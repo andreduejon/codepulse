@@ -3,7 +3,7 @@ import { useKeyboard, useRenderer } from "@opentui/solid";
 import { createAppState, AppStateContext } from "./context/state";
 import { createThemeState, ThemeContext } from "./context/theme";
 import { getCommits, getBranches, getCurrentBranch, getRepoName, getCommitDetail } from "./git/repo";
-import { buildGraph } from "./git/graph";
+import { buildGraph, getMaxGraphColumns } from "./git/graph";
 import GraphView from "./components/graph";
 import CommitDetailView from "./components/detail";
 import Header from "./components/header";
@@ -40,7 +40,7 @@ function AppContent(props: AppProps) {
         getCommits(repoPath, {
           maxCount: props.maxCount ?? 200,
           branch: branch,
-          all: props.all ?? true,
+          all: state.showAllBranches(),
         }),
         getBranches(repoPath),
         getCurrentBranch(repoPath),
@@ -48,7 +48,9 @@ function AppContent(props: AppProps) {
       ]);
 
       actions.setCommits(commits);
-      actions.setGraphRows(buildGraph(commits));
+      const rows = buildGraph(commits);
+      actions.setGraphRows(rows);
+      actions.setMaxGraphColumns(getMaxGraphColumns(rows));
       actions.setBranches(branches);
       actions.setCurrentBranch(currentBranch);
       actions.setRepoName(repoName);
@@ -122,9 +124,6 @@ function AppContent(props: AppProps) {
           actions.setSelectedIndex(state.filteredRows().length - 1);
         }
         break;
-      case "G":
-        actions.setSelectedIndex(state.filteredRows().length - 1);
-        break;
       case "pagedown":
         actions.moveSelection(20);
         break;
@@ -144,11 +143,22 @@ function AppContent(props: AppProps) {
         setDialog(dialog() === "help" ? null : "help");
         break;
       case "t":
-        setDialog("theme");
+        if (e.shift) {
+          // T (shift+t) -- toggle tags
+          actions.setShowTags(!state.showTags());
+        } else {
+          // t -- change theme
+          setDialog("theme");
+        }
         break;
-      case "a":
-        actions.setShowAllBranches(!state.showAllBranches());
-        loadData(state.showAllBranches() ? undefined : state.currentBranch());
+      case "a": {
+        const newAll = !state.showAllBranches();
+        actions.setShowAllBranches(newAll);
+        loadData(newAll ? undefined : state.currentBranch());
+        break;
+      }
+      case "f":
+        actions.setFocusCurrentBranch(!state.focusCurrentBranch());
         break;
     }
   });

@@ -1,92 +1,266 @@
-import { For, Show } from "solid-js";
+import { For, Show, createMemo, createEffect } from "solid-js";
 import { useAppState } from "../context/state";
 import { useTheme } from "../context/theme";
-import { renderGraphRow } from "../git/graph";
-import type { GraphRow } from "../git/types";
+import { renderGraphRow, renderConnectorRow, graphCharsToContent, getColorForColumn } from "../git/graph";
+import type { GraphRow, RefInfo } from "../git/types";
+import type { TextRenderable, StyledText } from "@opentui/core";
 
-function GraphLine(props: { row: GraphRow; index: number; selected: boolean }) {
+function RefBadge(props: { info: RefInfo; laneColor: () => string }) {
   const { theme } = useTheme();
-
-  const graphChars = () => renderGraphRow(props.row);
-  const commit = () => props.row.commit;
-  const refs = () => commit().refs;
   const t = () => theme();
+
+  return (
+    <text flexShrink={0} wrapMode="none" fg={t().background} bg={props.laneColor()}>
+      {` ${props.info.name} `}
+    </text>
+  );
+}
+
+function ColumnHeader() {
+  const { theme } = useTheme();
+  const { state } = useAppState();
+  const t = () => theme();
+
+  // Graph column width: each graph column is 2 chars + 1 paddingLeft
+  const graphWidth = () => Math.max(state.maxGraphColumns() * 2 + 1, 6);
 
   return (
     <box
       flexDirection="row"
       width="100%"
-      backgroundColor={props.selected ? t().backgroundElement : undefined}
-      paddingLeft={1}
+      border={["bottom"]}
+      borderColor={t().border}
+      borderStyle="single"
     >
-      {/* Graph part */}
-      <text flexShrink={0} wrapMode="none" truncate>
-        <For each={graphChars()}>
-          {(gc) => <span fg={gc.color}>{gc.char}</span>}
-        </For>
-      </text>
-
-      {/* Short hash */}
+      {/* Graph header */}
       <text
         flexShrink={0}
-        fg={props.selected ? t().primary : t().foregroundMuted}
+        width={graphWidth()}
         wrapMode="none"
-        truncate
+        fg={t().foregroundMuted}
+        paddingLeft={1}
       >
-        {commit().shortHash}
+        Graph
       </text>
 
-      {/* Refs (branch names, tags) */}
-      <Show when={refs().length > 0}>
-        <text flexShrink={0} wrapMode="none" truncate>
-          {" "}
-          <For each={refs()}>
-            {(ref, i) => (
-              <>
-                <span
-                  fg={
-                    ref.type === "tag"
-                      ? t().warning
-                      : ref.type === "head"
-                        ? t().accent
-                        : ref.isCurrent
-                          ? t().success
-                          : ref.type === "remote"
-                            ? t().foregroundMuted
-                            : t().primary
-                  }
-                >
-                  {ref.type === "tag" ? `[${ref.name}]` : `(${ref.name})`}
-                </span>
-                <Show when={i() < refs().length - 1}>
-                  <span fg={t().foregroundMuted}> </span>
-                </Show>
-              </>
-            )}
-          </For>
-        </text>
-      </Show>
-
-      {/* Commit message */}
-      <text flexGrow={1} flexShrink={1} fg={t().foreground} wrapMode="none" truncate>
-        {" "}
-        {commit().subject}
+      {/* Description (commit message + refs) */}
+      <text flexGrow={1} flexShrink={1} fg={t().foregroundMuted} wrapMode="none" truncate>
+        Description
       </text>
 
-      {/* Author and date */}
+      {/* Commit hash */}
       <text
         flexShrink={0}
         fg={t().foregroundMuted}
         wrapMode="none"
-        truncate
-        paddingRight={1}
+        paddingLeft={1}
       >
-        {" "}
-        {commit().author} {formatRelativeDate(commit().authorDate)}
+        Commit
+      </text>
+
+      {/* Author */}
+      <text
+        flexShrink={0}
+        fg={t().foregroundMuted}
+        wrapMode="none"
+        paddingLeft={2}
+        width={18}
+      >
+        Author
+      </text>
+
+      {/* Date */}
+      <text
+        flexShrink={0}
+        fg={t().foregroundMuted}
+        wrapMode="none"
+        paddingRight={1}
+        width={16}
+      >
+        Date
       </text>
     </box>
   );
 }
+
+/**
+ * Connector row component. Uses its own ref + createEffect to ensure
+ * the StyledText content is set after the element is mounted.
+ */
+function ConnectorRow(props: { content: () => StyledText }) {
+  let textRef: TextRenderable | undefined;
+
+  createEffect(() => {
+    if (textRef) textRef.content = props.content();
+  });
+
+  return (
+    <box flexDirection="row" width="100%">
+      <text ref={textRef} flexShrink={0} wrapMode="none" truncate paddingLeft={1} />
+    </box>
+  );
+}
+
+// Special branches whose commits get bold styling
+const SPECIAL_BRANCHES = ["main", "master", "develop", "development", "release", "staging", "production"];
+
+function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isLast: boolean }) {
+  const { theme } = useTheme();
+  const { state } = useAppState();
+
+  const commit = () => props.row.commit;
+  const padCols = () => state.maxGraphColumns();
+
+  // Focus mode: compute render options with dim colors for non-current-branch lanes.
+  // The current branch's lane lines (│) stay colored on ALL rows so you can
+  // visually trace the branch path through the graph, even when non-current-branch
+  // commits appear in between. Only the node dot is dimmed via isNodeFocused.
+  const renderOpts = () => {
+    const base = {
+      themeColors: theme().graphColors,
+      padToColumns: padCols(),
+    };
+    if (state.focusCurrentBranch()) {
+      return {
+        ...base,
+        focusColumns: props.row.currentBranchColumns,
+        dimColor: theme().foregroundMuted,
+        isNodeFocused: props.row.isOnCurrentBranch,
+      };
+    }
+    return base;
+  };
+
+  const graphChars = () => renderGraphRow(props.row, renderOpts());
+  const connectorChars = () => renderConnectorRow(props.row, renderOpts());
+
+  const graphContent = () => graphCharsToContent(graphChars());
+  const connectorContent = () => graphCharsToContent(connectorChars());
+
+  // Use refs to set StyledText content directly on TextRenderable,
+  // bypassing the Solid reconciler which stringifies the content prop.
+  let graphTextRef: TextRenderable | undefined;
+
+  createEffect(() => {
+    if (graphTextRef) graphTextRef.content = graphContent();
+  });
+
+  // Sort order: tag=0, branch=1, remote=2, head=3
+  const REF_ORDER: Record<string, number> = { tag: 0, branch: 1, remote: 2, head: 3 };
+
+  const visibleRefs = () => {
+    const allRefs = commit().refs;
+    const filtered = state.showTags() ? allRefs : allRefs.filter((r) => r.type !== "tag");
+    return [...filtered].sort((a, b) => (REF_ORDER[a.type] ?? 9) - (REF_ORDER[b.type] ?? 9));
+  };
+  const laneColor = () => getColorForColumn(props.row.nodeColumn, theme().graphColors);
+  const t = () => theme();
+
+  // Is this commit on the current branch? (for focus mode dimming)
+  const isOnCurrentBranch = () => props.row.isOnCurrentBranch;
+
+  // Effective lane color: dimmed if focus mode is on and commit not on current branch
+  const effectiveLaneColor = () => {
+    if (state.focusCurrentBranch() && !isOnCurrentBranch()) {
+      return t().foregroundMuted;
+    }
+    return laneColor();
+  };
+
+  // Effective text color: dimmed if focus mode is on and commit not on current branch
+  const effectiveTextColor = () => {
+    if (state.focusCurrentBranch() && !isOnCurrentBranch()) {
+      return t().foregroundMuted;
+    }
+    return t().foreground;
+  };
+
+  // Determine if this commit is on a special branch
+  const isSpecialBranch = createMemo(() => {
+    return commit().refs.some((r) =>
+      r.type === "branch" && SPECIAL_BRANCHES.some((sb) =>
+        r.name.toLowerCase() === sb || r.name.toLowerCase().startsWith(sb + "/")
+      )
+    );
+  });
+
+  return (
+    <box flexDirection="column" width="100%">
+      {/* Commit row */}
+      <box
+        flexDirection="row"
+        width="100%"
+        backgroundColor={props.selected ? t().backgroundElement : undefined}
+      >
+        {/* Graph part: styled via ref + StyledText to bypass reconciler stringification */}
+        <text ref={graphTextRef} flexShrink={0} wrapMode="none" truncate paddingLeft={1} />
+
+        {/* Description: refs + commit message share one flex area */}
+        <box flexDirection="row" flexGrow={1} flexShrink={1}>
+          <Show when={visibleRefs().length > 0}>
+            <box flexDirection="row" flexShrink={0} gap={1}>
+              <For each={visibleRefs()}>
+                {(ri) => <RefBadge info={ri} laneColor={effectiveLaneColor} />}
+              </For>
+            </box>
+          </Show>
+          <Show when={isSpecialBranch()} fallback={
+            <text flexGrow={1} flexShrink={1} fg={effectiveTextColor()} wrapMode="none" truncate>
+              {" "}
+              {commit().subject}
+            </text>
+          }>
+            <text flexGrow={1} flexShrink={1} fg={effectiveTextColor()} wrapMode="none" truncate>
+              {" "}<strong>{commit().subject}</strong>
+            </text>
+          </Show>
+        </box>
+
+        {/* Short hash */}
+        <text
+          flexShrink={0}
+          fg={props.selected ? t().primary : t().foregroundMuted}
+          wrapMode="none"
+          truncate
+          paddingLeft={1}
+        >
+          {commit().shortHash}
+        </text>
+
+        {/* Author */}
+        <text
+          flexShrink={0}
+          fg={t().foregroundMuted}
+          wrapMode="none"
+          truncate
+          paddingLeft={2}
+          width={18}
+        >
+          {commit().author}
+        </text>
+
+        {/* Date */}
+        <text
+          flexShrink={0}
+          fg={t().foregroundMuted}
+          wrapMode="none"
+          truncate
+          paddingRight={1}
+          width={16}
+        >
+          {formatRelativeDate(commit().authorDate)}
+        </text>
+      </box>
+
+      {/* Connector row: vertical lines only, providing visual continuity */}
+      <Show when={!props.isLast}>
+        <ConnectorRow content={connectorContent} />
+      </Show>
+    </box>
+  );
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function formatRelativeDate(dateStr: string): string {
   const date = new Date(dateStr);
@@ -95,17 +269,17 @@ function formatRelativeDate(dateStr: string): string {
   const diffMins = Math.floor(diffMs / 60000);
   const diffHours = Math.floor(diffMins / 60);
   const diffDays = Math.floor(diffHours / 24);
-  const diffWeeks = Math.floor(diffDays / 7);
-  const diffMonths = Math.floor(diffDays / 30);
-  const diffYears = Math.floor(diffDays / 365);
 
   if (diffMins < 1) return "just now";
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffHours < 1) return `${diffMins}m ago`;
+  if (diffDays < 1) return `${diffHours}h ago`;
+  if (diffDays === 1) return "Yesterday";
   if (diffDays < 7) return `${diffDays}d ago`;
-  if (diffWeeks < 4) return `${diffWeeks}w ago`;
-  if (diffMonths < 12) return `${diffMonths}mo ago`;
-  return `${diffYears}y ago`;
+
+  const day = date.getDate();
+  const month = MONTHS[date.getMonth()];
+  const year = date.getFullYear();
+  return `${day}. ${month} ${year}`;
 }
 
 export default function GraphView() {
@@ -113,6 +287,9 @@ export default function GraphView() {
 
   return (
     <box flexDirection="column" flexGrow={1}>
+      {/* Column headers */}
+      <ColumnHeader />
+
       <Show
         when={!state.loading()}
         fallback={
@@ -127,6 +304,7 @@ export default function GraphView() {
               row={row}
               index={index()}
               selected={index() === state.selectedIndex()}
+              isLast={index() === state.filteredRows().length - 1}
             />
           )}
         </For>

@@ -13,8 +13,11 @@ export interface AppState {
   commitDetail: Accessor<CommitDetail | null>;
   loading: Accessor<boolean>;
   showAllBranches: Accessor<boolean>;
+  showTags: Accessor<boolean>;
+  focusCurrentBranch: Accessor<boolean>;
   searchQuery: Accessor<string>;
   filteredRows: Accessor<GraphRow[]>;
+  maxGraphColumns: Accessor<number>;
 }
 
 export interface AppActions {
@@ -23,6 +26,8 @@ export interface AppActions {
   setCommitDetail: (detail: CommitDetail | null) => void;
   setLoading: (loading: boolean) => void;
   setShowAllBranches: (show: boolean) => void;
+  setShowTags: (show: boolean) => void;
+  setFocusCurrentBranch: (focus: boolean) => void;
   setSearchQuery: (query: string) => void;
   setCommits: (commits: Commit[]) => void;
   setGraphRows: (rows: GraphRow[]) => void;
@@ -30,6 +35,7 @@ export interface AppActions {
   setCurrentBranch: (branch: string) => void;
   setRepoName: (name: string) => void;
   setRepoPath: (path: string) => void;
+  setMaxGraphColumns: (cols: number) => void;
 }
 
 const AppStateContext = createContext<{ state: AppState; actions: AppActions }>();
@@ -45,7 +51,10 @@ export function createAppState() {
   const [commitDetail, setCommitDetail] = createSignal<CommitDetail | null>(null);
   const [loading, setLoading] = createSignal(true);
   const [showAllBranches, setShowAllBranches] = createSignal(true);
+  const [showTags, setShowTags] = createSignal(true);
+  const [focusCurrentBranch, setFocusCurrentBranch] = createSignal(false);
   const [searchQuery, setSearchQuery] = createSignal("");
+  const [maxGraphColumns, setMaxGraphColumns] = createSignal(0);
 
   const selectedCommit = () => {
     const rows = filteredRows();
@@ -85,8 +94,11 @@ export function createAppState() {
     commitDetail,
     loading,
     showAllBranches,
+    showTags,
+    focusCurrentBranch,
     searchQuery,
     filteredRows,
+    maxGraphColumns,
   };
 
   const actions: AppActions = {
@@ -95,6 +107,8 @@ export function createAppState() {
     setCommitDetail,
     setLoading,
     setShowAllBranches,
+    setShowTags,
+    setFocusCurrentBranch,
     setSearchQuery,
     setCommits,
     setGraphRows,
@@ -102,6 +116,7 @@ export function createAppState() {
     setCurrentBranch,
     setRepoName,
     setRepoPath,
+    setMaxGraphColumns,
   };
 
   return { state, actions, AppStateContext };

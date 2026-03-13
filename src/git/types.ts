@@ -41,6 +41,10 @@ export interface GraphRow {
   columns: GraphColumn[];
   nodeColumn: number;
   connectors: Connector[];
+  /** Set of column indices that carry the current branch (for focus mode graph lines) */
+  currentBranchColumns: Set<number>;
+  /** Whether this commit is on the current branch's first-parent chain */
+  isOnCurrentBranch: boolean;
 }
 
 export interface GraphColumn {
@@ -50,11 +54,17 @@ export interface GraphColumn {
 
 export type ConnectorType =
   | "straight" // │
-  | "merge-left" // ╱ or /
-  | "merge-right" // ╲ or \
-  | "branch-left" // going left from node
-  | "branch-right" // going right from node
-  | "horizontal" // ─
+  | "merge-left" // lane merging into target on the left (╭ corner at start)
+  | "merge-right" // lane merging into target on the right (╮ corner at start)
+  | "branch-left" // new lane branching off to the left (╰ corner at end)
+  | "branch-right" // new lane branching off to the right (╮ corner at end)
+  | "horizontal" // ──
+  | "tee-left" // ├─ (T-junction: existing vertical lane, merge/branch joins from right)
+  | "tee-right" // ─┤ (T-junction: existing vertical lane, merge/branch joins from left)
+  | "corner-top-right" // ╮ (new lane starts, line comes from left, turns down)
+  | "corner-top-left" // ╭ (new lane starts, line comes from right, turns down)
+  | "corner-bottom-right" // ╯ (lane ends, line comes from left, turns up)
+  | "corner-bottom-left" // ╰ (lane ends, line comes from right, turns up)
   | "node" // ●
   | "empty"; // space
 

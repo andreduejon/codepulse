@@ -11,6 +11,9 @@ export default function Footer() {
       height={1}
       backgroundColor={t().backgroundPanel}
       paddingX={1}
+      border={["top"]}
+      borderColor={t().border}
+      borderStyle="single"
     >
       {/* Keyboard hints */}
       <text flexShrink={0} wrapMode="none">
@@ -22,6 +25,10 @@ export default function Footer() {
         <span fg={t().foregroundMuted}> search  </span>
         <span fg={t().foreground}>a</span>
         <span fg={t().foregroundMuted}> all branches  </span>
+        <span fg={t().foreground}>T</span>
+        <span fg={t().foregroundMuted}> tags  </span>
+        <span fg={t().foreground}>f</span>
+        <span fg={t().foregroundMuted}> focus  </span>
         <span fg={t().foreground}>t</span>
         <span fg={t().foregroundMuted}> theme  </span>
         <span fg={t().foreground}>?</span>

@@ -14,6 +14,9 @@ export default function Header() {
       height={1}
       backgroundColor={t().backgroundPanel}
       paddingX={1}
+      border={["bottom"]}
+      borderColor={t().border}
+      borderStyle="single"
     >
       {/* App name */}
       <text flexShrink={0} wrapMode="none">
