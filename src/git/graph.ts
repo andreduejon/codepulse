@@ -711,8 +711,10 @@ export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphCh
         result.push({ char: "╰─", color: connColor(cornerBottomLeft) });
       }
     } else if (horizontal && straight) {
-      // Crossing: use the straight connector's focus state (it's the lane passing through)
-      result.push({ char: "┼─", color: connColor(straight) });
+      // Crossing: ┼ uses the crossed lane's color (the vertical lane passing through),
+      // ─ uses the horizontal connector's color (the spanning merge/branch connector).
+      result.push({ char: "┼", color: connColor(straight) });
+      result.push({ char: "─", color: connColor(horizontal) });
     } else if (horizontal) {
       result.push({ char: "──", color: connColor(horizontal) });
     } else if (straight) {
