@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createEffect } from "solid-js";
+import { For, Show, createEffect } from "solid-js";
 import { useAppState } from "../context/state";
 import { useTheme } from "../context/theme";
 import { renderGraphRow, renderConnectorRow, graphCharsToContent, getColorForColumn } from "../git/graph";
@@ -101,9 +101,6 @@ function ConnectorRow(props: { content: () => StyledText }) {
   );
 }
 
-// Special branches whose commits get bold styling
-const SPECIAL_BRANCHES = ["main", "master", "develop", "development", "release", "staging", "production"];
-
 function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isLast: boolean }) {
   const { theme } = useTheme();
   const { state } = useAppState();
@@ -115,6 +112,10 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
   // The current branch's lane lines (│) stay colored on ALL rows so you can
   // visually trace the branch path through the graph, even when non-current-branch
   // commits appear in between. Only the node dot is dimmed via isNodeFocused.
+  // All focused-branch elements use a single consistent color (the tip column's color).
+  const focusBranchColor = () =>
+    getColorForColumn(props.row.currentBranchTipColumn, theme().graphColors);
+
   const renderOpts = () => {
     const base = {
       themeColors: theme().graphColors,
@@ -123,8 +124,9 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
     if (state.focusCurrentBranch()) {
       return {
         ...base,
-        focusColumns: props.row.currentBranchColumns,
+        focusMode: true,
         dimColor: theme().foregroundMuted,
+        focusBranchColor: focusBranchColor(),
         isNodeFocused: props.row.isOnCurrentBranch,
       };
     }
@@ -159,10 +161,13 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
   // Is this commit on the current branch? (for focus mode dimming)
   const isOnCurrentBranch = () => props.row.isOnCurrentBranch;
 
-  // Effective lane color: dimmed if focus mode is on and commit not on current branch
+  // Effective lane color for ref badges: single focus color if on current branch, dimmed otherwise
   const effectiveLaneColor = () => {
     if (state.focusCurrentBranch() && !isOnCurrentBranch()) {
       return t().foregroundMuted;
+    }
+    if (state.focusCurrentBranch() && isOnCurrentBranch()) {
+      return focusBranchColor();
     }
     return laneColor();
   };
@@ -174,15 +179,6 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
     }
     return t().foreground;
   };
-
-  // Determine if this commit is on a special branch
-  const isSpecialBranch = createMemo(() => {
-    return commit().refs.some((r) =>
-      r.type === "branch" && SPECIAL_BRANCHES.some((sb) =>
-        r.name.toLowerCase() === sb || r.name.toLowerCase().startsWith(sb + "/")
-      )
-    );
-  });
 
   return (
     <box flexDirection="column" width="100%">
@@ -204,16 +200,10 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
               </For>
             </box>
           </Show>
-          <Show when={isSpecialBranch()} fallback={
-            <text flexGrow={1} flexShrink={1} fg={effectiveTextColor()} wrapMode="none" truncate>
-              {" "}
-              {commit().subject}
-            </text>
-          }>
-            <text flexGrow={1} flexShrink={1} fg={effectiveTextColor()} wrapMode="none" truncate>
-              {" "}<strong>{commit().subject}</strong>
-            </text>
-          </Show>
+          <text flexGrow={1} flexShrink={1} fg={effectiveTextColor()} wrapMode="none" truncate>
+            {" "}
+            {commit().subject}
+          </text>
         </box>
 
         {/* Short hash */}
@@ -237,6 +227,18 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
           width={18}
         >
           {commit().author}
+        </text>
+
+        {/* Branch (debug) */}
+        <text
+          flexShrink={0}
+          fg={effectiveTextColor()}
+          wrapMode="none"
+          truncate
+          paddingLeft={1}
+          width={20}
+        >
+          {props.row.branchName}
         </text>
 
         {/* Date */}

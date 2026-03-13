@@ -72,6 +72,7 @@ export async function getCommits(
   const args = [
     "git",
     "log",
+    "--topo-order",
     `--format=${GIT_LOG_FORMAT}`,
     `--max-count=${options.maxCount ?? 200}`,
   ];

@@ -41,15 +41,19 @@ export interface GraphRow {
   columns: GraphColumn[];
   nodeColumn: number;
   connectors: Connector[];
-  /** Set of column indices that carry the current branch (for focus mode graph lines) */
-  currentBranchColumns: Set<number>;
   /** Whether this commit is on the current branch's first-parent chain */
   isOnCurrentBranch: boolean;
+  /** The column index of the current branch tip (for consistent focus color) */
+  currentBranchTipColumn: number;
+  /** Debug: the branch this commit belongs to (first-parent chain from nearest tip) */
+  branchName: string;
 }
 
 export interface GraphColumn {
   color: number;
   active: boolean;
+  /** Whether this column's lane is tracking a current-branch hash */
+  isFocused?: boolean;
 }
 
 export type ConnectorType =
@@ -72,4 +76,6 @@ export interface Connector {
   type: ConnectorType;
   color: number;
   column: number;
+  /** Whether this connector belongs to the focused (current) branch path */
+  isFocused?: boolean;
 }
