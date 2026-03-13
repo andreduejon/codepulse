@@ -179,8 +179,12 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       from: number,
       to: number,
       color: number,
-      kind: "merge" | "branch",
+      kind: "merge" | "branch" | "close",
       focused?: boolean,
+      /** Optional: override the color index for the target column connector.
+       *  When branching, the target (parent branch's tee/corner) should use
+       *  the parent branch's color, while intermediates use `color`. */
+      targetColor?: number,
     ) {
       if (from === to) return;
 
@@ -198,15 +202,31 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
         });
       }
 
+      // Resolve the color for the target column connector
+      const resolvedTargetColor = targetColor !== undefined ? targetColor : color;
+
       // Target column connector
       if (kind === "merge") {
-        // Merging into an existing active lane → T-junction.
-        // The T-junction visually includes the vertical part of the target lane,
-        // so if the target lane is focused, the T-junction should be focused too
-        // (to maintain visual continuity of the focused branch line).
+        // Merging into an existing active lane that continues below.
+        // Use a top corner: the line forks off from the lane's vertical path.
+        // ╭─ (going right) or ─╮ (going left) — connects horizontal + downward,
+        // visually showing "line departs this lane going toward the merge commit."
+        // The lane's vertical continuity above is maintained by the straight │
+        // connectors already placed; below by the connector row.
         const targetLaneFocused = to < laneFocused.length && laneFocused[to];
         connectors.push({
-          type: goingRight ? "tee-right" : "tee-left",
+          type: goingRight ? "corner-top-right" : "corner-top-left",
+          color,
+          column: to,
+          isFocused: focused || targetLaneFocused,
+        });
+      } else if (kind === "close") {
+        // Lane is closing — the line ends here, no continuation below.
+        // Use a bottom corner: ╰─ (going right) or ─╯ (going left) —
+        // connects horizontal + upward, showing "line arrives and ends."
+        const targetLaneFocused = to < laneFocused.length && laneFocused[to];
+        connectors.push({
+          type: goingRight ? "corner-bottom-right" : "corner-bottom-left",
           color,
           column: to,
           isFocused: focused || targetLaneFocused,
@@ -215,7 +235,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
         // Branching into a new lane → rounded corner (line turns down)
         connectors.push({
           type: goingRight ? "corner-top-right" : "corner-top-left",
-          color,
+          color: resolvedTargetColor,
           column: to,
           isFocused: focused,
         });
@@ -242,14 +262,18 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
         //   This favors main/develop which tend to be in the leftmost columns.
         // - If the other lane has a lower index, merge into it (close ours).
         if (nodeColumn < existingLane) {
-          // Keep our lane, close the other one
-          addSpanningConnectors(nodeColumn, existingLane, existingLane, "merge", parentFocused);
+          // Keep our lane, close the other one.
+          // The existingLane is ending. Since we're closing existingLane (setting it null),
+          // the target gets a bottom corner — no lane continues downward there.
+          addSpanningConnectors(nodeColumn, existingLane, existingLane, "close", parentFocused);
           lanes[existingLane] = null;
           laneFocused[existingLane] = false;
           lanes[nodeColumn] = parentHash;
           laneFocused[nodeColumn] = parentFocused;
         } else {
-          // Merge into the other (lower-index) lane
+          // Merge into the other (lower-index) lane.
+          // Our lane (nodeColumn) is closing, but the TARGET (existingLane) continues
+          // downward — it still has an active lane. So the target gets a tee, not a corner.
           addSpanningConnectors(nodeColumn, existingLane, nodeColumn, "merge", parentFocused);
           lanes[nodeColumn] = null;
           laneFocused[nodeColumn] = false;
@@ -261,8 +285,11 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       } else if (processedColumns.has(parentHash)) {
         const parentCol = processedColumns.get(parentHash)!;
         if (parentCol !== nodeColumn) {
-          const kind = (parentCol < lanes.length && lanes[parentCol] !== null) ? "merge" : "branch";
-          addSpanningConnectors(nodeColumn, parentCol, nodeColumn, kind, parentFocused);
+          // Parent already processed — our lane is closing.
+          // If the target column still has an active lane, use tee (vertical continues).
+          // If the target column is empty, use close (bottom corner, line ends).
+          const targetActive = parentCol < lanes.length && lanes[parentCol] !== null;
+          addSpanningConnectors(nodeColumn, parentCol, nodeColumn, targetActive ? "merge" : "close", parentFocused);
         }
         lanes[nodeColumn] = null;
         laneFocused[nodeColumn] = false;
@@ -283,9 +310,9 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       if (firstParentLane !== -1 && firstParentLane !== nodeColumn) {
         // First parent is tracked in another lane. Instead of merging into it
         // (which would shift our branch to a different column), we keep our lane
-        // and close the other one. Visually this looks like the other lane merging
-        // into us (which is correct — the sibling branch converges here).
-        addSpanningConnectors(nodeColumn, firstParentLane, firstParentLane, "merge", firstParentFocused);
+        // and close the other one. The other lane is ending → use "close" for
+        // a bottom corner instead of a tee.
+        addSpanningConnectors(nodeColumn, firstParentLane, firstParentLane, "close", firstParentFocused);
         lanes[firstParentLane] = null;
         laneFocused[firstParentLane] = false;
         lanes[nodeColumn] = firstParent;
@@ -293,8 +320,10 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       } else if (processedColumns.has(firstParent) && firstParentLane === -1) {
         const parentCol = processedColumns.get(firstParent)!;
         if (parentCol !== nodeColumn) {
-          const kind = (parentCol < lanes.length && lanes[parentCol] !== null) ? "merge" : "branch";
-          addSpanningConnectors(nodeColumn, parentCol, nodeColumn, kind, firstParentFocused);
+          // First parent already processed — our lane is closing.
+          // If the target column still has an active lane, use tee; otherwise corner.
+          const targetActive = parentCol < lanes.length && lanes[parentCol] !== null;
+          addSpanningConnectors(nodeColumn, parentCol, nodeColumn, targetActive ? "merge" : "close", firstParentFocused);
         }
         lanes[nodeColumn] = null;
         laneFocused[nodeColumn] = false;

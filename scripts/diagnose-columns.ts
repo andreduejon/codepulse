@@ -183,13 +183,14 @@ function analyzeScenario(name: string, commits: Commit[]) {
     console.log("  >>> COLUMN JUMPING DETECTED — investigate above");
   }
 
-  // Also print the graph visually (simplified ASCII)
-  console.log("\n  Visual graph:");
+  // Also print the graph visually with connector rows
+  console.log("\n  Visual graph (with connector rows):");
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
+    
+    // Commit row
     let line = "  ";
     const maxCol = Math.max(row.columns.length, row.nodeColumn + 1);
-    // Build connector map
     const cmap = new Map<number, string>();
     for (const c of row.connectors) {
       const chars: Record<string, string> = {
@@ -204,7 +205,6 @@ function analyzeScenario(name: string, commits: Commit[]) {
         "corner-bottom-left": "╰",
         empty: " ",
       };
-      // For duplicates (crossings), prefer the more interesting one
       const existing = cmap.get(c.column);
       if (!existing || existing === " " || existing === "│") {
         cmap.set(c.column, chars[c.type] ?? "?");
@@ -216,7 +216,26 @@ function analyzeScenario(name: string, commits: Commit[]) {
       line += (cmap.get(col) ?? " ") + " ";
     }
     line += ` ${row.commit.shortHash} ${row.branchName}`;
+    
+    // Show raw connectors for rows with tees
+    const hasTee = row.connectors.some(c => c.type === "tee-left" || c.type === "tee-right");
+    if (hasTee) {
+      line += `  [${row.connectors.map(c => `${c.column}:${c.type}(c${c.color})`).join(", ")}]`;
+    }
     console.log(line);
+    
+    // Connector row (except for last row)
+    if (i < rows.length - 1) {
+      let connLine = "  ";
+      for (let col = 0; col < row.columns.length; col++) {
+        if (row.columns[col].active) {
+          connLine += "│ ";
+        } else {
+          connLine += "  ";
+        }
+      }
+      console.log(connLine);
+    }
   }
 }
 
@@ -266,6 +285,29 @@ function scenario6(): Commit[] {
   ];
 }
 
+// ============================================================
+// Scenario 7: release branch with multiple commits, branched from develop
+// The branch tip is far from the branch-off point (tests tee vs corner)
+// ============================================================
+function scenario7(): Commit[] {
+  // develop: d1 <- d2 <- d3 <- d4 <- d5 (tip, current)
+  // release: d2 <- r1 <- r2 <- r3 (release tip)
+  //
+  // Topo-order:
+  // d5, d4, d3, r3, r2, r1, d2, d1
+
+  return [
+    makeCommit("d5", ["d4"], [{ name: "develop", type: "branch", isCurrent: true }], "develop tip"),
+    makeCommit("d4", ["d3"], [], "develop work 4"),
+    makeCommit("d3", ["d2"], [], "develop work 3"),
+    makeCommit("r3", ["r2"], [{ name: "release/1.0", type: "branch", isCurrent: false }], "Release v1.46.0"),
+    makeCommit("r2", ["r1"], [], "release work 2"),
+    makeCommit("r1", ["d2"], [], "release work 1"),
+    makeCommit("d2", ["d1"], [], "develop baseline"),
+    makeCommit("d1", [], [], "initial"),
+  ];
+}
+
 // Run all scenarios
 analyzeScenario("develop + two sequential feature merges", scenario1());
 analyzeScenario("develop + three parallel feature branches (fan-out)", scenario2());
@@ -273,3 +315,4 @@ analyzeScenario("renovate-style short branches", scenario3());
 analyzeScenario("develop + release + hotfix", scenario4());
 analyzeScenario("diamond pattern", scenario5());
 analyzeScenario("two long-lived branches with cross-merge", scenario6());
+analyzeScenario("release branch far from branch-off (tee vs corner)", scenario7());

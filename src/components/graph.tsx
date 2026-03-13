@@ -229,18 +229,6 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
           {commit().author}
         </text>
 
-        {/* Branch (debug) */}
-        <text
-          flexShrink={0}
-          fg={effectiveTextColor()}
-          wrapMode="none"
-          truncate
-          paddingLeft={1}
-          width={20}
-        >
-          {props.row.branchName}
-        </text>
-
         {/* Date */}
         <text
           flexShrink={0}
