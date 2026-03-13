@@ -163,7 +163,8 @@ function analyzeScenario(name: string, commits: Commit[]) {
     const colStr = String(col).padStart(3);
     const bnStr = bn.padEnd(16);
     const hashStr = row.commit.shortHash.padEnd(12);
-    console.log(`  ${String(i).padStart(3)}  ${colStr}  ${bnStr} ${hashStr} ${row.commit.subject}`);
+    const roFlag = row.isRemoteOnly ? " [RO]" : "";
+    console.log(`  ${String(i).padStart(3)}  ${colStr}  ${bnStr} ${hashStr} ${row.commit.subject}${roFlag}`);
   }
 
   // Detect column jumping
@@ -216,8 +217,14 @@ function analyzeScenario(name: string, commits: Commit[]) {
       line += (cmap.get(col) ?? " ") + " ";
     }
     line += ` ${row.commit.shortHash} ${row.branchName}`;
+    if (row.isRemoteOnly) line += " [RO]";
     
-    // Show raw connectors for rows with tees
+    // Show connector remote-only flags for rows that have any
+    const hasRemoteOnly = row.connectors.some(c => c.isRemoteOnly);
+    if (hasRemoteOnly) {
+      const roConns = row.connectors.filter(c => c.isRemoteOnly).map(c => `${c.column}:${c.type}`);
+      line += ` {RO: ${roConns.join(", ")}}`;
+    }
     const hasTee = row.connectors.some(c => c.type === "tee-left" || c.type === "tee-right");
     if (hasTee) {
       line += `  [${row.connectors.map(c => `${c.column}:${c.type}(c${c.color})`).join(", ")}]`;
@@ -229,7 +236,7 @@ function analyzeScenario(name: string, commits: Commit[]) {
       let connLine = "  ";
       for (let col = 0; col < row.columns.length; col++) {
         if (row.columns[col].active) {
-          connLine += "│ ";
+          connLine += row.columns[col].isRemoteOnly ? "┆ " : "│ ";
         } else {
           connLine += "  ";
         }
@@ -308,6 +315,39 @@ function scenario7(): Commit[] {
   ];
 }
 
+// ============================================================
+// Scenario 8: Unmerged remote-only branches above develop
+// Simulates origin/renovate/* branches that sit above develop in topo-order
+// because they are children of develop's tip. All rows above develop
+// should be dimmed (isRemoteOnly=true) including passing-through lane lines.
+// ============================================================
+function scenario8(): Commit[] {
+  // develop: d1 <- d2 <- d3 (tip, current)
+  // main: d1 <- d2 <- d3 (same as develop tip, with origin/main + origin/HEAD)
+  // origin/renovate/major: d3 <- ren1 (unmerged)
+  // origin/renovate/minor: d3 <- ren2 (unmerged)
+  // origin/renovate/patch: d3 <- ren3 (unmerged)
+  //
+  // Topo-order (children first):
+  // ren1, ren2, ren3, d3(develop+main+origin/develop+origin/main+origin/HEAD), d2, d1
+
+  return [
+    makeCommit("ren1", ["d3"], [{ name: "origin/renovate/major", type: "remote", isCurrent: false }], "fix(deps): update major deps"),
+    makeCommit("ren2", ["d3"], [{ name: "origin/renovate/minor", type: "remote", isCurrent: false }], "fix(deps): update minor deps"),
+    makeCommit("ren3", ["d3"], [{ name: "origin/renovate/patch", type: "remote", isCurrent: false }], "fix(deps): update patch deps"),
+    makeCommit("d3", ["d2"], [
+      { name: "develop", type: "branch", isCurrent: true },
+      { name: "origin/develop", type: "remote", isCurrent: false },
+      { name: "v1.52.0", type: "tag", isCurrent: false },
+      { name: "main", type: "branch", isCurrent: false },
+      { name: "origin/main", type: "remote", isCurrent: false },
+      { name: "origin/HEAD", type: "remote", isCurrent: false },
+    ], "Merge pull request #36"),
+    makeCommit("d2", ["d1"], [], "chore: pipeline changes"),
+    makeCommit("d1", [], [], "initial commit"),
+  ];
+}
+
 // Run all scenarios
 analyzeScenario("develop + two sequential feature merges", scenario1());
 analyzeScenario("develop + three parallel feature branches (fan-out)", scenario2());
@@ -316,3 +356,4 @@ analyzeScenario("develop + release + hotfix", scenario4());
 analyzeScenario("diamond pattern", scenario5());
 analyzeScenario("two long-lived branches with cross-merge", scenario6());
 analyzeScenario("release branch far from branch-off (tee vs corner)", scenario7());
+analyzeScenario("unmerged remote-only branches above develop", scenario8());

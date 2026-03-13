@@ -49,6 +49,8 @@ export interface GraphRow {
   branchName: string;
   /** Whether this commit's lane belongs to a remote-only branch */
   isRemoteOnly: boolean;
+  /** Set of remote branch names that are remote-only (no local counterpart) */
+  remoteOnlyBranches: Set<string>;
 }
 
 export interface GraphColumn {

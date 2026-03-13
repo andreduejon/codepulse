@@ -5,18 +5,45 @@ import { renderGraphRow, renderConnectorRow, graphCharsToContent, getColorForCol
 import type { GraphRow, RefInfo } from "../git/types";
 import type { TextRenderable, StyledText } from "@opentui/core";
 
-function RefBadge(props: { info: RefInfo; laneColor: () => string; dimColor: () => string }) {
+function RefBadge(props: {
+  info: RefInfo;
+  laneColor: () => string;
+  dimColor: () => string;
+  remoteOnlyBranches: Set<string>;
+}) {
   const { theme } = useTheme();
   const t = () => theme();
+
+  // Determine if this remote ref is locally-tracked (has a local counterpart).
+  // Remote-only branches stay fully dimmed; locally-tracked remotes get a
+  // colored left border to visually link them to their local branch.
+  const isLocallyTrackedRemote = () => {
+    if (props.info.type !== "remote") return false;
+    return !props.remoteOnlyBranches.has(props.info.name);
+  };
 
   // Remote branches use a dimmed background to visually distinguish
   // them from local branches. Tags and local branches use the lane color.
   const bgColor = () => props.info.type === "remote" ? props.dimColor() : props.laneColor();
 
   return (
-    <text flexShrink={0} wrapMode="none" fg={t().background} bg={bgColor()}>
-      {` ${props.info.name} `}
-    </text>
+    <Show when={isLocallyTrackedRemote()} fallback={
+      <text flexShrink={0} wrapMode="none" fg={t().background} bg={bgColor()}>
+        {` ${props.info.name} `}
+      </text>
+    }>
+      <box
+        flexShrink={0}
+        flexDirection="row"
+        border={["left"]}
+        borderColor={props.laneColor()}
+        borderStyle="heavy"
+      >
+        <text flexShrink={0} wrapMode="none" fg={t().background} bg={bgColor()}>
+          {` ${props.info.name} `}
+        </text>
+      </box>
+    </Show>
   );
 }
 
@@ -207,7 +234,7 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
           <Show when={visibleRefs().length > 0}>
             <box flexDirection="row" flexShrink={0} gap={1}>
               <For each={visibleRefs()}>
-                {(ri) => <RefBadge info={ri} laneColor={effectiveLaneColor} dimColor={() => t().foregroundMuted} />}
+                {(ri) => <RefBadge info={ri} laneColor={effectiveLaneColor} dimColor={() => t().foregroundMuted} remoteOnlyBranches={props.row.remoteOnlyBranches} />}
               </For>
             </box>
           </Show>

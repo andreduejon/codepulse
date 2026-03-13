@@ -448,11 +448,36 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       currentBranchTipColumn,
       branchName: branchNameMap.get(commit.hash) ?? "",
       isRemoteOnly: isCommitRemoteOnly,
+      remoteOnlyBranches,
     });
 
     // Record this commit as processed with its column, so later commits
     // whose parents point here can detect the parent was already rendered.
     processedColumns.set(commit.hash, nodeColumn);
+  }
+
+  // Post-pass: dim all rows above the first non-remote-only row.
+  // If the topmost rows are only remote-only branches (e.g. renovate/*),
+  // everything above the first tracked branch should appear dimmed.
+  let firstNonRemoteOnlyRow = 0;
+  for (let i = 0; i < rows.length; i++) {
+    if (!rows[i].isRemoteOnly) {
+      firstNonRemoteOnlyRow = i;
+      break;
+    }
+  }
+  if (firstNonRemoteOnlyRow > 0) {
+    for (let i = 0; i < firstNonRemoteOnlyRow; i++) {
+      const row = rows[i];
+      // Force all connectors to remote-only
+      for (const conn of row.connectors) {
+        conn.isRemoteOnly = true;
+      }
+      // Force all columns to remote-only
+      for (const col of row.columns) {
+        col.isRemoteOnly = true;
+      }
+    }
   }
 
   return rows;
