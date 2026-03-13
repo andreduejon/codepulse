@@ -53,6 +53,8 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
   // A lane is NOT focused when created by a non-current-branch commit (even if
   // it points to a current-branch parent — that's just converging back, not the path).
   let laneFocused: boolean[] = [];
+  // Parallel array: whether each lane belongs to a remote-only branch.
+  let laneRemoteOnly: boolean[] = [];
 
   // Build a map from commit hash to commit for quick lookups.
   const commitMap = new Map<string, Commit>();
@@ -103,6 +105,42 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
     }
   }
 
+  // Determine which branch names are "remote-only".
+  // A remote branch like "origin/foo" is remote-only if there is no local branch
+  // named "foo" among the tip commits. We collect all local branch names and
+  // all remote branch names, then compute the set difference.
+  const localBranchNames = new Set<string>();
+  const remoteBranchTipNames = new Set<string>();
+  for (const c of commits) {
+    for (const r of c.refs) {
+      if (r.type === "branch") {
+        localBranchNames.add(r.name);
+      } else if (r.type === "remote") {
+        remoteBranchTipNames.add(r.name);
+      }
+    }
+  }
+  // A remote branch is remote-only if stripping the remote prefix (e.g. "origin/")
+  // gives a name that is NOT in localBranchNames.
+  const remoteOnlyBranches = new Set<string>();
+  for (const remoteName of remoteBranchTipNames) {
+    // Strip "origin/", "upstream/", or "refs/remotes/..." prefix
+    const slashIdx = remoteName.indexOf("/");
+    const localEquivalent = slashIdx !== -1 ? remoteName.slice(slashIdx + 1) : remoteName;
+    if (!localBranchNames.has(localEquivalent)) {
+      remoteOnlyBranches.add(remoteName);
+    }
+  }
+
+  // Build a set of commit hashes that belong to remote-only branches.
+  // A commit is remote-only if branchNameMap assigns it to a remote-only branch name.
+  const remoteOnlyHashes = new Set<string>();
+  for (const [hash, branchName] of branchNameMap) {
+    if (remoteOnlyBranches.has(branchName)) {
+      remoteOnlyHashes.add(hash);
+    }
+  }
+
   // Find the column of the current branch tip (first row).
   // We'll compute this once the tip commit is placed, and use it
   // across all rows for a consistent focus color.
@@ -126,6 +164,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       nodeColumn = lanes.length;
       lanes.push(commit.hash);
       laneFocused.push(false); // will be set properly during parent processing
+      laneRemoteOnly.push(remoteOnlyHashes.has(commit.hash));
     }
 
     // Record the tip column for the current branch (used for consistent focus color)
@@ -140,6 +179,8 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
 
     // First, draw all passing-through lanes and the node.
     // Use laneFocused[] to determine if a lane belongs to the focused branch path.
+    const isCommitRemoteOnly = remoteOnlyHashes.has(commit.hash);
+
     for (let col = 0; col < lanes.length; col++) {
       if (col === nodeColumn) {
         connectors.push({
@@ -147,6 +188,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
           color: col,
           column: col,
           isFocused: isCommitOnCurrentBranch,
+          isRemoteOnly: isCommitRemoteOnly,
         });
       } else if (lanes[col] !== null) {
         connectors.push({
@@ -154,6 +196,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
           color: col,
           column: col,
           isFocused: laneFocused[col],
+          isRemoteOnly: laneRemoteOnly[col],
         });
       } else {
         connectors.push({
@@ -185,6 +228,8 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
        *  When branching, the target (parent branch's tee/corner) should use
        *  the parent branch's color, while intermediates use `color`. */
       targetColor?: number,
+      /** Whether these connectors belong to a remote-only branch */
+      remoteOnly?: boolean,
     ) {
       if (from === to) return;
 
@@ -204,6 +249,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
           color,
           column: col,
           isFocused: false,
+          isRemoteOnly: remoteOnly,
         });
       }
 
@@ -218,6 +264,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
           color,
           column: to,
           isFocused: false,
+          isRemoteOnly: remoteOnly,
         });
       } else if (kind === "close") {
         connectors.push({
@@ -225,6 +272,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
           color,
           column: to,
           isFocused: false,
+          isRemoteOnly: remoteOnly,
         });
       } else {
         // Branching into a new lane → rounded corner (line turns down)
@@ -233,6 +281,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
           color: resolvedTargetColor,
           column: to,
           isFocused: false,
+          isRemoteOnly: remoteOnly,
         });
       }
     }
@@ -244,103 +293,88 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       // Root commit -- close this lane
       lanes[nodeColumn] = null;
       laneFocused[nodeColumn] = false;
+      laneRemoteOnly[nodeColumn] = false;
     } else if (parents.length === 1) {
       const parentHash = parents[0];
       const parentFocused = isCommitOnCurrentBranch && currentBranchHashes.has(parentHash);
+      const parentRemoteOnly = remoteOnlyHashes.has(parentHash);
       const existingLane = lanes.indexOf(parentHash);
       if (existingLane !== -1 && existingLane !== nodeColumn) {
-        // Parent is already tracked in another lane. Two lanes are converging
-        // to the same parent. We need to decide which lane to keep.
-        //
-        // To maintain column stability for long-running branches:
-        // - If our lane (nodeColumn) has a LOWER index, keep ours and close the other.
-        //   This favors main/develop which tend to be in the leftmost columns.
-        // - If the other lane has a lower index, merge into it (close ours).
         if (nodeColumn < existingLane) {
-          // Keep our lane, close the other one.
-          // The existingLane is ending. Since we're closing existingLane (setting it null),
-          // the target gets a bottom corner — no lane continues downward there.
-          addSpanningConnectors(nodeColumn, existingLane, existingLane, "close", parentFocused);
+          addSpanningConnectors(nodeColumn, existingLane, existingLane, "close", parentFocused, undefined, isCommitRemoteOnly);
           lanes[existingLane] = null;
           laneFocused[existingLane] = false;
+          laneRemoteOnly[existingLane] = false;
           lanes[nodeColumn] = parentHash;
           laneFocused[nodeColumn] = parentFocused;
+          laneRemoteOnly[nodeColumn] = parentRemoteOnly;
         } else {
-          // Merge into the other (lower-index) lane.
-          // Our lane (nodeColumn) is closing, but the TARGET (existingLane) continues
-          // downward — it still has an active lane. So the target gets a tee, not a corner.
-          addSpanningConnectors(nodeColumn, existingLane, nodeColumn, "merge", parentFocused);
+          addSpanningConnectors(nodeColumn, existingLane, nodeColumn, "merge", parentFocused, undefined, isCommitRemoteOnly);
           lanes[nodeColumn] = null;
           laneFocused[nodeColumn] = false;
+          laneRemoteOnly[nodeColumn] = false;
         }
       } else if (existingLane === nodeColumn) {
-        // Parent is tracked in our own lane (shouldn't happen, but safe)
         lanes[nodeColumn] = parentHash;
         laneFocused[nodeColumn] = parentFocused;
+        laneRemoteOnly[nodeColumn] = parentRemoteOnly;
       } else if (processedColumns.has(parentHash)) {
         const parentCol = processedColumns.get(parentHash)!;
         if (parentCol !== nodeColumn) {
-          // Parent already processed — our lane is closing.
-          // If the target column still has an active lane, use tee (vertical continues).
-          // If the target column is empty, use close (bottom corner, line ends).
           const targetActive = parentCol < lanes.length && lanes[parentCol] !== null;
-          addSpanningConnectors(nodeColumn, parentCol, nodeColumn, targetActive ? "merge" : "close", parentFocused);
+          addSpanningConnectors(nodeColumn, parentCol, nodeColumn, targetActive ? "merge" : "close", parentFocused, undefined, isCommitRemoteOnly);
         }
         lanes[nodeColumn] = null;
         laneFocused[nodeColumn] = false;
+        laneRemoteOnly[nodeColumn] = false;
       } else {
         lanes[nodeColumn] = parentHash;
         laneFocused[nodeColumn] = parentFocused;
+        laneRemoteOnly[nodeColumn] = parentRemoteOnly;
       }
     } else {
       // Merge commit -- first parent continues the lane, others open new lanes.
-      // IMPORTANT: The first parent ALWAYS continues in the current lane (nodeColumn)
-      // to maintain column stability for long-running branches like develop/main.
-      // If another lane already tracks the first parent (because a sibling branch
-      // also pointed to it), we steal the tracking: continue our lane with the first
-      // parent and close the other lane with a merge visual.
       const firstParent = parents[0];
       const firstParentFocused = isCommitOnCurrentBranch && currentBranchHashes.has(firstParent);
+      const firstParentRemoteOnly = remoteOnlyHashes.has(firstParent);
       const firstParentLane = lanes.indexOf(firstParent);
       if (firstParentLane !== -1 && firstParentLane !== nodeColumn) {
-        // First parent is tracked in another lane. Instead of merging into it
-        // (which would shift our branch to a different column), we keep our lane
-        // and close the other one. The other lane is ending → use "close" for
-        // a bottom corner instead of a tee.
-        addSpanningConnectors(nodeColumn, firstParentLane, firstParentLane, "close", firstParentFocused);
+        addSpanningConnectors(nodeColumn, firstParentLane, firstParentLane, "close", firstParentFocused, undefined, isCommitRemoteOnly);
         lanes[firstParentLane] = null;
         laneFocused[firstParentLane] = false;
+        laneRemoteOnly[firstParentLane] = false;
         lanes[nodeColumn] = firstParent;
         laneFocused[nodeColumn] = firstParentFocused;
+        laneRemoteOnly[nodeColumn] = firstParentRemoteOnly;
       } else if (processedColumns.has(firstParent) && firstParentLane === -1) {
         const parentCol = processedColumns.get(firstParent)!;
         if (parentCol !== nodeColumn) {
-          // First parent already processed — our lane is closing.
-          // If the target column still has an active lane, use tee; otherwise corner.
           const targetActive = parentCol < lanes.length && lanes[parentCol] !== null;
-          addSpanningConnectors(nodeColumn, parentCol, nodeColumn, targetActive ? "merge" : "close", firstParentFocused);
+          addSpanningConnectors(nodeColumn, parentCol, nodeColumn, targetActive ? "merge" : "close", firstParentFocused, undefined, isCommitRemoteOnly);
         }
         lanes[nodeColumn] = null;
         laneFocused[nodeColumn] = false;
+        laneRemoteOnly[nodeColumn] = false;
       } else {
         lanes[nodeColumn] = firstParent;
         laneFocused[nodeColumn] = firstParentFocused;
+        laneRemoteOnly[nodeColumn] = firstParentRemoteOnly;
       }
 
       for (let p = 1; p < parents.length; p++) {
         const parentHash = parents[p];
         const pFocused = isCommitOnCurrentBranch && currentBranchHashes.has(parentHash);
+        const pRemoteOnly = remoteOnlyHashes.has(parentHash);
         const existingLane = lanes.indexOf(parentHash);
         if (existingLane !== -1) {
-          // Parent already tracked - add spanning merge connectors
           if (existingLane !== nodeColumn) {
-            addSpanningConnectors(nodeColumn, existingLane, existingLane, "merge", pFocused);
+            addSpanningConnectors(nodeColumn, existingLane, existingLane, "merge", pFocused, undefined, isCommitRemoteOnly);
           }
         } else if (processedColumns.has(parentHash)) {
           const parentCol = processedColumns.get(parentHash)!;
           if (parentCol !== nodeColumn) {
             const kind = (parentCol < lanes.length && lanes[parentCol] !== null) ? "merge" : "branch";
-            addSpanningConnectors(nodeColumn, parentCol, parentCol, kind, pFocused);
+            addSpanningConnectors(nodeColumn, parentCol, parentCol, kind, pFocused, undefined, isCommitRemoteOnly);
           }
         } else {
           // Open a new lane for this parent
@@ -350,27 +384,27 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
             newLane = emptyIdx;
             lanes[emptyIdx] = parentHash;
             laneFocused[emptyIdx] = pFocused;
+            laneRemoteOnly[emptyIdx] = pRemoteOnly;
           } else {
             newLane = lanes.length;
             lanes.push(parentHash);
             laneFocused.push(pFocused);
+            laneRemoteOnly.push(pRemoteOnly);
           }
           // Add spanning connectors from nodeColumn to the new lane
-          addSpanningConnectors(nodeColumn, newLane, newLane, "branch", pFocused);
+          addSpanningConnectors(nodeColumn, newLane, newLane, "branch", pFocused, undefined, pRemoteOnly);
         }
       }
     }
 
-    // Clean up trailing null lanes, but only if the next commit is already
-    // tracked in a lane. If the next commit is a new branch tip (not in any
-    // lane), we want to preserve the current lane width so the new tip gets
-    // a unique, higher column index rather than reusing a freshly-popped one.
+    // Clean up trailing null lanes
     const nextCommit = i + 1 < commits.length ? commits[i + 1] : null;
     const nextIsTracked = nextCommit !== null && lanes.indexOf(nextCommit.hash) !== -1;
     if (nextIsTracked || nextCommit === null) {
       while (lanes.length > 0 && lanes[lanes.length - 1] === null) {
         lanes.pop();
         laneFocused.pop();
+        laneRemoteOnly.pop();
       }
     }
 
@@ -379,6 +413,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       color: idx,
       active: lane !== null,
       isFocused: laneFocused[idx],
+      isRemoteOnly: laneRemoteOnly[idx],
     }));
 
     rows.push({
@@ -389,6 +424,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       isOnCurrentBranch: isCommitOnCurrentBranch,
       currentBranchTipColumn,
       branchName: branchNameMap.get(commit.hash) ?? "",
+      isRemoteOnly: isCommitRemoteOnly,
     });
 
     // Record this commit as processed with its column, so later commits
@@ -420,6 +456,8 @@ export interface RenderOptions {
   focusBranchColor?: string;
   /** When focus mode is active and this is false, the node dot is also dimmed */
   isNodeFocused?: boolean;
+  /** Color to use for remote-only branch elements (independent of focus mode) */
+  remoteOnlyDimColor?: string;
 }
 
 /**
@@ -449,8 +487,16 @@ export function renderConnectorRow(row: GraphRow, opts: RenderOptions = {}): Gra
   for (let col = 0; col < row.columns.length; col++) {
     if (row.columns[col].active) {
       const focused = row.columns[col].isFocused;
+      const isRemote = row.columns[col].isRemoteOnly;
       const focusColor = getFocusColor(focused, opts);
-      const color = focusColor ?? getBaseColor(col, opts);
+      let color: string;
+      if (focusColor) {
+        color = focusColor;
+      } else if (isRemote && opts.remoteOnlyDimColor) {
+        color = opts.remoteOnlyDimColor;
+      } else {
+        color = getBaseColor(col, opts);
+      }
       const isBold = !opts.focusMode || !!focused;
       result.push({ char: "│ ", color, bold: isBold });
     } else {
@@ -491,9 +537,13 @@ export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphCh
   const result: GraphChar[] = [];
 
   // Helper: resolve color for a connector based on its isFocused flag
-  function connColor(c: { color: number; isFocused?: boolean }): string {
+  // and isRemoteOnly flag. Focus mode takes precedence over remote-only dimming.
+  function connColor(c: { color: number; isFocused?: boolean; isRemoteOnly?: boolean }): string {
     const fc = getFocusColor(c.isFocused, opts);
-    return fc ?? getBaseColor(c.color, opts);
+    if (fc) return fc;
+    // Remote-only dimming (independent of focus mode)
+    if (c.isRemoteOnly && opts.remoteOnlyDimColor) return opts.remoteOnlyDimColor;
+    return getBaseColor(c.color, opts);
   }
 
   // Determine the max column we need to render
@@ -562,6 +612,8 @@ export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphCh
         } else {
           nodeColor = opts.focusBranchColor ?? getBaseColor(node.color, opts);
         }
+      } else if (node.isRemoteOnly && opts.remoteOnlyDimColor) {
+        nodeColor = opts.remoteOnlyDimColor;
       } else {
         nodeColor = getBaseColor(node.color, opts);
       }

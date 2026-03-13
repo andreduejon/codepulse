@@ -47,6 +47,8 @@ export interface GraphRow {
   currentBranchTipColumn: number;
   /** Debug: the branch this commit belongs to (first-parent chain from nearest tip) */
   branchName: string;
+  /** Whether this commit's lane belongs to a remote-only branch */
+  isRemoteOnly: boolean;
 }
 
 export interface GraphColumn {
@@ -54,6 +56,8 @@ export interface GraphColumn {
   active: boolean;
   /** Whether this column's lane is tracking a current-branch hash */
   isFocused?: boolean;
+  /** Whether this column's lane belongs to a remote-only branch (no local counterpart) */
+  isRemoteOnly?: boolean;
 }
 
 export type ConnectorType =
@@ -78,4 +82,6 @@ export interface Connector {
   column: number;
   /** Whether this connector belongs to the focused (current) branch path */
   isFocused?: boolean;
+  /** Whether this connector belongs to a remote-only branch */
+  isRemoteOnly?: boolean;
 }

@@ -123,6 +123,7 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
     const base = {
       themeColors: theme().graphColors,
       padToColumns: padCols(),
+      remoteOnlyDimColor: theme().foregroundMuted,
     };
     if (state.focusCurrentBranch()) {
       return {
@@ -172,12 +173,19 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
     if (state.focusCurrentBranch() && isOnCurrentBranch()) {
       return focusBranchColor();
     }
+    if (props.row.isRemoteOnly) {
+      return t().foregroundMuted;
+    }
     return laneColor();
   };
 
-  // Effective text color: dimmed if focus mode is on and commit not on current branch
+  // Effective text color: dimmed if focus mode is on and commit not on current branch,
+  // or if the commit is on a remote-only branch
   const effectiveTextColor = () => {
     if (state.focusCurrentBranch() && !isOnCurrentBranch()) {
+      return t().foregroundMuted;
+    }
+    if (props.row.isRemoteOnly) {
       return t().foregroundMuted;
     }
     return t().foreground;
@@ -268,7 +276,7 @@ function formatRelativeDate(dateStr: string): string {
   if (diffDays === 1) return "Yesterday";
   if (diffDays < 7) return `${diffDays}d ago`;
 
-  const day = date.getDate();
+  const day = String(date.getDate()).padStart(2, "0");
   const month = MONTHS[date.getMonth()];
   const hours = String(date.getHours()).padStart(2, "0");
   const mins = String(date.getMinutes()).padStart(2, "0");
