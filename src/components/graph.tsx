@@ -41,9 +41,9 @@ function RefBadge(props: {
       </text>
     }>
       <box flexDirection="row" flexShrink={0}>
-        <text flexShrink={0} wrapMode="none" fg={accentColor()} bg={bgColor()}>▎</text>
+        <text flexShrink={0} wrapMode="none" fg={t().background} bg={accentColor()}>{" "}</text>
         <text flexShrink={0} wrapMode="none" fg={t().background} bg={bgColor()}>
-          {`${props.info.name} `}
+          {` ${props.info.name} `}
         </text>
       </box>
     </Show>
