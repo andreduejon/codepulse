@@ -2,9 +2,10 @@
 /**
  * Test script: verifies focus mode graph rendering.
  *
- * In focus mode, only the focused branch's lane verticals (│) and node dots (●)
- * should use the focus color. All spanning connectors (horizontals ──, corners ╭╮╯╰,
- * trailing dashes after corners, and tee connectors) must be dimmed.
+ * In focus mode, the focused branch's lane verticals (│), node dots (●),
+ * and corners at the focused lane's column (╭╮╯╰) use the focus color.
+ * All horizontal connectors (──), trailing dashes (─), and corners at
+ * non-focused columns must be dimmed.
  *
  * This script:
  * 1. Builds synthetic graphs with merges/branches
@@ -127,9 +128,10 @@ function test1() {
     // Check focus color usage
     const focused = focusedChars(chars);
     for (const fc of focused) {
-      // Only ● and │ should be in focus color (on focused branch rows)
-      // The ─ after ● on merge rows should NOT be focus-colored
-      const allowed = fc.char === "●" || fc.char === "● " || fc.char === "│ " || fc.char === "│";
+      // ●, │, and corners (╭╮╯╰) at the focused lane column may use focus color.
+      // Horizontal dashes (─, ──) must always be dimmed.
+      const allowed = fc.char === "●" || fc.char === "● " || fc.char === "│ " || fc.char === "│"
+        || fc.char === "╭" || fc.char === "╮" || fc.char === "╯" || fc.char === "╰";
       assert(
         allowed,
         `Row ${i} ("${row.commit.subject}"): unexpected focus-colored char "${fc.char}" at index ${fc.index}`,
@@ -146,10 +148,11 @@ function test1() {
       );
     }
 
-    // Connector row: only focused lane verticals should be in focus color
+    // Connector row: focused lane verticals and corners at focused lane column may use focus color
     const connFocused = focusedChars(connChars);
     for (const fc of connFocused) {
-      const allowed = fc.char === "│ " || fc.char === "│";
+      const allowed = fc.char === "│ " || fc.char === "│"
+        || fc.char === "╭" || fc.char === "╮" || fc.char === "╯" || fc.char === "╰";
       assert(
         allowed,
         `Row ${i} ("${row.commit.subject}"): connector row has unexpected focus-colored char "${fc.char}" at index ${fc.index}`,
@@ -192,10 +195,11 @@ function test2() {
       `Row ${i} ("${row.commit.subject}"): width=${width}, expected ${padCols * 2}`,
     );
 
-    // Focus color: only ● and │ allowed
+    // Focus color: ●, │, and corners at focused lane column allowed
     const focused = focusedChars(chars);
     for (const fc of focused) {
-      const allowed = fc.char === "●" || fc.char === "● " || fc.char === "│ " || fc.char === "│";
+      const allowed = fc.char === "●" || fc.char === "● " || fc.char === "│ " || fc.char === "│"
+        || fc.char === "╭" || fc.char === "╮" || fc.char === "╯" || fc.char === "╰";
       assert(
         allowed,
         `Row ${i} ("${row.commit.subject}"): unexpected focus-colored "${fc.char}" at index ${fc.index}`,
@@ -247,13 +251,14 @@ function test3() {
       `Row ${i}: connector row width=${totalCharWidth(connChars)}, expected ${padCols * 2}`,
     );
 
-    // No corners/dashes should be focus-colored
+    // No horizontal dashes should be focus-colored; ●, │, and corners at focused lane are OK
     for (const gc of chars) {
       if (gc.color === FOCUS_COLOR) {
-        const allowed = gc.char === "●" || gc.char === "● " || gc.char === "│ " || gc.char === "│";
+        const allowed = gc.char === "●" || gc.char === "● " || gc.char === "│ " || gc.char === "│"
+          || gc.char === "╭" || gc.char === "╮" || gc.char === "╯" || gc.char === "╰";
         assert(
           allowed,
-          `Row ${i} ("${row.commit.subject}"): focus-colored "${gc.char}" — only ● and │ allowed`,
+          `Row ${i} ("${row.commit.subject}"): focus-colored "${gc.char}" — only ●, │, and corners at focused lane allowed`,
         );
       }
     }
@@ -292,14 +297,15 @@ function test4() {
       `Row ${i} ("${row.commit.subject}"): width=${totalCharWidth(chars)}, expected ${padCols * 2}`,
     );
 
-    // Check every char: only ● and │ may be focus-colored
+    // Check every char: ●, │, and corners at focused lane may be focus-colored; dashes must be dimmed
     for (let j = 0; j < chars.length; j++) {
       const gc = chars[j];
       if (gc.color === FOCUS_COLOR) {
-        const allowed = gc.char === "●" || gc.char === "● " || gc.char === "│ " || gc.char === "│";
+        const allowed = gc.char === "●" || gc.char === "● " || gc.char === "│ " || gc.char === "│"
+          || gc.char === "╭" || gc.char === "╮" || gc.char === "╯" || gc.char === "╰";
         assert(
           allowed,
-          `Row ${i} ("${row.commit.subject}"): focus-colored "${gc.char}" at position ${j} — corners/dashes must be dimmed`,
+          `Row ${i} ("${row.commit.subject}"): focus-colored "${gc.char}" at position ${j} — dashes must be dimmed`,
         );
       }
     }
@@ -313,7 +319,8 @@ function test4() {
     for (let j = 0; j < connChars.length; j++) {
       const gc = connChars[j];
       if (gc.color === FOCUS_COLOR) {
-        const allowed = gc.char === "│ " || gc.char === "│";
+        const allowed = gc.char === "│ " || gc.char === "│"
+          || gc.char === "╭" || gc.char === "╮" || gc.char === "╯" || gc.char === "╰";
         assert(
           allowed,
           `Row ${i} connector: focus-colored "${gc.char}" at position ${j}`,
@@ -356,11 +363,12 @@ function test5() {
       `Row ${i} ("${row.commit.subject}"): width=${totalCharWidth(chars)}, expected ${padCols * 2}`,
     );
 
-    // Focus color discipline
+    // Focus color discipline: ●, │, and corners at focused lane allowed; dashes must be dimmed
     for (let j = 0; j < chars.length; j++) {
       const gc = chars[j];
       if (gc.color === FOCUS_COLOR) {
-        const allowed = gc.char === "●" || gc.char === "● " || gc.char === "│ " || gc.char === "│";
+        const allowed = gc.char === "●" || gc.char === "● " || gc.char === "│ " || gc.char === "│"
+          || gc.char === "╭" || gc.char === "╮" || gc.char === "╯" || gc.char === "╰";
         assert(
           allowed,
           `Row ${i} ("${row.commit.subject}"): focus-colored "${gc.char}" at position ${j}`,

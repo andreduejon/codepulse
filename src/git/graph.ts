@@ -280,13 +280,17 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       const resolvedTargetColor = targetColor !== undefined ? targetColor : color;
 
       // Target column connector
-      // In focus mode, corners are always dimmed — only ● and │ retain focus color.
+      // In focus mode, corners at the focused lane's column should retain focus
+      // color because they are the visual continuation of that lane's path.
+      // Only corners at non-focused columns are dimmed.
+      const targetLaneFocused = to < laneFocused.length && laneFocused[to];
+
       if (kind === "merge") {
         connectors.push({
           type: goingRight ? "corner-top-right" : "corner-top-left",
           color,
           column: to,
-          isFocused: false,
+          isFocused: targetLaneFocused,
           isRemoteOnly: remoteOnly,
         });
       } else if (kind === "close") {
@@ -294,7 +298,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
           type: goingRight ? "corner-bottom-right" : "corner-bottom-left",
           color,
           column: to,
-          isFocused: false,
+          isFocused: targetLaneFocused,
           isRemoteOnly: remoteOnly,
         });
       } else {
