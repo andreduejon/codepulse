@@ -756,10 +756,10 @@ export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphCh
         }
       }
     } else if (horizontal && straight) {
-      // Crossing: ┼ uses the crossed lane's color (the vertical lane passing through),
-      // ─ uses the horizontal connector's color (the spanning merge/branch connector).
-      result.push({ char: "┼", color: connColor(straight) });
-      result.push({ char: "─", color: connColor(horizontal) });
+      // Crossing: both ┼ and ─ use the horizontal connector's color
+      // (the spanning merge/branch). The crossing visually belongs to the
+      // branch that is spanning across, not the vertical lane being crossed.
+      result.push({ char: "┼─", color: connColor(horizontal) });
     } else if (horizontal) {
       result.push({ char: "──", color: connColor(horizontal) });
     } else if (straight) {
