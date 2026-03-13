@@ -247,10 +247,9 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       color: number,
       kind: "merge" | "branch" | "close",
       focused?: boolean,
-      /** Optional: override the color index for the target column connector.
-       *  When branching, the target (parent branch's tee/corner) should use
-       *  the parent branch's color, while intermediates use `color`. */
-      targetColor?: number,
+      /** Color for the horizontal connectors spanning between from and to.
+       *  Defaults to `color` if not provided. */
+      horizontalColor?: number,
       /** Whether these connectors belong to a remote-only branch */
       remoteOnly?: boolean,
     ) {
@@ -260,52 +259,51 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       const lo = Math.min(from, to);
       const hi = Math.max(from, to);
 
-      // In focus mode, spanning connectors (horizontals, corners) are always
-      // dimmed. The focused node ● and the rounded corner shape provide enough
-      // visual signal that something branched or merged. Only independently
-      // focused lanes (targetLaneFocused) retain their highlight.
+      const hColor = horizontalColor !== undefined ? horizontalColor : color;
 
-      // Intermediate columns between node and target get horizontal lines
+      // Intermediate columns between node and target get horizontal lines.
+      // These use the spanning branch's color (horizontalColor).
       for (let col = lo + 1; col < hi; col++) {
         connectors.push({
           type: "horizontal",
-          color,
+          color: hColor,
           column: col,
           isFocused: false,
           isRemoteOnly: remoteOnly,
         });
       }
 
-      // Resolve the color for the target column connector
-      const resolvedTargetColor = targetColor !== undefined ? targetColor : color;
-
-      // Target column connector
-      // In focus mode, corners at the focused lane's column should retain focus
-      // color because they are the visual continuation of that lane's path.
-      // Only corners at non-focused columns are dimmed.
+      // Corner at the target column.
+      // The corner sits on the target lane's vertical path, so it uses
+      // the target lane's color (= `to` column index) for merge/close.
+      // For branch kind, the corner starts a new lane, so it uses `color`
+      // (which is the new lane's color index).
       const targetLaneFocused = to < laneFocused.length && laneFocused[to];
 
       if (kind === "merge") {
+        // Target lane continues — corner is on its direct line → use target lane color (= to)
         connectors.push({
           type: goingRight ? "corner-top-right" : "corner-top-left",
-          color,
+          color: to,
           column: to,
           isFocused: targetLaneFocused,
           isRemoteOnly: remoteOnly,
         });
       } else if (kind === "close") {
+        // Target lane is being closed — corner is the last point of that lane.
+        // Use the lane's own color (= to) so it stays on its direct visual path.
         connectors.push({
           type: goingRight ? "corner-bottom-right" : "corner-bottom-left",
-          color,
+          color: to,
           column: to,
           isFocused: targetLaneFocused,
           isRemoteOnly: remoteOnly,
         });
       } else {
-        // Branching into a new lane → rounded corner (line turns down)
+        // Branching into a new lane — corner starts a new lane → use the new lane's color
         connectors.push({
           type: goingRight ? "corner-top-right" : "corner-top-left",
-          color: resolvedTargetColor,
+          color,
           column: to,
           isFocused: false,
           isRemoteOnly: remoteOnly,
@@ -328,7 +326,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       const existingLane = lanes.indexOf(parentHash);
       if (existingLane !== -1 && existingLane !== nodeColumn) {
         if (nodeColumn < existingLane) {
-          addSpanningConnectors(nodeColumn, existingLane, existingLane, "close", parentFocused, undefined, isCommitRemoteOnly);
+          addSpanningConnectors(nodeColumn, existingLane, existingLane, "close", parentFocused, nodeColumn, isCommitRemoteOnly);
           lanes[existingLane] = null;
           laneFocused[existingLane] = false;
           laneRemoteOnly[existingLane] = false;
@@ -366,7 +364,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       const firstParentRemoteOnly = remoteOnlyHashes.has(firstParent);
       const firstParentLane = lanes.indexOf(firstParent);
       if (firstParentLane !== -1 && firstParentLane !== nodeColumn) {
-        addSpanningConnectors(nodeColumn, firstParentLane, firstParentLane, "close", firstParentFocused, undefined, isCommitRemoteOnly);
+        addSpanningConnectors(nodeColumn, firstParentLane, firstParentLane, "close", firstParentFocused, nodeColumn, isCommitRemoteOnly);
         lanes[firstParentLane] = null;
         laneFocused[firstParentLane] = false;
         laneRemoteOnly[firstParentLane] = false;
