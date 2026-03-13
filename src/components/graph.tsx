@@ -157,13 +157,51 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
   const graphContent = () => graphCharsToContent(graphChars());
   const connectorContent = () => graphCharsToContent(connectorChars());
 
-  // Fan-out rows: extra connector rows showing branch-off corners
-  const fanOutContents = () => {
+  // Check if the commit row has merge/branch connectors (horizontals, corners, tees).
+  // If so, the commit row carries connection info and can't be replaced by a fan-out row.
+  const commitRowHasConnections = () =>
+    props.row.connectors.some(c =>
+      c.type === "horizontal" || c.type === "tee-left" || c.type === "tee-right" ||
+      c.type === "corner-top-right" || c.type === "corner-top-left" ||
+      c.type === "corner-bottom-right" || c.type === "corner-bottom-left"
+    );
+
+  // Fan-out rows: extra connector rows showing branch-off corners.
+  // When fan-out rows exist AND the commit row is "simple" (no merge/branch
+  // connectors), the LAST fan-out row is used as the commit row's graph
+  // (since its █ at the node column would be adjacent to a redundant commit █).
+  // When the commit row HAS connections (e.g., a merge), all fan-out rows
+  // render separately and the commit row keeps its own graph.
+  const canMergeFanOut = () => {
+    const foRows = props.row.fanOutRows;
+    return foRows && foRows.length > 0 && !commitRowHasConnections();
+  };
+
+  // Fan-out rows ABOVE the commit row
+  const fanOutAboveContents = () => {
     const foRows = props.row.fanOutRows;
     if (!foRows || foRows.length === 0) return [];
+    // If merging last fan-out into commit row, show all except the last
+    if (canMergeFanOut()) {
+      if (foRows.length <= 1) return [];
+      return foRows.slice(0, -1).map((foConnectors) =>
+        graphCharsToContent(renderFanOutRow(foConnectors, renderOpts()))
+      );
+    }
+    // Otherwise show all fan-out rows separately
     return foRows.map((foConnectors) =>
       graphCharsToContent(renderFanOutRow(foConnectors, renderOpts()))
     );
+  };
+
+  // The commit row graph: if we can merge, use the last fan-out row's graph;
+  // otherwise use the normal commit row graph.
+  const commitRowGraphContent = () => {
+    if (canMergeFanOut()) {
+      const foRows = props.row.fanOutRows!;
+      return graphCharsToContent(renderFanOutRow(foRows[foRows.length - 1], renderOpts()));
+    }
+    return graphContent();
   };
 
   // Use refs to set StyledText content directly on TextRenderable,
@@ -171,7 +209,7 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
   let graphTextRef: TextRenderable | undefined;
 
   createEffect(() => {
-    if (graphTextRef) graphTextRef.content = graphContent();
+    if (graphTextRef) graphTextRef.content = commitRowGraphContent();
   });
 
   // Sort order: tag=0, branch=1, remote=2, head=3
@@ -216,9 +254,9 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
 
   return (
     <box flexDirection="column" width="100%">
-      {/* Fan-out rows: rendered ABOVE the parent commit (graph flows bottom-to-top).
-          Children's lanes come from above and converge at the parent below. */}
-      <For each={fanOutContents()}>
+      {/* Fan-out rows above the commit (all except the last, which merges
+          into the commit row to avoid a redundant █ block). */}
+      <For each={fanOutAboveContents()}>
         {(foContent) => <ConnectorRow content={() => foContent} />}
       </For>
 

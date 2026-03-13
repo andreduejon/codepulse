@@ -833,26 +833,27 @@ export function renderFanOutRow(fanOutConnectors: Connector[], opts: RenderOptio
     const teeRight = connectors.find(c => c.type === "tee-right");
 
     if (teeLeft) {
-      // ├ — parent lane with branch going right.
-      // ├ uses parent lane's color; trailing ─ uses the horizontal/branch color.
+      // █ — block segment at parent's node column (fan-out row).
+      // Replaces ├ with █ so the block extends through fan-out rows.
+      // Trailing ─ uses the horizontal/branch color.
       const teeColor = connColor(teeLeft);
       if (opts.focusMode && opts.dimColor) {
-        result.push({ char: "├", color: teeColor });
+        result.push({ char: "█", color: teeColor });
         result.push({ char: "─", color: opts.dimColor });
       } else {
         const nextConns = byCol.get(col + 1);
         const nextH = nextConns?.find(c => c.type === "horizontal" || c.type === "corner-bottom-right");
         const dashColor = nextH ? connColor(nextH) : teeColor;
         if (dashColor === teeColor) {
-          result.push({ char: "├─", color: teeColor });
+          result.push({ char: "█─", color: teeColor });
         } else {
-          result.push({ char: "├", color: teeColor });
+          result.push({ char: "█", color: teeColor });
           result.push({ char: "─", color: dashColor });
         }
       }
     } else if (teeRight) {
-      // ┤ — parent lane with branch going left.
-      result.push({ char: "┤ ", color: connColor(teeRight) });
+      // █ — block segment at parent's node column (fan-out row, branch going left).
+      result.push({ char: "█ ", color: connColor(teeRight) });
     } else if (straight && horizontal) {
       // Crossing: ┼ uses the vertical lane's color, ─ uses the horizontal's color
       result.push({ char: "┼", color: connColor(straight) });
@@ -915,7 +916,7 @@ export function renderFanOutRow(fanOutConnectors: Connector[], opts: RenderOptio
 
 export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphChar[] {
   const padToColumns = opts.padToColumns;
-  const nodeChar = "●";
+  const nodeChar = "█";
   const result: GraphChar[] = [];
 
   // Helper: resolve color for a connector based on its isFocused flag
