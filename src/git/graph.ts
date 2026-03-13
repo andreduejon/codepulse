@@ -133,10 +133,33 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
   }
 
   // Build a set of commit hashes that belong to remote-only branches.
-  // A commit is remote-only if branchNameMap assigns it to a remote-only branch name.
+  // A commit is remote-only if branchNameMap assigns it to a remote-only branch
+  // AND it is NOT reachable from any non-remote-only branch's first-parent chain.
+  // This prevents shared ancestors (e.g. merge bases) from being dimmed.
+  const nonRemoteOnlyHashes = new Set<string>();
+  for (const c of commits) {
+    // Check if this commit has ANY non-remote-only branch/tag ref.
+    // We must check ALL refs, not just the first one, because a commit can have
+    // multiple refs (e.g. origin/HEAD + main) and only some may be remote-only.
+    const hasNonRemoteOnlyRef = c.refs.some((r) => {
+      if (r.type === "tag") return true; // tags are never remote-only
+      if (r.type === "branch") return true; // local branches are never remote-only
+      if (r.type === "remote") return !remoteOnlyBranches.has(r.name);
+      return false;
+    });
+    if (!hasNonRemoteOnlyRef) continue;
+    // Walk first-parent chain from this commit
+    let h: string | undefined = c.hash;
+    while (h) {
+      if (nonRemoteOnlyHashes.has(h)) break;
+      nonRemoteOnlyHashes.add(h);
+      const parent = commitMap.get(h);
+      h = parent?.parents[0];
+    }
+  }
   const remoteOnlyHashes = new Set<string>();
   for (const [hash, branchName] of branchNameMap) {
-    if (remoteOnlyBranches.has(branchName)) {
+    if (remoteOnlyBranches.has(branchName) && !nonRemoteOnlyHashes.has(hash)) {
       remoteOnlyHashes.add(hash);
     }
   }
