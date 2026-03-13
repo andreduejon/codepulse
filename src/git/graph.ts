@@ -670,16 +670,28 @@ export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphCh
         nodeColor = getBaseColor(node.color, opts);
       }
       if (col === nodeCol && hasRightConnection) {
-        // Split: ● in node color, ─ in node's lane color (non-focus mode)
-        // or dimColor (focus mode, since the dash connects to non-focused branches).
+        // Split: ● in node color, ─ in connecting branch color.
+        // Branch case: ● = origin (node lane), ─ = target (new branch)
+        // Merge case:  ● = target (node lane), ─ = origin (incoming branch)
+        // In focus mode, the dash is always dimmed (only direct lane path is colored).
         result.push({ char: nodeChar, color: nodeColor, bold: true });
         let dashColor: string;
         if (opts.focusMode && opts.dimColor) {
           dashColor = opts.dimColor;
-        } else if (node.isRemoteOnly && opts.remoteOnlyDimColor) {
-          dashColor = opts.remoteOnlyDimColor;
         } else {
-          dashColor = getBaseColor(node.color, opts);
+          const rightConn = (connectorsByCol.get(nodeCol + 1) ?? []).find((c) =>
+            c.type === "horizontal" || c.type === "corner-top-right" ||
+            c.type === "corner-bottom-right" || c.type === "tee-right"
+          );
+          if (rightConn) {
+            if (rightConn.isRemoteOnly && opts.remoteOnlyDimColor) {
+              dashColor = opts.remoteOnlyDimColor;
+            } else {
+              dashColor = getBaseColor(rightConn.color, opts);
+            }
+          } else {
+            dashColor = getBaseColor(node.color, opts);
+          }
         }
         result.push({ char: "─", color: dashColor });
       } else if (col === nodeCol && hasLeftConnection) {
