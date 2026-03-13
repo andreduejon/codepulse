@@ -10,6 +10,8 @@ function RefBadge(props: {
   laneColor: () => string;
   dimColor: () => string;
   remoteOnlyBranches: Set<string>;
+  /** Border color override (e.g. for origin/HEAD pointing to a tracked branch) */
+  borderColor?: () => string | undefined;
 }) {
   const { theme } = useTheme();
   const t = () => theme();
@@ -22,25 +24,26 @@ function RefBadge(props: {
     return !props.remoteOnlyBranches.has(props.info.name);
   };
 
+  // Whether this badge should show a left border accent
+  const showBorder = () => isLocallyTrackedRemote() || !!props.borderColor?.();
+
+  // The color of the left border accent
+  const accentColor = () => props.borderColor?.() ?? props.laneColor();
+
   // Remote branches use a dimmed background to visually distinguish
   // them from local branches. Tags and local branches use the lane color.
   const bgColor = () => props.info.type === "remote" ? props.dimColor() : props.laneColor();
 
   return (
-    <Show when={isLocallyTrackedRemote()} fallback={
+    <Show when={showBorder()} fallback={
       <text flexShrink={0} wrapMode="none" fg={t().background} bg={bgColor()}>
         {` ${props.info.name} `}
       </text>
     }>
-      <box
-        flexShrink={0}
-        flexDirection="row"
-        border={["left"]}
-        borderColor={props.laneColor()}
-        borderStyle="heavy"
-      >
+      <box flexDirection="row" flexShrink={0}>
+        <text flexShrink={0} wrapMode="none" fg={accentColor()} bg={bgColor()}>▎</text>
         <text flexShrink={0} wrapMode="none" fg={t().background} bg={bgColor()}>
-          {` ${props.info.name} `}
+          {`${props.info.name} `}
         </text>
       </box>
     </Show>
@@ -189,6 +192,16 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
   const laneColor = () => getColorForColumn(props.row.nodeColumn, theme().graphColors);
   const t = () => theme();
 
+  // Compute border color for specific refs (e.g. origin/HEAD → branch it points to)
+  // origin/HEAD shares a commit with the branch it references, so use the lane color.
+  const headLikeBorderColor = (ri: RefInfo): (() => string | undefined) => {
+    if (ri.type === "remote" && ri.name.endsWith("/HEAD")) {
+      // origin/HEAD points to the branch on this same commit — use lane color
+      return effectiveLaneColor;
+    }
+    return () => undefined;
+  };
+
   // Is this commit on the current branch? (for focus mode dimming)
   const isOnCurrentBranch = () => props.row.isOnCurrentBranch;
 
@@ -234,7 +247,7 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
           <Show when={visibleRefs().length > 0}>
             <box flexDirection="row" flexShrink={0} gap={1}>
               <For each={visibleRefs()}>
-                {(ri) => <RefBadge info={ri} laneColor={effectiveLaneColor} dimColor={() => t().foregroundMuted} remoteOnlyBranches={props.row.remoteOnlyBranches} />}
+                {(ri) => <RefBadge info={ri} laneColor={effectiveLaneColor} dimColor={() => t().foregroundMuted} remoteOnlyBranches={props.row.remoteOnlyBranches} borderColor={headLikeBorderColor(ri)} />}
               </For>
             </box>
           </Show>
