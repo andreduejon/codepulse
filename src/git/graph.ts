@@ -192,13 +192,18 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       const lo = Math.min(from, to);
       const hi = Math.max(from, to);
 
+      // In focus mode, spanning connectors (horizontals, corners) are always
+      // dimmed. The focused node ● and the rounded corner shape provide enough
+      // visual signal that something branched or merged. Only independently
+      // focused lanes (targetLaneFocused) retain their highlight.
+
       // Intermediate columns between node and target get horizontal lines
       for (let col = lo + 1; col < hi; col++) {
         connectors.push({
           type: "horizontal",
           color,
           column: col,
-          isFocused: focused,
+          isFocused: false,
         });
       }
 
@@ -207,29 +212,20 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
 
       // Target column connector
       if (kind === "merge") {
-        // Merging into an existing active lane that continues below.
-        // Use a top corner: the line forks off from the lane's vertical path.
-        // ╭─ (going right) or ─╮ (going left) — connects horizontal + downward,
-        // visually showing "line departs this lane going toward the merge commit."
-        // The lane's vertical continuity above is maintained by the straight │
-        // connectors already placed; below by the connector row.
         const targetLaneFocused = to < laneFocused.length && laneFocused[to];
         connectors.push({
           type: goingRight ? "corner-top-right" : "corner-top-left",
           color,
           column: to,
-          isFocused: focused || targetLaneFocused,
+          isFocused: targetLaneFocused,
         });
       } else if (kind === "close") {
-        // Lane is closing — the line ends here, no continuation below.
-        // Use a bottom corner: ╰─ (going right) or ─╯ (going left) —
-        // connects horizontal + upward, showing "line arrives and ends."
         const targetLaneFocused = to < laneFocused.length && laneFocused[to];
         connectors.push({
           type: goingRight ? "corner-bottom-right" : "corner-bottom-left",
           color,
           column: to,
-          isFocused: focused || targetLaneFocused,
+          isFocused: targetLaneFocused,
         });
       } else {
         // Branching into a new lane → rounded corner (line turns down)
@@ -237,7 +233,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
           type: goingRight ? "corner-top-right" : "corner-top-left",
           color: resolvedTargetColor,
           column: to,
-          isFocused: focused,
+          isFocused: false,
         });
       }
     }
@@ -585,17 +581,32 @@ export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphCh
         result.push({ char: `${nodeChar} `, color: nodeColor, bold: true });
       }
     } else if (teeLeft) {
-      result.push({ char: "├─", color: connColor(teeLeft) });
+      if (opts.focusMode && opts.dimColor) {
+        result.push({ char: "├", color: connColor(teeLeft) });
+        result.push({ char: "─", color: opts.dimColor });
+      } else {
+        result.push({ char: "├─", color: connColor(teeLeft) });
+      }
     } else if (teeRight) {
       result.push({ char: "┤ ", color: connColor(teeRight) });
     } else if (cornerTopRight) {
       result.push({ char: "╮ ", color: connColor(cornerTopRight) });
     } else if (cornerTopLeft) {
-      result.push({ char: "╭─", color: connColor(cornerTopLeft) });
+      if (opts.focusMode && opts.dimColor) {
+        result.push({ char: "╭", color: connColor(cornerTopLeft) });
+        result.push({ char: "─", color: opts.dimColor });
+      } else {
+        result.push({ char: "╭─", color: connColor(cornerTopLeft) });
+      }
     } else if (cornerBottomRight) {
       result.push({ char: "╯ ", color: connColor(cornerBottomRight) });
     } else if (cornerBottomLeft) {
-      result.push({ char: "╰─", color: connColor(cornerBottomLeft) });
+      if (opts.focusMode && opts.dimColor) {
+        result.push({ char: "╰", color: connColor(cornerBottomLeft) });
+        result.push({ char: "─", color: opts.dimColor });
+      } else {
+        result.push({ char: "╰─", color: connColor(cornerBottomLeft) });
+      }
     } else if (horizontal && straight) {
       // Crossing: use the straight connector's focus state (it's the lane passing through)
       result.push({ char: "┼─", color: connColor(straight) });
