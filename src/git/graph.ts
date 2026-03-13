@@ -668,28 +668,17 @@ export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphCh
         nodeColor = getBaseColor(node.color, opts);
       }
       if (col === nodeCol && hasRightConnection) {
-        // Split: ● in node color, ─ in connecting branch color.
-        // Branch case: ● = origin (node lane), ─ = target (new branch)
-        // Merge case:  ● = target (node lane), ─ = origin (incoming branch)
-        // In focus mode, the dash is always dimmed (only direct lane path is colored).
+        // The ─ right after ● is part of the node's direct path, so it uses
+        // the node's lane color. The spanning branch color starts at the next column.
+        // In focus mode, the dash is always dimmed.
         result.push({ char: nodeChar, color: nodeColor, bold: true });
         let dashColor: string;
         if (opts.focusMode && opts.dimColor) {
           dashColor = opts.dimColor;
+        } else if (node.isRemoteOnly && opts.remoteOnlyDimColor) {
+          dashColor = opts.remoteOnlyDimColor;
         } else {
-          const rightConn = (connectorsByCol.get(nodeCol + 1) ?? []).find((c) =>
-            c.type === "horizontal" || c.type === "corner-top-right" ||
-            c.type === "corner-bottom-right" || c.type === "tee-right"
-          );
-          if (rightConn) {
-            if (rightConn.isRemoteOnly && opts.remoteOnlyDimColor) {
-              dashColor = opts.remoteOnlyDimColor;
-            } else {
-              dashColor = getBaseColor(rightConn.color, opts);
-            }
-          } else {
-            dashColor = getBaseColor(node.color, opts);
-          }
+          dashColor = getBaseColor(node.color, opts);
         }
         result.push({ char: "─", color: dashColor });
       } else if (col === nodeCol && hasLeftConnection) {
@@ -756,10 +745,10 @@ export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphCh
         }
       }
     } else if (horizontal && straight) {
-      // Crossing: both ┼ and ─ use the horizontal connector's color
-      // (the spanning merge/branch). The crossing visually belongs to the
-      // branch that is spanning across, not the vertical lane being crossed.
-      result.push({ char: "┼─", color: connColor(horizontal) });
+      // Crossing: ┼ uses the crossed lane's color (the vertical lane passing through),
+      // ─ uses the horizontal connector's color (the spanning merge/branch connector).
+      result.push({ char: "┼", color: connColor(straight) });
+      result.push({ char: "─", color: connColor(horizontal) });
     } else if (horizontal) {
       result.push({ char: "──", color: connColor(horizontal) });
     } else if (straight) {
