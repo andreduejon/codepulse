@@ -698,31 +698,62 @@ export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphCh
         result.push({ char: `${nodeChar} `, color: nodeColor, bold: true });
       }
     } else if (teeLeft) {
+      // ├ is on the lane's direct path → lane color.
+      // The trailing ─ is a horizontal connector → spanning branch's color.
+      const teeColor = connColor(teeLeft);
       if (opts.focusMode && opts.dimColor) {
-        result.push({ char: "├", color: connColor(teeLeft) });
+        result.push({ char: "├", color: teeColor });
         result.push({ char: "─", color: opts.dimColor });
       } else {
-        result.push({ char: "├─", color: connColor(teeLeft) });
+        const nextHoriz = (connectorsByCol.get(col + 1) ?? []).find((c) => c.type === "horizontal");
+        const dashColor = nextHoriz ? connColor(nextHoriz) : teeColor;
+        if (dashColor === teeColor) {
+          result.push({ char: "├─", color: teeColor });
+        } else {
+          result.push({ char: "├", color: teeColor });
+          result.push({ char: "─", color: dashColor });
+        }
       }
     } else if (teeRight) {
       result.push({ char: "┤ ", color: connColor(teeRight) });
     } else if (cornerTopRight) {
       result.push({ char: "╮ ", color: connColor(cornerTopRight) });
     } else if (cornerTopLeft) {
+      // ╭ is on the lane's direct path → lane color.
+      // The trailing ─ is a horizontal connector → use the spanning branch's color.
+      // Look for a horizontal at the next column; if none, fall back to corner color.
+      const cornerColor = connColor(cornerTopLeft);
       if (opts.focusMode && opts.dimColor) {
-        result.push({ char: "╭", color: connColor(cornerTopLeft) });
+        result.push({ char: "╭", color: cornerColor });
         result.push({ char: "─", color: opts.dimColor });
       } else {
-        result.push({ char: "╭─", color: connColor(cornerTopLeft) });
+        const nextHoriz = (connectorsByCol.get(col + 1) ?? []).find((c) => c.type === "horizontal");
+        const dashColor = nextHoriz ? connColor(nextHoriz) : cornerColor;
+        if (dashColor === cornerColor) {
+          result.push({ char: "╭─", color: cornerColor });
+        } else {
+          result.push({ char: "╭", color: cornerColor });
+          result.push({ char: "─", color: dashColor });
+        }
       }
     } else if (cornerBottomRight) {
       result.push({ char: "╯ ", color: connColor(cornerBottomRight) });
     } else if (cornerBottomLeft) {
+      // ╰ is on the lane's direct path → lane color.
+      // The trailing ─ is a horizontal connector → spanning branch's color.
+      const cornerColor = connColor(cornerBottomLeft);
       if (opts.focusMode && opts.dimColor) {
-        result.push({ char: "╰", color: connColor(cornerBottomLeft) });
+        result.push({ char: "╰", color: cornerColor });
         result.push({ char: "─", color: opts.dimColor });
       } else {
-        result.push({ char: "╰─", color: connColor(cornerBottomLeft) });
+        const nextHoriz = (connectorsByCol.get(col + 1) ?? []).find((c) => c.type === "horizontal");
+        const dashColor = nextHoriz ? connColor(nextHoriz) : cornerColor;
+        if (dashColor === cornerColor) {
+          result.push({ char: "╰─", color: cornerColor });
+        } else {
+          result.push({ char: "╰", color: cornerColor });
+          result.push({ char: "─", color: dashColor });
+        }
       }
     } else if (horizontal && straight) {
       // Crossing: ┼ uses the crossed lane's color (the vertical lane passing through),
