@@ -211,21 +211,20 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       const resolvedTargetColor = targetColor !== undefined ? targetColor : color;
 
       // Target column connector
+      // In focus mode, corners are always dimmed — only ● and │ retain focus color.
       if (kind === "merge") {
-        const targetLaneFocused = to < laneFocused.length && laneFocused[to];
         connectors.push({
           type: goingRight ? "corner-top-right" : "corner-top-left",
           color,
           column: to,
-          isFocused: targetLaneFocused,
+          isFocused: false,
         });
       } else if (kind === "close") {
-        const targetLaneFocused = to < laneFocused.length && laneFocused[to];
         connectors.push({
           type: goingRight ? "corner-bottom-right" : "corner-bottom-left",
           color,
           column: to,
-          isFocused: targetLaneFocused,
+          isFocused: false,
         });
       } else {
         // Branching into a new lane → rounded corner (line turns down)
@@ -619,10 +618,17 @@ export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphCh
     }
   }
 
-  // Pad to fixed width if requested
+  // Pad to fixed width if requested.
+  // We track total character width rather than array length because
+  // focus-mode glyph splitting (e.g. "╭" + "─" as two entries for one column)
+  // inflates the array length beyond the column count.
   if (padToColumns !== undefined) {
-    while (result.length < padToColumns) {
+    const targetWidth = padToColumns * 2; // 2 chars per column
+    let currentWidth = 0;
+    for (const gc of result) currentWidth += gc.char.length;
+    while (currentWidth < targetWidth) {
       result.push({ char: "  ", color: opts.dimColor ?? getBaseColor(0, opts) });
+      currentWidth += 2;
     }
   }
 

@@ -5,12 +5,16 @@ import { renderGraphRow, renderConnectorRow, graphCharsToContent, getColorForCol
 import type { GraphRow, RefInfo } from "../git/types";
 import type { TextRenderable, StyledText } from "@opentui/core";
 
-function RefBadge(props: { info: RefInfo; laneColor: () => string }) {
+function RefBadge(props: { info: RefInfo; laneColor: () => string; dimColor: () => string }) {
   const { theme } = useTheme();
   const t = () => theme();
 
+  // Remote branches use a dimmed background to visually distinguish
+  // them from local branches. Tags and local branches use the lane color.
+  const bgColor = () => props.info.type === "remote" ? props.dimColor() : props.laneColor();
+
   return (
-    <text flexShrink={0} wrapMode="none" fg={t().background} bg={props.laneColor()}>
+    <text flexShrink={0} wrapMode="none" fg={t().background} bg={bgColor()}>
       {` ${props.info.name} `}
     </text>
   );
@@ -48,16 +52,6 @@ function ColumnHeader() {
         Description
       </text>
 
-      {/* Commit hash */}
-      <text
-        flexShrink={0}
-        fg={t().foregroundMuted}
-        wrapMode="none"
-        paddingLeft={1}
-      >
-        Commit
-      </text>
-
       {/* Author */}
       <text
         flexShrink={0}
@@ -74,10 +68,19 @@ function ColumnHeader() {
         flexShrink={0}
         fg={t().foregroundMuted}
         wrapMode="none"
-        paddingRight={1}
         width={16}
       >
         Date
+      </text>
+
+      {/* Commit hash */}
+      <text
+        flexShrink={0}
+        fg={t().foregroundMuted}
+        wrapMode="none"
+        paddingRight={1}
+      >
+        Commit
       </text>
     </box>
   );
@@ -196,7 +199,7 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
           <Show when={visibleRefs().length > 0}>
             <box flexDirection="row" flexShrink={0} gap={1}>
               <For each={visibleRefs()}>
-                {(ri) => <RefBadge info={ri} laneColor={effectiveLaneColor} />}
+                {(ri) => <RefBadge info={ri} laneColor={effectiveLaneColor} dimColor={() => t().foregroundMuted} />}
               </For>
             </box>
           </Show>
@@ -205,17 +208,6 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
             {commit().subject}
           </text>
         </box>
-
-        {/* Short hash */}
-        <text
-          flexShrink={0}
-          fg={props.selected ? t().primary : t().foregroundMuted}
-          wrapMode="none"
-          truncate
-          paddingLeft={1}
-        >
-          {commit().shortHash}
-        </text>
 
         {/* Author */}
         <text
@@ -235,10 +227,20 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
           fg={t().foregroundMuted}
           wrapMode="none"
           truncate
-          paddingRight={1}
           width={16}
         >
           {formatRelativeDate(commit().authorDate)}
+        </text>
+
+        {/* Short hash */}
+        <text
+          flexShrink={0}
+          fg={props.selected ? t().primary : t().foregroundMuted}
+          wrapMode="none"
+          truncate
+          paddingRight={1}
+        >
+          {commit().shortHash}
         </text>
       </box>
 
@@ -268,8 +270,14 @@ function formatRelativeDate(dateStr: string): string {
 
   const day = date.getDate();
   const month = MONTHS[date.getMonth()];
-  const year = date.getFullYear();
-  return `${day}. ${month} ${year}`;
+  const hours = String(date.getHours()).padStart(2, "0");
+  const mins = String(date.getMinutes()).padStart(2, "0");
+
+  // Same year → show time; different year → show year
+  if (date.getFullYear() === now.getFullYear()) {
+    return `${day}. ${month} ${hours}:${mins}`;
+  }
+  return `${day}. ${month} ${date.getFullYear()}`;
 }
 
 export default function GraphView() {
