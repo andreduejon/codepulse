@@ -571,7 +571,14 @@ export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphCh
         nodeColor = getBaseColor(node.color, opts);
       }
       if (col === nodeCol && hasRightConnection) {
-        result.push({ char: `${nodeChar}─`, color: nodeColor, bold: true });
+        // Split: ● in node color, ─ in the connecting branch's color
+        result.push({ char: nodeChar, color: nodeColor, bold: true });
+        const rightConn = (connectorsByCol.get(nodeCol + 1) ?? []).find((c) =>
+          c.type === "horizontal" || c.type === "corner-top-right" ||
+          c.type === "corner-bottom-right" || c.type === "tee-right"
+        );
+        const dashColor = rightConn ? connColor(rightConn) : nodeColor;
+        result.push({ char: "─", color: dashColor });
       } else if (col === nodeCol && hasLeftConnection) {
         result.push({ char: `${nodeChar} `, color: nodeColor, bold: true });
       } else {
