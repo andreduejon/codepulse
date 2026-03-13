@@ -184,16 +184,10 @@ function analyzeScenario(name: string, commits: Commit[]) {
     console.log("  >>> COLUMN JUMPING DETECTED — investigate above");
   }
 
-  // Also print the graph visually with connector rows
-  console.log("\n  Visual graph (with connector rows):");
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    
-    // Commit row
-    let line = "  ";
-    const maxCol = Math.max(row.columns.length, row.nodeColumn + 1);
+  // Helper: render a set of connectors to a simple string line
+  function renderConnectorsToString(connectors: { type: string; column: number; isRemoteOnly?: boolean; color?: number }[], maxCol: number): string {
     const cmap = new Map<number, string>();
-    for (const c of row.connectors) {
+    for (const c of connectors) {
       const chars: Record<string, string> = {
         node: "●",
         straight: "│",
@@ -206,16 +200,70 @@ function analyzeScenario(name: string, commits: Commit[]) {
         "corner-bottom-left": "╰",
         empty: " ",
       };
+      const ch = chars[c.type] ?? "?";
       const existing = cmap.get(c.column);
-      if (!existing || existing === " " || existing === "│") {
-        cmap.set(c.column, chars[c.type] ?? "?");
-      } else if (c.type === "straight" && existing === "─") {
+      if (!existing || existing === " ") {
+        cmap.set(c.column, ch);
+      } else if (existing === "│" && c.type === "horizontal") {
+        // Crossing: vertical + horizontal
         cmap.set(c.column, "┼");
+      } else if (existing === "─" && c.type === "straight") {
+        // Crossing: horizontal + vertical
+        cmap.set(c.column, "┼");
+      } else if ((c.type === "corner-bottom-right" || c.type === "corner-top-right") && existing === "─") {
+        // Corner + horizontal crossing
+        cmap.set(c.column, c.type === "corner-bottom-right" ? "┴" : "┬");
+      } else if (existing === "│") {
+        // Another connector replaces straight (e.g., corner, tee, node)
+        cmap.set(c.column, ch);
       }
     }
+    let s = "";
     for (let col = 0; col < maxCol; col++) {
-      line += (cmap.get(col) ?? " ") + " ";
+      s += (cmap.get(col) ?? " ") + " ";
     }
+    return s;
+  }
+
+  // Also print the graph visually with connector rows
+  console.log("\n  Visual graph (with connector rows):");
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    
+    // Compute maxCol for this row
+    let maxCol = Math.max(row.columns.length, row.nodeColumn + 1);
+    // Also account for all connectors (may extend beyond columns after fan-out)
+    for (const c of row.connectors) {
+      if (c.column + 1 > maxCol) maxCol = c.column + 1;
+    }
+    // Also account for fan-out rows
+    if (row.fanOutRows) {
+      for (const foRow of row.fanOutRows) {
+        for (const c of foRow) {
+          if (c.column + 1 > maxCol) maxCol = c.column + 1;
+        }
+      }
+    }
+
+    // Fan-out rows: render ABOVE the commit row (graph flows bottom-to-top)
+    if (row.fanOutRows) {
+      for (const foConnectors of row.fanOutRows) {
+        let foMaxCol = maxCol;
+        for (const c of foConnectors) {
+          if (c.column + 1 > foMaxCol) foMaxCol = c.column + 1;
+        }
+        let foLine = "  " + renderConnectorsToString(foConnectors, foMaxCol);
+        // Annotate which lane is closing
+        const corner = foConnectors.find(c => c.type === "corner-bottom-right" || c.type === "corner-bottom-left");
+        if (corner) {
+          foLine += ` (fan-out: lane ${corner.column} closing, color ${corner.color})`;
+        }
+        console.log(foLine);
+      }
+    }
+
+    // Commit row
+    let line = "  " + renderConnectorsToString(row.connectors, maxCol);
     line += ` ${row.commit.shortHash} ${row.branchName}`;
     if (row.isRemoteOnly) line += " [RO]";
     
@@ -348,6 +396,77 @@ function scenario8(): Commit[] {
   ];
 }
 
+// ============================================================
+// Scenario 9: e-ant-backend tspd-556/558/626 area
+// Complex cross-merges between tspd-556 and tspd-558 branches
+// with shared ancestor cee38bbb and tspd-626 side-branch
+// ============================================================
+function scenario9(): Commit[] {
+  // Exact structure from git log --topo-order of e-ant-backend:
+  //
+  // cd21d4d0 (MR #22 tspd-642) parents: 3c67a4f3, 34ae7c3f
+  // 34ae7c3f parents: e9bb1d45  — Update .env.template
+  // e9bb1d45 parents: 4f8ea691
+  // ...
+  // f7e7523b parents: cee38bbb  — chore(tspd-642): config
+  // 3c67a4f3 (MR #19 tspd-557) parents: 9b4a4ba2, 0fee6932
+  // 0fee6932 parents: 7ffa77a5  — [tspd-557] ESN > time log
+  // 9b4a4ba2 (MR #20 tspd-556) parents: d1bbf694, 2cb7d0af
+  // 2cb7d0af parents: 3e36e1b3  — feat(tspd-558): minor config fixes
+  // 3e36e1b3 parents: c1c4da6a, 34bbc62c — Merge origin/tspd-558 into tspd-556
+  // c1c4da6a parents: 5b4a22bb, fe1485f3 — Merge origin/tspd-558 into tspd-556
+  // 5b4a22bb parents: 7a4804bc  — feat(tspd-535): sso config
+  // 7a4804bc parents: 3f9f7a92  — [tspd-556]- refactor
+  // 3f9f7a92 parents: cee38bbb  — [tspd-556]- add a new api
+  // d1bbf694 (MR #21 tspd-558) parents: cee38bbb, 34bbc62c
+  // 34bbc62c parents: fe1485f3  — [tspd-558]- refactor the code
+  // fe1485f3 parents: cee38bbb  — [tspd-556]- LLPs: improved bulk update
+  // b95a0262 parents: e5b2a605  — [tspd-626]- added tests
+  // e5b2a605 parents: cee38bbb  — [tspd-626]- Functionality to document
+  // cee38bbb parents: 8b48362d  — Delete cicd/helm/...
+  // 8b48362d parents: 7ffa77a5  — chore(tspd-506): config
+  // 7ffa77a5 (MR #18) parents: d7979cd9, aa24bb22
+  // aa24bb22 (v1.49.0) parents: c0d70f04
+
+  return [
+    // tspd-642 branch
+    makeCommit("cd21d4d0", ["3c67a4f3", "34ae7c3f"], [{ name: "develop", type: "branch", isCurrent: true }], "Merge pull request #22 from lht-general/tspd-642"),
+    makeCommit("34ae7c3f", ["e9bb1d45"], [], "Update .env.template"),
+    makeCommit("e9bb1d45", ["4f8ea691"], [], "fix(tspd-642): etop report s1000d and warnings in sheet"),
+    makeCommit("4f8ea691", ["1f4c8531"], [], "fix(tspd-642): remained part of refTaskName"),
+    makeCommit("1f4c8531", ["be4f5c69"], [], "feat(tspd-642): refSb handling & warnings in reports"),
+    makeCommit("be4f5c69", ["85509b67"], [], "feat(tspd-642): customer s100d task name print option"),
+    makeCommit("85509b67", ["f7e7523b"], [], "feat(tspd-642): s100d task name input (engine)"),
+    makeCommit("f7e7523b", ["cee38bbb"], [], "chore(tspd-642): config"),
+    // Merge #19 tspd-557
+    makeCommit("3c67a4f3", ["9b4a4ba2", "0fee6932"], [], "Merge pull request #19 from lht-general/tspd-557"),
+    makeCommit("0fee6932", ["7ffa77a5"], [], "[tspd-557] - ESN > time log / LLPs: automatically synchronize ratings used"),
+    // Merge #20 tspd-556
+    makeCommit("9b4a4ba2", ["d1bbf694", "2cb7d0af"], [], "Merge pull request #20 from lht-general/tspd-556"),
+    makeCommit("2cb7d0af", ["3e36e1b3"], [], "feat(tspd-558): minor config fixes"),
+    makeCommit("3e36e1b3", ["c1c4da6a", "34bbc62c"], [], "Merge remote-tracking branch 'origin/tspd-558' into tspd-556"),
+    makeCommit("c1c4da6a", ["5b4a22bb", "fe1485f3"], [], "Merge remote-tracking branch 'origin/tspd-558' into tspd-556"),
+    makeCommit("5b4a22bb", ["7a4804bc"], [], "feat(tspd-535): sso config"),
+    makeCommit("7a4804bc", ["3f9f7a92"], [], "[tspd-556]- refactor"),
+    makeCommit("3f9f7a92", ["cee38bbb"], [], "[tspd-556]- add a new api for calculating the @install values"),
+    // Merge #21 tspd-558
+    makeCommit("d1bbf694", ["cee38bbb", "34bbc62c"], [], "Merge pull request #21 from lht-general/tspd-558"),
+    makeCommit("34bbc62c", ["fe1485f3"], [], "[tspd-558]- refactor the code"),
+    makeCommit("fe1485f3", ["cee38bbb"], [], "[tspd-556]- LLPs: improved bulk update of part / LLP times & cycles"),
+    // tspd-626 branch
+    makeCommit("b95a0262", ["e5b2a605"], [{ name: "origin/tspd-626", type: "remote", isCurrent: false }], "[tspd-626]- added tests for ticket tspd-626"),
+    makeCommit("e5b2a605", ["cee38bbb"], [], "[tspd-626]- Functionality to document 'penalty cycles'"),
+    // shared ancestor
+    makeCommit("cee38bbb", ["8b48362d"], [], "Delete cicd/helm/e-ant-backend/values.tspd-506.yaml"),
+    makeCommit("8b48362d", ["7ffa77a5"], [], "chore(tspd-506): config"),
+    // Merge #18
+    makeCommit("7ffa77a5", ["d7979cd9", "aa24bb22"], [], "Merge pull request #18 from lht-general/main"),
+    makeCommit("aa24bb22", ["c0d70f04"], [{ name: "v1.49.0", type: "tag", isCurrent: false }], "Release v1.49.0"),
+    makeCommit("c0d70f04", ["d7979cd9"], [], "Merge pull request #17 from lht-general/develop"),
+    makeCommit("d7979cd9", [], [], "initial"),
+  ];
+}
+
 // Run all scenarios
 analyzeScenario("develop + two sequential feature merges", scenario1());
 analyzeScenario("develop + three parallel feature branches (fan-out)", scenario2());
@@ -357,3 +476,4 @@ analyzeScenario("diamond pattern", scenario5());
 analyzeScenario("two long-lived branches with cross-merge", scenario6());
 analyzeScenario("release branch far from branch-off (tee vs corner)", scenario7());
 analyzeScenario("unmerged remote-only branches above develop", scenario8());
+analyzeScenario("e-ant-backend tspd-556/558/626 area", scenario9());

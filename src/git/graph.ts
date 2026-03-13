@@ -181,13 +181,47 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
     // Find which lane this commit occupies
     let nodeColumn = lanes.indexOf(commit.hash);
     if (nodeColumn === -1) {
-      // New commit not in any lane -- always append to get its own column.
-      // Do NOT reuse empty lanes here; that would place independent branch
-      // tips at the same horizontal level which looks wrong.
-      nodeColumn = lanes.length;
-      lanes.push(commit.hash);
-      laneFocused.push(false); // will be set properly during parent processing
-      laneRemoteOnly.push(remoteOnlyHashes.has(commit.hash));
+      // New commit not tracked in any lane.
+      // Try to reuse an interior null lane (a gap between active lanes) to
+      // keep the graph compact. Only reuse gaps, not trailing nulls — the
+      // trailing null cleanup already handles those.
+      let reuseIdx = -1;
+      for (let j = 0; j < lanes.length; j++) {
+        if (lanes[j] === null) {
+          // Check if there's an active lane after this one (i.e., it's a gap)
+          let hasActiveAfter = false;
+          for (let k = j + 1; k < lanes.length; k++) {
+            if (lanes[k] !== null) { hasActiveAfter = true; break; }
+          }
+          if (hasActiveAfter) {
+            reuseIdx = j;
+            break;
+          }
+        }
+      }
+      if (reuseIdx !== -1) {
+        nodeColumn = reuseIdx;
+        lanes[reuseIdx] = commit.hash;
+        laneFocused[reuseIdx] = false;
+        laneRemoteOnly[reuseIdx] = remoteOnlyHashes.has(commit.hash);
+      } else {
+        nodeColumn = lanes.length;
+        lanes.push(commit.hash);
+        laneFocused.push(false);
+        laneRemoteOnly.push(remoteOnlyHashes.has(commit.hash));
+      }
+    }
+
+    // Fan-out: find all OTHER lanes that also track this commit's hash.
+    // This happens when multiple children pointed to the same parent
+    // and we didn't merge them early (we keep lanes independent until the
+    // parent commit is reached). Now close those extra lanes with
+    // branch-off connectors (╰ or ╯) so the graph shows the fan-out.
+    const extraLanes: number[] = [];
+    for (let col = 0; col < lanes.length; col++) {
+      if (col !== nodeColumn && lanes[col] === commit.hash) {
+        extraLanes.push(col);
+      }
     }
 
     // Record the tip column for the current branch (used for consistent focus color)
@@ -214,6 +248,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
           isRemoteOnly: isCommitRemoteOnly,
         });
       } else if (lanes[col] !== null) {
+        const laneHash = lanes[col]!;
         connectors.push({
           type: "straight",
           color: col,
@@ -247,9 +282,6 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       color: number,
       kind: "merge" | "branch" | "close",
       focused?: boolean,
-      /** Color for the horizontal connectors spanning between from and to.
-       *  Defaults to `color` if not provided. */
-      horizontalColor?: number,
       /** Whether these connectors belong to a remote-only branch */
       remoteOnly?: boolean,
     ) {
@@ -259,10 +291,12 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       const lo = Math.min(from, to);
       const hi = Math.max(from, to);
 
-      const hColor = horizontalColor !== undefined ? horizontalColor : color;
+      // Horizontal connectors always use the OTHER branch's color (the lane
+      // at `to`, not the node's lane). This is consistent regardless of merge
+      // direction: horizontals represent the connection to the other branch.
+      const hColor = to;
 
       // Intermediate columns between node and target get horizontal lines.
-      // These use the spanning branch's color (horizontalColor).
       for (let col = lo + 1; col < hi; col++) {
         connectors.push({
           type: "horizontal",
@@ -273,17 +307,20 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
         });
       }
 
-      // Corner at the target column.
-      // The corner sits on the target lane's vertical path, so it uses
-      // the target lane's color (= `to` column index) for merge/close.
-      // For branch kind, the corner starts a new lane, so it uses `color`
-      // (which is the new lane's color index).
+      // Connector at the target column.
+      // For "merge": the target lane continues above and below, so use a
+      // T-junction (├ or ┤) instead of a corner. If going right (target is
+      // to the right of node), the horizontal arrives from the left →
+      // tee-right (┤). If going left, the horizontal arrives from the
+      // right → tee-left (├).
+      // For "close": the lane terminates here → bottom corner (╯ or ╰).
+      // For "branch": a new lane starts here → top corner (╮ or ╭).
       const targetLaneFocused = to < laneFocused.length && laneFocused[to];
 
       if (kind === "merge") {
-        // Target lane continues — corner is on its direct line → use target lane color (= to)
+        // Target lane continues — T-junction on its direct line → use target lane color (= to)
         connectors.push({
-          type: goingRight ? "corner-top-right" : "corner-top-left",
+          type: goingRight ? "tee-right" : "tee-left",
           color: to,
           column: to,
           isFocused: targetLaneFocused,
@@ -311,6 +348,134 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       }
     }
 
+    // Build fan-out rows: when this commit has multiple lanes pointing to it,
+    // each extra lane gets its own connector row showing a branch-off corner.
+    // Fan-out rows render ABOVE the parent commit (graph flows bottom-to-top:
+    // oldest at bottom, newest at top). Children's lanes come from above and
+    // converge at the parent. Sort farthest-first so outermost lanes close
+    // first (topmost fan-out row) and closest lanes close last (right above ●).
+    const fanOutRows: Connector[][] = [];
+    if (extraLanes.length > 0) {
+      const sorted = [...extraLanes].sort(
+        (a, b) => Math.abs(b - nodeColumn) - Math.abs(a - nodeColumn)
+      );
+
+      // Track which extra lanes are still active (not yet closed).
+      // We'll close them one per fan-out row, farthest first.
+      const stillActive = new Set(extraLanes);
+
+      for (const extraCol of sorted) {
+        const fanOutConnectors: Connector[] = [];
+        const extraFocused = laneFocused[extraCol];
+        const extraRemoteOnly = laneRemoteOnly[extraCol];
+        const goingRight = extraCol > nodeColumn;
+        const lo = Math.min(nodeColumn, extraCol);
+        const hi = Math.max(nodeColumn, extraCol);
+
+        // Build the connector row: straight lines for all active lanes,
+        // horizontal connectors between node and extra lane, corner at the end.
+        // When a horizontal crosses an active lane, we emit BOTH a straight and
+        // a horizontal connector at the same column — renderFanOutRow will
+        // combine them into a crossing glyph (┼─).
+        // 
+        // Fan-out rows render ABOVE the parent commit. The child lane comes
+        // from above (going DOWN) and terminates here, curving inward to the
+        // parent column. So the corner is "bottom" (╯/╰) — line ends here,
+        // connecting upward to the child and horizontally to the parent.
+        for (let col = 0; col < lanes.length; col++) {
+          if (col === extraCol) {
+            // This is the lane we're closing — bottom corner here
+            // ╯ if extra is to the right (line from above turns left to parent)
+            // ╰ if extra is to the left (line from above turns right to parent)
+            fanOutConnectors.push({
+              type: goingRight ? "corner-bottom-right" : "corner-bottom-left",
+              color: extraCol,
+              column: col,
+              isFocused: extraFocused,
+              isRemoteOnly: extraRemoteOnly,
+            });
+          } else if (col === nodeColumn) {
+            // The parent's vertical line continues, but with a T-junction
+            // to show the branch-off. ├ if the extra lane is to the right,
+            // ┤ if it's to the left.
+            fanOutConnectors.push({
+              type: goingRight ? "tee-left" : "tee-right",
+              color: nodeColumn,
+              column: col,
+              isFocused: isCommitOnCurrentBranch,
+              isRemoteOnly: isCommitRemoteOnly,
+            });
+          } else if (col > lo && col < hi) {
+            // Between node and extra lane.
+            // Check if there's an active lane at this column (crossing).
+            const isActiveLane = (lanes[col] !== null && !stillActive.has(col)) || 
+                                 (stillActive.has(col));
+            if (isActiveLane) {
+              // Active lane being crossed by the horizontal — emit both
+              // connectors. The renderer will combine these into ┼─.
+              fanOutConnectors.push({
+                type: "straight",
+                color: col,
+                column: col,
+                isFocused: laneFocused[col],
+                isRemoteOnly: laneRemoteOnly[col],
+              });
+              fanOutConnectors.push({
+                type: "horizontal",
+                color: extraCol,
+                column: col,
+                isFocused: false,
+                isRemoteOnly: extraRemoteOnly,
+              });
+            } else {
+              // Empty column — just horizontal passing through
+              fanOutConnectors.push({
+                type: "horizontal",
+                color: extraCol,
+                column: col,
+                isFocused: false,
+                isRemoteOnly: extraRemoteOnly,
+              });
+            }
+          } else if ((lanes[col] !== null && col !== extraCol) || stillActive.has(col)) {
+            // Active lane passing through (either regular lane or another extra)
+            fanOutConnectors.push({
+              type: "straight",
+              color: col,
+              column: col,
+              isFocused: laneFocused[col],
+              isRemoteOnly: laneRemoteOnly[col],
+            });
+          } else {
+            fanOutConnectors.push({
+              type: "empty",
+              color: 0,
+              column: col,
+            });
+          }
+        }
+
+        fanOutRows.push(fanOutConnectors);
+
+        // Mark this extra lane as closed
+        stillActive.delete(extraCol);
+        lanes[extraCol] = null;
+        laneFocused[extraCol] = false;
+        laneRemoteOnly[extraCol] = false;
+      }
+
+      // Remove stray "straight" connectors for lanes closed by fan-out.
+      // The initial connectors were built before fan-out processing, so they
+      // still contain │ for extra lanes that are now closed. Replace them with
+      // empties so the commit row doesn't show dangling vertical lines.
+      for (const extraCol of extraLanes) {
+        const idx = connectors.findIndex(c => c.column === extraCol && c.type === "straight");
+        if (idx !== -1) {
+          connectors[idx] = { type: "empty", color: 0, column: extraCol };
+        }
+      }
+    }
+
     // Now handle parents and generate merge/branch connectors
     const parents = commit.parents;
 
@@ -323,31 +488,50 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       const parentHash = parents[0];
       const parentFocused = isCommitOnCurrentBranch && currentBranchHashes.has(parentHash);
       const parentRemoteOnly = remoteOnlyHashes.has(parentHash);
+      // For the lane's remote-only status: if the current commit is remote-only,
+      // the lane stays remote-only (it visually represents the remote-only branch's
+      // path to its ancestor). Only when a non-remote-only commit takes over does
+      // the lane become non-remote-only.
+      const laneRemoteOnlyValue = isCommitRemoteOnly || parentRemoteOnly;
       const existingLane = lanes.indexOf(parentHash);
       if (existingLane !== -1 && existingLane !== nodeColumn) {
-        if (nodeColumn < existingLane) {
-          addSpanningConnectors(nodeColumn, existingLane, existingLane, "close", parentFocused, nodeColumn, isCommitRemoteOnly);
-          lanes[existingLane] = null;
-          laneFocused[existingLane] = false;
-          laneRemoteOnly[existingLane] = false;
+        // Another lane already tracks this parent.
+        // If the parent has been processed (rendered), we can merge now.
+        // If not, keep BOTH lanes tracking the same parent independently
+        // so the parent commit can show the fan-out with branch-off corners.
+        if (processedColumns.has(parentHash)) {
+          // Parent already rendered — merge into it
+          if (nodeColumn < existingLane) {
+            addSpanningConnectors(nodeColumn, existingLane, existingLane, "close", parentFocused, isCommitRemoteOnly);
+            lanes[existingLane] = null;
+            laneFocused[existingLane] = false;
+            laneRemoteOnly[existingLane] = false;
+            lanes[nodeColumn] = parentHash;
+            laneFocused[nodeColumn] = parentFocused;
+            laneRemoteOnly[nodeColumn] = laneRemoteOnlyValue;
+          } else {
+            addSpanningConnectors(nodeColumn, existingLane, nodeColumn, "merge", parentFocused, isCommitRemoteOnly);
+            lanes[nodeColumn] = null;
+            laneFocused[nodeColumn] = false;
+            laneRemoteOnly[nodeColumn] = false;
+          }
+        } else {
+          // Parent NOT yet rendered — don't merge. Keep both lanes
+          // tracking the same parent. The parent commit's row will
+          // close the extra lanes with branch-off corners (fan-out).
           lanes[nodeColumn] = parentHash;
           laneFocused[nodeColumn] = parentFocused;
-          laneRemoteOnly[nodeColumn] = parentRemoteOnly;
-        } else {
-          addSpanningConnectors(nodeColumn, existingLane, nodeColumn, "merge", parentFocused, undefined, isCommitRemoteOnly);
-          lanes[nodeColumn] = null;
-          laneFocused[nodeColumn] = false;
-          laneRemoteOnly[nodeColumn] = false;
+          laneRemoteOnly[nodeColumn] = laneRemoteOnlyValue;
         }
       } else if (existingLane === nodeColumn) {
         lanes[nodeColumn] = parentHash;
         laneFocused[nodeColumn] = parentFocused;
-        laneRemoteOnly[nodeColumn] = parentRemoteOnly;
+        laneRemoteOnly[nodeColumn] = laneRemoteOnlyValue;
       } else if (processedColumns.has(parentHash)) {
         const parentCol = processedColumns.get(parentHash)!;
         if (parentCol !== nodeColumn) {
           const targetActive = parentCol < lanes.length && lanes[parentCol] !== null;
-          addSpanningConnectors(nodeColumn, parentCol, nodeColumn, targetActive ? "merge" : "close", parentFocused, undefined, isCommitRemoteOnly);
+          addSpanningConnectors(nodeColumn, parentCol, nodeColumn, targetActive ? "merge" : "close", parentFocused, isCommitRemoteOnly);
         }
         lanes[nodeColumn] = null;
         laneFocused[nodeColumn] = false;
@@ -355,27 +539,34 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       } else {
         lanes[nodeColumn] = parentHash;
         laneFocused[nodeColumn] = parentFocused;
-        laneRemoteOnly[nodeColumn] = parentRemoteOnly;
+        laneRemoteOnly[nodeColumn] = laneRemoteOnlyValue;
       }
     } else {
       // Merge commit -- first parent continues the lane, others open new lanes.
       const firstParent = parents[0];
       const firstParentFocused = isCommitOnCurrentBranch && currentBranchHashes.has(firstParent);
       const firstParentRemoteOnly = remoteOnlyHashes.has(firstParent);
+      const firstParentLaneROValue = isCommitRemoteOnly || firstParentRemoteOnly;
       const firstParentLane = lanes.indexOf(firstParent);
       if (firstParentLane !== -1 && firstParentLane !== nodeColumn) {
-        addSpanningConnectors(nodeColumn, firstParentLane, firstParentLane, "close", firstParentFocused, nodeColumn, isCommitRemoteOnly);
-        lanes[firstParentLane] = null;
-        laneFocused[firstParentLane] = false;
-        laneRemoteOnly[firstParentLane] = false;
+        // Another lane already tracks the first parent.
+        // If the parent has been processed, close the other lane now.
+        // If not, keep both lanes tracking the same parent — the parent
+        // commit's row will show the fan-out with branch-off corners.
+        if (processedColumns.has(firstParent)) {
+          addSpanningConnectors(nodeColumn, firstParentLane, firstParentLane, "close", firstParentFocused, isCommitRemoteOnly);
+          lanes[firstParentLane] = null;
+          laneFocused[firstParentLane] = false;
+          laneRemoteOnly[firstParentLane] = false;
+        }
         lanes[nodeColumn] = firstParent;
         laneFocused[nodeColumn] = firstParentFocused;
-        laneRemoteOnly[nodeColumn] = firstParentRemoteOnly;
+        laneRemoteOnly[nodeColumn] = firstParentLaneROValue;
       } else if (processedColumns.has(firstParent) && firstParentLane === -1) {
         const parentCol = processedColumns.get(firstParent)!;
         if (parentCol !== nodeColumn) {
           const targetActive = parentCol < lanes.length && lanes[parentCol] !== null;
-          addSpanningConnectors(nodeColumn, parentCol, nodeColumn, targetActive ? "merge" : "close", firstParentFocused, undefined, isCommitRemoteOnly);
+          addSpanningConnectors(nodeColumn, parentCol, nodeColumn, targetActive ? "merge" : "close", firstParentFocused, isCommitRemoteOnly);
         }
         lanes[nodeColumn] = null;
         laneFocused[nodeColumn] = false;
@@ -383,23 +574,24 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       } else {
         lanes[nodeColumn] = firstParent;
         laneFocused[nodeColumn] = firstParentFocused;
-        laneRemoteOnly[nodeColumn] = firstParentRemoteOnly;
+        laneRemoteOnly[nodeColumn] = firstParentLaneROValue;
       }
 
       for (let p = 1; p < parents.length; p++) {
         const parentHash = parents[p];
         const pFocused = isCommitOnCurrentBranch && currentBranchHashes.has(parentHash);
         const pRemoteOnly = remoteOnlyHashes.has(parentHash);
+        const pLaneROValue = isCommitRemoteOnly || pRemoteOnly;
         const existingLane = lanes.indexOf(parentHash);
         if (existingLane !== -1) {
           if (existingLane !== nodeColumn) {
-            addSpanningConnectors(nodeColumn, existingLane, existingLane, "merge", pFocused, undefined, isCommitRemoteOnly);
+            addSpanningConnectors(nodeColumn, existingLane, existingLane, "merge", pFocused, pLaneROValue);
           }
         } else if (processedColumns.has(parentHash)) {
           const parentCol = processedColumns.get(parentHash)!;
           if (parentCol !== nodeColumn) {
             const kind = (parentCol < lanes.length && lanes[parentCol] !== null) ? "merge" : "branch";
-            addSpanningConnectors(nodeColumn, parentCol, parentCol, kind, pFocused, undefined, isCommitRemoteOnly);
+            addSpanningConnectors(nodeColumn, parentCol, parentCol, kind, pFocused, pLaneROValue);
           }
         } else {
           // Open a new lane for this parent
@@ -409,28 +601,25 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
             newLane = emptyIdx;
             lanes[emptyIdx] = parentHash;
             laneFocused[emptyIdx] = pFocused;
-            laneRemoteOnly[emptyIdx] = pRemoteOnly;
+            laneRemoteOnly[emptyIdx] = pLaneROValue;
           } else {
             newLane = lanes.length;
             lanes.push(parentHash);
             laneFocused.push(pFocused);
-            laneRemoteOnly.push(pRemoteOnly);
+            laneRemoteOnly.push(pLaneROValue);
           }
           // Add spanning connectors from nodeColumn to the new lane
-          addSpanningConnectors(nodeColumn, newLane, newLane, "branch", pFocused, undefined, pRemoteOnly);
+          addSpanningConnectors(nodeColumn, newLane, newLane, "branch", pFocused, pLaneROValue);
         }
       }
     }
 
-    // Clean up trailing null lanes
-    const nextCommit = i + 1 < commits.length ? commits[i + 1] : null;
-    const nextIsTracked = nextCommit !== null && lanes.indexOf(nextCommit.hash) !== -1;
-    if (nextIsTracked || nextCommit === null) {
-      while (lanes.length > 0 && lanes[lanes.length - 1] === null) {
-        lanes.pop();
-        laneFocused.pop();
-        laneRemoteOnly.pop();
-      }
+    // Clean up trailing null lanes.
+    // Always pop trailing nulls to keep the graph compact.
+    while (lanes.length > 0 && lanes[lanes.length - 1] === null) {
+      lanes.pop();
+      laneFocused.pop();
+      laneRemoteOnly.pop();
     }
 
     // Build the columns for this row (snapshot of active lanes AFTER parent processing)
@@ -451,6 +640,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       branchName: branchNameMap.get(commit.hash) ?? "",
       isRemoteOnly: isCommitRemoteOnly,
       remoteOnlyBranches,
+      fanOutRows: fanOutRows.length > 0 ? fanOutRows : undefined,
     });
 
     // Record this commit as processed with its column, so later commits
@@ -478,6 +668,14 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       // Force all columns to remote-only
       for (const col of row.columns) {
         col.isRemoteOnly = true;
+      }
+      // Force all fan-out row connectors to remote-only
+      if (row.fanOutRows) {
+        for (const foRow of row.fanOutRows) {
+          for (const conn of foRow) {
+            conn.isRemoteOnly = true;
+          }
+        }
       }
     }
   }
@@ -576,9 +774,143 @@ export function getMaxGraphColumns(rows: GraphRow[]): number {
       if (c.column + 1 > maxCol) maxCol = c.column + 1;
     }
     maxCol = Math.max(maxCol, row.columns.length);
+    // Also account for fan-out rows
+    if (row.fanOutRows) {
+      for (const foRow of row.fanOutRows) {
+        for (const c of foRow) {
+          if (c.column + 1 > maxCol) maxCol = c.column + 1;
+        }
+      }
+    }
     if (maxCol > max) max = maxCol;
   }
   return max;
+}
+
+/**
+ * Render a fan-out connector row. These are extra rows below a commit that
+ * show branch-off corners for lanes that were all pointing to the same parent.
+ * Each fan-out row shows one lane closing with a corner, plus straight lines
+ * for active lanes and horizontals spanning from the parent's column.
+ *
+ * The connectors array is pre-built by buildGraph — one entry per column.
+ */
+export function renderFanOutRow(fanOutConnectors: Connector[], opts: RenderOptions = {}): GraphChar[] {
+  const padToColumns = opts.padToColumns;
+  const result: GraphChar[] = [];
+
+  // NOTE: connColor is duplicated in renderGraphRow — keep both in sync
+  function connColor(c: { color: number; isFocused?: boolean; isRemoteOnly?: boolean }): string {
+    const fc = getFocusColor(c.isFocused, opts);
+    if (fc) return fc;
+    if (c.isRemoteOnly && opts.remoteOnlyDimColor) return opts.remoteOnlyDimColor;
+    return getBaseColor(c.color, opts);
+  }
+
+  // Group by column — may have multiple connectors at the same column (crossing)
+  const byCol = new Map<number, Connector[]>();
+  let maxCol = 0;
+  for (const c of fanOutConnectors) {
+    const list = byCol.get(c.column) ?? [];
+    list.push(c);
+    byCol.set(c.column, list);
+    if (c.column >= maxCol) maxCol = c.column + 1;
+  }
+
+  for (let col = 0; col < maxCol; col++) {
+    const connectors = byCol.get(col);
+    if (!connectors || connectors.length === 0) {
+      result.push({ char: "  ", color: opts.dimColor ?? getBaseColor(col, opts) });
+      continue;
+    }
+
+    // Find specific connector types at this column
+    const straight = connectors.find(c => c.type === "straight");
+    const horizontal = connectors.find(c => c.type === "horizontal");
+    const cornerBR = connectors.find(c => c.type === "corner-bottom-right");
+    const cornerBL = connectors.find(c => c.type === "corner-bottom-left");
+    const teeLeft = connectors.find(c => c.type === "tee-left");
+    const teeRight = connectors.find(c => c.type === "tee-right");
+
+    if (teeLeft) {
+      // ├ — parent lane with branch going right.
+      // ├ uses parent lane's color; trailing ─ uses the horizontal/branch color.
+      const teeColor = connColor(teeLeft);
+      if (opts.focusMode && opts.dimColor) {
+        result.push({ char: "├", color: teeColor });
+        result.push({ char: "─", color: opts.dimColor });
+      } else {
+        const nextConns = byCol.get(col + 1);
+        const nextH = nextConns?.find(c => c.type === "horizontal" || c.type === "corner-bottom-right");
+        const dashColor = nextH ? connColor(nextH) : teeColor;
+        if (dashColor === teeColor) {
+          result.push({ char: "├─", color: teeColor });
+        } else {
+          result.push({ char: "├", color: teeColor });
+          result.push({ char: "─", color: dashColor });
+        }
+      }
+    } else if (teeRight) {
+      // ┤ — parent lane with branch going left.
+      result.push({ char: "┤ ", color: connColor(teeRight) });
+    } else if (straight && horizontal) {
+      // Crossing: ┼ uses the vertical lane's color, ─ uses the horizontal's color
+      result.push({ char: "┼", color: connColor(straight) });
+      result.push({ char: "─", color: connColor(horizontal) });
+    } else if (cornerBR) {
+      // ╯ — lane comes from above, curves left toward parent and terminates
+      if (horizontal) {
+        // Corner + horizontal crossing: ┴ glyph
+        result.push({ char: "┴", color: connColor(cornerBR) });
+        result.push({ char: "─", color: connColor(horizontal) });
+      } else {
+        result.push({ char: "╯ ", color: connColor(cornerBR) });
+      }
+    } else if (cornerBL) {
+      // ╰ — lane comes from above, curves right toward parent and terminates
+      const cornerColor = connColor(cornerBL);
+      if (horizontal) {
+        // Corner + horizontal crossing (unlikely but handle for correctness)
+        result.push({ char: "┴", color: cornerColor });
+        result.push({ char: "─", color: connColor(horizontal) });
+      } else if (opts.focusMode && opts.dimColor) {
+        result.push({ char: "╰", color: cornerColor });
+        result.push({ char: "─", color: opts.dimColor });
+      } else {
+        // Look for horizontal at next column for trailing dash color
+        const nextConns = byCol.get(col + 1);
+        const nextH = nextConns?.find(c => c.type === "horizontal");
+        const dashColor = nextH ? connColor(nextH) : cornerColor;
+        if (dashColor === cornerColor) {
+          result.push({ char: "╰─", color: cornerColor });
+        } else {
+          result.push({ char: "╰", color: cornerColor });
+          result.push({ char: "─", color: dashColor });
+        }
+      }
+    } else if (straight) {
+      const color = connColor(straight);
+      const isBold = !opts.focusMode || !!straight.isFocused;
+      result.push({ char: "│ ", color, bold: isBold });
+    } else if (horizontal) {
+      result.push({ char: "──", color: connColor(horizontal) });
+    } else {
+      result.push({ char: "  ", color: opts.dimColor ?? getBaseColor(col, opts) });
+    }
+  }
+
+  // Pad to fixed width
+  if (padToColumns !== undefined) {
+    const targetWidth = padToColumns * 2;
+    let currentWidth = 0;
+    for (const gc of result) currentWidth += gc.char.length;
+    while (currentWidth < targetWidth) {
+      result.push({ char: "  ", color: opts.dimColor ?? getBaseColor(0, opts) });
+      currentWidth += 2;
+    }
+  }
+
+  return result;
 }
 
 export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphChar[] {
@@ -588,6 +920,7 @@ export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphCh
 
   // Helper: resolve color for a connector based on its isFocused flag
   // and isRemoteOnly flag. Focus mode takes precedence over remote-only dimming.
+  // NOTE: connColor is duplicated in renderFanOutRow — keep both in sync
   function connColor(c: { color: number; isFocused?: boolean; isRemoteOnly?: boolean }): string {
     const fc = getFocusColor(c.isFocused, opts);
     if (fc) return fc;
@@ -601,9 +934,7 @@ export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphCh
   for (const c of row.connectors) {
     if (c.column >= maxCol) maxCol = c.column + 1;
   }
-  for (const c of row.columns) {
-    maxCol = Math.max(maxCol, row.columns.length);
-  }
+  maxCol = Math.max(maxCol, row.columns.length);
 
   // Group connectors by column for easy lookup
   const connectorsByCol = new Map<number, Connector[]>();
@@ -668,8 +999,9 @@ export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphCh
         nodeColor = getBaseColor(node.color, opts);
       }
       if (col === nodeCol && hasRightConnection) {
-        // The ─ right after ● is part of the node's direct path, so it uses
-        // the node's lane color. The spanning branch color starts at the next column.
+        // The ─ right after ● uses the OTHER branch's color (same as horizontals).
+        // For merges: source branch color. For branch-offs: new branch color.
+        // Look up the horizontal/corner connector at the next column to get the color.
         // In focus mode, the dash is always dimmed.
         result.push({ char: nodeChar, color: nodeColor, bold: true });
         let dashColor: string;
@@ -678,7 +1010,15 @@ export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphCh
         } else if (node.isRemoteOnly && opts.remoteOnlyDimColor) {
           dashColor = opts.remoteOnlyDimColor;
         } else {
-          dashColor = getBaseColor(node.color, opts);
+          // Find the horizontal or corner connector at col+1 to pick up the other branch's color
+          const nextConnectors = connectorsByCol.get(col + 1) ?? [];
+          const nextHoriz = nextConnectors.find((c) => c.type === "horizontal");
+          const nextCorner = nextConnectors.find((c) =>
+            c.type === "corner-top-right" || c.type === "corner-bottom-right" ||
+            c.type === "corner-top-left" || c.type === "corner-bottom-left"
+          );
+          const hConn = nextHoriz ?? nextCorner;
+          dashColor = hConn ? connColor(hConn) : getBaseColor(node.color, opts);
         }
         result.push({ char: "─", color: dashColor });
       } else if (col === nodeCol && hasLeftConnection) {
@@ -706,7 +1046,17 @@ export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphCh
     } else if (teeRight) {
       result.push({ char: "┤ ", color: connColor(teeRight) });
     } else if (cornerTopRight) {
-      result.push({ char: "╮ ", color: connColor(cornerTopRight) });
+      if (horizontal) {
+        // Corner + horizontal crossing: lane going down + horizontal passing through.
+        // ┬ = horizontal with vertical going DOWN. The corner starts a lane below,
+        // and the horizontal passes through from the merge/branch connector.
+        const cornerColor = connColor(cornerTopRight);
+        const hColor = connColor(horizontal);
+        result.push({ char: "┬", color: cornerColor });
+        result.push({ char: "─", color: hColor });
+      } else {
+        result.push({ char: "╮ ", color: connColor(cornerTopRight) });
+      }
     } else if (cornerTopLeft) {
       // ╭ is on the lane's direct path → lane color.
       // The trailing ─ is a horizontal connector → use the spanning branch's color.
@@ -726,7 +1076,17 @@ export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphCh
         }
       }
     } else if (cornerBottomRight) {
-      result.push({ char: "╯ ", color: connColor(cornerBottomRight) });
+      if (horizontal) {
+        // Corner + horizontal crossing: lane from above terminating + horizontal passing through.
+        // ┴ = horizontal with vertical going UP. The lane from above ends here,
+        // and the horizontal passes through from the merge/branch connector.
+        const cornerColor = connColor(cornerBottomRight);
+        const hColor = connColor(horizontal);
+        result.push({ char: "┴", color: cornerColor });
+        result.push({ char: "─", color: hColor });
+      } else {
+        result.push({ char: "╯ ", color: connColor(cornerBottomRight) });
+      }
     } else if (cornerBottomLeft) {
       // ╰ is on the lane's direct path → lane color.
       // The trailing ─ is a horizontal connector → spanning branch's color.
@@ -752,7 +1112,8 @@ export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphCh
     } else if (horizontal) {
       result.push({ char: "──", color: connColor(horizontal) });
     } else if (straight) {
-      result.push({ char: "│ ", color: connColor(straight) });
+      const isBold = !opts.focusMode || !!straight.isFocused;
+      result.push({ char: "│ ", color: connColor(straight), bold: isBold });
     } else {
       result.push({ char: "  ", color: opts.dimColor ?? getBaseColor(col, opts) });
     }

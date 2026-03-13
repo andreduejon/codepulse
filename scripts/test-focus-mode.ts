@@ -379,6 +379,73 @@ function test5() {
 }
 
 // ============================================================
+// Test 6: Focus + remote-only interaction
+// When focus mode is active AND there are remote-only branches,
+// remote-only lanes should still be dimmed (not focused).
+// The focused lane (develop) should use focus color even when
+// remote-only lanes pass through.
+// ============================================================
+function test6() {
+  console.log("\nTest 6: Focus + remote-only interaction");
+
+  // develop (focused, current) + remote-only branch above
+  const commits: Commit[] = [
+    makeCommit("ren1", ["d2"], [{ name: "origin/renovate/foo", type: "remote", isCurrent: false }], "renovate/foo update"),
+    makeCommit("d2", ["d1"], [{ name: "develop", type: "branch", isCurrent: true }], "develop tip"),
+    makeCommit("d1", [], [], "initial"),
+  ];
+
+  const rows = buildGraph(commits);
+  const padCols = Math.max(...rows.map((r) => r.columns.length), ...rows.map((r) => Math.max(...r.connectors.map((c) => c.column + 1))));
+
+  // Row 0 (ren1): remote-only commit above develop.
+  // In focus mode, since ren1 is not on current branch, its node should be dimmed.
+  // Any focused-lane vertical passing through should still be focus-colored.
+  {
+    const row = rows[0];
+    const isOnCurrent = row.isOnCurrentBranch;
+    assert(isOnCurrent === false, "ren1 should NOT be on current branch");
+
+    const chars = renderGraphRow(row, focusOpts(isOnCurrent, padCols));
+
+    // ren1's dot should NOT be focus-colored (it's not on current branch)
+    const focused = focusedChars(chars);
+    const focusedDots = focused.filter((fc) => fc.char === "●" || fc.char === "● ");
+    assert(
+      focusedDots.length === 0,
+      `ren1 row: remote-only commit should NOT have focus-colored dot`,
+    );
+  }
+
+  // Row 1 (d2): develop tip. Should be focused.
+  {
+    const row = rows[1];
+    const isOnCurrent = row.isOnCurrentBranch;
+    assert(isOnCurrent === true, "d2 should be on current branch");
+
+    const chars = renderGraphRow(row, focusOpts(isOnCurrent, padCols));
+    const focused = focusedChars(chars);
+    const focusedDots = focused.filter((fc) => fc.char === "●" || fc.char === "● ");
+    assert(
+      focusedDots.length === 1,
+      `d2 row: develop tip should have exactly 1 focus-colored dot, got ${focusedDots.length}`,
+    );
+  }
+
+  // Width consistency for all rows
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const isOnCurrent = row.isOnCurrentBranch;
+    const chars = renderGraphRow(row, focusOpts(isOnCurrent, padCols));
+    const width = totalCharWidth(chars);
+    assert(
+      width === padCols * 2,
+      `Row ${i} ("${row.commit.subject}"): width=${width}, expected ${padCols * 2}`,
+    );
+  }
+}
+
+// ============================================================
 // Run all tests
 // ============================================================
 console.log("Focus Mode Tests");
@@ -389,6 +456,7 @@ test2();
 test3();
 test4();
 test5();
+test6();
 
 console.log(`\n${"=".repeat(60)}`);
 console.log(`Results: ${passedTests}/${totalTests} passed, ${failedTests} failed`);

@@ -51,6 +51,15 @@ export interface GraphRow {
   isRemoteOnly: boolean;
   /** Set of remote branch names that are remote-only (no local counterpart) */
   remoteOnlyBranches: Set<string>;
+  /**
+   * Fan-out connector rows: when this commit has multiple lanes pointing to it
+   * (multiple children branched off from it), each extra lane gets its own
+   * connector row showing a branch-off corner from the node column.
+   * Each entry is a set of connectors for one fan-out row.
+   * Rendered as separate rows ABOVE the commit row (graph flows bottom-to-top:
+   * children are above, parent is below, fan-out connects them going up).
+   */
+  fanOutRows?: Connector[][];
 }
 
 export interface GraphColumn {
@@ -64,10 +73,6 @@ export interface GraphColumn {
 
 export type ConnectorType =
   | "straight" // │
-  | "merge-left" // lane merging into target on the left (╭ corner at start)
-  | "merge-right" // lane merging into target on the right (╮ corner at start)
-  | "branch-left" // new lane branching off to the left (╰ corner at end)
-  | "branch-right" // new lane branching off to the right (╮ corner at end)
   | "horizontal" // ──
   | "tee-left" // ├─ (T-junction: existing vertical lane, merge/branch joins from right)
   | "tee-right" // ─┤ (T-junction: existing vertical lane, merge/branch joins from left)
