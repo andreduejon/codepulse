@@ -1,4 +1,4 @@
-import { createSignal, createEffect, Show, onMount } from "solid-js";
+import { createEffect, Show, onMount } from "solid-js";
 import { useKeyboard, useRenderer } from "@opentui/solid";
 import { createAppState, AppStateContext } from "./context/state";
 import { createThemeState, ThemeContext } from "./context/theme";
@@ -12,6 +12,8 @@ import SearchDialog from "./components/search";
 import BranchDialog from "./components/branch-dialog";
 import HelpDialog from "./components/help-dialog";
 import ThemeDialog from "./components/theme-dialog";
+import SettingsDialog from "./components/settings-dialog";
+import { createSignal } from "solid-js";
 
 interface AppProps {
   repoPath: string;
@@ -22,12 +24,11 @@ interface AppProps {
 }
 
 function AppContent(props: AppProps) {
-  const { state, actions } = createAppState();
+  const { state, actions } = createAppState(props.maxCount ?? 200);
   const themeState = createThemeState(props.themeName);
   const renderer = useRenderer();
 
-  const [dialog, setDialog] = createSignal<"search" | "branch" | "help" | "theme" | null>(null);
-  const [showDetail, setShowDetail] = createSignal(true);
+  const [dialog, setDialog] = createSignal<"search" | "branch" | "help" | "theme" | "settings" | null>(null);
 
   // Load git data
   async function loadData(branch?: string) {
@@ -38,7 +39,7 @@ function AppContent(props: AppProps) {
 
       const [commits, branches, currentBranch, repoName] = await Promise.all([
         getCommits(repoPath, {
-          maxCount: props.maxCount ?? 200,
+          maxCount: state.maxCount(),
           branch: branch,
           all: state.showAllBranches(),
         }),
@@ -86,6 +87,12 @@ function AppContent(props: AppProps) {
   useKeyboard((e) => {
     if (e.eventType === "release") return;
 
+    // Ctrl+S opens settings regardless of dialog state
+    if (e.ctrl && e.name === "s") {
+      setDialog(dialog() === "settings" ? null : "settings");
+      return;
+    }
+
     // Close dialog on Escape
     if (e.name === "escape") {
       if (dialog()) {
@@ -131,7 +138,7 @@ function AppContent(props: AppProps) {
         actions.moveSelection(-20);
         break;
       case "return":
-        setShowDetail(!showDetail());
+        actions.setShowDetailPanel(!state.showDetailPanel());
         break;
       case "/":
         setDialog("search");
@@ -186,7 +193,7 @@ function AppContent(props: AppProps) {
             {/* Graph panel */}
             <box
               flexDirection="column"
-              flexGrow={showDetail() ? 2 : 1}
+              flexGrow={state.showDetailPanel() ? 2 : 1}
               flexShrink={1}
               border={["right"]}
               borderColor={themeState.theme().border}
@@ -202,7 +209,7 @@ function AppContent(props: AppProps) {
             </box>
 
             {/* Detail panel */}
-            <Show when={showDetail()}>
+            <Show when={state.showDetailPanel()}>
               <box flexDirection="column" flexGrow={1} flexShrink={1} width="40%">
                 <scrollbox flexGrow={1} scrollY scrollX={false}>
                   <CommitDetailView />
@@ -231,6 +238,12 @@ function AppContent(props: AppProps) {
           </Show>
           <Show when={dialog() === "theme"}>
             <ThemeDialog onClose={() => setDialog(null)} />
+          </Show>
+          <Show when={dialog() === "settings"}>
+            <SettingsDialog
+              onClose={() => setDialog(null)}
+              onReload={() => loadData()}
+            />
           </Show>
         </box>
       </AppStateContext.Provider>

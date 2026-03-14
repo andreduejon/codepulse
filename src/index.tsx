@@ -104,6 +104,7 @@ KEYBOARD SHORTCUTS:
   T                      Toggle tag visibility
   f                      Focus current branch
   t                      Change theme
+  Ctrl+S                 Open settings
   ?                      Show help
   q or Ctrl+C            Quit
 `);

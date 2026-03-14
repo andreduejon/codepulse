@@ -137,7 +137,7 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
     const base = {
       themeColors: theme().graphColors,
       padToColumns: padCols(),
-      remoteOnlyDimColor: theme().foregroundMuted,
+      remoteOnlyDimColor: state.dimRemoteOnly() ? theme().foregroundMuted : undefined,
     };
     if (state.focusCurrentBranch()) {
       return {
@@ -234,7 +234,7 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
     if (state.focusCurrentBranch() && isOnCurrentBranch()) {
       return focusBranchColor();
     }
-    if (props.row.isRemoteOnly) {
+    if (props.row.isRemoteOnly && state.dimRemoteOnly()) {
       return t().foregroundMuted;
     }
     return laneColor();
@@ -246,7 +246,7 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
     if (state.focusCurrentBranch() && !isOnCurrentBranch()) {
       return t().foregroundMuted;
     }
-    if (props.row.isRemoteOnly) {
+    if (props.row.isRemoteOnly && state.dimRemoteOnly()) {
       return t().foregroundMuted;
     }
     return t().foreground;

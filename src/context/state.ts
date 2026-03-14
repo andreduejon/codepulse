@@ -18,6 +18,9 @@ export interface AppState {
   searchQuery: Accessor<string>;
   filteredRows: Accessor<GraphRow[]>;
   maxGraphColumns: Accessor<number>;
+  maxCount: Accessor<number>;
+  dimRemoteOnly: Accessor<boolean>;
+  showDetailPanel: Accessor<boolean>;
 }
 
 export interface AppActions {
@@ -36,11 +39,14 @@ export interface AppActions {
   setRepoName: (name: string) => void;
   setRepoPath: (path: string) => void;
   setMaxGraphColumns: (cols: number) => void;
+  setMaxCount: (n: number) => void;
+  setDimRemoteOnly: (dim: boolean) => void;
+  setShowDetailPanel: (show: boolean) => void;
 }
 
 const AppStateContext = createContext<{ state: AppState; actions: AppActions }>();
 
-export function createAppState() {
+export function createAppState(initialMaxCount: number = 200) {
   const [commits, setCommits] = createSignal<Commit[]>([]);
   const [graphRows, setGraphRows] = createSignal<GraphRow[]>([]);
   const [branches, setBranches] = createSignal<Branch[]>([]);
@@ -55,6 +61,9 @@ export function createAppState() {
   const [focusCurrentBranch, setFocusCurrentBranch] = createSignal(false);
   const [searchQuery, setSearchQuery] = createSignal("");
   const [maxGraphColumns, setMaxGraphColumns] = createSignal(0);
+  const [maxCount, setMaxCount] = createSignal(initialMaxCount);
+  const [dimRemoteOnly, setDimRemoteOnly] = createSignal(true);
+  const [showDetailPanel, setShowDetailPanel] = createSignal(true);
 
   const selectedCommit = () => {
     const rows = filteredRows();
@@ -99,6 +108,9 @@ export function createAppState() {
     searchQuery,
     filteredRows,
     maxGraphColumns,
+    maxCount,
+    dimRemoteOnly,
+    showDetailPanel,
   };
 
   const actions: AppActions = {
@@ -117,6 +129,9 @@ export function createAppState() {
     setRepoName,
     setRepoPath,
     setMaxGraphColumns,
+    setMaxCount,
+    setDimRemoteOnly,
+    setShowDetailPanel,
   };
 
   return { state, actions, AppStateContext };
