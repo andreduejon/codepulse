@@ -8,7 +8,7 @@ interface SettingsDialogProps {
   onReload: () => void;
 }
 
-const MAX_COUNT_OPTIONS = [100, 200, 500, 1000];
+const MAX_COUNT_OPTIONS = [10, 20, 50, 100, 200, 500];
 
 type SettingItem =
   | { kind: "header"; label: string }
@@ -22,7 +22,7 @@ export default function SettingsDialog(props: SettingsDialogProps) {
 
   // All items including headers
   const items: SettingItem[] = [
-    { kind: "header", label: "Theme" },
+    { kind: "header", label: "Appearance" },
     {
       kind: "cycle",
       label: "Color theme",
@@ -175,7 +175,7 @@ export default function SettingsDialog(props: SettingsDialogProps) {
                 <box flexDirection="column" width="100%">
                   {itemIndex() > 0 ? <box height={1} /> : null}
                   <text wrapMode="none">
-                    <strong><span fg={t().primary}>{item.label}</span></strong>
+                    <strong><span fg={t().accent}>{item.label}</span></strong>
                   </text>
                 </box>
               );
@@ -197,19 +197,23 @@ export default function SettingsDialog(props: SettingsDialogProps) {
                   </span>
                 </text>
 
-                {/* Current value */}
-                <text flexShrink={0} wrapMode="none" paddingLeft={2}>
-                  <span fg={t().foregroundMuted}>
-                    {val()}
-                  </span>
-                </text>
+                {/* Current value — right-aligned */}
+                <box flexShrink={0} width={20} justifyContent="flex-end">
+                  <text flexShrink={0} wrapMode="none">
+                    <span fg={t().foregroundMuted}>
+                      {val()}
+                    </span>
+                  </text>
+                </box>
 
-                {/* Hotkey */}
-                <text flexShrink={0} wrapMode="none" width={12}>
-                  <span fg={t().foregroundMuted}>
-                    {item.hotkey ? item.hotkey : ""}
-                  </span>
-                </text>
+                {/* Hotkey — right-aligned with brackets */}
+                <box flexShrink={0} width={12} justifyContent="flex-end">
+                  <text flexShrink={0} wrapMode="none">
+                    <span fg={t().foregroundMuted}>
+                      {item.hotkey ? `[${item.hotkey}]` : ""}
+                    </span>
+                  </text>
+                </box>
               </box>
             );
           }}

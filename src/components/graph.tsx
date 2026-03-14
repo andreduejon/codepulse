@@ -12,13 +12,16 @@ function RefBadge(props: {
   remoteOnlyBranches: Set<string>;
 }) {
   const { theme } = useTheme();
+  const { state } = useAppState();
   const t = () => theme();
 
-  // Remote-only branches (no local counterpart) use dimmed color.
+  // Remote-only branches (no local counterpart) use dimmed color,
+  // but only when dim remote-only setting is enabled.
   // Locally-tracked remotes (e.g. origin/main when main exists) and
   // origin/HEAD use the same lane color as local branches — no border,
   // no accent, completely identical styling.
   const isRemoteOnly = () => {
+    if (!state.dimRemoteOnly()) return false;
     if (props.info.type !== "remote") return false;
     // origin/HEAD is never remote-only (it tracks whatever local branch exists)
     if (props.info.name.endsWith("/HEAD")) return false;
@@ -27,8 +30,14 @@ function RefBadge(props: {
 
   const bgColor = () => isRemoteOnly() ? props.dimColor() : props.laneColor();
 
+  // When the badge bg is a dim/muted color, use foreground for readable label text.
+  // When badge has a vivid lane color bg, use the dark background color for contrast.
+  // Check both badge-level dimming (isRemoteOnly) and row-level dimming (laneColor = dimColor).
+  const isDimBadge = () => isRemoteOnly() || props.laneColor() === props.dimColor();
+  const fgColor = () => isDimBadge() ? t().foreground : t().background;
+
   return (
-    <text flexShrink={0} wrapMode="none" fg={t().background} bg={bgColor()}>
+    <text flexShrink={0} wrapMode="none" fg={fgColor()} bg={bgColor()}>
       {` ${props.info.name} `}
     </text>
   );
