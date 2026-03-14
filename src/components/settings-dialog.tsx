@@ -174,7 +174,7 @@ export default function SettingsDialog(props: SettingsDialogProps) {
               return (
                 <box flexDirection="column" width="100%">
                   {itemIndex() > 0 ? <box height={1} /> : null}
-                  <text wrapMode="none">
+                  <text wrapMode="none" fg={t().accent}>
                     <strong><span fg={t().accent}>{item.label}</span></strong>
                   </text>
                 </box>
@@ -183,6 +183,16 @@ export default function SettingsDialog(props: SettingsDialogProps) {
 
             const isSelected = () => selectedItemIndex() === itemIndex();
             const val = () => valueDisplay(item);
+
+            // Pad value and hotkey to fixed widths for right-alignment
+            const paddedVal = () => {
+              const v = `[${val()}]`;
+              return v.padStart(22);
+            };
+            const paddedHotkey = () => {
+              const h = item.hotkey ?? "";
+              return h.padStart(8);
+            };
 
             return (
               <box
@@ -197,23 +207,15 @@ export default function SettingsDialog(props: SettingsDialogProps) {
                   </span>
                 </text>
 
-                {/* Current value — right-aligned */}
-                <box flexShrink={0} width={20} justifyContent="flex-end">
-                  <text flexShrink={0} wrapMode="none">
-                    <span fg={t().foregroundMuted}>
-                      {val()}
-                    </span>
-                  </text>
-                </box>
+                {/* Current value — right-aligned, in brackets */}
+                <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                  <span fg={t().foregroundMuted}>{paddedVal()}</span>
+                </text>
 
-                {/* Hotkey — right-aligned with brackets */}
-                <box flexShrink={0} width={12} justifyContent="flex-end">
-                  <text flexShrink={0} wrapMode="none">
-                    <span fg={t().foregroundMuted}>
-                      {item.hotkey ? `[${item.hotkey}]` : ""}
-                    </span>
-                  </text>
-                </box>
+                {/* Hotkey — right-aligned */}
+                <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                  <span fg={t().foregroundMuted}>{paddedHotkey()}</span>
+                </text>
               </box>
             );
           }}
