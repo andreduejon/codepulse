@@ -105,7 +105,7 @@ KEYBOARD SHORTCUTS:
   f                      Focus current branch
    Ctrl+T                 Change theme
    Ctrl+S                 Open settings
-   Ctrl+H                 Show help
+  ?                      Show help
   q or Ctrl+C            Quit
 `);
 }

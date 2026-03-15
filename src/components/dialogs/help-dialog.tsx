@@ -18,7 +18,7 @@ export default function HelpDialog(props: { onClose: () => void }) {
     ["f", "Focus current branch"],
     ["Ctrl+T", "Change theme"],
     ["Ctrl+S", "Settings"],
-    ["Ctrl+H", "Show this help"],
+    ["?", "Show this help"],
     ["q / Ctrl+C", "Quit"],
   ];
 

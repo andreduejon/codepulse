@@ -99,12 +99,6 @@ function AppContent(props: AppProps) {
       return;
     }
 
-    // Ctrl+H opens help dialog regardless of dialog state
-    if (e.ctrl && e.name === "h") {
-      setDialog(dialog() === "help" ? null : "help");
-      return;
-    }
-
     // Close dialog on Escape
     if (e.name === "escape") {
       if (dialog()) {
@@ -157,6 +151,9 @@ function AppContent(props: AppProps) {
         break;
       case "b":
         setDialog("branch");
+        break;
+      case "?":
+        setDialog(dialog() === "help" ? null : "help");
         break;
       case "t":
         if (e.shift) {

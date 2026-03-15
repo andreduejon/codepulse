@@ -33,7 +33,7 @@ export default function Footer() {
         <span fg={t().foregroundMuted}> theme  </span>
         <span fg={t().foreground}>ctrl+s</span>
         <span fg={t().foregroundMuted}> settings  </span>
-        <span fg={t().foreground}>ctrl+h</span>
+        <span fg={t().foreground}>?</span>
         <span fg={t().foregroundMuted}> help  </span>
         <span fg={t().foreground}>q</span>
         <span fg={t().foregroundMuted}> quit</span>
