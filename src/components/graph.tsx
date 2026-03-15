@@ -55,9 +55,6 @@ function ColumnHeader() {
     <box
       flexDirection="row"
       width="100%"
-      border={["bottom"]}
-      borderColor={t().border}
-      borderStyle="single"
     >
       {/* Graph header */}
       <text
@@ -133,7 +130,7 @@ function ConnectorRow(props: { content: () => StyledText }) {
   );
 }
 
-function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isLast: boolean }) {
+function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isLast: boolean; onSelect: (index: number) => void }) {
   const { theme } = useTheme();
   const { state } = useAppState();
 
@@ -280,6 +277,8 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
         flexDirection="row"
         width="100%"
         backgroundColor={props.selected ? t().backgroundElement : undefined}
+        onMouseDown={() => props.onSelect(props.index)}
+        onMouseMove={() => props.onSelect(props.index)}
       >
         {/* Graph part: styled via ref + StyledText to bypass reconciler stringification */}
         <text ref={graphTextRef} flexShrink={0} wrapMode="none" truncate paddingLeft={1} />
@@ -377,7 +376,7 @@ function formatRelativeDate(dateStr: string): string {
 }
 
 export default function GraphView() {
-  const { state } = useAppState();
+  const { state, actions } = useAppState();
 
   return (
     <box flexDirection="column" flexGrow={1}>
@@ -399,6 +398,7 @@ export default function GraphView() {
               index={index()}
               selected={index() === state.selectedIndex()}
               isLast={index() === state.filteredRows().length - 1}
+              onSelect={(i) => actions.setSelectedIndex(i)}
             />
           )}
         </For>

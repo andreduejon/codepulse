@@ -1,4 +1,4 @@
-import { createEffect, Show, onMount } from "solid-js";
+import { createEffect, Show, onMount, createSignal } from "solid-js";
 import { useKeyboard, useRenderer } from "@opentui/solid";
 import { createAppState, AppStateContext } from "./context/state";
 import { createThemeState, ThemeContext } from "./context/theme";
@@ -6,14 +6,11 @@ import { getCommits, getBranches, getCurrentBranch, getRepoName, getCommitDetail
 import { buildGraph, getMaxGraphColumns } from "./git/graph";
 import GraphView from "./components/graph";
 import CommitDetailView from "./components/detail";
-import Header from "./components/header";
 import Footer from "./components/footer";
-import SearchDialog from "./components/dialogs/search";
 import BranchDialog from "./components/dialogs/branch-dialog";
 import HelpDialog from "./components/dialogs/help-dialog";
 import ThemeDialog from "./components/dialogs/theme-dialog";
 import SettingsDialog from "./components/dialogs/settings-dialog";
-import { createSignal } from "solid-js";
 
 interface AppProps {
   repoPath: string;
@@ -28,7 +25,8 @@ function AppContent(props: AppProps) {
   const themeState = createThemeState(props.themeName);
   const renderer = useRenderer();
 
-  const [dialog, setDialog] = createSignal<"search" | "branch" | "help" | "theme" | "settings" | null>(null);
+  const [dialog, setDialog] = createSignal<"branch" | "help" | "theme" | "settings" | null>(null);
+  const [searchFocused, setSearchFocused] = createSignal(false);
 
   // Load git data
   async function loadData(branch?: string) {
@@ -83,26 +81,45 @@ function AppContent(props: AppProps) {
     }
   });
 
+  // Search input handlers
+  const handleSearchSubmit = (value: string) => {
+    actions.setSearchQuery(value);
+    actions.setSelectedIndex(0);
+    setSearchFocused(false);
+  };
+
+  const handleSearchInput = (value: string) => {
+    // Live filter as user types
+    actions.setSearchQuery(value);
+    actions.setSelectedIndex(0);
+  };
+
   // Keyboard handling
   useKeyboard((e) => {
     if (e.eventType === "release") return;
 
-    // Ctrl+S opens settings regardless of dialog state
+    // Ctrl+S opens settings regardless of dialog/search state
     if (e.ctrl && e.name === "s") {
+      setSearchFocused(false);
       setDialog(dialog() === "settings" ? null : "settings");
       return;
     }
 
-    // Ctrl+T opens theme dialog regardless of dialog state
+    // Ctrl+T opens theme dialog regardless of dialog/search state
     if (e.ctrl && e.name === "t") {
+      setSearchFocused(false);
       setDialog(dialog() === "theme" ? null : "theme");
       return;
     }
 
-    // Close dialog on Escape
+    // Escape handling
     if (e.name === "escape") {
       if (dialog()) {
         setDialog(null);
+        return;
+      }
+      if (searchFocused()) {
+        setSearchFocused(false);
         return;
       }
       if (state.searchQuery()) {
@@ -113,6 +130,9 @@ function AppContent(props: AppProps) {
       return;
     }
 
+    // If search input is focused, let the input handle all other keys
+    if (searchFocused()) return;
+
     // If a dialog is open, only handle Escape (handled above)
     if (dialog()) return;
 
@@ -121,11 +141,9 @@ function AppContent(props: AppProps) {
         renderer.destroy();
         process.exit(0);
         break;
-      case "j":
       case "down":
         actions.moveSelection(1);
         break;
-      case "k":
       case "up":
         actions.moveSelection(-1);
         break;
@@ -133,7 +151,6 @@ function AppContent(props: AppProps) {
         if (!e.shift) {
           actions.setSelectedIndex(0);
         } else {
-          // G (shift+g) -- go to last
           actions.setSelectedIndex(state.filteredRows().length - 1);
         }
         break;
@@ -147,7 +164,7 @@ function AppContent(props: AppProps) {
         actions.setShowDetailPanel(!state.showDetailPanel());
         break;
       case "/":
-        setDialog("search");
+        setSearchFocused(true);
         break;
       case "b":
         setDialog("branch");
@@ -157,7 +174,6 @@ function AppContent(props: AppProps) {
         break;
       case "t":
         if (e.shift) {
-          // T (shift+t) -- toggle tags
           actions.setShowTags(!state.showTags());
         }
         break;
@@ -188,46 +204,66 @@ function AppContent(props: AppProps) {
           height="100%"
           backgroundColor={themeState.theme().background}
         >
-          {/* Header */}
-          <Header />
-
           {/* Main content area */}
           <box flexDirection="row" flexGrow={1}>
-            {/* Graph panel */}
+            {/* Graph panel - left, grey background */}
             <box
               flexDirection="column"
-              flexGrow={state.showDetailPanel() ? 2 : 1}
+              flexGrow={1}
               flexShrink={1}
-              border={["right"]}
-              borderColor={themeState.theme().border}
-              borderStyle="single"
+              backgroundColor={themeState.theme().backgroundPanel}
+              paddingX={2}
+              paddingY={1}
             >
               <scrollbox
                 flexGrow={1}
                 scrollY
                 scrollX={false}
+                verticalScrollbarOptions={{ visible: false }}
               >
                 <GraphView />
               </scrollbox>
             </box>
 
-            {/* Detail panel */}
+            {/* Detail panel - right */}
             <Show when={state.showDetailPanel()}>
-              <box flexDirection="column" flexGrow={1} flexShrink={1} width="40%">
-                <scrollbox flexGrow={1} scrollY scrollX={false}>
+              <box
+                flexDirection="column"
+                width="20%"
+                flexShrink={0}
+                paddingX={2}
+                paddingY={1}
+              >
+                <scrollbox flexGrow={1} scrollY scrollX={false} verticalScrollbarOptions={{ visible: false }}>
                   <CommitDetailView />
                 </scrollbox>
               </box>
             </Show>
           </box>
 
-          {/* Footer */}
+          {/* Search input bar */}
+          <box
+            width="100%"
+            height={1}
+            backgroundColor={themeState.theme().backgroundPanel}
+            paddingX={2}
+          >
+            <input
+              focused={searchFocused()}
+              width="100%"
+              placeholder="Search commits..."
+              value={state.searchQuery()}
+              onInput={handleSearchInput}
+              onSubmit={handleSearchSubmit as any}
+              fg={themeState.theme().foreground}
+              backgroundColor={themeState.theme().backgroundPanel}
+            />
+          </box>
+
+          {/* Footer - hotkey hints */}
           <Footer />
 
           {/* Dialogs */}
-          <Show when={dialog() === "search"}>
-            <SearchDialog onClose={() => setDialog(null)} />
-          </Show>
           <Show when={dialog() === "branch"}>
             <BranchDialog
               onClose={() => setDialog(null)}

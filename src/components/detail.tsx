@@ -37,17 +37,6 @@ export default function CommitDetailView() {
 
   return (
     <box flexDirection="column" flexGrow={1}>
-      {/* Details header */}
-      <box
-        width="100%"
-        border={["bottom"]}
-        borderColor={t().border}
-        borderStyle="single"
-      >
-        <text fg={t().foregroundMuted} paddingLeft={1}>Details</text>
-      </box>
-
-      <box flexDirection="column" flexGrow={1} paddingX={1} paddingTop={1}>
       <Show
         when={commit()}
         fallback={
@@ -179,7 +168,6 @@ export default function CommitDetailView() {
           </>
         )}
       </Show>
-      </box>
     </box>
   );
 }

@@ -5,8 +5,8 @@ export default function HelpDialog(props: { onClose: () => void }) {
   const t = () => theme();
 
   const keybinds = [
-    ["j / Down", "Move selection down"],
-    ["k / Up", "Move selection up"],
+    ["↓ / Down", "Move selection down"],
+    ["↑ / Up", "Move selection up"],
     ["g", "Go to first commit"],
     ["G", "Go to last commit"],
     ["Enter", "Toggle commit details"],
