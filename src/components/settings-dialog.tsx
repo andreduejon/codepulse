@@ -37,10 +37,22 @@ export default function SettingsDialog(props: SettingsDialogProps) {
     { kind: "header", label: "Display" },
     {
       kind: "toggle",
-      label: "Show tags",
-      hotkey: "T",
-      get: () => state.showTags(),
-      set: (v) => actions.setShowTags(v),
+      label: "Focus current branch",
+      hotkey: "f",
+      get: () => state.focusCurrentBranch(),
+      set: (v) => actions.setFocusCurrentBranch(v),
+    },
+    {
+      kind: "toggle",
+      label: "Show author column",
+      get: () => state.showAuthorColumn(),
+      set: (v) => actions.setShowAuthorColumn(v),
+    },
+    {
+      kind: "toggle",
+      label: "Show date column",
+      get: () => state.showDateColumn(),
+      set: (v) => actions.setShowDateColumn(v),
     },
     {
       kind: "toggle",
@@ -51,12 +63,24 @@ export default function SettingsDialog(props: SettingsDialogProps) {
     },
     {
       kind: "toggle",
-      label: "Focus current branch",
-      hotkey: "f",
-      get: () => state.focusCurrentBranch(),
-      set: (v) => actions.setFocusCurrentBranch(v),
+      label: "Show hash column",
+      get: () => state.showHashColumn(),
+      set: (v) => actions.setShowHashColumn(v),
+    },
+    {
+      kind: "toggle",
+      label: "Show tags",
+      hotkey: "T",
+      get: () => state.showTags(),
+      set: (v) => actions.setShowTags(v),
     },
     { kind: "header", label: "Graph" },
+    {
+      kind: "toggle",
+      label: "Dim remote-only branches",
+      get: () => state.dimRemoteOnly(),
+      set: (v) => actions.setDimRemoteOnly(v),
+    },
     {
       kind: "cycle",
       label: "Max commits",
@@ -64,12 +88,6 @@ export default function SettingsDialog(props: SettingsDialogProps) {
       get: () => String(state.maxCount()),
       set: (v) => actions.setMaxCount(parseInt(v, 10)),
       needsReload: true,
-    },
-    {
-      kind: "toggle",
-      label: "Dim remote-only branches",
-      get: () => state.dimRemoteOnly(),
-      set: (v) => actions.setDimRemoteOnly(v),
     },
     {
       kind: "toggle",
@@ -144,26 +162,32 @@ export default function SettingsDialog(props: SettingsDialogProps) {
   return (
     <box
       position="absolute"
-      top="15%"
-      left="25%"
-      width="50%"
-      height="70%"
-      backgroundColor={t().backgroundPanel}
-      border={true}
-      borderColor={t().borderActive}
-      borderStyle="rounded"
-      flexDirection="column"
-      paddingX={2}
-      paddingY={1}
+      top={0}
+      left={0}
+      width="100%"
+      height="100%"
+      backgroundColor={"#00000080"}
+      alignItems="center"
+      justifyContent="center"
     >
+      <box
+        width="50%"
+        height="70%"
+        backgroundColor={t().backgroundPanel}
+        flexDirection="column"
+        paddingX={2}
+        paddingY={1}
+      >
       {/* Title bar */}
       <box flexDirection="row" width="100%">
         <text flexGrow={1} wrapMode="none">
           <strong><span fg={t().foreground}>Settings</span></strong>
         </text>
-        <text flexShrink={0} wrapMode="none">
-          <span fg={t().foregroundMuted}>esc</span>
-        </text>
+        <box flexShrink={0} onMouseDown={() => props.onClose()}>
+          <text wrapMode="none" fg={t().foregroundMuted}>
+            <span fg={t().foregroundMuted}>{"esc".padStart(8)}</span>
+          </text>
+        </box>
       </box>
       <box height={1} />
 
@@ -221,8 +245,8 @@ export default function SettingsDialog(props: SettingsDialogProps) {
                 </text>
 
                 {/* Current value — right-aligned, in brackets */}
-                <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                  <span fg={t().foregroundMuted}>{paddedVal()}</span>
+                <text flexShrink={0} wrapMode="none" fg={t().foreground}>
+                  <span fg={t().foreground}>{paddedVal()}</span>
                 </text>
 
                 {/* Hotkey — right-aligned */}
@@ -234,11 +258,7 @@ export default function SettingsDialog(props: SettingsDialogProps) {
           }}
         </For>
       </box>
-
-      {/* Footer hint */}
-      <text wrapMode="none">
-        <span fg={t().foregroundMuted}>Enter to toggle/cycle · Esc to close</span>
-      </text>
+    </box>
     </box>
   );
 }

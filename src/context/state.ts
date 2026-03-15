@@ -21,6 +21,9 @@ export interface AppState {
   maxCount: Accessor<number>;
   dimRemoteOnly: Accessor<boolean>;
   showDetailPanel: Accessor<boolean>;
+  showAuthorColumn: Accessor<boolean>;
+  showDateColumn: Accessor<boolean>;
+  showHashColumn: Accessor<boolean>;
 }
 
 export interface AppActions {
@@ -42,6 +45,9 @@ export interface AppActions {
   setMaxCount: (n: number) => void;
   setDimRemoteOnly: (dim: boolean) => void;
   setShowDetailPanel: (show: boolean) => void;
+  setShowAuthorColumn: (show: boolean) => void;
+  setShowDateColumn: (show: boolean) => void;
+  setShowHashColumn: (show: boolean) => void;
 }
 
 const AppStateContext = createContext<{ state: AppState; actions: AppActions }>();
@@ -64,6 +70,9 @@ export function createAppState(initialMaxCount: number = 200) {
   const [maxCount, setMaxCount] = createSignal(initialMaxCount);
   const [dimRemoteOnly, setDimRemoteOnly] = createSignal(true);
   const [showDetailPanel, setShowDetailPanel] = createSignal(true);
+  const [showAuthorColumn, setShowAuthorColumn] = createSignal(true);
+  const [showDateColumn, setShowDateColumn] = createSignal(true);
+  const [showHashColumn, setShowHashColumn] = createSignal(true);
 
   const selectedCommit = () => {
     const rows = filteredRows();
@@ -111,6 +120,9 @@ export function createAppState(initialMaxCount: number = 200) {
     maxCount,
     dimRemoteOnly,
     showDetailPanel,
+    showAuthorColumn,
+    showDateColumn,
+    showHashColumn,
   };
 
   const actions: AppActions = {
@@ -132,6 +144,9 @@ export function createAppState(initialMaxCount: number = 200) {
     setMaxCount,
     setDimRemoteOnly,
     setShowDetailPanel,
+    setShowAuthorColumn,
+    setShowDateColumn,
+    setShowHashColumn,
   };
 
   return { state, actions, AppStateContext };

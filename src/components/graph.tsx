@@ -76,35 +76,41 @@ function ColumnHeader() {
       </text>
 
       {/* Author */}
-      <text
-        flexShrink={0}
-        fg={t().foregroundMuted}
-        wrapMode="none"
-        paddingLeft={2}
-        width={18}
-      >
-        Author
-      </text>
+      <Show when={state.showAuthorColumn()}>
+        <text
+          flexShrink={0}
+          fg={t().foregroundMuted}
+          wrapMode="none"
+          paddingLeft={2}
+          width={18}
+        >
+          Author
+        </text>
+      </Show>
 
       {/* Date */}
-      <text
-        flexShrink={0}
-        fg={t().foregroundMuted}
-        wrapMode="none"
-        width={16}
-      >
-        Date
-      </text>
+      <Show when={state.showDateColumn()}>
+        <text
+          flexShrink={0}
+          fg={t().foregroundMuted}
+          wrapMode="none"
+          width={16}
+        >
+          Date
+        </text>
+      </Show>
 
       {/* Commit hash */}
-      <text
-        flexShrink={0}
-        fg={t().foregroundMuted}
-        wrapMode="none"
-        paddingRight={1}
-      >
-        Commit
-      </text>
+      <Show when={state.showHashColumn()}>
+        <text
+          flexShrink={0}
+          fg={t().foregroundMuted}
+          wrapMode="none"
+          paddingRight={1}
+        >
+          Commit
+        </text>
+      </Show>
     </box>
   );
 }
@@ -294,38 +300,44 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
         </box>
 
         {/* Author */}
-        <text
-          flexShrink={0}
-          fg={t().foregroundMuted}
-          wrapMode="none"
-          truncate
-          paddingLeft={2}
-          width={18}
-        >
-          {commit().author}
-        </text>
+        <Show when={state.showAuthorColumn()}>
+          <text
+            flexShrink={0}
+            fg={t().foregroundMuted}
+            wrapMode="none"
+            truncate
+            paddingLeft={2}
+            width={18}
+          >
+            {commit().author}
+          </text>
+        </Show>
 
         {/* Date */}
-        <text
-          flexShrink={0}
-          fg={t().foregroundMuted}
-          wrapMode="none"
-          truncate
-          width={16}
-        >
-          {formatRelativeDate(commit().authorDate)}
-        </text>
+        <Show when={state.showDateColumn()}>
+          <text
+            flexShrink={0}
+            fg={t().foregroundMuted}
+            wrapMode="none"
+            truncate
+            width={16}
+          >
+            {formatRelativeDate(commit().authorDate)}
+          </text>
+        </Show>
 
         {/* Short hash */}
-        <text
-          flexShrink={0}
-          fg={props.selected ? t().primary : t().foregroundMuted}
-          wrapMode="none"
-          truncate
-          paddingRight={1}
-        >
-          {commit().shortHash}
-        </text>
+        <Show when={state.showHashColumn()}>
+          <text
+            flexShrink={0}
+            fg={props.selected ? t().primary : t().foregroundMuted}
+            wrapMode="none"
+            truncate
+            paddingRight={1}
+          >
+            {commit().shortHash}
+          </text>
+        </Show>
       </box>
 
       {/* Connector row: vertical lines only, providing visual continuity */}
