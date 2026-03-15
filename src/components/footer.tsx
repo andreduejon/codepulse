@@ -29,7 +29,7 @@ export default function Footer() {
         <span fg={t().foregroundMuted}> tags  </span>
         <span fg={t().foreground}>f</span>
         <span fg={t().foregroundMuted}> focus  </span>
-        <span fg={t().foreground}>t</span>
+        <span fg={t().foreground}>ctrl+t</span>
         <span fg={t().foregroundMuted}> theme  </span>
         <span fg={t().foreground}>ctrl+s</span>
         <span fg={t().foregroundMuted}> settings  </span>

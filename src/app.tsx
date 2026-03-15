@@ -93,6 +93,12 @@ function AppContent(props: AppProps) {
       return;
     }
 
+    // Ctrl+T opens theme dialog regardless of dialog state
+    if (e.ctrl && e.name === "t") {
+      setDialog(dialog() === "theme" ? null : "theme");
+      return;
+    }
+
     // Close dialog on Escape
     if (e.name === "escape") {
       if (dialog()) {
@@ -153,9 +159,6 @@ function AppContent(props: AppProps) {
         if (e.shift) {
           // T (shift+t) -- toggle tags
           actions.setShowTags(!state.showTags());
-        } else {
-          // t -- change theme
-          setDialog("theme");
         }
         break;
       case "a": {
@@ -243,6 +246,11 @@ function AppContent(props: AppProps) {
             <SettingsDialog
               onClose={() => setDialog(null)}
               onReload={() => loadData()}
+              onOpenDialog={(dialogId) => {
+                if (dialogId === "theme") {
+                  setDialog("theme");
+                }
+              }}
             />
           </Show>
         </box>

@@ -6,6 +6,7 @@ import { useTheme, themeNames, themes } from "../context/theme";
 interface SettingsDialogProps {
   onClose: () => void;
   onReload: () => void;
+  onOpenDialog?: (dialogId: string) => void;
 }
 
 const MAX_COUNT_OPTIONS = [10, 20, 50, 100, 200, 500];
@@ -13,26 +14,23 @@ const MAX_COUNT_OPTIONS = [10, 20, 50, 100, 200, 500];
 type SettingItem =
   | { kind: "header"; label: string }
   | { kind: "toggle"; label: string; hotkey?: string; get: () => boolean; set: (v: boolean) => void; needsReload?: boolean }
-  | { kind: "cycle"; label: string; hotkey?: string; options: string[]; get: () => string; set: (v: string) => void; needsReload?: boolean };
+  | { kind: "cycle"; label: string; hotkey?: string; options: string[]; get: () => string; set: (v: string) => void; needsReload?: boolean }
+  | { kind: "dialog"; label: string; hotkey?: string; dialogId: string; get: () => string };
 
 export default function SettingsDialog(props: Readonly<SettingsDialogProps>) {
   const { state, actions } = useAppState();
-  const { theme, setTheme, themeName } = useTheme();
+  const { theme, themeName } = useTheme();
   const t = () => theme();
 
   // All items including headers
   const items: SettingItem[] = [
     { kind: "header", label: "Appearance" },
     {
-      kind: "cycle",
+      kind: "dialog",
       label: "Color theme",
-      hotkey: "t",
-      options: themeNames.map((n) => themes[n].name),
+      hotkey: "ctrl+t",
+      dialogId: "theme",
       get: () => themes[themeName()]?.name ?? themeName(),
-      set: (displayName: string) => {
-        const key = themeNames.find((n) => themes[n].name === displayName);
-        if (key) setTheme(key);
-      },
     },
     { kind: "header", label: "Display" },
     {
@@ -119,15 +117,15 @@ export default function SettingsDialog(props: Readonly<SettingsDialogProps>) {
 
     if (item.kind === "toggle") {
       item.set(!item.get());
+      if (item.needsReload) props.onReload();
     } else if (item.kind === "cycle") {
       const currentVal = item.get();
       const currentIdx = item.options.indexOf(currentVal);
       const nextIdx = (currentIdx + 1) % item.options.length;
       item.set(item.options[nextIdx]);
-    }
-
-    if (item.needsReload) {
-      props.onReload();
+      if (item.needsReload) props.onReload();
+    } else if (item.kind === "dialog") {
+      props.onOpenDialog?.(item.dialogId);
     }
   };
 
@@ -211,7 +209,7 @@ export default function SettingsDialog(props: Readonly<SettingsDialogProps>) {
 
             // Pad value and hotkey to fixed widths for right-alignment
             const paddedVal = () => {
-              const v = `[${val()}]`;
+              const v = item.kind === "dialog" ? val() : `[${val()}]`;
               return v.padStart(22);
             };
             const paddedHotkey = () => {
@@ -231,9 +229,10 @@ export default function SettingsDialog(props: Readonly<SettingsDialogProps>) {
                 onMouseMove={() => {
                   if (cursorPos >= 0) setCursor(cursorPos);
                 }}
-                onMouseDown={() => {
+                onMouseDown={(e: any) => {
                   if (cursorPos >= 0) {
                     setCursor(cursorPos);
+                    if (item.kind === "dialog") e.preventDefault();
                     activateItemAt(itemIndex());
                   }
                 }}

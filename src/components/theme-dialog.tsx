@@ -1,57 +1,133 @@
+import { createSignal, createEffect, For, onMount, onCleanup } from "solid-js";
+import { useKeyboard } from "@opentui/solid";
 import { useTheme, themeNames, themes } from "../context/theme";
 
 export default function ThemeDialog(props: { onClose: () => void }) {
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, themeName } = useTheme();
   const t = () => theme();
 
-  const options = themeNames.map((name) => ({
-    name: themes[name].name,
-    description: name,
+  // Guard against stale mouse events from the dialog that opened us
+  let mounted = false;
+  onMount(() => {
+    setTimeout(() => { mounted = true; }, 50);
+  });
+
+  // Remember the original theme to revert on cancel
+  const originalTheme = themeName();
+  let confirmed = false;
+
+  // Revert to original theme if dialog closes without confirmation
+  onCleanup(() => {
+    if (!confirmed) setTheme(originalTheme);
+  });
+
+  const themeOptions = themeNames.map((key) => ({
+    key,
+    name: themes[key].name,
   }));
+
+  // Initialize cursor to the currently selected theme
+  const initialIdx = themeOptions.findIndex((o) => o.key === originalTheme);
+  const [cursor, setCursor] = createSignal(initialIdx >= 0 ? initialIdx : 0);
+
+  // Preview theme when cursor changes
+  createEffect(() => {
+    const opt = themeOptions[cursor()];
+    if (opt) setTheme(opt.key);
+  });
+
+  const moveCursor = (delta: number) => {
+    const len = themeOptions.length;
+    setCursor((c) => Math.max(0, Math.min(len - 1, c + delta)));
+  };
+
+  const confirmTheme = () => {
+    confirmed = true;
+    props.onClose();
+  };
+
+  useKeyboard((e) => {
+    if (e.eventType === "release") return;
+
+    switch (e.name) {
+      case "j":
+      case "down":
+        moveCursor(1);
+        break;
+      case "k":
+      case "up":
+        moveCursor(-1);
+        break;
+      case "return":
+        confirmTheme();
+        break;
+    }
+  });
 
   return (
     <box
       position="absolute"
-      top="25%"
-      left="30%"
-      width="40%"
-      height="50%"
-      backgroundColor={t().backgroundPanel}
-      border={true}
-      borderColor={t().borderActive}
-      borderStyle="rounded"
-      flexDirection="column"
-      paddingX={1}
-      paddingY={1}
+      top={0}
+      left={0}
+      width="100%"
+      height="100%"
+      backgroundColor={"#00000080"}
+      alignItems="center"
+      justifyContent="center"
+      onMouseDown={() => { if (mounted) props.onClose(); }}
     >
-      <text wrapMode="none">
-        <span fg={t().primary}>Select Theme</span>
-      </text>
-      <box height={1} />
-      <select
-        focused
-        flexGrow={1}
-        options={options}
+      <box
+        width={50}
+        height={themeOptions.length + 5}
         backgroundColor={t().backgroundPanel}
-        textColor={t().foreground}
-        selectedBackgroundColor={t().backgroundElement}
-        selectedTextColor={t().primary}
-        focusedBackgroundColor={t().backgroundPanel}
-        focusedTextColor={t().foreground}
-        descriptionColor={t().foregroundMuted}
-        selectedDescriptionColor={t().foregroundMuted}
-        onSelect={(idx) => {
-          const name = themeNames[idx];
-          if (name) {
-            setTheme(name);
-            props.onClose();
-          }
-        }}
-      />
-      <box height={1} />
-      <text wrapMode="none">
-        <span fg={t().foregroundMuted}>Enter to select · Esc to cancel</span>
-      </text>
+        flexDirection="column"
+        paddingX={1}
+        paddingY={1}
+        onMouseDown={(e: any) => e.preventDefault()}
+      >
+        {/* Title bar */}
+        <box flexDirection="row" width="100%" paddingX={4}>
+          <text flexGrow={1} wrapMode="none">
+            <strong><span fg={t().foreground}>Color Theme</span></strong>
+          </text>
+          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+            <span fg={t().foregroundMuted}>{"esc".padStart(9)}</span>
+          </text>
+        </box>
+        <box height={1} />
+
+        {/* Theme list */}
+        <box flexDirection="column" flexGrow={1}>
+          <For each={themeOptions}>
+            {(opt, optIndex) => {
+              const isSelected = () => cursor() === optIndex();
+
+              return (
+                <box
+                  flexDirection="row"
+                  width="100%"
+                  paddingX={4}
+                  backgroundColor={isSelected() ? t().backgroundElement : undefined}
+                  onMouseMove={() => setCursor(optIndex())}
+                  onMouseDown={() => {
+                    setCursor(optIndex());
+                    confirmTheme();
+                  }}
+                >
+                  <text flexGrow={1} wrapMode="none">
+                    <span fg={isSelected() ? t().primary : t().foreground}>
+                      {opt.name}
+                    </span>
+                  </text>
+                  <text flexShrink={0} wrapMode="none" fg={isSelected() ? themes[opt.key].graphColors[0] : t().backgroundPanel}>
+                    {isSelected() ? "  █" : "   "}
+                  </text>
+                </box>
+              );
+            }}
+          </For>
+        </box>
+      </box>
     </box>
   );
 }

@@ -103,8 +103,8 @@ KEYBOARD SHORTCUTS:
   a                      Toggle all branches
   T                      Toggle tag visibility
   f                      Focus current branch
-  t                      Change theme
-  Ctrl+S                 Open settings
+   Ctrl+T                 Change theme
+   Ctrl+S                 Open settings
   ?                      Show help
   q or Ctrl+C            Quit
 `);
