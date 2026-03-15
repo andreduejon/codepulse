@@ -1,7 +1,7 @@
 import { createSignal, For } from "solid-js";
 import { useKeyboard } from "@opentui/solid";
-import { useAppState } from "../context/state";
-import { useTheme, themeNames, themes } from "../context/theme";
+import { useAppState } from "../../context/state";
+import { useTheme, themeNames, themes } from "../../context/theme";
 
 interface SettingsDialogProps {
   onClose: () => void;

@@ -1,6 +1,6 @@
 import { createSignal, Show, For } from "solid-js";
-import { useAppState } from "../context/state";
-import { useTheme } from "../context/theme";
+import { useAppState } from "../../context/state";
+import { useTheme } from "../../context/theme";
 
 export default function SearchDialog(props: { onClose: () => void }) {
   const { state, actions } = useAppState();

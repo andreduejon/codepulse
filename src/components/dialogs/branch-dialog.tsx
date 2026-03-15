@@ -1,7 +1,7 @@
 import { createSignal, For, Show } from "solid-js";
-import { useAppState } from "../context/state";
-import { useTheme } from "../context/theme";
-import type { Branch } from "../git/types";
+import { useAppState } from "../../context/state";
+import { useTheme } from "../../context/theme";
+import type { Branch } from "../../git/types";
 
 export default function BranchDialog(props: {
   onClose: () => void;

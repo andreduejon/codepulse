@@ -1,6 +1,6 @@
 import { createSignal, createEffect, For, onMount, onCleanup } from "solid-js";
 import { useKeyboard } from "@opentui/solid";
-import { useTheme, themeNames, themes } from "../context/theme";
+import { useTheme, themeNames, themes } from "../../context/theme";
 
 export default function ThemeDialog(props: { onClose: () => void }) {
   const { theme, setTheme, themeName } = useTheme();

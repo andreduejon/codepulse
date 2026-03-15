@@ -8,11 +8,11 @@ import GraphView from "./components/graph";
 import CommitDetailView from "./components/detail";
 import Header from "./components/header";
 import Footer from "./components/footer";
-import SearchDialog from "./components/search";
-import BranchDialog from "./components/branch-dialog";
-import HelpDialog from "./components/help-dialog";
-import ThemeDialog from "./components/theme-dialog";
-import SettingsDialog from "./components/settings-dialog";
+import SearchDialog from "./components/dialogs/search";
+import BranchDialog from "./components/dialogs/branch-dialog";
+import HelpDialog from "./components/dialogs/help-dialog";
+import ThemeDialog from "./components/dialogs/theme-dialog";
+import SettingsDialog from "./components/dialogs/settings-dialog";
 import { createSignal } from "solid-js";
 
 interface AppProps {
@@ -99,6 +99,12 @@ function AppContent(props: AppProps) {
       return;
     }
 
+    // Ctrl+H opens help dialog regardless of dialog state
+    if (e.ctrl && e.name === "h") {
+      setDialog(dialog() === "help" ? null : "help");
+      return;
+    }
+
     // Close dialog on Escape
     if (e.name === "escape") {
       if (dialog()) {
@@ -151,9 +157,6 @@ function AppContent(props: AppProps) {
         break;
       case "b":
         setDialog("branch");
-        break;
-      case "?":
-        setDialog(dialog() === "help" ? null : "help");
         break;
       case "t":
         if (e.shift) {
