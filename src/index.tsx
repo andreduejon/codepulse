@@ -42,12 +42,12 @@ async function main() {
         process.exit(0);
         break;
       default:
-        if (!arg.startsWith("-")) {
-          repoPath = arg.startsWith("/") ? arg : `${process.cwd()}/${arg}`;
-        } else {
+        if (arg.startsWith("-")) {
           console.error(`Unknown option: ${arg}`);
           printHelp();
           process.exit(1);
+        } else {
+          repoPath = arg.startsWith("/") ? arg : `${process.cwd()}/${arg}`;
         }
     }
   }

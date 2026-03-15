@@ -15,7 +15,7 @@ type SettingItem =
   | { kind: "toggle"; label: string; hotkey?: string; get: () => boolean; set: (v: boolean) => void; needsReload?: boolean }
   | { kind: "cycle"; label: string; hotkey?: string; options: string[]; get: () => string; set: (v: string) => void; needsReload?: boolean };
 
-export default function SettingsDialog(props: SettingsDialogProps) {
+export default function SettingsDialog(props: Readonly<SettingsDialogProps>) {
   const { state, actions } = useAppState();
   const { theme, setTheme, themeName } = useTheme();
   const t = () => theme();
@@ -86,7 +86,7 @@ export default function SettingsDialog(props: SettingsDialogProps) {
       label: "Max commits",
       options: MAX_COUNT_OPTIONS.map(String),
       get: () => String(state.maxCount()),
-      set: (v) => actions.setMaxCount(parseInt(v, 10)),
+      set: (v) => actions.setMaxCount(Number.parseInt(v, 10)),
       needsReload: true,
     },
     {
@@ -101,7 +101,7 @@ export default function SettingsDialog(props: SettingsDialogProps) {
 
   // Indices of selectable (non-header) items
   const selectableIndices = items
-    .map((item, i) => (item.kind !== "header" ? i : -1))
+    .map((item, i) => (item.kind === "header" ? -1 : i))
     .filter((i) => i >= 0);
 
   const [cursor, setCursor] = createSignal(0); // index into selectableIndices
@@ -169,25 +169,25 @@ export default function SettingsDialog(props: SettingsDialogProps) {
       backgroundColor={"#00000080"}
       alignItems="center"
       justifyContent="center"
+      onMouseDown={() => props.onClose()}
     >
       <box
-        width="50%"
-        height="70%"
+        width={70}
+        height="60%"
         backgroundColor={t().backgroundPanel}
         flexDirection="column"
-        paddingX={2}
+        paddingX={1}
         paddingY={1}
+        onMouseDown={(e: any) => e.preventDefault()}
       >
       {/* Title bar */}
-      <box flexDirection="row" width="100%">
+      <box flexDirection="row" width="100%" paddingX={4}>
         <text flexGrow={1} wrapMode="none">
           <strong><span fg={t().foreground}>Settings</span></strong>
         </text>
-        <box flexShrink={0} onMouseDown={() => props.onClose()}>
-          <text wrapMode="none" fg={t().foregroundMuted}>
-            <span fg={t().foregroundMuted}>{"esc".padStart(8)}</span>
-          </text>
-        </box>
+        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+          <span fg={t().foregroundMuted}>{"esc".padStart(9)}</span>
+        </text>
       </box>
       <box height={1} />
 
@@ -197,7 +197,7 @@ export default function SettingsDialog(props: SettingsDialogProps) {
           {(item, itemIndex) => {
             if (item.kind === "header") {
               return (
-                <box flexDirection="column" width="100%">
+                <box flexDirection="column" width="100%" paddingX={4}>
                   {itemIndex() > 0 ? <box height={1} /> : null}
                   <text wrapMode="none" fg={t().accent}>
                     <strong><span fg={t().accent}>{item.label}</span></strong>
@@ -216,7 +216,7 @@ export default function SettingsDialog(props: SettingsDialogProps) {
             };
             const paddedHotkey = () => {
               const h = item.hotkey ?? "";
-              return h.padStart(8);
+              return h.padStart(9);
             };
 
             // Find this item's cursor position for mouse interaction
@@ -226,6 +226,7 @@ export default function SettingsDialog(props: SettingsDialogProps) {
               <box
                 flexDirection="row"
                 width="100%"
+                paddingX={4}
                 backgroundColor={isSelected() ? t().backgroundElement : undefined}
                 onMouseMove={() => {
                   if (cursorPos >= 0) setCursor(cursorPos);
