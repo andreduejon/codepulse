@@ -206,23 +206,64 @@ function AppContent(props: AppProps) {
         >
           {/* Main content area */}
           <box flexDirection="row" flexGrow={1}>
-            {/* Graph panel - left, grey background */}
+            {/* Left panel - graph + search + footer, all on grey background */}
             <box
               flexDirection="column"
               flexGrow={1}
               flexShrink={1}
               backgroundColor={themeState.theme().backgroundPanel}
               paddingX={2}
-              paddingY={1}
             >
-              <scrollbox
-                flexGrow={1}
-                scrollY
-                scrollX={false}
-                verticalScrollbarOptions={{ visible: false }}
+              {/* Graph area */}
+              <box flexDirection="column" flexGrow={1} paddingY={1}>
+                <scrollbox
+                  flexGrow={1}
+                  scrollY
+                  scrollX={false}
+                  verticalScrollbarOptions={{ visible: false }}
+                >
+                  <GraphView />
+                </scrollbox>
+              </box>
+
+              {/* Search input bar - main background, inset within grey */}
+              <box
+                width="100%"
+                minHeight={5}
+                backgroundColor={themeState.theme().background}
+                paddingX={2}
+                paddingY={1}
+                border={["left"]}
+                borderStyle="heavy"
+                borderColor={themeState.theme().accent}
+                flexDirection="column"
               >
-                <GraphView />
-              </scrollbox>
+                {/* Line 1+: input that grows with content */}
+                <box flexGrow={1}>
+                  <input
+                    focused={searchFocused()}
+                    width="100%"
+                    placeholder="Search commits..."
+                    value={state.searchQuery()}
+                    onInput={handleSearchInput}
+                    onSubmit={handleSearchSubmit as any}
+                    fg={themeState.theme().foreground}
+                    backgroundColor={themeState.theme().background}
+                  />
+                </box>
+
+                {/* Bottom line: repo path : branch in accent color */}
+                <box flexDirection="row" width="100%">
+                  <text flexShrink={0} wrapMode="none" fg={themeState.theme().accent}>
+                    {state.repoPath() ? state.repoPath().replace(/^\/Users\/[^/]+/, "~") : ""}
+                    {state.currentBranch() ? `:${state.currentBranch()}` : ""}
+                  </text>
+                </box>
+              </box>
+
+              {/* Footer - hotkey hints, 1 char gap above, right-aligned */}
+              <box height={1} />
+              <Footer />
             </box>
 
             {/* Detail panel - right */}
@@ -240,28 +281,6 @@ function AppContent(props: AppProps) {
               </box>
             </Show>
           </box>
-
-          {/* Search input bar */}
-          <box
-            width="100%"
-            height={1}
-            backgroundColor={themeState.theme().backgroundPanel}
-            paddingX={2}
-          >
-            <input
-              focused={searchFocused()}
-              width="100%"
-              placeholder="Search commits..."
-              value={state.searchQuery()}
-              onInput={handleSearchInput}
-              onSubmit={handleSearchSubmit as any}
-              fg={themeState.theme().foreground}
-              backgroundColor={themeState.theme().backgroundPanel}
-            />
-          </box>
-
-          {/* Footer - hotkey hints */}
-          <Footer />
 
           {/* Dialogs */}
           <Show when={dialog() === "branch"}>

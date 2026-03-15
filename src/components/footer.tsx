@@ -9,8 +9,10 @@ export default function Footer() {
       flexDirection="row"
       width="100%"
       height={1}
-      paddingX={2}
     >
+      {/* Spacer pushes everything right */}
+      <box flexGrow={1} />
+
       {/* Keyboard hints */}
       <text flexShrink={0} wrapMode="none">
         <span fg={t().foreground}>↑/↓</span>
@@ -19,28 +21,15 @@ export default function Footer() {
         <span fg={t().foregroundMuted}> details  </span>
         <span fg={t().foreground}>/</span>
         <span fg={t().foregroundMuted}> search  </span>
-        <span fg={t().foreground}>a</span>
-        <span fg={t().foregroundMuted}> all branches  </span>
-        <span fg={t().foreground}>T</span>
-        <span fg={t().foregroundMuted}> tags  </span>
-        <span fg={t().foreground}>f</span>
-        <span fg={t().foregroundMuted}> focus  </span>
-        <span fg={t().foreground}>ctrl+t</span>
-        <span fg={t().foregroundMuted}> theme  </span>
         <span fg={t().foreground}>ctrl+s</span>
         <span fg={t().foregroundMuted}> settings  </span>
         <span fg={t().foreground}>?</span>
-        <span fg={t().foregroundMuted}> help  </span>
-        <span fg={t().foreground}>q</span>
-        <span fg={t().foregroundMuted}> quit</span>
+        <span fg={t().foregroundMuted}> help</span>
       </text>
 
-      {/* Spacer */}
-      <box flexGrow={1} />
-
-      {/* Branding */}
-      <text flexShrink={0} wrapMode="none">
-        <span fg={t().foregroundMuted}>gittree v0.1.0</span>
+      {/* Separator + Branding */}
+      <text flexShrink={0} wrapMode="none" paddingLeft={2}>
+        <span fg={t().foregroundMuted}>• gittree v0.1.0</span>
       </text>
     </box>
   );
