@@ -95,9 +95,8 @@ export default function SettingsDialog(props: SettingsDialogProps) {
     setCursor((c) => Math.max(0, Math.min(len - 1, c + delta)));
   };
 
-  const activateItem = () => {
-    const idx = selectedItemIndex();
-    const item = items[idx];
+  const activateItemAt = (itemIdx: number) => {
+    const item = items[itemIdx];
     if (!item || item.kind === "header") return;
 
     if (item.kind === "toggle") {
@@ -113,6 +112,8 @@ export default function SettingsDialog(props: SettingsDialogProps) {
       props.onReload();
     }
   };
+
+  const activateItem = () => activateItemAt(selectedItemIndex());
 
   // Handle navigation within the dialog
   useKeyboard((e) => {
@@ -194,11 +195,23 @@ export default function SettingsDialog(props: SettingsDialogProps) {
               return h.padStart(8);
             };
 
+            // Find this item's cursor position for mouse interaction
+            const cursorPos = selectableIndices.indexOf(itemIndex());
+
             return (
               <box
                 flexDirection="row"
                 width="100%"
                 backgroundColor={isSelected() ? t().backgroundElement : undefined}
+                onMouseMove={() => {
+                  if (cursorPos >= 0) setCursor(cursorPos);
+                }}
+                onMouseDown={() => {
+                  if (cursorPos >= 0) {
+                    setCursor(cursorPos);
+                    activateItemAt(itemIndex());
+                  }
+                }}
               >
                 {/* Setting name */}
                 <text flexGrow={1} flexShrink={1} wrapMode="none" truncate>
