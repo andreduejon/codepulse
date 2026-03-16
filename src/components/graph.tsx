@@ -43,7 +43,7 @@ function RefBadge(props: {
   );
 }
 
-function ColumnHeader() {
+export function ColumnHeader() {
   const { theme } = useTheme();
   const { state } = useAppState();
   const t = () => theme();
@@ -55,6 +55,7 @@ function ColumnHeader() {
     <box
       flexDirection="row"
       width="100%"
+      paddingBottom={1}
     >
       {/* Graph header */}
       <text
@@ -64,47 +65,37 @@ function ColumnHeader() {
         fg={t().foregroundMuted}
         paddingLeft={1}
       >
-        Graph
+        {"Graph "}
       </text>
 
-      {/* Description (commit message + refs) */}
-      <text flexGrow={1} flexShrink={1} fg={t().foregroundMuted} wrapMode="none" truncate>
-        Description
-      </text>
+      {/* Description (commit message + refs) — box wrapper matches data row structure */}
+      <box flexDirection="row" flexGrow={1} flexShrink={1}>
+        <text flexGrow={1} flexShrink={1} fg={t().foregroundMuted} wrapMode="none" truncate>
+          Description
+        </text>
+      </box>
 
       {/* Author */}
       <Show when={state.showAuthorColumn()}>
-        <text
-          flexShrink={0}
-          fg={t().foregroundMuted}
-          wrapMode="none"
-          paddingLeft={2}
-          width={18}
-        >
-          Author
-        </text>
+        <box flexShrink={0} width={15} paddingRight={2}>
+          <text fg={t().foregroundMuted} wrapMode="none" truncate>
+            Author
+          </text>
+        </box>
       </Show>
 
       {/* Date */}
       <Show when={state.showDateColumn()}>
-        <text
-          flexShrink={0}
-          fg={t().foregroundMuted}
-          wrapMode="none"
-          width={16}
-        >
-          Date
-        </text>
+        <box flexShrink={0} width={15} paddingRight={2}>
+          <text fg={t().foregroundMuted} wrapMode="none" truncate>
+            Date
+          </text>
+        </box>
       </Show>
 
       {/* Commit hash */}
       <Show when={state.showHashColumn()}>
-        <text
-          flexShrink={0}
-          fg={t().foregroundMuted}
-          wrapMode="none"
-          paddingRight={1}
-        >
+        <text flexShrink={0} width={8} fg={t().foregroundMuted} wrapMode="none" truncate>
           Commit
         </text>
       </Show>
@@ -253,8 +244,9 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
   };
 
   // Effective text color: dimmed if focus mode is on and commit not on current branch,
-  // or if the commit is on a remote-only branch
+  // or if the commit is on a remote-only branch. Selected rows use foreground (bold applied separately).
   const effectiveTextColor = () => {
+    if (props.selected) return t().foreground;
     if (state.focusCurrentBranch() && !isOnCurrentBranch()) {
       return t().foregroundMuted;
     }
@@ -281,7 +273,7 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
         onMouseMove={() => props.onSelect(props.index)}
       >
         {/* Graph part: styled via ref + StyledText to bypass reconciler stringification */}
-        <text ref={graphTextRef} flexShrink={0} wrapMode="none" truncate paddingLeft={1} />
+        <text ref={graphTextRef} flexShrink={0} width={Math.max(padCols() * 2 + 1, 6)} wrapMode="none" truncate paddingLeft={1} />
 
         {/* Description: refs + commit message share one flex area */}
         <box flexDirection="row" flexGrow={1} flexShrink={1}>
@@ -294,47 +286,32 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
           </Show>
           <text flexGrow={1} flexShrink={1} fg={effectiveTextColor()} wrapMode="none" truncate>
             {" "}
-            {commit().subject}
+            {props.selected ? <strong><span fg={effectiveTextColor()}>{commit().subject}</span></strong> : commit().subject}
           </text>
         </box>
 
         {/* Author */}
         <Show when={state.showAuthorColumn()}>
-          <text
-            flexShrink={0}
-            fg={t().foregroundMuted}
-            wrapMode="none"
-            truncate
-            paddingLeft={2}
-            width={18}
-          >
-            {commit().author}
-          </text>
+          <box flexShrink={0} width={15} paddingRight={2} overflow="hidden">
+            <text fg={props.selected ? t().foreground : t().foregroundMuted} wrapMode="none" truncate>
+              {props.selected ? <strong><span fg={t().foreground}>{commit().author}</span></strong> : commit().author}
+            </text>
+          </box>
         </Show>
 
         {/* Date */}
         <Show when={state.showDateColumn()}>
-          <text
-            flexShrink={0}
-            fg={t().foregroundMuted}
-            wrapMode="none"
-            truncate
-            width={16}
-          >
-            {formatRelativeDate(commit().authorDate)}
-          </text>
+          <box flexShrink={0} width={15} paddingRight={2} overflow="hidden">
+            <text fg={props.selected ? t().foreground : t().foregroundMuted} wrapMode="none" truncate>
+              {props.selected ? <strong><span fg={t().foreground}>{formatRelativeDate(commit().authorDate)}</span></strong> : formatRelativeDate(commit().authorDate)}
+            </text>
+          </box>
         </Show>
 
         {/* Short hash */}
         <Show when={state.showHashColumn()}>
-          <text
-            flexShrink={0}
-            fg={props.selected ? t().primary : t().foregroundMuted}
-            wrapMode="none"
-            truncate
-            paddingRight={1}
-          >
-            {commit().shortHash}
+          <text flexShrink={0} width={8} fg={props.selected ? t().foreground : t().foregroundMuted} wrapMode="none" truncate>
+            {props.selected ? <strong><span fg={t().foreground}>{commit().shortHash}</span></strong> : commit().shortHash}
           </text>
         </Show>
       </box>
@@ -380,9 +357,6 @@ export default function GraphView() {
 
   return (
     <box flexDirection="column" flexGrow={1}>
-      {/* Column headers */}
-      <ColumnHeader />
-
       <Show
         when={!state.loading()}
         fallback={

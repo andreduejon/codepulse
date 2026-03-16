@@ -54,13 +54,6 @@ export default function SettingsDialog(props: Readonly<SettingsDialogProps>) {
     },
     {
       kind: "toggle",
-      label: "Show detail panel",
-      hotkey: "enter",
-      get: () => state.showDetailPanel(),
-      set: (v) => actions.setShowDetailPanel(v),
-    },
-    {
-      kind: "toggle",
       label: "Show hash column",
       get: () => state.showHashColumn(),
       set: (v) => actions.setShowHashColumn(v),

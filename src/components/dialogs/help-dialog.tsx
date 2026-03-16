@@ -9,7 +9,6 @@ export default function HelpDialog(props: { onClose: () => void }) {
     ["↑ / Up", "Move selection up"],
     ["g", "Go to first commit"],
     ["G", "Go to last commit"],
-    ["Enter", "Toggle commit details"],
     ["/", "Search commits"],
     ["Esc", "Clear search / close dialog"],
     ["a", "Toggle all branches"],

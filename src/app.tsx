@@ -4,7 +4,7 @@ import { createAppState, AppStateContext } from "./context/state";
 import { createThemeState, ThemeContext } from "./context/theme";
 import { getCommits, getBranches, getCurrentBranch, getRepoName, getCommitDetail } from "./git/repo";
 import { buildGraph, getMaxGraphColumns } from "./git/graph";
-import GraphView from "./components/graph";
+import GraphView, { ColumnHeader } from "./components/graph";
 import CommitDetailView from "./components/detail";
 import Footer from "./components/footer";
 import BranchDialog from "./components/dialogs/branch-dialog";
@@ -160,9 +160,6 @@ function AppContent(props: AppProps) {
       case "pageup":
         actions.moveSelection(-20);
         break;
-      case "return":
-        actions.setShowDetailPanel(!state.showDetailPanel());
-        break;
       case "/":
         setSearchFocused(true);
         break;
@@ -216,6 +213,9 @@ function AppContent(props: AppProps) {
             >
               {/* Graph area */}
               <box flexDirection="column" flexGrow={1} paddingY={1}>
+                {/* Sticky column headers - above scrollbox */}
+                <ColumnHeader />
+
                 <scrollbox
                   flexGrow={1}
                   scrollY
@@ -267,19 +267,18 @@ function AppContent(props: AppProps) {
             </box>
 
             {/* Detail panel - right */}
-            <Show when={state.showDetailPanel()}>
-              <box
-                flexDirection="column"
-                width="20%"
-                flexShrink={0}
-                paddingX={2}
-                paddingY={1}
-              >
-                <scrollbox flexGrow={1} scrollY scrollX={false} verticalScrollbarOptions={{ visible: false }}>
-                  <CommitDetailView />
-                </scrollbox>
-              </box>
-            </Show>
+            <box
+              flexDirection="column"
+              width="20%"
+              minWidth={40}
+              flexShrink={0}
+              paddingX={2}
+              paddingY={1}
+            >
+              <scrollbox flexGrow={1} scrollY scrollX={false} verticalScrollbarOptions={{ visible: false }}>
+                <CommitDetailView />
+              </scrollbox>
+            </box>
           </box>
 
           {/* Dialogs */}

@@ -97,7 +97,6 @@ OPTIONS:
 KEYBOARD SHORTCUTS:
   j/k or Up/Down         Navigate commits
   g/G                    First/last commit
-  Enter                  Toggle detail panel
   /                      Search commits
   b                      Branch picker
   a                      Toggle all branches

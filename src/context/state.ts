@@ -20,7 +20,6 @@ export interface AppState {
   maxGraphColumns: Accessor<number>;
   maxCount: Accessor<number>;
   dimRemoteOnly: Accessor<boolean>;
-  showDetailPanel: Accessor<boolean>;
   showAuthorColumn: Accessor<boolean>;
   showDateColumn: Accessor<boolean>;
   showHashColumn: Accessor<boolean>;
@@ -44,7 +43,6 @@ export interface AppActions {
   setMaxGraphColumns: (cols: number) => void;
   setMaxCount: (n: number) => void;
   setDimRemoteOnly: (dim: boolean) => void;
-  setShowDetailPanel: (show: boolean) => void;
   setShowAuthorColumn: (show: boolean) => void;
   setShowDateColumn: (show: boolean) => void;
   setShowHashColumn: (show: boolean) => void;
@@ -69,7 +67,6 @@ export function createAppState(initialMaxCount: number = 200) {
   const [maxGraphColumns, setMaxGraphColumns] = createSignal(0);
   const [maxCount, setMaxCount] = createSignal(initialMaxCount);
   const [dimRemoteOnly, setDimRemoteOnly] = createSignal(true);
-  const [showDetailPanel, setShowDetailPanel] = createSignal(true);
   const [showAuthorColumn, setShowAuthorColumn] = createSignal(true);
   const [showDateColumn, setShowDateColumn] = createSignal(true);
   const [showHashColumn, setShowHashColumn] = createSignal(true);
@@ -119,7 +116,6 @@ export function createAppState(initialMaxCount: number = 200) {
     maxGraphColumns,
     maxCount,
     dimRemoteOnly,
-    showDetailPanel,
     showAuthorColumn,
     showDateColumn,
     showHashColumn,
@@ -143,7 +139,6 @@ export function createAppState(initialMaxCount: number = 200) {
     setMaxGraphColumns,
     setMaxCount,
     setDimRemoteOnly,
-    setShowDetailPanel,
     setShowAuthorColumn,
     setShowDateColumn,
     setShowHashColumn,

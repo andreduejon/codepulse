@@ -49,7 +49,7 @@ function parseCommitLine(line: string): Commit | null {
 
   return {
     hash,
-    shortHash,
+    shortHash: shortHash.slice(0, 8),
     parents,
     message: subject,
     subject,
