@@ -614,6 +614,107 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       }
     }
 
+    // ── Fan-out + commit-row merge optimization ──
+    // When a commit has fan-out rows AND merge/branch connectors on its
+    // commit row, check if the last fan-out row's connector and the commit
+    // row's connectors are on OPPOSITE sides of the node column. If so,
+    // combine them into a single row so the commit renders as 1 █ block
+    // instead of 2. Keep 2 rows when connectors conflict on the same side.
+    if (fanOutRows.length > 0) {
+      // Determine which side the last fan-out row's corner is on
+      const lastFO = fanOutRows[fanOutRows.length - 1];
+      const foCorner = lastFO.find(c =>
+        c.type === "corner-bottom-right" || c.type === "corner-bottom-left"
+      );
+
+      // Collect merge/branch connectors from the commit row
+      // (horizontals, corners, tees at columns other than nodeColumn)
+      const commitMBConnectors = connectors.filter(c =>
+        c.column !== nodeColumn && (
+          c.type === "horizontal" || c.type === "tee-left" || c.type === "tee-right" ||
+          c.type === "corner-top-right" || c.type === "corner-top-left" ||
+          c.type === "corner-bottom-right" || c.type === "corner-bottom-left"
+        )
+      );
+
+      if (foCorner && commitMBConnectors.length > 0) {
+        const foSide = foCorner.column < nodeColumn ? "left" : "right";
+
+        // Determine sides of commit-row merge/branch connectors
+        let hasLeft = false;
+        let hasRight = false;
+        for (const c of commitMBConnectors) {
+          if (c.column < nodeColumn) hasLeft = true;
+          if (c.column > nodeColumn) hasRight = true;
+        }
+
+        // Can merge if ALL commit-row connectors are on the opposite side
+        const canMerge = (foSide === "left" && !hasLeft && hasRight) ||
+                         (foSide === "right" && !hasRight && hasLeft);
+
+        if (canMerge) {
+          // Combine: add commit-row merge/branch connectors to the last fan-out row
+          const combined = [...lastFO];
+
+          for (const mc of commitMBConnectors) {
+            // Check if there's already a connector at this column
+            const existing = combined.find(c => c.column === mc.column);
+            if (existing) {
+              // If existing is empty, replace it; otherwise add alongside (crossing)
+              if (existing.type === "empty") {
+                const idx = combined.indexOf(existing);
+                combined[idx] = mc;
+              } else {
+                combined.push(mc);
+              }
+            } else {
+              combined.push(mc);
+            }
+          }
+
+          // Fix the tee direction at the node column for the combined row.
+          // tee-left (├) → renders █─ (arm goes RIGHT)
+          // tee-right (┤) → renders █  (arm goes LEFT)
+          // If we now have connectors on the RIGHT side, we need tee-left
+          // so the █─ connects to the right-side horizontals.
+          // If connectors on the LEFT side only, keep tee-right.
+          const teeIdx = combined.findIndex(c =>
+            c.column === nodeColumn && (c.type === "tee-left" || c.type === "tee-right")
+          );
+          if (teeIdx !== -1) {
+            const commitHasRight = hasRight;
+            if (commitHasRight && combined[teeIdx].type === "tee-right") {
+              // Switch from tee-right (█ ) to tee-left (█─) for right-side connection
+              combined[teeIdx] = { ...combined[teeIdx], type: "tee-left" };
+            } else if (!commitHasRight && hasLeft && combined[teeIdx].type === "tee-left") {
+              // Fan-out was right, merge is left — keep tee-left (█─) for the right fan-out
+              // Actually this case can't happen: foSide=right means fan-out corner is RIGHT,
+              // and canMerge requires hasLeft && !hasRight. The original tee for a right-side
+              // fan-out is tee-left (arm toward right corner). Now we have left-side merge
+              // connectors too. But tee-left produces █─ which connects rightward to the
+              // fan-out corner. The left-side merge connectors at col < nodeColumn just have
+              // horizontals approaching from the left — they connect via the horizontal at
+              // nodeColumn-1, not via the dash after █. So tee-left is still correct.
+            }
+          }
+
+          // Replace the last fan-out row with the combined version
+          fanOutRows[fanOutRows.length - 1] = combined;
+
+          // Strip absorbed merge/branch connectors from the commit row.
+          // Replace them with empties so commitRowHasConnections() returns false
+          // in the renderer, allowing the last fan-out row to be used as the
+          // commit row's graph (single █ block).
+          for (const mc of commitMBConnectors) {
+            const idx = connectors.findIndex(c => c === mc);
+            if (idx !== -1) {
+              connectors[idx] = { type: "empty", color: 0, column: mc.column };
+            }
+          }
+        }
+      }
+    }
+
     // Clean up trailing null lanes.
     // Always pop trailing nulls to keep the graph compact.
     while (lanes.length > 0 && lanes[lanes.length - 1] === null) {
