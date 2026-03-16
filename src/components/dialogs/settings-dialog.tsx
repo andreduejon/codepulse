@@ -169,7 +169,7 @@ export default function SettingsDialog(props: Readonly<SettingsDialogProps>) {
         flexDirection="column"
         paddingX={1}
         paddingY={1}
-        onMouseDown={(e: any) => e.preventDefault()}
+        onMouseDown={(e: any) => { e.stopPropagation(); e.preventDefault(); }}
       >
       {/* Title bar */}
       <box flexDirection="row" width="100%" paddingX={4}>
@@ -222,10 +222,9 @@ export default function SettingsDialog(props: Readonly<SettingsDialogProps>) {
                 onMouseMove={() => {
                   if (cursorPos >= 0) setCursor(cursorPos);
                 }}
-                onMouseDown={(e: any) => {
+                onMouseDown={() => {
                   if (cursorPos >= 0) {
                     setCursor(cursorPos);
-                    if (item.kind === "dialog") e.preventDefault();
                     activateItemAt(itemIndex());
                   }
                 }}

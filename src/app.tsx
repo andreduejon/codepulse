@@ -29,7 +29,7 @@ function AppContent(props: AppProps) {
   const [searchFocused, setSearchFocused] = createSignal(false);
 
   // Load git data
-  async function loadData(branch?: string) {
+  async function loadData(branch?: string, stickyHash?: string) {
     actions.setLoading(true);
     try {
       const repoPath = props.repoPath;
@@ -53,7 +53,22 @@ function AppContent(props: AppProps) {
       actions.setBranches(branches);
       actions.setCurrentBranch(currentBranch);
       actions.setRepoName(repoName);
-      actions.setSelectedIndex(0);
+
+      // Selection priority: sticky hash > current branch tip > 0
+      let targetIndex = 0;
+      if (stickyHash) {
+        const idx = rows.findIndex((r) => r.commit.hash === stickyHash);
+        if (idx >= 0) {
+          targetIndex = idx;
+        } else {
+          const cbIdx = rows.findIndex((r) => r.isOnCurrentBranch);
+          if (cbIdx >= 0) targetIndex = cbIdx;
+        }
+      } else {
+        const cbIdx = rows.findIndex((r) => r.isOnCurrentBranch);
+        if (cbIdx >= 0) targetIndex = cbIdx;
+      }
+      actions.setSelectedIndex(targetIndex);
     } catch (err) {
       // TODO: show error in UI
     } finally {
@@ -112,6 +127,22 @@ function AppContent(props: AppProps) {
       return;
     }
 
+    // F1 opens help regardless of dialog/search state
+    if (e.name === "f1") {
+      setSearchFocused(false);
+      setDialog(dialog() === "help" ? null : "help");
+      return;
+    }
+
+    // F5 refreshes git data, preserving scroll position
+    if (e.name === "f5") {
+      setSearchFocused(false);
+      if (dialog()) setDialog(null);
+      const stickyHash = state.selectedCommit()?.hash;
+      loadData(undefined, stickyHash);
+      return;
+    }
+
     // Escape handling
     if (e.name === "escape") {
       if (dialog()) {
@@ -165,9 +196,6 @@ function AppContent(props: AppProps) {
         break;
       case "b":
         setDialog("branch");
-        break;
-      case "?":
-        setDialog(dialog() === "help" ? null : "help");
         break;
       case "t":
         if (e.shift) {

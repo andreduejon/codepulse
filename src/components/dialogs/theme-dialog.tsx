@@ -1,16 +1,10 @@
-import { createSignal, createEffect, For, onMount, onCleanup } from "solid-js";
+import { createSignal, createEffect, For, onCleanup } from "solid-js";
 import { useKeyboard } from "@opentui/solid";
 import { useTheme, themeNames, themes } from "../../context/theme";
 
 export default function ThemeDialog(props: { onClose: () => void }) {
   const { theme, setTheme, themeName } = useTheme();
   const t = () => theme();
-
-  // Guard against stale mouse events from the dialog that opened us
-  let mounted = false;
-  onMount(() => {
-    setTimeout(() => { mounted = true; }, 50);
-  });
 
   // Remember the original theme to revert on cancel
   const originalTheme = themeName();
@@ -74,7 +68,7 @@ export default function ThemeDialog(props: { onClose: () => void }) {
       backgroundColor={"#00000080"}
       alignItems="center"
       justifyContent="center"
-      onMouseDown={() => { if (mounted) props.onClose(); }}
+      onMouseDown={() => props.onClose()}
     >
       <box
         width={50}
@@ -83,7 +77,7 @@ export default function ThemeDialog(props: { onClose: () => void }) {
         flexDirection="column"
         paddingX={1}
         paddingY={1}
-        onMouseDown={(e: any) => e.preventDefault()}
+        onMouseDown={(e: any) => { e.stopPropagation(); e.preventDefault(); }}
       >
         {/* Title bar */}
         <box flexDirection="row" width="100%" paddingX={4}>

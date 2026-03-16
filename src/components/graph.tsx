@@ -69,7 +69,7 @@ export function ColumnHeader() {
       </text>
 
       {/* Description (commit message + refs) — box wrapper matches data row structure */}
-      <box flexDirection="row" flexGrow={1} flexShrink={1}>
+      <box flexDirection="row" flexGrow={1} flexShrink={1} paddingLeft={1} paddingRight={2}>
         <text flexGrow={1} flexShrink={1} fg={t().foregroundMuted} wrapMode="none" truncate>
           Description
         </text>
@@ -276,16 +276,15 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
         <text ref={graphTextRef} flexShrink={0} width={Math.max(padCols() * 2 + 1, 6)} wrapMode="none" truncate paddingLeft={1} />
 
         {/* Description: refs + commit message share one flex area */}
-        <box flexDirection="row" flexGrow={1} flexShrink={1}>
+        <box flexDirection="row" flexGrow={1} flexShrink={1} paddingLeft={1} paddingRight={2}>
           <Show when={visibleRefs().length > 0}>
-            <box flexDirection="row" flexShrink={0} gap={1}>
+            <box flexDirection="row" flexShrink={0} gap={1} paddingRight={1}>
               <For each={visibleRefs()}>
                 {(ri) => <RefBadge info={ri} laneColor={effectiveLaneColor} dimColor={() => t().foregroundMuted} remoteOnlyBranches={props.row.remoteOnlyBranches} />}
               </For>
             </box>
           </Show>
           <text flexGrow={1} flexShrink={1} fg={effectiveTextColor()} wrapMode="none" truncate>
-            {" "}
             {props.selected ? <strong><span fg={effectiveTextColor()}>{commit().subject}</span></strong> : commit().subject}
           </text>
         </box>

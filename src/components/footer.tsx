@@ -17,13 +17,11 @@ export default function Footer() {
       <text flexShrink={0} wrapMode="none">
         <span fg={t().foreground}>↑/↓</span>
         <span fg={t().foregroundMuted}> navigate  </span>
-        <span fg={t().foreground}>enter</span>
-        <span fg={t().foregroundMuted}> details  </span>
-        <span fg={t().foreground}>/</span>
-        <span fg={t().foregroundMuted}> search  </span>
         <span fg={t().foreground}>ctrl+s</span>
         <span fg={t().foregroundMuted}> settings  </span>
-        <span fg={t().foreground}>?</span>
+        <span fg={t().foreground}>F5</span>
+        <span fg={t().foregroundMuted}> refresh  </span>
+        <span fg={t().foreground}>F1</span>
         <span fg={t().foregroundMuted}> help</span>
       </text>
 

@@ -5,20 +5,20 @@ export default function HelpDialog(props: { onClose: () => void }) {
   const t = () => theme();
 
   const keybinds = [
-    ["↓ / Down", "Move selection down"],
-    ["↑ / Up", "Move selection up"],
+    ["↓ / ↑", "Move selection down / up"],
     ["g", "Go to first commit"],
     ["G", "Go to last commit"],
     ["/", "Search commits"],
-    ["Esc", "Clear search / close dialog"],
+    ["esc", "Clear search / close dialog"],
     ["a", "Toggle all branches"],
     ["b", "Open branch picker"],
     ["T", "Toggle tag visibility"],
     ["f", "Focus current branch"],
-    ["Ctrl+T", "Change theme"],
-    ["Ctrl+S", "Settings"],
-    ["?", "Show this help"],
-    ["q / Ctrl+C", "Quit"],
+    ["ctrl+t", "Change theme"],
+    ["ctrl+s", "Settings"],
+    ["F1", "Show this help"],
+    ["F5", "Refresh"],
+    ["q / ctrl+c", "Quit"],
   ];
 
   return (
@@ -40,7 +40,7 @@ export default function HelpDialog(props: { onClose: () => void }) {
         flexDirection="column"
         paddingX={1}
         paddingY={1}
-        onMouseDown={(e: any) => e.preventDefault()}
+        onMouseDown={(e: any) => { e.stopPropagation(); e.preventDefault(); }}
       >
         {/* Title bar */}
         <box flexDirection="row" width="100%" paddingX={4}>
