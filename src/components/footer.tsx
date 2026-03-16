@@ -13,22 +13,13 @@ export default function Footer() {
       {/* Spacer pushes everything right */}
       <box flexGrow={1} />
 
-      {/* Keyboard hints */}
-      <text flexShrink={0} wrapMode="none">
-        <span fg={t().foreground}>↑/↓</span>
-        <span fg={t().foregroundMuted}> navigate  </span>
-        <span fg={t().foreground}>ctrl+s</span>
-        <span fg={t().foregroundMuted}> settings  </span>
-        <span fg={t().foreground}>F5</span>
-        <span fg={t().foregroundMuted}> refresh  </span>
-        <span fg={t().foreground}>F1</span>
-        <span fg={t().foregroundMuted}> help</span>
-      </text>
-
-      {/* Separator + Branding */}
-      <text flexShrink={0} wrapMode="none" paddingLeft={2}>
-        <span fg={t().foregroundMuted}>• gittree v0.1.0</span>
-      </text>
+      {/* Keyboard hints — right-aligned, separate <text> per color segment */}
+      <text flexShrink={0} wrapMode="none" fg={t().foreground}>ctrl+s</text>
+      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" settings  "}</text>
+      <text flexShrink={0} wrapMode="none" fg={t().foreground}>f5</text>
+      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" refresh  "}</text>
+      <text flexShrink={0} wrapMode="none" fg={t().foreground}>f1</text>
+      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" help"}</text>
     </box>
   );
 }

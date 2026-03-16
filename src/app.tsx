@@ -280,11 +280,15 @@ function AppContent(props: AppProps) {
                   />
                 </box>
 
-                {/* Bottom line: repo path : branch in accent color */}
+                {/* Bottom line: Git label + repo path : branch + version */}
                 <box flexDirection="row" width="100%">
-                  <text flexShrink={0} wrapMode="none" fg={themeState.theme().accent}>
-                    {state.repoPath() ? state.repoPath().replace(/^\/Users\/[^/]+/, "~") : ""}
-                    {state.currentBranch() ? `:${state.currentBranch()}` : ""}
+                  <text flexShrink={0} wrapMode="none" fg={themeState.theme().accent}>Git</text>
+                  <text flexShrink={0} wrapMode="none" fg={themeState.theme().foregroundMuted}>
+                    {"  "}{state.repoPath() ? state.repoPath().replace(/^\/Users\/[^/]+/, "~") : ""}{state.currentBranch() ? `:${state.currentBranch()}` : ""}
+                  </text>
+                  <box flexGrow={1} />
+                  <text flexShrink={0} wrapMode="none" fg={themeState.theme().foregroundMuted}>
+                    gittree v0.1.0
                   </text>
                 </box>
               </box>
