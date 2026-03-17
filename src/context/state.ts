@@ -1,4 +1,4 @@
-import { createContext, useContext, createSignal, type Accessor } from "solid-js";
+import { createContext, useContext, createSignal, createMemo, type Accessor } from "solid-js";
 import type { Commit, GraphRow, CommitDetail, Branch } from "../git/types";
 
 export interface AppState {
@@ -75,13 +75,7 @@ export function createAppState(initialMaxCount: number = 200) {
   const [showDateColumn, setShowDateColumn] = createSignal(true);
   const [showHashColumn, setShowHashColumn] = createSignal(true);
 
-  const selectedCommit = () => {
-    const rows = filteredRows();
-    const idx = selectedIndex();
-    return idx >= 0 && idx < rows.length ? rows[idx].commit : null;
-  };
-
-  const filteredRows = () => {
+  const filteredRows = createMemo(() => {
     const query = searchQuery().toLowerCase();
     if (!query) return graphRows();
     return graphRows().filter((row) => {
@@ -93,7 +87,13 @@ export function createAppState(initialMaxCount: number = 200) {
         c.refs.some((r) => r.name.toLowerCase().includes(query))
       );
     });
-  };
+  });
+
+  const selectedCommit = createMemo(() => {
+    const rows = filteredRows();
+    const idx = selectedIndex();
+    return idx >= 0 && idx < rows.length ? rows[idx].commit : null;
+  });
 
   const moveHighlight = (delta: number) => {
     const rows = filteredRows();

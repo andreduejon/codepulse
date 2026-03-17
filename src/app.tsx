@@ -82,18 +82,20 @@ function AppContent(props: AppProps) {
     renderer.setTerminalTitle("gittree");
   });
 
-  // Load commit detail when selection changes
+  // Load commit detail when selection changes (with race condition guard)
+  let detailVersion = 0;
   createEffect(async () => {
     const commit = state.selectedCommit();
+    const v = ++detailVersion;
     if (!commit) {
       actions.setCommitDetail(null);
       return;
     }
     try {
       const detail = await getCommitDetail(props.repoPath, commit.hash);
-      actions.setCommitDetail(detail);
+      if (v === detailVersion) actions.setCommitDetail(detail);
     } catch {
-      actions.setCommitDetail(null);
+      if (v === detailVersion) actions.setCommitDetail(null);
     }
   });
 
@@ -106,10 +108,10 @@ function AppContent(props: AppProps) {
   };
 
   const handleSearchInput = (value: string) => {
-    // Live filter as user types
+    // Live filter as user types — only move highlight, don't change selection
+    // (avoids spawning git subprocesses for commit detail on every keystroke)
     actions.setSearchQuery(value);
     actions.setHighlightedIndex(0);
-    actions.setSelectedIndex(0);
   };
 
   // Keyboard handling

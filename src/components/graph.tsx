@@ -425,6 +425,11 @@ export default function GraphView() {
   let scrollboxRef: ScrollBoxRenderable | undefined;
   const rowRefs: Renderable[] = [];
 
+  // Clean up stale rowRefs when filtered row count changes
+  createEffect(() => {
+    rowRefs.length = state.filteredRows().length;
+  });
+
   createEffect(() => {
     const rows = state.filteredRows();
     const idx = state.highlightedIndex();
