@@ -8,6 +8,7 @@ export interface AppState {
   currentBranch: Accessor<string>;
   repoName: Accessor<string>;
   repoPath: Accessor<string>;
+  highlightedIndex: Accessor<number>;
   selectedIndex: Accessor<number>;
   selectedCommit: Accessor<Commit | null>;
   commitDetail: Accessor<CommitDetail | null>;
@@ -26,8 +27,10 @@ export interface AppState {
 }
 
 export interface AppActions {
+  setHighlightedIndex: (index: number) => void;
+  moveHighlight: (delta: number) => void;
   setSelectedIndex: (index: number) => void;
-  moveSelection: (delta: number) => void;
+  selectHighlighted: () => void;
   setCommitDetail: (detail: CommitDetail | null) => void;
   setLoading: (loading: boolean) => void;
   setShowAllBranches: (show: boolean) => void;
@@ -57,6 +60,7 @@ export function createAppState(initialMaxCount: number = 200) {
   const [currentBranch, setCurrentBranch] = createSignal("");
   const [repoName, setRepoName] = createSignal("");
   const [repoPath, setRepoPath] = createSignal("");
+  const [highlightedIndex, setHighlightedIndex] = createSignal(0);
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   const [commitDetail, setCommitDetail] = createSignal<CommitDetail | null>(null);
   const [loading, setLoading] = createSignal(true);
@@ -91,10 +95,14 @@ export function createAppState(initialMaxCount: number = 200) {
     });
   };
 
-  const moveSelection = (delta: number) => {
+  const moveHighlight = (delta: number) => {
     const rows = filteredRows();
-    const newIndex = Math.max(0, Math.min(rows.length - 1, selectedIndex() + delta));
-    setSelectedIndex(newIndex);
+    const newIndex = Math.max(0, Math.min(rows.length - 1, highlightedIndex() + delta));
+    setHighlightedIndex(newIndex);
+  };
+
+  const selectHighlighted = () => {
+    setSelectedIndex(highlightedIndex());
   };
 
   const state: AppState = {
@@ -104,6 +112,7 @@ export function createAppState(initialMaxCount: number = 200) {
     currentBranch,
     repoName,
     repoPath,
+    highlightedIndex,
     selectedIndex,
     selectedCommit,
     commitDetail,
@@ -122,8 +131,10 @@ export function createAppState(initialMaxCount: number = 200) {
   };
 
   const actions: AppActions = {
+    setHighlightedIndex,
+    moveHighlight,
     setSelectedIndex,
-    moveSelection,
+    selectHighlighted,
     setCommitDetail,
     setLoading,
     setShowAllBranches,

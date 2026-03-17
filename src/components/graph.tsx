@@ -3,7 +3,7 @@ import { useAppState } from "../context/state";
 import { useTheme } from "../context/theme";
 import { renderGraphRow, renderConnectorRow, renderFanOutRow, graphCharsToContent, getColorForColumn, sliceGraphToViewport, computeSingleViewportOffset, buildEdgeIndicator, MAX_GRAPH_COLUMNS, type GraphChar } from "../git/graph";
 import type { GraphRow, RefInfo } from "../git/types";
-import type { TextRenderable, StyledText } from "@opentui/core";
+import type { TextRenderable, StyledText, ScrollBoxRenderable, Renderable } from "@opentui/core";
 
 function RefBadge(props: {
   info: RefInfo;
@@ -124,7 +124,7 @@ function ConnectorRow(props: { content: () => StyledText; width?: number }) {
   );
 }
 
-function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isLast: boolean; onSelect: (index: number) => void; viewportOffset: () => number }) {
+function GraphLine(props: { row: GraphRow; index: number; highlighted: boolean; selected: boolean; isLast: boolean; onHighlight: (index: number) => void; onSelect: (index: number) => void; viewportOffset: () => number; rowRef?: (el: Renderable) => void }) {
   const { theme } = useTheme();
   const { state } = useAppState();
 
@@ -289,10 +289,12 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
     return laneColor();
   };
 
-  // Effective text color: dimmed if focus mode is on and commit not on current branch,
-  // or if the commit is on a remote-only branch. Selected rows use foreground (bold applied separately).
+  // Effective text color for the commit subject (primary column).
+  // Selected rows use primary color. Highlighted-only rows use foreground.
+  // Dimmed for focus mode / remote-only otherwise.
   const effectiveTextColor = () => {
-    if (props.selected) return t().foreground;
+    if (props.selected) return t().primary;
+    if (props.highlighted) return t().foreground;
     if (state.focusCurrentBranch() && !isOnCurrentBranch()) {
       return t().foregroundMuted;
     }
@@ -302,8 +304,23 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
     return t().foreground;
   };
 
+  // Secondary column color (author, date, hash).
+  // Selected → primary (bold applied separately). Highlighted → foreground.
+  // Otherwise muted (or dimmed for focus/remote-only).
+  const secondaryColumnColor = () => {
+    if (props.selected) return t().primary;
+    if (props.highlighted) return t().foreground;
+    if (state.focusCurrentBranch() && !isOnCurrentBranch()) {
+      return t().foregroundMuted;
+    }
+    if (props.row.isRemoteOnly && state.dimRemoteOnly()) {
+      return t().foregroundMuted;
+    }
+    return t().foregroundMuted;
+  };
+
   return (
-    <box flexDirection="column" width="100%">
+    <box ref={(el: Renderable) => props.rowRef?.(el)} flexDirection="column" width="100%">
       {/* Fan-out rows above the commit (all except the last, which merges
           into the commit row to avoid a redundant █ block). */}
       <For each={fanOutAboveContents()}>
@@ -314,9 +331,9 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
       <box
         flexDirection="row"
         width="100%"
-        backgroundColor={props.selected ? t().backgroundElement : undefined}
+        backgroundColor={props.highlighted || props.selected ? t().backgroundElement : undefined}
         onMouseDown={() => props.onSelect(props.index)}
-        onMouseMove={() => props.onSelect(props.index)}
+        onMouseMove={() => props.onHighlight(props.index)}
       >
         {/* Graph part: styled via ref + StyledText to bypass reconciler stringification */}
         <text ref={graphTextRef} flexShrink={0} width={graphWidth()} wrapMode="none" truncate paddingLeft={1} />
@@ -338,8 +355,8 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
         {/* Author */}
         <Show when={state.showAuthorColumn()}>
           <box flexShrink={0} width={15} paddingRight={2} overflow="hidden">
-            <text fg={props.selected ? t().foreground : t().foregroundMuted} wrapMode="none" truncate>
-              {props.selected ? <strong><span fg={t().foreground}>{commit().author}</span></strong> : commit().author}
+            <text fg={secondaryColumnColor()} wrapMode="none" truncate>
+              {props.selected ? <strong><span fg={secondaryColumnColor()}>{commit().author}</span></strong> : commit().author}
             </text>
           </box>
         </Show>
@@ -347,16 +364,16 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
         {/* Date */}
         <Show when={state.showDateColumn()}>
           <box flexShrink={0} width={15} paddingRight={2} overflow="hidden">
-            <text fg={props.selected ? t().foreground : t().foregroundMuted} wrapMode="none" truncate>
-              {props.selected ? <strong><span fg={t().foreground}>{formatRelativeDate(commit().authorDate)}</span></strong> : formatRelativeDate(commit().authorDate)}
+            <text fg={secondaryColumnColor()} wrapMode="none" truncate>
+              {props.selected ? <strong><span fg={secondaryColumnColor()}>{formatRelativeDate(commit().authorDate)}</span></strong> : formatRelativeDate(commit().authorDate)}
             </text>
           </box>
         </Show>
 
         {/* Short hash */}
         <Show when={state.showHashColumn()}>
-          <text flexShrink={0} width={8} fg={props.selected ? t().foreground : t().foregroundMuted} wrapMode="none" truncate>
-            {props.selected ? <strong><span fg={t().foreground}>{commit().shortHash}</span></strong> : commit().shortHash}
+          <text flexShrink={0} width={8} fg={secondaryColumnColor()} wrapMode="none" truncate>
+            {props.selected ? <strong><span fg={secondaryColumnColor()}>{commit().shortHash}</span></strong> : commit().shortHash}
           </text>
         </Show>
       </box>
@@ -400,13 +417,17 @@ function formatRelativeDate(dateStr: string): string {
 export default function GraphView() {
   const { state, actions } = useAppState();
 
-  // Single viewport offset: reacts to the selected commit's node column.
+  // Single viewport offset: reacts to the highlighted commit's node column.
   // All rows share the same offset, giving a horizontal "scroll" effect.
   const [viewportOffset, setViewportOffset] = createSignal(0);
 
+  // Refs for programmatic scroll-into-view
+  let scrollboxRef: ScrollBoxRenderable | undefined;
+  const rowRefs: Renderable[] = [];
+
   createEffect(() => {
     const rows = state.filteredRows();
-    const idx = state.selectedIndex();
+    const idx = state.highlightedIndex();
     const maxCols = state.maxGraphColumns();
 
     if (maxCols <= MAX_GRAPH_COLUMNS || idx < 0 || idx >= rows.length) {
@@ -420,29 +441,72 @@ export default function GraphView() {
     );
   });
 
+  // Scroll the highlighted row into view whenever highlightedIndex changes
+  createEffect(() => {
+    const idx = state.highlightedIndex();
+    const sb = scrollboxRef;
+    if (!sb || idx < 0) return;
+
+    const rowEl = rowRefs[idx];
+    if (!rowEl) return;
+
+    // Get the row's position within the scrollbox content
+    const layout = rowEl.getLayoutNode().getComputedLayout();
+    const rowTop = layout.top;
+    const rowHeight = layout.height;
+    const rowBottom = rowTop + rowHeight;
+
+    const viewportHeight = sb.viewport.height;
+    const currentScroll = sb.scrollTop;
+    const visibleTop = currentScroll;
+    const visibleBottom = currentScroll + viewportHeight;
+
+    const padding = 1; // keep at least 1 row of context visible above/below
+
+    if (rowTop < visibleTop + padding) {
+      sb.scrollTo(Math.max(0, rowTop - padding));
+    } else if (rowBottom > visibleBottom - padding) {
+      sb.scrollTo(rowBottom - viewportHeight + padding);
+    }
+  });
+
   return (
-    <box flexDirection="column" flexGrow={1}>
-      <Show
-        when={!state.loading()}
-        fallback={
-          <box flexGrow={1} alignItems="center" justifyContent="center">
-            <text fg="#89b4fa">Loading commits...</text>
-          </box>
-        }
-      >
-        <For each={state.filteredRows()}>
-          {(row, index) => (
-            <GraphLine
-              row={row}
-              index={index()}
-              selected={index() === state.selectedIndex()}
-              isLast={index() === state.filteredRows().length - 1}
-              onSelect={(i) => actions.setSelectedIndex(i)}
-              viewportOffset={viewportOffset}
-            />
-          )}
-        </For>
-      </Show>
-    </box>
+    <scrollbox
+      ref={scrollboxRef}
+      flexGrow={1}
+      scrollY
+      scrollX={false}
+      verticalScrollbarOptions={{ visible: false }}
+    >
+      <box flexDirection="column" flexGrow={1}>
+        <Show
+          when={!state.loading()}
+          fallback={
+            <box flexGrow={1} alignItems="center" justifyContent="center">
+              <text fg="#89b4fa">Loading commits...</text>
+            </box>
+          }
+        >
+          <For each={state.filteredRows()}>
+            {(row, index) => (
+              <GraphLine
+                row={row}
+                index={index()}
+                highlighted={index() === state.highlightedIndex()}
+                selected={index() === state.selectedIndex()}
+                isLast={index() === state.filteredRows().length - 1}
+                onHighlight={(i) => actions.setHighlightedIndex(i)}
+                onSelect={(i) => {
+                  actions.setHighlightedIndex(i);
+                  actions.setSelectedIndex(i);
+                }}
+                viewportOffset={viewportOffset}
+                rowRef={(el) => { rowRefs[index()] = el; }}
+              />
+            )}
+          </For>
+        </Show>
+      </box>
+    </scrollbox>
   );
 }

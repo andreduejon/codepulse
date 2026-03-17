@@ -68,6 +68,7 @@ function AppContent(props: AppProps) {
         const cbIdx = rows.findIndex((r) => r.isOnCurrentBranch);
         if (cbIdx >= 0) targetIndex = cbIdx;
       }
+      actions.setHighlightedIndex(targetIndex);
       actions.setSelectedIndex(targetIndex);
     } catch (err) {
       // TODO: show error in UI
@@ -99,6 +100,7 @@ function AppContent(props: AppProps) {
   // Search input handlers
   const handleSearchSubmit = (value: string) => {
     actions.setSearchQuery(value);
+    actions.setHighlightedIndex(0);
     actions.setSelectedIndex(0);
     setSearchFocused(false);
   };
@@ -106,6 +108,7 @@ function AppContent(props: AppProps) {
   const handleSearchInput = (value: string) => {
     // Live filter as user types
     actions.setSearchQuery(value);
+    actions.setHighlightedIndex(0);
     actions.setSelectedIndex(0);
   };
 
@@ -155,6 +158,7 @@ function AppContent(props: AppProps) {
       }
       if (state.searchQuery()) {
         actions.setSearchQuery("");
+        actions.setHighlightedIndex(0);
         actions.setSelectedIndex(0);
         return;
       }
@@ -173,23 +177,36 @@ function AppContent(props: AppProps) {
         process.exit(0);
         break;
       case "down":
-        actions.moveSelection(1);
+        e.preventDefault();
+        actions.moveHighlight(1);
         break;
       case "up":
-        actions.moveSelection(-1);
+        e.preventDefault();
+        actions.moveHighlight(-1);
+        break;
+      case "return":
+        e.preventDefault();
+        actions.selectHighlighted();
+        break;
+      case "left":
+        e.preventDefault();
+        actions.setHighlightedIndex(state.selectedIndex());
         break;
       case "g":
+        e.preventDefault();
         if (!e.shift) {
-          actions.setSelectedIndex(0);
+          actions.setHighlightedIndex(0);
         } else {
-          actions.setSelectedIndex(state.filteredRows().length - 1);
+          actions.setHighlightedIndex(state.filteredRows().length - 1);
         }
         break;
       case "pagedown":
-        actions.moveSelection(20);
+        e.preventDefault();
+        actions.moveHighlight(20);
         break;
       case "pageup":
-        actions.moveSelection(-20);
+        e.preventDefault();
+        actions.moveHighlight(-20);
         break;
       case "/":
         setSearchFocused(true);
@@ -244,14 +261,7 @@ function AppContent(props: AppProps) {
                 {/* Sticky column headers - above scrollbox */}
                 <ColumnHeader />
 
-                <scrollbox
-                  flexGrow={1}
-                  scrollY
-                  scrollX={false}
-                  verticalScrollbarOptions={{ visible: false }}
-                >
-                  <GraphView />
-                </scrollbox>
+                <GraphView />
               </box>
 
               {/* Search input bar - main background, inset within grey */}
