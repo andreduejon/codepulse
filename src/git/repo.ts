@@ -139,7 +139,8 @@ export async function getBranches(repoPath: string): Promise<Branch[]> {
 
 export async function getCommitDetail(
   repoPath: string,
-  hash: string
+  hash: string,
+  existingCommit?: Commit
 ): Promise<CommitDetail | null> {
   // Get full commit message
   const msgProc = Bun.spawn(
@@ -179,11 +180,16 @@ export async function getCommitDetail(
   const diff = await new Response(diffProc.stdout).text();
   await diffProc.exited;
 
-  // Get the base commit info
-  const commits = await getCommits(repoPath, { maxCount: 1, branch: hash });
-  if (commits.length === 0) return null;
+  // Use existing commit info if provided (avoids a redundant git log subprocess)
+  let commit: Commit;
+  if (existingCommit) {
+    commit = existingCommit;
+  } else {
+    const commits = await getCommits(repoPath, { maxCount: 1, branch: hash });
+    if (commits.length === 0) return null;
+    commit = commits[0];
+  }
 
-  const commit = commits[0];
   const lines = fullMessage.trim().split("\n");
 
   return {

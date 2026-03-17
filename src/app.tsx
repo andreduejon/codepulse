@@ -92,7 +92,7 @@ function AppContent(props: AppProps) {
       return;
     }
     try {
-      const detail = await getCommitDetail(props.repoPath, commit.hash);
+      const detail = await getCommitDetail(props.repoPath, commit.hash, commit);
       if (v === detailVersion) actions.setCommitDetail(detail);
     } catch {
       if (v === detailVersion) actions.setCommitDetail(null);

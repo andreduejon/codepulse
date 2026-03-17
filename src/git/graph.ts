@@ -1400,41 +1400,53 @@ export function sliceGraphToViewport(
 
   const padColor = opts.dimColor ?? opts.remoteOnlyDimColor ?? "#6c7086";
 
-  // Convert the flat GraphChar[] (where each entry may be 1 or 2 chars)
-  // into a per-character representation, then extract columns.
-  const viewportEnd = viewportOffset + depthLimit;
+  // Each graph column = 2 character positions. The viewport covers char
+  // positions [startCharPos, endCharPos). Instead of flattening the entire
+  // GraphChar[] to per-character entries, we walk the sparse array and only
+  // emit entries that overlap with the viewport window.
+  const startCharPos = viewportOffset * 2;
+  const endCharPos = (viewportOffset + depthLimit) * 2;
 
-  // Flatten to individual characters
-  const charsByPos: GraphChar[] = [];
+  const result: GraphChar[] = [];
+  let pos = 0; // current character position in the full-width row
+
   for (const gc of chars) {
-    for (let i = 0; i < gc.char.length; i++) {
-      charsByPos.push({ char: gc.char[i], color: gc.color, bold: gc.bold });
+    const gcLen = gc.char.length;
+    const gcEnd = pos + gcLen;
+
+    if (gcEnd <= startCharPos) {
+      // Entirely before viewport — skip
+      pos = gcEnd;
+      continue;
     }
+    if (pos >= endCharPos) {
+      // Past viewport — done
+      break;
+    }
+
+    if (pos >= startCharPos && gcEnd <= endCharPos) {
+      // Entirely within viewport — emit as-is
+      result.push(gc);
+    } else {
+      // Partially overlapping — need to split.
+      // This happens when a 2-char entry straddles the viewport boundary.
+      const clipStart = Math.max(0, startCharPos - pos);
+      const clipEnd = Math.min(gcLen, endCharPos - pos);
+      for (let i = clipStart; i < clipEnd; i++) {
+        result.push({ char: gc.char[i], color: gc.color, bold: gc.bold });
+      }
+    }
+
+    pos = gcEnd;
   }
 
-  // Extract columns [viewportOffset, viewportOffset + depthLimit)
-  // Each column = 2 chars starting at column * 2
-  const result: GraphChar[] = [];
-  for (let col = viewportOffset; col < viewportEnd; col++) {
-    const startPos = col * 2;
-    const c1 = charsByPos[startPos];
-    const c2 = charsByPos[startPos + 1];
-
-    if (c1 && c2) {
-      // Merge into one entry if same styling
-      if (c1.color === c2.color && c1.bold === c2.bold) {
-        result.push({ char: c1.char + c2.char, color: c1.color, bold: c1.bold });
-      } else {
-        result.push(c1);
-        result.push(c2);
-      }
-    } else if (c1) {
-      result.push(c1);
-      result.push({ char: " ", color: padColor });
-    } else {
-      // Column is beyond rendered content — pad with spaces
-      result.push({ char: "  ", color: padColor });
-    }
+  // Pad if the rendered content didn't fill the viewport
+  const targetWidth = depthLimit * 2;
+  let currentWidth = 0;
+  for (const gc of result) currentWidth += gc.char.length;
+  while (currentWidth < targetWidth) {
+    result.push({ char: "  ", color: padColor });
+    currentWidth += 2;
   }
 
   return result;

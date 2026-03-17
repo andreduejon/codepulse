@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createSignal } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal } from "solid-js";
 import { useAppState } from "../context/state";
 import { useTheme } from "../context/theme";
 import { renderGraphRow, renderConnectorRow, renderFanOutRow, graphCharsToContent, getColorForColumn, sliceGraphToViewport, computeSingleViewportOffset, buildEdgeIndicator, MAX_GRAPH_COLUMNS, type GraphChar } from "../git/graph";
@@ -183,13 +183,22 @@ function GraphLine(props: { row: GraphRow; index: number; highlighted: boolean; 
     return [...chars, blankEdge()];
   };
 
+  // --- Performance optimization: split full-width render (expensive) from
+  // viewport slicing (cheap). When only viewportOffset changes, the memoized
+  // full-width renders are reused and only the cheap slice re-runs. ---
+
+  // Full-width renders — memoized, depend on row data + renderOpts, NOT viewportOffset
+  const fullGraphChars = createMemo(() => renderGraphRow(props.row, renderOpts()));
+  const fullConnectorChars = createMemo(() => renderConnectorRow(props.row, renderOpts()));
+
+  // Viewport-sliced renders — depend on memoized full-width + viewportOffset (cheap)
   const graphChars = () => {
-    const chars = renderGraphRow(props.row, renderOpts());
+    const chars = fullGraphChars();
     if (!viewportActive()) return chars;
     return sliceGraphToViewport(chars, props.viewportOffset(), MAX_GRAPH_COLUMNS, props.row, renderOpts());
   };
   const connectorChars = () => {
-    const chars = renderConnectorRow(props.row, renderOpts());
+    const chars = fullConnectorChars();
     if (!viewportActive()) return chars;
     return sliceGraphToViewport(chars, props.viewportOffset(), MAX_GRAPH_COLUMNS, props.row, renderOpts());
   };
@@ -217,23 +226,30 @@ function GraphLine(props: { row: GraphRow; index: number; highlighted: boolean; 
     return foRows && foRows.length > 0 && !commitRowHasConnections();
   };
 
-  // Fan-out rows ABOVE the commit row
-  const fanOutAboveContents = () => {
+  // Full-width fan-out renders — memoized, NOT dependent on viewportOffset
+  const fullFanOutChars = createMemo(() => {
     const foRows = props.row.fanOutRows;
     if (!foRows || foRows.length === 0) return [];
+    return foRows.map((foConnectors) => renderFanOutRow(foConnectors, renderOpts()));
+  });
+
+  // Fan-out rows ABOVE the commit row
+  const fanOutAboveContents = () => {
+    const allFanOut = fullFanOutChars();
+    if (allFanOut.length === 0) return [];
     const active = viewportActive();
     const applySlice = (chars: GraphChar[]) =>
       active ? sliceGraphToViewport(chars, props.viewportOffset(), MAX_GRAPH_COLUMNS, props.row, renderOpts()) : chars;
     // If merging last fan-out into commit row, show all except the last
     if (canMergeFanOut()) {
-      if (foRows.length <= 1) return [];
-      return foRows.slice(0, -1).map((foConnectors) =>
-        graphCharsToContent(withEdgeIndicator(applySlice(renderFanOutRow(foConnectors, renderOpts())), false))
+      if (allFanOut.length <= 1) return [];
+      return allFanOut.slice(0, -1).map((chars) =>
+        graphCharsToContent(withEdgeIndicator(applySlice(chars), false))
       );
     }
     // Otherwise show all fan-out rows separately
-    return foRows.map((foConnectors) =>
-      graphCharsToContent(withEdgeIndicator(applySlice(renderFanOutRow(foConnectors, renderOpts())), false))
+    return allFanOut.map((chars) =>
+      graphCharsToContent(withEdgeIndicator(applySlice(chars), false))
     );
   };
 
@@ -241,8 +257,8 @@ function GraphLine(props: { row: GraphRow; index: number; highlighted: boolean; 
   // otherwise use the normal commit row graph.
   const commitRowGraphContent = () => {
     if (canMergeFanOut()) {
-      const foRows = props.row.fanOutRows!;
-      const chars = renderFanOutRow(foRows[foRows.length - 1], renderOpts());
+      const allFanOut = fullFanOutChars();
+      const chars = allFanOut[allFanOut.length - 1];
       const sliced = viewportActive()
         ? sliceGraphToViewport(chars, props.viewportOffset(), MAX_GRAPH_COLUMNS, props.row, renderOpts())
         : chars;
@@ -388,30 +404,55 @@ function GraphLine(props: { row: GraphRow; index: number; highlighted: boolean; 
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+// Cache for formatRelativeDate — avoids repeated Date parsing and arithmetic.
+// Entries are keyed by date string. Cache is cleared when it exceeds 1000 entries
+// (happens naturally on data reload since new commit objects have new date strings).
+const dateFormatCache = new Map<string, { result: string; cachedAt: number }>();
+const DATE_CACHE_MAX = 1000;
+// Recent dates (< 7 days) are re-evaluated if the cache entry is older than 60 seconds
+const DATE_CACHE_RECENT_TTL = 60_000;
+
 function formatRelativeDate(dateStr: string): string {
+  const now = Date.now();
+  const cached = dateFormatCache.get(dateStr);
+  if (cached) {
+    // For recent dates, check TTL; old dates never change
+    const age = now - cached.cachedAt;
+    if (age < DATE_CACHE_RECENT_TTL) return cached.result;
+  }
+
   const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
+  const nowDate = new Date(now);
+  const diffMs = now - date.getTime();
   const diffMins = Math.floor(diffMs / 60000);
   const diffHours = Math.floor(diffMins / 60);
   const diffDays = Math.floor(diffHours / 24);
 
-  if (diffMins < 1) return "just now";
-  if (diffHours < 1) return `${diffMins}m ago`;
-  if (diffDays < 1) return `${diffHours}h ago`;
-  if (diffDays === 1) return "Yesterday";
-  if (diffDays < 7) return `${diffDays}d ago`;
+  let result: string;
+  if (diffMins < 1) result = "just now";
+  else if (diffHours < 1) result = `${diffMins}m ago`;
+  else if (diffDays < 1) result = `${diffHours}h ago`;
+  else if (diffDays === 1) result = "Yesterday";
+  else if (diffDays < 7) result = `${diffDays}d ago`;
+  else {
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = MONTHS[date.getMonth()];
+    const hours = String(date.getHours()).padStart(2, "0");
+    const mins = String(date.getMinutes()).padStart(2, "0");
 
-  const day = String(date.getDate()).padStart(2, "0");
-  const month = MONTHS[date.getMonth()];
-  const hours = String(date.getHours()).padStart(2, "0");
-  const mins = String(date.getMinutes()).padStart(2, "0");
-
-  // Same year → show time; different year → show year
-  if (date.getFullYear() === now.getFullYear()) {
-    return `${day}. ${month} ${hours}:${mins}`;
+    if (date.getFullYear() === nowDate.getFullYear()) {
+      result = `${day}. ${month} ${hours}:${mins}`;
+    } else {
+      result = `${day}. ${month} ${date.getFullYear()}`;
+    }
   }
-  return `${day}. ${month} ${date.getFullYear()}`;
+
+  // Evict cache if too large
+  if (dateFormatCache.size >= DATE_CACHE_MAX) {
+    dateFormatCache.clear();
+  }
+  dateFormatCache.set(dateStr, { result, cachedAt: now });
+  return result;
 }
 
 export default function GraphView() {
