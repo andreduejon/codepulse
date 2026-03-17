@@ -1,7 +1,5 @@
-import { createSignal, For, Show } from "solid-js";
 import { useAppState } from "../../context/state";
 import { useTheme } from "../../context/theme";
-import type { Branch } from "../../git/types";
 
 export default function BranchDialog(props: {
   onClose: () => void;
@@ -25,50 +23,57 @@ export default function BranchDialog(props: {
   return (
     <box
       position="absolute"
-      top="20%"
-      left="25%"
-      width="50%"
-      height="60%"
-      backgroundColor={t().backgroundPanel}
-      border={true}
-      borderColor={t().borderActive}
-      borderStyle="rounded"
-      flexDirection="column"
-      paddingX={1}
-      paddingY={1}
+      top={0}
+      left={0}
+      width="100%"
+      height="100%"
+      backgroundColor={"#00000080"}
+      alignItems="center"
+      justifyContent="center"
+      onMouseDown={() => props.onClose()}
     >
-      <text wrapMode="none">
-        <span fg={t().primary}>Switch Branch</span>
-        <span fg={t().foregroundMuted}>
-          {" "}
-          ({localBranches().length} local, {remoteBranches().length} remote)
-        </span>
-      </text>
-      <box height={1} />
-      <select
-        focused
-        flexGrow={1}
-        options={options()}
+      <box
+        width={70}
+        height="60%"
         backgroundColor={t().backgroundPanel}
-        textColor={t().foreground}
-        selectedBackgroundColor={t().backgroundElement}
-        selectedTextColor={t().primary}
-        focusedBackgroundColor={t().backgroundPanel}
-        focusedTextColor={t().foreground}
-        descriptionColor={t().foregroundMuted}
-        selectedDescriptionColor={t().success}
-        onSelect={(idx) => {
-          const branch = localBranches()[idx];
-          if (branch) {
-            props.onSelect(branch.name);
-            props.onClose();
-          }
-        }}
-      />
-      <box height={1} />
-      <text wrapMode="none">
-        <span fg={t().foregroundMuted}>Enter to select · Esc to cancel</span>
-      </text>
+        flexDirection="column"
+        paddingX={1}
+        paddingY={1}
+        onMouseDown={(e: any) => { e.stopPropagation(); e.preventDefault(); }}
+      >
+        {/* Title bar */}
+        <box flexDirection="row" width="100%" paddingX={4}>
+          <text flexGrow={1} wrapMode="none">
+            <strong><span fg={t().foreground}>Switch Branch</span></strong>
+          </text>
+          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+            {"esc".padStart(9)}
+          </text>
+        </box>
+        <box height={1} />
+
+        {/* Branch list */}
+        <select
+          focused
+          flexGrow={1}
+          options={options()}
+          backgroundColor={t().backgroundPanel}
+          textColor={t().foreground}
+          selectedBackgroundColor={t().backgroundElement}
+          selectedTextColor={t().primary}
+          focusedBackgroundColor={t().backgroundPanel}
+          focusedTextColor={t().foreground}
+          descriptionColor={t().foregroundMuted}
+          selectedDescriptionColor={t().success}
+          onSelect={(idx) => {
+            const branch = localBranches()[idx];
+            if (branch) {
+              props.onSelect(branch.name);
+              props.onClose();
+            }
+          }}
+        />
+      </box>
     </box>
   );
 }

@@ -129,11 +129,9 @@ export default function SettingsDialog(props: Readonly<SettingsDialogProps>) {
     if (e.eventType === "release") return;
 
     switch (e.name) {
-      case "j":
       case "down":
         moveCursor(1);
         break;
-      case "k":
       case "up":
         moveCursor(-1);
         break;

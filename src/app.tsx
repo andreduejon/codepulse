@@ -1,5 +1,6 @@
 import { createEffect, Show, onMount, createSignal } from "solid-js";
 import { useKeyboard, useRenderer } from "@opentui/solid";
+import type { ScrollBoxRenderable } from "@opentui/core";
 import { createAppState, AppStateContext } from "./context/state";
 import { createThemeState, ThemeContext } from "./context/theme";
 import { getCommits, getBranches, getCurrentBranch, getRepoName, getCommitDetail } from "./git/repo";
@@ -11,6 +12,7 @@ import BranchDialog from "./components/dialogs/branch-dialog";
 import HelpDialog from "./components/dialogs/help-dialog";
 import ThemeDialog from "./components/dialogs/theme-dialog";
 import SettingsDialog from "./components/dialogs/settings-dialog";
+import packageJson from "../package.json";
 
 interface AppProps {
   repoPath: string;
@@ -27,6 +29,9 @@ function AppContent(props: AppProps) {
 
   const [dialog, setDialog] = createSignal<"branch" | "help" | "theme" | "settings" | null>(null);
   const [searchFocused, setSearchFocused] = createSignal(false);
+
+  // Ref for programmatic scrolling of the detail panel
+  let detailScrollboxRef: ScrollBoxRenderable | undefined;
 
   // Load git data
   async function loadData(branch?: string, stickyHash?: string) {
@@ -121,6 +126,7 @@ function AppContent(props: AppProps) {
     // Ctrl+S opens settings regardless of dialog/search state
     if (e.ctrl && e.name === "s") {
       setSearchFocused(false);
+      actions.setDetailFocused(false);
       setDialog(dialog() === "settings" ? null : "settings");
       return;
     }
@@ -128,6 +134,7 @@ function AppContent(props: AppProps) {
     // Ctrl+T opens theme dialog regardless of dialog/search state
     if (e.ctrl && e.name === "t") {
       setSearchFocused(false);
+      actions.setDetailFocused(false);
       setDialog(dialog() === "theme" ? null : "theme");
       return;
     }
@@ -135,6 +142,7 @@ function AppContent(props: AppProps) {
     // F1 opens help regardless of dialog/search state
     if (e.name === "f1") {
       setSearchFocused(false);
+      actions.setDetailFocused(false);
       setDialog(dialog() === "help" ? null : "help");
       return;
     }
@@ -142,6 +150,7 @@ function AppContent(props: AppProps) {
     // F5 refreshes git data, preserving scroll position
     if (e.name === "f5") {
       setSearchFocused(false);
+      actions.setDetailFocused(false);
       if (dialog()) setDialog(null);
       const stickyHash = state.selectedCommit()?.hash;
       loadData(undefined, stickyHash);
@@ -152,6 +161,10 @@ function AppContent(props: AppProps) {
     if (e.name === "escape") {
       if (dialog()) {
         setDialog(null);
+        return;
+      }
+      if (state.detailFocused()) {
+        actions.setDetailFocused(false);
         return;
       }
       if (searchFocused()) {
@@ -173,6 +186,37 @@ function AppContent(props: AppProps) {
     // If a dialog is open, only handle Escape (handled above)
     if (dialog()) return;
 
+    // Detail panel focused: arrow keys scroll detail, left returns to list
+    if (state.detailFocused()) {
+      switch (e.name) {
+        case "left":
+          e.preventDefault();
+          actions.setDetailFocused(false);
+          return;
+        case "up":
+          e.preventDefault();
+          detailScrollboxRef?.scrollBy(-1, "absolute");
+          return;
+        case "down":
+          e.preventDefault();
+          detailScrollboxRef?.scrollBy(1, "absolute");
+          return;
+        case "pageup":
+          e.preventDefault();
+          detailScrollboxRef?.scrollBy(-0.5, "viewport");
+          return;
+        case "pagedown":
+          e.preventDefault();
+          detailScrollboxRef?.scrollBy(0.5, "viewport");
+          return;
+        case "q":
+          renderer.destroy();
+          process.exit(0);
+          break;
+      }
+      return; // swallow all other keys when detail is focused
+    }
+
     switch (e.name) {
       case "q":
         renderer.destroy();
@@ -181,14 +225,26 @@ function AppContent(props: AppProps) {
       case "down":
         e.preventDefault();
         actions.moveHighlight(1);
+        actions.selectHighlighted();
+        detailScrollboxRef?.scrollTo(0);
         break;
       case "up":
         e.preventDefault();
         actions.moveHighlight(-1);
+        actions.selectHighlighted();
+        detailScrollboxRef?.scrollTo(0);
         break;
       case "return":
         e.preventDefault();
         actions.selectHighlighted();
+        // Reset detail scroll to top when selecting a new commit
+        detailScrollboxRef?.scrollTo(0);
+        break;
+      case "right":
+        e.preventDefault();
+        if (state.selectedCommit()) {
+          actions.setDetailFocused(true);
+        }
         break;
       case "left":
         e.preventDefault();
@@ -201,19 +257,27 @@ function AppContent(props: AppProps) {
         } else {
           actions.setHighlightedIndex(state.filteredRows().length - 1);
         }
+        actions.selectHighlighted();
+        detailScrollboxRef?.scrollTo(0);
         break;
       case "pagedown":
         e.preventDefault();
         actions.moveHighlight(20);
+        actions.selectHighlighted();
+        detailScrollboxRef?.scrollTo(0);
         break;
       case "pageup":
         e.preventDefault();
         actions.moveHighlight(-20);
+        actions.selectHighlighted();
+        detailScrollboxRef?.scrollTo(0);
         break;
       case "/":
+        actions.setDetailFocused(false);
         setSearchFocused(true);
         break;
       case "b":
+        actions.setDetailFocused(false);
         setDialog("branch");
         break;
       case "t":
@@ -259,7 +323,7 @@ function AppContent(props: AppProps) {
               paddingX={2}
             >
               {/* Graph area */}
-              <box flexDirection="column" flexGrow={1} paddingY={1}>
+              <box flexDirection="column" flexGrow={1} paddingBottom={1}>
                 {/* Sticky column headers - above scrollbox */}
                 <ColumnHeader />
 
@@ -278,11 +342,11 @@ function AppContent(props: AppProps) {
                 borderColor={themeState.theme().accent}
                 flexDirection="column"
               >
-                {/* Line 1+: input that grows with content */}
-                <box flexGrow={1}>
+                {/* Line 1+: input + search result count */}
+                <box flexGrow={1} flexDirection="row">
                   <input
                     focused={searchFocused()}
-                    width="100%"
+                    flexGrow={1}
                     placeholder="Search commits..."
                     value={state.searchQuery()}
                     onInput={handleSearchInput}
@@ -290,6 +354,15 @@ function AppContent(props: AppProps) {
                     fg={themeState.theme().foreground}
                     backgroundColor={themeState.theme().background}
                   />
+                  <Show when={state.searchQuery()}>
+                    <text
+                      flexShrink={0}
+                      wrapMode="none"
+                      fg={state.filteredRows().length === 0 ? themeState.theme().error : themeState.theme().foregroundMuted}
+                    >
+                      {"  "}{state.filteredRows().length === 0 ? "No matches" : `${state.filteredRows().length} / ${state.graphRows().length}`}
+                    </text>
+                  </Show>
                 </box>
 
                 {/* Bottom line: Git label + repo path : branch + version */}
@@ -300,7 +373,7 @@ function AppContent(props: AppProps) {
                   </text>
                   <box flexGrow={1} />
                   <text flexShrink={0} wrapMode="none" fg={themeState.theme().foregroundMuted}>
-                    gittree v0.1.0
+                    gittree v{packageJson.version}
                   </text>
                 </box>
               </box>
@@ -317,9 +390,27 @@ function AppContent(props: AppProps) {
               minWidth={40}
               flexShrink={0}
               paddingX={2}
-              paddingY={1}
+              paddingBottom={1}
+              onMouseDown={() => actions.setDetailFocused(true)}
             >
-              <scrollbox flexGrow={1} scrollY scrollX={false} verticalScrollbarOptions={{ visible: false }}>
+              {/* Details header with reactive border */}
+              <box flexDirection="column" width="100%" flexShrink={0}>
+                <box
+                  flexDirection="row"
+                  width="100%"
+                  border={["top"]}
+                  borderStyle="single"
+                  borderColor={state.detailFocused() ? themeState.theme().accent : themeState.theme().border}
+                >
+                  <text wrapMode="none">
+                    <strong><span fg={state.detailFocused() ? themeState.theme().foreground : themeState.theme().foregroundMuted}>Details</span></strong>
+                  </text>
+                </box>
+                {/* Muted separator below header */}
+                <box width="100%" border={["top"]} borderStyle="single" borderColor={themeState.theme().border} />
+              </box>
+
+              <scrollbox ref={detailScrollboxRef} flexGrow={1} scrollY scrollX={false} verticalScrollbarOptions={{ visible: false }}>
                 <CommitDetailView />
               </scrollbox>
             </box>

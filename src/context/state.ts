@@ -19,6 +19,7 @@ export interface AppState {
   searchQuery: Accessor<string>;
   filteredRows: Accessor<GraphRow[]>;
   maxGraphColumns: Accessor<number>;
+  detailFocused: Accessor<boolean>;
   maxCount: Accessor<number>;
   dimRemoteOnly: Accessor<boolean>;
   showAuthorColumn: Accessor<boolean>;
@@ -37,6 +38,7 @@ export interface AppActions {
   setShowTags: (show: boolean) => void;
   setFocusCurrentBranch: (focus: boolean) => void;
   setSearchQuery: (query: string) => void;
+  setDetailFocused: (focused: boolean) => void;
   setCommits: (commits: Commit[]) => void;
   setGraphRows: (rows: GraphRow[]) => void;
   setBranches: (branches: Branch[]) => void;
@@ -74,6 +76,7 @@ export function createAppState(initialMaxCount: number = 200) {
   const [showAuthorColumn, setShowAuthorColumn] = createSignal(true);
   const [showDateColumn, setShowDateColumn] = createSignal(true);
   const [showHashColumn, setShowHashColumn] = createSignal(true);
+  const [detailFocused, setDetailFocused] = createSignal(false);
 
   const filteredRows = createMemo(() => {
     const query = searchQuery().toLowerCase();
@@ -125,6 +128,7 @@ export function createAppState(initialMaxCount: number = 200) {
     maxGraphColumns,
     maxCount,
     dimRemoteOnly,
+    detailFocused,
     showAuthorColumn,
     showDateColumn,
     showHashColumn,
@@ -141,6 +145,7 @@ export function createAppState(initialMaxCount: number = 200) {
     setShowTags,
     setFocusCurrentBranch,
     setSearchQuery,
+    setDetailFocused,
     setCommits,
     setGraphRows,
     setBranches,

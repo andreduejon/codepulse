@@ -44,11 +44,9 @@ export default function ThemeDialog(props: { onClose: () => void }) {
     if (e.eventType === "release") return;
 
     switch (e.name) {
-      case "j":
       case "down":
         moveCursor(1);
         break;
-      case "k":
       case "up":
         moveCursor(-1);
         break;

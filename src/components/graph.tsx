@@ -55,53 +55,58 @@ export function ColumnHeader() {
   const graphWidth = () => Math.max(effectiveGraphColumns() * 2 + 1 + (viewportActive() ? 2 : 0), 6);
 
   return (
-    <box
-      flexDirection="row"
-      width="100%"
-      paddingBottom={1}
-    >
-      {/* Graph header */}
-      <text
-        flexShrink={0}
-        width={graphWidth()}
-        wrapMode="none"
-        fg={t().foregroundMuted}
-        paddingLeft={1}
+    <box flexDirection="column" width="100%" flexShrink={0}>
+      <box
+        flexDirection="row"
+        width="100%"
+        border={["top"]}
+        borderStyle="single"
+        borderColor={!state.detailFocused() ? t().accent : t().border}
       >
-        {"Graph "}
-      </text>
-
-      {/* Description (commit message + refs) — box wrapper matches data row structure */}
-      <box flexDirection="row" flexGrow={1} flexShrink={1} paddingLeft={1} paddingRight={2}>
-        <text flexGrow={1} flexShrink={1} fg={t().foregroundMuted} wrapMode="none" truncate>
-          Description
+        {/* Graph header */}
+        <text
+          flexShrink={0}
+          width={graphWidth()}
+          wrapMode="none"
+          paddingLeft={1}
+        >
+          <strong><span fg={!state.detailFocused() ? t().foreground : t().foregroundMuted}>{"Graph "}</span></strong>
         </text>
+
+        {/* Description (commit message + refs) — box wrapper matches data row structure */}
+        <box flexDirection="row" flexGrow={1} flexShrink={1} paddingLeft={1} paddingRight={2}>
+          <text flexGrow={1} flexShrink={1} wrapMode="none" truncate>
+            <strong><span fg={!state.detailFocused() ? t().foreground : t().foregroundMuted}>Description</span></strong>
+          </text>
+        </box>
+
+        {/* Author */}
+        <Show when={state.showAuthorColumn()}>
+          <box flexShrink={0} width={15} paddingRight={2}>
+            <text wrapMode="none" truncate>
+              <strong><span fg={!state.detailFocused() ? t().foreground : t().foregroundMuted}>Author</span></strong>
+            </text>
+          </box>
+        </Show>
+
+        {/* Date */}
+        <Show when={state.showDateColumn()}>
+          <box flexShrink={0} width={15} paddingRight={2}>
+            <text wrapMode="none" truncate>
+              <strong><span fg={!state.detailFocused() ? t().foreground : t().foregroundMuted}>Date</span></strong>
+            </text>
+          </box>
+        </Show>
+
+        {/* Commit hash */}
+        <Show when={state.showHashColumn()}>
+          <text flexShrink={0} width={8} wrapMode="none" truncate>
+            <strong><span fg={!state.detailFocused() ? t().foreground : t().foregroundMuted}>Commit</span></strong>
+          </text>
+        </Show>
       </box>
-
-      {/* Author */}
-      <Show when={state.showAuthorColumn()}>
-        <box flexShrink={0} width={15} paddingRight={2}>
-          <text fg={t().foregroundMuted} wrapMode="none" truncate>
-            Author
-          </text>
-        </box>
-      </Show>
-
-      {/* Date */}
-      <Show when={state.showDateColumn()}>
-        <box flexShrink={0} width={15} paddingRight={2}>
-          <text fg={t().foregroundMuted} wrapMode="none" truncate>
-            Date
-          </text>
-        </box>
-      </Show>
-
-      {/* Commit hash */}
-      <Show when={state.showHashColumn()}>
-        <text flexShrink={0} width={8} fg={t().foregroundMuted} wrapMode="none" truncate>
-          Commit
-        </text>
-      </Show>
+      {/* Muted separator below headers */}
+      <box width="100%" border={["top"]} borderStyle="single" borderColor={t().border} />
     </box>
   );
 }
@@ -336,7 +341,14 @@ function GraphLine(props: { row: GraphRow; index: number; highlighted: boolean; 
   };
 
   return (
-    <box ref={(el: Renderable) => props.rowRef?.(el)} flexDirection="column" width="100%">
+    <box
+      ref={(el: Renderable) => props.rowRef?.(el)}
+      flexDirection="column"
+      width="100%"
+      backgroundColor={(props.selected || props.highlighted) ? t().backgroundElement : undefined}
+      onMouseDown={() => props.onSelect(props.index)}
+      onMouseMove={() => props.onHighlight(props.index)}
+    >
       {/* Fan-out rows above the commit (all except the last, which merges
           into the commit row to avoid a redundant █ block). */}
       <For each={fanOutAboveContents()}>
@@ -347,9 +359,6 @@ function GraphLine(props: { row: GraphRow; index: number; highlighted: boolean; 
       <box
         flexDirection="row"
         width="100%"
-        backgroundColor={props.highlighted || props.selected ? t().backgroundElement : undefined}
-        onMouseDown={() => props.onSelect(props.index)}
-        onMouseMove={() => props.onHighlight(props.index)}
       >
         {/* Graph part: styled via ref + StyledText to bypass reconciler stringification */}
         <text ref={graphTextRef} flexShrink={0} width={graphWidth()} wrapMode="none" truncate paddingLeft={1} />
@@ -523,6 +532,10 @@ export default function GraphView() {
       scrollY
       scrollX={false}
       verticalScrollbarOptions={{ visible: false }}
+      onMouseOut={() => {
+        // Reset highlight to selected row when mouse leaves the graph
+        actions.setHighlightedIndex(state.selectedIndex());
+      }}
     >
       <box flexDirection="column" flexGrow={1}>
         <Show
@@ -541,10 +554,14 @@ export default function GraphView() {
                 highlighted={index() === state.highlightedIndex()}
                 selected={index() === state.selectedIndex()}
                 isLast={index() === state.filteredRows().length - 1}
-                onHighlight={(i) => actions.setHighlightedIndex(i)}
+                onHighlight={(i) => {
+                  actions.setHighlightedIndex(i);
+                  actions.setDetailFocused(false);
+                }}
                 onSelect={(i) => {
                   actions.setHighlightedIndex(i);
                   actions.setSelectedIndex(i);
+                  actions.setDetailFocused(false);
                 }}
                 viewportOffset={viewportOffset}
                 rowRef={(el) => { rowRefs[index()] = el; }}

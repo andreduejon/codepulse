@@ -5,6 +5,7 @@ export interface Theme {
   background: string;
   backgroundPanel: string;
   backgroundElement: string;
+  backgroundElementActive: string;
   foreground: string;
   foregroundMuted: string;
   border: string;
@@ -30,6 +31,7 @@ const catppuccinMocha: Theme = {
   background: "#1e1e2e",
   backgroundPanel: "#181825",
   backgroundElement: "#313244",
+  backgroundElementActive: "#45475a",
   foreground: "#cdd6f4",
   foregroundMuted: "#6c7086",
   border: "#45475a",
@@ -66,6 +68,7 @@ const tokyoNight: Theme = {
   background: "#1a1b26",
   backgroundPanel: "#16161e",
   backgroundElement: "#292e42",
+  backgroundElementActive: "#3b4261",
   foreground: "#c0caf5",
   foregroundMuted: "#565f89",
   border: "#3b4261",
@@ -102,7 +105,7 @@ const dracula: Theme = {
   background: "#282a36",
   backgroundPanel: "#21222c",
   backgroundElement: "#44475a",
-  foreground: "#f8f8f2",
+  backgroundElementActive: "#565972",  foreground: "#f8f8f2",
   foregroundMuted: "#6272a4",
   border: "#44475a",
   borderActive: "#bd93f9",
@@ -138,6 +141,7 @@ const nord: Theme = {
   background: "#2e3440",
   backgroundPanel: "#272c36",
   backgroundElement: "#3b4252",
+  backgroundElementActive: "#434c5e",
   foreground: "#d8dee9",
   foregroundMuted: "#616e88",
   border: "#3b4252",
