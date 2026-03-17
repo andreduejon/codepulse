@@ -45,6 +45,10 @@ export interface GraphRow {
   isOnCurrentBranch: boolean;
   /** The column index of the current branch tip (for consistent focus color) */
   currentBranchTipColumn: number;
+  /** The lane color index of the current branch tip (decoupled from column position) */
+  currentBranchTipColor: number;
+  /** The lane color index of this commit's node (decoupled from column position) */
+  nodeColor: number;
   /** Debug: the branch this commit belongs to (first-parent chain from nearest tip) */
   branchName: string;
   /** Whether this commit's lane belongs to a remote-only branch */

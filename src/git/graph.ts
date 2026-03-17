@@ -1,6 +1,9 @@
 import type { Commit, GraphRow, GraphColumn, Connector, ConnectorType } from "./types";
 import { StyledText, fg, bold } from "@opentui/core";
 
+/** Hard cap on visible graph columns. When the graph exceeds this, the viewport/sliding system activates. */
+export const MAX_GRAPH_COLUMNS = 12;
+
 // Fallback colors if no theme colors provided
 const DEFAULT_COLORS = [
   "#f38ba8", "#a6e3a1", "#89b4fa", "#f9e2af",
@@ -55,6 +58,11 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
   let laneFocused: boolean[] = [];
   // Parallel array: whether each lane belongs to a remote-only branch.
   let laneRemoteOnly: boolean[] = [];
+  // Parallel array: visual color index for each lane. Decoupled from column index
+  // so that lanes reusing interior null slots get fresh colors rather than inheriting
+  // the color of whatever previously occupied that column position.
+  let laneColors: number[] = [];
+  let nextColorIdx = 0;
 
   // Build a map from commit hash to commit for quick lookups.
   const commitMap = new Map<string, Commit>();
@@ -168,6 +176,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
   // We'll compute this once the tip commit is placed, and use it
   // across all rows for a consistent focus color.
   let currentBranchTipColumn = 0;
+  let currentBranchTipColor = 0;
 
   // Track which commits have already been processed and their node column.
   // This is needed to detect when a parent commit was already rendered
@@ -204,11 +213,13 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
         lanes[reuseIdx] = commit.hash;
         laneFocused[reuseIdx] = false;
         laneRemoteOnly[reuseIdx] = remoteOnlyHashes.has(commit.hash);
+        laneColors[reuseIdx] = nextColorIdx++;
       } else {
         nodeColumn = lanes.length;
         lanes.push(commit.hash);
         laneFocused.push(false);
         laneRemoteOnly.push(remoteOnlyHashes.has(commit.hash));
+        laneColors.push(nextColorIdx++);
       }
     }
 
@@ -227,9 +238,14 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
     // Record the tip column for the current branch (used for consistent focus color)
     if (commit.refs.some((r) => r.isCurrent)) {
       currentBranchTipColumn = nodeColumn;
+      currentBranchTipColor = laneColors[nodeColumn];
     }
 
     const isCommitOnCurrentBranch = currentBranchHashes.has(commit.hash);
+
+    // Capture the node's lane color BEFORE any parent processing or lane cleanup,
+    // because those operations may pop/overwrite laneColors entries.
+    const nodeColor = laneColors[nodeColumn];
 
     // Build connectors for this row
     const connectors: Connector[] = [];
@@ -242,7 +258,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       if (col === nodeColumn) {
         connectors.push({
           type: "node",
-          color: col,
+          color: laneColors[col],
           column: col,
           isFocused: isCommitOnCurrentBranch,
           isRemoteOnly: isCommitRemoteOnly,
@@ -251,7 +267,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
         const laneHash = lanes[col]!;
         connectors.push({
           type: "straight",
-          color: col,
+          color: laneColors[col],
           column: col,
           isFocused: laneFocused[col],
           isRemoteOnly: laneRemoteOnly[col],
@@ -294,7 +310,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       // Horizontal connectors always use the OTHER branch's color (the lane
       // at `to`, not the node's lane). This is consistent regardless of merge
       // direction: horizontals represent the connection to the other branch.
-      const hColor = to;
+      const hColor = laneColors[to];
 
       // Intermediate columns between node and target get horizontal lines.
       for (let col = lo + 1; col < hi; col++) {
@@ -318,20 +334,20 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       const targetLaneFocused = to < laneFocused.length && laneFocused[to];
 
       if (kind === "merge") {
-        // Target lane continues — T-junction on its direct line → use target lane color (= to)
+        // Target lane continues — T-junction on its direct line → use target lane color
         connectors.push({
           type: goingRight ? "tee-right" : "tee-left",
-          color: to,
+          color: laneColors[to],
           column: to,
           isFocused: targetLaneFocused,
           isRemoteOnly: remoteOnly,
         });
       } else if (kind === "close") {
         // Target lane is being closed — corner is the last point of that lane.
-        // Use the lane's own color (= to) so it stays on its direct visual path.
+        // Use the lane's own color so it stays on its direct visual path.
         connectors.push({
           type: goingRight ? "corner-bottom-right" : "corner-bottom-left",
-          color: to,
+          color: laneColors[to],
           column: to,
           isFocused: targetLaneFocused,
           isRemoteOnly: remoteOnly,
@@ -389,7 +405,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
             // ╰ if extra is to the left (line from above turns right to parent)
             fanOutConnectors.push({
               type: goingRight ? "corner-bottom-right" : "corner-bottom-left",
-              color: extraCol,
+              color: laneColors[extraCol],
               column: col,
               isFocused: extraFocused,
               isRemoteOnly: extraRemoteOnly,
@@ -400,7 +416,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
             // ┤ if it's to the left.
             fanOutConnectors.push({
               type: goingRight ? "tee-left" : "tee-right",
-              color: nodeColumn,
+              color: laneColors[nodeColumn],
               column: col,
               isFocused: isCommitOnCurrentBranch,
               isRemoteOnly: isCommitRemoteOnly,
@@ -415,14 +431,14 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
               // connectors. The renderer will combine these into ┼─.
               fanOutConnectors.push({
                 type: "straight",
-                color: col,
+                color: laneColors[col],
                 column: col,
                 isFocused: laneFocused[col],
                 isRemoteOnly: laneRemoteOnly[col],
               });
               fanOutConnectors.push({
                 type: "horizontal",
-                color: extraCol,
+                color: laneColors[extraCol],
                 column: col,
                 isFocused: false,
                 isRemoteOnly: extraRemoteOnly,
@@ -431,7 +447,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
               // Empty column — just horizontal passing through
               fanOutConnectors.push({
                 type: "horizontal",
-                color: extraCol,
+                color: laneColors[extraCol],
                 column: col,
                 isFocused: false,
                 isRemoteOnly: extraRemoteOnly,
@@ -441,7 +457,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
             // Active lane passing through (either regular lane or another extra)
             fanOutConnectors.push({
               type: "straight",
-              color: col,
+              color: laneColors[col],
               column: col,
               isFocused: laneFocused[col],
               isRemoteOnly: laneRemoteOnly[col],
@@ -591,7 +607,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
           const parentCol = processedColumns.get(parentHash)!;
           if (parentCol !== nodeColumn) {
             const kind = (parentCol < lanes.length && lanes[parentCol] !== null) ? "merge" : "branch";
-            addSpanningConnectors(nodeColumn, parentCol, parentCol, kind, pFocused, pLaneROValue);
+            addSpanningConnectors(nodeColumn, parentCol, laneColors[parentCol] ?? parentCol, kind, pFocused, pLaneROValue);
           }
         } else {
           // Open a new lane for this parent
@@ -602,14 +618,16 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
             lanes[emptyIdx] = parentHash;
             laneFocused[emptyIdx] = pFocused;
             laneRemoteOnly[emptyIdx] = pLaneROValue;
+            laneColors[emptyIdx] = nextColorIdx++;
           } else {
             newLane = lanes.length;
             lanes.push(parentHash);
             laneFocused.push(pFocused);
             laneRemoteOnly.push(pLaneROValue);
+            laneColors.push(nextColorIdx++);
           }
           // Add spanning connectors from nodeColumn to the new lane
-          addSpanningConnectors(nodeColumn, newLane, newLane, "branch", pFocused, pLaneROValue);
+          addSpanningConnectors(nodeColumn, newLane, laneColors[newLane], "branch", pFocused, pLaneROValue);
         }
       }
     }
@@ -721,11 +739,12 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       lanes.pop();
       laneFocused.pop();
       laneRemoteOnly.pop();
+      laneColors.pop();
     }
 
     // Build the columns for this row (snapshot of active lanes AFTER parent processing)
     const columns: GraphColumn[] = lanes.map((lane, idx) => ({
-      color: idx,
+      color: laneColors[idx] ?? idx,
       active: lane !== null,
       isFocused: laneFocused[idx],
       isRemoteOnly: laneRemoteOnly[idx],
@@ -738,6 +757,8 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       connectors,
       isOnCurrentBranch: isCommitOnCurrentBranch,
       currentBranchTipColumn,
+      currentBranchTipColor,
+      nodeColor,
       branchName: branchNameMap.get(commit.hash) ?? "",
       isRemoteOnly: isCommitRemoteOnly,
       remoteOnlyBranches,
@@ -844,12 +865,12 @@ export function renderConnectorRow(row: GraphRow, opts: RenderOptions = {}): Gra
       } else if (isRemote && opts.remoteOnlyDimColor) {
         color = opts.remoteOnlyDimColor;
       } else {
-        color = getBaseColor(col, opts);
+        color = getBaseColor(row.columns[col].color, opts);
       }
       const isBold = !opts.focusMode || !!focused;
       result.push({ char: "│ ", color, bold: isBold });
     } else {
-      result.push({ char: "  ", color: opts.dimColor ?? getBaseColor(col, opts) });
+      result.push({ char: "  ", color: opts.dimColor ?? getBaseColor(row.columns[col].color, opts) });
     }
   }
 
@@ -930,6 +951,8 @@ export function renderFanOutRow(fanOutConnectors: Connector[], opts: RenderOptio
     const horizontal = connectors.find(c => c.type === "horizontal");
     const cornerBR = connectors.find(c => c.type === "corner-bottom-right");
     const cornerBL = connectors.find(c => c.type === "corner-bottom-left");
+    const cornerTR = connectors.find(c => c.type === "corner-top-right");
+    const cornerTL = connectors.find(c => c.type === "corner-top-left");
     const teeLeft = connectors.find(c => c.type === "tee-left");
     const teeRight = connectors.find(c => c.type === "tee-right");
 
@@ -987,6 +1010,34 @@ export function renderFanOutRow(fanOutConnectors: Connector[], opts: RenderOptio
           result.push({ char: "╰─", color: cornerColor });
         } else {
           result.push({ char: "╰", color: cornerColor });
+          result.push({ char: "─", color: dashColor });
+        }
+      }
+    } else if (cornerTR) {
+      // ╮ — new lane starts, line comes from left (absorbed from commit row by fan-out merge).
+      if (horizontal) {
+        // Corner + horizontal crossing: ┬ glyph (horizontal with vertical going DOWN)
+        const cornerColor = connColor(cornerTR);
+        const hColor = connColor(horizontal);
+        result.push({ char: "┬", color: cornerColor });
+        result.push({ char: "─", color: hColor });
+      } else {
+        result.push({ char: "╮ ", color: connColor(cornerTR) });
+      }
+    } else if (cornerTL) {
+      // ╭ — new lane starts, line comes from right (absorbed from commit row by fan-out merge).
+      const cornerColor = connColor(cornerTL);
+      if (opts.focusMode && opts.dimColor) {
+        result.push({ char: "╭", color: cornerColor });
+        result.push({ char: "─", color: opts.dimColor });
+      } else {
+        const nextConns = byCol.get(col + 1);
+        const nextH = nextConns?.find(c => c.type === "horizontal");
+        const dashColor = nextH ? connColor(nextH) : cornerColor;
+        if (dashColor === cornerColor) {
+          result.push({ char: "╭─", color: cornerColor });
+        } else {
+          result.push({ char: "╭", color: cornerColor });
           result.push({ char: "─", color: dashColor });
         }
       }
@@ -1236,4 +1287,208 @@ export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphCh
   }
 
   return result;
+}
+
+/**
+ * Compute per-row horizontal viewport offsets for the sliding graph viewport.
+ *
+ * The viewport shows `depthLimit` columns at a time. It slides smoothly
+ * to keep each row's commit node (█) visible. The offset represents the
+ * first visible column index.
+ *
+ * Algorithm (smooth sliding / camera follow):
+ * - Start with offset = 0
+ * - For each row: if the node is outside the current viewport, shift
+ *   the minimum amount needed to bring it into view (with 1 column margin).
+ * - Otherwise keep the current offset.
+ *
+ * Returns an array of offsets (one per row). When depthLimit >= maxColumns,
+ * all offsets are 0 (no sliding needed).
+ */
+export function computeViewportOffsets(
+  rows: GraphRow[],
+  depthLimit: number,
+  maxColumns: number,
+): number[] {
+  if (depthLimit >= maxColumns) {
+    return new Array(rows.length).fill(0);
+  }
+
+  const offsets: number[] = [];
+  let offset = 0;
+
+  for (const row of rows) {
+    const nc = row.nodeColumn;
+
+    if (nc >= offset + depthLimit) {
+      // Node is to the right of viewport — shift right.
+      // Place node 2 columns from the right edge for context.
+      offset = nc - depthLimit + 2;
+    } else if (nc < offset) {
+      // Node is to the left of viewport — shift left.
+      // Place node 1 column from the left edge for context.
+      offset = Math.max(0, nc - 1);
+    }
+    // Otherwise keep current offset
+
+    offsets.push(offset);
+  }
+
+  return offsets;
+}
+
+/**
+ * Compute a single viewport offset for a given node column.
+ *
+ * Used reactively: when the selected commit changes, compute the offset
+ * needed to keep its node column visible. The same offset is applied
+ * to all visible rows, giving a horizontal "scroll" effect.
+ *
+ * @param prevOffset - The current/previous viewport offset (for smooth transitions)
+ * @param nodeColumn - The selected commit's node column
+ * @param depthLimit - Number of visible columns
+ * @param maxColumns - Total graph columns
+ * @returns The new viewport offset
+ */
+export function computeSingleViewportOffset(
+  prevOffset: number,
+  nodeColumn: number,
+  depthLimit: number,
+  maxColumns: number,
+): number {
+  if (depthLimit >= maxColumns) return 0;
+
+  let offset = prevOffset;
+
+  if (nodeColumn >= offset + depthLimit) {
+    // Node is to the right — shift right, place node 2 from right edge
+    offset = nodeColumn - depthLimit + 2;
+  } else if (nodeColumn < offset) {
+    // Node is to the left — shift left, place node 1 from left edge
+    offset = Math.max(0, nodeColumn - 1);
+  }
+
+  // Clamp to valid range
+  return Math.max(0, Math.min(offset, maxColumns - depthLimit));
+}
+
+/**
+ * Slice a rendered GraphChar[] array to the viewport window.
+ *
+ * Each graph column occupies 2 characters. The viewport shows columns
+ * [viewportOffset, viewportOffset + depthLimit). Pure slicer — no edge
+ * decoration. Edge indicators (◀/▶) are handled separately by the component.
+ *
+ * @param chars - The full-width rendered GraphChar[] from renderGraphRow / renderConnectorRow / renderFanOutRow
+ * @param viewportOffset - The first visible column index
+ * @param depthLimit - Number of columns in the viewport
+ * @param row - The GraphRow (used for early-exit check)
+ * @param opts - RenderOptions (for padToColumns check)
+ * @returns Sliced GraphChar[] fitting within depthLimit columns
+ */
+export function sliceGraphToViewport(
+  chars: GraphChar[],
+  viewportOffset: number,
+  depthLimit: number,
+  row: GraphRow,
+  opts: RenderOptions = {},
+): GraphChar[] {
+  // No slicing needed
+  if (viewportOffset === 0 && depthLimit >= (opts.padToColumns ?? row.columns.length)) {
+    return chars;
+  }
+
+  const padColor = opts.dimColor ?? opts.remoteOnlyDimColor ?? "#6c7086";
+
+  // Convert the flat GraphChar[] (where each entry may be 1 or 2 chars)
+  // into a per-character representation, then extract columns.
+  const viewportEnd = viewportOffset + depthLimit;
+
+  // Flatten to individual characters
+  const charsByPos: GraphChar[] = [];
+  for (const gc of chars) {
+    for (let i = 0; i < gc.char.length; i++) {
+      charsByPos.push({ char: gc.char[i], color: gc.color, bold: gc.bold });
+    }
+  }
+
+  // Extract columns [viewportOffset, viewportOffset + depthLimit)
+  // Each column = 2 chars starting at column * 2
+  const result: GraphChar[] = [];
+  for (let col = viewportOffset; col < viewportEnd; col++) {
+    const startPos = col * 2;
+    const c1 = charsByPos[startPos];
+    const c2 = charsByPos[startPos + 1];
+
+    if (c1 && c2) {
+      // Merge into one entry if same styling
+      if (c1.color === c2.color && c1.bold === c2.bold) {
+        result.push({ char: c1.char + c2.char, color: c1.color, bold: c1.bold });
+      } else {
+        result.push(c1);
+        result.push(c2);
+      }
+    } else if (c1) {
+      result.push(c1);
+      result.push({ char: " ", color: padColor });
+    } else {
+      // Column is beyond rendered content — pad with spaces
+      result.push({ char: "  ", color: padColor });
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Build a single edge indicator GraphChar for a commit row.
+ *
+ * When the viewport is scrolled and a commit's node (█) is off-screen,
+ * a muted triangle (◀ or ▶) is shown in a fixed 2-char-wide column
+ * appended to the right side of the graph area.
+ *
+ * A commit node can only be off-screen in ONE direction, so a single
+ * indicator column suffices. This keeps the graph starting at column 0
+ * with no extra left padding.
+ *
+ * Returns a single 2-char GraphChar:
+ *   "◀ " when node is off-screen to the left
+ *   " ▶" when node is off-screen to the right
+ *   "  " when node is in viewport or for non-commit rows
+ *
+ * @param nodeColumn - The commit's node column
+ * @param viewportOffset - The first visible column index
+ * @param depthLimit - Number of columns in the viewport
+ * @param maxColumns - Total graph columns
+ * @param indicatorColor - Muted color for the triangle
+ * @param isCommitRow - true for commit rows, false for connector/fan-out rows
+ */
+export function buildEdgeIndicator(
+  nodeColumn: number,
+  viewportOffset: number,
+  depthLimit: number,
+  maxColumns: number,
+  indicatorColor: string,
+  isCommitRow: boolean = true,
+): GraphChar {
+  const blank: GraphChar = { char: "  ", color: indicatorColor };
+
+  if (depthLimit >= maxColumns) {
+    return blank;
+  }
+
+  if (!isCommitRow) {
+    return blank;
+  }
+
+  if (nodeColumn < viewportOffset) {
+    return { char: "◀ ", color: indicatorColor };
+  }
+
+  const viewportEnd = viewportOffset + depthLimit;
+  if (nodeColumn >= viewportEnd) {
+    return { char: " ▶", color: indicatorColor };
+  }
+
+  return blank;
 }

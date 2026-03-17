@@ -1,7 +1,7 @@
-import { For, Show, createEffect } from "solid-js";
+import { For, Show, createEffect, createSignal } from "solid-js";
 import { useAppState } from "../context/state";
 import { useTheme } from "../context/theme";
-import { renderGraphRow, renderConnectorRow, renderFanOutRow, graphCharsToContent, getColorForColumn } from "../git/graph";
+import { renderGraphRow, renderConnectorRow, renderFanOutRow, graphCharsToContent, getColorForColumn, sliceGraphToViewport, computeSingleViewportOffset, buildEdgeIndicator, MAX_GRAPH_COLUMNS, type GraphChar } from "../git/graph";
 import type { GraphRow, RefInfo } from "../git/types";
 import type { TextRenderable, StyledText } from "@opentui/core";
 
@@ -48,8 +48,11 @@ export function ColumnHeader() {
   const { state } = useAppState();
   const t = () => theme();
 
-  // Graph column width: each graph column is 2 chars + 1 paddingLeft
-  const graphWidth = () => Math.max(state.maxGraphColumns() * 2 + 1, 6);
+  // Graph column width: dynamic based on actual graph data, capped at MAX_GRAPH_COLUMNS
+  const effectiveGraphColumns = () => Math.min(state.maxGraphColumns(), MAX_GRAPH_COLUMNS);
+  // When viewport is active, add 2 chars for the edge indicator column (◀/▶ on the right)
+  const viewportActive = () => state.maxGraphColumns() > MAX_GRAPH_COLUMNS;
+  const graphWidth = () => Math.max(effectiveGraphColumns() * 2 + 1 + (viewportActive() ? 2 : 0), 6);
 
   return (
     <box
@@ -107,7 +110,7 @@ export function ColumnHeader() {
  * Connector row component. Uses its own ref + createEffect to ensure
  * the StyledText content is set after the element is mounted.
  */
-function ConnectorRow(props: { content: () => StyledText }) {
+function ConnectorRow(props: { content: () => StyledText; width?: number }) {
   let textRef: TextRenderable | undefined;
 
   createEffect(() => {
@@ -116,17 +119,26 @@ function ConnectorRow(props: { content: () => StyledText }) {
 
   return (
     <box flexDirection="row" width="100%">
-      <text ref={textRef} flexShrink={0} wrapMode="none" truncate paddingLeft={1} />
+      <text ref={textRef} flexShrink={0} wrapMode="none" truncate paddingLeft={1} width={props.width} />
     </box>
   );
 }
 
-function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isLast: boolean; onSelect: (index: number) => void }) {
+function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isLast: boolean; onSelect: (index: number) => void; viewportOffset: () => number }) {
   const { theme } = useTheme();
   const { state } = useAppState();
 
   const commit = () => props.row.commit;
   const padCols = () => state.maxGraphColumns();
+
+  // Effective graph columns: capped by MAX_GRAPH_COLUMNS
+  const effectiveGraphCols = () => Math.min(state.maxGraphColumns(), MAX_GRAPH_COLUMNS);
+
+  // Viewport active when actual graph exceeds the cap
+  const viewportActive = () => state.maxGraphColumns() > MAX_GRAPH_COLUMNS;
+
+  // Graph width for this line (must match ColumnHeader's graphWidth formula)
+  const graphWidth = () => Math.max(effectiveGraphCols() * 2 + 1 + (viewportActive() ? 2 : 0), 6);
 
   // Focus mode: compute render options with dim colors for non-current-branch lanes.
   // The current branch's lane lines (│) stay colored on ALL rows so you can
@@ -134,7 +146,7 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
   // commits appear in between. Only the node dot is dimmed via isNodeFocused.
   // All focused-branch elements use a single consistent color (the tip column's color).
   const focusBranchColor = () =>
-    getColorForColumn(props.row.currentBranchTipColumn, theme().graphColors);
+    getColorForColumn(props.row.currentBranchTipColor, theme().graphColors);
 
   const renderOpts = () => {
     const base = {
@@ -154,11 +166,36 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
     return base;
   };
 
-  const graphChars = () => renderGraphRow(props.row, renderOpts());
-  const connectorChars = () => renderConnectorRow(props.row, renderOpts());
+  // Edge indicator helper — single 2-char column appended to the right
+  const edgeColor = () => theme().foregroundMuted;
+  const blankEdge = (): GraphChar => ({ char: "  ", color: edgeColor() });
 
-  const graphContent = () => graphCharsToContent(graphChars());
-  const connectorContent = () => graphCharsToContent(connectorChars());
+  // Append edge indicator column to the right of the graph chars
+  const withEdgeIndicator = (chars: GraphChar[], isCommitRow: boolean): GraphChar[] => {
+    if (!viewportActive()) return chars;
+    if (isCommitRow) {
+      const indicator = buildEdgeIndicator(
+        props.row.nodeColumn, props.viewportOffset(), MAX_GRAPH_COLUMNS,
+        state.maxGraphColumns(), edgeColor(), true
+      );
+      return [...chars, indicator];
+    }
+    return [...chars, blankEdge()];
+  };
+
+  const graphChars = () => {
+    const chars = renderGraphRow(props.row, renderOpts());
+    if (!viewportActive()) return chars;
+    return sliceGraphToViewport(chars, props.viewportOffset(), MAX_GRAPH_COLUMNS, props.row, renderOpts());
+  };
+  const connectorChars = () => {
+    const chars = renderConnectorRow(props.row, renderOpts());
+    if (!viewportActive()) return chars;
+    return sliceGraphToViewport(chars, props.viewportOffset(), MAX_GRAPH_COLUMNS, props.row, renderOpts());
+  };
+
+  const graphContent = () => graphCharsToContent(withEdgeIndicator(graphChars(), true));
+  const connectorContent = () => graphCharsToContent(withEdgeIndicator(connectorChars(), false));
 
   // Check if the commit row has merge/branch connectors (horizontals, corners, tees).
   // If so, the commit row carries connection info and can't be replaced by a fan-out row.
@@ -184,16 +221,19 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
   const fanOutAboveContents = () => {
     const foRows = props.row.fanOutRows;
     if (!foRows || foRows.length === 0) return [];
+    const active = viewportActive();
+    const applySlice = (chars: GraphChar[]) =>
+      active ? sliceGraphToViewport(chars, props.viewportOffset(), MAX_GRAPH_COLUMNS, props.row, renderOpts()) : chars;
     // If merging last fan-out into commit row, show all except the last
     if (canMergeFanOut()) {
       if (foRows.length <= 1) return [];
       return foRows.slice(0, -1).map((foConnectors) =>
-        graphCharsToContent(renderFanOutRow(foConnectors, renderOpts()))
+        graphCharsToContent(withEdgeIndicator(applySlice(renderFanOutRow(foConnectors, renderOpts())), false))
       );
     }
     // Otherwise show all fan-out rows separately
     return foRows.map((foConnectors) =>
-      graphCharsToContent(renderFanOutRow(foConnectors, renderOpts()))
+      graphCharsToContent(withEdgeIndicator(applySlice(renderFanOutRow(foConnectors, renderOpts())), false))
     );
   };
 
@@ -202,8 +242,14 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
   const commitRowGraphContent = () => {
     if (canMergeFanOut()) {
       const foRows = props.row.fanOutRows!;
-      return graphCharsToContent(renderFanOutRow(foRows[foRows.length - 1], renderOpts()));
+      const chars = renderFanOutRow(foRows[foRows.length - 1], renderOpts());
+      const sliced = viewportActive()
+        ? sliceGraphToViewport(chars, props.viewportOffset(), MAX_GRAPH_COLUMNS, props.row, renderOpts())
+        : chars;
+      // Merged fan-out row IS the commit row — use isCommitRow=true for edge indicators
+      return graphCharsToContent(withEdgeIndicator(sliced, true));
     }
+    // graphContent() already has viewport slicing and edge indicators applied
     return graphContent();
   };
 
@@ -223,7 +269,7 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
     const filtered = state.showTags() ? allRefs : allRefs.filter((r) => r.type !== "tag");
     return [...filtered].sort((a, b) => (REF_ORDER[a.type] ?? 9) - (REF_ORDER[b.type] ?? 9));
   };
-  const laneColor = () => getColorForColumn(props.row.nodeColumn, theme().graphColors);
+  const laneColor = () => getColorForColumn(props.row.nodeColor, theme().graphColors);
   const t = () => theme();
 
   // Is this commit on the current branch? (for focus mode dimming)
@@ -261,7 +307,7 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
       {/* Fan-out rows above the commit (all except the last, which merges
           into the commit row to avoid a redundant █ block). */}
       <For each={fanOutAboveContents()}>
-        {(foContent) => <ConnectorRow content={() => foContent} />}
+        {(foContent) => <ConnectorRow content={() => foContent} width={graphWidth()} />}
       </For>
 
       {/* Commit row */}
@@ -273,7 +319,7 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
         onMouseMove={() => props.onSelect(props.index)}
       >
         {/* Graph part: styled via ref + StyledText to bypass reconciler stringification */}
-        <text ref={graphTextRef} flexShrink={0} width={Math.max(padCols() * 2 + 1, 6)} wrapMode="none" truncate paddingLeft={1} />
+        <text ref={graphTextRef} flexShrink={0} width={graphWidth()} wrapMode="none" truncate paddingLeft={1} />
 
         {/* Description: refs + commit message share one flex area */}
         <box flexDirection="row" flexGrow={1} flexShrink={1} paddingLeft={1} paddingRight={2}>
@@ -317,7 +363,7 @@ function GraphLine(props: { row: GraphRow; index: number; selected: boolean; isL
 
       {/* Connector row: vertical lines only, providing visual continuity */}
       <Show when={!props.isLast}>
-        <ConnectorRow content={connectorContent} />
+        <ConnectorRow content={connectorContent} width={graphWidth()} />
       </Show>
     </box>
   );
@@ -354,6 +400,26 @@ function formatRelativeDate(dateStr: string): string {
 export default function GraphView() {
   const { state, actions } = useAppState();
 
+  // Single viewport offset: reacts to the selected commit's node column.
+  // All rows share the same offset, giving a horizontal "scroll" effect.
+  const [viewportOffset, setViewportOffset] = createSignal(0);
+
+  createEffect(() => {
+    const rows = state.filteredRows();
+    const idx = state.selectedIndex();
+    const maxCols = state.maxGraphColumns();
+
+    if (maxCols <= MAX_GRAPH_COLUMNS || idx < 0 || idx >= rows.length) {
+      setViewportOffset(0);
+      return;
+    }
+
+    const nodeCol = rows[idx].nodeColumn;
+    setViewportOffset((prev) =>
+      computeSingleViewportOffset(prev, nodeCol, MAX_GRAPH_COLUMNS, maxCols)
+    );
+  });
+
   return (
     <box flexDirection="column" flexGrow={1}>
       <Show
@@ -372,6 +438,7 @@ export default function GraphView() {
               selected={index() === state.selectedIndex()}
               isLast={index() === state.filteredRows().length - 1}
               onSelect={(i) => actions.setSelectedIndex(i)}
+              viewportOffset={viewportOffset}
             />
           )}
         </For>
