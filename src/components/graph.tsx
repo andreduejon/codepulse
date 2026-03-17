@@ -347,7 +347,7 @@ function GraphLine(props: { row: GraphRow; index: number; highlighted: boolean; 
       width="100%"
       backgroundColor={(props.selected || props.highlighted) ? t().backgroundElement : undefined}
       onMouseDown={() => props.onSelect(props.index)}
-      onMouseMove={() => props.onHighlight(props.index)}
+      onMouseMove={(e: any) => { e.stopPropagation(); props.onHighlight(props.index); }}
     >
       {/* Fan-out rows above the commit (all except the last, which merges
           into the commit row to avoid a redundant █ block). */}
@@ -532,10 +532,6 @@ export default function GraphView() {
       scrollY
       scrollX={false}
       verticalScrollbarOptions={{ visible: false }}
-      onMouseOut={() => {
-        // Reset highlight to selected row when mouse leaves the graph
-        actions.setHighlightedIndex(state.selectedIndex());
-      }}
     >
       <box flexDirection="column" flexGrow={1}>
         <Show

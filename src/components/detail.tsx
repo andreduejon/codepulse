@@ -1,7 +1,7 @@
 import { Show, For } from "solid-js";
 import { useAppState } from "../context/state";
 import { useTheme } from "../context/theme";
-import type { CommitDetail, FileChange } from "../git/types";
+import type { FileChange } from "../git/types";
 
 function FileLine(props: { file: FileChange }) {
   const { theme } = useTheme();
@@ -35,6 +35,24 @@ export default function CommitDetailView() {
   const commit = () => state.selectedCommit();
   const detail = () => state.commitDetail();
 
+  // Split refs into branches (branch/remote/head) and tags
+  const branchRefs = () => {
+    const c = commit();
+    if (!c) return [];
+    return c.refs.filter((r) => r.type !== "tag");
+  };
+
+  const tagRefs = () => {
+    const c = commit();
+    if (!c) return [];
+    return c.refs.filter((r) => r.type === "tag");
+  };
+
+  // Ref color: current branch = success, others = primary
+  const refColor = (ref: { type: string; isCurrent: boolean }) => {
+    return ref.isCurrent ? t().success : t().primary;
+  };
+
   return (
     <box flexDirection="column" flexGrow={1}>
       <Show
@@ -47,26 +65,25 @@ export default function CommitDetailView() {
       >
         {(c) => (
           <>
-            {/* Commit hash */}
-            <text wrapMode="word">
+            {/* ── Branch sub-header ── */}
+            <Show when={branchRefs().length > 0}>
+              <text wrapMode="none">
+                <strong><span fg={t().accent}>Branch</span></strong>
+              </text>
+              <text wrapMode="word" paddingLeft={2} fg={t().primary}>
+                {branchRefs().map((r, i) =>
+                  (i > 0 ? ", " : "") + r.name
+                ).join("")}
+              </text>
+              <box height={1} />
+            </Show>
+
+            {/* ── Commit info block ── */}
+            <text wrapMode="none">
               <span fg={t().foregroundMuted}>Commit  </span>
-              <span fg={t().primary}>{c().hash}</span>
+              <span fg={t().primary}>{c().shortHash}</span>
             </text>
 
-            {/* Author */}
-            <text wrapMode="none">
-              <span fg={t().foregroundMuted}>Author  </span>
-              <span fg={t().foreground}>{c().author}</span>
-              <span fg={t().foregroundMuted}> {"<"}{c().authorEmail}{">"}</span>
-            </text>
-
-            {/* Date */}
-            <text wrapMode="none">
-              <span fg={t().foregroundMuted}>Date    </span>
-              <span fg={t().foreground}>{formatDate(c().authorDate)}</span>
-            </text>
-
-            {/* Parents */}
             <Show when={c().parents.length > 0}>
               <text wrapMode="none">
                 <span fg={t().foregroundMuted}>
@@ -85,42 +102,42 @@ export default function CommitDetailView() {
               </text>
             </Show>
 
-            {/* Refs */}
-            <Show when={c().refs.length > 0}>
-              <text wrapMode="none">
-                <span fg={t().foregroundMuted}>Refs    </span>
-                <For each={c().refs}>
-                  {(ref, i) => (
-                    <>
-                      <span
-                        fg={
-                          ref.type === "tag"
-                            ? t().warning
-                            : ref.isCurrent
-                              ? t().success
-                              : t().primary
-                        }
-                      >
-                        {ref.name}
-                      </span>
-                      <Show when={i() < c().refs.length - 1}>
-                        <span fg={t().foregroundMuted}>, </span>
-                      </Show>
-                    </>
-                  )}
-                </For>
-              </text>
-            </Show>
+            <text wrapMode="none">
+              <span fg={t().foregroundMuted}>Author  </span>
+              <span fg={t().foreground}>{c().author}</span>
+            </text>
 
-            {/* Spacer */}
+            <text wrapMode="none">
+              <span fg={t().foregroundMuted}>Email   </span>
+              <span fg={t().foregroundMuted}>{c().authorEmail}</span>
+            </text>
+
+            <text wrapMode="none">
+              <span fg={t().foregroundMuted}>Date    </span>
+              <span fg={t().foreground}>{formatDate(c().authorDate)}</span>
+            </text>
+
             <box height={1} />
 
-            {/* Subject */}
+            {/* ── Tags sub-header ── */}
+            <Show when={tagRefs().length > 0}>
+              <text wrapMode="none">
+                <strong><span fg={t().accent}>Tags</span></strong>
+              </text>
+              <text wrapMode="word" paddingLeft={2} fg={t().warning}>
+                {tagRefs().map((r, i) =>
+                  (i > 0 ? ", " : "") + r.name
+                ).join("")}
+              </text>
+              <box height={1} />
+            </Show>
+
+            {/* ── Subject ── */}
             <text fg={t().foreground} wrapMode="word">
               {c().subject}
             </text>
 
-            {/* Body */}
+            {/* ── Body ── */}
             <Show when={detail()?.body}>
               <box height={1} />
               <text fg={t().foregroundMuted} wrapMode="word">
@@ -128,12 +145,10 @@ export default function CommitDetailView() {
               </text>
             </Show>
 
-            {/* Files changed */}
+            {/* ── Files changed ── */}
             <Show when={detail() && detail()!.files.length > 0}>
               <box height={1} />
-              <text fg={t().foregroundMuted} paddingLeft={0}>
-                {"─".repeat(40)}
-              </text>
+              <box width="100%" border={["top"]} borderStyle="single" borderColor={t().border} />
               <text fg={t().foreground} wrapMode="none">
                 <span fg={t().info}>
                   {detail()!.files.length} file{detail()!.files.length !== 1 ? "s" : ""} changed

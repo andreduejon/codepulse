@@ -297,6 +297,9 @@ function AppContent(props: AppProps) {
     }
   });
 
+  // Reset hover highlight when mouse leaves the graph area
+  const clearHover = () => actions.setHighlightedIndex(state.selectedIndex());
+
   return (
     <ThemeContext.Provider
       value={{
@@ -321,6 +324,7 @@ function AppContent(props: AppProps) {
               flexShrink={1}
               backgroundColor={themeState.theme().backgroundPanel}
               paddingX={2}
+              onMouseMove={clearHover}
             >
               {/* Graph area */}
               <box flexDirection="column" flexGrow={1} paddingBottom={1}>
@@ -392,6 +396,7 @@ function AppContent(props: AppProps) {
               paddingX={2}
               paddingBottom={1}
               onMouseDown={() => actions.setDetailFocused(true)}
+              onMouseMove={clearHover}
             >
               {/* Details header with reactive border */}
               <box flexDirection="column" width="100%" flexShrink={0}>
