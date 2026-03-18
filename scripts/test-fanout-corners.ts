@@ -15,8 +15,6 @@ import {
   makeCommit,
   assert,
   printResults,
-  hasConnector,
-  findConnector,
 } from "./test-helpers";
 
 const THEME_COLORS = [

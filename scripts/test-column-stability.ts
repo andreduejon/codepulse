@@ -13,7 +13,6 @@ import type { Commit } from "../src/git/types";
 import {
   makeCommit,
   assert,
-  resetResults,
   printResults,
 } from "./test-helpers";
 

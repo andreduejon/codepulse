@@ -302,8 +302,8 @@ export default function CommitDetailView(props: DetailViewProps) {
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       if (item.type === type) {
-        if (type === "section-header" && (item as any).section === section) return i;
-        if ((type === "child" || type === "parent") && (item as any).index === idx) return i;
+        if (type === "section-header" && item.type === "section-header" && item.section === section) return i;
+        if ((type === "child" || type === "parent") && (item.type === "child" || item.type === "parent") && item.index === idx) return i;
       }
     }
     return -1;
@@ -318,7 +318,6 @@ export default function CommitDetailView(props: DetailViewProps) {
     count: number;
     expanded: boolean;
     section: "children" | "parents" | "files";
-    onToggle: () => void;
   }) {
     const itemIdx = () => findItemIndex("section-header", headerProps.section);
 
@@ -535,7 +534,6 @@ export default function CommitDetailView(props: DetailViewProps) {
                 count={row()!.children.length}
                 expanded={childrenExpanded()}
                 section="children"
-                onToggle={() => setChildrenExpanded(!childrenExpanded())}
               />
               <Show when={childrenExpanded()}>
                 <For each={row()!.children}>
@@ -560,7 +558,6 @@ export default function CommitDetailView(props: DetailViewProps) {
                 count={row()!.parentHashes.length}
                 expanded={parentsExpanded()}
                 section="parents"
-                onToggle={() => setParentsExpanded(!parentsExpanded())}
               />
               <Show when={parentsExpanded()}>
                 <For each={row()!.parentHashes}>
@@ -585,7 +582,6 @@ export default function CommitDetailView(props: DetailViewProps) {
                 count={detail()!.files.length}
                 expanded={filesExpanded()}
                 section="files"
-                onToggle={() => setFilesExpanded(!filesExpanded())}
               />
               <Show when={filesExpanded()}>
                 <box flexDirection="row" paddingLeft={2}>

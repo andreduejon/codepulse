@@ -2,7 +2,8 @@
 /**
  * Test script: verifies the sliding graph viewport functions.
  *
- * Covers: computeViewportOffsets, sliceGraphToViewport, hasActiveLanesBefore/After.
+ * Covers: computeViewportOffsets, computeSingleViewportOffset,
+ * sliceGraphToViewport, getMaxGraphColumns, buildEdgeIndicator.
  */
 
 import { buildGraph, computeViewportOffsets, computeSingleViewportOffset, renderGraphRow, renderConnectorRow, sliceGraphToViewport, getMaxGraphColumns, buildEdgeIndicator } from "../src/git/graph";

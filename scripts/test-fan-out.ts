@@ -8,15 +8,11 @@
  * extra lane, with branch-off corners (╯/╰) closing each lane.
  */
 
-import { buildGraph, renderFanOutRow, renderGraphRow, type GraphChar } from "../src/git/graph";
+import { buildGraph } from "../src/git/graph";
 import {
   makeCommit,
   assert,
-  resetResults,
   printResults,
-  hasConnector,
-  findConnector,
-  countConnectors,
 } from "./test-helpers";
 
 const THEME_COLORS = [

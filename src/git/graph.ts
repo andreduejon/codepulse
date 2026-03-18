@@ -428,8 +428,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
           } else if (col > lo && col < hi) {
             // Between node and extra lane.
             // Check if there's an active lane at this column (crossing).
-            const isActiveLane = (lanes[col] !== null && !stillActive.has(col)) || 
-                                 (stillActive.has(col));
+            const isActiveLane = lanes[col] !== null;
             if (isActiveLane) {
               // Active lane being crossed by the horizontal — emit both
               // connectors. The renderer will combine these into ┼─.
@@ -1103,14 +1102,6 @@ export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphCh
       c.type === "corner-top-right" || c.type === "corner-bottom-right"
     )
   );
-  // Check if the node column has a horizontal connection going to the left
-  const hasLeftConnection = nodeCol >= 1 && (
-    connectorsByCol.has(nodeCol - 1) &&
-    (connectorsByCol.get(nodeCol - 1) ?? []).some((c) =>
-      c.type === "horizontal" || c.type === "tee-left" ||
-      c.type === "corner-top-left" || c.type === "corner-bottom-left"
-    )
-  );
 
   for (let col = 0; col < maxCol; col++) {
     const colConnectors = connectorsByCol.get(col) ?? [];
@@ -1147,9 +1138,7 @@ export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphCh
         const hConn = nextHoriz ?? nextCorner;
         const dashColor = hConn ? connColor(hConn) : getBaseColor(node.color, opts);
         result.push({ char: "─", color: dashColor });
-      } else if (col === nodeCol && hasLeftConnection) {
-        result.push({ char: `${nodeChar} `, color: nodeColor, bold: true });
-      } else {
+      } else if (col === nodeCol) {
         result.push({ char: `${nodeChar} `, color: nodeColor, bold: true });
       }
     } else if (teeLeft) {

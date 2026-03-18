@@ -250,11 +250,6 @@ function GraphLine(props: { row: GraphRow; index: number; active: boolean; isLas
   const laneColor = () => getColorForColumn(props.row.nodeColor, theme().graphColors);
   const t = () => theme();
 
-  // Effective lane color for ref badges
-  const effectiveLaneColor = () => {
-    return laneColor();
-  };
-
   // Effective text color for the commit subject (primary column).
   // Active row uses primary color with bold. Inactive rows use foreground.
   const effectiveTextColor = () => {
@@ -302,7 +297,7 @@ function GraphLine(props: { row: GraphRow; index: number; active: boolean; isLas
           <Show when={visibleRefs().length > 0}>
             <box flexDirection="row" flexShrink={0} gap={1} paddingRight={1}>
               <For each={visibleRefs()}>
-                {(ri) => <RefBadge info={ri} laneColor={effectiveLaneColor} />}
+                {(ri) => <RefBadge info={ri} laneColor={laneColor} />}
               </For>
             </box>
           </Show>
@@ -389,6 +384,7 @@ function formatRelativeDate(dateStr: string): string {
 
 export default function GraphView() {
   const { state, actions } = useAppState();
+  const { theme } = useTheme();
 
   // Single viewport offset: reacts to the highlighted commit's node column.
   // All rows share the same offset, giving a horizontal "scroll" effect.
@@ -461,7 +457,7 @@ export default function GraphView() {
           when={!state.loading()}
           fallback={
             <box flexGrow={1} alignItems="center" justifyContent="center">
-              <text fg="#89b4fa">Loading commits...</text>
+              <text fg={theme().primary}>Loading commits...</text>
             </box>
           }
         >

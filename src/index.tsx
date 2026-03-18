@@ -2,6 +2,7 @@
 import { render } from "@opentui/solid";
 import { isGitRepo } from "./git/repo";
 import App from "./app";
+import packageJson from "../package.json";
 
 async function main() {
   const args = process.argv.slice(2);
@@ -38,7 +39,7 @@ async function main() {
         break;
       case "--version":
       case "-v":
-        console.log("gittree v0.1.0");
+        console.log(`gittree v${packageJson.version}`);
         process.exit(0);
         break;
       default:

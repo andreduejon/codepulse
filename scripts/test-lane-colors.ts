@@ -7,7 +7,7 @@
  */
 
 import { buildGraph, renderGraphRow, getColorForColumn } from "../src/git/graph";
-import { assert, makeCommit, findConnector, printResults, resetResults } from "./test-helpers";
+import { assert, makeCommit, printResults, resetResults } from "./test-helpers";
 
 resetResults();
 

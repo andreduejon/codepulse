@@ -3,11 +3,11 @@
  * Test script: verifies block commit rendering (█ instead of ●).
  *
  * Tests:
- * 1. Node glyph is █ (not ●) in rendered output
- * 2. Fan-out rows use █ (not ├/┤) at the node column
- * 3. Fan-out merge optimization: last fan-out row merges into commit row
- *    when the commit row has no merge/branch connectors
- * 4. Fan-out merge is skipped when commit has merge/branch connectors
+ * 1-6.  Node glyph is █ (not ●) in rendered output
+ * 8-9.  Fan-out merge optimization: last fan-out row merges into commit row
+ *       when the commit row has no merge/branch connectors
+ * 10-11. Fan-out merge is skipped when commit has merge/branch connectors
+ * 12-13. Additional merge/fan-out edge cases
  */
 
 import { buildGraph, renderGraphRow, renderFanOutRow, type GraphChar } from "../src/git/graph";

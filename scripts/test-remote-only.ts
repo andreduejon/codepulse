@@ -9,15 +9,12 @@
  * dimming logic.
  */
 
-import { buildGraph, renderGraphRow, renderConnectorRow } from "../src/git/graph";
+import { buildGraph } from "../src/git/graph";
 import {
   makeCommit,
   assert,
-  resetResults,
   printResults,
-  hasConnector,
   findConnector,
-  countConnectors,
 } from "./test-helpers";
 
 // ============================================================
