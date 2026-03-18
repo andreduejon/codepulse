@@ -1,6 +1,6 @@
 import type { Commit, Branch, FileChange, CommitDetail, RefInfo } from "./types";
 
-const GIT_LOG_FORMAT = "%H|%h|%P|%D|%s|%an|%ae|%aI";
+const GIT_LOG_FORMAT = "%H|%h|%P|%D|%s|%an|%ae|%aI|%cn|%ce|%cI";
 const FIELD_SEPARATOR = "|";
 
 function parseRefs(refString: string): RefInfo[] {
@@ -41,9 +41,9 @@ function parseRefs(refString: string): RefInfo[] {
 
 function parseCommitLine(line: string): Commit | null {
   const parts = line.split(FIELD_SEPARATOR);
-  if (parts.length < 8) return null;
+  if (parts.length < 11) return null;
 
-  const [hash, shortHash, parentsStr, refsStr, subject, author, authorEmail, authorDate] = parts;
+  const [hash, shortHash, parentsStr, refsStr, subject, author, authorEmail, authorDate, committer, committerEmail, commitDate] = parts;
   const parents = parentsStr.trim() ? parentsStr.trim().split(" ") : [];
   const refs = parseRefs(refsStr);
 
@@ -57,6 +57,9 @@ function parseCommitLine(line: string): Commit | null {
     author,
     authorEmail,
     authorDate,
+    committer,
+    committerEmail,
+    commitDate,
     refs,
   };
 }

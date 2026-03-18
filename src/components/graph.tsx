@@ -73,6 +73,15 @@ export function ColumnHeader() {
           <strong><span fg={!state.detailFocused() ? t().foreground : t().foregroundMuted}>{"Graph "}</span></strong>
         </text>
 
+        {/* Commit hash */}
+        <Show when={state.showHashColumn()}>
+          <box flexShrink={0} width={9} paddingLeft={1}>
+            <text wrapMode="none" truncate>
+              <strong><span fg={!state.detailFocused() ? t().foreground : t().foregroundMuted}>Commit</span></strong>
+            </text>
+          </box>
+        </Show>
+
         {/* Description (commit message + refs) — box wrapper matches data row structure */}
         <box flexDirection="row" flexGrow={1} flexShrink={1} paddingLeft={1} paddingRight={2}>
           <text flexGrow={1} flexShrink={1} wrapMode="none" truncate>
@@ -91,18 +100,11 @@ export function ColumnHeader() {
 
         {/* Date */}
         <Show when={state.showDateColumn()}>
-          <box flexShrink={0} width={15} paddingRight={2}>
+          <box flexShrink={0} width={15}>
             <text wrapMode="none" truncate>
               <strong><span fg={!state.detailFocused() ? t().foreground : t().foregroundMuted}>Date</span></strong>
             </text>
           </box>
-        </Show>
-
-        {/* Commit hash */}
-        <Show when={state.showHashColumn()}>
-          <text flexShrink={0} width={8} wrapMode="none" truncate>
-            <strong><span fg={!state.detailFocused() ? t().foreground : t().foregroundMuted}>Commit</span></strong>
-          </text>
         </Show>
       </box>
       {/* Muted separator below headers */}
@@ -363,6 +365,15 @@ function GraphLine(props: { row: GraphRow; index: number; highlighted: boolean; 
         {/* Graph part: styled via ref + StyledText to bypass reconciler stringification */}
         <text ref={graphTextRef} flexShrink={0} width={graphWidth()} wrapMode="none" truncate paddingLeft={1} />
 
+        {/* Short hash */}
+        <Show when={state.showHashColumn()}>
+          <box flexShrink={0} width={9} paddingLeft={1} overflow="hidden">
+            <text fg={secondaryColumnColor()} wrapMode="none" truncate>
+              {props.selected ? <strong><span fg={secondaryColumnColor()}>{commit().shortHash}</span></strong> : commit().shortHash}
+            </text>
+          </box>
+        </Show>
+
         {/* Description: refs + commit message share one flex area */}
         <box flexDirection="row" flexGrow={1} flexShrink={1} paddingLeft={1} paddingRight={2}>
           <Show when={visibleRefs().length > 0}>
@@ -388,18 +399,11 @@ function GraphLine(props: { row: GraphRow; index: number; highlighted: boolean; 
 
         {/* Date */}
         <Show when={state.showDateColumn()}>
-          <box flexShrink={0} width={15} paddingRight={2} overflow="hidden">
+          <box flexShrink={0} width={15} overflow="hidden">
             <text fg={secondaryColumnColor()} wrapMode="none" truncate>
               {props.selected ? <strong><span fg={secondaryColumnColor()}>{formatRelativeDate(commit().authorDate)}</span></strong> : formatRelativeDate(commit().authorDate)}
             </text>
           </box>
-        </Show>
-
-        {/* Short hash */}
-        <Show when={state.showHashColumn()}>
-          <text flexShrink={0} width={8} fg={secondaryColumnColor()} wrapMode="none" truncate>
-            {props.selected ? <strong><span fg={secondaryColumnColor()}>{commit().shortHash}</span></strong> : commit().shortHash}
-          </text>
         </Show>
       </box>
 
@@ -496,9 +500,9 @@ export default function GraphView() {
     );
   });
 
-  // Scroll the highlighted row into view whenever highlightedIndex changes
+  // Scroll the target row into view (only triggered by keyboard nav / selection, not mouse hover)
   createEffect(() => {
-    const idx = state.highlightedIndex();
+    const idx = state.scrollTargetIndex();
     const sb = scrollboxRef;
     if (!sb || idx < 0) return;
 
@@ -556,6 +560,7 @@ export default function GraphView() {
                 }}
                 onSelect={(i) => {
                   actions.setHighlightedIndex(i);
+                  actions.setScrollTargetIndex(i);
                   actions.setSelectedIndex(i);
                   actions.setDetailFocused(false);
                 }}

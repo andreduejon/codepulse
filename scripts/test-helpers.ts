@@ -54,6 +54,9 @@ export function makeCommit(
     author: "test",
     authorEmail: "test@test.com",
     authorDate: new Date().toISOString(),
+    committer: "test",
+    committerEmail: "test@test.com",
+    commitDate: new Date().toISOString(),
     refs,
   };
 }

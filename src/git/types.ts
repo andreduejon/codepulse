@@ -8,6 +8,9 @@ export interface Commit {
   author: string;
   authorEmail: string;
   authorDate: string;
+  committer: string;
+  committerEmail: string;
+  commitDate: string;
   refs: RefInfo[];
 }
 
@@ -51,6 +54,24 @@ export interface GraphRow {
   nodeColor: number;
   /** Debug: the branch this commit belongs to (first-parent chain from nearest tip) */
   branchName: string;
+  /** For merge commits: branch name of parents[1] (merged FROM) */
+  mergeBranch?: string;
+  /** For merge commits: branch name of parents[0] (merged INTO) */
+  mergeTarget?: string;
+  /** Lane color index of the merge source branch (parents[1]'s lane) */
+  mergeSourceColor?: number;
+  /** Parent commit hashes, sorted: same-branch first, then by row order */
+  parentHashes: string[];
+  /** Branch name for each parent (from branchNameMap), parallel to parentHashes */
+  parentBranches: string[];
+  /** Lane color index for each parent, parallel to parentHashes */
+  parentColors: number[];
+  /** Child commit hashes (commits whose parents include this commit) */
+  children: string[];
+  /** Branch name for each child (from branchNameMap), parallel to children */
+  childBranches: string[];
+  /** Lane color index for each child, parallel to children */
+  childColors: number[];
   /** Whether this commit's lane belongs to a remote-only branch */
   isRemoteOnly: boolean;
   /** Set of remote branch names that are remote-only (no local counterpart) */

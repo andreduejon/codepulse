@@ -68,6 +68,16 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
   const commitMap = new Map<string, Commit>();
   for (const c of commits) commitMap.set(c.hash, c);
 
+  // Build a reverse map: parent hash → child hashes (for children display).
+  const childrenMap = new Map<string, string[]>();
+  for (const c of commits) {
+    for (const p of c.parents) {
+      let arr = childrenMap.get(p);
+      if (!arr) { arr = []; childrenMap.set(p, arr); }
+      arr.push(c.hash);
+    }
+  }
+
   // Build a set of hashes reachable via first-parent from the current branch tip.
   // These commits "belong" to the current branch for focus-mode purposes.
   const currentBranchHashes = new Set<string>();
@@ -91,32 +101,12 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
     }
   }
 
-  // Build branchName map: for each commit, determine which branch it belongs to.
-  // Walk first-parent chains from every branch/tag tip. The first tip to claim
-  // a commit wins (since commits is in topo-order, tips appear first).
-  const branchNameMap = new Map<string, string>();
-  for (const c of commits) {
-    // Find branch/tag refs on this commit
-    const branchRefs = c.refs.filter((r) => r.type === "branch" || r.type === "remote");
-    const tagRefs = c.refs.filter((r) => r.type === "tag");
-    // Use first branch ref, falling back to first tag, falling back to nothing
-    const tipName = branchRefs[0]?.name ?? tagRefs[0]?.name;
-    if (!tipName) continue;
-
-    // Walk first-parent chain from this tip, claiming unclaimed commits
-    let h: string | undefined = c.hash;
-    while (h) {
-      if (branchNameMap.has(h)) break; // already claimed by another (earlier) tip
-      branchNameMap.set(h, tipName);
-      const parent = commitMap.get(h);
-      h = parent?.parents[0]; // first parent only
-    }
-  }
-
   // Determine which branch names are "remote-only".
   // A remote branch like "origin/foo" is remote-only if there is no local branch
   // named "foo" among the tip commits. We collect all local branch names and
   // all remote branch names, then compute the set difference.
+  // NOTE: This must be computed BEFORE branchNameMap so we can use it for
+  // priority-based tip sorting.
   const localBranchNames = new Set<string>();
   const remoteBranchTipNames = new Set<string>();
   for (const c of commits) {
@@ -137,6 +127,71 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
     const localEquivalent = slashIdx !== -1 ? remoteName.slice(slashIdx + 1) : remoteName;
     if (!localBranchNames.has(localEquivalent)) {
       remoteOnlyBranches.add(remoteName);
+    }
+  }
+
+  // Build branchName map: for each commit, determine which branch it belongs to.
+  // Collect all tip commits with their ref name and priority, then sort so that
+  // higher-priority branches are processed LAST (last-writer-wins). This ensures
+  // important branches like "develop" overwrite feature branch claims on shared
+  // ancestors.
+  //
+  // Build a topo-order index map for tiebreaking: commits earlier in topo order
+  // (lower index = more recent) should have their branch processed last so they
+  // overwrite older branches' claims.
+  const commitTopoIndex = new Map<string, number>();
+  for (let i = 0; i < commits.length; i++) {
+    commitTopoIndex.set(commits[i].hash, i);
+  }
+
+  // Determine which local branches have a remote tracking counterpart.
+  // A branch like "develop" has "origin/develop" → it's a tracked mainline branch.
+  // Used for tiebreaking when multiple branches share the same tip commit.
+  const trackedLocalBranches = new Set<string>();
+  for (const remoteName of remoteBranchTipNames) {
+    const slashIdx = remoteName.indexOf("/");
+    const localEquivalent = slashIdx !== -1 ? remoteName.slice(slashIdx + 1) : remoteName;
+    if (localBranchNames.has(localEquivalent)) {
+      trackedLocalBranches.add(localEquivalent);
+    }
+  }
+
+  const tips: { hash: string; name: string; priority: number; topoIdx: number }[] = [];
+  for (const c of commits) {
+    for (const r of c.refs) {
+      if (r.type === "tag") continue; // skip tags for branch ownership
+      let priority: number;
+      if (r.type === "branch" && r.isCurrent) {
+        // Current branch gets highest priority ONLY if it has a remote counterpart.
+        // Otherwise it's likely a feature branch checked out at an integration point.
+        priority = trackedLocalBranches.has(r.name) ? 0 : 1;
+      } else if (r.type === "branch") {
+        // Local branches with a remote counterpart (tracked) rank higher than untracked.
+        priority = trackedLocalBranches.has(r.name) ? 1 : 2;
+      } else if (r.type === "remote" && !remoteOnlyBranches.has(r.name)) {
+        priority = 3; // tracked remotes (have a local counterpart)
+      } else {
+        priority = 4; // remote-only branches
+      }
+      tips.push({ hash: c.hash, name: r.name, priority, topoIdx: commitTopoIndex.get(c.hash) ?? 0 });
+    }
+  }
+  // Sort: lowest priority first (remote-only=4 first, current-tracked=0 last).
+  // Within same priority, higher topoIdx first (older tip first, newer tip last).
+  // Last-writer-wins: the last tip processed overwrites earlier claims.
+  tips.sort((a, b) => {
+    if (a.priority !== b.priority) return b.priority - a.priority; // descending: 4,3,2,1,0
+    return b.topoIdx - a.topoIdx; // descending: older tips first, newer tips last
+  });
+
+  // Walk first-parent chains — last writer wins (higher-priority tips overwrite)
+  const branchNameMap = new Map<string, string>();
+  for (const tip of tips) {
+    let h: string | undefined = tip.hash;
+    while (h) {
+      branchNameMap.set(h, tip.name); // overwrite — last writer wins
+      const parent = commitMap.get(h);
+      h = parent?.parents[0]; // first parent only
     }
   }
 
@@ -177,6 +232,11 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
   // across all rows for a consistent focus color.
   let currentBranchTipColumn = 0;
   let currentBranchTipColor = 0;
+
+  // Map commit hash → nodeColor (lane color index), populated as rows are built.
+  // Used to look up child colors: since topo order processes children before parents,
+  // a child's nodeColor is already recorded when we reach the parent.
+  const nodeColorByHash = new Map<string, number>();
 
   // Track which commits have already been processed and their node column.
   // This is needed to detect when a parent commit was already rendered
@@ -494,6 +554,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
 
     // Now handle parents and generate merge/branch connectors
     const parents = commit.parents;
+    const parentLaneColors: number[] = [];
 
     if (parents.length === 0) {
       // Root commit -- close this lane
@@ -504,17 +565,9 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       const parentHash = parents[0];
       const parentFocused = isCommitOnCurrentBranch && currentBranchHashes.has(parentHash);
       const parentRemoteOnly = remoteOnlyHashes.has(parentHash);
-      // For the lane's remote-only status: if the current commit is remote-only,
-      // the lane stays remote-only (it visually represents the remote-only branch's
-      // path to its ancestor). Only when a non-remote-only commit takes over does
-      // the lane become non-remote-only.
       const laneRemoteOnlyValue = isCommitRemoteOnly || parentRemoteOnly;
       const existingLane = lanes.indexOf(parentHash);
       if (existingLane !== -1 && existingLane !== nodeColumn) {
-        // Another lane already tracks this parent.
-        // If the parent has been processed (rendered), we can merge now.
-        // If not, keep BOTH lanes tracking the same parent independently
-        // so the parent commit can show the fan-out with branch-off corners.
         if (processedColumns.has(parentHash)) {
           // Parent already rendered — merge into it
           if (nodeColumn < existingLane) {
@@ -525,24 +578,25 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
             lanes[nodeColumn] = parentHash;
             laneFocused[nodeColumn] = parentFocused;
             laneRemoteOnly[nodeColumn] = laneRemoteOnlyValue;
+            parentLaneColors.push(laneColors[nodeColumn]);
           } else {
             addSpanningConnectors(nodeColumn, existingLane, nodeColumn, "merge", parentFocused, isCommitRemoteOnly);
             lanes[nodeColumn] = null;
             laneFocused[nodeColumn] = false;
             laneRemoteOnly[nodeColumn] = false;
+            parentLaneColors.push(laneColors[existingLane]);
           }
         } else {
-          // Parent NOT yet rendered — don't merge. Keep both lanes
-          // tracking the same parent. The parent commit's row will
-          // close the extra lanes with branch-off corners (fan-out).
           lanes[nodeColumn] = parentHash;
           laneFocused[nodeColumn] = parentFocused;
           laneRemoteOnly[nodeColumn] = laneRemoteOnlyValue;
+          parentLaneColors.push(laneColors[nodeColumn]);
         }
       } else if (existingLane === nodeColumn) {
         lanes[nodeColumn] = parentHash;
         laneFocused[nodeColumn] = parentFocused;
         laneRemoteOnly[nodeColumn] = laneRemoteOnlyValue;
+        parentLaneColors.push(laneColors[nodeColumn]);
       } else if (processedColumns.has(parentHash)) {
         const parentCol = processedColumns.get(parentHash)!;
         if (parentCol !== nodeColumn) {
@@ -552,10 +606,12 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
         lanes[nodeColumn] = null;
         laneFocused[nodeColumn] = false;
         laneRemoteOnly[nodeColumn] = false;
+        parentLaneColors.push(laneColors[parentCol] ?? nodeColor);
       } else {
         lanes[nodeColumn] = parentHash;
         laneFocused[nodeColumn] = parentFocused;
         laneRemoteOnly[nodeColumn] = laneRemoteOnlyValue;
+        parentLaneColors.push(laneColors[nodeColumn]);
       }
     } else {
       // Merge commit -- first parent continues the lane, others open new lanes.
@@ -565,10 +621,6 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       const firstParentLaneROValue = isCommitRemoteOnly || firstParentRemoteOnly;
       const firstParentLane = lanes.indexOf(firstParent);
       if (firstParentLane !== -1 && firstParentLane !== nodeColumn) {
-        // Another lane already tracks the first parent.
-        // If the parent has been processed, close the other lane now.
-        // If not, keep both lanes tracking the same parent — the parent
-        // commit's row will show the fan-out with branch-off corners.
         if (processedColumns.has(firstParent)) {
           addSpanningConnectors(nodeColumn, firstParentLane, firstParentLane, "close", firstParentFocused, isCommitRemoteOnly);
           lanes[firstParentLane] = null;
@@ -578,6 +630,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
         lanes[nodeColumn] = firstParent;
         laneFocused[nodeColumn] = firstParentFocused;
         laneRemoteOnly[nodeColumn] = firstParentLaneROValue;
+        parentLaneColors.push(laneColors[nodeColumn]);
       } else if (processedColumns.has(firstParent) && firstParentLane === -1) {
         const parentCol = processedColumns.get(firstParent)!;
         if (parentCol !== nodeColumn) {
@@ -587,10 +640,12 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
         lanes[nodeColumn] = null;
         laneFocused[nodeColumn] = false;
         laneRemoteOnly[nodeColumn] = false;
+        parentLaneColors.push(laneColors[parentCol] ?? nodeColor);
       } else {
         lanes[nodeColumn] = firstParent;
         laneFocused[nodeColumn] = firstParentFocused;
         laneRemoteOnly[nodeColumn] = firstParentLaneROValue;
+        parentLaneColors.push(laneColors[nodeColumn]);
       }
 
       for (let p = 1; p < parents.length; p++) {
@@ -600,11 +655,13 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
         const pLaneROValue = isCommitRemoteOnly || pRemoteOnly;
         const existingLane = lanes.indexOf(parentHash);
         if (existingLane !== -1) {
+          parentLaneColors.push(laneColors[existingLane]);
           if (existingLane !== nodeColumn) {
             addSpanningConnectors(nodeColumn, existingLane, existingLane, "merge", pFocused, pLaneROValue);
           }
         } else if (processedColumns.has(parentHash)) {
           const parentCol = processedColumns.get(parentHash)!;
+          parentLaneColors.push(laneColors[parentCol] ?? parentCol);
           if (parentCol !== nodeColumn) {
             const kind = (parentCol < lanes.length && lanes[parentCol] !== null) ? "merge" : "branch";
             addSpanningConnectors(nodeColumn, parentCol, laneColors[parentCol] ?? parentCol, kind, pFocused, pLaneROValue);
@@ -626,11 +683,14 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
             laneRemoteOnly.push(pLaneROValue);
             laneColors.push(nextColorIdx++);
           }
+          parentLaneColors.push(laneColors[newLane]);
           // Add spanning connectors from nodeColumn to the new lane
           addSpanningConnectors(nodeColumn, newLane, laneColors[newLane], "branch", pFocused, pLaneROValue);
         }
       }
     }
+
+    const mergeSourceColor = parentLaneColors.length >= 2 ? parentLaneColors[1] : undefined;
 
     // ── Fan-out + commit-row merge optimization ──
     // When a commit has fan-out rows AND merge/branch connectors on its
@@ -750,6 +810,44 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       isRemoteOnly: laneRemoteOnly[idx],
     }));
 
+    // Record this commit's lane color for child lookups.
+    nodeColorByHash.set(commit.hash, nodeColor);
+
+    const commitBranch = branchNameMap.get(commit.hash) ?? "";
+
+    // Build parent list with branch names and colors.
+    // Sort: same-branch parents first (stable, preserving row order within groups).
+    const parentEntries = parents.map((p, i) => ({
+      hash: p,
+      branch: branchNameMap.get(p) ?? "",
+      color: parentLaneColors[i],
+    }));
+    parentEntries.sort((a, b) => {
+      const aMatch = a.branch === commitBranch && commitBranch !== "" ? 0 : 1;
+      const bMatch = b.branch === commitBranch && commitBranch !== "" ? 0 : 1;
+      return aMatch - bMatch;
+    });
+    const parentHashes = parentEntries.map((e) => e.hash);
+    const parentBranches = parentEntries.map((e) => e.branch);
+    const parentColors = parentEntries.map((e) => e.color);
+
+    // Build child list with branch names and colors.
+    // Sort: same-branch children first (stable, preserving row order within groups).
+    const rawChildren = childrenMap.get(commit.hash) ?? [];
+    const childEntries = rawChildren.map((h) => ({
+      hash: h,
+      branch: branchNameMap.get(h) ?? "",
+      color: nodeColorByHash.get(h) ?? nodeColor,
+    }));
+    childEntries.sort((a, b) => {
+      const aMatch = a.branch === commitBranch && commitBranch !== "" ? 0 : 1;
+      const bMatch = b.branch === commitBranch && commitBranch !== "" ? 0 : 1;
+      return aMatch - bMatch;
+    });
+    const children = childEntries.map((e) => e.hash);
+    const childBranches = childEntries.map((e) => e.branch);
+    const childColors = childEntries.map((e) => e.color);
+
     rows.push({
       commit,
       columns,
@@ -760,6 +858,15 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       currentBranchTipColor,
       nodeColor,
       branchName: branchNameMap.get(commit.hash) ?? "",
+      mergeBranch: parents.length >= 2 ? branchNameMap.get(parents[1]) ?? "" : undefined,
+      mergeTarget: parents.length >= 2 ? branchNameMap.get(parents[0]) ?? "" : undefined,
+      mergeSourceColor,
+      parentHashes,
+      parentBranches,
+      parentColors,
+      children,
+      childBranches,
+      childColors,
       isRemoteOnly: isCommitRemoteOnly,
       remoteOnlyBranches,
       fanOutRows: fanOutRows.length > 0 ? fanOutRows : undefined,
@@ -768,6 +875,19 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
     // Record this commit as processed with its column, so later commits
     // whose parents point here can detect the parent was already rendered.
     processedColumns.set(commit.hash, nodeColumn);
+  }
+
+  // Post-pass: fix parentColors using nodeColorByHash (now fully populated).
+  // During the main loop, parentLaneColors captures lane colors from the
+  // child's perspective. The parent's actual nodeColor (its branch color)
+  // may differ. Overwrite with the definitive color when available.
+  for (const row of rows) {
+    for (let i = 0; i < row.parentHashes.length; i++) {
+      const parentNodeColor = nodeColorByHash.get(row.parentHashes[i]);
+      if (parentNodeColor !== undefined) {
+        row.parentColors[i] = parentNodeColor;
+      }
+    }
   }
 
   // Post-pass: dim all rows above the first non-remote-only row.

@@ -7,6 +7,7 @@ import { getCommits, getBranches, getCurrentBranch, getRepoName, getCommitDetail
 import { buildGraph, getMaxGraphColumns } from "./git/graph";
 import GraphView, { ColumnHeader } from "./components/graph";
 import CommitDetailView from "./components/detail";
+import type { DetailNavRef } from "./components/detail";
 import Footer from "./components/footer";
 import BranchDialog from "./components/dialogs/branch-dialog";
 import HelpDialog from "./components/dialogs/help-dialog";
@@ -32,6 +33,29 @@ function AppContent(props: AppProps) {
 
   // Ref for programmatic scrolling of the detail panel
   let detailScrollboxRef: ScrollBoxRenderable | undefined;
+
+  // Navigation ref for interactive detail panel items
+  const detailNavRef: DetailNavRef = {
+    itemCount: 0,
+    activateCurrentItem: () => false,
+    lastJumpFrom: null,
+  };
+
+  // Jump to a commit by hash (used by detail panel parent/child entries)
+  const handleJumpToCommit = (hash: string, from: "child" | "parent") => {
+    const rows = state.filteredRows();
+    const idx = rows.findIndex((r) => r.commit.hash === hash);
+    if (idx >= 0) {
+      // Store the current commit as the origin for cursor positioning
+      const currentHash = state.selectedCommit()?.hash ?? null;
+      actions.setDetailOriginHash(currentHash);
+      detailNavRef.lastJumpFrom = from;
+      actions.setHighlightedIndex(idx);
+      actions.setScrollTargetIndex(idx);
+      actions.setSelectedIndex(idx);
+      detailScrollboxRef?.scrollTo(0);
+    }
+  };
 
   // Load git data
   async function loadData(branch?: string, stickyHash?: string) {
@@ -74,6 +98,7 @@ function AppContent(props: AppProps) {
         if (cbIdx >= 0) targetIndex = cbIdx;
       }
       actions.setHighlightedIndex(targetIndex);
+      actions.setScrollTargetIndex(targetIndex);
       actions.setSelectedIndex(targetIndex);
     } catch (err) {
       // TODO: show error in UI
@@ -108,6 +133,7 @@ function AppContent(props: AppProps) {
   const handleSearchSubmit = (value: string) => {
     actions.setSearchQuery(value);
     actions.setHighlightedIndex(0);
+    actions.setScrollTargetIndex(0);
     actions.setSelectedIndex(0);
     setSearchFocused(false);
   };
@@ -117,6 +143,7 @@ function AppContent(props: AppProps) {
     // (avoids spawning git subprocesses for commit detail on every keystroke)
     actions.setSearchQuery(value);
     actions.setHighlightedIndex(0);
+    actions.setScrollTargetIndex(0);
   };
 
   // Keyboard handling
@@ -174,6 +201,7 @@ function AppContent(props: AppProps) {
       if (state.searchQuery()) {
         actions.setSearchQuery("");
         actions.setHighlightedIndex(0);
+        actions.setScrollTargetIndex(0);
         actions.setSelectedIndex(0);
         return;
       }
@@ -186,7 +214,7 @@ function AppContent(props: AppProps) {
     // If a dialog is open, only handle Escape (handled above)
     if (dialog()) return;
 
-    // Detail panel focused: arrow keys scroll detail, left returns to list
+    // Detail panel focused: up/down navigate interactive items, enter activates
     if (state.detailFocused()) {
       switch (e.name) {
         case "left":
@@ -195,11 +223,17 @@ function AppContent(props: AppProps) {
           return;
         case "up":
           e.preventDefault();
+          actions.moveDetailCursor(-1, detailNavRef.itemCount);
           detailScrollboxRef?.scrollBy(-1, "absolute");
           return;
         case "down":
           e.preventDefault();
+          actions.moveDetailCursor(1, detailNavRef.itemCount);
           detailScrollboxRef?.scrollBy(1, "absolute");
+          return;
+        case "return":
+          e.preventDefault();
+          detailNavRef.activateCurrentItem();
           return;
         case "pageup":
           e.preventDefault();
@@ -243,19 +277,24 @@ function AppContent(props: AppProps) {
       case "right":
         e.preventDefault();
         if (state.selectedCommit()) {
+          actions.setDetailOriginHash(null);
+          actions.setDetailCursorIndex(0);
           actions.setDetailFocused(true);
         }
         break;
       case "left":
         e.preventDefault();
         actions.setHighlightedIndex(state.selectedIndex());
+        actions.setScrollTargetIndex(state.selectedIndex());
         break;
       case "g":
         e.preventDefault();
         if (!e.shift) {
           actions.setHighlightedIndex(0);
+          actions.setScrollTargetIndex(0);
         } else {
           actions.setHighlightedIndex(state.filteredRows().length - 1);
+          actions.setScrollTargetIndex(state.filteredRows().length - 1);
         }
         actions.selectHighlighted();
         detailScrollboxRef?.scrollTo(0);
@@ -297,7 +336,7 @@ function AppContent(props: AppProps) {
     }
   });
 
-  // Reset hover highlight when mouse leaves the graph area
+  // Reset hover highlight when mouse leaves the graph area (no scroll)
   const clearHover = () => actions.setHighlightedIndex(state.selectedIndex());
 
   return (
@@ -390,8 +429,8 @@ function AppContent(props: AppProps) {
             {/* Detail panel - right */}
             <box
               flexDirection="column"
-              width="20%"
-              minWidth={40}
+              width="25%"
+              minWidth={60}
               flexShrink={0}
               paddingX={2}
               paddingBottom={1}
@@ -416,7 +455,7 @@ function AppContent(props: AppProps) {
               </box>
 
               <scrollbox ref={detailScrollboxRef} flexGrow={1} scrollY scrollX={false} verticalScrollbarOptions={{ visible: false }}>
-                <CommitDetailView />
+                <CommitDetailView onJumpToCommit={handleJumpToCommit} navRef={detailNavRef} />
               </scrollbox>
             </box>
           </box>

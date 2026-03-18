@@ -11,6 +11,7 @@ export interface AppState {
   highlightedIndex: Accessor<number>;
   selectedIndex: Accessor<number>;
   selectedCommit: Accessor<Commit | null>;
+  selectedRow: Accessor<GraphRow | null>;
   commitDetail: Accessor<CommitDetail | null>;
   loading: Accessor<boolean>;
   showAllBranches: Accessor<boolean>;
@@ -20,6 +21,9 @@ export interface AppState {
   filteredRows: Accessor<GraphRow[]>;
   maxGraphColumns: Accessor<number>;
   detailFocused: Accessor<boolean>;
+  detailCursorIndex: Accessor<number>;
+  detailOriginHash: Accessor<string | null>;
+  scrollTargetIndex: Accessor<number>;
   maxCount: Accessor<number>;
   dimRemoteOnly: Accessor<boolean>;
   showAuthorColumn: Accessor<boolean>;
@@ -30,6 +34,7 @@ export interface AppState {
 export interface AppActions {
   setHighlightedIndex: (index: number) => void;
   moveHighlight: (delta: number) => void;
+  setScrollTargetIndex: (index: number) => void;
   setSelectedIndex: (index: number) => void;
   selectHighlighted: () => void;
   setCommitDetail: (detail: CommitDetail | null) => void;
@@ -39,6 +44,9 @@ export interface AppActions {
   setFocusCurrentBranch: (focus: boolean) => void;
   setSearchQuery: (query: string) => void;
   setDetailFocused: (focused: boolean) => void;
+  setDetailCursorIndex: (index: number) => void;
+  setDetailOriginHash: (hash: string | null) => void;
+  moveDetailCursor: (delta: number, itemCount: number) => void;
   setCommits: (commits: Commit[]) => void;
   setGraphRows: (rows: GraphRow[]) => void;
   setBranches: (branches: Branch[]) => void;
@@ -64,6 +72,7 @@ export function createAppState(initialMaxCount: number = 200) {
   const [repoPath, setRepoPath] = createSignal("");
   const [highlightedIndex, setHighlightedIndex] = createSignal(0);
   const [selectedIndex, setSelectedIndex] = createSignal(0);
+  const [scrollTargetIndex, setScrollTargetIndex] = createSignal(0);
   const [commitDetail, setCommitDetail] = createSignal<CommitDetail | null>(null);
   const [loading, setLoading] = createSignal(true);
   const [showAllBranches, setShowAllBranches] = createSignal(true);
@@ -77,6 +86,8 @@ export function createAppState(initialMaxCount: number = 200) {
   const [showDateColumn, setShowDateColumn] = createSignal(true);
   const [showHashColumn, setShowHashColumn] = createSignal(true);
   const [detailFocused, setDetailFocused] = createSignal(false);
+  const [detailCursorIndex, setDetailCursorIndex] = createSignal(-1);
+  const [detailOriginHash, setDetailOriginHash] = createSignal<string | null>(null);
 
   const filteredRows = createMemo(() => {
     const query = searchQuery().toLowerCase();
@@ -98,14 +109,28 @@ export function createAppState(initialMaxCount: number = 200) {
     return idx >= 0 && idx < rows.length ? rows[idx].commit : null;
   });
 
+  const selectedRow = createMemo(() => {
+    const rows = filteredRows();
+    const idx = selectedIndex();
+    return idx >= 0 && idx < rows.length ? rows[idx] : null;
+  });
+
   const moveHighlight = (delta: number) => {
     const rows = filteredRows();
     const newIndex = Math.max(0, Math.min(rows.length - 1, highlightedIndex() + delta));
     setHighlightedIndex(newIndex);
+    setScrollTargetIndex(newIndex);
   };
 
   const selectHighlighted = () => {
     setSelectedIndex(highlightedIndex());
+  };
+
+  const moveDetailCursor = (delta: number, itemCount: number) => {
+    if (itemCount === 0) return;
+    const cur = detailCursorIndex();
+    const next = Math.max(0, Math.min(itemCount - 1, cur + delta));
+    setDetailCursorIndex(next);
   };
 
   const state: AppState = {
@@ -118,6 +143,7 @@ export function createAppState(initialMaxCount: number = 200) {
     highlightedIndex,
     selectedIndex,
     selectedCommit,
+    selectedRow,
     commitDetail,
     loading,
     showAllBranches,
@@ -129,6 +155,9 @@ export function createAppState(initialMaxCount: number = 200) {
     maxCount,
     dimRemoteOnly,
     detailFocused,
+    detailCursorIndex,
+    detailOriginHash,
+    scrollTargetIndex,
     showAuthorColumn,
     showDateColumn,
     showHashColumn,
@@ -137,6 +166,7 @@ export function createAppState(initialMaxCount: number = 200) {
   const actions: AppActions = {
     setHighlightedIndex,
     moveHighlight,
+    setScrollTargetIndex,
     setSelectedIndex,
     selectHighlighted,
     setCommitDetail,
@@ -146,6 +176,9 @@ export function createAppState(initialMaxCount: number = 200) {
     setFocusCurrentBranch,
     setSearchQuery,
     setDetailFocused,
+    setDetailCursorIndex,
+    setDetailOriginHash,
+    moveDetailCursor,
     setCommits,
     setGraphRows,
     setBranches,
