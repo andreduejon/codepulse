@@ -39,7 +39,7 @@ function test1() {
   // f1's node connector should be remote-only
   const f1Node = findConnector(rows[0].connectors, "node");
   assert(f1Node !== undefined, "f1 should have a node connector");
-  assert(f1Node!.isRemoteOnly === true, "f1 node connector should be remote-only");
+  assert(f1Node.isRemoteOnly === true, "f1 node connector should be remote-only");
 
   // d1 should NOT be remote-only (it has a local branch)
   assert(rows[1].isRemoteOnly === false, "d1 row should NOT be remote-only");
@@ -47,7 +47,7 @@ function test1() {
   // d1's node connector should NOT be remote-only
   const d1Node = findConnector(rows[1].connectors, "node");
   assert(d1Node !== undefined, "d1 should have a node connector");
-  assert(d1Node!.isRemoteOnly !== true, "d1 node connector should NOT be remote-only");
+  assert(d1Node.isRemoteOnly !== true, "d1 node connector should NOT be remote-only");
 }
 
 // ============================================================
@@ -154,13 +154,13 @@ function test4() {
   assert(d1Row !== undefined, "d1 row should exist");
 
   // d1 should have fan-out rows
-  assert(d1Row!.fanOutRows !== undefined && d1Row!.fanOutRows!.length > 0,
+  assert(d1Row.fanOutRows !== undefined && d1Row.fanOutRows.length > 0,
     "d1 should have fan-out rows");
 
   // Fan-out corners should be remote-only (they close remote-only lanes)
-  if (d1Row!.fanOutRows) {
-    for (let foIdx = 0; foIdx < d1Row!.fanOutRows!.length; foIdx++) {
-      const foRow = d1Row!.fanOutRows![foIdx];
+  if (d1Row.fanOutRows) {
+    for (let foIdx = 0; foIdx < d1Row.fanOutRows.length; foIdx++) {
+      const foRow = d1Row.fanOutRows[foIdx];
       const corners = foRow.filter(c =>
         c.type === "corner-bottom-right" || c.type === "corner-bottom-left"
       );
@@ -172,7 +172,7 @@ function test4() {
   }
 
   // d1's node connector should NOT be remote-only
-  assert(d1Row!.isRemoteOnly === false, "d1 row should NOT be remote-only");
+  assert(d1Row.isRemoteOnly === false, "d1 row should NOT be remote-only");
 }
 
 // ============================================================
@@ -248,7 +248,7 @@ runTest(test3);
 runTest(test4);
 runTest(test5);
 
-const { totalTests, passedTests, failedTests } = (await import("./test-helpers")).getResults();
+const { failedTests } = (await import("./test-helpers")).getResults();
 printResults("remote-only");
 
 if (failedTests > 0) {

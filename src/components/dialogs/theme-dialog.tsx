@@ -1,6 +1,7 @@
 import { createSignal, createEffect, For, onCleanup } from "solid-js";
 import { useKeyboard } from "@opentui/solid";
 import { useTheme, themeNames, themes } from "../../context/theme";
+import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
 export default function ThemeDialog(props: { onClose: () => void }) {
   const { theme, setTheme, themeName } = useTheme();
@@ -57,16 +58,7 @@ export default function ThemeDialog(props: { onClose: () => void }) {
   });
 
   return (
-    <box
-      position="absolute"
-      top={0}
-      left={0}
-      width="100%"
-      height="100%"
-      backgroundColor={"#00000080"}
-      alignItems="center"
-      justifyContent="center"
-    >
+    <DialogOverlay>
       <box
         width={50}
         height={themeOptions.length + 5}
@@ -75,16 +67,7 @@ export default function ThemeDialog(props: { onClose: () => void }) {
         paddingX={1}
         paddingY={1}
       >
-        {/* Title bar */}
-        <box flexDirection="row" width="100%" paddingX={4}>
-          <text flexGrow={1} wrapMode="none">
-            <strong><span fg={t().foreground}>Color Theme</span></strong>
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            <span fg={t().foregroundMuted}>{"esc".padStart(9)}</span>
-          </text>
-        </box>
-        <box height={1} />
+        <DialogTitleBar title="Color Theme" />
 
         {/* Theme list */}
         <box flexDirection="column" flexGrow={1}>
@@ -113,6 +96,6 @@ export default function ThemeDialog(props: { onClose: () => void }) {
           </For>
         </box>
       </box>
-    </box>
+    </DialogOverlay>
   );
 }

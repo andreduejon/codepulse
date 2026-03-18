@@ -11,10 +11,10 @@ type InteractiveItem =
   | { type: "parent"; hash: string; index: number };
 
 /** Colored badge for branch/tag labels in the detail view */
-function DetailBadge(props: {
+function DetailBadge(props: Readonly<{
   name: string;
   colorIndex: number;
-}) {
+}>) {
   const { theme } = useTheme();
   const t = () => theme();
 
@@ -33,7 +33,7 @@ function DetailBadge(props: {
   );
 }
 
-function FileLine(props: { file: FileChange; addColWidth: number; delColWidth: number }) {
+function FileLine(props: Readonly<{ file: FileChange; addColWidth: number; delColWidth: number }>) {
   const { theme } = useTheme();
   const t = () => theme();
 
@@ -77,7 +77,7 @@ export interface DetailNavRef {
   lastJumpFrom: "child" | "parent" | null;
 }
 
-export default function CommitDetailView(props: DetailViewProps) {
+export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   const { state, actions } = useAppState();
   const { theme } = useTheme();
   const t = () => theme();
@@ -313,12 +313,12 @@ export default function CommitDetailView(props: DetailViewProps) {
   // These are derived from the interactiveItems memo
 
   /** Render a collapsible section header with interactive highlight */
-  function InteractiveSectionHeader(headerProps: {
+  function InteractiveSectionHeader(headerProps: Readonly<{
     title: string;
     count: number;
     expanded: boolean;
     section: "children" | "parents" | "files";
-  }) {
+  }>) {
     const itemIdx = () => findItemIndex("section-header", headerProps.section);
 
     return (
@@ -333,13 +333,13 @@ export default function CommitDetailView(props: DetailViewProps) {
   }
 
   /** Render a child/parent entry row with interactive highlight */
-  function InteractiveCommitEntry(entryProps: {
+  function InteractiveCommitEntry(entryProps: Readonly<{
     hash: string;
     entryIndex: number;
     type: "child" | "parent";
     branchName: string;
     colorIndex: number;
-  }) {
+  }>) {
     const itemIdx = () => findItemIndex(entryProps.type, undefined, entryProps.entryIndex);
     const cursored = () => isCursored(itemIdx());
 

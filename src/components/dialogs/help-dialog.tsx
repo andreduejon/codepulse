@@ -1,4 +1,5 @@
 import { useTheme } from "../../context/theme";
+import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
 export default function HelpDialog(props: { onClose: () => void }) {
   const { theme } = useTheme();
@@ -23,16 +24,7 @@ export default function HelpDialog(props: { onClose: () => void }) {
   ];
 
   return (
-    <box
-      position="absolute"
-      top={0}
-      left={0}
-      width="100%"
-      height="100%"
-      backgroundColor={"#00000080"}
-      alignItems="center"
-      justifyContent="center"
-    >
+    <DialogOverlay>
       <box
         width={60}
         height={keybinds.length + 5}
@@ -41,16 +33,7 @@ export default function HelpDialog(props: { onClose: () => void }) {
         paddingX={1}
         paddingY={1}
       >
-        {/* Title bar */}
-        <box flexDirection="row" width="100%" paddingX={4}>
-          <text flexGrow={1} wrapMode="none">
-            <strong><span fg={t().foreground}>Keyboard Shortcuts</span></strong>
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            <span fg={t().foregroundMuted}>{"esc".padStart(9)}</span>
-          </text>
-        </box>
-        <box height={1} />
+        <DialogTitleBar title="Keyboard Shortcuts" />
 
         {/* Keybind list */}
         <box flexDirection="column" flexGrow={1}>
@@ -66,6 +49,6 @@ export default function HelpDialog(props: { onClose: () => void }) {
           ))}
         </box>
       </box>
-    </box>
+    </DialogOverlay>
   );
 }

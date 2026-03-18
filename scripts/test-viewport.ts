@@ -7,7 +7,7 @@
  */
 
 import { buildGraph, computeViewportOffsets, computeSingleViewportOffset, renderGraphRow, renderConnectorRow, sliceGraphToViewport, getMaxGraphColumns, buildEdgeIndicator } from "../src/git/graph";
-import type { GraphChar, RenderOptions } from "../src/git/graph";
+import type { RenderOptions } from "../src/git/graph";
 import {
   makeCommit,
   assert,

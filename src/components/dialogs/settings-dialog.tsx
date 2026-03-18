@@ -2,6 +2,7 @@ import { createSignal, For } from "solid-js";
 import { useKeyboard } from "@opentui/solid";
 import { useAppState } from "../../context/state";
 import { useTheme, themeNames, themes } from "../../context/theme";
+import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
 interface SettingsDialogProps {
   onClose: () => void;
@@ -110,16 +111,7 @@ export default function SettingsDialog(props: Readonly<SettingsDialogProps>) {
   };
 
   return (
-    <box
-      position="absolute"
-      top={0}
-      left={0}
-      width="100%"
-      height="100%"
-      backgroundColor={"#00000080"}
-      alignItems="center"
-      justifyContent="center"
-    >
+    <DialogOverlay>
       <box
         width={70}
         height="60%"
@@ -128,16 +120,7 @@ export default function SettingsDialog(props: Readonly<SettingsDialogProps>) {
         paddingX={1}
         paddingY={1}
       >
-      {/* Title bar */}
-      <box flexDirection="row" width="100%" paddingX={4}>
-        <text flexGrow={1} wrapMode="none">
-          <strong><span fg={t().foreground}>Settings</span></strong>
-        </text>
-        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-          <span fg={t().foregroundMuted}>{"esc".padStart(9)}</span>
-        </text>
-      </box>
-      <box height={1} />
+      <DialogTitleBar title="Settings" />
 
       {/* Settings list */}
       <box flexDirection="column" flexGrow={1}>
@@ -195,7 +178,7 @@ export default function SettingsDialog(props: Readonly<SettingsDialogProps>) {
           }}
         </For>
       </box>
-    </box>
-    </box>
+      </box>
+    </DialogOverlay>
   );
 }

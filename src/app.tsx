@@ -1,5 +1,5 @@
 import { createEffect, Show, onMount, createSignal } from "solid-js";
-import { useKeyboard, useRenderer } from "@opentui/solid";
+import { useRenderer } from "@opentui/solid";
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { createAppState, AppStateContext } from "./context/state";
 import { createThemeState, ThemeContext } from "./context/theme";
@@ -14,7 +14,8 @@ import HelpDialog from "./components/dialogs/help-dialog";
 import ThemeDialog from "./components/dialogs/theme-dialog";
 import SettingsDialog from "./components/dialogs/settings-dialog";
 import packageJson from "../package.json";
-import { DEFAULT_MAX_COUNT, SHIFT_JUMP, PAGE_JUMP } from "./constants";
+import { DEFAULT_MAX_COUNT } from "./constants";
+import { useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
 
 interface AppProps {
   repoPath: string;
@@ -159,179 +160,16 @@ function AppContent(props: AppProps) {
   };
 
   // Keyboard handling
-  useKeyboard((e) => {
-    if (e.eventType === "release") return;
-
-    // Ctrl+S opens settings regardless of dialog/search state
-    if (e.ctrl && e.name === "s") {
-      setSearchFocused(false);
-      actions.setDetailFocused(false);
-      setDialog(dialog() === "settings" ? null : "settings");
-      return;
-    }
-
-    // Ctrl+T opens theme dialog regardless of dialog/search state
-    if (e.ctrl && e.name === "t") {
-      setSearchFocused(false);
-      actions.setDetailFocused(false);
-      setDialog(dialog() === "theme" ? null : "theme");
-      return;
-    }
-
-    // F1 opens help regardless of dialog/search state
-    if (e.name === "f1") {
-      setSearchFocused(false);
-      actions.setDetailFocused(false);
-      setDialog(dialog() === "help" ? null : "help");
-      return;
-    }
-
-    // F5 refreshes git data, preserving scroll position
-    if (e.name === "f5") {
-      setSearchFocused(false);
-      actions.setDetailFocused(false);
-      if (dialog()) setDialog(null);
-      const stickyHash = state.selectedCommit()?.hash;
-      loadData(undefined, stickyHash);
-      return;
-    }
-
-    // Escape handling
-    if (e.name === "escape") {
-      if (dialog()) {
-        setDialog(null);
-        return;
-      }
-      if (state.detailFocused()) {
-        actions.setDetailFocused(false);
-        return;
-      }
-      if (searchFocused()) {
-        setSearchFocused(false);
-        return;
-      }
-      if (state.searchQuery()) {
-        actions.setSearchQuery("");
-        actions.setCursorIndex(0);
-        actions.setScrollTargetIndex(0);
-        return;
-      }
-      return;
-    }
-
-    // If search input is focused, let the input handle all other keys
-    if (searchFocused()) return;
-
-    // If a dialog is open, only handle Escape (handled above)
-    if (dialog()) return;
-
-    // Detail panel focused: up/down navigate interactive items, enter activates
-    if (state.detailFocused()) {
-      switch (e.name) {
-        case "left":
-          e.preventDefault();
-          actions.setDetailFocused(false);
-          return;
-        case "up":
-          e.preventDefault();
-          actions.moveDetailCursor(-1, detailNavRef.itemCount);
-          detailScrollboxRef?.scrollBy(-1, "absolute");
-          return;
-        case "down":
-          e.preventDefault();
-          actions.moveDetailCursor(1, detailNavRef.itemCount);
-          detailScrollboxRef?.scrollBy(1, "absolute");
-          return;
-        case "return":
-          e.preventDefault();
-          detailNavRef.activateCurrentItem();
-          return;
-        case "pageup":
-          e.preventDefault();
-          detailScrollboxRef?.scrollBy(-0.5, "viewport");
-          return;
-        case "pagedown":
-          e.preventDefault();
-          detailScrollboxRef?.scrollBy(0.5, "viewport");
-          return;
-        case "q":
-          renderer.destroy();
-          process.exit(0);
-          break;
-      }
-      return; // swallow all other keys when detail is focused
-    }
-
-    switch (e.name) {
-      case "q":
-        renderer.destroy();
-        process.exit(0);
-        break;
-      case "down":
-        e.preventDefault();
-        actions.moveCursor(e.shift ? SHIFT_JUMP : 1);
-        detailScrollboxRef?.scrollTo(0);
-        break;
-      case "up":
-        e.preventDefault();
-        actions.moveCursor(e.shift ? -SHIFT_JUMP : -1);
-        detailScrollboxRef?.scrollTo(0);
-        break;
-      case "return":
-        e.preventDefault();
-        // Reset detail scroll to top when selecting a new commit
-        detailScrollboxRef?.scrollTo(0);
-        break;
-      case "right":
-        e.preventDefault();
-        if (state.selectedCommit()) {
-          actions.setDetailOriginHash(null);
-          actions.setDetailCursorIndex(0);
-          actions.setDetailFocused(true);
-        }
-        break;
-      case "left":
-        e.preventDefault();
-        // Re-center scroll on current cursor position
-        actions.setScrollTargetIndex(state.cursorIndex());
-        break;
-      case "g":
-        e.preventDefault();
-        if (!e.shift) {
-          actions.setCursorIndex(0);
-          actions.setScrollTargetIndex(0);
-        } else {
-          const lastIdx = state.filteredRows().length - 1;
-          actions.setCursorIndex(lastIdx);
-          actions.setScrollTargetIndex(lastIdx);
-        }
-        detailScrollboxRef?.scrollTo(0);
-        break;
-      case "pagedown":
-        e.preventDefault();
-        actions.moveCursor(PAGE_JUMP);
-        detailScrollboxRef?.scrollTo(0);
-        break;
-      case "pageup":
-        e.preventDefault();
-        actions.moveCursor(-PAGE_JUMP);
-        detailScrollboxRef?.scrollTo(0);
-        break;
-      case "/":
-        actions.setDetailFocused(false);
-        setSearchFocused(true);
-        break;
-      case "b":
-        actions.setDetailFocused(false);
-        setDialog("branch");
-        break;
-      case "a": {
-        const newAll = !state.showAllBranches();
-        actions.setShowAllBranches(newAll);
-        loadData(newAll ? undefined : state.currentBranch());
-        break;
-      }
-    }
+  useKeyboardNavigation({
+    state,
+    actions,
+    dialog,
+    setDialog,
+    searchFocused,
+    setSearchFocused,
+    getDetailScrollboxRef: () => detailScrollboxRef,
+    detailNavRef,
+    loadData,
   });
 
   return (

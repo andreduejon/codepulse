@@ -6,10 +6,10 @@ import { renderGraphRow, renderConnectorRow, renderFanOutRow, graphCharsToConten
 import type { GraphRow, RefInfo } from "../git/types";
 import type { TextRenderable, StyledText, ScrollBoxRenderable, Renderable } from "@opentui/core";
 
-function RefBadge(props: {
+function RefBadge(props: Readonly<{
   info: RefInfo;
   laneColor: () => string;
-}) {
+}>) {
   const { theme } = useTheme();
   const t = () => theme();
 
@@ -43,7 +43,7 @@ export function ColumnHeader() {
         width="100%"
         border={["top"]}
         borderStyle="single"
-        borderColor={!state.detailFocused() ? t().accent : t().border}
+        borderColor={state.detailFocused() ? t().border : t().accent}
       >
         {/* Graph header */}
         <text
@@ -93,7 +93,7 @@ export function ColumnHeader() {
  * Connector row component. Uses its own ref + createEffect to ensure
  * the StyledText content is set after the element is mounted.
  */
-function ConnectorRow(props: { content: () => StyledText; width?: number }) {
+function ConnectorRow(props: Readonly<{ content: () => StyledText; width?: number }>) {
   let textRef: TextRenderable | undefined;
 
   createEffect(() => {
@@ -107,7 +107,14 @@ function ConnectorRow(props: { content: () => StyledText; width?: number }) {
   );
 }
 
-function GraphLine(props: { row: GraphRow; index: number; active: boolean; isLast: boolean; viewportOffset: () => number; rowRef?: (el: Renderable) => void }) {
+function GraphLine(props: Readonly<{
+  row: GraphRow;
+  index: number;
+  active: boolean;
+  isLast: boolean;
+  viewportOffset: () => number;
+  rowRef?: (el: Renderable) => void
+}>) {
   const { theme } = useTheme();
   const { state } = useAppState();
 
@@ -223,7 +230,7 @@ function GraphLine(props: { row: GraphRow; index: number; active: boolean; isLas
   const commitRowGraphContent = () => {
     if (canMergeFanOut()) {
       const allFanOut = fullFanOutChars();
-      const chars = allFanOut[allFanOut.length - 1];
+      const chars = allFanOut.at(-1);
       const sliced = viewportActive()
         ? sliceGraphToViewport(chars, props.viewportOffset(), MAX_GRAPH_COLUMNS, props.row, renderOpts())
         : chars;
@@ -385,7 +392,7 @@ function formatRelativeDate(dateStr: string): string {
 }
 
 export default function GraphView() {
-  const { state, actions } = useAppState();
+  const { state } = useAppState();
   const { theme } = useTheme();
 
   // Single viewport offset: reacts to the highlighted commit's node column.

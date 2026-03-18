@@ -8,7 +8,7 @@
  * C4-4: Remote prefixes other than "origin/" (upstream/, nested paths)
  */
 
-import { buildGraph, renderGraphRow, getColorForColumn } from "../src/git/graph";
+import { buildGraph, renderGraphRow } from "../src/git/graph";
 import {
   makeCommit,
   assert,

@@ -15,12 +15,238 @@ export function getColorForColumn(column: number, colors: string[] = DEFAULT_COL
   return colors[column % colors.length];
 }
 
-/**
- * Get the base color for a column.
- */
+/** Convenience wrapper: resolve a color index using a RenderOptions bag. */
 function getBaseColor(column: number, opts: RenderOptions): string {
-  const colors = opts.themeColors ?? DEFAULT_COLORS;
-  return colors[column % colors.length];
+  return getColorForColumn(column, opts.themeColors);
+}
+
+/**
+ * Walk the first-parent chain starting from `startHash`, calling `visit`
+ * for each hash encountered. Stops when there are no more parents or
+ * when `visit` returns `false` (early exit).
+ */
+function walkFirstParentChain(
+  startHash: string | undefined,
+  commitMap: Map<string, Commit>,
+  visit: (hash: string) => boolean | void,
+): void {
+  let h = startHash;
+  while (h) {
+    if (visit(h) === false) break;
+    const c = commitMap.get(h);
+    h = c?.parents[0];
+  }
+}
+
+/**
+ * Phase 1: Build lookup maps from the commit list.
+ *
+ * - commitMap: hash → Commit for O(1) lookups
+ * - childrenMap: parent hash → child hashes (reverse of parents[])
+ * - currentBranchHashes: set of hashes on the current branch's first-parent chain
+ */
+function buildLookupMaps(commits: Commit[]): {
+  commitMap: Map<string, Commit>;
+  childrenMap: Map<string, string[]>;
+  currentBranchHashes: Set<string>;
+} {
+  const commitMap = new Map<string, Commit>();
+  for (const c of commits) commitMap.set(c.hash, c);
+
+  const childrenMap = new Map<string, string[]>();
+  for (const c of commits) {
+    for (const p of c.parents) {
+      let arr = childrenMap.get(p);
+      if (!arr) { arr = []; childrenMap.set(p, arr); }
+      arr.push(c.hash);
+    }
+  }
+
+  const currentBranchHashes = new Set<string>();
+  {
+    let tipHash: string | undefined;
+    for (const c of commits) {
+      if (c.refs.some((r) => r.isCurrent)) {
+        tipHash = c.hash;
+        break;
+      }
+    }
+    if (tipHash) {
+      walkFirstParentChain(tipHash, commitMap, (h) => { currentBranchHashes.add(h); });
+    }
+  }
+
+  return { commitMap, childrenMap, currentBranchHashes };
+}
+
+/**
+ * Phase 2: Compute branch ownership and remote-only classification.
+ *
+ * Determines which branch each commit belongs to (branchNameMap),
+ * which branch names are remote-only (remoteOnlyBranches), and
+ * which individual commit hashes are on remote-only branches (remoteOnlyHashes).
+ *
+ * Uses priority-sorted tip collection with 5 priority levels and
+ * last-writer-wins via first-parent chain walks.
+ */
+function computeBranchOwnership(commits: Commit[], commitMap: Map<string, Commit>): {
+  branchNameMap: Map<string, string>;
+  remoteOnlyBranches: Set<string>;
+  remoteOnlyHashes: Set<string>;
+} {
+  // Collect local and remote branch names from refs
+  const localBranchNames = new Set<string>();
+  const remoteBranchTipNames = new Set<string>();
+  for (const c of commits) {
+    for (const r of c.refs) {
+      if (r.type === "branch") {
+        localBranchNames.add(r.name);
+      } else if (r.type === "remote") {
+        remoteBranchTipNames.add(r.name);
+      }
+    }
+  }
+
+  // A remote branch is remote-only if stripping the remote prefix gives a
+  // name that is NOT in localBranchNames.
+  const remoteOnlyBranches = new Set<string>();
+  for (const remoteName of remoteBranchTipNames) {
+    const slashIdx = remoteName.indexOf("/");
+    const localEquivalent = slashIdx !== -1 ? remoteName.slice(slashIdx + 1) : remoteName;
+    if (!localBranchNames.has(localEquivalent)) {
+      remoteOnlyBranches.add(remoteName);
+    }
+  }
+
+  // Determine which local branches have a remote tracking counterpart.
+  const trackedLocalBranches = new Set<string>();
+  for (const remoteName of remoteBranchTipNames) {
+    const slashIdx = remoteName.indexOf("/");
+    const localEquivalent = slashIdx !== -1 ? remoteName.slice(slashIdx + 1) : remoteName;
+    if (localBranchNames.has(localEquivalent)) {
+      trackedLocalBranches.add(localEquivalent);
+    }
+  }
+
+  // Build topo-order index map for tiebreaking
+  const commitTopoIndex = new Map<string, number>();
+  for (let i = 0; i < commits.length; i++) {
+    commitTopoIndex.set(commits[i].hash, i);
+  }
+
+  // Collect tips with priority levels:
+  //   0 = current branch (tracked)
+  //   1 = current branch (untracked) or local tracked branch
+  //   2 = local untracked branch
+  //   3 = tracked remote (has local counterpart)
+  //   4 = remote-only
+  const tips: { hash: string; name: string; priority: number; topoIdx: number }[] = [];
+  for (const c of commits) {
+    for (const r of c.refs) {
+      if (r.type === "tag") continue;
+      let priority: number;
+      if (r.type === "branch" && r.isCurrent) {
+        priority = trackedLocalBranches.has(r.name) ? 0 : 1;
+      } else if (r.type === "branch") {
+        priority = trackedLocalBranches.has(r.name) ? 1 : 2;
+      } else if (r.type === "remote" && !remoteOnlyBranches.has(r.name)) {
+        priority = 3;
+      } else {
+        priority = 4;
+      }
+      tips.push({ hash: c.hash, name: r.name, priority, topoIdx: commitTopoIndex.get(c.hash) ?? 0 });
+    }
+  }
+
+  // Sort: lowest priority first → last-writer-wins means highest priority overwrites
+  tips.sort((a, b) => {
+    if (a.priority !== b.priority) return b.priority - a.priority;
+    return b.topoIdx - a.topoIdx;
+  });
+
+  // Walk first-parent chains — last writer wins
+  const branchNameMap = new Map<string, string>();
+  for (const tip of tips) {
+    walkFirstParentChain(tip.hash, commitMap, (h) => { branchNameMap.set(h, tip.name); });
+  }
+
+  // Build remoteOnlyHashes: commits on remote-only branches that are NOT
+  // reachable from any non-remote-only branch's first-parent chain.
+  const nonRemoteOnlyHashes = new Set<string>();
+  for (const c of commits) {
+    const hasNonRemoteOnlyRef = c.refs.some((r) => {
+      if (r.type === "tag") return true;
+      if (r.type === "branch") return true;
+      if (r.type === "remote") return !remoteOnlyBranches.has(r.name);
+      return false;
+    });
+    if (!hasNonRemoteOnlyRef) continue;
+    walkFirstParentChain(c.hash, commitMap, (h) => {
+      if (nonRemoteOnlyHashes.has(h)) return false;
+      nonRemoteOnlyHashes.add(h);
+    });
+  }
+
+  const remoteOnlyHashes = new Set<string>();
+  for (const [hash, branchName] of branchNameMap) {
+    if (remoteOnlyBranches.has(branchName) && !nonRemoteOnlyHashes.has(hash)) {
+      remoteOnlyHashes.add(hash);
+    }
+  }
+
+  return { branchNameMap, remoteOnlyBranches, remoteOnlyHashes };
+}
+
+/**
+ * Post-pass: fix parentColors using definitive nodeColor values.
+ *
+ * During the main loop, parentLaneColors captures lane colors from the
+ * child's perspective. The parent's actual nodeColor may differ. This
+ * overwrites with the definitive color when the parent was processed.
+ */
+function fixParentColors(rows: GraphRow[], nodeColorByHash: Map<string, number>): void {
+  for (const row of rows) {
+    for (let i = 0; i < row.parentHashes.length; i++) {
+      const parentNodeColor = nodeColorByHash.get(row.parentHashes[i]);
+      if (parentNodeColor !== undefined) {
+        row.parentColors[i] = parentNodeColor;
+      }
+    }
+  }
+}
+
+/**
+ * Post-pass: dim all rows above the first non-remote-only row.
+ *
+ * If the topmost rows are only remote-only branches (e.g. renovate/*),
+ * everything above the first tracked branch should appear dimmed.
+ */
+function dimLeadingRemoteOnlyRows(rows: GraphRow[]): void {
+  let firstNonRemoteOnlyRow = 0;
+  for (let i = 0; i < rows.length; i++) {
+    if (!rows[i].isRemoteOnly) {
+      firstNonRemoteOnlyRow = i;
+      break;
+    }
+  }
+  if (firstNonRemoteOnlyRow > 0) {
+    for (let i = 0; i < firstNonRemoteOnlyRow; i++) {
+      const row = rows[i];
+      for (const conn of row.connectors) {
+        conn.isRemoteOnly = true;
+      }
+      for (const col of row.columns) {
+        col.isRemoteOnly = true;
+      }
+      if (row.fanOutRows) {
+        for (const foRow of row.fanOutRows) {
+          for (const conn of foRow) {
+            conn.isRemoteOnly = true;
+          }
+        }
+      }
+    }
+  }
 }
 
 /**
@@ -35,189 +261,19 @@ function getBaseColor(column: number, opts: RenderOptions): string {
  * and secondary parent lanes so that diagonal lines are drawn properly.
  */
 export function buildGraph(commits: Commit[]): GraphRow[] {
+  // Phase 1: Build lookup maps
+  const { commitMap, childrenMap, currentBranchHashes } = buildLookupMaps(commits);
+
+  // Phase 2: Compute branch ownership and remote-only classification
+  const { branchNameMap, remoteOnlyBranches, remoteOnlyHashes } = computeBranchOwnership(commits, commitMap);
+
+  // Phase 3: Main loop — assign lanes, build connectors, create rows
   const rows: GraphRow[] = [];
-  // Active lanes: each lane tracks a commit hash it's waiting for
   let lanes: (string | null)[] = [];
-  // Parallel array: whether each lane belongs to a remote-only branch.
   let laneRemoteOnly: boolean[] = [];
-  // Parallel array: visual color index for each lane. Decoupled from column index
-  // so that lanes reusing interior null slots get fresh colors rather than inheriting
-  // the color of whatever previously occupied that column position.
   let laneColors: number[] = [];
   let nextColorIdx = 0;
-
-  // Build a map from commit hash to commit for quick lookups.
-  const commitMap = new Map<string, Commit>();
-  for (const c of commits) commitMap.set(c.hash, c);
-
-  // Build a reverse map: parent hash → child hashes (for children display).
-  const childrenMap = new Map<string, string[]>();
-  for (const c of commits) {
-    for (const p of c.parents) {
-      let arr = childrenMap.get(p);
-      if (!arr) { arr = []; childrenMap.set(p, arr); }
-      arr.push(c.hash);
-    }
-  }
-
-  // Build a set of hashes reachable via first-parent from the current branch tip.
-  // These commits "belong" to the current branch for focus-mode purposes.
-  const currentBranchHashes = new Set<string>();
-  {
-    // Find the current branch tip: commit with isCurrent ref
-    let tipHash: string | undefined;
-    for (const c of commits) {
-      if (c.refs.some((r) => r.isCurrent)) {
-        tipHash = c.hash;
-        break;
-      }
-    }
-    // Walk first-parent chain
-    if (tipHash) {
-      let h: string | undefined = tipHash;
-      while (h) {
-        currentBranchHashes.add(h);
-        const c = commitMap.get(h);
-        h = c?.parents[0]; // first parent only
-      }
-    }
-  }
-
-  // Determine which branch names are "remote-only".
-  // A remote branch like "origin/foo" is remote-only if there is no local branch
-  // named "foo" among the tip commits. We collect all local branch names and
-  // all remote branch names, then compute the set difference.
-  // NOTE: This must be computed BEFORE branchNameMap so we can use it for
-  // priority-based tip sorting.
-  const localBranchNames = new Set<string>();
-  const remoteBranchTipNames = new Set<string>();
-  for (const c of commits) {
-    for (const r of c.refs) {
-      if (r.type === "branch") {
-        localBranchNames.add(r.name);
-      } else if (r.type === "remote") {
-        remoteBranchTipNames.add(r.name);
-      }
-    }
-  }
-  // A remote branch is remote-only if stripping the remote prefix (e.g. "origin/")
-  // gives a name that is NOT in localBranchNames.
-  const remoteOnlyBranches = new Set<string>();
-  for (const remoteName of remoteBranchTipNames) {
-    // Strip "origin/", "upstream/", or "refs/remotes/..." prefix
-    const slashIdx = remoteName.indexOf("/");
-    const localEquivalent = slashIdx !== -1 ? remoteName.slice(slashIdx + 1) : remoteName;
-    if (!localBranchNames.has(localEquivalent)) {
-      remoteOnlyBranches.add(remoteName);
-    }
-  }
-
-  // Build branchName map: for each commit, determine which branch it belongs to.
-  // Collect all tip commits with their ref name and priority, then sort so that
-  // higher-priority branches are processed LAST (last-writer-wins). This ensures
-  // important branches like "develop" overwrite feature branch claims on shared
-  // ancestors.
-  //
-  // Build a topo-order index map for tiebreaking: commits earlier in topo order
-  // (lower index = more recent) should have their branch processed last so they
-  // overwrite older branches' claims.
-  const commitTopoIndex = new Map<string, number>();
-  for (let i = 0; i < commits.length; i++) {
-    commitTopoIndex.set(commits[i].hash, i);
-  }
-
-  // Determine which local branches have a remote tracking counterpart.
-  // A branch like "develop" has "origin/develop" → it's a tracked mainline branch.
-  // Used for tiebreaking when multiple branches share the same tip commit.
-  const trackedLocalBranches = new Set<string>();
-  for (const remoteName of remoteBranchTipNames) {
-    const slashIdx = remoteName.indexOf("/");
-    const localEquivalent = slashIdx !== -1 ? remoteName.slice(slashIdx + 1) : remoteName;
-    if (localBranchNames.has(localEquivalent)) {
-      trackedLocalBranches.add(localEquivalent);
-    }
-  }
-
-  const tips: { hash: string; name: string; priority: number; topoIdx: number }[] = [];
-  for (const c of commits) {
-    for (const r of c.refs) {
-      if (r.type === "tag") continue; // skip tags for branch ownership
-      let priority: number;
-      if (r.type === "branch" && r.isCurrent) {
-        // Current branch gets highest priority ONLY if it has a remote counterpart.
-        // Otherwise it's likely a feature branch checked out at an integration point.
-        priority = trackedLocalBranches.has(r.name) ? 0 : 1;
-      } else if (r.type === "branch") {
-        // Local branches with a remote counterpart (tracked) rank higher than untracked.
-        priority = trackedLocalBranches.has(r.name) ? 1 : 2;
-      } else if (r.type === "remote" && !remoteOnlyBranches.has(r.name)) {
-        priority = 3; // tracked remotes (have a local counterpart)
-      } else {
-        priority = 4; // remote-only branches
-      }
-      tips.push({ hash: c.hash, name: r.name, priority, topoIdx: commitTopoIndex.get(c.hash) ?? 0 });
-    }
-  }
-  // Sort: lowest priority first (remote-only=4 first, current-tracked=0 last).
-  // Within same priority, higher topoIdx first (older tip first, newer tip last).
-  // Last-writer-wins: the last tip processed overwrites earlier claims.
-  tips.sort((a, b) => {
-    if (a.priority !== b.priority) return b.priority - a.priority; // descending: 4,3,2,1,0
-    return b.topoIdx - a.topoIdx; // descending: older tips first, newer tips last
-  });
-
-  // Walk first-parent chains — last writer wins (higher-priority tips overwrite)
-  const branchNameMap = new Map<string, string>();
-  for (const tip of tips) {
-    let h: string | undefined = tip.hash;
-    while (h) {
-      branchNameMap.set(h, tip.name); // overwrite — last writer wins
-      const parent = commitMap.get(h);
-      h = parent?.parents[0]; // first parent only
-    }
-  }
-
-  // Build a set of commit hashes that belong to remote-only branches.
-  // A commit is remote-only if branchNameMap assigns it to a remote-only branch
-  // AND it is NOT reachable from any non-remote-only branch's first-parent chain.
-  // This prevents shared ancestors (e.g. merge bases) from being dimmed.
-  const nonRemoteOnlyHashes = new Set<string>();
-  for (const c of commits) {
-    // Check if this commit has ANY non-remote-only branch/tag ref.
-    // We must check ALL refs, not just the first one, because a commit can have
-    // multiple refs (e.g. origin/HEAD + main) and only some may be remote-only.
-    const hasNonRemoteOnlyRef = c.refs.some((r) => {
-      if (r.type === "tag") return true; // tags are never remote-only
-      if (r.type === "branch") return true; // local branches are never remote-only
-      if (r.type === "remote") return !remoteOnlyBranches.has(r.name);
-      return false;
-    });
-    if (!hasNonRemoteOnlyRef) continue;
-    // Walk first-parent chain from this commit
-    let h: string | undefined = c.hash;
-    while (h) {
-      if (nonRemoteOnlyHashes.has(h)) break;
-      nonRemoteOnlyHashes.add(h);
-      const parent = commitMap.get(h);
-      h = parent?.parents[0];
-    }
-  }
-  const remoteOnlyHashes = new Set<string>();
-  for (const [hash, branchName] of branchNameMap) {
-    if (remoteOnlyBranches.has(branchName) && !nonRemoteOnlyHashes.has(hash)) {
-      remoteOnlyHashes.add(hash);
-    }
-  }
-
-  // Map commit hash → nodeColor (lane color index), populated as rows are built.
-  // Used to look up child colors: since topo order processes children before parents,
-  // a child's nodeColor is already recorded when we reach the parent.
   const nodeColorByHash = new Map<string, number>();
-
-  // Track which commits have already been processed and their node column.
-  // This is needed to detect when a parent commit was already rendered
-  // (and its lane reassigned) so the current lane can close properly
-  // instead of becoming an orphan.
   const processedColumns = new Map<string, number>();
 
   for (let i = 0; i < commits.length; i++) {
@@ -794,50 +850,9 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
     processedColumns.set(commit.hash, nodeColumn);
   }
 
-  // Post-pass: fix parentColors using nodeColorByHash (now fully populated).
-  // During the main loop, parentLaneColors captures lane colors from the
-  // child's perspective. The parent's actual nodeColor (its branch color)
-  // may differ. Overwrite with the definitive color when available.
-  for (const row of rows) {
-    for (let i = 0; i < row.parentHashes.length; i++) {
-      const parentNodeColor = nodeColorByHash.get(row.parentHashes[i]);
-      if (parentNodeColor !== undefined) {
-        row.parentColors[i] = parentNodeColor;
-      }
-    }
-  }
-
-  // Post-pass: dim all rows above the first non-remote-only row.
-  // If the topmost rows are only remote-only branches (e.g. renovate/*),
-  // everything above the first tracked branch should appear dimmed.
-  let firstNonRemoteOnlyRow = 0;
-  for (let i = 0; i < rows.length; i++) {
-    if (!rows[i].isRemoteOnly) {
-      firstNonRemoteOnlyRow = i;
-      break;
-    }
-  }
-  if (firstNonRemoteOnlyRow > 0) {
-    for (let i = 0; i < firstNonRemoteOnlyRow; i++) {
-      const row = rows[i];
-      // Force all connectors to remote-only
-      for (const conn of row.connectors) {
-        conn.isRemoteOnly = true;
-      }
-      // Force all columns to remote-only
-      for (const col of row.columns) {
-        col.isRemoteOnly = true;
-      }
-      // Force all fan-out row connectors to remote-only
-      if (row.fanOutRows) {
-        for (const foRow of row.fanOutRows) {
-          for (const conn of foRow) {
-            conn.isRemoteOnly = true;
-          }
-        }
-      }
-    }
-  }
+  // Phase 4: Post-passes
+  fixParentColors(rows, nodeColorByHash);
+  dimLeadingRemoteOnlyRows(rows);
 
   return rows;
 }
@@ -856,6 +871,137 @@ export interface RenderOptions {
   themeColors?: string[];
   padToColumns?: number;
   padColor?: string;
+}
+
+/**
+ * Pad a GraphChar[] result to fill `padToColumns` columns (2 chars each).
+ * Uses character-width tracking to handle multi-entry glyphs correctly.
+ */
+function padResult(result: GraphChar[], padToColumns: number | undefined, opts: RenderOptions): void {
+  if (padToColumns === undefined) return;
+  const targetWidth = padToColumns * 2;
+  let currentWidth = 0;
+  for (const gc of result) currentWidth += gc.char.length;
+  const color = getBaseColor(0, opts);
+  while (currentWidth < targetWidth) {
+    result.push({ char: "  ", color });
+    currentWidth += 2;
+  }
+}
+
+/**
+ * Configuration for the shared connector-to-glyph renderer.
+ * The tee glyphs differ between commit rows (├/┤) and fan-out rows (█/█).
+ */
+interface ConnectorGlyphConfig {
+  teeLeftChar: string;    // "├" for commit rows, "█" for fan-out rows
+  teeRightGlyph: string;  // "┤ " for commit rows, "█ " for fan-out rows
+  /** Extra types (besides "horizontal") to check at the next column for tee-left dash color. */
+  teeLeftDashExtraTypes?: ConnectorType[];
+}
+
+/**
+ * Shared connector-to-glyph rendering used by both renderGraphRow and renderFanOutRow.
+ *
+ * Given the connectors at a single column, pushes the appropriate glyph(s) onto `result`.
+ * Handles: teeLeft, teeRight, corners (TR/TL/BR/BL), straight+horizontal crossings,
+ * horizontal, straight, and empty. Does NOT handle "node" connectors — the caller
+ * must check for those before calling this function.
+ *
+ * @returns true if glyphs were pushed, false if no known connector was found at this column
+ */
+function renderConnectorGlyphs(
+  connectors: Connector[],
+  col: number,
+  byCol: Map<number, Connector[]>,
+  result: GraphChar[],
+  opts: RenderOptions,
+  config: ConnectorGlyphConfig,
+): boolean {
+  function connColor(c: { color: number }): string {
+    return getBaseColor(c.color, opts);
+  }
+
+  const straight = connectors.find(c => c.type === "straight");
+  const horizontal = connectors.find(c => c.type === "horizontal");
+  const cornerBR = connectors.find(c => c.type === "corner-bottom-right");
+  const cornerBL = connectors.find(c => c.type === "corner-bottom-left");
+  const cornerTR = connectors.find(c => c.type === "corner-top-right");
+  const cornerTL = connectors.find(c => c.type === "corner-top-left");
+  const teeLeft = connectors.find(c => c.type === "tee-left");
+  const teeRight = connectors.find(c => c.type === "tee-right");
+
+  if (teeLeft) {
+    const teeColor = connColor(teeLeft);
+    const nextConns = byCol.get(col + 1);
+    const extraTypes = config.teeLeftDashExtraTypes ?? [];
+    const nextH = nextConns?.find(c =>
+      c.type === "horizontal" || extraTypes.includes(c.type)
+    );
+    const dashColor = nextH ? connColor(nextH) : teeColor;
+    if (dashColor === teeColor) {
+      result.push({ char: `${config.teeLeftChar}─`, color: teeColor });
+    } else {
+      result.push({ char: config.teeLeftChar, color: teeColor });
+      result.push({ char: "─", color: dashColor });
+    }
+  } else if (teeRight) {
+    result.push({ char: config.teeRightGlyph, color: connColor(teeRight) });
+  } else if (straight && horizontal) {
+    // Crossing: ┼ uses the vertical lane's color, ─ uses the horizontal's color
+    result.push({ char: "┼", color: connColor(straight) });
+    result.push({ char: "─", color: connColor(horizontal) });
+  } else if (cornerBR) {
+    if (horizontal) {
+      result.push({ char: "┴", color: connColor(cornerBR) });
+      result.push({ char: "─", color: connColor(horizontal) });
+    } else {
+      result.push({ char: "╯ ", color: connColor(cornerBR) });
+    }
+  } else if (cornerBL) {
+    const cornerColor = connColor(cornerBL);
+    if (horizontal) {
+      result.push({ char: "┴", color: cornerColor });
+      result.push({ char: "─", color: connColor(horizontal) });
+    } else {
+      const nextConns = byCol.get(col + 1);
+      const nextH = nextConns?.find(c => c.type === "horizontal");
+      const dashColor = nextH ? connColor(nextH) : cornerColor;
+      if (dashColor === cornerColor) {
+        result.push({ char: "╰─", color: cornerColor });
+      } else {
+        result.push({ char: "╰", color: cornerColor });
+        result.push({ char: "─", color: dashColor });
+      }
+    }
+  } else if (cornerTR) {
+    if (horizontal) {
+      const cornerColor = connColor(cornerTR);
+      const hColor = connColor(horizontal);
+      result.push({ char: "┬", color: cornerColor });
+      result.push({ char: "─", color: hColor });
+    } else {
+      result.push({ char: "╮ ", color: connColor(cornerTR) });
+    }
+  } else if (cornerTL) {
+    const cornerColor = connColor(cornerTL);
+    const nextConns = byCol.get(col + 1);
+    const nextH = nextConns?.find(c => c.type === "horizontal");
+    const dashColor = nextH ? connColor(nextH) : cornerColor;
+    if (dashColor === cornerColor) {
+      result.push({ char: "╭─", color: cornerColor });
+    } else {
+      result.push({ char: "╭", color: cornerColor });
+      result.push({ char: "─", color: dashColor });
+    }
+  } else if (straight) {
+    result.push({ char: "│ ", color: connColor(straight), bold: true });
+  } else if (horizontal) {
+    result.push({ char: "──", color: connColor(horizontal) });
+  } else {
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -891,12 +1037,7 @@ export function renderConnectorRow(row: GraphRow, opts: RenderOptions = {}): Gra
     }
   }
 
-  // Pad to fixed width if requested
-  if (padToColumns !== undefined) {
-    while (result.length < padToColumns) {
-      result.push({ char: "  ", color: getBaseColor(0, opts) });
-    }
-  }
+  padResult(result, padToColumns, opts);
 
   return result;
 }
@@ -938,11 +1079,6 @@ export function renderFanOutRow(fanOutConnectors: Connector[], opts: RenderOptio
   const padToColumns = opts.padToColumns;
   const result: GraphChar[] = [];
 
-  // NOTE: connColor is duplicated in renderGraphRow — keep both in sync
-  function connColor(c: { color: number }): string {
-    return getBaseColor(c.color, opts);
-  }
-
   // Group by column — may have multiple connectors at the same column (crossing)
   const byCol = new Map<number, Connector[]>();
   let maxCol = 0;
@@ -953,6 +1089,12 @@ export function renderFanOutRow(fanOutConnectors: Connector[], opts: RenderOptio
     if (c.column >= maxCol) maxCol = c.column + 1;
   }
 
+  const config: ConnectorGlyphConfig = {
+    teeLeftChar: "█",
+    teeRightGlyph: "█ ",
+    teeLeftDashExtraTypes: ["corner-bottom-right"],
+  };
+
   for (let col = 0; col < maxCol; col++) {
     const connectors = byCol.get(col);
     if (!connectors || connectors.length === 0) {
@@ -960,108 +1102,12 @@ export function renderFanOutRow(fanOutConnectors: Connector[], opts: RenderOptio
       continue;
     }
 
-    // Find specific connector types at this column
-    const straight = connectors.find(c => c.type === "straight");
-    const horizontal = connectors.find(c => c.type === "horizontal");
-    const cornerBR = connectors.find(c => c.type === "corner-bottom-right");
-    const cornerBL = connectors.find(c => c.type === "corner-bottom-left");
-    const cornerTR = connectors.find(c => c.type === "corner-top-right");
-    const cornerTL = connectors.find(c => c.type === "corner-top-left");
-    const teeLeft = connectors.find(c => c.type === "tee-left");
-    const teeRight = connectors.find(c => c.type === "tee-right");
-
-    if (teeLeft) {
-      // █ — block segment at parent's node column (fan-out row).
-      // Replaces ├ with █ so the block extends through fan-out rows.
-      // Trailing ─ uses the horizontal/branch color.
-      const teeColor = connColor(teeLeft);
-      const nextConns = byCol.get(col + 1);
-      const nextH = nextConns?.find(c => c.type === "horizontal" || c.type === "corner-bottom-right");
-      const dashColor = nextH ? connColor(nextH) : teeColor;
-      if (dashColor === teeColor) {
-        result.push({ char: "█─", color: teeColor });
-      } else {
-        result.push({ char: "█", color: teeColor });
-        result.push({ char: "─", color: dashColor });
-      }
-    } else if (teeRight) {
-      // █ — block segment at parent's node column (fan-out row, branch going left).
-      result.push({ char: "█ ", color: connColor(teeRight) });
-    } else if (straight && horizontal) {
-      // Crossing: ┼ uses the vertical lane's color, ─ uses the horizontal's color
-      result.push({ char: "┼", color: connColor(straight) });
-      result.push({ char: "─", color: connColor(horizontal) });
-    } else if (cornerBR) {
-      // ╯ — lane comes from above, curves left toward parent and terminates
-      if (horizontal) {
-        // Corner + horizontal crossing: ┴ glyph
-        result.push({ char: "┴", color: connColor(cornerBR) });
-        result.push({ char: "─", color: connColor(horizontal) });
-      } else {
-        result.push({ char: "╯ ", color: connColor(cornerBR) });
-      }
-    } else if (cornerBL) {
-      // ╰ — lane comes from above, curves right toward parent and terminates
-      const cornerColor = connColor(cornerBL);
-      if (horizontal) {
-        // Corner + horizontal crossing (unlikely but handle for correctness)
-        result.push({ char: "┴", color: cornerColor });
-        result.push({ char: "─", color: connColor(horizontal) });
-      } else {
-        // Look for horizontal at next column for trailing dash color
-        const nextConns = byCol.get(col + 1);
-        const nextH = nextConns?.find(c => c.type === "horizontal");
-        const dashColor = nextH ? connColor(nextH) : cornerColor;
-        if (dashColor === cornerColor) {
-          result.push({ char: "╰─", color: cornerColor });
-        } else {
-          result.push({ char: "╰", color: cornerColor });
-          result.push({ char: "─", color: dashColor });
-        }
-      }
-    } else if (cornerTR) {
-      // ╮ — new lane starts, line comes from left (absorbed from commit row by fan-out merge).
-      if (horizontal) {
-        // Corner + horizontal crossing: ┬ glyph (horizontal with vertical going DOWN)
-        const cornerColor = connColor(cornerTR);
-        const hColor = connColor(horizontal);
-        result.push({ char: "┬", color: cornerColor });
-        result.push({ char: "─", color: hColor });
-      } else {
-        result.push({ char: "╮ ", color: connColor(cornerTR) });
-      }
-    } else if (cornerTL) {
-      // ╭ — new lane starts, line comes from right (absorbed from commit row by fan-out merge).
-      const cornerColor = connColor(cornerTL);
-      const nextConns = byCol.get(col + 1);
-      const nextH = nextConns?.find(c => c.type === "horizontal");
-      const dashColor = nextH ? connColor(nextH) : cornerColor;
-      if (dashColor === cornerColor) {
-        result.push({ char: "╭─", color: cornerColor });
-      } else {
-        result.push({ char: "╭", color: cornerColor });
-        result.push({ char: "─", color: dashColor });
-      }
-    } else if (straight) {
-      const color = connColor(straight);
-      result.push({ char: "│ ", color, bold: true });
-    } else if (horizontal) {
-      result.push({ char: "──", color: connColor(horizontal) });
-    } else {
+    if (!renderConnectorGlyphs(connectors, col, byCol, result, opts, config)) {
       result.push({ char: "  ", color: getBaseColor(col, opts) });
     }
   }
 
-  // Pad to fixed width
-  if (padToColumns !== undefined) {
-    const targetWidth = padToColumns * 2;
-    let currentWidth = 0;
-    for (const gc of result) currentWidth += gc.char.length;
-    while (currentWidth < targetWidth) {
-      result.push({ char: "  ", color: getBaseColor(0, opts) });
-      currentWidth += 2;
-    }
-  }
+  padResult(result, padToColumns, opts);
 
   return result;
 }
@@ -1070,12 +1116,6 @@ export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphCh
   const padToColumns = opts.padToColumns;
   const nodeChar = "█";
   const result: GraphChar[] = [];
-
-  // Helper: resolve color for a connector based on its color index.
-  // NOTE: connColor is duplicated in renderFanOutRow — keep both in sync
-  function connColor(c: { color: number }): string {
-    return getBaseColor(c.color, opts);
-  }
 
   // Determine the max column we need to render
   let maxCol = 0;
@@ -1104,6 +1144,15 @@ export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphCh
     )
   );
 
+  function connColor(c: { color: number }): string {
+    return getBaseColor(c.color, opts);
+  }
+
+  const config: ConnectorGlyphConfig = {
+    teeLeftChar: "├",
+    teeRightGlyph: "┤ ",
+  };
+
   for (let col = 0; col < maxCol; col++) {
     const colConnectors = connectorsByCol.get(col) ?? [];
 
@@ -1112,17 +1161,8 @@ export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphCh
       continue;
     }
 
-    // Prioritize: node > tee/corner > horizontal > straight > empty
+    // Handle node connector (only in commit rows, not fan-out rows)
     const node = colConnectors.find((c) => c.type === "node");
-    const teeLeft = colConnectors.find((c) => c.type === "tee-left");
-    const teeRight = colConnectors.find((c) => c.type === "tee-right");
-    const cornerTopRight = colConnectors.find((c) => c.type === "corner-top-right");
-    const cornerTopLeft = colConnectors.find((c) => c.type === "corner-top-left");
-    const cornerBottomRight = colConnectors.find((c) => c.type === "corner-bottom-right");
-    const cornerBottomLeft = colConnectors.find((c) => c.type === "corner-bottom-left");
-    const horizontal = colConnectors.find((c) => c.type === "horizontal");
-    const straight = colConnectors.find((c) => c.type === "straight");
-
     if (node) {
       const nodeColor = getBaseColor(node.color, opts);
       if (col === nodeCol && hasRightConnection) {
@@ -1142,95 +1182,16 @@ export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphCh
       } else if (col === nodeCol) {
         result.push({ char: `${nodeChar} `, color: nodeColor, bold: true });
       }
-    } else if (teeLeft) {
-      // ├ is on the lane's direct path → lane color.
-      // The trailing ─ is a horizontal connector → spanning branch's color.
-      const teeColor = connColor(teeLeft);
-      const nextHoriz = (connectorsByCol.get(col + 1) ?? []).find((c) => c.type === "horizontal");
-      const dashColor = nextHoriz ? connColor(nextHoriz) : teeColor;
-      if (dashColor === teeColor) {
-        result.push({ char: "├─", color: teeColor });
-      } else {
-        result.push({ char: "├", color: teeColor });
-        result.push({ char: "─", color: dashColor });
-      }
-    } else if (teeRight) {
-      result.push({ char: "┤ ", color: connColor(teeRight) });
-    } else if (cornerTopRight) {
-      if (horizontal) {
-        // Corner + horizontal crossing: lane going down + horizontal passing through.
-        // ┬ = horizontal with vertical going DOWN. The corner starts a lane below,
-        // and the horizontal passes through from the merge/branch connector.
-        const cornerColor = connColor(cornerTopRight);
-        const hColor = connColor(horizontal);
-        result.push({ char: "┬", color: cornerColor });
-        result.push({ char: "─", color: hColor });
-      } else {
-        result.push({ char: "╮ ", color: connColor(cornerTopRight) });
-      }
-    } else if (cornerTopLeft) {
-      // ╭ is on the lane's direct path → lane color.
-      // The trailing ─ is a horizontal connector → use the spanning branch's color.
-      const cornerColor = connColor(cornerTopLeft);
-      const nextHoriz = (connectorsByCol.get(col + 1) ?? []).find((c) => c.type === "horizontal");
-      const dashColor = nextHoriz ? connColor(nextHoriz) : cornerColor;
-      if (dashColor === cornerColor) {
-        result.push({ char: "╭─", color: cornerColor });
-      } else {
-        result.push({ char: "╭", color: cornerColor });
-        result.push({ char: "─", color: dashColor });
-      }
-    } else if (cornerBottomRight) {
-      if (horizontal) {
-        // Corner + horizontal crossing: lane from above terminating + horizontal passing through.
-        // ┴ = horizontal with vertical going UP. The lane from above ends here,
-        // and the horizontal passes through from the merge/branch connector.
-        const cornerColor = connColor(cornerBottomRight);
-        const hColor = connColor(horizontal);
-        result.push({ char: "┴", color: cornerColor });
-        result.push({ char: "─", color: hColor });
-      } else {
-        result.push({ char: "╯ ", color: connColor(cornerBottomRight) });
-      }
-    } else if (cornerBottomLeft) {
-      // ╰ is on the lane's direct path → lane color.
-      // The trailing ─ is a horizontal connector → spanning branch's color.
-      const cornerColor = connColor(cornerBottomLeft);
-      const nextHoriz = (connectorsByCol.get(col + 1) ?? []).find((c) => c.type === "horizontal");
-      const dashColor = nextHoriz ? connColor(nextHoriz) : cornerColor;
-      if (dashColor === cornerColor) {
-        result.push({ char: "╰─", color: cornerColor });
-      } else {
-        result.push({ char: "╰", color: cornerColor });
-        result.push({ char: "─", color: dashColor });
-      }
-    } else if (horizontal && straight) {
-      // Crossing: ┼ uses the crossed lane's color (the vertical lane passing through),
-      // ─ uses the horizontal connector's color (the spanning merge/branch connector).
-      result.push({ char: "┼", color: connColor(straight) });
-      result.push({ char: "─", color: connColor(horizontal) });
-    } else if (horizontal) {
-      result.push({ char: "──", color: connColor(horizontal) });
-    } else if (straight) {
-      result.push({ char: "│ ", color: connColor(straight), bold: true });
-    } else {
+      continue;
+    }
+
+    // Delegate all non-node connectors to the shared glyph renderer
+    if (!renderConnectorGlyphs(colConnectors, col, connectorsByCol, result, opts, config)) {
       result.push({ char: "  ", color: getBaseColor(col, opts) });
     }
   }
 
-  // Pad to fixed width if requested.
-  // We track total character width rather than array length because
-  // multi-color glyph splitting (e.g. "╭" + "─" as two entries for one column)
-  // inflates the array length beyond the column count.
-  if (padToColumns !== undefined) {
-    const targetWidth = padToColumns * 2; // 2 chars per column
-    let currentWidth = 0;
-    for (const gc of result) currentWidth += gc.char.length;
-    while (currentWidth < targetWidth) {
-      result.push({ char: "  ", color: getBaseColor(0, opts) });
-      currentWidth += 2;
-    }
-  }
+  padResult(result, padToColumns, opts);
 
   return result;
 }
