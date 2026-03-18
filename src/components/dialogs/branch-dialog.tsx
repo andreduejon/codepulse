@@ -30,7 +30,6 @@ export default function BranchDialog(props: {
       backgroundColor={"#00000080"}
       alignItems="center"
       justifyContent="center"
-      onMouseDown={() => props.onClose()}
     >
       <box
         width={70}
@@ -39,7 +38,6 @@ export default function BranchDialog(props: {
         flexDirection="column"
         paddingX={1}
         paddingY={1}
-        onMouseDown={(e: any) => { e.stopPropagation(); e.preventDefault(); }}
       >
         {/* Title bar */}
         <box flexDirection="row" width="100%" paddingX={4}>

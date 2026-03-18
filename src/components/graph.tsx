@@ -131,7 +131,7 @@ function ConnectorRow(props: { content: () => StyledText; width?: number }) {
   );
 }
 
-function GraphLine(props: { row: GraphRow; index: number; highlighted: boolean; selected: boolean; isLast: boolean; onHighlight: (index: number) => void; onSelect: (index: number) => void; viewportOffset: () => number; rowRef?: (el: Renderable) => void }) {
+function GraphLine(props: { row: GraphRow; index: number; highlighted: boolean; selected: boolean; isLast: boolean; viewportOffset: () => number; rowRef?: (el: Renderable) => void }) {
   const { theme } = useTheme();
   const { state } = useAppState();
 
@@ -348,8 +348,6 @@ function GraphLine(props: { row: GraphRow; index: number; highlighted: boolean; 
       flexDirection="column"
       width="100%"
       backgroundColor={(props.selected || props.highlighted) ? t().backgroundElement : undefined}
-      onMouseDown={() => props.onSelect(props.index)}
-      onMouseMove={(e: any) => { e.stopPropagation(); props.onHighlight(props.index); }}
     >
       {/* Fan-out rows above the commit (all except the last, which merges
           into the commit row to avoid a redundant █ block). */}
@@ -554,16 +552,6 @@ export default function GraphView() {
                 highlighted={index() === state.highlightedIndex()}
                 selected={index() === state.selectedIndex()}
                 isLast={index() === state.filteredRows().length - 1}
-                onHighlight={(i) => {
-                  actions.setHighlightedIndex(i);
-                  actions.setDetailFocused(false);
-                }}
-                onSelect={(i) => {
-                  actions.setHighlightedIndex(i);
-                  actions.setScrollTargetIndex(i);
-                  actions.setSelectedIndex(i);
-                  actions.setDetailFocused(false);
-                }}
                 viewportOffset={viewportOffset}
                 rowRef={(el) => { rowRefs[index()] = el; }}
               />

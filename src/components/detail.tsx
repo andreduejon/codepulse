@@ -310,22 +310,13 @@ export default function CommitDetailView(props: DetailViewProps) {
     };
   });
 
-  // Mouse hover index — independent of focus state
-  const [hoverIndex, setHoverIndex] = createSignal(-1);
-
-  // Highlight color for the cursor'd interactive item (focused) vs hovered (unfocused)
+  // Highlight color for the cursor'd interactive item
   const highlightBgFocused = () => t().backgroundElementActive;
-  const highlightBgHover = () => t().backgroundElement;
 
   /** Check if a given interactive item index should be highlighted, and return its bg color */
   const itemHighlightBg = (itemIndex: number): string | undefined => {
-    // Focused cursor takes priority
     if (state.detailFocused() && state.detailCursorIndex() === itemIndex) {
       return highlightBgFocused();
-    }
-    // Mouse hover highlight (works regardless of focus)
-    if (hoverIndex() === itemIndex) {
-      return highlightBgHover();
     }
     return undefined;
   };
@@ -363,18 +354,6 @@ export default function CommitDetailView(props: DetailViewProps) {
 
     return (
       <box
-        onMouseDown={() => {
-          headerProps.onToggle();
-        }}
-        onMouseMove={(e: any) => {
-          e.stopPropagation();
-          const idx = itemIdx();
-          if (idx >= 0) {
-            setHoverIndex(idx);
-            actions.setDetailCursorIndex(idx);
-            actions.setDetailFocused(true);
-          }
-        }}
         backgroundColor={itemHighlightBg(itemIdx())}
       >
         <text fg={t().accent} wrapMode="none">
@@ -405,18 +384,6 @@ export default function CommitDetailView(props: DetailViewProps) {
         gap={1}
         paddingLeft={2}
         backgroundColor={itemHighlightBg(itemIdx())}
-        onMouseDown={() => {
-          if (props.onJumpToCommit) props.onJumpToCommit(entryProps.hash, entryProps.type);
-        }}
-        onMouseMove={(e: any) => {
-          e.stopPropagation();
-          const idx = itemIdx();
-          if (idx >= 0) {
-            setHoverIndex(idx);
-            actions.setDetailCursorIndex(idx);
-            actions.setDetailFocused(true);
-          }
-        }}
       >
         <text fg={cursored() ? t().accent : t().foreground} wrapMode="none">
           {entryProps.hash.substring(0, 7)}
@@ -452,7 +419,7 @@ export default function CommitDetailView(props: DetailViewProps) {
   }
 
   return (
-    <box flexDirection="column" flexGrow={1} onMouseMove={() => setHoverIndex(-1)}>
+    <box flexDirection="column" flexGrow={1}>
       <Show
         when={commit()}
         fallback={

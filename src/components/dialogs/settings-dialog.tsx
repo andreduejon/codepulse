@@ -158,7 +158,6 @@ export default function SettingsDialog(props: Readonly<SettingsDialogProps>) {
       backgroundColor={"#00000080"}
       alignItems="center"
       justifyContent="center"
-      onMouseDown={() => props.onClose()}
     >
       <box
         width={70}
@@ -167,7 +166,6 @@ export default function SettingsDialog(props: Readonly<SettingsDialogProps>) {
         flexDirection="column"
         paddingX={1}
         paddingY={1}
-        onMouseDown={(e: any) => { e.stopPropagation(); e.preventDefault(); }}
       >
       {/* Title bar */}
       <box flexDirection="row" width="100%" paddingX={4}>
@@ -211,21 +209,12 @@ export default function SettingsDialog(props: Readonly<SettingsDialogProps>) {
             // Find this item's cursor position for mouse interaction
             const cursorPos = selectableIndices.indexOf(itemIndex());
 
-            return (
+              return (
               <box
                 flexDirection="row"
                 width="100%"
                 paddingX={4}
                 backgroundColor={isSelected() ? t().backgroundElement : undefined}
-                onMouseMove={() => {
-                  if (cursorPos >= 0) setCursor(cursorPos);
-                }}
-                onMouseDown={() => {
-                  if (cursorPos >= 0) {
-                    setCursor(cursorPos);
-                    activateItemAt(itemIndex());
-                  }
-                }}
               >
                 {/* Setting name */}
                 <text flexGrow={1} flexShrink={1} wrapMode="none" truncate>
