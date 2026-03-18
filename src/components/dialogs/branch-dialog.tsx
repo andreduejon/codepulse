@@ -11,8 +11,6 @@ export default function BranchDialog(props: {
 
   const localBranches = () =>
     state.branches().filter((b) => !b.isRemote);
-  const remoteBranches = () =>
-    state.branches().filter((b) => b.isRemote);
 
   const options = () =>
     localBranches().map((b) => ({

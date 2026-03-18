@@ -9,21 +9,15 @@ export interface Theme {
   foreground: string;
   foregroundMuted: string;
   border: string;
-  borderActive: string;
   primary: string;
-  secondary: string;
   accent: string;
   error: string;
-  warning: string;
   success: string;
-  info: string;
   // Graph colors
   graphColors: string[];
   // Diff colors
   diffAdded: string;
   diffRemoved: string;
-  diffAddedBg: string;
-  diffRemovedBg: string;
 }
 
 const catppuccinMocha: Theme = {
@@ -35,14 +29,10 @@ const catppuccinMocha: Theme = {
   foreground: "#cdd6f4",
   foregroundMuted: "#6c7086",
   border: "#45475a",
-  borderActive: "#89b4fa",
   primary: "#89b4fa",
-  secondary: "#cba6f7",
   accent: "#f5c2e7",
   error: "#f38ba8",
-  warning: "#f9e2af",
   success: "#a6e3a1",
-  info: "#89dceb",
   graphColors: [
     "#f38ba8",
     "#a6e3a1",
@@ -59,8 +49,6 @@ const catppuccinMocha: Theme = {
   ],
   diffAdded: "#a6e3a1",
   diffRemoved: "#f38ba8",
-  diffAddedBg: "#1a3a2a",
-  diffRemovedBg: "#3a1a1a",
 };
 
 const tokyoNight: Theme = {
@@ -72,14 +60,10 @@ const tokyoNight: Theme = {
   foreground: "#c0caf5",
   foregroundMuted: "#565f89",
   border: "#3b4261",
-  borderActive: "#7aa2f7",
   primary: "#7aa2f7",
-  secondary: "#bb9af7",
   accent: "#f7768e",
   error: "#f7768e",
-  warning: "#e0af68",
   success: "#9ece6a",
-  info: "#7dcfff",
   graphColors: [
     "#f7768e",
     "#9ece6a",
@@ -96,8 +80,6 @@ const tokyoNight: Theme = {
   ],
   diffAdded: "#9ece6a",
   diffRemoved: "#f7768e",
-  diffAddedBg: "#1a2a1a",
-  diffRemovedBg: "#2a1a1a",
 };
 
 const dracula: Theme = {
@@ -105,17 +87,14 @@ const dracula: Theme = {
   background: "#282a36",
   backgroundPanel: "#21222c",
   backgroundElement: "#44475a",
-  backgroundElementActive: "#565972",  foreground: "#f8f8f2",
+  backgroundElementActive: "#565972",
+  foreground: "#f8f8f2",
   foregroundMuted: "#6272a4",
   border: "#44475a",
-  borderActive: "#bd93f9",
   primary: "#bd93f9",
-  secondary: "#ff79c6",
   accent: "#8be9fd",
   error: "#ff5555",
-  warning: "#f1fa8c",
   success: "#50fa7b",
-  info: "#8be9fd",
   graphColors: [
     "#ff5555",
     "#50fa7b",
@@ -132,8 +111,6 @@ const dracula: Theme = {
   ],
   diffAdded: "#50fa7b",
   diffRemoved: "#ff5555",
-  diffAddedBg: "#1a3a2a",
-  diffRemovedBg: "#3a1a1a",
 };
 
 const nord: Theme = {
@@ -145,14 +122,10 @@ const nord: Theme = {
   foreground: "#d8dee9",
   foregroundMuted: "#616e88",
   border: "#3b4252",
-  borderActive: "#88c0d0",
   primary: "#88c0d0",
-  secondary: "#b48ead",
   accent: "#81a1c1",
   error: "#bf616a",
-  warning: "#ebcb8b",
   success: "#a3be8c",
-  info: "#5e81ac",
   graphColors: [
     "#bf616a",
     "#a3be8c",
@@ -169,8 +142,6 @@ const nord: Theme = {
   ],
   diffAdded: "#a3be8c",
   diffRemoved: "#bf616a",
-  diffAddedBg: "#2a3a2a",
-  diffRemovedBg: "#3a2a2a",
 };
 
 export const themes: Record<string, Theme> = {

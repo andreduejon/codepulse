@@ -167,9 +167,6 @@ export default function SettingsDialog(props: Readonly<SettingsDialogProps>) {
               return h.padStart(9);
             };
 
-            // Find this item's cursor position for mouse interaction
-            const cursorPos = selectableIndices.indexOf(itemIndex());
-
               return (
               <box
                 flexDirection="row"

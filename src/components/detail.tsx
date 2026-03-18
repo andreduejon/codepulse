@@ -2,7 +2,7 @@ import { Show, For, createSignal, createEffect, createMemo, untrack } from "soli
 import { useAppState } from "../context/state";
 import { useTheme } from "../context/theme";
 import { getColorForColumn } from "../git/graph";
-import type { Commit, FileChange, RefInfo } from "../git/types";
+import type { Commit, FileChange } from "../git/types";
 
 /** Types for interactive items in the detail panel */
 type InteractiveItem =
@@ -321,7 +321,6 @@ export default function CommitDetailView(props: DetailViewProps) {
     onToggle: () => void;
   }) {
     const itemIdx = () => findItemIndex("section-header", headerProps.section);
-    const cursored = () => isCursored(itemIdx());
 
     return (
       <box

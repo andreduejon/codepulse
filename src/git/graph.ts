@@ -23,10 +23,6 @@ function getBaseColor(column: number, opts: RenderOptions): string {
   return colors[column % colors.length];
 }
 
-export function getColorIndex(column: number): number {
-  return column;
-}
-
 /**
  * Build graph layout from a list of commits.
  *
@@ -295,7 +291,6 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
           isRemoteOnly: isCommitRemoteOnly,
         });
       } else if (lanes[col] !== null) {
-        const laneHash = lanes[col]!;
         connectors.push({
           type: "straight",
           color: laneColors[col],
@@ -424,16 +419,6 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
               isRemoteOnly: extraRemoteOnly,
             });
           } else if (col === nodeColumn) {
-            fanOutConnectors.push({
-              type: goingRight ? "tee-left" : "tee-right",
-              color: laneColors[nodeColumn],
-              column: col,
-              isRemoteOnly: isCommitRemoteOnly,
-            });
-          } else if (col === nodeColumn) {
-            // The parent's vertical line continues, but with a T-junction
-            // to show the branch-off. ├ if the extra lane is to the right,
-            // ┤ if it's to the left.
             fanOutConnectors.push({
               type: goingRight ? "tee-left" : "tee-right",
               color: laneColors[nodeColumn],
