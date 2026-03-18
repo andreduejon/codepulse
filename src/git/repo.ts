@@ -1,4 +1,5 @@
 import type { Commit, Branch, FileChange, CommitDetail, RefInfo } from "./types";
+import { DEFAULT_MAX_COUNT } from "../constants";
 
 const GIT_LOG_FORMAT = "%H|%h|%P|%D|%s|%an|%ae|%aI|%cn|%ce|%cI";
 const FIELD_SEPARATOR = "|";
@@ -77,7 +78,7 @@ export async function getCommits(
     "log",
     "--topo-order",
     `--format=${GIT_LOG_FORMAT}`,
-    `--max-count=${options.maxCount ?? 200}`,
+    `--max-count=${options.maxCount ?? DEFAULT_MAX_COUNT}`,
   ];
 
   if (options.all) {

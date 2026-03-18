@@ -855,6 +855,7 @@ export interface GraphChar {
 export interface RenderOptions {
   themeColors?: string[];
   padToColumns?: number;
+  padColor?: string;
 }
 
 /**
@@ -1343,7 +1344,7 @@ export function sliceGraphToViewport(
     return chars;
   }
 
-  const padColor = "#6c7086";
+  const padColor = opts.padColor ?? "#6c7086";
 
   // Each graph column = 2 character positions. The viewport covers char
   // positions [startCharPos, endCharPos). Instead of flattening the entire

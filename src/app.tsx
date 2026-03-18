@@ -14,6 +14,7 @@ import HelpDialog from "./components/dialogs/help-dialog";
 import ThemeDialog from "./components/dialogs/theme-dialog";
 import SettingsDialog from "./components/dialogs/settings-dialog";
 import packageJson from "../package.json";
+import { DEFAULT_MAX_COUNT, SHIFT_JUMP, PAGE_JUMP } from "./constants";
 
 interface AppProps {
   repoPath: string;
@@ -24,7 +25,7 @@ interface AppProps {
 }
 
 function AppContent(props: AppProps) {
-  const { state, actions } = createAppState(props.maxCount ?? 200);
+  const { state, actions } = createAppState(props.maxCount ?? DEFAULT_MAX_COUNT);
   const themeState = createThemeState(props.themeName);
   const renderer = useRenderer();
 
@@ -268,12 +269,12 @@ function AppContent(props: AppProps) {
         break;
       case "down":
         e.preventDefault();
-        actions.moveCursor(e.shift ? 10 : 1);
+        actions.moveCursor(e.shift ? SHIFT_JUMP : 1);
         detailScrollboxRef?.scrollTo(0);
         break;
       case "up":
         e.preventDefault();
-        actions.moveCursor(e.shift ? -10 : -1);
+        actions.moveCursor(e.shift ? -SHIFT_JUMP : -1);
         detailScrollboxRef?.scrollTo(0);
         break;
       case "return":
@@ -308,12 +309,12 @@ function AppContent(props: AppProps) {
         break;
       case "pagedown":
         e.preventDefault();
-        actions.moveCursor(20);
+        actions.moveCursor(PAGE_JUMP);
         detailScrollboxRef?.scrollTo(0);
         break;
       case "pageup":
         e.preventDefault();
-        actions.moveCursor(-20);
+        actions.moveCursor(-PAGE_JUMP);
         detailScrollboxRef?.scrollTo(0);
         break;
       case "/":

@@ -1,6 +1,7 @@
 import { For, Show, createEffect, createMemo, createSignal } from "solid-js";
 import { useAppState } from "../context/state";
 import { useTheme } from "../context/theme";
+import { HASH_COL_WIDTH, AUTHOR_COL_WIDTH, DATE_COL_WIDTH } from "../constants";
 import { renderGraphRow, renderConnectorRow, renderFanOutRow, graphCharsToContent, getColorForColumn, sliceGraphToViewport, computeSingleViewportOffset, buildEdgeIndicator, MAX_GRAPH_COLUMNS, type GraphChar } from "../git/graph";
 import type { GraphRow, RefInfo } from "../git/types";
 import type { TextRenderable, StyledText, ScrollBoxRenderable, Renderable } from "@opentui/core";
@@ -55,7 +56,7 @@ export function ColumnHeader() {
         </text>
 
         {/* Commit hash */}
-        <box flexShrink={0} width={9} paddingLeft={1}>
+        <box flexShrink={0} width={HASH_COL_WIDTH} paddingLeft={1}>
           <text wrapMode="none" truncate>
             <strong><span fg={!state.detailFocused() ? t().foreground : t().foregroundMuted}>Commit</span></strong>
           </text>
@@ -69,14 +70,14 @@ export function ColumnHeader() {
         </box>
 
         {/* Author */}
-        <box flexShrink={0} width={15} paddingRight={2}>
+        <box flexShrink={0} width={AUTHOR_COL_WIDTH} paddingRight={2}>
           <text wrapMode="none" truncate>
             <strong><span fg={!state.detailFocused() ? t().foreground : t().foregroundMuted}>Author</span></strong>
           </text>
         </box>
 
         {/* Date */}
-        <box flexShrink={0} width={15}>
+        <box flexShrink={0} width={DATE_COL_WIDTH}>
           <text wrapMode="none" truncate>
             <strong><span fg={!state.detailFocused() ? t().foreground : t().foregroundMuted}>Date</span></strong>
           </text>
@@ -126,6 +127,7 @@ function GraphLine(props: { row: GraphRow; index: number; active: boolean; isLas
     return {
       themeColors: theme().graphColors,
       padToColumns: padCols(),
+      padColor: theme().foregroundMuted,
     };
   };
 
@@ -286,7 +288,7 @@ function GraphLine(props: { row: GraphRow; index: number; active: boolean; isLas
         <text ref={graphTextRef} flexShrink={0} width={graphWidth()} wrapMode="none" truncate paddingLeft={1} />
 
         {/* Short hash */}
-        <box flexShrink={0} width={9} paddingLeft={1} overflow="hidden">
+        <box flexShrink={0} width={HASH_COL_WIDTH} paddingLeft={1} overflow="hidden">
           <text fg={secondaryColumnColor()} wrapMode="none" truncate>
             {props.active ? <strong><span fg={secondaryColumnColor()}>{commit().shortHash}</span></strong> : commit().shortHash}
           </text>
@@ -307,14 +309,14 @@ function GraphLine(props: { row: GraphRow; index: number; active: boolean; isLas
         </box>
 
         {/* Author */}
-        <box flexShrink={0} width={15} paddingRight={2} overflow="hidden">
+        <box flexShrink={0} width={AUTHOR_COL_WIDTH} paddingRight={2} overflow="hidden">
           <text fg={secondaryColumnColor()} wrapMode="none" truncate>
             {props.active ? <strong><span fg={secondaryColumnColor()}>{commit().author}</span></strong> : commit().author}
           </text>
         </box>
 
         {/* Date */}
-        <box flexShrink={0} width={15} overflow="hidden">
+        <box flexShrink={0} width={DATE_COL_WIDTH} overflow="hidden">
           <text fg={secondaryColumnColor()} wrapMode="none" truncate>
             {props.active ? <strong><span fg={secondaryColumnColor()}>{formatRelativeDate(commit().authorDate)}</span></strong> : formatRelativeDate(commit().authorDate)}
           </text>

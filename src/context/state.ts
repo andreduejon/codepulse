@@ -1,5 +1,6 @@
 import { createContext, useContext, createSignal, createMemo, type Accessor } from "solid-js";
 import type { Commit, GraphRow, CommitDetail, Branch } from "../git/types";
+import { DEFAULT_MAX_COUNT } from "../constants";
 
 export interface AppState {
   commits: Accessor<Commit[]>;
@@ -48,7 +49,7 @@ export interface AppActions {
 
 const AppStateContext = createContext<{ state: AppState; actions: AppActions }>();
 
-export function createAppState(initialMaxCount: number = 200) {
+export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
   const [commits, setCommits] = createSignal<Commit[]>([]);
   const [graphRows, setGraphRows] = createSignal<GraphRow[]>([]);
   const [branches, setBranches] = createSignal<Branch[]>([]);

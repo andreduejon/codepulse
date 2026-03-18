@@ -3,6 +3,7 @@ import { render } from "@opentui/solid";
 import { isGitRepo } from "./git/repo";
 import App from "./app";
 import packageJson from "../package.json";
+import { DEFAULT_MAX_COUNT } from "./constants";
 
 async function main() {
   const args = process.argv.slice(2);
@@ -11,7 +12,7 @@ async function main() {
   let repoPath = process.cwd();
   let branch: string | undefined;
   let all = true;
-  let maxCount = 200;
+  let maxCount = DEFAULT_MAX_COUNT;
   let themeName = "catppuccin-mocha";
 
   for (let i = 0; i < args.length; i++) {
@@ -24,7 +25,7 @@ async function main() {
         break;
       case "--max-count":
       case "-n":
-        maxCount = parseInt(args[++i], 10) || 200;
+        maxCount = parseInt(args[++i], 10) || DEFAULT_MAX_COUNT;
         break;
       case "--theme":
         themeName = args[++i];
@@ -89,7 +90,7 @@ ARGUMENTS:
 
 OPTIONS:
   -b, --branch <name>    Show only a specific branch
-  -n, --max-count <n>    Maximum number of commits to show (default: 200)
+  -n, --max-count <n>    Maximum number of commits to show (default: ${DEFAULT_MAX_COUNT})
       --theme <name>     Color theme (catppuccin-mocha, tokyo-night, dracula, nord)
       --no-all           Don't show all branches
   -h, --help             Show this help message
