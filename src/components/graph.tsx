@@ -106,7 +106,7 @@ function ConnectorRow(props: { content: () => StyledText; width?: number }) {
   );
 }
 
-function GraphLine(props: { row: GraphRow; index: number; highlighted: boolean; selected: boolean; isLast: boolean; viewportOffset: () => number; rowRef?: (el: Renderable) => void }) {
+function GraphLine(props: { row: GraphRow; index: number; active: boolean; isLast: boolean; viewportOffset: () => number; rowRef?: (el: Renderable) => void }) {
   const { theme } = useTheme();
   const { state } = useAppState();
 
@@ -256,19 +256,16 @@ function GraphLine(props: { row: GraphRow; index: number; highlighted: boolean; 
   };
 
   // Effective text color for the commit subject (primary column).
-  // Selected rows use primary color. Highlighted-only rows use foreground.
+  // Active row uses primary color with bold. Inactive rows use foreground.
   const effectiveTextColor = () => {
-    if (props.selected) return t().primary;
-    if (props.highlighted) return t().foreground;
+    if (props.active) return t().primary;
     return t().foreground;
   };
 
   // Secondary column color (author, date, hash).
-  // Selected → primary (bold applied separately). Highlighted → foreground.
-  // Otherwise muted.
+  // Active → primary (bold applied separately). Otherwise muted.
   const secondaryColumnColor = () => {
-    if (props.selected) return t().primary;
-    if (props.highlighted) return t().foreground;
+    if (props.active) return t().primary;
     return t().foregroundMuted;
   };
 
@@ -277,7 +274,7 @@ function GraphLine(props: { row: GraphRow; index: number; highlighted: boolean; 
       ref={(el: Renderable) => props.rowRef?.(el)}
       flexDirection="column"
       width="100%"
-      backgroundColor={(props.selected || props.highlighted) ? t().backgroundElement : undefined}
+      backgroundColor={props.active ? t().backgroundElement : undefined}
     >
       {/* Fan-out rows above the commit (all except the last, which merges
           into the commit row to avoid a redundant █ block). */}
@@ -296,7 +293,7 @@ function GraphLine(props: { row: GraphRow; index: number; highlighted: boolean; 
         {/* Short hash */}
         <box flexShrink={0} width={9} paddingLeft={1} overflow="hidden">
           <text fg={secondaryColumnColor()} wrapMode="none" truncate>
-            {props.selected ? <strong><span fg={secondaryColumnColor()}>{commit().shortHash}</span></strong> : commit().shortHash}
+            {props.active ? <strong><span fg={secondaryColumnColor()}>{commit().shortHash}</span></strong> : commit().shortHash}
           </text>
         </box>
 
@@ -310,21 +307,21 @@ function GraphLine(props: { row: GraphRow; index: number; highlighted: boolean; 
             </box>
           </Show>
           <text flexGrow={1} flexShrink={1} fg={effectiveTextColor()} wrapMode="none" truncate>
-            {props.selected ? <strong><span fg={effectiveTextColor()}>{commit().subject}</span></strong> : commit().subject}
+            {props.active ? <strong><span fg={effectiveTextColor()}>{commit().subject}</span></strong> : commit().subject}
           </text>
         </box>
 
         {/* Author */}
         <box flexShrink={0} width={15} paddingRight={2} overflow="hidden">
           <text fg={secondaryColumnColor()} wrapMode="none" truncate>
-            {props.selected ? <strong><span fg={secondaryColumnColor()}>{commit().author}</span></strong> : commit().author}
+            {props.active ? <strong><span fg={secondaryColumnColor()}>{commit().author}</span></strong> : commit().author}
           </text>
         </box>
 
         {/* Date */}
         <box flexShrink={0} width={15} overflow="hidden">
           <text fg={secondaryColumnColor()} wrapMode="none" truncate>
-            {props.selected ? <strong><span fg={secondaryColumnColor()}>{formatRelativeDate(commit().authorDate)}</span></strong> : formatRelativeDate(commit().authorDate)}
+            {props.active ? <strong><span fg={secondaryColumnColor()}>{formatRelativeDate(commit().authorDate)}</span></strong> : formatRelativeDate(commit().authorDate)}
           </text>
         </box>
       </box>
@@ -408,7 +405,7 @@ export default function GraphView() {
 
   createEffect(() => {
     const rows = state.filteredRows();
-    const idx = state.highlightedIndex();
+    const idx = state.cursorIndex();
     const maxCols = state.maxGraphColumns();
 
     if (maxCols <= MAX_GRAPH_COLUMNS || idx < 0 || idx >= rows.length) {
@@ -473,8 +470,7 @@ export default function GraphView() {
               <GraphLine
                 row={row}
                 index={index()}
-                highlighted={index() === state.highlightedIndex()}
-                selected={index() === state.selectedIndex()}
+                active={index() === state.cursorIndex()}
                 isLast={index() === state.filteredRows().length - 1}
                 viewportOffset={viewportOffset}
                 rowRef={(el) => { rowRefs[index()] = el; }}

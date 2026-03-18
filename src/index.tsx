@@ -96,6 +96,7 @@ OPTIONS:
 
 KEYBOARD SHORTCUTS:
   j/k or Up/Down         Navigate commits
+  Shift+Up/Down          Jump 10 entries
   g/G                    First/last commit
   /                      Search commits
   b                      Branch picker

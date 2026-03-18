@@ -8,8 +8,7 @@ export interface AppState {
   currentBranch: Accessor<string>;
   repoName: Accessor<string>;
   repoPath: Accessor<string>;
-  highlightedIndex: Accessor<number>;
-  selectedIndex: Accessor<number>;
+  cursorIndex: Accessor<number>;
   selectedCommit: Accessor<Commit | null>;
   selectedRow: Accessor<GraphRow | null>;
   commitDetail: Accessor<CommitDetail | null>;
@@ -26,11 +25,9 @@ export interface AppState {
 }
 
 export interface AppActions {
-  setHighlightedIndex: (index: number) => void;
-  moveHighlight: (delta: number) => void;
+  setCursorIndex: (index: number) => void;
+  moveCursor: (delta: number) => void;
   setScrollTargetIndex: (index: number) => void;
-  setSelectedIndex: (index: number) => void;
-  selectHighlighted: () => void;
   setCommitDetail: (detail: CommitDetail | null) => void;
   setLoading: (loading: boolean) => void;
   setShowAllBranches: (show: boolean) => void;
@@ -58,8 +55,7 @@ export function createAppState(initialMaxCount: number = 200) {
   const [currentBranch, setCurrentBranch] = createSignal("");
   const [repoName, setRepoName] = createSignal("");
   const [repoPath, setRepoPath] = createSignal("");
-  const [highlightedIndex, setHighlightedIndex] = createSignal(0);
-  const [selectedIndex, setSelectedIndex] = createSignal(0);
+  const [cursorIndex, setCursorIndex] = createSignal(0);
   const [scrollTargetIndex, setScrollTargetIndex] = createSignal(0);
   const [commitDetail, setCommitDetail] = createSignal<CommitDetail | null>(null);
   const [loading, setLoading] = createSignal(true);
@@ -87,25 +83,21 @@ export function createAppState(initialMaxCount: number = 200) {
 
   const selectedCommit = createMemo(() => {
     const rows = filteredRows();
-    const idx = selectedIndex();
+    const idx = cursorIndex();
     return idx >= 0 && idx < rows.length ? rows[idx].commit : null;
   });
 
   const selectedRow = createMemo(() => {
     const rows = filteredRows();
-    const idx = selectedIndex();
+    const idx = cursorIndex();
     return idx >= 0 && idx < rows.length ? rows[idx] : null;
   });
 
-  const moveHighlight = (delta: number) => {
+  const moveCursor = (delta: number) => {
     const rows = filteredRows();
-    const newIndex = Math.max(0, Math.min(rows.length - 1, highlightedIndex() + delta));
-    setHighlightedIndex(newIndex);
+    const newIndex = Math.max(0, Math.min(rows.length - 1, cursorIndex() + delta));
+    setCursorIndex(newIndex);
     setScrollTargetIndex(newIndex);
-  };
-
-  const selectHighlighted = () => {
-    setSelectedIndex(highlightedIndex());
   };
 
   const moveDetailCursor = (delta: number, itemCount: number) => {
@@ -122,8 +114,7 @@ export function createAppState(initialMaxCount: number = 200) {
     currentBranch,
     repoName,
     repoPath,
-    highlightedIndex,
-    selectedIndex,
+    cursorIndex,
     selectedCommit,
     selectedRow,
     commitDetail,
@@ -140,11 +131,9 @@ export function createAppState(initialMaxCount: number = 200) {
   };
 
   const actions: AppActions = {
-    setHighlightedIndex,
-    moveHighlight,
+    setCursorIndex,
+    moveCursor,
     setScrollTargetIndex,
-    setSelectedIndex,
-    selectHighlighted,
     setCommitDetail,
     setLoading,
     setShowAllBranches,

@@ -50,9 +50,8 @@ function AppContent(props: AppProps) {
       const currentHash = state.selectedCommit()?.hash ?? null;
       actions.setDetailOriginHash(currentHash);
       detailNavRef.lastJumpFrom = from;
-      actions.setHighlightedIndex(idx);
+      actions.setCursorIndex(idx);
       actions.setScrollTargetIndex(idx);
-      actions.setSelectedIndex(idx);
       detailScrollboxRef?.scrollTo(0);
     }
   };
@@ -97,9 +96,8 @@ function AppContent(props: AppProps) {
         const cbIdx = rows.findIndex((r) => r.isOnCurrentBranch);
         if (cbIdx >= 0) targetIndex = cbIdx;
       }
-      actions.setHighlightedIndex(targetIndex);
+      actions.setCursorIndex(targetIndex);
       actions.setScrollTargetIndex(targetIndex);
-      actions.setSelectedIndex(targetIndex);
     } catch (err) {
       // TODO: show error in UI
     } finally {
@@ -112,37 +110,50 @@ function AppContent(props: AppProps) {
     renderer.setTerminalTitle("gittree");
   });
 
-  // Load commit detail when selection changes (with race condition guard)
+  // Load commit detail when cursor changes (with debounce + race condition guard)
   let detailVersion = 0;
-  createEffect(async () => {
+  let detailDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  const DETAIL_DEBOUNCE_MS = 150;
+
+  createEffect(() => {
     const commit = state.selectedCommit();
     const v = ++detailVersion;
+
+    // Cancel any pending debounce
+    if (detailDebounceTimer) {
+      clearTimeout(detailDebounceTimer);
+      detailDebounceTimer = null;
+    }
+
     if (!commit) {
       actions.setCommitDetail(null);
       return;
     }
-    try {
-      const detail = await getCommitDetail(props.repoPath, commit.hash, commit);
-      if (v === detailVersion) actions.setCommitDetail(detail);
-    } catch {
-      if (v === detailVersion) actions.setCommitDetail(null);
-    }
+
+    // Debounce the detail load to avoid spawning git subprocesses on rapid navigation
+    detailDebounceTimer = setTimeout(async () => {
+      detailDebounceTimer = null;
+      try {
+        const detail = await getCommitDetail(props.repoPath, commit.hash, commit);
+        if (v === detailVersion) actions.setCommitDetail(detail);
+      } catch {
+        if (v === detailVersion) actions.setCommitDetail(null);
+      }
+    }, DETAIL_DEBOUNCE_MS);
   });
 
   // Search input handlers
   const handleSearchSubmit = (value: string) => {
     actions.setSearchQuery(value);
-    actions.setHighlightedIndex(0);
+    actions.setCursorIndex(0);
     actions.setScrollTargetIndex(0);
-    actions.setSelectedIndex(0);
     setSearchFocused(false);
   };
 
   const handleSearchInput = (value: string) => {
-    // Live filter as user types — only move highlight, don't change selection
-    // (avoids spawning git subprocesses for commit detail on every keystroke)
+    // Live filter as user types — cursor moves immediately, detail load is debounced
     actions.setSearchQuery(value);
-    actions.setHighlightedIndex(0);
+    actions.setCursorIndex(0);
     actions.setScrollTargetIndex(0);
   };
 
@@ -200,9 +211,8 @@ function AppContent(props: AppProps) {
       }
       if (state.searchQuery()) {
         actions.setSearchQuery("");
-        actions.setHighlightedIndex(0);
+        actions.setCursorIndex(0);
         actions.setScrollTargetIndex(0);
-        actions.setSelectedIndex(0);
         return;
       }
       return;
@@ -258,19 +268,16 @@ function AppContent(props: AppProps) {
         break;
       case "down":
         e.preventDefault();
-        actions.moveHighlight(1);
-        actions.selectHighlighted();
+        actions.moveCursor(e.shift ? 10 : 1);
         detailScrollboxRef?.scrollTo(0);
         break;
       case "up":
         e.preventDefault();
-        actions.moveHighlight(-1);
-        actions.selectHighlighted();
+        actions.moveCursor(e.shift ? -10 : -1);
         detailScrollboxRef?.scrollTo(0);
         break;
       case "return":
         e.preventDefault();
-        actions.selectHighlighted();
         // Reset detail scroll to top when selecting a new commit
         detailScrollboxRef?.scrollTo(0);
         break;
@@ -284,31 +291,29 @@ function AppContent(props: AppProps) {
         break;
       case "left":
         e.preventDefault();
-        actions.setHighlightedIndex(state.selectedIndex());
-        actions.setScrollTargetIndex(state.selectedIndex());
+        // Re-center scroll on current cursor position
+        actions.setScrollTargetIndex(state.cursorIndex());
         break;
       case "g":
         e.preventDefault();
         if (!e.shift) {
-          actions.setHighlightedIndex(0);
+          actions.setCursorIndex(0);
           actions.setScrollTargetIndex(0);
         } else {
-          actions.setHighlightedIndex(state.filteredRows().length - 1);
-          actions.setScrollTargetIndex(state.filteredRows().length - 1);
+          const lastIdx = state.filteredRows().length - 1;
+          actions.setCursorIndex(lastIdx);
+          actions.setScrollTargetIndex(lastIdx);
         }
-        actions.selectHighlighted();
         detailScrollboxRef?.scrollTo(0);
         break;
       case "pagedown":
         e.preventDefault();
-        actions.moveHighlight(20);
-        actions.selectHighlighted();
+        actions.moveCursor(20);
         detailScrollboxRef?.scrollTo(0);
         break;
       case "pageup":
         e.preventDefault();
-        actions.moveHighlight(-20);
-        actions.selectHighlighted();
+        actions.moveCursor(-20);
         detailScrollboxRef?.scrollTo(0);
         break;
       case "/":
