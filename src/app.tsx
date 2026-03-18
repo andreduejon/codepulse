@@ -330,9 +330,6 @@ function AppContent(props: AppProps) {
         loadData(newAll ? undefined : state.currentBranch());
         break;
       }
-      case "f":
-        actions.setFocusCurrentBranch(!state.focusCurrentBranch());
-        break;
     }
   });
 

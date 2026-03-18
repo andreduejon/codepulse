@@ -100,9 +100,8 @@ KEYBOARD SHORTCUTS:
   /                      Search commits
   b                      Branch picker
   a                      Toggle all branches
-  T                      Toggle tag visibility
-  f                      Focus current branch
-   Ctrl+T                 Change theme
+   T                      Toggle tag visibility
+    Ctrl+T                 Change theme
    Ctrl+S                 Open settings
   ?                      Show help
   q or Ctrl+C            Quit

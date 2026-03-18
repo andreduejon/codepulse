@@ -46,10 +46,6 @@ export interface GraphRow {
   connectors: Connector[];
   /** Whether this commit is on the current branch's first-parent chain */
   isOnCurrentBranch: boolean;
-  /** The column index of the current branch tip (for consistent focus color) */
-  currentBranchTipColumn: number;
-  /** The lane color index of the current branch tip (decoupled from column position) */
-  currentBranchTipColor: number;
   /** The lane color index of this commit's node (decoupled from column position) */
   nodeColor: number;
   /** Debug: the branch this commit belongs to (first-parent chain from nearest tip) */
@@ -90,8 +86,6 @@ export interface GraphRow {
 export interface GraphColumn {
   color: number;
   active: boolean;
-  /** Whether this column's lane is tracking a current-branch hash */
-  isFocused?: boolean;
   /** Whether this column's lane belongs to a remote-only branch (no local counterpart) */
   isRemoteOnly?: boolean;
 }
@@ -112,8 +106,6 @@ export interface Connector {
   type: ConnectorType;
   color: number;
   column: number;
-  /** Whether this connector belongs to the focused (current) branch path */
-  isFocused?: boolean;
   /** Whether this connector belongs to a remote-only branch */
   isRemoteOnly?: boolean;
 }

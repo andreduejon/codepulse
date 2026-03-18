@@ -377,50 +377,6 @@ function test4() {
 }
 
 // ============================================================
-// Test 5: corner-top-left in focus mode dims trailing dash
-//
-// In focus mode, the trailing ─ after ╭ should use dimColor,
-// not the focus/branch color.
-// ============================================================
-function test5() {
-  console.log("\nTest 5: corner-top-left focus mode dims trailing dash");
-
-  const DIM = "#999999";
-  const syntheticRow: Connector[] = [
-    { type: "tee-right", color: 1, column: 1, isFocused: true },  // node block
-    { type: "corner-top-left", color: 2, column: 0, isFocused: false },
-  ];
-
-  const rendered = renderFanOutRow(syntheticRow, {
-    themeColors: THEME_COLORS,
-    focusMode: true,
-    dimColor: DIM,
-  });
-  const str = charsToString(rendered);
-
-  // ╭ at col 0 should be present
-  assert(str.includes("╭"), `Should render ╭, got "${str}"`);
-
-  // The trailing dash after ╭ should use dimColor
-  // Find the ╭ GraphChar and the dash GraphChar
-  let foundCorner = false;
-  for (let i = 0; i < rendered.length; i++) {
-    if (rendered[i].char.includes("╭")) {
-      foundCorner = true;
-      // Next char should be the trailing dash
-      if (i + 1 < rendered.length && rendered[i + 1].char === "─") {
-        assert(rendered[i + 1].color === DIM,
-          `Trailing dash after ╭ should use dimColor in focus mode, got "${rendered[i + 1].color}"`);
-      } else if (rendered[i].char === "╭─") {
-        // Combined glyph — in focus mode they should be separate
-        assert(false, "In focus mode, ╭ and ─ should be separate GraphChars for proper coloring");
-      }
-    }
-  }
-  assert(foundCorner, "╭ should be present in rendered output");
-}
-
-// ============================================================
 // Test 6: Verify renderFanOutRow handles all corner types
 //
 // Comprehensive check that no corner type renders as empty space.
@@ -524,7 +480,6 @@ test1();
 test2();
 test3();
 test4();
-test5();
 test6();
 test7();
 

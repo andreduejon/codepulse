@@ -16,7 +16,6 @@ export interface AppState {
   loading: Accessor<boolean>;
   showAllBranches: Accessor<boolean>;
   showTags: Accessor<boolean>;
-  focusCurrentBranch: Accessor<boolean>;
   searchQuery: Accessor<string>;
   filteredRows: Accessor<GraphRow[]>;
   maxGraphColumns: Accessor<number>;
@@ -41,7 +40,6 @@ export interface AppActions {
   setLoading: (loading: boolean) => void;
   setShowAllBranches: (show: boolean) => void;
   setShowTags: (show: boolean) => void;
-  setFocusCurrentBranch: (focus: boolean) => void;
   setSearchQuery: (query: string) => void;
   setDetailFocused: (focused: boolean) => void;
   setDetailCursorIndex: (index: number) => void;
@@ -77,7 +75,6 @@ export function createAppState(initialMaxCount: number = 200) {
   const [loading, setLoading] = createSignal(true);
   const [showAllBranches, setShowAllBranches] = createSignal(true);
   const [showTags, setShowTags] = createSignal(true);
-  const [focusCurrentBranch, setFocusCurrentBranch] = createSignal(false);
   const [searchQuery, setSearchQuery] = createSignal("");
   const [maxGraphColumns, setMaxGraphColumns] = createSignal(0);
   const [maxCount, setMaxCount] = createSignal(initialMaxCount);
@@ -148,7 +145,6 @@ export function createAppState(initialMaxCount: number = 200) {
     loading,
     showAllBranches,
     showTags,
-    focusCurrentBranch,
     searchQuery,
     filteredRows,
     maxGraphColumns,
@@ -173,7 +169,6 @@ export function createAppState(initialMaxCount: number = 200) {
     setLoading,
     setShowAllBranches,
     setShowTags,
-    setFocusCurrentBranch,
     setSearchQuery,
     setDetailFocused,
     setDetailCursorIndex,

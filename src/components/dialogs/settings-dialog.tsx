@@ -35,13 +35,6 @@ export default function SettingsDialog(props: Readonly<SettingsDialogProps>) {
     { kind: "header", label: "Display" },
     {
       kind: "toggle",
-      label: "Focus current branch",
-      hotkey: "f",
-      get: () => state.focusCurrentBranch(),
-      set: (v) => actions.setFocusCurrentBranch(v),
-    },
-    {
-      kind: "toggle",
       label: "Show author column",
       get: () => state.showAuthorColumn(),
       set: (v) => actions.setShowAuthorColumn(v),

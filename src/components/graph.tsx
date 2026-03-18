@@ -147,30 +147,12 @@ function GraphLine(props: { row: GraphRow; index: number; highlighted: boolean; 
   // Graph width for this line (must match ColumnHeader's graphWidth formula)
   const graphWidth = () => Math.max(effectiveGraphCols() * 2 + 1 + (viewportActive() ? 2 : 0), 6);
 
-  // Focus mode: compute render options with dim colors for non-current-branch lanes.
-  // The current branch's lane lines (│) stay colored on ALL rows so you can
-  // visually trace the branch path through the graph, even when non-current-branch
-  // commits appear in between. Only the node dot is dimmed via isNodeFocused.
-  // All focused-branch elements use a single consistent color (the tip column's color).
-  const focusBranchColor = () =>
-    getColorForColumn(props.row.currentBranchTipColor, theme().graphColors);
-
   const renderOpts = () => {
-    const base = {
+    return {
       themeColors: theme().graphColors,
       padToColumns: padCols(),
       remoteOnlyDimColor: state.dimRemoteOnly() ? theme().foregroundMuted : undefined,
     };
-    if (state.focusCurrentBranch()) {
-      return {
-        ...base,
-        focusMode: true,
-        dimColor: theme().foregroundMuted,
-        focusBranchColor: focusBranchColor(),
-        isNodeFocused: props.row.isOnCurrentBranch,
-      };
-    }
-    return base;
   };
 
   // Edge indicator helper — single 2-char column appended to the right
@@ -295,17 +277,8 @@ function GraphLine(props: { row: GraphRow; index: number; highlighted: boolean; 
   const laneColor = () => getColorForColumn(props.row.nodeColor, theme().graphColors);
   const t = () => theme();
 
-  // Is this commit on the current branch? (for focus mode dimming)
-  const isOnCurrentBranch = () => props.row.isOnCurrentBranch;
-
-  // Effective lane color for ref badges: single focus color if on current branch, dimmed otherwise
+  // Effective lane color for ref badges: dimmed for remote-only
   const effectiveLaneColor = () => {
-    if (state.focusCurrentBranch() && !isOnCurrentBranch()) {
-      return t().foregroundMuted;
-    }
-    if (state.focusCurrentBranch() && isOnCurrentBranch()) {
-      return focusBranchColor();
-    }
     if (props.row.isRemoteOnly && state.dimRemoteOnly()) {
       return t().foregroundMuted;
     }
@@ -314,13 +287,10 @@ function GraphLine(props: { row: GraphRow; index: number; highlighted: boolean; 
 
   // Effective text color for the commit subject (primary column).
   // Selected rows use primary color. Highlighted-only rows use foreground.
-  // Dimmed for focus mode / remote-only otherwise.
+  // Dimmed for remote-only.
   const effectiveTextColor = () => {
     if (props.selected) return t().primary;
     if (props.highlighted) return t().foreground;
-    if (state.focusCurrentBranch() && !isOnCurrentBranch()) {
-      return t().foregroundMuted;
-    }
     if (props.row.isRemoteOnly && state.dimRemoteOnly()) {
       return t().foregroundMuted;
     }
@@ -329,13 +299,10 @@ function GraphLine(props: { row: GraphRow; index: number; highlighted: boolean; 
 
   // Secondary column color (author, date, hash).
   // Selected → primary (bold applied separately). Highlighted → foreground.
-  // Otherwise muted (or dimmed for focus/remote-only).
+  // Otherwise muted (or dimmed for remote-only).
   const secondaryColumnColor = () => {
     if (props.selected) return t().primary;
     if (props.highlighted) return t().foreground;
-    if (state.focusCurrentBranch() && !isOnCurrentBranch()) {
-      return t().foregroundMuted;
-    }
     if (props.row.isRemoteOnly && state.dimRemoteOnly()) {
       return t().foregroundMuted;
     }

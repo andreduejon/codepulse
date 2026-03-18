@@ -23,17 +23,6 @@ function renderOpts(padToColumns?: number) {
   return { themeColors: THEME_COLORS, padToColumns };
 }
 
-function focusOpts(isNodeFocused: boolean, padToColumns: number) {
-  return {
-    themeColors: THEME_COLORS,
-    focusMode: true,
-    dimColor: "#555555",
-    focusBranchColor: "#ff0000",
-    isNodeFocused,
-    padToColumns,
-  };
-}
-
 /** Check if any GraphChar in an array contains a specific character */
 function hasChar(chars: GraphChar[], ch: string): boolean {
   return chars.some(gc => gc.char === ch || gc.char.includes(ch));
@@ -233,44 +222,6 @@ function test6() {
 }
 
 // ============================================================
-// Test 7: Fan-out █ in focus mode
-// ============================================================
-function test7() {
-  console.log("\nTest 7: Fan-out █ in focus mode");
-
-  const commits: Commit[] = [
-    makeCommit("c1", ["p1"], [{ name: "feature", type: "branch", isCurrent: false }]),
-    makeCommit("c2", ["p1"], [{ name: "feature2", type: "branch", isCurrent: false }]),
-    makeCommit("p1", [], [{ name: "main", type: "branch", isCurrent: true }]),
-  ];
-
-  const rows = buildGraph(commits);
-  const parentRow = rows.find(r => r.commit.hash === "p1")!;
-  const padCols = Math.max(...rows.map(r => r.columns.length));
-  const opts = focusOpts(parentRow.isOnCurrentBranch, padCols);
-
-  // Fan-out rows' █ at the focused (current) branch's node column
-  // should use the focus color since p1 IS on the current branch
-  for (let fi = 0; fi < parentRow.fanOutRows!.length; fi++) {
-    const foChars = renderFanOutRow(parentRow.fanOutRows![fi], opts);
-    const foBlock = foChars.find(gc => gc.char.includes("█"));
-    assert(foBlock !== undefined, `Fan-out row ${fi}: should have █`);
-    assert(
-      foBlock!.color === "#ff0000",
-      `Fan-out row ${fi}: █ should use focus color (#ff0000), got ${foBlock!.color}`,
-    );
-
-    // Trailing ─ should be dimmed in focus mode
-    const dashes = foChars.filter(gc => gc.char === "─");
-    for (const d of dashes) {
-      assert(
-        d.color === "#555555",
-        `Fan-out row ${fi}: trailing ─ should be dimmed (#555555), got ${d.color}`,
-      );
-    }
-  }
-}
-
 // ============================================================
 // Test 8: Fan-out merge optimization — simple case (no connections on commit row)
 // ============================================================
@@ -490,7 +441,6 @@ test3();
 test4();
 test5();
 test6();
-test7();
 test8();
 test9();
 test10();

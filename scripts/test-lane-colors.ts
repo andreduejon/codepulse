@@ -225,30 +225,4 @@ console.log("\nTest 6: Interior null slot reuse - new lane gets fresh color\n");
   }
 }
 
-// ─── Test 7: currentBranchTipColor is set correctly ──────────────
-console.log("\nTest 7: currentBranchTipColor matches node color of tip commit\n");
-{
-  const commits = [
-    makeCommit("A", ["B"], [{ name: "main", type: "branch", isCurrent: true }]),
-    makeCommit("B", ["C"], []),
-    makeCommit("C", [], []),
-  ];
-  const rows = buildGraph(commits);
-
-  const tipRow = rows.find(r => r.commit.hash === "A")!;
-  // currentBranchTipColor should equal the tip's own nodeColor
-  assert(
-    tipRow.currentBranchTipColor === tipRow.nodeColor,
-    `currentBranchTipColor (${tipRow.currentBranchTipColor}) should match tip nodeColor (${tipRow.nodeColor})`
-  );
-
-  // All rows should share the same currentBranchTipColor
-  for (const row of rows) {
-    assert(
-      row.currentBranchTipColor === tipRow.currentBranchTipColor,
-      `Row ${row.commit.hash} currentBranchTipColor should match tip`
-    );
-  }
-}
-
 printResults("lane-color");
