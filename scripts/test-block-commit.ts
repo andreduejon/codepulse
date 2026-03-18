@@ -12,7 +12,7 @@
 
 import { buildGraph, renderGraphRow, renderFanOutRow, type GraphChar } from "../src/git/graph";
 import type { Commit } from "../src/git/types";
-import { assert, makeCommit, getResults, printResults } from "./test-helpers";
+import { assert, makeCommit, getResults, printResults, runTest } from "./test-helpers";
 
 const THEME_COLORS = [
   "#c0c001", "#c0c002", "#c0c003", "#c0c004",
@@ -435,18 +435,18 @@ function test13() {
 console.log("Block Commit Tests");
 console.log("=".repeat(60));
 
-test1();
-test2();
-test3();
-test4();
-test5();
-test6();
-test8();
-test9();
-test10();
-test11();
-test12();
-test13();
+runTest(test1);
+runTest(test2);
+runTest(test3);
+runTest(test4);
+runTest(test5);
+runTest(test6);
+runTest(test8);
+runTest(test9);
+runTest(test10);
+runTest(test11);
+runTest(test12);
+runTest(test13);
 
 const { failedTests } = getResults();
 printResults("block-commit");

@@ -15,6 +15,7 @@ import {
   makeCommit,
   assert,
   printResults,
+  runTest,
 } from "./test-helpers";
 
 const THEME_COLORS = [
@@ -474,12 +475,12 @@ function test7() {
 console.log("Fan-Out Corner Tests (corner-top-left/right in renderFanOutRow)");
 console.log("=".repeat(60));
 
-test1();
-test2();
-test3();
-test4();
-test6();
-test7();
+runTest(test1);
+runTest(test2);
+runTest(test3);
+runTest(test4);
+runTest(test6);
+runTest(test7);
 
 const { totalTests, passedTests, failedTests } = (await import("./test-helpers")).getResults();
 printResults("fan-out-corner");

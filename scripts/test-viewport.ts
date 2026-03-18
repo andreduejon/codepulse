@@ -13,7 +13,9 @@ import {
   assert,
   resetResults,
   printResults,
+  runTest,
 } from "./test-helpers";
+
 
 // ============================================================
 // Test 1: computeViewportOffsets — no sliding when limit >= maxColumns
@@ -349,15 +351,15 @@ function test9() {
 // ============================================================
 resetResults();
 
-test1();
-test2();
-test3();
-test4();
-test5();
-test6();
-test7();
-test8();
-test9();
+runTest(test1);
+runTest(test2);
+runTest(test3);
+runTest(test4);
+runTest(test5);
+runTest(test6);
+runTest(test7);
+runTest(test8);
+runTest(test9);
 
 printResults("viewport");
 const { failedTests } = await import("./test-helpers").then(m => m.getResults());

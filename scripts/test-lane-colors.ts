@@ -7,7 +7,7 @@
  */
 
 import { buildGraph, renderGraphRow, getColorForColumn } from "../src/git/graph";
-import { assert, makeCommit, printResults, resetResults } from "./test-helpers";
+import { assert, makeCommit, printResults, resetResults, runTest } from "./test-helpers";
 
 resetResults();
 
@@ -18,8 +18,8 @@ console.log("=".repeat(60));
 // Scenario: Feature branch at col 1 closes, then a new merge opens
 // a lane at col 1 (the freed slot). The new lane should NOT have
 // the same color as the old col 1 lane.
-console.log("\nTest 1: New lane at reused interior slot gets fresh color\n");
-{
+runTest(() => {
+  console.log("\nTest 1: New lane at reused interior slot gets fresh color\n");
   // Graph shape:
   //   A (main tip, col 0)
   //   B (feature tip, col 1)  — opens lane at col 1
@@ -65,11 +65,11 @@ console.log("\nTest 1: New lane at reused interior slot gets fresh color\n");
   const rowE = rows.find(r => r.commit.hash === "E")!;
   // A is at col 0, E may be at col 1. These are different branches.
   assert(rowA.nodeColor !== rowE.nodeColor, "A and E (different branches) should have different colors");
-}
+});
 
 // ─── Test 2: Sequential color indices are monotonically increasing ───
-console.log("\nTest 2: Color indices increase monotonically across lanes\n");
-{
+runTest(() => {
+  console.log("\nTest 2: Color indices increase monotonically across lanes\n");
   const commits = [
     makeCommit("A", ["D"], [{ name: "main", type: "branch", isCurrent: true }]),
     makeCommit("B", ["D"], [{ name: "feat1", type: "branch", isCurrent: false }]),
@@ -96,11 +96,11 @@ console.log("\nTest 2: Color indices increase monotonically across lanes\n");
     rows[1].nodeColor !== rows[2].nodeColor,
     "B and C should have different nodeColors"
   );
-}
+});
 
 // ─── Test 3: Connector colors match their lane, not column position ───
-console.log("\nTest 3: Straight connector colors match lane color, not column index\n");
-{
+runTest(() => {
+  console.log("\nTest 3: Straight connector colors match lane color, not column index\n");
   // Two parallel branches: main at col 0, feature at col 1
   // When B is processed, A's lane at col 0 is still active (straight)
   const commits = [
@@ -123,11 +123,11 @@ console.log("\nTest 3: Straight connector colors match lane color, not column in
       `Straight at col 0 color (${straightAtCol0.color}) should match main's nodeColor (${rowA.nodeColor})`
     );
   }
-}
+});
 
 // ─── Test 4: GraphColumn colors match lane colors ────────────────
-console.log("\nTest 4: GraphColumn.color matches lane color (not column index)\n");
-{
+runTest(() => {
+  console.log("\nTest 4: GraphColumn.color matches lane color (not column index)\n");
   const commits = [
     makeCommit("A", ["C"], [{ name: "main", type: "branch", isCurrent: true }]),
     makeCommit("B", ["C"], [{ name: "feature", type: "branch", isCurrent: false }]),
@@ -154,11 +154,11 @@ console.log("\nTest 4: GraphColumn.color matches lane color (not column index)\n
       `Column 1 color (${rowB.columns[1].color}) should match B's nodeColor (${rowB.nodeColor})`
     );
   }
-}
+});
 
 // ─── Test 5: Rendered colors are correct (actual hex values) ──────
-console.log("\nTest 5: Rendered graph row uses correct hex colors from lane colors\n");
-{
+runTest(() => {
+  console.log("\nTest 5: Rendered graph row uses correct hex colors from lane colors\n");
   const COLORS = [
     "#f38ba8", "#a6e3a1", "#89b4fa", "#f9e2af",
     "#cba6f7", "#94e2d5", "#fab387", "#74c7ec",
@@ -183,11 +183,11 @@ console.log("\nTest 5: Rendered graph row uses correct hex colors from lane colo
       `Node color should be ${expectedColor} but got ${nodeGlyph.color}`
     );
   }
-}
+});
 
 // ─── Test 6: Interior null slot reuse scenario (the original bug) ──
-console.log("\nTest 6: Interior null slot reuse - new lane gets fresh color\n");
-{
+runTest(() => {
+  console.log("\nTest 6: Interior null slot reuse - new lane gets fresh color\n");
   // Simulate the exact scenario from the bug:
   // 1. Branch at col 2 (blue) with some other branch at col 4 (purple)
   // 2. Col 4 closes
@@ -223,6 +223,6 @@ console.log("\nTest 6: Interior null slot reuse - new lane gets fresh color\n");
       `Branch corner color (${branchCorner.color}) should differ from B4 color (${rowB4.nodeColor})`
     );
   }
-}
+});
 
 printResults("lane-color");

@@ -13,6 +13,7 @@ import {
   makeCommit,
   assert,
   printResults,
+  runTest,
 } from "./test-helpers";
 
 const THEME_COLORS = [
@@ -446,12 +447,12 @@ function test6() {
 console.log("Fan-Out Tests");
 console.log("=".repeat(60));
 
-test1();
-test2();
-test3();
-test4();
-test5();
-test6();
+runTest(test1);
+runTest(test2);
+runTest(test3);
+runTest(test4);
+runTest(test5);
+runTest(test6);
 
 const { totalTests, passedTests, failedTests } = (await import("./test-helpers")).getResults();
 printResults("fan-out");

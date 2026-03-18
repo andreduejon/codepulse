@@ -14,6 +14,7 @@ import {
   makeCommit,
   assert,
   printResults,
+  runTest,
 } from "./test-helpers";
 
 /**
@@ -275,15 +276,15 @@ function test9() {
 console.log("Column Stability Tests");
 console.log("=".repeat(60));
 
-test1();
-test2();
-test3();
-test4();
-test5();
-test6();
-test7();
-test8();
-test9();
+runTest(test1);
+runTest(test2);
+runTest(test3);
+runTest(test4);
+runTest(test5);
+runTest(test6);
+runTest(test7);
+runTest(test8);
+runTest(test9);
 
 const { totalTests, passedTests, failedTests } = (await import("./test-helpers")).getResults();
 printResults("column-stability");
