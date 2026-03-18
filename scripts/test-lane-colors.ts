@@ -1,5 +1,6 @@
+#!/usr/bin/env bun
 /**
- * Test: Lane colors are decoupled from column indices.
+ * Test script: lane colors are decoupled from column indices.
  *
  * When lanes reuse interior null slots, they should get fresh sequential
  * color indices rather than inheriting the color of the column position.
@@ -7,26 +8,30 @@
  */
 
 import { buildGraph, renderGraphRow, getColorForColumn } from "../src/git/graph";
-import { assert, makeCommit, printResults, resetResults, runTest } from "./test-helpers";
-
-resetResults();
+import { assert, makeCommit, printResults, runTest, printGraph } from "./test-helpers";
 
 console.log("Lane Color Consistency Tests");
 console.log("=".repeat(60));
 
 // ─── Test 1: Colors differ when lane reuses interior slot ──────
-// Scenario: Feature branch at col 1 closes, then a new merge opens
-// a lane at col 1 (the freed slot). The new lane should NOT have
-// the same color as the old col 1 lane.
+//
+// Graph:
+//   █     A  (main)
+//   │
+//   │ █   B  (feature)  ← opens lane at col 1
+//   │ │
+//   █─╯   C             ← feature lane closes (merged fan-out)
+//   │
+//   █─╮   D             ← merge: opens lane for hotfix parent E
+//   │ │
+//   │ █   E  (hotfix)   ← reuses freed col 1 slot
+//   │ │
+//   █─╯   F  ()
+//
+// When feature's lane at col 1 closes and hotfix opens a new lane
+// at the same column, the new lane should get a fresh color index.
 runTest(() => {
   console.log("\nTest 1: New lane at reused interior slot gets fresh color\n");
-  // Graph shape:
-  //   A (main tip, col 0)
-  //   B (feature tip, col 1)  — opens lane at col 1
-  //   C (on main, merges feature) — feature lane at col 1 closes
-  //   D (on main, merges hotfix) — opens new lane at col 1 for hotfix parent
-  //   E (hotfix parent, at col 1)
-  //   F (common ancestor)
   const commits = [
     makeCommit("A", ["C"], [{ name: "main", type: "branch", isCurrent: true }]),
     makeCommit("B", ["C"], [{ name: "feature", type: "branch", isCurrent: false }]),
@@ -36,9 +41,12 @@ runTest(() => {
     makeCommit("F", [], []),
   ];
   const rows = buildGraph(commits);
+  printGraph(rows);
 
   // Find the row for B (feature tip) — its node is at col 1
-  const rowB = rows.find(r => r.commit.hash === "B")!;
+  const rowB = rows.find(r => r.commit.hash === "B");
+  assert(rowB !== undefined, "Should find row for B");
+
   const bNodeColor = rowB.nodeColor;
 
   // Find the row for D (merge commit that opens new lane for hotfix parent E)
@@ -68,6 +76,19 @@ runTest(() => {
 });
 
 // ─── Test 2: Sequential color indices are monotonically increasing ───
+//
+// Graph:
+//   █       A  (main)
+//   │
+//   │ █     B  (feat1)
+//   │ │
+//   │ │ █   C  (feat2)
+//   │ │ │
+//   █─┼─╯
+//   █─╯     D  ()
+//
+// Three branches from common ancestor D. Each should have a unique
+// color index (A != B != C).
 runTest(() => {
   console.log("\nTest 2: Color indices increase monotonically across lanes\n");
   const commits = [
@@ -77,10 +98,7 @@ runTest(() => {
     makeCommit("D", [], []),
   ];
   const rows = buildGraph(commits);
-
-  // Each commit should have a unique, increasing nodeColor
-  const colors = rows.map(r => r.nodeColor);
-  const uniqueColors = new Set(colors);
+  printGraph(rows);
 
   // A, B, C should all have different colors (D may share with one of them
   // since it reuses A's lane)
@@ -99,16 +117,25 @@ runTest(() => {
 });
 
 // ─── Test 3: Connector colors match their lane, not column position ───
+//
+// Graph:
+//   █     A  (main)     ← col 0
+//   │
+//   │ █   B  (feature)  ← col 1; A's lane continues as │ at col 0
+//   │ │
+//   █─╯   C  ()
+//
+// When B is processed, A's lane at col 0 is still active (straight │).
+// The straight connector's color should match A's nodeColor (main's lane).
 runTest(() => {
   console.log("\nTest 3: Straight connector colors match lane color, not column index\n");
-  // Two parallel branches: main at col 0, feature at col 1
-  // When B is processed, A's lane at col 0 is still active (straight)
   const commits = [
     makeCommit("A", ["C"], [{ name: "main", type: "branch", isCurrent: true }]),
     makeCommit("B", ["C"], [{ name: "feature", type: "branch", isCurrent: false }]),
     makeCommit("C", [], []),
   ];
   const rows = buildGraph(commits);
+  printGraph(rows);
 
   // Row B should have A's lane as a straight at col 0
   const rowB = rows.find(r => r.commit.hash === "B")!;
@@ -126,6 +153,17 @@ runTest(() => {
 });
 
 // ─── Test 4: GraphColumn colors match lane colors ────────────────
+//
+// Graph:  (same as Test 3)
+//   █     A  (main)     ← col 0
+//   │
+//   │ █   B  (feature)  ← col 1; both columns active
+//   │ │
+//   █─╯   C  ()
+//
+// Row B has 2 active columns: col 0 (main) and col 1 (feature).
+// GraphColumn[0].color should equal A's nodeColor;
+// GraphColumn[1].color should equal B's nodeColor.
 runTest(() => {
   console.log("\nTest 4: GraphColumn.color matches lane color (not column index)\n");
   const commits = [
@@ -134,6 +172,7 @@ runTest(() => {
     makeCommit("C", [], []),
   ];
   const rows = buildGraph(commits);
+  printGraph(rows);
 
   // Row B has both lanes active: col 0 (A/main), col 1 (B/feature)
   const rowB = rows.find(r => r.commit.hash === "B")!;
@@ -157,6 +196,16 @@ runTest(() => {
 });
 
 // ─── Test 5: Rendered colors are correct (actual hex values) ──────
+//
+// Graph:  (same as Test 3)
+//   █     A  (main)
+//   │
+//   │ █   B  (feature)
+//   │ │
+//   █─╯   C  ()
+//
+// Render row A with a known color palette and verify the █ glyph
+// gets the correct hex color from getColorForColumn(A.nodeColor).
 runTest(() => {
   console.log("\nTest 5: Rendered graph row uses correct hex colors from lane colors\n");
   const COLORS = [
@@ -170,6 +219,7 @@ runTest(() => {
     makeCommit("C", [], []),
   ];
   const rows = buildGraph(commits);
+  printGraph(rows);
   const rowA = rows.find(r => r.commit.hash === "A")!;
   const rendered = renderGraphRow(rowA, { themeColors: COLORS });
 
@@ -186,13 +236,32 @@ runTest(() => {
 });
 
 // ─── Test 6: Interior null slot reuse scenario (the original bug) ──
+//
+// Graph:
+//   █             A   (main)
+//   │
+//   │ █           B1  (f1)
+//   │ │
+//   │ │ █         B2  (f2)
+//   │ │ │
+//   │ │ │ █       B3  (f3)
+//   │ │ │ │
+//   │ │ │ │ █     B4  (f4)
+//   │ │ │ │ │
+//   █─┼─┼─┼─┼─╮   B   ()  ← merge: opens lane for hotfix parent E
+//   │ │ │ │ │ │
+//   │ │ │ │ │ █   E   (hotfix)  ← reuses a freed interior slot
+//   │ │ │ │ │ │
+//   █─┼─┼─┼─┼─╯
+//   █─┼─┼─┼─╯
+//   █─┼─┼─╯
+//   █─┼─╯
+//   █─╯           D   ()
+//
+// B1-B4 occupy cols 1-4. When B merges E, it opens a new lane.
+// The new lane should get a fresh color, not reuse B4's color.
 runTest(() => {
   console.log("\nTest 6: Interior null slot reuse - new lane gets fresh color\n");
-  // Simulate the exact scenario from the bug:
-  // 1. Branch at col 2 (blue) with some other branch at col 4 (purple)
-  // 2. Col 4 closes
-  // 3. A merge opens a new lane at col 4 (reusing the null slot)
-  // 4. The new lane at col 4 should NOT be purple — it should get a fresh color
   const commits = [
     makeCommit("A", ["B"], [{ name: "main", type: "branch", isCurrent: true }]),
     makeCommit("B1", ["D"], [{ name: "f1", type: "branch", isCurrent: false }]),
@@ -204,6 +273,7 @@ runTest(() => {
     makeCommit("D", [], []),
   ];
   const rows = buildGraph(commits);
+  printGraph(rows);
 
   // Find B's row — it's a merge that opens a lane for E
   const rowB = rows.find(r => r.commit.hash === "B")!;
@@ -226,3 +296,9 @@ runTest(() => {
 });
 
 printResults("lane-color");
+
+const { failedTests } = (await import("./test-helpers")).getResults();
+
+if (failedTests > 0) {
+  process.exit(1);
+}

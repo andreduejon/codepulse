@@ -5,7 +5,6 @@
  * Covers: octopus merges, single-commit repos, lane reuse,
  * multiple refs on same commit, and root commit handling.
  */
-
 import { buildGraph } from "../src/git/graph";
 import {
   makeCommit,
@@ -14,10 +13,24 @@ import {
   hasConnector,
   findConnector,
   runTest,
+  printGraph,
 } from "./test-helpers";
 
 // ============================================================
 // Test 1: Octopus merge (3 parents)
+//
+// Graph:
+//   █─┬─╮   m1  (develop)  ← octopus merge of d1 + a1 + b1
+//   │ │ │
+//   │ █ │   a1  (feat-A)
+//   │ │ │
+//   │ │ █   b1  (feat-B)
+//   │ │ │
+//   █ │ │   d1  ()
+//   │ │ │
+//   █─┼─╯
+//   █─╯     d0  ()
+//
 // A merge commit with 3 parents should produce spanning connectors
 // for each secondary parent without crashing.
 // ============================================================
@@ -36,6 +49,7 @@ function test1() {
   let rows: ReturnType<typeof buildGraph>;
   try {
     rows = buildGraph(commits);
+    printGraph(rows);
     assert(true, "buildGraph did not crash on octopus merge");
   } catch (e) {
     assert(false, `buildGraph crashed on octopus merge: ${e}`);
@@ -50,15 +64,19 @@ function test1() {
 
   // Should have spanning connectors for each secondary parent
   // At minimum: horizontals, corners, or tees connecting to parent lanes
-  const spanTypes = ["horizontal", "corner-top-right", "corner-top-left",
-    "corner-bottom-right", "corner-bottom-left", "tee-left", "tee-right"];
-  const spanConnectors = mergeRow.connectors.filter(c => spanTypes.includes(c.type));
+  const spanTypes = new Set(["horizontal", "corner-top-right", "corner-top-left",
+    "corner-bottom-right", "corner-bottom-left", "tee-left", "tee-right"]);
+  const spanConnectors = mergeRow.connectors.filter(c => spanTypes.has(c.type));
   assert(spanConnectors.length >= 2,
     `Octopus merge should have spanning connectors for 2 secondary parents, got ${spanConnectors.length}`);
 }
 
 // ============================================================
 // Test 2: Single-commit repo
+//
+// Graph:
+//   █  abc123  (main)
+//
 // A repo with just one commit and no parents should produce
 // exactly one row with nodeColumn=0 and only a node connector.
 // ============================================================
@@ -70,13 +88,14 @@ function test2() {
   ];
 
   const rows = buildGraph(commits);
+  printGraph(rows);
 
   assert(rows.length === 1, `Should have 1 row, got ${rows.length}`);
   assert(rows[0].nodeColumn === 0, `nodeColumn should be 0, got ${rows[0].nodeColumn}`);
 
   const nodeConn = findConnector(rows[0].connectors, "node");
   assert(nodeConn !== undefined, "Should have a node connector");
-  assert(nodeConn!.column === 0, "Node should be at column 0");
+  assert(nodeConn.column === 0, "Node should be at column 0");
 
   // Should only have one meaningful connector (the node)
   const nonEmpty = rows[0].connectors.filter(c => c.type !== "empty");
@@ -88,19 +107,37 @@ function test2() {
 }
 
 // ============================================================
-// Test 3: Lane reuse
+// Test 3: Lane reuse (freed interior column)
+//
+// Graph:
+//   █       d5  (develop)
+//   │
+//   █─╮     m2  ()  ← merges feat-B
+//   │ │
+//   │ █     b1  (feat-B)
+//   │ │
+//   █ │     d4  ()
+//   │ │
+//   █─┼─╮   m1  ()  ← merges feat-A
+//   │ │ │
+//   │ │ █   a1  (feat-A)
+//   │ │ │
+//   █─╯ │   d3  ()
+//   │   │
+//   │ █ │   r1  (release)  ← keeps col 1 alive
+//   │ │ │
+//   █─┼─╯
+//   █─╯     d2  ()
+//   │
+//   █       d1  ()
+//
 // feat-A merges and frees its lane. feat-B starts later and
-// should reuse feat-A's freed interior column (if it becomes a gap).
+// should reuse the freed column. Release keeps a lane alive
+// so there's an interior gap to reuse.
 // ============================================================
 function test3() {
   console.log("\nTest 3: Lane reuse (freed interior column)");
 
-  // develop at col 0 (always stays active)
-  // feat-A starts at col 1, merges, freeing col 1
-  // feat-B should reuse col 1 if it's an interior gap
-  //
-  // But for col 1 to be an interior gap, there must be an active lane
-  // at col 2+ when feat-B starts. Let's add a long-lived release branch.
   const commits = [
     makeCommit("d5", ["m2"], [{ name: "develop", type: "branch", isCurrent: true }], "develop after merge B"),
     makeCommit("m2", ["d4", "b1"], [], "Merge feat-B"),
@@ -115,6 +152,7 @@ function test3() {
   ];
 
   const rows = buildGraph(commits);
+  printGraph(rows);
 
   // Verify the graph builds without errors
   assert(rows.length === 10, `Should have 10 rows, got ${rows.length}`);
@@ -125,8 +163,7 @@ function test3() {
   assert(aRow !== undefined, "feat-A row should exist");
   assert(bRow !== undefined, "feat-B row should exist");
 
-  // If lane reuse works, feat-B may use feat-A's freed column (or another gap).
-  // We can't guarantee which column exactly, but the graph should be compact —
+  // If lane reuse works, the graph should be compact —
   // the max column used shouldn't grow unnecessarily.
   const maxUsedCol = Math.max(...rows.map(r => r.nodeColumn));
   // With develop + release + feat-A/B, we need at most 3 columns simultaneously
@@ -136,8 +173,14 @@ function test3() {
 
 // ============================================================
 // Test 4: Multiple refs on same commit
+//
+// Graph:
+//   █  d2  (develop, origin/develop, origin/HEAD)
+//   │
+//   █  d1
+//
 // develop, origin/develop, origin/HEAD all on same commit.
-// Should NOT create duplicate lanes.
+// Should NOT create duplicate lanes — only 1 column needed.
 // ============================================================
 function test4() {
   console.log("\nTest 4: Multiple refs on same commit");
@@ -152,6 +195,7 @@ function test4() {
   ];
 
   const rows = buildGraph(commits);
+  printGraph(rows);
 
   assert(rows.length === 2, `Should have 2 rows, got ${rows.length}`);
 
@@ -167,8 +211,14 @@ function test4() {
 
 // ============================================================
 // Test 5: Root commit handling
+//
+// Graph:
+//   █  d2  (develop)
+//   │
+//   █  d1  ← root (no parents)
+//
 // A root commit (no parents) should close its lane.
-// No connectors should appear below the root in the connector row.
+// No active columns should remain after the root row.
 // ============================================================
 function test5() {
   console.log("\nTest 5: Root commit handling");
@@ -179,6 +229,7 @@ function test5() {
   ];
 
   const rows = buildGraph(commits);
+  printGraph(rows);
 
   // d1 is the root
   const rootRow = rows[1];
@@ -207,7 +258,7 @@ runTest(test3);
 runTest(test4);
 runTest(test5);
 
-const { totalTests, passedTests, failedTests } = (await import("./test-helpers")).getResults();
+const { failedTests } = (await import("./test-helpers")).getResults();
 printResults("edge-case");
 
 if (failedTests > 0) {

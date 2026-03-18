@@ -14,10 +14,9 @@ import {
   assert,
   assertEqual,
   printResults,
-  findConnector,
   hasConnector,
   runTest,
-  graphCharsToAscii,
+  printGraph,
 } from "./test-helpers";
 
 // ============================================================
@@ -25,8 +24,20 @@ import {
 // ============================================================
 
 // Test 1: Parent already processed, node merges right-to-left (Case D in buildGraph)
-// c1 → p1 (processed first), c2 → p1 (p1 already in processedColumns)
-// c2's lane should close with a connector toward p1's column.
+//
+// Graph:
+//   col: 0  1
+//   ──────────
+//        █     c1  (feat-A)
+//        │
+//        █     p1  (main)
+//        │
+//        ├─█   c2  (feat-B)
+//        │
+//        █     root
+//
+// c2 finds p1 in processedColumns → lane closes with connectors
+// toward p1's column.
 function test1() {
   console.log("\nTest 1: Single-parent, parent already processed — lane closes");
 
@@ -37,8 +48,9 @@ function test1() {
     makeCommit("root", [], []),
   ];
   const rows = buildGraph(commits);
+  printGraph(rows);
 
-  const c2Row = rows.find(r => r.commit.hash === "c2")!;
+  const c2Row = rows.find(r => r.commit.hash === "c2");
   assert(c2Row !== undefined, "c2 row should exist");
 
   // c2 should have merge/close connectors pointing toward p1's column
@@ -50,14 +62,26 @@ function test1() {
   assert(closeConns.length > 0, "c2 should have close/merge connectors toward p1");
 
   // p1's row should still have an active column for its own lane to root
-  const p1Row = rows.find(r => r.commit.hash === "p1")!;
+  const p1Row = rows.find(r => r.commit.hash === "p1");
   assert(p1Row !== undefined, "p1 row should exist");
   assert(p1Row.columns.some(c => c.active), "p1 should have at least one active column");
 }
 
 // Test 2: Parent already processed, existing lane at different column (Case A)
-// Two siblings sharing a parent — first sibling processed with the parent,
-// second sibling finds parent in lanes AND processedColumns.
+//
+// Graph (same topology as test1, different assertion focus):
+//   col: 0  1
+//   ──────────
+//        █     c1  (feat-A)
+//        │
+//        █     p1  (main)
+//        │
+//        ├─█   c2  (feat-B)
+//        │
+//        █     root
+//
+// c2 finds p1 in both lanes[] and processedColumns → triggers
+// Case A (existingLane !== nodeColumn && processedColumns.has).
 function test2() {
   console.log("\nTest 2: Single-parent, parent already processed with existing lane — merge");
 
@@ -71,8 +95,9 @@ function test2() {
     makeCommit("root", [], []),
   ];
   const rows = buildGraph(commits);
+  printGraph(rows);
 
-  const c2Row = rows.find(r => r.commit.hash === "c2")!;
+  const c2Row = rows.find(r => r.commit.hash === "c2");
   const p1Row = rows.find(r => r.commit.hash === "p1")!;
   assert(c2Row !== undefined, "c2 row should exist");
   assert(p1Row !== undefined, "p1 row should exist");
@@ -88,6 +113,19 @@ function test2() {
 }
 
 // Test 3: parentLaneColors populated correctly after already-processed merge
+//
+// Graph (same topology as tests 1-2):
+//   col: 0  1
+//   ──────────
+//        █     c1  (feat-A)
+//        │
+//        █     p1  (main)
+//        │
+//        ├─█   c2  (feat-B) ← parentColors[0] should be a valid number
+//        │
+//        █     root
+//
+// Verifies c2's parentColors array has exactly 1 numeric entry.
 function test3() {
   console.log("\nTest 3: parentColors set correctly after already-processed merge");
 
@@ -98,6 +136,7 @@ function test3() {
     makeCommit("root", [], []),
   ];
   const rows = buildGraph(commits);
+  printGraph(rows);
 
   const c2Row = rows.find(r => r.commit.hash === "c2")!;
   // c2's parentColors should have exactly 1 entry (single parent)
@@ -111,6 +150,14 @@ function test3() {
 // ============================================================
 
 // Test 4: Detached HEAD commit is identified as current branch
+//
+// Graph:
+//   col: 0
+//   ──────
+//        █  d2  (HEAD, detached)
+//        █  d1  (main)
+//
+// Detached HEAD commit should be on the current branch path.
 function test4() {
   console.log("\nTest 4: Detached HEAD is on current branch path");
 
@@ -119,12 +166,22 @@ function test4() {
     makeCommit("d1", [], [{ name: "main", type: "branch", isCurrent: false }]),
   ];
   const rows = buildGraph(commits);
+  printGraph(rows);
 
   // HEAD commit should be marked as on current branch
-  assert(rows[0].isOnCurrentBranch === true, "Detached HEAD commit should be on current branch path");
+  assert(rows[0].isOnCurrentBranch, "Detached HEAD commit should be on current branch path");
 }
 
 // Test 5: Detached HEAD commit is NOT treated as remote-only
+//
+// Graph (same topology as test4):
+//   col: 0
+//   ──────
+//        █  d2  (HEAD, detached) ← NOT remote-only
+//        █  d1  (main)
+//
+// "head" ref type returns false for hasNonRemoteOnlyRef, but d2 is
+// rescued by current-branch walk (d1 has a local branch).
 function test5() {
   console.log("\nTest 5: Detached HEAD commit is not remote-only");
 
@@ -133,16 +190,26 @@ function test5() {
     makeCommit("d1", [], [{ name: "main", type: "branch", isCurrent: false }]),
   ];
   const rows = buildGraph(commits);
+  printGraph(rows);
 
   // Even though "head" type returns false for hasNonRemoteOnlyRef,
   // d2 is rescued by nonRemoteOnlyHashes because d1 (its descendant via
   // first-parent) has a local branch. The current-branch walk sets
   // currentBranchHashes which marks d2 as non-remote-only.
-  assert(rows[0].isRemoteOnly === false,
+  assert(!rows[0].isRemoteOnly,
     "Detached HEAD commit should NOT be remote-only");
 }
 
 // Test 6: Detached HEAD branchName falls through to priority 4
+//
+// Graph (same topology as test4-5):
+//   col: 0
+//   ──────
+//        █  d2  (HEAD) ← branchName = "HEAD" (priority 4)
+//        █  d1  (main) ← branchName = "main" (priority 1-2)
+//
+// d2 is only on HEAD's first-parent chain, not main's, so
+// branchName = "HEAD".
 function test6() {
   console.log("\nTest 6: Detached HEAD branchName assigned from branchNameMap");
 
@@ -151,6 +218,7 @@ function test6() {
     makeCommit("d1", [], [{ name: "main", type: "branch", isCurrent: false }]),
   ];
   const rows = buildGraph(commits);
+  printGraph(rows);
 
   // branchNameMap processes tips by priority. "main" (priority 1-2) wins over
   // "HEAD" (priority 4) because last-writer-wins and "main" is processed last.
@@ -162,6 +230,14 @@ function test6() {
 }
 
 // Test 7: Detached HEAD with no other refs — standalone
+//
+// Graph:
+//   col: 0
+//   ──────
+//        █  d1  (HEAD, detached, standalone)
+//
+// Single commit with only a "head" ref. Should be on current
+// branch, have branchName "HEAD", and node at col 0.
 function test7() {
   console.log("\nTest 7: Standalone detached HEAD (no other branches)");
 
@@ -169,8 +245,9 @@ function test7() {
     makeCommit("d1", [], [{ name: "HEAD", type: "head", isCurrent: true }]),
   ];
   const rows = buildGraph(commits);
+  printGraph(rows);
 
-  assert(rows[0].isOnCurrentBranch === true, "Standalone HEAD should be on current branch");
+  assert(rows[0].isOnCurrentBranch, "Standalone HEAD should be on current branch");
   assertEqual(rows[0].branchName, "HEAD", "Standalone HEAD branchName should be 'HEAD'");
   // Single commit, no parent — should have a node connector
   assert(hasConnector(rows[0].connectors, "node", 0), "Standalone HEAD should have node at col 0");
@@ -181,6 +258,20 @@ function test7() {
 // ============================================================
 
 // Test 8: Node with only left connection renders as "█ " (no trailing dash)
+//
+// Graph:
+//   col: 0  1
+//   ──────────
+//        █     c1  (feat-A)
+//        │
+//        █     p1  (main)
+//        │
+//        ├─█   c2  (feat-B → parent p1 at col 0)
+//        │
+//        █     root
+//
+// c2 at col 1 connects LEFT to p1 at col 0. The node should
+// render as "█ " (no trailing dash — dash only for RIGHT connections).
 function test8() {
   console.log("\nTest 8: Node with left connection renders without trailing dash");
 
@@ -193,10 +284,10 @@ function test8() {
     makeCommit("root", [], []),
   ];
   const rows = buildGraph(commits);
+  printGraph(rows);
 
   const c2Row = rows.find(r => r.commit.hash === "c2")!;
   const rendered = renderGraphRow(c2Row, {});
-  const ascii = graphCharsToAscii(rendered);
 
   // The node for c2 should render as "█ " not "█─"
   // because the connection is to the LEFT (toward col 0), not to the right
@@ -209,6 +300,16 @@ function test8() {
 }
 
 // Test 9: Node with right connection renders as "█─"
+//
+// Graph:
+//   col: 0  1
+//   ──────────
+//        █──╮  m1  (main, merge: parents [d1, f1])
+//        │  █  f1  (feature)
+//        █──╯  d1
+//
+// m1 at col 0 connects RIGHT to f1's lane at col 1. The node
+// should have a trailing dash (█─).
 function test9() {
   console.log("\nTest 9: Node with right connection renders with trailing dash");
 
@@ -219,6 +320,7 @@ function test9() {
     makeCommit("d1", [], []),
   ];
   const rows = buildGraph(commits);
+  printGraph(rows);
 
   const m1Row = rows.find(r => r.commit.hash === "m1")!;
   const rendered = renderGraphRow(m1Row, {});
@@ -240,6 +342,20 @@ function test9() {
 }
 
 // Test 10: Left-connection connectors appear at correct columns
+//
+// Graph (same topology as test8):
+//   col: 0  1
+//   ──────────
+//        █     c1  (feat-A)
+//        │
+//        █     p1  (main)
+//        │
+//        ├─█   c2  (feat-B) ← connectors between cols 0 and 1
+//        │
+//        █     root
+//
+// Verifies that connector glyphs exist between c2's column and
+// p1's column for the left connection.
 function test10() {
   console.log("\nTest 10: Left-connection connectors at correct columns");
 
@@ -250,6 +366,7 @@ function test10() {
     makeCommit("root", [], []),
   ];
   const rows = buildGraph(commits);
+  printGraph(rows);
 
   const c2Row = rows.find(r => r.commit.hash === "c2")!;
   const p1Row = rows.find(r => r.commit.hash === "p1")!;
@@ -272,6 +389,14 @@ function test10() {
 // ============================================================
 
 // Test 11: upstream/ remote is correctly identified as remote-only
+//
+// Graph:
+//   col: 0
+//   ──────
+//        █  f1  (upstream/feature) [RO]
+//        █  d1  (main)
+//
+// "upstream/feature" with no local "feature" branch → remote-only.
 function test11() {
   console.log("\nTest 11: upstream/ remote-only when no local counterpart");
 
@@ -280,15 +405,23 @@ function test11() {
     makeCommit("d1", [], [{ name: "main", type: "branch", isCurrent: true }]),
   ];
   const rows = buildGraph(commits);
+  printGraph(rows);
 
   // upstream/feature has no local "feature" branch → should be remote-only
-  assert(rows[0].isRemoteOnly === true,
+  assert(rows[0].isRemoteOnly,
     "upstream/feature without local counterpart should be remote-only");
   assert(rows[0].remoteOnlyBranches.has("upstream/feature"),
     "upstream/feature should be in remoteOnlyBranches set");
 }
 
 // Test 12: upstream/ remote is NOT remote-only when local branch exists
+//
+// Graph:
+//   col: 0
+//   ──────
+//        █  d1  (main, upstream/main)
+//
+// "upstream/main" has local counterpart "main" → NOT remote-only.
 function test12() {
   console.log("\nTest 12: upstream/ remote not remote-only when local exists");
 
@@ -299,14 +432,22 @@ function test12() {
     ]),
   ];
   const rows = buildGraph(commits);
+  printGraph(rows);
 
-  assert(rows[0].isRemoteOnly === false,
+  assert(!rows[0].isRemoteOnly,
     "Commit with local main should not be remote-only");
   assert(!rows[0].remoteOnlyBranches.has("upstream/main"),
     "upstream/main should NOT be remote-only when local 'main' exists");
 }
 
 // Test 13: origin/ and upstream/ pointing to same commit — both tracked
+//
+// Graph:
+//   col: 0
+//   ──────
+//        █  d1  (main, origin/main, upstream/main)
+//
+// Both remotes have local "main" counterpart → neither is remote-only.
 function test13() {
   console.log("\nTest 13: origin/ and upstream/ on same commit, both tracked");
 
@@ -318,17 +459,27 @@ function test13() {
     ]),
   ];
   const rows = buildGraph(commits);
+  printGraph(rows);
 
   // Neither remote should be remote-only since local "main" exists
   assert(!rows[0].remoteOnlyBranches.has("origin/main"),
     "origin/main should not be remote-only when local main exists");
   assert(!rows[0].remoteOnlyBranches.has("upstream/main"),
     "upstream/main should not be remote-only when local main exists");
-  assert(rows[0].isRemoteOnly === false,
+  assert(!rows[0].isRemoteOnly,
     "Commit should not be remote-only with local branch");
 }
 
 // Test 14: Nested remote path — origin/renovate/major strips to "renovate/major"
+//
+// Graph:
+//   col: 0
+//   ──────
+//        █  r1  (origin/renovate/major) [RO]
+//        █  d1  (main)
+//
+// "origin/renovate/major" → localEquivalent "renovate/major".
+// No local "renovate/major" branch → remote-only.
 function test14() {
   console.log("\nTest 14: Nested remote path prefix stripping");
 
@@ -337,16 +488,25 @@ function test14() {
     makeCommit("d1", [], [{ name: "main", type: "branch", isCurrent: true }]),
   ];
   const rows = buildGraph(commits);
+  printGraph(rows);
 
   // "origin/renovate/major" → localEquivalent = "renovate/major"
   // No local branch named "renovate/major" → remote-only
   assert(rows[0].remoteOnlyBranches.has("origin/renovate/major"),
     "origin/renovate/major should be remote-only (no local 'renovate/major')");
-  assert(rows[0].isRemoteOnly === true,
+  assert(rows[0].isRemoteOnly,
     "Commit on origin/renovate/major should be remote-only");
 }
 
 // Test 15: Nested remote path NOT remote-only when local equivalent exists
+//
+// Graph:
+//   col: 0
+//   ──────
+//        █  r1  (renovate/major, origin/renovate/major, main)
+//
+// "origin/renovate/major" → localEquivalent "renovate/major".
+// Local "renovate/major" exists → NOT remote-only.
 function test15() {
   console.log("\nTest 15: Nested remote path with local equivalent");
 
@@ -358,6 +518,7 @@ function test15() {
     ]),
   ];
   const rows = buildGraph(commits);
+  printGraph(rows);
 
   // "origin/renovate/major" → localEquivalent = "renovate/major"
   // Local "renovate/major" exists → NOT remote-only
@@ -366,6 +527,15 @@ function test15() {
 }
 
 // Test 16: Multiple remotes, same branch name — both remote-only when no local
+//
+// Graph:
+//   col: 0
+//   ──────
+//        █  f1  (origin/feature, upstream/feature) [RO]
+//        █  d1  (main)
+//
+// Both "origin/feature" and "upstream/feature" → localEquivalent "feature".
+// No local "feature" → both are remote-only.
 function test16() {
   console.log("\nTest 16: Multiple remotes same branch, both remote-only");
 
@@ -377,6 +547,7 @@ function test16() {
     makeCommit("d1", [], [{ name: "main", type: "branch", isCurrent: true }]),
   ];
   const rows = buildGraph(commits);
+  printGraph(rows);
 
   // Both origin/feature and upstream/feature have localEquivalent "feature"
   // No local "feature" → both should be remote-only
@@ -384,7 +555,7 @@ function test16() {
     "origin/feature should be remote-only");
   assert(rows[0].remoteOnlyBranches.has("upstream/feature"),
     "upstream/feature should be remote-only");
-  assert(rows[0].isRemoteOnly === true,
+  assert(rows[0].isRemoteOnly,
     "Commit with only remote-only refs should be remote-only");
 }
 
@@ -411,7 +582,7 @@ runTest(test14);
 runTest(test15);
 runTest(test16);
 
-const { totalTests, passedTests, failedTests } = (await import("./test-helpers")).getResults();
+const { failedTests } = (await import("./test-helpers")).getResults();
 printResults("coverage-gap");
 
 if (failedTests > 0) {

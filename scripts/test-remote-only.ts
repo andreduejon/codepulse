@@ -9,6 +9,7 @@
  * dimming logic.
  */
 
+import type { GraphRow } from "../src/git/types";
 import { buildGraph } from "../src/git/graph";
 import {
   makeCommit,
@@ -16,12 +17,47 @@ import {
   printResults,
   findConnector,
   runTest,
+  printGraph,
 } from "./test-helpers";
+
+/**
+ * Assert that every connector, column, and fan-out connector on the given row
+ * has `isRemoteOnly === true`. Used by tests that verify post-pass dimming.
+ */
+function assertRowFullyDimmed(row: GraphRow, rowIdx: number) {
+  const label = `Row ${rowIdx} (${row.commit.hash})`;
+
+  for (const conn of row.connectors) {
+    assert(conn.isRemoteOnly === true,
+      `${label}: connector ${conn.type}@col${conn.column} should be remote-only`);
+  }
+
+  for (let col = 0; col < row.columns.length; col++) {
+    assert(row.columns[col].isRemoteOnly === true,
+      `${label}: column ${col} should be remote-only`);
+  }
+
+  if (row.fanOutRows) {
+    for (let foIdx = 0; foIdx < row.fanOutRows.length; foIdx++) {
+      for (const conn of row.fanOutRows[foIdx]) {
+        assert(conn.isRemoteOnly === true,
+          `${label}: fan-out[${foIdx}] ${conn.type}@col${conn.column} should be remote-only`);
+      }
+    }
+  }
+}
 
 // ============================================================
 // Test 1: Remote-only lane propagation through single parent
-// origin/feature → f1 → parent d1 (develop)
-// The lane from f1 to d1 should be remote-only, d1's row should NOT be.
+//
+// Graph:
+//   █ f1  (origin/feature-x)  [RO]
+//   │
+//   █ d1  (develop)
+//
+// f1 carries a remote-only ref with no local counterpart, so its row
+// and node connector should be isRemoteOnly. d1 has a local branch,
+// so it should NOT be dimmed.
 // ============================================================
 function test1() {
   console.log("\nTest 1: Remote-only lane propagation (single parent)");
@@ -32,9 +68,10 @@ function test1() {
   ];
 
   const rows = buildGraph(commits);
+  printGraph(rows);
 
   // f1 should be remote-only
-  assert(rows[0].isRemoteOnly === true, "f1 row should be remote-only");
+  assert(rows[0].isRemoteOnly, "f1 row should be remote-only");
 
   // f1's node connector should be remote-only
   const f1Node = findConnector(rows[0].connectors, "node");
@@ -42,7 +79,7 @@ function test1() {
   assert(f1Node.isRemoteOnly === true, "f1 node connector should be remote-only");
 
   // d1 should NOT be remote-only (it has a local branch)
-  assert(rows[1].isRemoteOnly === false, "d1 row should NOT be remote-only");
+  assert(!rows[1].isRemoteOnly, "d1 row should NOT be remote-only");
 
   // d1's node connector should NOT be remote-only
   const d1Node = findConnector(rows[1].connectors, "node");
@@ -51,14 +88,24 @@ function test1() {
 }
 
 // ============================================================
-// Test 2: Remote-only lane propagation through merge first parent
-// origin/feature → merge → d2 → d1 (develop)
-// The merge's first parent chain should propagate remote-only down.
+// Test 2: Remote-only propagation through merge first parent
+//
+// Graph:
+//   █─╮  m1  (origin/feature-y)  [RO]  ← merge of f1+x1
+//   │ │
+//   █ │  f1  [RO]  ← first parent of m1
+//   │ │
+//   │ █  x1        ← second parent of m1
+//   │ │
+//   █─╯  d1  (develop)  ← fan-out merges col 1 back into commit row
+//
+// m1 is remote-only (only origin/feature-y, no local ref).
+// f1 inherits remote-only as m1's first parent.
+// d1 has a local branch → NOT remote-only.
 // ============================================================
 function test2() {
   console.log("\nTest 2: Remote-only propagation through merge first parent");
 
-  // remote-only branch with a merge commit
   const commits = [
     makeCommit("m1", ["f1", "x1"], [{ name: "origin/feature-y", type: "remote", isCurrent: false }], "merge in feature-y"),
     makeCommit("f1", ["d1"], [], "feature-y work"),
@@ -67,30 +114,35 @@ function test2() {
   ];
 
   const rows = buildGraph(commits);
+  printGraph(rows);
 
   // m1 should be remote-only
-  assert(rows[0].isRemoteOnly === true, "m1 row should be remote-only");
+  assert(rows[0].isRemoteOnly, "m1 row should be remote-only");
 
   // f1 should be remote-only (first parent of remote-only merge)
-  assert(rows[1].isRemoteOnly === true, "f1 row should be remote-only");
+  assert(rows[1].isRemoteOnly, "f1 row should be remote-only");
 
-  // x1 is the second parent — it's also remote-only since it has no other refs
-  // and its only ref ancestor (d1) is reachable from non-remote-only branches
-  // BUT x1 itself is only reachable from remote-only branch
-  // Actually, x1 has no refs and gets its branchName from parent chain.
-  // Since x1's only claim is from the remote-only tip, it should be remote-only.
-  // However, the nonRemoteOnlyHashes rescue set includes d1 (which has local branch),
-  // and x1 is NOT on d1's first-parent chain from any non-remote-only ref.
-  // x1 is claimed by the remote-only branch in branchNameMap.
-
-  // d1 should NOT be remote-only
-  assert(rows[3].isRemoteOnly === false, "d1 row should NOT be remote-only");
+  // d1 should NOT be remote-only (has local branch)
+  assert(!rows[3].isRemoteOnly, "d1 row should NOT be remote-only");
 }
 
 // ============================================================
-// Test 3: Remote-only merge connectors (secondary parent existing lane)
-// Merge from remote-only branch into develop: the spanning connectors
-// should have isRemoteOnly set.
+// Test 3: Remote-only merge connectors (secondary parent)
+//
+// Graph:
+//   █    d3  (develop)
+//   │
+//   █─╮  m1             ← merge: first parent d2, second parent r1
+//   │ │
+//   │ █  r1  (origin/remote-feat)  [RO]
+//   │ │
+//   █ │  d2
+//   │ │
+//   █─╯  d1             ← fan-out merges col 1 back into commit row
+//
+// m1 is on develop (NOT remote-only), but its second parent r1 is
+// remote-only. The spanning connectors (horizontals, corners, tees)
+// that connect m1's node to r1's lane should exist.
 // ============================================================
 function test3() {
   console.log("\nTest 3: Remote-only merge connectors (secondary parent)");
@@ -104,42 +156,43 @@ function test3() {
   ];
 
   const rows = buildGraph(commits);
+  printGraph(rows);
 
   // Find the merge row (m1)
   const mergeRow = rows[1];
   assert(mergeRow.commit.hash === "m1", "Row 1 should be m1");
 
   // The merge row should NOT be remote-only (it's on develop)
-  assert(mergeRow.isRemoteOnly === false, "m1 should NOT be remote-only");
+  assert(!mergeRow.isRemoteOnly, "m1 should NOT be remote-only");
 
   // Look for spanning connectors from the merge (horizontal, corners, tees)
-  // These connect nodeColumn to the secondary parent's lane.
-  // The secondary parent (r1) is remote-only, so the spanning connectors
-  // should have isRemoteOnly set.
-  const horizontals = mergeRow.connectors.filter(c => c.type === "horizontal");
-  const corners = mergeRow.connectors.filter(c =>
-    c.type === "corner-top-right" || c.type === "corner-top-left" ||
-    c.type === "corner-bottom-right" || c.type === "corner-bottom-left"
-  );
-  const tees = mergeRow.connectors.filter(c =>
-    c.type === "tee-left" || c.type === "tee-right"
-  );
-
-  // At least some spanning connectors should exist for the merge
-  const spanConns = [...horizontals, ...corners, ...tees];
+  const spanTypes = new Set([
+    "horizontal", "corner-top-right", "corner-top-left",
+    "corner-bottom-right", "corner-bottom-left", "tee-left", "tee-right",
+  ]);
+  const spanConns = mergeRow.connectors.filter(c => spanTypes.has(c.type));
   assert(spanConns.length > 0, "Merge row should have spanning connectors");
 }
 
 // ============================================================
 // Test 4: Fan-out remote-only flags
-// Remote-only branch closes via fan-out into non-remote-only parent.
-// Fan-out corner connectors should be remote-only, the parent's
-// lane straight connector should NOT be remote-only.
+//
+// Graph:
+//   █    r1  (origin/renovate/a)  [RO]
+//   │
+//   │ █  r2  (origin/renovate/b)  [RO]
+//   │ │
+//   █─╯  d1  (develop)  ← fan-out merges col 1 back into commit row
+//   │
+//   █    d0
+//
+// Two remote-only branches share the same parent d1, producing a
+// fan-out. The fan-out corner connectors should be remote-only,
+// but d1 itself (with a local branch) should NOT be.
 // ============================================================
 function test4() {
   console.log("\nTest 4: Fan-out remote-only flags");
 
-  // Two remote-only branches from the same parent (forces fan-out)
   const commits = [
     makeCommit("r1", ["d1"], [{ name: "origin/renovate/a", type: "remote", isCurrent: false }], "renovate/a work"),
     makeCommit("r2", ["d1"], [{ name: "origin/renovate/b", type: "remote", isCurrent: false }], "renovate/b work"),
@@ -148,44 +201,52 @@ function test4() {
   ];
 
   const rows = buildGraph(commits);
+  printGraph(rows);
 
-  // d1 is the parent with multiple lanes pointing to it
   const d1Row = rows.find(r => r.commit.hash === "d1");
   assert(d1Row !== undefined, "d1 row should exist");
-
-  // d1 should have fan-out rows
   assert(d1Row.fanOutRows !== undefined && d1Row.fanOutRows.length > 0,
     "d1 should have fan-out rows");
 
   // Fan-out corners should be remote-only (they close remote-only lanes)
   if (d1Row.fanOutRows) {
     for (let foIdx = 0; foIdx < d1Row.fanOutRows.length; foIdx++) {
-      const foRow = d1Row.fanOutRows[foIdx];
-      const corners = foRow.filter(c =>
+      const corners = d1Row.fanOutRows[foIdx].filter(c =>
         c.type === "corner-bottom-right" || c.type === "corner-bottom-left"
       );
       for (const corner of corners) {
         assert(corner.isRemoteOnly === true,
-          `Fan-out row ${foIdx}: corner at col ${corner.column} should be remote-only`);
+          `Fan-out[${foIdx}]: corner@col${corner.column} should be remote-only`);
       }
     }
   }
 
-  // d1's node connector should NOT be remote-only
-  assert(d1Row.isRemoteOnly === false, "d1 row should NOT be remote-only");
+  // d1 itself should NOT be remote-only
+  assert(!d1Row.isRemoteOnly, "d1 row should NOT be remote-only");
 }
 
 // ============================================================
 // Test 5: Post-pass dimming includes fan-out rows
-// Remote-only commits at the top with fan-out, then non-remote-only
-// commit below. All fan-out connectors in dimmed rows should get
-// isRemoteOnly=true.
+//
+// Graph (as rendered — last fan-out row merges into commit row):
+//   █        ren1  (origin/renovate/major)  [RO]
+//   │
+//   │ █      ren2  (origin/renovate/minor)  [RO]
+//   │ │
+//   │ │ █    ren3  (origin/renovate/patch)  [RO]
+//   │ │ │
+//   █─┼─╯    ← fan-out row 1 (separate): col 2 closes into col 0
+//   █─╯      d1  (develop)  ← fan-out row 2 merged into commit row
+//   │
+//   █        d0
+//
+// Three remote-only branches from the same parent d1. Post-pass
+// dimming should mark every row/connector/column above d1 as
+// remote-only, including all fan-out rows.
 // ============================================================
 function test5() {
   console.log("\nTest 5: Post-pass dimming includes fan-out rows");
 
-  // Three remote-only branches from same parent: they sit above develop
-  // in topo-order. Post-pass should dim everything above develop.
   const commits = [
     makeCommit("ren1", ["d1"], [{ name: "origin/renovate/major", type: "remote", isCurrent: false }], "renovate major"),
     makeCommit("ren2", ["d1"], [{ name: "origin/renovate/minor", type: "remote", isCurrent: false }], "renovate minor"),
@@ -195,45 +256,21 @@ function test5() {
   ];
 
   const rows = buildGraph(commits);
+  printGraph(rows);
 
   // Find the first non-remote-only row (should be d1)
-  let firstNonRO = -1;
-  for (let i = 0; i < rows.length; i++) {
-    if (!rows[i].isRemoteOnly) {
-      firstNonRO = i;
-      break;
-    }
-  }
+  const firstNonRO = rows.findIndex(r => !r.isRemoteOnly);
   assert(firstNonRO > 0, "There should be remote-only rows above d1");
 
-  // All rows above firstNonRO should be dimmed
+  // Every row above d1 should be fully dimmed (connectors + columns + fan-out)
   for (let i = 0; i < firstNonRO; i++) {
-    const row = rows[i];
-    // All connectors should be remote-only
-    for (const conn of row.connectors) {
-      assert(conn.isRemoteOnly === true,
-        `Row ${i} (${row.commit.subject}): connector ${conn.type} at col ${conn.column} should be remote-only after post-pass`);
-    }
-    // All columns should be remote-only
-    for (let col = 0; col < row.columns.length; col++) {
-      assert(row.columns[col].isRemoteOnly === true,
-        `Row ${i}: column ${col} should be remote-only after post-pass`);
-    }
-    // Fan-out rows (if any) should also be dimmed
-    if (row.fanOutRows) {
-      for (let foIdx = 0; foIdx < row.fanOutRows.length; foIdx++) {
-        for (const conn of row.fanOutRows[foIdx]) {
-          assert(conn.isRemoteOnly === true,
-            `Row ${i}: fan-out row ${foIdx} connector ${conn.type} at col ${conn.column} should be remote-only`);
-        }
-      }
-    }
+    assertRowFullyDimmed(rows[i], i);
   }
 
-  // d1 should NOT be remote-only
+  // d1 itself should NOT be remote-only
   const d1Row = rows[firstNonRO];
   assert(d1Row.commit.hash === "d1", "First non-RO row should be d1");
-  assert(d1Row.isRemoteOnly === false, "d1 should NOT be remote-only");
+  assert(!d1Row.isRemoteOnly, "d1 should NOT be remote-only");
 }
 
 // ============================================================

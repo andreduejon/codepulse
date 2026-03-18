@@ -1,9 +1,8 @@
 /**
  * Shared test helpers for graph engine tests.
  */
-
 import type { Commit, Connector, GraphRow } from "../src/git/types";
-import { renderGraphRow, renderConnectorRow, renderFanOutRow, type GraphChar, type RenderOptions } from "../src/git/graph";
+import { type GraphChar, renderGraphRow, renderFanOutRow, renderConnectorRow, getMaxGraphColumns } from "../src/git/graph";
 
 let totalTests = 0;
 let passedTests = 0;
@@ -14,7 +13,7 @@ let failedTests = 0;
  * Caught by `runTest()` to prevent cascading crashes from `!` assertions
  * after a failed check, while still allowing later tests to run.
  */
-export class TestAssertionError extends Error {
+class TestAssertionError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "TestAssertionError";
@@ -72,12 +71,6 @@ export function getResults() {
   return { totalTests, passedTests, failedTests };
 }
 
-export function resetResults() {
-  totalTests = 0;
-  passedTests = 0;
-  failedTests = 0;
-}
-
 export function printResults(label: string) {
   console.log(`\n${"=".repeat(60)}`);
   console.log(`Results: ${passedTests}/${totalTests} passed, ${failedTests} failed`);
@@ -132,76 +125,62 @@ export function findConnector(
   return connectors.find(c => c.type === type);
 }
 
-/** Count connectors of a given type */
-export function countConnectors(connectors: Connector[], type: string): number {
-  return connectors.filter(c => c.type === type).length;
-}
-
-// ============================================================
-// Graph visualization helpers — for test failure diagnostics
-// ============================================================
-
 /** Convert GraphChar[] to a plain ASCII string (no colors). */
 export function graphCharsToAscii(chars: GraphChar[]): string {
   return chars.map(gc => gc.char).join("");
 }
 
-/**
- * Render a complete GraphRow (commit row + connector row + fan-out rows)
- * as a multi-line ASCII string for test diagnostics.
- */
-export function renderRowToAscii(row: GraphRow, opts: RenderOptions = {}): string[] {
-  const lines: string[] = [];
+const DEFAULT_THEME_COLORS = [
+  "#c0c001", "#c0c002", "#c0c003", "#c0c004",
+  "#c0c005", "#c0c006", "#c0c007", "#c0c008",
+];
 
-  // Fan-out rows above the commit
-  if (row.fanOutRows) {
-    for (let i = 0; i < row.fanOutRows.length; i++) {
-      const foChars = renderFanOutRow(row.fanOutRows[i], opts);
-      lines.push(`  fo[${i}] ${graphCharsToAscii(foChars)}`);
+/**
+ * Print the full rendered graph for a set of rows, matching the real app's
+ * visual output. Mirrors the `canMergeFanOut` optimization from graph.tsx:
+ * when a commit row has no merge/branch connectors, the last fan-out row
+ * is used as the commit row's graph (single █ block).
+ */
+export function printGraph(rows: GraphRow[], themeColors: string[] = DEFAULT_THEME_COLORS) {
+  const maxCols = getMaxGraphColumns(rows);
+  const opts = { themeColors, padToColumns: maxCols };
+  for (const row of rows) {
+    const foRows = row.fanOutRows;
+
+    // Mirror canMergeFanOut: commit row has no merge/branch connectors?
+    const commitHasConnections = row.connectors.some(c =>
+      c.type === "horizontal" || c.type === "tee-left" || c.type === "tee-right" ||
+      c.type === "corner-top-right" || c.type === "corner-top-left" ||
+      c.type === "corner-bottom-right" || c.type === "corner-bottom-left"
+    );
+    const canMerge = foRows && foRows.length > 0 && !commitHasConnections;
+
+    if (foRows) {
+      // Print fan-out rows above the commit.
+      // If merging, print all except the last (last becomes the commit row).
+      const count = canMerge ? foRows.length - 1 : foRows.length;
+      for (let i = 0; i < count; i++) {
+        const foAscii = graphCharsToAscii(renderFanOutRow(foRows[i], opts));
+        console.log(`        ${foAscii}`);
+      }
     }
-  }
 
-  // Commit row
-  const commitChars = renderGraphRow(row, opts);
-  lines.push(`  node  ${graphCharsToAscii(commitChars)}  ${row.commit.shortHash} ${row.commit.subject}`);
+    // Commit row: use last fan-out row's graph if merging, else normal
+    const refs = row.commit.refs.map(r => r.name).join(", ");
+    const ro = row.isRemoteOnly ? " [RO]" : "";
+    if (canMerge && foRows) {
+      const lastFO = foRows[foRows.length - 1];
+      const foAscii = graphCharsToAscii(renderFanOutRow(lastFO, opts));
+      console.log(`        ${foAscii}  ${row.commit.hash}  (${refs})${ro}`);
+    } else {
+      const commitAscii = graphCharsToAscii(renderGraphRow(row, opts));
+      console.log(`        ${commitAscii}  ${row.commit.hash}  (${refs})${ro}`);
+    }
 
-  // Connector row
-  const connChars = renderConnectorRow(row, opts);
-  lines.push(`  conn  ${graphCharsToAscii(connChars)}`);
-
-  return lines;
-}
-
-/**
- * Render an array of GraphRows as an ASCII graph.
- * Useful for printing expected vs actual in test failures.
- */
-export function renderGraphToAscii(rows: GraphRow[], opts: RenderOptions = {}): string {
-  const lines: string[] = [];
-  for (let i = 0; i < rows.length; i++) {
-    lines.push(...renderRowToAscii(rows[i], opts));
-  }
-  return lines.join("\n");
-}
-
-/**
- * Print expected and actual ASCII graphs side by side when a test fails.
- * Call this in test code after detecting a mismatch to aid debugging.
- */
-export function printGraphComparison(
-  label: string,
-  expected: string[],
-  actual: string[],
-): void {
-  const maxLen = Math.max(expected.length, actual.length);
-  const colWidth = 50;
-  console.error(`\n  ${label}:`);
-  console.error(`  ${"EXPECTED".padEnd(colWidth)}  ACTUAL`);
-  console.error(`  ${"-".repeat(colWidth)}  ${"-".repeat(colWidth)}`);
-  for (let i = 0; i < maxLen; i++) {
-    const exp = (expected[i] ?? "").padEnd(colWidth);
-    const act = actual[i] ?? "";
-    const marker = expected[i] !== actual[i] ? " <<<" : "";
-    console.error(`  ${exp}  ${act}${marker}`);
+    // Connector row below the commit
+    const connAscii = graphCharsToAscii(renderConnectorRow(row, opts));
+    if (connAscii.trim()) {
+      console.log(`        ${connAscii}`);
+    }
   }
 }

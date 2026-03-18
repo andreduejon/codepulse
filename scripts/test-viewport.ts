@@ -11,14 +11,24 @@ import type { RenderOptions } from "../src/git/graph";
 import {
   makeCommit,
   assert,
-  resetResults,
   printResults,
   runTest,
+  printGraph,
 } from "./test-helpers";
 
 
 // ============================================================
 // Test 1: computeViewportOffsets — no sliding when limit >= maxColumns
+//
+// Graph:
+//   col: 0
+//   ──────
+//        █  c1  (main)
+//        █  c2
+//        █  c3
+//
+// Linear graph, all at col 0. With depthLimit = maxCols + 5,
+// the viewport covers all columns → all offsets should be 0.
 // ============================================================
 function test1() {
   console.log("\nTest 1: No sliding when depth limit >= max columns");
@@ -30,6 +40,7 @@ function test1() {
   ];
 
   const rows = buildGraph(commits);
+  printGraph(rows);
   const maxCols = getMaxGraphColumns(rows);
   const offsets = computeViewportOffsets(rows, maxCols + 5, maxCols);
 
@@ -41,6 +52,29 @@ function test1() {
 
 // ============================================================
 // Test 2: computeViewportOffsets — basic sliding for branched graph
+//
+// Graph:
+//   col: 0  1  2  3  4
+//   ─────────────────────
+//        █                 c1  (main)
+//        │
+//        │  █              f1  (feat-1)
+//        │  │
+//        │  │  █           f2  (feat-2)
+//        │  │  │
+//        │  │  │  █        f3  (feat-3)
+//        │  │  │  │
+//        │  │  │  │  █     f4  (feat-4)
+//        │  │  │  │  │
+//        █  │  │  │  │     c2
+//        │  │  │  │  │
+//        █─┼─┼─┼─╯
+//        █─┼─┼─╯
+//        █─┼─╯
+//        █─╯               c3  (shared parent)
+//
+// With depthLimit = 3, rows at high columns (f3 at 3, f4 at 4)
+// must shift the viewport right so their node stays visible.
 // ============================================================
 function test2() {
   console.log("\nTest 2: Basic sliding for branched graph");
@@ -58,6 +92,7 @@ function test2() {
   ];
 
   const rows = buildGraph(commits);
+  printGraph(rows);
   const maxCols = getMaxGraphColumns(rows);
 
   // Use a small depth limit
@@ -77,6 +112,17 @@ function test2() {
 
 // ============================================================
 // Test 3: computeViewportOffsets — smooth camera (minimal shifts)
+//
+// Graph:
+//   col: 0
+//   ──────
+//        █  a  (main)
+//        █  b
+//        █  c
+//        █  d
+//
+// Linear graph, all at col 0. With depthLimit = 2, all offsets
+// should still be 0 since every node is at column 0.
 // ============================================================
 function test3() {
   console.log("\nTest 3: Smooth camera follow - offset doesn't jump unnecessarily");
@@ -90,6 +136,7 @@ function test3() {
   ];
 
   const rows = buildGraph(commits);
+  printGraph(rows);
   const maxCols = getMaxGraphColumns(rows);
   const offsets = computeViewportOffsets(rows, 2, maxCols);
 
@@ -101,6 +148,26 @@ function test3() {
 
 // ============================================================
 // Test 4: sliceGraphToViewport — basic slicing
+//
+// Graph:
+//   col: 0  1  2  3
+//   ─────────────────
+//        █              c1  (main)
+//        │
+//        │  █           f1
+//        │  │
+//        │  │  █        f2
+//        │  │  │
+//        │  │  │  █     f3
+//        │  │  │  │
+//        █  │  │  │     c2
+//        │  │  │  │
+//        █─┼─┼─╯
+//        █─┼─╯
+//        █─╯            c3
+//
+// Full rendered width = maxCols * 2 chars. Sliced to depthLimit=3
+// should produce exactly depthLimit * 2 chars per row.
 // ============================================================
 function test4() {
   console.log("\nTest 4: Basic graph char slicing");
@@ -116,6 +183,7 @@ function test4() {
   ];
 
   const rows = buildGraph(commits);
+  printGraph(rows);
   const maxCols = getMaxGraphColumns(rows);
   const opts: RenderOptions = { padToColumns: maxCols };
 
@@ -144,6 +212,19 @@ function test4() {
 
 // ============================================================
 // Test 5: buildEdgeIndicator — single right-side edge indicator
+//
+// No graph — pure function tests for buildEdgeIndicator:
+//
+//   buildEdgeIndicator(nodeColumn, viewportOffset, depthLimit, maxColumns, color, isCommitRow)
+//
+//   5a: node LEFT of viewport  → "◀ "
+//   5b: node RIGHT of viewport → " ▶"
+//   5c: node within viewport   → "  " (blank)
+//   5d: node at left edge      → "  " (blank)
+//   5e: node at right edge     → "  " (blank)
+//   5f: connector row          → "  " (always blank)
+//   5g: viewport not active    → "  " (no sliding needed)
+//   5h: node at viewportEnd    → " ▶" (just past right edge)
 // ============================================================
 function test5() {
   console.log("\nTest 5: Edge indicator (single right-side column)");
@@ -205,6 +286,15 @@ function test5() {
 
 // ============================================================
 // Test 6: sliceGraphToViewport — no-op when viewport covers full width
+//
+// Graph:
+//   col: 0
+//   ──────
+//        █  a  (main)
+//        █  b
+//
+// When depthLimit = maxCols, slicing is a no-op and should
+// return the same array reference.
 // ============================================================
 function test6() {
   console.log("\nTest 6: No slicing when viewport covers full width");
@@ -215,6 +305,7 @@ function test6() {
   ];
 
   const rows = buildGraph(commits);
+  printGraph(rows);
   const maxCols = getMaxGraphColumns(rows);
   const opts: RenderOptions = { padToColumns: maxCols };
 
@@ -228,6 +319,32 @@ function test6() {
 
 // ============================================================
 // Test 7: computeViewportOffsets — node at high column shifts viewport right
+//
+// Graph:
+//   col: 0  1  2  3  4  5
+//   ───────────────────────
+//        █                    m1  (main)
+//        │
+//        │  █                 f1
+//        │  │
+//        │  │  █              f2
+//        │  │  │
+//        │  │  │  █           f3
+//        │  │  │  │
+//        │  │  │  │  █        f4
+//        │  │  │  │  │
+//        │  │  │  │  │  █     f5
+//        │  │  │  │  │  │
+//        █  │  │  │  │  │     m2
+//        │  │  │  │  │  │
+//        █─┼─┼─┼─┼─╯
+//        █─┼─┼─┼─╯
+//        █─┼─┼─╯
+//        █─┼─╯
+//        █─╯                  b1
+//
+// With depthLimit = 4, the highest-column commit (f5 at col 5)
+// must trigger a positive offset to keep it in viewport.
 // ============================================================
 function test7() {
   console.log("\nTest 7: Node at high column triggers rightward shift");
@@ -245,6 +362,7 @@ function test7() {
   ];
 
   const rows = buildGraph(commits);
+  printGraph(rows);
   const maxCols = getMaxGraphColumns(rows);
   const depthLimit = 4;
 
@@ -276,6 +394,23 @@ function test7() {
 
 // ============================================================
 // Test 8: sliceGraphToViewport — connector row slicing
+//
+// Graph:
+//   col: 0  1  2
+//   ─────────────
+//        █           c1  (main)
+//        │
+//        │  █        f1
+//        │  │
+//        │  │  █     f2
+//        │  │  │
+//        █  │  │     c2
+//        │  │  │
+//        █─┼─╯
+//        █─╯         c3
+//
+// Connector rows (the │ rows between commit rows) should also
+// slice to exactly depthLimit * 2 chars.
 // ============================================================
 function test8() {
   console.log("\nTest 8: Connector row slicing");
@@ -289,6 +424,7 @@ function test8() {
   ];
 
   const rows = buildGraph(commits);
+  printGraph(rows);
   const maxCols = getMaxGraphColumns(rows);
   const opts: RenderOptions = { padToColumns: maxCols };
 
@@ -308,6 +444,18 @@ function test8() {
 
 // ============================================================
 // Test 9: computeSingleViewportOffset — reactive viewport scrolling
+//
+// No graph — pure function tests for computeSingleViewportOffset:
+//
+//   computeSingleViewportOffset(prevOffset, nodeColumn, depthLimit, maxColumns)
+//
+// Simulates scrolling through a graph with depthLimit=4, maxColumns=12:
+//   1. node col 0  → offset 0  (node in viewport)
+//   2. node col 3  → offset 0  (still in [0,4))
+//   3. node col 5  → offset >0 (shifts right)
+//   4. node col 10 → offset shifts further right
+//   5. node col 0  → offset shifts back left
+//   6. depthLimit >= maxColumns → always 0
 // ============================================================
 function test9() {
   console.log("\nTest 9: Single viewport offset (reactive scrolling)");
@@ -349,7 +497,8 @@ function test9() {
 // ============================================================
 // Run all tests
 // ============================================================
-resetResults();
+console.log("Viewport Tests");
+console.log("=".repeat(60));
 
 runTest(test1);
 runTest(test2);
@@ -361,6 +510,9 @@ runTest(test7);
 runTest(test8);
 runTest(test9);
 
+const { failedTests } = (await import("./test-helpers")).getResults();
 printResults("viewport");
-const { failedTests } = await import("./test-helpers").then(m => m.getResults());
-process.exit(failedTests > 0 ? 1 : 0);
+
+if (failedTests > 0) {
+  process.exit(1);
+}
