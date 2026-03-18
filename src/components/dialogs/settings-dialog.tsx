@@ -32,32 +32,6 @@ export default function SettingsDialog(props: Readonly<SettingsDialogProps>) {
       dialogId: "theme",
       get: () => themes[themeName()]?.name ?? themeName(),
     },
-    { kind: "header", label: "Display" },
-    {
-      kind: "toggle",
-      label: "Show author column",
-      get: () => state.showAuthorColumn(),
-      set: (v) => actions.setShowAuthorColumn(v),
-    },
-    {
-      kind: "toggle",
-      label: "Show date column",
-      get: () => state.showDateColumn(),
-      set: (v) => actions.setShowDateColumn(v),
-    },
-    {
-      kind: "toggle",
-      label: "Show hash column",
-      get: () => state.showHashColumn(),
-      set: (v) => actions.setShowHashColumn(v),
-    },
-    {
-      kind: "toggle",
-      label: "Show tags",
-      hotkey: "T",
-      get: () => state.showTags(),
-      set: (v) => actions.setShowTags(v),
-    },
     { kind: "header", label: "Graph" },
     {
       kind: "cycle",

@@ -15,7 +15,6 @@ export interface AppState {
   commitDetail: Accessor<CommitDetail | null>;
   loading: Accessor<boolean>;
   showAllBranches: Accessor<boolean>;
-  showTags: Accessor<boolean>;
   searchQuery: Accessor<string>;
   filteredRows: Accessor<GraphRow[]>;
   maxGraphColumns: Accessor<number>;
@@ -24,9 +23,6 @@ export interface AppState {
   detailOriginHash: Accessor<string | null>;
   scrollTargetIndex: Accessor<number>;
   maxCount: Accessor<number>;
-  showAuthorColumn: Accessor<boolean>;
-  showDateColumn: Accessor<boolean>;
-  showHashColumn: Accessor<boolean>;
 }
 
 export interface AppActions {
@@ -38,7 +34,6 @@ export interface AppActions {
   setCommitDetail: (detail: CommitDetail | null) => void;
   setLoading: (loading: boolean) => void;
   setShowAllBranches: (show: boolean) => void;
-  setShowTags: (show: boolean) => void;
   setSearchQuery: (query: string) => void;
   setDetailFocused: (focused: boolean) => void;
   setDetailCursorIndex: (index: number) => void;
@@ -52,9 +47,6 @@ export interface AppActions {
   setRepoPath: (path: string) => void;
   setMaxGraphColumns: (cols: number) => void;
   setMaxCount: (n: number) => void;
-  setShowAuthorColumn: (show: boolean) => void;
-  setShowDateColumn: (show: boolean) => void;
-  setShowHashColumn: (show: boolean) => void;
 }
 
 const AppStateContext = createContext<{ state: AppState; actions: AppActions }>();
@@ -72,13 +64,9 @@ export function createAppState(initialMaxCount: number = 200) {
   const [commitDetail, setCommitDetail] = createSignal<CommitDetail | null>(null);
   const [loading, setLoading] = createSignal(true);
   const [showAllBranches, setShowAllBranches] = createSignal(true);
-  const [showTags, setShowTags] = createSignal(true);
   const [searchQuery, setSearchQuery] = createSignal("");
   const [maxGraphColumns, setMaxGraphColumns] = createSignal(0);
   const [maxCount, setMaxCount] = createSignal(initialMaxCount);
-  const [showAuthorColumn, setShowAuthorColumn] = createSignal(true);
-  const [showDateColumn, setShowDateColumn] = createSignal(true);
-  const [showHashColumn, setShowHashColumn] = createSignal(true);
   const [detailFocused, setDetailFocused] = createSignal(false);
   const [detailCursorIndex, setDetailCursorIndex] = createSignal(-1);
   const [detailOriginHash, setDetailOriginHash] = createSignal<string | null>(null);
@@ -141,7 +129,6 @@ export function createAppState(initialMaxCount: number = 200) {
     commitDetail,
     loading,
     showAllBranches,
-    showTags,
     searchQuery,
     filteredRows,
     maxGraphColumns,
@@ -150,9 +137,6 @@ export function createAppState(initialMaxCount: number = 200) {
     detailCursorIndex,
     detailOriginHash,
     scrollTargetIndex,
-    showAuthorColumn,
-    showDateColumn,
-    showHashColumn,
   };
 
   const actions: AppActions = {
@@ -164,7 +148,6 @@ export function createAppState(initialMaxCount: number = 200) {
     setCommitDetail,
     setLoading,
     setShowAllBranches,
-    setShowTags,
     setSearchQuery,
     setDetailFocused,
     setDetailCursorIndex,
@@ -178,9 +161,6 @@ export function createAppState(initialMaxCount: number = 200) {
     setRepoPath,
     setMaxGraphColumns,
     setMaxCount,
-    setShowAuthorColumn,
-    setShowDateColumn,
-    setShowHashColumn,
   };
 
   return { state, actions, AppStateContext };

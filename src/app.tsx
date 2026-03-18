@@ -319,11 +319,6 @@ function AppContent(props: AppProps) {
         actions.setDetailFocused(false);
         setDialog("branch");
         break;
-      case "t":
-        if (e.shift) {
-          actions.setShowTags(!state.showTags());
-        }
-        break;
       case "a": {
         const newAll = !state.showAllBranches();
         actions.setShowAllBranches(newAll);

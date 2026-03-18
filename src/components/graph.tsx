@@ -55,13 +55,11 @@ export function ColumnHeader() {
         </text>
 
         {/* Commit hash */}
-        <Show when={state.showHashColumn()}>
-          <box flexShrink={0} width={9} paddingLeft={1}>
-            <text wrapMode="none" truncate>
-              <strong><span fg={!state.detailFocused() ? t().foreground : t().foregroundMuted}>Commit</span></strong>
-            </text>
-          </box>
-        </Show>
+        <box flexShrink={0} width={9} paddingLeft={1}>
+          <text wrapMode="none" truncate>
+            <strong><span fg={!state.detailFocused() ? t().foreground : t().foregroundMuted}>Commit</span></strong>
+          </text>
+        </box>
 
         {/* Description (commit message + refs) — box wrapper matches data row structure */}
         <box flexDirection="row" flexGrow={1} flexShrink={1} paddingLeft={1} paddingRight={2}>
@@ -71,22 +69,18 @@ export function ColumnHeader() {
         </box>
 
         {/* Author */}
-        <Show when={state.showAuthorColumn()}>
-          <box flexShrink={0} width={15} paddingRight={2}>
-            <text wrapMode="none" truncate>
-              <strong><span fg={!state.detailFocused() ? t().foreground : t().foregroundMuted}>Author</span></strong>
-            </text>
-          </box>
-        </Show>
+        <box flexShrink={0} width={15} paddingRight={2}>
+          <text wrapMode="none" truncate>
+            <strong><span fg={!state.detailFocused() ? t().foreground : t().foregroundMuted}>Author</span></strong>
+          </text>
+        </box>
 
         {/* Date */}
-        <Show when={state.showDateColumn()}>
-          <box flexShrink={0} width={15}>
-            <text wrapMode="none" truncate>
-              <strong><span fg={!state.detailFocused() ? t().foreground : t().foregroundMuted}>Date</span></strong>
-            </text>
-          </box>
-        </Show>
+        <box flexShrink={0} width={15}>
+          <text wrapMode="none" truncate>
+            <strong><span fg={!state.detailFocused() ? t().foreground : t().foregroundMuted}>Date</span></strong>
+          </text>
+        </box>
       </box>
       {/* Muted separator below headers */}
       <box width="100%" border={["top"]} borderStyle="single" borderColor={t().border} />
@@ -251,8 +245,7 @@ function GraphLine(props: { row: GraphRow; index: number; highlighted: boolean; 
 
   const visibleRefs = () => {
     const allRefs = commit().refs;
-    const filtered = state.showTags() ? allRefs : allRefs.filter((r) => r.type !== "tag");
-    return [...filtered].sort((a, b) => (REF_ORDER[a.type] ?? 9) - (REF_ORDER[b.type] ?? 9));
+    return [...allRefs].sort((a, b) => (REF_ORDER[a.type] ?? 9) - (REF_ORDER[b.type] ?? 9));
   };
   const laneColor = () => getColorForColumn(props.row.nodeColor, theme().graphColors);
   const t = () => theme();
@@ -301,13 +294,11 @@ function GraphLine(props: { row: GraphRow; index: number; highlighted: boolean; 
         <text ref={graphTextRef} flexShrink={0} width={graphWidth()} wrapMode="none" truncate paddingLeft={1} />
 
         {/* Short hash */}
-        <Show when={state.showHashColumn()}>
-          <box flexShrink={0} width={9} paddingLeft={1} overflow="hidden">
-            <text fg={secondaryColumnColor()} wrapMode="none" truncate>
-              {props.selected ? <strong><span fg={secondaryColumnColor()}>{commit().shortHash}</span></strong> : commit().shortHash}
-            </text>
-          </box>
-        </Show>
+        <box flexShrink={0} width={9} paddingLeft={1} overflow="hidden">
+          <text fg={secondaryColumnColor()} wrapMode="none" truncate>
+            {props.selected ? <strong><span fg={secondaryColumnColor()}>{commit().shortHash}</span></strong> : commit().shortHash}
+          </text>
+        </box>
 
         {/* Description: refs + commit message share one flex area */}
         <box flexDirection="row" flexGrow={1} flexShrink={1} paddingLeft={1} paddingRight={2}>
@@ -324,22 +315,18 @@ function GraphLine(props: { row: GraphRow; index: number; highlighted: boolean; 
         </box>
 
         {/* Author */}
-        <Show when={state.showAuthorColumn()}>
-          <box flexShrink={0} width={15} paddingRight={2} overflow="hidden">
-            <text fg={secondaryColumnColor()} wrapMode="none" truncate>
-              {props.selected ? <strong><span fg={secondaryColumnColor()}>{commit().author}</span></strong> : commit().author}
-            </text>
-          </box>
-        </Show>
+        <box flexShrink={0} width={15} paddingRight={2} overflow="hidden">
+          <text fg={secondaryColumnColor()} wrapMode="none" truncate>
+            {props.selected ? <strong><span fg={secondaryColumnColor()}>{commit().author}</span></strong> : commit().author}
+          </text>
+        </box>
 
         {/* Date */}
-        <Show when={state.showDateColumn()}>
-          <box flexShrink={0} width={15} overflow="hidden">
-            <text fg={secondaryColumnColor()} wrapMode="none" truncate>
-              {props.selected ? <strong><span fg={secondaryColumnColor()}>{formatRelativeDate(commit().authorDate)}</span></strong> : formatRelativeDate(commit().authorDate)}
-            </text>
-          </box>
-        </Show>
+        <box flexShrink={0} width={15} overflow="hidden">
+          <text fg={secondaryColumnColor()} wrapMode="none" truncate>
+            {props.selected ? <strong><span fg={secondaryColumnColor()}>{formatRelativeDate(commit().authorDate)}</span></strong> : formatRelativeDate(commit().authorDate)}
+          </text>
+        </box>
       </box>
 
       {/* Connector row: vertical lines only, providing visual continuity */}
