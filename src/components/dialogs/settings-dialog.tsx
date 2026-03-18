@@ -60,12 +60,6 @@ export default function SettingsDialog(props: Readonly<SettingsDialogProps>) {
     },
     { kind: "header", label: "Graph" },
     {
-      kind: "toggle",
-      label: "Dim remote-only branches",
-      get: () => state.dimRemoteOnly(),
-      set: (v) => actions.setDimRemoteOnly(v),
-    },
-    {
       kind: "cycle",
       label: "Max commits",
       options: MAX_COUNT_OPTIONS.map(String),

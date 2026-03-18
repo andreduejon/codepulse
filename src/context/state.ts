@@ -24,7 +24,6 @@ export interface AppState {
   detailOriginHash: Accessor<string | null>;
   scrollTargetIndex: Accessor<number>;
   maxCount: Accessor<number>;
-  dimRemoteOnly: Accessor<boolean>;
   showAuthorColumn: Accessor<boolean>;
   showDateColumn: Accessor<boolean>;
   showHashColumn: Accessor<boolean>;
@@ -53,7 +52,6 @@ export interface AppActions {
   setRepoPath: (path: string) => void;
   setMaxGraphColumns: (cols: number) => void;
   setMaxCount: (n: number) => void;
-  setDimRemoteOnly: (dim: boolean) => void;
   setShowAuthorColumn: (show: boolean) => void;
   setShowDateColumn: (show: boolean) => void;
   setShowHashColumn: (show: boolean) => void;
@@ -78,7 +76,6 @@ export function createAppState(initialMaxCount: number = 200) {
   const [searchQuery, setSearchQuery] = createSignal("");
   const [maxGraphColumns, setMaxGraphColumns] = createSignal(0);
   const [maxCount, setMaxCount] = createSignal(initialMaxCount);
-  const [dimRemoteOnly, setDimRemoteOnly] = createSignal(true);
   const [showAuthorColumn, setShowAuthorColumn] = createSignal(true);
   const [showDateColumn, setShowDateColumn] = createSignal(true);
   const [showHashColumn, setShowHashColumn] = createSignal(true);
@@ -149,7 +146,6 @@ export function createAppState(initialMaxCount: number = 200) {
     filteredRows,
     maxGraphColumns,
     maxCount,
-    dimRemoteOnly,
     detailFocused,
     detailCursorIndex,
     detailOriginHash,
@@ -182,7 +178,6 @@ export function createAppState(initialMaxCount: number = 200) {
     setRepoPath,
     setMaxGraphColumns,
     setMaxCount,
-    setDimRemoteOnly,
     setShowAuthorColumn,
     setShowDateColumn,
     setShowHashColumn,

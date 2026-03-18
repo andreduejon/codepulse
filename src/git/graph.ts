@@ -871,8 +871,6 @@ export interface GraphChar {
 export interface RenderOptions {
   themeColors?: string[];
   padToColumns?: number;
-  /** Color to use for remote-only branch elements */
-  remoteOnlyDimColor?: string;
 }
 
 /**
@@ -901,13 +899,7 @@ export function renderConnectorRow(row: GraphRow, opts: RenderOptions = {}): Gra
 
   for (let col = 0; col < row.columns.length; col++) {
     if (row.columns[col].active) {
-      const isRemote = row.columns[col].isRemoteOnly;
-      let color: string;
-      if (isRemote && opts.remoteOnlyDimColor) {
-        color = opts.remoteOnlyDimColor;
-      } else {
-        color = getBaseColor(row.columns[col].color, opts);
-      }
+      const color = getBaseColor(row.columns[col].color, opts);
       result.push({ char: "│ ", color, bold: true });
     } else {
       result.push({ char: "  ", color: getBaseColor(row.columns[col].color, opts) });
@@ -962,8 +954,7 @@ export function renderFanOutRow(fanOutConnectors: Connector[], opts: RenderOptio
   const result: GraphChar[] = [];
 
   // NOTE: connColor is duplicated in renderGraphRow — keep both in sync
-  function connColor(c: { color: number; isRemoteOnly?: boolean }): string {
-    if (c.isRemoteOnly && opts.remoteOnlyDimColor) return opts.remoteOnlyDimColor;
+  function connColor(c: { color: number }): string {
     return getBaseColor(c.color, opts);
   }
 
@@ -1095,10 +1086,9 @@ export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphCh
   const nodeChar = "█";
   const result: GraphChar[] = [];
 
-  // Helper: resolve color for a connector based on its isRemoteOnly flag.
+  // Helper: resolve color for a connector based on its color index.
   // NOTE: connColor is duplicated in renderFanOutRow — keep both in sync
-  function connColor(c: { color: number; isRemoteOnly?: boolean }): string {
-    if (c.isRemoteOnly && opts.remoteOnlyDimColor) return opts.remoteOnlyDimColor;
+  function connColor(c: { color: number }): string {
     return getBaseColor(c.color, opts);
   }
 
@@ -1157,30 +1147,20 @@ export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphCh
     const straight = colConnectors.find((c) => c.type === "straight");
 
     if (node) {
-      let nodeColor: string;
-      if (node.isRemoteOnly && opts.remoteOnlyDimColor) {
-        nodeColor = opts.remoteOnlyDimColor;
-      } else {
-        nodeColor = getBaseColor(node.color, opts);
-      }
+      const nodeColor = getBaseColor(node.color, opts);
       if (col === nodeCol && hasRightConnection) {
         // The ─ right after █ uses the OTHER branch's color (same as horizontals).
         // For merges: source branch color. For branch-offs: new branch color.
         result.push({ char: nodeChar, color: nodeColor, bold: true });
-        let dashColor: string;
-        if (node.isRemoteOnly && opts.remoteOnlyDimColor) {
-          dashColor = opts.remoteOnlyDimColor;
-        } else {
-          // Find the horizontal or corner connector at col+1 to pick up the other branch's color
-          const nextConnectors = connectorsByCol.get(col + 1) ?? [];
-          const nextHoriz = nextConnectors.find((c) => c.type === "horizontal");
-          const nextCorner = nextConnectors.find((c) =>
-            c.type === "corner-top-right" || c.type === "corner-bottom-right" ||
-            c.type === "corner-top-left" || c.type === "corner-bottom-left"
-          );
-          const hConn = nextHoriz ?? nextCorner;
-          dashColor = hConn ? connColor(hConn) : getBaseColor(node.color, opts);
-        }
+        // Find the horizontal or corner connector at col+1 to pick up the other branch's color
+        const nextConnectors = connectorsByCol.get(col + 1) ?? [];
+        const nextHoriz = nextConnectors.find((c) => c.type === "horizontal");
+        const nextCorner = nextConnectors.find((c) =>
+          c.type === "corner-top-right" || c.type === "corner-bottom-right" ||
+          c.type === "corner-top-left" || c.type === "corner-bottom-left"
+        );
+        const hConn = nextHoriz ?? nextCorner;
+        const dashColor = hConn ? connColor(hConn) : getBaseColor(node.color, opts);
         result.push({ char: "─", color: dashColor });
       } else if (col === nodeCol && hasLeftConnection) {
         result.push({ char: `${nodeChar} `, color: nodeColor, bold: true });
@@ -1389,7 +1369,7 @@ export function sliceGraphToViewport(
     return chars;
   }
 
-  const padColor = opts.remoteOnlyDimColor ?? "#6c7086";
+  const padColor = "#6c7086";
 
   // Each graph column = 2 character positions. The viewport covers char
   // positions [startCharPos, endCharPos). Instead of flattening the entire

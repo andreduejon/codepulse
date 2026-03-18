@@ -14,19 +14,15 @@ type InteractiveItem =
 function DetailBadge(props: {
   name: string;
   colorIndex: number;
-  isDimmed?: boolean;
 }) {
   const { theme } = useTheme();
   const t = () => theme();
 
   const bgColor = () => {
-    if (props.isDimmed) return t().foregroundMuted;
     return getColorForColumn(props.colorIndex, t().graphColors);
   };
 
   const fgColor = () => {
-    // Dimmed bg → light text, vivid bg → dark text for contrast
-    if (props.isDimmed) return t().foreground;
     return t().background;
   };
 
@@ -251,15 +247,6 @@ export default function CommitDetailView(props: DetailViewProps) {
     return c.refs.filter((r) => r.type === "tag");
   };
 
-  // Determine if a ref badge should be dimmed (remote-only branch)
-  const isRefDimmed = (ref: RefInfo): boolean => {
-    if (!state.dimRemoteOnly()) return false;
-    const r = row();
-    if (!r) return false;
-    if (ref.type !== "remote") return false;
-    return r.remoteOnlyBranches.has(ref.name);
-  };
-
   // The node color index for this commit's lane
   const nodeColorIndex = () => row()?.nodeColor ?? 0;
 
@@ -271,22 +258,6 @@ export default function CommitDetailView(props: DetailViewProps) {
       (b) => b.isRemote && b.name.endsWith("/" + bn)
     );
     return remote?.name ?? null;
-  };
-
-  // Whether a parent branch badge should be dimmed
-  const isParentBranchDimmed = (branchName: string): boolean => {
-    if (!state.dimRemoteOnly()) return false;
-    const r = row();
-    if (!r) return false;
-    return r.remoteOnlyBranches.has(branchName);
-  };
-
-  // Whether a child branch badge should be dimmed
-  const isChildBranchDimmed = (branchName: string): boolean => {
-    if (!state.dimRemoteOnly()) return false;
-    const r = row();
-    if (!r) return false;
-    return r.remoteOnlyBranches.has(branchName);
   };
 
   // Whether to show committer info (only when different from author)
@@ -370,7 +341,6 @@ export default function CommitDetailView(props: DetailViewProps) {
     type: "child" | "parent";
     branchName: string;
     colorIndex: number;
-    isDimmed: boolean;
   }) {
     const itemIdx = () => findItemIndex(entryProps.type, undefined, entryProps.entryIndex);
     const cursored = () => isCursored(itemIdx());
@@ -397,7 +367,6 @@ export default function CommitDetailView(props: DetailViewProps) {
                 <DetailBadge
                   name="deleted"
                   colorIndex={0}
-                  isDimmed={true}
                 />
               }
             >
@@ -411,7 +380,6 @@ export default function CommitDetailView(props: DetailViewProps) {
           <DetailBadge
             name={entryProps.branchName}
             colorIndex={entryProps.colorIndex}
-            isDimmed={entryProps.isDimmed}
           />
         </Show>
       </box>
@@ -452,7 +420,6 @@ export default function CommitDetailView(props: DetailViewProps) {
                           <DetailBadge
                             name="deleted"
                             colorIndex={0}
-                            isDimmed={true}
                           />
                         );
                       })()
@@ -476,7 +443,6 @@ export default function CommitDetailView(props: DetailViewProps) {
                     <DetailBadge
                       name={ref.name}
                       colorIndex={nodeColorIndex()}
-                      isDimmed={isRefDimmed(ref)}
                     />
                   )}
                 </For>
@@ -581,7 +547,6 @@ export default function CommitDetailView(props: DetailViewProps) {
                       type="child"
                       branchName={row()!.childBranches[i()]}
                       colorIndex={row()!.childColors[i()]}
-                      isDimmed={isChildBranchDimmed(row()!.childBranches[i()])}
                     />
                   )}
                 </For>
@@ -607,7 +572,6 @@ export default function CommitDetailView(props: DetailViewProps) {
                       type="parent"
                       branchName={row()!.parentBranches[i()]}
                       colorIndex={row()!.parentColors[i()]}
-                      isDimmed={isParentBranchDimmed(row()!.parentBranches[i()])}
                     />
                   )}
                 </For>

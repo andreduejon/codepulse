@@ -8,33 +8,14 @@ import type { TextRenderable, StyledText, ScrollBoxRenderable, Renderable } from
 function RefBadge(props: {
   info: RefInfo;
   laneColor: () => string;
-  dimColor: () => string;
-  remoteOnlyBranches: Set<string>;
 }) {
   const { theme } = useTheme();
-  const { state } = useAppState();
   const t = () => theme();
 
-  // Remote-only branches (no local counterpart) use dimmed color,
-  // but only when dim remote-only setting is enabled.
-  // Locally-tracked remotes (e.g. origin/main when main exists) and
-  // origin/HEAD use the same lane color as local branches — no border,
-  // no accent, completely identical styling.
-  const isRemoteOnly = () => {
-    if (!state.dimRemoteOnly()) return false;
-    if (props.info.type !== "remote") return false;
-    // origin/HEAD is never remote-only (it tracks whatever local branch exists)
-    if (props.info.name.endsWith("/HEAD")) return false;
-    return props.remoteOnlyBranches.has(props.info.name);
-  };
+  const bgColor = () => props.laneColor();
 
-  const bgColor = () => isRemoteOnly() ? props.dimColor() : props.laneColor();
-
-  // When the badge bg is a dim/muted color, use foreground for readable label text.
-  // When badge has a vivid lane color bg, use the dark background color for contrast.
-  // Check both badge-level dimming (isRemoteOnly) and row-level dimming (laneColor = dimColor).
-  const isDimBadge = () => isRemoteOnly() || props.laneColor() === props.dimColor();
-  const fgColor = () => isDimBadge() ? t().foreground : t().background;
+  // When the badge bg is the lane color, use dark background for contrast.
+  const fgColor = () => t().background;
 
   return (
     <text flexShrink={0} wrapMode="none" fg={fgColor()} bg={bgColor()}>
@@ -151,7 +132,6 @@ function GraphLine(props: { row: GraphRow; index: number; highlighted: boolean; 
     return {
       themeColors: theme().graphColors,
       padToColumns: padCols(),
-      remoteOnlyDimColor: state.dimRemoteOnly() ? theme().foregroundMuted : undefined,
     };
   };
 
@@ -277,35 +257,25 @@ function GraphLine(props: { row: GraphRow; index: number; highlighted: boolean; 
   const laneColor = () => getColorForColumn(props.row.nodeColor, theme().graphColors);
   const t = () => theme();
 
-  // Effective lane color for ref badges: dimmed for remote-only
+  // Effective lane color for ref badges
   const effectiveLaneColor = () => {
-    if (props.row.isRemoteOnly && state.dimRemoteOnly()) {
-      return t().foregroundMuted;
-    }
     return laneColor();
   };
 
   // Effective text color for the commit subject (primary column).
   // Selected rows use primary color. Highlighted-only rows use foreground.
-  // Dimmed for remote-only.
   const effectiveTextColor = () => {
     if (props.selected) return t().primary;
     if (props.highlighted) return t().foreground;
-    if (props.row.isRemoteOnly && state.dimRemoteOnly()) {
-      return t().foregroundMuted;
-    }
     return t().foreground;
   };
 
   // Secondary column color (author, date, hash).
   // Selected → primary (bold applied separately). Highlighted → foreground.
-  // Otherwise muted (or dimmed for remote-only).
+  // Otherwise muted.
   const secondaryColumnColor = () => {
     if (props.selected) return t().primary;
     if (props.highlighted) return t().foreground;
-    if (props.row.isRemoteOnly && state.dimRemoteOnly()) {
-      return t().foregroundMuted;
-    }
     return t().foregroundMuted;
   };
 
@@ -344,7 +314,7 @@ function GraphLine(props: { row: GraphRow; index: number; highlighted: boolean; 
           <Show when={visibleRefs().length > 0}>
             <box flexDirection="row" flexShrink={0} gap={1} paddingRight={1}>
               <For each={visibleRefs()}>
-                {(ri) => <RefBadge info={ri} laneColor={effectiveLaneColor} dimColor={() => t().foregroundMuted} remoteOnlyBranches={props.row.remoteOnlyBranches} />}
+                {(ri) => <RefBadge info={ri} laneColor={effectiveLaneColor} />}
               </For>
             </box>
           </Show>
