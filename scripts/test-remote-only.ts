@@ -1,12 +1,16 @@
 #!/usr/bin/env bun
 /**
- * Test script: verifies remote-only branch dimming and propagation.
+ * Test script: verifies remote-only branch dimming, propagation, and
+ * remote prefix handling.
  *
  * Remote-only branches (remote branches with no local counterpart) should
  * have `isRemoteOnly=true` on their lanes, connectors, and rows. This flag
  * propagates through single-parent chains, merge first-parents, secondary
  * parent connectors, fan-out rows, and is also applied by the post-pass
  * dimming logic.
+ *
+ * Also covers: upstream/ remotes, nested paths (origin/renovate/major),
+ * and multi-remote scenarios.
  */
 
 import type { GraphRow } from "../src/git/types";
@@ -18,34 +22,8 @@ import {
   findConnector,
   runTest,
   printGraph,
+  assertRowFullyDimmed,
 } from "./test-helpers";
-
-/**
- * Assert that every connector, column, and fan-out connector on the given row
- * has `isRemoteOnly === true`. Used by tests that verify post-pass dimming.
- */
-function assertRowFullyDimmed(row: GraphRow, rowIdx: number) {
-  const label = `Row ${rowIdx} (${row.commit.hash})`;
-
-  for (const conn of row.connectors) {
-    assert(conn.isRemoteOnly === true,
-      `${label}: connector ${conn.type}@col${conn.column} should be remote-only`);
-  }
-
-  for (let col = 0; col < row.columns.length; col++) {
-    assert(row.columns[col].isRemoteOnly === true,
-      `${label}: column ${col} should be remote-only`);
-  }
-
-  if (row.fanOutRows) {
-    for (let foIdx = 0; foIdx < row.fanOutRows.length; foIdx++) {
-      for (const conn of row.fanOutRows[foIdx]) {
-        assert(conn.isRemoteOnly === true,
-          `${label}: fan-out[${foIdx}] ${conn.type}@col${conn.column} should be remote-only`);
-      }
-    }
-  }
-}
 
 // ============================================================
 // Test 1: Remote-only lane propagation through single parent
@@ -274,6 +252,189 @@ function test5() {
 }
 
 // ============================================================
+// Test 6: upstream/ remote is correctly identified as remote-only
+//
+// Graph:
+//   col: 0
+//   ──────
+//        █  f1  (upstream/feature) [RO]
+//        █  d1  (main)
+//
+// "upstream/feature" with no local "feature" branch → remote-only.
+// ============================================================
+function test6() {
+  console.log("\nTest 6: upstream/ remote-only when no local counterpart");
+
+  const commits = [
+    makeCommit("f1", ["d1"], [{ name: "upstream/feature", type: "remote", isCurrent: false }]),
+    makeCommit("d1", [], [{ name: "main", type: "branch", isCurrent: true }]),
+  ];
+  const rows = buildGraph(commits);
+  printGraph(rows);
+
+  // upstream/feature has no local "feature" branch → should be remote-only
+  assert(rows[0].isRemoteOnly,
+    "upstream/feature without local counterpart should be remote-only");
+  assert(rows[0].remoteOnlyBranches.has("upstream/feature"),
+    "upstream/feature should be in remoteOnlyBranches set");
+}
+
+// ============================================================
+// Test 7: upstream/ remote is NOT remote-only when local branch exists
+//
+// Graph:
+//   col: 0
+//   ──────
+//        █  d1  (main, upstream/main)
+//
+// "upstream/main" has local counterpart "main" → NOT remote-only.
+// ============================================================
+function test7() {
+  console.log("\nTest 7: upstream/ remote not remote-only when local exists");
+
+  const commits = [
+    makeCommit("d1", [], [
+      { name: "main", type: "branch", isCurrent: true },
+      { name: "upstream/main", type: "remote", isCurrent: false },
+    ]),
+  ];
+  const rows = buildGraph(commits);
+  printGraph(rows);
+
+  assert(!rows[0].isRemoteOnly,
+    "Commit with local main should not be remote-only");
+  assert(!rows[0].remoteOnlyBranches.has("upstream/main"),
+    "upstream/main should NOT be remote-only when local 'main' exists");
+}
+
+// ============================================================
+// Test 8: origin/ and upstream/ pointing to same commit — both tracked
+//
+// Graph:
+//   col: 0
+//   ──────
+//        █  d1  (main, origin/main, upstream/main)
+//
+// Both remotes have local "main" counterpart → neither is remote-only.
+// ============================================================
+function test8() {
+  console.log("\nTest 8: origin/ and upstream/ on same commit, both tracked");
+
+  const commits = [
+    makeCommit("d1", [], [
+      { name: "main", type: "branch", isCurrent: true },
+      { name: "origin/main", type: "remote", isCurrent: false },
+      { name: "upstream/main", type: "remote", isCurrent: false },
+    ]),
+  ];
+  const rows = buildGraph(commits);
+  printGraph(rows);
+
+  // Neither remote should be remote-only since local "main" exists
+  assert(!rows[0].remoteOnlyBranches.has("origin/main"),
+    "origin/main should not be remote-only when local main exists");
+  assert(!rows[0].remoteOnlyBranches.has("upstream/main"),
+    "upstream/main should not be remote-only when local main exists");
+  assert(!rows[0].isRemoteOnly,
+    "Commit should not be remote-only with local branch");
+}
+
+// ============================================================
+// Test 9: Nested remote path — origin/renovate/major strips to "renovate/major"
+//
+// Graph:
+//   col: 0
+//   ──────
+//        █  r1  (origin/renovate/major) [RO]
+//        █  d1  (main)
+//
+// "origin/renovate/major" → localEquivalent "renovate/major".
+// No local "renovate/major" branch → remote-only.
+// ============================================================
+function test9() {
+  console.log("\nTest 9: Nested remote path prefix stripping");
+
+  const commits = [
+    makeCommit("r1", ["d1"], [{ name: "origin/renovate/major", type: "remote", isCurrent: false }]),
+    makeCommit("d1", [], [{ name: "main", type: "branch", isCurrent: true }]),
+  ];
+  const rows = buildGraph(commits);
+  printGraph(rows);
+
+  // "origin/renovate/major" → localEquivalent = "renovate/major"
+  // No local branch named "renovate/major" → remote-only
+  assert(rows[0].remoteOnlyBranches.has("origin/renovate/major"),
+    "origin/renovate/major should be remote-only (no local 'renovate/major')");
+  assert(rows[0].isRemoteOnly,
+    "Commit on origin/renovate/major should be remote-only");
+}
+
+// ============================================================
+// Test 10: Nested remote path NOT remote-only when local equivalent exists
+//
+// Graph:
+//   col: 0
+//   ──────
+//        █  r1  (renovate/major, origin/renovate/major, main)
+//
+// "origin/renovate/major" → localEquivalent "renovate/major".
+// Local "renovate/major" exists → NOT remote-only.
+// ============================================================
+function test10() {
+  console.log("\nTest 10: Nested remote path with local equivalent");
+
+  const commits = [
+    makeCommit("r1", [], [
+      { name: "renovate/major", type: "branch", isCurrent: false },
+      { name: "origin/renovate/major", type: "remote", isCurrent: false },
+      { name: "main", type: "branch", isCurrent: true },
+    ]),
+  ];
+  const rows = buildGraph(commits);
+  printGraph(rows);
+
+  // "origin/renovate/major" → localEquivalent = "renovate/major"
+  // Local "renovate/major" exists → NOT remote-only
+  assert(!rows[0].remoteOnlyBranches.has("origin/renovate/major"),
+    "origin/renovate/major should NOT be remote-only when local 'renovate/major' exists");
+}
+
+// ============================================================
+// Test 11: Multiple remotes, same branch name — both remote-only when no local
+//
+// Graph:
+//   col: 0
+//   ──────
+//        █  f1  (origin/feature, upstream/feature) [RO]
+//        █  d1  (main)
+//
+// Both "origin/feature" and "upstream/feature" → localEquivalent "feature".
+// No local "feature" → both are remote-only.
+// ============================================================
+function test11() {
+  console.log("\nTest 11: Multiple remotes same branch, both remote-only");
+
+  const commits = [
+    makeCommit("f1", ["d1"], [
+      { name: "origin/feature", type: "remote", isCurrent: false },
+      { name: "upstream/feature", type: "remote", isCurrent: false },
+    ]),
+    makeCommit("d1", [], [{ name: "main", type: "branch", isCurrent: true }]),
+  ];
+  const rows = buildGraph(commits);
+  printGraph(rows);
+
+  // Both origin/feature and upstream/feature have localEquivalent "feature"
+  // No local "feature" → both should be remote-only
+  assert(rows[0].remoteOnlyBranches.has("origin/feature"),
+    "origin/feature should be remote-only");
+  assert(rows[0].remoteOnlyBranches.has("upstream/feature"),
+    "upstream/feature should be remote-only");
+  assert(rows[0].isRemoteOnly,
+    "Commit with only remote-only refs should be remote-only");
+}
+
+// ============================================================
 // Run all tests
 // ============================================================
 console.log("Remote-Only Tests");
@@ -284,6 +445,12 @@ runTest(test2);
 runTest(test3);
 runTest(test4);
 runTest(test5);
+runTest(test6);
+runTest(test7);
+runTest(test8);
+runTest(test9);
+runTest(test10);
+runTest(test11);
 
 const { failedTests } = (await import("./test-helpers")).getResults();
 printResults("remote-only");

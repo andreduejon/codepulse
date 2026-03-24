@@ -3,12 +3,14 @@
  * Test script: verifies edge cases in the graph engine.
  *
  * Covers: octopus merges, single-commit repos, lane reuse,
- * multiple refs on same commit, and root commit handling.
+ * multiple refs on same commit, root commit handling,
+ * already-processed parent merging, and detached HEAD states.
  */
 import { buildGraph } from "../src/git/graph";
 import {
   makeCommit,
   assert,
+  assertEqual,
   printResults,
   hasConnector,
   findConnector,
@@ -247,6 +249,232 @@ function test5() {
 }
 
 // ============================================================
+// Test 6: Single-parent already-processed merging — lane closes
+//
+// Graph:
+//   col: 0  1
+//   ──────────
+//        █     c1  (feat-A)
+//        │
+//        █     p1  (main)
+//        │
+//        ├─█   c2  (feat-B)
+//        │
+//        █     root
+//
+// c2 finds p1 in processedColumns → lane closes with connectors
+// toward p1's column.
+// ============================================================
+function test6() {
+  console.log("\nTest 6: Single-parent, parent already processed — lane closes");
+
+  const commits = [
+    makeCommit("c1", ["p1"], [{ name: "feat-A", type: "branch", isCurrent: false }]),
+    makeCommit("p1", ["root"], []),
+    makeCommit("c2", ["p1"], [{ name: "feat-B", type: "branch", isCurrent: true }]),
+    makeCommit("root", [], []),
+  ];
+  const rows = buildGraph(commits);
+  printGraph(rows);
+
+  const c2Row = rows.find(r => r.commit.hash === "c2");
+  assert(c2Row !== undefined, "c2 row should exist");
+
+  // c2 should have merge/close connectors pointing toward p1's column
+  const closeConns = c2Row.connectors.filter(c =>
+    c.type === "corner-bottom-right" || c.type === "corner-bottom-left" ||
+    c.type === "tee-left" || c.type === "tee-right" ||
+    c.type === "horizontal"
+  );
+  assert(closeConns.length > 0, "c2 should have close/merge connectors toward p1");
+
+  // p1's row should still have an active column for its own lane to root
+  const p1Row = rows.find(r => r.commit.hash === "p1");
+  assert(p1Row !== undefined, "p1 row should exist");
+  assert(p1Row.columns.some(c => c.active), "p1 should have at least one active column");
+}
+
+// ============================================================
+// Test 7: Single-parent already-processed with existing lane — merge
+//
+// Graph (same topology as test6, different assertion focus):
+//   col: 0  1
+//   ──────────
+//        █     c1  (feat-A)
+//        │
+//        █     p1  (main)
+//        │
+//        ├─█   c2  (feat-B)
+//        │
+//        █     root
+//
+// c2 finds p1 in both lanes[] and processedColumns → triggers
+// Case A (existingLane !== nodeColumn && processedColumns.has).
+// ============================================================
+function test7() {
+  console.log("\nTest 7: Single-parent, parent already processed with existing lane — merge");
+
+  const commits = [
+    makeCommit("c1", ["p1"], [{ name: "feat-A", type: "branch", isCurrent: false }]),
+    makeCommit("p1", ["root"], [{ name: "main", type: "branch", isCurrent: true }]),
+    makeCommit("c2", ["p1"], [{ name: "feat-B", type: "branch", isCurrent: false }]),
+    makeCommit("root", [], []),
+  ];
+  const rows = buildGraph(commits);
+  printGraph(rows);
+
+  const c2Row = rows.find(r => r.commit.hash === "c2");
+  const p1Row = rows.find(r => r.commit.hash === "p1")!;
+  assert(c2Row !== undefined, "c2 row should exist");
+  assert(p1Row !== undefined, "p1 row should exist");
+
+  // c2 is to the right of p1's lane. It should merge left toward p1.
+  const spanConns = c2Row.connectors.filter(c =>
+    c.type === "corner-bottom-right" || c.type === "corner-bottom-left" ||
+    c.type === "tee-left" || c.type === "tee-right" ||
+    c.type === "horizontal"
+  );
+  assert(spanConns.length > 0, "c2 should have spanning connectors merging toward p1");
+}
+
+// ============================================================
+// Test 8: parentColors populated correctly after already-processed merge
+//
+// Graph (same topology as tests 6-7):
+//   col: 0  1
+//   ──────────
+//        █     c1  (feat-A)
+//        │
+//        █     p1  (main)
+//        │
+//        ├─█   c2  (feat-B) ← parentColors[0] should be a valid number
+//        │
+//        █     root
+//
+// Verifies c2's parentColors array has exactly 1 numeric entry.
+// ============================================================
+function test8() {
+  console.log("\nTest 8: parentColors set correctly after already-processed merge");
+
+  const commits = [
+    makeCommit("c1", ["p1"], [{ name: "feat-A", type: "branch", isCurrent: false }]),
+    makeCommit("p1", ["root"], [{ name: "main", type: "branch", isCurrent: true }]),
+    makeCommit("c2", ["p1"], [{ name: "feat-B", type: "branch", isCurrent: false }]),
+    makeCommit("root", [], []),
+  ];
+  const rows = buildGraph(commits);
+  printGraph(rows);
+
+  const c2Row = rows.find(r => r.commit.hash === "c2")!;
+  // c2's parentColors should have exactly 1 entry (single parent)
+  assertEqual(c2Row.parentColors.length, 1, "c2 should have 1 parentColor");
+  // parentColors[0] should be defined (not NaN or undefined)
+  assert(typeof c2Row.parentColors[0] === "number", "c2 parentColor should be a number");
+}
+
+// ============================================================
+// Test 9: Detached HEAD on current branch path
+//
+// Graph:
+//   col: 0
+//   ──────
+//        █  d2  (HEAD, detached)
+//        █  d1  (main)
+//
+// Detached HEAD commit should be on the current branch path.
+// ============================================================
+function test9() {
+  console.log("\nTest 9: Detached HEAD is on current branch path");
+
+  const commits = [
+    makeCommit("d2", ["d1"], [{ name: "HEAD", type: "head", isCurrent: true }]),
+    makeCommit("d1", [], [{ name: "main", type: "branch", isCurrent: false }]),
+  ];
+  const rows = buildGraph(commits);
+  printGraph(rows);
+
+  // HEAD commit should be marked as on current branch
+  assert(rows[0].isOnCurrentBranch, "Detached HEAD commit should be on current branch path");
+}
+
+// ============================================================
+// Test 10: Detached HEAD commit is NOT remote-only
+//
+// Graph:
+//   col: 0
+//   ──────
+//        █  d2  (HEAD, detached) ← NOT remote-only
+//        █  d1  (main)
+//
+// "head" ref type returns false for hasNonRemoteOnlyRef, but d2 is
+// rescued by current-branch walk (d1 has a local branch).
+// ============================================================
+function test10() {
+  console.log("\nTest 10: Detached HEAD commit is not remote-only");
+
+  const commits = [
+    makeCommit("d2", ["d1"], [{ name: "HEAD", type: "head", isCurrent: true }]),
+    makeCommit("d1", [], [{ name: "main", type: "branch", isCurrent: false }]),
+  ];
+  const rows = buildGraph(commits);
+  printGraph(rows);
+
+  assert(!rows[0].isRemoteOnly,
+    "Detached HEAD commit should NOT be remote-only");
+}
+
+// ============================================================
+// Test 11: Detached HEAD branchName assigned from branchNameMap
+//
+// Graph:
+//   col: 0
+//   ──────
+//        █  d2  (HEAD) ← branchName = "HEAD" (priority 4)
+//        █  d1  (main) ← branchName = "main" (priority 1-2)
+//
+// d2 is only on HEAD's first-parent chain, not main's, so
+// branchName = "HEAD".
+// ============================================================
+function test11() {
+  console.log("\nTest 11: Detached HEAD branchName assigned from branchNameMap");
+
+  const commits = [
+    makeCommit("d2", ["d1"], [{ name: "HEAD", type: "head", isCurrent: true }]),
+    makeCommit("d1", [], [{ name: "main", type: "branch", isCurrent: false }]),
+  ];
+  const rows = buildGraph(commits);
+  printGraph(rows);
+
+  assertEqual(rows[0].branchName, "HEAD", "Detached HEAD commit branchName should be 'HEAD'");
+}
+
+// ============================================================
+// Test 12: Standalone detached HEAD (no other branches)
+//
+// Graph:
+//   col: 0
+//   ──────
+//        █  d1  (HEAD, detached, standalone)
+//
+// Single commit with only a "head" ref. Should be on current
+// branch, have branchName "HEAD", and node at col 0.
+// ============================================================
+function test12() {
+  console.log("\nTest 12: Standalone detached HEAD (no other branches)");
+
+  const commits = [
+    makeCommit("d1", [], [{ name: "HEAD", type: "head", isCurrent: true }]),
+  ];
+  const rows = buildGraph(commits);
+  printGraph(rows);
+
+  assert(rows[0].isOnCurrentBranch, "Standalone HEAD should be on current branch");
+  assertEqual(rows[0].branchName, "HEAD", "Standalone HEAD branchName should be 'HEAD'");
+  // Single commit, no parent — should have a node connector
+  assert(hasConnector(rows[0].connectors, "node", 0), "Standalone HEAD should have node at col 0");
+}
+
+// ============================================================
 // Run all tests
 // ============================================================
 console.log("Edge Case Tests");
@@ -257,6 +485,13 @@ runTest(test2);
 runTest(test3);
 runTest(test4);
 runTest(test5);
+runTest(test6);
+runTest(test7);
+runTest(test8);
+runTest(test9);
+runTest(test10);
+runTest(test11);
+runTest(test12);
 
 const { failedTests } = (await import("./test-helpers")).getResults();
 printResults("edge-case");

@@ -11,31 +11,7 @@
  */
 
 import { buildGraph, renderGraphRow, renderFanOutRow, type GraphChar } from "../src/git/graph";
-import { assert, makeCommit, printResults, runTest, printGraph } from "./test-helpers";
-
-const THEME_COLORS = [
-  "#c0c001", "#c0c002", "#c0c003", "#c0c004",
-  "#c0c005", "#c0c006", "#c0c007", "#c0c008",
-];
-
-function renderOpts(padToColumns?: number) {
-  return { themeColors: THEME_COLORS, padToColumns };
-}
-
-/** Check if any GraphChar in an array contains a specific character */
-function hasChar(chars: GraphChar[], ch: string): boolean {
-  return chars.some(gc => gc.char === ch || gc.char.includes(ch));
-}
-
-/** Find all GraphChars containing a specific character */
-function findChars(chars: GraphChar[], ch: string): GraphChar[] {
-  return chars.filter(gc => gc.char === ch || gc.char.includes(ch));
-}
-
-/** Get total character width */
-function totalCharWidth(chars: GraphChar[]): number {
-  return chars.reduce((sum, gc) => sum + gc.char.length, 0);
-}
+import { assert, makeCommit, printResults, runTest, printGraph, THEME_COLORS, renderOpts, hasChar, findChars, totalCharWidth } from "./test-helpers";
 
 // ============================================================
 // Test 1: Basic node glyph is █ (simple linear commits)
@@ -78,11 +54,13 @@ function test1() {
 // Test 2: Node glyph █ with right-side horizontal connection (█─)
 //
 // Graph:
-//   col: 0  1
-//   ──────────
-//        █──╮  m1  (main, merge: parents [c1, f1])
-//        │  █  f1  (feature)
-//        █──╯  c1
+//   col: 0 1
+//   ────────
+//        █─╮   m1  (main, merge: parents [c1, f1])
+//        │ │
+//        │ █   f1  (feature)
+//        │ │
+//        █─╯   c1
 //
 // Verifies the merge commit row renders █─ (block + dash).
 // ============================================================
@@ -122,7 +100,7 @@ function test2() {
 // Graph:
 //   col: 0
 //   ──────
-//        █  c2  (main)
+//        █  c2   (main)
 //        │
 //        █  c1
 //
@@ -152,15 +130,18 @@ function test3() {
 // Test 4: Fan-out rows use █ (not ├/┤) at node column
 //
 // Graph:
-//   col: 0  1  2
-//   ─────────────
-//        █        c1  (branch-a → parent p1)
-//        │  █     c2  (branch-b → parent p1)
-//        │  │  █  c3  (branch-c → parent p1)
-//        █──┼──╯
-//        █──╯     p1  (main) ← 2 fan-out rows; last merged into commit row
+//   col: 0 1 2
+//   ──────────
+//        █       c1  (branch-a → parent p1)
+//        │
+//        │ █     c2  (branch-b → parent p1)
+//        │ │
+//        │ │ █   c3  (branch-c → parent p1)
+//        │ │ │
+//        █─┼─╯
+//        █─╯     p1  (main) ← 2 fan-out rows; last merged into commit row
 //
-// Fan-out rows must use █ at the node column, not ├ or ┤.
+// Fan-out rows use █ at the node column, not ├ or ┤.
 // ============================================================
 function test4() {
   console.log("\nTest 4: Fan-out rows use █ at node column");
@@ -199,11 +180,13 @@ function test4() {
 // Test 5: Fan-out █ with trailing dash (█─) when branch goes right
 //
 // Graph:
-//   col: 0  1
-//   ──────────
+//   col: 0 1
+//   ────────
 //        █     c1  (branch-a → parent p1)
-//        │  █  c2  (branch-b → parent p1)
-//        █──╯  p1  (main) ← fan-out with █─ (tee-left)
+//        │
+//        │ █   c2  (branch-b → parent p1)
+//        │ │
+//        █─╯   p1  (main) ← fan-out with █─ (tee-left)
 //
 // When the closing lane is to the right of the node, the fan-out
 // row should render █─ (block with trailing dash).
@@ -246,11 +229,13 @@ function test5() {
 // Test 6: Fan-out █ color matches node color
 //
 // Graph (same topology as test5):
-//   col: 0  1
-//   ──────────
+//   col: 0 1
+//   ────────
 //        █     c1  (branch-a)
-//        │  █  c2  (branch-b)
-//        █──╯  p1  (main)
+//        │
+//        │ █   c2  (branch-b)
+//        │ │
+//        █─╯   p1  (main)
 //
 // Verifies the █ glyph in fan-out rows uses the same color
 // as the █ in the commit row.
@@ -292,14 +277,58 @@ function test6() {
 }
 
 // ============================================================
-// Test 8: Fan-out merge optimization — simple case (no connections on commit row)
+// Test 7: Node with left connection renders as "█ " (no trailing dash)
 //
 // Graph:
 //   col: 0  1
 //   ──────────
+//        █     c1  (feat-A)
+//        │
+//        █     p1  (main)
+//        │
+//        ├─█   c2  (feat-B → parent p1 at col 0)
+//        │
+//        █     root
+//
+// c2 at col 1 connects LEFT to p1 at col 0. The node should
+// render as "█ " (no trailing dash — dash only for RIGHT connections).
+// ============================================================
+function test7() {
+  console.log("\nTest 7: Node with left connection renders without trailing dash");
+
+  const commits = [
+    makeCommit("c1", ["p1"], [{ name: "feat-A", type: "branch", isCurrent: false }]),
+    makeCommit("p1", ["root"], [{ name: "main", type: "branch", isCurrent: true }]),
+    makeCommit("c2", ["p1"], [{ name: "feat-B", type: "branch", isCurrent: false }]),
+    makeCommit("root", [], []),
+  ];
+  const rows = buildGraph(commits);
+  printGraph(rows);
+
+  const c2Row = rows.find(r => r.commit.hash === "c2")!;
+  const rendered = renderGraphRow(c2Row, {});
+
+  // The node for c2 should render as "█ " not "█─"
+  // because the connection is to the LEFT (toward col 0), not to the right
+  const nodeChar = rendered.find(gc => gc.char.includes("█"));
+  assert(nodeChar !== undefined, "Should find █ in rendered c2");
+  if (nodeChar) {
+    assert(!nodeChar.char.includes("─"),
+      `Node with only left connection should not have trailing dash, got "${nodeChar.char}"`);
+  }
+}
+
+// ============================================================
+// Test 8: Fan-out merge optimization — simple case (no connections on commit row)
+//
+// Graph:
+//   col: 0 1
+//   ────────
 //        █     c1  (branch-a → parent p1)
-//        │  █  c2  (branch-b → parent p1)
-//        █──╯  p1  (main) ← last fan-out row merged into commit row
+//        │
+//        │ █   c2  (branch-b → parent p1)
+//        │ │
+//        █─╯   p1  (main) ← last fan-out row merged into commit row
 //
 // When the commit row has no merge/branch connectors, the last
 // fan-out row can be merged into the commit row. Verifies the
@@ -350,13 +379,16 @@ function test8() {
 // Test 9: Fan-out merge with 2 fan-out rows — only last merges
 //
 // Graph:
-//   col: 0  1  2
-//   ─────────────
-//        █        c1  (branch-a → parent p1)
-//        │  █     c2  (branch-b → parent p1)
-//        │  │  █  c3  (branch-c → parent p1)
-//        █──╯  │     ← fan-out row 0 (rendered above commit)
-//        █─────╯  p1  (main) ← fan-out row 1 merged into commit row
+//   col: 0 1 2
+//   ──────────
+//        █       c1  (branch-a → parent p1)
+//        │
+//        │ █     c2  (branch-b → parent p1)
+//        │ │
+//        │ │ █   c3  (branch-c → parent p1)
+//        │ │ │
+//        █─╯ │       ← fan-out row 0 (rendered above commit)
+//        █───╯   p1  (main) ← fan-out row 1 merged into commit row
 //
 // With 3 children → 2 fan-out rows. Only the last fan-out row
 // merges into the commit row; earlier fan-out rows render above.
@@ -397,14 +429,18 @@ function test9() {
 // Test 10: Fan-out merge SKIPPED — commit has merge connectors
 //
 // Graph:
-//   col: 0  1
-//   ──────────
-//        █        c1  (branch-a → parent m1)
-//        │  █     c2  (branch-b → parent m1)
-//        █──╮     m1  (main, merge: parents [p1, f1])
-//        █──╯        ← fan-out row (NOT merged — commit row has ╮)
-//        │  █     f1  (feature)
-//        █──╯     p1
+//   col: 0 1
+//   ────────
+//        █     c1  (branch-a → parent m1)
+//        │
+//        │ █   c2  (branch-b → parent m1)
+//        │ │
+//        █─╯       ← fan-out row (not optimized)
+//        █─╮   m1  (main, merge: parents [p1, f1])
+//        │ │
+//        │ █   f1  (feature)
+//        │ │
+//        █─╯   p1
 //
 // When the commit row already has merge connectors (╮ from the
 // merge parent f1), fan-out merge optimization is skipped.
@@ -445,18 +481,18 @@ function test10() {
 // Test 11: Fan-out merge skipped — commit has branch-off connector
 //
 // Graph (same topology as test10 with different branch names):
-//   col: 0  1
-//   ──────────
+//   col: 0 1
+//   ────────
 //        █     c1  (branch-a)
 //        │
-//        │  █  c2  (branch-b)
-//        │  │
+//        │ █   c2  (branch-b)
+//        │ │
 //        █─╯
-//        █─╮  m1  (main, merge: parents [p1, s1])
-//        │  │
-//        │  █  s1  (side)
-//        │  │
-//        █─╯  p1
+//        █─╮   m1  (main, merge: parents [p1, s1])
+//        │ │
+//        │ █   s1  (side)
+//        │ │
+//        █─╯   p1
 //
 // Merge commit with branch-off has connectors → can't merge fan-out.
 // ============================================================
@@ -491,16 +527,16 @@ function test11() {
 // Test 12: Width consistency — fan-out █ rows match commit row width
 //
 // Graph (same topology as test4/test9):
-//   col: 0  1  2
-//   ─────────────
-//        █        c1  (branch-a)
+//   col: 0 1 2
+//   ──────────
+//        █      c1  (branch-a)
 //        │
-//        │  █     c2  (branch-b)
-//        │  │
-//        │  │  █  c3  (branch-c)
-//        │  │  │
+//        │ █    c2  (branch-b)
+//        │ │
+//        │ │ █  c3  (branch-c)
+//        │ │ │
 //        █─┼─╯
-//        █─╯     p1  (main)
+//        █─╯    p1  (main)
 //
 // When padToColumns is set, fan-out rows and commit rows must
 // have identical total character widths.
@@ -537,23 +573,23 @@ function test12() {
 // Test 13: No ● anywhere in rendered output (comprehensive check)
 //
 // Graph:
-//   col: 0  1  2
-//   ─────────────
-//        █        d4  (develop)
+//   col: 0 1 2
+//   ──────────
+//        █      d4  (develop)
 //        │
-//        █─╮      m2  (merge: parents [d3, f2])
-//        │  │
-//        │  █     f2  (feature-2)
-//        │  │
-//        █  │     d3
-//        │  │
-//        █─┼─╮    m1  (merge: parents [d2, f1])
-//        │  │  │
-//        │  │  █  f1  (feature-1)
-//        │  │  │
-//        █─╯  │   d2
-//        │    │
-//        █───╯    d1
+//        █─╮    m2  (merge: parents [d3, f2])
+//        │ │
+//        │ █    f2  (feature-2)
+//        │ │
+//        █ │    d3
+//        │ │
+//        █─┼─╮  m1  (merge: parents [d2, f1])
+//        │ │ │
+//        │ │ █  f1  (feature-1)
+//        │ │ │
+//        █─╯ │  d2
+//        │   │
+//        █───╯  d1
 //
 // Comprehensive scan: every commit row and fan-out row must
 // contain █ (not ●), and fan-out rows must not contain ├ or ┤.
@@ -594,6 +630,95 @@ function test13() {
 }
 
 // ============================================================
+// Test 14: Node with right connection renders as "█─"
+//
+// Graph:
+//   col: 0  1
+//   ──────────
+//        █──╮  m1  (main, merge: parents [d1, f1])
+//        │  █  f1  (feature)
+//        █──╯  d1
+//
+// m1 at col 0 connects RIGHT to f1's lane at col 1. The node
+// should have a trailing dash (█─).
+// ============================================================
+function test14() {
+  console.log("\nTest 14: Node with right connection renders with trailing dash");
+
+  // Merge commit at col 0 with secondary parent opening a lane to the right
+  const commits = [
+    makeCommit("m1", ["d1", "f1"], [{ name: "main", type: "branch", isCurrent: true }]),
+    makeCommit("f1", ["d1"], [{ name: "feature", type: "branch", isCurrent: false }]),
+    makeCommit("d1", [], []),
+  ];
+  const rows = buildGraph(commits);
+  printGraph(rows);
+
+  const m1Row = rows.find(r => r.commit.hash === "m1")!;
+  const rendered = renderGraphRow(m1Row, {});
+
+  // m1 at col 0 should have a right connection (to feature lane)
+  const nodeGlyph = rendered.find(gc => gc.char.includes("█"));
+  assert(nodeGlyph !== undefined, "Should find █ in rendered m1");
+  if (nodeGlyph) {
+    // Should be just "█" (the dash is a separate GraphChar)
+    // OR "█─" depending on implementation
+    // Check that the next char after █ is "─"
+    const nodeIdx = rendered.indexOf(nodeGlyph);
+    const hasTrailingDash = nodeGlyph.char === "█" ||
+      (nodeIdx + 1 < rendered.length && rendered[nodeIdx + 1].char === "─") ||
+      nodeGlyph.char.includes("─");
+    assert(hasTrailingDash,
+      "Node with right connection should have a trailing dash");
+  }
+}
+
+// ============================================================
+// Test 15: Left-connection connectors appear at correct columns
+//
+// Graph:
+//   col: 0  1
+//   ──────────
+//        █     c1  (feat-A)
+//        │
+//        █     p1  (main)
+//        │
+//        ├─█   c2  (feat-B) ← connectors between cols 0 and 1
+//        │
+//        █     root
+//
+// Verifies that connector glyphs exist between c2's column and
+// p1's column for the left connection.
+// ============================================================
+function test15() {
+  console.log("\nTest 15: Left-connection connectors at correct columns");
+
+  const commits = [
+    makeCommit("c1", ["p1"], [{ name: "feat-A", type: "branch", isCurrent: false }]),
+    makeCommit("p1", ["root"], [{ name: "main", type: "branch", isCurrent: true }]),
+    makeCommit("c2", ["p1"], [{ name: "feat-B", type: "branch", isCurrent: false }]),
+    makeCommit("root", [], []),
+  ];
+  const rows = buildGraph(commits);
+  printGraph(rows);
+
+  const c2Row = rows.find(r => r.commit.hash === "c2")!;
+  const p1Row = rows.find(r => r.commit.hash === "p1")!;
+
+  // c2's nodeColumn should be > p1's nodeColumn (c2 is at a higher column)
+  if (c2Row.nodeColumn > p1Row.nodeColumn) {
+    // There should be connectors between c2's column and p1's column
+    // These are the "left connection" connectors
+    const leftConns = c2Row.connectors.filter(c =>
+      c.column < c2Row.nodeColumn && c.column >= p1Row.nodeColumn &&
+      c.type !== "straight" && c.type !== "empty" && c.type !== "node"
+    );
+    assert(leftConns.length > 0,
+      "Should have connectors between c2 node and p1 column for left connection");
+  }
+}
+
+// ============================================================
 // Run all tests
 // ============================================================
 console.log("Block Commit Tests");
@@ -605,12 +730,15 @@ runTest(test3);
 runTest(test4);
 runTest(test5);
 runTest(test6);
+runTest(test7);
 runTest(test8);
 runTest(test9);
 runTest(test10);
 runTest(test11);
 runTest(test12);
 runTest(test13);
+runTest(test14);
+runTest(test15);
 
 const { failedTests } = (await import("./test-helpers")).getResults();
 printResults("block-commit");

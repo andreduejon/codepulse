@@ -2,7 +2,7 @@
  * Shared test helpers for graph engine tests.
  */
 import type { Commit, Connector, GraphRow } from "../src/git/types";
-import { type GraphChar, renderGraphRow, renderFanOutRow, renderConnectorRow, getMaxGraphColumns } from "../src/git/graph";
+import { type GraphChar, type RenderOptions, renderGraphRow, renderFanOutRow, renderConnectorRow, getMaxGraphColumns } from "../src/git/graph";
 
 let totalTests = 0;
 let passedTests = 0;
@@ -130,10 +130,57 @@ export function graphCharsToAscii(chars: GraphChar[]): string {
   return chars.map(gc => gc.char).join("");
 }
 
-const DEFAULT_THEME_COLORS = [
+export const THEME_COLORS = [
   "#c0c001", "#c0c002", "#c0c003", "#c0c004",
   "#c0c005", "#c0c006", "#c0c007", "#c0c008",
 ];
+
+/** Build render options with the shared test theme colors. */
+export function renderOpts(padToColumns?: number): RenderOptions {
+  return { themeColors: THEME_COLORS, padToColumns };
+}
+
+/** Check if any GraphChar in an array contains a specific character. */
+export function hasChar(chars: GraphChar[], ch: string): boolean {
+  return chars.some(gc => gc.char === ch || gc.char.includes(ch));
+}
+
+/** Find all GraphChars containing a specific character. */
+export function findChars(chars: GraphChar[], ch: string): GraphChar[] {
+  return chars.filter(gc => gc.char === ch || gc.char.includes(ch));
+}
+
+/** Get total character width of a GraphChar array. */
+export function totalCharWidth(chars: GraphChar[]): number {
+  return chars.reduce((sum, gc) => sum + gc.char.length, 0);
+}
+
+/**
+ * Assert that every connector, column, and fan-out connector on the given row
+ * has `isRemoteOnly === true`. Used by tests that verify post-pass dimming.
+ */
+export function assertRowFullyDimmed(row: GraphRow, rowIdx: number) {
+  const label = `Row ${rowIdx} (${row.commit.hash})`;
+
+  for (const conn of row.connectors) {
+    assert(conn.isRemoteOnly === true,
+      `${label}: connector ${conn.type}@col${conn.column} should be remote-only`);
+  }
+
+  for (let col = 0; col < row.columns.length; col++) {
+    assert(row.columns[col].isRemoteOnly === true,
+      `${label}: column ${col} should be remote-only`);
+  }
+
+  if (row.fanOutRows) {
+    for (let foIdx = 0; foIdx < row.fanOutRows.length; foIdx++) {
+      for (const conn of row.fanOutRows[foIdx]) {
+        assert(conn.isRemoteOnly === true,
+          `${label}: fan-out[${foIdx}] ${conn.type}@col${conn.column} should be remote-only`);
+      }
+    }
+  }
+}
 
 /**
  * Print the full rendered graph for a set of rows, matching the real app's
@@ -141,7 +188,7 @@ const DEFAULT_THEME_COLORS = [
  * when a commit row has no merge/branch connectors, the last fan-out row
  * is used as the commit row's graph (single █ block).
  */
-export function printGraph(rows: GraphRow[], themeColors: string[] = DEFAULT_THEME_COLORS) {
+export function printGraph(rows: GraphRow[], themeColors: string[] = THEME_COLORS) {
   const maxCols = getMaxGraphColumns(rows);
   const opts = { themeColors, padToColumns: maxCols };
   for (const row of rows) {
@@ -169,7 +216,10 @@ export function printGraph(rows: GraphRow[], themeColors: string[] = DEFAULT_THE
     const refs = row.commit.refs.map(r => r.name).join(", ");
     const ro = row.isRemoteOnly ? " [RO]" : "";
     if (canMerge && foRows) {
-      const lastFO = foRows[foRows.length - 1];
+      const lastFO = foRows.at(-1);
+
+      assert(lastFO !== undefined, "Last fan-out row should exist when canMerge is true");
+
       const foAscii = graphCharsToAscii(renderFanOutRow(lastFO, opts));
       console.log(`        ${foAscii}  ${row.commit.hash}  (${refs})${ro}`);
     } else {

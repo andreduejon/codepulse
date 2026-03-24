@@ -30,7 +30,7 @@ console.log("=".repeat(60));
 //
 // When feature's lane at col 1 closes and hotfix opens a new lane
 // at the same column, the new lane should get a fresh color index.
-runTest(() => {
+function test1() {
   console.log("\nTest 1: New lane at reused interior slot gets fresh color\n");
   const commits = [
     makeCommit("A", ["C"], [{ name: "main", type: "branch", isCurrent: true }]),
@@ -73,7 +73,7 @@ runTest(() => {
   const rowE = rows.find(r => r.commit.hash === "E")!;
   // A is at col 0, E may be at col 1. These are different branches.
   assert(rowA.nodeColor !== rowE.nodeColor, "A and E (different branches) should have different colors");
-});
+}
 
 // ─── Test 2: Sequential color indices are monotonically increasing ───
 //
@@ -89,7 +89,7 @@ runTest(() => {
 //
 // Three branches from common ancestor D. Each should have a unique
 // color index (A != B != C).
-runTest(() => {
+function test2() {
   console.log("\nTest 2: Color indices increase monotonically across lanes\n");
   const commits = [
     makeCommit("A", ["D"], [{ name: "main", type: "branch", isCurrent: true }]),
@@ -114,7 +114,7 @@ runTest(() => {
     rows[1].nodeColor !== rows[2].nodeColor,
     "B and C should have different nodeColors"
   );
-});
+}
 
 // ─── Test 3: Connector colors match their lane, not column position ───
 //
@@ -127,7 +127,7 @@ runTest(() => {
 //
 // When B is processed, A's lane at col 0 is still active (straight │).
 // The straight connector's color should match A's nodeColor (main's lane).
-runTest(() => {
+function test3() {
   console.log("\nTest 3: Straight connector colors match lane color, not column index\n");
   const commits = [
     makeCommit("A", ["C"], [{ name: "main", type: "branch", isCurrent: true }]),
@@ -150,7 +150,7 @@ runTest(() => {
       `Straight at col 0 color (${straightAtCol0.color}) should match main's nodeColor (${rowA.nodeColor})`
     );
   }
-});
+}
 
 // ─── Test 4: GraphColumn colors match lane colors ────────────────
 //
@@ -164,7 +164,7 @@ runTest(() => {
 // Row B has 2 active columns: col 0 (main) and col 1 (feature).
 // GraphColumn[0].color should equal A's nodeColor;
 // GraphColumn[1].color should equal B's nodeColor.
-runTest(() => {
+function test4() {
   console.log("\nTest 4: GraphColumn.color matches lane color (not column index)\n");
   const commits = [
     makeCommit("A", ["C"], [{ name: "main", type: "branch", isCurrent: true }]),
@@ -193,7 +193,7 @@ runTest(() => {
       `Column 1 color (${rowB.columns[1].color}) should match B's nodeColor (${rowB.nodeColor})`
     );
   }
-});
+}
 
 // ─── Test 5: Rendered colors are correct (actual hex values) ──────
 //
@@ -206,7 +206,7 @@ runTest(() => {
 //
 // Render row A with a known color palette and verify the █ glyph
 // gets the correct hex color from getColorForColumn(A.nodeColor).
-runTest(() => {
+function test5() {
   console.log("\nTest 5: Rendered graph row uses correct hex colors from lane colors\n");
   const COLORS = [
     "#f38ba8", "#a6e3a1", "#89b4fa", "#f9e2af",
@@ -233,7 +233,7 @@ runTest(() => {
       `Node color should be ${expectedColor} but got ${nodeGlyph.color}`
     );
   }
-});
+}
 
 // ─── Test 6: Interior null slot reuse scenario (the original bug) ──
 //
@@ -260,7 +260,7 @@ runTest(() => {
 //
 // B1-B4 occupy cols 1-4. When B merges E, it opens a new lane.
 // The new lane should get a fresh color, not reuse B4's color.
-runTest(() => {
+function test6() {
   console.log("\nTest 6: Interior null slot reuse - new lane gets fresh color\n");
   const commits = [
     makeCommit("A", ["B"], [{ name: "main", type: "branch", isCurrent: true }]),
@@ -293,7 +293,17 @@ runTest(() => {
       `Branch corner color (${branchCorner.color}) should differ from B4 color (${rowB4.nodeColor})`
     );
   }
-});
+}
+
+// ============================================================
+// Run all tests
+// ============================================================
+runTest(test1);
+runTest(test2);
+runTest(test3);
+runTest(test4);
+runTest(test5);
+runTest(test6);
 
 printResults("lane-color");
 

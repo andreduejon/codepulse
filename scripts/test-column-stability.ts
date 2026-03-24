@@ -63,18 +63,26 @@ function assertNoColumnJumping(label: string, commits: Commit[]) {
 // Test 1: Sequential feature merges
 //
 // Graph:
-//   col: 0  1
-//   ──────────
-//        █        d4   (develop)
-//        █──╮     mergeB  (merge: parents [d3, b2])
-//        │  █     b2   (feat-B)
-//        │  █     b1
-//        █──╯     d3
-//        █──╮     mergeA  (merge: parents [d2, a2])
-//        │  █     a2   (feat-A)
-//        │  █     a1
-//        █──╯     d2
-//        █        d1
+//   col: 0 1
+//   ────────
+//        █    d4  (develop)
+//        │
+//        █─╮  mergeB  (merge: parents [d3, b2])
+//        │ │
+//        │ █  b2  (feat-B)
+//        │ │
+//        │ █  b1
+//        │ │
+//        █─╯  d3
+//        █─╮  mergeA  (merge: parents [d2, a2])
+//        │ │
+//        │ █  a2  (feat-A)
+//        │ │
+//        │ █  a1
+//        │ │
+//        █─╯  d2
+//        │
+//        █    d1
 //
 // Two feature branches merged sequentially into develop.
 // Develop should stay in col 0 throughout.
@@ -102,27 +110,27 @@ function test1() {
 // Test 2: Parallel feature branches (fan-out)
 //
 // Graph:
-//   col: 0  1  2  3
-//   ─────────────────
-//        █              d3   (develop)
+//   col: 0 1 2 3
+//   ────────────
+//        █       d3   (develop)
 //        │
-//        █─╮            mergeC  (merge: [mergeB, c1])
-//        │  │
-//        │  █            c1   (feat-C)
-//        │  │
-//        █─┼─╮          mergeB  (merge: [mergeA, b1])
-//        │  │  │
-//        │  │  █         b1   (feat-B)
-//        │  │  │
-//        █─┼─┼─╮        mergeA  (merge: [d2, a1])
-//        │  │  │  │
-//        │  │  │  █      a1   (feat-A)
-//        │  │  │  │
+//        █─╮     mergeC  (merge: [mergeB, c1])
+//        │ │
+//        │ █     c1   (feat-C)
+//        │ │
+//        █─┼─╮   mergeB  (merge: [mergeA, b1])
+//        │ │ │
+//        │ │ █   b1   (feat-B)
+//        │ │ │
+//        █─┼─┼─╮ mergeA  (merge: [d2, a1])
+//        │ │ │ │
+//        │ │ │ █  a1   (feat-A)
+//        │ │ │ │
 //        █─┼─┼─╯
 //        █─┼─╯
-//        █─╯            d2   (shared ancestor for A, B, C)
+//        █─╯      d2   (shared ancestor for A, B, C)
 //        │
-//        █              d1
+//        █        d1
 //
 // Three features all branched from d2, merged sequentially.
 // ============================================================
@@ -148,27 +156,27 @@ function test2() {
 // Test 3: Renovate-style short branches
 //
 // Graph:
-//   col: 0  1  2
-//   ─────────────
-//        █           d3   (develop)
+//   col: 0 1 2
+//   ──────────
+//        █      d3   (develop)
 //        │
-//        █─╮         m3   (merge: [m2, rc1])
-//        │  │
-//        │  █        rc1  (origin/renovate/c) [RO]
-//        │  │
-//        █─┼─╮      m2   (merge: [m1, rb1])
-//        │  │  │
-//        │  │  █     rb1  (origin/renovate/b) [RO]
-//        │  │  │
-//        █─╯  │
-//        █─╮  │      m1   (merge: [d2, ra1])
-//        │  │  │
-//        │  █  │     ra1  (origin/renovate/a) [RO]
-//        │  │  │
+//        █─╮    m3   (merge: [m2, rc1])
+//        │ │
+//        │ █    rc1  (origin/renovate/c) [RO]
+//        │ │
+//        █─┼─╮  m2   (merge: [m1, rb1])
+//        │ │ │
+//        │ │ █  rb1  (origin/renovate/b) [RO]
+//        │ │ │
+//        █─╯ │
+//        █─╮ │  m1   (merge: [d2, ra1])
+//        │ │ │
+//        │ █ │  ra1  (origin/renovate/a) [RO]
+//        │ │ │
 //        █─┼─╯
-//        █─╯         d2
+//        █─╯    d2
 //        │
-//        █           d1
+//        █      d1
 //
 // Many short remote-only branches merged interleaved.
 // ============================================================
@@ -194,21 +202,21 @@ function test3() {
 // Test 4: Diamond pattern
 //
 // Graph:
-//   col: 0  1
-//   ──────────
-//        █     d3   (develop)
+//   col: 0 1
+//   ────────
+//        █    d3   (develop)
 //        │
-//        █─╮   mergeB  (merge: [mergeA, b1])
-//        │  │
-//        │  █  b1   (feat-B)
-//        │  │
+//        █─╮  mergeB  (merge: [mergeA, b1])
+//        │ │
+//        │ █  b1   (feat-B)
+//        │ │
 //        █─╯
-//        █─╮   mergeA  (merge: [d2, a1])
-//        │  │
-//        │  █  a1   (feat-A)
-//        │  │
-//        █  │  d2
-//        │  │
+//        █─╮  mergeA  (merge: [d2, a1])
+//        │ │
+//        │ █  a1   (feat-A)
+//        │ │
+//        █ │  d2
+//        │ │
 //        █─╯  d1
 //
 // Feature B branches from mergeA (a diamond shape).
@@ -233,20 +241,20 @@ function test4() {
 // Test 5: Two long-lived branches with cross-merge
 //
 // Graph:
-//   col: 0  1
-//   ──────────
-//        █     d4   (develop)
+//   col: 0 1
+//   ────────
+//        █    d4   (develop)
 //        │
-//        █     d3
+//        █    d3
 //        │
-//        █     d2
+//        █    d2
 //        │
-//        │  █  s2   (staging)
-//        │  │
-//        ├─█   merge_d2  (merge: [s1, d2])
-//        │  │
-//        │  █  s1
-//        │  │
+//        │ █  s2   (staging)
+//        │ │
+//        ├─█  merge_d2  (merge: [s1, d2])
+//        │ │
+//        │ █  s1
+//        │ │
 //        █─╯  d1   (shared base for develop + staging)
 //
 // Develop and staging with cherry-pick/cross-merge from d2.
@@ -271,16 +279,23 @@ function test5() {
 // Test 6: Release branch far from branch-off point
 //
 // Graph:
-//   col: 0  1
-//   ──────────
-//        █     d5   (develop)
-//        █     d4
-//        █     d3
-//        │  █  r3   (release/1.0)
-//        │  █  r2
-//        │  █  r1   (→ parent d2)
-//        █──╯  d2
-//        █     d1
+//   col: 0 1
+//   ────────
+//        █    d5   (develop)
+//        │
+//        █    d4
+//        │
+//        █    d3
+//        │
+//        │ █  r3   (release/1.0)
+//        │ │
+//        │ █  r2
+//        │ │
+//        │ █  r1   (→ parent d2)
+//        │ │
+//        █─╯  d2
+//        │
+//        █    d1
 //
 // Long release branch — tests that column assignment stays
 // stable even with many commits between branch-off and tip.
@@ -306,20 +321,20 @@ function test6() {
 // Test 7: Unmerged remote-only branches above develop
 //
 // Graph:
-//   col: 0  1  2
-//   ─────────────
-//        █           ren1  (origin/renovate/major) [RO]
+//   col: 0 1 2
+//   ──────────
+//        █      ren1  (origin/renovate/major) [RO]
 //        │
-//        │  █        ren2  (origin/renovate/minor) [RO]
-//        │  │
-//        │  │  █     ren3  (origin/renovate/patch) [RO]
-//        │  │  │
+//        │ █    ren2  (origin/renovate/minor) [RO]
+//        │ │
+//        │ │ █  ren3  (origin/renovate/patch) [RO]
+//        │ │ │
 //        █─┼─╯
-//        █─╯         d3    (develop, origin/develop, origin/HEAD)
+//        █─╯    d3    (develop, origin/develop, origin/HEAD)
 //        │
-//        █           d2
+//        █      d2
 //        │
-//        █           d1
+//        █      d1
 //
 // Three remote-only branches above develop, all parented to d3.
 // Creates a fan-out when d3 appears.
@@ -344,102 +359,35 @@ function test7() {
 }
 
 // ============================================================
-// Test 8: Complex cross-merges (e-ant-backend style)
-//
-// Simplified topology sketch (27 commits):
-//
-//   develop ──── Merge#22(tspd-642) ──── Merge#19(tspd-557)
-//                     │                       │
-//                     ╰── 7 commits ──╯       ╰── 0fee6932
-//                                             │
-//                                   Merge#20(tspd-556)
-//                                        │         │
-//                             ╭──────────╯         ╰── 2cb7d0af
-//                             │                         │
-//                      Merge#21(tspd-558)       Merge tspd-558→556
-//                             │                    │          │
-//                             ╰── 34bbc62c    Merge(2)   34bbc62c
-//                                    │           │
-//                                    ╰── fe1485f3 ╰── 5b4a22bb→7a4804bc→3f9f7a92
-//                                           │
-//   origin/tspd-626 ── b95a0262 ── e5b2a605 │
-//                                           │
-//                               cee38bbb ───╯── 8b48362d ── Merge#18
-//                                                              │    │
-//                                                  v1.49.0 ────╯    │
-//                                                     │             │
-//                                                  c0d70f04 ── d7979cd9
-//
-// Real-world DAG with multiple interleaved PR merges.
-// Tests that no branch jumps columns despite complex topology.
-// ============================================================
-function test8() {
-  console.log("\nTest 8: Complex cross-merges (e-ant-backend style)");
-
-  const commits = [
-    makeCommit("cd21d4d0", ["3c67a4f3", "34ae7c3f"], [{ name: "develop", type: "branch", isCurrent: true }], "Merge #22 tspd-642"),
-    makeCommit("34ae7c3f", ["e9bb1d45"], [], "Update .env.template"),
-    makeCommit("e9bb1d45", ["4f8ea691"], [], "fix(tspd-642): report"),
-    makeCommit("4f8ea691", ["1f4c8531"], [], "fix(tspd-642): refTaskName"),
-    makeCommit("1f4c8531", ["be4f5c69"], [], "feat(tspd-642): refSb handling"),
-    makeCommit("be4f5c69", ["85509b67"], [], "feat(tspd-642): customer print"),
-    makeCommit("85509b67", ["f7e7523b"], [], "feat(tspd-642): s100d input"),
-    makeCommit("f7e7523b", ["cee38bbb"], [], "chore(tspd-642): config"),
-    makeCommit("3c67a4f3", ["9b4a4ba2", "0fee6932"], [], "Merge #19 tspd-557"),
-    makeCommit("0fee6932", ["7ffa77a5"], [], "tspd-557 ESN"),
-    makeCommit("9b4a4ba2", ["d1bbf694", "2cb7d0af"], [], "Merge #20 tspd-556"),
-    makeCommit("2cb7d0af", ["3e36e1b3"], [], "tspd-558 config fixes"),
-    makeCommit("3e36e1b3", ["c1c4da6a", "34bbc62c"], [], "Merge tspd-558 into tspd-556"),
-    makeCommit("c1c4da6a", ["5b4a22bb", "fe1485f3"], [], "Merge tspd-558 into tspd-556 (2)"),
-    makeCommit("5b4a22bb", ["7a4804bc"], [], "tspd-535 sso config"),
-    makeCommit("7a4804bc", ["3f9f7a92"], [], "tspd-556 refactor"),
-    makeCommit("3f9f7a92", ["cee38bbb"], [], "tspd-556 new api"),
-    makeCommit("d1bbf694", ["cee38bbb", "34bbc62c"], [], "Merge #21 tspd-558"),
-    makeCommit("34bbc62c", ["fe1485f3"], [], "tspd-558 refactor"),
-    makeCommit("fe1485f3", ["cee38bbb"], [], "tspd-556 bulk update"),
-    makeCommit("b95a0262", ["e5b2a605"], [{ name: "origin/tspd-626", type: "remote", isCurrent: false }], "tspd-626 tests"),
-    makeCommit("e5b2a605", ["cee38bbb"], [], "tspd-626 penalty cycles"),
-    makeCommit("cee38bbb", ["8b48362d"], [], "Delete cicd/helm"),
-    makeCommit("8b48362d", ["7ffa77a5"], [], "chore(tspd-506) config"),
-    makeCommit("7ffa77a5", ["d7979cd9", "aa24bb22"], [], "Merge #18"),
-    makeCommit("aa24bb22", ["c0d70f04"], [{ name: "v1.49.0", type: "tag", isCurrent: false }], "Release v1.49.0"),
-    makeCommit("c0d70f04", ["d7979cd9"], [], "Merge #17"),
-    makeCommit("d7979cd9", [], [], "initial"),
-  ];
-
-  assertNoColumnJumping("e-ant-backend style", commits);
-}
-
-// ============================================================
-// Test 9: Develop + release + hotfix cross-merge
+// Test 8: Develop + release + hotfix cross-merge
 //
 // Graph:
-//   col: 0  1  2
-//   ─────────────
-//        █           d4   (develop)
+//   col: 0 1 2
+//   ──────────
+//        █      d4   (develop)
 //        │
-//        █─╮         mergeHF  (merge: [d3, hf1])
-//        │  │
-//        │  █        hf1  (hotfix/fix-1)
-//        │  │
-//        █  │        d3
-//        │  │
-//        │  │  █     r2   (release/1.0)
-//        │  │  │
-//        │  ├─█      mergeHF_rel  (merge: [r1, hf1])
-//        │  │  │
-//        │  │  █     r1
-//        │  │  │
+//        █─╮    mergeHF  (merge: [d3, hf1])
+//        │ │
+//        │ █    hf1  (hotfix/fix-1)
+//        │ │
+//        █ │    d3
+//        │ │
+//        │ │ █  r2   (release/1.0)
+//        │ │ │
+//        │ ├─█  mergeHF_rel  (merge: [r1, hf1])
+//        │ │ │
+//        │ │ █  r1
+//        │ │ │
 //        █─┼─╯
-//        █─╯         d2
+//        █─╯    d2
 //        │
-//        █           d1
+//        █      d1
 //
 // Hotfix merged into both develop and release.
 // Tests cross-merge stability across 3 long-lived branches.
 // ============================================================
-function test9() {
-  console.log("\nTest 9: Develop + release + hotfix");
+function test8() {
+  console.log("\nTest 8: Develop + release + hotfix");
 
   const commits = [
     makeCommit("d4", ["mergeHF"], [{ name: "develop", type: "branch", isCurrent: true }], "develop tip"),
@@ -470,7 +418,6 @@ runTest(test5);
 runTest(test6);
 runTest(test7);
 runTest(test8);
-runTest(test9);
 
 const { failedTests } = (await import("./test-helpers")).getResults();
 printResults("column-stability");

@@ -24,7 +24,9 @@ import {
 //   col: 0
 //   ──────
 //        █  c1  (main)
+//        │
 //        █  c2
+//        │
 //        █  c3
 //
 // Linear graph, all at col 0. With depthLimit = maxCols + 5,
@@ -54,20 +56,20 @@ function test1() {
 // Test 2: computeViewportOffsets — basic sliding for branched graph
 //
 // Graph:
-//   col: 0  1  2  3  4
-//   ─────────────────────
-//        █                 c1  (main)
+//   col: 0 1 2 3 4
+//   ──────────────
+//        █          c1  (main)
 //        │
-//        │  █              f1  (feat-1)
-//        │  │
-//        │  │  █           f2  (feat-2)
-//        │  │  │
-//        │  │  │  █        f3  (feat-3)
-//        │  │  │  │
-//        │  │  │  │  █     f4  (feat-4)
-//        │  │  │  │  │
-//        █  │  │  │  │     c2
-//        │  │  │  │  │
+//        │ █        f1  (feat-1)
+//        │ │
+//        │ │ █      f2  (feat-2)
+//        │ │ │
+//        │ │ │ █    f3  (feat-3)
+//        │ │ │ │
+//        │ │ │ │ █  f4  (feat-4)
+//        │ │ │ │ │
+//        █ │ │ │ │  c2
+//        │ │ │ │ │
 //        █─┼─┼─┼─╯
 //        █─┼─┼─╯
 //        █─┼─╯
@@ -117,8 +119,11 @@ function test2() {
 //   col: 0
 //   ──────
 //        █  a  (main)
+//        │
 //        █  b
+//        │
 //        █  c
+//        │
 //        █  d
 //
 // Linear graph, all at col 0. With depthLimit = 2, all offsets
@@ -150,21 +155,21 @@ function test3() {
 // Test 4: sliceGraphToViewport — basic slicing
 //
 // Graph:
-//   col: 0  1  2  3
-//   ─────────────────
-//        █              c1  (main)
+//   col: 0 1 2 3
+//   ────────────
+//        █        c1  (main)
 //        │
-//        │  █           f1
-//        │  │
-//        │  │  █        f2
-//        │  │  │
-//        │  │  │  █     f3
-//        │  │  │  │
-//        █  │  │  │     c2
-//        │  │  │  │
+//        │ █      f1
+//        │ │
+//        │ │ █    f2
+//        │ │ │
+//        │ │ │ █  f3
+//        │ │ │ │
+//        █ │ │ │  c2
+//        │ │ │ │
 //        █─┼─┼─╯
 //        █─┼─╯
-//        █─╯            c3
+//        █─╯      c3
 //
 // Full rendered width = maxCols * 2 chars. Sliced to depthLimit=3
 // should produce exactly depthLimit * 2 chars per row.
@@ -291,6 +296,7 @@ function test5() {
 //   col: 0
 //   ──────
 //        █  a  (main)
+//        │
 //        █  b
 //
 // When depthLimit = maxCols, slicing is a no-op and should
@@ -321,27 +327,27 @@ function test6() {
 // Test 7: computeViewportOffsets — node at high column shifts viewport right
 //
 // Graph:
-//   col: 0  1  2  3  4  5
-//   ───────────────────────
-//        █                    m1  (main)
+//   col: 0 1 2 3 4 5
+//   ────────────────
+//        █            m1  (main)
 //        │
-//        │  █                 f1
-//        │  │
-//        │  │  █              f2
-//        │  │  │
-//        │  │  │  █           f3
-//        │  │  │  │
-//        │  │  │  │  █        f4
-//        │  │  │  │  │
-//        │  │  │  │  │  █     f5
-//        │  │  │  │  │  │
-//        █  │  │  │  │  │     m2
-//        │  │  │  │  │  │
+//        │ █          f1
+//        │ │
+//        │ │ █        f2
+//        │ │ │
+//        │ │ │ █      f3
+//        │ │ │ │
+//        │ │ │ │ █    f4
+//        │ │ │ │ │
+//        │ │ │ │ │ █  f5
+//        │ │ │ │ │ │
+//        █ │ │ │ │ │  m2
+//        │ │ │ │ │ │
 //        █─┼─┼─┼─┼─╯
 //        █─┼─┼─┼─╯
 //        █─┼─┼─╯
 //        █─┼─╯
-//        █─╯                  b1
+//        █─╯          b1
 //
 // With depthLimit = 4, the highest-column commit (f5 at col 5)
 // must trigger a positive offset to keep it in viewport.
@@ -396,18 +402,18 @@ function test7() {
 // Test 8: sliceGraphToViewport — connector row slicing
 //
 // Graph:
-//   col: 0  1  2
-//   ─────────────
-//        █           c1  (main)
+//   col: 0 1 2
+//   ──────────
+//        █      c1  (main)
 //        │
-//        │  █        f1
-//        │  │
-//        │  │  █     f2
-//        │  │  │
-//        █  │  │     c2
-//        │  │  │
+//        │ █    f1
+//        │ │
+//        │ │ █  f2
+//        │ │ │
+//        █ │ │  c2
+//        │ │ │
 //        █─┼─╯
-//        █─╯         c3
+//        █─╯    c3
 //
 // Connector rows (the │ rows between commit rows) should also
 // slice to exactly depthLimit * 2 chars.
