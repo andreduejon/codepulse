@@ -120,7 +120,7 @@ const nord: Theme = {
   backgroundElement: "#3b4252",
   backgroundElementActive: "#4c566a",
   foreground: "#eceff4",
-  foregroundMuted: "#d8dee9",
+  foregroundMuted: "#9aa1a6",
   border: "#434c5e",
   primary: "#88c0d0",
   accent: "#b48ead",

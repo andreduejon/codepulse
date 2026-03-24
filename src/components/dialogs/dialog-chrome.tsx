@@ -23,7 +23,7 @@ export function DialogOverlay(props: { children: JSX.Element }) {
 }
 
 /**
- * Shared title bar for dialogs: bold title on the left, "esc" hint on the right,
+ * Shared title bar for dialogs: bold title on the left, "esc close" hint on the right,
  * followed by a 1-row spacer.
  */
 export function DialogTitleBar(props: { title: string }) {
@@ -36,9 +36,8 @@ export function DialogTitleBar(props: { title: string }) {
         <text flexGrow={1} wrapMode="none">
           <strong><span fg={t().foreground}>{props.title}</span></strong>
         </text>
-        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-          <span fg={t().foregroundMuted}>{"esc".padStart(9)}</span>
-        </text>
+        <text flexShrink={0} wrapMode="none" fg={t().foreground}>esc</text>
+        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" close"}</text>
       </box>
       <box height={1} />
     </>

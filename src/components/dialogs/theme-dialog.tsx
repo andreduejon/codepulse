@@ -61,7 +61,7 @@ export default function ThemeDialog(props: { onClose: () => void }) {
     <DialogOverlay>
       <box
         width={50}
-        height={themeOptions.length + 5}
+        height={themeOptions.length + 7}
         backgroundColor={t().backgroundPanel}
         flexDirection="column"
         paddingX={1}
@@ -87,13 +87,23 @@ export default function ThemeDialog(props: { onClose: () => void }) {
                       {opt.name}
                     </span>
                   </text>
-                  <text flexShrink={0} wrapMode="none" fg={isSelected() ? themes[opt.key].graphColors[0] : t().backgroundPanel}>
+                  <text flexShrink={0} wrapMode="none" fg={isSelected() ? themes[opt.key].accent : t().backgroundPanel}>
                     {isSelected() ? "  █" : "   "}
                   </text>
                 </box>
               );
             }}
           </For>
+        </box>
+
+        {/* Navigation footer */}
+        <box height={1} />
+        <box flexDirection="row" width="100%" paddingX={4}>
+          <box flexGrow={1} />
+          <text flexShrink={0} wrapMode="none" fg={t().foreground}>enter</text>
+          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" confirm  "}</text>
+          <text flexShrink={0} wrapMode="none" fg={t().foreground}>↑/↓</text>
+          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" navigate"}</text>
         </box>
       </box>
     </DialogOverlay>
