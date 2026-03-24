@@ -16,19 +16,21 @@ console.log("=".repeat(60));
 // ─── Test 1: Colors differ when lane reuses interior slot ──────
 //
 // Graph:
-//   █     A  (main)
-//   │
-//   │ █   B  (feature)  ← opens lane at col 1
-//   │ │
-//   █─╯   C             ← feature lane closes (merged fan-out)
-//   │
-//   █─╮   D             ← merge: opens lane for hotfix parent E
-//   │ │
-//   │ █   E  (hotfix)   ← reuses freed col 1 slot
-//   │ │
-//   █─╯   F  ()
+//   col: 0 1
+//   ────────
+//        █     A  (main)
+//        │
+//        │ █   B  (feature)  ← opens lane at col 1
+//        │ │
+//        █─╯   C             ← feature lane closes (merged fan-out)
+//        │
+//        █─╮   D             ← merge: opens lane for hotfix parent E
+//        │ │
+//        │ █   E  (hotfix)   ← reuses freed col 1 slot
+//        │ │
+//        █─╯   F  ()
 //
-// When feature's lane at col 1 closes and hotfix opens a new lane
+// When feature's lane at column one closes and hotfix opens a new lane
 // at the same column, the new lane should get a fresh color index.
 function test1() {
   console.log("\nTest 1: New lane at reused interior slot gets fresh color\n");
@@ -78,14 +80,16 @@ function test1() {
 // ─── Test 2: Sequential color indices are monotonically increasing ───
 //
 // Graph:
-//   █       A  (main)
-//   │
-//   │ █     B  (feat1)
-//   │ │
-//   │ │ █   C  (feat2)
-//   │ │ │
-//   █─┼─╯
-//   █─╯     D  ()
+//   col: 0 1 2
+//   ──────────
+//        █       A  (main)
+//        │
+//        │ █     B  (feat1)
+//        │ │
+//        │ │ █   C  (feat2)
+//        │ │ │
+//        █─┼─╯
+//        █─╯     D  ()
 //
 // Three branches from common ancestor D. Each should have a unique
 // color index (A != B != C).
@@ -119,11 +123,13 @@ function test2() {
 // ─── Test 3: Connector colors match their lane, not column position ───
 //
 // Graph:
-//   █     A  (main)     ← col 0
-//   │
-//   │ █   B  (feature)  ← col 1; A's lane continues as │ at col 0
-//   │ │
-//   █─╯   C  ()
+//   col: 0 1
+//   ────────
+//        █     A  (main)     ← col 0
+//        │
+//        │ █   B  (feature)  ← col 1; A's lane continues as │ at col 0
+//        │ │
+//        █─╯   C  ()
 //
 // When B is processed, A's lane at col 0 is still active (straight │).
 // The straight connector's color should match A's nodeColor (main's lane).
@@ -154,12 +160,14 @@ function test3() {
 
 // ─── Test 4: GraphColumn colors match lane colors ────────────────
 //
-// Graph:  (same as Test 3)
-//   █     A  (main)     ← col 0
-//   │
-//   │ █   B  (feature)  ← col 1; both columns active
-//   │ │
-//   █─╯   C  ()
+// Graph:
+//   col: 0 1
+//   ────────
+//        █     A  (main)     ← col 0
+//        │
+//        │ █   B  (feature)  ← col 1; both columns active
+//        │ │
+//        █─╯   C  ()
 //
 // Row B has 2 active columns: col 0 (main) and col 1 (feature).
 // GraphColumn[0].color should equal A's nodeColor;
@@ -197,12 +205,14 @@ function test4() {
 
 // ─── Test 5: Rendered colors are correct (actual hex values) ──────
 //
-// Graph:  (same as Test 3)
-//   █     A  (main)
-//   │
-//   │ █   B  (feature)
-//   │ │
-//   █─╯   C  ()
+// Graph:
+//   col: 0 1
+//   ────────
+//        █     A  (main)
+//        │
+//        │ █   B  (feature)
+//        │ │
+//        █─╯   C  ()
 //
 // Render row A with a known color palette and verify the █ glyph
 // gets the correct hex color from getColorForColumn(A.nodeColor).
@@ -238,25 +248,27 @@ function test5() {
 // ─── Test 6: Interior null slot reuse scenario (the original bug) ──
 //
 // Graph:
-//   █             A   (main)
-//   │
-//   │ █           B1  (f1)
-//   │ │
-//   │ │ █         B2  (f2)
-//   │ │ │
-//   │ │ │ █       B3  (f3)
-//   │ │ │ │
-//   │ │ │ │ █     B4  (f4)
-//   │ │ │ │ │
-//   █─┼─┼─┼─┼─╮   B   ()  ← merge: opens lane for hotfix parent E
-//   │ │ │ │ │ │
-//   │ │ │ │ │ █   E   (hotfix)  ← reuses a freed interior slot
-//   │ │ │ │ │ │
-//   █─┼─┼─┼─┼─╯
-//   █─┼─┼─┼─╯
-//   █─┼─┼─╯
-//   █─┼─╯
-//   █─╯           D   ()
+//   col: 0 1 2 3 4 5
+//   ────────────────
+//        █             A   (main)
+//        │
+//        │ █           B1  (f1)
+//        │ │
+//        │ │ █         B2  (f2)
+//        │ │ │
+//        │ │ │ █       B3  (f3)
+//        │ │ │ │
+//        │ │ │ │ █     B4  (f4)
+//        │ │ │ │ │
+//        █─┼─┼─┼─┼─╮   B   ()  ← merge: opens lane for hotfix parent E
+//        │ │ │ │ │ │
+//        │ │ │ │ │ █   E   (hotfix)  ← reuses a freed interior slot
+//        │ │ │ │ │ │
+//        █─┼─┼─┼─┼─╯
+//        █─┼─┼─┼─╯
+//        █─┼─┼─╯
+//        █─┼─╯
+//        █─╯           D   ()
 //
 // B1-B4 occupy cols 1-4. When B merges E, it opens a new lane.
 // The new lane should get a fresh color, not reuse B4's color.

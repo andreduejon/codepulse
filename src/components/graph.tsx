@@ -202,7 +202,7 @@ function GraphLine(props: Readonly<{
   const fullFanOutChars = createMemo(() => {
     const foRows = props.row.fanOutRows;
     if (!foRows || foRows.length === 0) return [];
-    return foRows.map((foConnectors) => renderFanOutRow(foConnectors, renderOpts()));
+    return foRows.map((foConnectors) => renderFanOutRow(foConnectors, renderOpts(), props.row.nodeColumn));
   });
 
   // Fan-out rows ABOVE the commit row

@@ -1075,7 +1075,7 @@ export function getMaxGraphColumns(rows: GraphRow[]): number {
  *
  * The connectors array is pre-built by buildGraph — one entry per column.
  */
-export function renderFanOutRow(fanOutConnectors: Connector[], opts: RenderOptions = {}): GraphChar[] {
+export function renderFanOutRow(fanOutConnectors: Connector[], opts: RenderOptions = {}, nodeColumn?: number): GraphChar[] {
   const padToColumns = opts.padToColumns;
   const result: GraphChar[] = [];
 
@@ -1089,9 +1089,17 @@ export function renderFanOutRow(fanOutConnectors: Connector[], opts: RenderOptio
     if (c.column >= maxCol) maxCol = c.column + 1;
   }
 
-  const config: ConnectorGlyphConfig = {
+  // Node column uses █ for the commit's block glyph.
+  // Other columns (e.g. absorbed merge connectors) use ├/┤ so they
+  // don't look like a second commit on the same row.
+  const nodeConfig: ConnectorGlyphConfig = {
     teeLeftChar: "█",
     teeRightGlyph: "█ ",
+    teeLeftDashExtraTypes: ["corner-bottom-right"],
+  };
+  const mergeConfig: ConnectorGlyphConfig = {
+    teeLeftChar: "├",
+    teeRightGlyph: "┤ ",
     teeLeftDashExtraTypes: ["corner-bottom-right"],
   };
 
@@ -1101,6 +1109,10 @@ export function renderFanOutRow(fanOutConnectors: Connector[], opts: RenderOptio
       result.push({ char: "  ", color: getBaseColor(col, opts) });
       continue;
     }
+
+    // Use █ only at the node column; ├/┤ at absorbed merge tee columns
+    const config = (nodeColumn !== undefined && col === nodeColumn) || nodeColumn === undefined
+      ? nodeConfig : mergeConfig;
 
     if (!renderConnectorGlyphs(connectors, col, byCol, result, opts, config)) {
       result.push({ char: "  ", color: getBaseColor(col, opts) });

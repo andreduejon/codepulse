@@ -288,7 +288,7 @@ function test4() {
 //   │ │
 //   │ │ █   g1  (feat-G)
 //   │ │ │
-//   █─█─╯   d1  (develop)  ← merge m1 (LEFT) + fan-out g1 (RIGHT)
+//   ├─█─╯   d1  (develop)  ← merge m1 (LEFT) + fan-out g1 (RIGHT)
 //   │ │           opposite sides → combined into 1 █ row
 //   █ │     m0  ()
 //     │
@@ -447,19 +447,19 @@ function test6() {
 // Test 7: corner-top-left (╭) absorbed into fan-out row
 //
 // Graph (buildGraph output):
-//   col: 0  1  2
-//   ─────────────
+//   col: 0 1 2
+//   ──────────
 //        █        t1  (trunk)
 //        │
-//        │  █     x1  (hotfix-X)
-//        │  │
-//        │  │  █  y1  (hotfix-Y)
-//        │  │  │
-//        █─█─╯    r1  (release, merge: parents [r0, t1])
-//        │  │
-//        █  │     t0
-//           │
-//           █     r0
+//        │ █     x1  (hotfix-X)
+//        │ │
+//        │ │ █  y1  (hotfix-Y)
+//        │ │ │
+//        ├─█─╯    r1  (release, merge: parents [r0, t1])
+//        │ │
+//        █ │     t0
+//          │
+//          █     r0
 //
 // The fan-out+commit-row merge optimization absorbs the merge
 // connector into the last fan-out row.
@@ -542,9 +542,9 @@ function test7() {
 // Test 8: corner-top-right (╮) absorbed into fan-out row
 //
 // Synthetic connector layout (no buildGraph):
-//   col: 0  1  2  3
-//   ─────────────────
-//        │  █──╮
+//   col: 0 1 2
+//   ──────────
+//        │ █─╮
 //
 // Connectors:
 //   col 0: straight  → "│ "
@@ -584,9 +584,9 @@ function test8() {
 // Test 9: corner-top-right with horizontal crossing → ┬ glyph
 //
 // Synthetic connector layout (no buildGraph):
-//   col: 0  1  2  3  4
-//   ─────────────────────
-//        │  █──┬──╯
+//   col: 0 1 2 3
+//   ────────────
+//        │ █─┬─╯
 //
 // Connectors:
 //   col 0: straight          → "│ "
@@ -620,52 +620,7 @@ function test9() {
 }
 
 // ============================================================
-// Test 10: corner-top-left (╭) renders correctly
-//
-// Synthetic connector layout (no buildGraph):
-//   col: 0  1  2  3  4  5  6  7  8  9
-//   ────────────────────────────────────
-//        │  │  ────╭──█──────╯
-//
-// Regression test for the original bug (commit d84b3a0 scenario):
-// corner-top-left at col 4 was rendering as empty space.
-// ============================================================
-function test10() {
-  console.log("\nTest 10: corner-top-left (╭) renders correctly in fan-out row");
-
-  // Layout: │  │  ────╭──█──────╯
-  const syntheticRow: Connector[] = [
-    { type: "straight", color: 0, column: 0 },
-    { type: "straight", color: 1, column: 1 },
-    { type: "horizontal", color: 3, column: 2 },
-    { type: "horizontal", color: 3, column: 3 },
-    { type: "corner-top-left", color: 3, column: 4 },
-    { type: "horizontal", color: 3, column: 5 },
-    { type: "tee-left", color: 2, column: 6 },
-    { type: "horizontal", color: 4, column: 7 },
-    { type: "horizontal", color: 4, column: 8 },
-    { type: "corner-bottom-right", color: 4, column: 9 },
-  ];
-
-  const rendered = renderFanOutRow(syntheticRow, { themeColors: THEME_COLORS });
-  const str = graphCharsToAscii(rendered);
-
-  // The ╭ at col 4 should be visible
-  assert(str.includes("╭"), `corner-top-left should render as ╭, got "${str}"`);
-
-  // Check the position: col 4 means char position ~8
-  let foundCorner = false;
-  for (const gc of rendered) {
-    if (gc.char.includes("╭")) {
-      foundCorner = true;
-      break;
-    }
-  }
-  assert(foundCorner, `╭ glyph should be present in rendered output`);
-}
-
-// ============================================================
-// Test 11: All corner types render non-empty in fan-out row
+// Test 10: All corner types render non-empty in fan-out row
 //
 // Synthetic single-connector layouts (no buildGraph):
 //   Each corner type is rendered alone at col 0:
@@ -677,8 +632,8 @@ function test10() {
 //
 // Comprehensive check that no corner type renders as empty space.
 // ============================================================
-function test11() {
-  console.log("\nTest 11: All corner types render non-empty in fan-out row");
+function test10() {
+  console.log("\nTest 10: All corner types render non-empty in fan-out row");
 
   const cornerTypes: Array<{ type: string; glyph: string }> = [
     { type: "corner-bottom-right", glyph: "╯" },
@@ -729,30 +684,30 @@ function assertConnectorsVisible(
 }
 
 // ============================================================
-// Test 12: Integration — rendered merged fan-out row has visible
+// Test 11: Integration — rendered merged fan-out row has visible
 // corner glyphs
 //
 // Graph (buildGraph output):
-//   col: 0  1  2
-//   ─────────────
-//        █        p1  (prod)
+//   col: 0 1 2
+//   ──────────
+//        █      p1  (prod)
 //        │
-//        │  █     h1  (fix-H)
-//        │  │
-//        │  │  █  k1  (fix-K)
-//        │  │  │
-//        █─█─╯    s1  (staging, merge: parents [s0, p1])
-//        │  │
-//        █  │     p0
-//           │
-//           █     s0
+//        │ █    h1  (fix-H)
+//        │ │
+//        │ │ █  k1  (fix-K)
+//        │ │ │
+//        ├─█─╯  s1  (staging, merge: parents [s0, p1])
+//        │ │
+//        █ │    p0
+//          │
+//          █    s0
 //
 // Verifies that all non-empty connectors in the RENDERED fan-out
 // rows produce visible glyphs (no blank spaces at glyph positions).
 // Also checks that ╭/╮ or ┬ glyphs appear where expected.
 // ============================================================
-function test12() {
-  console.log("\nTest 12: Integration — rendered merged fan-out row has visible corner glyphs");
+function test11() {
+  console.log("\nTest 11: Integration — rendered merged fan-out row has visible corner glyphs");
 
   const commits = [
     makeCommit("p1", ["p0"], [{ name: "prod", type: "branch", isCurrent: false }], "prod tip"),
@@ -808,7 +763,6 @@ runTest(test8);
 runTest(test9);
 runTest(test10);
 runTest(test11);
-runTest(test12);
 
 const { failedTests } = (await import("./test-helpers")).getResults();
 printResults("fan-out");

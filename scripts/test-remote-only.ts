@@ -13,7 +13,6 @@
  * and multi-remote scenarios.
  */
 
-import type { GraphRow } from "../src/git/types";
 import { buildGraph } from "../src/git/graph";
 import {
   makeCommit,
@@ -29,9 +28,11 @@ import {
 // Test 1: Remote-only lane propagation through single parent
 //
 // Graph:
-//   █ f1  (origin/feature-x)  [RO]
-//   │
-//   █ d1  (develop)
+//   col: 0
+//   ──────
+//        █ f1  (origin/feature-x)  [RO]
+//        │
+//        █ d1  (develop)
 //
 // f1 carries a remote-only ref with no local counterpart, so its row
 // and node connector should be isRemoteOnly. d1 has a local branch,
@@ -69,13 +70,15 @@ function test1() {
 // Test 2: Remote-only propagation through merge first parent
 //
 // Graph:
-//   █─╮  m1  (origin/feature-y)  [RO]  ← merge of f1+x1
-//   │ │
-//   █ │  f1  [RO]  ← first parent of m1
-//   │ │
-//   │ █  x1        ← second parent of m1
-//   │ │
-//   █─╯  d1  (develop)  ← fan-out merges col 1 back into commit row
+//   col: 0 1
+//   ────────
+//        █─╮  m1  (origin/feature-y)  [RO]  ← merge of f1+x1
+//        │ │
+//        █ │  f1  [RO]  ← first parent of m1
+//        │ │
+//        │ █  x1  ← second parent of m1
+//        │ │
+//        █─╯  d1  (develop)  ← fan-out merges col 1 back into commit row
 //
 // m1 is remote-only (only origin/feature-y, no local ref).
 // f1 inherits remote-only as m1's first parent.
@@ -108,15 +111,17 @@ function test2() {
 // Test 3: Remote-only merge connectors (secondary parent)
 //
 // Graph:
-//   █    d3  (develop)
-//   │
-//   █─╮  m1             ← merge: first parent d2, second parent r1
-//   │ │
-//   │ █  r1  (origin/remote-feat)  [RO]
-//   │ │
-//   █ │  d2
-//   │ │
-//   █─╯  d1             ← fan-out merges col 1 back into commit row
+//   col: 0 1 2
+//   ──────────
+//        █    d3  (develop)
+//        │
+//        █─╮  m1  ← merge: first parent d2, second parent r1
+//        │ │
+//        │ █  r1  (origin/remote-feat)  [RO]
+//        │ │
+//        █ │  d2
+//        │ │
+//        █─╯  d1  ← fan-out merges col 1 back into commit row
 //
 // m1 is on develop (NOT remote-only), but its second parent r1 is
 // remote-only. The spanning connectors (horizontals, corners, tees)
@@ -206,17 +211,19 @@ function test4() {
 // ============================================================
 // Test 5: Post-pass dimming includes fan-out rows
 //
-// Graph (as rendered — last fan-out row merges into commit row):
-//   █        ren1  (origin/renovate/major)  [RO]
-//   │
-//   │ █      ren2  (origin/renovate/minor)  [RO]
-//   │ │
-//   │ │ █    ren3  (origin/renovate/patch)  [RO]
-//   │ │ │
-//   █─┼─╯    ← fan-out row 1 (separate): col 2 closes into col 0
-//   █─╯      d1  (develop)  ← fan-out row 2 merged into commit row
-//   │
-//   █        d0
+// Graph:
+//   col: 0 1 2
+//   ──────────
+//        █        ren1  (origin/renovate/major)  [RO]
+//        │
+//        │ █      ren2  (origin/renovate/minor)  [RO]
+//        │ │
+//        │ │ █    ren3  (origin/renovate/patch)  [RO]
+//        │ │ │
+//        █─┼─╯    ← fan-out row 1 (separate): col 2 closes into col 0
+//        █─╯      d1  (develop)  ← fan-out row 2 merged into commit row
+//        │
+//        █        d0
 //
 // Three remote-only branches from the same parent d1. Post-pass
 // dimming should mark every row/connector/column above d1 as
@@ -258,6 +265,7 @@ function test5() {
 //   col: 0
 //   ──────
 //        █  f1  (upstream/feature) [RO]
+//        │
 //        █  d1  (main)
 //
 // "upstream/feature" with no local "feature" branch → remote-only.
@@ -346,6 +354,7 @@ function test8() {
 //   col: 0
 //   ──────
 //        █  r1  (origin/renovate/major) [RO]
+//        │
 //        █  d1  (main)
 //
 // "origin/renovate/major" → localEquivalent "renovate/major".
@@ -406,6 +415,7 @@ function test10() {
 //   col: 0
 //   ──────
 //        █  f1  (origin/feature, upstream/feature) [RO]
+//        │
 //        █  d1  (main)
 //
 // Both "origin/feature" and "upstream/feature" → localEquivalent "feature".

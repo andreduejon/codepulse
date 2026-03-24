@@ -10,8 +10,18 @@
  * 12-13. Additional merge/fan-out edge cases
  */
 
-import { buildGraph, renderGraphRow, renderFanOutRow, type GraphChar } from "../src/git/graph";
-import { assert, makeCommit, printResults, runTest, printGraph, THEME_COLORS, renderOpts, hasChar, findChars, totalCharWidth } from "./test-helpers";
+import { buildGraph, renderGraphRow, renderFanOutRow } from "../src/git/graph";
+import {
+  assert,
+  makeCommit,
+  printResults,
+  runTest,
+  printGraph,
+  renderOpts,
+  hasChar,
+  findChars,
+  totalCharWidth
+} from "./test-helpers";
 
 // ============================================================
 // Test 1: Basic node glyph is █ (simple linear commits)

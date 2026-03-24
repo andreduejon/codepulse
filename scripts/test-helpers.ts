@@ -168,8 +168,9 @@ export function assertRowFullyDimmed(row: GraphRow, rowIdx: number) {
   }
 
   for (let col = 0; col < row.columns.length; col++) {
-    assert(row.columns[col].isRemoteOnly === true,
-      `${label}: column ${col} should be remote-only`);
+    const column = row.columns[col];
+    assert(column.isRemoteOnly !== undefined, `${label}: column ${col} should have isRemoteOnly defined`);
+    assert(column.isRemoteOnly, `${label}: column ${col} should be remote-only`);
   }
 
   if (row.fanOutRows) {
@@ -207,7 +208,7 @@ export function printGraph(rows: GraphRow[], themeColors: string[] = THEME_COLOR
       // If merging, print all except the last (last becomes the commit row).
       const count = canMerge ? foRows.length - 1 : foRows.length;
       for (let i = 0; i < count; i++) {
-        const foAscii = graphCharsToAscii(renderFanOutRow(foRows[i], opts));
+        const foAscii = graphCharsToAscii(renderFanOutRow(foRows[i], opts, row.nodeColumn));
         console.log(`        ${foAscii}`);
       }
     }
@@ -220,7 +221,7 @@ export function printGraph(rows: GraphRow[], themeColors: string[] = THEME_COLOR
 
       assert(lastFO !== undefined, "Last fan-out row should exist when canMerge is true");
 
-      const foAscii = graphCharsToAscii(renderFanOutRow(lastFO, opts));
+      const foAscii = graphCharsToAscii(renderFanOutRow(lastFO, opts, row.nodeColumn));
       console.log(`        ${foAscii}  ${row.commit.hash}  (${refs})${ro}`);
     } else {
       const commitAscii = graphCharsToAscii(renderGraphRow(row, opts));

@@ -22,16 +22,18 @@ import {
 // Test 1: Octopus merge (3 parents)
 //
 // Graph:
-//   █─┬─╮   m1  (develop)  ← octopus merge of d1 + a1 + b1
-//   │ │ │
-//   │ █ │   a1  (feat-A)
-//   │ │ │
-//   │ │ █   b1  (feat-B)
-//   │ │ │
-//   █ │ │   d1  ()
-//   │ │ │
-//   █─┼─╯
-//   █─╯     d0  ()
+//   col: 0 1 2
+//   ──────────
+//        █─┬─╮  m1  (develop)  ← octopus merge of d1 + a1 + b1
+//        │ │ │
+//        │ █ │  a1  (feat-A)
+//        │ │ │
+//        │ │ █  b1  (feat-B)
+//        │ │ │
+//        █ │ │  d1
+//        │ │ │
+//        █─┼─╯
+//        █─╯    d0
 //
 // A merge commit with 3 parents should produce spanning connectors
 // for each secondary parent without crashing.
@@ -77,7 +79,9 @@ function test1() {
 // Test 2: Single-commit repo
 //
 // Graph:
-//   █  abc123  (main)
+//   col: 0
+//   ──────
+//        █  abc123  (main)
 //
 // A repo with just one commit and no parents should produce
 // exactly one row with nodeColumn=0 and only a node connector.
@@ -112,26 +116,28 @@ function test2() {
 // Test 3: Lane reuse (freed interior column)
 //
 // Graph:
-//   █       d5  (develop)
-//   │
-//   █─╮     m2  ()  ← merges feat-B
-//   │ │
-//   │ █     b1  (feat-B)
-//   │ │
-//   █ │     d4  ()
-//   │ │
-//   █─┼─╮   m1  ()  ← merges feat-A
-//   │ │ │
-//   │ │ █   a1  (feat-A)
-//   │ │ │
-//   █─╯ │   d3  ()
-//   │   │
-//   │ █ │   r1  (release)  ← keeps col 1 alive
-//   │ │ │
-//   █─┼─╯
-//   █─╯     d2  ()
-//   │
-//   █       d1  ()
+//   col: 0 1 2
+//   ──────────
+//        █      d5  (develop)
+//        │
+//        █─╮    m2  ← merges feat-B
+//        │ │
+//        │ █    b1  (feat-B)
+//        │ │
+//        █ │    d4
+//        │ │
+//        █─┼─╮  m1  ← merges feat-A
+//        │ │ │
+//        │ │ █  a1  (feat-A)
+//        │ │ │
+//        █─╯ │  d3
+//        │   │
+//        │ █ │  r1  (release)  ← keeps col 1 alive
+//        │ │ │
+//        █─┼─╯
+//        █─╯    d2
+//        │
+//        █      d1
 //
 // feat-A merges and frees its lane. feat-B starts later and
 // should reuse the freed column. Release keeps a lane alive
@@ -177,9 +183,11 @@ function test3() {
 // Test 4: Multiple refs on same commit
 //
 // Graph:
-//   █  d2  (develop, origin/develop, origin/HEAD)
-//   │
-//   █  d1
+//   col: 0
+//   ──────
+//        █  d2  (develop, origin/develop, origin/HEAD)
+//        │
+//        █  d1
 //
 // develop, origin/develop, origin/HEAD all on same commit.
 // Should NOT create duplicate lanes — only 1 column needed.
@@ -215,9 +223,11 @@ function test4() {
 // Test 5: Root commit handling
 //
 // Graph:
-//   █  d2  (develop)
-//   │
-//   █  d1  ← root (no parents)
+//   col: 0
+//   ──────
+//        █  d2  (develop)
+//        │
+//        █  d1  ← root (no parents)
 //
 // A root commit (no parents) should close its lane.
 // No active columns should remain after the root row.
@@ -252,15 +262,15 @@ function test5() {
 // Test 6: Single-parent already-processed merging — lane closes
 //
 // Graph:
-//   col: 0  1
-//   ──────────
-//        █     c1  (feat-A)
+//   col: 0 1
+//   ────────
+//        █    c1  (feat-A)
 //        │
-//        █     p1  (main)
+//        █    p1  (main)
 //        │
-//        ├─█   c2  (feat-B)
+//        ├─█  c2  (feat-B)
 //        │
-//        █     root
+//        █    root
 //
 // c2 finds p1 in processedColumns → lane closes with connectors
 // toward p1's column.
@@ -298,15 +308,15 @@ function test6() {
 // Test 7: Single-parent already-processed with existing lane — merge
 //
 // Graph (same topology as test6, different assertion focus):
-//   col: 0  1
-//   ──────────
-//        █     c1  (feat-A)
+//   col: 0 1
+//   ────────
+//        █    c1  (feat-A)
 //        │
-//        █     p1  (main)
+//        █    p1  (main)
 //        │
-//        ├─█   c2  (feat-B)
+//        ├─█  c2  (feat-B)
 //        │
-//        █     root
+//        █    root
 //
 // c2 finds p1 in both lanes[] and processedColumns → triggers
 // Case A (existingLane !== nodeColumn && processedColumns.has).
@@ -341,15 +351,15 @@ function test7() {
 // Test 8: parentColors populated correctly after already-processed merge
 //
 // Graph (same topology as tests 6-7):
-//   col: 0  1
-//   ──────────
-//        █     c1  (feat-A)
+//   col: 0 1
+//   ────────
+//        █    c1  (feat-A)
 //        │
-//        █     p1  (main)
+//        █    p1  (main)
 //        │
-//        ├─█   c2  (feat-B) ← parentColors[0] should be a valid number
+//        ├─█  c2  (feat-B) ← parentColors[0] should be a valid number
 //        │
-//        █     root
+//        █    root
 //
 // Verifies c2's parentColors array has exactly 1 numeric entry.
 // ============================================================
@@ -379,6 +389,7 @@ function test8() {
 //   col: 0
 //   ──────
 //        █  d2  (HEAD, detached)
+//        │
 //        █  d1  (main)
 //
 // Detached HEAD commit should be on the current branch path.
@@ -404,6 +415,7 @@ function test9() {
 //   col: 0
 //   ──────
 //        █  d2  (HEAD, detached) ← NOT remote-only
+//        │
 //        █  d1  (main)
 //
 // "head" ref type returns false for hasNonRemoteOnlyRef, but d2 is
@@ -430,6 +442,7 @@ function test10() {
 //   col: 0
 //   ──────
 //        █  d2  (HEAD) ← branchName = "HEAD" (priority 4)
+//        │
 //        █  d1  (main) ← branchName = "main" (priority 1-2)
 //
 // d2 is only on HEAD's first-parent chain, not main's, so
