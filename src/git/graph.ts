@@ -1181,14 +1181,17 @@ export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphCh
         // The ─ right after █ uses the OTHER branch's color (same as horizontals).
         // For merges: source branch color. For branch-offs: new branch color.
         result.push({ char: nodeChar, color: nodeColor, bold: true });
-        // Find the horizontal or corner connector at col+1 to pick up the other branch's color
+        // Find the horizontal, corner, or tee connector at col+1 to pick up the other branch's color
         const nextConnectors = connectorsByCol.get(col + 1) ?? [];
         const nextHoriz = nextConnectors.find((c) => c.type === "horizontal");
         const nextCorner = nextConnectors.find((c) =>
           c.type === "corner-top-right" || c.type === "corner-bottom-right" ||
           c.type === "corner-top-left" || c.type === "corner-bottom-left"
         );
-        const hConn = nextHoriz ?? nextCorner;
+        const nextTee = nextConnectors.find((c) =>
+          c.type === "tee-left" || c.type === "tee-right"
+        );
+        const hConn = nextHoriz ?? nextCorner ?? nextTee;
         const dashColor = hConn ? connColor(hConn) : getBaseColor(node.color, opts);
         result.push({ char: "─", color: dashColor });
       } else if (col === nodeCol) {

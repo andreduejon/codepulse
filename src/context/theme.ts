@@ -191,7 +191,7 @@ const monokai: Theme = {
   success: "#a9dc76",
   graphColors: [
     "#ff6188", "#a9dc76", "#78dce8", "#ffd866", "#ab9df2", "#fc9867",
-    "#fcfcfa", "#c1c0c0", "#ff6188", "#a9dc76", "#78dce8", "#ffd866"
+    "#fcfcfa", "#c1c0c0", "#ff6188", "#a9dc76", "#78da78", "#ffd866"
   ],
   diffAdded: "#a9dc76",
   diffRemoved: "#ff6188",

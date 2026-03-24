@@ -14,15 +14,18 @@ type InteractiveItem =
 function DetailBadge(props: Readonly<{
   name: string;
   colorIndex: number;
+  dimmed?: boolean;
 }>) {
   const { theme } = useTheme();
   const t = () => theme();
 
   const bgColor = () => {
+    if (props.dimmed) return t().backgroundElement;
     return getColorForColumn(props.colorIndex, t().graphColors);
   };
 
   const fgColor = () => {
+    if (props.dimmed) return t().foregroundMuted;
     return t().background;
   };
 
@@ -365,6 +368,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 <DetailBadge
                   name="deleted"
                   colorIndex={0}
+                  dimmed
                 />
               }
             >
@@ -418,6 +422,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                           <DetailBadge
                             name="deleted"
                             colorIndex={0}
+                            dimmed
                           />
                         );
                       })()
@@ -575,10 +580,10 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
               <box height={1} />
             </Show>
 
-            {/* ── Files changed (collapsible) ── */}
+            {/* ── Modified files (collapsible) ── */}
             <Show when={detail() && detail()!.files.length > 0}>
               <InteractiveSectionHeader
-                title="Files"
+                title="Modified Files"
                 count={detail()!.files.length}
                 expanded={filesExpanded()}
                 section="files"
@@ -587,7 +592,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 <box flexDirection="row" paddingLeft={2}>
                   <box flexGrow={1}>
                     <text fg={t().foregroundMuted} wrapMode="none">
-                      lines changed
+                      total lines changed
                     </text>
                   </box>
                   <box flexShrink={0} paddingLeft={2}>
