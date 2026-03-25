@@ -24,7 +24,7 @@ interface KeyboardNavigationOptions {
 /**
  * Global keyboard handler for the main app.
  *
- * Handles: dialog toggles (Ctrl+S, Ctrl+T, F1), refresh (F5), escape,
+ * Handles: dialog toggles (Ctrl+S, Ctrl+T, ?), refresh (Ctrl+R), escape,
  * detail panel navigation, graph list navigation, search focus, and
  * branch dialog shortcuts.
  */
@@ -64,8 +64,8 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
       return;
     }
 
-    // Ctrl+H opens help regardless of dialog/search state
-    if (e.ctrl && e.name === "h") {
+    // ? opens help (but not when typing in search)
+    if (e.name === "?" && !searchFocused()) {
       setSearchFocused(false);
       actions.setDetailFocused(false);
       setDialog(dialog() === "help" ? null : "help");

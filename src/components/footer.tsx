@@ -20,7 +20,7 @@ export default function Footer() {
       <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" settings  "}</text>
       <text flexShrink={0} wrapMode="none" fg={t().foreground}>ctrl+r</text>
       <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" refresh  "}</text>
-      <text flexShrink={0} wrapMode="none" fg={t().foreground}>ctrl+h</text>
+      <text flexShrink={0} wrapMode="none" fg={t().foreground}>?</text>
       <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" help  "}</text>
       <text flexShrink={0} wrapMode="none" fg={t().foreground}>ctrl+q</text>
       <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" quit"}</text>
