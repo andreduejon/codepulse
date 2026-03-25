@@ -29,6 +29,8 @@ export interface AppState {
   autoRefreshInterval: Accessor<number>;
   lastFetchTime: Accessor<Date | null>;
   fetching: Accessor<boolean>;
+  /** Branch being viewed (filtered perspective). null = show all / default. */
+  viewingBranch: Accessor<string | null>;
 }
 
 export interface AppActions {
@@ -55,6 +57,7 @@ export interface AppActions {
   setAutoRefreshInterval: (ms: number) => void;
   setLastFetchTime: (time: Date | null) => void;
   setFetching: (fetching: boolean) => void;
+  setViewingBranch: (branch: string | null) => void;
 }
 
 const AppStateContext = createContext<{ state: AppState; actions: AppActions }>();
@@ -81,6 +84,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
   const [detailOriginHash, setDetailOriginHash] = createSignal<string | null>(null);
   const [lastFetchTime, setLastFetchTime] = createSignal<Date | null>(null);
   const [fetching, setFetching] = createSignal(false);
+  const [viewingBranch, setViewingBranch] = createSignal<string | null>(null);
 
   const filteredRows = createMemo(() => {
     const query = searchQuery().toLowerCase();
@@ -147,6 +151,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
     scrollTargetIndex,
     lastFetchTime,
     fetching,
+    viewingBranch,
   };
 
   const actions: AppActions = {
@@ -173,6 +178,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
     setAutoRefreshInterval,
     setLastFetchTime,
     setFetching,
+    setViewingBranch,
   };
 
   return { state, actions, AppStateContext };
