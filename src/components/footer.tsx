@@ -2,8 +2,8 @@ import { createSignal, createEffect, onCleanup, Show } from "solid-js";
 import { useTheme } from "../context/theme";
 import { useAppState } from "../context/state";
 
-/** Block fill characters for the breathing pulse animation. */
-const PULSE_CHARS = ["\u2591", "\u2592", "\u2593", "\u2588", "\u2588", "\u2593", "\u2592", "\u2591", "\u2591", "\u2591"];
+/** Block fill characters for the breathing pulse animation (▉ = 7/8 block, leaves a thin gap). */
+const PULSE_CHARS = ["\u2591", "\u2592", "\u2593", "\u2589", "\u2589", "\u2593", "\u2592", "\u2591", "\u2591", "\u2591"];
 const PULSE_FRAME_MS = 100;
 const PULSE_BLOCK_COUNT = 6;
 
@@ -40,7 +40,7 @@ export default function Footer() {
     if (pulseTimer) clearInterval(pulseTimer);
   });
 
-  const pulseText = () => Array.from({ length: PULSE_BLOCK_COUNT }, () => PULSE_CHARS[frame()]).join(" ");
+  const pulseText = () => PULSE_CHARS[frame()].repeat(PULSE_BLOCK_COUNT);
 
   return (
     <box
