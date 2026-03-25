@@ -1,4 +1,4 @@
-import { createSignal, onMount, onCleanup, For, createMemo, createEffect } from "solid-js";
+import { createSignal, onCleanup, For, createMemo, createEffect } from "solid-js";
 import { useKeyboard } from "@opentui/solid";
 import { useAppState, DEFAULT_AUTO_REFRESH_INTERVAL } from "../../context/state";
 import { useTheme, themes } from "../../context/theme";
@@ -36,26 +36,14 @@ const MS_TO_LABEL: Record<number, string> = {
 /** Width of the info label column (characters). */
 const INFO_LABEL_WIDTH = 12;
 
-/**
- * Available width for the path banner text.
- * Dialog width=70, paddingX=1 on dialog, paddingX=4 on row → 70 - 2 - 8 = 60 usable.
- * Subtract label column to get the scrollable area.
- */
-const PATH_VISIBLE_WIDTH = 60 - INFO_LABEL_WIDTH;
-
-/** Scrolling speed: shift 1 char every N ms. */
-const BANNER_TICK_MS = 200;
-/** Pause at each end before reversing (ms). */
-const BANNER_PAUSE_MS = 2000;
-
 type SettingItem =
   | { kind: "header"; label: string }
   | { kind: "info"; label: string; get: () => string }
-  | { kind: "path" }
+  | { kind: "copyable"; label: string; get: () => string }
   | { kind: "toggle"; label: string; hotkey?: string; get: () => boolean; set: (v: boolean) => void; needsReload?: boolean }
   | { kind: "cycle"; label: string; hotkey?: string; options: string[]; get: () => string; set: (v: string) => void; needsReload?: boolean }
   | { kind: "dialog"; label: string; hotkey?: string; dialogId: string; get: () => string }
-  | { kind: "action"; label: string; hotkey?: string; run: () => void }
+  | { kind: "action"; label: string; hotkey?: string; get?: () => string; run: () => void }
   | { kind: "section"; label: string; count: number; collapsed: () => boolean; toggle: () => void }
   | { kind: "branch"; name: string; isCurrent: boolean; isViewing: boolean; run: () => void };
 
@@ -67,60 +55,20 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   // ── Tab state ─────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = createSignal<MenuTab>("repository");
 
-  // ── Scrolling banner for Path (Repository tab) ────────────────────
-  const [pathOffset, setPathOffset] = createSignal(0);
-  const [bannerDirection, setBannerDirection] = createSignal<1 | -1>(1);
+  // ── Clipboard feedback ────────────────────────────────────────────
+  const [copiedLabel, setCopiedLabel] = createSignal<string | null>(null);
+  let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 
-  let bannerTimer: ReturnType<typeof setInterval> | undefined;
-  let pauseTimer: ReturnType<typeof setTimeout> | undefined;
-
-  const startBanner = () => {
-    bannerTimer = setInterval(() => {
-      const path = state.repoPath() || "";
-      const maxOffset = Math.max(0, path.length - PATH_VISIBLE_WIDTH);
-      if (maxOffset <= 0) return;
-
-      setPathOffset((prev) => {
-        const dir = bannerDirection();
-        const next = prev + dir;
-
-        if (next >= maxOffset) {
-          clearInterval(bannerTimer);
-          bannerTimer = undefined;
-          pauseTimer = setTimeout(() => {
-            setBannerDirection(-1);
-            startBanner();
-          }, BANNER_PAUSE_MS);
-          return maxOffset;
-        }
-        if (next <= 0) {
-          clearInterval(bannerTimer);
-          bannerTimer = undefined;
-          pauseTimer = setTimeout(() => {
-            setBannerDirection(1);
-            startBanner();
-          }, BANNER_PAUSE_MS);
-          return 0;
-        }
-        return next;
-      });
-    }, BANNER_TICK_MS);
+  const copyToClipboard = (text: string, label: string) => {
+    Bun.spawn(["pbcopy"], { stdin: new Response(text).body });
+    setCopiedLabel(label);
+    if (copiedTimer) clearTimeout(copiedTimer);
+    copiedTimer = setTimeout(() => setCopiedLabel(null), 1500);
   };
-
-  onMount(() => {
-    pauseTimer = setTimeout(() => startBanner(), BANNER_PAUSE_MS);
-  });
 
   onCleanup(() => {
-    if (bannerTimer) clearInterval(bannerTimer);
-    if (pauseTimer) clearTimeout(pauseTimer);
+    if (copiedTimer) clearTimeout(copiedTimer);
   });
-
-  const pathBannerText = (): string => {
-    const path = state.repoPath() || "(unknown)";
-    if (path.length <= PATH_VISIBLE_WIDTH) return path;
-    return path.substring(pathOffset(), pathOffset() + PATH_VISIBLE_WIDTH);
-  };
 
   // ── Collapsed state for branch sections ───────────────────────────
   const [localCollapsed, setLocalCollapsed] = createSignal(false);
@@ -142,9 +90,11 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   };
 
   const repoItems: SettingItem[] = [
-    { kind: "header", label: "Info" },
-    { kind: "info", label: "Origin", get: () => state.remoteUrl() || "(none)" },
-    { kind: "path" },
+    { kind: "header", label: "Origin" },
+    { kind: "copyable", label: "URL", get: () => state.remoteUrl() || "(none)" },
+
+    { kind: "header", label: "Path" },
+    { kind: "copyable", label: "Directory", get: () => state.repoPath() || "(unknown)" },
 
     { kind: "header", label: "Preferences" },
     {
@@ -178,10 +128,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     },
 
     { kind: "header", label: "Actions" },
-    { kind: "action", label: "Fetch remote", hotkey: "f", run: () => props.onFetch() },
-    { kind: "info", label: "Last fetch", get: lastFetchLabel },
-    { kind: "action", label: "Reload data", run: () => props.onReload() },
-
+    { kind: "action", label: "Fetch remote", hotkey: "f", get: lastFetchLabel, run: () => props.onFetch() },
   ];
 
   // ── Branch tab items ──────────────────────────────────────────────
@@ -286,7 +233,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   const selectableIndices = (): number[] =>
     activeItems()
       .map((item, i) =>
-        item.kind === "toggle" || item.kind === "cycle" || item.kind === "dialog" || item.kind === "action" || item.kind === "branch" || item.kind === "section"
+        item.kind === "toggle" || item.kind === "cycle" || item.kind === "dialog" || item.kind === "action" || item.kind === "branch" || item.kind === "section" || item.kind === "copyable"
           ? i
           : -1
       )
@@ -303,9 +250,11 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   const activateItemAt = (itemIdx: number) => {
     const items = activeItems();
     const item = items[itemIdx];
-    if (!item || item.kind === "header" || item.kind === "info" || item.kind === "path") return;
+    if (!item || item.kind === "header" || item.kind === "info") return;
 
-    if (item.kind === "toggle") {
+    if (item.kind === "copyable") {
+      copyToClipboard(item.get(), item.label);
+    } else if (item.kind === "toggle") {
       item.set(!item.get());
       if (item.needsReload) props.onReload();
     } else if (item.kind === "cycle") {
@@ -333,6 +282,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     const item = items[selectedItemIndex()];
     if (!item) return "select";
     switch (item.kind) {
+      case "copyable": return "copy";
       case "toggle": return "toggle";
       case "cycle": return "cycle";
       case "dialog": return "open";
@@ -403,8 +353,10 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
 
   // Format the value display for an item
   const valueDisplay = (item: SettingItem): string => {
-    if (item.kind === "header" || item.kind === "action" || item.kind === "path" || item.kind === "branch" || item.kind === "section") return "";
+    if (item.kind === "header" || item.kind === "branch" || item.kind === "section") return "";
+    if (item.kind === "action") return item.get ? item.get() : "";
     if (item.kind === "info") return item.get();
+    if (item.kind === "copyable") return item.get();
     if (item.kind === "toggle") return item.get() ? "on" : "off";
     return item.get();
   };
@@ -494,16 +446,32 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
               );
             }
 
-            // --- Path banner (scrolling, dimmed) ---
-            if (item.kind === "path") {
+            // --- Copyable (selectable, copies to clipboard on Enter) ---
+            if (item.kind === "copyable") {
+              const isSel = () => selectedItemIndex() === itemIndex();
+              const isCopied = () => copiedLabel() === item.label;
               return (
-                <box ref={(el: Renderable) => { itemRefs[itemIndex()] = el; }} flexDirection="row" width="100%" paddingX={4}>
-                  <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                    {"Path".padEnd(INFO_LABEL_WIDTH)}
+                <box
+                  ref={(el: Renderable) => { itemRefs[itemIndex()] = el; }}
+                  flexDirection="row"
+                  width="100%"
+                  paddingX={4}
+                  backgroundColor={isSel() ? t().backgroundElement : undefined}
+                >
+                  <text flexGrow={1} flexShrink={1} wrapMode="none" truncate>
+                    <span fg={isSel() ? t().primary : t().foreground}>
+                      {item.get()}
+                    </span>
                   </text>
-                  <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
-                    {pathBannerText()}
-                  </text>
+                  {isCopied() ? (
+                    <text flexShrink={0} wrapMode="none" fg={t().success}>
+                      {"  copied!"}
+                    </text>
+                  ) : isSel() ? (
+                    <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                      {"  enter to copy"}
+                    </text>
+                  ) : null}
                 </box>
               );
             }
@@ -572,9 +540,10 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
 
             // Pad value and hotkey to fixed widths for right-alignment
             const paddedVal = () => {
-              if (item.kind === "action") return " ".padStart(22);
-              const v = item.kind === "dialog" ? val() : `[${val()}]`;
-              return v.padStart(22);
+              const v = val();
+              if (!v) return " ".padStart(22);
+              if (item.kind === "dialog" || item.kind === "action") return v.padStart(22);
+              return `[${v}]`.padStart(22);
             };
             const paddedHotkey = () => {
               const h = (item.kind === "toggle" || item.kind === "cycle" || item.kind === "dialog" || item.kind === "action")
