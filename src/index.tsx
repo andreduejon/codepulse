@@ -80,7 +80,7 @@ async function main() {
 
 function printHelp() {
   console.log(`
-gittree - A beautiful terminal git graph visualizer
+gittree - A read-only terminal git graph visualizer
 
 USAGE:
   gittree [options] [path]
@@ -97,18 +97,22 @@ OPTIONS:
   -v, --version          Show version
 
 KEYBOARD SHORTCUTS:
-  Up/Down                Navigate commits
-  Shift+Up/Down          Jump 10 entries
-  Right/Left             Focus/unfocus detail panel
+  j/k or Up/Down         Navigate commits
+  Shift+j/k              Jump 10 entries
+  l/h or Right/Left      Focus/unfocus detail panel
+  Tab                    Switch between graph and detail panel
   g/G                    First/last commit
   /                      Search commits
-  b                      Branch operations
   a                      Toggle all branches
-  ctrl+r                 Repository operations
-  ctrl+b                 Branch operations
+  f                      Fetch from remote
+  R (Shift+r)            Reload data
+  ctrl+r                 Open menu
+  ctrl+b                 Open branch navigator
   ctrl+t                 Change theme
   ?                      Show help
-  ctrl+q                 Quit
+  q                      Close current view / quit
+  Esc                    Close current view
+  ctrl+q                 Quit immediately
 `);
 }
 
