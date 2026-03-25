@@ -3,7 +3,7 @@ import { useRenderer } from "@opentui/solid";
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { createAppState, AppStateContext } from "./context/state";
 import { createThemeState, ThemeContext } from "./context/theme";
-import { getCommits, getBranches, getCurrentBranch, getRepoName, getCommitDetail, getRemoteUrl } from "./git/repo";
+import { getCommits, getBranches, getCurrentBranch, getRepoName, getCommitDetail, getRemoteUrl, fetchRemote, getLastFetchTime } from "./git/repo";
 import { buildGraph, getMaxGraphColumns } from "./git/graph";
 import GraphView, { ColumnHeader } from "./components/graph";
 import CommitDetailView from "./components/detail";
@@ -125,7 +125,30 @@ function AppContent(props: AppProps) {
   onMount(() => {
     loadData(props.branch);
     renderer.setTerminalTitle("gittree");
+    // Load initial fetch time
+    getLastFetchTime(props.repoPath).then((time) => actions.setLastFetchTime(time));
   });
+
+  // Fetch from remote and reload data
+  async function handleFetch() {
+    if (state.fetching()) return; // guard against double-fetch
+    actions.setFetching(true);
+    try {
+      const result = await fetchRemote(props.repoPath);
+      if (result.ok) {
+        const fetchTime = await getLastFetchTime(props.repoPath);
+        actions.setLastFetchTime(fetchTime);
+        const stickyHash = state.selectedCommit()?.hash;
+        await loadData(undefined, stickyHash);
+      } else {
+        actions.setError(result.error ?? "Fetch failed");
+      }
+    } catch (err) {
+      actions.setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      actions.setFetching(false);
+    }
+  }
 
   // Auto-refresh timer: re-reads local git data at the configured interval
   let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
@@ -206,6 +229,7 @@ function AppContent(props: AppProps) {
     getDetailScrollboxRef: () => detailScrollboxRef,
     detailNavRef,
     loadData,
+    handleFetch,
   });
 
   return (

@@ -23,6 +23,8 @@ interface KeyboardNavigationOptions {
   detailNavRef: DetailNavRef;
   /** Reload git data, optionally preserving scroll position via stickyHash. */
   loadData: (branch?: string, stickyHash?: string) => void;
+  /** Fetch from all remotes and reload data. */
+  handleFetch: () => void;
 }
 
 /**
@@ -39,7 +41,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     operationsTab, setOperationsTab,
     searchFocused, setSearchFocused,
     getDetailScrollboxRef, detailNavRef,
-    loadData,
+    loadData, handleFetch,
   } = opts;
 
   const renderer = useRenderer();
@@ -221,6 +223,9 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         loadData(newAll ? undefined : state.currentBranch());
         break;
       }
+      case "f":
+        handleFetch();
+        break;
     }
   });
 }
