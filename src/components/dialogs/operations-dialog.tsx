@@ -616,7 +616,9 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
         <box flexGrow={1} />
         <text flexShrink={0} wrapMode="none" fg={t().foreground}>enter</text>
         <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{` ${footerVerb()}  `}</text>
-        <text flexShrink={0} wrapMode="none" fg={t().foreground}>←/↑/→/↓</text>
+        <text flexShrink={0} wrapMode="none" fg={t().foreground}>tab</text>
+        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" switch tab  "}</text>
+        <text flexShrink={0} wrapMode="none" fg={t().foreground}>↑/↓</text>
         <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" navigate"}</text>
       </box>
       </box>
