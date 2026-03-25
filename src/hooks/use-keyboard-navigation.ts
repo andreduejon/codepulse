@@ -5,7 +5,7 @@ import type { AppState, AppActions } from "../context/state";
 import type { DetailNavRef } from "../components/detail";
 import { SHIFT_JUMP, PAGE_JUMP } from "../constants";
 
-import type { OperationsTab } from "../components/dialogs/settings-dialog";
+import type { OperationsTab } from "../components/dialogs/operations-dialog";
 
 type DialogId = "operations" | "help" | "theme" | null;
 
