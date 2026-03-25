@@ -1,7 +1,7 @@
 {
   "name": "gittree",
-  "version": "0.1.0",
-  "description": "A beautiful terminal git graph visualizer",
+  "version": "0.2.0",
+  "description": "A read-only terminal git graph visualizer",
   "type": "module",
   "bin": {
     "gittree": "./src/index.tsx"
