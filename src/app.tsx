@@ -66,11 +66,16 @@ function AppContent(props: AppProps) {
       const repoPath = props.repoPath;
       actions.setRepoPath(repoPath);
 
+      // When viewing a specific branch perspective, scope the log to that branch
+      const viewBranch = state.viewingBranch();
+      const effectiveBranch = viewBranch ?? branch;
+      const effectiveAll = viewBranch ? false : state.showAllBranches();
+
       const [commits, branches, currentBranch, remoteUrl] = await Promise.all([
         getCommits(repoPath, {
           maxCount: state.maxCount(),
-          branch: branch,
-          all: state.showAllBranches(),
+          branch: effectiveBranch,
+          all: effectiveAll,
         }),
         getBranches(repoPath),
         getCurrentBranch(repoPath),
