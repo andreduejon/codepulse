@@ -91,22 +91,24 @@ ARGUMENTS:
 OPTIONS:
   -b, --branch <name>    Show only a specific branch
   -n, --max-count <n>    Maximum number of commits to show (default: ${DEFAULT_MAX_COUNT})
-      --theme <name>     Color theme (catppuccin-mocha, tokyo-night, dracula, nord)
+      --theme <name>     Color theme (use ctrl+t in-app to browse)
       --no-all           Don't show all branches
   -h, --help             Show this help message
   -v, --version          Show version
 
 KEYBOARD SHORTCUTS:
-  j/k or Up/Down         Navigate commits
+  Up/Down                Navigate commits
   Shift+Up/Down          Jump 10 entries
+  Right/Left             Focus/unfocus detail panel
   g/G                    First/last commit
   /                      Search commits
-  b                      Branch picker
+  b                      Branch operations
   a                      Toggle all branches
-  Ctrl+T                 Change theme
-  Ctrl+S                 Open settings
+  ctrl+r                 Repository operations
+  ctrl+b                 Branch operations
+  ctrl+t                 Change theme
   ?                      Show help
-  q or Ctrl+C            Quit
+  ctrl+q                 Quit
 `);
 }
 

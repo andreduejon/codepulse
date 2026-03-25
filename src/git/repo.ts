@@ -240,6 +240,50 @@ export async function getRemoteUrl(repoPath: string): Promise<string> {
   }
 }
 
+export async function createBranch(
+  repoPath: string,
+  branchName: string,
+  startPoint?: string
+): Promise<{ ok: boolean; error?: string }> {
+  const args = ["git", "checkout", "-b", branchName];
+  if (startPoint) args.push(startPoint);
+
+  const proc = Bun.spawn(args, {
+    cwd: repoPath,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+
+  const errorOutput = await new Response(proc.stderr).text();
+  await proc.exited;
+
+  if (proc.exitCode !== 0) {
+    return { ok: false, error: errorOutput.trim() };
+  }
+  return { ok: true };
+}
+
+export async function deleteBranch(
+  repoPath: string,
+  branchName: string,
+  force = false
+): Promise<{ ok: boolean; error?: string }> {
+  const flag = force ? "-D" : "-d";
+  const proc = Bun.spawn(["git", "branch", flag, branchName], {
+    cwd: repoPath,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+
+  const errorOutput = await new Response(proc.stderr).text();
+  await proc.exited;
+
+  if (proc.exitCode !== 0) {
+    return { ok: false, error: errorOutput.trim() };
+  }
+  return { ok: true };
+}
+
 export async function isGitRepo(path: string): Promise<boolean> {
   const proc = Bun.spawn(
     ["git", "rev-parse", "--is-inside-work-tree"],

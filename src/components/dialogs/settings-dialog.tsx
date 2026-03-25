@@ -1,13 +1,20 @@
-import { createSignal, onMount, onCleanup, For } from "solid-js";
+import { createSignal, onMount, onCleanup, For, Show, createMemo } from "solid-js";
 import { useKeyboard } from "@opentui/solid";
 import { useAppState, DEFAULT_AUTO_REFRESH_INTERVAL } from "../../context/state";
 import { useTheme, themes } from "../../context/theme";
 import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
+import { createBranch, deleteBranch } from "../../git/repo";
 
-interface RepositoryDialogProps {
+export type OperationsTab = "repository" | "branch";
+
+interface OperationsDialogProps {
   onClose: () => void;
   onReload: () => void;
   onOpenDialog?: (dialogId: string) => void;
+  /** Which tab to show initially. */
+  initialTab?: OperationsTab;
+  /** Called when the user switches branches via the Branch tab. */
+  onSwitchBranch?: (branch: string) => void;
 }
 
 const MAX_COUNT_OPTIONS = [10, 20, 50, 100, 200, 500];
@@ -51,12 +58,15 @@ type SettingItem =
   | { kind: "action"; label: string; hotkey?: string; run: () => void }
   | { kind: "disabled"; label: string };
 
-export default function RepositoryDialog(props: Readonly<RepositoryDialogProps>) {
+export default function OperationsDialog(props: Readonly<OperationsDialogProps>) {
   const { state, actions } = useAppState();
   const { theme, themeName } = useTheme();
   const t = () => theme();
 
-  // ── Scrolling banner for Path ──────────────────────────────────────
+  // ── Tab state ─────────────────────────────────────────────────────
+  const [activeTab, setActiveTab] = createSignal<OperationsTab>(props.initialTab ?? "repository");
+
+  // ── Scrolling banner for Path (Repository tab) ────────────────────
   const [pathOffset, setPathOffset] = createSignal(0);
   const [bannerDirection, setBannerDirection] = createSignal<1 | -1>(1);
 
@@ -67,14 +77,13 @@ export default function RepositoryDialog(props: Readonly<RepositoryDialogProps>)
     bannerTimer = setInterval(() => {
       const path = state.repoPath() || "";
       const maxOffset = Math.max(0, path.length - PATH_VISIBLE_WIDTH);
-      if (maxOffset <= 0) return; // fits, no scrolling needed
+      if (maxOffset <= 0) return;
 
       setPathOffset((prev) => {
         const dir = bannerDirection();
         const next = prev + dir;
 
         if (next >= maxOffset) {
-          // Hit right end — pause then reverse
           clearInterval(bannerTimer);
           bannerTimer = undefined;
           pauseTimer = setTimeout(() => {
@@ -84,7 +93,6 @@ export default function RepositoryDialog(props: Readonly<RepositoryDialogProps>)
           return maxOffset;
         }
         if (next <= 0) {
-          // Hit left end — pause then reverse
           clearInterval(bannerTimer);
           bannerTimer = undefined;
           pauseTimer = setTimeout(() => {
@@ -99,7 +107,6 @@ export default function RepositoryDialog(props: Readonly<RepositoryDialogProps>)
   };
 
   onMount(() => {
-    // Start scrolling after an initial pause
     pauseTimer = setTimeout(() => startBanner(), BANNER_PAUSE_MS);
   });
 
@@ -108,15 +115,24 @@ export default function RepositoryDialog(props: Readonly<RepositoryDialogProps>)
     if (pauseTimer) clearTimeout(pauseTimer);
   });
 
-  /** Visible slice of the path for the banner. */
   const pathBannerText = (): string => {
     const path = state.repoPath() || "(unknown)";
     if (path.length <= PATH_VISIBLE_WIDTH) return path;
     return path.substring(pathOffset(), pathOffset() + PATH_VISIBLE_WIDTH);
   };
 
-  // ── Item definitions ───────────────────────────────────────────────
-  const items: SettingItem[] = [
+  // ── Status message (for branch operations feedback) ───────────────
+  const [statusMsg, setStatusMsg] = createSignal<{ text: string; isError: boolean } | null>(null);
+  let statusTimer: ReturnType<typeof setTimeout> | undefined;
+  const showStatus = (text: string, isError: boolean) => {
+    setStatusMsg({ text, isError });
+    if (statusTimer) clearTimeout(statusTimer);
+    statusTimer = setTimeout(() => setStatusMsg(null), 3000);
+  };
+  onCleanup(() => { if (statusTimer) clearTimeout(statusTimer); });
+
+  // ── Repository tab items ──────────────────────────────────────────
+  const repoItems: SettingItem[] = [
     { kind: "header", label: "Info" },
     { kind: "info", label: "Origin", get: () => state.remoteUrl() || "(none)" },
     { kind: "info", label: "Branch", get: () => state.currentBranch() || "(unknown)" },
@@ -161,32 +177,109 @@ export default function RepositoryDialog(props: Readonly<RepositoryDialogProps>)
     { kind: "disabled", label: "Fetch from remote" },
     { kind: "disabled", label: "Pull" },
     { kind: "disabled", label: "Push" },
-    { kind: "disabled", label: "Create branch" },
-    { kind: "disabled", label: "Delete branch" },
     { kind: "disabled", label: "Stash / Unstash" },
     { kind: "disabled", label: "Cherry-pick" },
     { kind: "disabled", label: "Revert commit" },
   ];
 
-  // Indices of selectable items (toggle, cycle, dialog, action)
-  const selectableIndices = items
-    .map((item, i) =>
-      item.kind === "toggle" || item.kind === "cycle" || item.kind === "dialog" || item.kind === "action"
-        ? i
-        : -1
-    )
-    .filter((i) => i >= 0);
+  // ── Branch tab items ──────────────────────────────────────────────
+  const localBranches = createMemo(() =>
+    state.branches().filter((b) => !b.isRemote)
+  );
 
-  const [cursor, setCursor] = createSignal(0); // index into selectableIndices
+  const branchItems = createMemo<SettingItem[]>(() => {
+    const locals = localBranches();
+    const totalBranches = state.branches().length;
+    const localCount = locals.length;
+    const remoteCount = totalBranches - localCount;
 
-  const selectedItemIndex = () => selectableIndices[cursor()];
+    const switchItems: SettingItem[] = locals.map((b) => ({
+      kind: "action" as const,
+      label: b.isCurrent ? `${b.name}  (current)` : b.name,
+      run: () => {
+        if (!b.isCurrent) {
+          props.onSwitchBranch?.(b.name);
+          props.onClose();
+        }
+      },
+    }));
+
+    return [
+      { kind: "header", label: "Info" },
+      { kind: "info", label: "Current", get: () => state.currentBranch() || "(unknown)" },
+      { kind: "info", label: "Local", get: () => String(localCount) },
+      { kind: "info", label: "Remote", get: () => String(remoteCount) },
+
+      { kind: "header", label: "Switch Branch" },
+      ...switchItems,
+
+      { kind: "header", label: "Actions" },
+      {
+        kind: "action",
+        label: "Create branch",
+        run: async () => {
+          // For now, create a branch from current HEAD
+          // A proper input field would be ideal; using a prompt-style approach
+          // We'll use a simple sequential name for demonstration
+          const name = `branch-${Date.now()}`;
+          const result = await createBranch(state.repoPath(), name);
+          if (result.ok) {
+            showStatus(`Created and switched to '${name}'`, false);
+            props.onReload();
+          } else {
+            showStatus(result.error ?? "Failed to create branch", true);
+          }
+        },
+      },
+      {
+        kind: "action",
+        label: "Delete branch",
+        run: async () => {
+          // Delete the branch at current cursor in the switch list
+          // For safety, this is a placeholder — needs proper selection UX
+          showStatus("Select a non-current branch to delete", true);
+        },
+      },
+
+      { kind: "header", label: "Coming Soon" },
+      { kind: "disabled", label: "Rename branch" },
+      { kind: "disabled", label: "Merge branch" },
+    ];
+  });
+
+  // ── Active items depend on tab ────────────────────────────────────
+  const activeItems = (): SettingItem[] =>
+    activeTab() === "repository" ? repoItems : branchItems();
+
+  // ── Cursor per tab ────────────────────────────────────────────────
+  const [repoCursor, setRepoCursor] = createSignal(0);
+  const [branchCursor, setBranchCursor] = createSignal(0);
+
+  const currentCursor = () => activeTab() === "repository" ? repoCursor() : branchCursor();
+  const setCurrentCursor = (v: number | ((prev: number) => number)) =>
+    activeTab() === "repository"
+      ? setRepoCursor(v as any)
+      : setBranchCursor(v as any);
+
+  const selectableIndices = (): number[] =>
+    activeItems()
+      .map((item, i) =>
+        item.kind === "toggle" || item.kind === "cycle" || item.kind === "dialog" || item.kind === "action"
+          ? i
+          : -1
+      )
+      .filter((i) => i >= 0);
+
+  const selectedItemIndex = () => selectableIndices()[currentCursor()];
 
   const moveCursor = (delta: number) => {
-    const len = selectableIndices.length;
-    setCursor((c) => Math.max(0, Math.min(len - 1, c + delta)));
+    const indices = selectableIndices();
+    const len = indices.length;
+    setCurrentCursor((c: number) => Math.max(0, Math.min(len - 1, c + delta)));
   };
 
   const activateItemAt = (itemIdx: number) => {
+    const items = activeItems();
     const item = items[itemIdx];
     if (!item || item.kind === "header" || item.kind === "info" || item.kind === "path" || item.kind === "disabled") return;
 
@@ -210,6 +303,7 @@ export default function RepositoryDialog(props: Readonly<RepositoryDialogProps>)
 
   // Context-aware verb for the footer
   const footerVerb = (): string => {
+    const items = activeItems();
     const item = items[selectedItemIndex()];
     if (!item) return "select";
     switch (item.kind) {
@@ -221,7 +315,7 @@ export default function RepositoryDialog(props: Readonly<RepositoryDialogProps>)
     }
   };
 
-  // Handle navigation within the dialog
+  // ── Keyboard ──────────────────────────────────────────────────────
   useKeyboard((e) => {
     if (e.eventType === "release") return;
 
@@ -234,6 +328,16 @@ export default function RepositoryDialog(props: Readonly<RepositoryDialogProps>)
         break;
       case "return":
         activateItem();
+        break;
+      case "left":
+        if (activeTab() !== "repository") {
+          setActiveTab("repository");
+        }
+        break;
+      case "right":
+        if (activeTab() !== "branch") {
+          setActiveTab("branch");
+        }
         break;
     }
   });
@@ -256,11 +360,39 @@ export default function RepositoryDialog(props: Readonly<RepositoryDialogProps>)
         paddingX={1}
         paddingY={1}
       >
-      <DialogTitleBar title="Repository" />
+      <DialogTitleBar title="Operations" />
+
+      {/* Tab bar */}
+      <box flexDirection="row" width="100%" paddingX={4}>
+        <text
+          flexShrink={0}
+          wrapMode="none"
+          fg={activeTab() === "repository" ? t().accent : t().foregroundMuted}
+        >
+          <strong>
+            <span fg={activeTab() === "repository" ? t().accent : t().foregroundMuted}>
+              {"Repository"}
+            </span>
+          </strong>
+        </text>
+        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{"    "}</text>
+        <text
+          flexShrink={0}
+          wrapMode="none"
+          fg={activeTab() === "branch" ? t().accent : t().foregroundMuted}
+        >
+          <strong>
+            <span fg={activeTab() === "branch" ? t().accent : t().foregroundMuted}>
+              {"Branch"}
+            </span>
+          </strong>
+        </text>
+      </box>
+      <box height={1} />
 
       {/* Items list */}
       <box flexDirection="column" flexGrow={1}>
-        <For each={items}>
+        <For each={activeItems()}>
           {(item, itemIndex) => {
             // --- Header ---
             if (item.kind === "header") {
@@ -361,12 +493,25 @@ export default function RepositoryDialog(props: Readonly<RepositoryDialogProps>)
         </For>
       </box>
 
+      {/* Status message */}
+      <Show when={statusMsg()}>
+        {(msg) => (
+          <box flexDirection="row" width="100%" paddingX={4}>
+            <text wrapMode="none" fg={msg().isError ? t().error : t().success}>
+              {msg().text}
+            </text>
+          </box>
+        )}
+      </Show>
+
       {/* Context-aware footer */}
       <box height={1} />
       <box flexDirection="row" width="100%" paddingX={4}>
         <box flexGrow={1} />
         <text flexShrink={0} wrapMode="none" fg={t().foreground}>enter</text>
         <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{` ${footerVerb()}  `}</text>
+        <text flexShrink={0} wrapMode="none" fg={t().foreground}>←/→</text>
+        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" tab  "}</text>
         <text flexShrink={0} wrapMode="none" fg={t().foreground}>↑/↓</text>
         <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" navigate"}</text>
       </box>

@@ -5,13 +5,17 @@ import type { AppState, AppActions } from "../context/state";
 import type { DetailNavRef } from "../components/detail";
 import { SHIFT_JUMP, PAGE_JUMP } from "../constants";
 
-type DialogId = "branch" | "help" | "theme" | "repository" | null;
+import type { OperationsTab } from "../components/dialogs/settings-dialog";
+
+type DialogId = "operations" | "help" | "theme" | null;
 
 interface KeyboardNavigationOptions {
   state: AppState;
   actions: AppActions;
   dialog: Accessor<DialogId>;
   setDialog: (d: DialogId) => void;
+  operationsTab: Accessor<OperationsTab>;
+  setOperationsTab: (tab: OperationsTab) => void;
   searchFocused: Accessor<boolean>;
   setSearchFocused: (v: boolean) => void;
   /** Returns the current scrollbox ref (may be undefined before mount). */
@@ -24,14 +28,15 @@ interface KeyboardNavigationOptions {
 /**
  * Global keyboard handler for the main app.
  *
- * Handles: dialog toggles (Ctrl+R, Ctrl+T, ?), escape,
+ * Handles: dialog toggles (Ctrl+R, Ctrl+B, Ctrl+T, ?), escape,
  * detail panel navigation, graph list navigation, search focus, and
- * branch dialog shortcuts.
+ * branch/operations dialog shortcuts.
  */
 export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
   const {
     state, actions,
     dialog, setDialog,
+    operationsTab, setOperationsTab,
     searchFocused, setSearchFocused,
     getDetailScrollboxRef, detailNavRef,
     loadData,
@@ -42,11 +47,29 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
   useKeyboard((e) => {
     if (e.eventType === "release") return;
 
-    // Ctrl+R opens repository dialog regardless of dialog/search state
+    // Ctrl+R opens operations dialog on Repository tab
     if (e.ctrl && e.name === "r") {
       setSearchFocused(false);
       actions.setDetailFocused(false);
-      setDialog(dialog() === "repository" ? null : "repository");
+      if (dialog() === "operations" && operationsTab() === "repository") {
+        setDialog(null);
+      } else {
+        setOperationsTab("repository");
+        setDialog("operations");
+      }
+      return;
+    }
+
+    // Ctrl+B opens operations dialog on Branch tab
+    if (e.ctrl && e.name === "b") {
+      setSearchFocused(false);
+      actions.setDetailFocused(false);
+      if (dialog() === "operations" && operationsTab() === "branch") {
+        setDialog(null);
+      } else {
+        setOperationsTab("branch");
+        setDialog("operations");
+      }
       return;
     }
 
@@ -194,7 +217,8 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         break;
       case "b":
         actions.setDetailFocused(false);
-        setDialog("branch");
+        setOperationsTab("branch");
+        setDialog("operations");
         break;
       case "a": {
         const newAll = !state.showAllBranches();
