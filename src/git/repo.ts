@@ -1,8 +1,9 @@
 import type { Commit, Branch, FileChange, CommitDetail, RefInfo } from "./types";
 import { DEFAULT_MAX_COUNT } from "../constants";
 
-const GIT_LOG_FORMAT = "%H|%h|%P|%D|%s|%an|%ae|%aI|%cn|%ce|%cI";
-const FIELD_SEPARATOR = "|";
+/** ASCII Record Separator — safe delimiter that cannot appear in commit fields. */
+const RS = "\x1e";
+const GIT_LOG_FORMAT = `%H${RS}%h${RS}%P${RS}%D${RS}%s${RS}%an${RS}%ae${RS}%aI${RS}%cn${RS}%ce${RS}%cI`;
 
 /** Shared helper to run a git command and capture its output. */
 async function runGit(
@@ -61,7 +62,7 @@ function parseRefs(refString: string): RefInfo[] {
 }
 
 function parseCommitLine(line: string): Commit | null {
-  const parts = line.split(FIELD_SEPARATOR);
+  const parts = line.split(RS);
   if (parts.length < 11) return null;
 
   const [hash, shortHash, parentsStr, refsStr, subject, author, authorEmail, authorDate, committer, committerEmail, commitDate] = parts;
@@ -124,7 +125,7 @@ export async function getCommits(
 
 export async function getBranches(repoPath: string): Promise<Branch[]> {
   const { stdout, exitCode } = await runGit(repoPath, [
-    "branch", "-a", "--format=%(HEAD)|%(refname:short)|%(objectname:short)",
+    "branch", "-a", `--format=%(HEAD)${RS}%(refname:short)${RS}%(objectname:short)`,
   ]);
 
   if (exitCode !== 0) return [];
@@ -134,7 +135,7 @@ export async function getBranches(repoPath: string): Promise<Branch[]> {
     .split("\n")
     .filter((l) => l.trim())
     .map((line) => {
-      const [head, name, lastCommitHash] = line.split("|");
+      const [head, name, lastCommitHash] = line.split(RS);
       return {
         name: name.trim(),
         isCurrent: head.trim() === "*",
