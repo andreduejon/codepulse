@@ -25,16 +25,20 @@ function RefBadge(props: Readonly<{
   );
 }
 
+/** Shared graph dimension computations used by ColumnHeader and GraphLine. */
+function useGraphDimensions(maxGraphColumns: () => number) {
+  const effectiveGraphColumns = () => Math.min(maxGraphColumns(), MAX_GRAPH_COLUMNS);
+  const viewportActive = () => maxGraphColumns() > MAX_GRAPH_COLUMNS;
+  const graphWidth = () => Math.max(effectiveGraphColumns() * 2 + 1 + (viewportActive() ? 2 : 0), 6);
+  return { effectiveGraphColumns, viewportActive, graphWidth };
+}
+
 export function ColumnHeader() {
   const { theme } = useTheme();
   const { state } = useAppState();
   const t = () => theme();
 
-  // Graph column width: dynamic based on actual graph data, capped at MAX_GRAPH_COLUMNS
-  const effectiveGraphColumns = () => Math.min(state.maxGraphColumns(), MAX_GRAPH_COLUMNS);
-  // When viewport is active, add 2 chars for the edge indicator column (◀/▶ on the right)
-  const viewportActive = () => state.maxGraphColumns() > MAX_GRAPH_COLUMNS;
-  const graphWidth = () => Math.max(effectiveGraphColumns() * 2 + 1 + (viewportActive() ? 2 : 0), 6);
+  const { graphWidth } = useGraphDimensions(() => state.maxGraphColumns());
 
   return (
     <box flexDirection="column" width="100%" flexShrink={0}>
@@ -121,14 +125,7 @@ function GraphLine(props: Readonly<{
   const commit = () => props.row.commit;
   const padCols = () => state.maxGraphColumns();
 
-  // Effective graph columns: capped by MAX_GRAPH_COLUMNS
-  const effectiveGraphCols = () => Math.min(state.maxGraphColumns(), MAX_GRAPH_COLUMNS);
-
-  // Viewport active when actual graph exceeds the cap
-  const viewportActive = () => state.maxGraphColumns() > MAX_GRAPH_COLUMNS;
-
-  // Graph width for this line (must match ColumnHeader's graphWidth formula)
-  const graphWidth = () => Math.max(effectiveGraphCols() * 2 + 1 + (viewportActive() ? 2 : 0), 6);
+  const { effectiveGraphColumns, viewportActive, graphWidth } = useGraphDimensions(() => state.maxGraphColumns());
 
   const renderOpts = () => {
     return {
