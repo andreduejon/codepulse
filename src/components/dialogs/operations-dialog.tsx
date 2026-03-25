@@ -405,7 +405,7 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
         paddingX={1}
         paddingY={1}
       >
-      <DialogTitleBar title="Operations" />
+      <DialogTitleBar title="Menu" />
 
       {/* Tab bar with top accent line per selected tab, muted bottom separator */}
       <box flexDirection="row" width="100%" paddingX={4} flexShrink={0}>
