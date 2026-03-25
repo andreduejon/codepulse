@@ -3,7 +3,7 @@ import { useKeyboard } from "@opentui/solid";
 import { useAppState, DEFAULT_AUTO_REFRESH_INTERVAL } from "../../context/state";
 import { useTheme, themes } from "../../context/theme";
 import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
-import { createBranch, deleteBranch } from "../../git/repo";
+import { createBranch, getRecentBranches } from "../../git/repo";
 
 export type OperationsTab = "repository" | "branch";
 
@@ -56,6 +56,7 @@ type SettingItem =
   | { kind: "cycle"; label: string; hotkey?: string; options: string[]; get: () => string; set: (v: string) => void; needsReload?: boolean }
   | { kind: "dialog"; label: string; hotkey?: string; dialogId: string; get: () => string }
   | { kind: "action"; label: string; hotkey?: string; run: () => void }
+  | { kind: "branch"; name: string; isCurrent: boolean; run: () => void }
   | { kind: "disabled"; label: string };
 
 export default function OperationsDialog(props: Readonly<OperationsDialogProps>) {
@@ -131,6 +132,16 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
   };
   onCleanup(() => { if (statusTimer) clearTimeout(statusTimer); });
 
+  // ── Recent branches (loaded from reflog on mount) ─────────────────
+  const [recentBranchNames, setRecentBranchNames] = createSignal<string[]>([]);
+  onMount(async () => {
+    const repoPath = state.repoPath();
+    if (repoPath) {
+      const recent = await getRecentBranches(repoPath, 5);
+      setRecentBranchNames(recent);
+    }
+  });
+
   // ── Repository tab items ──────────────────────────────────────────
   const repoItems: SettingItem[] = [
     { kind: "header", label: "Info" },
@@ -187,64 +198,107 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
     state.branches().filter((b) => !b.isRemote)
   );
 
+  const remoteBranches = createMemo(() =>
+    state.branches().filter((b) => b.isRemote)
+  );
+
+  const makeBranchItem = (b: { name: string; isCurrent: boolean }): SettingItem => ({
+    kind: "branch" as const,
+    name: b.name,
+    isCurrent: b.isCurrent,
+    run: () => {
+      if (!b.isCurrent) {
+        props.onSwitchBranch?.(b.name);
+        props.onClose();
+      }
+    },
+  });
+
   const branchItems = createMemo<SettingItem[]>(() => {
     const locals = localBranches();
-    const totalBranches = state.branches().length;
-    const localCount = locals.length;
-    const remoteCount = totalBranches - localCount;
+    const remotes = remoteBranches();
+    const currentBranch = state.currentBranch();
+    const recent = recentBranchNames();
 
-    const switchItems: SettingItem[] = locals.map((b) => ({
-      kind: "action" as const,
-      label: b.isCurrent ? `${b.name}  (current)` : b.name,
-      run: () => {
-        if (!b.isCurrent) {
-          props.onSwitchBranch?.(b.name);
-          props.onClose();
+    const result: SettingItem[] = [];
+
+    // ── Recent section ────────────────────────────────────────────
+    // Show recently checked-out branches (from reflog), excluding current
+    const recentFiltered = recent.filter((name) => {
+      // Only include if the branch still exists as a local branch
+      return name !== currentBranch && locals.some((b) => b.name === name);
+    });
+    if (recentFiltered.length > 0) {
+      result.push({ kind: "header", label: "Recent" });
+      for (const name of recentFiltered) {
+        result.push(makeBranchItem({ name, isCurrent: false }));
+      }
+    }
+
+    // ── Local section ─────────────────────────────────────────────
+    result.push({ kind: "header", label: "Local" });
+    if (locals.length === 0) {
+      result.push({ kind: "info", label: "", get: () => "(no local branches)" });
+    } else {
+      // Current branch first, then alphabetical
+      const sorted = [...locals].sort((a, b) => {
+        if (a.isCurrent) return -1;
+        if (b.isCurrent) return 1;
+        return a.name.localeCompare(b.name);
+      });
+      for (const b of sorted) {
+        result.push(makeBranchItem(b));
+      }
+    }
+
+    // ── Remote section ────────────────────────────────────────────
+    if (remotes.length > 0) {
+      result.push({ kind: "header", label: "Remote" });
+      const sorted = [...remotes].sort((a, b) => a.name.localeCompare(b.name));
+      for (const b of sorted) {
+        result.push({
+          kind: "branch" as const,
+          name: b.name,
+          isCurrent: false,
+          run: () => {
+            // Checkout remote branch creates a local tracking branch
+            props.onSwitchBranch?.(b.name);
+            props.onClose();
+          },
+        });
+      }
+    }
+
+    // ── Actions section ───────────────────────────────────────────
+    result.push({ kind: "header", label: "Actions" });
+    result.push({
+      kind: "action",
+      label: "Create branch",
+      run: async () => {
+        const name = `branch-${Date.now()}`;
+        const res = await createBranch(state.repoPath(), name);
+        if (res.ok) {
+          showStatus(`Created and switched to '${name}'`, false);
+          props.onReload();
+        } else {
+          showStatus(res.error ?? "Failed to create branch", true);
         }
       },
-    }));
-
-    return [
-      { kind: "header", label: "Info" },
-      { kind: "info", label: "Current", get: () => state.currentBranch() || "(unknown)" },
-      { kind: "info", label: "Local", get: () => String(localCount) },
-      { kind: "info", label: "Remote", get: () => String(remoteCount) },
-
-      { kind: "header", label: "Switch Branch" },
-      ...switchItems,
-
-      { kind: "header", label: "Actions" },
-      {
-        kind: "action",
-        label: "Create branch",
-        run: async () => {
-          // For now, create a branch from current HEAD
-          // A proper input field would be ideal; using a prompt-style approach
-          // We'll use a simple sequential name for demonstration
-          const name = `branch-${Date.now()}`;
-          const result = await createBranch(state.repoPath(), name);
-          if (result.ok) {
-            showStatus(`Created and switched to '${name}'`, false);
-            props.onReload();
-          } else {
-            showStatus(result.error ?? "Failed to create branch", true);
-          }
-        },
+    });
+    result.push({
+      kind: "action",
+      label: "Delete branch",
+      run: async () => {
+        showStatus("Select a non-current branch to delete", true);
       },
-      {
-        kind: "action",
-        label: "Delete branch",
-        run: async () => {
-          // Delete the branch at current cursor in the switch list
-          // For safety, this is a placeholder — needs proper selection UX
-          showStatus("Select a non-current branch to delete", true);
-        },
-      },
+    });
 
-      { kind: "header", label: "Coming Soon" },
-      { kind: "disabled", label: "Rename branch" },
-      { kind: "disabled", label: "Merge branch" },
-    ];
+    // ── Coming Soon ───────────────────────────────────────────────
+    result.push({ kind: "header", label: "Coming Soon" });
+    result.push({ kind: "disabled", label: "Rename branch" });
+    result.push({ kind: "disabled", label: "Merge branch" });
+
+    return result;
   });
 
   // ── Active items depend on tab ────────────────────────────────────
@@ -264,7 +318,7 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
   const selectableIndices = (): number[] =>
     activeItems()
       .map((item, i) =>
-        item.kind === "toggle" || item.kind === "cycle" || item.kind === "dialog" || item.kind === "action"
+        item.kind === "toggle" || item.kind === "cycle" || item.kind === "dialog" || item.kind === "action" || item.kind === "branch"
           ? i
           : -1
       )
@@ -296,6 +350,8 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
       props.onOpenDialog?.(item.dialogId);
     } else if (item.kind === "action") {
       item.run();
+    } else if (item.kind === "branch") {
+      item.run();
     }
   };
 
@@ -311,6 +367,7 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
       case "cycle": return "cycle";
       case "dialog": return "open";
       case "action": return "confirm";
+      case "branch": return item.isCurrent ? "" : "switch";
       default: return "select";
     }
   };
@@ -344,7 +401,7 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
 
   // Format the value display for an item
   const valueDisplay = (item: SettingItem): string => {
-    if (item.kind === "header" || item.kind === "action" || item.kind === "disabled" || item.kind === "path") return "";
+    if (item.kind === "header" || item.kind === "action" || item.kind === "disabled" || item.kind === "path" || item.kind === "branch") return "";
     if (item.kind === "info") return item.get();
     if (item.kind === "toggle") return item.get() ? "on" : "off";
     return item.get();
@@ -391,7 +448,8 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
       <box height={1} />
 
       {/* Items list */}
-      <box flexDirection="column" flexGrow={1}>
+      <scrollbox flexGrow={1} scrollY scrollX={false} verticalScrollbarOptions={{ visible: false }}>
+        <box flexDirection="column">
         <For each={activeItems()}>
           {(item, itemIndex) => {
             // --- Header ---
@@ -447,6 +505,30 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
               );
             }
 
+            // --- Branch list entry (full-width name, no value/hotkey padding) ---
+            if (item.kind === "branch") {
+              const isSel = () => selectedItemIndex() === itemIndex();
+              return (
+                <box
+                  flexDirection="row"
+                  width="100%"
+                  paddingX={4}
+                  backgroundColor={isSel() ? t().backgroundElement : undefined}
+                >
+                  <text flexGrow={1} flexShrink={1} wrapMode="none" truncate>
+                    <span fg={isSel() ? t().primary : t().foreground}>
+                      {item.name}
+                    </span>
+                  </text>
+                  {item.isCurrent ? (
+                    <text flexShrink={0} wrapMode="none" fg={t().success}>
+                      {"  current"}
+                    </text>
+                  ) : null}
+                </box>
+              );
+            }
+
             // --- Selectable items: toggle, cycle, dialog, action ---
             const isSelected = () => selectedItemIndex() === itemIndex();
             const val = () => valueDisplay(item);
@@ -491,7 +573,8 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
             );
           }}
         </For>
-      </box>
+        </box>
+      </scrollbox>
 
       {/* Status message */}
       <Show when={statusMsg()}>

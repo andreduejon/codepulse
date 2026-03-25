@@ -240,6 +240,45 @@ export async function getRemoteUrl(repoPath: string): Promise<string> {
   }
 }
 
+/**
+ * Get recently checked-out branch names from the reflog.
+ * Returns up to `limit` unique local branch names (most recent first),
+ * excluding the current branch.
+ */
+export async function getRecentBranches(
+  repoPath: string,
+  limit = 5
+): Promise<string[]> {
+  try {
+    // git reflog records "checkout: moving from X to Y"
+    const proc = Bun.spawn(
+      ["git", "reflog", "--format=%gs", "-n", "200"],
+      { cwd: repoPath, stdout: "pipe", stderr: "pipe" }
+    );
+    const output = await new Response(proc.stdout).text();
+    await proc.exited;
+    if (proc.exitCode !== 0) return [];
+
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const line of output.trim().split("\n")) {
+      // Match "checkout: moving from <X> to <Y>"
+      const match = line.match(/^checkout: moving from .+ to (.+)$/);
+      if (!match) continue;
+      const branch = match[1];
+      // Skip detached HEAD hashes (40-char hex)
+      if (/^[0-9a-f]{40}$/.test(branch)) continue;
+      if (seen.has(branch)) continue;
+      seen.add(branch);
+      result.push(branch);
+      if (result.length >= limit) break;
+    }
+    return result;
+  } catch {
+    return [];
+  }
+}
+
 export async function createBranch(
   repoPath: string,
   branchName: string,
