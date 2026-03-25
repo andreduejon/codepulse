@@ -163,6 +163,9 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     { kind: "header", label: "Path" },
     { kind: "copyable", label: "Directory", get: () => state.repoPath() || "(unknown)" },
 
+    { kind: "header", label: "Actions" },
+    { kind: "action", label: "Fetch remote", hotkey: "f", get: lastFetchLabel, run: () => props.onFetch() },
+
     { kind: "header", label: "Preferences" },
     {
       kind: "dialog",
@@ -193,9 +196,6 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
       get: () => MS_TO_LABEL[state.autoRefreshInterval()] ?? "off",
       set: (v) => actions.setAutoRefreshInterval(AUTO_REFRESH_MS[v] ?? DEFAULT_AUTO_REFRESH_INTERVAL),
     },
-
-    { kind: "header", label: "Actions" },
-    { kind: "action", label: "Fetch remote", hotkey: "f", get: lastFetchLabel, run: () => props.onFetch() },
   ];
 
   // ── Branch tab items ──────────────────────────────────────────────
