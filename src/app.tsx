@@ -186,17 +186,26 @@ function AppContent(props: AppProps) {
 
     if (!commit) {
       actions.setCommitDetail(null);
+      actions.setDetailLoading(false);
       return;
     }
+
+    actions.setDetailLoading(true);
 
     // Debounce the detail load to avoid spawning git subprocesses on rapid navigation
     detailDebounceTimer = setTimeout(async () => {
       detailDebounceTimer = null;
       try {
         const detail = await getCommitDetail(props.repoPath, commit.hash, commit);
-        if (v === detailVersion) actions.setCommitDetail(detail);
+        if (v === detailVersion) {
+          actions.setCommitDetail(detail);
+          actions.setDetailLoading(false);
+        }
       } catch {
-        if (v === detailVersion) actions.setCommitDetail(null);
+        if (v === detailVersion) {
+          actions.setCommitDetail(null);
+          actions.setDetailLoading(false);
+        }
       }
     }, DETAIL_DEBOUNCE_MS);
   });

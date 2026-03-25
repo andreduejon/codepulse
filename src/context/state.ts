@@ -29,6 +29,8 @@ export interface AppState {
   autoRefreshInterval: Accessor<number>;
   lastFetchTime: Accessor<Date | null>;
   fetching: Accessor<boolean>;
+  /** True while commit detail (message, files, diff) is being loaded */
+  detailLoading: Accessor<boolean>;
   /** Branch being viewed (filtered perspective). null = show all / default. */
   viewingBranch: Accessor<string | null>;
 }
@@ -57,6 +59,7 @@ export interface AppActions {
   setAutoRefreshInterval: (ms: number) => void;
   setLastFetchTime: (time: Date | null) => void;
   setFetching: (fetching: boolean) => void;
+  setDetailLoading: (loading: boolean) => void;
   setViewingBranch: (branch: string | null) => void;
 }
 
@@ -84,6 +87,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
   const [detailOriginHash, setDetailOriginHash] = createSignal<string | null>(null);
   const [lastFetchTime, setLastFetchTime] = createSignal<Date | null>(null);
   const [fetching, setFetching] = createSignal(false);
+  const [detailLoading, setDetailLoading] = createSignal(false);
   const [viewingBranch, setViewingBranch] = createSignal<string | null>(null);
 
   const filteredRows = createMemo(() => {
@@ -151,6 +155,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
     scrollTargetIndex,
     lastFetchTime,
     fetching,
+    detailLoading,
     viewingBranch,
   };
 
@@ -178,6 +183,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
     setAutoRefreshInterval,
     setLastFetchTime,
     setFetching,
+    setDetailLoading,
     setViewingBranch,
   };
 
