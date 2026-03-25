@@ -335,20 +335,24 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
 
     switch (e.name) {
       case "down":
+      case "j":
         moveCursor(e.shift ? SHIFT_JUMP : 1);
         break;
       case "up":
+      case "k":
         moveCursor(e.shift ? -SHIFT_JUMP : -1);
         break;
       case "return":
         activateItem();
         break;
       case "left":
+      case "h":
         if (activeTab() !== "repository") {
           setActiveTab("repository");
         }
         break;
       case "right":
+      case "l":
         if (activeTab() !== "branch") {
           setActiveTab("branch");
         }

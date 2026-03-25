@@ -152,15 +152,18 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
       const scrollbox = getDetailScrollboxRef();
       switch (e.name) {
         case "left":
+        case "h":
           e.preventDefault();
           actions.setDetailFocused(false);
           return;
         case "up":
+        case "k":
           e.preventDefault();
           actions.moveDetailCursor(e.shift ? -SHIFT_JUMP : -1, detailNavRef.itemCount);
           scrollbox?.scrollBy(-1, "absolute");
           return;
         case "down":
+        case "j":
           e.preventDefault();
           actions.moveDetailCursor(e.shift ? SHIFT_JUMP : 1, detailNavRef.itemCount);
           scrollbox?.scrollBy(1, "absolute");
@@ -185,11 +188,13 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
 
     switch (e.name) {
       case "down":
+      case "j":
         e.preventDefault();
         actions.moveCursor(e.shift ? SHIFT_JUMP : 1);
         scrollbox?.scrollTo(0);
         break;
       case "up":
+      case "k":
         e.preventDefault();
         actions.moveCursor(e.shift ? -SHIFT_JUMP : -1);
         scrollbox?.scrollTo(0);
@@ -200,6 +205,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         scrollbox?.scrollTo(0);
         break;
       case "right":
+      case "l":
         e.preventDefault();
         if (state.selectedCommit()) {
           actions.setDetailOriginHash(null);
@@ -208,6 +214,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         }
         break;
       case "left":
+      case "h":
         e.preventDefault();
         // Re-center scroll on current cursor position
         actions.setScrollTargetIndex(state.cursorIndex());
