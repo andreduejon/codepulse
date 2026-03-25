@@ -70,6 +70,73 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     if (copiedTimer) clearTimeout(copiedTimer);
   });
 
+  // ── Banner scroll for selected copyable rows ──────────────────────
+  /** Usable width for copyable text: dialog=70 - 2(paddingX=1) - 8(paddingX=4) = 60 */
+  const COPYABLE_VISIBLE_WIDTH = 60;
+  /** Scrolling speed: shift 1 char every N ms. */
+  const BANNER_TICK_MS = 200;
+  /** Pause at each end before reversing (ms). */
+  const BANNER_PAUSE_MS = 1500;
+
+  const [bannerOffset, setBannerOffset] = createSignal(0);
+  const [bannerDirection, setBannerDirection] = createSignal<1 | -1>(1);
+  let bannerTimer: ReturnType<typeof setInterval> | undefined;
+  let bannerPauseTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const stopBanner = () => {
+    if (bannerTimer) { clearInterval(bannerTimer); bannerTimer = undefined; }
+    if (bannerPauseTimer) { clearTimeout(bannerPauseTimer); bannerPauseTimer = undefined; }
+    setBannerOffset(0);
+    setBannerDirection(1);
+  };
+
+  const startBanner = (text: string) => {
+    const maxOffset = Math.max(0, text.length - COPYABLE_VISIBLE_WIDTH);
+    if (maxOffset <= 0) return; // fits, no scrolling needed
+
+    bannerTimer = setInterval(() => {
+      setBannerOffset((prev) => {
+        const dir = bannerDirection();
+        const next = prev + dir;
+        if (next >= maxOffset) {
+          clearInterval(bannerTimer); bannerTimer = undefined;
+          bannerPauseTimer = setTimeout(() => { setBannerDirection(-1); startBanner(text); }, BANNER_PAUSE_MS);
+          return maxOffset;
+        }
+        if (next <= 0) {
+          clearInterval(bannerTimer); bannerTimer = undefined;
+          bannerPauseTimer = setTimeout(() => { setBannerDirection(1); startBanner(text); }, BANNER_PAUSE_MS);
+          return 0;
+        }
+        return next;
+      });
+    }, BANNER_TICK_MS);
+  };
+
+  // React to cursor / tab changes: restart banner if the newly selected item is copyable + overflows
+  createEffect(() => {
+    const idx = selectedItemIndex();
+    const items = activeItems();
+    const item = items[idx];
+    stopBanner();
+    if (item && item.kind === "copyable") {
+      const text = item.get();
+      if (text.length > COPYABLE_VISIBLE_WIDTH) {
+        bannerPauseTimer = setTimeout(() => startBanner(text), BANNER_PAUSE_MS);
+      }
+    }
+  });
+
+  onCleanup(() => stopBanner());
+
+  /** Returns the visible slice of a copyable value, applying banner offset when selected. */
+  const copyableBannerText = (text: string, isSelected: boolean): string => {
+    if (text.length <= COPYABLE_VISIBLE_WIDTH) return text;
+    if (!isSelected) return text; // let the TUI truncate when not selected
+    const off = bannerOffset();
+    return text.substring(off, off + COPYABLE_VISIBLE_WIDTH);
+  };
+
   // ── Collapsed state for branch sections ───────────────────────────
   const [localCollapsed, setLocalCollapsed] = createSignal(false);
   const [remoteCollapsed, setRemoteCollapsed] = createSignal(false);
@@ -460,16 +527,12 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
                 >
                   <text flexGrow={1} flexShrink={1} wrapMode="none" truncate>
                     <span fg={isSel() ? t().primary : t().foreground}>
-                      {item.get()}
+                      {copyableBannerText(item.get(), isSel())}
                     </span>
                   </text>
                   {isCopied() ? (
                     <text flexShrink={0} wrapMode="none" fg={t().success}>
                       {"  copied!"}
-                    </text>
-                  ) : isSel() ? (
-                    <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                      {"  enter to copy"}
                     </text>
                   ) : null}
                 </box>
