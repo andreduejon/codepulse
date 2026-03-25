@@ -59,8 +59,8 @@ function AppContent(props: AppProps) {
   };
 
   // Load git data
-  async function loadData(branch?: string, stickyHash?: string) {
-    actions.setLoading(true);
+  async function loadData(branch?: string, stickyHash?: string, silent = false) {
+    if (!silent) actions.setLoading(true);
     try {
       const repoPath = props.repoPath;
       actions.setRepoPath(repoPath);
@@ -76,6 +76,17 @@ function AppContent(props: AppProps) {
         getRepoName(repoPath),
         getRemoteUrl(repoPath),
       ]);
+
+      // Skip update if nothing changed (avoids flicker on auto-refresh)
+      if (silent) {
+        const oldCommits = state.commits();
+        if (
+          oldCommits.length === commits.length &&
+          oldCommits.every((c, i) => c.hash === commits[i].hash)
+        ) {
+          return;
+        }
+      }
 
       actions.setCommits(commits);
       const rows = buildGraph(commits);
@@ -106,7 +117,7 @@ function AppContent(props: AppProps) {
     } catch (err) {
       actions.setError(err instanceof Error ? err.message : String(err));
     } finally {
-      actions.setLoading(false);
+      if (!silent) actions.setLoading(false);
     }
   }
 
@@ -126,7 +137,7 @@ function AppContent(props: AppProps) {
     if (interval > 0) {
       autoRefreshTimer = setInterval(() => {
         const stickyHash = state.selectedCommit()?.hash;
-        loadData(undefined, stickyHash);
+        loadData(undefined, stickyHash, true);
       }, interval);
     }
   });
