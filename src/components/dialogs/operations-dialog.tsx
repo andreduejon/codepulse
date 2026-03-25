@@ -357,6 +357,14 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
           setActiveTab("branch");
         }
         break;
+      case "tab":
+        // Tab switches between tabs
+        if (e.shift) {
+          if (activeTab() !== "repository") setActiveTab("repository");
+        } else {
+          if (activeTab() !== "branch") setActiveTab("branch");
+        }
+        break;
     }
   });
 

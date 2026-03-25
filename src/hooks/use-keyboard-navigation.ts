@@ -180,6 +180,10 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
           e.preventDefault();
           scrollbox?.scrollBy(0.5, "viewport");
           return;
+        case "tab":
+          e.preventDefault();
+          actions.setDetailFocused(false);
+          return;
       }
       return; // swallow all other keys when detail is focused
     }
@@ -245,6 +249,13 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         actions.setDetailFocused(false);
         setSearchFocused(true);
         break;
+      case "r":
+        // Shift+R = Reload (without Ctrl — Ctrl+R opens menu)
+        if (e.shift && !e.ctrl) {
+          const stickyHash = state.selectedCommit()?.hash;
+          loadData(undefined, stickyHash);
+        }
+        break;
       case "a": {
         const newAll = !state.showAllBranches();
         actions.setShowAllBranches(newAll);
@@ -253,6 +264,14 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
       }
       case "f":
         handleFetch();
+        break;
+      case "tab":
+        e.preventDefault();
+        if (state.selectedCommit()) {
+          actions.setDetailOriginHash(null);
+          actions.setDetailCursorIndex(0);
+          actions.setDetailFocused(true);
+        }
         break;
     }
   });
