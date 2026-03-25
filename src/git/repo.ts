@@ -238,3 +238,46 @@ export async function isGitRepo(path: string): Promise<boolean> {
   ]);
   return exitCode === 0;
 }
+
+/**
+ * Fetch from all remotes, pruning deleted remote branches.
+ * This is the only network operation in gittree — safe and read-only.
+ */
+export async function fetchRemote(
+  repoPath: string
+): Promise<{ ok: boolean; error?: string }> {
+  const { stderr, exitCode } = await runGit(repoPath, [
+    "fetch", "--all", "--prune",
+  ]);
+
+  if (exitCode !== 0) {
+    return { ok: false, error: stderr.trim() };
+  }
+  return { ok: true };
+}
+
+/**
+ * Get the last fetch time by reading the mtime of FETCH_HEAD.
+ * Returns null if the file doesn't exist (never fetched).
+ */
+export async function getLastFetchTime(
+  repoPath: string
+): Promise<Date | null> {
+  try {
+    const { stdout, exitCode } = await runGit(repoPath, [
+      "rev-parse", "--git-dir",
+    ]);
+    if (exitCode !== 0) return null;
+
+    const gitDir = stdout.trim();
+    const fetchHeadPath = `${repoPath}/${gitDir}/FETCH_HEAD`;
+    const file = Bun.file(fetchHeadPath);
+    const exists = await file.exists();
+    if (!exists) return null;
+
+    // Bun.file().lastModified returns a unix timestamp in ms
+    return new Date(file.lastModified);
+  } catch {
+    return null;
+  }
+}
