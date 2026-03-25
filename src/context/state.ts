@@ -9,7 +9,6 @@ export interface AppState {
   graphRows: Accessor<GraphRow[]>;
   branches: Accessor<Branch[]>;
   currentBranch: Accessor<string>;
-  repoName: Accessor<string>;
   repoPath: Accessor<string>;
   remoteUrl: Accessor<string>;
   error: Accessor<string | null>;
@@ -48,7 +47,6 @@ export interface AppActions {
   setGraphRows: (rows: GraphRow[]) => void;
   setBranches: (branches: Branch[]) => void;
   setCurrentBranch: (branch: string) => void;
-  setRepoName: (name: string) => void;
   setRepoPath: (path: string) => void;
   setRemoteUrl: (url: string) => void;
   setError: (err: string | null) => void;
@@ -66,7 +64,6 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
   const [graphRows, setGraphRows] = createSignal<GraphRow[]>([]);
   const [branches, setBranches] = createSignal<Branch[]>([]);
   const [currentBranch, setCurrentBranch] = createSignal("");
-  const [repoName, setRepoName] = createSignal("");
   const [repoPath, setRepoPath] = createSignal("");
   const [remoteUrl, setRemoteUrl] = createSignal("");
   const [error, setError] = createSignal<string | null>(null);
@@ -130,7 +127,6 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
     graphRows,
     branches,
     currentBranch,
-    repoName,
     repoPath,
     remoteUrl,
     error,
@@ -169,7 +165,6 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
     setGraphRows,
     setBranches,
     setCurrentBranch,
-    setRepoName,
     setRepoPath,
     setRemoteUrl,
     setError,

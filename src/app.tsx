@@ -3,7 +3,7 @@ import { useRenderer } from "@opentui/solid";
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { createAppState, AppStateContext } from "./context/state";
 import { createThemeState, ThemeContext } from "./context/theme";
-import { getCommits, getBranches, getCurrentBranch, getRepoName, getCommitDetail, getRemoteUrl, fetchRemote, getLastFetchTime } from "./git/repo";
+import { getCommits, getBranches, getCurrentBranch, getCommitDetail, getRemoteUrl, fetchRemote, getLastFetchTime } from "./git/repo";
 import { buildGraph, getMaxGraphColumns } from "./git/graph";
 import GraphView, { ColumnHeader } from "./components/graph";
 import CommitDetailView from "./components/detail";
@@ -66,7 +66,7 @@ function AppContent(props: AppProps) {
       const repoPath = props.repoPath;
       actions.setRepoPath(repoPath);
 
-      const [commits, branches, currentBranch, repoName, remoteUrl] = await Promise.all([
+      const [commits, branches, currentBranch, remoteUrl] = await Promise.all([
         getCommits(repoPath, {
           maxCount: state.maxCount(),
           branch: branch,
@@ -74,7 +74,6 @@ function AppContent(props: AppProps) {
         }),
         getBranches(repoPath),
         getCurrentBranch(repoPath),
-        getRepoName(repoPath),
         getRemoteUrl(repoPath),
       ]);
 
@@ -95,7 +94,6 @@ function AppContent(props: AppProps) {
       actions.setMaxGraphColumns(getMaxGraphColumns(rows));
       actions.setBranches(branches);
       actions.setCurrentBranch(currentBranch);
-      actions.setRepoName(repoName);
       actions.setRemoteUrl(remoteUrl);
       actions.setError(null);
 

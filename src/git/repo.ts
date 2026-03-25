@@ -212,14 +212,6 @@ export async function getCurrentBranch(repoPath: string): Promise<string> {
   return stdout.trim();
 }
 
-export async function getRepoName(repoPath: string): Promise<string> {
-  const { stdout } = await runGit(repoPath, [
-    "rev-parse", "--show-toplevel",
-  ]);
-  const fullPath = stdout.trim();
-  return fullPath.split("/").pop() ?? "unknown";
-}
-
 export async function getRemoteUrl(repoPath: string): Promise<string> {
   try {
     const { stdout, exitCode } = await runGit(repoPath, [
