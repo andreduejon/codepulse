@@ -8,6 +8,7 @@ export default function HelpDialog(props: { onClose: () => void }) {
   const keybinds = [
     ["↓/↑ or j/k", "Move selection down / up"],
     ["Shift+↓/↑", "Jump 10 entries down / up"],
+    ["PgDn/PgUp", "Jump 20 entries down / up"],
     ["→/l or Tab", "Focus detail panel"],
     ["←/h", "Return to commit list / recenter"],
     ["g", "Go to first commit"],
