@@ -13,6 +13,8 @@ interface OperationsDialogProps {
   onReload: () => void;
   onFetch: () => void;
   onOpenDialog?: (dialogId: string) => void;
+  /** View graph from a specific branch's perspective. null clears the filter. */
+  onViewBranch: (branch: string | null) => void;
   /** Which tab to show initially. */
   initialTab?: OperationsTab;
 }
@@ -57,7 +59,7 @@ type SettingItem =
   | { kind: "dialog"; label: string; hotkey?: string; dialogId: string; get: () => string }
   | { kind: "action"; label: string; hotkey?: string; run: () => void }
   | { kind: "section"; label: string; count: number; collapsed: () => boolean; toggle: () => void }
-  | { kind: "branch"; name: string; isCurrent: boolean; run: () => void };
+  | { kind: "branch"; name: string; isCurrent: boolean; isViewing: boolean; run: () => void };
 
 export default function OperationsDialog(props: Readonly<OperationsDialogProps>) {
   const { state, actions } = useAppState();
@@ -198,7 +200,12 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
     kind: "branch" as const,
     name: b.name,
     isCurrent: b.isCurrent,
-    run: () => {}, // Read-only — no action on select
+    isViewing: state.viewingBranch() === b.name,
+    run: () => {
+      // View graph from this branch's perspective
+      props.onViewBranch(b.name);
+      props.onClose();
+    },
   });
 
   const branchItems = createMemo<SettingItem[]>(() => {
@@ -211,6 +218,16 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
     // ── Info ──────────────────────────────────────────────────────
     result.push({ kind: "header", label: "Info" });
     result.push({ kind: "info", label: "Current", get: () => currentBranch || "(unknown)" });
+
+    // Show viewing filter + clear action when a branch perspective is active
+    const viewing = state.viewingBranch();
+    if (viewing) {
+      result.push({ kind: "info", label: "Viewing", get: () => viewing });
+      result.push({ kind: "action", label: "Clear filter", run: () => {
+        props.onViewBranch(null);
+        props.onClose();
+      }});
+    }
 
     // ── Local section (collapsible) ───────────────────────────────
     result.push({
@@ -324,7 +341,7 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
       case "dialog": return "open";
       case "action": return "confirm";
       case "section": return item.collapsed() ? "expand" : "collapse";
-      case "branch": return "";
+      case "branch": return "view";
       default: return "select";
     }
   };
@@ -553,6 +570,11 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
                   {item.isCurrent ? (
                     <text flexShrink={0} wrapMode="none" fg={t().success}>
                       {"  current"}
+                    </text>
+                  ) : null}
+                  {item.isViewing ? (
+                    <text flexShrink={0} wrapMode="none" fg={t().accent}>
+                      {"  viewing"}
                     </text>
                   ) : null}
                 </box>

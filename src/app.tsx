@@ -319,6 +319,11 @@ function AppContent(props: AppProps) {
                   <text flexShrink={0} wrapMode="none" fg={themeState.theme().foregroundMuted}>
                     {"  "}{state.repoPath() ? state.repoPath().replace(/^\/Users\/[^/]+/, "~") : ""}{state.currentBranch() ? `:${state.currentBranch()}` : ""}
                   </text>
+                  <Show when={state.viewingBranch()}>
+                    <text flexShrink={0} wrapMode="none" fg={themeState.theme().accent}>
+                      {`  [viewing: ${state.viewingBranch()}]`}
+                    </text>
+                  </Show>
                   <box flexGrow={1} />
                   <text flexShrink={0} wrapMode="none" fg={themeState.theme().foregroundMuted}>
                     gittree v{packageJson.version}
@@ -375,6 +380,11 @@ function AppContent(props: AppProps) {
                 if (dialogId === "theme") {
                   setDialog("theme");
                 }
+              }}
+              onViewBranch={(branch) => {
+                actions.setViewingBranch(branch);
+                const stickyHash = state.selectedCommit()?.hash;
+                loadData(undefined, stickyHash);
               }}
             />
           </Show>

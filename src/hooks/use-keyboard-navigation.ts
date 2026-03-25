@@ -117,6 +117,11 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         actions.setScrollTargetIndex(0);
         return;
       }
+      if (state.viewingBranch()) {
+        actions.setViewingBranch(null);
+        loadData();
+        return;
+      }
       return;
     }
 
@@ -134,6 +139,11 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         actions.setSearchQuery("");
         actions.setCursorIndex(0);
         actions.setScrollTargetIndex(0);
+        return;
+      }
+      if (state.viewingBranch()) {
+        actions.setViewingBranch(null);
+        loadData();
         return;
       }
       // Nothing to close — quit
