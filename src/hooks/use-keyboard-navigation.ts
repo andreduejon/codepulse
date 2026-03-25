@@ -120,6 +120,27 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
       return;
     }
 
+    // q: same cascade as Escape, but quits if nothing left to close
+    if (e.name === "q" && !searchFocused()) {
+      if (dialog()) {
+        setDialog(null);
+        return;
+      }
+      if (state.detailFocused()) {
+        actions.setDetailFocused(false);
+        return;
+      }
+      if (state.searchQuery()) {
+        actions.setSearchQuery("");
+        actions.setCursorIndex(0);
+        actions.setScrollTargetIndex(0);
+        return;
+      }
+      // Nothing to close — quit
+      renderer.destroy();
+      process.exit(0);
+    }
+
     // If search input is focused, let the input handle all other keys
     if (searchFocused()) return;
 
