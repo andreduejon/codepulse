@@ -6,9 +6,9 @@ import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 import { SHIFT_JUMP } from "../../constants";
 import type { ScrollBoxRenderable, Renderable } from "@opentui/core";
 
-export type OperationsTab = "repository" | "branch";
+export type MenuTab = "repository" | "branch";
 
-interface OperationsDialogProps {
+interface MenuDialogProps {
   onClose: () => void;
   onReload: () => void;
   onFetch: () => void;
@@ -16,7 +16,7 @@ interface OperationsDialogProps {
   /** View graph from a specific branch's perspective. null clears the filter. */
   onViewBranch: (branch: string | null) => void;
   /** Which tab to show initially. */
-  initialTab?: OperationsTab;
+  initialTab?: MenuTab;
 }
 
 const MAX_COUNT_OPTIONS = [10, 20, 50, 100, 200, 500];
@@ -61,13 +61,13 @@ type SettingItem =
   | { kind: "section"; label: string; count: number; collapsed: () => boolean; toggle: () => void }
   | { kind: "branch"; name: string; isCurrent: boolean; isViewing: boolean; run: () => void };
 
-export default function OperationsDialog(props: Readonly<OperationsDialogProps>) {
+export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   const { state, actions } = useAppState();
   const { theme, themeName } = useTheme();
   const t = () => theme();
 
   // ── Tab state ─────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = createSignal<OperationsTab>(props.initialTab ?? "repository");
+  const [activeTab, setActiveTab] = createSignal<MenuTab>(props.initialTab ?? "repository");
 
   // ── Scrolling banner for Path (Repository tab) ────────────────────
   const [pathOffset, setPathOffset] = createSignal(0);
