@@ -215,7 +215,11 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         break;
       case "return":
         e.preventDefault();
-        // Reset detail scroll to top when selecting a new commit
+        if (state.selectedCommit()) {
+          actions.setDetailOriginHash(null);
+          actions.setDetailCursorIndex(0);
+          actions.setDetailFocused(true);
+        }
         scrollbox?.scrollTo(0);
         break;
       case "right":
