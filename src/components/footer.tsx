@@ -18,10 +18,12 @@ export default function Footer() {
       <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" navigate  "}</text>
       <text flexShrink={0} wrapMode="none" fg={t().foreground}>ctrl+s</text>
       <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" settings  "}</text>
-      <text flexShrink={0} wrapMode="none" fg={t().foreground}>f5</text>
+      <text flexShrink={0} wrapMode="none" fg={t().foreground}>ctrl+r</text>
       <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" refresh  "}</text>
-      <text flexShrink={0} wrapMode="none" fg={t().foreground}>f1</text>
-      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" help"}</text>
+      <text flexShrink={0} wrapMode="none" fg={t().foreground}>ctrl+h</text>
+      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" help  "}</text>
+      <text flexShrink={0} wrapMode="none" fg={t().foreground}>ctrl+q</text>
+      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" quit"}</text>
     </box>
   );
 }

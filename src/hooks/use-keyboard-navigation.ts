@@ -50,6 +50,12 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
       return;
     }
 
+    // Ctrl+Q quits the application
+    if (e.ctrl && e.name === "q") {
+      renderer.destroy();
+      process.exit(0);
+    }
+
     // Ctrl+T opens theme dialog regardless of dialog/search state
     if (e.ctrl && e.name === "t") {
       setSearchFocused(false);
@@ -58,16 +64,16 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
       return;
     }
 
-    // F1 opens help regardless of dialog/search state
-    if (e.name === "f1") {
+    // Ctrl+H opens help regardless of dialog/search state
+    if (e.ctrl && e.name === "h") {
       setSearchFocused(false);
       actions.setDetailFocused(false);
       setDialog(dialog() === "help" ? null : "help");
       return;
     }
 
-    // F5 refreshes git data, preserving scroll position
-    if (e.name === "f5") {
+    // Ctrl+R refreshes git data, preserving scroll position
+    if (e.ctrl && e.name === "r") {
       setSearchFocused(false);
       actions.setDetailFocused(false);
       if (dialog()) setDialog(null);
@@ -135,10 +141,6 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
           e.preventDefault();
           scrollbox?.scrollBy(0.5, "viewport");
           return;
-        case "q":
-          renderer.destroy();
-          process.exit(0);
-          break;
       }
       return; // swallow all other keys when detail is focused
     }
@@ -146,10 +148,6 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     const scrollbox = getDetailScrollboxRef();
 
     switch (e.name) {
-      case "q":
-        renderer.destroy();
-        process.exit(0);
-        break;
       case "down":
         e.preventDefault();
         actions.moveCursor(e.shift ? SHIFT_JUMP : 1);
