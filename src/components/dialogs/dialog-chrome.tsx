@@ -32,14 +32,14 @@ export function DialogTitleBar(props: { title: string }) {
 
   return (
     <>
-      <box flexDirection="row" width="100%" paddingX={4}>
+      <box flexDirection="row" width="100%" paddingX={4} flexShrink={0}>
         <text flexGrow={1} wrapMode="none">
           <strong><span fg={t().foreground}>{props.title}</span></strong>
         </text>
         <text flexShrink={0} wrapMode="none" fg={t().foreground}>esc</text>
         <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" close"}</text>
       </box>
-      <box height={1} />
+      <box height={1} flexShrink={0} />
     </>
   );
 }

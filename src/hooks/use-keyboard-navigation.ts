@@ -134,12 +134,12 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
           return;
         case "up":
           e.preventDefault();
-          actions.moveDetailCursor(-1, detailNavRef.itemCount);
+          actions.moveDetailCursor(e.shift ? -SHIFT_JUMP : -1, detailNavRef.itemCount);
           scrollbox?.scrollBy(-1, "absolute");
           return;
         case "down":
           e.preventDefault();
-          actions.moveDetailCursor(1, detailNavRef.itemCount);
+          actions.moveDetailCursor(e.shift ? SHIFT_JUMP : 1, detailNavRef.itemCount);
           scrollbox?.scrollBy(1, "absolute");
           return;
         case "return":

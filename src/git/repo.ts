@@ -279,6 +279,27 @@ export async function getRecentBranches(
   }
 }
 
+export async function switchBranch(
+  repoPath: string,
+  branchName: string
+): Promise<{ ok: boolean; error?: string }> {
+  // `git switch` handles both local branches and remote tracking branches
+  // (e.g. "origin/feat" auto-creates local "feat" tracking the remote).
+  const proc = Bun.spawn(["git", "switch", branchName], {
+    cwd: repoPath,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+
+  const errorOutput = await new Response(proc.stderr).text();
+  await proc.exited;
+
+  if (proc.exitCode !== 0) {
+    return { ok: false, error: errorOutput.trim() };
+  }
+  return { ok: true };
+}
+
 export async function createBranch(
   repoPath: string,
   branchName: string,

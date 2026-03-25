@@ -260,16 +260,16 @@ function GraphLine(props: Readonly<{
   const t = () => theme();
 
   // Effective text color for the commit subject (primary column).
-  // Active row uses primary color with bold. Inactive rows use foreground.
+  // Active row uses accent color with bold. Inactive rows use foreground.
   const effectiveTextColor = () => {
-    if (props.active) return t().primary;
+    if (props.active) return t().accent;
     return t().foreground;
   };
 
   // Secondary column color (author, date, hash).
-  // Active → primary (bold applied separately). Otherwise muted.
+  // Active → accent (bold applied separately). Otherwise muted.
   const secondaryColumnColor = () => {
-    if (props.active) return t().primary;
+    if (props.active) return t().accent;
     return t().foregroundMuted;
   };
 

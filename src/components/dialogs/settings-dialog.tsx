@@ -1,9 +1,11 @@
-import { createSignal, onMount, onCleanup, For, Show, createMemo } from "solid-js";
+import { createSignal, onMount, onCleanup, For, Show, createMemo, createEffect } from "solid-js";
 import { useKeyboard } from "@opentui/solid";
 import { useAppState, DEFAULT_AUTO_REFRESH_INTERVAL } from "../../context/state";
 import { useTheme, themes } from "../../context/theme";
 import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
-import { createBranch, getRecentBranches } from "../../git/repo";
+import { createBranch, switchBranch, getRecentBranches } from "../../git/repo";
+import { SHIFT_JUMP } from "../../constants";
+import type { ScrollBoxRenderable, Renderable } from "@opentui/core";
 
 export type OperationsTab = "repository" | "branch";
 
@@ -13,8 +15,6 @@ interface OperationsDialogProps {
   onOpenDialog?: (dialogId: string) => void;
   /** Which tab to show initially. */
   initialTab?: OperationsTab;
-  /** Called when the user switches branches via the Branch tab. */
-  onSwitchBranch?: (branch: string) => void;
 }
 
 const MAX_COUNT_OPTIONS = [10, 20, 50, 100, 200, 500];
@@ -56,8 +56,8 @@ type SettingItem =
   | { kind: "cycle"; label: string; hotkey?: string; options: string[]; get: () => string; set: (v: string) => void; needsReload?: boolean }
   | { kind: "dialog"; label: string; hotkey?: string; dialogId: string; get: () => string }
   | { kind: "action"; label: string; hotkey?: string; run: () => void }
-  | { kind: "branch"; name: string; isCurrent: boolean; run: () => void }
-  | { kind: "disabled"; label: string };
+  | { kind: "section"; label: string; count: number; collapsed: () => boolean; toggle: () => void }
+  | { kind: "branch"; name: string; isCurrent: boolean; run: () => void };
 
 export default function OperationsDialog(props: Readonly<OperationsDialogProps>) {
   const { state, actions } = useAppState();
@@ -142,11 +142,15 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
     }
   });
 
+  // ── Collapsed state for branch sections ───────────────────────────
+  const [recentCollapsed, setRecentCollapsed] = createSignal(false);
+  const [localCollapsed, setLocalCollapsed] = createSignal(false);
+  const [remoteCollapsed, setRemoteCollapsed] = createSignal(false);
+
   // ── Repository tab items ──────────────────────────────────────────
   const repoItems: SettingItem[] = [
     { kind: "header", label: "Info" },
     { kind: "info", label: "Origin", get: () => state.remoteUrl() || "(none)" },
-    { kind: "info", label: "Branch", get: () => state.currentBranch() || "(unknown)" },
     { kind: "path" },
 
     { kind: "header", label: "Preferences" },
@@ -184,13 +188,6 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
     { kind: "header", label: "Actions" },
     { kind: "action", label: "Reload data", run: () => props.onReload() },
 
-    { kind: "header", label: "Coming Soon" },
-    { kind: "disabled", label: "Fetch from remote" },
-    { kind: "disabled", label: "Pull" },
-    { kind: "disabled", label: "Push" },
-    { kind: "disabled", label: "Stash / Unstash" },
-    { kind: "disabled", label: "Cherry-pick" },
-    { kind: "disabled", label: "Revert commit" },
   ];
 
   // ── Branch tab items ──────────────────────────────────────────────
@@ -206,10 +203,14 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
     kind: "branch" as const,
     name: b.name,
     isCurrent: b.isCurrent,
-    run: () => {
-      if (!b.isCurrent) {
-        props.onSwitchBranch?.(b.name);
-        props.onClose();
+    run: async () => {
+      if (b.isCurrent) return;
+      const res = await switchBranch(state.repoPath(), b.name);
+      if (res.ok) {
+        showStatus(`Switched to '${b.name}'`, false);
+        props.onReload();
+      } else {
+        showStatus(res.error ?? "Failed to switch branch", true);
       }
     },
   });
@@ -222,52 +223,9 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
 
     const result: SettingItem[] = [];
 
-    // ── Recent section ────────────────────────────────────────────
-    // Show recently checked-out branches (from reflog), excluding current
-    const recentFiltered = recent.filter((name) => {
-      // Only include if the branch still exists as a local branch
-      return name !== currentBranch && locals.some((b) => b.name === name);
-    });
-    if (recentFiltered.length > 0) {
-      result.push({ kind: "header", label: "Recent" });
-      for (const name of recentFiltered) {
-        result.push(makeBranchItem({ name, isCurrent: false }));
-      }
-    }
-
-    // ── Local section ─────────────────────────────────────────────
-    result.push({ kind: "header", label: "Local" });
-    if (locals.length === 0) {
-      result.push({ kind: "info", label: "", get: () => "(no local branches)" });
-    } else {
-      // Current branch first, then alphabetical
-      const sorted = [...locals].sort((a, b) => {
-        if (a.isCurrent) return -1;
-        if (b.isCurrent) return 1;
-        return a.name.localeCompare(b.name);
-      });
-      for (const b of sorted) {
-        result.push(makeBranchItem(b));
-      }
-    }
-
-    // ── Remote section ────────────────────────────────────────────
-    if (remotes.length > 0) {
-      result.push({ kind: "header", label: "Remote" });
-      const sorted = [...remotes].sort((a, b) => a.name.localeCompare(b.name));
-      for (const b of sorted) {
-        result.push({
-          kind: "branch" as const,
-          name: b.name,
-          isCurrent: false,
-          run: () => {
-            // Checkout remote branch creates a local tracking branch
-            props.onSwitchBranch?.(b.name);
-            props.onClose();
-          },
-        });
-      }
-    }
+    // ── Info ──────────────────────────────────────────────────────
+    result.push({ kind: "header", label: "Info" });
+    result.push({ kind: "info", label: "Current", get: () => currentBranch || "(unknown)" });
 
     // ── Actions section ───────────────────────────────────────────
     result.push({ kind: "header", label: "Actions" });
@@ -293,10 +251,80 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
       },
     });
 
-    // ── Coming Soon ───────────────────────────────────────────────
-    result.push({ kind: "header", label: "Coming Soon" });
-    result.push({ kind: "disabled", label: "Rename branch" });
-    result.push({ kind: "disabled", label: "Merge branch" });
+    // ── Recent section (collapsible) ──────────────────────────────
+    const recentFiltered = recent.filter((name) => {
+      return name !== currentBranch && locals.some((b) => b.name === name);
+    });
+    if (recentFiltered.length > 0) {
+      result.push({
+        kind: "section",
+        label: "Recent",
+        count: recentFiltered.length,
+        collapsed: recentCollapsed,
+        toggle: () => setRecentCollapsed((v) => !v),
+      });
+      if (!recentCollapsed()) {
+        for (const name of recentFiltered) {
+          result.push(makeBranchItem({ name, isCurrent: false }));
+        }
+      }
+    }
+
+    // ── Local section (collapsible) ───────────────────────────────
+    result.push({
+      kind: "section",
+      label: "Local",
+      count: locals.length,
+      collapsed: localCollapsed,
+      toggle: () => setLocalCollapsed((v) => !v),
+    });
+    if (!localCollapsed()) {
+      if (locals.length === 0) {
+        result.push({ kind: "info", label: "", get: () => "(no local branches)" });
+      } else {
+        const sorted = [...locals].sort((a, b) => {
+          if (a.isCurrent) return -1;
+          if (b.isCurrent) return 1;
+          return a.name.localeCompare(b.name);
+        });
+        for (const b of sorted) {
+          result.push(makeBranchItem(b));
+        }
+      }
+    }
+
+    // ── Remote section (collapsible) ──────────────────────────────
+    if (remotes.length > 0) {
+      result.push({
+        kind: "section",
+        label: "Remote",
+        count: remotes.length,
+        collapsed: remoteCollapsed,
+        toggle: () => setRemoteCollapsed((v) => !v),
+      });
+      if (!remoteCollapsed()) {
+        const sorted = [...remotes].sort((a, b) => a.name.localeCompare(b.name));
+        for (const b of sorted) {
+          // Strip remote prefix (e.g. "origin/feat" → "feat") so git switch
+          // auto-creates a local tracking branch.
+          const localName = b.name.replace(/^[^/]+\//, "");
+          result.push({
+            kind: "branch" as const,
+            name: b.name,
+            isCurrent: false,
+            run: async () => {
+              const res = await switchBranch(state.repoPath(), localName);
+              if (res.ok) {
+                showStatus(`Switched to '${localName}' (tracking ${b.name})`, false);
+                props.onReload();
+              } else {
+                showStatus(res.error ?? "Failed to switch branch", true);
+              }
+            },
+          });
+        }
+      }
+    }
 
     return result;
   });
@@ -318,7 +346,7 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
   const selectableIndices = (): number[] =>
     activeItems()
       .map((item, i) =>
-        item.kind === "toggle" || item.kind === "cycle" || item.kind === "dialog" || item.kind === "action" || item.kind === "branch"
+        item.kind === "toggle" || item.kind === "cycle" || item.kind === "dialog" || item.kind === "action" || item.kind === "branch" || item.kind === "section"
           ? i
           : -1
       )
@@ -335,7 +363,7 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
   const activateItemAt = (itemIdx: number) => {
     const items = activeItems();
     const item = items[itemIdx];
-    if (!item || item.kind === "header" || item.kind === "info" || item.kind === "path" || item.kind === "disabled") return;
+    if (!item || item.kind === "header" || item.kind === "info" || item.kind === "path") return;
 
     if (item.kind === "toggle") {
       item.set(!item.get());
@@ -350,6 +378,8 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
       props.onOpenDialog?.(item.dialogId);
     } else if (item.kind === "action") {
       item.run();
+    } else if (item.kind === "section") {
+      item.toggle();
     } else if (item.kind === "branch") {
       item.run();
     }
@@ -367,6 +397,7 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
       case "cycle": return "cycle";
       case "dialog": return "open";
       case "action": return "confirm";
+      case "section": return item.collapsed() ? "expand" : "collapse";
       case "branch": return item.isCurrent ? "" : "switch";
       default: return "select";
     }
@@ -378,10 +409,10 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
 
     switch (e.name) {
       case "down":
-        moveCursor(1);
+        moveCursor(e.shift ? SHIFT_JUMP : 1);
         break;
       case "up":
-        moveCursor(-1);
+        moveCursor(e.shift ? -SHIFT_JUMP : -1);
         break;
       case "return":
         activateItem();
@@ -399,9 +430,40 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
     }
   });
 
+  // ── Scrollbox ref and auto-scroll into view ──────────────────────
+  let scrollboxRef: ScrollBoxRenderable | undefined;
+  const itemRefs: Renderable[] = [];
+
+  createEffect(() => {
+    const idx = selectedItemIndex();
+    const sb = scrollboxRef;
+    if (!sb || idx == null || idx < 0) return;
+
+    const el = itemRefs[idx];
+    if (!el) return;
+
+    const layout = el.getLayoutNode().getComputedLayout();
+    const rowTop = layout.top;
+    const rowHeight = layout.height;
+    const rowBottom = rowTop + rowHeight;
+
+    const viewportHeight = sb.viewport.height;
+    const currentScroll = sb.scrollTop;
+    const visibleTop = currentScroll;
+    const visibleBottom = currentScroll + viewportHeight;
+
+    const padding = 1;
+
+    if (rowTop < visibleTop + padding) {
+      sb.scrollTo(Math.max(0, rowTop - padding));
+    } else if (rowBottom > visibleBottom - padding) {
+      sb.scrollTo(rowBottom - viewportHeight + padding);
+    }
+  });
+
   // Format the value display for an item
   const valueDisplay = (item: SettingItem): string => {
-    if (item.kind === "header" || item.kind === "action" || item.kind === "disabled" || item.kind === "path" || item.kind === "branch") return "";
+    if (item.kind === "header" || item.kind === "action" || item.kind === "path" || item.kind === "branch" || item.kind === "section") return "";
     if (item.kind === "info") return item.get();
     if (item.kind === "toggle") return item.get() ? "on" : "off";
     return item.get();
@@ -419,43 +481,57 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
       >
       <DialogTitleBar title="Operations" />
 
-      {/* Tab bar */}
-      <box flexDirection="row" width="100%" paddingX={4}>
-        <text
-          flexShrink={0}
-          wrapMode="none"
-          fg={activeTab() === "repository" ? t().accent : t().foregroundMuted}
+      {/* Tab bar with top accent line per selected tab, muted bottom separator */}
+      <box flexDirection="row" width="100%" paddingX={4} flexShrink={0}>
+        {/* Repository tab */}
+        <box
+          flexGrow={1}
+          justifyContent="center"
+          flexDirection="row"
+          border={["top"]}
+          borderStyle="single"
+          borderColor={activeTab() === "repository" ? t().accent : t().border}
         >
-          <strong>
-            <span fg={activeTab() === "repository" ? t().accent : t().foregroundMuted}>
-              {"Repository"}
-            </span>
-          </strong>
-        </text>
-        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{"    "}</text>
-        <text
-          flexShrink={0}
-          wrapMode="none"
-          fg={activeTab() === "branch" ? t().accent : t().foregroundMuted}
+          <text flexShrink={0} wrapMode="none">
+            <strong>
+              <span fg={activeTab() === "repository" ? t().accent : t().foregroundMuted}>
+                {"Repository"}
+              </span>
+            </strong>
+          </text>
+        </box>
+        {/* Branch tab */}
+        <box
+          flexGrow={1}
+          justifyContent="center"
+          flexDirection="row"
+          border={["top"]}
+          borderStyle="single"
+          borderColor={activeTab() === "branch" ? t().accent : t().border}
         >
-          <strong>
-            <span fg={activeTab() === "branch" ? t().accent : t().foregroundMuted}>
-              {"Branch"}
-            </span>
-          </strong>
-        </text>
+          <text flexShrink={0} wrapMode="none">
+            <strong>
+              <span fg={activeTab() === "branch" ? t().accent : t().foregroundMuted}>
+                {"Branch"}
+              </span>
+            </strong>
+          </text>
+        </box>
       </box>
-      <box height={1} />
+      {/* Muted separator below tabs */}
+      <box width="100%" paddingX={4} flexShrink={0}>
+        <box flexGrow={1} border={["top"]} borderStyle="single" borderColor={t().border} />
+      </box>
 
       {/* Items list */}
-      <scrollbox flexGrow={1} scrollY scrollX={false} verticalScrollbarOptions={{ visible: false }}>
+      <scrollbox ref={scrollboxRef} flexGrow={1} flexShrink={1} minHeight={0} scrollY scrollX={false} verticalScrollbarOptions={{ visible: false }}>
         <box flexDirection="column">
         <For each={activeItems()}>
           {(item, itemIndex) => {
             // --- Header ---
             if (item.kind === "header") {
               return (
-                <box flexDirection="column" width="100%" paddingX={4}>
+                <box ref={(el: Renderable) => { itemRefs[itemIndex()] = el; }} flexDirection="column" width="100%" paddingX={4}>
                   {itemIndex() > 0 ? <box height={1} /> : null}
                   <text wrapMode="none" fg={t().accent}>
                     <strong><span fg={t().accent}>{item.label}</span></strong>
@@ -467,7 +543,7 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
             // --- Info (non-selectable, dimmed) ---
             if (item.kind === "info") {
               return (
-                <box flexDirection="row" width="100%" paddingX={4}>
+                <box ref={(el: Renderable) => { itemRefs[itemIndex()] = el; }} flexDirection="row" width="100%" paddingX={4}>
                   <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
                     {item.label.padEnd(INFO_LABEL_WIDTH)}
                   </text>
@@ -481,7 +557,7 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
             // --- Path banner (scrolling, dimmed) ---
             if (item.kind === "path") {
               return (
-                <box flexDirection="row" width="100%" paddingX={4}>
+                <box ref={(el: Renderable) => { itemRefs[itemIndex()] = el; }} flexDirection="row" width="100%" paddingX={4}>
                   <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
                     {"Path".padEnd(INFO_LABEL_WIDTH)}
                   </text>
@@ -492,15 +568,29 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
               );
             }
 
-            // --- Disabled (non-selectable, foregroundMuted) ---
-            if (item.kind === "disabled") {
+            // --- Collapsible section header (selectable) ---
+            if (item.kind === "section") {
+              const isSel = () => selectedItemIndex() === itemIndex();
+              const indicator = () => item.collapsed() ? "▸" : "▾";
               return (
-                <box flexDirection="row" width="100%" paddingX={4}>
-                  <text flexGrow={1} flexShrink={1} wrapMode="none" truncate>
-                    <span fg={t().foregroundMuted}>{item.label}</span>
-                  </text>
-                  <text flexShrink={0} wrapMode="none">{" ".padStart(22)}</text>
-                  <text flexShrink={0} wrapMode="none">{" ".padStart(9)}</text>
+                <box ref={(el: Renderable) => { itemRefs[itemIndex()] = el; }} flexDirection="column" width="100%" paddingX={4}>
+                  {itemIndex() > 0 ? <box height={1} /> : null}
+                  <box
+                    flexDirection="row"
+                    width="100%"
+                    backgroundColor={isSel() ? t().backgroundElement : undefined}
+                  >
+                    <text flexShrink={0} wrapMode="none" fg={t().accent}>
+                      <strong>
+                        <span fg={t().accent}>
+                          {`${indicator()} ${item.label}`}
+                        </span>
+                      </strong>
+                    </text>
+                    <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                      {` (${item.count})`}
+                    </text>
+                  </box>
                 </box>
               );
             }
@@ -510,9 +600,11 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
               const isSel = () => selectedItemIndex() === itemIndex();
               return (
                 <box
+                  ref={(el: Renderable) => { itemRefs[itemIndex()] = el; }}
                   flexDirection="row"
                   width="100%"
-                  paddingX={4}
+                  paddingLeft={6}
+                  paddingRight={4}
                   backgroundColor={isSel() ? t().backgroundElement : undefined}
                 >
                   <text flexGrow={1} flexShrink={1} wrapMode="none" truncate>
@@ -548,6 +640,7 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
 
             return (
               <box
+                ref={(el: Renderable) => { itemRefs[itemIndex()] = el; }}
                 flexDirection="row"
                 width="100%"
                 paddingX={4}
@@ -576,10 +669,13 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
         </box>
       </scrollbox>
 
+      {/* Spacer between scrollbox and footer area */}
+      <box height={1} flexShrink={0} />
+
       {/* Status message */}
       <Show when={statusMsg()}>
         {(msg) => (
-          <box flexDirection="row" width="100%" paddingX={4}>
+          <box flexDirection="row" width="100%" paddingX={4} flexShrink={0}>
             <text wrapMode="none" fg={msg().isError ? t().error : t().success}>
               {msg().text}
             </text>
@@ -588,14 +684,12 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
       </Show>
 
       {/* Context-aware footer */}
-      <box height={1} />
-      <box flexDirection="row" width="100%" paddingX={4}>
+      <box height={1} flexShrink={0} />
+      <box flexDirection="row" width="100%" paddingX={4} flexShrink={0}>
         <box flexGrow={1} />
         <text flexShrink={0} wrapMode="none" fg={t().foreground}>enter</text>
         <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{` ${footerVerb()}  `}</text>
-        <text flexShrink={0} wrapMode="none" fg={t().foreground}>←/→</text>
-        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" tab  "}</text>
-        <text flexShrink={0} wrapMode="none" fg={t().foreground}>↑/↓</text>
+        <text flexShrink={0} wrapMode="none" fg={t().foreground}>←/↑/→/↓</text>
         <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" navigate"}</text>
       </box>
       </box>

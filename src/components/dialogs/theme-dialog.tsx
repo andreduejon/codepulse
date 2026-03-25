@@ -2,6 +2,7 @@ import { createSignal, createEffect, For, onCleanup } from "solid-js";
 import { useKeyboard } from "@opentui/solid";
 import { useTheme, themeNames, themes } from "../../context/theme";
 import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
+import { SHIFT_JUMP } from "../../constants";
 
 export default function ThemeDialog(props: { onClose: () => void }) {
   const { theme, setTheme, themeName } = useTheme();
@@ -46,10 +47,10 @@ export default function ThemeDialog(props: { onClose: () => void }) {
 
     switch (e.name) {
       case "down":
-        moveCursor(1);
+        moveCursor(e.shift ? SHIFT_JUMP : 1);
         break;
       case "up":
-        moveCursor(-1);
+        moveCursor(e.shift ? -SHIFT_JUMP : -1);
         break;
       case "return":
         confirmTheme();

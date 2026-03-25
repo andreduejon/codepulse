@@ -338,9 +338,6 @@ function AppContent(props: AppProps) {
                   setDialog("theme");
                 }
               }}
-              onSwitchBranch={(branch) => {
-                loadData(branch);
-              }}
             />
           </Show>
           <Show when={dialog() === "help"}>
