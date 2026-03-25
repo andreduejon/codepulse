@@ -8,7 +8,28 @@ import type { Commit, FileChange } from "../git/types";
 type InteractiveItem =
   | { type: "section-header"; section: "children" | "parents" | "files" }
   | { type: "child"; hash: string; index: number }
-  | { type: "parent"; hash: string; index: number };
+  | { type: "parent"; hash: string; index: number }
+  | { type: "file-dir"; dirPath: string; index: number }
+  | { type: "file"; filePath: string; index: number };
+
+/** Tree node for building the file tree structure */
+interface FileTreeNode {
+  name: string;          // segment name (directory name or file basename)
+  fullPath: string;      // full path for identification
+  file?: FileChange;     // present only for file nodes (leaves)
+  children: FileTreeNode[];
+}
+
+/** A flattened row from the file tree, ready for rendering */
+interface FileTreeRow {
+  prefix: string;        // connector prefix chars (│, spaces from ancestors)
+  connector: string;     // this row's connector (├── or └──)
+  name: string;          // display name
+  isDir: boolean;        // true = directory, false = file
+  dirPath: string;       // for dirs: the full path; for files: parent dir path
+  file?: FileChange;     // present only for file rows
+  depth: number;         // nesting depth (0 = root children)
+}
 
 /** Colored badge for branch/tag labels in the detail view */
 function DetailBadge(props: Readonly<{
@@ -33,34 +54,6 @@ function DetailBadge(props: Readonly<{
     <text bg={bgColor()} fg={fgColor()} wrapMode="none">
       {` ${props.name} `}
     </text>
-  );
-}
-
-function FileLine(props: Readonly<{ file: FileChange; addColWidth: number; delColWidth: number }>) {
-  const { theme } = useTheme();
-  const t = () => theme();
-
-  const addStr = () => ("+" + props.file.additions).padStart(props.addColWidth);
-  const delStr = () => ("-" + props.file.deletions).padStart(props.delColWidth);
-
-  return (
-    <box flexDirection="row" width="100%" paddingLeft={2}>
-      <box flexGrow={1}>
-        <text fg={t().foreground} wrapMode="none" truncate>
-          {props.file.path}
-        </text>
-      </box>
-      <box flexShrink={0} paddingLeft={2}>
-        <text fg={t().diffAdded} wrapMode="none">
-          {addStr()}
-        </text>
-      </box>
-      <box flexShrink={0} paddingLeft={1}>
-        <text fg={t().diffRemoved} wrapMode="none">
-          {delStr()}
-        </text>
-      </box>
-    </box>
   );
 }
 
@@ -152,6 +145,17 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     const d = detail();
     if (d && d.files.length > 0) {
       items.push({ type: "section-header", section: "files" });
+      if (filesExpanded()) {
+        const rows = fileTreeRows();
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i];
+          if (row.isDir) {
+            items.push({ type: "file-dir", dirPath: row.dirPath, index: i });
+          } else {
+            items.push({ type: "file", filePath: row.file!.path, index: i });
+          }
+        }
+      }
     }
 
     return items;
@@ -213,6 +217,12 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
       case "child":
       case "parent":
         if (props.onJumpToCommit) props.onJumpToCommit(item.hash, item.type);
+        break;
+      case "file-dir":
+        toggleDir(item.dirPath);
+        break;
+      case "file":
+        // No action for files — just highlight
         break;
     }
   };
@@ -284,6 +294,116 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     };
   });
 
+  // Build file tree from flat file paths
+  const fileTree = createMemo((): FileTreeNode => {
+    const d = detail();
+    const root: FileTreeNode = { name: "/", fullPath: "/", children: [] };
+    if (!d) return root;
+
+    for (const file of d.files) {
+      const parts = file.path.split("/");
+      let node = root;
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+        const isFile = i === parts.length - 1;
+        const fullPath = parts.slice(0, i + 1).join("/") + (isFile ? "" : "/");
+        if (isFile) {
+          node.children.push({ name: part, fullPath: file.path, file, children: [] });
+        } else {
+          let child = node.children.find((c) => !c.file && c.name === part);
+          if (!child) {
+            child = { name: part, fullPath, children: [] };
+            node.children.push(child);
+          }
+          node = child;
+        }
+      }
+    }
+
+    // Sort: directories first (alphabetical), then files (alphabetical)
+    const sortNode = (n: FileTreeNode) => {
+      n.children.sort((a, b) => {
+        const aIsDir = !a.file;
+        const bIsDir = !b.file;
+        if (aIsDir !== bIsDir) return aIsDir ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+      for (const child of n.children) {
+        if (!child.file) sortNode(child);
+      }
+    };
+    sortNode(root);
+
+    // Compact single-child directory chains (e.g. src/ → components/ → dialogs/ becomes src/components/dialogs/)
+    const compact = (n: FileTreeNode) => {
+      for (let i = 0; i < n.children.length; i++) {
+        const child = n.children[i];
+        if (child.file) continue;
+        while (child.children.length === 1 && !child.children[0].file) {
+          const grandchild = child.children[0];
+          child.name = child.name + "/" + grandchild.name;
+          child.fullPath = grandchild.fullPath;
+          child.children = grandchild.children;
+        }
+        compact(child);
+      }
+    };
+    compact(root);
+
+    return root;
+  });
+
+  // Collapsed directory paths (tracked by fullPath)
+  const [collapsedDirs, setCollapsedDirs] = createSignal(new Set<string>());
+
+  // Reset collapsed dirs when commit changes
+  createEffect(() => {
+    commit();
+    setCollapsedDirs(new Set<string>());
+  });
+
+  /** Toggle a directory's collapsed state */
+  const toggleDir = (dirPath: string) => {
+    const next = new Set(collapsedDirs());
+    if (next.has(dirPath)) next.delete(dirPath);
+    else next.add(dirPath);
+    setCollapsedDirs(next);
+  };
+
+  // Flatten tree into renderable rows with connector prefixes
+  const fileTreeRows = createMemo((): FileTreeRow[] => {
+    const rows: FileTreeRow[] = [];
+    const collapsed = collapsedDirs();
+
+    const walk = (node: FileTreeNode, prefix: string, depth: number) => {
+      const visibleChildren = node.children;
+      for (let i = 0; i < visibleChildren.length; i++) {
+        const child = visibleChildren[i];
+        const isLast = i === visibleChildren.length - 1;
+        const connector = isLast ? "└─ " : "├─ ";
+        const isDir = !child.file;
+
+        rows.push({
+          prefix,
+          connector,
+          name: isDir ? child.name + "/" : child.name,
+          isDir,
+          dirPath: isDir ? child.fullPath : node.fullPath,
+          file: child.file,
+          depth,
+        });
+
+        if (isDir && !collapsed.has(child.fullPath)) {
+          const childPrefix = prefix + (isLast ? "   " : "│  ");
+          walk(child, childPrefix, depth + 1);
+        }
+      }
+    };
+
+    walk(fileTree(), "", 0);
+    return rows;
+  });
+
   // Highlight color for the cursor'd interactive item
   const highlightBgFocused = () => t().backgroundElementActive;
 
@@ -307,6 +427,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
       if (item.type === type) {
         if (type === "section-header" && item.type === "section-header" && item.section === section) return i;
         if ((type === "child" || type === "parent") && (item.type === "child" || item.type === "parent") && item.index === idx) return i;
+        if ((type === "file-dir" || type === "file") && (item.type === "file-dir" || item.type === "file") && item.index === idx) return i;
       }
     }
     return -1;
@@ -607,14 +728,57 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   </box>
                 </box>
                 <box height={1} />
-                <For each={detail()!.files}>
-                  {(file) => (
-                    <FileLine
-                      file={file}
-                      addColWidth={fileWidths().addColWidth}
-                      delColWidth={fileWidths().delColWidth}
-                    />
-                  )}
+                <For each={fileTreeRows()}>
+                  {(treeRow, i) => {
+                    const itemIdx = () => findItemIndex(treeRow.isDir ? "file-dir" : "file", undefined, i());
+                    const cursored = () => isCursored(itemIdx());
+                    const collapsed = () => treeRow.isDir && collapsedDirs().has(treeRow.dirPath);
+
+                    return (
+                      <box
+                        flexDirection="row"
+                        width="100%"
+                        paddingLeft={2}
+                        backgroundColor={itemHighlightBg(itemIdx())}
+                      >
+                        <box flexShrink={0}>
+                          <text fg={t().foregroundMuted} wrapMode="none">
+                            {treeRow.prefix}{treeRow.connector}
+                          </text>
+                        </box>
+                        <Show when={treeRow.isDir}>
+                          <box flexShrink={0}>
+                            <text fg={cursored() ? t().accent : t().foregroundMuted} wrapMode="none">
+                              {collapsed() ? "▸ " : "▾ "}
+                            </text>
+                          </box>
+                        </Show>
+                        <box flexGrow={1}>
+                          <text
+                            fg={treeRow.isDir
+                              ? (cursored() ? t().accent : t().foregroundMuted)
+                              : (cursored() ? t().accent : t().foreground)}
+                            wrapMode="none"
+                            truncate
+                          >
+                            {treeRow.name}
+                          </text>
+                        </box>
+                        <Show when={treeRow.file}>
+                          <box flexShrink={0} paddingLeft={2}>
+                            <text fg={t().diffAdded} wrapMode="none">
+                              {("+" + treeRow.file!.additions).padStart(fileWidths().addColWidth)}
+                            </text>
+                          </box>
+                          <box flexShrink={0} paddingLeft={1}>
+                            <text fg={t().diffRemoved} wrapMode="none">
+                              {("-" + treeRow.file!.deletions).padStart(fileWidths().delColWidth)}
+                            </text>
+                          </box>
+                        </Show>
+                      </box>
+                    );
+                  }}
                 </For>
               </Show>
             </Show>
