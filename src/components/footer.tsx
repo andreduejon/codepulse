@@ -40,7 +40,7 @@ export default function Footer() {
     if (pulseTimer) clearInterval(pulseTimer);
   });
 
-  const pulseText = () => PULSE_CHARS[frame()].repeat(PULSE_BLOCK_COUNT);
+  const pulseText = () => Array.from({ length: PULSE_BLOCK_COUNT }, () => PULSE_CHARS[frame()]).join(" ");
 
   return (
     <box
