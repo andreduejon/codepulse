@@ -12,7 +12,6 @@ import Footer from "./components/footer";
 import HelpDialog from "./components/dialogs/help-dialog";
 import ThemeDialog from "./components/dialogs/theme-dialog";
 import MenuDialog from "./components/dialogs/menu-dialog";
-import type { MenuTab } from "./components/dialogs/menu-dialog";
 import packageJson from "../package.json";
 import { DEFAULT_MAX_COUNT } from "./constants";
 import { useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
@@ -32,8 +31,6 @@ function AppContent(props: AppProps) {
 
   const [dialog, setDialog] = createSignal<"menu" | "help" | "theme" | null>(null);
   const [searchFocused, setSearchFocused] = createSignal(false);
-  const [menuTab, setMenuTab] = createSignal<MenuTab>("repository");
-
   // Ref for programmatic scrolling of the detail panel
   let detailScrollboxRef: ScrollBoxRenderable | undefined;
 
@@ -225,8 +222,6 @@ function AppContent(props: AppProps) {
     actions,
     dialog,
     setDialog,
-    menuTab,
-    setMenuTab,
     searchFocused,
     setSearchFocused,
     getDetailScrollboxRef: () => detailScrollboxRef,
@@ -372,7 +367,6 @@ function AppContent(props: AppProps) {
           {/* Dialogs */}
           <Show when={dialog() === "menu"}>
             <MenuDialog
-              initialTab={menuTab()}
               onClose={() => setDialog(null)}
               onReload={() => loadData()}
               onFetch={handleFetch}

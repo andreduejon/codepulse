@@ -6,7 +6,7 @@ import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 import { SHIFT_JUMP } from "../../constants";
 import type { ScrollBoxRenderable, Renderable } from "@opentui/core";
 
-export type MenuTab = "repository" | "branch";
+type MenuTab = "repository" | "branch";
 
 interface MenuDialogProps {
   onClose: () => void;
@@ -15,8 +15,6 @@ interface MenuDialogProps {
   onOpenDialog?: (dialogId: string) => void;
   /** View graph from a specific branch's perspective. null clears the filter. */
   onViewBranch: (branch: string | null) => void;
-  /** Which tab to show initially. */
-  initialTab?: MenuTab;
 }
 
 const MAX_COUNT_OPTIONS = [10, 20, 50, 100, 200, 500];
@@ -67,7 +65,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   const t = () => theme();
 
   // ── Tab state ─────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = createSignal<MenuTab>(props.initialTab ?? "repository");
+  const [activeTab, setActiveTab] = createSignal<MenuTab>("repository");
 
   // ── Scrolling banner for Path (Repository tab) ────────────────────
   const [pathOffset, setPathOffset] = createSignal(0);
@@ -167,7 +165,6 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     {
       kind: "toggle",
       label: "Show all branches",
-      hotkey: "a",
       get: () => state.showAllBranches(),
       set: (v) => actions.setShowAllBranches(v),
       needsReload: true,
@@ -352,34 +349,22 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
 
     switch (e.name) {
       case "down":
-      case "j":
         moveCursor(e.shift ? SHIFT_JUMP : 1);
         break;
       case "up":
-      case "k":
         moveCursor(e.shift ? -SHIFT_JUMP : -1);
         break;
       case "return":
         activateItem();
         break;
       case "left":
-      case "h":
         if (activeTab() !== "repository") {
           setActiveTab("repository");
         }
         break;
       case "right":
-      case "l":
         if (activeTab() !== "branch") {
           setActiveTab("branch");
-        }
-        break;
-      case "tab":
-        // Tab switches between tabs
-        if (e.shift) {
-          if (activeTab() !== "repository") setActiveTab("repository");
-        } else {
-          if (activeTab() !== "branch") setActiveTab("branch");
         }
         break;
     }
@@ -638,7 +623,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
         <box flexGrow={1} />
         <text flexShrink={0} wrapMode="none" fg={t().foreground}>enter</text>
         <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{` ${footerVerb()}  `}</text>
-        <text flexShrink={0} wrapMode="none" fg={t().foreground}>tab</text>
+        <text flexShrink={0} wrapMode="none" fg={t().foreground}>←/→</text>
         <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" switch tab  "}</text>
         <text flexShrink={0} wrapMode="none" fg={t().foreground}>↑/↓</text>
         <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" navigate"}</text>

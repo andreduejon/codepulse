@@ -14,13 +14,13 @@ export default function Footer() {
       <box flexGrow={1} />
 
       {/* Keyboard hints — right-aligned, separate <text> per color segment */}
-      <text flexShrink={0} wrapMode="none" fg={t().foreground}>←/↑/→/↓</text>
+      <text flexShrink={0} wrapMode="none" fg={t().foreground}>↑/↓</text>
       <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" navigate  "}</text>
       <text flexShrink={0} wrapMode="none" fg={t().foreground}>/</text>
       <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" search  "}</text>
       <text flexShrink={0} wrapMode="none" fg={t().foreground}>f</text>
       <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" fetch  "}</text>
-      <text flexShrink={0} wrapMode="none" fg={t().foreground}>ctrl+r</text>
+      <text flexShrink={0} wrapMode="none" fg={t().foreground}>m</text>
       <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" menu  "}</text>
       <text flexShrink={0} wrapMode="none" fg={t().foreground}>?</text>
       <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" help  "}</text>

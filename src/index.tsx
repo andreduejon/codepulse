@@ -97,22 +97,20 @@ OPTIONS:
   -v, --version          Show version
 
 KEYBOARD SHORTCUTS:
-  j/k or Up/Down         Navigate commits
-  Shift+j/k              Jump 10 entries
-  l/h or Right/Left      Focus/unfocus detail panel
-  Tab                    Switch between graph and detail panel
-  g/G                    First/last commit
+  ↑/↓                    Navigate list
+  Shift+↑/↓              Jump 10 entries
+  PgUp/PgDn              Jump 20 entries
+  g/G                    First / last commit
+  Enter                  Focus detail / activate
+  →/←                    Focus detail / return to graph
+  Esc                    Back (cascade)
+  q                      Back, or quit
   /                      Search commits
-  a                      Toggle all branches
   f                      Fetch from remote
-  R (Shift+r)            Reload data
-  ctrl+r                 Open menu
-  ctrl+b                 Open branch navigator
-  ctrl+t                 Change theme
+  R                      Reload data
+  m                      Menu
+  Ctrl+T                 Change theme
   ?                      Show help
-  q                      Close current view / quit
-  Esc                    Close current view
-  ctrl+q                 Quit immediately
 `);
 }
 

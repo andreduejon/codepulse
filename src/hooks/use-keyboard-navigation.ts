@@ -5,8 +5,6 @@ import type { AppState, AppActions } from "../context/state";
 import type { DetailNavRef } from "../components/detail";
 import { SHIFT_JUMP, PAGE_JUMP } from "../constants";
 
-import type { MenuTab } from "../components/dialogs/menu-dialog";
-
 type DialogId = "menu" | "help" | "theme" | null;
 
 interface KeyboardNavigationOptions {
@@ -14,8 +12,6 @@ interface KeyboardNavigationOptions {
   actions: AppActions;
   dialog: Accessor<DialogId>;
   setDialog: (d: DialogId) => void;
-  menuTab: Accessor<MenuTab>;
-  setMenuTab: (tab: MenuTab) => void;
   searchFocused: Accessor<boolean>;
   setSearchFocused: (v: boolean) => void;
   /** Returns the current scrollbox ref (may be undefined before mount). */
@@ -30,15 +26,13 @@ interface KeyboardNavigationOptions {
 /**
  * Global keyboard handler for the main app.
  *
- * Handles: dialog toggles (Ctrl+R, Ctrl+B, Ctrl+T, ?), escape,
- * detail panel navigation, graph list navigation, search focus, and
- * branch/menu dialog shortcuts.
+ * Handles: dialog toggles (m, Ctrl+T, ?), escape/q cascade,
+ * detail panel navigation, graph list navigation, and search focus.
  */
 export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
   const {
     state, actions,
     dialog, setDialog,
-    menuTab, setMenuTab,
     searchFocused, setSearchFocused,
     getDetailScrollboxRef, detailNavRef,
     loadData, handleFetch,
@@ -49,38 +43,6 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
   useKeyboard((e) => {
     if (e.eventType === "release") return;
 
-    // Ctrl+R opens menu dialog on Repository tab
-    if (e.ctrl && e.name === "r") {
-      setSearchFocused(false);
-      actions.setDetailFocused(false);
-      if (dialog() === "menu" && menuTab() === "repository") {
-        setDialog(null);
-      } else {
-        setMenuTab("repository");
-        setDialog("menu");
-      }
-      return;
-    }
-
-    // Ctrl+B opens menu dialog on Branch tab
-    if (e.ctrl && e.name === "b") {
-      setSearchFocused(false);
-      actions.setDetailFocused(false);
-      if (dialog() === "menu" && menuTab() === "branch") {
-        setDialog(null);
-      } else {
-        setMenuTab("branch");
-        setDialog("menu");
-      }
-      return;
-    }
-
-    // Ctrl+Q quits the application
-    if (e.ctrl && e.name === "q") {
-      renderer.destroy();
-      process.exit(0);
-    }
-
     // Ctrl+T opens theme dialog regardless of dialog/search state
     if (e.ctrl && e.name === "t") {
       setSearchFocused(false);
@@ -89,7 +51,15 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
       return;
     }
 
-    // ? opens help (but not when typing in search)
+    // m toggles menu (not when typing in search)
+    if (e.name === "m" && !searchFocused()) {
+      setSearchFocused(false);
+      actions.setDetailFocused(false);
+      setDialog(dialog() === "menu" ? null : "menu");
+      return;
+    }
+
+    // ? opens help (not when typing in search)
     if (e.name === "?" && !searchFocused()) {
       setSearchFocused(false);
       actions.setDetailFocused(false);
@@ -154,7 +124,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     // If search input is focused, let the input handle all other keys
     if (searchFocused()) return;
 
-    // If a dialog is open, only handle Escape (handled above)
+    // If a dialog is open, only handle Escape/q/m/? (handled above)
     if (dialog()) return;
 
     // Detail panel focused: up/down navigate interactive items, enter activates
@@ -162,18 +132,15 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
       const scrollbox = getDetailScrollboxRef();
       switch (e.name) {
         case "left":
-        case "h":
           e.preventDefault();
           actions.setDetailFocused(false);
           return;
         case "up":
-        case "k":
           e.preventDefault();
           actions.moveDetailCursor(e.shift ? -SHIFT_JUMP : -1, detailNavRef.itemCount);
           scrollbox?.scrollBy(-1, "absolute");
           return;
         case "down":
-        case "j":
           e.preventDefault();
           actions.moveDetailCursor(e.shift ? SHIFT_JUMP : 1, detailNavRef.itemCount);
           scrollbox?.scrollBy(1, "absolute");
@@ -190,10 +157,6 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
           e.preventDefault();
           scrollbox?.scrollBy(0.5, "viewport");
           return;
-        case "tab":
-          e.preventDefault();
-          actions.setDetailFocused(false);
-          return;
       }
       return; // swallow all other keys when detail is focused
     }
@@ -202,13 +165,11 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
 
     switch (e.name) {
       case "down":
-      case "j":
         e.preventDefault();
         actions.moveCursor(e.shift ? SHIFT_JUMP : 1);
         scrollbox?.scrollTo(0);
         break;
       case "up":
-      case "k":
         e.preventDefault();
         actions.moveCursor(e.shift ? -SHIFT_JUMP : -1);
         scrollbox?.scrollTo(0);
@@ -223,7 +184,6 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         scrollbox?.scrollTo(0);
         break;
       case "right":
-      case "l":
         e.preventDefault();
         if (state.selectedCommit()) {
           actions.setDetailOriginHash(null);
@@ -232,7 +192,6 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         }
         break;
       case "left":
-      case "h":
         e.preventDefault();
         // Re-center scroll on current cursor position
         actions.setScrollTargetIndex(state.cursorIndex());
@@ -260,32 +219,19 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         scrollbox?.scrollTo(0);
         break;
       case "/":
+        e.preventDefault();
         actions.setDetailFocused(false);
         setSearchFocused(true);
         break;
       case "r":
-        // Shift+R = Reload (without Ctrl — Ctrl+R opens menu)
+        // Shift+R = Reload
         if (e.shift && !e.ctrl) {
           const stickyHash = state.selectedCommit()?.hash;
           loadData(undefined, stickyHash);
         }
         break;
-      case "a": {
-        const newAll = !state.showAllBranches();
-        actions.setShowAllBranches(newAll);
-        loadData(newAll ? undefined : state.currentBranch());
-        break;
-      }
       case "f":
         handleFetch();
-        break;
-      case "tab":
-        e.preventDefault();
-        if (state.selectedCommit()) {
-          actions.setDetailOriginHash(null);
-          actions.setDetailCursorIndex(0);
-          actions.setDetailFocused(true);
-        }
         break;
     }
   });
