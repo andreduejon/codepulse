@@ -2,10 +2,9 @@ import { createSignal, createEffect, onCleanup, Show } from "solid-js";
 import { useTheme } from "../context/theme";
 import { useAppState } from "../context/state";
 
-/** Block fill characters for the breathing pulse animation (▉ = 7/8 block, leaves a thin gap). */
-const PULSE_CHARS = ["\u2591", "\u2592", "\u2593", "\u2589", "\u2589", "\u2593", "\u2592", "\u2591", "\u2591", "\u2591"];
-const PULSE_FRAME_MS = 100;
-const PULSE_BLOCK_COUNT = 6;
+/** Full braille rotation spinner — 8 frames, smooth circular motion. */
+const SPINNER_FRAMES = ["\u28FE", "\u28FD", "\u28FB", "\u28BF", "\u287F", "\u283F", "\u28EF", "\u28F7"];
+const SPINNER_FRAME_MS = 80;
 
 export default function Footer() {
   const { theme } = useTheme();
@@ -14,33 +13,31 @@ export default function Footer() {
 
   const isLoading = () => state.loading() || state.fetching() || state.detailLoading();
 
-  // Animation frame counter (0..PULSE_CHARS.length-1), cycles while loading
+  // Animation frame counter, cycles while loading
   const [frame, setFrame] = createSignal(0);
-  let pulseTimer: ReturnType<typeof setInterval> | null = null;
+  let spinnerTimer: ReturnType<typeof setInterval> | null = null;
 
   createEffect(() => {
     if (isLoading()) {
-      // Reset to start of cycle and begin ticking
       setFrame(0);
-      if (!pulseTimer) {
-        pulseTimer = setInterval(() => {
-          setFrame((f) => (f + 1) % PULSE_CHARS.length);
-        }, PULSE_FRAME_MS);
+      if (!spinnerTimer) {
+        spinnerTimer = setInterval(() => {
+          setFrame((f) => (f + 1) % SPINNER_FRAMES.length);
+        }, SPINNER_FRAME_MS);
       }
     } else {
-      // Stop the animation
-      if (pulseTimer) {
-        clearInterval(pulseTimer);
-        pulseTimer = null;
+      if (spinnerTimer) {
+        clearInterval(spinnerTimer);
+        spinnerTimer = null;
       }
     }
   });
 
   onCleanup(() => {
-    if (pulseTimer) clearInterval(pulseTimer);
+    if (spinnerTimer) clearInterval(spinnerTimer);
   });
 
-  const pulseText = () => PULSE_CHARS[frame()].repeat(PULSE_BLOCK_COUNT);
+  const spinnerChar = () => SPINNER_FRAMES[frame()];
 
   return (
     <box
@@ -51,7 +48,7 @@ export default function Footer() {
       {/* Loading indicator — left-aligned, visible only while loading */}
       <Show when={isLoading()}>
         <text flexShrink={0} wrapMode="none" fg={t().accent}>
-          {pulseText()}
+          {spinnerChar()}
         </text>
         <text flexShrink={0} wrapMode="none">{" "}</text>
       </Show>
