@@ -28,6 +28,8 @@ export interface AppState {
   scrollTargetIndex: Accessor<number>;
   maxCount: Accessor<number>;
   autoRefreshInterval: Accessor<number>;
+  lastFetchTime: Accessor<Date | null>;
+  fetching: Accessor<boolean>;
 }
 
 export interface AppActions {
@@ -53,6 +55,8 @@ export interface AppActions {
   setMaxGraphColumns: (cols: number) => void;
   setMaxCount: (n: number) => void;
   setAutoRefreshInterval: (ms: number) => void;
+  setLastFetchTime: (time: Date | null) => void;
+  setFetching: (fetching: boolean) => void;
 }
 
 const AppStateContext = createContext<{ state: AppState; actions: AppActions }>();
@@ -78,6 +82,8 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
   const [detailFocused, setDetailFocused] = createSignal(false);
   const [detailCursorIndex, setDetailCursorIndex] = createSignal(-1);
   const [detailOriginHash, setDetailOriginHash] = createSignal<string | null>(null);
+  const [lastFetchTime, setLastFetchTime] = createSignal<Date | null>(null);
+  const [fetching, setFetching] = createSignal(false);
 
   const filteredRows = createMemo(() => {
     const query = searchQuery().toLowerCase();
@@ -143,6 +149,8 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
     detailCursorIndex,
     detailOriginHash,
     scrollTargetIndex,
+    lastFetchTime,
+    fetching,
   };
 
   const actions: AppActions = {
@@ -168,6 +176,8 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
     setMaxGraphColumns,
     setMaxCount,
     setAutoRefreshInterval,
+    setLastFetchTime,
+    setFetching,
   };
 
   return { state, actions, AppStateContext };
