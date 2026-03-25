@@ -6,20 +6,22 @@ export default function HelpDialog(props: { onClose: () => void }) {
   const t = () => theme();
 
   const keybinds = [
-    ["↓ / ↑", "Move selection down / up"],
+    ["↓/↑ or j/k", "Move selection down / up"],
     ["Shift+↓/↑", "Jump 10 entries down / up"],
-    ["→", "Focus detail panel"],
-    ["←", "Return to commit list / recenter"],
+    ["→/l or Tab", "Focus detail panel"],
+    ["←/h", "Return to commit list / recenter"],
     ["g", "Go to first commit"],
     ["G", "Go to last commit"],
     ["/", "Search commits"],
-    ["esc", "Clear search / close dialog"],
+    ["esc", "Clear search / close dialog / go back"],
     ["a", "Toggle all branches"],
-    ["b", "Open branch operations"],
-    ["ctrl+r", "Repository operations"],
-    ["ctrl+b", "Branch operations"],
+    ["f", "Fetch from remote"],
+    ["R", "Reload data"],
+    ["ctrl+r", "Open menu (repository)"],
+    ["ctrl+b", "Open menu (branch)"],
     ["ctrl+t", "Change theme"],
     ["?", "Show this help"],
+    ["q", "Quit (or close dialog)"],
     ["ctrl+q", "Quit"],
   ];
 
