@@ -11,6 +11,7 @@ export type OperationsTab = "repository" | "branch";
 interface OperationsDialogProps {
   onClose: () => void;
   onReload: () => void;
+  onFetch: () => void;
   onOpenDialog?: (dialogId: string) => void;
   /** Which tab to show initially. */
   initialTab?: OperationsTab;
@@ -126,6 +127,20 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
   const [remoteCollapsed, setRemoteCollapsed] = createSignal(false);
 
   // ── Repository tab items ──────────────────────────────────────────
+  const lastFetchLabel = (): string => {
+    if (state.fetching()) return "fetching...";
+    const time = state.lastFetchTime();
+    if (!time) return "never";
+    const secs = Math.round((Date.now() - time.getTime()) / 1000);
+    if (secs < 60) return `${secs}s ago`;
+    const mins = Math.round(secs / 60);
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.round(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.round(hours / 24);
+    return `${days}d ago`;
+  };
+
   const repoItems: SettingItem[] = [
     { kind: "header", label: "Info" },
     { kind: "info", label: "Origin", get: () => state.remoteUrl() || "(none)" },
@@ -164,6 +179,8 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
     },
 
     { kind: "header", label: "Actions" },
+    { kind: "action", label: "Fetch remote", hotkey: "f", run: () => props.onFetch() },
+    { kind: "info", label: "Last fetch", get: lastFetchLabel },
     { kind: "action", label: "Reload data", run: () => props.onReload() },
 
   ];
@@ -541,7 +558,7 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
               return v.padStart(22);
             };
             const paddedHotkey = () => {
-              const h = (item.kind === "toggle" || item.kind === "cycle" || item.kind === "dialog")
+              const h = (item.kind === "toggle" || item.kind === "cycle" || item.kind === "dialog" || item.kind === "action")
                 ? (item.hotkey ?? "")
                 : "";
               return h.padStart(9);

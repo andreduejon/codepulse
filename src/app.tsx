@@ -357,6 +357,7 @@ function AppContent(props: AppProps) {
               initialTab={operationsTab()}
               onClose={() => setDialog(null)}
               onReload={() => loadData()}
+              onFetch={handleFetch}
               onOpenDialog={(dialogId) => {
                 if (dialogId === "theme") {
                   setDialog("theme");
