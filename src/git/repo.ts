@@ -4,6 +4,26 @@ import { DEFAULT_MAX_COUNT } from "../constants";
 const GIT_LOG_FORMAT = "%H|%h|%P|%D|%s|%an|%ae|%aI|%cn|%ce|%cI";
 const FIELD_SEPARATOR = "|";
 
+/** Shared helper to run a git command and capture its output. */
+async function runGit(
+  repoPath: string,
+  args: string[]
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  const proc = Bun.spawn(["git", ...args], {
+    cwd: repoPath,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+
+  const [stdout, stderr] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+  ]);
+  await proc.exited;
+
+  return { stdout, stderr, exitCode: proc.exitCode ?? 1 };
+}
+
 function parseRefs(refString: string): RefInfo[] {
   if (!refString.trim()) return [];
   return refString.split(",").map((ref) => {
@@ -74,7 +94,6 @@ export async function getCommits(
   } = {}
 ): Promise<Commit[]> {
   const args = [
-    "git",
     "log",
     "--topo-order",
     `--format=${GIT_LOG_FORMAT}`,
@@ -87,22 +106,14 @@ export async function getCommits(
     args.push(options.branch);
   }
 
-  const proc = Bun.spawn(args, {
-    cwd: repoPath,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+  const { stdout, stderr, exitCode } = await runGit(repoPath, args);
 
-  const output = await new Response(proc.stdout).text();
-  const errorOutput = await new Response(proc.stderr).text();
-  await proc.exited;
-
-  if (proc.exitCode !== 0) {
-    throw new Error(`git log failed: ${errorOutput}`);
+  if (exitCode !== 0) {
+    throw new Error(`git log failed: ${stderr}`);
   }
 
   const commits: Commit[] = [];
-  for (const line of output.trim().split("\n")) {
+  for (const line of stdout.trim().split("\n")) {
     if (!line.trim()) continue;
     const commit = parseCommitLine(line);
     if (commit) commits.push(commit);
@@ -112,21 +123,13 @@ export async function getCommits(
 }
 
 export async function getBranches(repoPath: string): Promise<Branch[]> {
-  const proc = Bun.spawn(
-    ["git", "branch", "-a", "--format=%(HEAD)|%(refname:short)|%(objectname:short)"],
-    {
-      cwd: repoPath,
-      stdout: "pipe",
-      stderr: "pipe",
-    }
-  );
+  const { stdout, exitCode } = await runGit(repoPath, [
+    "branch", "-a", "--format=%(HEAD)|%(refname:short)|%(objectname:short)",
+  ]);
 
-  const output = await new Response(proc.stdout).text();
-  await proc.exited;
+  if (exitCode !== 0) return [];
 
-  if (proc.exitCode !== 0) return [];
-
-  return output
+  return stdout
     .trim()
     .split("\n")
     .filter((l) => l.trim())
@@ -147,20 +150,25 @@ export async function getCommitDetail(
   existingCommit?: Commit
 ): Promise<CommitDetail | null> {
   // Get full commit message
-  const msgProc = Bun.spawn(
-    ["git", "log", "-1", "--format=%B", hash],
-    { cwd: repoPath, stdout: "pipe", stderr: "pipe" }
-  );
-  const fullMessage = await new Response(msgProc.stdout).text();
-  await msgProc.exited;
+  const msgProc = runGit(repoPath, ["log", "-1", "--format=%B", hash]);
 
   // Get file changes with stats
-  const statProc = Bun.spawn(
-    ["git", "diff-tree", "--no-commit-id", "-r", "--numstat", hash],
-    { cwd: repoPath, stdout: "pipe", stderr: "pipe" }
-  );
-  const statOutput = await new Response(statProc.stdout).text();
-  await statProc.exited;
+  const statProc = runGit(repoPath, [
+    "diff-tree", "--no-commit-id", "-r", "--numstat", hash,
+  ]);
+
+  // Get the diff
+  const diffProc = runGit(repoPath, [
+    "diff-tree", "-p", "--no-commit-id", hash,
+  ]);
+
+  const [msgResult, statResult, diffResult] = await Promise.all([
+    msgProc, statProc, diffProc,
+  ]);
+
+  const fullMessage = msgResult.stdout;
+  const statOutput = statResult.stdout;
+  const diff = diffResult.stdout;
 
   const files: FileChange[] = statOutput
     .trim()
@@ -175,14 +183,6 @@ export async function getCommitDetail(
         status: "M" as const,
       };
     });
-
-  // Get the diff
-  const diffProc = Bun.spawn(
-    ["git", "diff-tree", "-p", "--no-commit-id", hash],
-    { cwd: repoPath, stdout: "pipe", stderr: "pipe" }
-  );
-  const diff = await new Response(diffProc.stdout).text();
-  await diffProc.exited;
 
   // Use existing commit info if provided (avoids a redundant git log subprocess)
   let commit: Commit;
@@ -205,36 +205,27 @@ export async function getCommitDetail(
 }
 
 export async function getCurrentBranch(repoPath: string): Promise<string> {
-  const proc = Bun.spawn(
-    ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-    { cwd: repoPath, stdout: "pipe", stderr: "pipe" }
-  );
-  const output = await new Response(proc.stdout).text();
-  await proc.exited;
-  return output.trim();
+  const { stdout } = await runGit(repoPath, [
+    "rev-parse", "--abbrev-ref", "HEAD",
+  ]);
+  return stdout.trim();
 }
 
 export async function getRepoName(repoPath: string): Promise<string> {
-  const proc = Bun.spawn(
-    ["git", "rev-parse", "--show-toplevel"],
-    { cwd: repoPath, stdout: "pipe", stderr: "pipe" }
-  );
-  const output = await new Response(proc.stdout).text();
-  await proc.exited;
-  const fullPath = output.trim();
+  const { stdout } = await runGit(repoPath, [
+    "rev-parse", "--show-toplevel",
+  ]);
+  const fullPath = stdout.trim();
   return fullPath.split("/").pop() ?? "unknown";
 }
 
 export async function getRemoteUrl(repoPath: string): Promise<string> {
   try {
-    const proc = Bun.spawn(
-      ["git", "remote", "get-url", "origin"],
-      { cwd: repoPath, stdout: "pipe", stderr: "pipe" }
-    );
-    const output = await new Response(proc.stdout).text();
-    await proc.exited;
-    if (proc.exitCode !== 0) return "";
-    return output.trim();
+    const { stdout, exitCode } = await runGit(repoPath, [
+      "remote", "get-url", "origin",
+    ]);
+    if (exitCode !== 0) return "";
+    return stdout.trim();
   } catch {
     return "";
   }
@@ -251,17 +242,14 @@ export async function getRecentBranches(
 ): Promise<string[]> {
   try {
     // git reflog records "checkout: moving from X to Y"
-    const proc = Bun.spawn(
-      ["git", "reflog", "--format=%gs", "-n", "200"],
-      { cwd: repoPath, stdout: "pipe", stderr: "pipe" }
-    );
-    const output = await new Response(proc.stdout).text();
-    await proc.exited;
-    if (proc.exitCode !== 0) return [];
+    const { stdout, exitCode } = await runGit(repoPath, [
+      "reflog", "--format=%gs", "-n", "200",
+    ]);
+    if (exitCode !== 0) return [];
 
     const seen = new Set<string>();
     const result: string[] = [];
-    for (const line of output.trim().split("\n")) {
+    for (const line of stdout.trim().split("\n")) {
       // Match "checkout: moving from <X> to <Y>"
       const match = line.match(/^checkout: moving from .+ to (.+)$/);
       if (!match) continue;
@@ -285,17 +273,12 @@ export async function switchBranch(
 ): Promise<{ ok: boolean; error?: string }> {
   // `git switch` handles both local branches and remote tracking branches
   // (e.g. "origin/feat" auto-creates local "feat" tracking the remote).
-  const proc = Bun.spawn(["git", "switch", branchName], {
-    cwd: repoPath,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+  const { stderr, exitCode } = await runGit(repoPath, [
+    "switch", branchName,
+  ]);
 
-  const errorOutput = await new Response(proc.stderr).text();
-  await proc.exited;
-
-  if (proc.exitCode !== 0) {
-    return { ok: false, error: errorOutput.trim() };
+  if (exitCode !== 0) {
+    return { ok: false, error: stderr.trim() };
   }
   return { ok: true };
 }
@@ -305,20 +288,13 @@ export async function createBranch(
   branchName: string,
   startPoint?: string
 ): Promise<{ ok: boolean; error?: string }> {
-  const args = ["git", "checkout", "-b", branchName];
+  const args = ["checkout", "-b", branchName];
   if (startPoint) args.push(startPoint);
 
-  const proc = Bun.spawn(args, {
-    cwd: repoPath,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+  const { stderr, exitCode } = await runGit(repoPath, args);
 
-  const errorOutput = await new Response(proc.stderr).text();
-  await proc.exited;
-
-  if (proc.exitCode !== 0) {
-    return { ok: false, error: errorOutput.trim() };
+  if (exitCode !== 0) {
+    return { ok: false, error: stderr.trim() };
   }
   return { ok: true };
 }
@@ -329,26 +305,19 @@ export async function deleteBranch(
   force = false
 ): Promise<{ ok: boolean; error?: string }> {
   const flag = force ? "-D" : "-d";
-  const proc = Bun.spawn(["git", "branch", flag, branchName], {
-    cwd: repoPath,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+  const { stderr, exitCode } = await runGit(repoPath, [
+    "branch", flag, branchName,
+  ]);
 
-  const errorOutput = await new Response(proc.stderr).text();
-  await proc.exited;
-
-  if (proc.exitCode !== 0) {
-    return { ok: false, error: errorOutput.trim() };
+  if (exitCode !== 0) {
+    return { ok: false, error: stderr.trim() };
   }
   return { ok: true };
 }
 
 export async function isGitRepo(path: string): Promise<boolean> {
-  const proc = Bun.spawn(
-    ["git", "rev-parse", "--is-inside-work-tree"],
-    { cwd: path, stdout: "pipe", stderr: "pipe" }
-  );
-  await proc.exited;
-  return proc.exitCode === 0;
+  const { exitCode } = await runGit(path, [
+    "rev-parse", "--is-inside-work-tree",
+  ]);
+  return exitCode === 0;
 }
