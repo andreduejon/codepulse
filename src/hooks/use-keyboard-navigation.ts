@@ -215,11 +215,6 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         actions.setDetailFocused(false);
         setSearchFocused(true);
         break;
-      case "b":
-        actions.setDetailFocused(false);
-        setOperationsTab("branch");
-        setDialog("operations");
-        break;
       case "a": {
         const newAll = !state.showAllBranches();
         actions.setShowAllBranches(newAll);
