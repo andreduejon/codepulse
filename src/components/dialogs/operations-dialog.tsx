@@ -1,9 +1,8 @@
-import { createSignal, onMount, onCleanup, For, Show, createMemo, createEffect } from "solid-js";
+import { createSignal, onMount, onCleanup, For, createMemo, createEffect } from "solid-js";
 import { useKeyboard } from "@opentui/solid";
 import { useAppState, DEFAULT_AUTO_REFRESH_INTERVAL } from "../../context/state";
 import { useTheme, themes } from "../../context/theme";
 import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
-import { createBranch, switchBranch, getRecentBranches } from "../../git/repo";
 import { SHIFT_JUMP } from "../../constants";
 import type { ScrollBoxRenderable, Renderable } from "@opentui/core";
 
@@ -122,28 +121,7 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
     return path.substring(pathOffset(), pathOffset() + PATH_VISIBLE_WIDTH);
   };
 
-  // ── Status message (for branch operations feedback) ───────────────
-  const [statusMsg, setStatusMsg] = createSignal<{ text: string; isError: boolean } | null>(null);
-  let statusTimer: ReturnType<typeof setTimeout> | undefined;
-  const showStatus = (text: string, isError: boolean) => {
-    setStatusMsg({ text, isError });
-    if (statusTimer) clearTimeout(statusTimer);
-    statusTimer = setTimeout(() => setStatusMsg(null), 3000);
-  };
-  onCleanup(() => { if (statusTimer) clearTimeout(statusTimer); });
-
-  // ── Recent branches (loaded from reflog on mount) ─────────────────
-  const [recentBranchNames, setRecentBranchNames] = createSignal<string[]>([]);
-  onMount(async () => {
-    const repoPath = state.repoPath();
-    if (repoPath) {
-      const recent = await getRecentBranches(repoPath, 5);
-      setRecentBranchNames(recent);
-    }
-  });
-
   // ── Collapsed state for branch sections ───────────────────────────
-  const [recentCollapsed, setRecentCollapsed] = createSignal(false);
   const [localCollapsed, setLocalCollapsed] = createSignal(false);
   const [remoteCollapsed, setRemoteCollapsed] = createSignal(false);
 
@@ -203,72 +181,19 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
     kind: "branch" as const,
     name: b.name,
     isCurrent: b.isCurrent,
-    run: async () => {
-      if (b.isCurrent) return;
-      const res = await switchBranch(state.repoPath(), b.name);
-      if (res.ok) {
-        showStatus(`Switched to '${b.name}'`, false);
-        props.onReload();
-      } else {
-        showStatus(res.error ?? "Failed to switch branch", true);
-      }
-    },
+    run: () => {}, // Read-only — no action on select
   });
 
   const branchItems = createMemo<SettingItem[]>(() => {
     const locals = localBranches();
     const remotes = remoteBranches();
     const currentBranch = state.currentBranch();
-    const recent = recentBranchNames();
 
     const result: SettingItem[] = [];
 
     // ── Info ──────────────────────────────────────────────────────
     result.push({ kind: "header", label: "Info" });
     result.push({ kind: "info", label: "Current", get: () => currentBranch || "(unknown)" });
-
-    // ── Actions section ───────────────────────────────────────────
-    result.push({ kind: "header", label: "Actions" });
-    result.push({
-      kind: "action",
-      label: "Create branch",
-      run: async () => {
-        const name = `branch-${Date.now()}`;
-        const res = await createBranch(state.repoPath(), name);
-        if (res.ok) {
-          showStatus(`Created and switched to '${name}'`, false);
-          props.onReload();
-        } else {
-          showStatus(res.error ?? "Failed to create branch", true);
-        }
-      },
-    });
-    result.push({
-      kind: "action",
-      label: "Delete branch",
-      run: async () => {
-        showStatus("Select a non-current branch to delete", true);
-      },
-    });
-
-    // ── Recent section (collapsible) ──────────────────────────────
-    const recentFiltered = recent.filter((name) => {
-      return name !== currentBranch && locals.some((b) => b.name === name);
-    });
-    if (recentFiltered.length > 0) {
-      result.push({
-        kind: "section",
-        label: "Recent",
-        count: recentFiltered.length,
-        collapsed: recentCollapsed,
-        toggle: () => setRecentCollapsed((v) => !v),
-      });
-      if (!recentCollapsed()) {
-        for (const name of recentFiltered) {
-          result.push(makeBranchItem({ name, isCurrent: false }));
-        }
-      }
-    }
 
     // ── Local section (collapsible) ───────────────────────────────
     result.push({
@@ -305,23 +230,7 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
       if (!remoteCollapsed()) {
         const sorted = [...remotes].sort((a, b) => a.name.localeCompare(b.name));
         for (const b of sorted) {
-          // Strip remote prefix (e.g. "origin/feat" → "feat") so git switch
-          // auto-creates a local tracking branch.
-          const localName = b.name.replace(/^[^/]+\//, "");
-          result.push({
-            kind: "branch" as const,
-            name: b.name,
-            isCurrent: false,
-            run: async () => {
-              const res = await switchBranch(state.repoPath(), localName);
-              if (res.ok) {
-                showStatus(`Switched to '${localName}' (tracking ${b.name})`, false);
-                props.onReload();
-              } else {
-                showStatus(res.error ?? "Failed to switch branch", true);
-              }
-            },
-          });
+          result.push(makeBranchItem({ name: b.name, isCurrent: false }));
         }
       }
     }
@@ -398,7 +307,7 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
       case "dialog": return "open";
       case "action": return "confirm";
       case "section": return item.collapsed() ? "expand" : "collapse";
-      case "branch": return item.isCurrent ? "" : "switch";
+      case "branch": return "";
       default: return "select";
     }
   };
@@ -671,17 +580,6 @@ export default function OperationsDialog(props: Readonly<OperationsDialogProps>)
 
       {/* Spacer between scrollbox and footer area */}
       <box height={1} flexShrink={0} />
-
-      {/* Status message */}
-      <Show when={statusMsg()}>
-        {(msg) => (
-          <box flexDirection="row" width="100%" paddingX={4} flexShrink={0}>
-            <text wrapMode="none" fg={msg().isError ? t().error : t().success}>
-              {msg().text}
-            </text>
-          </box>
-        )}
-      </Show>
 
       {/* Context-aware footer */}
       <box height={1} flexShrink={0} />
