@@ -5,7 +5,7 @@ import type { AppState, AppActions } from "../context/state";
 import type { DetailNavRef } from "../components/detail";
 import { SHIFT_JUMP, PAGE_JUMP } from "../constants";
 
-type DialogId = "branch" | "help" | "theme" | "settings" | null;
+type DialogId = "branch" | "help" | "theme" | "repository" | null;
 
 interface KeyboardNavigationOptions {
   state: AppState;
@@ -24,7 +24,7 @@ interface KeyboardNavigationOptions {
 /**
  * Global keyboard handler for the main app.
  *
- * Handles: dialog toggles (Ctrl+S, Ctrl+T, ?), refresh (Ctrl+R), escape,
+ * Handles: dialog toggles (Ctrl+R, Ctrl+T, ?), escape,
  * detail panel navigation, graph list navigation, search focus, and
  * branch dialog shortcuts.
  */
@@ -42,11 +42,11 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
   useKeyboard((e) => {
     if (e.eventType === "release") return;
 
-    // Ctrl+S opens settings regardless of dialog/search state
-    if (e.ctrl && e.name === "s") {
+    // Ctrl+R opens repository dialog regardless of dialog/search state
+    if (e.ctrl && e.name === "r") {
       setSearchFocused(false);
       actions.setDetailFocused(false);
-      setDialog(dialog() === "settings" ? null : "settings");
+      setDialog(dialog() === "repository" ? null : "repository");
       return;
     }
 
@@ -69,16 +69,6 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
       setSearchFocused(false);
       actions.setDetailFocused(false);
       setDialog(dialog() === "help" ? null : "help");
-      return;
-    }
-
-    // Ctrl+R refreshes git data, preserving scroll position
-    if (e.ctrl && e.name === "r") {
-      setSearchFocused(false);
-      actions.setDetailFocused(false);
-      if (dialog()) setDialog(null);
-      const stickyHash = state.selectedCommit()?.hash;
-      loadData(undefined, stickyHash);
       return;
     }
 

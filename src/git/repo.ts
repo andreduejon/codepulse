@@ -225,6 +225,21 @@ export async function getRepoName(repoPath: string): Promise<string> {
   return fullPath.split("/").pop() ?? "unknown";
 }
 
+export async function getRemoteUrl(repoPath: string): Promise<string> {
+  try {
+    const proc = Bun.spawn(
+      ["git", "remote", "get-url", "origin"],
+      { cwd: repoPath, stdout: "pipe", stderr: "pipe" }
+    );
+    const output = await new Response(proc.stdout).text();
+    await proc.exited;
+    if (proc.exitCode !== 0) return "";
+    return output.trim();
+  } catch {
+    return "";
+  }
+}
+
 export async function isGitRepo(path: string): Promise<boolean> {
   const proc = Bun.spawn(
     ["git", "rev-parse", "--is-inside-work-tree"],

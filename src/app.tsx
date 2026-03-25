@@ -1,9 +1,9 @@
-import { createEffect, Show, onMount, createSignal } from "solid-js";
+import { createEffect, Show, onMount, onCleanup, createSignal } from "solid-js";
 import { useRenderer } from "@opentui/solid";
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { createAppState, AppStateContext } from "./context/state";
 import { createThemeState, ThemeContext } from "./context/theme";
-import { getCommits, getBranches, getCurrentBranch, getRepoName, getCommitDetail } from "./git/repo";
+import { getCommits, getBranches, getCurrentBranch, getRepoName, getCommitDetail, getRemoteUrl } from "./git/repo";
 import { buildGraph, getMaxGraphColumns } from "./git/graph";
 import GraphView, { ColumnHeader } from "./components/graph";
 import CommitDetailView from "./components/detail";
@@ -12,7 +12,7 @@ import Footer from "./components/footer";
 import BranchDialog from "./components/dialogs/branch-dialog";
 import HelpDialog from "./components/dialogs/help-dialog";
 import ThemeDialog from "./components/dialogs/theme-dialog";
-import SettingsDialog from "./components/dialogs/settings-dialog";
+import RepositoryDialog from "./components/dialogs/settings-dialog";
 import packageJson from "../package.json";
 import { DEFAULT_MAX_COUNT } from "./constants";
 import { useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
@@ -30,7 +30,7 @@ function AppContent(props: AppProps) {
   const themeState = createThemeState(props.themeName);
   const renderer = useRenderer();
 
-  const [dialog, setDialog] = createSignal<"branch" | "help" | "theme" | "settings" | null>(null);
+  const [dialog, setDialog] = createSignal<"branch" | "help" | "theme" | "repository" | null>(null);
   const [searchFocused, setSearchFocused] = createSignal(false);
 
   // Ref for programmatic scrolling of the detail panel
@@ -65,7 +65,7 @@ function AppContent(props: AppProps) {
       const repoPath = props.repoPath;
       actions.setRepoPath(repoPath);
 
-      const [commits, branches, currentBranch, repoName] = await Promise.all([
+      const [commits, branches, currentBranch, repoName, remoteUrl] = await Promise.all([
         getCommits(repoPath, {
           maxCount: state.maxCount(),
           branch: branch,
@@ -74,6 +74,7 @@ function AppContent(props: AppProps) {
         getBranches(repoPath),
         getCurrentBranch(repoPath),
         getRepoName(repoPath),
+        getRemoteUrl(repoPath),
       ]);
 
       actions.setCommits(commits);
@@ -83,6 +84,8 @@ function AppContent(props: AppProps) {
       actions.setBranches(branches);
       actions.setCurrentBranch(currentBranch);
       actions.setRepoName(repoName);
+      actions.setRemoteUrl(remoteUrl);
+      actions.setError(null);
 
       // Selection priority: sticky hash > current branch tip > 0
       let targetIndex = 0;
@@ -101,7 +104,7 @@ function AppContent(props: AppProps) {
       actions.setCursorIndex(targetIndex);
       actions.setScrollTargetIndex(targetIndex);
     } catch (err) {
-      // TODO: show error in UI
+      actions.setError(err instanceof Error ? err.message : String(err));
     } finally {
       actions.setLoading(false);
     }
@@ -110,6 +113,25 @@ function AppContent(props: AppProps) {
   onMount(() => {
     loadData(props.branch);
     renderer.setTerminalTitle("gittree");
+  });
+
+  // Auto-refresh timer: re-reads local git data at the configured interval
+  let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
+  createEffect(() => {
+    const interval = state.autoRefreshInterval();
+    if (autoRefreshTimer) {
+      clearInterval(autoRefreshTimer);
+      autoRefreshTimer = null;
+    }
+    if (interval > 0) {
+      autoRefreshTimer = setInterval(() => {
+        const stickyHash = state.selectedCommit()?.hash;
+        loadData(undefined, stickyHash);
+      }, interval);
+    }
+  });
+  onCleanup(() => {
+    if (autoRefreshTimer) clearInterval(autoRefreshTimer);
   });
 
   // Load commit detail when cursor changes (with debounce + race condition guard)
@@ -306,8 +328,8 @@ function AppContent(props: AppProps) {
           <Show when={dialog() === "theme"}>
             <ThemeDialog onClose={() => setDialog(null)} />
           </Show>
-          <Show when={dialog() === "settings"}>
-            <SettingsDialog
+          <Show when={dialog() === "repository"}>
+            <RepositoryDialog
               onClose={() => setDialog(null)}
               onReload={() => loadData()}
               onOpenDialog={(dialogId) => {

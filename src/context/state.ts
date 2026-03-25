@@ -2,6 +2,8 @@ import { createContext, useContext, createSignal, createMemo, type Accessor } fr
 import type { Commit, GraphRow, CommitDetail, Branch } from "../git/types";
 import { DEFAULT_MAX_COUNT } from "../constants";
 
+export const DEFAULT_AUTO_REFRESH_INTERVAL = 30000;
+
 export interface AppState {
   commits: Accessor<Commit[]>;
   graphRows: Accessor<GraphRow[]>;
@@ -9,6 +11,8 @@ export interface AppState {
   currentBranch: Accessor<string>;
   repoName: Accessor<string>;
   repoPath: Accessor<string>;
+  remoteUrl: Accessor<string>;
+  error: Accessor<string | null>;
   cursorIndex: Accessor<number>;
   selectedCommit: Accessor<Commit | null>;
   selectedRow: Accessor<GraphRow | null>;
@@ -23,6 +27,7 @@ export interface AppState {
   detailOriginHash: Accessor<string | null>;
   scrollTargetIndex: Accessor<number>;
   maxCount: Accessor<number>;
+  autoRefreshInterval: Accessor<number>;
 }
 
 export interface AppActions {
@@ -43,8 +48,11 @@ export interface AppActions {
   setCurrentBranch: (branch: string) => void;
   setRepoName: (name: string) => void;
   setRepoPath: (path: string) => void;
+  setRemoteUrl: (url: string) => void;
+  setError: (err: string | null) => void;
   setMaxGraphColumns: (cols: number) => void;
   setMaxCount: (n: number) => void;
+  setAutoRefreshInterval: (ms: number) => void;
 }
 
 const AppStateContext = createContext<{ state: AppState; actions: AppActions }>();
@@ -56,6 +64,8 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
   const [currentBranch, setCurrentBranch] = createSignal("");
   const [repoName, setRepoName] = createSignal("");
   const [repoPath, setRepoPath] = createSignal("");
+  const [remoteUrl, setRemoteUrl] = createSignal("");
+  const [error, setError] = createSignal<string | null>(null);
   const [cursorIndex, setCursorIndex] = createSignal(0);
   const [scrollTargetIndex, setScrollTargetIndex] = createSignal(0);
   const [commitDetail, setCommitDetail] = createSignal<CommitDetail | null>(null);
@@ -64,6 +74,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
   const [searchQuery, setSearchQuery] = createSignal("");
   const [maxGraphColumns, setMaxGraphColumns] = createSignal(0);
   const [maxCount, setMaxCount] = createSignal(initialMaxCount);
+  const [autoRefreshInterval, setAutoRefreshInterval] = createSignal(DEFAULT_AUTO_REFRESH_INTERVAL);
   const [detailFocused, setDetailFocused] = createSignal(false);
   const [detailCursorIndex, setDetailCursorIndex] = createSignal(-1);
   const [detailOriginHash, setDetailOriginHash] = createSignal<string | null>(null);
@@ -115,6 +126,8 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
     currentBranch,
     repoName,
     repoPath,
+    remoteUrl,
+    error,
     cursorIndex,
     selectedCommit,
     selectedRow,
@@ -125,6 +138,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
     filteredRows,
     maxGraphColumns,
     maxCount,
+    autoRefreshInterval,
     detailFocused,
     detailCursorIndex,
     detailOriginHash,
@@ -149,8 +163,11 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
     setCurrentBranch,
     setRepoName,
     setRepoPath,
+    setRemoteUrl,
+    setError,
     setMaxGraphColumns,
     setMaxCount,
+    setAutoRefreshInterval,
   };
 
   return { state, actions, AppStateContext };

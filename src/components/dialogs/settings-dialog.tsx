@@ -1,10 +1,10 @@
-import { createSignal, For } from "solid-js";
+import { createSignal, onMount, onCleanup, For } from "solid-js";
 import { useKeyboard } from "@opentui/solid";
-import { useAppState } from "../../context/state";
-import { useTheme, themeNames, themes } from "../../context/theme";
+import { useAppState, DEFAULT_AUTO_REFRESH_INTERVAL } from "../../context/state";
+import { useTheme, themes } from "../../context/theme";
 import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
-interface SettingsDialogProps {
+interface RepositoryDialogProps {
   onClose: () => void;
   onReload: () => void;
   onOpenDialog?: (dialogId: string) => void;
@@ -12,20 +12,117 @@ interface SettingsDialogProps {
 
 const MAX_COUNT_OPTIONS = [10, 20, 50, 100, 200, 500];
 
+const AUTO_REFRESH_OPTIONS = ["off", "10s", "30s", "60s"];
+const AUTO_REFRESH_MS: Record<string, number> = {
+  off: 0,
+  "10s": 10000,
+  "30s": 30000,
+  "60s": 60000,
+};
+const MS_TO_LABEL: Record<number, string> = {
+  0: "off",
+  10000: "10s",
+  30000: "30s",
+  60000: "60s",
+};
+
+/** Width of the info label column (characters). */
+const INFO_LABEL_WIDTH = 12;
+
+/**
+ * Available width for the path banner text.
+ * Dialog width=70, paddingX=1 on dialog, paddingX=4 on row → 70 - 2 - 8 = 60 usable.
+ * Subtract label column to get the scrollable area.
+ */
+const PATH_VISIBLE_WIDTH = 60 - INFO_LABEL_WIDTH;
+
+/** Scrolling speed: shift 1 char every N ms. */
+const BANNER_TICK_MS = 200;
+/** Pause at each end before reversing (ms). */
+const BANNER_PAUSE_MS = 2000;
+
 type SettingItem =
   | { kind: "header"; label: string }
+  | { kind: "info"; label: string; get: () => string }
+  | { kind: "path" }
   | { kind: "toggle"; label: string; hotkey?: string; get: () => boolean; set: (v: boolean) => void; needsReload?: boolean }
   | { kind: "cycle"; label: string; hotkey?: string; options: string[]; get: () => string; set: (v: string) => void; needsReload?: boolean }
-  | { kind: "dialog"; label: string; hotkey?: string; dialogId: string; get: () => string };
+  | { kind: "dialog"; label: string; hotkey?: string; dialogId: string; get: () => string }
+  | { kind: "action"; label: string; hotkey?: string; run: () => void }
+  | { kind: "disabled"; label: string };
 
-export default function SettingsDialog(props: Readonly<SettingsDialogProps>) {
+export default function RepositoryDialog(props: Readonly<RepositoryDialogProps>) {
   const { state, actions } = useAppState();
   const { theme, themeName } = useTheme();
   const t = () => theme();
 
-  // All items including headers
+  // ── Scrolling banner for Path ──────────────────────────────────────
+  const [pathOffset, setPathOffset] = createSignal(0);
+  const [bannerDirection, setBannerDirection] = createSignal<1 | -1>(1);
+
+  let bannerTimer: ReturnType<typeof setInterval> | undefined;
+  let pauseTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const startBanner = () => {
+    bannerTimer = setInterval(() => {
+      const path = state.repoPath() || "";
+      const maxOffset = Math.max(0, path.length - PATH_VISIBLE_WIDTH);
+      if (maxOffset <= 0) return; // fits, no scrolling needed
+
+      setPathOffset((prev) => {
+        const dir = bannerDirection();
+        const next = prev + dir;
+
+        if (next >= maxOffset) {
+          // Hit right end — pause then reverse
+          clearInterval(bannerTimer);
+          bannerTimer = undefined;
+          pauseTimer = setTimeout(() => {
+            setBannerDirection(-1);
+            startBanner();
+          }, BANNER_PAUSE_MS);
+          return maxOffset;
+        }
+        if (next <= 0) {
+          // Hit left end — pause then reverse
+          clearInterval(bannerTimer);
+          bannerTimer = undefined;
+          pauseTimer = setTimeout(() => {
+            setBannerDirection(1);
+            startBanner();
+          }, BANNER_PAUSE_MS);
+          return 0;
+        }
+        return next;
+      });
+    }, BANNER_TICK_MS);
+  };
+
+  onMount(() => {
+    // Start scrolling after an initial pause
+    pauseTimer = setTimeout(() => startBanner(), BANNER_PAUSE_MS);
+  });
+
+  onCleanup(() => {
+    if (bannerTimer) clearInterval(bannerTimer);
+    if (pauseTimer) clearTimeout(pauseTimer);
+  });
+
+  /** Visible slice of the path for the banner. */
+  const pathBannerText = (): string => {
+    const path = state.repoPath() || "(unknown)";
+    if (path.length <= PATH_VISIBLE_WIDTH) return path;
+    return path.substring(pathOffset(), pathOffset() + PATH_VISIBLE_WIDTH);
+  };
+
+  // ── Item definitions ───────────────────────────────────────────────
   const items: SettingItem[] = [
-    { kind: "header", label: "Appearance" },
+    { kind: "header", label: "Info" },
+    { kind: "info", label: "Origin", get: () => state.remoteUrl() || "(none)" },
+    { kind: "info", label: "Branch", get: () => state.currentBranch() || "(unknown)" },
+    { kind: "path" },
+
+    { kind: "header", label: "Preferences" },
     {
       kind: "dialog",
       label: "Color theme",
@@ -33,7 +130,6 @@ export default function SettingsDialog(props: Readonly<SettingsDialogProps>) {
       dialogId: "theme",
       get: () => themes[themeName()]?.name ?? themeName(),
     },
-    { kind: "header", label: "Graph" },
     {
       kind: "cycle",
       label: "Max commits",
@@ -50,11 +146,35 @@ export default function SettingsDialog(props: Readonly<SettingsDialogProps>) {
       set: (v) => actions.setShowAllBranches(v),
       needsReload: true,
     },
+    {
+      kind: "cycle",
+      label: "Auto refresh",
+      options: AUTO_REFRESH_OPTIONS,
+      get: () => MS_TO_LABEL[state.autoRefreshInterval()] ?? "off",
+      set: (v) => actions.setAutoRefreshInterval(AUTO_REFRESH_MS[v] ?? DEFAULT_AUTO_REFRESH_INTERVAL),
+    },
+
+    { kind: "header", label: "Actions" },
+    { kind: "action", label: "Reload data", run: () => props.onReload() },
+
+    { kind: "header", label: "Coming Soon" },
+    { kind: "disabled", label: "Fetch from remote" },
+    { kind: "disabled", label: "Pull" },
+    { kind: "disabled", label: "Push" },
+    { kind: "disabled", label: "Create branch" },
+    { kind: "disabled", label: "Delete branch" },
+    { kind: "disabled", label: "Stash / Unstash" },
+    { kind: "disabled", label: "Cherry-pick" },
+    { kind: "disabled", label: "Revert commit" },
   ];
 
-  // Indices of selectable (non-header) items
+  // Indices of selectable items (toggle, cycle, dialog, action)
   const selectableIndices = items
-    .map((item, i) => (item.kind === "header" ? -1 : i))
+    .map((item, i) =>
+      item.kind === "toggle" || item.kind === "cycle" || item.kind === "dialog" || item.kind === "action"
+        ? i
+        : -1
+    )
     .filter((i) => i >= 0);
 
   const [cursor, setCursor] = createSignal(0); // index into selectableIndices
@@ -68,7 +188,7 @@ export default function SettingsDialog(props: Readonly<SettingsDialogProps>) {
 
   const activateItemAt = (itemIdx: number) => {
     const item = items[itemIdx];
-    if (!item || item.kind === "header") return;
+    if (!item || item.kind === "header" || item.kind === "info" || item.kind === "path" || item.kind === "disabled") return;
 
     if (item.kind === "toggle") {
       item.set(!item.get());
@@ -81,10 +201,25 @@ export default function SettingsDialog(props: Readonly<SettingsDialogProps>) {
       if (item.needsReload) props.onReload();
     } else if (item.kind === "dialog") {
       props.onOpenDialog?.(item.dialogId);
+    } else if (item.kind === "action") {
+      item.run();
     }
   };
 
   const activateItem = () => activateItemAt(selectedItemIndex());
+
+  // Context-aware verb for the footer
+  const footerVerb = (): string => {
+    const item = items[selectedItemIndex()];
+    if (!item) return "select";
+    switch (item.kind) {
+      case "toggle": return "toggle";
+      case "cycle": return "cycle";
+      case "dialog": return "open";
+      case "action": return "confirm";
+      default: return "select";
+    }
+  };
 
   // Handle navigation within the dialog
   useKeyboard((e) => {
@@ -105,7 +240,8 @@ export default function SettingsDialog(props: Readonly<SettingsDialogProps>) {
 
   // Format the value display for an item
   const valueDisplay = (item: SettingItem): string => {
-    if (item.kind === "header") return "";
+    if (item.kind === "header" || item.kind === "action" || item.kind === "disabled" || item.kind === "path") return "";
+    if (item.kind === "info") return item.get();
     if (item.kind === "toggle") return item.get() ? "on" : "off";
     return item.get();
   };
@@ -114,18 +250,19 @@ export default function SettingsDialog(props: Readonly<SettingsDialogProps>) {
     <DialogOverlay>
       <box
         width={70}
-        height="60%"
+        height="70%"
         backgroundColor={t().backgroundPanel}
         flexDirection="column"
         paddingX={1}
         paddingY={1}
       >
-      <DialogTitleBar title="Settings" />
+      <DialogTitleBar title="Repository" />
 
-      {/* Settings list */}
+      {/* Items list */}
       <box flexDirection="column" flexGrow={1}>
         <For each={items}>
           {(item, itemIndex) => {
+            // --- Header ---
             if (item.kind === "header") {
               return (
                 <box flexDirection="column" width="100%" paddingX={4}>
@@ -137,20 +274,65 @@ export default function SettingsDialog(props: Readonly<SettingsDialogProps>) {
               );
             }
 
+            // --- Info (non-selectable, dimmed) ---
+            if (item.kind === "info") {
+              return (
+                <box flexDirection="row" width="100%" paddingX={4}>
+                  <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                    {item.label.padEnd(INFO_LABEL_WIDTH)}
+                  </text>
+                  <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
+                    {item.get()}
+                  </text>
+                </box>
+              );
+            }
+
+            // --- Path banner (scrolling, dimmed) ---
+            if (item.kind === "path") {
+              return (
+                <box flexDirection="row" width="100%" paddingX={4}>
+                  <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                    {"Path".padEnd(INFO_LABEL_WIDTH)}
+                  </text>
+                  <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
+                    {pathBannerText()}
+                  </text>
+                </box>
+              );
+            }
+
+            // --- Disabled (non-selectable, foregroundMuted) ---
+            if (item.kind === "disabled") {
+              return (
+                <box flexDirection="row" width="100%" paddingX={4}>
+                  <text flexGrow={1} flexShrink={1} wrapMode="none" truncate>
+                    <span fg={t().foregroundMuted}>{item.label}</span>
+                  </text>
+                  <text flexShrink={0} wrapMode="none">{" ".padStart(22)}</text>
+                  <text flexShrink={0} wrapMode="none">{" ".padStart(9)}</text>
+                </box>
+              );
+            }
+
+            // --- Selectable items: toggle, cycle, dialog, action ---
             const isSelected = () => selectedItemIndex() === itemIndex();
             const val = () => valueDisplay(item);
 
             // Pad value and hotkey to fixed widths for right-alignment
             const paddedVal = () => {
+              if (item.kind === "action") return " ".padStart(22);
               const v = item.kind === "dialog" ? val() : `[${val()}]`;
               return v.padStart(22);
             };
             const paddedHotkey = () => {
-              const h = item.hotkey ?? "";
+              const h = (item.kind === "toggle" || item.kind === "cycle" || item.kind === "dialog")
+                ? (item.hotkey ?? "")
+                : "";
               return h.padStart(9);
             };
 
-              return (
+            return (
               <box
                 flexDirection="row"
                 width="100%"
@@ -177,6 +359,16 @@ export default function SettingsDialog(props: Readonly<SettingsDialogProps>) {
             );
           }}
         </For>
+      </box>
+
+      {/* Context-aware footer */}
+      <box height={1} />
+      <box flexDirection="row" width="100%" paddingX={4}>
+        <box flexGrow={1} />
+        <text flexShrink={0} wrapMode="none" fg={t().foreground}>enter</text>
+        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{` ${footerVerb()}  `}</text>
+        <text flexShrink={0} wrapMode="none" fg={t().foreground}>↑/↓</text>
+        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" navigate"}</text>
       </box>
       </box>
     </DialogOverlay>
