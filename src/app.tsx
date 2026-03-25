@@ -314,11 +314,6 @@ function AppContent(props: AppProps) {
                       {"error: "}{state.error()}{"  "}
                     </text>
                   </Show>
-                  <Show when={state.fetching()}>
-                    <text flexShrink={0} wrapMode="none" fg={themeState.theme().accent}>
-                      {"fetching...  "}
-                    </text>
-                  </Show>
                   <text flexShrink={0} wrapMode="none" fg={themeState.theme().accent}>Git</text>
                   <text flexShrink={0} wrapMode="none" fg={themeState.theme().foregroundMuted}>
                     {"  "}{state.repoPath() ? state.repoPath().replace(/^\/Users\/[^/]+/, "~") : ""}{state.currentBranch() ? `:${state.currentBranch()}` : ""}
