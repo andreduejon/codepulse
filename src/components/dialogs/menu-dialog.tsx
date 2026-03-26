@@ -96,16 +96,6 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   /** Usable width for copyable text: dialog=70 - 2(paddingX=1) - 8(paddingX=4) = 60 */
   const COPYABLE_VISIBLE_WIDTH = 60;
 
-  // Overflow memo for the currently-selected copyable item
-  const bannerOverflow = createMemo(() => {
-    const idx = selectedItemIndex();
-    const items = activeItems();
-    const item = items[idx];
-    if (!item || item.kind !== "copyable") return 0;
-    return Math.max(0, item.get().length - COPYABLE_VISIBLE_WIDTH);
-  });
-  const bannerOffset = useBannerScroll(bannerOverflow);
-
   /** Returns the visible slice of a copyable value, applying banner offset when selected. */
   const copyableBannerText = (text: string, isSelected: boolean): string => {
     if (text.length <= COPYABLE_VISIBLE_WIDTH) return text;
@@ -323,6 +313,17 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
       .filter((i) => i >= 0);
 
   const selectedItemIndex = () => selectableIndices()[currentCursor()];
+
+  // Overflow memo for the currently-selected copyable item
+  // NOTE: must be placed after selectedItemIndex/activeItems to avoid TDZ with createMemo's eager evaluation
+  const bannerOverflow = createMemo(() => {
+    const idx = selectedItemIndex();
+    const items = activeItems();
+    const item = items[idx];
+    if (!item || item.kind !== "copyable") return 0;
+    return Math.max(0, item.get().length - COPYABLE_VISIBLE_WIDTH);
+  });
+  const bannerOffset = useBannerScroll(bannerOverflow);
 
   const moveCursor = (delta: number) => {
     const indices = selectableIndices();
