@@ -642,7 +642,13 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
             }
 
             // --- Selectable items: toggle, cycle, dialog, action ---
-            const isDisabledAction = () => item.kind === "action" && !!item.disabled;
+            // Read disabled from the live items array (item is a static
+            // closure captured by For — plain booleans on it aren't reactive).
+            const liveItem = () => activeItems()[itemIndex()];
+            const isDisabledAction = () => {
+              const li = liveItem();
+              return li?.kind === "action" && !!li.disabled;
+            };
             const isSelected = () => !isDisabledAction() && selectedItemIndex() === itemIndex();
             const val = () => valueDisplay(item);
 
