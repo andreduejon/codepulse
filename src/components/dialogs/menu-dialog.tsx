@@ -488,11 +488,9 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
           borderStyle="single"
           borderColor={activeTab() === "repository" ? t().accent : t().border}
         >
-          <text flexShrink={0} wrapMode="none">
+          <text flexShrink={0} wrapMode="none" fg={activeTab() === "repository" ? t().accent : t().foregroundMuted}>
             <strong>
-              <span fg={activeTab() === "repository" ? t().accent : t().foregroundMuted}>
-                {"Repository"}
-              </span>
+              {"Repository"}
             </strong>
           </text>
         </box>
@@ -505,11 +503,9 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
           borderStyle="single"
           borderColor={activeTab() === "branch" ? t().accent : t().border}
         >
-          <text flexShrink={0} wrapMode="none">
+          <text flexShrink={0} wrapMode="none" fg={activeTab() === "branch" ? t().accent : t().foregroundMuted}>
             <strong>
-              <span fg={activeTab() === "branch" ? t().accent : t().foregroundMuted}>
-                {"Branch"}
-              </span>
+              {"Branch"}
             </strong>
           </text>
         </box>
@@ -579,10 +575,8 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
                   paddingX={4}
                   backgroundColor={isSel() ? t().backgroundElement : undefined}
                 >
-                  <text flexGrow={1} flexShrink={1} wrapMode="none" truncate>
-                    <span fg={isSel() ? t().accent : t().foreground}>
+                  <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={isSel() ? t().accent : t().foreground}>
                       {copyableBannerText(item.get(), isSel())}
-                    </span>
                   </text>
                   {isCopied() ? (
                     <text flexShrink={0} wrapMode="none" fg={t().success}>
@@ -632,10 +626,8 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
                   paddingRight={4}
                   backgroundColor={isSel() ? t().backgroundElement : undefined}
                 >
-                  <text flexGrow={1} flexShrink={1} wrapMode="none" truncate>
-                    <span fg={isSel() ? t().accent : t().foreground}>
+                  <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={isSel() ? t().accent : t().foreground}>
                       {item.name}
-                    </span>
                   </text>
                 </box>
               );
@@ -681,12 +673,12 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
 
                 {/* Current value — right-aligned, in brackets */}
                 <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-                  <span fg={t().foreground}>{paddedVal()}</span>
+                  {paddedVal()}
                 </text>
 
                 {/* Hotkey — right-aligned */}
                 <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                  <span fg={t().foregroundMuted}>{paddedHotkey()}</span>
+                  {paddedHotkey()}
                 </text>
               </box>
             );

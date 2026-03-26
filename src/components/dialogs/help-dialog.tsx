@@ -39,7 +39,7 @@ export default function HelpDialog(props: { onClose: () => void }) {
           {keybinds.map(([key, desc]) => (
             <box flexDirection="row" width="100%" paddingX={4}>
               <text flexShrink={0} wrapMode="none" fg={t().accent}>
-                {(key ?? "").padEnd(16)}
+                <strong>{(key ?? "").padEnd(16)}</strong>
               </text>
               <text flexGrow={1} wrapMode="none" fg={t().foreground}>
                 {desc}
