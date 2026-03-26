@@ -641,39 +641,31 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
               );
             }
 
-            // --- Disabled action (non-selectable, dimmed) ---
-            if (item.kind === "action" && item.disabled) {
-              return (
-                <box
-                  ref={(el: Renderable) => { itemRefs[itemIndex()] = el; }}
-                  flexDirection="row"
-                  width="100%"
-                  paddingX={4}
-                >
-                  <text flexGrow={1} flexShrink={1} wrapMode="none" truncate>
-                    <span fg={t().foregroundMuted}>{item.label}</span>
-                  </text>
-                </box>
-              );
-            }
-
             // --- Selectable items: toggle, cycle, dialog, action ---
-            const isSelected = () => selectedItemIndex() === itemIndex();
+            const isDisabledAction = () => item.kind === "action" && !!item.disabled;
+            const isSelected = () => !isDisabledAction() && selectedItemIndex() === itemIndex();
             const val = () => valueDisplay(item);
 
             // Pad value and hotkey to fixed widths for right-alignment
             const paddedVal = () => {
+              if (isDisabledAction()) return "";
               const v = val();
               if (!v) return " ".padStart(22);
               if (item.kind === "dialog" || item.kind === "action") return v.padStart(22);
               return `[${v}]`.padStart(22);
             };
             const paddedHotkey = () => {
+              if (isDisabledAction()) return "";
               const h = (item.kind === "toggle" || item.kind === "cycle" || item.kind === "dialog" || item.kind === "action")
                 ? (item.hotkey ?? "")
                 : "";
               return h.padStart(9);
             };
+
+            const labelColor = () =>
+              isDisabledAction() ? t().foregroundMuted
+              : isSelected() ? t().primary
+              : t().foreground;
 
             return (
               <box
@@ -685,7 +677,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
               >
                 {/* Setting name */}
                 <text flexGrow={1} flexShrink={1} wrapMode="none" truncate>
-                  <span fg={isSelected() ? t().primary : t().foreground}>
+                  <span fg={labelColor()}>
                     {item.label}
                   </span>
                 </text>
