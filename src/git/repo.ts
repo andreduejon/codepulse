@@ -83,7 +83,7 @@ function parseCommitLine(line: string, remoteNames: Set<string>): Commit | null 
 
   return {
     hash,
-    shortHash: shortHash.slice(0, 8),
+    shortHash,
     parents,
     message: subject,
     subject,
@@ -175,17 +175,17 @@ export async function getCommitDetail(
   hash: string,
   existingCommit?: Commit
 ): Promise<CommitDetail | null> {
-  // Get full commit message
-  const msgProc = runGit(repoPath, ["log", "-1", "--format=%B", hash]);
+  // Get full commit message ("--" separates revisions from paths/flags)
+  const msgProc = runGit(repoPath, ["log", "-1", "--format=%B", "--", hash]);
 
   // Get file changes with stats
   const statProc = runGit(repoPath, [
-    "diff-tree", "--no-commit-id", "-r", "--numstat", hash,
+    "diff-tree", "--no-commit-id", "-r", "--numstat", "--", hash,
   ]);
 
   // Get file changes with status letters (A/M/D/R/C/T)
   const statusProc = runGit(repoPath, [
-    "diff-tree", "--no-commit-id", "-r", "--name-status", hash,
+    "diff-tree", "--no-commit-id", "-r", "--name-status", "--", hash,
   ]);
 
   const [msgResult, statResult, statusResult] = await Promise.all([
@@ -226,9 +226,19 @@ export async function getCommitDetail(
   if (existingCommit) {
     commit = existingCommit;
   } else {
-    const commits = await getCommits(repoPath, { maxCount: 1, branch: hash });
-    if (commits.length === 0) return null;
-    commit = commits[0];
+    // Fetch metadata for a single commit by its hash.
+    // Note: we pass the hash as a revision (after "--") rather than using
+    // the `branch` option, which would incorrectly treat a hash as a branch name.
+    const [lookupResult, remoteNames] = await Promise.all([
+      runGit(repoPath, [
+        "log", "-1", "--topo-order", `--format=${GIT_LOG_FORMAT}`, "--", hash,
+      ]),
+      getRemoteNames(repoPath),
+    ]);
+    if (lookupResult.exitCode !== 0 || !lookupResult.stdout.trim()) return null;
+    const parsed = parseCommitLine(lookupResult.stdout.trim().split("\n")[0], remoteNames);
+    if (!parsed) return null;
+    commit = parsed;
   }
 
   const lines = fullMessage.trim().split("\n");
