@@ -173,10 +173,13 @@ function AppContent(props: Readonly<AppProps>) {
     if (autoRefreshTimer) clearInterval(autoRefreshTimer);
   });
 
-  // Load commit detail when cursor changes (with debounce + abort of stale loads)
+  // Load commit detail when cursor changes (with debounce + abort of stale loads).
+  // The debounce prevents spawning git subprocesses during rapid navigation
+  // (e.g. trackpad scroll, which has natural micro-pauses of 100–300ms between
+  // inertial batches that would defeat shorter debounce windows).
   let detailAbortCtrl: AbortController | null = null;
   let detailDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-  const DETAIL_DEBOUNCE_MS = 250;
+  const DETAIL_DEBOUNCE_MS = 400;
 
   createEffect(() => {
     const commit = state.selectedCommit();
