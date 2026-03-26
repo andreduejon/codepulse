@@ -232,8 +232,8 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
 
     const result: SettingItem[] = [];
 
-    // ── Current branch (always shown) ────────────────────────────
-    result.push({ kind: "header", label: "Current" });
+    // ── Checked-out branch (always shown) ──────────────────────────
+    result.push({ kind: "header", label: "Checked Out" });
     result.push({
       kind: "badge",
       name: currentBranch || "(unknown)",
@@ -241,8 +241,8 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
       dimmed: !currentBranch,
     });
 
-    // ── Viewing filter (always shown) ────────────────────────────
-    result.push({ kind: "header", label: "Viewing" });
+    // ── Showing filter (always shown) ──────────────────────────────
+    result.push({ kind: "header", label: "Showing" });
     const viewing = state.viewingBranch();
     if (viewing) {
       result.push({
@@ -250,7 +250,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
         name: viewing,
         colorIndex: branchColorIndex(viewing),
       });
-      result.push({ kind: "action", label: "Clear filter", run: () => {
+      result.push({ kind: "action", label: "Clear", run: () => {
         props.onViewBranch(null);
         props.onClose();
       }});
