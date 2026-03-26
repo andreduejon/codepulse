@@ -173,19 +173,22 @@ function AppContent(props: Readonly<AppProps>) {
     if (autoRefreshTimer) clearInterval(autoRefreshTimer);
   });
 
-  // Load commit detail when cursor changes (with debounce + race condition guard)
-  let detailVersion = 0;
+  // Load commit detail when cursor changes (with debounce + abort of stale loads)
+  let detailAbortCtrl: AbortController | null = null;
   let detailDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-  const DETAIL_DEBOUNCE_MS = 150;
+  const DETAIL_DEBOUNCE_MS = 250;
 
   createEffect(() => {
     const commit = state.selectedCommit();
-    const v = ++detailVersion;
 
-    // Cancel any pending debounce
+    // Cancel any pending debounce and abort in-flight git subprocesses
     if (detailDebounceTimer) {
       clearTimeout(detailDebounceTimer);
       detailDebounceTimer = null;
+    }
+    if (detailAbortCtrl) {
+      detailAbortCtrl.abort();
+      detailAbortCtrl = null;
     }
 
     if (!commit) {
@@ -199,14 +202,16 @@ function AppContent(props: Readonly<AppProps>) {
     // Debounce the detail load to avoid spawning git subprocesses on rapid navigation
     detailDebounceTimer = setTimeout(async () => {
       detailDebounceTimer = null;
+      const ctrl = new AbortController();
+      detailAbortCtrl = ctrl;
       try {
-        const detail = await getCommitDetail(props.repoPath, commit.hash, commit);
-        if (v === detailVersion) {
+        const detail = await getCommitDetail(props.repoPath, commit.hash, commit, ctrl.signal);
+        if (!ctrl.signal.aborted) {
           actions.setCommitDetail(detail);
           actions.setDetailLoading(false);
         }
       } catch {
-        if (v === detailVersion) {
+        if (!ctrl.signal.aborted) {
           actions.setCommitDetail(null);
           actions.setDetailLoading(false);
         }
@@ -217,6 +222,10 @@ function AppContent(props: Readonly<AppProps>) {
     if (detailDebounceTimer) {
       clearTimeout(detailDebounceTimer);
       detailDebounceTimer = null;
+    }
+    if (detailAbortCtrl) {
+      detailAbortCtrl.abort();
+      detailAbortCtrl = null;
     }
   });
 

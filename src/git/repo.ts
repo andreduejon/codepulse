@@ -8,21 +8,38 @@ const GIT_LOG_FORMAT = `%H${RS}%h${RS}%P${RS}%D${RS}%s${RS}%an${RS}%ae${RS}%aI${
 /** Shared helper to run a git command and capture its output. */
 async function runGit(
   repoPath: string,
-  args: string[]
+  args: string[],
+  signal?: AbortSignal,
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  // Bail out before spawning if already cancelled
+  if (signal?.aborted) {
+    return { stdout: "", stderr: "aborted", exitCode: 1 };
+  }
+
   const proc = Bun.spawn(["git", ...args], {
     cwd: repoPath,
     stdout: "pipe",
     stderr: "pipe",
   });
 
-  const [stdout, stderr] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-  ]);
-  await proc.exited;
+  // If the caller aborts, kill the subprocess immediately
+  if (signal) {
+    const onAbort = () => { try { proc.kill(); } catch {} };
+    signal.addEventListener("abort", onAbort, { once: true });
+    proc.exited.then(() => signal.removeEventListener("abort", onAbort)).catch(() => {});
+  }
 
-  return { stdout, stderr, exitCode: proc.exitCode ?? 1 };
+  try {
+    const [stdout, stderr] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+    ]);
+    await proc.exited;
+    return { stdout, stderr, exitCode: proc.exitCode ?? 1 };
+  } catch {
+    // Process was killed — pipes may throw
+    return { stdout: "", stderr: "aborted", exitCode: 1 };
+  }
 }
 
 /** Fetch the list of configured remote names (e.g. ["origin", "upstream"]). */
@@ -174,53 +191,62 @@ export async function getBranches(repoPath: string): Promise<Branch[]> {
 export async function getCommitDetail(
   repoPath: string,
   hash: string,
-  existingCommit?: Commit
+  existingCommit?: Commit,
+  signal?: AbortSignal,
 ): Promise<CommitDetail | null> {
-  // Get full commit message ("--" separates revisions from paths/flags)
-  const msgProc = runGit(repoPath, ["log", "-1", "--format=%B", "--", hash]);
+  // Get full commit message ("--" after the revision prevents the hash
+  // from being mistaken for a path if it matches a filename)
+  const msgProc = runGit(repoPath, ["log", "-1", "--format=%B", hash, "--"], signal);
 
-  // Get file changes with stats
-  const statProc = runGit(repoPath, [
-    "diff-tree", "--no-commit-id", "-r", "--numstat", "--", hash,
-  ]);
+  // Single diff-tree call: --raw gives status letters, --numstat gives +/- stats.
+  // Git outputs the raw lines first, then a blank separator, then numstat lines.
+  const diffProc = runGit(repoPath, [
+    "diff-tree", "--no-commit-id", "-r", "--raw", "--numstat", hash, "--",
+  ], signal);
 
-  // Get file changes with status letters (A/M/D/R/C/T)
-  const statusProc = runGit(repoPath, [
-    "diff-tree", "--no-commit-id", "-r", "--name-status", "--", hash,
-  ]);
-
-  const [msgResult, statResult, statusResult] = await Promise.all([
-    msgProc, statProc, statusProc,
-  ]);
+  const [msgResult, diffResult] = await Promise.all([msgProc, diffProc]);
+  if (signal?.aborted) return null;
 
   const fullMessage = msgResult.stdout;
-  const statOutput = statResult.stdout;
 
-  // Build a map from file path → status letter
+  // Parse the combined --raw / --numstat output.
+  // Raw lines start with ":" (e.g. ":100644 100644 ... M\tfile.ts")
+  // Numstat lines are "adds\tdels\tpath"
   const statusMap = new Map<string, string>();
-  for (const line of statusResult.stdout.trim().split("\n")) {
-    if (!line.trim()) continue;
-    const [statusCode, ...pathParts] = line.split("\t");
-    const filePath = pathParts.join("\t");
-    // Status codes like R100, C080 — extract just the leading letter
-    statusMap.set(filePath, (statusCode?.[0] ?? "M") as string);
-  }
+  const statMap = new Map<string, { additions: number; deletions: number }>();
 
-  const files: FileChange[] = statOutput
-    .trim()
-    .split("\n")
-    .filter((l) => l.trim())
-    .map((line) => {
+  for (const line of diffResult.stdout.split("\n")) {
+    if (!line) continue;
+    if (line.startsWith(":")) {
+      // Raw format: :old_mode new_mode old_hash new_hash status\tpath[\tnew_path]
+      const tabIdx = line.indexOf("\t");
+      if (tabIdx === -1) continue;
+      const meta = line.slice(0, tabIdx);
+      const pathPart = line.slice(tabIdx + 1);
+      // Status is the last token before the tab (e.g. "M", "R100", "C080")
+      const statusCode = meta.split(" ").pop() ?? "M";
+      const filePath = pathPart.split("\t")[0]; // first path for renames
+      statusMap.set(filePath, statusCode[0]);
+    } else if (line.includes("\t")) {
+      // Numstat format: additions\tdeletions\tpath
       const [additions, deletions, ...pathParts] = line.split("\t");
       const filePath = pathParts.join("\t");
-      const status = (statusMap.get(filePath) ?? "M") as FileChange["status"];
-      return {
-        path: filePath,
+      statMap.set(filePath, {
         additions: additions === "-" ? 0 : parseInt(additions, 10),
         deletions: deletions === "-" ? 0 : parseInt(deletions, 10),
-        status,
-      };
+      });
+    }
+  }
+
+  const files: FileChange[] = [];
+  for (const [filePath, stat] of statMap) {
+    files.push({
+      path: filePath,
+      additions: stat.additions,
+      deletions: stat.deletions,
+      status: (statusMap.get(filePath) ?? "M") as FileChange["status"],
     });
+  }
 
   // Use existing commit info if provided (avoids a redundant git log subprocess)
   let commit: Commit;
@@ -228,14 +254,14 @@ export async function getCommitDetail(
     commit = existingCommit;
   } else {
     // Fetch metadata for a single commit by its hash.
-    // Note: we pass the hash as a revision (after "--") rather than using
-    // the `branch` option, which would incorrectly treat a hash as a branch name.
+    // Place hash before "--" so git treats it as a revision, not a path.
     const [lookupResult, remoteNames] = await Promise.all([
       runGit(repoPath, [
-        "log", "-1", "--topo-order", `--format=${GIT_LOG_FORMAT}`, "--", hash,
-      ]),
+        "log", "-1", "--topo-order", `--format=${GIT_LOG_FORMAT}`, hash, "--",
+      ], signal),
       getRemoteNames(repoPath),
     ]);
+    if (signal?.aborted) return null;
     if (lookupResult.exitCode !== 0 || !lookupResult.stdout.trim()) return null;
     const parsed = parseCommitLine(lookupResult.stdout.trim().split("\n")[0], remoteNames);
     if (!parsed) return null;
