@@ -84,7 +84,7 @@ export default function ThemeDialog(props: { onClose: () => void }) {
                   backgroundColor={isSelected() ? t().backgroundElement : undefined}
                 >
                   <text flexGrow={1} wrapMode="none">
-                    <span fg={isSelected() ? t().primary : t().foreground}>
+                    <span fg={isSelected() ? t().accent : t().foreground}>
                       {opt.name}
                     </span>
                   </text>

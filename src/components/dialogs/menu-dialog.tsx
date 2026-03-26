@@ -580,7 +580,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
                   backgroundColor={isSel() ? t().backgroundElement : undefined}
                 >
                   <text flexGrow={1} flexShrink={1} wrapMode="none" truncate>
-                    <span fg={isSel() ? t().primary : t().foreground}>
+                    <span fg={isSel() ? t().accent : t().foreground}>
                       {copyableBannerText(item.get(), isSel())}
                     </span>
                   </text>
@@ -633,7 +633,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
                   backgroundColor={isSel() ? t().backgroundElement : undefined}
                 >
                   <text flexGrow={1} flexShrink={1} wrapMode="none" truncate>
-                    <span fg={isSel() ? t().primary : t().foreground}>
+                    <span fg={isSel() ? t().accent : t().foreground}>
                       {item.name}
                     </span>
                   </text>
@@ -664,7 +664,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
 
             const labelColor = () =>
               isDisabledAction() ? t().foregroundMuted
-              : isSelected() ? t().primary
+              : isSelected() ? t().accent
               : t().foreground;
 
             return (
