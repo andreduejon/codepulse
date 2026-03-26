@@ -188,18 +188,12 @@ export async function getCommitDetail(
     "diff-tree", "--no-commit-id", "-r", "--name-status", hash,
   ]);
 
-  // Get the diff
-  const diffProc = runGit(repoPath, [
-    "diff-tree", "-p", "--no-commit-id", hash,
-  ]);
-
-  const [msgResult, statResult, statusResult, diffResult] = await Promise.all([
-    msgProc, statProc, statusProc, diffProc,
+  const [msgResult, statResult, statusResult] = await Promise.all([
+    msgProc, statProc, statusProc,
   ]);
 
   const fullMessage = msgResult.stdout;
   const statOutput = statResult.stdout;
-  const diff = diffResult.stdout;
 
   // Build a map from file path → status letter
   const statusMap = new Map<string, string>();
@@ -243,14 +237,14 @@ export async function getCommitDetail(
     ...commit,
     body: lines.slice(1).join("\n").trim(),
     files,
-    diff,
   };
 }
 
 export async function getCurrentBranch(repoPath: string): Promise<string> {
-  const { stdout } = await runGit(repoPath, [
+  const { stdout, exitCode } = await runGit(repoPath, [
     "rev-parse", "--abbrev-ref", "HEAD",
   ]);
+  if (exitCode !== 0) return "";
   return stdout.trim();
 }
 

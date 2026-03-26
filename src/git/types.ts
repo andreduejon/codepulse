@@ -36,7 +36,6 @@ export interface FileChange {
 
 export interface CommitDetail extends Commit {
   files: FileChange[];
-  diff: string;
 }
 
 export interface GraphRow {

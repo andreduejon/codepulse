@@ -3,7 +3,7 @@ import { useRenderer } from "@opentui/solid";
 import { useAppState } from "../context/state";
 import { useTheme } from "../context/theme";
 import { getColorForColumn } from "../git/graph";
-import type { Commit } from "../git/types";
+import type { Commit, GraphRow } from "../git/types";
 import { buildFileTree, flattenFileTree } from "../utils/file-tree";
 import type { FileTreeNode, FileTreeRow } from "../utils/file-tree";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
@@ -77,6 +77,9 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   const commit = () => state.selectedCommit();
   const detail = () => state.commitDetail();
   const row = () => state.selectedRow();
+  /** Non-null row accessor — safe inside <Show when={commit()}>
+   *  since selectedRow and selectedCommit are derived from the same index. */
+  const r = (): GraphRow => row()!;
 
   // Hash → Commit lookup for tag fallback on parent/child badges
   const commitMap = createMemo(() => {
@@ -588,7 +591,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                     }
                   >
                     <DetailBadge
-                      name={row()!.branchName}
+                      name={r().branchName}
                       colorIndex={nodeColorIndex()}
                     />
                     <Show when={remoteName()}>
@@ -694,22 +697,22 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
             </Show>
 
             {/* ── Children (collapsible) ── */}
-            <Show when={row()!.children.length > 0}>
+            <Show when={r().children.length > 0}>
               <InteractiveSectionHeader
                 title="Children"
-                count={row()!.children.length}
+                count={r().children.length}
                 expanded={childrenExpanded()}
                 section="children"
               />
               <Show when={childrenExpanded()}>
-                <For each={row()!.children}>
+                <For each={r().children}>
                   {(childHash, i) => (
                     <InteractiveCommitEntry
                       hash={childHash}
                       entryIndex={i()}
                       type="child"
-                      branchName={row()!.childBranches[i()]}
-                      colorIndex={row()!.childColors[i()]}
+                      branchName={r().childBranches[i()]}
+                      colorIndex={r().childColors[i()]}
                     />
                   )}
                 </For>
@@ -718,22 +721,22 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
             </Show>
 
             {/* ── Parents (collapsible) ── */}
-            <Show when={row()!.parentHashes.length > 0}>
+            <Show when={r().parentHashes.length > 0}>
               <InteractiveSectionHeader
                 title="Parents"
-                count={row()!.parentHashes.length}
+                count={r().parentHashes.length}
                 expanded={parentsExpanded()}
                 section="parents"
               />
               <Show when={parentsExpanded()}>
-                <For each={row()!.parentHashes}>
+                <For each={r().parentHashes}>
                   {(parentHash, i) => (
                     <InteractiveCommitEntry
                       hash={parentHash}
                       entryIndex={i()}
                       type="parent"
-                      branchName={row()!.parentBranches[i()]}
-                      colorIndex={row()!.parentColors[i()]}
+                      branchName={r().parentBranches[i()]}
+                      colorIndex={r().parentColors[i()]}
                     />
                   )}
                 </For>
