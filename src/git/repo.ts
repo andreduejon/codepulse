@@ -104,7 +104,8 @@ export async function getCommits(
   if (options.all) {
     args.push("--all");
   } else if (options.branch) {
-    args.push(options.branch);
+    // Use "--" to prevent branch names starting with "-" being interpreted as flags
+    args.push("--", options.branch);
   }
 
   const { stdout, stderr, exitCode } = await runGit(repoPath, args);

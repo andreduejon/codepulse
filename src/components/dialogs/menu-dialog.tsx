@@ -66,7 +66,22 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 
   const copyToClipboard = (text: string, label: string) => {
-    Bun.spawn(["pbcopy"], { stdin: new Response(text).body });
+    try {
+      // Cross-platform clipboard: pbcopy (macOS), xclip (Linux), clip.exe (WSL/Windows)
+      const platform = process.platform;
+      let cmd: string[];
+      if (platform === "darwin") {
+        cmd = ["pbcopy"];
+      } else if (platform === "win32") {
+        cmd = ["clip.exe"];
+      } else {
+        // Linux / WSL fallback
+        cmd = ["xclip", "-selection", "clipboard"];
+      }
+      Bun.spawn(cmd, { stdin: new Response(text).body });
+    } catch {
+      // Clipboard utility not available — silently ignore
+    }
     setCopiedLabel(label);
     if (copiedTimer) clearTimeout(copiedTimer);
     copiedTimer = setTimeout(() => setCopiedLabel(null), 1500);
