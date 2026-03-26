@@ -179,7 +179,7 @@ function AppContent(props: Readonly<AppProps>) {
   // inertial batches that would defeat shorter debounce windows).
   let detailAbortCtrl: AbortController | null = null;
   let detailDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-  const DETAIL_DEBOUNCE_MS = 400;
+  const DETAIL_DEBOUNCE_MS = 150;
 
   createEffect(() => {
     const commit = state.selectedCommit();
@@ -200,6 +200,9 @@ function AppContent(props: Readonly<AppProps>) {
       return;
     }
 
+    // Clear stale detail immediately so the old file tree nodes are removed
+    // from the render tree during scroll (a 334-file commit's tree = ~3K nodes).
+    actions.setCommitDetail(null);
     actions.setDetailLoading(true);
 
     // Debounce the detail load to avoid spawning git subprocesses on rapid navigation

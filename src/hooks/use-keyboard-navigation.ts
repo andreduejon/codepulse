@@ -137,16 +137,20 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
           e.preventDefault();
           actions.setDetailFocused(false);
           return;
-        case "up":
+        case "up": {
           e.preventDefault();
-          actions.moveDetailCursor(e.shift ? -SHIFT_JUMP : -1, detailNavRef.itemCount);
-          scrollbox?.scrollBy(-1, "absolute");
+          const delta = e.shift ? -SHIFT_JUMP : -1;
+          actions.moveDetailCursor(delta, detailNavRef.itemCount);
+          scrollbox?.scrollBy(delta, "absolute");
           return;
-        case "down":
+        }
+        case "down": {
           e.preventDefault();
-          actions.moveDetailCursor(e.shift ? SHIFT_JUMP : 1, detailNavRef.itemCount);
-          scrollbox?.scrollBy(1, "absolute");
+          const delta = e.shift ? SHIFT_JUMP : 1;
+          actions.moveDetailCursor(delta, detailNavRef.itemCount);
+          scrollbox?.scrollBy(delta, "absolute");
           return;
+        }
         case "return":
           e.preventDefault();
           detailNavRef.activateCurrentItem();
@@ -158,6 +162,17 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         case "pagedown":
           e.preventDefault();
           scrollbox?.scrollBy(0.5, "viewport");
+          return;
+        case "g":
+          e.preventDefault();
+          if (!e.shift) {
+            actions.setDetailCursorIndex(0);
+            scrollbox?.scrollTo(0);
+          } else {
+            const lastIdx = detailNavRef.itemCount - 1;
+            actions.setDetailCursorIndex(Math.max(0, lastIdx));
+            scrollbox?.scrollTo(Infinity);
+          }
           return;
       }
       return; // swallow all other keys when detail is focused
@@ -177,15 +192,6 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
       case "up":
         e.preventDefault();
         actions.moveCursor(e.shift ? -SHIFT_JUMP : -1);
-        resetDetailScroll();
-        break;
-      case "return":
-        e.preventDefault();
-        if (state.selectedCommit()) {
-          actions.setDetailOriginHash(null);
-          actions.setDetailCursorIndex(0);
-          actions.setDetailFocused(true);
-        }
         resetDetailScroll();
         break;
       case "right":
