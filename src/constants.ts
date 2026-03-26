@@ -9,3 +9,6 @@ export const DATE_COL_WIDTH = 15;
 /** Keyboard navigation jump distances (number of entries). */
 export const SHIFT_JUMP = 10;
 export const PAGE_JUMP = 20;
+
+/** Detail panel width as a fraction of terminal width. */
+export const DETAIL_PANEL_WIDTH_FRACTION = 0.25;

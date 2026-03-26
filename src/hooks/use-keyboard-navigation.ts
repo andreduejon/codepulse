@@ -165,16 +165,19 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
 
     const scrollbox = getDetailScrollboxRef();
 
+    /** Reset detail scrollbox to top — called when the graph cursor moves. */
+    const resetDetailScroll = () => scrollbox?.scrollTo(0);
+
     switch (e.name) {
       case "down":
         e.preventDefault();
         actions.moveCursor(e.shift ? SHIFT_JUMP : 1);
-        scrollbox?.scrollTo(0);
+        resetDetailScroll();
         break;
       case "up":
         e.preventDefault();
         actions.moveCursor(e.shift ? -SHIFT_JUMP : -1);
-        scrollbox?.scrollTo(0);
+        resetDetailScroll();
         break;
       case "return":
         e.preventDefault();
@@ -183,7 +186,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
           actions.setDetailCursorIndex(0);
           actions.setDetailFocused(true);
         }
-        scrollbox?.scrollTo(0);
+        resetDetailScroll();
         break;
       case "right":
         e.preventDefault();
@@ -208,17 +211,17 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
           actions.setCursorIndex(lastIdx);
           actions.setScrollTargetIndex(lastIdx);
         }
-        scrollbox?.scrollTo(0);
+        resetDetailScroll();
         break;
       case "pagedown":
         e.preventDefault();
         actions.moveCursor(PAGE_JUMP);
-        scrollbox?.scrollTo(0);
+        resetDetailScroll();
         break;
       case "pageup":
         e.preventDefault();
         actions.moveCursor(-PAGE_JUMP);
-        scrollbox?.scrollTo(0);
+        resetDetailScroll();
         break;
       case "/":
         e.preventDefault();

@@ -7,6 +7,7 @@ import type { Commit, GraphRow } from "../git/types";
 import { buildFileTree, flattenFileTree } from "../utils/file-tree";
 import type { FileTreeNode, FileTreeRow } from "../utils/file-tree";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
+import { DETAIL_PANEL_WIDTH_FRACTION } from "../constants";
 
 // ── Layout constants ────────────────────────────────────────────────
 /** Minimum panel width in characters before padding is subtracted. */
@@ -120,7 +121,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
 
   // ── Cursor-aware banner scroll for long text ──────────────────────
   // Only the currently-cursored item scrolls when its text overflows.
-  const panelUsableWidth = () => Math.max(Math.floor(renderer.width * 0.25), MIN_PANEL_WIDTH) - PANEL_PADDING_X;
+  const panelUsableWidth = () => Math.max(Math.floor(renderer.width * DETAIL_PANEL_WIDTH_FRACTION), MIN_PANEL_WIDTH) - PANEL_PADDING_X;
 
 
   // Collapsible section state — reset to expanded when commit changes

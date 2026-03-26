@@ -235,6 +235,22 @@ function AppContent(props: AppProps) {
     actions.setScrollTargetIndex(0);
   };
 
+  /** Open a sub-dialog from within the menu (e.g. theme picker). */
+  const handleOpenDialog = (dialogId: string) => {
+    if (dialogId === "theme") {
+      setDialog("theme");
+    }
+  };
+
+  /** Switch the graph to view a specific branch perspective. */
+  const handleViewBranch = (branch: string | null) => {
+    actions.setViewingBranch(branch);
+    // When clearing the filter (null), jump to checked-out branch head;
+    // when setting a filter, try to keep the cursor on the same commit.
+    const stickyHash = branch ? state.selectedCommit()?.hash : undefined;
+    loadData(undefined, stickyHash);
+  };
+
   // Keyboard handling
   useKeyboardNavigation({
     state,
@@ -345,7 +361,7 @@ function AppContent(props: AppProps) {
               <Footer />
             </box>
 
-            {/* Detail panel - right */}
+            {/* Detail panel - right (width must match DETAIL_PANEL_WIDTH_FRACTION in constants.ts) */}
             <box
               flexDirection="column"
               width="25%"
@@ -384,18 +400,8 @@ function AppContent(props: AppProps) {
               onClose={() => setDialog(null)}
               onReload={() => loadData()}
               onFetch={handleFetch}
-              onOpenDialog={(dialogId) => {
-                if (dialogId === "theme") {
-                  setDialog("theme");
-                }
-              }}
-              onViewBranch={(branch) => {
-                actions.setViewingBranch(branch);
-                // When clearing the filter (null), jump to checked-out branch head;
-                // when setting a filter, try to keep the cursor on the same commit.
-                const stickyHash = branch ? state.selectedCommit()?.hash : undefined;
-                loadData(undefined, stickyHash);
-              }}
+              onOpenDialog={handleOpenDialog}
+              onViewBranch={handleViewBranch}
             />
           </Show>
           <Show when={dialog() === "help"}>

@@ -4,6 +4,12 @@ import { useTheme, themeNames, themes } from "../../context/theme";
 import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 import { SHIFT_JUMP } from "../../constants";
 
+/** Pre-computed theme options — themeNames and themes are module-level constants. */
+const themeOptions = themeNames.map((key) => ({
+  key,
+  name: themes[key].name,
+}));
+
 export default function ThemeDialog(props: { onClose: () => void }) {
   const { theme, setTheme, themeName } = useTheme();
   const t = () => theme();
@@ -16,11 +22,6 @@ export default function ThemeDialog(props: { onClose: () => void }) {
   onCleanup(() => {
     if (!confirmed) setTheme(originalTheme);
   });
-
-  const themeOptions = themeNames.map((key) => ({
-    key,
-    name: themes[key].name,
-  }));
 
   // Initialize cursor to the currently selected theme
   const initialIdx = themeOptions.findIndex((o) => o.key === originalTheme);
