@@ -250,6 +250,177 @@ function dimLeadingRemoteOnlyRows(rows: GraphRow[]): void {
 }
 
 /**
+ * Add connectors spanning from one column to another.
+ *
+ * @param connectors - The mutable connector array to push into
+ * @param laneColors - Current lane color index array
+ * @param from - Source column (typically the node column)
+ * @param to - Target column
+ * @param color - Color index for branch connectors (new lane's color)
+ * @param kind - "merge" (lane continues, T-junction), "branch" (new lane, corner),
+ *               or "close" (lane ending, bottom corner)
+ * @param remoteOnly - Whether these connectors belong to a remote-only branch
+ */
+function addSpanningConnectors(
+  connectors: Connector[],
+  laneColors: number[],
+  from: number,
+  to: number,
+  color: number,
+  kind: "merge" | "branch" | "close",
+  remoteOnly?: boolean,
+): void {
+  if (from === to) return;
+
+  const goingRight = to > from;
+  const lo = Math.min(from, to);
+  const hi = Math.max(from, to);
+
+  // Horizontal connectors always use the OTHER branch's color (the lane
+  // at `to`, not the node's lane). This is consistent regardless of merge
+  // direction: horizontals represent the connection to the other branch.
+  const hColor = laneColors[to];
+
+  // Intermediate columns between node and target get horizontal lines.
+  for (let col = lo + 1; col < hi; col++) {
+    connectors.push({
+      type: "horizontal",
+      color: hColor,
+      column: col,
+      isRemoteOnly: remoteOnly,
+    });
+  }
+
+  // Connector at the target column.
+  if (kind === "merge") {
+    // Target lane continues — T-junction on its direct line → use target lane color
+    connectors.push({
+      type: goingRight ? "tee-right" : "tee-left",
+      color: laneColors[to],
+      column: to,
+      isRemoteOnly: remoteOnly,
+    });
+  } else if (kind === "close") {
+    // Target lane is being closed — corner is the last point of that lane.
+    connectors.push({
+      type: goingRight ? "corner-bottom-right" : "corner-bottom-left",
+      color: laneColors[to],
+      column: to,
+      isRemoteOnly: remoteOnly,
+    });
+  } else {
+    // Branching into a new lane — corner starts a new lane → use the new lane's color
+    connectors.push({
+      type: goingRight ? "corner-top-right" : "corner-top-left",
+      color,
+      column: to,
+      isRemoteOnly: remoteOnly,
+    });
+  }
+}
+
+/**
+ * Fan-out + commit-row merge optimization.
+ *
+ * When a commit has fan-out rows AND merge/branch connectors on its
+ * commit row, check if the last fan-out row's connector and the commit
+ * row's connectors are on OPPOSITE sides of the node column. If so,
+ * combine them into a single row so the commit renders as 1 block
+ * instead of 2. Keep 2 rows when connectors conflict on the same side.
+ */
+function optimizeFanOutMerge(
+  fanOutRows: Connector[][],
+  connectors: Connector[],
+  nodeColumn: number,
+): void {
+  if (fanOutRows.length === 0) return;
+
+  // Determine which side the last fan-out row's corner is on
+  const lastFO = fanOutRows[fanOutRows.length - 1];
+  const foCorner = lastFO.find(c =>
+    c.type === "corner-bottom-right" || c.type === "corner-bottom-left"
+  );
+
+  // Collect merge/branch connectors from the commit row
+  // (horizontals, corners, tees at columns other than nodeColumn)
+  const commitMBConnectors = connectors.filter(c =>
+    c.column !== nodeColumn && (
+      c.type === "horizontal" || c.type === "tee-left" || c.type === "tee-right" ||
+      c.type === "corner-top-right" || c.type === "corner-top-left" ||
+      c.type === "corner-bottom-right" || c.type === "corner-bottom-left"
+    )
+  );
+
+  if (!foCorner || commitMBConnectors.length === 0) return;
+
+  const foSide = foCorner.column < nodeColumn ? "left" : "right";
+
+  // Determine sides of commit-row merge/branch connectors
+  let hasLeft = false;
+  let hasRight = false;
+  for (const c of commitMBConnectors) {
+    if (c.column < nodeColumn) hasLeft = true;
+    if (c.column > nodeColumn) hasRight = true;
+  }
+
+  // Can merge if ALL commit-row connectors are on the opposite side
+  const canMerge = (foSide === "left" && !hasLeft && hasRight) ||
+                   (foSide === "right" && !hasRight && hasLeft);
+
+  if (!canMerge) return;
+
+  // Combine: add commit-row merge/branch connectors to the last fan-out row
+  const combined = [...lastFO];
+
+  for (const mc of commitMBConnectors) {
+    // Check if there's already a connector at this column
+    const existing = combined.find(c => c.column === mc.column);
+    if (existing) {
+      // If existing is empty, replace it; otherwise add alongside (crossing)
+      if (existing.type === "empty") {
+        const idx = combined.indexOf(existing);
+        combined[idx] = mc;
+      } else {
+        combined.push(mc);
+      }
+    } else {
+      combined.push(mc);
+    }
+  }
+
+  // Fix the tee direction at the node column for the combined row.
+  // tee-left (├) → renders █─ (arm goes RIGHT)
+  // tee-right (┤) → renders █  (arm goes LEFT)
+  // If we now have connectors on the RIGHT side, we need tee-left
+  // so the █─ connects to the right-side horizontals.
+  const teeIdx = combined.findIndex(c =>
+    c.column === nodeColumn && (c.type === "tee-left" || c.type === "tee-right")
+  );
+  if (teeIdx !== -1) {
+    if (hasRight && combined[teeIdx].type === "tee-right") {
+      combined[teeIdx] = { ...combined[teeIdx], type: "tee-left" };
+    }
+    // Note: foSide=right + hasLeft case: tee-left is already correct
+    // (arm toward right fan-out corner; left-side merge connectors
+    // approach via horizontals at col < nodeColumn).
+  }
+
+  // Replace the last fan-out row with the combined version
+  fanOutRows[fanOutRows.length - 1] = combined;
+
+  // Strip absorbed merge/branch connectors from the commit row.
+  // Replace them with empties so commitRowHasConnections() returns false
+  // in the renderer, allowing the last fan-out row to be used as the
+  // commit row's graph (single block).
+  for (const mc of commitMBConnectors) {
+    const idx = connectors.findIndex(c => c === mc);
+    if (idx !== -1) {
+      connectors[idx] = { type: "empty", color: 0, column: mc.column };
+    }
+  }
+}
+
+/**
  * Build graph layout from a list of commits.
  *
  * Each commit is assigned a column (the "lane" it lives in).
@@ -362,73 +533,11 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       }
     }
 
-    // Helper: add connectors spanning from nodeColumn to targetColumn.
-    // `color` is the color index for these connectors.
-    // `kind` is "merge" (lane closing, merging into existing lane)
-    //       or "branch" (new lane opening from this node).
-    //
-    // For "merge": the target column has an existing active lane, so it gets
-    //   a T-junction (├ or ┤). The node already has ● so horizontal connects from it.
-    //
-    // For "branch": the target column is a newly opened lane, so it gets a
-    //   rounded corner (╮ or ╭) showing the lane starting. The node has ● so
-    //   horizontal connects from it.
-    function addSpanningConnectors(
-      from: number,
-      to: number,
-      color: number,
-      kind: "merge" | "branch" | "close",
-      /** Whether these connectors belong to a remote-only branch */
-      remoteOnly?: boolean,
-    ) {
-      if (from === to) return;
-
-      const goingRight = to > from;
-      const lo = Math.min(from, to);
-      const hi = Math.max(from, to);
-
-      // Horizontal connectors always use the OTHER branch's color (the lane
-      // at `to`, not the node's lane). This is consistent regardless of merge
-      // direction: horizontals represent the connection to the other branch.
-      const hColor = laneColors[to];
-
-      // Intermediate columns between node and target get horizontal lines.
-      for (let col = lo + 1; col < hi; col++) {
-        connectors.push({
-          type: "horizontal",
-          color: hColor,
-          column: col,
-          isRemoteOnly: remoteOnly,
-        });
-      }
-
-      // Connector at the target column.
-      if (kind === "merge") {
-        // Target lane continues — T-junction on its direct line → use target lane color
-        connectors.push({
-          type: goingRight ? "tee-right" : "tee-left",
-          color: laneColors[to],
-          column: to,
-          isRemoteOnly: remoteOnly,
-        });
-      } else if (kind === "close") {
-        // Target lane is being closed — corner is the last point of that lane.
-        connectors.push({
-          type: goingRight ? "corner-bottom-right" : "corner-bottom-left",
-          color: laneColors[to],
-          column: to,
-          isRemoteOnly: remoteOnly,
-        });
-      } else {
-        // Branching into a new lane — corner starts a new lane → use the new lane's color
-        connectors.push({
-          type: goingRight ? "corner-top-right" : "corner-top-left",
-          color,
-          column: to,
-          isRemoteOnly: remoteOnly,
-        });
-      }
-    }
+    // Spanning connectors (merge/branch/close) between node and target lanes
+    const addSpan = (
+      from: number, to: number, color: number,
+      kind: "merge" | "branch" | "close", remoteOnly?: boolean,
+    ) => addSpanningConnectors(connectors, laneColors, from, to, color, kind, remoteOnly);
 
     // Build fan-out rows: when this commit has multiple lanes pointing to it,
     // each extra lane gets its own connector row showing a branch-off corner.
@@ -563,14 +672,14 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
         if (processedColumns.has(parentHash)) {
           // Parent already rendered — merge into it
           if (nodeColumn < existingLane) {
-            addSpanningConnectors(nodeColumn, existingLane, existingLane, "close", isCommitRemoteOnly);
+            addSpan(nodeColumn, existingLane, existingLane, "close", isCommitRemoteOnly);
             lanes[existingLane] = null;
             laneRemoteOnly[existingLane] = false;
             lanes[nodeColumn] = parentHash;
             laneRemoteOnly[nodeColumn] = laneRemoteOnlyValue;
             parentLaneColors.push(laneColors[nodeColumn]);
           } else {
-            addSpanningConnectors(nodeColumn, existingLane, nodeColumn, "merge", isCommitRemoteOnly);
+            addSpan(nodeColumn, existingLane, nodeColumn, "merge", isCommitRemoteOnly);
             lanes[nodeColumn] = null;
             laneRemoteOnly[nodeColumn] = false;
             parentLaneColors.push(laneColors[existingLane]);
@@ -588,7 +697,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
         const parentCol = processedColumns.get(parentHash)!;
         if (parentCol !== nodeColumn) {
           const targetActive = parentCol < lanes.length && lanes[parentCol] !== null;
-          addSpanningConnectors(nodeColumn, parentCol, nodeColumn, targetActive ? "merge" : "close", isCommitRemoteOnly);
+          addSpan(nodeColumn, parentCol, nodeColumn, targetActive ? "merge" : "close", isCommitRemoteOnly);
         }
         lanes[nodeColumn] = null;
         laneRemoteOnly[nodeColumn] = false;
@@ -606,7 +715,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       const firstParentLane = lanes.indexOf(firstParent);
       if (firstParentLane !== -1 && firstParentLane !== nodeColumn) {
         if (processedColumns.has(firstParent)) {
-          addSpanningConnectors(nodeColumn, firstParentLane, firstParentLane, "close", isCommitRemoteOnly);
+          addSpan(nodeColumn, firstParentLane, firstParentLane, "close", isCommitRemoteOnly);
           lanes[firstParentLane] = null;
           laneRemoteOnly[firstParentLane] = false;
         }
@@ -617,7 +726,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
         const parentCol = processedColumns.get(firstParent)!;
         if (parentCol !== nodeColumn) {
           const targetActive = parentCol < lanes.length && lanes[parentCol] !== null;
-          addSpanningConnectors(nodeColumn, parentCol, nodeColumn, targetActive ? "merge" : "close", isCommitRemoteOnly);
+          addSpan(nodeColumn, parentCol, nodeColumn, targetActive ? "merge" : "close", isCommitRemoteOnly);
         }
         lanes[nodeColumn] = null;
         laneRemoteOnly[nodeColumn] = false;
@@ -636,14 +745,14 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
         if (existingLane !== -1) {
           parentLaneColors.push(laneColors[existingLane]);
           if (existingLane !== nodeColumn) {
-            addSpanningConnectors(nodeColumn, existingLane, existingLane, "merge", pLaneROValue);
+            addSpan(nodeColumn, existingLane, existingLane, "merge", pLaneROValue);
           }
         } else if (processedColumns.has(parentHash)) {
           const parentCol = processedColumns.get(parentHash)!;
           parentLaneColors.push(laneColors[parentCol] ?? parentCol);
           if (parentCol !== nodeColumn) {
             const kind = (parentCol < lanes.length && lanes[parentCol] !== null) ? "merge" : "branch";
-            addSpanningConnectors(nodeColumn, parentCol, laneColors[parentCol] ?? parentCol, kind, pLaneROValue);
+            addSpan(nodeColumn, parentCol, laneColors[parentCol] ?? parentCol, kind, pLaneROValue);
           }
         } else {
           // Open a new lane for this parent
@@ -662,7 +771,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
           }
           parentLaneColors.push(laneColors[newLane]);
           // Add spanning connectors from nodeColumn to the new lane
-          addSpanningConnectors(nodeColumn, newLane, laneColors[newLane], "branch", pLaneROValue);
+          addSpan(nodeColumn, newLane, laneColors[newLane], "branch", pLaneROValue);
         }
       }
     }
@@ -670,105 +779,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
     const mergeSourceColor = parentLaneColors.length >= 2 ? parentLaneColors[1] : undefined;
 
     // ── Fan-out + commit-row merge optimization ──
-    // When a commit has fan-out rows AND merge/branch connectors on its
-    // commit row, check if the last fan-out row's connector and the commit
-    // row's connectors are on OPPOSITE sides of the node column. If so,
-    // combine them into a single row so the commit renders as 1 █ block
-    // instead of 2. Keep 2 rows when connectors conflict on the same side.
-    if (fanOutRows.length > 0) {
-      // Determine which side the last fan-out row's corner is on
-      const lastFO = fanOutRows[fanOutRows.length - 1];
-      const foCorner = lastFO.find(c =>
-        c.type === "corner-bottom-right" || c.type === "corner-bottom-left"
-      );
-
-      // Collect merge/branch connectors from the commit row
-      // (horizontals, corners, tees at columns other than nodeColumn)
-      const commitMBConnectors = connectors.filter(c =>
-        c.column !== nodeColumn && (
-          c.type === "horizontal" || c.type === "tee-left" || c.type === "tee-right" ||
-          c.type === "corner-top-right" || c.type === "corner-top-left" ||
-          c.type === "corner-bottom-right" || c.type === "corner-bottom-left"
-        )
-      );
-
-      if (foCorner && commitMBConnectors.length > 0) {
-        const foSide = foCorner.column < nodeColumn ? "left" : "right";
-
-        // Determine sides of commit-row merge/branch connectors
-        let hasLeft = false;
-        let hasRight = false;
-        for (const c of commitMBConnectors) {
-          if (c.column < nodeColumn) hasLeft = true;
-          if (c.column > nodeColumn) hasRight = true;
-        }
-
-        // Can merge if ALL commit-row connectors are on the opposite side
-        const canMerge = (foSide === "left" && !hasLeft && hasRight) ||
-                         (foSide === "right" && !hasRight && hasLeft);
-
-        if (canMerge) {
-          // Combine: add commit-row merge/branch connectors to the last fan-out row
-          const combined = [...lastFO];
-
-          for (const mc of commitMBConnectors) {
-            // Check if there's already a connector at this column
-            const existing = combined.find(c => c.column === mc.column);
-            if (existing) {
-              // If existing is empty, replace it; otherwise add alongside (crossing)
-              if (existing.type === "empty") {
-                const idx = combined.indexOf(existing);
-                combined[idx] = mc;
-              } else {
-                combined.push(mc);
-              }
-            } else {
-              combined.push(mc);
-            }
-          }
-
-          // Fix the tee direction at the node column for the combined row.
-          // tee-left (├) → renders █─ (arm goes RIGHT)
-          // tee-right (┤) → renders █  (arm goes LEFT)
-          // If we now have connectors on the RIGHT side, we need tee-left
-          // so the █─ connects to the right-side horizontals.
-          // If connectors on the LEFT side only, keep tee-right.
-          const teeIdx = combined.findIndex(c =>
-            c.column === nodeColumn && (c.type === "tee-left" || c.type === "tee-right")
-          );
-          if (teeIdx !== -1) {
-            const commitHasRight = hasRight;
-            if (commitHasRight && combined[teeIdx].type === "tee-right") {
-              // Switch from tee-right (█ ) to tee-left (█─) for right-side connection
-              combined[teeIdx] = { ...combined[teeIdx], type: "tee-left" };
-            } else if (!commitHasRight && hasLeft && combined[teeIdx].type === "tee-left") {
-              // Fan-out was right, merge is left — keep tee-left (█─) for the right fan-out
-              // Actually this case can't happen: foSide=right means fan-out corner is RIGHT,
-              // and canMerge requires hasLeft && !hasRight. The original tee for a right-side
-              // fan-out is tee-left (arm toward right corner). Now we have left-side merge
-              // connectors too. But tee-left produces █─ which connects rightward to the
-              // fan-out corner. The left-side merge connectors at col < nodeColumn just have
-              // horizontals approaching from the left — they connect via the horizontal at
-              // nodeColumn-1, not via the dash after █. So tee-left is still correct.
-            }
-          }
-
-          // Replace the last fan-out row with the combined version
-          fanOutRows[fanOutRows.length - 1] = combined;
-
-          // Strip absorbed merge/branch connectors from the commit row.
-          // Replace them with empties so commitRowHasConnections() returns false
-          // in the renderer, allowing the last fan-out row to be used as the
-          // commit row's graph (single █ block).
-          for (const mc of commitMBConnectors) {
-            const idx = connectors.findIndex(c => c === mc);
-            if (idx !== -1) {
-              connectors[idx] = { type: "empty", color: 0, column: mc.column };
-            }
-          }
-        }
-      }
-    }
+    optimizeFanOutMerge(fanOutRows, connectors, nodeColumn);
 
     // Clean up trailing null lanes.
     // Always pop trailing nulls to keep the graph compact.
@@ -1213,6 +1224,9 @@ export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphCh
 
 /**
  * Compute per-row horizontal viewport offsets for the sliding graph viewport.
+ *
+ * @deprecated Superseded by {@link computeSingleViewportOffset} for runtime use.
+ * Retained for test coverage. Use `computeSingleViewportOffset` in new code.
  *
  * The viewport shows `depthLimit` columns at a time. It slides smoothly
  * to keep each row's commit node (█) visible. The offset represents the
