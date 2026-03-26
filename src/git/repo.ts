@@ -85,7 +85,6 @@ function parseCommitLine(line: string, remoteNames: Set<string>): Commit | null 
     hash,
     shortHash,
     parents,
-    message: subject,
     subject,
     body: "",
     author,
@@ -260,11 +259,19 @@ export async function getCurrentBranch(repoPath: string): Promise<string> {
 
 export async function getRemoteUrl(repoPath: string): Promise<string> {
   try {
+    // Try "origin" first (most common), then fall back to the first available remote
     const { stdout, exitCode } = await runGit(repoPath, [
       "remote", "get-url", "origin",
     ]);
-    if (exitCode !== 0) return "";
-    return stdout.trim();
+    if (exitCode === 0 && stdout.trim()) return stdout.trim();
+
+    // Fallback: pick the first remote name and get its URL
+    const remoteNames = await getRemoteNames(repoPath);
+    for (const name of remoteNames) {
+      const result = await runGit(repoPath, ["remote", "get-url", name]);
+      if (result.exitCode === 0 && result.stdout.trim()) return result.stdout.trim();
+    }
+    return "";
   } catch {
     return "";
   }

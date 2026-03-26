@@ -5,7 +5,7 @@ import { useTheme } from "../../context/theme";
  * Full-screen semi-transparent overlay that centers its children.
  * Shared by all dialog components.
  */
-export function DialogOverlay(props: { children: JSX.Element }) {
+export function DialogOverlay(props: Readonly<{ children: JSX.Element }>) {
   return (
     <box
       position="absolute"
@@ -26,7 +26,7 @@ export function DialogOverlay(props: { children: JSX.Element }) {
  * Shared title bar for dialogs: bold title on the left, "esc close" hint on the right,
  * followed by a 1-row spacer.
  */
-export function DialogTitleBar(props: { title: string }) {
+export function DialogTitleBar(props: Readonly<{ title: string }>) {
   const { theme } = useTheme();
   const t = () => theme();
 

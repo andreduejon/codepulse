@@ -2,7 +2,6 @@ export interface Commit {
   hash: string;
   shortHash: string;
   parents: string[];
-  message: string;
   subject: string;
   body: string;
   author: string;

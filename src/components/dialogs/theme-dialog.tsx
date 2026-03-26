@@ -10,7 +10,7 @@ const themeOptions = themeNames.map((key) => ({
   name: themes[key].name,
 }));
 
-export default function ThemeDialog(props: { onClose: () => void }) {
+export default function ThemeDialog(props: Readonly<{ onClose: () => void }>) {
   const { theme, setTheme, themeName } = useTheme();
   const t = () => theme();
 

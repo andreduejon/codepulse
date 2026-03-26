@@ -24,7 +24,7 @@ interface AppProps {
   themeName?: string;
 }
 
-function AppContent(props: AppProps) {
+function AppContent(props: Readonly<AppProps>) {
   const { state, actions } = createAppState(props.maxCount ?? DEFAULT_MAX_COUNT);
   const themeState = createThemeState(props.themeName);
   const renderer = useRenderer();
@@ -416,6 +416,6 @@ function AppContent(props: AppProps) {
   );
 }
 
-export default function App(props: AppProps) {
+export default function App(props: Readonly<AppProps>) {
   return <AppContent {...props} />;
 }

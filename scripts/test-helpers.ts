@@ -91,7 +91,6 @@ export function makeCommit(
     hash,
     shortHash: hash.slice(0, 7),
     parents,
-    message: subject,
     subject,
     body: "",
     author: "test",

@@ -1,7 +1,8 @@
+import { For } from "solid-js";
 import { useTheme } from "../../context/theme";
 import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
-export default function HelpDialog(props: { onClose: () => void }) {
+export default function HelpDialog(props: Readonly<{ onClose: () => void }>) {
   const { theme } = useTheme();
   const t = () => theme();
 
@@ -36,16 +37,18 @@ export default function HelpDialog(props: { onClose: () => void }) {
 
         {/* Keybind list */}
         <box flexDirection="column" flexGrow={1}>
-          {keybinds.map(([key, desc]) => (
-            <box flexDirection="row" width="100%" paddingX={4}>
-              <text flexShrink={0} wrapMode="none" fg={t().accent}>
-                <strong>{(key ?? "").padEnd(16)}</strong>
-              </text>
-              <text flexGrow={1} wrapMode="none" fg={t().foreground}>
-                {desc}
-              </text>
-            </box>
-          ))}
+          <For each={keybinds}>
+            {([key, desc]) => (
+              <box flexDirection="row" width="100%" paddingX={4}>
+                <text flexShrink={0} wrapMode="none" fg={t().accent}>
+                  <strong>{(key ?? "").padEnd(16)}</strong>
+                </text>
+                <text flexGrow={1} wrapMode="none" fg={t().foreground}>
+                  {desc}
+                </text>
+              </box>
+            )}
+          </For>
         </box>
       </box>
     </DialogOverlay>
