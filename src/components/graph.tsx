@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createMemo, createSignal } from "solid-js";
+import { For, Show, createEffect, createMemo, createSelector, createSignal } from "solid-js";
 import { useAppState } from "../context/state";
 import { useTheme } from "../context/theme";
 import { HASH_COL_WIDTH, AUTHOR_COL_WIDTH, DATE_COL_WIDTH } from "../constants";
@@ -466,6 +466,11 @@ export default function GraphView() {
     }
   });
 
+  // createSelector tracks which index is "selected" and only notifies the
+  // previous and current rows when the cursor moves, reducing reactive
+  // re-evaluations from N (every row) down to exactly 2.
+  const isActive = createSelector(() => state.cursorIndex());
+
   return (
     <scrollbox
       ref={scrollboxRef}
@@ -481,7 +486,7 @@ export default function GraphView() {
               <GraphLine
                 row={row}
                 index={index()}
-                active={index() === state.cursorIndex()}
+                active={isActive(index())}
                 isLast={index() === state.filteredRows().length - 1}
                 viewportOffset={viewportOffset}
                 rowRef={(el) => { rowRefs[index()] = el; }}
