@@ -381,7 +381,9 @@ function AppContent(props: AppProps) {
               }}
               onViewBranch={(branch) => {
                 actions.setViewingBranch(branch);
-                const stickyHash = state.selectedCommit()?.hash;
+                // When clearing the filter (null), jump to checked-out branch head;
+                // when setting a filter, try to keep the cursor on the same commit.
+                const stickyHash = branch ? state.selectedCommit()?.hash : undefined;
                 loadData(undefined, stickyHash);
               }}
             />
