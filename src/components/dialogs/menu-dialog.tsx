@@ -47,7 +47,7 @@ type SettingItem =
   | { kind: "toggle"; label: string; hotkey?: string; get: () => boolean; set: (v: boolean) => void; needsReload?: boolean }
   | { kind: "cycle"; label: string; hotkey?: string; options: string[]; get: () => string; set: (v: string) => void; needsReload?: boolean }
   | { kind: "dialog"; label: string; hotkey?: string; dialogId: string; get: () => string }
-  | { kind: "action"; label: string; hotkey?: string; get?: () => string; run: () => void; disabled?: boolean }
+  | { kind: "action"; label: string; hotkey?: string; get?: () => string; run: () => void; disabled?: () => boolean }
   | { kind: "section"; label: string; count: number; collapsed: () => boolean; toggle: () => void }
   | { kind: "badge"; name: string; colorIndex: number; dimmed?: boolean }
   | { kind: "branch"; name: string; run: () => void };
@@ -268,7 +268,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     result.push({
       kind: "action",
       label: "Clear filter",
-      disabled: !viewing,
+      disabled: () => !state.viewingBranch(),
       run: () => {
         props.onViewBranch(null);
         props.onClose();
@@ -336,7 +336,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     activeItems()
       .map((item, i) =>
         (item.kind === "toggle" || item.kind === "cycle" || item.kind === "dialog" || item.kind === "branch" || item.kind === "section" || item.kind === "copyable"
-          || (item.kind === "action" && !item.disabled))
+          || (item.kind === "action" && !(item.disabled?.())))
           ? i
           : -1
       )
@@ -354,7 +354,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     const items = activeItems();
     const item = items[itemIdx];
     if (!item || item.kind === "header" || item.kind === "info" || item.kind === "badge") return;
-    if (item.kind === "action" && item.disabled) return;
+    if (item.kind === "action" && item.disabled?.()) return;
 
     if (item.kind === "copyable") {
       copyToClipboard(item.get(), item.label);
@@ -642,13 +642,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
             }
 
             // --- Selectable items: toggle, cycle, dialog, action ---
-            // Read disabled from the live items array (item is a static
-            // closure captured by For — plain booleans on it aren't reactive).
-            const liveItem = () => activeItems()[itemIndex()];
-            const isDisabledAction = () => {
-              const li = liveItem();
-              return li?.kind === "action" && !!li.disabled;
-            };
+            const isDisabledAction = () => item.kind === "action" && !!(item.disabled?.());
             const isSelected = () => !isDisabledAction() && selectedItemIndex() === itemIndex();
             const val = () => valueDisplay(item);
 
