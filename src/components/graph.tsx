@@ -139,17 +139,21 @@ function GraphLine(props: Readonly<{
   const edgeColor = () => theme().foregroundMuted;
   const blankEdge = (): GraphChar => ({ char: "  ", color: edgeColor() });
 
-  // Append edge indicator column to the right of the graph chars
+  // Append edge indicator column to the right of the graph chars.
+  // Uses push on a shallow copy to avoid the spread operator's overhead
+  // of iterating the entire source array through the iterator protocol.
   const withEdgeIndicator = (chars: GraphChar[], isCommitRow: boolean): GraphChar[] => {
     if (!viewportActive()) return chars;
+    const out = chars.slice();
     if (isCommitRow) {
-      const indicator = buildEdgeIndicator(
+      out.push(buildEdgeIndicator(
         props.row.nodeColumn, props.viewportOffset(), MAX_GRAPH_COLUMNS,
         state.maxGraphColumns(), edgeColor(), true
-      );
-      return [...chars, indicator];
+      ));
+    } else {
+      out.push(blankEdge());
     }
-    return [...chars, blankEdge()];
+    return out;
   };
 
   // --- Performance optimization: split full-width render (expensive) from
@@ -246,13 +250,11 @@ function GraphLine(props: Readonly<{
     if (graphTextRef) graphTextRef.content = commitRowGraphContent();
   });
 
-  // Sort order: tag=0, branch=1, remote=2, head=3
-  const REF_ORDER: Record<string, number> = { tag: 0, branch: 1, remote: 2, head: 3 };
-
-  const visibleRefs = () => {
+  // Ref sort order: tag=0, branch=1, remote=2, head=3 (hoisted to module scope)
+  const visibleRefs = createMemo(() => {
     const allRefs = commit().refs;
-    return [...allRefs].sort((a, b) => (REF_ORDER[a.type] ?? 9) - (REF_ORDER[b.type] ?? 9));
-  };
+    return [...allRefs].sort((a, b) => (REF_SORT_ORDER[a.type] ?? 9) - (REF_SORT_ORDER[b.type] ?? 9));
+  });
   const laneColor = () => getColorForColumn(props.row.nodeColor, theme().graphColors);
   const t = () => theme();
 
@@ -336,6 +338,9 @@ function GraphLine(props: Readonly<{
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** Sort order for ref badges: tags first, then branches, remotes, HEAD last. */
+const REF_SORT_ORDER: Record<string, number> = { tag: 0, branch: 1, remote: 2, head: 3 };
 
 // Cache for formatRelativeDate — avoids repeated Date parsing and arithmetic.
 // Entries are keyed by date string. When the cache exceeds MAX entries,
