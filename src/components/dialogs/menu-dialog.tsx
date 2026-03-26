@@ -133,7 +133,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     return `${days}d ago`;
   };
 
-  const repoItems: SettingItem[] = [
+  const repoItems = createMemo<SettingItem[]>(() => [
     { kind: "header", label: "Origin" },
     { kind: "copyable", label: "URL", get: () => state.remoteUrl() || "(none)" },
 
@@ -173,7 +173,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
       get: () => MS_TO_LABEL[state.autoRefreshInterval()] ?? "off",
       set: (v) => actions.setAutoRefreshInterval(AUTO_REFRESH_MS[v] ?? DEFAULT_AUTO_REFRESH_INTERVAL),
     },
-  ];
+  ]);
 
   // ── Branch tab items ──────────────────────────────────────────────
   const localBranches = createMemo(() =>
@@ -291,7 +291,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
 
   // ── Active items depend on tab ────────────────────────────────────
   const activeItems = (): SettingItem[] =>
-    activeTab() === "repository" ? repoItems : branchItems();
+    activeTab() === "repository" ? repoItems() : branchItems();
 
   // ── Cursor per tab ────────────────────────────────────────────────
   const [repoCursor, setRepoCursor] = createSignal(0);

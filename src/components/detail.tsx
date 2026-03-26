@@ -8,6 +8,26 @@ import { buildFileTree, flattenFileTree } from "../utils/file-tree";
 import type { FileTreeNode, FileTreeRow } from "../utils/file-tree";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
 
+// ── Layout constants ────────────────────────────────────────────────
+/** Minimum panel width in characters before padding is subtracted. */
+const MIN_PANEL_WIDTH = 60;
+/** Horizontal padding (paddingX=2 each side) subtracted from panel width. */
+const PANEL_PADDING_X = 4;
+/** Width of the abbreviated commit hash (7 hex chars). */
+const SHORT_HASH_LEN = 7;
+/** Space between hash and badge in child/parent entry rows. */
+const HASH_BADGE_GAP = 1;
+/** Badge inner padding (1 space each side of the text). */
+const BADGE_PADDING = 2;
+/** Left indent for child/parent/file entry rows. */
+const ENTRY_PADDING_LEFT = 2;
+/** Width of the directory collapse indicator ("▸ " / "▾ "). */
+const DIR_INDICATOR_WIDTH = 2;
+/** Padding before the +/- stat columns in file rows. */
+const STAT_PADDING_LEFT = 2;
+/** Padding between the + and - stat columns. */
+const STAT_GAP = 1;
+
 /** Types for interactive items in the detail panel */
 type InteractiveItem =
   | { type: "section-header"; section: "children" | "parents" | "files" }
@@ -100,8 +120,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
 
   // ── Cursor-aware banner scroll for long text ──────────────────────
   // Only the currently-cursored item scrolls when its text overflows.
-  // Panel usable width = max(floor(renderer.width * 0.25), 60) - 4 (paddingX=2 each side)
-  const panelUsableWidth = () => Math.max(Math.floor(renderer.width * 0.25), 60) - 4;
+  const panelUsableWidth = () => Math.max(Math.floor(renderer.width * 0.25), MIN_PANEL_WIDTH) - PANEL_PADDING_X;
 
 
   // Collapsible section state — reset to expanded when commit changes
@@ -379,8 +398,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
 
       case "child":
       case "parent": {
-        // Layout: paddingLeft(2) + hash(7) + gap(1) + ` name ` badge
-        // Available for badge text = pw - 2(paddingLeft) - 7(hash) - 1(gap) - 2(badge padding)
+        // Layout: paddingLeft + hash(7) + gap(1) + ` name ` badge
         const r = row();
         const entryBranch = item.type === "child"
           ? r?.childBranches[item.index] ?? ""
@@ -390,30 +408,30 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
           const tag = getTagForHash(item.hash);
           name = tag ?? "deleted";
         }
-        const available = pw - 2 - 7 - 1 - 2;
+        const available = pw - ENTRY_PADDING_LEFT - SHORT_HASH_LEN - HASH_BADGE_GAP - BADGE_PADDING;
         if (name.length <= available) return null;
         return { text: name, visibleWidth: available };
       }
 
       case "file-dir": {
-        // Layout: paddingLeft(2) + prefix + connector + dirIndicator(2) + name
+        // Layout: paddingLeft + prefix + connector + dirIndicator + name
         const rows = fileTreeRows();
         const treeRow = rows[item.index];
         if (!treeRow) return null;
-        const fixedChars = 2 + treeRow.prefix.length + treeRow.connector.length + 2;
+        const fixedChars = ENTRY_PADDING_LEFT + treeRow.prefix.length + treeRow.connector.length + DIR_INDICATOR_WIDTH;
         const available = pw - fixedChars;
         if (treeRow.name.length <= available) return null;
         return { text: treeRow.name, visibleWidth: available };
       }
 
       case "file": {
-        // Layout: paddingLeft(2) + prefix + connector + name + paddingLeft(2) + addCol + paddingLeft(1) + delCol
+        // Layout: paddingLeft + prefix + connector + name + statPaddingLeft + addCol + statGap + delCol
         const rows = fileTreeRows();
         const treeRow = rows[item.index];
         if (!treeRow) return null;
         const fw = fileWidths();
-        const statWidth = 2 + fw.addColWidth + 1 + fw.delColWidth;
-        const fixedChars = 2 + treeRow.prefix.length + treeRow.connector.length + statWidth;
+        const statWidth = STAT_PADDING_LEFT + fw.addColWidth + STAT_GAP + fw.delColWidth;
+        const fixedChars = ENTRY_PADDING_LEFT + treeRow.prefix.length + treeRow.connector.length + statWidth;
         const available = pw - fixedChars;
         if (treeRow.name.length <= available) return null;
         return { text: treeRow.name, visibleWidth: available };
@@ -444,18 +462,32 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   const isCursored = (itemIndex: number) =>
     state.detailFocused() && state.detailCursorIndex() === itemIndex;
 
-  /** Find the interactive item index for a given item */
-  const findItemIndex = (type: InteractiveItem["type"], section?: string, idx?: number): number => {
+  /** Memo'd index map for O(1) lookup of interactive item positions.
+   *  Keys are "section-header:children", "child:0", "file-dir:3", etc. */
+  const itemIndexMap = createMemo(() => {
+    const map = new Map<string, number>();
     const items = interactiveItems();
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
-      if (item.type === type) {
-        if (type === "section-header" && item.type === "section-header" && item.section === section) return i;
-        if ((type === "child" || type === "parent") && (item.type === "child" || item.type === "parent") && item.index === idx) return i;
-        if ((type === "file-dir" || type === "file") && (item.type === "file-dir" || item.type === "file") && item.index === idx) return i;
+      switch (item.type) {
+        case "section-header":
+          map.set(`section-header:${item.section}`, i);
+          break;
+        case "child":
+        case "parent":
+        case "file-dir":
+        case "file":
+          map.set(`${item.type}:${item.index}`, i);
+          break;
       }
     }
-    return -1;
+    return map;
+  });
+
+  /** Find the interactive item index for a given item (O(1) via memo'd map). */
+  const findItemIndex = (type: InteractiveItem["type"], section?: string, idx?: number): number => {
+    const key = type === "section-header" ? `section-header:${section}` : `${type}:${idx}`;
+    return itemIndexMap().get(key) ?? -1;
   };
 
   // Track interactive item indices for each rendered section/entry

@@ -1,0 +1,250 @@
+/**
+ * Theme color definitions for gittree.
+ *
+ * Extracted from theme.ts to keep the provider/context logic separate
+ * from the raw color data.  Each exported constant satisfies the Theme
+ * interface defined in theme.ts.
+ */
+import type { Theme } from "./theme";
+
+export const openCodeOriginal: Theme = {
+  name: "OpenCode Original",
+  background: "#131010",
+  backgroundPanel: "#1e1a1a",
+  backgroundElement: "#2a2424",
+  backgroundElementActive: "#3d3838",
+  foreground: "#e8e4e1",
+  foregroundMuted: "#8b8584",
+  border: "#3d3838",
+
+  primary: "#e08a5c",
+  accent: "#e5b567",
+  error: "#e06c75",
+  success: "#98c379",
+  graphColors: [
+    "#e08a5c",
+    "#98c379",
+    "#61afef",
+    "#e5b567",
+    "#c678dd",
+    "#56b6c2",
+    "#d19a66",
+    "#e06c75",
+    "#e8e4e1",
+    "#8b8584",
+    "#b48ead",
+    "#8fbcbb"
+  ],
+  diffAdded: "#98c379",
+  diffRemoved: "#e06c75",
+};
+
+export const catppuccinMocha: Theme = {
+  name: "Catppuccin Mocha",
+  background: "#1e1e2e",
+  backgroundPanel: "#11111b",
+  backgroundElement: "#313244",
+  backgroundElementActive: "#45475a",
+  foreground: "#cdd6f4",
+  foregroundMuted: "#7f849c",
+  border: "#45475a",
+  primary: "#89b4fa",
+  accent: "#f5c2e7",
+  error: "#f38ba8",
+  success: "#a6e3a1",
+  graphColors: [
+    "#f38ba8", "#a6e3a1", "#89b4fa", "#f9e2af", "#cba6f7", "#94e2d5",
+    "#fab387", "#74c7ec", "#f2cdcd", "#89dceb", "#b4befe", "#eba0ac",
+  ],
+  diffAdded: "#a6e3a1",
+  diffRemoved: "#f38ba8",
+};
+
+export const tokyoNight: Theme = {
+  name: "Tokyo Night",
+  background: "#1a1b26",
+  backgroundPanel: "#16161e",
+  backgroundElement: "#292e42",
+  backgroundElementActive: "#3b4261",
+  foreground: "#c0caf5",
+  foregroundMuted: "#565f89",
+  border: "#3b4261",
+  primary: "#7aa2f7",
+  accent: "#bb9af7",
+  error: "#f7768e",
+  success: "#9ece6a",
+  graphColors: [
+    "#f7768e", "#9ece6a", "#7aa2f7", "#e0af68", "#bb9af7", "#73daca",
+    "#ff9e64", "#7dcfff", "#c0caf5", "#2ac3de", "#b4f9f8", "#ff007c",
+  ],
+  diffAdded: "#9ece6a",
+  diffRemoved: "#f7768e",
+};
+
+export const dracula: Theme = {
+  name: "Dracula",
+  background: "#282a36",
+  backgroundPanel: "#1e1f29",
+  backgroundElement: "#44475a",
+  backgroundElementActive: "#6272a4",
+  foreground: "#f8f8f2",
+  foregroundMuted: "#6272a4",
+  border: "#44475a",
+  primary: "#bd93f9",
+  accent: "#ff79c6",
+  error: "#ff5555",
+  success: "#50fa7b",
+  graphColors: [
+    "#ff5555", "#50fa7b", "#bd93f9", "#f1fa8c", "#ff79c6", "#8be9fd",
+    "#ffb86c", "#6272a4", "#f8f8f2", "#ff6e6e", "#69ff94", "#d6acff",
+  ],
+  diffAdded: "#50fa7b",
+  diffRemoved: "#ff5555",
+};
+
+export const nord: Theme = {
+  name: "Nord",
+  background: "#2e3440",
+  backgroundPanel: "#242933",
+  backgroundElement: "#3b4252",
+  backgroundElementActive: "#4c566a",
+  foreground: "#eceff4",
+  foregroundMuted: "#9aa1a6",
+  border: "#434c5e",
+  primary: "#88c0d0",
+  accent: "#b48ead",
+  error: "#bf616a",
+  success: "#a3be8c",
+  graphColors: [
+    "#bf616a", "#a3be8c", "#81a1c1", "#ebcb8b", "#b48ead", "#88c0d0",
+    "#d08770", "#5e81ac", "#d8dee9", "#8fbcbb", "#a3be8c", "#bf616a",
+  ],
+  diffAdded: "#a3be8c",
+  diffRemoved: "#bf616a",
+};
+
+export const oneDark: Theme = {
+  name: "One Dark Pro",
+  background: "#282c34",
+  backgroundPanel: "#21252b",
+  backgroundElement: "#2c313c",
+  backgroundElementActive: "#3e4451",
+  foreground: "#abb2bf",
+  foregroundMuted: "#5c6370",
+  border: "#3e4451",
+  primary: "#61afef",
+  accent: "#c678dd",
+  error: "#e06c75",
+  success: "#98c379",
+  graphColors: [
+    "#e06c75", "#98c379", "#61afef", "#e5c07b", "#c678dd", "#56b6c2",
+    "#d19a66", "#be5046", "#abb2bf", "#5c6370", "#73bda8", "#d8985f"
+  ],
+  diffAdded: "#98c379",
+  diffRemoved: "#e06c75",
+};
+
+export const gruvbox: Theme = {
+  name: "Gruvbox Dark",
+  background: "#282828",
+  backgroundPanel: "#1d2021",
+  backgroundElement: "#3c3836",
+  backgroundElementActive: "#504945",
+  foreground: "#ebdbb2",
+  foregroundMuted: "#a89984",
+  border: "#504945",
+  primary: "#83a598",
+  accent: "#d3869b",
+  error: "#fb4934",
+  success: "#b8bb26",
+  graphColors: [
+    "#fb4934", "#b8bb26", "#83a598", "#fabd2f", "#d3869b", "#8ec07c",
+    "#fe8019", "#cc241d", "#98971a", "#458588", "#b16286", "#689d6a"
+  ],
+  diffAdded: "#b8bb26",
+  diffRemoved: "#fb4934",
+};
+
+export const monokai: Theme = {
+  name: "Monokai Pro",
+  background: "#2d2a2e",
+  backgroundPanel: "#221f22",
+  backgroundElement: "#403e41",
+  backgroundElementActive: "#5b595c",
+  foreground: "#fcfcfa",
+  foregroundMuted: "#939293",
+  border: "#5b595c",
+  primary: "#78dce8",
+  accent: "#ab9df2",
+  error: "#ff6188",
+  success: "#a9dc76",
+  graphColors: [
+    "#ff6188", "#a9dc76", "#78dce8", "#ffd866", "#ab9df2", "#fc9867",
+    "#fcfcfa", "#c1c0c0", "#ff6188", "#a9dc76", "#78da78", "#ffd866"
+  ],
+  diffAdded: "#a9dc76",
+  diffRemoved: "#ff6188",
+};
+
+export const ayuDark: Theme = {
+  name: "Ayu Mirage",
+  background: "#1f2430",
+  backgroundPanel: "#171b24",
+  backgroundElement: "#232836",
+  backgroundElementActive: "#2d3446",
+  foreground: "#cbccc6",
+  foregroundMuted: "#707a8c",
+  border: "#2d3446",
+  primary: "#5ccfe6",
+  accent: "#ffcc66",
+  error: "#ff3333",
+  success: "#bae67e",
+  graphColors: [
+    "#ff3333", "#bae67e", "#5ccfe6", "#ffcc66", "#d4bfff", "#95e6cb",
+    "#ffa759", "#f28779", "#cbccc6", "#73d0ff", "#ffdfb3", "#f29e74"
+  ],
+  diffAdded: "#bae67e",
+  diffRemoved: "#ff3333",
+};
+
+export const synthwave: Theme = {
+  name: "Synthwave '84",
+  background: "#262335",
+  backgroundPanel: "#1c1926",
+  backgroundElement: "#342f49",
+  backgroundElementActive: "#49416a",
+  foreground: "#ffffff",
+  foregroundMuted: "#848bbd",
+  border: "#49416a",
+  primary: "#f92aad",
+  accent: "#36f9f6",
+  error: "#fe4450",
+  success: "#72f1b8",
+  graphColors: [
+    "#fe4450", "#72f1b8", "#36f9f6", "#fede5d", "#f92aad", "#8b00ff",
+    "#ff7edb", "#03e8fc", "#f8f9fa", "#ff0055", "#00ffcc", "#ffaa00"
+  ],
+  diffAdded: "#72f1b8",
+  diffRemoved: "#fe4450",
+};
+
+export const rosePine: Theme = {
+  name: "Ros\u00e9 Pine",
+  background: "#191724",
+  backgroundPanel: "#14121d",
+  backgroundElement: "#26233a",
+  backgroundElementActive: "#312f45",
+  foreground: "#e0def4",
+  foregroundMuted: "#6e6a86",
+  border: "#312f45",
+  primary: "#c4a7e7",
+  accent: "#ebbcba",
+  error: "#eb6f92",
+  success: "#9ccfd8",
+  graphColors: [
+    "#eb6f92", "#9ccfd8", "#c4a7e7", "#f6c177", "#ebbcba", "#31748f",
+    "#e0def4", "#908caa", "#eb6f92", "#9ccfd8", "#c4a7e7", "#f6c177"
+  ],
+  diffAdded: "#9ccfd8",
+  diffRemoved: "#eb6f92",
+};
