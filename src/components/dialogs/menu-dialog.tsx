@@ -675,11 +675,8 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
                 paddingX={4}
                 backgroundColor={isSelected() ? t().backgroundElement : undefined}
               >
-                {/* Setting name */}
-                <text flexGrow={1} flexShrink={1} wrapMode="none" truncate>
-                  <span fg={labelColor()}>
-                    {item.label}
-                  </span>
+                <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={labelColor()}>
+                  {item.label}
                 </text>
 
                 {/* Current value — right-aligned, in brackets */}
