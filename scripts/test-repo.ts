@@ -142,27 +142,27 @@ function test8() {
   const commit = parseCommitLine(line, new Set(["origin"]));
   assert(commit !== null, "commit is not null");
 
-  assertEqual(hash, commit!.hash, "hash matches");
-  assertEqual(shortHash, commit!.shortHash, "shortHash matches");
-  assertEqual(2, commit!.parents.length, "two parents");
-  assertEqual("parent1", commit!.parents[0], "first parent");
-  assertEqual("parent2", commit!.parents[1], "second parent");
-  assertEqual(subject, commit!.subject, "subject matches");
-  assertEqual("", commit!.body, "body is empty (populated later by getCommitDetail)");
-  assertEqual(author, commit!.author, "author matches");
-  assertEqual(email, commit!.authorEmail, "authorEmail matches");
-  assertEqual(date, commit!.authorDate, "authorDate matches");
-  assertEqual(committer, commit!.committer, "committer matches");
-  assertEqual(committerEmail, commit!.committerEmail, "committerEmail matches");
-  assertEqual(commitDate, commit!.commitDate, "commitDate matches");
+  assertEqual(hash, commit.hash, "hash matches");
+  assertEqual(shortHash, commit.shortHash, "shortHash matches");
+  assertEqual(2, commit.parents.length, "two parents");
+  assertEqual("parent1", commit.parents[0], "first parent");
+  assertEqual("parent2", commit.parents[1], "second parent");
+  assertEqual(subject, commit.subject, "subject matches");
+  assertEqual("", commit.body, "body is empty (populated later by getCommitDetail)");
+  assertEqual(author, commit.author, "author matches");
+  assertEqual(email, commit.authorEmail, "authorEmail matches");
+  assertEqual(date, commit.authorDate, "authorDate matches");
+  assertEqual(committer, commit.committer, "committer matches");
+  assertEqual(committerEmail, commit.committerEmail, "committerEmail matches");
+  assertEqual(commitDate, commit.commitDate, "commitDate matches");
 
   // Refs
-  assertEqual(2, commit!.refs.length, "two refs");
-  assertEqual("main", commit!.refs[0].name, "first ref is main");
-  assertEqual("branch", commit!.refs[0].type, "main is branch");
-  assert(commit!.refs[0].isCurrent, "main is current");
-  assertEqual("v1.0", commit!.refs[1].name, "second ref is v1.0");
-  assertEqual("tag", commit!.refs[1].type, "v1.0 is tag");
+  assertEqual(2, commit.refs.length, "two refs");
+  assertEqual("main", commit.refs[0].name, "first ref is main");
+  assertEqual("branch", commit.refs[0].type, "main is branch");
+  assert(commit.refs[0].isCurrent, "main is current");
+  assertEqual("v1.0", commit.refs[1].name, "second ref is v1.0");
+  assertEqual("tag", commit.refs[1].type, "v1.0 is tag");
 }
 
 // ============================================================
@@ -180,8 +180,8 @@ function test9() {
 
   const commit = parseCommitLine(line, new Set());
   assert(commit !== null, "commit is not null");
-  assertEqual(0, commit!.parents.length, "root commit has no parents");
-  assertEqual(0, commit!.refs.length, "no refs");
+  assertEqual(0, commit.parents.length, "root commit has no parents");
+  assertEqual(0, commit.refs.length, "no refs");
 }
 
 // ============================================================
@@ -205,7 +205,7 @@ function test11() {
 
   assertEqual("\x1e", RS, "RS is the ASCII record separator character");
   assertEqual(1, RS.length, "RS is a single character");
-  assertEqual(0x1e, RS.charCodeAt(0), "RS char code is 30 (0x1E)");
+  assertEqual(0x1e, RS.codePointAt(0), "RS char code is 30 (0x1E)");
 }
 
 // ============================================================
@@ -225,7 +225,7 @@ function test12() {
 
   const commit = parseCommitLine(line, new Set());
   assert(commit !== null, "commit is not null");
-  assertEqual(specialSubject, commit!.subject, "subject with special chars preserved exactly");
+  assertEqual(specialSubject, commit.subject, "subject with special chars preserved exactly");
 }
 
 // ── Run all tests ───────────────────────────────────────────

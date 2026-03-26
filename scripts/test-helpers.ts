@@ -182,6 +182,26 @@ export function assertRowFullyDimmed(row: GraphRow, rowIdx: number) {
   }
 }
 
+/** Connector types that indicate a merge/branch connection (not just a straight pass-through). */
+const CONNECTION_TYPES = new Set([
+  "horizontal", "tee-left", "tee-right",
+  "corner-top-right", "corner-top-left",
+  "corner-bottom-right", "corner-bottom-left",
+]);
+
+/** Check whether a commit row has merge/branch connectors (mirrors canMergeFanOut from graph.tsx). */
+function hasConnectionConnectors(row: GraphRow): boolean {
+  return row.connectors.some(c => CONNECTION_TYPES.has(c.type));
+}
+
+/** Print fan-out rows above a commit, optionally excluding the last one when it will be merged. */
+function printFanOutRows(foRows: Connector[][], count: number, opts: RenderOptions, nodeColumn: number): void {
+  for (let i = 0; i < count; i++) {
+    const foAscii = graphCharsToAscii(renderFanOutRow(foRows[i], opts, nodeColumn));
+    console.log(`        ${foAscii}`);
+  }
+}
+
 /**
  * Print the full rendered graph for a set of rows, matching the real app's
  * visual output. Mirrors the `canMergeFanOut` optimization from graph.tsx:
@@ -191,25 +211,14 @@ export function assertRowFullyDimmed(row: GraphRow, rowIdx: number) {
 export function printGraph(rows: GraphRow[], themeColors: string[] = THEME_COLORS) {
   const maxCols = getMaxGraphColumns(rows);
   const opts = { themeColors, padToColumns: maxCols };
+
   for (const row of rows) {
     const foRows = row.fanOutRows;
-
-    // Mirror canMergeFanOut: commit row has no merge/branch connectors?
-    const commitHasConnections = row.connectors.some(c =>
-      c.type === "horizontal" || c.type === "tee-left" || c.type === "tee-right" ||
-      c.type === "corner-top-right" || c.type === "corner-top-left" ||
-      c.type === "corner-bottom-right" || c.type === "corner-bottom-left"
-    );
-    const canMerge = foRows && foRows.length > 0 && !commitHasConnections;
+    const canMerge = foRows && foRows.length > 0 && !hasConnectionConnectors(row);
 
     if (foRows) {
-      // Print fan-out rows above the commit.
-      // If merging, print all except the last (last becomes the commit row).
       const count = canMerge ? foRows.length - 1 : foRows.length;
-      for (let i = 0; i < count; i++) {
-        const foAscii = graphCharsToAscii(renderFanOutRow(foRows[i], opts, row.nodeColumn));
-        console.log(`        ${foAscii}`);
-      }
+      printFanOutRows(foRows, count, opts, row.nodeColumn);
     }
 
     // Commit row: use last fan-out row's graph if merging, else normal
@@ -217,9 +226,7 @@ export function printGraph(rows: GraphRow[], themeColors: string[] = THEME_COLOR
     const ro = row.isRemoteOnly ? " [RO]" : "";
     if (canMerge && foRows) {
       const lastFO = foRows.at(-1);
-
       assert(lastFO !== undefined, "Last fan-out row should exist when canMerge is true");
-
       const foAscii = graphCharsToAscii(renderFanOutRow(lastFO, opts, row.nodeColumn));
       console.log(`        ${foAscii}  ${row.commit.hash}  (${refs})${ro}`);
     } else {
