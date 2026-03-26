@@ -264,7 +264,7 @@ function GraphLine(props: Readonly<{
   };
 
   // Secondary column color (author, date, hash).
-  // Active → accent (bold applied separately). Otherwise muted.
+  // Active → accent (bold applied separately). Otherwise, muted.
   const secondaryColumnColor = () => {
     if (props.active) return t().accent;
     return t().foregroundMuted;

@@ -73,7 +73,7 @@ function DetailBadge(props: Readonly<{
   );
 }
 
-export interface DetailViewProps {
+interface DetailViewProps {
   onJumpToCommit?: (hash: string, from: "child" | "parent") => void;
   /** Mutable ref object populated by the detail view with navigation callbacks */
   navRef?: DetailNavRef;

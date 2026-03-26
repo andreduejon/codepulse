@@ -100,7 +100,7 @@ export function makeCommit(
     committerEmail: "test@test.com",
     commitDate: new Date().toISOString(),
     refs,
-  };
+  } as Commit;
 }
 
 /** Check that a row has a connector of the given type at the given column */
