@@ -25,7 +25,20 @@ async function runGit(
   return { stdout, stderr, exitCode: proc.exitCode ?? 1 };
 }
 
-function parseRefs(refString: string): RefInfo[] {
+/** Fetch the list of configured remote names (e.g. ["origin", "upstream"]). */
+async function getRemoteNames(repoPath: string): Promise<Set<string>> {
+  const { stdout, exitCode } = await runGit(repoPath, ["remote"]);
+  if (exitCode !== 0) return new Set();
+  return new Set(
+    stdout
+      .trim()
+      .split("\n")
+      .map((r) => r.trim())
+      .filter(Boolean)
+  );
+}
+
+function parseRefs(refString: string, remoteNames: Set<string>): RefInfo[] {
   if (!refString.trim()) return [];
   return refString.split(",").map((ref) => {
     ref = ref.trim();
@@ -46,9 +59,8 @@ function parseRefs(refString: string): RefInfo[] {
     }
     if (ref.includes("/")) {
       const isRemote =
-        ref.startsWith("origin/") ||
-        ref.startsWith("upstream/") ||
-        ref.startsWith("refs/remotes/");
+        ref.startsWith("refs/remotes/") ||
+        [...remoteNames].some((r) => ref.startsWith(`${r}/`));
       if (isRemote) {
         return {
           name: ref,
@@ -61,13 +73,13 @@ function parseRefs(refString: string): RefInfo[] {
   });
 }
 
-function parseCommitLine(line: string): Commit | null {
+function parseCommitLine(line: string, remoteNames: Set<string>): Commit | null {
   const parts = line.split(RS);
   if (parts.length < 11) return null;
 
   const [hash, shortHash, parentsStr, refsStr, subject, author, authorEmail, authorDate, committer, committerEmail, commitDate] = parts;
   const parents = parentsStr.trim() ? parentsStr.trim().split(" ") : [];
-  const refs = parseRefs(refsStr);
+  const refs = parseRefs(refsStr, remoteNames);
 
   return {
     hash,
@@ -108,7 +120,12 @@ export async function getCommits(
     args.push("--", options.branch);
   }
 
-  const { stdout, stderr, exitCode } = await runGit(repoPath, args);
+  const [logResult, remoteNames] = await Promise.all([
+    runGit(repoPath, args),
+    getRemoteNames(repoPath),
+  ]);
+
+  const { stdout, stderr, exitCode } = logResult;
 
   if (exitCode !== 0) {
     throw new Error(`git log failed: ${stderr}`);
@@ -117,7 +134,7 @@ export async function getCommits(
   const commits: Commit[] = [];
   for (const line of stdout.trim().split("\n")) {
     if (!line.trim()) continue;
-    const commit = parseCommitLine(line);
+    const commit = parseCommitLine(line, remoteNames);
     if (commit) commits.push(commit);
   }
 
@@ -125,22 +142,29 @@ export async function getCommits(
 }
 
 export async function getBranches(repoPath: string): Promise<Branch[]> {
-  const { stdout, exitCode } = await runGit(repoPath, [
-    "branch", "-a", `--format=%(HEAD)${RS}%(refname:short)${RS}%(objectname:short)`,
+  const [branchResult, remoteNames] = await Promise.all([
+    runGit(repoPath, [
+      "branch", "-a", `--format=%(HEAD)${RS}%(refname:short)${RS}%(objectname:short)`,
+    ]),
+    getRemoteNames(repoPath),
   ]);
 
-  if (exitCode !== 0) return [];
+  if (branchResult.exitCode !== 0) return [];
 
-  return stdout
+  return branchResult.stdout
     .trim()
     .split("\n")
     .filter((l) => l.trim())
     .map((line) => {
       const [head, name, lastCommitHash] = line.split(RS);
+      const trimmedName = name.trim();
+      const isRemote =
+        trimmedName.includes("remotes/") ||
+        [...remoteNames].some((r) => trimmedName.startsWith(`${r}/`));
       return {
-        name: name.trim(),
+        name: trimmedName,
         isCurrent: head.trim() === "*",
-        isRemote: name.includes("remotes/") || name.includes("origin/"),
+        isRemote,
         lastCommitHash: lastCommitHash?.trim() ?? "",
       };
     });
@@ -159,18 +183,33 @@ export async function getCommitDetail(
     "diff-tree", "--no-commit-id", "-r", "--numstat", hash,
   ]);
 
+  // Get file changes with status letters (A/M/D/R/C/T)
+  const statusProc = runGit(repoPath, [
+    "diff-tree", "--no-commit-id", "-r", "--name-status", hash,
+  ]);
+
   // Get the diff
   const diffProc = runGit(repoPath, [
     "diff-tree", "-p", "--no-commit-id", hash,
   ]);
 
-  const [msgResult, statResult, diffResult] = await Promise.all([
-    msgProc, statProc, diffProc,
+  const [msgResult, statResult, statusResult, diffResult] = await Promise.all([
+    msgProc, statProc, statusProc, diffProc,
   ]);
 
   const fullMessage = msgResult.stdout;
   const statOutput = statResult.stdout;
   const diff = diffResult.stdout;
+
+  // Build a map from file path → status letter
+  const statusMap = new Map<string, string>();
+  for (const line of statusResult.stdout.trim().split("\n")) {
+    if (!line.trim()) continue;
+    const [statusCode, ...pathParts] = line.split("\t");
+    const filePath = pathParts.join("\t");
+    // Status codes like R100, C080 — extract just the leading letter
+    statusMap.set(filePath, (statusCode?.[0] ?? "M") as string);
+  }
 
   const files: FileChange[] = statOutput
     .trim()
@@ -178,11 +217,13 @@ export async function getCommitDetail(
     .filter((l) => l.trim())
     .map((line) => {
       const [additions, deletions, ...pathParts] = line.split("\t");
+      const filePath = pathParts.join("\t");
+      const status = (statusMap.get(filePath) ?? "M") as FileChange["status"];
       return {
-        path: pathParts.join("\t"),
+        path: filePath,
         additions: additions === "-" ? 0 : parseInt(additions, 10),
         deletions: deletions === "-" ? 0 : parseInt(deletions, 10),
-        status: "M" as const,
+        status,
       };
     });
 
