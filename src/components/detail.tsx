@@ -732,7 +732,9 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
               </text>
             </Show>
 
-            <box height={1} />
+            <Show when={interactiveItems().length > 0}>
+              <box width="100%" border={["top"]} borderStyle="single" borderColor={t().border} />
+            </Show>
 
             {/* ── Children (collapsible) ── */}
             <Show when={row()!.children.length > 0}>
@@ -832,7 +834,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                         backgroundColor={itemHighlightBg(itemIdx())}
                       >
                         <box flexShrink={0}>
-                          <text fg={t().foregroundMuted} wrapMode="none">
+              <text fg={t().border} wrapMode="none">
                             {treeRow.prefix}{treeRow.connector}
                           </text>
                         </box>
