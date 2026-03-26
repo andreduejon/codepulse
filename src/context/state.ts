@@ -5,36 +5,43 @@ import { DEFAULT_MAX_COUNT } from "../constants";
 export const DEFAULT_AUTO_REFRESH_INTERVAL = 30000;
 
 export interface AppState {
+  // ── Repository data ─────────────────────────────────────────────────
   commits: Accessor<Commit[]>;
   graphRows: Accessor<GraphRow[]>;
   branches: Accessor<Branch[]>;
   currentBranch: Accessor<string>;
   repoPath: Accessor<string>;
   remoteUrl: Accessor<string>;
-  error: Accessor<string | null>;
+
+  // ── Navigation & selection ──────────────────────────────────────────
   cursorIndex: Accessor<number>;
   selectedCommit: Accessor<Commit | null>;
   selectedRow: Accessor<GraphRow | null>;
   commitDetail: Accessor<CommitDetail | null>;
-  loading: Accessor<boolean>;
-  showAllBranches: Accessor<boolean>;
   searchQuery: Accessor<string>;
   filteredRows: Accessor<GraphRow[]>;
-  maxGraphColumns: Accessor<number>;
+  scrollTargetIndex: Accessor<number>;
+  /** Branch being viewed (filtered perspective). null = show all / default. */
+  viewingBranch: Accessor<string | null>;
+
+  // ── Detail panel ────────────────────────────────────────────────────
   detailFocused: Accessor<boolean>;
   detailCursorIndex: Accessor<number>;
   detailOriginHash: Accessor<string | null>;
-  scrollTargetIndex: Accessor<number>;
-  maxCount: Accessor<number>;
-  autoRefreshInterval: Accessor<number>;
-  lastFetchTime: Accessor<Date | null>;
-  fetching: Accessor<boolean>;
   /** True while commit detail (message, files, diff) is being loaded */
   detailLoading: Accessor<boolean>;
   /** Contextual enter-key action label for the detail cursor item (null = no action) */
   detailCursorAction: Accessor<string | null>;
-  /** Branch being viewed (filtered perspective). null = show all / default. */
-  viewingBranch: Accessor<string | null>;
+
+  // ── UI state & settings ─────────────────────────────────────────────
+  error: Accessor<string | null>;
+  loading: Accessor<boolean>;
+  showAllBranches: Accessor<boolean>;
+  maxGraphColumns: Accessor<number>;
+  maxCount: Accessor<number>;
+  autoRefreshInterval: Accessor<number>;
+  lastFetchTime: Accessor<Date | null>;
+  fetching: Accessor<boolean>;
 }
 
 export interface AppActions {
@@ -69,30 +76,37 @@ export interface AppActions {
 const AppStateContext = createContext<{ state: AppState; actions: AppActions }>();
 
 export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
+  // ── Repository data ───────────────────────────────────────────────
   const [commits, setCommits] = createSignal<Commit[]>([]);
   const [graphRows, setGraphRows] = createSignal<GraphRow[]>([]);
   const [branches, setBranches] = createSignal<Branch[]>([]);
   const [currentBranch, setCurrentBranch] = createSignal("");
   const [repoPath, setRepoPath] = createSignal("");
   const [remoteUrl, setRemoteUrl] = createSignal("");
-  const [error, setError] = createSignal<string | null>(null);
+
+  // ── Navigation & selection ────────────────────────────────────────
   const [cursorIndex, setCursorIndex] = createSignal(0);
   const [scrollTargetIndex, setScrollTargetIndex] = createSignal(0);
   const [commitDetail, setCommitDetail] = createSignal<CommitDetail | null>(null);
-  const [loading, setLoading] = createSignal(true);
-  const [showAllBranches, setShowAllBranches] = createSignal(true);
   const [searchQuery, setSearchQuery] = createSignal("");
-  const [maxGraphColumns, setMaxGraphColumns] = createSignal(0);
-  const [maxCount, setMaxCount] = createSignal(initialMaxCount);
-  const [autoRefreshInterval, setAutoRefreshInterval] = createSignal(DEFAULT_AUTO_REFRESH_INTERVAL);
+  const [viewingBranch, setViewingBranch] = createSignal<string | null>(null);
+
+  // ── Detail panel ──────────────────────────────────────────────────
   const [detailFocused, setDetailFocused] = createSignal(false);
   const [detailCursorIndex, setDetailCursorIndex] = createSignal(-1);
   const [detailOriginHash, setDetailOriginHash] = createSignal<string | null>(null);
-  const [lastFetchTime, setLastFetchTime] = createSignal<Date | null>(null);
-  const [fetching, setFetching] = createSignal(false);
   const [detailLoading, setDetailLoading] = createSignal(false);
   const [detailCursorAction, setDetailCursorAction] = createSignal<string | null>(null);
-  const [viewingBranch, setViewingBranch] = createSignal<string | null>(null);
+
+  // ── UI state & settings ───────────────────────────────────────────
+  const [error, setError] = createSignal<string | null>(null);
+  const [loading, setLoading] = createSignal(true);
+  const [showAllBranches, setShowAllBranches] = createSignal(true);
+  const [maxGraphColumns, setMaxGraphColumns] = createSignal(0);
+  const [maxCount, setMaxCount] = createSignal(initialMaxCount);
+  const [autoRefreshInterval, setAutoRefreshInterval] = createSignal(DEFAULT_AUTO_REFRESH_INTERVAL);
+  const [lastFetchTime, setLastFetchTime] = createSignal<Date | null>(null);
+  const [fetching, setFetching] = createSignal(false);
 
   const filteredRows = createMemo(() => {
     const query = searchQuery().toLowerCase();

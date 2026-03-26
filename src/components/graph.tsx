@@ -338,12 +338,24 @@ function GraphLine(props: Readonly<{
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 // Cache for formatRelativeDate — avoids repeated Date parsing and arithmetic.
-// Entries are keyed by date string. Cache is cleared when it exceeds 1000 entries
-// (happens naturally on data reload since new commit objects have new date strings).
+// Entries are keyed by date string. When the cache exceeds MAX entries,
+// the oldest half is evicted (Map preserves insertion order) to avoid
+// cliff-eviction where the entire cache is lost at once.
 const dateFormatCache = new Map<string, { result: string; cachedAt: number }>();
 const DATE_CACHE_MAX = 1000;
 // Recent dates (< 7 days) are re-evaluated if the cache entry is older than 60 seconds
 const DATE_CACHE_RECENT_TTL = 60_000;
+
+/** Evict the oldest half of entries when the cache is full. */
+function evictDateCache(): void {
+  const evictCount = Math.floor(dateFormatCache.size / 2);
+  let removed = 0;
+  for (const key of dateFormatCache.keys()) {
+    if (removed >= evictCount) break;
+    dateFormatCache.delete(key);
+    removed++;
+  }
+}
 
 function formatRelativeDate(dateStr: string): string {
   const now = Date.now();
@@ -380,9 +392,9 @@ function formatRelativeDate(dateStr: string): string {
     }
   }
 
-  // Evict cache if too large
+  // Evict oldest entries if cache is full
   if (dateFormatCache.size >= DATE_CACHE_MAX) {
-    dateFormatCache.clear();
+    evictDateCache();
   }
   dateFormatCache.set(dateStr, { result, cachedAt: now });
   return result;
