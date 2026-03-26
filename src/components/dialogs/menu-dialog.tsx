@@ -194,11 +194,20 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     },
   });
 
+  /** Pre-built map from branch name → graph color index (O(1) lookup). */
+  const branchColorMap = createMemo(() => {
+    const map = new Map<string, number>();
+    for (const r of state.graphRows()) {
+      if (r.branchName && !map.has(r.branchName)) {
+        map.set(r.branchName, r.nodeColor);
+      }
+    }
+    return map;
+  });
+
   /** Look up the graph color index for a branch name (falls back to 0). */
-  const branchColorIndex = (name: string): number => {
-    const row = state.graphRows().find((r) => r.branchName === name);
-    return row?.nodeColor ?? 0;
-  };
+  const branchColorIndex = (name: string): number =>
+    branchColorMap().get(name) ?? 0;
 
   const branchItems = createMemo<SettingItem[]>(() => {
     const locals = localBranches();

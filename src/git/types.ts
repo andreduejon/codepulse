@@ -69,7 +69,11 @@ export interface GraphRow {
   childColors: number[];
   /** Whether this commit's lane belongs to a remote-only branch */
   isRemoteOnly: boolean;
-  /** Set of remote branch names that are remote-only (no local counterpart) */
+  /**
+   * Set of remote branch names that are remote-only (no local counterpart).
+   * This is the same shared Set reference across all rows in a graph result —
+   * it is graph-level data attached to each row for convenient access.
+   */
   remoteOnlyBranches: Set<string>;
   /**
    * Fan-out connector rows: when this commit has multiple lanes pointing to it

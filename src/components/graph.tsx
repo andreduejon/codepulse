@@ -341,9 +341,9 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 // Entries are keyed by date string. When the cache exceeds MAX entries,
 // the oldest half is evicted (Map preserves insertion order) to avoid
 // cliff-eviction where the entire cache is lost at once.
-const dateFormatCache = new Map<string, { result: string; cachedAt: number }>();
+const dateFormatCache = new Map<string, { result: string; cachedAt: number; isStable: boolean }>();
 const DATE_CACHE_MAX = 1000;
-// Recent dates (< 7 days) are re-evaluated if the cache entry is older than 60 seconds
+// Recent dates (< 7 days) produce relative text ("5m ago") that needs periodic refresh
 const DATE_CACHE_RECENT_TTL = 60_000;
 
 /** Evict the oldest half of entries when the cache is full. */
@@ -361,9 +361,10 @@ function formatRelativeDate(dateStr: string): string {
   const now = Date.now();
   const cached = dateFormatCache.get(dateStr);
   if (cached) {
-    // For recent dates, check TTL; old dates never change
-    const age = now - cached.cachedAt;
-    if (age < DATE_CACHE_RECENT_TTL) return cached.result;
+    // Stable dates (>7 days old) never change — always return cached
+    if (cached.isStable) return cached.result;
+    // Recent dates need periodic refresh for relative text accuracy
+    if (now - cached.cachedAt < DATE_CACHE_RECENT_TTL) return cached.result;
   }
 
   const date = new Date(dateStr);
@@ -374,12 +375,15 @@ function formatRelativeDate(dateStr: string): string {
   const diffDays = Math.floor(diffHours / 24);
 
   let result: string;
+  let isStable = false;
+
   if (diffMins < 1) result = "just now";
   else if (diffHours < 1) result = `${diffMins}m ago`;
   else if (diffDays < 1) result = `${diffHours}h ago`;
   else if (diffDays === 1) result = "Yesterday";
   else if (diffDays < 7) result = `${diffDays}d ago`;
   else {
+    isStable = true; // Absolute format — won't change on subsequent calls
     const day = String(date.getDate()).padStart(2, "0");
     const month = MONTHS[date.getMonth()];
     const hours = String(date.getHours()).padStart(2, "0");
@@ -396,7 +400,7 @@ function formatRelativeDate(dateStr: string): string {
   if (dateFormatCache.size >= DATE_CACHE_MAX) {
     evictDateCache();
   }
-  dateFormatCache.set(dateStr, { result, cachedAt: now });
+  dateFormatCache.set(dateStr, { result, cachedAt: now, isStable });
   return result;
 }
 
