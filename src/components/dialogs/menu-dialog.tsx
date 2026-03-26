@@ -5,6 +5,7 @@ import { useTheme, themes } from "../../context/theme";
 import { getColorForColumn } from "../../git/graph";
 import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 import { SHIFT_JUMP } from "../../constants";
+import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import type { ScrollBoxRenderable, Renderable } from "@opentui/core";
 
 type MenuTab = "repository" | "branch";
@@ -38,7 +39,7 @@ const MS_TO_LABEL: Record<number, string> = {
 const INFO_LABEL_WIDTH = 12;
 
 /** Persists the last-used tab across dialog open/close cycles. */
-let lastMenuTab: MenuTab = "repository";
+const [lastMenuTab, setLastMenuTab] = createSignal<MenuTab>("repository");
 
 type SettingItem =
   | { kind: "header"; label: string }
@@ -58,8 +59,8 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   const t = () => theme();
 
   // ── Tab state ─────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = createSignal<MenuTab>(lastMenuTab);
-  createEffect(() => { lastMenuTab = activeTab(); });
+  const [activeTab, setActiveTab] = createSignal<MenuTab>(lastMenuTab());
+  createEffect(() => { setLastMenuTab(activeTab()); });
 
   // ── Clipboard feedback ────────────────────────────────────────────
   const [copiedLabel, setCopiedLabel] = createSignal<string | null>(null);
@@ -94,61 +95,16 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   // ── Banner scroll for selected copyable rows ──────────────────────
   /** Usable width for copyable text: dialog=70 - 2(paddingX=1) - 8(paddingX=4) = 60 */
   const COPYABLE_VISIBLE_WIDTH = 60;
-  /** Scrolling speed: shift 1 char every N ms. */
-  const BANNER_TICK_MS = 200;
-  /** Pause at each end before reversing (ms). */
-  const BANNER_PAUSE_MS = 1500;
 
-  const [bannerOffset, setBannerOffset] = createSignal(0);
-  const [bannerDirection, setBannerDirection] = createSignal<1 | -1>(1);
-  let bannerTimer: ReturnType<typeof setInterval> | undefined;
-  let bannerPauseTimer: ReturnType<typeof setTimeout> | undefined;
-
-  const stopBanner = () => {
-    if (bannerTimer) { clearInterval(bannerTimer); bannerTimer = undefined; }
-    if (bannerPauseTimer) { clearTimeout(bannerPauseTimer); bannerPauseTimer = undefined; }
-    setBannerOffset(0);
-    setBannerDirection(1);
-  };
-
-  const startBanner = (text: string) => {
-    const maxOffset = Math.max(0, text.length - COPYABLE_VISIBLE_WIDTH);
-    if (maxOffset <= 0) return; // fits, no scrolling needed
-
-    bannerTimer = setInterval(() => {
-      setBannerOffset((prev) => {
-        const dir = bannerDirection();
-        const next = prev + dir;
-        if (next >= maxOffset) {
-          clearInterval(bannerTimer); bannerTimer = undefined;
-          bannerPauseTimer = setTimeout(() => { setBannerDirection(-1); startBanner(text); }, BANNER_PAUSE_MS);
-          return maxOffset;
-        }
-        if (next <= 0) {
-          clearInterval(bannerTimer); bannerTimer = undefined;
-          bannerPauseTimer = setTimeout(() => { setBannerDirection(1); startBanner(text); }, BANNER_PAUSE_MS);
-          return 0;
-        }
-        return next;
-      });
-    }, BANNER_TICK_MS);
-  };
-
-  // React to cursor / tab changes: restart banner if the newly selected item is copyable + overflows
-  createEffect(() => {
+  // Overflow memo for the currently-selected copyable item
+  const bannerOverflow = createMemo(() => {
     const idx = selectedItemIndex();
     const items = activeItems();
     const item = items[idx];
-    stopBanner();
-    if (item && item.kind === "copyable") {
-      const text = item.get();
-      if (text.length > COPYABLE_VISIBLE_WIDTH) {
-        bannerPauseTimer = setTimeout(() => startBanner(text), BANNER_PAUSE_MS);
-      }
-    }
+    if (!item || item.kind !== "copyable") return 0;
+    return Math.max(0, item.get().length - COPYABLE_VISIBLE_WIDTH);
   });
-
-  onCleanup(() => stopBanner());
+  const bannerOffset = useBannerScroll(bannerOverflow);
 
   /** Returns the visible slice of a copyable value, applying banner offset when selected. */
   const copyableBannerText = (text: string, isSelected: boolean): string => {

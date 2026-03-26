@@ -6,6 +6,7 @@ import { getColorForColumn } from "../git/graph";
 import type { Commit } from "../git/types";
 import { buildFileTree, flattenFileTree } from "../utils/file-tree";
 import type { FileTreeNode, FileTreeRow } from "../utils/file-tree";
+import { useBannerScroll } from "../hooks/use-banner-scroll";
 
 /** Types for interactive items in the detail panel */
 type InteractiveItem =
@@ -98,44 +99,6 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   // Only the currently-cursored item scrolls when its text overflows.
   // Panel usable width = max(floor(renderer.width * 0.25), 60) - 4 (paddingX=2 each side)
   const panelUsableWidth = () => Math.max(Math.floor(renderer.width * 0.25), 60) - 4;
-
-  /** Scrolling speed: shift 1 char every N ms. */
-  const BANNER_TICK_MS = 200;
-  /** Pause at each end before reversing (ms). */
-  const BANNER_PAUSE_MS = 1500;
-
-  const [bannerOffset, setBannerOffset] = createSignal(0);
-  const [bannerDirection, setBannerDirection] = createSignal<1 | -1>(1);
-  let bannerTimer: ReturnType<typeof setInterval> | undefined;
-  let bannerPauseTimer: ReturnType<typeof setTimeout> | undefined;
-
-  const stopBanner = () => {
-    if (bannerTimer) { clearInterval(bannerTimer); bannerTimer = undefined; }
-    if (bannerPauseTimer) { clearTimeout(bannerPauseTimer); bannerPauseTimer = undefined; }
-    setBannerOffset(0);
-    setBannerDirection(1);
-  };
-
-  const startBanner = (maxOverflow: number) => {
-    if (maxOverflow <= 0) return;
-    bannerTimer = setInterval(() => {
-      setBannerOffset((prev) => {
-        const dir = bannerDirection();
-        const next = prev + dir;
-        if (next >= maxOverflow) {
-          clearInterval(bannerTimer); bannerTimer = undefined;
-          bannerPauseTimer = setTimeout(() => { setBannerDirection(-1); startBanner(maxOverflow); }, BANNER_PAUSE_MS);
-          return maxOverflow;
-        }
-        if (next <= 0) {
-          clearInterval(bannerTimer); bannerTimer = undefined;
-          bannerPauseTimer = setTimeout(() => { setBannerDirection(1); startBanner(maxOverflow); }, BANNER_PAUSE_MS);
-          return 0;
-        }
-        return next;
-      });
-    }, BANNER_TICK_MS);
-  };
 
 
   // Collapsible section state — reset to expanded when commit changes
@@ -455,19 +418,13 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     }
   });
 
-  // Restart banner when cursor moves or focus changes
-  createEffect(() => {
+  // Drive banner scroll via shared hook — overflow is derived from cursoredTextInfo
+  const bannerOverflow = createMemo(() => {
     const info = cursoredTextInfo();
-    stopBanner();
-    if (info) {
-      const overflow = info.text.length - info.visibleWidth;
-      if (overflow > 0) {
-        bannerPauseTimer = setTimeout(() => startBanner(overflow), BANNER_PAUSE_MS);
-      }
-    }
+    if (!info) return 0;
+    return Math.max(0, info.text.length - info.visibleWidth);
   });
-
-  onCleanup(() => stopBanner());
+  const bannerOffset = useBannerScroll(bannerOverflow);
 
   // Highlight color for the cursor'd interactive item
   const highlightBgFocused = () => t().backgroundElementActive;
