@@ -230,6 +230,37 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     }
   });
 
+  // Keep the footer's contextual enter-key hint in sync with the cursor position
+  createEffect(() => {
+    const items = interactiveItems();
+    const idx = state.detailCursorIndex();
+    if (!state.detailFocused() || idx < 0 || idx >= items.length) {
+      actions.setDetailCursorAction(null);
+      return;
+    }
+    const item = items[idx];
+    switch (item.type) {
+      case "section-header": {
+        const expanded =
+          item.section === "children" ? childrenExpanded() :
+          item.section === "parents" ? parentsExpanded() :
+          filesExpanded();
+        actions.setDetailCursorAction(expanded ? "collapse" : "expand");
+        break;
+      }
+      case "file-dir":
+        actions.setDetailCursorAction(collapsedDirs().has(item.dirPath) ? "expand" : "collapse");
+        break;
+      case "child":
+      case "parent":
+        actions.setDetailCursorAction("navigate");
+        break;
+      case "file":
+        actions.setDetailCursorAction(null);
+        break;
+    }
+  });
+
   // Split refs into branches (branch/remote/head) and tags
   const branchRefs = () => {
     const c = commit();
@@ -685,11 +716,6 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
               </Show>
             </Show>
 
-            {/* Loading indicator for detail */}
-            <Show when={!detail() && commit()}>
-              <box height={1} />
-              <text fg={t().foregroundMuted}>Loading commit details...</text>
-            </Show>
           </>
         )}
       </Show>

@@ -13,12 +13,7 @@ export default function Footer() {
 
   const isLoading = () => state.loading() || state.fetching() || state.detailLoading();
 
-  // Contextual label for what's loading
-  const loadingLabel = () => {
-    if (state.fetching()) return " fetching";
-    if (state.loading()) return " loading";
-    return "";
-  };
+  const loadingLabel = () => (isLoading() ? " loading" : "");
 
   // Animation frame counter, cycles while loading
   const [frame, setFrame] = createSignal(0);
@@ -48,6 +43,8 @@ export default function Footer() {
   // show the braille char when loading, empty space when idle.
   const spinnerChar = () => isLoading() ? SPINNER_FRAMES[frame()] : " ";
 
+  const enterAction = () => state.detailFocused() ? state.detailCursorAction() : null;
+
   return (
     <box
       flexDirection="row"
@@ -66,12 +63,14 @@ export default function Footer() {
       <box flexGrow={1} />
 
       {/* Keyboard hints — right-aligned, separate <text> per color segment */}
+      <text flexShrink={0} wrapMode="none" fg={t().foreground}>{enterAction() ? "enter" : ""}</text>
+      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{enterAction() ? ` ${enterAction()}  ` : ""}</text>
+      <text flexShrink={0} wrapMode="none" fg={t().foreground}>{"\u2190/\u2192"}</text>
+      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" switch tab  "}</text>
       <text flexShrink={0} wrapMode="none" fg={t().foreground}>{"\u2191/\u2193"}</text>
       <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" navigate  "}</text>
       <text flexShrink={0} wrapMode="none" fg={t().foreground}>/</text>
       <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" search  "}</text>
-      <text flexShrink={0} wrapMode="none" fg={t().foreground}>f</text>
-      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" fetch  "}</text>
       <text flexShrink={0} wrapMode="none" fg={t().foreground}>m</text>
       <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" menu  "}</text>
       <text flexShrink={0} wrapMode="none" fg={t().foreground}>?</text>

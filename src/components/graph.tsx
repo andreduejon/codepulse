@@ -459,14 +459,7 @@ export default function GraphView() {
       verticalScrollbarOptions={{ visible: false }}
     >
       <box flexDirection="column" flexGrow={1}>
-        <Show
-          when={!state.loading()}
-          fallback={
-            <box flexGrow={1} alignItems="center" justifyContent="center">
-              <text fg={theme().primary}>Loading commits...</text>
-            </box>
-          }
-        >
+        <Show when={!state.loading()}>
           <For each={state.filteredRows()}>
             {(row, index) => (
               <GraphLine

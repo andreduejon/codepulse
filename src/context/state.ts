@@ -31,6 +31,8 @@ export interface AppState {
   fetching: Accessor<boolean>;
   /** True while commit detail (message, files, diff) is being loaded */
   detailLoading: Accessor<boolean>;
+  /** Contextual enter-key action label for the detail cursor item (null = no action) */
+  detailCursorAction: Accessor<string | null>;
   /** Branch being viewed (filtered perspective). null = show all / default. */
   viewingBranch: Accessor<string | null>;
 }
@@ -60,6 +62,7 @@ export interface AppActions {
   setLastFetchTime: (time: Date | null) => void;
   setFetching: (fetching: boolean) => void;
   setDetailLoading: (loading: boolean) => void;
+  setDetailCursorAction: (action: string | null) => void;
   setViewingBranch: (branch: string | null) => void;
 }
 
@@ -88,6 +91,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
   const [lastFetchTime, setLastFetchTime] = createSignal<Date | null>(null);
   const [fetching, setFetching] = createSignal(false);
   const [detailLoading, setDetailLoading] = createSignal(false);
+  const [detailCursorAction, setDetailCursorAction] = createSignal<string | null>(null);
   const [viewingBranch, setViewingBranch] = createSignal<string | null>(null);
 
   const filteredRows = createMemo(() => {
@@ -156,6 +160,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
     lastFetchTime,
     fetching,
     detailLoading,
+    detailCursorAction,
     viewingBranch,
   };
 
@@ -184,6 +189,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
     setLastFetchTime,
     setFetching,
     setDetailLoading,
+    setDetailCursorAction,
     setViewingBranch,
   };
 
