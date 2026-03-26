@@ -56,8 +56,11 @@ function AppContent(props: AppProps) {
     }
   };
 
-  // Load git data
+  // Load git data (guarded against concurrent calls)
+  let loadInFlight = false;
   async function loadData(branch?: string, stickyHash?: string, silent = false) {
+    if (loadInFlight) return;
+    loadInFlight = true;
     if (!silent) actions.setLoading(true);
     try {
       const repoPath = props.repoPath;
@@ -119,6 +122,7 @@ function AppContent(props: AppProps) {
       actions.setError(err instanceof Error ? err.message : String(err));
     } finally {
       if (!silent) actions.setLoading(false);
+      loadInFlight = false;
     }
   }
 
@@ -208,6 +212,12 @@ function AppContent(props: AppProps) {
         }
       }
     }, DETAIL_DEBOUNCE_MS);
+  });
+  onCleanup(() => {
+    if (detailDebounceTimer) {
+      clearTimeout(detailDebounceTimer);
+      detailDebounceTimer = null;
+    }
   });
 
   // Search input handlers

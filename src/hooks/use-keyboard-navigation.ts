@@ -116,9 +116,11 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         loadData();
         return;
       }
-      // Nothing to close — quit
+      // Nothing to close — quit.
+      // renderer.destroy() restores the terminal and resolves the render()
+      // promise, letting the process exit cleanly via the event loop.
+      // Avoid process.exit() here as it would bypass onCleanup handlers.
       renderer.destroy();
-      process.exit(0);
     }
 
     // If search input is focused, let the input handle all other keys
