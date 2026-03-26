@@ -2,6 +2,7 @@ import { createSignal, onCleanup, For, createMemo, createEffect } from "solid-js
 import { useKeyboard } from "@opentui/solid";
 import { useAppState, DEFAULT_AUTO_REFRESH_INTERVAL } from "../../context/state";
 import { useTheme, themes } from "../../context/theme";
+import { getColorForColumn } from "../../git/graph";
 import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 import { SHIFT_JUMP } from "../../constants";
 import type { ScrollBoxRenderable, Renderable } from "@opentui/core";
@@ -45,7 +46,8 @@ type SettingItem =
   | { kind: "dialog"; label: string; hotkey?: string; dialogId: string; get: () => string }
   | { kind: "action"; label: string; hotkey?: string; get?: () => string; run: () => void }
   | { kind: "section"; label: string; count: number; collapsed: () => boolean; toggle: () => void }
-  | { kind: "branch"; name: string; isCurrent: boolean; isViewing: boolean; run: () => void };
+  | { kind: "badge"; name: string; colorIndex: number; dimmed?: boolean }
+  | { kind: "branch"; name: string; run: () => void };
 
 export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   const { state, actions } = useAppState();
@@ -207,17 +209,21 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     state.branches().filter((b) => b.isRemote)
   );
 
-  const makeBranchItem = (b: { name: string; isCurrent: boolean }): SettingItem => ({
+  const makeBranchItem = (b: { name: string }): SettingItem => ({
     kind: "branch" as const,
     name: b.name,
-    isCurrent: b.isCurrent,
-    isViewing: state.viewingBranch() === b.name,
     run: () => {
       // View graph from this branch's perspective
       props.onViewBranch(b.name);
       props.onClose();
     },
   });
+
+  /** Look up the graph color index for a branch name (falls back to 0). */
+  const branchColorIndex = (name: string): number => {
+    const row = state.graphRows().find((r) => r.branchName === name);
+    return row?.nodeColor ?? 0;
+  };
 
   const branchItems = createMemo<SettingItem[]>(() => {
     const locals = localBranches();
@@ -226,18 +232,35 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
 
     const result: SettingItem[] = [];
 
-    // ── Info ──────────────────────────────────────────────────────
-    result.push({ kind: "header", label: "Info" });
-    result.push({ kind: "info", label: "Current", get: () => currentBranch || "(unknown)" });
+    // ── Current branch (always shown) ────────────────────────────
+    result.push({ kind: "header", label: "Current" });
+    result.push({
+      kind: "badge",
+      name: currentBranch || "(unknown)",
+      colorIndex: currentBranch ? branchColorIndex(currentBranch) : 0,
+      dimmed: !currentBranch,
+    });
 
-    // Show viewing filter + clear action when a branch perspective is active
+    // ── Viewing filter (always shown) ────────────────────────────
+    result.push({ kind: "header", label: "Viewing" });
     const viewing = state.viewingBranch();
     if (viewing) {
-      result.push({ kind: "info", label: "Viewing", get: () => viewing });
+      result.push({
+        kind: "badge",
+        name: viewing,
+        colorIndex: branchColorIndex(viewing),
+      });
       result.push({ kind: "action", label: "Clear filter", run: () => {
         props.onViewBranch(null);
         props.onClose();
       }});
+    } else {
+      result.push({
+        kind: "badge",
+        name: "(all branches)",
+        colorIndex: 0,
+        dimmed: true,
+      });
     }
 
     // ── Local section (collapsible) ───────────────────────────────
@@ -275,7 +298,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
       if (!remoteCollapsed()) {
         const sorted = [...remotes].sort((a, b) => a.name.localeCompare(b.name));
         for (const b of sorted) {
-          result.push(makeBranchItem({ name: b.name, isCurrent: false }));
+          result.push(makeBranchItem({ name: b.name }));
         }
       }
     }
@@ -317,7 +340,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   const activateItemAt = (itemIdx: number) => {
     const items = activeItems();
     const item = items[itemIdx];
-    if (!item || item.kind === "header" || item.kind === "info") return;
+    if (!item || item.kind === "header" || item.kind === "info" || item.kind === "badge") return;
 
     if (item.kind === "copyable") {
       copyToClipboard(item.get(), item.label);
@@ -420,7 +443,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
 
   // Format the value display for an item
   const valueDisplay = (item: SettingItem): string => {
-    if (item.kind === "header" || item.kind === "branch" || item.kind === "section") return "";
+    if (item.kind === "header" || item.kind === "branch" || item.kind === "section" || item.kind === "badge") return "";
     if (item.kind === "action") return item.get ? item.get() : "";
     if (item.kind === "info") return item.get();
     if (item.kind === "copyable") return item.get();
@@ -513,6 +536,23 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
               );
             }
 
+            // --- Badge (non-selectable, colored branch badge) ---
+            if (item.kind === "badge") {
+              const bgColor = () => item.dimmed
+                ? t().backgroundElement
+                : getColorForColumn(item.colorIndex, t().graphColors);
+              const fgColor = () => item.dimmed
+                ? t().foregroundMuted
+                : t().background;
+              return (
+                <box ref={(el: Renderable) => { itemRefs[itemIndex()] = el; }} flexDirection="row" width="100%" paddingX={4}>
+                  <text bg={bgColor()} fg={fgColor()} wrapMode="none">
+                    {` ${item.name} `}
+                  </text>
+                </box>
+              );
+            }
+
             // --- Copyable (selectable, copies to clipboard on Enter) ---
             if (item.kind === "copyable") {
               const isSel = () => selectedItemIndex() === itemIndex();
@@ -583,16 +623,6 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
                       {item.name}
                     </span>
                   </text>
-                  {item.isCurrent ? (
-                    <text flexShrink={0} wrapMode="none" fg={t().success}>
-                      {"  current"}
-                    </text>
-                  ) : null}
-                  {item.isViewing ? (
-                    <text flexShrink={0} wrapMode="none" fg={t().accent}>
-                      {"  viewing"}
-                    </text>
-                  ) : null}
                 </box>
               );
             }
@@ -660,6 +690,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
         <text flexShrink={0} wrapMode="none" fg={t().foreground}>↑/↓</text>
         <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" navigate"}</text>
       </box>
+      <box height={1} flexShrink={0} />
       </box>
     </DialogOverlay>
   );
