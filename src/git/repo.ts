@@ -2,7 +2,7 @@ import type { Commit, Branch, FileChange, CommitDetail, RefInfo } from "./types"
 import { DEFAULT_MAX_COUNT } from "../constants";
 
 /** ASCII Record Separator — safe delimiter that cannot appear in commit fields. */
-const RS = "\x1e";
+export const RS = "\x1e";
 const GIT_LOG_FORMAT = `%H${RS}%h${RS}%P${RS}%D${RS}%s${RS}%an${RS}%ae${RS}%aI${RS}%cn${RS}%ce${RS}%cI`;
 
 /** Shared helper to run a git command and capture its output. */
@@ -38,7 +38,8 @@ async function getRemoteNames(repoPath: string): Promise<Set<string>> {
   );
 }
 
-function parseRefs(refString: string, remoteNames: Set<string>): RefInfo[] {
+/** @internal Exported for testing. Parse a git ref decoration string into structured RefInfo[]. */
+export function parseRefs(refString: string, remoteNames: Set<string>): RefInfo[] {
   if (!refString.trim()) return [];
   return refString.split(",").map((ref) => {
     ref = ref.trim();
@@ -73,7 +74,8 @@ function parseRefs(refString: string, remoteNames: Set<string>): RefInfo[] {
   });
 }
 
-function parseCommitLine(line: string, remoteNames: Set<string>): Commit | null {
+/** @internal Exported for testing. Parse a single git log output line into a Commit. */
+export function parseCommitLine(line: string, remoteNames: Set<string>): Commit | null {
   const parts = line.split(RS);
   if (parts.length < 11) return null;
 
