@@ -37,6 +37,9 @@ const MS_TO_LABEL: Record<number, string> = {
 /** Width of the info label column (characters). */
 const INFO_LABEL_WIDTH = 12;
 
+/** Persists the last-used tab across dialog open/close cycles. */
+let lastMenuTab: MenuTab = "repository";
+
 type SettingItem =
   | { kind: "header"; label: string }
   | { kind: "info"; label: string; get: () => string }
@@ -44,7 +47,7 @@ type SettingItem =
   | { kind: "toggle"; label: string; hotkey?: string; get: () => boolean; set: (v: boolean) => void; needsReload?: boolean }
   | { kind: "cycle"; label: string; hotkey?: string; options: string[]; get: () => string; set: (v: string) => void; needsReload?: boolean }
   | { kind: "dialog"; label: string; hotkey?: string; dialogId: string; get: () => string }
-  | { kind: "action"; label: string; hotkey?: string; get?: () => string; run: () => void }
+  | { kind: "action"; label: string; hotkey?: string; get?: () => string; run: () => void; disabled?: boolean }
   | { kind: "section"; label: string; count: number; collapsed: () => boolean; toggle: () => void }
   | { kind: "badge"; name: string; colorIndex: number; dimmed?: boolean }
   | { kind: "branch"; name: string; run: () => void };
@@ -55,7 +58,8 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   const t = () => theme();
 
   // ── Tab state ─────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = createSignal<MenuTab>("repository");
+  const [activeTab, setActiveTab] = createSignal<MenuTab>(lastMenuTab);
+  createEffect(() => { lastMenuTab = activeTab(); });
 
   // ── Clipboard feedback ────────────────────────────────────────────
   const [copiedLabel, setCopiedLabel] = createSignal<string | null>(null);
@@ -250,10 +254,6 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
         name: viewing,
         colorIndex: branchColorIndex(viewing),
       });
-      result.push({ kind: "action", label: "Clear", run: () => {
-        props.onViewBranch(null);
-        props.onClose();
-      }});
     } else {
       result.push({
         kind: "badge",
@@ -262,6 +262,18 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
         dimmed: true,
       });
     }
+
+    // ── Actions (always shown) ────────────────────────────────────
+    result.push({ kind: "header", label: "Actions" });
+    result.push({
+      kind: "action",
+      label: "Clear filter",
+      disabled: !viewing,
+      run: () => {
+        props.onViewBranch(null);
+        props.onClose();
+      },
+    });
 
     // ── Local section (collapsible) ───────────────────────────────
     result.push({
@@ -323,7 +335,8 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   const selectableIndices = (): number[] =>
     activeItems()
       .map((item, i) =>
-        item.kind === "toggle" || item.kind === "cycle" || item.kind === "dialog" || item.kind === "action" || item.kind === "branch" || item.kind === "section" || item.kind === "copyable"
+        (item.kind === "toggle" || item.kind === "cycle" || item.kind === "dialog" || item.kind === "branch" || item.kind === "section" || item.kind === "copyable"
+          || (item.kind === "action" && !item.disabled))
           ? i
           : -1
       )
@@ -341,6 +354,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     const items = activeItems();
     const item = items[itemIdx];
     if (!item || item.kind === "header" || item.kind === "info" || item.kind === "badge") return;
+    if (item.kind === "action" && item.disabled) return;
 
     if (item.kind === "copyable") {
       copyToClipboard(item.get(), item.label);
@@ -622,6 +636,22 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
                     <span fg={isSel() ? t().primary : t().foreground}>
                       {item.name}
                     </span>
+                  </text>
+                </box>
+              );
+            }
+
+            // --- Disabled action (non-selectable, dimmed) ---
+            if (item.kind === "action" && item.disabled) {
+              return (
+                <box
+                  ref={(el: Renderable) => { itemRefs[itemIndex()] = el; }}
+                  flexDirection="row"
+                  width="100%"
+                  paddingX={4}
+                >
+                  <text flexGrow={1} flexShrink={1} wrapMode="none" truncate>
+                    <span fg={t().foregroundMuted}>{item.label}</span>
                   </text>
                 </box>
               );
