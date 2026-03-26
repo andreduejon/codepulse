@@ -74,7 +74,7 @@ async function main() {
     exitOnCtrlC: true,
     useAlternateScreen: true,
     useMouse: false,
-    targetFps: 60,
+    targetFps: 40,
   });
 }
 
