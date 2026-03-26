@@ -1,4 +1,5 @@
-import { Show, For, createSignal, createEffect, createMemo, untrack } from "solid-js";
+import { Show, For, createSignal, createEffect, createMemo, untrack, onCleanup } from "solid-js";
+import { useRenderer } from "@opentui/solid";
 import { useAppState } from "../context/state";
 import { useTheme } from "../context/theme";
 import { getColorForColumn } from "../git/graph";
@@ -19,6 +20,9 @@ function DetailBadge(props: Readonly<{
   name: string;
   colorIndex: number;
   dimmed?: boolean;
+  /** When set, applies banner scroll: substring of name at [bannerOffset, bannerOffset+visibleWidth). */
+  visibleWidth?: number;
+  bannerOffset?: number;
 }>) {
   const { theme } = useTheme();
   const t = () => theme();
@@ -33,9 +37,16 @@ function DetailBadge(props: Readonly<{
     return t().background;
   };
 
+  const displayName = () => {
+    const w = props.visibleWidth;
+    if (w == null || props.name.length <= w) return props.name;
+    const off = props.bannerOffset ?? 0;
+    return props.name.substring(off, off + w);
+  };
+
   return (
     <text bg={bgColor()} fg={fgColor()} wrapMode="none">
-      {` ${props.name} `}
+      {` ${displayName()} `}
     </text>
   );
 }
@@ -60,6 +71,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   const { state, actions } = useAppState();
   const { theme } = useTheme();
   const t = () => theme();
+  const renderer = useRenderer();
 
   const commit = () => state.selectedCommit();
   const detail = () => state.commitDetail();
@@ -81,6 +93,50 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     const tag = c.refs.find((r) => r.type === "tag");
     return tag?.name ?? null;
   };
+
+  // ── Cursor-aware banner scroll for long text ──────────────────────
+  // Only the currently-cursored item scrolls when its text overflows.
+  // Panel usable width = max(floor(renderer.width * 0.25), 60) - 4 (paddingX=2 each side)
+  const panelUsableWidth = () => Math.max(Math.floor(renderer.width * 0.25), 60) - 4;
+
+  /** Scrolling speed: shift 1 char every N ms. */
+  const BANNER_TICK_MS = 200;
+  /** Pause at each end before reversing (ms). */
+  const BANNER_PAUSE_MS = 1500;
+
+  const [bannerOffset, setBannerOffset] = createSignal(0);
+  const [bannerDirection, setBannerDirection] = createSignal<1 | -1>(1);
+  let bannerTimer: ReturnType<typeof setInterval> | undefined;
+  let bannerPauseTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const stopBanner = () => {
+    if (bannerTimer) { clearInterval(bannerTimer); bannerTimer = undefined; }
+    if (bannerPauseTimer) { clearTimeout(bannerPauseTimer); bannerPauseTimer = undefined; }
+    setBannerOffset(0);
+    setBannerDirection(1);
+  };
+
+  const startBanner = (maxOverflow: number) => {
+    if (maxOverflow <= 0) return;
+    bannerTimer = setInterval(() => {
+      setBannerOffset((prev) => {
+        const dir = bannerDirection();
+        const next = prev + dir;
+        if (next >= maxOverflow) {
+          clearInterval(bannerTimer); bannerTimer = undefined;
+          bannerPauseTimer = setTimeout(() => { setBannerDirection(-1); startBanner(maxOverflow); }, BANNER_PAUSE_MS);
+          return maxOverflow;
+        }
+        if (next <= 0) {
+          clearInterval(bannerTimer); bannerTimer = undefined;
+          bannerPauseTimer = setTimeout(() => { setBannerDirection(1); startBanner(maxOverflow); }, BANNER_PAUSE_MS);
+          return 0;
+        }
+        return next;
+      });
+    }, BANNER_TICK_MS);
+  };
+
 
   // Collapsible section state — reset to expanded when commit changes
   const [childrenExpanded, setChildrenExpanded] = createSignal(true);
@@ -337,6 +393,82 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     flattenFileTree(fileTree(), collapsedDirs())
   );
 
+  // ── Cursor-aware banner scroll (deferred part) ────────────────────
+  // Must be defined after interactiveItems, fileTreeRows, and fileWidths.
+
+  /** Compute the visible width and text for the currently-cursored item.
+   *  Returns null if the item doesn't need scrolling (section-header or text fits). */
+  const cursoredTextInfo = createMemo((): { text: string; visibleWidth: number } | null => {
+    if (!state.detailFocused()) return null;
+    const items = interactiveItems();
+    const idx = state.detailCursorIndex();
+    if (idx < 0 || idx >= items.length) return null;
+
+    const item = items[idx];
+    const pw = panelUsableWidth();
+
+    switch (item.type) {
+      case "section-header":
+        return null; // short text, no scroll needed
+
+      case "child":
+      case "parent": {
+        // Layout: paddingLeft(2) + hash(7) + gap(1) + ` name ` badge
+        // Available for badge text = pw - 2(paddingLeft) - 7(hash) - 1(gap) - 2(badge padding)
+        const r = row();
+        const entryBranch = item.type === "child"
+          ? r?.childBranches[item.index] ?? ""
+          : r?.parentBranches[item.index] ?? "";
+        let name = entryBranch;
+        if (name === "") {
+          const tag = getTagForHash(item.hash);
+          name = tag ?? "deleted";
+        }
+        const available = pw - 2 - 7 - 1 - 2;
+        if (name.length <= available) return null;
+        return { text: name, visibleWidth: available };
+      }
+
+      case "file-dir": {
+        // Layout: paddingLeft(2) + prefix + connector + dirIndicator(2) + name
+        const rows = fileTreeRows();
+        const treeRow = rows[item.index];
+        if (!treeRow) return null;
+        const fixedChars = 2 + treeRow.prefix.length + treeRow.connector.length + 2;
+        const available = pw - fixedChars;
+        if (treeRow.name.length <= available) return null;
+        return { text: treeRow.name, visibleWidth: available };
+      }
+
+      case "file": {
+        // Layout: paddingLeft(2) + prefix + connector + name + paddingLeft(2) + addCol + paddingLeft(1) + delCol
+        const rows = fileTreeRows();
+        const treeRow = rows[item.index];
+        if (!treeRow) return null;
+        const fw = fileWidths();
+        const statWidth = 2 + fw.addColWidth + 1 + fw.delColWidth;
+        const fixedChars = 2 + treeRow.prefix.length + treeRow.connector.length + statWidth;
+        const available = pw - fixedChars;
+        if (treeRow.name.length <= available) return null;
+        return { text: treeRow.name, visibleWidth: available };
+      }
+    }
+  });
+
+  // Restart banner when cursor moves or focus changes
+  createEffect(() => {
+    const info = cursoredTextInfo();
+    stopBanner();
+    if (info) {
+      const overflow = info.text.length - info.visibleWidth;
+      if (overflow > 0) {
+        bannerPauseTimer = setTimeout(() => startBanner(overflow), BANNER_PAUSE_MS);
+      }
+    }
+  });
+
+  onCleanup(() => stopBanner());
+
   // Highlight color for the cursor'd interactive item
   const highlightBgFocused = () => t().backgroundElementActive;
 
@@ -402,6 +534,20 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
 
     const tag = () => getTagForHash(entryProps.hash);
 
+    /** Resolved badge name for this entry */
+    const badgeName = () => {
+      if (entryProps.branchName !== "") return entryProps.branchName;
+      return tag() ?? "deleted";
+    };
+
+    /** Banner scroll props: only applied to the badge of the cursored entry */
+    const badgeScrollProps = () => {
+      if (!cursored()) return {};
+      const info = cursoredTextInfo();
+      if (!info || info.text !== badgeName()) return {};
+      return { visibleWidth: info.visibleWidth, bannerOffset: bannerOffset() };
+    };
+
     return (
       <box
         flexDirection="row"
@@ -429,6 +575,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
               <DetailBadge
                 name={tag()!}
                 colorIndex={entryProps.colorIndex}
+                {...badgeScrollProps()}
               />
             </Show>
           }
@@ -436,6 +583,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
           <DetailBadge
             name={entryProps.branchName}
             colorIndex={entryProps.colorIndex}
+            {...badgeScrollProps()}
           />
         </Show>
       </box>
@@ -667,6 +815,15 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                     const cursored = () => isCursored(itemIdx());
                     const collapsed = () => treeRow.isDir && collapsedDirs().has(treeRow.dirPath);
 
+                    /** When this row is cursored and overflows, apply banner scroll */
+                    const scrolledName = () => {
+                      if (!cursored()) return null;
+                      const info = cursoredTextInfo();
+                      if (!info || info.text !== treeRow.name) return null;
+                      const off = bannerOffset();
+                      return treeRow.name.substring(off, off + info.visibleWidth);
+                    };
+
                     return (
                       <box
                         flexDirection="row"
@@ -692,9 +849,9 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                               ? (cursored() ? t().accent : t().foregroundMuted)
                               : (cursored() ? t().accent : t().foreground)}
                             wrapMode="none"
-                            truncate
+                            truncate={scrolledName() == null}
                           >
-                            {treeRow.name}
+                            {scrolledName() ?? treeRow.name}
                           </text>
                         </box>
                         <Show when={treeRow.file}>
