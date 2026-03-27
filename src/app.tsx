@@ -1,4 +1,4 @@
-import { createEffect, Show, onMount, onCleanup, createSignal, batch, untrack } from "solid-js";
+import { createEffect, Show, onMount, onCleanup, createSignal, batch } from "solid-js";
 import { useRenderer } from "@opentui/solid";
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { createAppState, AppStateContext } from "./context/state";
@@ -43,6 +43,10 @@ function AppContent(props: Readonly<AppProps>) {
     lastJumpFrom: null,
   };
 
+  // Flag to suppress tab reset during child/parent jump navigation.
+  // Set synchronously before setCursorIndex, read inside the commit-change effect.
+  let isJumpNavigation = false;
+
   // Jump to a commit by hash (used by detail panel parent/child entries)
   const handleJumpToCommit = (hash: string, from: "child" | "parent") => {
     const rows = state.filteredRows();
@@ -52,7 +56,11 @@ function AppContent(props: Readonly<AppProps>) {
       const currentHash = state.selectedCommit()?.hash ?? null;
       actions.setDetailOriginHash(currentHash);
       detailNavRef.lastJumpFrom = from;
+      // Suppress tab reset — setCursorIndex triggers the commit-change effect
+      // synchronously, which reads this flag to preserve the active tab.
+      isJumpNavigation = true;
       actions.setCursorIndex(idx);
+      isJumpNavigation = false;
       actions.setScrollTargetIndex(idx);
       detailScrollboxRef?.scrollTo(0);
     }
@@ -278,11 +286,10 @@ function AppContent(props: Readonly<AppProps>) {
 
     // Reset active tab — but preserve it on child/parent jump navigation
     // so the user stays on the Details tab when walking the commit graph.
-    // detailOriginHash is set by handleJumpToCommit before the cursor changes;
-    // its presence reliably indicates a jump (unlike the mutable lastJumpFrom ref
-    // which could be consumed by other effects before this one runs).
-    // Read untracked so clearing originHash later doesn't re-trigger this effect.
-    if (untrack(() => state.detailOriginHash())) {
+    // isJumpNavigation is a plain JS flag set synchronously by handleJumpToCommit
+    // around the setCursorIndex call. Since SolidJS effects run synchronously when
+    // a signal updates, this flag is still true when this effect fires.
+    if (isJumpNavigation) {
       // Jump — keep current tab
     } else {
       actions.setDetailActiveTab(isUncommitted ? "unstaged" : "files");
