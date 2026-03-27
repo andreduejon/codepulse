@@ -1,85 +1,9 @@
 /**
  * Shared test helpers for graph engine tests.
  */
+import { expect } from "bun:test";
 import type { Commit, Connector, GraphRow } from "../src/git/types";
 import { type GraphChar, type RenderOptions, renderGraphRow, renderFanOutRow, renderConnectorRow, getMaxGraphColumns } from "../src/git/graph";
-
-let totalTests = 0;
-let passedTests = 0;
-let failedTests = 0;
-
-/**
- * Error thrown by assert/assertEqual on failure.
- * Caught by `runTest()` to prevent cascading crashes from `!` assertions
- * after a failed check, while still allowing later tests to run.
- */
-class TestAssertionError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "TestAssertionError";
-  }
-}
-
-export function assert(condition: boolean, message: string): asserts condition {
-  totalTests++;
-  if (condition) {
-    passedTests++;
-  } else {
-    failedTests++;
-    console.error(`  FAIL: ${message}`);
-    throw new TestAssertionError(message);
-  }
-}
-
-/**
- * Assert that two values are strictly equal. On failure, shows both values
- * for easy comparison.
- */
-export function assertEqual<T>(expected: T, actual: T, message: string): void {
-  totalTests++;
-  if (expected === actual) {
-    passedTests++;
-  } else {
-    failedTests++;
-    console.error(`  FAIL: ${message}`);
-    console.error(`    expected: ${JSON.stringify(expected)}`);
-    console.error(`    actual:   ${JSON.stringify(actual)}`);
-    throw new TestAssertionError(message);
-  }
-}
-
-/**
- * Run a test function, catching TestAssertionError so that one test failure
- * doesn't crash subsequent tests.
- */
-export function runTest(fn: () => void): void {
-  try {
-    fn();
-  } catch (e) {
-    if (e instanceof TestAssertionError) {
-      // Already counted and logged by assert/assertEqual — move on
-    } else {
-      // Unexpected error — count it as a failure
-      failedTests++;
-      totalTests++;
-      console.error(`  ERROR: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }
-}
-
-export function getResults() {
-  return { totalTests, passedTests, failedTests };
-}
-
-export function printResults(label: string) {
-  console.log(`\n${"=".repeat(60)}`);
-  console.log(`Results: ${passedTests}/${totalTests} passed, ${failedTests} failed`);
-  if (failedTests === 0) {
-    console.log(`\nAll ${label} tests PASSED!`);
-  } else {
-    console.log(`\n${failedTests} ${label} test(s) FAILED!`);
-  }
-}
 
 export function makeCommit(
   hash: string,
@@ -162,21 +86,19 @@ export function assertRowFullyDimmed(row: GraphRow, rowIdx: number) {
   const label = `Row ${rowIdx} (${row.commit.hash})`;
 
   for (const conn of row.connectors) {
-    assert(conn.isRemoteOnly === true,
-      `${label}: connector ${conn.type}@col${conn.column} should be remote-only`);
+    expect(conn.isRemoteOnly).toBe(true);
   }
 
   for (let col = 0; col < row.columns.length; col++) {
     const column = row.columns[col];
-    assert(column.isRemoteOnly !== undefined, `${label}: column ${col} should have isRemoteOnly defined`);
-    assert(column.isRemoteOnly, `${label}: column ${col} should be remote-only`);
+    expect(column.isRemoteOnly).toBeDefined();
+    expect(column.isRemoteOnly).toBe(true);
   }
 
   if (row.fanOutRows) {
     for (let foIdx = 0; foIdx < row.fanOutRows.length; foIdx++) {
       for (const conn of row.fanOutRows[foIdx]) {
-        assert(conn.isRemoteOnly === true,
-          `${label}: fan-out[${foIdx}] ${conn.type}@col${conn.column} should be remote-only`);
+        expect(conn.isRemoteOnly).toBe(true);
       }
     }
   }
@@ -226,8 +148,8 @@ export function printGraph(rows: GraphRow[], themeColors: string[] = THEME_COLOR
     const ro = row.isRemoteOnly ? " [RO]" : "";
     if (canMerge && foRows) {
       const lastFO = foRows.at(-1);
-      assert(lastFO !== undefined, "Last fan-out row should exist when canMerge is true");
-      const foAscii = graphCharsToAscii(renderFanOutRow(lastFO, opts, row.nodeColumn));
+      expect(lastFO).toBeDefined();
+      const foAscii = graphCharsToAscii(renderFanOutRow(lastFO!, opts, row.nodeColumn));
       console.log(`        ${foAscii}  ${row.commit.hash}  (${refs})${ro}`);
     } else {
       const commitAscii = graphCharsToAscii(renderGraphRow(row, opts));
