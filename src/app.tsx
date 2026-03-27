@@ -507,7 +507,7 @@ function AppContent(props: Readonly<AppProps>) {
                     ]
                     : [
                       { id: "files", label: `Files${cd?.files ? ` (${cd.files.length})` : ""}` },
-                      { id: "detail", label: "Detail" },
+                      { id: "detail", label: "Details" },
                       ...(state.stashByParent().has(commit?.hash ?? "")
                         ? [{ id: "stashes", label: `Stashes (${state.stashByParent().get(commit?.hash ?? "")?.length ?? 0})` }]
                         : []),

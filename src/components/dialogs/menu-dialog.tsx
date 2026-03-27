@@ -507,7 +507,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
         >
           <text flexShrink={0} wrapMode="none" fg={activeTab() === "branch" ? t().accent : t().foregroundMuted}>
             <strong>
-              {"Branch"}
+              {"Branches"}
             </strong>
           </text>
         </box>
