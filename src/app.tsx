@@ -497,12 +497,20 @@ function AppContent(props: Readonly<AppProps>) {
                 {(() => {
                   const commit = state.selectedCommit();
                   const isUncommitted = commit?.hash === UNCOMMITTED_HASH;
+                  const ud = state.uncommittedDetail();
+                  const cd = state.commitDetail();
                   const tabs = isUncommitted
-                    ? [{ id: "staged", label: "Staged" }, { id: "unstaged", label: "Unstaged" }, { id: "untracked", label: "Untracked" }]
+                    ? [
+                      { id: "unstaged", label: `Unstaged${ud ? ` (${ud.unstaged.length})` : ""}` },
+                      { id: "staged", label: `Staged${ud ? ` (${ud.staged.length})` : ""}` },
+                      { id: "untracked", label: `Untracked${ud ? ` (${ud.untracked.length})` : ""}` },
+                    ]
                     : [
+                      { id: "files", label: `Files${cd?.files ? ` (${cd.files.length})` : ""}` },
                       { id: "detail", label: "Detail" },
-                      { id: "files", label: "Files" },
-                      ...(state.stashByParent().has(commit?.hash ?? "") ? [{ id: "stashes", label: "Stashes" }] : []),
+                      ...(state.stashByParent().has(commit?.hash ?? "")
+                        ? [{ id: "stashes", label: `Stashes (${state.stashByParent().get(commit?.hash ?? "")?.length ?? 0})` }]
+                        : []),
                     ];
                   return tabs.map((tab) => (
                     <box

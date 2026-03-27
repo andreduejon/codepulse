@@ -138,9 +138,9 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
       const getAvailableTabs = (): string[] => {
         const commit = state.selectedCommit();
         if (commit?.hash === UNCOMMITTED_HASH) {
-          return ["staged", "unstaged", "untracked"];
+          return ["unstaged", "staged", "untracked"];
         }
-        const tabs = ["detail", "files"];
+        const tabs = ["files", "detail"];
         if (state.stashByParent().has(commit?.hash ?? "")) {
           tabs.push("stashes");
         }
