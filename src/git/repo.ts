@@ -1,4 +1,4 @@
-import type { Commit, Branch, FileChange, CommitDetail, RefInfo } from "./types";
+import type { Commit, Branch, FileChange, CommitDetail, RefInfo, TagInfo } from "./types";
 import { DEFAULT_MAX_COUNT } from "../constants";
 
 /** ASCII Record Separator — safe delimiter that cannot appear in commit fields. */
@@ -135,8 +135,9 @@ export async function getCommits(
   if (options.all) {
     args.push("--all");
   } else if (options.branch) {
-    // Use "--" to prevent branch names starting with "-" being interpreted as flags
-    args.push("--", options.branch);
+    // Place branch before "--" so git treats it as a revision, not a path.
+    // The "--" prevents ambiguity if a file exists with the same name as the branch.
+    args.push(options.branch, "--");
   }
 
   const [logResult, remoteNames] = await Promise.all([
@@ -160,10 +161,25 @@ export async function getCommits(
   return commits;
 }
 
+/**
+ * @internal Exported for testing. Parse git upstream track string into ahead/behind counts.
+ * Input examples: "ahead 3", "behind 2", "ahead 3, behind 2", "" (no tracking).
+ */
+export function parseTrackInfo(track: string): { ahead?: number; behind?: number } {
+  if (!track.trim()) return {};
+  const result: { ahead?: number; behind?: number } = {};
+  const aheadMatch = track.match(/ahead (\d+)/);
+  if (aheadMatch) result.ahead = parseInt(aheadMatch[1], 10);
+  const behindMatch = track.match(/behind (\d+)/);
+  if (behindMatch) result.behind = parseInt(behindMatch[1], 10);
+  return result;
+}
+
 export async function getBranches(repoPath: string, signal?: AbortSignal): Promise<Branch[]> {
   const [branchResult, remoteNames] = await Promise.all([
     runGit(repoPath, [
-      "branch", "-a", `--format=%(HEAD)${RS}%(refname:short)${RS}%(objectname:short)`,
+      "branch", "-a",
+      `--format=%(HEAD)${RS}%(refname:short)${RS}%(objectname:short)${RS}%(upstream:short)${RS}%(upstream:track,nobracket)${RS}%(symref)`,
     ], signal),
     getRemoteNames(repoPath, signal),
   ]);
@@ -174,19 +190,89 @@ export async function getBranches(repoPath: string, signal?: AbortSignal): Promi
     .trim()
     .split("\n")
     .filter((l) => l.trim())
+    .filter((line) => {
+      // Filter out symbolic refs (e.g. origin/HEAD -> origin/develop)
+      const parts = line.split(RS);
+      const symref = parts[5]?.trim();
+      return !symref;
+    })
     .map((line) => {
-      const [head, name, lastCommitHash] = line.split(RS);
+      const [head, name, lastCommitHash, upstream, track] = line.split(RS);
       const trimmedName = name.trim();
       const isRemote =
         trimmedName.includes("remotes/") ||
         [...remoteNames].some((r) => trimmedName.startsWith(`${r}/`));
-      return {
+
+      const branch: Branch = {
         name: trimmedName,
         isCurrent: head.trim() === "*",
         isRemote,
         lastCommitHash: lastCommitHash?.trim() ?? "",
       };
+
+      // Upstream tracking info (only meaningful for local branches)
+      const trimmedUpstream = upstream?.trim();
+      if (trimmedUpstream) {
+        branch.upstream = trimmedUpstream;
+        const trackInfo = parseTrackInfo(track ?? "");
+        if (trackInfo.ahead != null) branch.ahead = trackInfo.ahead;
+        if (trackInfo.behind != null) branch.behind = trackInfo.behind;
+      }
+
+      return branch;
     });
+}
+
+/**
+ * Fetch details for all tags in the repository.
+ * Uses `git for-each-ref refs/tags/` to distinguish annotated from lightweight tags
+ * and to retrieve tagger/message info for annotated tags.
+ *
+ * @internal parseTagLine is exported for testing.
+ */
+export function parseTagLine(line: string): TagInfo | null {
+  const parts = line.split(RS);
+  if (parts.length < 5) return null;
+
+  const [refname, objecttype, taggername, taggerdate, contents] = parts;
+  const name = refname.replace(/^refs\/tags\//, "");
+  if (!name) return null;
+
+  // objecttype is "commit" for lightweight tags, "tag" for annotated tags
+  if (objecttype === "tag") {
+    return {
+      name,
+      type: "annotated",
+      message: contents.trim() || undefined,
+      tagger: taggername.trim() || undefined,
+      taggerDate: taggerdate.trim() || undefined,
+    };
+  }
+
+  return { name, type: "lightweight" };
+}
+
+export async function getTagDetails(
+  repoPath: string,
+  signal?: AbortSignal,
+): Promise<Map<string, TagInfo>> {
+  const format = `%(refname)${RS}%(objecttype)${RS}%(taggername)${RS}%(taggerdate:iso-strict)${RS}%(contents:subject)`;
+  const { stdout, exitCode } = await runGit(
+    repoPath,
+    ["for-each-ref", `--format=${format}`, "refs/tags/"],
+    signal,
+  );
+
+  const result = new Map<string, TagInfo>();
+  if (exitCode !== 0) return result;
+
+  for (const line of stdout.trim().split("\n")) {
+    if (!line.trim()) continue;
+    const tag = parseTagLine(line);
+    if (tag) result.set(tag.name, tag);
+  }
+
+  return result;
 }
 
 export async function getCommitDetail(

@@ -7,7 +7,7 @@
  * These are unit tests for the parsing layer — they don't spawn git subprocesses.
  */
 import { describe, test, expect } from "bun:test";
-import { parseRefs, parseCommitLine, RS } from "../src/git/repo";
+import { parseRefs, parseCommitLine, parseTagLine, parseTrackInfo, RS } from "../src/git/repo";
 
 describe("repo.ts parsing", () => {
   test("parseRefs — empty/blank string returns []", () => {
@@ -166,5 +166,119 @@ describe("repo.ts parsing", () => {
     const commit = parseCommitLine(line, new Set());
     expect(commit).not.toBeNull();
     expect(commit!.subject).toBe(specialSubject);
+  });
+});
+
+describe("parseTagLine", () => {
+  test("annotated tag with full info", () => {
+    const line = [
+      "refs/tags/v1.0.0",
+      "tag",
+      "Jane Doe",
+      "2024-06-15T12:00:00+02:00",
+      "Release v1.0.0",
+    ].join(RS);
+
+    const tag = parseTagLine(line);
+    expect(tag).not.toBeNull();
+    expect(tag!.name).toBe("v1.0.0");
+    expect(tag!.type).toBe("annotated");
+    expect(tag!.tagger).toBe("Jane Doe");
+    expect(tag!.taggerDate).toBe("2024-06-15T12:00:00+02:00");
+    expect(tag!.message).toBe("Release v1.0.0");
+  });
+
+  test("lightweight tag", () => {
+    const line = [
+      "refs/tags/v0.1.0",
+      "commit",
+      "",
+      "",
+      "",
+    ].join(RS);
+
+    const tag = parseTagLine(line);
+    expect(tag).not.toBeNull();
+    expect(tag!.name).toBe("v0.1.0");
+    expect(tag!.type).toBe("lightweight");
+    expect(tag!.tagger).toBeUndefined();
+    expect(tag!.taggerDate).toBeUndefined();
+    expect(tag!.message).toBeUndefined();
+  });
+
+  test("annotated tag with empty tagger/message", () => {
+    const line = [
+      "refs/tags/v2.0",
+      "tag",
+      "",
+      "",
+      "",
+    ].join(RS);
+
+    const tag = parseTagLine(line);
+    expect(tag).not.toBeNull();
+    expect(tag!.name).toBe("v2.0");
+    expect(tag!.type).toBe("annotated");
+    expect(tag!.tagger).toBeUndefined();
+    expect(tag!.taggerDate).toBeUndefined();
+    expect(tag!.message).toBeUndefined();
+  });
+
+  test("malformed line returns null", () => {
+    expect(parseTagLine("")).toBeNull();
+    expect(parseTagLine("refs/tags/v1" + RS + "tag")).toBeNull();
+  });
+
+  test("strips refs/tags/ prefix from name", () => {
+    const line = [
+      "refs/tags/release/v3.0",
+      "commit",
+      "",
+      "",
+      "",
+    ].join(RS);
+
+    const tag = parseTagLine(line);
+    expect(tag).not.toBeNull();
+    expect(tag!.name).toBe("release/v3.0");
+  });
+});
+
+describe("parseTrackInfo", () => {
+  test("ahead only", () => {
+    const result = parseTrackInfo("ahead 3");
+    expect(result.ahead).toBe(3);
+    expect(result.behind).toBeUndefined();
+  });
+
+  test("behind only", () => {
+    const result = parseTrackInfo("behind 5");
+    expect(result.ahead).toBeUndefined();
+    expect(result.behind).toBe(5);
+  });
+
+  test("ahead and behind", () => {
+    const result = parseTrackInfo("ahead 3, behind 2");
+    expect(result.ahead).toBe(3);
+    expect(result.behind).toBe(2);
+  });
+
+  test("empty string (up to date)", () => {
+    const result = parseTrackInfo("");
+    expect(result.ahead).toBeUndefined();
+    expect(result.behind).toBeUndefined();
+  });
+
+  test("whitespace only", () => {
+    const result = parseTrackInfo("   ");
+    expect(result.ahead).toBeUndefined();
+    expect(result.behind).toBeUndefined();
+  });
+
+  test("gone (upstream deleted)", () => {
+    // git outputs "gone" when the upstream branch has been deleted
+    const result = parseTrackInfo("gone");
+    expect(result.ahead).toBeUndefined();
+    expect(result.behind).toBeUndefined();
   });
 });

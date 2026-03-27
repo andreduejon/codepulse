@@ -1,5 +1,5 @@
 import { createContext, useContext, createSignal, createMemo, type Accessor } from "solid-js";
-import type { Commit, GraphRow, CommitDetail, Branch } from "../git/types";
+import type { Commit, GraphRow, CommitDetail, Branch, TagInfo } from "../git/types";
 import { DEFAULT_MAX_COUNT } from "../constants";
 
 export const DEFAULT_AUTO_REFRESH_INTERVAL = 30000;
@@ -12,6 +12,8 @@ export interface AppState {
   currentBranch: Accessor<string>;
   repoPath: Accessor<string>;
   remoteUrl: Accessor<string>;
+  /** Tag details keyed by tag name — annotated tags include tagger/message. */
+  tagDetails: Accessor<Map<string, TagInfo>>;
 
   // ── Navigation & selection ──────────────────────────────────────────
   cursorIndex: Accessor<number>;
@@ -62,6 +64,7 @@ export interface AppActions {
   setCurrentBranch: (branch: string) => void;
   setRepoPath: (path: string) => void;
   setRemoteUrl: (url: string) => void;
+  setTagDetails: (tags: Map<string, TagInfo>) => void;
   setError: (err: string | null) => void;
   setMaxGraphColumns: (cols: number) => void;
   setMaxCount: (n: number) => void;
@@ -83,6 +86,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
   const [currentBranch, setCurrentBranch] = createSignal("");
   const [repoPath, setRepoPath] = createSignal("");
   const [remoteUrl, setRemoteUrl] = createSignal("");
+  const [tagDetails, setTagDetails] = createSignal<Map<string, TagInfo>>(new Map());
 
   // ── Navigation & selection ────────────────────────────────────────
   const [cursorIndex, setCursorIndex] = createSignal(0);
@@ -155,6 +159,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
     currentBranch,
     repoPath,
     remoteUrl,
+    tagDetails,
     error,
     cursorIndex,
     selectedCommit,
@@ -196,6 +201,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
     setCurrentBranch,
     setRepoPath,
     setRemoteUrl,
+    setTagDetails,
     setError,
     setMaxGraphColumns,
     setMaxCount,

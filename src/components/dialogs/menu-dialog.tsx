@@ -51,7 +51,7 @@ type SettingItem =
   | { kind: "action"; label: string; hotkey?: string; get?: () => string; run: () => void; disabled?: () => boolean }
   | { kind: "section"; label: string; count: number; collapsed: () => boolean; toggle: () => void }
   | { kind: "badge"; name: string; colorIndex: number; dimmed?: boolean }
-  | { kind: "branch"; name: string; run: () => void };
+  | { kind: "branch"; name: string; run: () => void; upstream?: string; ahead?: number; behind?: number };
 
 export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   const { state, actions } = useAppState();
@@ -177,9 +177,12 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     state.branches().filter((b) => b.isRemote)
   );
 
-  const makeBranchItem = (b: { name: string }): SettingItem => ({
+  const makeBranchItem = (b: { name: string; upstream?: string; ahead?: number; behind?: number }): SettingItem => ({
     kind: "branch" as const,
     name: b.name,
+    upstream: b.upstream,
+    ahead: b.ahead,
+    behind: b.behind,
     run: () => {
       // View graph from this branch's perspective
       props.onViewBranch(b.name);
@@ -289,6 +292,20 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     }
 
     return result;
+  });
+
+  /** Max column widths for ahead/behind counts across all visible branch items. */
+  const branchTrackWidths = createMemo(() => {
+    let addW = 0;
+    let delW = 0;
+    for (const item of branchItems()) {
+      if (item.kind !== "branch") continue;
+      if (item.ahead != null && item.ahead > 0)
+        addW = Math.max(addW, ("↑" + item.ahead).length);
+      if (item.behind != null && item.behind > 0)
+        delW = Math.max(delW, ("↓" + item.behind).length);
+    }
+    return { addColWidth: addW, delColWidth: delW };
   });
 
   // ── Active items depend on tab ────────────────────────────────────
@@ -599,9 +616,12 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
               );
             }
 
-            // --- Branch list entry (full-width name, no value/hotkey padding) ---
+            // --- Branch list entry (full-width name, with optional ahead/behind columns) ---
             if (item.kind === "branch") {
               const isSel = () => selectedItemIndex() === itemIndex();
+              const hasTracking = () =>
+                (item.ahead != null && item.ahead > 0) ||
+                (item.behind != null && item.behind > 0);
               return (
                 <box
                   ref={(el: Renderable) => { itemRefs[itemIndex()] = el; }}
@@ -614,6 +634,18 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
                   <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={isSel() ? t().accent : t().foreground}>
                       {item.name}
                   </text>
+                  {hasTracking() ? (
+                    <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                      {"  "}
+                      {item.ahead != null && item.ahead > 0
+                        ? ("↑" + item.ahead).padStart(branchTrackWidths().addColWidth)
+                        : " ".repeat(branchTrackWidths().addColWidth)}
+                      {" "}
+                      {item.behind != null && item.behind > 0
+                        ? ("↓" + item.behind).padStart(branchTrackWidths().delColWidth)
+                        : " ".repeat(branchTrackWidths().delColWidth)}
+                    </text>
+                  ) : null}
                 </box>
               );
             }

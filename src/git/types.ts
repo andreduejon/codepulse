@@ -24,6 +24,23 @@ export interface Branch {
   isCurrent: boolean;
   isRemote: boolean;
   lastCommitHash: string;
+  /** Upstream tracking branch (e.g. "origin/main"). Only set for local branches. */
+  upstream?: string;
+  /** Commits ahead of upstream. Only set when upstream is configured. */
+  ahead?: number;
+  /** Commits behind upstream. Only set when upstream is configured. */
+  behind?: number;
+}
+
+export interface TagInfo {
+  name: string;
+  type: "annotated" | "lightweight";
+  /** Tag message (annotated tags only). */
+  message?: string;
+  /** Tagger name (annotated tags only). */
+  tagger?: string;
+  /** Tagger date in ISO 8601 format (annotated tags only). */
+  taggerDate?: string;
 }
 
 export interface FileChange {

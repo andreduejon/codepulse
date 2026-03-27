@@ -3,7 +3,7 @@ import { useRenderer } from "@opentui/solid";
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { createAppState, AppStateContext } from "./context/state";
 import { createThemeState, ThemeContext } from "./context/theme";
-import { getCommits, getBranches, getCurrentBranch, getCommitDetail, getRemoteUrl, fetchRemote, getLastFetchTime } from "./git/repo";
+import { getCommits, getBranches, getCurrentBranch, getCommitDetail, getRemoteUrl, fetchRemote, getLastFetchTime, getTagDetails } from "./git/repo";
 import { buildGraph, getMaxGraphColumns } from "./git/graph";
 import GraphView, { ColumnHeader } from "./components/graph";
 import CommitDetailView from "./components/detail";
@@ -74,7 +74,7 @@ function AppContent(props: Readonly<AppProps>) {
       const effectiveBranch = viewBranch ?? branch;
       const effectiveAll = viewBranch ? false : state.showAllBranches();
 
-      const [commits, branches, currentBranch, remoteUrl] = await Promise.all([
+      const [commits, branches, currentBranch, remoteUrl, tagDetails] = await Promise.all([
         getCommits(repoPath, {
           maxCount: state.maxCount(),
           branch: effectiveBranch,
@@ -83,6 +83,7 @@ function AppContent(props: Readonly<AppProps>) {
         getBranches(repoPath, ctrl.signal),
         getCurrentBranch(repoPath, ctrl.signal),
         getRemoteUrl(repoPath, ctrl.signal),
+        getTagDetails(repoPath, ctrl.signal),
       ]);
 
       // If we were superseded by a newer loadData call, discard results
@@ -124,6 +125,7 @@ function AppContent(props: Readonly<AppProps>) {
         actions.setBranches(branches);
         actions.setCurrentBranch(currentBranch);
         actions.setRemoteUrl(remoteUrl);
+        actions.setTagDetails(tagDetails);
         actions.setError(null);
         actions.setCursorIndex(targetIndex);
         actions.setScrollTargetIndex(targetIndex);
