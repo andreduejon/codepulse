@@ -1,4 +1,4 @@
-import { createEffect, Show, onMount, onCleanup, createSignal } from "solid-js";
+import { createEffect, Show, onMount, onCleanup, createSignal, batch } from "solid-js";
 import { useRenderer } from "@opentui/solid";
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { createAppState, AppStateContext } from "./context/state";
@@ -56,11 +56,14 @@ function AppContent(props: Readonly<AppProps>) {
     }
   };
 
-  // Load git data (guarded against concurrent calls)
-  let loadInFlight = false;
+  // Load git data (cancels any in-flight load so user actions always win)
+  let loadAbortCtrl: AbortController | null = null;
   async function loadData(branch?: string, stickyHash?: string, silent = false) {
-    if (loadInFlight) return;
-    loadInFlight = true;
+    // Cancel any in-flight load — user-initiated actions take priority
+    if (loadAbortCtrl) loadAbortCtrl.abort();
+    const ctrl = new AbortController();
+    loadAbortCtrl = ctrl;
+
     if (!silent) actions.setLoading(true);
     try {
       const repoPath = props.repoPath;
@@ -76,11 +79,14 @@ function AppContent(props: Readonly<AppProps>) {
           maxCount: state.maxCount(),
           branch: effectiveBranch,
           all: effectiveAll,
-        }),
-        getBranches(repoPath),
-        getCurrentBranch(repoPath),
-        getRemoteUrl(repoPath),
+        }, ctrl.signal),
+        getBranches(repoPath, ctrl.signal),
+        getCurrentBranch(repoPath, ctrl.signal),
+        getRemoteUrl(repoPath, ctrl.signal),
       ]);
+
+      // If we were superseded by a newer loadData call, discard results
+      if (ctrl.signal.aborted) return;
 
       // Skip update if nothing changed (avoids flicker on auto-refresh)
       if (silent) {
@@ -93,14 +99,7 @@ function AppContent(props: Readonly<AppProps>) {
         }
       }
 
-      actions.setCommits(commits);
       const rows = buildGraph(commits);
-      actions.setGraphRows(rows);
-      actions.setMaxGraphColumns(getMaxGraphColumns(rows));
-      actions.setBranches(branches);
-      actions.setCurrentBranch(currentBranch);
-      actions.setRemoteUrl(remoteUrl);
-      actions.setError(null);
 
       // Selection priority: sticky hash > current branch tip > 0
       let targetIndex = 0;
@@ -116,13 +115,28 @@ function AppContent(props: Readonly<AppProps>) {
         const cbIdx = rows.findIndex((r) => r.isOnCurrentBranch);
         if (cbIdx >= 0) targetIndex = cbIdx;
       }
-      actions.setCursorIndex(targetIndex);
-      actions.setScrollTargetIndex(targetIndex);
+
+      // Batch all signal updates to avoid intermediate reactive cascades
+      batch(() => {
+        actions.setCommits(commits);
+        actions.setGraphRows(rows);
+        actions.setMaxGraphColumns(getMaxGraphColumns(rows));
+        actions.setBranches(branches);
+        actions.setCurrentBranch(currentBranch);
+        actions.setRemoteUrl(remoteUrl);
+        actions.setError(null);
+        actions.setCursorIndex(targetIndex);
+        actions.setScrollTargetIndex(targetIndex);
+      });
     } catch (err) {
+      if (ctrl.signal.aborted) return; // superseded — ignore
       actions.setError(err instanceof Error ? err.message : String(err));
     } finally {
-      if (!silent) actions.setLoading(false);
-      loadInFlight = false;
+      // Only clear loading/controller if we're still the active load
+      if (loadAbortCtrl === ctrl) {
+        loadAbortCtrl = null;
+        if (!silent) actions.setLoading(false);
+      }
     }
   }
 
@@ -237,17 +251,21 @@ function AppContent(props: Readonly<AppProps>) {
 
   // Search input handlers
   const handleSearchSubmit = (value: string) => {
-    actions.setSearchQuery(value);
-    actions.setCursorIndex(0);
-    actions.setScrollTargetIndex(0);
+    batch(() => {
+      actions.setSearchQuery(value);
+      actions.setCursorIndex(0);
+      actions.setScrollTargetIndex(0);
+    });
     setSearchFocused(false);
   };
 
   const handleSearchInput = (value: string) => {
     // Live filter as user types — cursor moves immediately, detail load is debounced
-    actions.setSearchQuery(value);
-    actions.setCursorIndex(0);
-    actions.setScrollTargetIndex(0);
+    batch(() => {
+      actions.setSearchQuery(value);
+      actions.setCursorIndex(0);
+      actions.setScrollTargetIndex(0);
+    });
   };
 
   /** Open a sub-dialog from within the menu (e.g. theme picker). */

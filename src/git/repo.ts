@@ -43,8 +43,8 @@ async function runGit(
 }
 
 /** Fetch the list of configured remote names (e.g. ["origin", "upstream"]). */
-async function getRemoteNames(repoPath: string): Promise<Set<string>> {
-  const { stdout, exitCode } = await runGit(repoPath, ["remote"]);
+async function getRemoteNames(repoPath: string, signal?: AbortSignal): Promise<Set<string>> {
+  const { stdout, exitCode } = await runGit(repoPath, ["remote"], signal);
   if (exitCode !== 0) return new Set();
   return new Set(
     stdout
@@ -122,7 +122,8 @@ export async function getCommits(
     maxCount?: number;
     branch?: string;
     all?: boolean;
-  } = {}
+  } = {},
+  signal?: AbortSignal,
 ): Promise<Commit[]> {
   const args = [
     "log",
@@ -139,8 +140,8 @@ export async function getCommits(
   }
 
   const [logResult, remoteNames] = await Promise.all([
-    runGit(repoPath, args),
-    getRemoteNames(repoPath),
+    runGit(repoPath, args, signal),
+    getRemoteNames(repoPath, signal),
   ]);
 
   const { stdout, stderr, exitCode } = logResult;
@@ -159,12 +160,12 @@ export async function getCommits(
   return commits;
 }
 
-export async function getBranches(repoPath: string): Promise<Branch[]> {
+export async function getBranches(repoPath: string, signal?: AbortSignal): Promise<Branch[]> {
   const [branchResult, remoteNames] = await Promise.all([
     runGit(repoPath, [
       "branch", "-a", `--format=%(HEAD)${RS}%(refname:short)${RS}%(objectname:short)`,
-    ]),
-    getRemoteNames(repoPath),
+    ], signal),
+    getRemoteNames(repoPath, signal),
   ]);
 
   if (branchResult.exitCode !== 0) return [];
@@ -277,26 +278,26 @@ export async function getCommitDetail(
   };
 }
 
-export async function getCurrentBranch(repoPath: string): Promise<string> {
+export async function getCurrentBranch(repoPath: string, signal?: AbortSignal): Promise<string> {
   const { stdout, exitCode } = await runGit(repoPath, [
     "rev-parse", "--abbrev-ref", "HEAD",
-  ]);
+  ], signal);
   if (exitCode !== 0) return "";
   return stdout.trim();
 }
 
-export async function getRemoteUrl(repoPath: string): Promise<string> {
+export async function getRemoteUrl(repoPath: string, signal?: AbortSignal): Promise<string> {
   try {
     // Try "origin" first (most common), then fall back to the first available remote
     const { stdout, exitCode } = await runGit(repoPath, [
       "remote", "get-url", "origin",
-    ]);
+    ], signal);
     if (exitCode === 0 && stdout.trim()) return stdout.trim();
 
     // Fallback: pick the first remote name and get its URL
-    const remoteNames = await getRemoteNames(repoPath);
+    const remoteNames = await getRemoteNames(repoPath, signal);
     for (const name of remoteNames) {
-      const result = await runGit(repoPath, ["remote", "get-url", name]);
+      const result = await runGit(repoPath, ["remote", "get-url", name], signal);
       if (result.exitCode === 0 && result.stdout.trim()) return result.stdout.trim();
     }
     return "";
