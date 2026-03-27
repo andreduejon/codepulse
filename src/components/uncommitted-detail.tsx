@@ -308,6 +308,16 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
                     </text>
                   </box>
                 </Show>
+                <Show when={treeRow.file}>
+                  <box flexShrink={0} paddingLeft={1}>
+                    <text fg={treeRow.file!.status === "A" ? t().diffAdded
+                            : treeRow.file!.status === "D" ? t().diffRemoved
+                            : t().foregroundMuted}
+                          wrapMode="none">
+                      {treeRow.file!.status}
+                    </text>
+                  </box>
+                </Show>
               </box>
             );
           }}
