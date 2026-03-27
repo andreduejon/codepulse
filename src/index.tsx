@@ -20,14 +20,26 @@ async function main() {
     switch (arg) {
       case "--branch":
       case "-b":
+        if (i + 1 >= args.length) {
+          console.error(`${arg} requires a value`);
+          process.exit(1);
+        }
         branch = args[++i];
         all = false;
         break;
       case "--max-count":
       case "-n":
-        maxCount = parseInt(args[++i], 10) || DEFAULT_MAX_COUNT;
+        if (i + 1 >= args.length) {
+          console.error(`${arg} requires a value`);
+          process.exit(1);
+        }
+        maxCount = Math.max(1, parseInt(args[++i], 10) || DEFAULT_MAX_COUNT);
         break;
       case "--theme":
+        if (i + 1 >= args.length) {
+          console.error(`${arg} requires a value`);
+          process.exit(1);
+        }
         themeName = args[++i];
         break;
       case "--no-all":

@@ -230,10 +230,11 @@ function AppContent(props: Readonly<AppProps>) {
           actions.setCommitDetail(detail);
           actions.setDetailLoading(false);
         }
-      } catch {
+      } catch (err) {
         if (!ctrl.signal.aborted) {
           actions.setCommitDetail(null);
           actions.setDetailLoading(false);
+          actions.setError(err instanceof Error ? err.message : String(err));
         }
       }
     }, DETAIL_DEBOUNCE_MS);

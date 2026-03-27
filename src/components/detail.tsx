@@ -550,7 +550,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
         backgroundColor={itemHighlightBg(itemIdx())}
       >
         <text fg={cursored() ? t().accent : t().foreground} wrapMode="none">
-          {entryProps.hash.substring(0, 7)}
+          {entryProps.hash.substring(0, SHORT_HASH_LEN)}
         </text>
         <Show
           when={entryProps.branchName !== ""}

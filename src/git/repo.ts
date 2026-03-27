@@ -344,7 +344,11 @@ export async function getLastFetchTime(
     if (exitCode !== 0) return null;
 
     const gitDir = stdout.trim();
-    const fetchHeadPath = `${repoPath}/${gitDir}/FETCH_HEAD`;
+    // git rev-parse --git-dir returns a relative path for normal repos
+    // but an absolute path for linked worktrees — handle both
+    const fetchHeadPath = gitDir.startsWith("/")
+      ? `${gitDir}/FETCH_HEAD`
+      : `${repoPath}/${gitDir}/FETCH_HEAD`;
     const file = Bun.file(fetchHeadPath);
     const exists = await file.exists();
     if (!exists) return null;

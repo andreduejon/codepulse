@@ -79,7 +79,10 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
         // Linux / WSL fallback
         cmd = ["xclip", "-selection", "clipboard"];
       }
-      Bun.spawn(cmd, { stdin: new Response(text).body });
+      const proc = Bun.spawn(cmd, { stdin: new Response(text).body });
+      // Kill after 5s to prevent zombie if clipboard utility hangs (e.g. xclip without X11)
+      const killTimer = setTimeout(() => { try { proc.kill(); } catch {} }, 5000);
+      proc.exited.then(() => clearTimeout(killTimer)).catch(() => clearTimeout(killTimer));
     } catch {
       // Clipboard utility not available — silently ignore
     }
