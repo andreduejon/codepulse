@@ -140,7 +140,11 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         if (commit?.hash === UNCOMMITTED_HASH) {
           return ["unstaged", "staged", "untracked"];
         }
-        const tabs: DetailTab[] = ["files"];
+        const tabs: DetailTab[] = [];
+        const cd = state.commitDetail();
+        if (cd && cd.files.length > 0) {
+          tabs.push("files");
+        }
         if (state.stashByParent().has(commit?.hash ?? "")) {
           tabs.push("stashes");
         }

@@ -519,7 +519,9 @@ function AppContent(props: Readonly<AppProps>) {
                       { id: "untracked", label: `Untracked${ud ? ` (${ud.untracked.length})` : ""}` },
                     ]
                     : [
-                      { id: "files", label: `Files${cd?.files ? ` (${cd.files.length})` : ""}` },
+                      ...(cd && cd.files.length > 0
+                        ? [{ id: "files", label: `Files (${cd.files.length})` }]
+                        : []),
                       ...(state.stashByParent().has(commit?.hash ?? "")
                         ? [{ id: "stashes", label: `Stashes (${state.stashByParent().get(commit?.hash ?? "")?.length ?? 0})` }]
                         : []),
