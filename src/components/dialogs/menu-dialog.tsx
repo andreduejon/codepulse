@@ -581,8 +581,8 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
                       {copyableBannerText(item.get(), isSel())}
                   </text>
                   {isCopied() ? (
-                    <text flexShrink={0} wrapMode="none" fg={t().success}>
-                      {"  copied!"}
+                    <text flexShrink={0} wrapMode="none" bg={t().primary} fg={t().background}>
+                      {" \u2713 copied "}
                     </text>
                   ) : null}
                 </box>

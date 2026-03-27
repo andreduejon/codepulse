@@ -1,4 +1,4 @@
-import { Show, For, createSignal, createEffect, createMemo, untrack } from "solid-js";
+import { Show, For, createSignal, createEffect, createMemo, untrack, onCleanup } from "solid-js";
 import { useRenderer } from "@opentui/solid";
 import { useAppState } from "../context/state";
 import { useTheme } from "../context/theme";
@@ -21,8 +21,11 @@ import {
 const MIN_PANEL_WIDTH = 60;
 
 /** Types for interactive items in the detail panel */
+type CopyableField = "hash" | "author" | "date" | "committer" | "commitDate" | "subject" | "body";
+
 type InteractiveItem =
   | { type: "section-header"; section: "children" | "parents" }
+  | { type: "copyable"; field: CopyableField }
   | { type: "child"; hash: string; index: number }
   | { type: "parent"; hash: string; index: number }
   | { type: "file-dir"; dirPath: string; index: number }
@@ -90,7 +93,201 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   // Active tab for committed commits: "detail" | "files" | "stashes"
   const activeTab = () => state.detailActiveTab();
 
+  // Split refs into branches (branch/remote/head) and tags
+  const branchRefs = () => {
+    const c = commit();
+    if (!c) return [];
+    return c.refs.filter((r) => r.type !== "tag");
+  };
+
+  const tagRefs = () => {
+    const c = commit();
+    if (!c) return [];
+    return c.refs.filter((r) => r.type === "tag");
+  };
+
+  // The node color index for this commit's lane
+  const nodeColorIndex = () => row()?.nodeColor ?? 0;
+
+  // For non-tip commits: find the remote counterpart of branchName
+  const remoteName = () => {
+    const bn = row()?.branchName;
+    if (!bn) return null;
+    const remote = state.branches().find(
+      (b) => b.isRemote && b.name.endsWith("/" + bn)
+    );
+    return remote?.name ?? null;
+  };
+
+  // Whether to show committer info (only when different from author)
+  const showCommitter = () => {
+    const c = commit();
+    if (!c) return false;
+    return c.committer !== c.author || c.committerEmail !== c.authorEmail;
+  };
+
+  // Whether the selected commit is the synthetic uncommitted-changes node
+  const isUncommitted = () => commit()?.hash === UNCOMMITTED_HASH;
+
+  // ── Clipboard copy with "✓ copied" feedback ────────────────────────
+  const [copiedField, setCopiedField] = createSignal<CopyableField | null>(null);
+  let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const copyToClipboard = (text: string, field: CopyableField) => {
+    try {
+      const platform = process.platform;
+      let cmd: string[];
+      if (platform === "darwin") {
+        cmd = ["pbcopy"];
+      } else if (platform === "win32") {
+        cmd = ["clip.exe"];
+      } else {
+        cmd = ["xclip", "-selection", "clipboard"];
+      }
+      const proc = Bun.spawn(cmd, { stdin: new Response(text).body });
+      const killTimer = setTimeout(() => { try { proc.kill(); } catch {} }, 5000);
+      proc.exited.then(() => clearTimeout(killTimer)).catch(() => clearTimeout(killTimer));
+      setCopiedField(field);
+      if (copiedTimer) clearTimeout(copiedTimer);
+      copiedTimer = setTimeout(() => setCopiedField(null), 1500);
+    } catch {
+      // Clipboard utility not available — silently ignore
+    }
+  };
+
+  onCleanup(() => {
+    if (copiedTimer) clearTimeout(copiedTimer);
+  });
+
+  /** Get the text to copy for a given copyable field. */
+  const getCopyableText = (field: CopyableField): string => {
+    const c = commit();
+    if (!c) return "";
+    switch (field) {
+      case "hash": return c.hash;
+      case "author": return `${c.author} <${c.authorEmail}>`;
+      case "date": return formatDate(c.authorDate);
+      case "committer": return `${c.committer} <${c.committerEmail}>`;
+      case "commitDate": return formatDate(c.commitDate);
+      case "subject": return c.subject;
+      case "body": return detail()?.body ?? "";
+    }
+  };
+
+  // Column widths for file changes — derived from totals (always >= per-file values)
+  const fileWidths = createMemo(() => {
+    const d = detail();
+    if (!d) return { totalAdd: 0, totalDel: 0, addColWidth: 2, delColWidth: 2 };
+    return computeFileWidths(d.files);
+  });
+
+  // Build file tree from flat file paths
+  const fileTree = createMemo((): FileTreeNode => {
+    const d = detail();
+    if (!d) return { name: "/", fullPath: "/", children: [] };
+    return buildFileTree(d.files);
+  });
+
+  // Collapsed directory paths (tracked by fullPath)
+  const [collapsedDirs, setCollapsedDirs] = createSignal(new Set<string>());
+
+  // Reset collapsed dirs when commit changes
+  createEffect(() => {
+    commit();
+    setCollapsedDirs(new Set<string>());
+  });
+
+  // ── Stash section state ─────────────────────────────────────────────
+  /** Stash entries for the currently selected commit (from stashByParent map). */
+  const stashEntries = createMemo((): Commit[] => {
+    const c = commit();
+    if (!c) return [];
+    return state.stashByParent().get(c.hash) ?? [];
+  });
+
+  /** Which stash hashes are expanded in the detail panel. */
+  const [expandedStashes, setExpandedStashes] = createSignal(new Set<string>());
+  /** Cached stash file data: stashHash → FileChange[]. */
+  const [stashFileCache, setStashFileCache] = createSignal(new Map<string, FileChange[]>());
+  /** Collapsed dirs per stash: stashHash → Set of collapsed dir paths. */
+  const [stashCollapsedDirs, setStashCollapsedDirs] = createSignal(new Map<string, Set<string>>());
+
+  // Reset stash state when selected commit changes
+  createEffect(() => {
+    commit();
+    setExpandedStashes(new Set<string>());
+    setStashFileCache(new Map<string, FileChange[]>());
+    setStashCollapsedDirs(new Map<string, Set<string>>());
+  });
+
+  /** Toggle a stash's expanded state and lazily load files. */
+  const toggleStash = async (stashHash: string) => {
+    const next = new Set(expandedStashes());
+    if (next.has(stashHash)) {
+      next.delete(stashHash);
+      setExpandedStashes(next);
+      return;
+    }
+    next.add(stashHash);
+    setExpandedStashes(next);
+
+    // Lazy load files if not cached
+    if (!stashFileCache().has(stashHash)) {
+      const files = await getStashFiles(state.repoPath(), stashHash);
+      setStashFileCache((prev) => {
+        const m = new Map(prev);
+        m.set(stashHash, files);
+        return m;
+      });
+    }
+  };
+
+  /** Toggle a directory within a stash's file tree. */
+  const toggleStashDir = (stashHash: string, dirPath: string) => {
+    setStashCollapsedDirs((prev) => {
+      const m = new Map(prev);
+      const dirs = new Set(m.get(stashHash) ?? []);
+      if (dirs.has(dirPath)) dirs.delete(dirPath);
+      else dirs.add(dirPath);
+      m.set(stashHash, dirs);
+      return m;
+    });
+  };
+
+  /** Build file tree rows for a specific stash. */
+  const getStashFileTreeRows = (stashHash: string): FileTreeRow[] => {
+    const files = stashFileCache().get(stashHash);
+    if (!files || files.length === 0) return [];
+    const tree = buildFileTree(files);
+    const collapsed = stashCollapsedDirs().get(stashHash) ?? new Set<string>();
+    return flattenFileTree(tree, collapsed);
+  };
+
+  /** Get column widths for a stash's file stats. */
+  const getStashFileWidths = (stashHash: string) => {
+    const files = stashFileCache().get(stashHash);
+    if (!files) return { totalAdd: 0, totalDel: 0, addColWidth: 2, delColWidth: 2 };
+    return computeFileWidths(files);
+  };
+
+  /** Toggle a directory's collapsed state */
+  const toggleDir = (dirPath: string) => {
+    const next = new Set(collapsedDirs());
+    if (next.has(dirPath)) next.delete(dirPath);
+    else next.add(dirPath);
+    setCollapsedDirs(next);
+  };
+
+  // Flatten tree into renderable rows with connector prefixes
+  const fileTreeRows = createMemo((): FileTreeRow[] =>
+    flattenFileTree(fileTree(), collapsedDirs())
+  );
+
   // ── Build flat list of interactive items (tab-aware) ──
+  // IMPORTANT: This memo must be defined AFTER fileTreeRows, stashEntries,
+  // expandedStashes, getStashFileTreeRows, collapsedDirs, and stashCollapsedDirs
+  // because createMemo evaluates eagerly (unlike createEffect).
+  // Moving it earlier causes a TDZ crash.
   const interactiveItems = createMemo((): InteractiveItem[] => {
     const r = row();
     const c = commit();
@@ -100,6 +297,22 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     const items: InteractiveItem[] = [];
 
     if (tab === "detail") {
+      // Copyable metadata fields (skip for uncommitted node — values are all "·······")
+      if (c.hash !== UNCOMMITTED_HASH) {
+        items.push({ type: "copyable", field: "hash" });
+        items.push({ type: "copyable", field: "author" });
+        items.push({ type: "copyable", field: "date" });
+        if (c.committer !== c.author || c.committerEmail !== c.authorEmail) {
+          items.push({ type: "copyable", field: "committer" });
+          items.push({ type: "copyable", field: "commitDate" });
+        }
+        items.push({ type: "copyable", field: "subject" });
+        const d = detail();
+        if (d?.body) {
+          items.push({ type: "copyable", field: "body" });
+        }
+      }
+
       // Children section (only if children exist; excludes synthetic uncommitted node)
       const fc = filteredChildren();
       if (fc.length > 0) {
@@ -213,6 +426,9 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
         if (item.section === "children") setChildrenExpanded(!childrenExpanded());
         else if (item.section === "parents") setParentsExpanded(!parentsExpanded());
         break;
+      case "copyable":
+        copyToClipboard(getCopyableText(item.field), item.field);
+        break;
       case "child":
       case "parent":
         if (props.onJumpToCommit) props.onJumpToCommit(item.hash, item.type);
@@ -274,6 +490,9 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
       case "file-dir":
         actions.setDetailCursorAction(collapsedDirs().has(item.dirPath) ? "expand" : "collapse");
         break;
+      case "copyable":
+        actions.setDetailCursorAction("copy");
+        break;
       case "child":
       case "parent":
         actions.setDetailCursorAction("navigate");
@@ -292,151 +511,6 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
         break;
     }
   });
-
-  // Split refs into branches (branch/remote/head) and tags
-  const branchRefs = () => {
-    const c = commit();
-    if (!c) return [];
-    return c.refs.filter((r) => r.type !== "tag");
-  };
-
-  const tagRefs = () => {
-    const c = commit();
-    if (!c) return [];
-    return c.refs.filter((r) => r.type === "tag");
-  };
-
-  // The node color index for this commit's lane
-  const nodeColorIndex = () => row()?.nodeColor ?? 0;
-
-  // For non-tip commits: find the remote counterpart of branchName
-  const remoteName = () => {
-    const bn = row()?.branchName;
-    if (!bn) return null;
-    const remote = state.branches().find(
-      (b) => b.isRemote && b.name.endsWith("/" + bn)
-    );
-    return remote?.name ?? null;
-  };
-
-  // Whether to show committer info (only when different from author)
-  const showCommitter = () => {
-    const c = commit();
-    if (!c) return false;
-    return c.committer !== c.author || c.committerEmail !== c.authorEmail;
-  };
-
-  // Whether the selected commit is the synthetic uncommitted-changes node
-  const isUncommitted = () => commit()?.hash === UNCOMMITTED_HASH;
-
-  // Column widths for file changes — derived from totals (always >= per-file values)
-  const fileWidths = createMemo(() => {
-    const d = detail();
-    if (!d) return { totalAdd: 0, totalDel: 0, addColWidth: 2, delColWidth: 2 };
-    return computeFileWidths(d.files);
-  });
-
-  // Build file tree from flat file paths
-  const fileTree = createMemo((): FileTreeNode => {
-    const d = detail();
-    if (!d) return { name: "/", fullPath: "/", children: [] };
-    return buildFileTree(d.files);
-  });
-
-  // Collapsed directory paths (tracked by fullPath)
-  const [collapsedDirs, setCollapsedDirs] = createSignal(new Set<string>());
-
-  // Reset collapsed dirs when commit changes
-  createEffect(() => {
-    commit();
-    setCollapsedDirs(new Set<string>());
-  });
-
-  // ── Stash section state ─────────────────────────────────────────────
-  /** Stash entries for the currently selected commit (from stashByParent map). */
-  const stashEntries = createMemo((): Commit[] => {
-    const c = commit();
-    if (!c) return [];
-    return state.stashByParent().get(c.hash) ?? [];
-  });
-
-  /** Which stash hashes are expanded in the detail panel. */
-  const [expandedStashes, setExpandedStashes] = createSignal(new Set<string>());
-  /** Cached stash file data: stashHash → FileChange[]. */
-  const [stashFileCache, setStashFileCache] = createSignal(new Map<string, FileChange[]>());
-  /** Collapsed dirs per stash: stashHash → Set of collapsed dir paths. */
-  const [stashCollapsedDirs, setStashCollapsedDirs] = createSignal(new Map<string, Set<string>>());
-
-  // Reset stash state when selected commit changes
-  createEffect(() => {
-    commit();
-    setExpandedStashes(new Set<string>());
-    setStashFileCache(new Map<string, FileChange[]>());
-    setStashCollapsedDirs(new Map<string, Set<string>>());
-  });
-
-  /** Toggle a stash's expanded state and lazily load files. */
-  const toggleStash = async (stashHash: string) => {
-    const next = new Set(expandedStashes());
-    if (next.has(stashHash)) {
-      next.delete(stashHash);
-      setExpandedStashes(next);
-      return;
-    }
-    next.add(stashHash);
-    setExpandedStashes(next);
-
-    // Lazy load files if not cached
-    if (!stashFileCache().has(stashHash)) {
-      const files = await getStashFiles(state.repoPath(), stashHash);
-      setStashFileCache((prev) => {
-        const m = new Map(prev);
-        m.set(stashHash, files);
-        return m;
-      });
-    }
-  };
-
-  /** Toggle a directory within a stash's file tree. */
-  const toggleStashDir = (stashHash: string, dirPath: string) => {
-    setStashCollapsedDirs((prev) => {
-      const m = new Map(prev);
-      const dirs = new Set(m.get(stashHash) ?? []);
-      if (dirs.has(dirPath)) dirs.delete(dirPath);
-      else dirs.add(dirPath);
-      m.set(stashHash, dirs);
-      return m;
-    });
-  };
-
-  /** Build file tree rows for a specific stash. */
-  const getStashFileTreeRows = (stashHash: string): FileTreeRow[] => {
-    const files = stashFileCache().get(stashHash);
-    if (!files || files.length === 0) return [];
-    const tree = buildFileTree(files);
-    const collapsed = stashCollapsedDirs().get(stashHash) ?? new Set<string>();
-    return flattenFileTree(tree, collapsed);
-  };
-
-  /** Get column widths for a stash's file stats. */
-  const getStashFileWidths = (stashHash: string) => {
-    const files = stashFileCache().get(stashHash);
-    if (!files) return { totalAdd: 0, totalDel: 0, addColWidth: 2, delColWidth: 2 };
-    return computeFileWidths(files);
-  };
-
-  /** Toggle a directory's collapsed state */
-  const toggleDir = (dirPath: string) => {
-    const next = new Set(collapsedDirs());
-    if (next.has(dirPath)) next.delete(dirPath);
-    else next.add(dirPath);
-    setCollapsedDirs(next);
-  };
-
-  // Flatten tree into renderable rows with connector prefixes
-  const fileTreeRows = createMemo((): FileTreeRow[] =>
-    flattenFileTree(fileTree(), collapsedDirs())
-  );
 
   // ── Cursor-aware banner scroll (deferred part) ────────────────────
   // Must be defined after interactiveItems, fileTreeRows, and fileWidths.
@@ -534,6 +608,15 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
         if (treeRow.name.length <= available) return null;
         return { text: treeRow.name, visibleWidth: available };
       }
+
+      case "copyable": {
+        // Body uses wrapMode="word", no banner scroll
+        if (item.field === "body") return null;
+        const text = getCopyableText(item.field);
+        const available = pw;
+        if (text.length <= available) return null;
+        return { text, visibleWidth: available };
+      }
     }
   });
 
@@ -560,6 +643,27 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   const isCursored = (itemIndex: number) =>
     state.detailFocused() && state.detailCursorIndex() === itemIndex;
 
+  // ── Copyable field rendering helpers ────────────────────────────────
+  /** Get the interactive item index for a copyable field. */
+  const copyableIdx = (field: CopyableField) => findItemIndex("copyable", field);
+
+  /** Whether a copyable field is the currently-cursored item. */
+  const isCopyableCursored = (field: CopyableField) => isCursored(copyableIdx(field));
+
+  /** Highlight background for a copyable field row. */
+  const copyableHighlightBg = (field: CopyableField): string | undefined => itemHighlightBg(copyableIdx(field));
+
+  /** Banner-scrolled text for a copyable field (or null if not scrolling). */
+  const scrolledCopyableText = (field: CopyableField): string | null => {
+    if (!isCopyableCursored(field)) return null;
+    const info = cursoredTextInfo();
+    if (!info) return null;
+    const text = getCopyableText(field);
+    if (info.text !== text) return null;
+    const off = bannerOffset();
+    return text.substring(off, off + info.visibleWidth);
+  };
+
   /** Memo'd index map for O(1) lookup of interactive item positions.
    *  Keys are "section-header:children", "child:0", "file-dir:3", "stash-entry:abc123", etc. */
   const itemIndexMap = createMemo(() => {
@@ -570,6 +674,9 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
       switch (item.type) {
         case "section-header":
           map.set(`section-header:${item.section}`, i);
+          break;
+        case "copyable":
+          map.set(`copyable:${item.field}`, i);
           break;
         case "child":
         case "parent":
@@ -597,6 +704,9 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     switch (type) {
       case "section-header":
         key = `section-header:${keyOrSection}`;
+        break;
+      case "copyable":
+        key = `copyable:${keyOrSection}`;
         break;
       case "stash-entry":
         key = `stash-entry:${keyOrSection}`;
@@ -792,68 +902,148 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 <box height={1} />
               </Show>
 
-              {/* ── Metadata block (subheaders with values below) ── */}
+              {/* ── Metadata block (subheaders with copyable values) ── */}
               <text fg={t().accent} wrapMode="none">
                 <strong>Commit</strong>
               </text>
-              <text fg={isUncommitted() ? t().foregroundMuted : t().foreground} wrapMode="none" truncate>
-                {isUncommitted() ? "\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7" : c().hash}
-              </text>
+              <Show when={!isUncommitted()} fallback={
+                <text fg={t().foregroundMuted} wrapMode="none">{"\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7"}</text>
+              }>
+                <box flexDirection="row" backgroundColor={copyableHighlightBg("hash")}>
+                  <text flexGrow={1} flexShrink={1}
+                        fg={isCopyableCursored("hash") ? t().accent : t().foreground}
+                        wrapMode="none" truncate={!isCopyableCursored("hash")}>
+                    {scrolledCopyableText("hash") ?? c().hash}
+                  </text>
+                  <Show when={copiedField() === "hash"}>
+                    <text flexShrink={0} bg={t().primary} fg={t().background} wrapMode="none">
+                      {" \u2713 copied "}
+                    </text>
+                  </Show>
+                </box>
+              </Show>
 
               <box height={1} />
               <text fg={t().accent} wrapMode="none">
                 <strong>Author</strong>
               </text>
-              <text fg={isUncommitted() ? t().foregroundMuted : t().foreground} wrapMode="none" truncate>
-                {isUncommitted() ? "\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7" : <>{c().author} {"<"}{c().authorEmail}{">"}</>}
-              </text>
+              <Show when={!isUncommitted()} fallback={
+                <text fg={t().foregroundMuted} wrapMode="none">{"\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7"}</text>
+              }>
+                <box flexDirection="row" backgroundColor={copyableHighlightBg("author")}>
+                  <text flexGrow={1} flexShrink={1}
+                        fg={isCopyableCursored("author") ? t().accent : t().foreground}
+                        wrapMode="none" truncate={!isCopyableCursored("author")}>
+                    {scrolledCopyableText("author") ?? <>{c().author} {"<"}{c().authorEmail}{">"}</>}
+                  </text>
+                  <Show when={copiedField() === "author"}>
+                    <text flexShrink={0} bg={t().primary} fg={t().background} wrapMode="none">
+                      {" \u2713 copied "}
+                    </text>
+                  </Show>
+                </box>
+              </Show>
 
               <box height={1} />
               <text fg={t().accent} wrapMode="none">
                 <strong>Date</strong>
               </text>
-              <text fg={isUncommitted() ? t().foregroundMuted : t().foreground} wrapMode="none">
-                {isUncommitted() ? "\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7" : formatDate(c().authorDate)}
-              </text>
+              <Show when={!isUncommitted()} fallback={
+                <text fg={t().foregroundMuted} wrapMode="none">{"\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7"}</text>
+              }>
+                <box flexDirection="row" backgroundColor={copyableHighlightBg("date")}>
+                  <text flexGrow={1} flexShrink={1}
+                        fg={isCopyableCursored("date") ? t().accent : t().foreground}
+                        wrapMode="none" truncate={!isCopyableCursored("date")}>
+                    {scrolledCopyableText("date") ?? formatDate(c().authorDate)}
+                  </text>
+                  <Show when={copiedField() === "date"}>
+                    <text flexShrink={0} bg={t().primary} fg={t().background} wrapMode="none">
+                      {" \u2713 copied "}
+                    </text>
+                  </Show>
+                </box>
+              </Show>
 
               <Show when={!isUncommitted() && showCommitter()}>
                 <box height={1} />
                 <text fg={t().accent} wrapMode="none">
                   <strong>Committer</strong>
                 </text>
-                <text fg={t().foreground} wrapMode="none" truncate>
-                  {c().committer} {"<"}{c().committerEmail}{">"}
-                </text>
+                <box flexDirection="row" backgroundColor={copyableHighlightBg("committer")}>
+                  <text flexGrow={1} flexShrink={1}
+                        fg={isCopyableCursored("committer") ? t().accent : t().foreground}
+                        wrapMode="none" truncate={!isCopyableCursored("committer")}>
+                    {scrolledCopyableText("committer") ?? <>{c().committer} {"<"}{c().committerEmail}{">"}</>}
+                  </text>
+                  <Show when={copiedField() === "committer"}>
+                    <text flexShrink={0} bg={t().primary} fg={t().background} wrapMode="none">
+                      {" \u2713 copied "}
+                    </text>
+                  </Show>
+                </box>
 
                 <box height={1} />
                 <text fg={t().accent} wrapMode="none">
                   <strong>Commit Date</strong>
                 </text>
-                <text fg={t().foreground} wrapMode="none">
-                  {formatDate(c().commitDate)}
-                </text>
+                <box flexDirection="row" backgroundColor={copyableHighlightBg("commitDate")}>
+                  <text flexGrow={1} flexShrink={1}
+                        fg={isCopyableCursored("commitDate") ? t().accent : t().foreground}
+                        wrapMode="none" truncate={!isCopyableCursored("commitDate")}>
+                    {scrolledCopyableText("commitDate") ?? formatDate(c().commitDate)}
+                  </text>
+                  <Show when={copiedField() === "commitDate"}>
+                    <text flexShrink={0} bg={t().primary} fg={t().background} wrapMode="none">
+                      {" \u2713 copied "}
+                    </text>
+                  </Show>
+                </box>
               </Show>
 
               <box height={1} />
 
-              {/* ── Message (subject + body) ── */}
+              {/* ── Subject + Body ── */}
               <text fg={t().accent} wrapMode="none">
-                <strong>Message</strong>
+                <strong>Subject</strong>
               </text>
-              <text fg={isUncommitted() ? t().foregroundMuted : t().foreground} wrapMode="word">
-                {isUncommitted() ? "Staged and unstaged changes in working tree" : c().subject}
-              </text>
+              <Show when={!isUncommitted()} fallback={
+                <text fg={t().foregroundMuted} wrapMode="word">Staged and unstaged changes in working tree</text>
+              }>
+                <box flexDirection="row" backgroundColor={copyableHighlightBg("subject")}>
+                  <text flexGrow={1} flexShrink={1}
+                        fg={isCopyableCursored("subject") ? t().accent : t().foreground}
+                        wrapMode="none" truncate={!isCopyableCursored("subject")}>
+                    {scrolledCopyableText("subject") ?? c().subject}
+                  </text>
+                  <Show when={copiedField() === "subject"}>
+                    <text flexShrink={0} bg={t().primary} fg={t().background} wrapMode="none">
+                      {" \u2713 copied "}
+                    </text>
+                  </Show>
+                </box>
+              </Show>
 
               <Show when={!isUncommitted() && detail()?.body}>
                 <box height={1} />
-                <text fg={t().foregroundMuted} wrapMode="word">
-                  {detail()!.body}
+                <text fg={t().accent} wrapMode="none">
+                  <strong>Body</strong>
                 </text>
+                <box flexDirection="row" backgroundColor={copyableHighlightBg("body")}>
+                  <text flexGrow={1} flexShrink={1}
+                        fg={isCopyableCursored("body") ? t().accent : t().foregroundMuted}
+                        wrapMode="word">
+                    {detail()!.body}
+                  </text>
+                  <Show when={copiedField() === "body"}>
+                    <text flexShrink={0} bg={t().primary} fg={t().background} wrapMode="none">
+                      {" \u2713 copied "}
+                    </text>
+                  </Show>
+                </box>
               </Show>
 
-              <Show when={interactiveItems().length > 0}>
-                <box width="100%" border={["top"]} borderStyle="single" borderColor={t().border} />
-              </Show>
+              <box height={1} />
 
               {/* ── Children (collapsible) ── */}
               <Show when={filteredChildren().length > 0}>

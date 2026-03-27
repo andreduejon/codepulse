@@ -611,7 +611,7 @@ export async function getCommitDetail(
       runGit(repoPath, [
         "log", "-1", "--topo-order", `--format=${GIT_LOG_FORMAT}`, hash, "--",
       ], signal),
-      getRemoteNames(repoPath),
+      getRemoteNames(repoPath, signal),
     ]);
     if (signal?.aborted) return null;
     if (lookupResult.exitCode !== 0 || !lookupResult.stdout.trim()) return null;

@@ -4,6 +4,9 @@ import { DEFAULT_MAX_COUNT } from "../constants";
 
 export const DEFAULT_AUTO_REFRESH_INTERVAL = 30000;
 
+/** Valid tab identifiers for the detail panel. */
+export type DetailTab = "files" | "detail" | "stashes" | "staged" | "unstaged" | "untracked";
+
 export interface AppState {
   // ── Repository data ─────────────────────────────────────────────────
   commits: Accessor<Commit[]>;
@@ -37,7 +40,7 @@ export interface AppState {
   /** Contextual enter-key action label for the detail cursor item (null = no action) */
   detailCursorAction: Accessor<string | null>;
   /** Active tab in the detail panel (e.g. "detail", "files", "stashes" or "staged", "unstaged", "untracked") */
-  detailActiveTab: Accessor<string>;
+  detailActiveTab: Accessor<DetailTab>;
   /** Separate file lists for the uncommitted-changes node (null when a normal commit is selected) */
   uncommittedDetail: Accessor<UncommittedDetail | null>;
 
@@ -80,7 +83,7 @@ export interface AppActions {
   setFetching: (fetching: boolean) => void;
   setDetailLoading: (loading: boolean) => void;
   setDetailCursorAction: (action: string | null) => void;
-  setDetailActiveTab: (tab: string) => void;
+  setDetailActiveTab: (tab: DetailTab) => void;
   setUncommittedDetail: (detail: UncommittedDetail | null) => void;
   setViewingBranch: (branch: string | null) => void;
 }
@@ -111,7 +114,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
   const [detailOriginHash, setDetailOriginHash] = createSignal<string | null>(null);
   const [detailLoading, setDetailLoading] = createSignal(false);
   const [detailCursorAction, setDetailCursorAction] = createSignal<string | null>(null);
-  const [detailActiveTab, setDetailActiveTab] = createSignal("files");
+  const [detailActiveTab, setDetailActiveTab] = createSignal<DetailTab>("files");
   const [uncommittedDetail, setUncommittedDetail] = createSignal<UncommittedDetail | null>(null);
 
   // ── UI state & settings ───────────────────────────────────────────

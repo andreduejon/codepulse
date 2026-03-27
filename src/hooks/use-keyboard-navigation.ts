@@ -1,7 +1,7 @@
 import { useKeyboard, useRenderer } from "@opentui/solid";
 import type { Accessor } from "solid-js";
 import type { ScrollBoxRenderable } from "@opentui/core";
-import type { AppState, AppActions } from "../context/state";
+import type { AppState, AppActions, DetailTab } from "../context/state";
 import type { DetailNavRef } from "../components/detail-types";
 import { SHIFT_JUMP, PAGE_JUMP, UNCOMMITTED_HASH } from "../constants";
 
@@ -135,12 +135,12 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
       const scrollbox = getDetailScrollboxRef();
 
       /** Get available tab IDs based on commit type */
-      const getAvailableTabs = (): string[] => {
+      const getAvailableTabs = (): DetailTab[] => {
         const commit = state.selectedCommit();
         if (commit?.hash === UNCOMMITTED_HASH) {
           return ["unstaged", "staged", "untracked"];
         }
-        const tabs = ["files"];
+        const tabs: DetailTab[] = ["files"];
         if (state.stashByParent().has(commit?.hash ?? "")) {
           tabs.push("stashes");
         }
@@ -157,6 +157,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
             // Already on leftmost tab (or unknown tab) — exit detail focus
             actions.setDetailFocused(false);
           } else {
+            actions.setDetailCursorAction(null);
             actions.setDetailActiveTab(tabs[currentIdx - 1]);
             actions.setDetailCursorIndex(0);
             scrollbox?.scrollTo(0);
@@ -168,6 +169,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
           const tabs = getAvailableTabs();
           const currentIdx = tabs.indexOf(state.detailActiveTab());
           if (currentIdx < tabs.length - 1) {
+            actions.setDetailCursorAction(null);
             actions.setDetailActiveTab(tabs[currentIdx + 1]);
             actions.setDetailCursorIndex(0);
             scrollbox?.scrollTo(0);
