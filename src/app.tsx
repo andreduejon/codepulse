@@ -340,6 +340,14 @@ function AppContent(props: Readonly<AppProps>) {
     detailScrollboxRef?.scrollTo(0);
   });
 
+  // Auto-switch to Details tab when loaded commit has no file changes
+  createEffect(() => {
+    const cd = state.commitDetail();
+    if (cd && cd.files.length === 0 && state.detailActiveTab() === "files") {
+      actions.setDetailActiveTab("detail");
+    }
+  });
+
   // Search input handlers
   const handleSearchSubmit = (value: string) => {
     batch(() => {
