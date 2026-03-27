@@ -2,13 +2,13 @@
  * Shared test helpers for graph engine tests.
  */
 import { expect } from "bun:test";
-import type { Commit, Connector, GraphRow } from "../src/git/types";
+import type { Commit, Connector, GraphRow, RefInfo } from "../src/git/types";
 import { type GraphChar, type RenderOptions, renderGraphRow, renderFanOutRow, renderConnectorRow, getMaxGraphColumns } from "../src/git/graph";
 
 export function makeCommit(
   hash: string,
   parents: string[],
-  refs: { name: string; type: "branch" | "tag" | "remote" | "head"; isCurrent: boolean }[] = [],
+  refs: { name: string; type: RefInfo["type"]; isCurrent: boolean }[] = [],
   subject = `commit ${hash}`,
 ): Commit {
   return {

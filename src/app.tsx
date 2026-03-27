@@ -3,7 +3,7 @@ import { useRenderer } from "@opentui/solid";
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { createAppState, AppStateContext } from "./context/state";
 import { createThemeState, ThemeContext } from "./context/theme";
-import { getCommits, getBranches, getCurrentBranch, getCommitDetail, getRemoteUrl, fetchRemote, getLastFetchTime, getTagDetails, getStashList } from "./git/repo";
+import { getCommits, getBranches, getCurrentBranch, getCommitDetail, getRemoteUrl, fetchRemote, getLastFetchTime, getTagDetails, getStashList, getWorkingTreeStatus } from "./git/repo";
 import { buildGraph, getMaxGraphColumns } from "./git/graph";
 import type { Commit } from "./git/types";
 import GraphView, { ColumnHeader } from "./components/graph";
@@ -14,7 +14,7 @@ import HelpDialog from "./components/dialogs/help-dialog";
 import ThemeDialog from "./components/dialogs/theme-dialog";
 import MenuDialog from "./components/dialogs/menu-dialog";
 import packageJson from "../package.json";
-import { DEFAULT_MAX_COUNT } from "./constants";
+import { DEFAULT_MAX_COUNT, UNCOMMITTED_HASH } from "./constants";
 import { useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
 
 interface AppProps {
@@ -75,7 +75,7 @@ function AppContent(props: Readonly<AppProps>) {
       const effectiveBranch = viewBranch ?? branch;
       const effectiveAll = viewBranch ? false : state.showAllBranches();
 
-      const [commits, branches, currentBranch, remoteUrl, tagDetails, stashes] = await Promise.all([
+      const [commits, branches, currentBranch, remoteUrl, tagDetails, stashes, wtStatus] = await Promise.all([
         getCommits(repoPath, {
           maxCount: state.maxCount(),
           branch: effectiveBranch,
@@ -86,37 +86,62 @@ function AppContent(props: Readonly<AppProps>) {
         getRemoteUrl(repoPath, ctrl.signal),
         getTagDetails(repoPath, ctrl.signal),
         getStashList(repoPath, ctrl.signal),
+        getWorkingTreeStatus(repoPath, ctrl.signal),
       ]);
 
       // If we were superseded by a newer loadData call, discard results
       if (ctrl.signal.aborted) return;
 
-      // Inject stash commits into the commit list.
-      // Each stash's parents[0] is the HEAD commit it was based on.
-      // Insert each stash right before its parent so the graph draws it
-      // as a short branch off the base commit.
+      // Capture the HEAD commit hash before any synthetic commits are injected.
+      const headHash = commits[0]?.hash;
+
+      // Build stash-by-parent map: parent hash → stash Commit[].
+      // Used for (a) injecting "stash (N)" badges on parent commits in the
+      // graph, and (b) showing stash entries in the detail panel.
+      const stashByParent = new Map<string, Commit[]>();
       if (stashes.length > 0) {
-        const commitIndexMap = new Map<string, number>();
-        for (let i = 0; i < commits.length; i++) {
-          commitIndexMap.set(commits[i].hash, i);
-        }
-        // Group stashes by parent, preserving stash order (newest first)
-        const stashesByParent = new Map<number, Commit[]>();
+        const commitHashSet = new Set(commits.map(c => c.hash));
         for (const s of stashes) {
-          const parentIdx = commitIndexMap.get(s.parents[0]);
-          if (parentIdx != null) {
-            const group = stashesByParent.get(parentIdx);
-            if (group) group.push(s);
-            else stashesByParent.set(parentIdx, [s]);
+          const parentHash = s.parents[0];
+          if (!parentHash || !commitHashSet.has(parentHash)) continue;
+          const group = stashByParent.get(parentHash);
+          if (group) group.push(s);
+          else stashByParent.set(parentHash, [s]);
+        }
+        // Inject synthetic "stash (N)" ref on each parent commit so the
+        // graph renders a dimmed badge. This does NOT add stash commits
+        // to the commit list — they only appear in the detail panel.
+        for (const [parentHash, stashGroup] of stashByParent) {
+          const parentCommit = commits.find(c => c.hash === parentHash);
+          if (parentCommit) {
+            parentCommit.refs.push({
+              name: `stash (${stashGroup.length})`,
+              type: "stash" as const,
+              isCurrent: false,
+            });
           }
-          // If parent not in commits (e.g. truncated by maxCount), skip the stash
         }
-        // Insert in reverse index order so earlier indices aren't shifted
-        const sortedParentIndices = [...stashesByParent.keys()].sort((a, b) => b - a);
-        for (const parentIdx of sortedParentIndices) {
-          const group = stashesByParent.get(parentIdx)!;
-          commits.splice(parentIdx, 0, ...group);
-        }
+      }
+
+      // Inject a synthetic "uncommitted changes" node at index 0 when the
+      // working tree is dirty.  Its parent is the current HEAD commit so
+      // buildGraph draws it as a side branch off the tip.
+      if (wtStatus && headHash) {
+        const uncommitted: Commit = {
+          hash: UNCOMMITTED_HASH,
+          shortHash: "\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7",
+          parents: [headHash],
+          subject: "Uncommitted changes",
+          body: "",
+          author: "",
+          authorEmail: "",
+          authorDate: "",
+          committer: "",
+          committerEmail: "",
+          commitDate: "",
+          refs: [{ name: "uncommitted", type: "uncommitted" as const, isCurrent: false }],
+        };
+        commits.unshift(uncommitted);
       }
 
       // Skip update if nothing changed (avoids flicker on auto-refresh)
@@ -156,6 +181,7 @@ function AppContent(props: Readonly<AppProps>) {
         actions.setCurrentBranch(currentBranch);
         actions.setRemoteUrl(remoteUrl);
         actions.setTagDetails(tagDetails);
+        actions.setStashByParent(stashByParent);
         actions.setError(null);
         actions.setCursorIndex(targetIndex);
         actions.setScrollTargetIndex(targetIndex);
@@ -250,6 +276,13 @@ function AppContent(props: Readonly<AppProps>) {
     // from the render tree during scroll (a 334-file commit's tree = ~3K nodes).
     actions.setCommitDetail(null);
     actions.setDetailLoading(true);
+
+    // Skip detail loading for the uncommitted-changes node which doesn't
+    // have a real git object to query.
+    if (commit.hash === UNCOMMITTED_HASH) {
+      actions.setDetailLoading(false);
+      return;
+    }
 
     // Debounce the detail load to avoid spawning git subprocesses on rapid navigation
     detailDebounceTimer = setTimeout(async () => {

@@ -14,6 +14,8 @@ export interface AppState {
   remoteUrl: Accessor<string>;
   /** Tag details keyed by tag name — annotated tags include tagger/message. */
   tagDetails: Accessor<Map<string, TagInfo>>;
+  /** Stash commits grouped by parent hash — used for detail panel stash section. */
+  stashByParent: Accessor<Map<string, Commit[]>>;
 
   // ── Navigation & selection ──────────────────────────────────────────
   cursorIndex: Accessor<number>;
@@ -65,6 +67,7 @@ export interface AppActions {
   setRepoPath: (path: string) => void;
   setRemoteUrl: (url: string) => void;
   setTagDetails: (tags: Map<string, TagInfo>) => void;
+  setStashByParent: (map: Map<string, Commit[]>) => void;
   setError: (err: string | null) => void;
   setMaxGraphColumns: (cols: number) => void;
   setMaxCount: (n: number) => void;
@@ -87,6 +90,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
   const [repoPath, setRepoPath] = createSignal("");
   const [remoteUrl, setRemoteUrl] = createSignal("");
   const [tagDetails, setTagDetails] = createSignal<Map<string, TagInfo>>(new Map());
+  const [stashByParent, setStashByParent] = createSignal<Map<string, Commit[]>>(new Map());
 
   // ── Navigation & selection ────────────────────────────────────────
   const [cursorIndex, setCursorIndex] = createSignal(0);
@@ -160,6 +164,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
     repoPath,
     remoteUrl,
     tagDetails,
+    stashByParent,
     error,
     cursorIndex,
     selectedCommit,
@@ -202,6 +207,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
     setRepoPath,
     setRemoteUrl,
     setTagDetails,
+    setStashByParent,
     setError,
     setMaxGraphColumns,
     setMaxCount,

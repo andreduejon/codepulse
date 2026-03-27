@@ -75,6 +75,9 @@ export function parseRefs(refString: string, remoteNames: Set<string>): RefInfo[
         isCurrent: false,
       };
     }
+    if (ref === "refs/stash" || ref.startsWith("stash@{")) {
+      return { name: ref, type: "stash" as const, isCurrent: false };
+    }
     if (ref.includes("/")) {
       const isRemote =
         ref.startsWith("refs/remotes/") ||
@@ -133,7 +136,9 @@ export async function getCommits(
   ];
 
   if (options.all) {
-    args.push("--all");
+    // Exclude stash refs so their internal commits (index, untracked) don't
+    // leak into the log.  We inject stash entries separately via getStashList().
+    args.push("--exclude=refs/stash*", "--all");
   } else if (options.branch) {
     // Place branch before "--" so git treats it as a revision, not a path.
     // The "--" prevents ambiguity if a file exists with the same name as the branch.
@@ -303,8 +308,8 @@ export function parseStashEntry(line: string): Commit | null {
   // Use just the first parent for graph topology — we want a single line to the base commit
   const parents = [graphParent];
 
-  // Build a display label like "stash@{0}" for the badge
-  const label = stashRef?.trim() || "stash";
+  // Use the stash ref (e.g. "stash@{0}") as the label for display in the detail panel
+  const label = stashRef || "stash";
 
   return {
     hash,
@@ -349,6 +354,114 @@ export async function getStashList(
   return stashes;
 }
 
+export interface WorkingTreeStatus {
+  staged: number;
+  unstaged: number;
+  untracked: number;
+}
+
+/**
+ * @internal Exported for testing. Parse `git status --porcelain=v1` output
+ * into a WorkingTreeStatus. Returns null if the working tree is clean.
+ */
+export function parseStatusPorcelain(output: string): WorkingTreeStatus | null {
+  let staged = 0, unstaged = 0, untracked = 0;
+  for (const line of output.split("\n")) {
+    if (!line || line.length < 2) continue;
+    const x = line[0]; // index (staged) status
+    const y = line[1]; // worktree (unstaged) status
+    if (x === "?" && y === "?") { untracked++; continue; }
+    if (x !== " " && x !== "?") staged++;
+    if (y !== " " && y !== "?") unstaged++;
+  }
+  if (staged === 0 && unstaged === 0 && untracked === 0) return null;
+  return { staged, unstaged, untracked };
+}
+
+/**
+ * Check if the working tree has uncommitted changes.
+ * Returns null if the tree is clean (no staged, unstaged, or untracked files).
+ */
+export async function getWorkingTreeStatus(
+  repoPath: string,
+  signal?: AbortSignal,
+): Promise<WorkingTreeStatus | null> {
+  const { stdout, exitCode } = await runGit(
+    repoPath,
+    ["status", "--porcelain=v1"],
+    signal,
+  );
+  if (exitCode !== 0 || !stdout.trim()) return null;
+  return parseStatusPorcelain(stdout);
+}
+
+/**
+ * @internal Exported for testing. Parse combined `git diff-tree --raw --numstat` output
+ * into FileChange[]. Both getStashFiles and getCommitDetail use this format.
+ *
+ * Raw lines start with ":" (e.g. ":100644 100644 ... M\tfile.ts") — they provide status.
+ * Numstat lines are "adds\tdels\tpath" — they provide +/- stats.
+ */
+export function parseDiffTreeOutput(output: string): FileChange[] {
+  const statusMap = new Map<string, string>();
+  const statMap = new Map<string, { additions: number; deletions: number }>();
+
+  for (const line of output.split("\n")) {
+    if (!line) continue;
+    if (line.startsWith(":")) {
+      const tabIdx = line.indexOf("\t");
+      if (tabIdx === -1) continue;
+      const meta = line.slice(0, tabIdx);
+      const pathPart = line.slice(tabIdx + 1);
+      const statusCode = meta.split(" ").pop() ?? "M";
+      const filePath = pathPart.split("\t")[0];
+      statusMap.set(filePath, statusCode[0]);
+    } else if (line.includes("\t")) {
+      const [additions, deletions, ...pathParts] = line.split("\t");
+      const filePath = pathParts.join("\t");
+      statMap.set(filePath, {
+        additions: additions === "-" ? 0 : parseInt(additions, 10),
+        deletions: deletions === "-" ? 0 : parseInt(deletions, 10),
+      });
+    }
+  }
+
+  const files: FileChange[] = [];
+  for (const [filePath, stat] of statMap) {
+    files.push({
+      path: filePath,
+      additions: stat.additions,
+      deletions: stat.deletions,
+      status: (statusMap.get(filePath) ?? "M") as FileChange["status"],
+    });
+  }
+
+  return files;
+}
+
+/**
+ * Fetch file changes for a specific stash entry.
+ * Uses `git diff-tree` against the stash's parent to get the diff.
+ * Returns the same FileChange[] format as CommitDetail.files.
+ */
+export async function getStashFiles(
+  repoPath: string,
+  stashHash: string,
+  signal?: AbortSignal,
+): Promise<FileChange[]> {
+  // Stash commits are merges (2-3 parents). diff-tree on a merge commit
+  // with just one revision produces no output. We must explicitly diff
+  // against the first parent (the HEAD at time of stash).
+  const { stdout, exitCode } = await runGit(
+    repoPath,
+    ["diff-tree", "--no-commit-id", "-r", "--raw", "--numstat", `${stashHash}^1`, stashHash, "--"],
+    signal,
+  );
+
+  if (exitCode !== 0 || !stdout.trim()) return [];
+  return parseDiffTreeOutput(stdout);
+}
+
 export async function getCommitDetail(
   repoPath: string,
   hash: string,
@@ -369,45 +482,7 @@ export async function getCommitDetail(
   if (signal?.aborted) return null;
 
   const fullMessage = msgResult.stdout;
-
-  // Parse the combined --raw / --numstat output.
-  // Raw lines start with ":" (e.g. ":100644 100644 ... M\tfile.ts")
-  // Numstat lines are "adds\tdels\tpath"
-  const statusMap = new Map<string, string>();
-  const statMap = new Map<string, { additions: number; deletions: number }>();
-
-  for (const line of diffResult.stdout.split("\n")) {
-    if (!line) continue;
-    if (line.startsWith(":")) {
-      // Raw format: :old_mode new_mode old_hash new_hash status\tpath[\tnew_path]
-      const tabIdx = line.indexOf("\t");
-      if (tabIdx === -1) continue;
-      const meta = line.slice(0, tabIdx);
-      const pathPart = line.slice(tabIdx + 1);
-      // Status is the last token before the tab (e.g. "M", "R100", "C080")
-      const statusCode = meta.split(" ").pop() ?? "M";
-      const filePath = pathPart.split("\t")[0]; // first path for renames
-      statusMap.set(filePath, statusCode[0]);
-    } else if (line.includes("\t")) {
-      // Numstat format: additions\tdeletions\tpath
-      const [additions, deletions, ...pathParts] = line.split("\t");
-      const filePath = pathParts.join("\t");
-      statMap.set(filePath, {
-        additions: additions === "-" ? 0 : parseInt(additions, 10),
-        deletions: deletions === "-" ? 0 : parseInt(deletions, 10),
-      });
-    }
-  }
-
-  const files: FileChange[] = [];
-  for (const [filePath, stat] of statMap) {
-    files.push({
-      path: filePath,
-      additions: stat.additions,
-      deletions: stat.deletions,
-      status: (statusMap.get(filePath) ?? "M") as FileChange["status"],
-    });
-  }
+  const files = parseDiffTreeOutput(diffResult.stdout);
 
   // Use existing commit info if provided (avoids a redundant git log subprocess)
   let commit: Commit;

@@ -15,7 +15,7 @@ export interface Commit {
 
 export interface RefInfo {
   name: string;
-  type: "branch" | "tag" | "remote" | "head" | "stash";
+  type: "branch" | "tag" | "remote" | "head" | "stash" | "uncommitted";
   isCurrent: boolean;
 }
 

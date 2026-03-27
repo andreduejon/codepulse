@@ -3,10 +3,11 @@ import { useRenderer } from "@opentui/solid";
 import { useAppState } from "../context/state";
 import { useTheme } from "../context/theme";
 import { getColorForColumn } from "../git/graph";
-import type { Commit, GraphRow } from "../git/types";
+import type { Commit, GraphRow, FileChange } from "../git/types";
 import { buildFileTree, flattenFileTree } from "../utils/file-tree";
 import type { FileTreeNode, FileTreeRow } from "../utils/file-tree";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
+import { getStashFiles } from "../git/repo";
 import { DETAIL_PANEL_WIDTH_FRACTION } from "../constants";
 
 // ── Layout constants ────────────────────────────────────────────────
@@ -35,7 +36,10 @@ type InteractiveItem =
   | { type: "child"; hash: string; index: number }
   | { type: "parent"; hash: string; index: number }
   | { type: "file-dir"; dirPath: string; index: number }
-  | { type: "file"; filePath: string; index: number };
+  | { type: "file"; filePath: string; index: number }
+  | { type: "stash-entry"; stashHash: string; stashIndex: number }
+  | { type: "stash-dir"; stashHash: string; dirPath: string; index: number }
+  | { type: "stash-file"; stashHash: string; filePath: string; index: number };
 
 /** Colored badge for branch/tag labels in the detail view */
 function DetailBadge(props: Readonly<{
@@ -50,12 +54,12 @@ function DetailBadge(props: Readonly<{
   const t = () => theme();
 
   const bgColor = () => {
-    if (props.dimmed) return t().backgroundElement;
+    if (props.dimmed) return t().backgroundElementActive;
     return getColorForColumn(props.colorIndex, t().graphColors);
   };
 
   const fgColor = () => {
-    if (props.dimmed) return t().foregroundMuted;
+    if (props.dimmed) return t().foreground;
     return t().background;
   };
 
@@ -183,6 +187,28 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
       }
     }
 
+    // Stash entries (each stash is its own collapsible header — no outer wrapper)
+    const stashes = stashEntries();
+    if (stashes.length > 0) {
+      for (let si = 0; si < stashes.length; si++) {
+        const stash = stashes[si];
+        items.push({ type: "stash-entry", stashHash: stash.hash, stashIndex: si });
+
+        // If this stash is expanded, add its file tree items
+        if (expandedStashes().has(stash.hash)) {
+          const rows = getStashFileTreeRows(stash.hash);
+          for (let fi = 0; fi < rows.length; fi++) {
+            const row = rows[fi];
+            if (row.isDir) {
+              items.push({ type: "stash-dir", stashHash: stash.hash, dirPath: row.dirPath, index: fi });
+            } else {
+              items.push({ type: "stash-file", stashHash: stash.hash, filePath: row.file!.path, index: fi });
+            }
+          }
+        }
+      }
+    }
+
     return items;
   });
 
@@ -249,6 +275,15 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
       case "file":
         // No action for files — just highlight
         break;
+      case "stash-entry":
+        toggleStash(item.stashHash);
+        break;
+      case "stash-dir":
+        toggleStashDir(item.stashHash, item.dirPath);
+        break;
+      case "stash-file":
+        // No action for stash files — just highlight
+        break;
     }
   };
 
@@ -297,7 +332,16 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
       case "parent":
         actions.setDetailCursorAction("navigate");
         break;
+      case "stash-entry":
+        actions.setDetailCursorAction(expandedStashes().has(item.stashHash) ? "collapse" : "expand");
+        break;
+      case "stash-dir": {
+        const dirs = stashCollapsedDirs().get(item.stashHash);
+        actions.setDetailCursorAction(dirs?.has(item.dirPath) ? "expand" : "collapse");
+        break;
+      }
       case "file":
+      case "stash-file":
         actions.setDetailCursorAction(null);
         break;
     }
@@ -365,6 +409,86 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     commit();
     setCollapsedDirs(new Set<string>());
   });
+
+  // ── Stash section state ─────────────────────────────────────────────
+  /** Stash entries for the currently selected commit (from stashByParent map). */
+  const stashEntries = createMemo((): Commit[] => {
+    const c = commit();
+    if (!c) return [];
+    return state.stashByParent().get(c.hash) ?? [];
+  });
+
+  /** Which stash hashes are expanded in the detail panel. */
+  const [expandedStashes, setExpandedStashes] = createSignal(new Set<string>());
+  /** Cached stash file data: stashHash → FileChange[]. */
+  const [stashFileCache, setStashFileCache] = createSignal(new Map<string, FileChange[]>());
+  /** Collapsed dirs per stash: stashHash → Set of collapsed dir paths. */
+  const [stashCollapsedDirs, setStashCollapsedDirs] = createSignal(new Map<string, Set<string>>());
+
+  // Reset stash state when selected commit changes
+  createEffect(() => {
+    commit();
+    setExpandedStashes(new Set<string>());
+    setStashFileCache(new Map<string, FileChange[]>());
+    setStashCollapsedDirs(new Map<string, Set<string>>());
+  });
+
+  /** Toggle a stash's expanded state and lazily load files. */
+  const toggleStash = async (stashHash: string) => {
+    const next = new Set(expandedStashes());
+    if (next.has(stashHash)) {
+      next.delete(stashHash);
+      setExpandedStashes(next);
+      return;
+    }
+    next.add(stashHash);
+    setExpandedStashes(next);
+
+    // Lazy load files if not cached
+    if (!stashFileCache().has(stashHash)) {
+      const files = await getStashFiles(state.repoPath(), stashHash);
+      setStashFileCache((prev) => {
+        const m = new Map(prev);
+        m.set(stashHash, files);
+        return m;
+      });
+    }
+  };
+
+  /** Toggle a directory within a stash's file tree. */
+  const toggleStashDir = (stashHash: string, dirPath: string) => {
+    setStashCollapsedDirs((prev) => {
+      const m = new Map(prev);
+      const dirs = new Set(m.get(stashHash) ?? []);
+      if (dirs.has(dirPath)) dirs.delete(dirPath);
+      else dirs.add(dirPath);
+      m.set(stashHash, dirs);
+      return m;
+    });
+  };
+
+  /** Build file tree rows for a specific stash. */
+  const getStashFileTreeRows = (stashHash: string): FileTreeRow[] => {
+    const files = stashFileCache().get(stashHash);
+    if (!files || files.length === 0) return [];
+    const tree = buildFileTree(files);
+    const collapsed = stashCollapsedDirs().get(stashHash) ?? new Set<string>();
+    return flattenFileTree(tree, collapsed);
+  };
+
+  /** Get column widths for a stash's file stats. */
+  const getStashFileWidths = (stashHash: string) => {
+    const files = stashFileCache().get(stashHash);
+    if (!files) return { totalAdd: 0, totalDel: 0, addColWidth: 2, delColWidth: 2 };
+    const totalAdd = files.reduce((sum, f) => sum + f.additions, 0);
+    const totalDel = files.reduce((sum, f) => sum + f.deletions, 0);
+    return {
+      totalAdd,
+      totalDel,
+      addColWidth: ("+" + totalAdd).length,
+      delColWidth: ("-" + totalDel).length,
+    };
+  };
 
   /** Toggle a directory's collapsed state */
   const toggleDir = (dirPath: string) => {
@@ -437,6 +561,44 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
         if (treeRow.name.length <= available) return null;
         return { text: treeRow.name, visibleWidth: available };
       }
+
+      case "stash-entry": {
+        // Header shows only label + optional " (N)" file count suffix.
+        // The label is the scrollable part; file count is short and appended outside scroll.
+        const stash = stashEntries()[item.stashIndex];
+        if (!stash) return null;
+        const label = stash.refs[0]?.name ?? "stash";
+        const indicatorWidth = 2; // "▸ " or "▾ "
+        const available = pw - indicatorWidth;
+        if (label.length <= available) return null;
+        return { text: label, visibleWidth: available };
+      }
+
+      case "stash-dir": {
+        // Same layout as file-dir but inside a stash sub-tree (extra indent for stash nesting)
+        const stashIndent = ENTRY_PADDING_LEFT; // stash files are double-indented
+        const rows = getStashFileTreeRows(item.stashHash);
+        const treeRow = rows[item.index];
+        if (!treeRow) return null;
+        const fixedChars = ENTRY_PADDING_LEFT + stashIndent + treeRow.prefix.length + treeRow.connector.length + DIR_INDICATOR_WIDTH;
+        const available = pw - fixedChars;
+        if (treeRow.name.length <= available) return null;
+        return { text: treeRow.name, visibleWidth: available };
+      }
+
+      case "stash-file": {
+        // Same layout as file but inside a stash sub-tree
+        const stashIndent = ENTRY_PADDING_LEFT;
+        const rows = getStashFileTreeRows(item.stashHash);
+        const treeRow = rows[item.index];
+        if (!treeRow) return null;
+        const fw = getStashFileWidths(item.stashHash);
+        const statWidth = STAT_PADDING_LEFT + fw.addColWidth + STAT_GAP + fw.delColWidth;
+        const fixedChars = ENTRY_PADDING_LEFT + stashIndent + treeRow.prefix.length + treeRow.connector.length + statWidth;
+        const available = pw - fixedChars;
+        if (treeRow.name.length <= available) return null;
+        return { text: treeRow.name, visibleWidth: available };
+      }
     }
   });
 
@@ -464,7 +626,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     state.detailFocused() && state.detailCursorIndex() === itemIndex;
 
   /** Memo'd index map for O(1) lookup of interactive item positions.
-   *  Keys are "section-header:children", "child:0", "file-dir:3", etc. */
+   *  Keys are "section-header:children", "child:0", "file-dir:3", "stash-entry:abc123", etc. */
   const itemIndexMap = createMemo(() => {
     const map = new Map<string, number>();
     const items = interactiveItems();
@@ -480,14 +642,40 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
         case "file":
           map.set(`${item.type}:${item.index}`, i);
           break;
+        case "stash-entry":
+          map.set(`stash-entry:${item.stashHash}`, i);
+          break;
+        case "stash-dir":
+          map.set(`stash-dir:${item.stashHash}:${item.index}`, i);
+          break;
+        case "stash-file":
+          map.set(`stash-file:${item.stashHash}:${item.index}`, i);
+          break;
       }
     }
     return map;
   });
 
   /** Find the interactive item index for a given item (O(1) via memo'd map). */
-  const findItemIndex = (type: InteractiveItem["type"], section?: string, idx?: number): number => {
-    const key = type === "section-header" ? `section-header:${section}` : `${type}:${idx}`;
+  const findItemIndex = (type: InteractiveItem["type"], keyOrSection?: string, idx?: number): number => {
+    let key: string;
+    switch (type) {
+      case "section-header":
+        key = `section-header:${keyOrSection}`;
+        break;
+      case "stash-entry":
+        key = `stash-entry:${keyOrSection}`;
+        break;
+      case "stash-dir":
+        key = `stash-dir:${keyOrSection}:${idx}`;
+        break;
+      case "stash-file":
+        key = `stash-file:${keyOrSection}:${idx}`;
+        break;
+      default:
+        key = `${type}:${idx}`;
+        break;
+    }
     return itemIndexMap().get(key) ?? -1;
   };
 
@@ -641,7 +829,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                     <DetailBadge
                       name={ref.name}
                       colorIndex={nodeColorIndex()}
-                      dimmed={ref.type === "stash"}
+                      dimmed={ref.type === "stash" || ref.type === "uncommitted"}
                     />
                   )}
                 </For>
@@ -868,6 +1056,148 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 </For>
               </Show>
             </Show>
+
+            {/* ── Stash entries (each is its own collapsible header) ── */}
+            <Show when={stashEntries().length > 0}>
+              <box height={1} />
+            </Show>
+            <For each={stashEntries()}>
+              {(stash, si) => {
+                const itemIdx = () => findItemIndex("stash-entry", stash.hash);
+                const cursored = () => isCursored(itemIdx());
+                const expanded = () => expandedStashes().has(stash.hash);
+                const label = () => stash.refs[0]?.name ?? "stash";
+                const fileCount = () => stashFileCache().get(stash.hash)?.length;
+
+                /** Banner scroll for the stash header label when cursored */
+                const scrolledHeaderText = () => {
+                  if (!cursored()) return null;
+                  const info = cursoredTextInfo();
+                  if (!info) return null;
+                  // Header text is just the label (+ file count suffix, not scrolled)
+                  const headerLabel = label();
+                  if (info.text !== headerLabel) return null;
+                  const off = bannerOffset();
+                  return headerLabel.substring(off, off + info.visibleWidth);
+                };
+
+                const stashFileRows = () => getStashFileTreeRows(stash.hash);
+                const stashFw = () => getStashFileWidths(stash.hash);
+
+                return (
+                  <>
+                    {/* Spacer between stash entries (not before the first one) */}
+                    <Show when={si() > 0}>
+                      <box height={1} />
+                    </Show>
+
+                    {/* Stash entry header — label + file count only */}
+                    <box backgroundColor={itemHighlightBg(itemIdx())}>
+                      <text fg={t().accent} wrapMode="none" truncate={scrolledHeaderText() == null}>
+                        <strong>{expanded() ? "▾" : "▸"} {scrolledHeaderText() ?? label()}{fileCount() != null ? ` (${fileCount()})` : ""}</strong>
+                      </text>
+                    </box>
+
+                    {/* Expanded area: description + total lines changed + file tree */}
+                    <Show when={expanded()}>
+                      {/* Stash description (subject line) */}
+                      <box paddingLeft={ENTRY_PADDING_LEFT}>
+                        <text fg={t().foregroundMuted} wrapMode="none" truncate>
+                          {stash.subject}
+                        </text>
+                      </box>
+
+                      {/* Total lines changed (only after files are loaded) */}
+                      <Show when={stashFw().totalAdd > 0 || stashFw().totalDel > 0}>
+                        <box flexDirection="row" paddingLeft={2}>
+                          <box flexGrow={1}>
+                            <text fg={t().foregroundMuted} wrapMode="none">
+                              total lines changed
+                            </text>
+                          </box>
+                          <box flexShrink={0} paddingLeft={2}>
+                            <text fg={t().diffAdded} wrapMode="none">
+                              +{stashFw().totalAdd}
+                            </text>
+                          </box>
+                          <box flexShrink={0} paddingLeft={1}>
+                            <text fg={t().diffRemoved} wrapMode="none">
+                              -{stashFw().totalDel}
+                            </text>
+                          </box>
+                        </box>
+                        <box height={1} />
+                      </Show>
+
+                      <For each={stashFileRows()}>
+                        {(treeRow, fi) => {
+                          const fileItemIdx = () => findItemIndex(
+                            treeRow.isDir ? "stash-dir" : "stash-file",
+                            stash.hash,
+                            fi()
+                          );
+                          const fileCursored = () => isCursored(fileItemIdx());
+                          const fileCollapsed = () => treeRow.isDir && (stashCollapsedDirs().get(stash.hash)?.has(treeRow.dirPath) ?? false);
+
+                          const scrolledFileName = () => {
+                            if (!fileCursored()) return null;
+                            const info = cursoredTextInfo();
+                            if (!info || info.text !== treeRow.name) return null;
+                            const off = bannerOffset();
+                            return treeRow.name.substring(off, off + info.visibleWidth);
+                          };
+
+                          return (
+                            <box
+                              flexDirection="row"
+                              width="100%"
+                              paddingLeft={2}
+                              backgroundColor={itemHighlightBg(fileItemIdx())}
+                            >
+                              <box flexShrink={0}>
+                                <text fg={t().border} wrapMode="none">
+                                  {treeRow.prefix}{treeRow.connector}
+                                </text>
+                              </box>
+                              <Show when={treeRow.isDir}>
+                                <box flexShrink={0}>
+                                  <text fg={fileCursored() ? t().accent : t().foregroundMuted} wrapMode="none">
+                                    {fileCollapsed() ? "▸ " : "▾ "}
+                                  </text>
+                                </box>
+                              </Show>
+                              <box flexGrow={1}>
+                                <text
+                                  fg={treeRow.isDir
+                                    ? (fileCursored() ? t().accent : t().foregroundMuted)
+                                    : (fileCursored() ? t().accent : t().foreground)}
+                                  wrapMode="none"
+                                  truncate={scrolledFileName() == null}
+                                >
+                                  {scrolledFileName() ?? treeRow.name}
+                                </text>
+                              </box>
+                              <Show when={treeRow.file}>
+                                <box flexShrink={0} paddingLeft={2}>
+                                  <text fg={t().diffAdded} wrapMode="none">
+                                    {("+" + treeRow.file!.additions).padStart(stashFw().addColWidth)}
+                                  </text>
+                                </box>
+                                <box flexShrink={0} paddingLeft={1}>
+                                  <text fg={t().diffRemoved} wrapMode="none">
+                                    {("-" + treeRow.file!.deletions).padStart(stashFw().delColWidth)}
+                                  </text>
+                                </box>
+                              </Show>
+                            </box>
+                          );
+                        }}
+                      </For>
+                    </Show>
+                  </>
+                );
+              }}
+            </For>
 
           </>
         )}

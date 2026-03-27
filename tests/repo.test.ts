@@ -7,7 +7,7 @@
  * These are unit tests for the parsing layer — they don't spawn git subprocesses.
  */
 import { describe, test, expect } from "bun:test";
-import { parseRefs, parseCommitLine, parseTagLine, parseTrackInfo, parseStashEntry, RS } from "../src/git/repo";
+import { parseRefs, parseCommitLine, parseTagLine, parseTrackInfo, parseStashEntry, parseStatusPorcelain, parseDiffTreeOutput, RS } from "../src/git/repo";
 
 describe("repo.ts parsing", () => {
   test("parseRefs — empty/blank string returns []", () => {
@@ -66,6 +66,23 @@ describe("repo.ts parsing", () => {
     expect(refs.length).toBe(1);
     expect(refs[0].type).toBe("branch");
     expect(refs[0].name).toBe("feature/my-feature");
+  });
+
+  test("parseRefs — stash refs are classified as stash", () => {
+    // refs/stash (raw ref that git log --all may produce)
+    const refs1 = parseRefs("refs/stash", new Set(["origin"]));
+    expect(refs1.length).toBe(1);
+    expect(refs1[0].type).toBe("stash");
+    expect(refs1[0].isCurrent).toBe(false);
+
+    // stash@{N} (synthetic refs from our stash injection)
+    const refs2 = parseRefs("stash@{0}", new Set());
+    expect(refs2.length).toBe(1);
+    expect(refs2[0].type).toBe("stash");
+    expect(refs2[0].name).toBe("stash@{0}");
+
+    const refs3 = parseRefs("stash@{2}", new Set());
+    expect(refs3[0].type).toBe("stash");
   });
 
   test("parseRefs — multiple refs on one commit", () => {
@@ -378,5 +395,147 @@ describe("parseStashEntry", () => {
     expect(entry).not.toBeNull();
     expect(entry!.refs[0].name).toBe("stash@{5}");
     expect(entry!.refs[0].type).toBe("stash");
+  });
+});
+
+describe("parseStatusPorcelain", () => {
+  test("returns null for empty output", () => {
+    expect(parseStatusPorcelain("")).toBeNull();
+    expect(parseStatusPorcelain("  \n  ")).toBeNull();
+  });
+
+  test("counts staged files (index column)", () => {
+    const output = "M  src/app.ts\nA  src/new.ts\nD  old.ts\n";
+    const result = parseStatusPorcelain(output);
+    expect(result).not.toBeNull();
+    expect(result!.staged).toBe(3);
+    expect(result!.unstaged).toBe(0);
+    expect(result!.untracked).toBe(0);
+  });
+
+  test("counts unstaged files (worktree column)", () => {
+    const output = " M src/app.ts\n M src/other.ts\n";
+    const result = parseStatusPorcelain(output);
+    expect(result).not.toBeNull();
+    expect(result!.staged).toBe(0);
+    expect(result!.unstaged).toBe(2);
+    expect(result!.untracked).toBe(0);
+  });
+
+  test("counts untracked files", () => {
+    const output = "?? newfile.ts\n?? another.ts\n";
+    const result = parseStatusPorcelain(output);
+    expect(result).not.toBeNull();
+    expect(result!.staged).toBe(0);
+    expect(result!.unstaged).toBe(0);
+    expect(result!.untracked).toBe(2);
+  });
+
+  test("handles mixed staged + unstaged + untracked", () => {
+    const output = [
+      "M  staged-only.ts",
+      " M unstaged-only.ts",
+      "MM both.ts",        // staged AND unstaged
+      "?? newfile.ts",
+    ].join("\n");
+    const result = parseStatusPorcelain(output);
+    expect(result).not.toBeNull();
+    // "M " = staged, " M" = unstaged, "MM" = both staged+unstaged, "??" = untracked
+    expect(result!.staged).toBe(2);   // M_ and MM
+    expect(result!.unstaged).toBe(2); // _M and MM
+    expect(result!.untracked).toBe(1);
+  });
+
+  test("returns null when all lines are empty or too short", () => {
+    expect(parseStatusPorcelain("\n\n\n")).toBeNull();
+    expect(parseStatusPorcelain("X")).toBeNull(); // too short
+  });
+});
+
+describe("parseDiffTreeOutput", () => {
+  test("parses combined raw + numstat output", () => {
+    const output = [
+      ":100644 100644 abc1234 def5678 M\tsrc/app.tsx",
+      ":000000 100644 0000000 abc1234 A\tsrc/new-file.ts",
+      ":100644 000000 abc1234 0000000 D\told-file.ts",
+      "",
+      "12\t3\tsrc/app.tsx",
+      "45\t0\tsrc/new-file.ts",
+      "0\t10\told-file.ts",
+    ].join("\n");
+
+    const files = parseDiffTreeOutput(output);
+    expect(files).toHaveLength(3);
+
+    const app = files.find(f => f.path === "src/app.tsx");
+    expect(app).toBeDefined();
+    expect(app!.additions).toBe(12);
+    expect(app!.deletions).toBe(3);
+    expect(app!.status).toBe("M");
+
+    const newFile = files.find(f => f.path === "src/new-file.ts");
+    expect(newFile).toBeDefined();
+    expect(newFile!.additions).toBe(45);
+    expect(newFile!.deletions).toBe(0);
+    expect(newFile!.status).toBe("A");
+
+    const deleted = files.find(f => f.path === "old-file.ts");
+    expect(deleted).toBeDefined();
+    expect(deleted!.additions).toBe(0);
+    expect(deleted!.deletions).toBe(10);
+    expect(deleted!.status).toBe("D");
+  });
+
+  test("handles rename status (R100)", () => {
+    const output = [
+      ":100644 100644 abc1234 def5678 R100\told-name.ts\tnew-name.ts",
+      "",
+      "0\t0\told-name.ts",
+    ].join("\n");
+
+    const files = parseDiffTreeOutput(output);
+    expect(files).toHaveLength(1);
+    expect(files[0].path).toBe("old-name.ts");
+    expect(files[0].status).toBe("R");
+  });
+
+  test("handles binary files (- additions/deletions)", () => {
+    const output = [
+      ":100644 100644 abc1234 def5678 M\timage.png",
+      "",
+      "-\t-\timage.png",
+    ].join("\n");
+
+    const files = parseDiffTreeOutput(output);
+    expect(files).toHaveLength(1);
+    expect(files[0].path).toBe("image.png");
+    expect(files[0].additions).toBe(0);
+    expect(files[0].deletions).toBe(0);
+    expect(files[0].status).toBe("M");
+  });
+
+  test("returns empty array for empty output", () => {
+    expect(parseDiffTreeOutput("")).toHaveLength(0);
+    expect(parseDiffTreeOutput("\n\n")).toHaveLength(0);
+  });
+
+  test("defaults to M status when raw line is missing", () => {
+    // Only numstat, no raw lines — status should default to "M"
+    const output = "5\t2\tsrc/file.ts\n";
+
+    const files = parseDiffTreeOutput(output);
+    expect(files).toHaveLength(1);
+    expect(files[0].status).toBe("M");
+  });
+
+  test("handles paths with tabs (pathParts.join)", () => {
+    // Pathological case: a path containing a tab character
+    const output = "10\t5\tpath\twith\ttabs\n";
+
+    const files = parseDiffTreeOutput(output);
+    expect(files).toHaveLength(1);
+    expect(files[0].path).toBe("path\twith\ttabs");
+    expect(files[0].additions).toBe(10);
+    expect(files[0].deletions).toBe(5);
   });
 });

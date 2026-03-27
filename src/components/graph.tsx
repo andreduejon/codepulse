@@ -3,6 +3,7 @@ import { useAppState } from "../context/state";
 import { useTheme } from "../context/theme";
 import { HASH_COL_WIDTH, AUTHOR_COL_WIDTH, DATE_COL_WIDTH } from "../constants";
 import { renderGraphRow, renderConnectorRow, renderFanOutRow, graphCharsToContent, getColorForColumn, sliceGraphToViewport, computeSingleViewportOffset, buildEdgeIndicator, MAX_GRAPH_COLUMNS, type GraphChar } from "../git/graph";
+import { formatRelativeDate } from "../utils/date";
 import type { GraphRow, RefInfo } from "../git/types";
 import type { TextRenderable, StyledText, ScrollBoxRenderable, Renderable } from "@opentui/core";
 
@@ -14,11 +15,13 @@ function RefBadge(props: Readonly<{
   const t = () => theme();
 
   const isStash = () => props.info.type === "stash";
+  const isDimmed = () => props.info.type === "stash" || props.info.type === "uncommitted";
 
-  const bgColor = () => isStash() ? t().backgroundElement : props.laneColor();
+  const bgColor = () => isDimmed() ? t().backgroundElementActive : props.laneColor();
 
-  // Stash badges use muted foreground; regular badges use dark background for contrast.
-  const fgColor = () => isStash() ? t().foregroundMuted : t().background;
+  // Dimmed badges (stash, uncommitted) use normal foreground on muted background;
+  // regular badges use dark background color for contrast against bright lane colors.
+  const fgColor = () => isDimmed() ? t().foreground : t().background;
 
   return (
     <text flexShrink={0} wrapMode="none" fg={fgColor()} bg={bgColor()}>
@@ -137,6 +140,10 @@ function GraphLine(props: Readonly<{
     };
   };
 
+  // Uncommitted-changes node renders in dimmed/muted style.
+  // IMPORTANT: Must be defined BEFORE fullGraphChars (createMemo evaluates eagerly).
+  const isUncommitted = () => commit().refs.some(r => r.type === "uncommitted");
+
   // Edge indicator helper — single 2-char column appended to the right
   const edgeColor = () => theme().foregroundMuted;
   const blankEdge = (): GraphChar => ({ char: "  ", color: edgeColor() });
@@ -162,9 +169,21 @@ function GraphLine(props: Readonly<{
   // viewport slicing (cheap). When only viewportOffset changes, the memoized
   // full-width renders are reused and only the cheap slice re-runs. ---
 
+  // Dim ALL graph chars for the uncommitted-changes row — including the █ node —
+  // so the entire row visually recedes. Uses foregroundMuted for a uniformly muted look.
+  const dimChars = (chars: GraphChar[]): GraphChar[] => {
+    if (!isUncommitted()) return chars;
+    const mutedColor = theme().foregroundMuted;
+    for (const c of chars) {
+      c.color = mutedColor;
+      c.bold = false;
+    }
+    return chars;
+  };
+
   // Full-width renders — memoized, depend on row data + renderOpts, NOT viewportOffset
-  const fullGraphChars = createMemo(() => renderGraphRow(props.row, renderOpts()));
-  const fullConnectorChars = createMemo(() => renderConnectorRow(props.row, renderOpts()));
+  const fullGraphChars = createMemo(() => dimChars(renderGraphRow(props.row, renderOpts())));
+  const fullConnectorChars = createMemo(() => dimChars(renderConnectorRow(props.row, renderOpts())));
 
   // Viewport-sliced renders — depend on memoized full-width + viewportOffset (cheap)
   const graphChars = () => {
@@ -201,11 +220,23 @@ function GraphLine(props: Readonly<{
     return foRows && foRows.length > 0 && !commitRowHasConnections();
   };
 
-  // Full-width fan-out renders — memoized, NOT dependent on viewportOffset
+  // Full-width fan-out renders — memoized, NOT dependent on viewportOffset.
+  // When the commit is the uncommitted-changes node, dim all fan-out chars.
   const fullFanOutChars = createMemo(() => {
     const foRows = props.row.fanOutRows;
     if (!foRows || foRows.length === 0) return [];
-    return foRows.map((foConnectors) => renderFanOutRow(foConnectors, renderOpts(), props.row.nodeColumn));
+    const dimAll = isUncommitted();
+    return foRows.map((foConnectors) => {
+      const chars = renderFanOutRow(foConnectors, renderOpts(), props.row.nodeColumn);
+      if (dimAll) {
+        const mutedColor = theme().foregroundMuted;
+        for (const c of chars) {
+          c.color = mutedColor;
+          c.bold = false;
+        }
+      }
+      return chars;
+    });
   });
 
   // Fan-out rows ABOVE the commit row
@@ -262,14 +293,18 @@ function GraphLine(props: Readonly<{
 
   // Effective text color for the commit subject (primary column).
   // Active row uses accent color with bold. Inactive rows use foreground.
+  // Uncommitted-changes row always uses muted color.
   const effectiveTextColor = () => {
+    if (isUncommitted()) return t().foregroundMuted;
     if (props.active) return t().accent;
     return t().foreground;
   };
 
   // Secondary column color (author, date, hash).
   // Active → accent (bold applied separately). Otherwise, muted.
+  // Uncommitted-changes row always uses muted.
   const secondaryColumnColor = () => {
+    if (isUncommitted()) return t().foregroundMuted;
     if (props.active) return t().accent;
     return t().foregroundMuted;
   };
@@ -339,77 +374,8 @@ function GraphLine(props: Readonly<{
   );
 }
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
 /** Sort order for ref badges: tags first, then branches, remotes, HEAD last. */
-const REF_SORT_ORDER: Record<string, number> = { tag: 0, branch: 1, remote: 2, stash: 3, head: 4 };
-
-// Cache for formatRelativeDate — avoids repeated Date parsing and arithmetic.
-// Entries are keyed by date string. When the cache exceeds MAX entries,
-// the oldest half is evicted (Map preserves insertion order) to avoid
-// cliff-eviction where the entire cache is lost at once.
-const dateFormatCache = new Map<string, { result: string; cachedAt: number; isStable: boolean }>();
-const DATE_CACHE_MAX = 1000;
-// Recent dates (< 7 days) produce relative text ("5m ago") that needs periodic refresh
-const DATE_CACHE_RECENT_TTL = 60_000;
-
-/** Evict the oldest half of entries when the cache is full. */
-function evictDateCache(): void {
-  const evictCount = Math.floor(dateFormatCache.size / 2);
-  let removed = 0;
-  for (const key of dateFormatCache.keys()) {
-    if (removed >= evictCount) break;
-    dateFormatCache.delete(key);
-    removed++;
-  }
-}
-
-function formatRelativeDate(dateStr: string): string {
-  const now = Date.now();
-  const cached = dateFormatCache.get(dateStr);
-  if (cached) {
-    // Stable dates (>7 days old) never change — always return cached
-    if (cached.isStable) return cached.result;
-    // Recent dates need periodic refresh for relative text accuracy
-    if (now - cached.cachedAt < DATE_CACHE_RECENT_TTL) return cached.result;
-  }
-
-  const date = new Date(dateStr);
-  const nowDate = new Date(now);
-  const diffMs = now - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  let result: string;
-  let isStable = false;
-
-  if (diffMins < 1) result = "just now";
-  else if (diffHours < 1) result = `${diffMins}m ago`;
-  else if (diffDays < 1) result = `${diffHours}h ago`;
-  else if (diffDays === 1) result = "Yesterday";
-  else if (diffDays < 7) result = `${diffDays}d ago`;
-  else {
-    isStable = true; // Absolute format — won't change on subsequent calls
-    const day = String(date.getDate()).padStart(2, "0");
-    const month = MONTHS[date.getMonth()];
-    const hours = String(date.getHours()).padStart(2, "0");
-    const mins = String(date.getMinutes()).padStart(2, "0");
-
-    if (date.getFullYear() === nowDate.getFullYear()) {
-      result = `${day}. ${month} ${hours}:${mins}`;
-    } else {
-      result = `${day}. ${month} ${date.getFullYear()}`;
-    }
-  }
-
-  // Evict oldest entries if cache is full
-  if (dateFormatCache.size >= DATE_CACHE_MAX) {
-    evictDateCache();
-  }
-  dateFormatCache.set(dateStr, { result, cachedAt: now, isStable });
-  return result;
-}
+const REF_SORT_ORDER: Record<string, number> = { tag: 0, branch: 1, remote: 2, stash: 3, uncommitted: 4, head: 5 };
 
 export default function GraphView() {
   const { state } = useAppState();

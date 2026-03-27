@@ -448,6 +448,21 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
   const nodeColorByHash = new Map<string, number>();
   const processedColumns = new Map<string, number>();
 
+  // Pre-seed lane 0 for the uncommitted-changes node.
+  //
+  // When the first commit is an uncommitted-changes synthetic node, it's a
+  // forward reference (appears before its parent). Without pre-seeding,
+  // it would claim lane 0, making it look like a straight-line continuation
+  // instead of a side branch. By reserving lane 0 for the parent hash,
+  // the uncommitted node gets a side lane.
+  //
+  // However, the uncommitted node is special: it SHOULD be on lane 0 as
+  // a natural continuation of the current branch. So we do NOT pre-seed
+  // for it — it claims lane 0 naturally and its parent (HEAD) flows into
+  // lane 0 after it.
+  //
+  // No pre-seeding is needed for this design.
+
   for (let i = 0; i < commits.length; i++) {
     const commit = commits[i];
 
