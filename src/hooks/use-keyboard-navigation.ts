@@ -134,11 +134,16 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     if (state.detailFocused()) {
       const scrollbox = getDetailScrollboxRef();
 
-      /** Get available tab IDs based on commit type */
+      /** Get navigable (non-empty) tab IDs based on commit type */
       const getAvailableTabs = (): DetailTab[] => {
         const commit = state.selectedCommit();
         if (commit?.hash === UNCOMMITTED_HASH) {
-          return ["unstaged", "staged", "untracked"];
+          const ud = state.uncommittedDetail();
+          const tabs: DetailTab[] = [];
+          if (ud && ud.unstaged.length > 0) tabs.push("unstaged");
+          if (ud && ud.staged.length > 0) tabs.push("staged");
+          if (ud && ud.untracked.length > 0) tabs.push("untracked");
+          return tabs;
         }
         const tabs: DetailTab[] = [];
         const cd = state.commitDetail();

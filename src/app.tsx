@@ -340,10 +340,36 @@ function AppContent(props: Readonly<AppProps>) {
     detailScrollboxRef?.scrollTo(0);
   });
 
-  // Auto-switch to Details tab when loaded commit has no file changes
+  // Auto-switch away from empty tabs after detail data loads.
+  // Finds the first non-disabled tab if the current tab has 0 items.
   createEffect(() => {
     const cd = state.commitDetail();
-    if (cd && cd.files.length === 0 && state.detailActiveTab() === "files") {
+    const ud = state.uncommittedDetail();
+    const tab = state.detailActiveTab();
+    const commit = state.selectedCommit();
+    if (!commit) return;
+
+    const isUncommitted = commit.hash === UNCOMMITTED_HASH;
+
+    // Check if current tab is empty
+    let isEmpty = false;
+    if (isUncommitted && ud) {
+      if (tab === "unstaged") isEmpty = ud.unstaged.length === 0;
+      else if (tab === "staged") isEmpty = ud.staged.length === 0;
+      else if (tab === "untracked") isEmpty = ud.untracked.length === 0;
+    } else if (!isUncommitted && cd) {
+      if (tab === "files") isEmpty = cd.files.length === 0;
+    }
+
+    if (!isEmpty) return;
+
+    // Find first non-empty tab to switch to
+    if (isUncommitted && ud) {
+      if (ud.unstaged.length > 0) { actions.setDetailActiveTab("unstaged"); return; }
+      if (ud.staged.length > 0) { actions.setDetailActiveTab("staged"); return; }
+      if (ud.untracked.length > 0) { actions.setDetailActiveTab("untracked"); return; }
+    } else if (!isUncommitted) {
+      if (cd && cd.files.length > 0) { actions.setDetailActiveTab("files"); return; }
       actions.setDetailActiveTab("detail");
     }
   });
@@ -514,37 +540,40 @@ function AppContent(props: Readonly<AppProps>) {
                   const cd = state.commitDetail();
                   const tabs = isUncommitted
                     ? [
-                      { id: "unstaged", label: `Unstaged${ud ? ` (${ud.unstaged.length})` : ""}` },
-                      { id: "staged", label: `Staged${ud ? ` (${ud.staged.length})` : ""}` },
-                      { id: "untracked", label: `Untracked${ud ? ` (${ud.untracked.length})` : ""}` },
+                      { id: "unstaged", label: `Unstaged${ud ? ` (${ud.unstaged.length})` : ""}`, disabled: ud ? ud.unstaged.length === 0 : false },
+                      { id: "staged", label: `Staged${ud ? ` (${ud.staged.length})` : ""}`, disabled: ud ? ud.staged.length === 0 : false },
+                      { id: "untracked", label: `Untracked${ud ? ` (${ud.untracked.length})` : ""}`, disabled: ud ? ud.untracked.length === 0 : false },
                     ]
                     : [
-                      ...(cd && cd.files.length > 0
-                        ? [{ id: "files", label: `Files (${cd.files.length})` }]
-                        : []),
+                      { id: "files", label: `Files${cd?.files ? ` (${cd.files.length})` : ""}`, disabled: cd ? cd.files.length === 0 : false },
                       ...(state.stashByParent().has(commit?.hash ?? "")
-                        ? [{ id: "stashes", label: `Stashes (${state.stashByParent().get(commit?.hash ?? "")?.length ?? 0})` }]
+                        ? [{ id: "stashes", label: `Stashes (${state.stashByParent().get(commit?.hash ?? "")?.length ?? 0})`, disabled: false }]
                         : []),
-                      { id: "detail", label: "Details" },
+                      { id: "detail", label: "Details", disabled: false },
                     ];
-                  return tabs.map((tab) => (
-                    <box
-                      flexGrow={1}
-                      justifyContent="center"
-                      flexDirection="row"
-                      border={["top"]}
-                      borderStyle="single"
-                      borderColor={state.detailActiveTab() === tab.id
-                        ? (state.detailFocused() ? themeState.theme().accent : themeState.theme().foregroundMuted)
-                        : themeState.theme().border}
-                    >
-                      <text flexShrink={0} wrapMode="none" fg={state.detailActiveTab() === tab.id
-                        ? (state.detailFocused() ? themeState.theme().accent : themeState.theme().foregroundMuted)
-                        : themeState.theme().border}>
-                        <strong>{tab.label}</strong>
-                      </text>
-                    </box>
-                  ));
+                  return tabs.map((tab) => {
+                    const isActive = state.detailActiveTab() === tab.id;
+                    const t = themeState.theme();
+                    const color = tab.disabled
+                      ? t.border
+                      : isActive
+                        ? (state.detailFocused() ? t.accent : t.foregroundMuted)
+                        : t.border;
+                    return (
+                      <box
+                        flexGrow={1}
+                        justifyContent="center"
+                        flexDirection="row"
+                        border={["top"]}
+                        borderStyle="single"
+                        borderColor={color}
+                      >
+                        <text flexShrink={0} wrapMode="none" fg={color}>
+                          <strong>{tab.label}</strong>
+                        </text>
+                      </box>
+                    );
+                  });
                 })()}
               </box>
               {/* Muted separator below tabs */}
