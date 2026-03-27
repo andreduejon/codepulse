@@ -8,7 +8,7 @@ import { buildGraph, getMaxGraphColumns } from "./git/graph";
 import type { Commit } from "./git/types";
 import GraphView, { ColumnHeader } from "./components/graph";
 import CommitDetailView from "./components/detail";
-import type { DetailNavRef } from "./components/detail";
+import type { DetailNavRef } from "./components/detail-types";
 import Footer from "./components/footer";
 import HelpDialog from "./components/dialogs/help-dialog";
 import ThemeDialog from "./components/dialogs/theme-dialog";

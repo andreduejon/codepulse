@@ -2,7 +2,7 @@ import { useKeyboard, useRenderer } from "@opentui/solid";
 import type { Accessor } from "solid-js";
 import type { ScrollBoxRenderable } from "@opentui/core";
 import type { AppState, AppActions } from "../context/state";
-import type { DetailNavRef } from "../components/detail";
+import type { DetailNavRef } from "../components/detail-types";
 import { SHIFT_JUMP, PAGE_JUMP } from "../constants";
 
 type DialogId = "menu" | "help" | "theme" | null;

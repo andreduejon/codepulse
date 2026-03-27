@@ -1,34 +1,24 @@
-import { Show, For, createSignal, createEffect, createMemo, untrack, onCleanup } from "solid-js";
+import { Show, For, createSignal, createEffect, createMemo, untrack } from "solid-js";
 import { useRenderer } from "@opentui/solid";
 import { useAppState } from "../context/state";
 import { useTheme } from "../context/theme";
-import { getColorForColumn } from "../git/graph";
 import type { Commit, GraphRow, FileChange } from "../git/types";
 import { buildFileTree, flattenFileTree } from "../utils/file-tree";
 import type { FileTreeNode, FileTreeRow } from "../utils/file-tree";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
 import { getStashFiles } from "../git/repo";
 import { DETAIL_PANEL_WIDTH_FRACTION, UNCOMMITTED_HASH } from "../constants";
+import DetailBadge from "./detail-badge";
+import type { DetailNavRef, DetailViewProps } from "./detail-types";
+import {
+  PANEL_PADDING_X, SHORT_HASH_LEN, HASH_BADGE_GAP, BADGE_PADDING,
+  ENTRY_PADDING_LEFT, DIR_INDICATOR_WIDTH, STAT_PADDING_LEFT, STAT_GAP,
+  computeFileWidths,
+} from "./detail-types";
 
 // ── Layout constants ────────────────────────────────────────────────
 /** Minimum panel width in characters before padding is subtracted. */
 const MIN_PANEL_WIDTH = 60;
-/** Horizontal padding (paddingX=2 each side) subtracted from panel width. */
-const PANEL_PADDING_X = 4;
-/** Width of the abbreviated commit hash (7 hex chars). */
-const SHORT_HASH_LEN = 7;
-/** Space between hash and badge in child/parent entry rows. */
-const HASH_BADGE_GAP = 1;
-/** Badge inner padding (1 space each side of the text). */
-const BADGE_PADDING = 2;
-/** Left indent for child/parent/file entry rows. */
-const ENTRY_PADDING_LEFT = 2;
-/** Width of the directory collapse indicator ("▸ " / "▾ "). */
-const DIR_INDICATOR_WIDTH = 2;
-/** Padding before the +/- stat columns in file rows. */
-const STAT_PADDING_LEFT = 2;
-/** Padding between the + and - stat columns. */
-const STAT_GAP = 1;
 
 /** Types for interactive items in the detail panel */
 type InteractiveItem =
@@ -40,58 +30,6 @@ type InteractiveItem =
   | { type: "stash-entry"; stashHash: string; stashIndex: number }
   | { type: "stash-dir"; stashHash: string; dirPath: string; index: number }
   | { type: "stash-file"; stashHash: string; filePath: string; index: number };
-
-/** Colored badge for branch/tag labels in the detail view */
-function DetailBadge(props: Readonly<{
-  name: string;
-  colorIndex: number;
-  dimmed?: boolean;
-  /** When set, applies banner scroll: substring of name at [bannerOffset, bannerOffset+visibleWidth). */
-  visibleWidth?: number;
-  bannerOffset?: number;
-}>) {
-  const { theme } = useTheme();
-  const t = () => theme();
-
-  const bgColor = () => {
-    if (props.dimmed) return t().backgroundElementActive;
-    return getColorForColumn(props.colorIndex, t().graphColors);
-  };
-
-  const fgColor = () => {
-    if (props.dimmed) return t().foreground;
-    return t().background;
-  };
-
-  const displayName = () => {
-    const w = props.visibleWidth;
-    if (w == null || props.name.length <= w) return props.name;
-    const off = props.bannerOffset ?? 0;
-    return props.name.substring(off, off + w);
-  };
-
-  return (
-    <text bg={bgColor()} fg={fgColor()} wrapMode="none">
-      {` ${displayName()} `}
-    </text>
-  );
-}
-
-interface DetailViewProps {
-  onJumpToCommit?: (hash: string, from: "child" | "parent") => void;
-  /** Mutable ref object populated by the detail view with navigation callbacks */
-  navRef?: DetailNavRef;
-}
-
-/** Mutable ref populated by CommitDetailView for app.tsx to call */
-export interface DetailNavRef {
-  /** Number of interactive items currently visible */
-  itemCount: number;
-  /** Activate the item at the current cursor index. Returns true if it was a jump-to-commit action. */
-  activateCurrentItem: () => boolean;
-  /** Direction of the last jump: "child" means we selected a child entry, "parent" means we selected a parent entry */
-  lastJumpFrom: "child" | "parent" | null;
-}
 
 export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   const { state, actions } = useAppState();
@@ -387,14 +325,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   const fileWidths = createMemo(() => {
     const d = detail();
     if (!d) return { totalAdd: 0, totalDel: 0, addColWidth: 2, delColWidth: 2 };
-    const totalAdd = d.files.reduce((sum, f) => sum + f.additions, 0);
-    const totalDel = d.files.reduce((sum, f) => sum + f.deletions, 0);
-    return {
-      totalAdd,
-      totalDel,
-      addColWidth: ("+" + totalAdd).length,
-      delColWidth: ("-" + totalDel).length,
-    };
+    return computeFileWidths(d.files);
   });
 
   // Build file tree from flat file paths
@@ -483,14 +414,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   const getStashFileWidths = (stashHash: string) => {
     const files = stashFileCache().get(stashHash);
     if (!files) return { totalAdd: 0, totalDel: 0, addColWidth: 2, delColWidth: 2 };
-    const totalAdd = files.reduce((sum, f) => sum + f.additions, 0);
-    const totalDel = files.reduce((sum, f) => sum + f.deletions, 0);
-    return {
-      totalAdd,
-      totalDel,
-      addColWidth: ("+" + totalAdd).length,
-      delColWidth: ("-" + totalDel).length,
-    };
+    return computeFileWidths(files);
   };
 
   /** Toggle a directory's collapsed state */

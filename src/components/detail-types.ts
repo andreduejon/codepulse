@@ -1,0 +1,45 @@
+/** Mutable ref populated by a detail view for app.tsx to call */
+export interface DetailNavRef {
+  /** Number of interactive items currently visible */
+  itemCount: number;
+  /** Activate the item at the current cursor index. Returns true if it was a jump-to-commit action. */
+  activateCurrentItem: () => boolean;
+  /** Direction of the last jump: "child" means we selected a child entry, "parent" means we selected a parent entry */
+  lastJumpFrom: "child" | "parent" | null;
+}
+
+export interface DetailViewProps {
+  onJumpToCommit?: (hash: string, from: "child" | "parent") => void;
+  /** Mutable ref object populated by the detail view with navigation callbacks */
+  navRef?: DetailNavRef;
+}
+
+/** Layout constants shared between committed and uncommitted detail views */
+/** Horizontal padding (paddingX=2 each side) subtracted from panel width. */
+export const PANEL_PADDING_X = 4;
+/** Width of the abbreviated commit hash (7 hex chars). */
+export const SHORT_HASH_LEN = 7;
+/** Space between hash and badge in child/parent entry rows. */
+export const HASH_BADGE_GAP = 1;
+/** Badge inner padding (1 space each side of the text). */
+export const BADGE_PADDING = 2;
+/** Left indent for child/parent/file entry rows. */
+export const ENTRY_PADDING_LEFT = 2;
+/** Width of the directory collapse indicator ("▸ " / "▾ "). */
+export const DIR_INDICATOR_WIDTH = 2;
+/** Padding before the +/- stat columns in file rows. */
+export const STAT_PADDING_LEFT = 2;
+/** Padding between the + and - stat columns. */
+export const STAT_GAP = 1;
+
+/** Compute column widths for file change stats (total determines column width). */
+export function computeFileWidths(files: readonly { additions: number; deletions: number }[]) {
+  const totalAdd = files.reduce((sum, f) => sum + f.additions, 0);
+  const totalDel = files.reduce((sum, f) => sum + f.deletions, 0);
+  return {
+    totalAdd,
+    totalDel,
+    addColWidth: ("+" + totalAdd).length,
+    delColWidth: ("-" + totalDel).length,
+  };
+}

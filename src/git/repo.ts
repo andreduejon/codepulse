@@ -1,4 +1,4 @@
-import type { Commit, Branch, FileChange, CommitDetail, RefInfo, TagInfo } from "./types";
+import type { Commit, Branch, FileChange, CommitDetail, RefInfo, TagInfo, UncommittedDetail } from "./types";
 import { DEFAULT_MAX_COUNT } from "../constants";
 
 /** ASCII Record Separator — safe delimiter that cannot appear in commit fields. */
@@ -502,6 +502,80 @@ export async function getUncommittedFiles(
   }
 
   return files;
+}
+
+/**
+ * Fetch staged file changes (index vs HEAD).
+ * Uses `git diff --cached --raw --numstat` to get files staged for commit.
+ */
+export async function getStagedFiles(
+  repoPath: string,
+  signal?: AbortSignal,
+): Promise<FileChange[]> {
+  const { stdout, exitCode } = await runGit(
+    repoPath,
+    ["diff", "--cached", "--raw", "--numstat", "--"],
+    signal,
+  );
+  if (exitCode !== 0 || !stdout.trim()) return [];
+  return parseDiffTreeOutput(stdout);
+}
+
+/**
+ * Fetch unstaged file changes (working tree vs index).
+ * Uses `git diff --raw --numstat` (no HEAD, no --cached) to get modified tracked files.
+ */
+export async function getUnstagedFiles(
+  repoPath: string,
+  signal?: AbortSignal,
+): Promise<FileChange[]> {
+  const { stdout, exitCode } = await runGit(
+    repoPath,
+    ["diff", "--raw", "--numstat", "--"],
+    signal,
+  );
+  if (exitCode !== 0 || !stdout.trim()) return [];
+  return parseDiffTreeOutput(stdout);
+}
+
+/**
+ * Fetch untracked files (files not tracked by git, excluding ignored).
+ * Returns FileChange[] with status "A" and zero stats (no diff available).
+ */
+export async function getUntrackedFiles(
+  repoPath: string,
+  signal?: AbortSignal,
+): Promise<FileChange[]> {
+  const { stdout, exitCode } = await runGit(
+    repoPath,
+    ["ls-files", "--others", "--exclude-standard"],
+    signal,
+  );
+  if (exitCode !== 0 || !stdout.trim()) return [];
+
+  const files: FileChange[] = [];
+  for (const line of stdout.split("\n")) {
+    const path = line.trim();
+    if (!path) continue;
+    files.push({ path, additions: 0, deletions: 0, status: "A" });
+  }
+  return files;
+}
+
+/**
+ * Load all three uncommitted file categories in parallel.
+ * Returns an UncommittedDetail with staged, unstaged, and untracked file lists.
+ */
+export async function getUncommittedDetail(
+  repoPath: string,
+  signal?: AbortSignal,
+): Promise<UncommittedDetail> {
+  const [staged, unstaged, untracked] = await Promise.all([
+    getStagedFiles(repoPath, signal),
+    getUnstagedFiles(repoPath, signal),
+    getUntrackedFiles(repoPath, signal),
+  ]);
+  return { staged, unstaged, untracked };
 }
 
 export async function getCommitDetail(

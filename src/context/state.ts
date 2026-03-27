@@ -1,5 +1,5 @@
 import { createContext, useContext, createSignal, createMemo, type Accessor } from "solid-js";
-import type { Commit, GraphRow, CommitDetail, Branch, TagInfo } from "../git/types";
+import type { Commit, GraphRow, CommitDetail, Branch, TagInfo, UncommittedDetail } from "../git/types";
 import { DEFAULT_MAX_COUNT } from "../constants";
 
 export const DEFAULT_AUTO_REFRESH_INTERVAL = 30000;
@@ -36,6 +36,10 @@ export interface AppState {
   detailLoading: Accessor<boolean>;
   /** Contextual enter-key action label for the detail cursor item (null = no action) */
   detailCursorAction: Accessor<string | null>;
+  /** Active tab in the detail panel (e.g. "detail", "files", "stashes" or "staged", "unstaged", "untracked") */
+  detailActiveTab: Accessor<string>;
+  /** Separate file lists for the uncommitted-changes node (null when a normal commit is selected) */
+  uncommittedDetail: Accessor<UncommittedDetail | null>;
 
   // ── UI state & settings ─────────────────────────────────────────────
   error: Accessor<string | null>;
@@ -76,6 +80,8 @@ export interface AppActions {
   setFetching: (fetching: boolean) => void;
   setDetailLoading: (loading: boolean) => void;
   setDetailCursorAction: (action: string | null) => void;
+  setDetailActiveTab: (tab: string) => void;
+  setUncommittedDetail: (detail: UncommittedDetail | null) => void;
   setViewingBranch: (branch: string | null) => void;
 }
 
@@ -105,6 +111,8 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
   const [detailOriginHash, setDetailOriginHash] = createSignal<string | null>(null);
   const [detailLoading, setDetailLoading] = createSignal(false);
   const [detailCursorAction, setDetailCursorAction] = createSignal<string | null>(null);
+  const [detailActiveTab, setDetailActiveTab] = createSignal("detail");
+  const [uncommittedDetail, setUncommittedDetail] = createSignal<UncommittedDetail | null>(null);
 
   // ── UI state & settings ───────────────────────────────────────────
   const [error, setError] = createSignal<string | null>(null);
@@ -185,6 +193,8 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
     fetching,
     detailLoading,
     detailCursorAction,
+    detailActiveTab,
+    uncommittedDetail,
     viewingBranch,
   };
 
@@ -216,6 +226,8 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
     setFetching,
     setDetailLoading,
     setDetailCursorAction,
+    setDetailActiveTab,
+    setUncommittedDetail,
     setViewingBranch,
   };
 

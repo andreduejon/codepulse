@@ -54,6 +54,13 @@ export interface CommitDetail extends Commit {
   files: FileChange[];
 }
 
+/** Separate file lists for the uncommitted-changes synthetic node. */
+export interface UncommittedDetail {
+  staged: FileChange[];
+  unstaged: FileChange[];
+  untracked: FileChange[];
+}
+
 export interface GraphRow {
   commit: Commit;
   columns: GraphColumn[];
