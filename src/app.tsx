@@ -1,4 +1,4 @@
-import { createEffect, Show, onMount, onCleanup, createSignal, batch } from "solid-js";
+import { createEffect, Show, onMount, onCleanup, createSignal, batch, untrack } from "solid-js";
 import { useRenderer } from "@opentui/solid";
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { createAppState, AppStateContext } from "./context/state";
@@ -277,9 +277,13 @@ function AppContent(props: Readonly<AppProps>) {
     const isUncommitted = commit.hash === UNCOMMITTED_HASH;
 
     // Reset active tab — but preserve it on child/parent jump navigation
-    // so the user stays on the Details tab when walking the commit graph
-    if (detailNavRef.lastJumpFrom) {
-      detailNavRef.lastJumpFrom = null; // consumed
+    // so the user stays on the Details tab when walking the commit graph.
+    // detailOriginHash is set by handleJumpToCommit before the cursor changes;
+    // its presence reliably indicates a jump (unlike the mutable lastJumpFrom ref
+    // which could be consumed by other effects before this one runs).
+    // Read untracked so clearing originHash later doesn't re-trigger this effect.
+    if (untrack(() => state.detailOriginHash())) {
+      // Jump — keep current tab
     } else {
       actions.setDetailActiveTab(isUncommitted ? "unstaged" : "files");
     }
