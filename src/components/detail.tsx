@@ -22,7 +22,7 @@ const MIN_PANEL_WIDTH = 60;
 
 /** Types for interactive items in the detail panel */
 type InteractiveItem =
-  | { type: "section-header"; section: "children" | "parents" | "files" }
+  | { type: "section-header"; section: "children" | "parents" }
   | { type: "child"; hash: string; index: number }
   | { type: "parent"; hash: string; index: number }
   | { type: "file-dir"; dirPath: string; index: number }
@@ -69,7 +69,6 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   // Collapsible section state — reset to expanded when commit changes
   const [childrenExpanded, setChildrenExpanded] = createSignal(true);
   const [parentsExpanded, setParentsExpanded] = createSignal(true);
-  const [filesExpanded, setFilesExpanded] = createSignal(true);
 
   createEffect(() => {
     // Reset collapse state when selected commit changes
@@ -77,42 +76,44 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     row();
     setChildrenExpanded(true);
     setParentsExpanded(true);
-    setFilesExpanded(true);
   });
 
-  // ── Build flat list of interactive items ──
+  // Active tab for committed commits: "detail" | "files" | "stashes"
+  const activeTab = () => state.detailActiveTab();
+
+  // ── Build flat list of interactive items (tab-aware) ──
   const interactiveItems = createMemo((): InteractiveItem[] => {
     const r = row();
     const c = commit();
     if (!r || !c) return [];
 
+    const tab = activeTab();
     const items: InteractiveItem[] = [];
 
-    // Children section (only if children exist)
-    if (r.children.length > 0) {
-      items.push({ type: "section-header", section: "children" });
-      if (childrenExpanded()) {
-        for (let i = 0; i < r.children.length; i++) {
-          items.push({ type: "child", hash: r.children[i], index: i });
+    if (tab === "detail") {
+      // Children section (only if children exist)
+      if (r.children.length > 0) {
+        items.push({ type: "section-header", section: "children" });
+        if (childrenExpanded()) {
+          for (let i = 0; i < r.children.length; i++) {
+            items.push({ type: "child", hash: r.children[i], index: i });
+          }
         }
       }
-    }
 
-    // Parents section (only if parents exist)
-    if (r.parentHashes.length > 0) {
-      items.push({ type: "section-header", section: "parents" });
-      if (parentsExpanded()) {
-        for (let i = 0; i < r.parentHashes.length; i++) {
-          items.push({ type: "parent", hash: r.parentHashes[i], index: i });
+      // Parents section (only if parents exist)
+      if (r.parentHashes.length > 0) {
+        items.push({ type: "section-header", section: "parents" });
+        if (parentsExpanded()) {
+          for (let i = 0; i < r.parentHashes.length; i++) {
+            items.push({ type: "parent", hash: r.parentHashes[i], index: i });
+          }
         }
       }
-    }
-
-    // Files section (only if files exist)
-    const d = detail();
-    if (d && d.files.length > 0) {
-      items.push({ type: "section-header", section: "files" });
-      if (filesExpanded()) {
+    } else if (tab === "files") {
+      // Files tab: file tree items directly (no section header)
+      const d = detail();
+      if (d && d.files.length > 0) {
         const rows = fileTreeRows();
         for (let i = 0; i < rows.length; i++) {
           const row = rows[i];
@@ -123,24 +124,24 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
           }
         }
       }
-    }
+    } else if (tab === "stashes") {
+      // Stash entries (each stash is its own collapsible header)
+      const stashes = stashEntries();
+      if (stashes.length > 0) {
+        for (let si = 0; si < stashes.length; si++) {
+          const stash = stashes[si];
+          items.push({ type: "stash-entry", stashHash: stash.hash, stashIndex: si });
 
-    // Stash entries (each stash is its own collapsible header — no outer wrapper)
-    const stashes = stashEntries();
-    if (stashes.length > 0) {
-      for (let si = 0; si < stashes.length; si++) {
-        const stash = stashes[si];
-        items.push({ type: "stash-entry", stashHash: stash.hash, stashIndex: si });
-
-        // If this stash is expanded, add its file tree items
-        if (expandedStashes().has(stash.hash)) {
-          const rows = getStashFileTreeRows(stash.hash);
-          for (let fi = 0; fi < rows.length; fi++) {
-            const row = rows[fi];
-            if (row.isDir) {
-              items.push({ type: "stash-dir", stashHash: stash.hash, dirPath: row.dirPath, index: fi });
-            } else {
-              items.push({ type: "stash-file", stashHash: stash.hash, filePath: row.file!.path, index: fi });
+          // If this stash is expanded, add its file tree items
+          if (expandedStashes().has(stash.hash)) {
+            const rows = getStashFileTreeRows(stash.hash);
+            for (let fi = 0; fi < rows.length; fi++) {
+              const row = rows[fi];
+              if (row.isDir) {
+                items.push({ type: "stash-dir", stashHash: stash.hash, dirPath: row.dirPath, index: fi });
+              } else {
+                items.push({ type: "stash-file", stashHash: stash.hash, filePath: row.file!.path, index: fi });
+              }
             }
           }
         }
@@ -201,7 +202,6 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
       case "section-header":
         if (item.section === "children") setChildrenExpanded(!childrenExpanded());
         else if (item.section === "parents") setParentsExpanded(!parentsExpanded());
-        else if (item.section === "files") setFilesExpanded(!filesExpanded());
         break;
       case "child":
       case "parent":
@@ -257,9 +257,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     switch (item.type) {
       case "section-header": {
         const expanded =
-          item.section === "children" ? childrenExpanded() :
-          item.section === "parents" ? parentsExpanded() :
-          filesExpanded();
+          item.section === "children" ? childrenExpanded() : parentsExpanded();
         actions.setDetailCursorAction(expanded ? "collapse" : "expand");
         break;
       }
@@ -614,7 +612,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     title: string;
     count: number;
     expanded: boolean;
-    section: "children" | "parents" | "files";
+    section: "children" | "parents";
   }>) {
     const itemIdx = () => findItemIndex("section-header", headerProps.section);
 
@@ -710,422 +708,431 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
       >
         {(c) => (
           <>
-            {/* ── Branch ── */}
-            <text fg={t().accent} wrapMode="none">
-              <strong>Branch</strong>
-            </text>
-            <box flexDirection="row" flexWrap="wrap" gap={1}>
-              <Show
-                when={branchRefs().length > 0}
-                fallback={
-                  <Show
-                    when={(row()?.branchName ?? "") !== ""}
-                    fallback={
-                      (() => {
-                        const tag = getTagForHash(c().hash);
-                        return tag ? (
-                          <DetailBadge
-                            name={tag}
-                            colorIndex={nodeColorIndex()}
-                          />
-                        ) : (
-                          <DetailBadge
-                            name="deleted"
-                            colorIndex={0}
-                            dimmed
-                          />
-                        );
-                      })()
-                    }
-                  >
-                    <DetailBadge
-                      name={r().branchName}
-                      colorIndex={nodeColorIndex()}
-                    />
-                    <Show when={remoteName()}>
-                      <DetailBadge
-                        name={remoteName()!}
-                        colorIndex={nodeColorIndex()}
-                      />
-                    </Show>
-                  </Show>
-                }
-              >
-                <For each={branchRefs()}>
-                  {(ref) => (
-                    <DetailBadge
-                      name={ref.name}
-                      colorIndex={nodeColorIndex()}
-                      dimmed={ref.type === "stash" || ref.type === "uncommitted"}
-                    />
-                  )}
-                </For>
-              </Show>
-            </box>
-            <box height={1} />
-
-            {/* ── Tags ── */}
-            <Show when={tagRefs().length > 0}>
+            {/* ══════════════ Detail tab ══════════════ */}
+            <Show when={activeTab() === "detail"}>
+              {/* ── Branch ── */}
               <text fg={t().accent} wrapMode="none">
-                <strong>Tags</strong>
+                <strong>Branch</strong>
               </text>
               <box flexDirection="row" flexWrap="wrap" gap={1}>
-                <For each={tagRefs()}>
-                  {(ref) => (
-                    <DetailBadge
-                      name={ref.name}
-                      colorIndex={nodeColorIndex()}
-                    />
-                  )}
-                </For>
+                <Show
+                  when={branchRefs().length > 0}
+                  fallback={
+                    <Show
+                      when={(row()?.branchName ?? "") !== ""}
+                      fallback={
+                        (() => {
+                          const tag = getTagForHash(c().hash);
+                          return tag ? (
+                            <DetailBadge
+                              name={tag}
+                              colorIndex={nodeColorIndex()}
+                            />
+                          ) : (
+                            <DetailBadge
+                              name="deleted"
+                              colorIndex={0}
+                              dimmed
+                            />
+                          );
+                        })()
+                      }
+                    >
+                      <DetailBadge
+                        name={r().branchName}
+                        colorIndex={nodeColorIndex()}
+                      />
+                      <Show when={remoteName()}>
+                        <DetailBadge
+                          name={remoteName()!}
+                          colorIndex={nodeColorIndex()}
+                        />
+                      </Show>
+                    </Show>
+                  }
+                >
+                  <For each={branchRefs()}>
+                    {(ref) => (
+                      <DetailBadge
+                        name={ref.name}
+                        colorIndex={nodeColorIndex()}
+                        dimmed={ref.type === "stash" || ref.type === "uncommitted"}
+                      />
+                    )}
+                  </For>
+                </Show>
               </box>
               <box height={1} />
-            </Show>
 
-            {/* ── Metadata block (subheaders with values below) ── */}
-            <text fg={t().accent} wrapMode="none">
-              <strong>Commit</strong>
-            </text>
-            <text fg={isUncommitted() ? t().foregroundMuted : t().foreground} wrapMode="none" truncate>
-              {isUncommitted() ? "\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7" : c().hash}
-            </text>
-
-            <box height={1} />
-            <text fg={t().accent} wrapMode="none">
-              <strong>Author</strong>
-            </text>
-            <text fg={isUncommitted() ? t().foregroundMuted : t().foreground} wrapMode="none" truncate>
-              {isUncommitted() ? "\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7" : <>{c().author} {"<"}{c().authorEmail}{">"}</>}
-            </text>
-
-            <box height={1} />
-            <text fg={t().accent} wrapMode="none">
-              <strong>Date</strong>
-            </text>
-            <text fg={isUncommitted() ? t().foregroundMuted : t().foreground} wrapMode="none">
-              {isUncommitted() ? "\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7" : formatDate(c().authorDate)}
-            </text>
-
-            <Show when={!isUncommitted() && showCommitter()}>
-              <box height={1} />
-              <text fg={t().accent} wrapMode="none">
-                <strong>Committer</strong>
-              </text>
-              <text fg={t().foreground} wrapMode="none" truncate>
-                {c().committer} {"<"}{c().committerEmail}{">"}
-              </text>
-
-              <box height={1} />
-              <text fg={t().accent} wrapMode="none">
-                <strong>Commit Date</strong>
-              </text>
-              <text fg={t().foreground} wrapMode="none">
-                {formatDate(c().commitDate)}
-              </text>
-            </Show>
-
-            <box height={1} />
-
-            {/* ── Message (subject + body) ── */}
-            <text fg={t().accent} wrapMode="none">
-              <strong>Message</strong>
-            </text>
-            <text fg={isUncommitted() ? t().foregroundMuted : t().foreground} wrapMode="word">
-              {isUncommitted() ? "Staged and unstaged changes in working tree" : c().subject}
-            </text>
-
-            <Show when={!isUncommitted() && detail()?.body}>
-              <box height={1} />
-              <text fg={t().foregroundMuted} wrapMode="word">
-                {detail()!.body}
-              </text>
-            </Show>
-
-            <Show when={interactiveItems().length > 0}>
-              <box width="100%" border={["top"]} borderStyle="single" borderColor={t().border} />
-            </Show>
-
-            {/* ── Children (collapsible) ── */}
-            <Show when={r().children.length > 0}>
-              <InteractiveSectionHeader
-                title="Children"
-                count={r().children.length}
-                expanded={childrenExpanded()}
-                section="children"
-              />
-              <Show when={childrenExpanded()}>
-                <For each={r().children}>
-                  {(childHash, i) => (
-                    <InteractiveCommitEntry
-                      hash={childHash}
-                      entryIndex={i()}
-                      type="child"
-                      branchName={r().childBranches[i()]}
-                      colorIndex={r().childColors[i()]}
-                    />
-                  )}
-                </For>
-              </Show>
-              <box height={1} />
-            </Show>
-
-            {/* ── Parents (collapsible) ── */}
-            <Show when={r().parentHashes.length > 0}>
-              <InteractiveSectionHeader
-                title="Parents"
-                count={r().parentHashes.length}
-                expanded={parentsExpanded()}
-                section="parents"
-              />
-              <Show when={parentsExpanded()}>
-                <For each={r().parentHashes}>
-                  {(parentHash, i) => (
-                    <InteractiveCommitEntry
-                      hash={parentHash}
-                      entryIndex={i()}
-                      type="parent"
-                      branchName={r().parentBranches[i()]}
-                      colorIndex={r().parentColors[i()]}
-                    />
-                  )}
-                </For>
-              </Show>
-              <box height={1} />
-            </Show>
-
-            {/* ── Modified files (collapsible) ── */}
-            <Show when={detail() && detail()!.files.length > 0}>
-              <InteractiveSectionHeader
-                title="Modified Files"
-                count={detail()!.files.length}
-                expanded={filesExpanded()}
-                section="files"
-              />
-              <Show when={filesExpanded()}>
-                <box flexDirection="row" paddingLeft={2}>
-                  <box flexGrow={1}>
-                    <text fg={t().foregroundMuted} wrapMode="none">
-                      total lines changed
-                    </text>
-                  </box>
-                  <box flexShrink={0} paddingLeft={2}>
-                    <text fg={t().diffAdded} wrapMode="none">
-                      +{fileWidths().totalAdd}
-                    </text>
-                  </box>
-                  <box flexShrink={0} paddingLeft={1}>
-                    <text fg={t().diffRemoved} wrapMode="none">
-                      -{fileWidths().totalDel}
-                    </text>
-                  </box>
+              {/* ── Tags ── */}
+              <Show when={tagRefs().length > 0}>
+                <text fg={t().accent} wrapMode="none">
+                  <strong>Tags</strong>
+                </text>
+                <box flexDirection="row" flexWrap="wrap" gap={1}>
+                  <For each={tagRefs()}>
+                    {(ref) => (
+                      <DetailBadge
+                        name={ref.name}
+                        colorIndex={nodeColorIndex()}
+                      />
+                    )}
+                  </For>
                 </box>
                 <box height={1} />
-                <For each={fileTreeRows()}>
-                  {(treeRow, i) => {
-                    const itemIdx = () => findItemIndex(treeRow.isDir ? "file-dir" : "file", undefined, i());
-                    const cursored = () => isCursored(itemIdx());
-                    const collapsed = () => treeRow.isDir && collapsedDirs().has(treeRow.dirPath);
+              </Show>
 
-                    /** When this row is cursored and overflows, apply banner scroll */
-                    const scrolledName = () => {
-                      if (!cursored()) return null;
-                      const info = cursoredTextInfo();
-                      if (!info || info.text !== treeRow.name) return null;
-                      const off = bannerOffset();
-                      return treeRow.name.substring(off, off + info.visibleWidth);
-                    };
+              {/* ── Metadata block (subheaders with values below) ── */}
+              <text fg={t().accent} wrapMode="none">
+                <strong>Commit</strong>
+              </text>
+              <text fg={isUncommitted() ? t().foregroundMuted : t().foreground} wrapMode="none" truncate>
+                {isUncommitted() ? "\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7" : c().hash}
+              </text>
 
-                    return (
-                      <box
-                        flexDirection="row"
-                        width="100%"
-                        paddingLeft={2}
-                        backgroundColor={itemHighlightBg(itemIdx())}
-                      >
-                        <box flexShrink={0}>
-              <text fg={t().border} wrapMode="none">
-                            {treeRow.prefix}{treeRow.connector}
-                          </text>
-                        </box>
-                        <Show when={treeRow.isDir}>
-                          <box flexShrink={0}>
-                            <text fg={cursored() ? t().accent : t().foregroundMuted} wrapMode="none">
-                              {collapsed() ? "▸ " : "▾ "}
-                            </text>
-                          </box>
-                        </Show>
-                        <box flexGrow={1}>
-                          <text
-                            fg={treeRow.isDir
-                              ? (cursored() ? t().accent : t().foregroundMuted)
-                              : (cursored() ? t().accent : t().foreground)}
-                            wrapMode="none"
-                            truncate={scrolledName() == null}
-                          >
-                            {scrolledName() ?? treeRow.name}
-                          </text>
-                        </box>
-                        <Show when={treeRow.file}>
-                          <box flexShrink={0} paddingLeft={2}>
-                            <text fg={t().diffAdded} wrapMode="none">
-                              {("+" + treeRow.file!.additions).padStart(fileWidths().addColWidth)}
-                            </text>
-                          </box>
-                          <box flexShrink={0} paddingLeft={1}>
-                            <text fg={t().diffRemoved} wrapMode="none">
-                              {("-" + treeRow.file!.deletions).padStart(fileWidths().delColWidth)}
-                            </text>
-                          </box>
-                        </Show>
-                      </box>
-                    );
-                  }}
-                </For>
+              <box height={1} />
+              <text fg={t().accent} wrapMode="none">
+                <strong>Author</strong>
+              </text>
+              <text fg={isUncommitted() ? t().foregroundMuted : t().foreground} wrapMode="none" truncate>
+                {isUncommitted() ? "\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7" : <>{c().author} {"<"}{c().authorEmail}{">"}</>}
+              </text>
+
+              <box height={1} />
+              <text fg={t().accent} wrapMode="none">
+                <strong>Date</strong>
+              </text>
+              <text fg={isUncommitted() ? t().foregroundMuted : t().foreground} wrapMode="none">
+                {isUncommitted() ? "\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7" : formatDate(c().authorDate)}
+              </text>
+
+              <Show when={!isUncommitted() && showCommitter()}>
+                <box height={1} />
+                <text fg={t().accent} wrapMode="none">
+                  <strong>Committer</strong>
+                </text>
+                <text fg={t().foreground} wrapMode="none" truncate>
+                  {c().committer} {"<"}{c().committerEmail}{">"}
+                </text>
+
+                <box height={1} />
+                <text fg={t().accent} wrapMode="none">
+                  <strong>Commit Date</strong>
+                </text>
+                <text fg={t().foreground} wrapMode="none">
+                  {formatDate(c().commitDate)}
+                </text>
+              </Show>
+
+              <box height={1} />
+
+              {/* ── Message (subject + body) ── */}
+              <text fg={t().accent} wrapMode="none">
+                <strong>Message</strong>
+              </text>
+              <text fg={isUncommitted() ? t().foregroundMuted : t().foreground} wrapMode="word">
+                {isUncommitted() ? "Staged and unstaged changes in working tree" : c().subject}
+              </text>
+
+              <Show when={!isUncommitted() && detail()?.body}>
+                <box height={1} />
+                <text fg={t().foregroundMuted} wrapMode="word">
+                  {detail()!.body}
+                </text>
+              </Show>
+
+              <Show when={interactiveItems().length > 0}>
+                <box width="100%" border={["top"]} borderStyle="single" borderColor={t().border} />
+              </Show>
+
+              {/* ── Children (collapsible) ── */}
+              <Show when={r().children.length > 0}>
+                <InteractiveSectionHeader
+                  title="Children"
+                  count={r().children.length}
+                  expanded={childrenExpanded()}
+                  section="children"
+                />
+                <Show when={childrenExpanded()}>
+                  <For each={r().children}>
+                    {(childHash, i) => (
+                      <InteractiveCommitEntry
+                        hash={childHash}
+                        entryIndex={i()}
+                        type="child"
+                        branchName={r().childBranches[i()]}
+                        colorIndex={r().childColors[i()]}
+                      />
+                    )}
+                  </For>
+                </Show>
+                <box height={1} />
+              </Show>
+
+              {/* ── Parents (collapsible) ── */}
+              <Show when={r().parentHashes.length > 0}>
+                <InteractiveSectionHeader
+                  title="Parents"
+                  count={r().parentHashes.length}
+                  expanded={parentsExpanded()}
+                  section="parents"
+                />
+                <Show when={parentsExpanded()}>
+                  <For each={r().parentHashes}>
+                    {(parentHash, i) => (
+                      <InteractiveCommitEntry
+                        hash={parentHash}
+                        entryIndex={i()}
+                        type="parent"
+                        branchName={r().parentBranches[i()]}
+                        colorIndex={r().parentColors[i()]}
+                      />
+                    )}
+                  </For>
+                </Show>
+                <box height={1} />
               </Show>
             </Show>
 
-            {/* ── Stash entries (each is its own collapsible header) ── */}
-            <Show when={stashEntries().length > 0}>
+            {/* ══════════════ Files tab ══════════════ */}
+            <Show when={activeTab() === "files" && detail() && detail()!.files.length > 0}>
+              <box flexDirection="row" paddingLeft={2}>
+                <box flexGrow={1}>
+                  <text fg={t().foregroundMuted} wrapMode="none">
+                    total lines changed
+                  </text>
+                </box>
+                <box flexShrink={0} paddingLeft={2}>
+                  <text fg={t().diffAdded} wrapMode="none">
+                    +{fileWidths().totalAdd}
+                  </text>
+                </box>
+                <box flexShrink={0} paddingLeft={1}>
+                  <text fg={t().diffRemoved} wrapMode="none">
+                    -{fileWidths().totalDel}
+                  </text>
+                </box>
+              </box>
               <box height={1} />
-            </Show>
-            <For each={stashEntries()}>
-              {(stash, si) => {
-                const itemIdx = () => findItemIndex("stash-entry", stash.hash);
-                const cursored = () => isCursored(itemIdx());
-                const expanded = () => expandedStashes().has(stash.hash);
-                const label = () => stash.refs[0]?.name ?? "stash";
-                const fileCount = () => stashFileCache().get(stash.hash)?.length;
+              <For each={fileTreeRows()}>
+                {(treeRow, i) => {
+                  const itemIdx = () => findItemIndex(treeRow.isDir ? "file-dir" : "file", undefined, i());
+                  const cursored = () => isCursored(itemIdx());
+                  const collapsed = () => treeRow.isDir && collapsedDirs().has(treeRow.dirPath);
 
-                /** Banner scroll for the stash header label when cursored */
-                const scrolledHeaderText = () => {
-                  if (!cursored()) return null;
-                  const info = cursoredTextInfo();
-                  if (!info) return null;
-                  // Header text is just the label (+ file count suffix, not scrolled)
-                  const headerLabel = label();
-                  if (info.text !== headerLabel) return null;
-                  const off = bannerOffset();
-                  return headerLabel.substring(off, off + info.visibleWidth);
-                };
+                  /** When this row is cursored and overflows, apply banner scroll */
+                  const scrolledName = () => {
+                    if (!cursored()) return null;
+                    const info = cursoredTextInfo();
+                    if (!info || info.text !== treeRow.name) return null;
+                    const off = bannerOffset();
+                    return treeRow.name.substring(off, off + info.visibleWidth);
+                  };
 
-                const stashFileRows = () => getStashFileTreeRows(stash.hash);
-                const stashFw = () => getStashFileWidths(stash.hash);
-
-                return (
-                  <>
-                    {/* Spacer between stash entries (not before the first one) */}
-                    <Show when={si() > 0}>
-                      <box height={1} />
-                    </Show>
-
-                    {/* Stash entry header — label + file count only */}
-                    <box backgroundColor={itemHighlightBg(itemIdx())}>
-                      <text fg={t().accent} wrapMode="none" truncate={scrolledHeaderText() == null}>
-                        <strong>{expanded() ? "▾" : "▸"} {scrolledHeaderText() ?? label()}{fileCount() != null ? ` (${fileCount()})` : ""}</strong>
-                      </text>
-                    </box>
-
-                    {/* Expanded area: description + total lines changed + file tree */}
-                    <Show when={expanded()}>
-                      {/* Stash description (subject line) */}
-                      <box paddingLeft={ENTRY_PADDING_LEFT}>
-                        <text fg={t().foregroundMuted} wrapMode="none" truncate>
-                          {stash.subject}
+                  return (
+                    <box
+                      flexDirection="row"
+                      width="100%"
+                      paddingLeft={2}
+                      backgroundColor={itemHighlightBg(itemIdx())}
+                    >
+                      <box flexShrink={0}>
+            <text fg={t().border} wrapMode="none">
+                          {treeRow.prefix}{treeRow.connector}
                         </text>
                       </box>
-                      <box height={1} />
-
-                      {/* Total lines changed (only after files are loaded) */}
-                      <Show when={stashFw().totalAdd > 0 || stashFw().totalDel > 0}>
-                        <box flexDirection="row" paddingLeft={2}>
-                          <box flexGrow={1}>
-                            <text fg={t().foregroundMuted} wrapMode="none">
-                              total lines changed
-                            </text>
-                          </box>
-                          <box flexShrink={0} paddingLeft={2}>
-                            <text fg={t().diffAdded} wrapMode="none">
-                              +{stashFw().totalAdd}
-                            </text>
-                          </box>
-                          <box flexShrink={0} paddingLeft={1}>
-                            <text fg={t().diffRemoved} wrapMode="none">
-                              -{stashFw().totalDel}
-                            </text>
-                          </box>
+                      <Show when={treeRow.isDir}>
+                        <box flexShrink={0}>
+                          <text fg={cursored() ? t().accent : t().foregroundMuted} wrapMode="none">
+                            {collapsed() ? "▸ " : "▾ "}
+                          </text>
                         </box>
+                      </Show>
+                      <box flexGrow={1}>
+                        <text
+                          fg={treeRow.isDir
+                            ? (cursored() ? t().accent : t().foregroundMuted)
+                            : (cursored() ? t().accent : t().foreground)}
+                          wrapMode="none"
+                          truncate={scrolledName() == null}
+                        >
+                          {scrolledName() ?? treeRow.name}
+                        </text>
+                      </box>
+                      <Show when={treeRow.file}>
+                        <box flexShrink={0} paddingLeft={2}>
+                          <text fg={t().diffAdded} wrapMode="none">
+                            {("+" + treeRow.file!.additions).padStart(fileWidths().addColWidth)}
+                          </text>
+                        </box>
+                        <box flexShrink={0} paddingLeft={1}>
+                          <text fg={t().diffRemoved} wrapMode="none">
+                            {("-" + treeRow.file!.deletions).padStart(fileWidths().delColWidth)}
+                          </text>
+                        </box>
+                      </Show>
+                    </box>
+                  );
+                }}
+              </For>
+            </Show>
+
+            {/* Show "no files" message when files tab has no content */}
+            <Show when={activeTab() === "files" && (!detail() || detail()!.files.length === 0)}>
+              <box flexGrow={1} alignItems="center" justifyContent="center">
+                <text fg={t().foregroundMuted}>
+                  {state.detailLoading() ? "Loading..." : "No modified files"}
+                </text>
+              </box>
+            </Show>
+
+            {/* ══════════════ Stashes tab ══════════════ */}
+            <Show when={activeTab() === "stashes"}>
+              <For each={stashEntries()}>
+                {(stash, si) => {
+                  const itemIdx = () => findItemIndex("stash-entry", stash.hash);
+                  const cursored = () => isCursored(itemIdx());
+                  const expanded = () => expandedStashes().has(stash.hash);
+                  const label = () => stash.refs[0]?.name ?? "stash";
+                  const fileCount = () => stashFileCache().get(stash.hash)?.length;
+
+                  /** Banner scroll for the stash header label when cursored */
+                  const scrolledHeaderText = () => {
+                    if (!cursored()) return null;
+                    const info = cursoredTextInfo();
+                    if (!info) return null;
+                    const headerLabel = label();
+                    if (info.text !== headerLabel) return null;
+                    const off = bannerOffset();
+                    return headerLabel.substring(off, off + info.visibleWidth);
+                  };
+
+                  const stashFileRows = () => getStashFileTreeRows(stash.hash);
+                  const stashFw = () => getStashFileWidths(stash.hash);
+
+                  return (
+                    <>
+                      {/* Spacer between stash entries (not before the first one) */}
+                      <Show when={si() > 0}>
                         <box height={1} />
                       </Show>
 
-                      <For each={stashFileRows()}>
-                        {(treeRow, fi) => {
-                          const fileItemIdx = () => findItemIndex(
-                            treeRow.isDir ? "stash-dir" : "stash-file",
-                            stash.hash,
-                            fi()
-                          );
-                          const fileCursored = () => isCursored(fileItemIdx());
-                          const fileCollapsed = () => treeRow.isDir && (stashCollapsedDirs().get(stash.hash)?.has(treeRow.dirPath) ?? false);
+                      {/* Stash entry header — label + file count only */}
+                      <box backgroundColor={itemHighlightBg(itemIdx())}>
+                        <text fg={t().accent} wrapMode="none" truncate={scrolledHeaderText() == null}>
+                          <strong>{expanded() ? "▾" : "▸"} {scrolledHeaderText() ?? label()}{fileCount() != null ? ` (${fileCount()})` : ""}</strong>
+                        </text>
+                      </box>
 
-                          const scrolledFileName = () => {
-                            if (!fileCursored()) return null;
-                            const info = cursoredTextInfo();
-                            if (!info || info.text !== treeRow.name) return null;
-                            const off = bannerOffset();
-                            return treeRow.name.substring(off, off + info.visibleWidth);
-                          };
+                      {/* Expanded area: description + total lines changed + file tree */}
+                      <Show when={expanded()}>
+                        {/* Stash description (subject line) */}
+                        <box paddingLeft={ENTRY_PADDING_LEFT}>
+                          <text fg={t().foregroundMuted} wrapMode="none" truncate>
+                            {stash.subject}
+                          </text>
+                        </box>
+                        <box height={1} />
 
-                          return (
-                            <box
-                              flexDirection="row"
-                              width="100%"
-                              paddingLeft={2}
-                              backgroundColor={itemHighlightBg(fileItemIdx())}
-                            >
-                              <box flexShrink={0}>
-                                <text fg={t().border} wrapMode="none">
-                                  {treeRow.prefix}{treeRow.connector}
-                                </text>
-                              </box>
-                              <Show when={treeRow.isDir}>
-                                <box flexShrink={0}>
-                                  <text fg={fileCursored() ? t().accent : t().foregroundMuted} wrapMode="none">
-                                    {fileCollapsed() ? "▸ " : "▾ "}
-                                  </text>
-                                </box>
-                              </Show>
-                              <box flexGrow={1}>
-                                <text
-                                  fg={treeRow.isDir
-                                    ? (fileCursored() ? t().accent : t().foregroundMuted)
-                                    : (fileCursored() ? t().accent : t().foreground)}
-                                  wrapMode="none"
-                                  truncate={scrolledFileName() == null}
-                                >
-                                  {scrolledFileName() ?? treeRow.name}
-                                </text>
-                              </box>
-                              <Show when={treeRow.file}>
-                                <box flexShrink={0} paddingLeft={2}>
-                                  <text fg={t().diffAdded} wrapMode="none">
-                                    {("+" + treeRow.file!.additions).padStart(stashFw().addColWidth)}
-                                  </text>
-                                </box>
-                                <box flexShrink={0} paddingLeft={1}>
-                                  <text fg={t().diffRemoved} wrapMode="none">
-                                    {("-" + treeRow.file!.deletions).padStart(stashFw().delColWidth)}
-                                  </text>
-                                </box>
-                              </Show>
+                        {/* Total lines changed (only after files are loaded) */}
+                        <Show when={stashFw().totalAdd > 0 || stashFw().totalDel > 0}>
+                          <box flexDirection="row" paddingLeft={2}>
+                            <box flexGrow={1}>
+                              <text fg={t().foregroundMuted} wrapMode="none">
+                                total lines changed
+                              </text>
                             </box>
-                          );
-                        }}
-                      </For>
-                    </Show>
-                  </>
-                );
-              }}
-            </For>
+                            <box flexShrink={0} paddingLeft={2}>
+                              <text fg={t().diffAdded} wrapMode="none">
+                                +{stashFw().totalAdd}
+                              </text>
+                            </box>
+                            <box flexShrink={0} paddingLeft={1}>
+                              <text fg={t().diffRemoved} wrapMode="none">
+                                -{stashFw().totalDel}
+                              </text>
+                            </box>
+                          </box>
+                          <box height={1} />
+                        </Show>
+
+                        <For each={stashFileRows()}>
+                          {(treeRow, fi) => {
+                            const fileItemIdx = () => findItemIndex(
+                              treeRow.isDir ? "stash-dir" : "stash-file",
+                              stash.hash,
+                              fi()
+                            );
+                            const fileCursored = () => isCursored(fileItemIdx());
+                            const fileCollapsed = () => treeRow.isDir && (stashCollapsedDirs().get(stash.hash)?.has(treeRow.dirPath) ?? false);
+
+                            const scrolledFileName = () => {
+                              if (!fileCursored()) return null;
+                              const info = cursoredTextInfo();
+                              if (!info || info.text !== treeRow.name) return null;
+                              const off = bannerOffset();
+                              return treeRow.name.substring(off, off + info.visibleWidth);
+                            };
+
+                            return (
+                              <box
+                                flexDirection="row"
+                                width="100%"
+                                paddingLeft={2}
+                                backgroundColor={itemHighlightBg(fileItemIdx())}
+                              >
+                                <box flexShrink={0}>
+                                  <text fg={t().border} wrapMode="none">
+                                    {treeRow.prefix}{treeRow.connector}
+                                  </text>
+                                </box>
+                                <Show when={treeRow.isDir}>
+                                  <box flexShrink={0}>
+                                    <text fg={fileCursored() ? t().accent : t().foregroundMuted} wrapMode="none">
+                                      {fileCollapsed() ? "▸ " : "▾ "}
+                                    </text>
+                                  </box>
+                                </Show>
+                                <box flexGrow={1}>
+                                  <text
+                                    fg={treeRow.isDir
+                                      ? (fileCursored() ? t().accent : t().foregroundMuted)
+                                      : (fileCursored() ? t().accent : t().foreground)}
+                                    wrapMode="none"
+                                    truncate={scrolledFileName() == null}
+                                  >
+                                    {scrolledFileName() ?? treeRow.name}
+                                  </text>
+                                </box>
+                                <Show when={treeRow.file}>
+                                  <box flexShrink={0} paddingLeft={2}>
+                                    <text fg={t().diffAdded} wrapMode="none">
+                                      {("+" + treeRow.file!.additions).padStart(stashFw().addColWidth)}
+                                    </text>
+                                  </box>
+                                  <box flexShrink={0} paddingLeft={1}>
+                                    <text fg={t().diffRemoved} wrapMode="none">
+                                      {("-" + treeRow.file!.deletions).padStart(stashFw().delColWidth)}
+                                    </text>
+                                  </box>
+                                </Show>
+                              </box>
+                            );
+                          }}
+                        </For>
+                      </Show>
+                    </>
+                  );
+                }}
+              </For>
+
+              {/* Show "no stashes" message when stash tab is empty */}
+              <Show when={stashEntries().length === 0}>
+                <box flexGrow={1} alignItems="center" justifyContent="center">
+                  <text fg={t().foregroundMuted}>No stashes on this commit</text>
+                </box>
+              </Show>
+            </Show>
 
           </>
         )}
