@@ -9,7 +9,7 @@ import { DETAIL_PANEL_WIDTH_FRACTION } from "../constants";
 import type { DetailNavRef, DetailViewProps } from "./detail-types";
 import {
   PANEL_PADDING_X, ENTRY_PADDING_LEFT, DIR_INDICATOR_WIDTH,
-  STAT_PADDING_LEFT, STAT_GAP, computeFileWidths,
+  STAT_PADDING_LEFT, STATUS_COL_WIDTH, STAT_GAP, computeFileWidths,
 } from "./detail-types";
 
 // ── Layout constants ────────────────────────────────────────────────
@@ -195,7 +195,9 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
 
     if (item.type === "file") {
       const fw = fileWidths();
-      const statWidth = STAT_PADDING_LEFT + fw.addColWidth + STAT_GAP + fw.delColWidth;
+      const statWidth = activeTab() === "untracked"
+        ? STAT_PADDING_LEFT + STATUS_COL_WIDTH
+        : STAT_PADDING_LEFT + STATUS_COL_WIDTH + STAT_GAP + fw.addColWidth + STAT_GAP + fw.delColWidth;
       const fixedChars = ENTRY_PADDING_LEFT + treeRow.prefix.length + treeRow.connector.length + statWidth;
       const available = pw - fixedChars;
       if (treeRow.name.length <= available) return null;
@@ -237,7 +239,8 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
                 total lines changed
               </text>
             </box>
-            <box flexShrink={0} paddingLeft={2}>
+            <box flexShrink={0} width={2} />
+            <box flexShrink={0} paddingLeft={1}>
               <text fg={t().diffAdded} wrapMode="none">
                 +{fileWidths().totalAdd}
               </text>
@@ -295,9 +298,16 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
                     {scrolledName() ?? treeRow.name}
                   </text>
                 </box>
-                {/* Show +/- stats for staged/unstaged (not untracked) */}
+                {/* Status letter + stats for staged/unstaged; status only for untracked */}
+                <Show when={treeRow.file}>
+                  <box flexShrink={0} paddingLeft={1}>
+                    <text fg={t().foregroundMuted} wrapMode="none">
+                      {treeRow.file!.status}
+                    </text>
+                  </box>
+                </Show>
                 <Show when={treeRow.file && activeTab() !== "untracked"}>
-                  <box flexShrink={0} paddingLeft={2}>
+                  <box flexShrink={0} paddingLeft={1}>
                     <text fg={t().diffAdded} wrapMode="none">
                       {("+" + treeRow.file!.additions).padStart(fileWidths().addColWidth)}
                     </text>
@@ -305,16 +315,6 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
                   <box flexShrink={0} paddingLeft={1}>
                     <text fg={t().diffRemoved} wrapMode="none">
                       {("-" + treeRow.file!.deletions).padStart(fileWidths().delColWidth)}
-                    </text>
-                  </box>
-                </Show>
-                <Show when={treeRow.file}>
-                  <box flexShrink={0} paddingLeft={1}>
-                    <text fg={treeRow.file!.status === "A" ? t().diffAdded
-                            : treeRow.file!.status === "D" ? t().diffRemoved
-                            : t().foregroundMuted}
-                          wrapMode="none">
-                      {treeRow.file!.status}
                     </text>
                   </box>
                 </Show>

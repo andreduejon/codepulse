@@ -12,7 +12,7 @@ import DetailBadge from "./detail-badge";
 import type { DetailNavRef, DetailViewProps } from "./detail-types";
 import {
   PANEL_PADDING_X, SHORT_HASH_LEN, HASH_BADGE_GAP, BADGE_PADDING,
-  ENTRY_PADDING_LEFT, DIR_INDICATOR_WIDTH, STAT_PADDING_LEFT, STAT_GAP,
+  ENTRY_PADDING_LEFT, DIR_INDICATOR_WIDTH, STAT_PADDING_LEFT, STATUS_COL_WIDTH, STAT_GAP,
   computeFileWidths,
 } from "./detail-types";
 
@@ -490,7 +490,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
         const treeRow = rows[item.index];
         if (!treeRow) return null;
         const fw = fileWidths();
-        const statWidth = STAT_PADDING_LEFT + fw.addColWidth + STAT_GAP + fw.delColWidth;
+        const statWidth = STAT_PADDING_LEFT + STATUS_COL_WIDTH + STAT_GAP + fw.addColWidth + STAT_GAP + fw.delColWidth;
         const fixedChars = ENTRY_PADDING_LEFT + treeRow.prefix.length + treeRow.connector.length + statWidth;
         const available = pw - fixedChars;
         if (treeRow.name.length <= available) return null;
@@ -528,7 +528,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
         const treeRow = rows[item.index];
         if (!treeRow) return null;
         const fw = getStashFileWidths(item.stashHash);
-        const statWidth = STAT_PADDING_LEFT + fw.addColWidth + STAT_GAP + fw.delColWidth;
+        const statWidth = STAT_PADDING_LEFT + STATUS_COL_WIDTH + STAT_GAP + fw.addColWidth + STAT_GAP + fw.delColWidth;
         const fixedChars = ENTRY_PADDING_LEFT + stashIndent + treeRow.prefix.length + treeRow.connector.length + statWidth;
         const available = pw - fixedChars;
         if (treeRow.name.length <= available) return null;
@@ -912,7 +912,8 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                     total lines changed
                   </text>
                 </box>
-                <box flexShrink={0} paddingLeft={2}>
+                <box flexShrink={0} width={2} />
+                <box flexShrink={0} paddingLeft={1}>
                   <text fg={t().diffAdded} wrapMode="none">
                     +{fileWidths().totalAdd}
                   </text>
@@ -970,7 +971,12 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                         </text>
                       </box>
                       <Show when={treeRow.file}>
-                        <box flexShrink={0} paddingLeft={2}>
+                        <box flexShrink={0} paddingLeft={1}>
+                          <text fg={t().foregroundMuted} wrapMode="none">
+                            {treeRow.file!.status}
+                          </text>
+                        </box>
+                        <box flexShrink={0} paddingLeft={1}>
                           <text fg={t().diffAdded} wrapMode="none">
                             {("+" + treeRow.file!.additions).padStart(fileWidths().addColWidth)}
                           </text>
@@ -978,16 +984,6 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                         <box flexShrink={0} paddingLeft={1}>
                           <text fg={t().diffRemoved} wrapMode="none">
                             {("-" + treeRow.file!.deletions).padStart(fileWidths().delColWidth)}
-                          </text>
-                        </box>
-                      </Show>
-                      <Show when={treeRow.file}>
-                        <box flexShrink={0} paddingLeft={1}>
-                          <text fg={treeRow.file!.status === "A" ? t().diffAdded
-                                  : treeRow.file!.status === "D" ? t().diffRemoved
-                                  : t().foregroundMuted}
-                                wrapMode="none">
-                            {treeRow.file!.status}
                           </text>
                         </box>
                       </Show>
@@ -1062,7 +1058,8 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                                 total lines changed
                               </text>
                             </box>
-                            <box flexShrink={0} paddingLeft={2}>
+                            <box flexShrink={0} width={2} />
+                            <box flexShrink={0} paddingLeft={1}>
                               <text fg={t().diffAdded} wrapMode="none">
                                 +{stashFw().totalAdd}
                               </text>
@@ -1125,7 +1122,12 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                                   </text>
                                 </box>
                                 <Show when={treeRow.file}>
-                                  <box flexShrink={0} paddingLeft={2}>
+                                  <box flexShrink={0} paddingLeft={1}>
+                                    <text fg={t().foregroundMuted} wrapMode="none">
+                                      {treeRow.file!.status}
+                                    </text>
+                                  </box>
+                                  <box flexShrink={0} paddingLeft={1}>
                                     <text fg={t().diffAdded} wrapMode="none">
                                       {("+" + treeRow.file!.additions).padStart(stashFw().addColWidth)}
                                     </text>
@@ -1133,16 +1135,6 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                                   <box flexShrink={0} paddingLeft={1}>
                                     <text fg={t().diffRemoved} wrapMode="none">
                                       {("-" + treeRow.file!.deletions).padStart(stashFw().delColWidth)}
-                                    </text>
-                                  </box>
-                                </Show>
-                                <Show when={treeRow.file}>
-                                  <box flexShrink={0} paddingLeft={1}>
-                                    <text fg={treeRow.file!.status === "A" ? t().diffAdded
-                                            : treeRow.file!.status === "D" ? t().diffRemoved
-                                            : t().foregroundMuted}
-                                          wrapMode="none">
-                                      {treeRow.file!.status}
                                     </text>
                                   </box>
                                 </Show>

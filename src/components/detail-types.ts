@@ -27,9 +27,11 @@ export const BADGE_PADDING = 2;
 export const ENTRY_PADDING_LEFT = 2;
 /** Width of the directory collapse indicator ("▸ " / "▾ "). */
 export const DIR_INDICATOR_WIDTH = 2;
-/** Padding before the +/- stat columns in file rows. */
-export const STAT_PADDING_LEFT = 2;
-/** Padding between the + and - stat columns. */
+/** Padding before the status letter in file rows. */
+export const STAT_PADDING_LEFT = 1;
+/** Width of the status letter column (padding + letter). */
+export const STATUS_COL_WIDTH = 2;
+/** Padding between the stat columns (status→+, +→-). */
 export const STAT_GAP = 1;
 
 /** Compute column widths for file change stats (total determines column width). */
