@@ -289,18 +289,25 @@ function AppContent(props: Readonly<AppProps>) {
     // isJumpNavigation is a plain JS flag set synchronously by handleJumpToCommit
     // around the setCursorIndex call. Since SolidJS effects run synchronously when
     // a signal updates, this flag is still true when this effect fires.
-    if (isJumpNavigation) {
-      // Jump — keep current tab
-    } else {
-      actions.setDetailActiveTab(isUncommitted ? "unstaged" : "files");
-    }
-    actions.setDetailCursorIndex(0);
+    //
+    // Batch all state updates together to prevent intermediate effect firings.
+    // Without batch(), setDetailCursorIndex(0) would trigger the detail.tsx cursor
+    // effect (which consumes detailOriginHash), and then setCommitDetail(null) would
+    // trigger it again (with origin already consumed → cursor falls back to 0).
+    batch(() => {
+      if (isJumpNavigation) {
+        // Jump — keep current tab
+      } else {
+        actions.setDetailActiveTab(isUncommitted ? "unstaged" : "files");
+      }
+      actions.setDetailCursorIndex(0);
 
-    // Clear stale detail immediately so the old file tree nodes are removed
-    // from the render tree during scroll (a 334-file commit's tree = ~3K nodes).
-    actions.setCommitDetail(null);
-    actions.setUncommittedDetail(null);
-    actions.setDetailLoading(true);
+      // Clear stale detail immediately so the old file tree nodes are removed
+      // from the render tree during scroll (a 334-file commit's tree = ~3K nodes).
+      actions.setCommitDetail(null);
+      actions.setUncommittedDetail(null);
+      actions.setDetailLoading(true);
+    });
 
     // Debounce the detail load to avoid spawning git subprocesses on rapid navigation
     detailDebounceTimer = setTimeout(async () => {
