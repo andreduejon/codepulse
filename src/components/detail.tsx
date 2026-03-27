@@ -78,6 +78,15 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     setParentsExpanded(true);
   });
 
+  /** Children excluding the synthetic uncommitted node (shown in graph, not in detail). */
+  const filteredChildren = createMemo(() => {
+    const gr = row();
+    if (!gr) return [];
+    return gr.children
+      .map((hash, i) => ({ hash, branch: gr.childBranches[i], color: gr.childColors[i] }))
+      .filter(c => c.hash !== UNCOMMITTED_HASH);
+  });
+
   // Active tab for committed commits: "detail" | "files" | "stashes"
   const activeTab = () => state.detailActiveTab();
 
@@ -91,12 +100,13 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     const items: InteractiveItem[] = [];
 
     if (tab === "detail") {
-      // Children section (only if children exist)
-      if (r.children.length > 0) {
+      // Children section (only if children exist; excludes synthetic uncommitted node)
+      const fc = filteredChildren();
+      if (fc.length > 0) {
         items.push({ type: "section-header", section: "children" });
         if (childrenExpanded()) {
-          for (let i = 0; i < r.children.length; i++) {
-            items.push({ type: "child", hash: r.children[i], index: i });
+          for (let i = 0; i < fc.length; i++) {
+            items.push({ type: "child", hash: fc[i].hash, index: i });
           }
         }
       }
@@ -846,22 +856,22 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
               </Show>
 
               {/* ── Children (collapsible) ── */}
-              <Show when={r().children.length > 0}>
+              <Show when={filteredChildren().length > 0}>
                 <InteractiveSectionHeader
                   title="Children"
-                  count={r().children.length}
+                  count={filteredChildren().length}
                   expanded={childrenExpanded()}
                   section="children"
                 />
                 <Show when={childrenExpanded()}>
-                  <For each={r().children}>
-                    {(childHash, i) => (
+                  <For each={filteredChildren()}>
+                    {(child, i) => (
                       <InteractiveCommitEntry
-                        hash={childHash}
+                        hash={child.hash}
                         entryIndex={i()}
                         type="child"
-                        branchName={r().childBranches[i()]}
-                        colorIndex={r().childColors[i()]}
+                        branchName={child.branch}
+                        colorIndex={child.color}
                       />
                     )}
                   </For>
