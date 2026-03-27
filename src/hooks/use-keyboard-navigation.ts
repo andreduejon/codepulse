@@ -3,7 +3,7 @@ import type { Accessor } from "solid-js";
 import type { ScrollBoxRenderable } from "@opentui/core";
 import type { AppState, AppActions } from "../context/state";
 import type { DetailNavRef } from "../components/detail-types";
-import { SHIFT_JUMP, PAGE_JUMP } from "../constants";
+import { SHIFT_JUMP, PAGE_JUMP, UNCOMMITTED_HASH } from "../constants";
 
 type DialogId = "menu" | "help" | "theme" | null;
 
@@ -129,14 +129,51 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     // If a dialog is open, only handle Escape/q/m/? (handled above)
     if (dialog()) return;
 
-    // Detail panel focused: up/down navigate interactive items, enter activates
+    // Detail panel focused: up/down navigate interactive items, enter activates,
+    // left/right switch tabs (left on first tab exits detail focus)
     if (state.detailFocused()) {
       const scrollbox = getDetailScrollboxRef();
+
+      /** Get available tab IDs based on commit type */
+      const getAvailableTabs = (): string[] => {
+        const commit = state.selectedCommit();
+        if (commit?.hash === UNCOMMITTED_HASH) {
+          return ["staged", "unstaged", "untracked"];
+        }
+        const tabs = ["detail", "files"];
+        if (state.stashByParent().has(commit?.hash ?? "")) {
+          tabs.push("stashes");
+        }
+        return tabs;
+      };
+
       switch (e.name) {
-        case "left":
+        case "left": {
           e.preventDefault();
-          actions.setDetailFocused(false);
+          const tabs = getAvailableTabs();
+          const currentIdx = tabs.indexOf(state.detailActiveTab());
+          if (currentIdx <= 0) {
+            // Already on leftmost tab (or unknown tab) — exit detail focus
+            actions.setDetailFocused(false);
+          } else {
+            actions.setDetailActiveTab(tabs[currentIdx - 1]);
+            actions.setDetailCursorIndex(0);
+            scrollbox?.scrollTo(0);
+          }
           return;
+        }
+        case "right": {
+          e.preventDefault();
+          const tabs = getAvailableTabs();
+          const currentIdx = tabs.indexOf(state.detailActiveTab());
+          if (currentIdx < tabs.length - 1) {
+            actions.setDetailActiveTab(tabs[currentIdx + 1]);
+            actions.setDetailCursorIndex(0);
+            scrollbox?.scrollTo(0);
+          }
+          // On rightmost tab, do nothing
+          return;
+        }
         case "up": {
           e.preventDefault();
           const delta = e.shift ? -SHIFT_JUMP : -1;

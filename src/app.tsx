@@ -3,11 +3,12 @@ import { useRenderer } from "@opentui/solid";
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { createAppState, AppStateContext } from "./context/state";
 import { createThemeState, ThemeContext } from "./context/theme";
-import { getCommits, getBranches, getCurrentBranch, getCommitDetail, getUncommittedFiles, getRemoteUrl, fetchRemote, getLastFetchTime, getTagDetails, getStashList, getWorkingTreeStatus } from "./git/repo";
+import { getCommits, getBranches, getCurrentBranch, getCommitDetail, getUncommittedDetail, getRemoteUrl, fetchRemote, getLastFetchTime, getTagDetails, getStashList, getWorkingTreeStatus } from "./git/repo";
 import { buildGraph, getMaxGraphColumns } from "./git/graph";
 import type { Commit } from "./git/types";
 import GraphView, { ColumnHeader } from "./components/graph";
 import CommitDetailView from "./components/detail";
+import UncommittedDetailView from "./components/uncommitted-detail";
 import type { DetailNavRef } from "./components/detail-types";
 import Footer from "./components/footer";
 import HelpDialog from "./components/dialogs/help-dialog";
@@ -268,13 +269,21 @@ function AppContent(props: Readonly<AppProps>) {
 
     if (!commit) {
       actions.setCommitDetail(null);
+      actions.setUncommittedDetail(null);
       actions.setDetailLoading(false);
       return;
     }
 
+    const isUncommitted = commit.hash === UNCOMMITTED_HASH;
+
+    // Reset active tab to the appropriate default for this commit type
+    actions.setDetailActiveTab(isUncommitted ? "staged" : "detail");
+    actions.setDetailCursorIndex(0);
+
     // Clear stale detail immediately so the old file tree nodes are removed
     // from the render tree during scroll (a 334-file commit's tree = ~3K nodes).
     actions.setCommitDetail(null);
+    actions.setUncommittedDetail(null);
     actions.setDetailLoading(true);
 
     // Debounce the detail load to avoid spawning git subprocesses on rapid navigation
@@ -283,23 +292,26 @@ function AppContent(props: Readonly<AppProps>) {
       const ctrl = new AbortController();
       detailAbortCtrl = ctrl;
       try {
-        let detail: import("./git/types").CommitDetail | null;
-
-        if (commit.hash === UNCOMMITTED_HASH) {
-          // Uncommitted node: load dirty files instead of querying a git object
-          const files = await getUncommittedFiles(props.repoPath, ctrl.signal);
-          detail = { ...commit, files };
+        if (isUncommitted) {
+          // Uncommitted node: load staged/unstaged/untracked file lists in parallel
+          const ud = await getUncommittedDetail(props.repoPath, ctrl.signal);
+          if (!ctrl.signal.aborted) {
+            actions.setUncommittedDetail(ud);
+            // Also set a basic CommitDetail so any fallback code still has commit info
+            actions.setCommitDetail({ ...commit, files: [...ud.staged, ...ud.unstaged, ...ud.untracked] });
+            actions.setDetailLoading(false);
+          }
         } else {
-          detail = await getCommitDetail(props.repoPath, commit.hash, commit, ctrl.signal);
-        }
-
-        if (!ctrl.signal.aborted) {
-          actions.setCommitDetail(detail);
-          actions.setDetailLoading(false);
+          const detail = await getCommitDetail(props.repoPath, commit.hash, commit, ctrl.signal);
+          if (!ctrl.signal.aborted) {
+            actions.setCommitDetail(detail);
+            actions.setDetailLoading(false);
+          }
         }
       } catch (err) {
         if (!ctrl.signal.aborted) {
           actions.setCommitDetail(null);
+          actions.setUncommittedDetail(null);
           actions.setDetailLoading(false);
           actions.setError(err instanceof Error ? err.message : String(err));
         }
@@ -315,6 +327,12 @@ function AppContent(props: Readonly<AppProps>) {
       detailAbortCtrl.abort();
       detailAbortCtrl = null;
     }
+  });
+
+  // Scroll detail panel to top when active tab changes
+  createEffect(() => {
+    state.detailActiveTab(); // track
+    detailScrollboxRef?.scrollTo(0);
   });
 
   // Search input handlers
@@ -468,31 +486,54 @@ function AppContent(props: Readonly<AppProps>) {
             <box
               flexDirection="column"
               width="25%"
-              minWidth={60}
+              minWidth={80}
               flexShrink={0}
               paddingX={2}
               paddingBottom={1}
 
             >
-              {/* Details header with reactive border */}
-              <box flexDirection="column" width="100%" flexShrink={0}>
-                <box
-                  flexDirection="row"
-                  width="100%"
-                  border={["top"]}
-                  borderStyle="single"
-                  borderColor={state.detailFocused() ? themeState.theme().accent : themeState.theme().border}
-                >
-                  <text wrapMode="none">
-                    <strong><span fg={state.detailFocused() ? themeState.theme().foreground : themeState.theme().foregroundMuted}>Details</span></strong>
-                  </text>
-                </box>
-                {/* Muted separator below header */}
-                <box width="100%" border={["top"]} borderStyle="single" borderColor={themeState.theme().border} />
+              {/* Tab bar with top accent line per selected tab */}
+              <box flexDirection="row" width="100%" flexShrink={0}>
+                {(() => {
+                  const commit = state.selectedCommit();
+                  const isUncommitted = commit?.hash === UNCOMMITTED_HASH;
+                  const tabs = isUncommitted
+                    ? [{ id: "staged", label: "Staged" }, { id: "unstaged", label: "Unstaged" }, { id: "untracked", label: "Untracked" }]
+                    : [
+                      { id: "detail", label: "Detail" },
+                      { id: "files", label: "Files" },
+                      ...(state.stashByParent().has(commit?.hash ?? "") ? [{ id: "stashes", label: "Stashes" }] : []),
+                    ];
+                  return tabs.map((tab) => (
+                    <box
+                      flexGrow={1}
+                      justifyContent="center"
+                      flexDirection="row"
+                      border={["top"]}
+                      borderStyle="single"
+                      borderColor={state.detailActiveTab() === tab.id
+                        ? (state.detailFocused() ? themeState.theme().accent : themeState.theme().foregroundMuted)
+                        : themeState.theme().border}
+                    >
+                      <text flexShrink={0} wrapMode="none" fg={state.detailActiveTab() === tab.id
+                        ? (state.detailFocused() ? themeState.theme().accent : themeState.theme().foregroundMuted)
+                        : themeState.theme().border}>
+                        <strong>{tab.label}</strong>
+                      </text>
+                    </box>
+                  ));
+                })()}
               </box>
+              {/* Muted separator below tabs */}
+              <box width="100%" border={["top"]} borderStyle="single" borderColor={themeState.theme().border} />
 
               <scrollbox ref={detailScrollboxRef} flexGrow={1} scrollY scrollX={false} verticalScrollbarOptions={{ visible: false }}>
-                <CommitDetailView onJumpToCommit={handleJumpToCommit} navRef={detailNavRef} />
+                <Show
+                  when={state.selectedCommit()?.hash !== UNCOMMITTED_HASH}
+                  fallback={<UncommittedDetailView onJumpToCommit={handleJumpToCommit} navRef={detailNavRef} />}
+                >
+                  <CommitDetailView onJumpToCommit={handleJumpToCommit} navRef={detailNavRef} />
+                </Show>
               </scrollbox>
             </box>
           </box>
