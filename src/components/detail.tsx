@@ -367,6 +367,16 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   /** Collapsed dirs per stash: stashHash → Set of collapsed dir paths. */
   const [stashCollapsedDirs, setStashCollapsedDirs] = createSignal(new Map<string, Set<string>>());
 
+  /** Aggregate additions/deletions across all loaded stash file caches. */
+  const stashAggregateTotals = createMemo(() => {
+    const cache = stashFileCache();
+    let totalAdd = 0, totalDel = 0;
+    for (const files of cache.values()) {
+      for (const f of files) { totalAdd += f.additions; totalDel += f.deletions; }
+    }
+    return { totalAdd, totalDel };
+  });
+
   // Reset stash state when selected commit changes
   createEffect(() => {
     commit();
@@ -998,6 +1008,26 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
 
             {/* ══════════════ Stashes tab ══════════════ */}
             <Show when={activeTab() === "stashes"}>
+              <Show when={stashAggregateTotals().totalAdd > 0 || stashAggregateTotals().totalDel > 0}>
+                <box flexDirection="row" paddingLeft={2}>
+                  <box flexGrow={1}>
+                    <text fg={t().foregroundMuted} wrapMode="none">
+                      total lines changed
+                    </text>
+                  </box>
+                  <box flexShrink={0} paddingLeft={2}>
+                    <text fg={t().diffAdded} wrapMode="none">
+                      +{stashAggregateTotals().totalAdd}
+                    </text>
+                  </box>
+                  <box flexShrink={0} paddingLeft={1}>
+                    <text fg={t().diffRemoved} wrapMode="none">
+                      -{stashAggregateTotals().totalDel}
+                    </text>
+                  </box>
+                </box>
+                <box height={1} />
+              </Show>
               <For each={stashEntries()}>
                 {(stash, si) => {
                   const itemIdx = () => findItemIndex("stash-entry", stash.hash);
