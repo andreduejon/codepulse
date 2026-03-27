@@ -300,10 +300,11 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   const [branchCursor, setBranchCursor] = createSignal(0);
 
   const currentCursor = () => activeTab() === "repository" ? repoCursor() : branchCursor();
-  const setCurrentCursor = (v: number | ((prev: number) => number)) =>
-    activeTab() === "repository"
-      ? setRepoCursor(v as any)
-      : setBranchCursor(v as any);
+  const setCurrentCursor = (v: number | ((prev: number) => number)) => {
+    const setter = activeTab() === "repository" ? setRepoCursor : setBranchCursor;
+    if (typeof v === "function") setter(v);
+    else setter(v);
+  };
 
   const selectableIndices = (): number[] =>
     activeItems()

@@ -352,6 +352,8 @@ function AppContent(props: Readonly<AppProps>) {
                     placeholder="Search commits..."
                     value={state.searchQuery()}
                     onInput={handleSearchInput}
+                    // @opentui/solid type bug: InputProps.onSubmit is (value: string) => void
+                    // but JSX intrinsics intersect it with core's (event: SubmitEvent) => void
                     onSubmit={handleSearchSubmit as any}
                     fg={themeState.theme().foreground}
                     backgroundColor={themeState.theme().background}
