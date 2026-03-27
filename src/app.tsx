@@ -277,7 +277,7 @@ function AppContent(props: Readonly<AppProps>) {
     const isUncommitted = commit.hash === UNCOMMITTED_HASH;
 
     // Reset active tab to the appropriate default for this commit type
-    actions.setDetailActiveTab(isUncommitted ? "staged" : "detail");
+    actions.setDetailActiveTab(isUncommitted ? "unstaged" : "files");
     actions.setDetailCursorIndex(0);
 
     // Clear stale detail immediately so the old file tree nodes are removed
@@ -486,7 +486,7 @@ function AppContent(props: Readonly<AppProps>) {
             <box
               flexDirection="column"
               width="25%"
-              minWidth={80}
+              minWidth={60}
               flexShrink={0}
               paddingX={2}
               paddingBottom={1}

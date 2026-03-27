@@ -111,7 +111,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
   const [detailOriginHash, setDetailOriginHash] = createSignal<string | null>(null);
   const [detailLoading, setDetailLoading] = createSignal(false);
   const [detailCursorAction, setDetailCursorAction] = createSignal<string | null>(null);
-  const [detailActiveTab, setDetailActiveTab] = createSignal("detail");
+  const [detailActiveTab, setDetailActiveTab] = createSignal("files");
   const [uncommittedDetail, setUncommittedDetail] = createSignal<UncommittedDetail | null>(null);
 
   // ── UI state & settings ───────────────────────────────────────────
