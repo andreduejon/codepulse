@@ -539,3 +539,51 @@ describe("parseDiffTreeOutput", () => {
     expect(files[0].deletions).toBe(5);
   });
 });
+
+describe("computeFileWidths", () => {
+  // Import from detail-types (shared between committed and uncommitted detail views)
+  const { computeFileWidths } = require("../src/components/detail-types");
+
+  test("sums additions and deletions across all files", () => {
+    const files = [
+      { additions: 10, deletions: 3 },
+      { additions: 25, deletions: 7 },
+      { additions: 100, deletions: 0 },
+    ];
+    const result = computeFileWidths(files);
+    expect(result.totalAdd).toBe(135);
+    expect(result.totalDel).toBe(10);
+  });
+
+  test("column widths match formatted total string length", () => {
+    const files = [
+      { additions: 999, deletions: 50 },
+      { additions: 1, deletions: 1 },
+    ];
+    const result = computeFileWidths(files);
+    // totalAdd = 1000, totalDel = 51
+    expect(result.totalAdd).toBe(1000);
+    expect(result.totalDel).toBe(51);
+    // "+1000" = 5 chars, "-51" = 3 chars
+    expect(result.addColWidth).toBe(5);
+    expect(result.delColWidth).toBe(3);
+  });
+
+  test("empty file list returns zeroes with min column width 2", () => {
+    const result = computeFileWidths([]);
+    expect(result.totalAdd).toBe(0);
+    expect(result.totalDel).toBe(0);
+    // "+0" = 2 chars, "-0" = 2 chars
+    expect(result.addColWidth).toBe(2);
+    expect(result.delColWidth).toBe(2);
+  });
+
+  test("single file with zero stats", () => {
+    const files = [{ additions: 0, deletions: 0 }];
+    const result = computeFileWidths(files);
+    expect(result.totalAdd).toBe(0);
+    expect(result.totalDel).toBe(0);
+    expect(result.addColWidth).toBe(2);
+    expect(result.delColWidth).toBe(2);
+  });
+});
