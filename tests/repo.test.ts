@@ -7,7 +7,7 @@
  * These are unit tests for the parsing layer — they don't spawn git subprocesses.
  */
 import { describe, test, expect } from "bun:test";
-import { parseRefs, parseCommitLine, parseTagLine, parseTrackInfo, RS } from "../src/git/repo";
+import { parseRefs, parseCommitLine, parseTagLine, parseTrackInfo, parseStashEntry, RS } from "../src/git/repo";
 
 describe("repo.ts parsing", () => {
   test("parseRefs — empty/blank string returns []", () => {
@@ -280,5 +280,103 @@ describe("parseTrackInfo", () => {
     const result = parseTrackInfo("gone");
     expect(result.ahead).toBeUndefined();
     expect(result.behind).toBeUndefined();
+  });
+});
+
+describe("parseStashEntry", () => {
+  test("basic stash entry with two parents", () => {
+    const line = [
+      "abc123def456abc123def456abc123def456abc123", // hash
+      "abc123d",                                     // shortHash
+      "parent1111 parent2222",                       // parents (HEAD + index)
+      "stash@{0}",                                   // stashRef
+      "WIP on main: fix typo",                       // subject
+      "John Doe",                                    // author
+      "john@example.com",                            // authorEmail
+      "2024-06-15T12:00:00+02:00",                  // authorDate
+      "John Doe",                                    // committer
+      "john@example.com",                            // committerEmail
+      "2024-06-15T12:00:00+02:00",                  // commitDate
+    ].join(RS);
+
+    const entry = parseStashEntry(line);
+    expect(entry).not.toBeNull();
+    expect(entry!.hash).toBe("abc123def456abc123def456abc123def456abc123");
+    expect(entry!.shortHash).toBe("abc123d");
+    // Only first parent used for graph topology
+    expect(entry!.parents).toEqual(["parent1111"]);
+    expect(entry!.subject).toBe("WIP on main: fix typo");
+    expect(entry!.author).toBe("John Doe");
+    expect(entry!.refs).toHaveLength(1);
+    expect(entry!.refs[0].name).toBe("stash@{0}");
+    expect(entry!.refs[0].type).toBe("stash");
+    expect(entry!.refs[0].isCurrent).toBe(false);
+  });
+
+  test("stash with three parents (untracked files)", () => {
+    const line = [
+      "aaa111bbb222ccc333ddd444eee555fff666aaa111",
+      "aaa111b",
+      "parent1 parent2 parent3",
+      "stash@{2}",
+      "On feature: WIP",
+      "Jane",
+      "jane@example.com",
+      "2024-07-01T10:00:00Z",
+      "Jane",
+      "jane@example.com",
+      "2024-07-01T10:00:00Z",
+    ].join(RS);
+
+    const entry = parseStashEntry(line);
+    expect(entry).not.toBeNull();
+    // Only first parent used
+    expect(entry!.parents).toEqual(["parent1"]);
+    expect(entry!.refs[0].name).toBe("stash@{2}");
+  });
+
+  test("malformed line returns null", () => {
+    expect(parseStashEntry("")).toBeNull();
+    expect(parseStashEntry("only" + RS + "two")).toBeNull();
+  });
+
+  test("line with no parents returns null", () => {
+    const line = [
+      "abc123def456abc123def456abc123def456abc123",
+      "abc123d",
+      "",         // empty parents
+      "stash@{0}",
+      "WIP",
+      "Author",
+      "a@b.com",
+      "2024-01-01T00:00:00Z",
+      "Author",
+      "a@b.com",
+      "2024-01-01T00:00:00Z",
+    ].join(RS);
+
+    const entry = parseStashEntry(line);
+    expect(entry).toBeNull();
+  });
+
+  test("stash ref label preserved in badge", () => {
+    const line = [
+      "fff000aaa111bbb222ccc333ddd444eee555fff000",
+      "fff000a",
+      "parenthash123",
+      "stash@{5}",
+      "On develop: saving progress",
+      "Dev",
+      "dev@co.com",
+      "2024-12-25T08:00:00Z",
+      "Dev",
+      "dev@co.com",
+      "2024-12-25T08:00:00Z",
+    ].join(RS);
+
+    const entry = parseStashEntry(line);
+    expect(entry).not.toBeNull();
+    expect(entry!.refs[0].name).toBe("stash@{5}");
+    expect(entry!.refs[0].type).toBe("stash");
   });
 });

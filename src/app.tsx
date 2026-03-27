@@ -3,8 +3,9 @@ import { useRenderer } from "@opentui/solid";
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { createAppState, AppStateContext } from "./context/state";
 import { createThemeState, ThemeContext } from "./context/theme";
-import { getCommits, getBranches, getCurrentBranch, getCommitDetail, getRemoteUrl, fetchRemote, getLastFetchTime, getTagDetails } from "./git/repo";
+import { getCommits, getBranches, getCurrentBranch, getCommitDetail, getRemoteUrl, fetchRemote, getLastFetchTime, getTagDetails, getStashList } from "./git/repo";
 import { buildGraph, getMaxGraphColumns } from "./git/graph";
+import type { Commit } from "./git/types";
 import GraphView, { ColumnHeader } from "./components/graph";
 import CommitDetailView from "./components/detail";
 import type { DetailNavRef } from "./components/detail";
@@ -74,7 +75,7 @@ function AppContent(props: Readonly<AppProps>) {
       const effectiveBranch = viewBranch ?? branch;
       const effectiveAll = viewBranch ? false : state.showAllBranches();
 
-      const [commits, branches, currentBranch, remoteUrl, tagDetails] = await Promise.all([
+      const [commits, branches, currentBranch, remoteUrl, tagDetails, stashes] = await Promise.all([
         getCommits(repoPath, {
           maxCount: state.maxCount(),
           branch: effectiveBranch,
@@ -84,10 +85,39 @@ function AppContent(props: Readonly<AppProps>) {
         getCurrentBranch(repoPath, ctrl.signal),
         getRemoteUrl(repoPath, ctrl.signal),
         getTagDetails(repoPath, ctrl.signal),
+        getStashList(repoPath, ctrl.signal),
       ]);
 
       // If we were superseded by a newer loadData call, discard results
       if (ctrl.signal.aborted) return;
+
+      // Inject stash commits into the commit list.
+      // Each stash's parents[0] is the HEAD commit it was based on.
+      // Insert each stash right before its parent so the graph draws it
+      // as a short branch off the base commit.
+      if (stashes.length > 0) {
+        const commitIndexMap = new Map<string, number>();
+        for (let i = 0; i < commits.length; i++) {
+          commitIndexMap.set(commits[i].hash, i);
+        }
+        // Group stashes by parent, preserving stash order (newest first)
+        const stashesByParent = new Map<number, Commit[]>();
+        for (const s of stashes) {
+          const parentIdx = commitIndexMap.get(s.parents[0]);
+          if (parentIdx != null) {
+            const group = stashesByParent.get(parentIdx);
+            if (group) group.push(s);
+            else stashesByParent.set(parentIdx, [s]);
+          }
+          // If parent not in commits (e.g. truncated by maxCount), skip the stash
+        }
+        // Insert in reverse index order so earlier indices aren't shifted
+        const sortedParentIndices = [...stashesByParent.keys()].sort((a, b) => b - a);
+        for (const parentIdx of sortedParentIndices) {
+          const group = stashesByParent.get(parentIdx)!;
+          commits.splice(parentIdx, 0, ...group);
+        }
+      }
 
       // Skip update if nothing changed (avoids flicker on auto-refresh)
       if (silent) {

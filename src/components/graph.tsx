@@ -13,10 +13,12 @@ function RefBadge(props: Readonly<{
   const { theme } = useTheme();
   const t = () => theme();
 
-  const bgColor = () => props.laneColor();
+  const isStash = () => props.info.type === "stash";
 
-  // When the badge bg is the lane color, use dark background for contrast.
-  const fgColor = () => t().background;
+  const bgColor = () => isStash() ? t().backgroundElement : props.laneColor();
+
+  // Stash badges use muted foreground; regular badges use dark background for contrast.
+  const fgColor = () => isStash() ? t().foregroundMuted : t().background;
 
   return (
     <text flexShrink={0} wrapMode="none" fg={fgColor()} bg={bgColor()}>
@@ -340,7 +342,7 @@ function GraphLine(props: Readonly<{
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /** Sort order for ref badges: tags first, then branches, remotes, HEAD last. */
-const REF_SORT_ORDER: Record<string, number> = { tag: 0, branch: 1, remote: 2, head: 3 };
+const REF_SORT_ORDER: Record<string, number> = { tag: 0, branch: 1, remote: 2, stash: 3, head: 4 };
 
 // Cache for formatRelativeDate — avoids repeated Date parsing and arithmetic.
 // Entries are keyed by date string. When the cache exceeds MAX entries,

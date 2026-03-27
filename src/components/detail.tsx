@@ -641,6 +641,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                     <DetailBadge
                       name={ref.name}
                       colorIndex={nodeColorIndex()}
+                      dimmed={ref.type === "stash"}
                     />
                   )}
                 </For>

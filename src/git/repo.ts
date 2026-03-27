@@ -275,6 +275,80 @@ export async function getTagDetails(
   return result;
 }
 
+// ── Stash support ─────────────────────────────────────────────────────
+
+/** Format string for `git stash list`: hash, short hash, first parent, subject, author info, dates. */
+const STASH_FORMAT = `%H${RS}%h${RS}%P${RS}%gd${RS}%s${RS}%an${RS}%ae${RS}%aI${RS}%cn${RS}%ce${RS}%cI`;
+
+/**
+ * @internal Exported for testing. Parse a single stash list line into a Commit
+ * with a synthetic "stash" ref. Returns null for malformed lines.
+ *
+ * Format fields: hash, shortHash, parents, stashRef (e.g. "stash@{0}"), subject,
+ * author, authorEmail, authorDate, committer, committerEmail, commitDate.
+ */
+export function parseStashEntry(line: string): Commit | null {
+  const parts = line.split(RS);
+  if (parts.length < 11) return null;
+
+  const [hash, shortHash, parentsStr, stashRef, subject, author, authorEmail, authorDate, committer, committerEmail, commitDate] = parts;
+  if (!hash?.trim()) return null;
+
+  // Stash commits have 2-3 parents: [0]=HEAD, [1]=index, [2]=untracked (optional).
+  // For graph placement we only use parents[0] (the commit the stash was based on).
+  const allParents = parentsStr.trim() ? parentsStr.trim().split(" ") : [];
+  const graphParent = allParents[0];
+  if (!graphParent) return null;
+
+  // Use just the first parent for graph topology — we want a single line to the base commit
+  const parents = [graphParent];
+
+  // Build a display label like "stash@{0}" for the badge
+  const label = stashRef?.trim() || "stash";
+
+  return {
+    hash,
+    shortHash,
+    parents,
+    subject,
+    body: "",
+    author,
+    authorEmail,
+    authorDate,
+    committer,
+    committerEmail,
+    commitDate,
+    refs: [{ name: label, type: "stash" as const, isCurrent: false }],
+  };
+}
+
+/**
+ * Fetch all stash entries as synthetic Commit objects.
+ * Each stash commit's parents[0] is the HEAD commit at the time of stashing,
+ * which allows buildGraph to connect the stash to the correct point in history.
+ */
+export async function getStashList(
+  repoPath: string,
+  signal?: AbortSignal,
+): Promise<Commit[]> {
+  const { stdout, exitCode } = await runGit(
+    repoPath,
+    ["stash", "list", `--format=${STASH_FORMAT}`],
+    signal,
+  );
+
+  if (exitCode !== 0 || !stdout.trim()) return [];
+
+  const stashes: Commit[] = [];
+  for (const line of stdout.trim().split("\n")) {
+    if (!line.trim()) continue;
+    const entry = parseStashEntry(line);
+    if (entry) stashes.push(entry);
+  }
+
+  return stashes;
+}
+
 export async function getCommitDetail(
   repoPath: string,
   hash: string,
