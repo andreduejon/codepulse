@@ -276,8 +276,13 @@ function AppContent(props: Readonly<AppProps>) {
 
     const isUncommitted = commit.hash === UNCOMMITTED_HASH;
 
-    // Reset active tab to the appropriate default for this commit type
-    actions.setDetailActiveTab(isUncommitted ? "unstaged" : "files");
+    // Reset active tab — but preserve it on child/parent jump navigation
+    // so the user stays on the Details tab when walking the commit graph
+    if (detailNavRef.lastJumpFrom) {
+      detailNavRef.lastJumpFrom = null; // consumed
+    } else {
+      actions.setDetailActiveTab(isUncommitted ? "unstaged" : "files");
+    }
     actions.setDetailCursorIndex(0);
 
     // Clear stale detail immediately so the old file tree nodes are removed
