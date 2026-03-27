@@ -347,21 +347,21 @@ function GraphLine(props: Readonly<{
             </box>
           </Show>
           <text flexGrow={1} flexShrink={1} fg={effectiveTextColor()} wrapMode="none" truncate>
-            {props.active ? <strong><span fg={effectiveTextColor()}>{commit().subject}</span></strong> : commit().subject}
+            {(() => { const v = isUncommitted() ? "Staged and unstaged changes in working tree" : commit().subject; return props.active ? <strong><span fg={effectiveTextColor()}>{v}</span></strong> : v; })()}
           </text>
         </box>
 
         {/* Author */}
         <box flexShrink={0} width={AUTHOR_COL_WIDTH} paddingRight={2} overflow="hidden">
           <text fg={secondaryColumnColor()} wrapMode="none" truncate>
-            {props.active ? <strong><span fg={secondaryColumnColor()}>{commit().author}</span></strong> : commit().author}
+            {(() => { const v = isUncommitted() ? "\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7" : commit().author; return props.active ? <strong><span fg={secondaryColumnColor()}>{v}</span></strong> : v; })()}
           </text>
         </box>
 
         {/* Date */}
         <box flexShrink={0} width={DATE_COL_WIDTH} overflow="hidden">
           <text fg={secondaryColumnColor()} wrapMode="none" truncate>
-            {props.active ? <strong><span fg={secondaryColumnColor()}>{formatRelativeDate(commit().authorDate)}</span></strong> : formatRelativeDate(commit().authorDate)}
+            {(() => { const v = isUncommitted() ? "\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7" : formatRelativeDate(commit().authorDate); return props.active ? <strong><span fg={secondaryColumnColor()}>{v}</span></strong> : v; })()}
           </text>
         </box>
       </box>

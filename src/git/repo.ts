@@ -462,6 +462,48 @@ export async function getStashFiles(
   return parseDiffTreeOutput(stdout);
 }
 
+/**
+ * Fetch file changes for the uncommitted-changes synthetic node.
+ * Combines `git diff HEAD --raw --numstat` (staged + unstaged tracked changes)
+ * with `git ls-files --others --exclude-standard` (untracked files).
+ * Returns the same FileChange[] format as CommitDetail.files.
+ */
+export async function getUncommittedFiles(
+  repoPath: string,
+  signal?: AbortSignal,
+): Promise<FileChange[]> {
+  const diffProc = runGit(
+    repoPath,
+    ["diff", "HEAD", "--raw", "--numstat", "--"],
+    signal,
+  );
+  const untrackedProc = runGit(
+    repoPath,
+    ["ls-files", "--others", "--exclude-standard"],
+    signal,
+  );
+
+  const [diffResult, untrackedResult] = await Promise.all([diffProc, untrackedProc]);
+  if (signal?.aborted) return [];
+
+  const files = diffResult.exitCode === 0 && diffResult.stdout.trim()
+    ? parseDiffTreeOutput(diffResult.stdout)
+    : [];
+
+  // Append untracked files as "Added" with zero stats
+  if (untrackedResult.exitCode === 0 && untrackedResult.stdout.trim()) {
+    for (const line of untrackedResult.stdout.split("\n")) {
+      const path = line.trim();
+      if (!path) continue;
+      // Skip if already covered by the diff (shouldn't happen, but be safe)
+      if (files.some(f => f.path === path)) continue;
+      files.push({ path, additions: 0, deletions: 0, status: "A" });
+    }
+  }
+
+  return files;
+}
+
 export async function getCommitDetail(
   repoPath: string,
   hash: string,

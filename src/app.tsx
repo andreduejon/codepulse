@@ -3,7 +3,7 @@ import { useRenderer } from "@opentui/solid";
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { createAppState, AppStateContext } from "./context/state";
 import { createThemeState, ThemeContext } from "./context/theme";
-import { getCommits, getBranches, getCurrentBranch, getCommitDetail, getRemoteUrl, fetchRemote, getLastFetchTime, getTagDetails, getStashList, getWorkingTreeStatus } from "./git/repo";
+import { getCommits, getBranches, getCurrentBranch, getCommitDetail, getUncommittedFiles, getRemoteUrl, fetchRemote, getLastFetchTime, getTagDetails, getStashList, getWorkingTreeStatus } from "./git/repo";
 import { buildGraph, getMaxGraphColumns } from "./git/graph";
 import type { Commit } from "./git/types";
 import GraphView, { ColumnHeader } from "./components/graph";
@@ -277,20 +277,22 @@ function AppContent(props: Readonly<AppProps>) {
     actions.setCommitDetail(null);
     actions.setDetailLoading(true);
 
-    // Skip detail loading for the uncommitted-changes node which doesn't
-    // have a real git object to query.
-    if (commit.hash === UNCOMMITTED_HASH) {
-      actions.setDetailLoading(false);
-      return;
-    }
-
     // Debounce the detail load to avoid spawning git subprocesses on rapid navigation
     detailDebounceTimer = setTimeout(async () => {
       detailDebounceTimer = null;
       const ctrl = new AbortController();
       detailAbortCtrl = ctrl;
       try {
-        const detail = await getCommitDetail(props.repoPath, commit.hash, commit, ctrl.signal);
+        let detail: import("./git/types").CommitDetail | null;
+
+        if (commit.hash === UNCOMMITTED_HASH) {
+          // Uncommitted node: load dirty files instead of querying a git object
+          const files = await getUncommittedFiles(props.repoPath, ctrl.signal);
+          detail = { ...commit, files };
+        } else {
+          detail = await getCommitDetail(props.repoPath, commit.hash, commit, ctrl.signal);
+        }
+
         if (!ctrl.signal.aborted) {
           actions.setCommitDetail(detail);
           actions.setDetailLoading(false);

@@ -8,7 +8,7 @@ import { buildFileTree, flattenFileTree } from "../utils/file-tree";
 import type { FileTreeNode, FileTreeRow } from "../utils/file-tree";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
 import { getStashFiles } from "../git/repo";
-import { DETAIL_PANEL_WIDTH_FRACTION } from "../constants";
+import { DETAIL_PANEL_WIDTH_FRACTION, UNCOMMITTED_HASH } from "../constants";
 
 // ── Layout constants ────────────────────────────────────────────────
 /** Minimum panel width in characters before padding is subtracted. */
@@ -379,6 +379,9 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     if (!c) return false;
     return c.committer !== c.author || c.committerEmail !== c.authorEmail;
   };
+
+  // Whether the selected commit is the synthetic uncommitted-changes node
+  const isUncommitted = () => commit()?.hash === UNCOMMITTED_HASH;
 
   // Column widths for file changes — derived from totals (always >= per-file values)
   const fileWidths = createMemo(() => {
@@ -859,27 +862,27 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
             <text fg={t().accent} wrapMode="none">
               <strong>Commit</strong>
             </text>
-            <text fg={t().foreground} wrapMode="none" truncate>
-              {c().hash}
+            <text fg={isUncommitted() ? t().foregroundMuted : t().foreground} wrapMode="none" truncate>
+              {isUncommitted() ? "\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7" : c().hash}
             </text>
 
             <box height={1} />
             <text fg={t().accent} wrapMode="none">
               <strong>Author</strong>
             </text>
-            <text fg={t().foreground} wrapMode="none" truncate>
-              {c().author} {"<"}{c().authorEmail}{">"}
+            <text fg={isUncommitted() ? t().foregroundMuted : t().foreground} wrapMode="none" truncate>
+              {isUncommitted() ? "\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7" : <>{c().author} {"<"}{c().authorEmail}{">"}</>}
             </text>
 
             <box height={1} />
             <text fg={t().accent} wrapMode="none">
               <strong>Date</strong>
             </text>
-            <text fg={t().foreground} wrapMode="none">
-              {formatDate(c().authorDate)}
+            <text fg={isUncommitted() ? t().foregroundMuted : t().foreground} wrapMode="none">
+              {isUncommitted() ? "\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7" : formatDate(c().authorDate)}
             </text>
 
-            <Show when={showCommitter()}>
+            <Show when={!isUncommitted() && showCommitter()}>
               <box height={1} />
               <text fg={t().accent} wrapMode="none">
                 <strong>Committer</strong>
@@ -903,11 +906,11 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
             <text fg={t().accent} wrapMode="none">
               <strong>Message</strong>
             </text>
-            <text fg={t().foreground} wrapMode="word">
-              {c().subject}
+            <text fg={isUncommitted() ? t().foregroundMuted : t().foreground} wrapMode="word">
+              {isUncommitted() ? "Staged and unstaged changes in working tree" : c().subject}
             </text>
 
-            <Show when={detail()?.body}>
+            <Show when={!isUncommitted() && detail()?.body}>
               <box height={1} />
               <text fg={t().foregroundMuted} wrapMode="word">
                 {detail()!.body}
@@ -1106,6 +1109,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                           {stash.subject}
                         </text>
                       </box>
+                      <box height={1} />
 
                       {/* Total lines changed (only after files are loaded) */}
                       <Show when={stashFw().totalAdd > 0 || stashFw().totalDel > 0}>
