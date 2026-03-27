@@ -251,7 +251,6 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
               </text>
             </box>
           </box>
-          <box height={1} />
         </Show>
 
         <For each={fileTreeRows()}>

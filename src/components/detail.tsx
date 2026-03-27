@@ -924,7 +924,6 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   </text>
                 </box>
               </box>
-              <box height={1} />
               <For each={fileTreeRows()}>
                 {(treeRow, i) => {
                   const itemIdx = () => findItemIndex(treeRow.isDir ? "file-dir" : "file", undefined, i());
@@ -1070,9 +1069,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                               </text>
                             </box>
                           </box>
-                          <box height={1} />
                         </Show>
-
                         <For each={stashFileRows()}>
                           {(treeRow, fi) => {
                             const fileItemIdx = () => findItemIndex(
