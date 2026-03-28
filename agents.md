@@ -1,34 +1,21 @@
 # Agent Notes
 
-## Critical Bug Fix: Dialog Freeze (2026-03-27)
+## SolidJS Rules (prevent known bugs)
 
-### Symptom
-Pressing `m` (menu) or `?` (help) froze the app completely. Graph rendered fine, arrow keys worked, search worked — but opening any dialog caused a total freeze.
+### 1. `createMemo` is eager — beware TDZ
+- `createMemo` evaluates **immediately** on creation. `createEffect` is **deferred** (runs after component setup).
+- A `createMemo` that references a `const` declared later in the component body hits the **Temporal Dead Zone** and throws a `ReferenceError`. SolidJS swallows this error silently, leaving the reactive system broken (app freezes).
+- **Rule**: Every `createMemo` must appear **after** all `const` declarations it references. When refactoring `createEffect` to `createMemo`, check for forward references.
+- This caused the dialog freeze bug (commit `f9b7267`).
 
-### Root Cause
-**`createMemo` evaluates eagerly (immediately on creation), while `createEffect` defers.**
+### 2. `batch()` is a no-op inside effects
+- `batch()` calls `runUpdates(fn, false)` which checks `if (Updates) return fn()`. Inside an effect, `Updates` is already set, so `batch()` just calls `fn()` directly with no deferred behavior.
+- **Rule**: Never rely on `batch()` inside `createEffect` to prevent intermediate reactive firings. Use mutable refs or restructure the reactive graph instead.
 
-In `menu-dialog.tsx`, the `bannerOverflow` memo was placed at ~line 98 but referenced `selectedItemIndex()` (line 361) and `activeItems()` (line 338) — both `const` arrow functions not yet initialized at that point in the component function body.
+### 3. Signals are consumed on read — mutable refs persist
+- Reading a signal inside an effect and then setting it to `null` means subsequent effect firings see `null`. A mutable ref (plain JS property on an object) persists across multiple effect firings within the same reactive cascade.
+- **Rule**: When state must survive multiple effect firings in a single reactive flush, use a mutable ref (e.g., a property on a ref object) instead of a signal.
 
-The memo hit the **JavaScript Temporal Dead Zone (TDZ)**, threw a `ReferenceError`, which was swallowed by SolidJS, leaving the reactive system in a broken state. This caused the entire app to freeze on any subsequent dialog render (including unrelated dialogs like the help dialog).
-
-### Why the old code worked
-The original inline banner code used `createEffect` (which **defers** execution until after all synchronous component setup completes). By the time the effect ran, `selectedItemIndex` and `activeItems` were fully initialized. The refactor to `createMemo` (for use with the `useBannerScroll` hook) changed this to **eager** evaluation, triggering the TDZ.
-
-### Fix
-Move the `bannerOverflow` memo + `useBannerScroll()` call to **after** `selectedItemIndex` and `activeItems` are defined in the component body.
-
-### Key SolidJS lesson
-- `createEffect` — **deferred**: runs after component setup completes
-- `createMemo` — **eager**: evaluates immediately on creation
-- When refactoring from `createEffect` to `createMemo`, forward references to `const` declarations that worked in effects will cause TDZ errors in memos
-
-### Bisect results
-- Introduced by commit `f9b7267` (refactor: extract shared banner scroll hook)
-- Isolated via binary search across 7 commits between `develop` and `cleanup/code-quality-review`
-- Further narrowed by selective reverts: detail.tsx changes were innocent, menu-dialog.tsx `bannerOverflow` memo placement was the culprit
-
-### Files involved
-- `src/components/dialogs/menu-dialog.tsx` — the buggy memo placement (fixed)
-- `src/hooks/use-banner-scroll.ts` — shared hook (innocent)
-- `src/components/detail.tsx` — also uses `useBannerScroll` but had no TDZ issue (its memo references are all defined earlier in the component)
+### 4. Effect re-tracking
+- SolidJS effects re-track dependencies on each run. If an effect reads signal X on run 1 but signal Y on run 2, it only depends on signals from the latest run.
+- **Rule**: Be aware that conditional branches in effects change the dependency set. An effect may stop reacting to a signal it read in a previous run.
