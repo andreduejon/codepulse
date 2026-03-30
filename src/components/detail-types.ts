@@ -6,6 +6,9 @@ export interface DetailNavRef {
   activateCurrentItem: () => boolean;
   /** Direction of the last jump: "child" means we selected a child entry, "parent" means we selected a parent entry */
   lastJumpFrom: "child" | "parent" | null;
+  /** Pending jump direction — persists across interactiveItems recomputations.
+   *  Set by handleJumpToCommit, cleared by app.tsx commit-change effect on non-jump navigation. */
+  pendingJumpDirection: "child" | "parent" | null;
 }
 
 export interface DetailViewProps {
@@ -41,7 +44,7 @@ export function computeFileWidths(files: readonly { additions: number; deletions
   return {
     totalAdd,
     totalDel,
-    addColWidth: ("+" + totalAdd).length,
-    delColWidth: ("-" + totalDel).length,
+    addColWidth: `+${totalAdd}`.length,
+    delColWidth: `-${totalDel}`.length,
   };
 }

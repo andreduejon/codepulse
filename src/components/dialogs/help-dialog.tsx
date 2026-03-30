@@ -2,7 +2,7 @@ import { For } from "solid-js";
 import { useTheme } from "../../context/theme";
 import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
-export default function HelpDialog(props: Readonly<{ onClose: () => void }>) {
+export default function HelpDialog(_props: Readonly<{ onClose: () => void }>) {
   const { theme } = useTheme();
   const t = () => theme();
 

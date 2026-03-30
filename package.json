@@ -9,7 +9,11 @@
   "scripts": {
     "dev": "bun run src/index.tsx",
     "start": "bun run src/index.tsx",
-    "test": "bun test"
+    "test": "bun test",
+    "lint": "biome lint src/ tests/",
+    "format": "biome format src/ tests/",
+    "check": "biome check src/ tests/",
+    "check:fix": "biome check --write src/ tests/"
   },
   "dependencies": {
     "@opentui/core": "0.1.87",
@@ -17,6 +21,7 @@
     "solid-js": "1.9.11"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.10",
     "@types/bun": "1.3.11"
   }
 }

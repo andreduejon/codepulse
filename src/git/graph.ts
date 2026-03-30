@@ -1,15 +1,24 @@
-import type { Commit, GraphRow, GraphColumn, Connector, ConnectorType } from "./types";
-import { StyledText, RGBA, TextAttributes } from "@opentui/core";
 import type { TextChunk } from "@opentui/core";
+import { RGBA, StyledText, TextAttributes } from "@opentui/core";
+import type { Commit, Connector, ConnectorType, GraphColumn, GraphRow } from "./types";
 
 /** Hard cap on visible graph columns. When the graph exceeds this, the viewport/sliding system activates. */
 export const MAX_GRAPH_COLUMNS = 12;
 
 // Fallback colors if no theme colors provided
 const DEFAULT_COLORS = [
-  "#f38ba8", "#a6e3a1", "#89b4fa", "#f9e2af",
-  "#cba6f7", "#94e2d5", "#fab387", "#74c7ec",
-  "#f2cdcd", "#89dceb", "#b4befe", "#eba0ac",
+  "#f38ba8",
+  "#a6e3a1",
+  "#89b4fa",
+  "#f9e2af",
+  "#cba6f7",
+  "#94e2d5",
+  "#fab387",
+  "#74c7ec",
+  "#f2cdcd",
+  "#89dceb",
+  "#b4befe",
+  "#eba0ac",
 ];
 
 export function getColorForColumn(column: number, colors: string[] = DEFAULT_COLORS): string {
@@ -29,7 +38,7 @@ function getBaseColor(column: number, opts: RenderOptions): string {
 function walkFirstParentChain(
   startHash: string | undefined,
   commitMap: Map<string, Commit>,
-  visit: (hash: string) => boolean | void,
+  visit: (hash: string) => boolean | undefined,
 ): void {
   let h = startHash;
   while (h) {
@@ -58,7 +67,10 @@ function buildLookupMaps(commits: Commit[]): {
   for (const c of commits) {
     for (const p of c.parents) {
       let arr = childrenMap.get(p);
-      if (!arr) { arr = []; childrenMap.set(p, arr); }
+      if (!arr) {
+        arr = [];
+        childrenMap.set(p, arr);
+      }
       arr.push(c.hash);
     }
   }
@@ -67,13 +79,15 @@ function buildLookupMaps(commits: Commit[]): {
   {
     let tipHash: string | undefined;
     for (const c of commits) {
-      if (c.refs.some((r) => r.isCurrent)) {
+      if (c.refs.some(r => r.isCurrent)) {
         tipHash = c.hash;
         break;
       }
     }
     if (tipHash) {
-      walkFirstParentChain(tipHash, commitMap, (h) => { currentBranchHashes.add(h); });
+      walkFirstParentChain(tipHash, commitMap, h => {
+        currentBranchHashes.add(h);
+      });
     }
   }
 
@@ -90,7 +104,10 @@ function buildLookupMaps(commits: Commit[]): {
  * Uses priority-sorted tip collection with 5 priority levels and
  * last-writer-wins via first-parent chain walks.
  */
-function computeBranchOwnership(commits: Commit[], commitMap: Map<string, Commit>): {
+function computeBranchOwnership(
+  commits: Commit[],
+  commitMap: Map<string, Commit>,
+): {
   branchNameMap: Map<string, string>;
   remoteOnlyBranches: Set<string>;
   remoteOnlyHashes: Set<string>;
@@ -168,21 +185,23 @@ function computeBranchOwnership(commits: Commit[], commitMap: Map<string, Commit
   // Walk first-parent chains — last writer wins
   const branchNameMap = new Map<string, string>();
   for (const tip of tips) {
-    walkFirstParentChain(tip.hash, commitMap, (h) => { branchNameMap.set(h, tip.name); });
+    walkFirstParentChain(tip.hash, commitMap, h => {
+      branchNameMap.set(h, tip.name);
+    });
   }
 
   // Build remoteOnlyHashes: commits on remote-only branches that are NOT
   // reachable from any non-remote-only branch's first-parent chain.
   const nonRemoteOnlyHashes = new Set<string>();
   for (const c of commits) {
-    const hasNonRemoteOnlyRef = c.refs.some((r) => {
+    const hasNonRemoteOnlyRef = c.refs.some(r => {
       if (r.type === "tag") return true;
       if (r.type === "branch") return true;
       if (r.type === "remote") return !remoteOnlyBranches.has(r.name);
       return false;
     });
     if (!hasNonRemoteOnlyRef) continue;
-    walkFirstParentChain(c.hash, commitMap, (h) => {
+    walkFirstParentChain(c.hash, commitMap, h => {
       if (nonRemoteOnlyHashes.has(h)) return false;
       nonRemoteOnlyHashes.add(h);
     });
@@ -329,27 +348,25 @@ function addSpanningConnectors(
  * combine them into a single row so the commit renders as 1 block
  * instead of 2. Keep 2 rows when connectors conflict on the same side.
  */
-function optimizeFanOutMerge(
-  fanOutRows: Connector[][],
-  connectors: Connector[],
-  nodeColumn: number,
-): void {
+function optimizeFanOutMerge(fanOutRows: Connector[][], connectors: Connector[], nodeColumn: number): void {
   if (fanOutRows.length === 0) return;
 
   // Determine which side the last fan-out row's corner is on
   const lastFO = fanOutRows[fanOutRows.length - 1];
-  const foCorner = lastFO.find(c =>
-    c.type === "corner-bottom-right" || c.type === "corner-bottom-left"
-  );
+  const foCorner = lastFO.find(c => c.type === "corner-bottom-right" || c.type === "corner-bottom-left");
 
   // Collect merge/branch connectors from the commit row
   // (horizontals, corners, tees at columns other than nodeColumn)
-  const commitMBConnectors = connectors.filter(c =>
-    c.column !== nodeColumn && (
-      c.type === "horizontal" || c.type === "tee-left" || c.type === "tee-right" ||
-      c.type === "corner-top-right" || c.type === "corner-top-left" ||
-      c.type === "corner-bottom-right" || c.type === "corner-bottom-left"
-    )
+  const commitMBConnectors = connectors.filter(
+    c =>
+      c.column !== nodeColumn &&
+      (c.type === "horizontal" ||
+        c.type === "tee-left" ||
+        c.type === "tee-right" ||
+        c.type === "corner-top-right" ||
+        c.type === "corner-top-left" ||
+        c.type === "corner-bottom-right" ||
+        c.type === "corner-bottom-left"),
   );
 
   if (!foCorner || commitMBConnectors.length === 0) return;
@@ -365,8 +382,7 @@ function optimizeFanOutMerge(
   }
 
   // Can merge if ALL commit-row connectors are on the opposite side
-  const canMerge = (foSide === "left" && !hasLeft && hasRight) ||
-                   (foSide === "right" && !hasRight && hasLeft);
+  const canMerge = (foSide === "left" && !hasLeft && hasRight) || (foSide === "right" && !hasRight && hasLeft);
 
   if (!canMerge) return;
 
@@ -394,9 +410,7 @@ function optimizeFanOutMerge(
   // tee-right (┤) → renders █  (arm goes LEFT)
   // If we now have connectors on the RIGHT side, we need tee-left
   // so the █─ connects to the right-side horizontals.
-  const teeIdx = combined.findIndex(c =>
-    c.column === nodeColumn && (c.type === "tee-left" || c.type === "tee-right")
-  );
+  const teeIdx = combined.findIndex(c => c.column === nodeColumn && (c.type === "tee-left" || c.type === "tee-right"));
   if (teeIdx !== -1) {
     if (hasRight && combined[teeIdx].type === "tee-right") {
       combined[teeIdx] = { ...combined[teeIdx], type: "tee-left" };
@@ -414,7 +428,7 @@ function optimizeFanOutMerge(
   // in the renderer, allowing the last fan-out row to be used as the
   // commit row's graph (single block).
   for (const mc of commitMBConnectors) {
-    const idx = connectors.findIndex(c => c === mc);
+    const idx = connectors.indexOf(mc);
     if (idx !== -1) {
       connectors[idx] = { type: "empty", color: 0, column: mc.column };
     }
@@ -441,9 +455,9 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
 
   // Phase 3: Main loop — assign lanes, build connectors, create rows
   const rows: GraphRow[] = [];
-  let lanes: (string | null)[] = [];
-  let laneRemoteOnly: boolean[] = [];
-  let laneColors: number[] = [];
+  const lanes: (string | null)[] = [];
+  const laneRemoteOnly: boolean[] = [];
+  const laneColors: number[] = [];
   let nextColorIdx = 0;
   const nodeColorByHash = new Map<string, number>();
   const processedColumns = new Map<string, number>();
@@ -479,7 +493,10 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
           // Check if there's an active lane after this one (i.e., it's a gap)
           let hasActiveAfter = false;
           for (let k = j + 1; k < lanes.length; k++) {
-            if (lanes[k] !== null) { hasActiveAfter = true; break; }
+            if (lanes[k] !== null) {
+              hasActiveAfter = true;
+              break;
+            }
           }
           if (hasActiveAfter) {
             reuseIdx = j;
@@ -551,8 +568,11 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
 
     // Spanning connectors (merge/branch/close) between node and target lanes
     const addSpan = (
-      from: number, to: number, color: number,
-      kind: "merge" | "branch" | "close", remoteOnly?: boolean,
+      from: number,
+      to: number,
+      color: number,
+      kind: "merge" | "branch" | "close",
+      remoteOnly?: boolean,
     ) => addSpanningConnectors(connectors, laneColors, from, to, color, kind, remoteOnly);
 
     // Build fan-out rows: when this commit has multiple lanes pointing to it,
@@ -563,9 +583,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
     // first (topmost fan-out row) and closest lanes close last (right above ●).
     const fanOutRows: Connector[][] = [];
     if (extraLanes.length > 0) {
-      const sorted = [...extraLanes].sort(
-        (a, b) => Math.abs(b - nodeColumn) - Math.abs(a - nodeColumn)
-      );
+      const sorted = [...extraLanes].sort((a, b) => Math.abs(b - nodeColumn) - Math.abs(a - nodeColumn));
 
       // Track which extra lanes are still active (not yet closed).
       // We'll close them one per fan-out row, farthest first.
@@ -583,7 +601,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
         // When a horizontal crosses an active lane, we emit BOTH a straight and
         // a horizontal connector at the same column — renderFanOutRow will
         // combine them into a crossing glyph (┼─).
-        // 
+        //
         // Fan-out rows render ABOVE the parent commit. The child lane comes
         // from above (going DOWN) and terminates here, curving inward to the
         // parent column. So the corner is "bottom" (╯/╰) — line ends here,
@@ -710,7 +728,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
         laneRemoteOnly[nodeColumn] = laneRemoteOnlyValue;
         parentLaneColors.push(laneColors[nodeColumn]);
       } else if (processedColumns.has(parentHash)) {
-        const parentCol = processedColumns.get(parentHash)!;
+        const parentCol = processedColumns.get(parentHash) ?? nodeColumn;
         if (parentCol !== nodeColumn) {
           const targetActive = parentCol < lanes.length && lanes[parentCol] !== null;
           addSpan(nodeColumn, parentCol, nodeColumn, targetActive ? "merge" : "close", isCommitRemoteOnly);
@@ -739,7 +757,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
         laneRemoteOnly[nodeColumn] = firstParentLaneROValue;
         parentLaneColors.push(laneColors[nodeColumn]);
       } else if (processedColumns.has(firstParent) && firstParentLane === -1) {
-        const parentCol = processedColumns.get(firstParent)!;
+        const parentCol = processedColumns.get(firstParent) ?? nodeColumn;
         if (parentCol !== nodeColumn) {
           const targetActive = parentCol < lanes.length && lanes[parentCol] !== null;
           addSpan(nodeColumn, parentCol, nodeColumn, targetActive ? "merge" : "close", isCommitRemoteOnly);
@@ -764,10 +782,10 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
             addSpan(nodeColumn, existingLane, existingLane, "merge", pLaneROValue);
           }
         } else if (processedColumns.has(parentHash)) {
-          const parentCol = processedColumns.get(parentHash)!;
+          const parentCol = processedColumns.get(parentHash) ?? nodeColumn;
           parentLaneColors.push(laneColors[parentCol] ?? parentCol);
           if (parentCol !== nodeColumn) {
-            const kind = (parentCol < lanes.length && lanes[parentCol] !== null) ? "merge" : "branch";
+            const kind = parentCol < lanes.length && lanes[parentCol] !== null ? "merge" : "branch";
             addSpan(nodeColumn, parentCol, laneColors[parentCol] ?? parentCol, kind, pLaneROValue);
           }
         } else {
@@ -829,14 +847,14 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       const bMatch = b.branch === commitBranch && commitBranch !== "" ? 0 : 1;
       return aMatch - bMatch;
     });
-    const parentHashes = parentEntries.map((e) => e.hash);
-    const parentBranches = parentEntries.map((e) => e.branch);
-    const parentColors = parentEntries.map((e) => e.color);
+    const parentHashes = parentEntries.map(e => e.hash);
+    const parentBranches = parentEntries.map(e => e.branch);
+    const parentColors = parentEntries.map(e => e.color);
 
     // Build child list with branch names and colors.
     // Sort: same-branch children first (stable, preserving row order within groups).
     const rawChildren = childrenMap.get(commit.hash) ?? [];
-    const childEntries = rawChildren.map((h) => ({
+    const childEntries = rawChildren.map(h => ({
       hash: h,
       branch: branchNameMap.get(h) ?? "",
       color: nodeColorByHash.get(h) ?? nodeColor,
@@ -846,9 +864,9 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       const bMatch = b.branch === commitBranch && commitBranch !== "" ? 0 : 1;
       return aMatch - bMatch;
     });
-    const children = childEntries.map((e) => e.hash);
-    const childBranches = childEntries.map((e) => e.branch);
-    const childColors = childEntries.map((e) => e.color);
+    const children = childEntries.map(e => e.hash);
+    const childBranches = childEntries.map(e => e.branch);
+    const childColors = childEntries.map(e => e.color);
 
     rows.push({
       commit,
@@ -858,8 +876,8 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       isOnCurrentBranch: isCommitOnCurrentBranch,
       nodeColor,
       branchName: branchNameMap.get(commit.hash) ?? "",
-      mergeBranch: parents.length >= 2 ? branchNameMap.get(parents[1]) ?? "" : undefined,
-      mergeTarget: parents.length >= 2 ? branchNameMap.get(parents[0]) ?? "" : undefined,
+      mergeBranch: parents.length >= 2 ? (branchNameMap.get(parents[1]) ?? "") : undefined,
+      mergeTarget: parents.length >= 2 ? (branchNameMap.get(parents[0]) ?? "") : undefined,
       mergeSourceColor,
       parentHashes,
       parentBranches,
@@ -921,8 +939,8 @@ function padResult(result: GraphChar[], padToColumns: number | undefined, opts: 
  * The tee glyphs differ between commit rows (├/┤) and fan-out rows (█/█).
  */
 interface ConnectorGlyphConfig {
-  teeLeftChar: string;    // "├" for commit rows, "█" for fan-out rows
-  teeRightGlyph: string;  // "┤ " for commit rows, "█ " for fan-out rows
+  teeLeftChar: string; // "├" for commit rows, "█" for fan-out rows
+  teeRightGlyph: string; // "┤ " for commit rows, "█ " for fan-out rows
   /** Extra types (besides "horizontal") to check at the next column for tee-left dash color. */
   teeLeftDashExtraTypes?: ConnectorType[];
 }
@@ -962,9 +980,7 @@ function renderConnectorGlyphs(
     const teeColor = connColor(teeLeft);
     const nextConns = byCol.get(col + 1);
     const extraTypes = config.teeLeftDashExtraTypes ?? [];
-    const nextH = nextConns?.find(c =>
-      c.type === "horizontal" || extraTypes.includes(c.type)
-    );
+    const nextH = nextConns?.find(c => c.type === "horizontal" || extraTypes.includes(c.type));
     const dashColor = nextH ? connColor(nextH) : teeColor;
     if (dashColor === teeColor) {
       result.push({ char: `${config.teeLeftChar}─`, color: teeColor });
@@ -1125,7 +1141,11 @@ export function getMaxGraphColumns(rows: GraphRow[]): number {
  *
  * The connectors array is pre-built by buildGraph — one entry per column.
  */
-export function renderFanOutRow(fanOutConnectors: Connector[], opts: RenderOptions = {}, nodeColumn?: number): GraphChar[] {
+export function renderFanOutRow(
+  fanOutConnectors: Connector[],
+  opts: RenderOptions = {},
+  nodeColumn?: number,
+): GraphChar[] {
   const padToColumns = opts.padToColumns;
   const result: GraphChar[] = [];
 
@@ -1161,8 +1181,8 @@ export function renderFanOutRow(fanOutConnectors: Connector[], opts: RenderOptio
     }
 
     // Use █ only at the node column; ├/┤ at absorbed merge tee columns
-    const config = (nodeColumn !== undefined && col === nodeColumn) || nodeColumn === undefined
-      ? nodeConfig : mergeConfig;
+    const config =
+      (nodeColumn !== undefined && col === nodeColumn) || nodeColumn === undefined ? nodeConfig : mergeConfig;
 
     if (!renderConnectorGlyphs(connectors, col, byCol, result, opts, config)) {
       result.push({ char: "  ", color: getBaseColor(col, opts) });
@@ -1196,15 +1216,18 @@ export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphCh
 
   // Check if the node column has a horizontal connection going to the right
   // (i.e. the column right of the node has a horizontal, tee, or corner connector)
-  const nodeConnector = row.connectors.find((c) => c.type === "node");
+  const nodeConnector = row.connectors.find(c => c.type === "node");
   const nodeCol = nodeConnector?.column ?? -1;
-  const hasRightConnection = nodeCol >= 0 && (
+  const hasRightConnection =
+    nodeCol >= 0 &&
     connectorsByCol.has(nodeCol + 1) &&
-    (connectorsByCol.get(nodeCol + 1) ?? []).some((c) =>
-      c.type === "horizontal" || c.type === "tee-right" ||
-      c.type === "corner-top-right" || c.type === "corner-bottom-right"
-    )
-  );
+    (connectorsByCol.get(nodeCol + 1) ?? []).some(
+      c =>
+        c.type === "horizontal" ||
+        c.type === "tee-right" ||
+        c.type === "corner-top-right" ||
+        c.type === "corner-bottom-right",
+    );
 
   function connColor(c: { color: number }): string {
     return getBaseColor(c.color, opts);
@@ -1224,7 +1247,7 @@ export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphCh
     }
 
     // Handle node connector (only in commit rows, not fan-out rows)
-    const node = colConnectors.find((c) => c.type === "node");
+    const node = colConnectors.find(c => c.type === "node");
     if (node) {
       const nodeColor = getBaseColor(node.color, opts);
       if (col === nodeCol && hasRightConnection) {
@@ -1233,14 +1256,15 @@ export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphCh
         result.push({ char: nodeChar, color: nodeColor, bold: true });
         // Find the horizontal, corner, or tee connector at col+1 to pick up the other branch's color
         const nextConnectors = connectorsByCol.get(col + 1) ?? [];
-        const nextHoriz = nextConnectors.find((c) => c.type === "horizontal");
-        const nextCorner = nextConnectors.find((c) =>
-          c.type === "corner-top-right" || c.type === "corner-bottom-right" ||
-          c.type === "corner-top-left" || c.type === "corner-bottom-left"
+        const nextHoriz = nextConnectors.find(c => c.type === "horizontal");
+        const nextCorner = nextConnectors.find(
+          c =>
+            c.type === "corner-top-right" ||
+            c.type === "corner-bottom-right" ||
+            c.type === "corner-top-left" ||
+            c.type === "corner-bottom-left",
         );
-        const nextTee = nextConnectors.find((c) =>
-          c.type === "tee-left" || c.type === "tee-right"
-        );
+        const nextTee = nextConnectors.find(c => c.type === "tee-left" || c.type === "tee-right");
         const hConn = nextHoriz ?? nextCorner ?? nextTee;
         const dashColor = hConn ? connColor(hConn) : getBaseColor(node.color, opts);
         result.push({ char: "─", color: dashColor });
@@ -1280,11 +1304,7 @@ export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphCh
  * Returns an array of offsets (one per row). When depthLimit >= maxColumns,
  * all offsets are 0 (no sliding needed).
  */
-export function computeViewportOffsets(
-  rows: GraphRow[],
-  depthLimit: number,
-  maxColumns: number,
-): number[] {
+export function computeViewportOffsets(rows: GraphRow[], depthLimit: number, maxColumns: number): number[] {
   if (depthLimit >= maxColumns) {
     return new Array(rows.length).fill(0);
   }

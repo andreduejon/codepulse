@@ -1,16 +1,16 @@
-import { createContext, useContext, createSignal, type Accessor } from "solid-js";
+import { type Accessor, createContext, createSignal, useContext } from "solid-js";
 import {
-  openCodeOriginal,
+  ayuDark,
   catppuccinMocha,
-  tokyoNight,
   dracula,
-  nord,
-  oneDark,
   gruvbox,
   monokai,
-  ayuDark,
-  synthwave,
+  nord,
+  oneDark,
+  openCodeOriginal,
   rosePine,
+  synthwave,
+  tokyoNight,
 } from "./theme-definitions";
 
 export interface Theme {
@@ -35,13 +35,13 @@ export const themes: Record<string, Theme> = {
   "open-code-original": openCodeOriginal,
   "catppuccin-mocha": catppuccinMocha,
   "tokyo-night": tokyoNight,
-  "dracula": dracula,
-  "nord": nord,
+  dracula: dracula,
+  nord: nord,
   "one-dark": oneDark,
-  "gruvbox": gruvbox,
-  "monokai": monokai,
+  gruvbox: gruvbox,
+  monokai: monokai,
   "ayu-mirage": ayuDark,
-  "synthwave": synthwave,
+  synthwave: synthwave,
   "rose-pine": rosePine,
 };
 

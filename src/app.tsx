@@ -1,21 +1,33 @@
-import { createEffect, Show, onMount, onCleanup, createSignal, batch } from "solid-js";
-import { useRenderer } from "@opentui/solid";
 import type { ScrollBoxRenderable } from "@opentui/core";
-import { createAppState, AppStateContext } from "./context/state";
-import { createThemeState, ThemeContext } from "./context/theme";
-import { getCommits, getBranches, getCurrentBranch, getCommitDetail, getUncommittedDetail, getRemoteUrl, fetchRemote, getLastFetchTime, getTagDetails, getStashList, getWorkingTreeStatus } from "./git/repo";
-import { buildGraph, getMaxGraphColumns } from "./git/graph";
-import type { Commit } from "./git/types";
-import GraphView, { ColumnHeader } from "./components/graph";
-import CommitDetailView from "./components/detail";
-import UncommittedDetailView from "./components/uncommitted-detail";
-import type { DetailNavRef } from "./components/detail-types";
-import Footer from "./components/footer";
-import HelpDialog from "./components/dialogs/help-dialog";
-import ThemeDialog from "./components/dialogs/theme-dialog";
-import MenuDialog from "./components/dialogs/menu-dialog";
+import { useRenderer } from "@opentui/solid";
+import { batch, createEffect, createSignal, onCleanup, onMount, Show } from "solid-js";
 import packageJson from "../package.json";
+import CommitDetailView from "./components/detail";
+import type { DetailNavRef } from "./components/detail-types";
+import HelpDialog from "./components/dialogs/help-dialog";
+import MenuDialog from "./components/dialogs/menu-dialog";
+import ThemeDialog from "./components/dialogs/theme-dialog";
+import Footer from "./components/footer";
+import GraphView, { ColumnHeader } from "./components/graph";
+import UncommittedDetailView from "./components/uncommitted-detail";
 import { DEFAULT_MAX_COUNT, UNCOMMITTED_HASH } from "./constants";
+import { AppStateContext, createAppState } from "./context/state";
+import { createThemeState, ThemeContext } from "./context/theme";
+import { buildGraph, getMaxGraphColumns } from "./git/graph";
+import {
+  fetchRemote,
+  getBranches,
+  getCommitDetail,
+  getCommits,
+  getCurrentBranch,
+  getLastFetchTime,
+  getRemoteUrl,
+  getStashList,
+  getTagDetails,
+  getUncommittedDetail,
+  getWorkingTreeStatus,
+} from "./git/repo";
+import type { Commit } from "./git/types";
 import { useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
 
 interface AppProps {
@@ -41,6 +53,7 @@ function AppContent(props: Readonly<AppProps>) {
     itemCount: 0,
     activateCurrentItem: () => false,
     lastJumpFrom: null,
+    pendingJumpDirection: null,
   };
 
   // Flag to suppress tab reset during child/parent jump navigation.
@@ -50,12 +63,10 @@ function AppContent(props: Readonly<AppProps>) {
   // Jump to a commit by hash (used by detail panel parent/child entries)
   const handleJumpToCommit = (hash: string, from: "child" | "parent") => {
     const rows = state.filteredRows();
-    const idx = rows.findIndex((r) => r.commit.hash === hash);
+    const idx = rows.findIndex(r => r.commit.hash === hash);
     if (idx >= 0) {
-      // Store the current commit as the origin for cursor positioning
-      const currentHash = state.selectedCommit()?.hash ?? null;
-      actions.setDetailOriginHash(currentHash);
       detailNavRef.lastJumpFrom = from;
+      detailNavRef.pendingJumpDirection = from;
       // Suppress tab reset — setCursorIndex triggers the commit-change effect
       // synchronously, which reads this flag to preserve the active tab.
       isJumpNavigation = true;
@@ -85,11 +96,15 @@ function AppContent(props: Readonly<AppProps>) {
       const effectiveAll = viewBranch ? false : state.showAllBranches();
 
       const [commits, branches, currentBranch, remoteUrl, tagDetails, stashes, wtStatus] = await Promise.all([
-        getCommits(repoPath, {
-          maxCount: state.maxCount(),
-          branch: effectiveBranch,
-          all: effectiveAll,
-        }, ctrl.signal),
+        getCommits(
+          repoPath,
+          {
+            maxCount: state.maxCount(),
+            branch: effectiveBranch,
+            all: effectiveAll,
+          },
+          ctrl.signal,
+        ),
         getBranches(repoPath, ctrl.signal),
         getCurrentBranch(repoPath, ctrl.signal),
         getRemoteUrl(repoPath, ctrl.signal),
@@ -156,10 +171,7 @@ function AppContent(props: Readonly<AppProps>) {
       // Skip update if nothing changed (avoids flicker on auto-refresh)
       if (silent) {
         const oldCommits = state.commits();
-        if (
-          oldCommits.length === commits.length &&
-          oldCommits.every((c, i) => c.hash === commits[i].hash)
-        ) {
+        if (oldCommits.length === commits.length && oldCommits.every((c, i) => c.hash === commits[i].hash)) {
           return;
         }
       }
@@ -169,15 +181,15 @@ function AppContent(props: Readonly<AppProps>) {
       // Selection priority: sticky hash > current branch tip > 0
       let targetIndex = 0;
       if (stickyHash) {
-        const idx = rows.findIndex((r) => r.commit.hash === stickyHash);
+        const idx = rows.findIndex(r => r.commit.hash === stickyHash);
         if (idx >= 0) {
           targetIndex = idx;
         } else {
-          const cbIdx = rows.findIndex((r) => r.isOnCurrentBranch);
+          const cbIdx = rows.findIndex(r => r.isOnCurrentBranch);
           if (cbIdx >= 0) targetIndex = cbIdx;
         }
       } else {
-        const cbIdx = rows.findIndex((r) => r.isOnCurrentBranch);
+        const cbIdx = rows.findIndex(r => r.isOnCurrentBranch);
         if (cbIdx >= 0) targetIndex = cbIdx;
       }
 
@@ -211,7 +223,7 @@ function AppContent(props: Readonly<AppProps>) {
     loadData(props.branch);
     renderer.setTerminalTitle("gittree");
     // Load initial fetch time
-    getLastFetchTime(props.repoPath).then((time) => actions.setLastFetchTime(time));
+    getLastFetchTime(props.repoPath).then(time => actions.setLastFetchTime(time));
   });
 
   // Fetch from remote and reload data
@@ -289,25 +301,21 @@ function AppContent(props: Readonly<AppProps>) {
     // isJumpNavigation is a plain JS flag set synchronously by handleJumpToCommit
     // around the setCursorIndex call. Since SolidJS effects run synchronously when
     // a signal updates, this flag is still true when this effect fires.
-    //
-    // Batch all state updates together to prevent intermediate effect firings.
-    // Without batch(), setDetailCursorIndex(0) would trigger the detail.tsx cursor
-    // effect (which consumes detailOriginHash), and then setCommitDetail(null) would
-    // trigger it again (with origin already consumed → cursor falls back to 0).
-    batch(() => {
-      if (isJumpNavigation) {
-        // Jump — keep current tab
-      } else {
-        actions.setDetailActiveTab(isUncommitted ? "unstaged" : "files");
-      }
+    if (isJumpNavigation) {
+      // Jump — keep current tab, don't reset cursor (detail.tsx cursor effect
+      // will position it on the correct parent/child entry using pendingJumpDirection).
+    } else {
+      actions.setDetailActiveTab(isUncommitted ? "unstaged" : "files");
       actions.setDetailCursorIndex(0);
+      // Clear any stale jump direction on normal (non-jump) navigation
+      detailNavRef.pendingJumpDirection = null;
+    }
 
-      // Clear stale detail immediately so the old file tree nodes are removed
-      // from the render tree during scroll (a 334-file commit's tree = ~3K nodes).
-      actions.setCommitDetail(null);
-      actions.setUncommittedDetail(null);
-      actions.setDetailLoading(true);
-    });
+    // Clear stale detail immediately so the old file tree nodes are removed
+    // from the render tree during scroll (a 334-file commit's tree = ~3K nodes).
+    actions.setCommitDetail(null);
+    actions.setUncommittedDetail(null);
+    actions.setDetailLoading(true);
 
     // Debounce the detail load to avoid spawning git subprocesses on rapid navigation
     detailDebounceTimer = setTimeout(async () => {
@@ -383,11 +391,23 @@ function AppContent(props: Readonly<AppProps>) {
 
     // Find first non-empty tab to switch to
     if (isUncommitted && ud) {
-      if (ud.unstaged.length > 0) { actions.setDetailActiveTab("unstaged"); return; }
-      if (ud.staged.length > 0) { actions.setDetailActiveTab("staged"); return; }
-      if (ud.untracked.length > 0) { actions.setDetailActiveTab("untracked"); return; }
+      if (ud.unstaged.length > 0) {
+        actions.setDetailActiveTab("unstaged");
+        return;
+      }
+      if (ud.staged.length > 0) {
+        actions.setDetailActiveTab("staged");
+        return;
+      }
+      if (ud.untracked.length > 0) {
+        actions.setDetailActiveTab("untracked");
+        return;
+      }
     } else if (!isUncommitted) {
-      if (cd && cd.files.length > 0) { actions.setDetailActiveTab("files"); return; }
+      if (cd && cd.files.length > 0) {
+        actions.setDetailActiveTab("files");
+        return;
+      }
       actions.setDetailActiveTab("detail");
     }
   });
@@ -450,12 +470,7 @@ function AppContent(props: Readonly<AppProps>) {
       }}
     >
       <AppStateContext.Provider value={{ state, actions }}>
-        <box
-          flexDirection="column"
-          width="100%"
-          height="100%"
-          backgroundColor={themeState.theme().background}
-        >
+        <box flexDirection="column" width="100%" height="100%" backgroundColor={themeState.theme().background}>
           {/* Main content area */}
           <box flexDirection="row" flexGrow={1}>
             {/* Left panel - graph + search + footer, all on grey background */}
@@ -494,8 +509,7 @@ function AppContent(props: Readonly<AppProps>) {
                     placeholder="Search commits..."
                     value={state.searchQuery()}
                     onInput={handleSearchInput}
-                    // @opentui/solid type bug: InputProps.onSubmit is (value: string) => void
-                    // but JSX intrinsics intersect it with core's (event: SubmitEvent) => void
+                    // biome-ignore lint/suspicious/noExplicitAny: @opentui/solid type bug — InputProps.onSubmit type mismatch
                     onSubmit={handleSearchSubmit as any}
                     fg={themeState.theme().foreground}
                     backgroundColor={themeState.theme().background}
@@ -504,9 +518,16 @@ function AppContent(props: Readonly<AppProps>) {
                     <text
                       flexShrink={0}
                       wrapMode="none"
-                      fg={state.filteredRows().length === 0 ? themeState.theme().error : themeState.theme().foregroundMuted}
+                      fg={
+                        state.filteredRows().length === 0
+                          ? themeState.theme().error
+                          : themeState.theme().foregroundMuted
+                      }
                     >
-                      {"  "}{state.filteredRows().length === 0 ? "No matches" : `${state.filteredRows().length} / ${state.graphRows().length}`}
+                      {"  "}
+                      {state.filteredRows().length === 0
+                        ? "No matches"
+                        : `${state.filteredRows().length} / ${state.graphRows().length}`}
                     </text>
                   </Show>
                 </box>
@@ -515,12 +536,18 @@ function AppContent(props: Readonly<AppProps>) {
                 <box flexDirection="row" width="100%">
                   <Show when={state.error()}>
                     <text flexShrink={0} wrapMode="none" fg={themeState.theme().error}>
-                      {"error: "}{state.error()}{"  "}
+                      {"error: "}
+                      {state.error()}
+                      {"  "}
                     </text>
                   </Show>
-                  <text flexShrink={0} wrapMode="none" fg={themeState.theme().accent}>Git</text>
+                  <text flexShrink={0} wrapMode="none" fg={themeState.theme().accent}>
+                    Git
+                  </text>
                   <text flexShrink={0} wrapMode="none" fg={themeState.theme().foregroundMuted}>
-                    {"  "}{state.repoPath() ? state.repoPath().replace(/^\/Users\/[^/]+/, "~") : ""}{state.currentBranch() ? `:${state.currentBranch()}` : ""}
+                    {"  "}
+                    {state.repoPath() ? state.repoPath().replace(/^\/Users\/[^/]+/, "~") : ""}
+                    {state.currentBranch() ? `:${state.currentBranch()}` : ""}
                   </text>
                   <Show when={state.viewingBranch()}>
                     <text flexShrink={0} wrapMode="none" fg={themeState.theme().accent}>
@@ -540,15 +567,7 @@ function AppContent(props: Readonly<AppProps>) {
             </box>
 
             {/* Detail panel - right (width must match DETAIL_PANEL_WIDTH_FRACTION in constants.ts) */}
-            <box
-              flexDirection="column"
-              width="25%"
-              minWidth={60}
-              flexShrink={0}
-              paddingX={2}
-              paddingBottom={1}
-
-            >
+            <box flexDirection="column" width="25%" minWidth={60} flexShrink={0} paddingX={2} paddingBottom={1}>
               {/* Tab bar with top accent line per selected tab */}
               <box flexDirection="row" width="100%" flexShrink={0}>
                 {(() => {
@@ -558,24 +577,48 @@ function AppContent(props: Readonly<AppProps>) {
                   const cd = state.commitDetail();
                   const tabs = isUncommitted
                     ? [
-                      { id: "unstaged", label: `Unstaged${ud ? ` (${ud.unstaged.length})` : ""}`, disabled: ud ? ud.unstaged.length === 0 : false },
-                      { id: "staged", label: `Staged${ud ? ` (${ud.staged.length})` : ""}`, disabled: ud ? ud.staged.length === 0 : false },
-                      { id: "untracked", label: `Untracked${ud ? ` (${ud.untracked.length})` : ""}`, disabled: ud ? ud.untracked.length === 0 : false },
-                    ]
+                        {
+                          id: "unstaged",
+                          label: `Unstaged${ud ? ` (${ud.unstaged.length})` : ""}`,
+                          disabled: ud ? ud.unstaged.length === 0 : false,
+                        },
+                        {
+                          id: "staged",
+                          label: `Staged${ud ? ` (${ud.staged.length})` : ""}`,
+                          disabled: ud ? ud.staged.length === 0 : false,
+                        },
+                        {
+                          id: "untracked",
+                          label: `Untracked${ud ? ` (${ud.untracked.length})` : ""}`,
+                          disabled: ud ? ud.untracked.length === 0 : false,
+                        },
+                      ]
                     : [
-                      { id: "files", label: `Files${cd?.files ? ` (${cd.files.length})` : ""}`, disabled: cd ? cd.files.length === 0 : false },
-                      ...(state.stashByParent().has(commit?.hash ?? "")
-                        ? [{ id: "stashes", label: `Stashes (${state.stashByParent().get(commit?.hash ?? "")?.length ?? 0})`, disabled: false }]
-                        : []),
-                      { id: "detail", label: "Details", disabled: false },
-                    ];
-                  return tabs.map((tab) => {
+                        {
+                          id: "files",
+                          label: `Files${cd?.files ? ` (${cd.files.length})` : ""}`,
+                          disabled: cd ? cd.files.length === 0 : false,
+                        },
+                        ...(state.stashByParent().has(commit?.hash ?? "")
+                          ? [
+                              {
+                                id: "stashes",
+                                label: `Stashes (${state.stashByParent().get(commit?.hash ?? "")?.length ?? 0})`,
+                                disabled: false,
+                              },
+                            ]
+                          : []),
+                        { id: "detail", label: "Details", disabled: false },
+                      ];
+                  return tabs.map(tab => {
                     const isActive = state.detailActiveTab() === tab.id;
                     const t = themeState.theme();
                     const color = tab.disabled
                       ? t.border
                       : isActive
-                        ? (state.detailFocused() ? t.accent : t.foregroundMuted)
+                        ? state.detailFocused()
+                          ? t.accent
+                          : t.foregroundMuted
                         : t.border;
                     return (
                       <box
@@ -597,7 +640,13 @@ function AppContent(props: Readonly<AppProps>) {
               {/* Muted separator below tabs */}
               <box width="100%" border={["top"]} borderStyle="single" borderColor={themeState.theme().border} />
 
-              <scrollbox ref={detailScrollboxRef} flexGrow={1} scrollY scrollX={false} verticalScrollbarOptions={{ visible: false }}>
+              <scrollbox
+                ref={detailScrollboxRef}
+                flexGrow={1}
+                scrollY
+                scrollX={false}
+                verticalScrollbarOptions={{ visible: false }}
+              >
                 <Show
                   when={state.selectedCommit()?.hash !== UNCOMMITTED_HASH}
                   fallback={<UncommittedDetailView onJumpToCommit={handleJumpToCommit} navRef={detailNavRef} />}

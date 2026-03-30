@@ -5,13 +5,10 @@
  * branch appear at different nodeColumn values without a merge/branch
  * connector explaining the shift.
  */
-import { describe, test, expect } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { buildGraph } from "../src/git/graph";
 import type { Commit } from "../src/git/types";
-import {
-  makeCommit,
-  printGraph,
-} from "./test-helpers";
+import { makeCommit, printGraph } from "./test-helpers";
 
 /**
  * Check column stability for a set of commits.
@@ -26,7 +23,7 @@ function checkColumnStability(commits: Commit[]): Map<string, number[]> {
   for (const row of rows) {
     const bn = row.branchName || "(none)";
     if (!branchColumns.has(bn)) branchColumns.set(bn, []);
-    const cols = branchColumns.get(bn)!;
+    const cols = branchColumns.get(bn) ?? [];
     if (!cols.includes(row.nodeColumn)) cols.push(row.nodeColumn);
   }
 
@@ -36,7 +33,7 @@ function checkColumnStability(commits: Commit[]): Map<string, number[]> {
 /**
  * Assert that no branch uses more than 1 column (no jumping).
  */
-function assertNoColumnJumping(label: string, commits: Commit[]) {
+function assertNoColumnJumping(_label: string, commits: Commit[]) {
   const branchCols = checkColumnStability(commits);
 
   for (const [branch, cols] of branchCols) {
@@ -147,14 +144,34 @@ describe("Column Stability", () => {
 
   test("Unmerged remote-only branches above develop", () => {
     const commits = [
-      makeCommit("ren1", ["d3"], [{ name: "origin/renovate/major", type: "remote", isCurrent: false }], "renovate major"),
-      makeCommit("ren2", ["d3"], [{ name: "origin/renovate/minor", type: "remote", isCurrent: false }], "renovate minor"),
-      makeCommit("ren3", ["d3"], [{ name: "origin/renovate/patch", type: "remote", isCurrent: false }], "renovate patch"),
-      makeCommit("d3", ["d2"], [
-        { name: "develop", type: "branch", isCurrent: true },
-        { name: "origin/develop", type: "remote", isCurrent: false },
-        { name: "origin/HEAD", type: "remote", isCurrent: false },
-      ], "develop tip"),
+      makeCommit(
+        "ren1",
+        ["d3"],
+        [{ name: "origin/renovate/major", type: "remote", isCurrent: false }],
+        "renovate major",
+      ),
+      makeCommit(
+        "ren2",
+        ["d3"],
+        [{ name: "origin/renovate/minor", type: "remote", isCurrent: false }],
+        "renovate minor",
+      ),
+      makeCommit(
+        "ren3",
+        ["d3"],
+        [{ name: "origin/renovate/patch", type: "remote", isCurrent: false }],
+        "renovate patch",
+      ),
+      makeCommit(
+        "d3",
+        ["d2"],
+        [
+          { name: "develop", type: "branch", isCurrent: true },
+          { name: "origin/develop", type: "remote", isCurrent: false },
+          { name: "origin/HEAD", type: "remote", isCurrent: false },
+        ],
+        "develop tip",
+      ),
       makeCommit("d2", ["d1"], [], "develop work"),
       makeCommit("d1", [], [], "initial"),
     ];

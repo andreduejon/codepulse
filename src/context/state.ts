@@ -1,6 +1,6 @@
-import { createContext, useContext, createSignal, createMemo, type Accessor } from "solid-js";
-import type { Commit, GraphRow, CommitDetail, Branch, TagInfo, UncommittedDetail } from "../git/types";
+import { type Accessor, createContext, createMemo, createSignal, useContext } from "solid-js";
 import { DEFAULT_MAX_COUNT } from "../constants";
+import type { Branch, Commit, CommitDetail, GraphRow, TagInfo, UncommittedDetail } from "../git/types";
 
 export const DEFAULT_AUTO_REFRESH_INTERVAL = 30000;
 
@@ -34,7 +34,6 @@ export interface AppState {
   // ── Detail panel ────────────────────────────────────────────────────
   detailFocused: Accessor<boolean>;
   detailCursorIndex: Accessor<number>;
-  detailOriginHash: Accessor<string | null>;
   /** True while commit detail (message, files, diff) is being loaded */
   detailLoading: Accessor<boolean>;
   /** Contextual enter-key action label for the detail cursor item (null = no action) */
@@ -65,7 +64,6 @@ export interface AppActions {
   setSearchQuery: (query: string) => void;
   setDetailFocused: (focused: boolean) => void;
   setDetailCursorIndex: (index: number) => void;
-  setDetailOriginHash: (hash: string | null) => void;
   moveDetailCursor: (delta: number, itemCount: number) => void;
   setCommits: (commits: Commit[]) => void;
   setGraphRows: (rows: GraphRow[]) => void;
@@ -111,7 +109,6 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
   // ── Detail panel ──────────────────────────────────────────────────
   const [detailFocused, setDetailFocused] = createSignal(false);
   const [detailCursorIndex, setDetailCursorIndex] = createSignal(-1);
-  const [detailOriginHash, setDetailOriginHash] = createSignal<string | null>(null);
   const [detailLoading, setDetailLoading] = createSignal(false);
   const [detailCursorAction, setDetailCursorAction] = createSignal<string | null>(null);
   const [detailActiveTab, setDetailActiveTab] = createSignal<DetailTab>("files");
@@ -130,13 +127,13 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
   const filteredRows = createMemo(() => {
     const query = searchQuery().toLowerCase();
     if (!query) return graphRows();
-    return graphRows().filter((row) => {
+    return graphRows().filter(row => {
       const c = row.commit;
       return (
         c.subject.toLowerCase().includes(query) ||
         c.author.toLowerCase().includes(query) ||
         c.shortHash.toLowerCase().includes(query) ||
-        c.refs.some((r) => r.name.toLowerCase().includes(query))
+        c.refs.some(r => r.name.toLowerCase().includes(query))
       );
     });
   });
@@ -190,7 +187,6 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
     autoRefreshInterval,
     detailFocused,
     detailCursorIndex,
-    detailOriginHash,
     scrollTargetIndex,
     lastFetchTime,
     fetching,
@@ -211,7 +207,6 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
     setSearchQuery,
     setDetailFocused,
     setDetailCursorIndex,
-    setDetailOriginHash,
     moveDetailCursor,
     setCommits,
     setGraphRows,

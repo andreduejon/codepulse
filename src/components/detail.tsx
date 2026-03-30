@@ -1,19 +1,26 @@
-import { Show, For, createSignal, createEffect, createMemo, untrack, onCleanup } from "solid-js";
 import { useRenderer } from "@opentui/solid";
+import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
+import { DETAIL_PANEL_WIDTH_FRACTION, UNCOMMITTED_HASH } from "../constants";
 import { useAppState } from "../context/state";
 import { useTheme } from "../context/theme";
-import type { Commit, GraphRow, FileChange } from "../git/types";
-import { buildFileTree, flattenFileTree } from "../utils/file-tree";
-import type { FileTreeNode, FileTreeRow } from "../utils/file-tree";
-import { useBannerScroll } from "../hooks/use-banner-scroll";
 import { getStashFiles } from "../git/repo";
-import { DETAIL_PANEL_WIDTH_FRACTION, UNCOMMITTED_HASH } from "../constants";
+import type { Commit, FileChange, GraphRow } from "../git/types";
+import { useBannerScroll } from "../hooks/use-banner-scroll";
+import type { FileTreeNode, FileTreeRow } from "../utils/file-tree";
+import { buildFileTree, flattenFileTree } from "../utils/file-tree";
 import DetailBadge from "./detail-badge";
-import type { DetailNavRef, DetailViewProps } from "./detail-types";
+import type { DetailViewProps } from "./detail-types";
 import {
-  PANEL_PADDING_X, SHORT_HASH_LEN, HASH_BADGE_GAP, BADGE_PADDING,
-  ENTRY_PADDING_LEFT, DIR_INDICATOR_WIDTH, STAT_PADDING_LEFT, STATUS_COL_WIDTH, STAT_GAP,
+  BADGE_PADDING,
   computeFileWidths,
+  DIR_INDICATOR_WIDTH,
+  ENTRY_PADDING_LEFT,
+  HASH_BADGE_GAP,
+  PANEL_PADDING_X,
+  SHORT_HASH_LEN,
+  STAT_GAP,
+  STAT_PADDING_LEFT,
+  STATUS_COL_WIDTH,
 } from "./detail-types";
 
 // ── Layout constants ────────────────────────────────────────────────
@@ -45,6 +52,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   const row = () => state.selectedRow();
   /** Non-null row accessor — safe inside <Show when={commit()}>
    *  since selectedRow and selectedCommit are derived from the same index. */
+  // biome-ignore lint/style/noNonNullAssertion: safe inside <Show when={commit()}> guard
   const r = (): GraphRow => row()!;
 
   // Hash → Commit lookup for tag fallback on parent/child badges
@@ -60,14 +68,14 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   const getTagForHash = (hash: string): string | null => {
     const c = commitMap().get(hash);
     if (!c) return null;
-    const tag = c.refs.find((r) => r.type === "tag");
+    const tag = c.refs.find(r => r.type === "tag");
     return tag?.name ?? null;
   };
 
   // ── Cursor-aware banner scroll for long text ──────────────────────
   // Only the currently-cursored item scrolls when its text overflows.
-  const panelUsableWidth = () => Math.max(Math.floor(renderer.width * DETAIL_PANEL_WIDTH_FRACTION), MIN_PANEL_WIDTH) - PANEL_PADDING_X;
-
+  const panelUsableWidth = () =>
+    Math.max(Math.floor(renderer.width * DETAIL_PANEL_WIDTH_FRACTION), MIN_PANEL_WIDTH) - PANEL_PADDING_X;
 
   // Collapsible section state — reset to expanded when commit changes
   const [childrenExpanded, setChildrenExpanded] = createSignal(true);
@@ -97,13 +105,13 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   const branchRefs = () => {
     const c = commit();
     if (!c) return [];
-    return c.refs.filter((r) => r.type !== "tag");
+    return c.refs.filter(r => r.type !== "tag");
   };
 
   const tagRefs = () => {
     const c = commit();
     if (!c) return [];
-    return c.refs.filter((r) => r.type === "tag");
+    return c.refs.filter(r => r.type === "tag");
   };
 
   // The node color index for this commit's lane
@@ -113,9 +121,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   const remoteName = () => {
     const bn = row()?.branchName;
     if (!bn) return null;
-    const remote = state.branches().find(
-      (b) => b.isRemote && b.name.endsWith("/" + bn)
-    );
+    const remote = state.branches().find(b => b.isRemote && b.name.endsWith(`/${bn}`));
     return remote?.name ?? null;
   };
 
@@ -145,7 +151,11 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
         cmd = ["xclip", "-selection", "clipboard"];
       }
       const proc = Bun.spawn(cmd, { stdin: new Response(text).body });
-      const killTimer = setTimeout(() => { try { proc.kill(); } catch {} }, 5000);
+      const killTimer = setTimeout(() => {
+        try {
+          proc.kill();
+        } catch {}
+      }, 5000);
       proc.exited.then(() => clearTimeout(killTimer)).catch(() => clearTimeout(killTimer));
       setCopiedField(field);
       if (copiedTimer) clearTimeout(copiedTimer);
@@ -164,13 +174,20 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     const c = commit();
     if (!c) return "";
     switch (field) {
-      case "hash": return c.hash;
-      case "author": return `${c.author} <${c.authorEmail}>`;
-      case "date": return formatDate(c.authorDate);
-      case "committer": return `${c.committer} <${c.committerEmail}>`;
-      case "commitDate": return formatDate(c.commitDate);
-      case "subject": return c.subject;
-      case "body": return detail()?.body ?? "";
+      case "hash":
+        return c.hash;
+      case "author":
+        return `${c.author} <${c.authorEmail}>`;
+      case "date":
+        return formatDate(c.authorDate);
+      case "committer":
+        return `${c.committer} <${c.committerEmail}>`;
+      case "commitDate":
+        return formatDate(c.commitDate);
+      case "subject":
+        return c.subject;
+      case "body":
+        return detail()?.body ?? "";
     }
   };
 
@@ -234,7 +251,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     // Lazy load files if not cached
     if (!stashFileCache().has(stashHash)) {
       const files = await getStashFiles(state.repoPath(), stashHash);
-      setStashFileCache((prev) => {
+      setStashFileCache(prev => {
         const m = new Map(prev);
         m.set(stashHash, files);
         return m;
@@ -244,7 +261,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
 
   /** Toggle a directory within a stash's file tree. */
   const toggleStashDir = (stashHash: string, dirPath: string) => {
-    setStashCollapsedDirs((prev) => {
+    setStashCollapsedDirs(prev => {
       const m = new Map(prev);
       const dirs = new Set(m.get(stashHash) ?? []);
       if (dirs.has(dirPath)) dirs.delete(dirPath);
@@ -279,9 +296,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   };
 
   // Flatten tree into renderable rows with connector prefixes
-  const fileTreeRows = createMemo((): FileTreeRow[] =>
-    flattenFileTree(fileTree(), collapsedDirs())
-  );
+  const fileTreeRows = createMemo((): FileTreeRow[] => flattenFileTree(fileTree(), collapsedDirs()));
 
   // ── Build flat list of interactive items (tab-aware) ──
   // IMPORTANT: This memo must be defined AFTER fileTreeRows, stashEntries,
@@ -343,7 +358,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
           if (row.isDir) {
             items.push({ type: "file-dir", dirPath: row.dirPath, index: i });
           } else {
-            items.push({ type: "file", filePath: row.file!.path, index: i });
+            items.push({ type: "file", filePath: row.file?.path, index: i });
           }
         }
       }
@@ -363,7 +378,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
               if (row.isDir) {
                 items.push({ type: "stash-dir", stashHash: stash.hash, dirPath: row.dirPath, index: fi });
               } else {
-                items.push({ type: "stash-file", stashHash: stash.hash, filePath: row.file!.path, index: fi });
+                items.push({ type: "stash-file", stashHash: stash.hash, filePath: row.file?.path, index: fi });
               }
             }
           }
@@ -379,18 +394,17 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     const items = interactiveItems();
     const count = items.length;
 
-    // If we navigated from another commit, position cursor based on jump direction.
-    // Read origin without tracking so this effect only fires when interactiveItems changes
-    // (not when originHash is set before the commit has changed).
-    const origin = untrack(() => state.detailOriginHash());
-    if (origin && count > 0 && props.navRef) {
-      const direction = props.navRef.lastJumpFrom;
-      actions.setDetailOriginHash(null);
-      props.navRef.lastJumpFrom = null;
-
+    // If we navigated via child/parent jump, position cursor on the matching entry.
+    // pendingJumpDirection is a mutable ref set by handleJumpToCommit. Unlike a signal,
+    // it persists across multiple interactiveItems recomputations — so even if this
+    // effect fires multiple times (e.g., once when commit changes, again when commitDetail
+    // is cleared to null), it consistently re-positions the cursor on the target entry.
+    // The ref is only cleared on the next non-jump navigation (in the app.tsx commit-change effect).
+    const jumpDir = props.navRef?.pendingJumpDirection;
+    if (jumpDir && count > 0) {
       // When jumping from a parent entry → continue walking parents (first parent)
       // When jumping from a child entry → continue walking children (first child)
-      const targetType = direction === "parent" ? "parent" : "child";
+      const targetType = jumpDir === "parent" ? "parent" : "child";
       for (let i = 0; i < items.length; i++) {
         if (items[i].type === targetType) {
           actions.setDetailCursorIndex(i);
@@ -405,7 +419,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
           return;
         }
       }
-      // No entries — fall back to first item
+      // No parent/child entries — fall back to first item
       actions.setDetailCursorIndex(0);
       return;
     }
@@ -482,8 +496,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     const item = items[idx];
     switch (item.type) {
       case "section-header": {
-        const expanded =
-          item.section === "children" ? childrenExpanded() : parentsExpanded();
+        const expanded = item.section === "children" ? childrenExpanded() : parentsExpanded();
         actions.setDetailCursorAction(expanded ? "collapse" : "expand");
         break;
       }
@@ -534,9 +547,8 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
       case "parent": {
         // Layout: paddingLeft + hash(7) + gap(1) + ` name ` badge
         const r = row();
-        const entryBranch = item.type === "child"
-          ? r?.childBranches[item.index] ?? ""
-          : r?.parentBranches[item.index] ?? "";
+        const entryBranch =
+          item.type === "child" ? (r?.childBranches[item.index] ?? "") : (r?.parentBranches[item.index] ?? "");
         let name = entryBranch;
         if (name === "") {
           const tag = getTagForHash(item.hash);
@@ -589,7 +601,8 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
         const rows = getStashFileTreeRows(item.stashHash);
         const treeRow = rows[item.index];
         if (!treeRow) return null;
-        const fixedChars = ENTRY_PADDING_LEFT + stashIndent + treeRow.prefix.length + treeRow.connector.length + DIR_INDICATOR_WIDTH;
+        const fixedChars =
+          ENTRY_PADDING_LEFT + stashIndent + treeRow.prefix.length + treeRow.connector.length + DIR_INDICATOR_WIDTH;
         const available = pw - fixedChars;
         if (treeRow.name.length <= available) return null;
         return { text: treeRow.name, visibleWidth: available };
@@ -603,7 +616,8 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
         if (!treeRow) return null;
         const fw = getStashFileWidths(item.stashHash);
         const statWidth = STAT_PADDING_LEFT + STATUS_COL_WIDTH + STAT_GAP + fw.addColWidth + STAT_GAP + fw.delColWidth;
-        const fixedChars = ENTRY_PADDING_LEFT + stashIndent + treeRow.prefix.length + treeRow.connector.length + statWidth;
+        const fixedChars =
+          ENTRY_PADDING_LEFT + stashIndent + treeRow.prefix.length + treeRow.connector.length + statWidth;
         const available = pw - fixedChars;
         if (treeRow.name.length <= available) return null;
         return { text: treeRow.name, visibleWidth: available };
@@ -640,8 +654,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   };
 
   /** Check if item is the focused cursor (for accent text color) */
-  const isCursored = (itemIndex: number) =>
-    state.detailFocused() && state.detailCursorIndex() === itemIndex;
+  const isCursored = (itemIndex: number) => state.detailFocused() && state.detailCursorIndex() === itemIndex;
 
   // ── Copyable field rendering helpers ────────────────────────────────
   /** Get the interactive item index for a copyable field. */
@@ -728,33 +741,37 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   // These are derived from the interactiveItems memo
 
   /** Render a collapsible section header with interactive highlight */
-  function InteractiveSectionHeader(headerProps: Readonly<{
-    title: string;
-    count: number;
-    expanded: boolean;
-    section: "children" | "parents";
-  }>) {
+  function InteractiveSectionHeader(
+    headerProps: Readonly<{
+      title: string;
+      count: number;
+      expanded: boolean;
+      section: "children" | "parents";
+    }>,
+  ) {
     const itemIdx = () => findItemIndex("section-header", headerProps.section);
 
     return (
-      <box
-        backgroundColor={itemHighlightBg(itemIdx())}
-      >
+      <box backgroundColor={itemHighlightBg(itemIdx())}>
         <text fg={t().accent} wrapMode="none">
-          <strong>{headerProps.expanded ? "▾" : "▸"} {headerProps.title} ({headerProps.count})</strong>
+          <strong>
+            {headerProps.expanded ? "▾" : "▸"} {headerProps.title} ({headerProps.count})
+          </strong>
         </text>
       </box>
     );
   }
 
   /** Render a child/parent entry row with interactive highlight */
-  function InteractiveCommitEntry(entryProps: Readonly<{
-    hash: string;
-    entryIndex: number;
-    type: "child" | "parent";
-    branchName: string;
-    colorIndex: number;
-  }>) {
+  function InteractiveCommitEntry(
+    entryProps: Readonly<{
+      hash: string;
+      entryIndex: number;
+      type: "child" | "parent";
+      branchName: string;
+      colorIndex: number;
+    }>,
+  ) {
     const itemIdx = () => findItemIndex(entryProps.type, undefined, entryProps.entryIndex);
     const cursored = () => isCursored(itemIdx());
 
@@ -775,42 +792,19 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     };
 
     return (
-      <box
-        flexDirection="row"
-        flexWrap="wrap"
-        gap={1}
-        paddingLeft={2}
-        backgroundColor={itemHighlightBg(itemIdx())}
-      >
+      <box flexDirection="row" flexWrap="wrap" gap={1} paddingLeft={2} backgroundColor={itemHighlightBg(itemIdx())}>
         <text fg={cursored() ? t().accent : t().foreground} wrapMode="none">
           {entryProps.hash.substring(0, SHORT_HASH_LEN)}
         </text>
         <Show
           when={entryProps.branchName !== ""}
           fallback={
-            <Show
-              when={tag()}
-              fallback={
-                <DetailBadge
-                  name="deleted"
-                  colorIndex={0}
-                  dimmed
-                />
-              }
-            >
-              <DetailBadge
-                name={tag()!}
-                colorIndex={entryProps.colorIndex}
-                {...badgeScrollProps()}
-              />
+            <Show when={tag()} fallback={<DetailBadge name="deleted" colorIndex={0} dimmed />}>
+              <DetailBadge name={tag() as string} colorIndex={entryProps.colorIndex} {...badgeScrollProps()} />
             </Show>
           }
         >
-          <DetailBadge
-            name={entryProps.branchName}
-            colorIndex={entryProps.colorIndex}
-            {...badgeScrollProps()}
-          />
+          <DetailBadge name={entryProps.branchName} colorIndex={entryProps.colorIndex} {...badgeScrollProps()} />
         </Show>
       </box>
     );
@@ -826,7 +820,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
           </box>
         }
       >
-        {(c) => (
+        {c => (
           <>
             {/* ══════════════ Detail tab ══════════════ */}
             <Show when={activeTab() === "detail"}>
@@ -840,39 +834,24 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   fallback={
                     <Show
                       when={(row()?.branchName ?? "") !== ""}
-                      fallback={
-                        (() => {
-                          const tag = getTagForHash(c().hash);
-                          return tag ? (
-                            <DetailBadge
-                              name={tag}
-                              colorIndex={nodeColorIndex()}
-                            />
-                          ) : (
-                            <DetailBadge
-                              name="deleted"
-                              colorIndex={0}
-                              dimmed
-                            />
-                          );
-                        })()
-                      }
+                      fallback={(() => {
+                        const tag = getTagForHash(c().hash);
+                        return tag ? (
+                          <DetailBadge name={tag} colorIndex={nodeColorIndex()} />
+                        ) : (
+                          <DetailBadge name="deleted" colorIndex={0} dimmed />
+                        );
+                      })()}
                     >
-                      <DetailBadge
-                        name={r().branchName}
-                        colorIndex={nodeColorIndex()}
-                      />
+                      <DetailBadge name={r().branchName} colorIndex={nodeColorIndex()} />
                       <Show when={remoteName()}>
-                        <DetailBadge
-                          name={remoteName()!}
-                          colorIndex={nodeColorIndex()}
-                        />
+                        <DetailBadge name={remoteName() as string} colorIndex={nodeColorIndex()} />
                       </Show>
                     </Show>
                   }
                 >
                   <For each={branchRefs()}>
-                    {(ref) => (
+                    {ref => (
                       <DetailBadge
                         name={ref.name}
                         colorIndex={nodeColorIndex()}
@@ -890,14 +869,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   <strong>Tags</strong>
                 </text>
                 <box flexDirection="row" flexWrap="wrap" gap={1}>
-                  <For each={tagRefs()}>
-                    {(ref) => (
-                      <DetailBadge
-                        name={ref.name}
-                        colorIndex={nodeColorIndex()}
-                      />
-                    )}
-                  </For>
+                  <For each={tagRefs()}>{ref => <DetailBadge name={ref.name} colorIndex={nodeColorIndex()} />}</For>
                 </box>
                 <box height={1} />
               </Show>
@@ -906,13 +878,22 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
               <text fg={t().accent} wrapMode="none">
                 <strong>Commit</strong>
               </text>
-              <Show when={!isUncommitted()} fallback={
-                <text fg={t().foregroundMuted} wrapMode="none">{"\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7"}</text>
-              }>
+              <Show
+                when={!isUncommitted()}
+                fallback={
+                  <text fg={t().foregroundMuted} wrapMode="none">
+                    {"\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7"}
+                  </text>
+                }
+              >
                 <box flexDirection="row" backgroundColor={copyableHighlightBg("hash")}>
-                  <text flexGrow={1} flexShrink={1}
-                        fg={isCopyableCursored("hash") ? t().accent : t().foreground}
-                        wrapMode="none" truncate={!isCopyableCursored("hash")}>
+                  <text
+                    flexGrow={1}
+                    flexShrink={1}
+                    fg={isCopyableCursored("hash") ? t().accent : t().foreground}
+                    wrapMode="none"
+                    truncate={!isCopyableCursored("hash")}
+                  >
                     {scrolledCopyableText("hash") ?? c().hash}
                   </text>
                   <Show when={copiedField() === "hash"}>
@@ -927,14 +908,29 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
               <text fg={t().accent} wrapMode="none">
                 <strong>Author</strong>
               </text>
-              <Show when={!isUncommitted()} fallback={
-                <text fg={t().foregroundMuted} wrapMode="none">{"\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7"}</text>
-              }>
+              <Show
+                when={!isUncommitted()}
+                fallback={
+                  <text fg={t().foregroundMuted} wrapMode="none">
+                    {"\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7"}
+                  </text>
+                }
+              >
                 <box flexDirection="row" backgroundColor={copyableHighlightBg("author")}>
-                  <text flexGrow={1} flexShrink={1}
-                        fg={isCopyableCursored("author") ? t().accent : t().foreground}
-                        wrapMode="none" truncate={!isCopyableCursored("author")}>
-                    {scrolledCopyableText("author") ?? <>{c().author} {"<"}{c().authorEmail}{">"}</>}
+                  <text
+                    flexGrow={1}
+                    flexShrink={1}
+                    fg={isCopyableCursored("author") ? t().accent : t().foreground}
+                    wrapMode="none"
+                    truncate={!isCopyableCursored("author")}
+                  >
+                    {scrolledCopyableText("author") ?? (
+                      <>
+                        {c().author} {"<"}
+                        {c().authorEmail}
+                        {">"}
+                      </>
+                    )}
                   </text>
                   <Show when={copiedField() === "author"}>
                     <text flexShrink={0} bg={t().primary} fg={t().background} wrapMode="none">
@@ -948,13 +944,22 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
               <text fg={t().accent} wrapMode="none">
                 <strong>Date</strong>
               </text>
-              <Show when={!isUncommitted()} fallback={
-                <text fg={t().foregroundMuted} wrapMode="none">{"\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7"}</text>
-              }>
+              <Show
+                when={!isUncommitted()}
+                fallback={
+                  <text fg={t().foregroundMuted} wrapMode="none">
+                    {"\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7"}
+                  </text>
+                }
+              >
                 <box flexDirection="row" backgroundColor={copyableHighlightBg("date")}>
-                  <text flexGrow={1} flexShrink={1}
-                        fg={isCopyableCursored("date") ? t().accent : t().foreground}
-                        wrapMode="none" truncate={!isCopyableCursored("date")}>
+                  <text
+                    flexGrow={1}
+                    flexShrink={1}
+                    fg={isCopyableCursored("date") ? t().accent : t().foreground}
+                    wrapMode="none"
+                    truncate={!isCopyableCursored("date")}
+                  >
                     {scrolledCopyableText("date") ?? formatDate(c().authorDate)}
                   </text>
                   <Show when={copiedField() === "date"}>
@@ -971,10 +976,20 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   <strong>Committer</strong>
                 </text>
                 <box flexDirection="row" backgroundColor={copyableHighlightBg("committer")}>
-                  <text flexGrow={1} flexShrink={1}
-                        fg={isCopyableCursored("committer") ? t().accent : t().foreground}
-                        wrapMode="none" truncate={!isCopyableCursored("committer")}>
-                    {scrolledCopyableText("committer") ?? <>{c().committer} {"<"}{c().committerEmail}{">"}</>}
+                  <text
+                    flexGrow={1}
+                    flexShrink={1}
+                    fg={isCopyableCursored("committer") ? t().accent : t().foreground}
+                    wrapMode="none"
+                    truncate={!isCopyableCursored("committer")}
+                  >
+                    {scrolledCopyableText("committer") ?? (
+                      <>
+                        {c().committer} {"<"}
+                        {c().committerEmail}
+                        {">"}
+                      </>
+                    )}
                   </text>
                   <Show when={copiedField() === "committer"}>
                     <text flexShrink={0} bg={t().primary} fg={t().background} wrapMode="none">
@@ -988,9 +1003,13 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   <strong>Commit Date</strong>
                 </text>
                 <box flexDirection="row" backgroundColor={copyableHighlightBg("commitDate")}>
-                  <text flexGrow={1} flexShrink={1}
-                        fg={isCopyableCursored("commitDate") ? t().accent : t().foreground}
-                        wrapMode="none" truncate={!isCopyableCursored("commitDate")}>
+                  <text
+                    flexGrow={1}
+                    flexShrink={1}
+                    fg={isCopyableCursored("commitDate") ? t().accent : t().foreground}
+                    wrapMode="none"
+                    truncate={!isCopyableCursored("commitDate")}
+                  >
                     {scrolledCopyableText("commitDate") ?? formatDate(c().commitDate)}
                   </text>
                   <Show when={copiedField() === "commitDate"}>
@@ -1007,13 +1026,22 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
               <text fg={t().accent} wrapMode="none">
                 <strong>Subject</strong>
               </text>
-              <Show when={!isUncommitted()} fallback={
-                <text fg={t().foregroundMuted} wrapMode="word">Staged and unstaged changes in working tree</text>
-              }>
+              <Show
+                when={!isUncommitted()}
+                fallback={
+                  <text fg={t().foregroundMuted} wrapMode="word">
+                    Staged and unstaged changes in working tree
+                  </text>
+                }
+              >
                 <box flexDirection="row" backgroundColor={copyableHighlightBg("subject")}>
-                  <text flexGrow={1} flexShrink={1}
-                        fg={isCopyableCursored("subject") ? t().accent : t().foreground}
-                        wrapMode="none" truncate={!isCopyableCursored("subject")}>
+                  <text
+                    flexGrow={1}
+                    flexShrink={1}
+                    fg={isCopyableCursored("subject") ? t().accent : t().foreground}
+                    wrapMode="none"
+                    truncate={!isCopyableCursored("subject")}
+                  >
                     {scrolledCopyableText("subject") ?? c().subject}
                   </text>
                   <Show when={copiedField() === "subject"}>
@@ -1030,10 +1058,13 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   <strong>Body</strong>
                 </text>
                 <box flexDirection="row" backgroundColor={copyableHighlightBg("body")}>
-                  <text flexGrow={1} flexShrink={1}
-                        fg={isCopyableCursored("body") ? t().accent : t().foregroundMuted}
-                        wrapMode="word">
-                    {detail()!.body}
+                  <text
+                    flexGrow={1}
+                    flexShrink={1}
+                    fg={isCopyableCursored("body") ? t().accent : t().foregroundMuted}
+                    wrapMode="word"
+                  >
+                    {detail()?.body}
                   </text>
                   <Show when={copiedField() === "body"}>
                     <text flexShrink={0} bg={t().primary} fg={t().background} wrapMode="none">
@@ -1095,7 +1126,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
             </Show>
 
             {/* ══════════════ Files tab ══════════════ */}
-            <Show when={activeTab() === "files" && detail() && detail()!.files.length > 0}>
+            <Show when={activeTab() === "files" && detail() && detail()?.files.length > 0}>
               <box flexDirection="row" paddingLeft={2}>
                 <box flexGrow={1}>
                   <text fg={t().foregroundMuted} wrapMode="none">
@@ -1130,15 +1161,11 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   };
 
                   return (
-                    <box
-                      flexDirection="row"
-                      width="100%"
-                      paddingLeft={2}
-                      backgroundColor={itemHighlightBg(itemIdx())}
-                    >
+                    <box flexDirection="row" width="100%" paddingLeft={2} backgroundColor={itemHighlightBg(itemIdx())}>
                       <box flexShrink={0}>
-            <text fg={t().border} wrapMode="none">
-                          {treeRow.prefix}{treeRow.connector}
+                        <text fg={t().border} wrapMode="none">
+                          {treeRow.prefix}
+                          {treeRow.connector}
                         </text>
                       </box>
                       <Show when={treeRow.isDir}>
@@ -1150,9 +1177,15 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                       </Show>
                       <box flexGrow={1}>
                         <text
-                          fg={treeRow.isDir
-                            ? (cursored() ? t().accent : t().foregroundMuted)
-                            : (cursored() ? t().accent : t().foreground)}
+                          fg={
+                            treeRow.isDir
+                              ? cursored()
+                                ? t().accent
+                                : t().foregroundMuted
+                              : cursored()
+                                ? t().accent
+                                : t().foreground
+                          }
                           wrapMode="none"
                           truncate={scrolledName() == null}
                         >
@@ -1162,17 +1195,17 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                       <Show when={treeRow.file}>
                         <box flexShrink={0} paddingLeft={1}>
                           <text fg={t().foregroundMuted} wrapMode="none">
-                            {treeRow.file!.status}
+                            {treeRow.file?.status}
                           </text>
                         </box>
                         <box flexShrink={0} paddingLeft={1}>
                           <text fg={t().diffAdded} wrapMode="none">
-                            {("+" + treeRow.file!.additions).padStart(fileWidths().addColWidth)}
+                            {`+${treeRow.file?.additions}`.padStart(fileWidths().addColWidth)}
                           </text>
                         </box>
                         <box flexShrink={0} paddingLeft={1}>
                           <text fg={t().diffRemoved} wrapMode="none">
-                            {("-" + treeRow.file!.deletions).padStart(fileWidths().delColWidth)}
+                            {`-${treeRow.file?.deletions}`.padStart(fileWidths().delColWidth)}
                           </text>
                         </box>
                       </Show>
@@ -1183,11 +1216,9 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
             </Show>
 
             {/* Show "no files" message when files tab has no content */}
-            <Show when={activeTab() === "files" && (!detail() || detail()!.files.length === 0)}>
+            <Show when={activeTab() === "files" && (!detail() || detail()?.files.length === 0)}>
               <box flexGrow={1} alignItems="center" justifyContent="center">
-                <text fg={t().foregroundMuted}>
-                  {state.detailLoading() ? "Loading..." : "No modified files"}
-                </text>
+                <text fg={t().foregroundMuted}>{state.detailLoading() ? "Loading..." : "No modified files"}</text>
               </box>
             </Show>
 
@@ -1225,7 +1256,10 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                       {/* Stash entry header — label + file count only */}
                       <box backgroundColor={itemHighlightBg(itemIdx())}>
                         <text fg={t().accent} wrapMode="none" truncate={scrolledHeaderText() == null}>
-                          <strong>{expanded() ? "▾" : "▸"} {scrolledHeaderText() ?? label()}{fileCount() != null ? ` (${fileCount()})` : ""}</strong>
+                          <strong>
+                            {expanded() ? "▾" : "▸"} {scrolledHeaderText() ?? label()}
+                            {fileCount() != null ? ` (${fileCount()})` : ""}
+                          </strong>
                         </text>
                       </box>
 
@@ -1262,13 +1296,11 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                         </Show>
                         <For each={stashFileRows()}>
                           {(treeRow, fi) => {
-                            const fileItemIdx = () => findItemIndex(
-                              treeRow.isDir ? "stash-dir" : "stash-file",
-                              stash.hash,
-                              fi()
-                            );
+                            const fileItemIdx = () =>
+                              findItemIndex(treeRow.isDir ? "stash-dir" : "stash-file", stash.hash, fi());
                             const fileCursored = () => isCursored(fileItemIdx());
-                            const fileCollapsed = () => treeRow.isDir && (stashCollapsedDirs().get(stash.hash)?.has(treeRow.dirPath) ?? false);
+                            const fileCollapsed = () =>
+                              treeRow.isDir && (stashCollapsedDirs().get(stash.hash)?.has(treeRow.dirPath) ?? false);
 
                             const scrolledFileName = () => {
                               if (!fileCursored()) return null;
@@ -1287,7 +1319,8 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                               >
                                 <box flexShrink={0}>
                                   <text fg={t().border} wrapMode="none">
-                                    {treeRow.prefix}{treeRow.connector}
+                                    {treeRow.prefix}
+                                    {treeRow.connector}
                                   </text>
                                 </box>
                                 <Show when={treeRow.isDir}>
@@ -1299,9 +1332,15 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                                 </Show>
                                 <box flexGrow={1}>
                                   <text
-                                    fg={treeRow.isDir
-                                      ? (fileCursored() ? t().accent : t().foregroundMuted)
-                                      : (fileCursored() ? t().accent : t().foreground)}
+                                    fg={
+                                      treeRow.isDir
+                                        ? fileCursored()
+                                          ? t().accent
+                                          : t().foregroundMuted
+                                        : fileCursored()
+                                          ? t().accent
+                                          : t().foreground
+                                    }
                                     wrapMode="none"
                                     truncate={scrolledFileName() == null}
                                   >
@@ -1311,17 +1350,17 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                                 <Show when={treeRow.file}>
                                   <box flexShrink={0} paddingLeft={1}>
                                     <text fg={t().foregroundMuted} wrapMode="none">
-                                      {treeRow.file!.status}
+                                      {treeRow.file?.status}
                                     </text>
                                   </box>
                                   <box flexShrink={0} paddingLeft={1}>
                                     <text fg={t().diffAdded} wrapMode="none">
-                                      {("+" + treeRow.file!.additions).padStart(stashFw().addColWidth)}
+                                      {`+${treeRow.file?.additions}`.padStart(stashFw().addColWidth)}
                                     </text>
                                   </box>
                                   <box flexShrink={0} paddingLeft={1}>
                                     <text fg={t().diffRemoved} wrapMode="none">
-                                      {("-" + treeRow.file!.deletions).padStart(stashFw().delColWidth)}
+                                      {`-${treeRow.file?.deletions}`.padStart(stashFw().delColWidth)}
                                     </text>
                                   </box>
                                 </Show>
@@ -1342,7 +1381,6 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 </box>
               </Show>
             </Show>
-
           </>
         )}
       </Show>

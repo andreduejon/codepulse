@@ -4,9 +4,9 @@
  * Covers: buildFileTree (path splitting, sorting, single-child compaction)
  * and flattenFileTree (connector prefixes, depth tracking, directory collapsing).
  */
-import { describe, test, expect } from "bun:test";
-import { buildFileTree, flattenFileTree } from "../src/utils/file-tree";
+import { describe, expect, test } from "bun:test";
 import type { FileChange } from "../src/git/types";
+import { buildFileTree, flattenFileTree } from "../src/utils/file-tree";
 
 /** Helper to create a minimal FileChange for testing. */
 const file = (path: string, status: FileChange["status"] = "M"): FileChange => ({
@@ -30,7 +30,7 @@ describe("buildFileTree", () => {
     expect(root.children.length).toBe(1);
     expect(root.children[0].name).toBe("README.md");
     expect(root.children[0].file).toBeDefined();
-    expect(root.children[0].file!.path).toBe("README.md");
+    expect(root.children[0].file?.path).toBe("README.md");
     expect(root.children[0].children).toEqual([]);
   });
 
@@ -48,11 +48,7 @@ describe("buildFileTree", () => {
   });
 
   test("directories are sorted before files", () => {
-    const root = buildFileTree([
-      file("zebra.txt"),
-      file("src/a.ts"),
-      file("apple.txt"),
-    ]);
+    const root = buildFileTree([file("zebra.txt"), file("src/a.ts"), file("apple.txt")]);
     // "src/" dir should come before both files
     expect(root.children[0].file).toBeUndefined(); // dir
     expect(root.children[0].name).toBe("src");
@@ -62,30 +58,20 @@ describe("buildFileTree", () => {
   });
 
   test("multiple directories are sorted alphabetically", () => {
-    const root = buildFileTree([
-      file("src/a.ts"),
-      file("docs/b.md"),
-      file("lib/c.ts"),
-    ]);
-    const dirNames = root.children.map((c) => c.name);
+    const root = buildFileTree([file("src/a.ts"), file("docs/b.md"), file("lib/c.ts")]);
+    const dirNames = root.children.map(c => c.name);
     expect(dirNames).toEqual(["docs", "lib", "src"]);
   });
 
   test("files within a directory are sorted alphabetically", () => {
-    const root = buildFileTree([
-      file("src/z.ts"),
-      file("src/a.ts"),
-      file("src/m.ts"),
-    ]);
+    const root = buildFileTree([file("src/z.ts"), file("src/a.ts"), file("src/m.ts")]);
     const dir = root.children[0];
-    const fileNames = dir.children.map((c) => c.name);
+    const fileNames = dir.children.map(c => c.name);
     expect(fileNames).toEqual(["a.ts", "m.ts", "z.ts"]);
   });
 
   test("single-child directory chains are compacted", () => {
-    const root = buildFileTree([
-      file("src/components/dialogs/menu.tsx"),
-    ]);
+    const root = buildFileTree([file("src/components/dialogs/menu.tsx")]);
     // src -> components -> dialogs -> menu.tsx
     // should compact to: "src/components/dialogs" -> "menu.tsx"
     expect(root.children.length).toBe(1);
@@ -97,10 +83,7 @@ describe("buildFileTree", () => {
   });
 
   test("compaction stops when directory has multiple children", () => {
-    const root = buildFileTree([
-      file("src/components/app.tsx"),
-      file("src/components/graph.tsx"),
-    ]);
+    const root = buildFileTree([file("src/components/app.tsx"), file("src/components/graph.tsx")]);
     // src -> components has 2 children, so src compacts with components
     // but components does NOT compact further
     const compacted = root.children[0];
@@ -139,9 +122,7 @@ describe("buildFileTree", () => {
   });
 
   test("deeply nested single-child chain compacts fully", () => {
-    const root = buildFileTree([
-      file("a/b/c/d/e/f.txt"),
-    ]);
+    const root = buildFileTree([file("a/b/c/d/e/f.txt")]);
     expect(root.children.length).toBe(1);
     expect(root.children[0].name).toBe("a/b/c/d/e");
     expect(root.children[0].children.length).toBe(1);
@@ -153,7 +134,7 @@ describe("buildFileTree", () => {
     const dir = root.children[0]; // compacted "src/utils"
     const leaf = dir.children[0];
     expect(leaf.fullPath).toBe("src/utils/date.ts");
-    expect(leaf.file!.path).toBe("src/utils/date.ts");
+    expect(leaf.file?.path).toBe("src/utils/date.ts");
   });
 });
 
@@ -178,11 +159,7 @@ describe("flattenFileTree", () => {
   });
 
   test("multiple root-level files get correct connectors", () => {
-    const root = buildFileTree([
-      file("a.txt"),
-      file("b.txt"),
-      file("c.txt"),
-    ]);
+    const root = buildFileTree([file("a.txt"), file("b.txt"), file("c.txt")]);
     const rows = flattenFileTree(root, new Set());
     expect(rows.length).toBe(3);
     expect(rows[0].connector).toBe("├─ "); // not last
@@ -194,10 +171,7 @@ describe("flattenFileTree", () => {
   });
 
   test("nested files get correct prefixes and depths", () => {
-    const root = buildFileTree([
-      file("src/a.ts"),
-      file("src/b.ts"),
-    ]);
+    const root = buildFileTree([file("src/a.ts"), file("src/b.ts")]);
     const rows = flattenFileTree(root, new Set());
     // Row 0: src/ directory (compacted)
     expect(rows[0].name).toBe("src/");
@@ -219,10 +193,7 @@ describe("flattenFileTree", () => {
   });
 
   test("sibling directories produce │ continuation prefix", () => {
-    const root = buildFileTree([
-      file("src/a.ts"),
-      file("lib/b.ts"),
-    ]);
+    const root = buildFileTree([file("src/a.ts"), file("lib/b.ts")]);
     const rows = flattenFileTree(root, new Set());
     // lib/ (first dir alphabetically), then src/
     expect(rows[0].name).toBe("lib/");
@@ -238,10 +209,7 @@ describe("flattenFileTree", () => {
   });
 
   test("collapsing a directory hides its children", () => {
-    const root = buildFileTree([
-      file("src/a.ts"),
-      file("src/b.ts"),
-    ]);
+    const root = buildFileTree([file("src/a.ts"), file("src/b.ts")]);
     // Collapse the src/ directory
     const srcPath = root.children[0].fullPath;
     const rows = flattenFileTree(root, new Set([srcPath]));
@@ -252,10 +220,7 @@ describe("flattenFileTree", () => {
   });
 
   test("collapsing one dir doesn't affect sibling dirs", () => {
-    const root = buildFileTree([
-      file("src/a.ts"),
-      file("lib/b.ts"),
-    ]);
+    const root = buildFileTree([file("src/a.ts"), file("lib/b.ts")]);
     // Collapse only lib/
     const libPath = root.children[0].fullPath; // lib comes first alphabetically
     const rows = flattenFileTree(root, new Set([libPath]));
@@ -269,10 +234,7 @@ describe("flattenFileTree", () => {
   });
 
   test("directory row has correct dirPath", () => {
-    const root = buildFileTree([
-      file("src/utils/date.ts"),
-      file("src/utils/file-tree.ts"),
-    ]);
+    const root = buildFileTree([file("src/utils/date.ts"), file("src/utils/file-tree.ts")]);
     const rows = flattenFileTree(root, new Set());
     // Compacted: src/utils/ dir
     const dirRow = rows[0];
@@ -281,10 +243,7 @@ describe("flattenFileTree", () => {
   });
 
   test("file row has parent dir as dirPath", () => {
-    const root = buildFileTree([
-      file("src/a.ts"),
-      file("src/b.ts"),
-    ]);
+    const root = buildFileTree([file("src/a.ts"), file("src/b.ts")]);
     const rows = flattenFileTree(root, new Set());
     const fileRow = rows[1]; // a.ts
     expect(fileRow.isDir).toBe(false);
@@ -293,11 +252,7 @@ describe("flattenFileTree", () => {
   });
 
   test("deeply nested tree produces correct multi-level prefixes", () => {
-    const root = buildFileTree([
-      file("a/x.ts"),
-      file("a/b/y.ts"),
-      file("a/b/z.ts"),
-    ]);
+    const root = buildFileTree([file("a/x.ts"), file("a/b/y.ts"), file("a/b/z.ts")]);
     const rows = flattenFileTree(root, new Set());
     // a/ dir (not last since it's only child → last)
     expect(rows[0].name).toBe("a/");
@@ -309,43 +264,42 @@ describe("flattenFileTree", () => {
 
     // x.ts at depth 1 (sibling of b/)
     // Due to sorting: dirs before files → b/ comes before x.ts
-    const xRow = rows.find((r) => r.name === "x.ts")!;
+    const xRow = rows.find(r => r.name === "x.ts");
     expect(xRow).toBeDefined();
-    expect(xRow.depth).toBe(1);
+    expect(xRow?.depth).toBe(1);
 
     // y.ts and z.ts at depth 2
-    const yRow = rows.find((r) => r.name === "y.ts")!;
-    const zRow = rows.find((r) => r.name === "z.ts")!;
-    expect(yRow.depth).toBe(2);
-    expect(zRow.depth).toBe(2);
+    const yRow = rows.find(r => r.name === "y.ts");
+    const zRow = rows.find(r => r.name === "z.ts");
+    expect(yRow?.depth).toBe(2);
+    expect(zRow?.depth).toBe(2);
   });
 
   test("file rows carry the FileChange object", () => {
     const fc = file("src/a.ts", "A");
     const root = buildFileTree([fc]);
     const rows = flattenFileTree(root, new Set());
-    const fileRow = rows.find((r) => !r.isDir)!;
-    expect(fileRow.file).toBeDefined();
-    expect(fileRow.file!.path).toBe("src/a.ts");
-    expect(fileRow.file!.status).toBe("A");
+    const fileRow = rows.find(r => !r.isDir);
+    expect(fileRow).toBeDefined();
+    expect(fileRow?.file?.path).toBe("src/a.ts");
+    expect(fileRow?.file?.status).toBe("A");
   });
 
   test("directory rows do not carry a FileChange object", () => {
     const root = buildFileTree([file("src/a.ts"), file("src/b.ts")]);
     const rows = flattenFileTree(root, new Set());
-    const dirRow = rows.find((r) => r.isDir)!;
-    expect(dirRow.file).toBeUndefined();
+    const dirRow = rows.find(r => r.isDir);
+    expect(dirRow).toBeDefined();
+    expect(dirRow?.file).toBeUndefined();
   });
 
   test("large tree with many files produces correct row count", () => {
-    const files = Array.from({ length: 10 }, (_, i) =>
-      file(`src/file${String(i).padStart(2, "0")}.ts`)
-    );
+    const files = Array.from({ length: 10 }, (_, i) => file(`src/file${String(i).padStart(2, "0")}.ts`));
     const root = buildFileTree(files);
     const rows = flattenFileTree(root, new Set());
     // 1 dir (src/) + 10 files = 11 rows
     expect(rows.length).toBe(11);
     expect(rows[0].isDir).toBe(true);
-    expect(rows.filter((r) => !r.isDir).length).toBe(10);
+    expect(rows.filter(r => !r.isDir).length).toBe(10);
   });
 });

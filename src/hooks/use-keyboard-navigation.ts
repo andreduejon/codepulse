@@ -1,9 +1,9 @@
+import type { ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useRenderer } from "@opentui/solid";
 import type { Accessor } from "solid-js";
-import type { ScrollBoxRenderable } from "@opentui/core";
-import type { AppState, AppActions, DetailTab } from "../context/state";
 import type { DetailNavRef } from "../components/detail-types";
-import { SHIFT_JUMP, PAGE_JUMP, UNCOMMITTED_HASH } from "../constants";
+import { PAGE_JUMP, SHIFT_JUMP, UNCOMMITTED_HASH } from "../constants";
+import type { AppActions, AppState, DetailTab } from "../context/state";
 
 type DialogId = "menu" | "help" | "theme" | null;
 
@@ -31,16 +31,21 @@ interface KeyboardNavigationOptions {
  */
 export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
   const {
-    state, actions,
-    dialog, setDialog,
-    searchFocused, setSearchFocused,
-    getDetailScrollboxRef, detailNavRef,
-    loadData, handleFetch,
+    state,
+    actions,
+    dialog,
+    setDialog,
+    searchFocused,
+    setSearchFocused,
+    getDetailScrollboxRef,
+    detailNavRef,
+    loadData,
+    handleFetch,
   } = opts;
 
   const renderer = useRenderer();
 
-  useKeyboard((e) => {
+  useKeyboard(e => {
     if (e.eventType === "release") return;
 
     // Ctrl+T opens theme dialog regardless of dialog/search state
@@ -246,7 +251,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
       case "right":
         e.preventDefault();
         if (state.selectedCommit()) {
-          actions.setDetailOriginHash(null);
+          detailNavRef.pendingJumpDirection = null;
           actions.setDetailCursorIndex(0);
           actions.setDetailFocused(true);
         }

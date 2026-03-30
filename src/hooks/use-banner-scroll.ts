@@ -1,5 +1,5 @@
-import { createSignal, createEffect, onCleanup } from "solid-js";
 import type { Accessor } from "solid-js";
+import { createEffect, createSignal, onCleanup } from "solid-js";
 
 /** Scrolling speed: shift 1 char every N ms. */
 const BANNER_TICK_MS = 200;
@@ -27,8 +27,14 @@ export function useBannerScroll(overflow: Accessor<number>): Accessor<number> {
   let bannerPauseTimer: ReturnType<typeof setTimeout> | undefined;
 
   const stop = () => {
-    if (bannerTimer) { clearInterval(bannerTimer); bannerTimer = undefined; }
-    if (bannerPauseTimer) { clearTimeout(bannerPauseTimer); bannerPauseTimer = undefined; }
+    if (bannerTimer) {
+      clearInterval(bannerTimer);
+      bannerTimer = undefined;
+    }
+    if (bannerPauseTimer) {
+      clearTimeout(bannerPauseTimer);
+      bannerPauseTimer = undefined;
+    }
     setBannerOffset(0);
     setBannerDirection(1);
   };
@@ -36,17 +42,25 @@ export function useBannerScroll(overflow: Accessor<number>): Accessor<number> {
   const start = (maxOverflow: number) => {
     if (maxOverflow <= 0) return;
     bannerTimer = setInterval(() => {
-      setBannerOffset((prev) => {
+      setBannerOffset(prev => {
         const dir = bannerDirection();
         const next = prev + dir;
         if (next >= maxOverflow) {
-          clearInterval(bannerTimer); bannerTimer = undefined;
-          bannerPauseTimer = setTimeout(() => { setBannerDirection(-1); start(maxOverflow); }, BANNER_PAUSE_MS);
+          clearInterval(bannerTimer);
+          bannerTimer = undefined;
+          bannerPauseTimer = setTimeout(() => {
+            setBannerDirection(-1);
+            start(maxOverflow);
+          }, BANNER_PAUSE_MS);
           return maxOverflow;
         }
         if (next <= 0) {
-          clearInterval(bannerTimer); bannerTimer = undefined;
-          bannerPauseTimer = setTimeout(() => { setBannerDirection(1); start(maxOverflow); }, BANNER_PAUSE_MS);
+          clearInterval(bannerTimer);
+          bannerTimer = undefined;
+          bannerPauseTimer = setTimeout(() => {
+            setBannerDirection(1);
+            start(maxOverflow);
+          }, BANNER_PAUSE_MS);
           return 0;
         }
         return next;

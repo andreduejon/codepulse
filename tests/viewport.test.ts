@@ -4,13 +4,19 @@
  * Covers: computeViewportOffsets, computeSingleViewportOffset,
  * sliceGraphToViewport, getMaxGraphColumns, buildEdgeIndicator.
  */
-import { describe, test, expect } from "bun:test";
-import { buildGraph, computeViewportOffsets, computeSingleViewportOffset, renderGraphRow, renderConnectorRow, sliceGraphToViewport, getMaxGraphColumns, buildEdgeIndicator } from "../src/git/graph";
+import { describe, expect, test } from "bun:test";
 import type { RenderOptions } from "../src/git/graph";
 import {
-  makeCommit,
-  printGraph,
-} from "./test-helpers";
+  buildEdgeIndicator,
+  buildGraph,
+  computeSingleViewportOffset,
+  computeViewportOffsets,
+  getMaxGraphColumns,
+  renderConnectorRow,
+  renderGraphRow,
+  sliceGraphToViewport,
+} from "../src/git/graph";
+import { makeCommit, printGraph } from "./test-helpers";
 
 describe("Viewport", () => {
   test("No sliding when depth limit >= max columns", () => {
@@ -165,10 +171,7 @@ describe("Viewport", () => {
   });
 
   test("No slicing when viewport covers full width", () => {
-    const commits = [
-      makeCommit("a", ["b"], [{ name: "main", type: "branch", isCurrent: true }]),
-      makeCommit("b", []),
-    ];
+    const commits = [makeCommit("a", ["b"], [{ name: "main", type: "branch", isCurrent: true }]), makeCommit("b", [])];
 
     const rows = buildGraph(commits);
     printGraph(rows);

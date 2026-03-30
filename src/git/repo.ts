@@ -1,5 +1,5 @@
-import type { Commit, Branch, FileChange, CommitDetail, RefInfo, TagInfo, UncommittedDetail } from "./types";
 import { DEFAULT_MAX_COUNT } from "../constants";
+import type { Branch, Commit, CommitDetail, FileChange, RefInfo, TagInfo, UncommittedDetail } from "./types";
 
 /** ASCII Record Separator — safe delimiter that cannot appear in commit fields. */
 export const RS = "\x1e";
@@ -24,16 +24,17 @@ async function runGit(
 
   // If the caller aborts, kill the subprocess immediately
   if (signal) {
-    const onAbort = () => { try { proc.kill(); } catch {} };
+    const onAbort = () => {
+      try {
+        proc.kill();
+      } catch {}
+    };
     signal.addEventListener("abort", onAbort, { once: true });
     proc.exited.then(() => signal.removeEventListener("abort", onAbort)).catch(() => {});
   }
 
   try {
-    const [stdout, stderr] = await Promise.all([
-      new Response(proc.stdout).text(),
-      new Response(proc.stderr).text(),
-    ]);
+    const [stdout, stderr] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
     await proc.exited;
     return { stdout, stderr, exitCode: proc.exitCode ?? 1 };
   } catch {
@@ -50,15 +51,15 @@ async function getRemoteNames(repoPath: string, signal?: AbortSignal): Promise<S
     stdout
       .trim()
       .split("\n")
-      .map((r) => r.trim())
-      .filter(Boolean)
+      .map(r => r.trim())
+      .filter(Boolean),
   );
 }
 
 /** @internal Exported for testing. Parse a git ref decoration string into structured RefInfo[]. */
 export function parseRefs(refString: string, remoteNames: Set<string>): RefInfo[] {
   if (!refString.trim()) return [];
-  return refString.split(",").map((ref) => {
+  return refString.split(",").map(ref => {
     ref = ref.trim();
     let isCurrent = false;
     if (ref.startsWith("HEAD -> ")) {
@@ -79,9 +80,7 @@ export function parseRefs(refString: string, remoteNames: Set<string>): RefInfo[
       return { name: ref, type: "stash" as const, isCurrent: false };
     }
     if (ref.includes("/")) {
-      const isRemote =
-        ref.startsWith("refs/remotes/") ||
-        [...remoteNames].some((r) => ref.startsWith(`${r}/`));
+      const isRemote = ref.startsWith("refs/remotes/") || [...remoteNames].some(r => ref.startsWith(`${r}/`));
       if (isRemote) {
         return {
           name: ref,
@@ -99,7 +98,19 @@ export function parseCommitLine(line: string, remoteNames: Set<string>): Commit 
   const parts = line.split(RS);
   if (parts.length < 11) return null;
 
-  const [hash, shortHash, parentsStr, refsStr, subject, author, authorEmail, authorDate, committer, committerEmail, commitDate] = parts;
+  const [
+    hash,
+    shortHash,
+    parentsStr,
+    refsStr,
+    subject,
+    author,
+    authorEmail,
+    authorDate,
+    committer,
+    committerEmail,
+    commitDate,
+  ] = parts;
   const parents = parentsStr.trim() ? parentsStr.trim().split(" ") : [];
   const refs = parseRefs(refsStr, remoteNames);
 
@@ -182,10 +193,15 @@ export function parseTrackInfo(track: string): { ahead?: number; behind?: number
 
 export async function getBranches(repoPath: string, signal?: AbortSignal): Promise<Branch[]> {
   const [branchResult, remoteNames] = await Promise.all([
-    runGit(repoPath, [
-      "branch", "-a",
-      `--format=%(HEAD)${RS}%(refname:short)${RS}%(objectname:short)${RS}%(upstream:short)${RS}%(upstream:track,nobracket)${RS}%(symref)`,
-    ], signal),
+    runGit(
+      repoPath,
+      [
+        "branch",
+        "-a",
+        `--format=%(HEAD)${RS}%(refname:short)${RS}%(objectname:short)${RS}%(upstream:short)${RS}%(upstream:track,nobracket)${RS}%(symref)`,
+      ],
+      signal,
+    ),
     getRemoteNames(repoPath, signal),
   ]);
 
@@ -194,19 +210,17 @@ export async function getBranches(repoPath: string, signal?: AbortSignal): Promi
   return branchResult.stdout
     .trim()
     .split("\n")
-    .filter((l) => l.trim())
-    .filter((line) => {
+    .filter(l => l.trim())
+    .filter(line => {
       // Filter out symbolic refs (e.g. origin/HEAD -> origin/develop)
       const parts = line.split(RS);
       const symref = parts[5]?.trim();
       return !symref;
     })
-    .map((line) => {
+    .map(line => {
       const [head, name, lastCommitHash, upstream, track] = line.split(RS);
       const trimmedName = name.trim();
-      const isRemote =
-        trimmedName.includes("remotes/") ||
-        [...remoteNames].some((r) => trimmedName.startsWith(`${r}/`));
+      const isRemote = trimmedName.includes("remotes/") || [...remoteNames].some(r => trimmedName.startsWith(`${r}/`));
 
       const branch: Branch = {
         name: trimmedName,
@@ -257,16 +271,9 @@ export function parseTagLine(line: string): TagInfo | null {
   return { name, type: "lightweight" };
 }
 
-export async function getTagDetails(
-  repoPath: string,
-  signal?: AbortSignal,
-): Promise<Map<string, TagInfo>> {
+export async function getTagDetails(repoPath: string, signal?: AbortSignal): Promise<Map<string, TagInfo>> {
   const format = `%(refname)${RS}%(objecttype)${RS}%(taggername)${RS}%(taggerdate:iso-strict)${RS}%(contents:subject)`;
-  const { stdout, exitCode } = await runGit(
-    repoPath,
-    ["for-each-ref", `--format=${format}`, "refs/tags/"],
-    signal,
-  );
+  const { stdout, exitCode } = await runGit(repoPath, ["for-each-ref", `--format=${format}`, "refs/tags/"], signal);
 
   const result = new Map<string, TagInfo>();
   if (exitCode !== 0) return result;
@@ -296,7 +303,19 @@ export function parseStashEntry(line: string): Commit | null {
   const parts = line.split(RS);
   if (parts.length < 11) return null;
 
-  const [hash, shortHash, parentsStr, stashRef, subject, author, authorEmail, authorDate, committer, committerEmail, commitDate] = parts;
+  const [
+    hash,
+    shortHash,
+    parentsStr,
+    stashRef,
+    subject,
+    author,
+    authorEmail,
+    authorDate,
+    committer,
+    committerEmail,
+    commitDate,
+  ] = parts;
   if (!hash?.trim()) return null;
 
   // Stash commits have 2-3 parents: [0]=HEAD, [1]=index, [2]=untracked (optional).
@@ -332,15 +351,8 @@ export function parseStashEntry(line: string): Commit | null {
  * Each stash commit's parents[0] is the HEAD commit at the time of stashing,
  * which allows buildGraph to connect the stash to the correct point in history.
  */
-export async function getStashList(
-  repoPath: string,
-  signal?: AbortSignal,
-): Promise<Commit[]> {
-  const { stdout, exitCode } = await runGit(
-    repoPath,
-    ["stash", "list", `--format=${STASH_FORMAT}`],
-    signal,
-  );
+export async function getStashList(repoPath: string, signal?: AbortSignal): Promise<Commit[]> {
+  const { stdout, exitCode } = await runGit(repoPath, ["stash", "list", `--format=${STASH_FORMAT}`], signal);
 
   if (exitCode !== 0 || !stdout.trim()) return [];
 
@@ -365,12 +377,17 @@ export interface WorkingTreeStatus {
  * into a WorkingTreeStatus. Returns null if the working tree is clean.
  */
 export function parseStatusPorcelain(output: string): WorkingTreeStatus | null {
-  let staged = 0, unstaged = 0, untracked = 0;
+  let staged = 0,
+    unstaged = 0,
+    untracked = 0;
   for (const line of output.split("\n")) {
     if (!line || line.length < 2) continue;
     const x = line[0]; // index (staged) status
     const y = line[1]; // worktree (unstaged) status
-    if (x === "?" && y === "?") { untracked++; continue; }
+    if (x === "?" && y === "?") {
+      untracked++;
+      continue;
+    }
     if (x !== " " && x !== "?") staged++;
     if (y !== " " && y !== "?") unstaged++;
   }
@@ -382,15 +399,8 @@ export function parseStatusPorcelain(output: string): WorkingTreeStatus | null {
  * Check if the working tree has uncommitted changes.
  * Returns null if the tree is clean (no staged, unstaged, or untracked files).
  */
-export async function getWorkingTreeStatus(
-  repoPath: string,
-  signal?: AbortSignal,
-): Promise<WorkingTreeStatus | null> {
-  const { stdout, exitCode } = await runGit(
-    repoPath,
-    ["status", "--porcelain=v1"],
-    signal,
-  );
+export async function getWorkingTreeStatus(repoPath: string, signal?: AbortSignal): Promise<WorkingTreeStatus | null> {
+  const { stdout, exitCode } = await runGit(repoPath, ["status", "--porcelain=v1"], signal);
   if (exitCode !== 0 || !stdout.trim()) return null;
   return parseStatusPorcelain(stdout);
 }
@@ -444,11 +454,7 @@ export function parseDiffTreeOutput(output: string): FileChange[] {
  * Uses `git diff-tree` against the stash's parent to get the diff.
  * Returns the same FileChange[] format as CommitDetail.files.
  */
-export async function getStashFiles(
-  repoPath: string,
-  stashHash: string,
-  signal?: AbortSignal,
-): Promise<FileChange[]> {
+export async function getStashFiles(repoPath: string, stashHash: string, signal?: AbortSignal): Promise<FileChange[]> {
   // Stash commits are merges (2-3 parents). diff-tree on a merge commit
   // with just one revision produces no output. We must explicitly diff
   // against the first parent (the HEAD at time of stash).
@@ -468,27 +474,14 @@ export async function getStashFiles(
  * with `git ls-files --others --exclude-standard` (untracked files).
  * Returns the same FileChange[] format as CommitDetail.files.
  */
-export async function getUncommittedFiles(
-  repoPath: string,
-  signal?: AbortSignal,
-): Promise<FileChange[]> {
-  const diffProc = runGit(
-    repoPath,
-    ["diff", "HEAD", "--raw", "--numstat", "--"],
-    signal,
-  );
-  const untrackedProc = runGit(
-    repoPath,
-    ["ls-files", "--others", "--exclude-standard"],
-    signal,
-  );
+export async function getUncommittedFiles(repoPath: string, signal?: AbortSignal): Promise<FileChange[]> {
+  const diffProc = runGit(repoPath, ["diff", "HEAD", "--raw", "--numstat", "--"], signal);
+  const untrackedProc = runGit(repoPath, ["ls-files", "--others", "--exclude-standard"], signal);
 
   const [diffResult, untrackedResult] = await Promise.all([diffProc, untrackedProc]);
   if (signal?.aborted) return [];
 
-  const files = diffResult.exitCode === 0 && diffResult.stdout.trim()
-    ? parseDiffTreeOutput(diffResult.stdout)
-    : [];
+  const files = diffResult.exitCode === 0 && diffResult.stdout.trim() ? parseDiffTreeOutput(diffResult.stdout) : [];
 
   // Append untracked files as "Added" with zero stats
   if (untrackedResult.exitCode === 0 && untrackedResult.stdout.trim()) {
@@ -508,15 +501,8 @@ export async function getUncommittedFiles(
  * Fetch staged file changes (index vs HEAD).
  * Uses `git diff --cached --raw --numstat` to get files staged for commit.
  */
-export async function getStagedFiles(
-  repoPath: string,
-  signal?: AbortSignal,
-): Promise<FileChange[]> {
-  const { stdout, exitCode } = await runGit(
-    repoPath,
-    ["diff", "--cached", "--raw", "--numstat", "--"],
-    signal,
-  );
+export async function getStagedFiles(repoPath: string, signal?: AbortSignal): Promise<FileChange[]> {
+  const { stdout, exitCode } = await runGit(repoPath, ["diff", "--cached", "--raw", "--numstat", "--"], signal);
   if (exitCode !== 0 || !stdout.trim()) return [];
   return parseDiffTreeOutput(stdout);
 }
@@ -525,15 +511,8 @@ export async function getStagedFiles(
  * Fetch unstaged file changes (working tree vs index).
  * Uses `git diff --raw --numstat` (no HEAD, no --cached) to get modified tracked files.
  */
-export async function getUnstagedFiles(
-  repoPath: string,
-  signal?: AbortSignal,
-): Promise<FileChange[]> {
-  const { stdout, exitCode } = await runGit(
-    repoPath,
-    ["diff", "--raw", "--numstat", "--"],
-    signal,
-  );
+export async function getUnstagedFiles(repoPath: string, signal?: AbortSignal): Promise<FileChange[]> {
+  const { stdout, exitCode } = await runGit(repoPath, ["diff", "--raw", "--numstat", "--"], signal);
   if (exitCode !== 0 || !stdout.trim()) return [];
   return parseDiffTreeOutput(stdout);
 }
@@ -542,15 +521,8 @@ export async function getUnstagedFiles(
  * Fetch untracked files (files not tracked by git, excluding ignored).
  * Returns FileChange[] with status "A" and zero stats (no diff available).
  */
-export async function getUntrackedFiles(
-  repoPath: string,
-  signal?: AbortSignal,
-): Promise<FileChange[]> {
-  const { stdout, exitCode } = await runGit(
-    repoPath,
-    ["ls-files", "--others", "--exclude-standard"],
-    signal,
-  );
+export async function getUntrackedFiles(repoPath: string, signal?: AbortSignal): Promise<FileChange[]> {
+  const { stdout, exitCode } = await runGit(repoPath, ["ls-files", "--others", "--exclude-standard"], signal);
   if (exitCode !== 0 || !stdout.trim()) return [];
 
   const files: FileChange[] = [];
@@ -566,10 +538,7 @@ export async function getUntrackedFiles(
  * Load all three uncommitted file categories in parallel.
  * Returns an UncommittedDetail with staged, unstaged, and untracked file lists.
  */
-export async function getUncommittedDetail(
-  repoPath: string,
-  signal?: AbortSignal,
-): Promise<UncommittedDetail> {
+export async function getUncommittedDetail(repoPath: string, signal?: AbortSignal): Promise<UncommittedDetail> {
   const [staged, unstaged, untracked] = await Promise.all([
     getStagedFiles(repoPath, signal),
     getUnstagedFiles(repoPath, signal),
@@ -590,9 +559,7 @@ export async function getCommitDetail(
 
   // Single diff-tree call: --raw gives status letters, --numstat gives +/- stats.
   // Git outputs the raw lines first, then a blank separator, then numstat lines.
-  const diffProc = runGit(repoPath, [
-    "diff-tree", "--no-commit-id", "-r", "--raw", "--numstat", hash, "--",
-  ], signal);
+  const diffProc = runGit(repoPath, ["diff-tree", "--no-commit-id", "-r", "--raw", "--numstat", hash, "--"], signal);
 
   const [msgResult, diffResult] = await Promise.all([msgProc, diffProc]);
   if (signal?.aborted) return null;
@@ -608,9 +575,7 @@ export async function getCommitDetail(
     // Fetch metadata for a single commit by its hash.
     // Place hash before "--" so git treats it as a revision, not a path.
     const [lookupResult, remoteNames] = await Promise.all([
-      runGit(repoPath, [
-        "log", "-1", "--topo-order", `--format=${GIT_LOG_FORMAT}`, hash, "--",
-      ], signal),
+      runGit(repoPath, ["log", "-1", "--topo-order", `--format=${GIT_LOG_FORMAT}`, hash, "--"], signal),
       getRemoteNames(repoPath, signal),
     ]);
     if (signal?.aborted) return null;
@@ -630,9 +595,7 @@ export async function getCommitDetail(
 }
 
 export async function getCurrentBranch(repoPath: string, signal?: AbortSignal): Promise<string> {
-  const { stdout, exitCode } = await runGit(repoPath, [
-    "rev-parse", "--abbrev-ref", "HEAD",
-  ], signal);
+  const { stdout, exitCode } = await runGit(repoPath, ["rev-parse", "--abbrev-ref", "HEAD"], signal);
   if (exitCode !== 0) return "";
   return stdout.trim();
 }
@@ -640,9 +603,7 @@ export async function getCurrentBranch(repoPath: string, signal?: AbortSignal): 
 export async function getRemoteUrl(repoPath: string, signal?: AbortSignal): Promise<string> {
   try {
     // Try "origin" first (most common), then fall back to the first available remote
-    const { stdout, exitCode } = await runGit(repoPath, [
-      "remote", "get-url", "origin",
-    ], signal);
+    const { stdout, exitCode } = await runGit(repoPath, ["remote", "get-url", "origin"], signal);
     if (exitCode === 0 && stdout.trim()) return stdout.trim();
 
     // Fallback: pick the first remote name and get its URL
@@ -658,9 +619,7 @@ export async function getRemoteUrl(repoPath: string, signal?: AbortSignal): Prom
 }
 
 export async function isGitRepo(path: string): Promise<boolean> {
-  const { exitCode } = await runGit(path, [
-    "rev-parse", "--is-inside-work-tree",
-  ]);
+  const { exitCode } = await runGit(path, ["rev-parse", "--is-inside-work-tree"]);
   return exitCode === 0;
 }
 
@@ -668,12 +627,8 @@ export async function isGitRepo(path: string): Promise<boolean> {
  * Fetch from all remotes, pruning deleted remote branches.
  * This is the only network operation in gittree — safe and read-only.
  */
-export async function fetchRemote(
-  repoPath: string
-): Promise<{ ok: boolean; error?: string }> {
-  const { stderr, exitCode } = await runGit(repoPath, [
-    "fetch", "--all", "--prune",
-  ]);
+export async function fetchRemote(repoPath: string): Promise<{ ok: boolean; error?: string }> {
+  const { stderr, exitCode } = await runGit(repoPath, ["fetch", "--all", "--prune"]);
 
   if (exitCode !== 0) {
     return { ok: false, error: stderr.trim() };
@@ -685,21 +640,15 @@ export async function fetchRemote(
  * Get the last fetch time by reading the mtime of FETCH_HEAD.
  * Returns null if the file doesn't exist (never fetched).
  */
-export async function getLastFetchTime(
-  repoPath: string
-): Promise<Date | null> {
+export async function getLastFetchTime(repoPath: string): Promise<Date | null> {
   try {
-    const { stdout, exitCode } = await runGit(repoPath, [
-      "rev-parse", "--git-dir",
-    ]);
+    const { stdout, exitCode } = await runGit(repoPath, ["rev-parse", "--git-dir"]);
     if (exitCode !== 0) return null;
 
     const gitDir = stdout.trim();
     // git rev-parse --git-dir returns a relative path for normal repos
     // but an absolute path for linked worktrees — handle both
-    const fetchHeadPath = gitDir.startsWith("/")
-      ? `${gitDir}/FETCH_HEAD`
-      : `${repoPath}/${gitDir}/FETCH_HEAD`;
+    const fetchHeadPath = gitDir.startsWith("/") ? `${gitDir}/FETCH_HEAD` : `${repoPath}/${gitDir}/FETCH_HEAD`;
     const file = Bun.file(fetchHeadPath);
     const exists = await file.exists();
     if (!exists) return null;

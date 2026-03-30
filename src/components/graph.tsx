@@ -1,27 +1,40 @@
-import { For, Show, createEffect, createMemo, createSelector, createSignal } from "solid-js";
+import type { Renderable, ScrollBoxRenderable, StyledText, TextRenderable } from "@opentui/core";
+import { createEffect, createMemo, createSelector, createSignal, For, Show } from "solid-js";
+import { AUTHOR_COL_WIDTH, DATE_COL_WIDTH, HASH_COL_WIDTH } from "../constants";
 import { useAppState } from "../context/state";
 import { useTheme } from "../context/theme";
-import { HASH_COL_WIDTH, AUTHOR_COL_WIDTH, DATE_COL_WIDTH } from "../constants";
-import { renderGraphRow, renderConnectorRow, renderFanOutRow, graphCharsToContent, getColorForColumn, sliceGraphToViewport, computeSingleViewportOffset, buildEdgeIndicator, MAX_GRAPH_COLUMNS, type GraphChar } from "../git/graph";
-import { formatRelativeDate } from "../utils/date";
+import {
+  buildEdgeIndicator,
+  computeSingleViewportOffset,
+  type GraphChar,
+  getColorForColumn,
+  graphCharsToContent,
+  MAX_GRAPH_COLUMNS,
+  renderConnectorRow,
+  renderFanOutRow,
+  renderGraphRow,
+  sliceGraphToViewport,
+} from "../git/graph";
 import type { GraphRow, RefInfo } from "../git/types";
-import type { TextRenderable, StyledText, ScrollBoxRenderable, Renderable } from "@opentui/core";
+import { formatRelativeDate } from "../utils/date";
 
-function RefBadge(props: Readonly<{
-  info: RefInfo;
-  laneColor: () => string;
-}>) {
+function RefBadge(
+  props: Readonly<{
+    info: RefInfo;
+    laneColor: () => string;
+  }>,
+) {
   const { theme } = useTheme();
   const t = () => theme();
 
-  const isStash = () => props.info.type === "stash";
+  const _isStash = () => props.info.type === "stash";
   const isDimmed = () => props.info.type === "stash" || props.info.type === "uncommitted";
 
-  const bgColor = () => isDimmed() ? t().backgroundElementActive : props.laneColor();
+  const bgColor = () => (isDimmed() ? t().backgroundElementActive : props.laneColor());
 
   // Dimmed badges (stash, uncommitted) use normal foreground on muted background;
   // regular badges use dark background color for contrast against bright lane colors.
-  const fgColor = () => isDimmed() ? t().foreground : t().background;
+  const fgColor = () => (isDimmed() ? t().foreground : t().background);
 
   return (
     <text flexShrink={0} wrapMode="none" fg={fgColor()} bg={bgColor()}>
@@ -55,40 +68,45 @@ export function ColumnHeader() {
         borderColor={state.detailFocused() ? t().border : t().accent}
       >
         {/* Graph header */}
-        <text
-          flexShrink={0}
-          width={graphWidth()}
-          wrapMode="none"
-          paddingLeft={1}
-        >
-          <strong><span fg={!state.detailFocused() ? t().foreground : t().foregroundMuted}>{"Graph "}</span></strong>
+        <text flexShrink={0} width={graphWidth()} wrapMode="none" paddingLeft={1}>
+          <strong>
+            <span fg={!state.detailFocused() ? t().foreground : t().foregroundMuted}>{"Graph "}</span>
+          </strong>
         </text>
 
         {/* Commit hash */}
         <box flexShrink={0} width={HASH_COL_WIDTH} paddingLeft={1}>
           <text wrapMode="none" truncate>
-            <strong><span fg={!state.detailFocused() ? t().foreground : t().foregroundMuted}>Commit</span></strong>
+            <strong>
+              <span fg={!state.detailFocused() ? t().foreground : t().foregroundMuted}>Commit</span>
+            </strong>
           </text>
         </box>
 
         {/* Description (commit message + refs) — box wrapper matches data row structure */}
         <box flexDirection="row" flexGrow={1} flexShrink={1} paddingLeft={1} paddingRight={2}>
           <text flexGrow={1} flexShrink={1} wrapMode="none" truncate>
-            <strong><span fg={!state.detailFocused() ? t().foreground : t().foregroundMuted}>Description</span></strong>
+            <strong>
+              <span fg={!state.detailFocused() ? t().foreground : t().foregroundMuted}>Description</span>
+            </strong>
           </text>
         </box>
 
         {/* Author */}
         <box flexShrink={0} width={AUTHOR_COL_WIDTH} paddingRight={2}>
           <text wrapMode="none" truncate>
-            <strong><span fg={!state.detailFocused() ? t().foreground : t().foregroundMuted}>Author</span></strong>
+            <strong>
+              <span fg={!state.detailFocused() ? t().foreground : t().foregroundMuted}>Author</span>
+            </strong>
           </text>
         </box>
 
         {/* Date */}
         <box flexShrink={0} width={DATE_COL_WIDTH}>
           <text wrapMode="none" truncate>
-            <strong><span fg={!state.detailFocused() ? t().foreground : t().foregroundMuted}>Date</span></strong>
+            <strong>
+              <span fg={!state.detailFocused() ? t().foreground : t().foregroundMuted}>Date</span>
+            </strong>
           </text>
         </box>
       </box>
@@ -116,21 +134,23 @@ function ConnectorRow(props: Readonly<{ content: () => StyledText; width?: numbe
   );
 }
 
-function GraphLine(props: Readonly<{
-  row: GraphRow;
-  index: number;
-  active: boolean;
-  isLast: boolean;
-  viewportOffset: () => number;
-  rowRef?: (el: Renderable) => void
-}>) {
+function GraphLine(
+  props: Readonly<{
+    row: GraphRow;
+    index: number;
+    active: boolean;
+    isLast: boolean;
+    viewportOffset: () => number;
+    rowRef?: (el: Renderable) => void;
+  }>,
+) {
   const { theme } = useTheme();
   const { state } = useAppState();
 
   const commit = () => props.row.commit;
   const padCols = () => state.maxGraphColumns();
 
-  const { effectiveGraphColumns, viewportActive, graphWidth } = useGraphDimensions(() => state.maxGraphColumns());
+  const { viewportActive, graphWidth } = useGraphDimensions(() => state.maxGraphColumns());
 
   const renderOpts = () => {
     return {
@@ -155,10 +175,16 @@ function GraphLine(props: Readonly<{
     if (!viewportActive()) return chars;
     const out = chars.slice();
     if (isCommitRow) {
-      out.push(buildEdgeIndicator(
-        props.row.nodeColumn, props.viewportOffset(), MAX_GRAPH_COLUMNS,
-        state.maxGraphColumns(), edgeColor(), true
-      ));
+      out.push(
+        buildEdgeIndicator(
+          props.row.nodeColumn,
+          props.viewportOffset(),
+          MAX_GRAPH_COLUMNS,
+          state.maxGraphColumns(),
+          edgeColor(),
+          true,
+        ),
+      );
     } else {
       out.push(blankEdge());
     }
@@ -203,10 +229,15 @@ function GraphLine(props: Readonly<{
   // Check if the commit row has merge/branch connectors (horizontals, corners, tees).
   // If so, the commit row carries connection info and can't be replaced by a fan-out row.
   const commitRowHasConnections = () =>
-    props.row.connectors.some(c =>
-      c.type === "horizontal" || c.type === "tee-left" || c.type === "tee-right" ||
-      c.type === "corner-top-right" || c.type === "corner-top-left" ||
-      c.type === "corner-bottom-right" || c.type === "corner-bottom-left"
+    props.row.connectors.some(
+      c =>
+        c.type === "horizontal" ||
+        c.type === "tee-left" ||
+        c.type === "tee-right" ||
+        c.type === "corner-top-right" ||
+        c.type === "corner-top-left" ||
+        c.type === "corner-bottom-right" ||
+        c.type === "corner-bottom-left",
     );
 
   // Fan-out rows: extra connector rows showing branch-off corners.
@@ -226,7 +257,7 @@ function GraphLine(props: Readonly<{
     const foRows = props.row.fanOutRows;
     if (!foRows || foRows.length === 0) return [];
     const dimAll = isUncommitted();
-    return foRows.map((foConnectors) => {
+    return foRows.map(foConnectors => {
       const chars = renderFanOutRow(foConnectors, renderOpts(), props.row.nodeColumn);
       if (dimAll) {
         const mutedColor = theme().foregroundMuted;
@@ -249,14 +280,10 @@ function GraphLine(props: Readonly<{
     // If merging last fan-out into commit row, show all except the last
     if (canMergeFanOut()) {
       if (allFanOut.length <= 1) return [];
-      return allFanOut.slice(0, -1).map((chars) =>
-        graphCharsToContent(withEdgeIndicator(applySlice(chars), false))
-      );
+      return allFanOut.slice(0, -1).map(chars => graphCharsToContent(withEdgeIndicator(applySlice(chars), false)));
     }
     // Otherwise show all fan-out rows separately
-    return allFanOut.map((chars) =>
-      graphCharsToContent(withEdgeIndicator(applySlice(chars), false))
-    );
+    return allFanOut.map(chars => graphCharsToContent(withEdgeIndicator(applySlice(chars), false)));
   };
 
   // The commit row graph: if we can merge, use the last fan-out row's graph;
@@ -319,21 +346,24 @@ function GraphLine(props: Readonly<{
       {/* Fan-out rows above the commit (all except the last, which merges
           into the commit row to avoid a redundant █ block). */}
       <For each={fanOutAboveContents()}>
-        {(foContent) => <ConnectorRow content={() => foContent} width={graphWidth()} />}
+        {foContent => <ConnectorRow content={() => foContent} width={graphWidth()} />}
       </For>
 
       {/* Commit row */}
-      <box
-        flexDirection="row"
-        width="100%"
-      >
+      <box flexDirection="row" width="100%">
         {/* Graph part: styled via ref + StyledText to bypass reconciler stringification */}
         <text ref={graphTextRef} flexShrink={0} width={graphWidth()} wrapMode="none" truncate paddingLeft={1} />
 
         {/* Short hash */}
         <box flexShrink={0} width={HASH_COL_WIDTH} paddingLeft={1} overflow="hidden">
           <text fg={secondaryColumnColor()} wrapMode="none" truncate>
-            {props.active ? <strong><span fg={secondaryColumnColor()}>{commit().shortHash}</span></strong> : commit().shortHash}
+            {props.active ? (
+              <strong>
+                <span fg={secondaryColumnColor()}>{commit().shortHash}</span>
+              </strong>
+            ) : (
+              commit().shortHash
+            )}
           </text>
         </box>
 
@@ -341,27 +371,54 @@ function GraphLine(props: Readonly<{
         <box flexDirection="row" flexGrow={1} flexShrink={1} paddingLeft={1} paddingRight={2}>
           <Show when={visibleRefs().length > 0}>
             <box flexDirection="row" flexShrink={0} gap={1} paddingRight={1}>
-              <For each={visibleRefs()}>
-                {(ri) => <RefBadge info={ri} laneColor={laneColor} />}
-              </For>
+              <For each={visibleRefs()}>{ri => <RefBadge info={ri} laneColor={laneColor} />}</For>
             </box>
           </Show>
           <text flexGrow={1} flexShrink={1} fg={effectiveTextColor()} wrapMode="none" truncate>
-            {(() => { const v = isUncommitted() ? "Staged and unstaged changes in working tree" : commit().subject; return props.active ? <strong><span fg={effectiveTextColor()}>{v}</span></strong> : v; })()}
+            {(() => {
+              const v = isUncommitted() ? "Staged and unstaged changes in working tree" : commit().subject;
+              return props.active ? (
+                <strong>
+                  <span fg={effectiveTextColor()}>{v}</span>
+                </strong>
+              ) : (
+                v
+              );
+            })()}
           </text>
         </box>
 
         {/* Author */}
         <box flexShrink={0} width={AUTHOR_COL_WIDTH} paddingRight={2} overflow="hidden">
           <text fg={secondaryColumnColor()} wrapMode="none" truncate>
-            {(() => { const v = isUncommitted() ? "\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7" : commit().author; return props.active ? <strong><span fg={secondaryColumnColor()}>{v}</span></strong> : v; })()}
+            {(() => {
+              const v = isUncommitted() ? "\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7" : commit().author;
+              return props.active ? (
+                <strong>
+                  <span fg={secondaryColumnColor()}>{v}</span>
+                </strong>
+              ) : (
+                v
+              );
+            })()}
           </text>
         </box>
 
         {/* Date */}
         <box flexShrink={0} width={DATE_COL_WIDTH} overflow="hidden">
           <text fg={secondaryColumnColor()} wrapMode="none" truncate>
-            {(() => { const v = isUncommitted() ? "\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7" : formatRelativeDate(commit().authorDate); return props.active ? <strong><span fg={secondaryColumnColor()}>{v}</span></strong> : v; })()}
+            {(() => {
+              const v = isUncommitted()
+                ? "\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7"
+                : formatRelativeDate(commit().authorDate);
+              return props.active ? (
+                <strong>
+                  <span fg={secondaryColumnColor()}>{v}</span>
+                </strong>
+              ) : (
+                v
+              );
+            })()}
           </text>
         </box>
       </box>
@@ -379,7 +436,6 @@ const REF_SORT_ORDER: Record<string, number> = { tag: 0, branch: 1, remote: 2, s
 
 export default function GraphView() {
   const { state } = useAppState();
-  const { theme } = useTheme();
 
   // Single viewport offset: reacts to the highlighted commit's node column.
   // All rows share the same offset, giving a horizontal "scroll" effect.
@@ -405,9 +461,7 @@ export default function GraphView() {
     }
 
     const nodeCol = rows[idx].nodeColumn;
-    setViewportOffset((prev) =>
-      computeSingleViewportOffset(prev, nodeCol, MAX_GRAPH_COLUMNS, maxCols)
-    );
+    setViewportOffset(prev => computeSingleViewportOffset(prev, nodeCol, MAX_GRAPH_COLUMNS, maxCols));
   });
 
   // Scroll the target row into view (only triggered by keyboard nav / selection, not mouse hover)
@@ -445,13 +499,7 @@ export default function GraphView() {
   const isActive = createSelector(() => state.cursorIndex());
 
   return (
-    <scrollbox
-      ref={scrollboxRef}
-      flexGrow={1}
-      scrollY
-      scrollX={false}
-      verticalScrollbarOptions={{ visible: false }}
-    >
+    <scrollbox ref={scrollboxRef} flexGrow={1} scrollY scrollX={false} verticalScrollbarOptions={{ visible: false }}>
       <box flexDirection="column" flexGrow={1}>
         <Show when={!state.loading()}>
           <For each={state.filteredRows()}>
@@ -462,7 +510,9 @@ export default function GraphView() {
                 active={isActive(index())}
                 isLast={index() === state.filteredRows().length - 1}
                 viewportOffset={viewportOffset}
-                rowRef={(el) => { rowRefs[index()] = el; }}
+                rowRef={el => {
+                  rowRefs[index()] = el;
+                }}
               />
             )}
           </For>

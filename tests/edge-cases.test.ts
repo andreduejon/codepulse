@@ -5,14 +5,9 @@
  * multiple refs on same commit, root commit handling,
  * already-processed parent merging, and detached HEAD states.
  */
-import { describe, test, expect } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { buildGraph } from "../src/git/graph";
-import {
-  makeCommit,
-  hasConnector,
-  findConnector,
-  printGraph,
-} from "./test-helpers";
+import { findConnector, findRow, hasConnector, makeCommit, printGraph } from "./test-helpers";
 
 describe("Edge Cases", () => {
   test("Octopus merge (3 parents)", () => {
@@ -34,16 +29,21 @@ describe("Edge Cases", () => {
     expect(hasConnector(mergeRow.connectors, "node", mergeRow.nodeColumn)).toBe(true);
 
     // Should have spanning connectors for each secondary parent
-    const spanTypes = new Set(["horizontal", "corner-top-right", "corner-top-left",
-      "corner-bottom-right", "corner-bottom-left", "tee-left", "tee-right"]);
+    const spanTypes = new Set([
+      "horizontal",
+      "corner-top-right",
+      "corner-top-left",
+      "corner-bottom-right",
+      "corner-bottom-left",
+      "tee-left",
+      "tee-right",
+    ]);
     const spanConnectors = mergeRow.connectors.filter(c => spanTypes.has(c.type));
     expect(spanConnectors.length).toBeGreaterThanOrEqual(2);
   });
 
   test("Single-commit repo", () => {
-    const commits = [
-      makeCommit("abc123", [], [{ name: "main", type: "branch", isCurrent: true }], "Initial commit"),
-    ];
+    const commits = [makeCommit("abc123", [], [{ name: "main", type: "branch", isCurrent: true }], "Initial commit")];
 
     const rows = buildGraph(commits);
     printGraph(rows);
@@ -53,7 +53,8 @@ describe("Edge Cases", () => {
 
     const nodeConn = findConnector(rows[0].connectors, "node");
     expect(nodeConn).toBeDefined();
-    expect(nodeConn!.column).toBe(0);
+    if (!nodeConn) throw new Error("nodeConn not found");
+    expect(nodeConn.column).toBe(0);
 
     // Should only have one meaningful connector (the node)
     const nonEmpty = rows[0].connectors.filter(c => c.type !== "empty");
@@ -93,11 +94,16 @@ describe("Edge Cases", () => {
 
   test("Multiple refs on same commit", () => {
     const commits = [
-      makeCommit("d2", ["d1"], [
-        { name: "develop", type: "branch", isCurrent: true },
-        { name: "origin/develop", type: "remote", isCurrent: false },
-        { name: "origin/HEAD", type: "remote", isCurrent: false },
-      ], "develop tip"),
+      makeCommit(
+        "d2",
+        ["d1"],
+        [
+          { name: "develop", type: "branch", isCurrent: true },
+          { name: "origin/develop", type: "remote", isCurrent: false },
+          { name: "origin/HEAD", type: "remote", isCurrent: false },
+        ],
+        "develop tip",
+      ),
       makeCommit("d1", [], [], "initial"),
     ];
 
@@ -139,17 +145,22 @@ describe("Edge Cases", () => {
 
     const c2Row = rows.find(r => r.commit.hash === "c2");
     expect(c2Row).toBeDefined();
+    if (!c2Row) throw new Error("c2Row not found");
 
-    const closeConns = c2Row!.connectors.filter(c =>
-      c.type === "corner-bottom-right" || c.type === "corner-bottom-left" ||
-      c.type === "tee-left" || c.type === "tee-right" ||
-      c.type === "horizontal"
+    const closeConns = c2Row.connectors.filter(
+      c =>
+        c.type === "corner-bottom-right" ||
+        c.type === "corner-bottom-left" ||
+        c.type === "tee-left" ||
+        c.type === "tee-right" ||
+        c.type === "horizontal",
     );
     expect(closeConns.length).toBeGreaterThan(0);
 
     const p1Row = rows.find(r => r.commit.hash === "p1");
     expect(p1Row).toBeDefined();
-    expect(p1Row!.columns.some(c => c.active)).toBe(true);
+    if (!p1Row) throw new Error("p1Row not found");
+    expect(p1Row.columns.some(c => c.active)).toBe(true);
   });
 
   test("Single-parent, parent already processed with existing lane — merge", () => {
@@ -163,14 +174,18 @@ describe("Edge Cases", () => {
     printGraph(rows);
 
     const c2Row = rows.find(r => r.commit.hash === "c2");
-    const p1Row = rows.find(r => r.commit.hash === "p1")!;
+    const p1Row = findRow(rows, "p1");
     expect(c2Row).toBeDefined();
     expect(p1Row).toBeDefined();
+    if (!c2Row) throw new Error("c2Row not found");
 
-    const spanConns = c2Row!.connectors.filter(c =>
-      c.type === "corner-bottom-right" || c.type === "corner-bottom-left" ||
-      c.type === "tee-left" || c.type === "tee-right" ||
-      c.type === "horizontal"
+    const spanConns = c2Row.connectors.filter(
+      c =>
+        c.type === "corner-bottom-right" ||
+        c.type === "corner-bottom-left" ||
+        c.type === "tee-left" ||
+        c.type === "tee-right" ||
+        c.type === "horizontal",
     );
     expect(spanConns.length).toBeGreaterThan(0);
   });
@@ -185,7 +200,7 @@ describe("Edge Cases", () => {
     const rows = buildGraph(commits);
     printGraph(rows);
 
-    const c2Row = rows.find(r => r.commit.hash === "c2")!;
+    const c2Row = findRow(rows, "c2");
     expect(c2Row.parentColors.length).toBe(1);
     expect(typeof c2Row.parentColors[0]).toBe("number");
   });
@@ -224,9 +239,7 @@ describe("Edge Cases", () => {
   });
 
   test("Standalone detached HEAD (no other branches)", () => {
-    const commits = [
-      makeCommit("d1", [], [{ name: "HEAD", type: "head", isCurrent: true }]),
-    ];
+    const commits = [makeCommit("d1", [], [{ name: "HEAD", type: "head", isCurrent: true }])];
     const rows = buildGraph(commits);
     printGraph(rows);
 

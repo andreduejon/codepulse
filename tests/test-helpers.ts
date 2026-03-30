@@ -2,8 +2,22 @@
  * Shared test helpers for graph engine tests.
  */
 import { expect } from "bun:test";
+import {
+  type GraphChar,
+  getMaxGraphColumns,
+  type RenderOptions,
+  renderConnectorRow,
+  renderFanOutRow,
+  renderGraphRow,
+} from "../src/git/graph";
 import type { Commit, Connector, GraphRow, RefInfo } from "../src/git/types";
-import { type GraphChar, type RenderOptions, renderGraphRow, renderFanOutRow, renderConnectorRow, getMaxGraphColumns } from "../src/git/graph";
+
+/** Find a row by commit hash, failing the test if not found. */
+export function findRow(rows: GraphRow[], hash: string): GraphRow {
+  const row = rows.find(r => r.commit.hash === hash);
+  if (!row) throw new Error(`Row with hash "${hash}" not found`);
+  return row;
+}
 
 export function makeCommit(
   hash: string,
@@ -28,20 +42,12 @@ export function makeCommit(
 }
 
 /** Check that a row has a connector of the given type at the given column */
-export function hasConnector(
-  connectors: Connector[],
-  type: string,
-  column: number,
-): boolean {
+export function hasConnector(connectors: Connector[], type: string, column: number): boolean {
   return connectors.some(c => c.type === type && c.column === column);
 }
 
 /** Find a connector of the given type at the given column */
-export function findConnector(
-  connectors: Connector[],
-  type: string,
-  column?: number,
-): Connector | undefined {
+export function findConnector(connectors: Connector[], type: string, column?: number): Connector | undefined {
   if (column !== undefined) {
     return connectors.find(c => c.type === type && c.column === column);
   }
@@ -53,10 +59,7 @@ export function graphCharsToAscii(chars: GraphChar[]): string {
   return chars.map(gc => gc.char).join("");
 }
 
-export const THEME_COLORS = [
-  "#c0c001", "#c0c002", "#c0c003", "#c0c004",
-  "#c0c005", "#c0c006", "#c0c007", "#c0c008",
-];
+export const THEME_COLORS = ["#c0c001", "#c0c002", "#c0c003", "#c0c004", "#c0c005", "#c0c006", "#c0c007", "#c0c008"];
 
 /** Build render options with the shared test theme colors. */
 export function renderOpts(padToColumns?: number): RenderOptions {
@@ -83,7 +86,7 @@ export function totalCharWidth(chars: GraphChar[]): number {
  * has `isRemoteOnly === true`. Used by tests that verify post-pass dimming.
  */
 export function assertRowFullyDimmed(row: GraphRow, rowIdx: number) {
-  const label = `Row ${rowIdx} (${row.commit.hash})`;
+  const _label = `Row ${rowIdx} (${row.commit.hash})`;
 
   for (const conn of row.connectors) {
     expect(conn.isRemoteOnly).toBe(true);
@@ -106,9 +109,13 @@ export function assertRowFullyDimmed(row: GraphRow, rowIdx: number) {
 
 /** Connector types that indicate a merge/branch connection (not just a straight pass-through). */
 const CONNECTION_TYPES = new Set([
-  "horizontal", "tee-left", "tee-right",
-  "corner-top-right", "corner-top-left",
-  "corner-bottom-right", "corner-bottom-left",
+  "horizontal",
+  "tee-left",
+  "tee-right",
+  "corner-top-right",
+  "corner-top-left",
+  "corner-bottom-right",
+  "corner-bottom-left",
 ]);
 
 /** Check whether a commit row has merge/branch connectors (mirrors canMergeFanOut from graph.tsx). */
@@ -148,8 +155,8 @@ export function printGraph(rows: GraphRow[], themeColors: string[] = THEME_COLOR
     const ro = row.isRemoteOnly ? " [RO]" : "";
     if (canMerge && foRows) {
       const lastFO = foRows.at(-1);
-      expect(lastFO).toBeDefined();
-      const foAscii = graphCharsToAscii(renderFanOutRow(lastFO!, opts, row.nodeColumn));
+      if (!lastFO) throw new Error("Expected lastFO to be defined");
+      const foAscii = graphCharsToAscii(renderFanOutRow(lastFO, opts, row.nodeColumn));
       console.log(`        ${foAscii}  ${row.commit.hash}  (${refs})${ro}`);
     } else {
       const commitAscii = graphCharsToAscii(renderGraphRow(row, opts));

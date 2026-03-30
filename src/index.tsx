@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
 import { render } from "@opentui/solid";
-import { isGitRepo } from "./git/repo";
-import App from "./app";
 import packageJson from "../package.json";
+import App from "./app";
 import { DEFAULT_MAX_COUNT } from "./constants";
+import { isGitRepo } from "./git/repo";
 
 async function main() {
   const args = process.argv.slice(2);
@@ -74,15 +74,7 @@ async function main() {
   }
 
   // Render the TUI
-  await render(() => (
-    <App
-      repoPath={repoPath}
-      branch={branch}
-      all={all}
-      maxCount={maxCount}
-      themeName={themeName}
-    />
-  ), {
+  await render(() => <App repoPath={repoPath} branch={branch} all={all} maxCount={maxCount} themeName={themeName} />, {
     exitOnCtrlC: true,
     useAlternateScreen: true,
     useMouse: false,
@@ -126,7 +118,7 @@ KEYBOARD SHORTCUTS:
 `);
 }
 
-main().catch((err) => {
+main().catch(err => {
   console.error("Fatal error:", err);
   process.exit(1);
 });

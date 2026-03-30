@@ -8,16 +8,9 @@
  * 10-11. Fan-out merge is skipped when commit has merge/branch connectors
  * 12-13. Additional merge/fan-out edge cases
  */
-import { describe, test, expect } from "bun:test";
-import { buildGraph, renderGraphRow, renderFanOutRow } from "../src/git/graph";
-import {
-  makeCommit,
-  printGraph,
-  renderOpts,
-  hasChar,
-  findChars,
-  totalCharWidth,
-} from "./test-helpers";
+import { describe, expect, test } from "bun:test";
+import { buildGraph, renderFanOutRow, renderGraphRow } from "../src/git/graph";
+import { findChars, findRow, hasChar, makeCommit, printGraph, renderOpts, totalCharWidth } from "./test-helpers";
 
 describe("Block Commit", () => {
   test("Basic node glyph is █ (linear commits)", () => {
@@ -92,10 +85,12 @@ describe("Block Commit", () => {
 
     const parentRow = rows.find(r => r.commit.hash === "p1");
     expect(parentRow).toBeDefined();
-    expect(parentRow!.fanOutRows !== undefined && parentRow!.fanOutRows.length > 0).toBe(true);
+    if (!parentRow) throw new Error("parentRow not found");
+    expect(parentRow.fanOutRows !== undefined && parentRow.fanOutRows.length > 0).toBe(true);
+    if (!parentRow.fanOutRows) throw new Error("fanOutRows not found");
 
-    for (let fi = 0; fi < parentRow!.fanOutRows!.length; fi++) {
-      const foConnectors = parentRow!.fanOutRows![fi];
+    for (let fi = 0; fi < parentRow.fanOutRows.length; fi++) {
+      const foConnectors = parentRow.fanOutRows[fi];
       const foChars = renderFanOutRow(foConnectors, renderOpts());
 
       expect(hasChar(foChars, "█")).toBe(true);
@@ -115,17 +110,18 @@ describe("Block Commit", () => {
     printGraph(rows);
     const parentRow = rows.find(r => r.commit.hash === "p1");
     expect(parentRow).toBeDefined();
-    expect(parentRow!.fanOutRows).toBeDefined();
+    if (!parentRow) throw new Error("parentRow not found");
+    expect(parentRow.fanOutRows).toBeDefined();
+    if (!parentRow.fanOutRows) throw new Error("fanOutRows not found");
 
-    for (let fi = 0; fi < parentRow!.fanOutRows!.length; fi++) {
-      const foConnectors = parentRow!.fanOutRows![fi];
+    for (let fi = 0; fi < parentRow.fanOutRows.length; fi++) {
+      const foConnectors = parentRow.fanOutRows[fi];
       const foChars = renderFanOutRow(foConnectors, renderOpts());
 
       expect(hasChar(foChars, "█")).toBe(true);
 
-      const nodeCol = parentRow!.nodeColumn;
-      const teeConn = foConnectors.find(c =>
-        c.column === nodeCol && (c.type === "tee-left" || c.type === "tee-right"));
+      const nodeCol = parentRow.nodeColumn;
+      const teeConn = foConnectors.find(c => c.column === nodeCol && (c.type === "tee-left" || c.type === "tee-right"));
       if (teeConn?.type === "tee-left") {
         expect(hasChar(foChars, "─")).toBe(true);
       }
@@ -143,21 +139,25 @@ describe("Block Commit", () => {
     printGraph(rows);
     const parentRow = rows.find(r => r.commit.hash === "p1");
     expect(parentRow).toBeDefined();
+    if (!parentRow) throw new Error("parentRow not found");
 
     const opts = renderOpts();
 
-    const commitChars = renderGraphRow(parentRow!, opts);
+    const commitChars = renderGraphRow(parentRow, opts);
     const commitBlock = commitChars.find(gc => gc.char.includes("█"));
     expect(commitBlock).toBeDefined();
+    if (!commitBlock) throw new Error("commitBlock not found");
 
-    const fanOutRows = parentRow!.fanOutRows;
+    const fanOutRows = parentRow.fanOutRows;
     expect(fanOutRows).toBeDefined();
+    if (!fanOutRows) throw new Error("fanOutRows not found");
 
-    for (let fi = 0; fi < fanOutRows!.length; fi++) {
-      const foChars = renderFanOutRow(fanOutRows![fi], opts);
+    for (let fi = 0; fi < fanOutRows.length; fi++) {
+      const foChars = renderFanOutRow(fanOutRows[fi], opts);
       const foBlock = foChars.find(gc => gc.char.includes("█"));
       expect(foBlock).toBeDefined();
-      expect(foBlock!.color).toBe(commitBlock!.color);
+      if (!foBlock) throw new Error("foBlock not found");
+      expect(foBlock.color).toBe(commitBlock.color);
     }
   });
 
@@ -171,7 +171,7 @@ describe("Block Commit", () => {
     const rows = buildGraph(commits);
     printGraph(rows);
 
-    const c2Row = rows.find(r => r.commit.hash === "c2")!;
+    const c2Row = findRow(rows, "c2");
     const rendered = renderGraphRow(c2Row, {});
 
     const nodeChar = rendered.find(gc => gc.char.includes("█"));
@@ -190,17 +190,23 @@ describe("Block Commit", () => {
 
     const rows = buildGraph(commits);
     printGraph(rows);
-    const parentRow = rows.find(r => r.commit.hash === "p1")!;
+    const parentRow = findRow(rows, "p1");
 
-    const hasConnections = parentRow.connectors.some(c =>
-      c.type === "horizontal" || c.type === "tee-left" || c.type === "tee-right" ||
-      c.type === "corner-top-right" || c.type === "corner-top-left" ||
-      c.type === "corner-bottom-right" || c.type === "corner-bottom-left"
+    const hasConnections = parentRow.connectors.some(
+      c =>
+        c.type === "horizontal" ||
+        c.type === "tee-left" ||
+        c.type === "tee-right" ||
+        c.type === "corner-top-right" ||
+        c.type === "corner-top-left" ||
+        c.type === "corner-bottom-right" ||
+        c.type === "corner-bottom-left",
     );
     expect(hasConnections).toBe(false);
 
     expect(parentRow.fanOutRows !== undefined && parentRow.fanOutRows.length > 0).toBe(true);
-    expect(parentRow.fanOutRows!.length).toBeGreaterThanOrEqual(1);
+    if (!parentRow.fanOutRows) throw new Error("fanOutRows not found");
+    expect(parentRow.fanOutRows.length).toBeGreaterThanOrEqual(1);
   });
 
   test("Fan-out merge with 2 fan-out rows", () => {
@@ -213,18 +219,24 @@ describe("Block Commit", () => {
 
     const rows = buildGraph(commits);
     printGraph(rows);
-    const parentRow = rows.find(r => r.commit.hash === "p1")!;
+    const parentRow = findRow(rows, "p1");
 
     expect(parentRow.fanOutRows !== undefined && parentRow.fanOutRows.length >= 2).toBe(true);
 
-    const hasConnections = parentRow.connectors.some(c =>
-      c.type === "horizontal" || c.type === "tee-left" || c.type === "tee-right" ||
-      c.type === "corner-top-right" || c.type === "corner-top-left" ||
-      c.type === "corner-bottom-right" || c.type === "corner-bottom-left"
+    const hasConnections = parentRow.connectors.some(
+      c =>
+        c.type === "horizontal" ||
+        c.type === "tee-left" ||
+        c.type === "tee-right" ||
+        c.type === "corner-top-right" ||
+        c.type === "corner-top-left" ||
+        c.type === "corner-bottom-right" ||
+        c.type === "corner-bottom-left",
     );
     expect(hasConnections).toBe(false);
 
-    const aboveCount = parentRow.fanOutRows!.length - 1;
+    if (!parentRow.fanOutRows) throw new Error("fanOutRows not found");
+    const aboveCount = parentRow.fanOutRows.length - 1;
     expect(aboveCount).toBeGreaterThanOrEqual(1);
   });
 
@@ -239,14 +251,19 @@ describe("Block Commit", () => {
 
     const rows = buildGraph(commits);
     printGraph(rows);
-    const mergeRow = rows.find(r => r.commit.hash === "m1")!;
+    const mergeRow = findRow(rows, "m1");
 
     expect(mergeRow.fanOutRows !== undefined && mergeRow.fanOutRows.length > 0).toBe(true);
 
-    const hasConnections = mergeRow.connectors.some(c =>
-      c.type === "horizontal" || c.type === "tee-left" || c.type === "tee-right" ||
-      c.type === "corner-top-right" || c.type === "corner-top-left" ||
-      c.type === "corner-bottom-right" || c.type === "corner-bottom-left"
+    const hasConnections = mergeRow.connectors.some(
+      c =>
+        c.type === "horizontal" ||
+        c.type === "tee-left" ||
+        c.type === "tee-right" ||
+        c.type === "corner-top-right" ||
+        c.type === "corner-top-left" ||
+        c.type === "corner-bottom-right" ||
+        c.type === "corner-bottom-left",
     );
     expect(hasConnections).toBe(true);
   });
@@ -262,12 +279,17 @@ describe("Block Commit", () => {
 
     const rows = buildGraph(commits);
     printGraph(rows);
-    const mergeRow = rows.find(r => r.commit.hash === "m1")!;
+    const mergeRow = findRow(rows, "m1");
 
-    const hasConnections = mergeRow.connectors.some(c =>
-      c.type === "horizontal" || c.type === "tee-left" || c.type === "tee-right" ||
-      c.type === "corner-top-right" || c.type === "corner-top-left" ||
-      c.type === "corner-bottom-right" || c.type === "corner-bottom-left"
+    const hasConnections = mergeRow.connectors.some(
+      c =>
+        c.type === "horizontal" ||
+        c.type === "tee-left" ||
+        c.type === "tee-right" ||
+        c.type === "corner-top-right" ||
+        c.type === "corner-top-left" ||
+        c.type === "corner-bottom-right" ||
+        c.type === "corner-bottom-left",
     );
     expect(hasConnections).toBe(true);
   });
@@ -283,13 +305,14 @@ describe("Block Commit", () => {
     const rows = buildGraph(commits);
     printGraph(rows);
     const padCols = Math.max(...rows.map(r => r.columns.length));
-    const parentRow = rows.find(r => r.commit.hash === "p1")!;
+    const parentRow = findRow(rows, "p1");
 
     const commitChars = renderGraphRow(parentRow, renderOpts(padCols));
     const commitWidth = totalCharWidth(commitChars);
 
-    for (let fi = 0; fi < parentRow.fanOutRows!.length; fi++) {
-      const foChars = renderFanOutRow(parentRow.fanOutRows![fi], renderOpts(padCols));
+    if (!parentRow.fanOutRows) throw new Error("fanOutRows not found");
+    for (let fi = 0; fi < parentRow.fanOutRows.length; fi++) {
+      const foChars = renderFanOutRow(parentRow.fanOutRows[fi], renderOpts(padCols));
       const foWidth = totalCharWidth(foChars);
       expect(foWidth).toBe(commitWidth);
     }
@@ -336,14 +359,15 @@ describe("Block Commit", () => {
     const rows = buildGraph(commits);
     printGraph(rows);
 
-    const m1Row = rows.find(r => r.commit.hash === "m1")!;
+    const m1Row = findRow(rows, "m1");
     const rendered = renderGraphRow(m1Row, {});
 
     const nodeGlyph = rendered.find(gc => gc.char.includes("█"));
     expect(nodeGlyph).toBeDefined();
     if (nodeGlyph) {
       const nodeIdx = rendered.indexOf(nodeGlyph);
-      const hasTrailingDash = nodeGlyph.char === "█" ||
+      const hasTrailingDash =
+        nodeGlyph.char === "█" ||
         (nodeIdx + 1 < rendered.length && rendered[nodeIdx + 1].char === "─") ||
         nodeGlyph.char.includes("─");
       expect(hasTrailingDash).toBe(true);
@@ -360,13 +384,17 @@ describe("Block Commit", () => {
     const rows = buildGraph(commits);
     printGraph(rows);
 
-    const c2Row = rows.find(r => r.commit.hash === "c2")!;
-    const p1Row = rows.find(r => r.commit.hash === "p1")!;
+    const c2Row = findRow(rows, "c2");
+    const p1Row = findRow(rows, "p1");
 
     if (c2Row.nodeColumn > p1Row.nodeColumn) {
-      const leftConns = c2Row.connectors.filter(c =>
-        c.column < c2Row.nodeColumn && c.column >= p1Row.nodeColumn &&
-        c.type !== "straight" && c.type !== "empty" && c.type !== "node"
+      const leftConns = c2Row.connectors.filter(
+        c =>
+          c.column < c2Row.nodeColumn &&
+          c.column >= p1Row.nodeColumn &&
+          c.type !== "straight" &&
+          c.type !== "empty" &&
+          c.type !== "node",
       );
       expect(leftConns.length).toBeGreaterThan(0);
     }

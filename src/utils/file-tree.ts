@@ -2,21 +2,21 @@ import type { FileChange } from "../git/types";
 
 /** Tree node for building the file tree structure */
 export interface FileTreeNode {
-  name: string;          // segment name (directory name or file basename)
-  fullPath: string;      // full path for identification
-  file?: FileChange;     // present only for file nodes (leaves)
+  name: string; // segment name (directory name or file basename)
+  fullPath: string; // full path for identification
+  file?: FileChange; // present only for file nodes (leaves)
   children: FileTreeNode[];
 }
 
 /** A flattened row from the file tree, ready for rendering */
 export interface FileTreeRow {
-  prefix: string;        // connector prefix chars (│, spaces from ancestors)
-  connector: string;     // this row's connector (├── or └──)
-  name: string;          // display name
-  isDir: boolean;        // true = directory, false = file
-  dirPath: string;       // for dirs: the full path; for files: parent dir path
-  file?: FileChange;     // present only for file rows
-  depth: number;         // nesting depth (0 = root children)
+  prefix: string; // connector prefix chars (│, spaces from ancestors)
+  connector: string; // this row's connector (├── or └──)
+  name: string; // display name
+  isDir: boolean; // true = directory, false = file
+  dirPath: string; // for dirs: the full path; for files: parent dir path
+  file?: FileChange; // present only for file rows
+  depth: number; // nesting depth (0 = root children)
 }
 
 /**
@@ -37,7 +37,7 @@ export function buildFileTree(files: FileChange[]): FileTreeNode {
       if (isFile) {
         node.children.push({ name: part, fullPath: file.path, file, children: [] });
       } else {
-        let child = node.children.find((c) => !c.file && c.name === part);
+        let child = node.children.find(c => !c.file && c.name === part);
         if (!child) {
           child = { name: part, fullPath, children: [] };
           node.children.push(child);
@@ -69,7 +69,7 @@ export function buildFileTree(files: FileChange[]): FileTreeNode {
       if (child.file) continue;
       while (child.children.length === 1 && !child.children[0].file) {
         const grandchild = child.children[0];
-        child.name = child.name + "/" + grandchild.name;
+        child.name = `${child.name}/${grandchild.name}`;
         child.fullPath = grandchild.fullPath;
         child.children = grandchild.children;
       }
@@ -85,10 +85,7 @@ export function buildFileTree(files: FileChange[]): FileTreeNode {
  * Flatten a file tree into renderable rows with connector prefixes.
  * Directories in `collapsedDirs` have their children hidden.
  */
-export function flattenFileTree(
-  root: FileTreeNode,
-  collapsedDirs: ReadonlySet<string>
-): FileTreeRow[] {
+export function flattenFileTree(root: FileTreeNode, collapsedDirs: ReadonlySet<string>): FileTreeRow[] {
   const rows: FileTreeRow[] = [];
 
   const walk = (node: FileTreeNode, prefix: string, depth: number) => {
@@ -102,7 +99,7 @@ export function flattenFileTree(
       rows.push({
         prefix,
         connector,
-        name: isDir ? child.name + "/" : child.name,
+        name: isDir ? `${child.name}/` : child.name,
         isDir,
         dirPath: isDir ? child.fullPath : node.fullPath,
         file: child.file,

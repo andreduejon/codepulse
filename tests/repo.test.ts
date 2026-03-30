@@ -6,8 +6,17 @@
  *
  * These are unit tests for the parsing layer — they don't spawn git subprocesses.
  */
-import { describe, test, expect } from "bun:test";
-import { parseRefs, parseCommitLine, parseTagLine, parseTrackInfo, parseStashEntry, parseStatusPorcelain, parseDiffTreeOutput, RS } from "../src/git/repo";
+import { describe, expect, test } from "bun:test";
+import {
+  parseCommitLine,
+  parseDiffTreeOutput,
+  parseRefs,
+  parseStashEntry,
+  parseStatusPorcelain,
+  parseTagLine,
+  parseTrackInfo,
+  RS,
+} from "../src/git/repo";
 
 describe("repo.ts parsing", () => {
   test("parseRefs — empty/blank string returns []", () => {
@@ -114,50 +123,72 @@ describe("repo.ts parsing", () => {
     const committerEmail = "other@example.com";
     const commitDate = "2024-01-15T11:00:00+01:00";
 
-    const line = [hash, shortHash, parents, refStr, subject, author, email, date, committer, committerEmail, commitDate].join(RS);
+    const line = [
+      hash,
+      shortHash,
+      parents,
+      refStr,
+      subject,
+      author,
+      email,
+      date,
+      committer,
+      committerEmail,
+      commitDate,
+    ].join(RS);
 
     const commit = parseCommitLine(line, new Set(["origin"]));
     expect(commit).not.toBeNull();
+    if (!commit) throw new Error("commit not found");
 
-    expect(commit!.hash).toBe(hash);
-    expect(commit!.shortHash).toBe(shortHash);
-    expect(commit!.parents.length).toBe(2);
-    expect(commit!.parents[0]).toBe("parent1");
-    expect(commit!.parents[1]).toBe("parent2");
-    expect(commit!.subject).toBe(subject);
-    expect(commit!.body).toBe("");
-    expect(commit!.author).toBe(author);
-    expect(commit!.authorEmail).toBe(email);
-    expect(commit!.authorDate).toBe(date);
-    expect(commit!.committer).toBe(committer);
-    expect(commit!.committerEmail).toBe(committerEmail);
-    expect(commit!.commitDate).toBe(commitDate);
+    expect(commit.hash).toBe(hash);
+    expect(commit.shortHash).toBe(shortHash);
+    expect(commit.parents.length).toBe(2);
+    expect(commit.parents[0]).toBe("parent1");
+    expect(commit.parents[1]).toBe("parent2");
+    expect(commit.subject).toBe(subject);
+    expect(commit.body).toBe("");
+    expect(commit.author).toBe(author);
+    expect(commit.authorEmail).toBe(email);
+    expect(commit.authorDate).toBe(date);
+    expect(commit.committer).toBe(committer);
+    expect(commit.committerEmail).toBe(committerEmail);
+    expect(commit.commitDate).toBe(commitDate);
 
     // Refs
-    expect(commit!.refs.length).toBe(2);
-    expect(commit!.refs[0].name).toBe("main");
-    expect(commit!.refs[0].type).toBe("branch");
-    expect(commit!.refs[0].isCurrent).toBe(true);
-    expect(commit!.refs[1].name).toBe("v1.0");
-    expect(commit!.refs[1].type).toBe("tag");
+    expect(commit.refs.length).toBe(2);
+    expect(commit.refs[0].name).toBe("main");
+    expect(commit.refs[0].type).toBe("branch");
+    expect(commit.refs[0].isCurrent).toBe(true);
+    expect(commit.refs[1].name).toBe("v1.0");
+    expect(commit.refs[1].type).toBe("tag");
   });
 
   test("parseCommitLine — root commit (no parents)", () => {
     const fields = [
-      "aaa111", "aaa111", "", "", "Initial commit",
-      "Author", "a@b.com", "2024-01-01T00:00:00Z",
-      "Author", "a@b.com", "2024-01-01T00:00:00Z",
+      "aaa111",
+      "aaa111",
+      "",
+      "",
+      "Initial commit",
+      "Author",
+      "a@b.com",
+      "2024-01-01T00:00:00Z",
+      "Author",
+      "a@b.com",
+      "2024-01-01T00:00:00Z",
     ];
     const line = fields.join(RS);
 
     const commit = parseCommitLine(line, new Set());
     expect(commit).not.toBeNull();
-    expect(commit!.parents.length).toBe(0);
-    expect(commit!.refs.length).toBe(0);
+    if (!commit) throw new Error("commit not found");
+    expect(commit.parents.length).toBe(0);
+    expect(commit.refs.length).toBe(0);
   });
 
   test("parseCommitLine — malformed line", () => {
-    const result = parseCommitLine("abc" + RS + "def" + RS + "ghi", new Set());
+    const result = parseCommitLine(`abc${RS}def${RS}ghi`, new Set());
     expect(result).toBeNull();
 
     const result2 = parseCommitLine("", new Set());
@@ -173,91 +204,79 @@ describe("repo.ts parsing", () => {
   test("parseCommitLine — subject with special characters", () => {
     const specialSubject = "fix(scope): handle <angle> & \"quotes\" + 'apostrophes'";
     const fields = [
-      "bbb222", "bbb222", "parent1", "",
+      "bbb222",
+      "bbb222",
+      "parent1",
+      "",
       specialSubject,
-      "Author", "a@b.com", "2024-06-15T12:00:00Z",
-      "Author", "a@b.com", "2024-06-15T12:00:00Z",
+      "Author",
+      "a@b.com",
+      "2024-06-15T12:00:00Z",
+      "Author",
+      "a@b.com",
+      "2024-06-15T12:00:00Z",
     ];
     const line = fields.join(RS);
 
     const commit = parseCommitLine(line, new Set());
     expect(commit).not.toBeNull();
-    expect(commit!.subject).toBe(specialSubject);
+    if (!commit) throw new Error("commit not found");
+    expect(commit.subject).toBe(specialSubject);
   });
 });
 
 describe("parseTagLine", () => {
   test("annotated tag with full info", () => {
-    const line = [
-      "refs/tags/v1.0.0",
-      "tag",
-      "Jane Doe",
-      "2024-06-15T12:00:00+02:00",
-      "Release v1.0.0",
-    ].join(RS);
+    const line = ["refs/tags/v1.0.0", "tag", "Jane Doe", "2024-06-15T12:00:00+02:00", "Release v1.0.0"].join(RS);
 
     const tag = parseTagLine(line);
     expect(tag).not.toBeNull();
-    expect(tag!.name).toBe("v1.0.0");
-    expect(tag!.type).toBe("annotated");
-    expect(tag!.tagger).toBe("Jane Doe");
-    expect(tag!.taggerDate).toBe("2024-06-15T12:00:00+02:00");
-    expect(tag!.message).toBe("Release v1.0.0");
+    if (!tag) throw new Error("tag not found");
+    expect(tag.name).toBe("v1.0.0");
+    expect(tag.type).toBe("annotated");
+    expect(tag.tagger).toBe("Jane Doe");
+    expect(tag.taggerDate).toBe("2024-06-15T12:00:00+02:00");
+    expect(tag.message).toBe("Release v1.0.0");
   });
 
   test("lightweight tag", () => {
-    const line = [
-      "refs/tags/v0.1.0",
-      "commit",
-      "",
-      "",
-      "",
-    ].join(RS);
+    const line = ["refs/tags/v0.1.0", "commit", "", "", ""].join(RS);
 
     const tag = parseTagLine(line);
     expect(tag).not.toBeNull();
-    expect(tag!.name).toBe("v0.1.0");
-    expect(tag!.type).toBe("lightweight");
-    expect(tag!.tagger).toBeUndefined();
-    expect(tag!.taggerDate).toBeUndefined();
-    expect(tag!.message).toBeUndefined();
+    if (!tag) throw new Error("tag not found");
+    expect(tag.name).toBe("v0.1.0");
+    expect(tag.type).toBe("lightweight");
+    expect(tag.tagger).toBeUndefined();
+    expect(tag.taggerDate).toBeUndefined();
+    expect(tag.message).toBeUndefined();
   });
 
   test("annotated tag with empty tagger/message", () => {
-    const line = [
-      "refs/tags/v2.0",
-      "tag",
-      "",
-      "",
-      "",
-    ].join(RS);
+    const line = ["refs/tags/v2.0", "tag", "", "", ""].join(RS);
 
     const tag = parseTagLine(line);
     expect(tag).not.toBeNull();
-    expect(tag!.name).toBe("v2.0");
-    expect(tag!.type).toBe("annotated");
-    expect(tag!.tagger).toBeUndefined();
-    expect(tag!.taggerDate).toBeUndefined();
-    expect(tag!.message).toBeUndefined();
+    if (!tag) throw new Error("tag not found");
+    expect(tag.name).toBe("v2.0");
+    expect(tag.type).toBe("annotated");
+    expect(tag.tagger).toBeUndefined();
+    expect(tag.taggerDate).toBeUndefined();
+    expect(tag.message).toBeUndefined();
   });
 
   test("malformed line returns null", () => {
     expect(parseTagLine("")).toBeNull();
-    expect(parseTagLine("refs/tags/v1" + RS + "tag")).toBeNull();
+    expect(parseTagLine(`refs/tags/v1${RS}tag`)).toBeNull();
   });
 
   test("strips refs/tags/ prefix from name", () => {
-    const line = [
-      "refs/tags/release/v3.0",
-      "commit",
-      "",
-      "",
-      "",
-    ].join(RS);
+    const line = ["refs/tags/release/v3.0", "commit", "", "", ""].join(RS);
 
     const tag = parseTagLine(line);
     expect(tag).not.toBeNull();
-    expect(tag!.name).toBe("release/v3.0");
+    if (!tag) throw new Error("tag not found");
+    expect(tag.name).toBe("release/v3.0");
   });
 });
 
@@ -304,30 +323,31 @@ describe("parseStashEntry", () => {
   test("basic stash entry with two parents", () => {
     const line = [
       "abc123def456abc123def456abc123def456abc123", // hash
-      "abc123d",                                     // shortHash
-      "parent1111 parent2222",                       // parents (HEAD + index)
-      "stash@{0}",                                   // stashRef
-      "WIP on main: fix typo",                       // subject
-      "John Doe",                                    // author
-      "john@example.com",                            // authorEmail
-      "2024-06-15T12:00:00+02:00",                  // authorDate
-      "John Doe",                                    // committer
-      "john@example.com",                            // committerEmail
-      "2024-06-15T12:00:00+02:00",                  // commitDate
+      "abc123d", // shortHash
+      "parent1111 parent2222", // parents (HEAD + index)
+      "stash@{0}", // stashRef
+      "WIP on main: fix typo", // subject
+      "John Doe", // author
+      "john@example.com", // authorEmail
+      "2024-06-15T12:00:00+02:00", // authorDate
+      "John Doe", // committer
+      "john@example.com", // committerEmail
+      "2024-06-15T12:00:00+02:00", // commitDate
     ].join(RS);
 
     const entry = parseStashEntry(line);
     expect(entry).not.toBeNull();
-    expect(entry!.hash).toBe("abc123def456abc123def456abc123def456abc123");
-    expect(entry!.shortHash).toBe("abc123d");
+    if (!entry) throw new Error("entry not found");
+    expect(entry.hash).toBe("abc123def456abc123def456abc123def456abc123");
+    expect(entry.shortHash).toBe("abc123d");
     // Only first parent used for graph topology
-    expect(entry!.parents).toEqual(["parent1111"]);
-    expect(entry!.subject).toBe("WIP on main: fix typo");
-    expect(entry!.author).toBe("John Doe");
-    expect(entry!.refs).toHaveLength(1);
-    expect(entry!.refs[0].name).toBe("stash@{0}");
-    expect(entry!.refs[0].type).toBe("stash");
-    expect(entry!.refs[0].isCurrent).toBe(false);
+    expect(entry.parents).toEqual(["parent1111"]);
+    expect(entry.subject).toBe("WIP on main: fix typo");
+    expect(entry.author).toBe("John Doe");
+    expect(entry.refs).toHaveLength(1);
+    expect(entry.refs[0].name).toBe("stash@{0}");
+    expect(entry.refs[0].type).toBe("stash");
+    expect(entry.refs[0].isCurrent).toBe(false);
   });
 
   test("stash with three parents (untracked files)", () => {
@@ -347,21 +367,22 @@ describe("parseStashEntry", () => {
 
     const entry = parseStashEntry(line);
     expect(entry).not.toBeNull();
+    if (!entry) throw new Error("entry not found");
     // Only first parent used
-    expect(entry!.parents).toEqual(["parent1"]);
-    expect(entry!.refs[0].name).toBe("stash@{2}");
+    expect(entry.parents).toEqual(["parent1"]);
+    expect(entry.refs[0].name).toBe("stash@{2}");
   });
 
   test("malformed line returns null", () => {
     expect(parseStashEntry("")).toBeNull();
-    expect(parseStashEntry("only" + RS + "two")).toBeNull();
+    expect(parseStashEntry(`only${RS}two`)).toBeNull();
   });
 
   test("line with no parents returns null", () => {
     const line = [
       "abc123def456abc123def456abc123def456abc123",
       "abc123d",
-      "",         // empty parents
+      "", // empty parents
       "stash@{0}",
       "WIP",
       "Author",
@@ -393,8 +414,9 @@ describe("parseStashEntry", () => {
 
     const entry = parseStashEntry(line);
     expect(entry).not.toBeNull();
-    expect(entry!.refs[0].name).toBe("stash@{5}");
-    expect(entry!.refs[0].type).toBe("stash");
+    if (!entry) throw new Error("entry not found");
+    expect(entry.refs[0].name).toBe("stash@{5}");
+    expect(entry.refs[0].type).toBe("stash");
   });
 });
 
@@ -408,42 +430,46 @@ describe("parseStatusPorcelain", () => {
     const output = "M  src/app.ts\nA  src/new.ts\nD  old.ts\n";
     const result = parseStatusPorcelain(output);
     expect(result).not.toBeNull();
-    expect(result!.staged).toBe(3);
-    expect(result!.unstaged).toBe(0);
-    expect(result!.untracked).toBe(0);
+    if (!result) throw new Error("result not found");
+    expect(result.staged).toBe(3);
+    expect(result.unstaged).toBe(0);
+    expect(result.untracked).toBe(0);
   });
 
   test("counts unstaged files (worktree column)", () => {
     const output = " M src/app.ts\n M src/other.ts\n";
     const result = parseStatusPorcelain(output);
     expect(result).not.toBeNull();
-    expect(result!.staged).toBe(0);
-    expect(result!.unstaged).toBe(2);
-    expect(result!.untracked).toBe(0);
+    if (!result) throw new Error("result not found");
+    expect(result.staged).toBe(0);
+    expect(result.unstaged).toBe(2);
+    expect(result.untracked).toBe(0);
   });
 
   test("counts untracked files", () => {
     const output = "?? newfile.ts\n?? another.ts\n";
     const result = parseStatusPorcelain(output);
     expect(result).not.toBeNull();
-    expect(result!.staged).toBe(0);
-    expect(result!.unstaged).toBe(0);
-    expect(result!.untracked).toBe(2);
+    if (!result) throw new Error("result not found");
+    expect(result.staged).toBe(0);
+    expect(result.unstaged).toBe(0);
+    expect(result.untracked).toBe(2);
   });
 
   test("handles mixed staged + unstaged + untracked", () => {
     const output = [
       "M  staged-only.ts",
       " M unstaged-only.ts",
-      "MM both.ts",        // staged AND unstaged
+      "MM both.ts", // staged AND unstaged
       "?? newfile.ts",
     ].join("\n");
     const result = parseStatusPorcelain(output);
     expect(result).not.toBeNull();
+    if (!result) throw new Error("result not found");
     // "M " = staged, " M" = unstaged, "MM" = both staged+unstaged, "??" = untracked
-    expect(result!.staged).toBe(2);   // M_ and MM
-    expect(result!.unstaged).toBe(2); // _M and MM
-    expect(result!.untracked).toBe(1);
+    expect(result.staged).toBe(2); // M_ and MM
+    expect(result.unstaged).toBe(2); // _M and MM
+    expect(result.untracked).toBe(1);
   });
 
   test("returns null when all lines are empty or too short", () => {
@@ -469,29 +495,30 @@ describe("parseDiffTreeOutput", () => {
 
     const app = files.find(f => f.path === "src/app.tsx");
     expect(app).toBeDefined();
-    expect(app!.additions).toBe(12);
-    expect(app!.deletions).toBe(3);
-    expect(app!.status).toBe("M");
+    if (!app) throw new Error("app not found");
+    expect(app.additions).toBe(12);
+    expect(app.deletions).toBe(3);
+    expect(app.status).toBe("M");
 
     const newFile = files.find(f => f.path === "src/new-file.ts");
     expect(newFile).toBeDefined();
-    expect(newFile!.additions).toBe(45);
-    expect(newFile!.deletions).toBe(0);
-    expect(newFile!.status).toBe("A");
+    if (!newFile) throw new Error("newFile not found");
+    expect(newFile.additions).toBe(45);
+    expect(newFile.deletions).toBe(0);
+    expect(newFile.status).toBe("A");
 
     const deleted = files.find(f => f.path === "old-file.ts");
     expect(deleted).toBeDefined();
-    expect(deleted!.additions).toBe(0);
-    expect(deleted!.deletions).toBe(10);
-    expect(deleted!.status).toBe("D");
+    if (!deleted) throw new Error("deleted not found");
+    expect(deleted.additions).toBe(0);
+    expect(deleted.deletions).toBe(10);
+    expect(deleted.status).toBe("D");
   });
 
   test("handles rename status (R100)", () => {
-    const output = [
-      ":100644 100644 abc1234 def5678 R100\told-name.ts\tnew-name.ts",
-      "",
-      "0\t0\told-name.ts",
-    ].join("\n");
+    const output = [":100644 100644 abc1234 def5678 R100\told-name.ts\tnew-name.ts", "", "0\t0\told-name.ts"].join(
+      "\n",
+    );
 
     const files = parseDiffTreeOutput(output);
     expect(files).toHaveLength(1);
@@ -500,11 +527,7 @@ describe("parseDiffTreeOutput", () => {
   });
 
   test("handles binary files (- additions/deletions)", () => {
-    const output = [
-      ":100644 100644 abc1234 def5678 M\timage.png",
-      "",
-      "-\t-\timage.png",
-    ].join("\n");
+    const output = [":100644 100644 abc1234 def5678 M\timage.png", "", "-\t-\timage.png"].join("\n");
 
     const files = parseDiffTreeOutput(output);
     expect(files).toHaveLength(1);

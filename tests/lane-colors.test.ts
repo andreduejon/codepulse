@@ -5,9 +5,9 @@
  * color indices rather than inheriting the color of the column position.
  * This prevents visually incorrect connector colors.
  */
-import { describe, test, expect } from "bun:test";
-import { buildGraph, renderGraphRow, getColorForColumn } from "../src/git/graph";
-import { makeCommit, printGraph } from "./test-helpers";
+import { describe, expect, test } from "bun:test";
+import { buildGraph, getColorForColumn, renderGraphRow } from "../src/git/graph";
+import { findRow, makeCommit, printGraph } from "./test-helpers";
 
 describe("Lane Color Consistency", () => {
   test("New lane at reused interior slot gets fresh color", () => {
@@ -24,22 +24,21 @@ describe("Lane Color Consistency", () => {
 
     const rowB = rows.find(r => r.commit.hash === "B");
     expect(rowB).toBeDefined();
+    if (!rowB) throw new Error("rowB not found");
 
-    const bNodeColor = rowB!.nodeColor;
+    const bNodeColor = rowB.nodeColor;
 
-    const rowD = rows.find(r => r.commit.hash === "D")!;
+    const rowD = findRow(rows, "D");
 
-    const branchCorner = rowD.connectors.find(c =>
-      c.type === "corner-top-right" || c.type === "corner-top-left"
-    );
+    const branchCorner = rowD.connectors.find(c => c.type === "corner-top-right" || c.type === "corner-top-left");
     expect(branchCorner).toBeDefined();
 
     if (branchCorner) {
       expect(branchCorner.color).not.toBe(bNodeColor);
     }
 
-    const rowA = rows.find(r => r.commit.hash === "A")!;
-    const rowE = rows.find(r => r.commit.hash === "E")!;
+    const rowA = findRow(rows, "A");
+    const rowE = findRow(rows, "E");
     expect(rowA.nodeColor).not.toBe(rowE.nodeColor);
   });
 
@@ -67,12 +66,12 @@ describe("Lane Color Consistency", () => {
     const rows = buildGraph(commits);
     printGraph(rows);
 
-    const rowB = rows.find(r => r.commit.hash === "B")!;
+    const rowB = findRow(rows, "B");
     const straightAtCol0 = rowB.connectors.find(c => c.type === "straight" && c.column === 0);
     expect(straightAtCol0).toBeDefined();
 
     if (straightAtCol0) {
-      const rowA = rows.find(r => r.commit.hash === "A")!;
+      const rowA = findRow(rows, "A");
       expect(straightAtCol0.color).toBe(rowA.nodeColor);
     }
   });
@@ -86,8 +85,8 @@ describe("Lane Color Consistency", () => {
     const rows = buildGraph(commits);
     printGraph(rows);
 
-    const rowB = rows.find(r => r.commit.hash === "B")!;
-    const rowA = rows.find(r => r.commit.hash === "A")!;
+    const rowB = findRow(rows, "B");
+    const rowA = findRow(rows, "A");
 
     expect(rowB.columns.length).toBeGreaterThanOrEqual(2);
 
@@ -99,9 +98,18 @@ describe("Lane Color Consistency", () => {
 
   test("Rendered graph row uses correct hex colors from lane colors", () => {
     const COLORS = [
-      "#f38ba8", "#a6e3a1", "#89b4fa", "#f9e2af",
-      "#cba6f7", "#94e2d5", "#fab387", "#74c7ec",
-      "#f2cdcd", "#89dceb", "#b4befe", "#eba0ac",
+      "#f38ba8",
+      "#a6e3a1",
+      "#89b4fa",
+      "#f9e2af",
+      "#cba6f7",
+      "#94e2d5",
+      "#fab387",
+      "#74c7ec",
+      "#f2cdcd",
+      "#89dceb",
+      "#b4befe",
+      "#eba0ac",
     ];
     const commits = [
       makeCommit("A", ["C"], [{ name: "main", type: "branch", isCurrent: true }]),
@@ -110,7 +118,7 @@ describe("Lane Color Consistency", () => {
     ];
     const rows = buildGraph(commits);
     printGraph(rows);
-    const rowA = rows.find(r => r.commit.hash === "A")!;
+    const rowA = findRow(rows, "A");
     const rendered = renderGraphRow(rowA, { themeColors: COLORS });
 
     const nodeGlyph = rendered.find(gc => gc.char.includes("█"));
@@ -128,19 +136,17 @@ describe("Lane Color Consistency", () => {
       makeCommit("B2", ["D"], [{ name: "f2", type: "branch", isCurrent: false }]),
       makeCommit("B3", ["D"], [{ name: "f3", type: "branch", isCurrent: false }]),
       makeCommit("B4", ["D"], [{ name: "f4", type: "branch", isCurrent: false }]),
-      makeCommit("B", ["D", "E"], []),  // merge commit — opens lane for E
+      makeCommit("B", ["D", "E"], []), // merge commit — opens lane for E
       makeCommit("E", ["D"], [{ name: "hotfix", type: "branch", isCurrent: false }]),
       makeCommit("D", [], []),
     ];
     const rows = buildGraph(commits);
     printGraph(rows);
 
-    const rowB = rows.find(r => r.commit.hash === "B")!;
-    const rowB4 = rows.find(r => r.commit.hash === "B4")!;
+    const rowB = findRow(rows, "B");
+    const rowB4 = findRow(rows, "B4");
 
-    const branchCorner = rowB.connectors.find(c =>
-      c.type === "corner-top-right" || c.type === "corner-top-left"
-    );
+    const branchCorner = rowB.connectors.find(c => c.type === "corner-top-right" || c.type === "corner-top-left");
     expect(branchCorner).toBeDefined();
 
     if (branchCorner) {

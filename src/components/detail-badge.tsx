@@ -2,14 +2,16 @@ import { useTheme } from "../context/theme";
 import { getColorForColumn } from "../git/graph";
 
 /** Colored badge for branch/tag labels in the detail view */
-export default function DetailBadge(props: Readonly<{
-  name: string;
-  colorIndex: number;
-  dimmed?: boolean;
-  /** When set, applies banner scroll: substring of name at [bannerOffset, bannerOffset+visibleWidth). */
-  visibleWidth?: number;
-  bannerOffset?: number;
-}>) {
+export default function DetailBadge(
+  props: Readonly<{
+    name: string;
+    colorIndex: number;
+    dimmed?: boolean;
+    /** When set, applies banner scroll: substring of name at [bannerOffset, bannerOffset+visibleWidth). */
+    visibleWidth?: number;
+    bannerOffset?: number;
+  }>,
+) {
   const { theme } = useTheme();
   const t = () => theme();
 

@@ -11,14 +11,9 @@
  * Also covers: upstream/ remotes, nested paths (origin/renovate/major),
  * and multi-remote scenarios.
  */
-import { describe, test, expect } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { buildGraph } from "../src/git/graph";
-import {
-  makeCommit,
-  findConnector,
-  printGraph,
-  assertRowFullyDimmed,
-} from "./test-helpers";
+import { assertRowFullyDimmed, findConnector, makeCommit, printGraph } from "./test-helpers";
 
 describe("Remote-Only", () => {
   test("Remote-only lane propagation (single parent)", () => {
@@ -34,18 +29,25 @@ describe("Remote-Only", () => {
 
     const f1Node = findConnector(rows[0].connectors, "node");
     expect(f1Node).toBeDefined();
-    expect(f1Node!.isRemoteOnly).toBe(true);
+    if (!f1Node) throw new Error("f1Node not found");
+    expect(f1Node.isRemoteOnly).toBe(true);
 
     expect(rows[1].isRemoteOnly).toBeFalsy();
 
     const d1Node = findConnector(rows[1].connectors, "node");
     expect(d1Node).toBeDefined();
-    expect(d1Node!.isRemoteOnly).not.toBe(true);
+    if (!d1Node) throw new Error("d1Node not found");
+    expect(d1Node.isRemoteOnly).not.toBe(true);
   });
 
   test("Remote-only propagation through merge first parent", () => {
     const commits = [
-      makeCommit("m1", ["f1", "x1"], [{ name: "origin/feature-y", type: "remote", isCurrent: false }], "merge in feature-y"),
+      makeCommit(
+        "m1",
+        ["f1", "x1"],
+        [{ name: "origin/feature-y", type: "remote", isCurrent: false }],
+        "merge in feature-y",
+      ),
       makeCommit("f1", ["d1"], [], "feature-y work"),
       makeCommit("x1", ["d1"], [], "side branch work"),
       makeCommit("d1", [], [{ name: "develop", type: "branch", isCurrent: true }], "initial"),
@@ -63,7 +65,12 @@ describe("Remote-Only", () => {
     const commits = [
       makeCommit("d3", ["m1"], [{ name: "develop", type: "branch", isCurrent: true }], "develop tip"),
       makeCommit("m1", ["d2", "r1"], [], "Merge remote feature"),
-      makeCommit("r1", ["d1"], [{ name: "origin/remote-feat", type: "remote", isCurrent: false }], "remote feature work"),
+      makeCommit(
+        "r1",
+        ["d1"],
+        [{ name: "origin/remote-feat", type: "remote", isCurrent: false }],
+        "remote feature work",
+      ),
       makeCommit("d2", ["d1"], [], "develop work"),
       makeCommit("d1", [], [], "initial"),
     ];
@@ -76,8 +83,13 @@ describe("Remote-Only", () => {
     expect(mergeRow.isRemoteOnly).toBeFalsy();
 
     const spanTypes = new Set([
-      "horizontal", "corner-top-right", "corner-top-left",
-      "corner-bottom-right", "corner-bottom-left", "tee-left", "tee-right",
+      "horizontal",
+      "corner-top-right",
+      "corner-top-left",
+      "corner-bottom-right",
+      "corner-bottom-left",
+      "tee-left",
+      "tee-right",
     ]);
     const spanConns = mergeRow.connectors.filter(c => spanTypes.has(c.type));
     expect(spanConns.length).toBeGreaterThan(0);
@@ -96,12 +108,13 @@ describe("Remote-Only", () => {
 
     const d1Row = rows.find(r => r.commit.hash === "d1");
     expect(d1Row).toBeDefined();
-    expect(d1Row!.fanOutRows !== undefined && d1Row!.fanOutRows.length > 0).toBe(true);
+    if (!d1Row) throw new Error("d1Row not found");
+    expect(d1Row.fanOutRows !== undefined && d1Row.fanOutRows.length > 0).toBe(true);
 
-    if (d1Row!.fanOutRows) {
-      for (let foIdx = 0; foIdx < d1Row!.fanOutRows.length; foIdx++) {
-        const corners = d1Row!.fanOutRows[foIdx].filter(c =>
-          c.type === "corner-bottom-right" || c.type === "corner-bottom-left"
+    if (d1Row.fanOutRows) {
+      for (let foIdx = 0; foIdx < d1Row.fanOutRows.length; foIdx++) {
+        const corners = d1Row.fanOutRows[foIdx].filter(
+          c => c.type === "corner-bottom-right" || c.type === "corner-bottom-left",
         );
         for (const corner of corners) {
           expect(corner.isRemoteOnly).toBe(true);
@@ -109,14 +122,29 @@ describe("Remote-Only", () => {
       }
     }
 
-    expect(d1Row!.isRemoteOnly).toBeFalsy();
+    expect(d1Row.isRemoteOnly).toBeFalsy();
   });
 
   test("Post-pass dimming includes fan-out rows", () => {
     const commits = [
-      makeCommit("ren1", ["d1"], [{ name: "origin/renovate/major", type: "remote", isCurrent: false }], "renovate major"),
-      makeCommit("ren2", ["d1"], [{ name: "origin/renovate/minor", type: "remote", isCurrent: false }], "renovate minor"),
-      makeCommit("ren3", ["d1"], [{ name: "origin/renovate/patch", type: "remote", isCurrent: false }], "renovate patch"),
+      makeCommit(
+        "ren1",
+        ["d1"],
+        [{ name: "origin/renovate/major", type: "remote", isCurrent: false }],
+        "renovate major",
+      ),
+      makeCommit(
+        "ren2",
+        ["d1"],
+        [{ name: "origin/renovate/minor", type: "remote", isCurrent: false }],
+        "renovate minor",
+      ),
+      makeCommit(
+        "ren3",
+        ["d1"],
+        [{ name: "origin/renovate/patch", type: "remote", isCurrent: false }],
+        "renovate patch",
+      ),
       makeCommit("d1", ["d0"], [{ name: "develop", type: "branch", isCurrent: true }], "develop tip"),
       makeCommit("d0", [], [], "initial"),
     ];
@@ -150,10 +178,14 @@ describe("Remote-Only", () => {
 
   test("upstream/ remote not remote-only when local exists", () => {
     const commits = [
-      makeCommit("d1", [], [
-        { name: "main", type: "branch", isCurrent: true },
-        { name: "upstream/main", type: "remote", isCurrent: false },
-      ]),
+      makeCommit(
+        "d1",
+        [],
+        [
+          { name: "main", type: "branch", isCurrent: true },
+          { name: "upstream/main", type: "remote", isCurrent: false },
+        ],
+      ),
     ];
     const rows = buildGraph(commits);
     printGraph(rows);
@@ -164,11 +196,15 @@ describe("Remote-Only", () => {
 
   test("origin/ and upstream/ on same commit, both tracked", () => {
     const commits = [
-      makeCommit("d1", [], [
-        { name: "main", type: "branch", isCurrent: true },
-        { name: "origin/main", type: "remote", isCurrent: false },
-        { name: "upstream/main", type: "remote", isCurrent: false },
-      ]),
+      makeCommit(
+        "d1",
+        [],
+        [
+          { name: "main", type: "branch", isCurrent: true },
+          { name: "origin/main", type: "remote", isCurrent: false },
+          { name: "upstream/main", type: "remote", isCurrent: false },
+        ],
+      ),
     ];
     const rows = buildGraph(commits);
     printGraph(rows);
@@ -192,11 +228,15 @@ describe("Remote-Only", () => {
 
   test("Nested remote path with local equivalent", () => {
     const commits = [
-      makeCommit("r1", [], [
-        { name: "renovate/major", type: "branch", isCurrent: false },
-        { name: "origin/renovate/major", type: "remote", isCurrent: false },
-        { name: "main", type: "branch", isCurrent: true },
-      ]),
+      makeCommit(
+        "r1",
+        [],
+        [
+          { name: "renovate/major", type: "branch", isCurrent: false },
+          { name: "origin/renovate/major", type: "remote", isCurrent: false },
+          { name: "main", type: "branch", isCurrent: true },
+        ],
+      ),
     ];
     const rows = buildGraph(commits);
     printGraph(rows);
@@ -206,10 +246,14 @@ describe("Remote-Only", () => {
 
   test("Multiple remotes same branch, both remote-only", () => {
     const commits = [
-      makeCommit("f1", ["d1"], [
-        { name: "origin/feature", type: "remote", isCurrent: false },
-        { name: "upstream/feature", type: "remote", isCurrent: false },
-      ]),
+      makeCommit(
+        "f1",
+        ["d1"],
+        [
+          { name: "origin/feature", type: "remote", isCurrent: false },
+          { name: "upstream/feature", type: "remote", isCurrent: false },
+        ],
+      ),
       makeCommit("d1", [], [{ name: "main", type: "branch", isCurrent: true }]),
     ];
     const rows = buildGraph(commits);

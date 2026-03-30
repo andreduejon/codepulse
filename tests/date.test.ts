@@ -5,7 +5,7 @@
  * days, same-year absolute, different-year absolute), empty string guard,
  * and cache behavior.
  */
-import { describe, test, expect } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { formatRelativeDate } from "../src/utils/date";
 
 /** Create an ISO date string offset from now by the given milliseconds. */

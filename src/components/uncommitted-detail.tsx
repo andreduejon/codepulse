@@ -1,15 +1,20 @@
-import { Show, For, createSignal, createEffect, createMemo } from "solid-js";
 import { useRenderer } from "@opentui/solid";
+import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
+import { DETAIL_PANEL_WIDTH_FRACTION } from "../constants";
 import { useAppState } from "../context/state";
 import { useTheme } from "../context/theme";
-import { buildFileTree, flattenFileTree } from "../utils/file-tree";
-import type { FileTreeNode, FileTreeRow } from "../utils/file-tree";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
-import { DETAIL_PANEL_WIDTH_FRACTION } from "../constants";
-import type { DetailNavRef, DetailViewProps } from "./detail-types";
+import type { FileTreeNode, FileTreeRow } from "../utils/file-tree";
+import { buildFileTree, flattenFileTree } from "../utils/file-tree";
+import type { DetailViewProps } from "./detail-types";
 import {
-  PANEL_PADDING_X, ENTRY_PADDING_LEFT, DIR_INDICATOR_WIDTH,
-  STAT_PADDING_LEFT, STATUS_COL_WIDTH, STAT_GAP, computeFileWidths,
+  computeFileWidths,
+  DIR_INDICATOR_WIDTH,
+  ENTRY_PADDING_LEFT,
+  PANEL_PADDING_X,
+  STAT_GAP,
+  STAT_PADDING_LEFT,
+  STATUS_COL_WIDTH,
 } from "./detail-types";
 
 // ── Layout constants ────────────────────────────────────────────────
@@ -74,9 +79,7 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
   };
 
   // Flatten tree into renderable rows
-  const fileTreeRows = createMemo((): FileTreeRow[] =>
-    flattenFileTree(fileTree(), collapsedDirs())
-  );
+  const fileTreeRows = createMemo((): FileTreeRow[] => flattenFileTree(fileTree(), collapsedDirs()));
 
   // ── Build flat list of interactive items ──
   const interactiveItems = createMemo((): UncommittedItem[] => {
@@ -87,7 +90,7 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
       if (row.isDir) {
         items.push({ type: "file-dir", dirPath: row.dirPath, index: i });
       } else {
-        items.push({ type: "file", filePath: row.file!.path, index: i });
+        items.push({ type: "file", filePath: row.file?.path, index: i });
       }
     }
     return items;
@@ -159,11 +162,9 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
     return map;
   });
 
-  const findItemIndex = (type: "file-dir" | "file", idx: number): number =>
-    itemIndexMap().get(`${type}:${idx}`) ?? -1;
+  const findItemIndex = (type: "file-dir" | "file", idx: number): number => itemIndexMap().get(`${type}:${idx}`) ?? -1;
 
-  const isCursored = (itemIndex: number) =>
-    state.detailFocused() && state.detailCursorIndex() === itemIndex;
+  const isCursored = (itemIndex: number) => state.detailFocused() && state.detailCursorIndex() === itemIndex;
 
   const highlightBgFocused = () => t().backgroundElementActive;
 
@@ -195,9 +196,10 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
 
     if (item.type === "file") {
       const fw = fileWidths();
-      const statWidth = activeTab() === "untracked"
-        ? STAT_PADDING_LEFT + STATUS_COL_WIDTH
-        : STAT_PADDING_LEFT + STATUS_COL_WIDTH + STAT_GAP + fw.addColWidth + STAT_GAP + fw.delColWidth;
+      const statWidth =
+        activeTab() === "untracked"
+          ? STAT_PADDING_LEFT + STATUS_COL_WIDTH
+          : STAT_PADDING_LEFT + STATUS_COL_WIDTH + STAT_GAP + fw.addColWidth + STAT_GAP + fw.delColWidth;
       const fixedChars = ENTRY_PADDING_LEFT + treeRow.prefix.length + treeRow.connector.length + statWidth;
       const available = pw - fixedChars;
       if (treeRow.name.length <= available) return null;
@@ -223,11 +225,7 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
         when={activeFiles().length > 0}
         fallback={
           <box flexGrow={1} alignItems="center" justifyContent="center">
-            <text fg={t().foregroundMuted}>
-              {state.detailLoading()
-                ? "Loading..."
-                : `No ${activeTab()} files`}
-            </text>
+            <text fg={t().foregroundMuted}>{state.detailLoading() ? "Loading..." : `No ${activeTab()} files`}</text>
           </box>
         }
       >
@@ -268,15 +266,11 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
             };
 
             return (
-              <box
-                flexDirection="row"
-                width="100%"
-                paddingLeft={2}
-                backgroundColor={itemHighlightBg(itemIdx())}
-              >
+              <box flexDirection="row" width="100%" paddingLeft={2} backgroundColor={itemHighlightBg(itemIdx())}>
                 <box flexShrink={0}>
                   <text fg={t().border} wrapMode="none">
-                    {treeRow.prefix}{treeRow.connector}
+                    {treeRow.prefix}
+                    {treeRow.connector}
                   </text>
                 </box>
                 <Show when={treeRow.isDir}>
@@ -288,9 +282,15 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
                 </Show>
                 <box flexGrow={1}>
                   <text
-                    fg={treeRow.isDir
-                      ? (cursored() ? t().accent : t().foregroundMuted)
-                      : (cursored() ? t().accent : t().foreground)}
+                    fg={
+                      treeRow.isDir
+                        ? cursored()
+                          ? t().accent
+                          : t().foregroundMuted
+                        : cursored()
+                          ? t().accent
+                          : t().foreground
+                    }
                     wrapMode="none"
                     truncate={scrolledName() == null}
                   >
@@ -301,19 +301,19 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
                 <Show when={treeRow.file}>
                   <box flexShrink={0} paddingLeft={1}>
                     <text fg={t().foregroundMuted} wrapMode="none">
-                      {treeRow.file!.status}
+                      {treeRow.file?.status}
                     </text>
                   </box>
                 </Show>
                 <Show when={treeRow.file && activeTab() !== "untracked"}>
                   <box flexShrink={0} paddingLeft={1}>
                     <text fg={t().diffAdded} wrapMode="none">
-                      {("+" + treeRow.file!.additions).padStart(fileWidths().addColWidth)}
+                      {`+${treeRow.file?.additions}`.padStart(fileWidths().addColWidth)}
                     </text>
                   </box>
                   <box flexShrink={0} paddingLeft={1}>
                     <text fg={t().diffRemoved} wrapMode="none">
-                      {("-" + treeRow.file!.deletions).padStart(fileWidths().delColWidth)}
+                      {`-${treeRow.file?.deletions}`.padStart(fileWidths().delColWidth)}
                     </text>
                   </box>
                 </Show>

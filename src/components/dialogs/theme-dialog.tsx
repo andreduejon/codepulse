@@ -1,11 +1,11 @@
-import { createSignal, createEffect, For, onCleanup } from "solid-js";
 import { useKeyboard } from "@opentui/solid";
-import { useTheme, themeNames, themes } from "../../context/theme";
-import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
+import { createEffect, createSignal, For, onCleanup } from "solid-js";
 import { SHIFT_JUMP } from "../../constants";
+import { themeNames, themes, useTheme } from "../../context/theme";
+import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
 /** Pre-computed theme options — themeNames and themes are module-level constants. */
-const themeOptions = themeNames.map((key) => ({
+const themeOptions = themeNames.map(key => ({
   key,
   name: themes[key].name,
 }));
@@ -24,7 +24,7 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void }>) {
   });
 
   // Initialize cursor to the currently selected theme
-  const initialIdx = themeOptions.findIndex((o) => o.key === originalTheme);
+  const initialIdx = themeOptions.findIndex(o => o.key === originalTheme);
   const [cursor, setCursor] = createSignal(initialIdx >= 0 ? initialIdx : 0);
 
   // Preview theme when cursor changes
@@ -35,7 +35,7 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void }>) {
 
   const moveCursor = (delta: number) => {
     const len = themeOptions.length;
-    setCursor((c) => Math.max(0, Math.min(len - 1, c + delta)));
+    setCursor(c => Math.max(0, Math.min(len - 1, c + delta)));
   };
 
   const confirmTheme = () => {
@@ -43,7 +43,7 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void }>) {
     props.onClose();
   };
 
-  useKeyboard((e) => {
+  useKeyboard(e => {
     if (e.eventType === "release") return;
 
     switch (e.name) {
@@ -85,7 +85,7 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void }>) {
                   backgroundColor={isSelected() ? t().backgroundElement : undefined}
                 >
                   <text flexGrow={1} wrapMode="none" fg={isSelected() ? t().accent : t().foreground}>
-                      {opt.name}
+                    {opt.name}
                   </text>
                   <text flexShrink={0} wrapMode="none" fg={isSelected() ? themes[opt.key].accent : t().backgroundPanel}>
                     {isSelected() ? "  █" : "   "}
@@ -100,10 +100,18 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void }>) {
         <box height={1} />
         <box flexDirection="row" width="100%" paddingX={4}>
           <box flexGrow={1} />
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>enter</text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" confirm  "}</text>
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>↑/↓</text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{" navigate"}</text>
+          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
+            enter
+          </text>
+          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+            {" confirm  "}
+          </text>
+          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
+            ↑/↓
+          </text>
+          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+            {" navigate"}
+          </text>
         </box>
       </box>
     </DialogOverlay>
