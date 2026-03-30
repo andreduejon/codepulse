@@ -1,3 +1,5 @@
+import type { DiffTarget } from "../git/types";
+
 /** Mutable ref populated by a detail view for app.tsx to call */
 export interface DetailNavRef {
   /** Number of interactive items currently visible */
@@ -13,6 +15,8 @@ export interface DetailNavRef {
 
 export interface DetailViewProps {
   onJumpToCommit?: (hash: string, from: "child" | "parent") => void;
+  /** Open the diff+blame dialog for a file. */
+  onOpenDiff?: (target: DiffTarget) => void;
   /** Mutable ref object populated by the detail view with navigation callbacks */
   navRef?: DetailNavRef;
 }

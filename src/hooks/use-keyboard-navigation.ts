@@ -5,7 +5,7 @@ import type { DetailNavRef } from "../components/detail-types";
 import { PAGE_JUMP, SHIFT_JUMP, UNCOMMITTED_HASH } from "../constants";
 import type { AppActions, AppState, DetailTab } from "../context/state";
 
-type DialogId = "menu" | "help" | "theme" | null;
+type DialogId = "menu" | "help" | "theme" | "diff-blame" | null;
 
 interface KeyboardNavigationOptions {
   state: AppState;

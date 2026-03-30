@@ -451,7 +451,12 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
         toggleDir(item.dirPath);
         break;
       case "file":
-        // No action for files — just highlight
+        if (props.onOpenDiff && item.filePath) {
+          const c = commit();
+          if (c) {
+            props.onOpenDiff({ commitHash: c.hash, filePath: item.filePath, source: "commit" });
+          }
+        }
         break;
       case "stash-entry":
         toggleStash(item.stashHash);
@@ -460,7 +465,9 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
         toggleStashDir(item.stashHash, item.dirPath);
         break;
       case "stash-file":
-        // No action for stash files — just highlight
+        if (props.onOpenDiff && item.filePath) {
+          props.onOpenDiff({ commitHash: item.stashHash, filePath: item.filePath, source: "stash" });
+        }
         break;
     }
   };
@@ -520,7 +527,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
       }
       case "file":
       case "stash-file":
-        actions.setDetailCursorAction(null);
+        actions.setDetailCursorAction("diff");
         break;
     }
   });

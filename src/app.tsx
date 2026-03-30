@@ -27,7 +27,7 @@ import {
   getUncommittedDetail,
   getWorkingTreeStatus,
 } from "./git/repo";
-import type { Commit } from "./git/types";
+import type { Commit, DiffTarget } from "./git/types";
 import { useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
 
 interface AppProps {
@@ -43,8 +43,10 @@ function AppContent(props: Readonly<AppProps>) {
   const themeState = createThemeState(props.themeName);
   const renderer = useRenderer();
 
-  const [dialog, setDialog] = createSignal<"menu" | "help" | "theme" | null>(null);
+  const [dialog, setDialog] = createSignal<"menu" | "help" | "theme" | "diff-blame" | null>(null);
   const [searchFocused, setSearchFocused] = createSignal(false);
+  /** Target for the diff+blame dialog (set when user activates a file). */
+  const [_diffTarget, setDiffTarget] = createSignal<DiffTarget | null>(null);
   // Ref for programmatic scrolling of the detail panel
   let detailScrollboxRef: ScrollBoxRenderable | undefined;
 
@@ -75,6 +77,12 @@ function AppContent(props: Readonly<AppProps>) {
       actions.setScrollTargetIndex(idx);
       detailScrollboxRef?.scrollTo(0);
     }
+  };
+
+  /** Open the diff+blame dialog for the given file target. */
+  const handleOpenDiff = (target: DiffTarget) => {
+    setDiffTarget(target);
+    setDialog("diff-blame");
   };
 
   // Load git data (cancels any in-flight load so user actions always win)
@@ -649,9 +657,19 @@ function AppContent(props: Readonly<AppProps>) {
               >
                 <Show
                   when={state.selectedCommit()?.hash !== UNCOMMITTED_HASH}
-                  fallback={<UncommittedDetailView onJumpToCommit={handleJumpToCommit} navRef={detailNavRef} />}
+                  fallback={
+                    <UncommittedDetailView
+                      onJumpToCommit={handleJumpToCommit}
+                      onOpenDiff={handleOpenDiff}
+                      navRef={detailNavRef}
+                    />
+                  }
                 >
-                  <CommitDetailView onJumpToCommit={handleJumpToCommit} navRef={detailNavRef} />
+                  <CommitDetailView
+                    onJumpToCommit={handleJumpToCommit}
+                    onOpenDiff={handleOpenDiff}
+                    navRef={detailNavRef}
+                  />
                 </Show>
               </scrollbox>
             </box>

@@ -3,6 +3,7 @@ import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
 import { DETAIL_PANEL_WIDTH_FRACTION } from "../constants";
 import { useAppState } from "../context/state";
 import { useTheme } from "../context/theme";
+import type { DiffSource } from "../git/types";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
 import type { FileTreeNode, FileTreeRow } from "../utils/file-tree";
 import { buildFileTree, flattenFileTree } from "../utils/file-tree";
@@ -111,8 +112,10 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
   const activateItem = (item: UncommittedItem) => {
     if (item.type === "file-dir") {
       toggleDir(item.dirPath);
+    } else if (item.type === "file" && props.onOpenDiff && item.filePath) {
+      const source = activeTab() as DiffSource;
+      props.onOpenDiff({ commitHash: "", filePath: item.filePath, source });
     }
-    // file items have no action
   };
 
   /** Activate the item at the current cursor index. Returns true if it was a jump. */
@@ -145,7 +148,7 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
     if (item.type === "file-dir") {
       actions.setDetailCursorAction(collapsedDirs().has(item.dirPath) ? "expand" : "collapse");
     } else {
-      actions.setDetailCursorAction(null);
+      actions.setDetailCursorAction("diff");
     }
   });
 
