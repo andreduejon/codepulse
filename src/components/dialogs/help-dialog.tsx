@@ -12,6 +12,7 @@ export default function HelpDialog(_props: Readonly<{ onClose: () => void }>) {
     ["PgUp/PgDn", "Jump 20 entries"],
     ["g/G", "First / last commit"],
     ["Enter", "Focus detail / activate"],
+    ["Enter (file)", "View diff"],
     ["→/←", "Focus detail / return to graph"],
     ["Esc", "Back (cascade)"],
     ["q", "Back, or quit"],
