@@ -4,6 +4,7 @@ import { batch, createEffect, createSignal, onCleanup, onMount, Show } from "sol
 import packageJson from "../package.json";
 import CommitDetailView from "./components/detail";
 import type { DetailNavRef } from "./components/detail-types";
+import DiffBlameDialog from "./components/dialogs/diff-blame-dialog";
 import HelpDialog from "./components/dialogs/help-dialog";
 import MenuDialog from "./components/dialogs/menu-dialog";
 import ThemeDialog from "./components/dialogs/theme-dialog";
@@ -46,7 +47,7 @@ function AppContent(props: Readonly<AppProps>) {
   const [dialog, setDialog] = createSignal<"menu" | "help" | "theme" | "diff-blame" | null>(null);
   const [searchFocused, setSearchFocused] = createSignal(false);
   /** Target for the diff+blame dialog (set when user activates a file). */
-  const [_diffTarget, setDiffTarget] = createSignal<DiffTarget | null>(null);
+  const [diffTarget, setDiffTarget] = createSignal<DiffTarget | null>(null);
   // Ref for programmatic scrolling of the detail panel
   let detailScrollboxRef: ScrollBoxRenderable | undefined;
 
@@ -690,6 +691,9 @@ function AppContent(props: Readonly<AppProps>) {
           </Show>
           <Show when={dialog() === "theme"}>
             <ThemeDialog onClose={() => setDialog(null)} />
+          </Show>
+          <Show when={dialog() === "diff-blame" && diffTarget()}>
+            {target => <DiffBlameDialog target={target()} onClose={() => setDialog(null)} />}
           </Show>
         </box>
       </AppStateContext.Provider>
