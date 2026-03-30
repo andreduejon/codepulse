@@ -6,6 +6,7 @@ import { useTheme } from "../../context/theme";
 import { getFileBlame, getFileDiff } from "../../git/repo";
 import type { BlameLine, DiffTarget, FileDiff } from "../../git/types";
 import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
+import { formatHunkHeader } from "./diff-utils";
 
 /** Maximum number of diff lines displayed before truncation. */
 const MAX_DISPLAY_LINES = 5000;
@@ -305,17 +306,13 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
             <box flexDirection="column">
               <For each={displayLines()}>
                 {line => {
-                  const oldW = gutterWidth(maxOldLineNo());
-                  const newW = gutterWidth(maxNewLineNo());
-                  const color = lineColor(line.kind);
                   const prefix = linePrefix(line.kind);
-                  const blame = blameAnnotation(line);
 
                   if (line.kind === "hunk-header") {
                     return (
                       <box flexDirection="row" width="100%">
                         <text wrapMode="none" fg={t().accent}>
-                          {line.content}
+                          {() => formatHunkHeader(line.content)}
                         </text>
                       </box>
                     );
@@ -326,12 +323,12 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
                       {/* Blame annotation (conditional) */}
                       <Show when={showBlame()}>
                         <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                          {blame}
+                          {() => blameAnnotation(line)}
                         </text>
                       </Show>
                       {/* Old line number */}
                       <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                        {padLineNo(line.oldLineNo, oldW)}
+                        {() => padLineNo(line.oldLineNo, gutterWidth(maxOldLineNo()))}
                       </text>
                       {/* Separator */}
                       <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
@@ -339,14 +336,14 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
                       </text>
                       {/* New line number */}
                       <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                        {padLineNo(line.newLineNo, newW)}
+                        {() => padLineNo(line.newLineNo, gutterWidth(maxNewLineNo()))}
                       </text>
                       {/* Separator + prefix */}
-                      <text flexShrink={0} wrapMode="none" fg={color}>
+                      <text flexShrink={0} wrapMode="none" fg={lineColor(line.kind)}>
                         {` ${prefix}`}
                       </text>
                       {/* Content */}
-                      <text flexGrow={1} wrapMode="none" fg={color}>
+                      <text flexGrow={1} wrapMode="none" fg={lineColor(line.kind)}>
                         {line.content}
                       </text>
                     </box>

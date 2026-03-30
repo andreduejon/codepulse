@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { formatHunkHeader } from "../src/components/dialogs/diff-utils";
 import { parseBlameOutput, parseUnifiedDiff } from "../src/git/repo";
 
 describe("parseUnifiedDiff", () => {
@@ -327,5 +328,37 @@ filename file.txt
 
     expect(result).toHaveLength(1);
     expect(result[0].content).toBe("");
+  });
+});
+
+describe("formatHunkHeader", () => {
+  test("formats a standard hunk header with both ranges", () => {
+    const result = formatHunkHeader("@@ -5,6 +12,8 @@");
+    expect(result).toBe("Lines 5\u201310 \u2192 12\u201319");
+  });
+
+  test("includes function context when present", () => {
+    const result = formatHunkHeader("@@ -10,6 +10,7 @@ function main() {");
+    expect(result).toBe("Lines 10\u201315 \u2192 10\u201316  function main() {");
+  });
+
+  test("handles count of 1 (single line)", () => {
+    const result = formatHunkHeader("@@ -3,1 +3,1 @@");
+    expect(result).toBe("Lines 3 \u2192 3");
+  });
+
+  test("handles implicit count of 1 (no comma)", () => {
+    const result = formatHunkHeader("@@ -3 +3 @@");
+    expect(result).toBe("Lines 3 \u2192 3");
+  });
+
+  test("handles count of 0 (empty range)", () => {
+    const result = formatHunkHeader("@@ -5,0 +5,2 @@");
+    expect(result).toBe("Lines (empty at 5) \u2192 5\u20136");
+  });
+
+  test("falls back to raw string for unparseable input", () => {
+    const raw = "not a hunk header";
+    expect(formatHunkHeader(raw)).toBe(raw);
   });
 });
