@@ -61,6 +61,53 @@ export interface UncommittedDetail {
   untracked: FileChange[];
 }
 
+// ── Diff + Blame types ──────────────────────────────────────────────
+
+/** A single line in a unified diff hunk. */
+export interface DiffLine {
+  type: "add" | "delete" | "context";
+  content: string;
+  oldLineNo?: number;
+  newLineNo?: number;
+}
+
+/** A hunk from a unified diff (one @@ block). */
+export interface DiffHunk {
+  oldStart: number;
+  oldCount: number;
+  newStart: number;
+  newCount: number;
+  /** The full @@ header line. */
+  header: string;
+  lines: DiffLine[];
+}
+
+/** Parsed unified diff for a single file. */
+export interface FileDiff {
+  filePath: string;
+  hunks: DiffHunk[];
+  isBinary: boolean;
+}
+
+/** A single blame annotation line from `git blame --porcelain`. */
+export interface BlameLine {
+  commitHash: string;
+  shortHash: string;
+  author: string;
+  lineNo: number;
+  content: string;
+}
+
+/** Identifies the source of a diff request — determines which git command variant to use. */
+export type DiffSource = "commit" | "stash" | "staged" | "unstaged" | "untracked";
+
+/** Target for opening the diff+blame dialog. */
+export interface DiffTarget {
+  commitHash: string;
+  filePath: string;
+  source: DiffSource;
+}
+
 export interface GraphRow {
   commit: Commit;
   columns: GraphColumn[];
