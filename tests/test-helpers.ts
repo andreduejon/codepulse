@@ -85,22 +85,20 @@ export function totalCharWidth(chars: GraphChar[]): number {
  * Assert that every connector, column, and fan-out connector on the given row
  * has `isRemoteOnly === true`. Used by tests that verify post-pass dimming.
  */
-export function assertRowFullyDimmed(row: GraphRow, rowIdx: number) {
-  const _label = `Row ${rowIdx} (${row.commit.hash})`;
-
+export function assertRowFullyDimmed(row: GraphRow) {
   for (const conn of row.connectors) {
     expect(conn.isRemoteOnly).toBe(true);
   }
 
-  for (let col = 0; col < row.columns.length; col++) {
-    const column = row.columns[col];
+  for (const element of row.columns) {
+    const column = element;
     expect(column.isRemoteOnly).toBeDefined();
     expect(column.isRemoteOnly).toBe(true);
   }
 
   if (row.fanOutRows) {
-    for (let foIdx = 0; foIdx < row.fanOutRows.length; foIdx++) {
-      for (const conn of row.fanOutRows[foIdx]) {
+    for (const element of row.fanOutRows) {
+      for (const conn of element) {
         expect(conn.isRemoteOnly).toBe(true);
       }
     }

@@ -156,7 +156,7 @@ describe("Remote-Only", () => {
     expect(firstNonRO).toBeGreaterThan(0);
 
     for (let i = 0; i < firstNonRO; i++) {
-      assertRowFullyDimmed(rows[i], i);
+      assertRowFullyDimmed(rows[i]);
     }
 
     const d1Row = rows[firstNonRO];
