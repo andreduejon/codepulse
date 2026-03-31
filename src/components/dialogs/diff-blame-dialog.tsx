@@ -17,6 +17,9 @@ const MAX_DIALOG_WIDTH = 160;
 /** Number of offscreen lines to render above/below viewport as buffer. */
 const WINDOW_BUFFER = 30;
 
+/** Blame annotation width: "abc1234 Author " — short hash (7) + space + author (capped) + space */
+const BLAME_COL_WIDTH = 22;
+
 type DiffViewMode = "mixed" | "new" | "old";
 
 const VIEW_MODE_CYCLE: DiffViewMode[] = ["mixed", "new", "old"];
@@ -384,9 +387,6 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
     }
   };
 
-  /** Blame annotation width: "abc1234 Author " — short hash (7) + space + author (capped) + space */
-  const BLAME_COL_WIDTH = 22;
-
   const blameAnnotation = (line: DisplayLine): string => {
     if (!showBlame() || line.kind === "hunk-header") return "";
     const lineNo = line.newLineNo;
@@ -465,12 +465,18 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
               <For each={windowedLines()}>
                 {line => {
                   if (line.kind === "spacer") {
+                    const ruleWidth = dialogWidth() - 10 - (showBlame() ? BLAME_COL_WIDTH : 0);
                     return (
                       <box flexDirection="column">
                         <box height={1} />
-                        <text wrapMode="none" fg={t().border}>
-                          {"─".repeat(dialogWidth() - 10)}
-                        </text>
+                        <box flexDirection="row">
+                          <Show when={showBlame()}>
+                            <box flexShrink={0} width={BLAME_COL_WIDTH} />
+                          </Show>
+                          <text wrapMode="none" fg={t().border}>
+                            {"─".repeat(ruleWidth)}
+                          </text>
+                        </box>
                       </box>
                     );
                   }
@@ -480,6 +486,9 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
                   if (line.kind === "hunk-header") {
                     return (
                       <box flexDirection="row" width="100%" backgroundColor={lineBg("hunk-header")}>
+                        <Show when={showBlame()}>
+                          <box flexShrink={0} width={BLAME_COL_WIDTH} />
+                        </Show>
                         <text wrapMode="none" fg={t().accent}>
                           <strong>{formatHunkHeader(line.content)}</strong>
                         </text>
@@ -489,9 +498,9 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
 
                   return (
                     <box flexDirection="row" width="100%" backgroundColor={lineBg(line.kind)}>
-                      {/* Blame annotation (conditional) */}
+                      {/* Blame annotation (conditional, fixed-width) */}
                       <Show when={showBlame()}>
-                        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                        <text flexShrink={0} width={BLAME_COL_WIDTH} wrapMode="none" fg={t().foregroundMuted}>
                           {() => blameAnnotation(line)}
                         </text>
                       </Show>
