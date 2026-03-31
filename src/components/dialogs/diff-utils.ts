@@ -1,3 +1,6 @@
+/** The kind of a display line in the diff viewer. */
+export type DisplayLineKind = "hunk-header" | "add" | "delete" | "context" | "spacer";
+
 /**
  * Convert a raw hunk header like `@@ -5,6 +12,8 @@ function foo()` into
  * a human-readable string like `Lines 5–10 → 12–19  function foo()`.
@@ -21,4 +24,43 @@ export function formatHunkHeader(raw: string): string {
 
   const label = `Lines ${fmtRange(oldStart, oldCount)} \u2192 ${fmtRange(newStart, newCount)}`;
   return context ? `${label}  ${context}` : label;
+}
+
+// ── Windowed rendering helpers ────────────────────────────────────────
+
+/** Row height of each display line kind. Spacers are 2 rows (blank + rule). */
+export function lineRowHeight(kind: DisplayLineKind): number {
+  return kind === "spacer" ? 2 : 1;
+}
+
+/**
+ * Build a prefix-sum array mapping line index → cumulative row offset.
+ * `rowOffsets[i]` is the row at which line `i` starts.
+ * `rowOffsets[lines.length]` is the total row count.
+ */
+export function buildRowOffsets(lines: readonly { kind: DisplayLineKind }[]): number[] {
+  const offsets = new Array<number>(lines.length + 1);
+  offsets[0] = 0;
+  for (let i = 0; i < lines.length; i++) {
+    offsets[i + 1] = offsets[i] + lineRowHeight(lines[i].kind);
+  }
+  return offsets;
+}
+
+/**
+ * Find the first line index whose row offset is >= `targetRow` using binary search.
+ * Returns the index into `rowOffsets` (0-based line index).
+ */
+export function findLineAtRow(rowOffsets: readonly number[], targetRow: number): number {
+  let lo = 0;
+  let hi = rowOffsets.length - 2; // last valid line index
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (rowOffsets[mid + 1] <= targetRow) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+  return lo;
 }

@@ -1,18 +1,21 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useRenderer } from "@opentui/solid";
-import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import { useAppState } from "../../context/state";
 import { useTheme } from "../../context/theme";
 import { getFileBlame, getFileDiff } from "../../git/repo";
 import type { BlameLine, DiffTarget, FileDiff } from "../../git/types";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
-import { formatHunkHeader } from "./diff-utils";
+import { buildRowOffsets, findLineAtRow, formatHunkHeader } from "./diff-utils";
 
 /** Maximum number of diff lines displayed before truncation. */
 const MAX_DISPLAY_LINES = 5000;
 
 /** Maximum dialog width in columns (fits 120-150 char lines with gutter). */
 const MAX_DIALOG_WIDTH = 160;
+
+/** Number of offscreen lines to render above/below viewport as buffer. */
+const WINDOW_BUFFER = 30;
 
 type DiffViewMode = "mixed" | "new" | "old";
 
@@ -188,6 +191,72 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
   const dialogWidth = createMemo(() => Math.min(Math.max(40, Math.floor(renderer.width * 0.85)), MAX_DIALOG_WIDTH));
   const dialogHeight = createMemo(() => Math.max(10, Math.floor(renderer.height * 0.9)));
 
+  // ── Windowed rendering ─────────────────────────────────────────────
+  // Track scroll position reactively via the scrollbar's "change" event.
+  const [scrollTop, setScrollTop] = createSignal(0);
+
+  // Mutable ref to hold the scrollbar listener cleanup function.
+  // We use a ref because the listener is set up imperatively after the
+  // scrollbox renders (inside a <Show>), and we need to clean up on unmount.
+  const listenerRef: { cleanup: (() => void) | null } = { cleanup: null };
+
+  /** Attach the scroll listener to the scrollbox's vertical scrollbar. */
+  const attachScrollListener = (sb: ScrollBoxRenderable) => {
+    // Remove any previous listener
+    if (listenerRef.cleanup) listenerRef.cleanup();
+
+    const handler = ({ position }: { position: number }) => {
+      setScrollTop(position);
+    };
+    sb.verticalScrollBar.on("change", handler);
+    listenerRef.cleanup = () => sb.verticalScrollBar.off("change", handler);
+  };
+
+  onCleanup(() => {
+    if (listenerRef.cleanup) listenerRef.cleanup();
+  });
+
+  // Row offsets: prefix-sum for mapping line index ↔ row position.
+  const rowOffsets = createMemo(() => buildRowOffsets(visibleLines()));
+
+  /** Total row count of all visible lines (for spacer sizing). */
+  const totalRows = createMemo(() => {
+    const offsets = rowOffsets();
+    return offsets[offsets.length - 1];
+  });
+
+  /** Compute the windowed slice of lines to render. */
+  const windowSlice = createMemo(() => {
+    const lines = visibleLines();
+    const offsets = rowOffsets();
+    const total = totalRows();
+    if (lines.length === 0) return { startIdx: 0, endIdx: 0, topRows: 0, bottomRows: 0 };
+
+    const st = scrollTop();
+    // Estimate viewport height: use scrollbox viewport if available, else fallback
+    const vpHeight = scrollboxRef?.viewport.height ?? dialogHeight() - 6;
+
+    // Find first visible line (the line that contains the row at scrollTop)
+    const firstVisible = findLineAtRow(offsets, st);
+    // Find last visible line (the line at scrollTop + viewportHeight)
+    const lastVisible = findLineAtRow(offsets, st + vpHeight);
+
+    // Expand by buffer
+    const startIdx = Math.max(0, firstVisible - WINDOW_BUFFER);
+    const endIdx = Math.min(lines.length, lastVisible + WINDOW_BUFFER + 1);
+
+    const topRows = offsets[startIdx];
+    const bottomRows = total - offsets[endIdx];
+
+    return { startIdx, endIdx, topRows, bottomRows };
+  });
+
+  /** The actual lines to render (windowed slice). */
+  const windowedLines = createMemo(() => {
+    const { startIdx, endIdx } = windowSlice();
+    return visibleLines().slice(startIdx, endIdx);
+  });
+
   // ── File navigation ────────────────────────────────────────────────
   const hasMultipleFiles = () => props.target.fileList.length > 1;
 
@@ -207,6 +276,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
   // ── Reset scroll when visible lines change (file nav or view mode toggle) ──
   createEffect(() => {
     const _lines = visibleLines();
+    setScrollTop(0);
     scrollboxRef?.scrollTo(0);
   });
 
@@ -377,7 +447,10 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
         {/* Diff content */}
         <Show when={!loading() && !diff()?.isBinary && displayLines().length > 0}>
           <scrollbox
-            ref={scrollboxRef}
+            ref={(el: ScrollBoxRenderable) => {
+              scrollboxRef = el;
+              attachScrollListener(el);
+            }}
             flexGrow={1}
             flexShrink={1}
             minHeight={0}
@@ -386,7 +459,10 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
             verticalScrollbarOptions={{ visible: false }}
           >
             <box flexDirection="column" paddingX={4}>
-              <For each={visibleLines()}>
+              {/* Top spacer — maintains scroll position for offscreen lines above */}
+              <box height={windowSlice().topRows} />
+
+              <For each={windowedLines()}>
                 {line => {
                   if (line.kind === "spacer") {
                     return (
@@ -435,6 +511,9 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
                   );
                 }}
               </For>
+
+              {/* Bottom spacer — maintains total content height for offscreen lines below */}
+              <box height={windowSlice().bottomRows} />
 
               {/* Truncation message */}
               <Show when={isTruncated()}>

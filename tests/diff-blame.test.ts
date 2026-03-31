@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { formatHunkHeader } from "../src/components/dialogs/diff-utils";
+import {
+  buildRowOffsets,
+  type DisplayLineKind,
+  findLineAtRow,
+  formatHunkHeader,
+} from "../src/components/dialogs/diff-utils";
 import { parseBlameOutput, parseUnifiedDiff } from "../src/git/repo";
 
 describe("parseUnifiedDiff", () => {
@@ -360,5 +365,102 @@ describe("formatHunkHeader", () => {
   test("falls back to raw string for unparseable input", () => {
     const raw = "not a hunk header";
     expect(formatHunkHeader(raw)).toBe(raw);
+  });
+});
+
+// ── Windowed rendering helpers ────────────────────────────────────────
+
+function dl(kind: DisplayLineKind): { kind: DisplayLineKind } {
+  return { kind };
+}
+
+describe("buildRowOffsets", () => {
+  test("empty array produces single zero entry", () => {
+    const offsets = buildRowOffsets([]);
+    expect(offsets).toEqual([0]);
+  });
+
+  test("all regular lines (height 1 each)", () => {
+    const lines = [dl("context"), dl("add"), dl("delete"), dl("hunk-header")];
+    const offsets = buildRowOffsets(lines);
+    expect(offsets).toEqual([0, 1, 2, 3, 4]);
+  });
+
+  test("spacer lines are 2 rows", () => {
+    const lines = [dl("context"), dl("spacer"), dl("add")];
+    const offsets = buildRowOffsets(lines);
+    // context=1row, spacer=2rows, add=1row → [0, 1, 3, 4]
+    expect(offsets).toEqual([0, 1, 3, 4]);
+  });
+
+  test("multiple spacers", () => {
+    const lines = [dl("spacer"), dl("spacer")];
+    const offsets = buildRowOffsets(lines);
+    expect(offsets).toEqual([0, 2, 4]);
+  });
+
+  test("total row count is last element", () => {
+    const lines = [dl("context"), dl("spacer"), dl("context"), dl("spacer"), dl("context")];
+    const offsets = buildRowOffsets(lines);
+    // 1 + 2 + 1 + 2 + 1 = 7
+    expect(offsets[offsets.length - 1]).toBe(7);
+  });
+});
+
+describe("findLineAtRow", () => {
+  test("finds first line for row 0", () => {
+    const offsets = buildRowOffsets([dl("context"), dl("add"), dl("delete")]);
+    expect(findLineAtRow(offsets, 0)).toBe(0);
+  });
+
+  test("finds correct line for exact row boundary", () => {
+    const offsets = buildRowOffsets([dl("context"), dl("add"), dl("delete")]);
+    // Row 1 starts at line index 1
+    expect(findLineAtRow(offsets, 1)).toBe(1);
+    // Row 2 starts at line index 2
+    expect(findLineAtRow(offsets, 2)).toBe(2);
+  });
+
+  test("finds line containing row within spacer", () => {
+    // context(h=1), spacer(h=2), add(h=1) → offsets [0,1,3,4]
+    const offsets = buildRowOffsets([dl("context"), dl("spacer"), dl("add")]);
+    // Row 0 → line 0 (context)
+    expect(findLineAtRow(offsets, 0)).toBe(0);
+    // Row 1 → line 1 (spacer starts at row 1)
+    expect(findLineAtRow(offsets, 1)).toBe(1);
+    // Row 2 → still line 1 (spacer occupies rows 1-2)
+    expect(findLineAtRow(offsets, 2)).toBe(1);
+    // Row 3 → line 2 (add)
+    expect(findLineAtRow(offsets, 3)).toBe(2);
+  });
+
+  test("clamps to last line for row beyond total", () => {
+    const offsets = buildRowOffsets([dl("context"), dl("add")]);
+    // Total is 2 rows, asking for row 10 → last line index (1)
+    expect(findLineAtRow(offsets, 10)).toBe(1);
+  });
+
+  test("works with single line", () => {
+    const offsets = buildRowOffsets([dl("add")]);
+    expect(findLineAtRow(offsets, 0)).toBe(0);
+  });
+
+  test("works with large array", () => {
+    const lines: { kind: DisplayLineKind }[] = [];
+    for (let i = 0; i < 1000; i++) {
+      lines.push(dl(i % 10 === 0 ? "spacer" : "context"));
+    }
+    const offsets = buildRowOffsets(lines);
+    // Verify a few known positions
+    // First line is spacer (h=2), second is context (h=1)
+    expect(findLineAtRow(offsets, 0)).toBe(0); // spacer at row 0
+    expect(findLineAtRow(offsets, 1)).toBe(0); // still spacer (row 1 of 2)
+    expect(findLineAtRow(offsets, 2)).toBe(1); // context at row 2
+
+    // Total rows: 100 spacers (×2) + 900 contexts (×1) = 200 + 900 = 1100
+    expect(offsets[offsets.length - 1]).toBe(1100);
+
+    // Last line is context (index 999), starts at row 1099
+    expect(findLineAtRow(offsets, 1099)).toBe(999);
   });
 });
