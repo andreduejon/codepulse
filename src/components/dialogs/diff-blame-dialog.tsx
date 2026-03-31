@@ -393,7 +393,8 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
     if (lineNo === undefined) return " ".repeat(BLAME_COL_WIDTH);
     const bl = blameLookup().get(lineNo);
     if (!bl) return " ".repeat(BLAME_COL_WIDTH);
-    const author = bl.author.length > 12 ? `${bl.author.slice(0, 11)}\u2026` : bl.author;
+    const rawAuthor = bl.author.normalize("NFC");
+    const author = rawAuthor.length > 12 ? `${rawAuthor.slice(0, 11)}\u2026` : rawAuthor;
     return `${bl.shortHash} ${author} `.padEnd(BLAME_COL_WIDTH);
   };
 
