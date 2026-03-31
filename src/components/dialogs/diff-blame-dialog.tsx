@@ -70,6 +70,11 @@ function padLineNo(lineNo: number | undefined, width: number): string {
   return String(lineNo).padStart(width);
 }
 
+/** Build the merged gutter string: "oldLineNo newLineNo". */
+function buildGutter(line: DisplayLine, oldWidth: number, newWidth: number): string {
+  return `${padLineNo(line.oldLineNo, oldWidth)} ${padLineNo(line.newLineNo, newWidth)}`;
+}
+
 export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
   const { state } = useAppState();
   const { theme } = useTheme();
@@ -414,19 +419,11 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
                           {() => blameAnnotation(line)}
                         </text>
                       </Show>
-                      {/* Old line number */}
+                      {/* Line numbers (old + new merged) */}
                       <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                        {() => padLineNo(line.oldLineNo, gutterWidth(maxOldLineNo()))}
+                        {() => buildGutter(line, gutterWidth(maxOldLineNo()), gutterWidth(maxNewLineNo()))}
                       </text>
-                      {/* Separator */}
-                      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                        {" "}
-                      </text>
-                      {/* New line number */}
-                      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                        {() => padLineNo(line.newLineNo, gutterWidth(maxNewLineNo()))}
-                      </text>
-                      {/* Separator + prefix */}
+                      {/* Prefix (+/-/space) */}
                       <text flexShrink={0} wrapMode="none" fg={lineColor(line.kind)}>
                         {`  ${prefix} `}
                       </text>
