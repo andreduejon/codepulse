@@ -43,27 +43,27 @@ interface DisplayLine {
   content: string;
   oldLineNo?: number;
   newLineNo?: number;
-  /** Index of the hunk this line belongs to (undefined for spacers). */
-  hunkIndex?: number;
 }
 
 function buildDisplayLines(diff: FileDiff): DisplayLine[] {
   const lines: DisplayLine[] = [];
   for (let i = 0; i < diff.hunks.length; i++) {
-    if (i > 0) {
-      lines.push({ kind: "spacer", content: "" });
-    }
+    // Spacer (horizontal rule) before every hunk — including the first
+    lines.push({ kind: "spacer", content: "" });
     const hunk = diff.hunks[i];
-    lines.push({ kind: "hunk-header", content: hunk.header, hunkIndex: i });
+    lines.push({ kind: "hunk-header", content: hunk.header });
     for (const line of hunk.lines) {
       lines.push({
         kind: line.type,
         content: line.content,
         oldLineNo: line.oldLineNo,
         newLineNo: line.newLineNo,
-        hunkIndex: i,
       });
     }
+  }
+  // Spacer (horizontal rule) after the last hunk
+  if (diff.hunks.length > 0) {
+    lines.push({ kind: "spacer", content: "" });
   }
   return lines;
 }
@@ -375,18 +375,15 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
     }
   };
 
-  /** Get the background color for a diff line row. Even-indexed hunks get a subtle tint. */
-  const lineBg = (kind: DisplayLine["kind"], hunkIndex: number | undefined): string | undefined => {
-    const tinted = hunkIndex !== undefined && hunkIndex % 2 === 0;
+  /** Get the background color for a diff line row. */
+  const lineBg = (kind: DisplayLine["kind"]): string | undefined => {
     switch (kind) {
       case "add":
         return t().diffAddedBg;
       case "delete":
         return t().diffRemovedBg;
       case "hunk-header":
-        return t().backgroundElement;
       case "context":
-        return tinted ? t().backgroundElement : undefined;
       case "spacer":
         return undefined;
     }
@@ -473,16 +470,13 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
                   if (line.kind === "spacer") {
                     const ruleWidth = dialogWidth() - 10 - (showBlame() ? BLAME_COL_WIDTH : 0);
                     return (
-                      <box flexDirection="column">
-                        <box height={1} />
-                        <box flexDirection="row">
-                          <Show when={showBlame()}>
-                            <box flexShrink={0} width={BLAME_COL_WIDTH} />
-                          </Show>
-                          <text wrapMode="none" fg={t().border}>
-                            {"─".repeat(ruleWidth)}
-                          </text>
-                        </box>
+                      <box flexDirection="row">
+                        <Show when={showBlame()}>
+                          <box flexShrink={0} width={BLAME_COL_WIDTH} />
+                        </Show>
+                        <text wrapMode="none" fg={t().border}>
+                          {"─".repeat(ruleWidth)}
+                        </text>
                       </box>
                     );
                   }
@@ -491,7 +485,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
 
                   if (line.kind === "hunk-header") {
                     return (
-                      <box flexDirection="row" width="100%" backgroundColor={lineBg("hunk-header", line.hunkIndex)}>
+                      <box flexDirection="row" width="100%" backgroundColor={lineBg("hunk-header")}>
                         <Show when={showBlame()}>
                           <box flexShrink={0} width={BLAME_COL_WIDTH} />
                         </Show>
@@ -503,7 +497,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
                   }
 
                   return (
-                    <box flexDirection="row" width="100%" backgroundColor={lineBg(line.kind, line.hunkIndex)}>
+                    <box flexDirection="row" width="100%" backgroundColor={lineBg(line.kind)}>
                       {/* Blame annotation (conditional, fixed-width) */}
                       <Show when={showBlame()}>
                         <text flexShrink={0} width={BLAME_COL_WIDTH} wrapMode="none" fg={t().foregroundMuted}>

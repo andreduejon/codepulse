@@ -28,9 +28,9 @@ export function formatHunkHeader(raw: string): string {
 
 // ── Windowed rendering helpers ────────────────────────────────────────
 
-/** Row height of each display line kind. Spacers are 2 rows (blank + rule). */
-export function lineRowHeight(kind: DisplayLineKind): number {
-  return kind === "spacer" ? 2 : 1;
+/** Row height of each display line kind. All kinds occupy 1 row. */
+export function lineRowHeight(_kind: DisplayLineKind): number {
+  return 1;
 }
 
 /**

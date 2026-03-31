@@ -386,24 +386,24 @@ describe("buildRowOffsets", () => {
     expect(offsets).toEqual([0, 1, 2, 3, 4]);
   });
 
-  test("spacer lines are 2 rows", () => {
+  test("spacer lines are 1 row", () => {
     const lines = [dl("context"), dl("spacer"), dl("add")];
     const offsets = buildRowOffsets(lines);
-    // context=1row, spacer=2rows, add=1row → [0, 1, 3, 4]
-    expect(offsets).toEqual([0, 1, 3, 4]);
+    // context=1row, spacer=1row, add=1row → [0, 1, 2, 3]
+    expect(offsets).toEqual([0, 1, 2, 3]);
   });
 
   test("multiple spacers", () => {
     const lines = [dl("spacer"), dl("spacer")];
     const offsets = buildRowOffsets(lines);
-    expect(offsets).toEqual([0, 2, 4]);
+    expect(offsets).toEqual([0, 1, 2]);
   });
 
   test("total row count is last element", () => {
     const lines = [dl("context"), dl("spacer"), dl("context"), dl("spacer"), dl("context")];
     const offsets = buildRowOffsets(lines);
-    // 1 + 2 + 1 + 2 + 1 = 7
-    expect(offsets[offsets.length - 1]).toBe(7);
+    // 1 + 1 + 1 + 1 + 1 = 5
+    expect(offsets[offsets.length - 1]).toBe(5);
   });
 });
 
@@ -421,17 +421,15 @@ describe("findLineAtRow", () => {
     expect(findLineAtRow(offsets, 2)).toBe(2);
   });
 
-  test("finds line containing row within spacer", () => {
-    // context(h=1), spacer(h=2), add(h=1) → offsets [0,1,3,4]
+  test("finds line at spacer boundary", () => {
+    // context(h=1), spacer(h=1), add(h=1) → offsets [0,1,2,3]
     const offsets = buildRowOffsets([dl("context"), dl("spacer"), dl("add")]);
     // Row 0 → line 0 (context)
     expect(findLineAtRow(offsets, 0)).toBe(0);
-    // Row 1 → line 1 (spacer starts at row 1)
+    // Row 1 → line 1 (spacer)
     expect(findLineAtRow(offsets, 1)).toBe(1);
-    // Row 2 → still line 1 (spacer occupies rows 1-2)
-    expect(findLineAtRow(offsets, 2)).toBe(1);
-    // Row 3 → line 2 (add)
-    expect(findLineAtRow(offsets, 3)).toBe(2);
+    // Row 2 → line 2 (add)
+    expect(findLineAtRow(offsets, 2)).toBe(2);
   });
 
   test("clamps to last line for row beyond total", () => {
@@ -452,15 +450,14 @@ describe("findLineAtRow", () => {
     }
     const offsets = buildRowOffsets(lines);
     // Verify a few known positions
-    // First line is spacer (h=2), second is context (h=1)
+    // First line is spacer (h=1), second is context (h=1)
     expect(findLineAtRow(offsets, 0)).toBe(0); // spacer at row 0
-    expect(findLineAtRow(offsets, 1)).toBe(0); // still spacer (row 1 of 2)
-    expect(findLineAtRow(offsets, 2)).toBe(1); // context at row 2
+    expect(findLineAtRow(offsets, 1)).toBe(1); // context at row 1
 
-    // Total rows: 100 spacers (×2) + 900 contexts (×1) = 200 + 900 = 1100
-    expect(offsets[offsets.length - 1]).toBe(1100);
+    // Total rows: all kinds are 1 row each → 1000
+    expect(offsets[offsets.length - 1]).toBe(1000);
 
-    // Last line is context (index 999), starts at row 1099
-    expect(findLineAtRow(offsets, 1099)).toBe(999);
+    // Last line is context (index 999), starts at row 999
+    expect(findLineAtRow(offsets, 999)).toBe(999);
   });
 });
