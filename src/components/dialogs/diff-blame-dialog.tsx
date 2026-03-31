@@ -5,20 +5,35 @@ import { useAppState } from "../../context/state";
 import { useTheme } from "../../context/theme";
 import { getFileBlame, getFileDiff } from "../../git/repo";
 import type { BlameLine, DiffTarget, FileDiff } from "../../git/types";
-import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
+import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 import { formatHunkHeader } from "./diff-utils";
 
 /** Maximum number of diff lines displayed before truncation. */
 const MAX_DISPLAY_LINES = 5000;
 
+/** Maximum dialog width in columns (fits 120-150 char lines with gutter). */
+const MAX_DIALOG_WIDTH = 160;
+
+type DiffViewMode = "mixed" | "new" | "old";
+
+const VIEW_MODE_CYCLE: DiffViewMode[] = ["mixed", "new", "old"];
+/** Label describes what pressing `c` will switch TO (the next mode in the cycle). */
+const VIEW_MODE_NEXT_LABEL: Record<DiffViewMode, string> = {
+  mixed: "show new",
+  new: "show old",
+  old: "show all",
+};
+
 interface DiffBlameDialogProps {
   target: DiffTarget;
   onClose: () => void;
+  /** Navigate to a different file within the same commit (left/right arrows). */
+  onNavigate: (target: DiffTarget) => void;
 }
 
 /** Flatten all hunks into a single line array with hunk headers interspersed. */
 interface DisplayLine {
-  kind: "hunk-header" | "add" | "delete" | "context";
+  kind: "hunk-header" | "add" | "delete" | "context" | "spacer";
   content: string;
   oldLineNo?: number;
   newLineNo?: number;
@@ -26,7 +41,11 @@ interface DisplayLine {
 
 function buildDisplayLines(diff: FileDiff): DisplayLine[] {
   const lines: DisplayLine[] = [];
-  for (const hunk of diff.hunks) {
+  for (let i = 0; i < diff.hunks.length; i++) {
+    if (i > 0) {
+      lines.push({ kind: "spacer", content: "" });
+    }
+    const hunk = diff.hunks[i];
     lines.push({ kind: "hunk-header", content: hunk.header });
     for (const line of hunk.lines) {
       lines.push({
@@ -65,29 +84,30 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
   const [blameLoading, setBlameLoading] = createSignal(false);
   /** Whether blame has ever been fetched (lazy — only on first `b` press). */
   let blameFetched = false;
+  const [viewMode, setViewMode] = createSignal<DiffViewMode>("mixed");
 
   let scrollboxRef: ScrollBoxRenderable | undefined;
 
-  // ── Load diff on mount ─────────────────────────────────────────────
-  const loadDiff = async () => {
-    setLoading(true);
-    try {
-      const result = await getFileDiff(
-        state.repoPath(),
-        props.target.commitHash,
-        props.target.filePath,
-        props.target.source,
-      );
-      setDiff(result);
-    } catch {
-      setDiff({ filePath: props.target.filePath, hunks: [], isBinary: false });
-    } finally {
-      setLoading(false);
-    }
-  };
+  // ── Load diff reactively (re-runs when target changes) ─────────────
+  createEffect(() => {
+    const { commitHash, filePath, source } = props.target;
+    // Reset blame state for new file
+    blameFetched = false;
+    setBlameLines([]);
+    setShowBlame(false);
 
-  // Trigger load immediately
-  loadDiff();
+    setLoading(true);
+    (async () => {
+      try {
+        const result = await getFileDiff(state.repoPath(), commitHash, filePath, source);
+        setDiff(result);
+      } catch {
+        setDiff({ filePath, hunks: [], isBinary: false });
+      } finally {
+        setLoading(false);
+      }
+    })();
+  });
 
   // ── Lazy blame fetch ───────────────────────────────────────────────
   const fetchBlame = async () => {
@@ -110,18 +130,19 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
   };
 
   // ── Derived display data ───────────────────────────────────────────
-  const displayLines = createMemo((): DisplayLine[] => {
+  // Single memo builds both line array and truncation flag to avoid
+  // calling buildDisplayLines twice.
+  const diffData = createMemo(() => {
     const d = diff();
-    if (!d) return [];
+    if (!d) return { lines: [] as DisplayLine[], truncated: false };
     const all = buildDisplayLines(d);
-    return all.length > MAX_DISPLAY_LINES ? all.slice(0, MAX_DISPLAY_LINES) : all;
+    const truncated = all.length > MAX_DISPLAY_LINES;
+    const lines = truncated ? all.slice(0, MAX_DISPLAY_LINES) : all;
+    return { lines, truncated };
   });
 
-  const isTruncated = createMemo(() => {
-    const d = diff();
-    if (!d) return false;
-    return buildDisplayLines(d).length > MAX_DISPLAY_LINES;
-  });
+  const displayLines = () => diffData().lines;
+  const isTruncated = () => diffData().truncated;
 
   // Compute max line numbers for gutter sizing
   const maxOldLineNo = createMemo(() => {
@@ -140,6 +161,15 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
     return max;
   });
 
+  // Filter lines based on view mode (mixed / new only / old only)
+  const visibleLines = createMemo(() => {
+    const mode = viewMode();
+    const lines = displayLines();
+    if (mode === "mixed") return lines;
+    if (mode === "new") return lines.filter(l => l.kind !== "delete");
+    return lines.filter(l => l.kind !== "add");
+  });
+
   // Build a blame lookup: newLineNo → BlameLine
   const blameLookup = createMemo(() => {
     const map = new Map<number, BlameLine>();
@@ -150,12 +180,28 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
   });
 
   // ── Dialog sizing ──────────────────────────────────────────────────
-  const dialogWidth = createMemo(() => Math.max(40, Math.floor(renderer.width * 0.95)));
+  const dialogWidth = createMemo(() => Math.min(Math.max(40, Math.floor(renderer.width * 0.85)), MAX_DIALOG_WIDTH));
   const dialogHeight = createMemo(() => Math.max(10, Math.floor(renderer.height * 0.9)));
 
-  // ── Reset scroll when diff changes ─────────────────────────────────
+  // ── File navigation ────────────────────────────────────────────────
+  const hasMultipleFiles = () => props.target.fileList.length > 1;
+
+  const navigateFile = (direction: -1 | 1) => {
+    const newIndex = props.target.fileIndex + direction;
+    if (newIndex < 0 || newIndex >= props.target.fileList.length) return;
+    const newPath = props.target.fileList[newIndex];
+    props.onNavigate({
+      commitHash: props.target.commitHash,
+      filePath: newPath,
+      source: props.target.source,
+      fileList: props.target.fileList,
+      fileIndex: newIndex,
+    });
+  };
+
+  // ── Reset scroll when visible lines change (file nav or view mode toggle) ──
   createEffect(() => {
-    const _lines = displayLines();
+    const _lines = visibleLines();
     scrollboxRef?.scrollTo(0);
   });
 
@@ -174,6 +220,14 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
         e.preventDefault();
         scrollboxRef?.scrollBy(e.shift ? 10 : 1, "absolute");
         break;
+      case "left":
+        e.preventDefault();
+        navigateFile(-1);
+        break;
+      case "right":
+        e.preventDefault();
+        navigateFile(1);
+        break;
       case "pageup":
         e.preventDefault();
         scrollboxRef?.scrollBy(-0.5, "viewport");
@@ -186,19 +240,24 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
       case "g":
         e.preventDefault();
         if (e.shift) {
-          // G → scroll to bottom
           scrollboxRef?.scrollTo(Infinity);
         } else {
-          // g → scroll to top
           scrollboxRef?.scrollTo(0);
         }
         break;
       case "b":
-        // Toggle blame annotations
+        e.preventDefault();
         if (!blameFetched) {
           fetchBlame();
         }
         setShowBlame(!showBlame());
+        break;
+      case "c":
+        e.preventDefault();
+        setViewMode(prev => {
+          const idx = VIEW_MODE_CYCLE.indexOf(prev);
+          return VIEW_MODE_CYCLE[(idx + 1) % VIEW_MODE_CYCLE.length];
+        });
         break;
     }
   });
@@ -215,6 +274,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
       case "hunk-header":
         return t().accent;
       case "context":
+      case "spacer":
         return t().foreground;
     }
   };
@@ -227,9 +287,25 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
       case "delete":
         return "-";
       case "hunk-header":
+      case "spacer":
         return "";
       case "context":
         return " ";
+    }
+  };
+
+  /** Get the background color for a diff line row, or undefined for context. */
+  const lineBg = (kind: DisplayLine["kind"]): string | undefined => {
+    switch (kind) {
+      case "add":
+        return t().diffAddedBg;
+      case "delete":
+        return t().diffRemovedBg;
+      case "hunk-header":
+        return t().backgroundElement;
+      case "context":
+      case "spacer":
+        return undefined;
     }
   };
 
@@ -238,7 +314,6 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
 
   const blameAnnotation = (line: DisplayLine): string => {
     if (!showBlame() || line.kind === "hunk-header") return "";
-    // For added/context lines, look up by newLineNo
     const lineNo = line.newLineNo;
     if (lineNo === undefined) return " ".repeat(BLAME_COL_WIDTH);
     const bl = blameLookup().get(lineNo);
@@ -256,7 +331,9 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
         : src === "stash"
           ? `stash:${props.target.commitHash.slice(0, 7)}`
           : src;
-    return `${props.target.filePath}  (${label})`;
+    const pos =
+      props.target.fileList.length > 1 ? `[${props.target.fileIndex + 1}/${props.target.fileList.length}]  ` : "";
+    return `${pos}(${label})  ${props.target.filePath}`;
   });
 
   return (
@@ -303,23 +380,34 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
             scrollX={false}
             verticalScrollbarOptions={{ visible: false }}
           >
-            <box flexDirection="column">
-              <For each={displayLines()}>
+            <box flexDirection="column" paddingX={4}>
+              <For each={visibleLines()}>
                 {line => {
+                  if (line.kind === "spacer") {
+                    return (
+                      <box flexDirection="column">
+                        <box height={1} />
+                        <text wrapMode="none" fg={t().border}>
+                          {"─".repeat(dialogWidth() - 10)}
+                        </text>
+                      </box>
+                    );
+                  }
+
                   const prefix = linePrefix(line.kind);
 
                   if (line.kind === "hunk-header") {
                     return (
-                      <box flexDirection="row" width="100%">
+                      <box flexDirection="row" width="100%" backgroundColor={lineBg("hunk-header")}>
                         <text wrapMode="none" fg={t().accent}>
-                          {() => formatHunkHeader(line.content)}
+                          <strong>{formatHunkHeader(line.content)}</strong>
                         </text>
                       </box>
                     );
                   }
 
                   return (
-                    <box flexDirection="row" width="100%">
+                    <box flexDirection="row" width="100%" backgroundColor={lineBg(line.kind)}>
                       {/* Blame annotation (conditional) */}
                       <Show when={showBlame()}>
                         <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
@@ -340,7 +428,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
                       </text>
                       {/* Separator + prefix */}
                       <text flexShrink={0} wrapMode="none" fg={lineColor(line.kind)}>
-                        {` ${prefix}`}
+                        {`  ${prefix} `}
                       </text>
                       {/* Content */}
                       <text flexGrow={1} wrapMode="none" fg={lineColor(line.kind)}>
@@ -355,7 +443,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
               <Show when={isTruncated()}>
                 <box flexDirection="row" width="100%" paddingY={1}>
                   <text wrapMode="none" fg={t().foregroundMuted}>
-                    {`  ... diff truncated at ${MAX_DISPLAY_LINES} lines`}
+                    {`... diff truncated at ${MAX_DISPLAY_LINES} lines`}
                   </text>
                 </box>
               </Show>
@@ -364,14 +452,26 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
         </Show>
 
         {/* Footer with keybinds */}
-        <box height={1} flexShrink={0} />
-        <box flexDirection="row" width="100%" paddingX={4} flexShrink={0}>
-          <box flexGrow={1} />
+        <DialogFooter>
           <Show when={blameLoading()}>
             <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
               {"loading blame...  "}
             </text>
           </Show>
+          <Show when={hasMultipleFiles()}>
+            <text flexShrink={0} wrapMode="none" fg={t().foreground}>
+              {"\u2190/\u2192"}
+            </text>
+            <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+              {" file  "}
+            </text>
+          </Show>
+          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
+            {"\u2191/\u2193"}
+          </text>
+          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+            {" scroll  "}
+          </text>
           <text flexShrink={0} wrapMode="none" fg={t().foreground}>
             b
           </text>
@@ -379,10 +479,10 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
             {showBlame() ? " hide blame  " : " show blame  "}
           </text>
           <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            {"j/k"}
+            c
           </text>
           <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {" scroll  "}
+            {` ${VIEW_MODE_NEXT_LABEL[viewMode()]}  `}
           </text>
           <text flexShrink={0} wrapMode="none" fg={t().foreground}>
             g/G
@@ -390,7 +490,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
           <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
             {" top/bottom"}
           </text>
-        </box>
+        </DialogFooter>
       </box>
     </DialogOverlay>
   );

@@ -6,7 +6,7 @@ import { DEFAULT_AUTO_REFRESH_INTERVAL, useAppState } from "../../context/state"
 import { themes, useTheme } from "../../context/theme";
 import { getColorForColumn } from "../../git/graph";
 import { useBannerScroll } from "../../hooks/use-banner-scroll";
-import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
+import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
 type MenuTab = "repository" | "branch";
 
@@ -774,13 +774,8 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
           </box>
         </scrollbox>
 
-        {/* Spacer between scrollbox and footer area */}
-        <box height={1} flexShrink={0} />
-
         {/* Context-aware footer */}
-        <box height={1} flexShrink={0} />
-        <box flexDirection="row" width="100%" paddingX={4} flexShrink={0}>
-          <box flexGrow={1} />
+        <DialogFooter>
           <text flexShrink={0} wrapMode="none" fg={t().foreground}>
             enter
           </text>
@@ -797,8 +792,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
           <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
             {" navigate"}
           </text>
-        </box>
-        <box height={1} flexShrink={0} />
+        </DialogFooter>
       </box>
     </DialogOverlay>
   );

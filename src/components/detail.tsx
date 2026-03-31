@@ -453,8 +453,17 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
       case "file":
         if (props.onOpenDiff && item.filePath) {
           const c = commit();
-          if (c) {
-            props.onOpenDiff({ commitHash: c.hash, filePath: item.filePath, source: "commit" });
+          const d = detail();
+          if (c && d) {
+            const fileList = d.files.map(f => f.path);
+            const fileIndex = fileList.indexOf(item.filePath);
+            props.onOpenDiff({
+              commitHash: c.hash,
+              filePath: item.filePath,
+              source: "commit",
+              fileList,
+              fileIndex: fileIndex >= 0 ? fileIndex : 0,
+            });
           }
         }
         break;
@@ -466,7 +475,16 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
         break;
       case "stash-file":
         if (props.onOpenDiff && item.filePath) {
-          props.onOpenDiff({ commitHash: item.stashHash, filePath: item.filePath, source: "stash" });
+          const stashFiles = stashFileCache().get(item.stashHash);
+          const fileList = stashFiles ? stashFiles.map(f => f.path) : [item.filePath];
+          const fileIndex = fileList.indexOf(item.filePath);
+          props.onOpenDiff({
+            commitHash: item.stashHash,
+            filePath: item.filePath,
+            source: "stash",
+            fileList,
+            fileIndex: fileIndex >= 0 ? fileIndex : 0,
+          });
         }
         break;
     }

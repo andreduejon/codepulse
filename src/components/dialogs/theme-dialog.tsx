@@ -2,7 +2,7 @@ import { useKeyboard } from "@opentui/solid";
 import { createEffect, createSignal, For, onCleanup } from "solid-js";
 import { SHIFT_JUMP } from "../../constants";
 import { themeNames, themes, useTheme } from "../../context/theme";
-import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
+import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
 /** Pre-computed theme options — themeNames and themes are module-level constants. */
 const themeOptions = themeNames.map(key => ({
@@ -63,7 +63,7 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void }>) {
     <DialogOverlay>
       <box
         width={50}
-        height={themeOptions.length + 7}
+        height={themeOptions.length + 9}
         backgroundColor={t().backgroundPanel}
         flexDirection="column"
         paddingX={1}
@@ -97,9 +97,7 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void }>) {
         </box>
 
         {/* Navigation footer */}
-        <box height={1} />
-        <box flexDirection="row" width="100%" paddingX={4}>
-          <box flexGrow={1} />
+        <DialogFooter>
           <text flexShrink={0} wrapMode="none" fg={t().foreground}>
             enter
           </text>
@@ -112,7 +110,7 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void }>) {
           <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
             {" navigate"}
           </text>
-        </box>
+        </DialogFooter>
       </box>
     </DialogOverlay>
   );

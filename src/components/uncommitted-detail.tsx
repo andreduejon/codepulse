@@ -114,7 +114,15 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
       toggleDir(item.dirPath);
     } else if (item.type === "file" && props.onOpenDiff && item.filePath) {
       const source = activeTab() as DiffSource;
-      props.onOpenDiff({ commitHash: "", filePath: item.filePath, source });
+      const fileList = activeFiles().map(f => f.path);
+      const fileIndex = fileList.indexOf(item.filePath);
+      props.onOpenDiff({
+        commitHash: "",
+        filePath: item.filePath,
+        source,
+        fileList,
+        fileIndex: fileIndex >= 0 ? fileIndex : 0,
+      });
     }
   };
 

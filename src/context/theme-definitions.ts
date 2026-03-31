@@ -37,6 +37,8 @@ export const openCodeOriginal: Theme = {
   ],
   diffAdded: "#98c379",
   diffRemoved: "#e06c75",
+  diffAddedBg: "#23251d",
+  diffRemovedBg: "#2c1b1c",
 };
 
 export const catppuccinMocha: Theme = {
@@ -68,6 +70,8 @@ export const catppuccinMocha: Theme = {
   ],
   diffAdded: "#a6e3a1",
   diffRemoved: "#f38ba8",
+  diffAddedBg: "#2e363c",
+  diffRemovedBg: "#382b3d",
 };
 
 export const tokyoNight: Theme = {
@@ -99,6 +103,8 @@ export const tokyoNight: Theme = {
   ],
   diffAdded: "#9ece6a",
   diffRemoved: "#f7768e",
+  diffAddedBg: "#2a302e",
+  diffRemovedBg: "#352632",
 };
 
 export const dracula: Theme = {
@@ -130,6 +136,8 @@ export const dracula: Theme = {
   ],
   diffAdded: "#50fa7b",
   diffRemoved: "#ff5555",
+  diffAddedBg: "#2d433e",
+  diffRemovedBg: "#422f3a",
 };
 
 export const nord: Theme = {
@@ -161,6 +169,8 @@ export const nord: Theme = {
   ],
   diffAdded: "#a3be8c",
   diffRemoved: "#bf616a",
+  diffAddedBg: "#3c4549",
+  diffRemovedBg: "#3f3945",
 };
 
 export const oneDark: Theme = {
@@ -192,6 +202,8 @@ export const oneDark: Theme = {
   ],
   diffAdded: "#98c379",
   diffRemoved: "#e06c75",
+  diffAddedBg: "#353e3c",
+  diffRemovedBg: "#3e343c",
 };
 
 export const gruvbox: Theme = {
@@ -223,6 +235,8 @@ export const gruvbox: Theme = {
   ],
   diffAdded: "#b8bb26",
   diffRemoved: "#fb4934",
+  diffAddedBg: "#393a28",
+  diffRemovedBg: "#412c29",
 };
 
 export const monokai: Theme = {
@@ -254,6 +268,8 @@ export const monokai: Theme = {
   ],
   diffAdded: "#a9dc76",
   diffRemoved: "#ff6188",
+  diffAddedBg: "#3c3f37",
+  diffRemovedBg: "#463139",
 };
 
 export const ayuDark: Theme = {
@@ -285,6 +301,8 @@ export const ayuDark: Theme = {
   ],
   diffAdded: "#bae67e",
   diffRemoved: "#ff3333",
+  diffAddedBg: "#323b39",
+  diffRemovedBg: "#3a2630",
 };
 
 export const synthwave: Theme = {
@@ -316,6 +334,8 @@ export const synthwave: Theme = {
   ],
   diffAdded: "#72f1b8",
   diffRemoved: "#fe4450",
+  diffAddedBg: "#2f3c45",
+  diffRemovedBg: "#402738",
 };
 
 export const rosePine: Theme = {
@@ -347,4 +367,6 @@ export const rosePine: Theme = {
   ],
   diffAdded: "#9ccfd8",
   diffRemoved: "#eb6f92",
+  diffAddedBg: "#292d3a",
+  diffRemovedBg: "#322231",
 };

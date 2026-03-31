@@ -693,7 +693,7 @@ function AppContent(props: Readonly<AppProps>) {
             <ThemeDialog onClose={() => setDialog(null)} />
           </Show>
           <Show when={dialog() === "diff-blame" && diffTarget()}>
-            {target => <DiffBlameDialog target={target()} onClose={() => setDialog(null)} />}
+            {target => <DiffBlameDialog target={target()} onClose={() => setDialog(null)} onNavigate={setDiffTarget} />}
           </Show>
         </box>
       </AppStateContext.Provider>

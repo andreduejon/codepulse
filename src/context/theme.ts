@@ -29,6 +29,8 @@ export interface Theme {
   graphColors: string[];
   diffAdded: string;
   diffRemoved: string;
+  diffAddedBg: string;
+  diffRemovedBg: string;
 }
 
 export const themes: Record<string, Theme> = {

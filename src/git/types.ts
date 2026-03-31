@@ -106,6 +106,10 @@ export interface DiffTarget {
   commitHash: string;
   filePath: string;
   source: DiffSource;
+  /** All file paths in the same commit/section, for left/right navigation. */
+  fileList: string[];
+  /** Index of `filePath` within `fileList`. */
+  fileIndex: number;
 }
 
 export interface GraphRow {
