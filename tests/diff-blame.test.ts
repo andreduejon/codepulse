@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   buildRowOffsets,
+  computeDiffStats,
   type DisplayLineKind,
   findLineAtRow,
   formatHunkHeader,
@@ -489,5 +490,118 @@ describe("findLineAtRow", () => {
 
     // Last line is context (index 999), starts at row 999
     expect(findLineAtRow(offsets, 999)).toBe(999);
+  });
+});
+
+describe("computeDiffStats", () => {
+  test("counts additions and deletions across a single hunk", () => {
+    const stats = computeDiffStats([
+      {
+        oldStart: 1,
+        oldCount: 3,
+        newStart: 1,
+        newCount: 4,
+        header: "@@ -1,3 +1,4 @@",
+        lines: [
+          { type: "context", content: "a" },
+          { type: "delete", content: "b" },
+          { type: "add", content: "b2" },
+          { type: "add", content: "b3" },
+          { type: "context", content: "c" },
+        ],
+      },
+    ]);
+    expect(stats.additions).toBe(2);
+    expect(stats.deletions).toBe(1);
+  });
+
+  test("counts across multiple hunks", () => {
+    const stats = computeDiffStats([
+      {
+        oldStart: 1,
+        oldCount: 1,
+        newStart: 1,
+        newCount: 2,
+        header: "@@ -1,1 +1,2 @@",
+        lines: [
+          { type: "add", content: "new" },
+          { type: "context", content: "x" },
+        ],
+      },
+      {
+        oldStart: 10,
+        oldCount: 2,
+        newStart: 11,
+        newCount: 1,
+        header: "@@ -10,2 +11,1 @@",
+        lines: [
+          { type: "delete", content: "old1" },
+          { type: "delete", content: "old2" },
+        ],
+      },
+    ]);
+    expect(stats.additions).toBe(1);
+    expect(stats.deletions).toBe(2);
+  });
+
+  test("returns zeros for empty hunk list", () => {
+    const stats = computeDiffStats([]);
+    expect(stats.additions).toBe(0);
+    expect(stats.deletions).toBe(0);
+  });
+
+  test("returns zeros for hunks with only context lines", () => {
+    const stats = computeDiffStats([
+      {
+        oldStart: 1,
+        oldCount: 2,
+        newStart: 1,
+        newCount: 2,
+        header: "@@ -1,2 +1,2 @@",
+        lines: [
+          { type: "context", content: "a" },
+          { type: "context", content: "b" },
+        ],
+      },
+    ]);
+    expect(stats.additions).toBe(0);
+    expect(stats.deletions).toBe(0);
+  });
+
+  test("pure addition (new file)", () => {
+    const stats = computeDiffStats([
+      {
+        oldStart: 0,
+        oldCount: 0,
+        newStart: 1,
+        newCount: 3,
+        header: "@@ -0,0 +1,3 @@",
+        lines: [
+          { type: "add", content: "line1" },
+          { type: "add", content: "line2" },
+          { type: "add", content: "line3" },
+        ],
+      },
+    ]);
+    expect(stats.additions).toBe(3);
+    expect(stats.deletions).toBe(0);
+  });
+
+  test("pure deletion (deleted file)", () => {
+    const stats = computeDiffStats([
+      {
+        oldStart: 1,
+        oldCount: 2,
+        newStart: 0,
+        newCount: 0,
+        header: "@@ -1,2 +0,0 @@",
+        lines: [
+          { type: "delete", content: "gone1" },
+          { type: "delete", content: "gone2" },
+        ],
+      },
+    ]);
+    expect(stats.additions).toBe(0);
+    expect(stats.deletions).toBe(2);
   });
 });

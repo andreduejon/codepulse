@@ -6,7 +6,7 @@ import { useTheme } from "../../context/theme";
 import { getFileBlame, getFileDiff } from "../../git/repo";
 import type { BlameLine, DiffTarget, FileDiff } from "../../git/types";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
-import { buildRowOffsets, findLineAtRow, formatHunkHeader } from "./diff-utils";
+import { buildRowOffsets, computeDiffStats, findLineAtRow, formatHunkHeader } from "./diff-utils";
 import { buildDiffTitleParts, TITLE_SEP } from "./title-utils";
 
 /** Maximum number of diff lines displayed before truncation. */
@@ -173,6 +173,13 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
   const displayLines = () => diffData().lines;
   const isTruncated = () => diffData().truncated;
 
+  // Compute +additions / -deletions from the (potentially truncated) diff
+  const diffStats = createMemo(() => {
+    const d = diff();
+    if (!d) return { additions: 0, deletions: 0 };
+    return computeDiffStats(d.hunks);
+  });
+
   // Compute max line numbers for gutter sizing
   const maxOldLineNo = createMemo(() => {
     let max = 0;
@@ -249,9 +256,10 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
    * Fixed row overhead inside the dialog box:
    *   paddingY={1} top+bottom = 2
    *   DialogTitleBar: title row + spacer row = 2
+   *   Stats line: 1 row = 1
    *   DialogFooter: spacer + spacer + footer row + spacer = 4
    */
-  const DIALOG_OVERHEAD = 8;
+  const DIALOG_OVERHEAD = 9;
 
   /**
    * Content-aware dialog height: shrinks to fit short diffs, caps at 90% of
@@ -499,7 +507,40 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
       >
         <DialogTitleBar title={titleElement()} />
 
-        {/* Loading state */}
+        {/* Stats line: status · +additions −deletions · N lines */}
+        <Show when={!loading() && !diff()?.isBinary && displayLines().length > 0}>
+          <box flexDirection="row" paddingX={4}>
+            <Show when={props.target.status}>
+              <text wrapMode="none" fg={t().foregroundMuted}>
+                {props.target.status}
+              </text>
+              <text wrapMode="none" fg={t().foregroundMuted}>
+                {TITLE_SEP}
+              </text>
+            </Show>
+            <Show when={diffStats().additions > 0}>
+              <text wrapMode="none" fg={t().diffAdded}>
+                {`+${diffStats().additions}`}
+              </text>
+              <Show when={diffStats().deletions > 0}>
+                <text wrapMode="none" fg={t().foregroundMuted}>
+                  {" "}
+                </text>
+              </Show>
+            </Show>
+            <Show when={diffStats().deletions > 0}>
+              <text wrapMode="none" fg={t().diffRemoved}>
+                {`\u2212${diffStats().deletions}`}
+              </text>
+            </Show>
+            <text wrapMode="none" fg={t().foregroundMuted}>
+              {TITLE_SEP}
+            </text>
+            <text wrapMode="none" fg={t().foregroundMuted}>
+              {isTruncated() ? `${MAX_DISPLAY_LINES} lines (truncated)` : `${displayLines().length} lines`}
+            </text>
+          </box>
+        </Show>
         <Show when={loading()}>
           <box flexGrow={1} alignItems="center" justifyContent="center">
             <text fg={t().foregroundMuted}>Loading diff...</text>
