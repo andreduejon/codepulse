@@ -23,10 +23,14 @@ export function DialogOverlay(props: Readonly<{ children: JSX.Element }>) {
 }
 
 /**
- * Shared title bar for dialogs: bold title on the left, "esc close" hint on the right,
+ * Shared title bar for dialogs: title on the left, "esc close" hint on the right,
  * followed by a 1-row spacer.
+ *
+ * When `title` is a string it renders as bold text (backward-compatible).
+ * When `title` is JSX the caller controls styling (used by the diff dialog
+ * for per-segment colors).
  */
-export function DialogTitleBar(props: Readonly<{ title: string }>) {
+export function DialogTitleBar(props: Readonly<{ title: string | JSX.Element }>) {
   const { theme } = useTheme();
   const t = () => theme();
 
@@ -34,9 +38,13 @@ export function DialogTitleBar(props: Readonly<{ title: string }>) {
     <>
       <box flexDirection="row" width="100%" paddingX={4} flexShrink={0}>
         <text flexGrow={1} wrapMode="none">
-          <strong>
-            <span fg={t().foreground}>{props.title}</span>
-          </strong>
+          {typeof props.title === "string" ? (
+            <strong>
+              <span fg={t().foreground}>{props.title}</span>
+            </strong>
+          ) : (
+            props.title
+          )}
         </text>
         <text flexShrink={0} wrapMode="none" fg={t().foreground}>
           esc

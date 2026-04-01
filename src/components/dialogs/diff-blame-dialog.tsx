@@ -7,6 +7,7 @@ import { getFileBlame, getFileDiff } from "../../git/repo";
 import type { BlameLine, DiffTarget, FileDiff } from "../../git/types";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 import { buildRowOffsets, findLineAtRow, formatHunkHeader } from "./diff-utils";
+import { buildDiffTitleParts, TITLE_SEP } from "./title-utils";
 
 /** Maximum number of diff lines displayed before truncation. */
 const MAX_DISPLAY_LINES = 5000;
@@ -28,13 +29,6 @@ const VIEW_MODE_NEXT_LABEL: Record<DiffViewMode, string> = {
   mixed: "show new only",
   new: "show old only",
   old: "show unified",
-};
-
-/** Label shown in the title bar for the current mode (empty for default). */
-const VIEW_MODE_TITLE_LABEL: Record<DiffViewMode, string> = {
-  mixed: "",
-  new: "new only",
-  old: "old only",
 };
 
 interface DiffBlameDialogProps {
@@ -416,22 +410,64 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
   };
 
   // ── Title ──────────────────────────────────────────────────────────
-  const title = createMemo(() => {
+  /** Mode label for the current view (empty for unified/mixed). */
+  const MODE_LABEL: Record<DiffViewMode, string> = {
+    mixed: "",
+    new: "new only",
+    old: "old only",
+  };
+
+  const titleParts = createMemo(() => {
     const src = props.target.source;
-    const label =
+    const sourceLabel =
       src === "commit"
         ? props.target.commitHash.slice(0, 7)
         : src === "stash"
           ? `stash:${props.target.commitHash.slice(0, 7)}`
           : src;
-    const parts: string[] = [];
-    if (props.target.fileList.length > 1) {
-      parts.push(`[${props.target.fileIndex + 1}/${props.target.fileList.length}]`);
+    const counter =
+      props.target.fileList.length > 1 ? `[${props.target.fileIndex + 1}/${props.target.fileList.length}]` : "";
+    const modeLabel = MODE_LABEL[viewMode()];
+    return buildDiffTitleParts(props.target.filePath, sourceLabel, counter, modeLabel, dialogWidth());
+  });
+
+  /** Render a muted separator span. */
+  const sep = () => <span fg={t().foregroundMuted}>{TITLE_SEP}</span>;
+
+  /** Render the structured title as JSX with per-segment styling. */
+  const titleElement = createMemo(() => {
+    const p = titleParts();
+    const segments: (() => unknown)[] = [];
+
+    if (p.counter) {
+      segments.push(() => <span fg={t().foreground}>{p.counter}</span>);
     }
-    parts.push(label, props.target.filePath);
-    const modeLabel = VIEW_MODE_TITLE_LABEL[viewMode()];
-    if (modeLabel) parts.push(modeLabel);
-    return parts.join(" · ");
+    if (p.source) {
+      segments.push(() => <span fg={t().foregroundMuted}>{p.source}</span>);
+    }
+    // Dir prefix + basename are one visual group
+    segments.push(() => (
+      <>
+        {p.dirPrefix ? <span fg={t().foregroundMuted}>{p.dirPrefix}</span> : null}
+        <strong>
+          <span fg={t().foreground}>{p.basename}</span>
+        </strong>
+      </>
+    ));
+    if (p.mode) {
+      segments.push(() => <span fg={t().foregroundMuted}>{p.mode}</span>);
+    }
+
+    return (
+      <>
+        {segments.map((render, i) => (
+          <>
+            {i > 0 ? sep() : null}
+            {render()}
+          </>
+        ))}
+      </>
+    );
   });
 
   return (
@@ -444,7 +480,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
         paddingX={1}
         paddingY={1}
       >
-        <DialogTitleBar title={title()} />
+        <DialogTitleBar title={titleElement()} />
 
         {/* Loading state */}
         <Show when={loading()}>
