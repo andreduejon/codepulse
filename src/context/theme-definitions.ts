@@ -1,5 +1,5 @@
 /**
- * Theme color definitions for gittree.
+ * Theme color definitions for codepulse.
  *
  * Extracted from theme.ts to keep the provider/context logic separate
  * from the raw color data.  Each exported constant satisfies the Theme

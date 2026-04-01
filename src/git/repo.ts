@@ -636,7 +636,7 @@ export async function isGitRepo(path: string): Promise<boolean> {
 
 /**
  * Fetch from all remotes, pruning deleted remote branches.
- * This is the only network operation in gittree — safe and read-only.
+ * This is the only network operation in codepulse — safe and read-only.
  */
 export async function fetchRemote(repoPath: string): Promise<{ ok: boolean; error?: string }> {
   const { stderr, exitCode } = await runGit(repoPath, ["fetch", "--all", "--prune"]);

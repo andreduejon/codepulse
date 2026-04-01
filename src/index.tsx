@@ -52,7 +52,7 @@ async function main() {
         break;
       case "--version":
       case "-v":
-        console.log(`gittree v${packageJson.version}`);
+        console.log(`codepulse v${packageJson.version}`);
         process.exit(0);
         break;
       default:
@@ -84,10 +84,10 @@ async function main() {
 
 function printHelp() {
   console.log(`
-gittree - A read-only terminal git graph visualizer
+codepulse - A read-only terminal git graph visualizer
 
 USAGE:
-  gittree [options] [path]
+  codepulse [options] [path]
 
 ARGUMENTS:
   path                   Path to git repository (default: current directory)

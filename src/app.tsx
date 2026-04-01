@@ -231,7 +231,7 @@ function AppContent(props: Readonly<AppProps>) {
 
   onMount(() => {
     loadData(props.branch);
-    renderer.setTerminalTitle("gittree");
+    renderer.setTerminalTitle("codepulse");
     // Load initial fetch time
     getLastFetchTime(props.repoPath).then(time => actions.setLastFetchTime(time));
   });
@@ -566,7 +566,7 @@ function AppContent(props: Readonly<AppProps>) {
                   </Show>
                   <box flexGrow={1} />
                   <text flexShrink={0} wrapMode="none" fg={themeState.theme().foregroundMuted}>
-                    gittree v{packageJson.version}
+                    codepulse v{packageJson.version}
                   </text>
                 </box>
               </box>

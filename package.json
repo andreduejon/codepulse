@@ -1,10 +1,10 @@
 {
-  "name": "gittree",
+  "name": "codepulse",
   "version": "0.2.0",
   "description": "A read-only terminal git graph visualizer",
   "type": "module",
   "bin": {
-    "gittree": "./src/index.tsx"
+    "codepulse": "./src/index.tsx"
   },
   "scripts": {
     "dev": "bun run src/index.tsx",
