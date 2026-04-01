@@ -1,6 +1,6 @@
 {
 	"name": "codepulse",
-	"version": "0.2.0",
+	"version": "0.0.1",
 	"description": "A read-only terminal git graph visualizer",
 	"license": "MIT",
 	"repository": {
@@ -23,6 +23,11 @@
 	"bin": {
 		"codepulse": "./src/index.tsx"
 	},
+	"files": [
+		"src/",
+		"LICENSE",
+		"README.md"
+	],
 	"scripts": {
 		"dev": "bun run src/index.tsx",
 		"start": "bun run src/index.tsx",
@@ -30,7 +35,8 @@
 		"lint": "biome lint src/ tests/",
 		"format": "biome format src/ tests/",
 		"check": "biome check src/ tests/",
-		"check:fix": "biome check --write src/ tests/"
+		"check:fix": "biome check --write src/ tests/",
+		"prepublishOnly": "bun run check && bun test"
 	},
 	"dependencies": {
 		"@opentui/core": "0.1.87",
