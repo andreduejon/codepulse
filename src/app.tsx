@@ -57,6 +57,7 @@ function AppContent(props: Readonly<AppProps>) {
     activateCurrentItem: () => false,
     lastJumpFrom: null,
     pendingJumpDirection: null,
+    scrollToFile: () => {},
   };
 
   // Flag to suppress tab reset during child/parent jump navigation.
@@ -693,7 +694,16 @@ function AppContent(props: Readonly<AppProps>) {
             <ThemeDialog onClose={() => setDialog(null)} />
           </Show>
           <Show when={dialog() === "diff-blame" && diffTarget()}>
-            {target => <DiffBlameDialog target={target()} onClose={() => setDialog(null)} onNavigate={setDiffTarget} />}
+            {target => (
+              <DiffBlameDialog
+                target={target()}
+                onClose={() => setDialog(null)}
+                onNavigate={t => {
+                  setDiffTarget(t);
+                  detailNavRef.scrollToFile(t.filePath);
+                }}
+              />
+            )}
           </Show>
         </box>
       </AppStateContext.Provider>

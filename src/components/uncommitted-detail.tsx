@@ -141,6 +141,14 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
     if (props.navRef) {
       props.navRef.itemCount = interactiveItems().length;
       props.navRef.activateCurrentItem = activateCurrentItem;
+      props.navRef.scrollToFile = (filePath: string) => {
+        const rows = fileTreeRows();
+        const treeIdx = rows.findIndex(r => !r.isDir && r.file?.path === filePath);
+        if (treeIdx >= 0) {
+          const itemIdx = findItemIndex("file", treeIdx);
+          if (itemIdx >= 0) actions.setDetailCursorIndex(itemIdx);
+        }
+      };
     }
   });
 

@@ -11,6 +11,8 @@ export interface DetailNavRef {
   /** Pending jump direction — persists across interactiveItems recomputations.
    *  Set by handleJumpToCommit, cleared by app.tsx commit-change effect on non-jump navigation. */
   pendingJumpDirection: "child" | "parent" | null;
+  /** Move the detail cursor to the file with the given path (if visible in the current tab). */
+  scrollToFile: (filePath: string) => void;
 }
 
 export interface DetailViewProps {

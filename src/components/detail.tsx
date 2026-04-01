@@ -507,6 +507,33 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     if (props.navRef) {
       props.navRef.itemCount = interactiveItems().length;
       props.navRef.activateCurrentItem = activateCurrentItem;
+      props.navRef.scrollToFile = (filePath: string) => {
+        // Find the file tree row index for this path
+        const tab = activeTab();
+        if (tab === "files") {
+          const rows = fileTreeRows();
+          const treeIdx = rows.findIndex(r => !r.isDir && r.file?.path === filePath);
+          if (treeIdx >= 0) {
+            const itemIdx = findItemIndex("file", undefined, treeIdx);
+            if (itemIdx >= 0) actions.setDetailCursorIndex(itemIdx);
+          }
+        } else if (tab === "stashes") {
+          // For stash files, search expanded stash file trees
+          const stashes = stashEntries();
+          for (const stash of stashes) {
+            if (!expandedStashes().has(stash.hash)) continue;
+            const rows = getStashFileTreeRows(stash.hash);
+            const treeIdx = rows.findIndex(r => !r.isDir && r.file?.path === filePath);
+            if (treeIdx >= 0) {
+              const itemIdx = findItemIndex("stash-file", stash.hash, treeIdx);
+              if (itemIdx >= 0) {
+                actions.setDetailCursorIndex(itemIdx);
+                return;
+              }
+            }
+          }
+        }
+      };
     }
   });
 
