@@ -482,16 +482,14 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
                     return (
                       <box flexDirection="row" width="100%">
                         <Show when={showBlame()}>
-                          <box flexShrink={0} width={BLAME_COL_WIDTH} />
+                          <box flexShrink={0} width={BLAME_COL_WIDTH} backgroundColor={t().backgroundElement}>
+                            <text wrapMode="none" fg={t().foregroundMuted}>
+                              {() => blameAnnotation(line)}
+                            </text>
+                          </box>
                         </Show>
-                        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                          {() => " ".repeat(gutterWidth(maxOldLineNo()) + 1 + gutterWidth(maxNewLineNo()))}
-                        </text>
                         <text wrapMode="none" fg={t().accent}>
-                          <strong>
-                            {"    "}
-                            {formatHunkHeader(line.content)}
-                          </strong>
+                          <strong>{formatHunkHeader(line.content)}</strong>
                         </text>
                       </box>
                     );
@@ -501,9 +499,11 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
                     <box flexDirection="row" width="100%" backgroundColor={lineBg(line.kind)}>
                       {/* Blame annotation (conditional, fixed-width) */}
                       <Show when={showBlame()}>
-                        <text flexShrink={0} width={BLAME_COL_WIDTH} wrapMode="none" fg={t().foregroundMuted}>
-                          {() => blameAnnotation(line)}
-                        </text>
+                        <box flexShrink={0} width={BLAME_COL_WIDTH} backgroundColor={t().backgroundElement}>
+                          <text wrapMode="none" fg={t().foregroundMuted}>
+                            {() => blameAnnotation(line)}
+                          </text>
+                        </box>
                       </Show>
                       {/* Line numbers (old + new merged) */}
                       <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
