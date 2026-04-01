@@ -1,6 +1,6 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useRenderer } from "@opentui/solid";
-import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, For, type JSX, onCleanup, Show } from "solid-js";
 import { useAppState } from "../../context/state";
 import { useTheme } from "../../context/theme";
 import { getFileBlame, getFileDiff } from "../../git/repo";
@@ -29,6 +29,12 @@ const VIEW_MODE_NEXT_LABEL: Record<DiffViewMode, string> = {
   mixed: "show new only",
   new: "show old only",
   old: "show unified",
+};
+/** Label shown in the title bar for the current mode (empty for default unified view). */
+const VIEW_MODE_TITLE_LABEL: Record<DiffViewMode, string> = {
+  mixed: "",
+  new: "new only",
+  old: "old only",
 };
 
 interface DiffBlameDialogProps {
@@ -410,13 +416,6 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
   };
 
   // ── Title ──────────────────────────────────────────────────────────
-  /** Mode label for the current view (empty for unified/mixed). */
-  const MODE_LABEL: Record<DiffViewMode, string> = {
-    mixed: "",
-    new: "new only",
-    old: "old only",
-  };
-
   const titleParts = createMemo(() => {
     const src = props.target.source;
     const sourceLabel =
@@ -427,25 +426,24 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
           : src;
     const counter =
       props.target.fileList.length > 1 ? `[${props.target.fileIndex + 1}/${props.target.fileList.length}]` : "";
-    const modeLabel = MODE_LABEL[viewMode()];
+    const modeLabel = VIEW_MODE_TITLE_LABEL[viewMode()];
     return buildDiffTitleParts(props.target.filePath, sourceLabel, counter, modeLabel, dialogWidth());
   });
 
-  /** Render a muted separator span. */
-  const sep = () => <span fg={t().foregroundMuted}>{TITLE_SEP}</span>;
-
   /** Render the structured title as JSX with per-segment styling. */
-  const titleElement = createMemo(() => {
+  const titleElement = createMemo((): JSX.Element => {
     const p = titleParts();
-    const segments: (() => unknown)[] = [];
+    const segments: (() => JSX.Element)[] = [];
 
     if (p.counter) {
-      segments.push(() => <span fg={t().foreground}>{p.counter}</span>);
+      // Counter is muted — navigational metadata, not the primary content
+      segments.push(() => <span fg={t().foregroundMuted}>{p.counter}</span>);
     }
     if (p.source) {
       segments.push(() => <span fg={t().foregroundMuted}>{p.source}</span>);
     }
-    // Dir prefix + basename are one visual group
+    // Dir prefix + basename are one visual group; basename is bold foreground
+    // (matches the bold-foreground pattern used by Help/Theme/Menu dialog titles)
     segments.push(() => (
       <>
         {p.dirPrefix ? <span fg={t().foregroundMuted}>{p.dirPrefix}</span> : null}
@@ -462,7 +460,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
       <>
         {segments.map((render, i) => (
           <>
-            {i > 0 ? sep() : null}
+            {i > 0 ? <span fg={t().foregroundMuted}>{TITLE_SEP}</span> : null}
             {render()}
           </>
         ))}
