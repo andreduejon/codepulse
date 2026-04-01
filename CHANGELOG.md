@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.2.0] - 2026-04-02
+## [0.0.1] - 2026-04-02
 
 ### Added
 - **Diff + blame dialog** — open a full-screen diff viewer for any file by pressing Enter on a file row; cycle through diff / blame / new-only views with `b` and `n`
@@ -48,6 +48,6 @@ All notable changes to this project will be documented in this file.
 - Cross-platform clipboard support
 - Git argument sanitization to prevent injection
 
-## [0.1.0] - 2025 (initial release as gittree)
+## [0.0.1] - 2025 (initial release as gittree)
 
 Initial release — read-only terminal git graph visualizer with lane-based graph rendering, color themes, and basic commit detail panel.
