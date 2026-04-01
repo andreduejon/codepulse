@@ -177,19 +177,49 @@ Binary files a/image.png and b/image.png differ
     const hunk = result.hunks[0];
 
     // ctx1: old=5, new=5
-    expect(hunk.lines[0]).toEqual({ type: "context", content: "ctx1", oldLineNo: 5, newLineNo: 5 });
+    expect(hunk.lines[0]).toEqual({
+      type: "context",
+      content: "ctx1",
+      oldLineNo: 5,
+      newLineNo: 5,
+    });
     // del1: old=6
-    expect(hunk.lines[1]).toEqual({ type: "delete", content: "del1", oldLineNo: 6 });
+    expect(hunk.lines[1]).toEqual({
+      type: "delete",
+      content: "del1",
+      oldLineNo: 6,
+    });
     // del2: old=7
-    expect(hunk.lines[2]).toEqual({ type: "delete", content: "del2", oldLineNo: 7 });
+    expect(hunk.lines[2]).toEqual({
+      type: "delete",
+      content: "del2",
+      oldLineNo: 7,
+    });
     // add1: new=6
-    expect(hunk.lines[3]).toEqual({ type: "add", content: "add1", newLineNo: 6 });
+    expect(hunk.lines[3]).toEqual({
+      type: "add",
+      content: "add1",
+      newLineNo: 6,
+    });
     // add2: new=7
-    expect(hunk.lines[4]).toEqual({ type: "add", content: "add2", newLineNo: 7 });
+    expect(hunk.lines[4]).toEqual({
+      type: "add",
+      content: "add2",
+      newLineNo: 7,
+    });
     // add3: new=8
-    expect(hunk.lines[5]).toEqual({ type: "add", content: "add3", newLineNo: 8 });
+    expect(hunk.lines[5]).toEqual({
+      type: "add",
+      content: "add3",
+      newLineNo: 8,
+    });
     // ctx2: old=8, new=9
-    expect(hunk.lines[6]).toEqual({ type: "context", content: "ctx2", oldLineNo: 8, newLineNo: 9 });
+    expect(hunk.lines[6]).toEqual({
+      type: "context",
+      content: "ctx2",
+      oldLineNo: 8,
+      newLineNo: 9,
+    });
   });
 
   test("new file diff (--- /dev/null)", () => {
@@ -344,7 +374,7 @@ describe("formatHunkHeader", () => {
 
   test("includes function context when present", () => {
     const result = formatHunkHeader("@@ -10,6 +10,7 @@ function main() {");
-    expect(result).toBe("Lines 10\u201315 \u2192 10\u201316  \u00b7  function main() {");
+    expect(result).toBe("Lines 10\u201315 \u2192 10\u201316 \u00b7 function main() {");
   });
 
   test("handles count of 1 (single line)", () => {
