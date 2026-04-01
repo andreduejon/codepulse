@@ -461,23 +461,18 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
             scrollX={false}
             verticalScrollbarOptions={{ visible: false }}
           >
-            <box flexDirection="column" paddingX={4}>
+            <box flexDirection="column" paddingX={1}>
               {/* Top spacer — maintains scroll position for offscreen lines above */}
               <box height={windowSlice().topRows} />
 
               <For each={windowedLines()}>
                 {line => {
                   if (line.kind === "spacer") {
-                    const ruleWidth = dialogWidth() - 10 - (showBlame() ? BLAME_COL_WIDTH : 0);
+                    const ruleWidth = dialogWidth() - 4;
                     return (
-                      <box flexDirection="row">
-                        <Show when={showBlame()}>
-                          <box flexShrink={0} width={BLAME_COL_WIDTH} />
-                        </Show>
-                        <text wrapMode="none" fg={t().border}>
-                          {"─".repeat(ruleWidth)}
-                        </text>
-                      </box>
+                      <text wrapMode="none" fg={t().border}>
+                        {"─".repeat(ruleWidth)}
+                      </text>
                     );
                   }
 
