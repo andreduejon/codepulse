@@ -1,16 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import {
-	buildRowOffsets,
-	computeDiffStats,
-	type DisplayLineKind,
-	findLineAtRow,
-	formatHunkHeader,
+  buildRowOffsets,
+  computeDiffStats,
+  type DisplayLineKind,
+  findLineAtRow,
+  formatHunkHeader,
 } from "../src/components/dialogs/diff-utils";
 import { parseBlameOutput, parseUnifiedDiff } from "../src/git/repo";
 
 describe("parseUnifiedDiff", () => {
-	test("parses a simple single-hunk diff", () => {
-		const stdout = `diff --git a/src/app.ts b/src/app.ts
+  test("parses a simple single-hunk diff", () => {
+    const stdout = `diff --git a/src/app.ts b/src/app.ts
 index abc1234..def5678 100644
 --- a/src/app.ts
 +++ b/src/app.ts
@@ -22,34 +22,34 @@ index abc1234..def5678 100644
  }
  
 `;
-		const result = parseUnifiedDiff(stdout, "src/app.ts");
+    const result = parseUnifiedDiff(stdout, "src/app.ts");
 
-		expect(result.filePath).toBe("src/app.ts");
-		expect(result.isBinary).toBe(false);
-		expect(result.hunks).toHaveLength(1);
+    expect(result.filePath).toBe("src/app.ts");
+    expect(result.isBinary).toBe(false);
+    expect(result.hunks).toHaveLength(1);
 
-		const hunk = result.hunks[0];
-		expect(hunk.oldStart).toBe(10);
-		expect(hunk.oldCount).toBe(6);
-		expect(hunk.newStart).toBe(10);
-		expect(hunk.newCount).toBe(7);
-		expect(hunk.header).toContain("@@ -10,6 +10,7 @@");
+    const hunk = result.hunks[0];
+    expect(hunk.oldStart).toBe(10);
+    expect(hunk.oldCount).toBe(6);
+    expect(hunk.newStart).toBe(10);
+    expect(hunk.newCount).toBe(7);
+    expect(hunk.header).toContain("@@ -10,6 +10,7 @@");
 
-		// 2 context + 1 add + 1 context + empty context + empty context
-		const addLines = hunk.lines.filter((l) => l.type === "add");
-		expect(addLines).toHaveLength(1);
-		expect(addLines[0].content).toBe("  const c = 3;");
-		expect(addLines[0].newLineNo).toBe(12);
+    // 2 context + 1 add + 1 context + empty context + empty context
+    const addLines = hunk.lines.filter(l => l.type === "add");
+    expect(addLines).toHaveLength(1);
+    expect(addLines[0].content).toBe("  const c = 3;");
+    expect(addLines[0].newLineNo).toBe(12);
 
-		const contextLines = hunk.lines.filter((l) => l.type === "context");
-		expect(contextLines.length).toBeGreaterThanOrEqual(2);
-		expect(contextLines[0].content).toBe("  const a = 1;");
-		expect(contextLines[0].oldLineNo).toBe(10);
-		expect(contextLines[0].newLineNo).toBe(10);
-	});
+    const contextLines = hunk.lines.filter(l => l.type === "context");
+    expect(contextLines.length).toBeGreaterThanOrEqual(2);
+    expect(contextLines[0].content).toBe("  const a = 1;");
+    expect(contextLines[0].oldLineNo).toBe(10);
+    expect(contextLines[0].newLineNo).toBe(10);
+  });
 
-	test("parses a diff with additions and deletions", () => {
-		const stdout = `diff --git a/file.txt b/file.txt
+  test("parses a diff with additions and deletions", () => {
+    const stdout = `diff --git a/file.txt b/file.txt
 --- a/file.txt
 +++ b/file.txt
 @@ -1,4 +1,4 @@
@@ -59,24 +59,24 @@ index abc1234..def5678 100644
  line3
  line4
 `;
-		const result = parseUnifiedDiff(stdout, "file.txt");
+    const result = parseUnifiedDiff(stdout, "file.txt");
 
-		expect(result.hunks).toHaveLength(1);
-		const hunk = result.hunks[0];
+    expect(result.hunks).toHaveLength(1);
+    const hunk = result.hunks[0];
 
-		const delLines = hunk.lines.filter((l) => l.type === "delete");
-		expect(delLines).toHaveLength(1);
-		expect(delLines[0].content).toBe("old line2");
-		expect(delLines[0].oldLineNo).toBe(2);
+    const delLines = hunk.lines.filter(l => l.type === "delete");
+    expect(delLines).toHaveLength(1);
+    expect(delLines[0].content).toBe("old line2");
+    expect(delLines[0].oldLineNo).toBe(2);
 
-		const addLines = hunk.lines.filter((l) => l.type === "add");
-		expect(addLines).toHaveLength(1);
-		expect(addLines[0].content).toBe("new line2");
-		expect(addLines[0].newLineNo).toBe(2);
-	});
+    const addLines = hunk.lines.filter(l => l.type === "add");
+    expect(addLines).toHaveLength(1);
+    expect(addLines[0].content).toBe("new line2");
+    expect(addLines[0].newLineNo).toBe(2);
+  });
 
-	test("parses multi-hunk diff", () => {
-		const stdout = `diff --git a/file.txt b/file.txt
+  test("parses multi-hunk diff", () => {
+    const stdout = `diff --git a/file.txt b/file.txt
 --- a/file.txt
 +++ b/file.txt
 @@ -1,3 +1,4 @@
@@ -90,61 +90,57 @@ index abc1234..def5678 100644
  line11
  line12
 `;
-		const result = parseUnifiedDiff(stdout, "file.txt");
+    const result = parseUnifiedDiff(stdout, "file.txt");
 
-		expect(result.hunks).toHaveLength(2);
-		expect(result.hunks[0].oldStart).toBe(1);
-		expect(result.hunks[0].newStart).toBe(1);
-		expect(result.hunks[1].oldStart).toBe(10);
-		expect(result.hunks[1].newStart).toBe(11);
+    expect(result.hunks).toHaveLength(2);
+    expect(result.hunks[0].oldStart).toBe(1);
+    expect(result.hunks[0].newStart).toBe(1);
+    expect(result.hunks[1].oldStart).toBe(10);
+    expect(result.hunks[1].newStart).toBe(11);
 
-		expect(result.hunks[0].lines.filter((l) => l.type === "add")).toHaveLength(
-			1,
-		);
-		expect(result.hunks[1].lines.filter((l) => l.type === "add")).toHaveLength(
-			1,
-		);
-	});
+    expect(result.hunks[0].lines.filter(l => l.type === "add")).toHaveLength(1);
+    expect(result.hunks[1].lines.filter(l => l.type === "add")).toHaveLength(1);
+  });
 
-	test("detects binary files", () => {
-		const stdout = `diff --git a/image.png b/image.png
+  test("detects binary files", () => {
+    const stdout = `diff --git a/image.png b/image.png
 Binary files a/image.png and b/image.png differ
 `;
-		const result = parseUnifiedDiff(stdout, "image.png");
+    const result = parseUnifiedDiff(stdout, "image.png");
 
-		expect(result.isBinary).toBe(true);
-		expect(result.hunks).toHaveLength(0);
-	});
+    expect(result.isBinary).toBe(true);
+    expect(result.hunks).toHaveLength(0);
+  });
 
-	test("handles empty output", () => {
-		const result = parseUnifiedDiff("", "empty.txt");
+  test("handles empty output", () => {
+    const result = parseUnifiedDiff("", "empty.txt");
 
-		expect(result.filePath).toBe("empty.txt");
-		expect(result.isBinary).toBe(false);
-		expect(result.hunks).toHaveLength(0);
-	});
+    expect(result.filePath).toBe("empty.txt");
+    expect(result.isBinary).toBe(false);
+    expect(result.hunks).toHaveLength(0);
+  });
 
-	test("handles hunk with count=1 implicit (no comma)", () => {
-		const stdout = `diff --git a/new.txt b/new.txt
+  test("handles hunk with count=1 implicit (no comma)", () => {
+    const stdout = `diff --git a/new.txt b/new.txt
 --- /dev/null
 +++ b/new.txt
 @@ -0,0 +1 @@
 +single line
 `;
-		const result = parseUnifiedDiff(stdout, "new.txt");
+    const result = parseUnifiedDiff(stdout, "new.txt");
 
-		expect(result.hunks).toHaveLength(1);
-		expect(result.hunks[0].oldStart).toBe(0);
-		expect(result.hunks[0].oldCount).toBe(0);
-		expect(result.hunks[0].newStart).toBe(1);
-		expect(result.hunks[0].newCount).toBe(1);
-		expect(result.hunks[0].lines).toHaveLength(1);
-		expect(result.hunks[0].lines[0].type).toBe("add");
-		expect(result.hunks[0].lines[0].content).toBe("single line");
-	});
+    expect(result.hunks).toHaveLength(1);
+    expect(result.hunks[0].oldStart).toBe(0);
+    expect(result.hunks[0].oldCount).toBe(0);
+    expect(result.hunks[0].newStart).toBe(1);
+    expect(result.hunks[0].newCount).toBe(1);
+    expect(result.hunks[0].lines).toHaveLength(1);
+    expect(result.hunks[0].lines[0].type).toBe("add");
+    expect(result.hunks[0].lines[0].content).toBe("single line");
+  });
 
-	test("handles 'No newline at end of file' marker", () => {
-		const stdout = `diff --git a/file.txt b/file.txt
+  test("handles 'No newline at end of file' marker", () => {
+    const stdout = `diff --git a/file.txt b/file.txt
 --- a/file.txt
 +++ b/file.txt
 @@ -1,2 +1,2 @@
@@ -154,16 +150,16 @@ Binary files a/image.png and b/image.png differ
 +new
 \\ No newline at end of file
 `;
-		const result = parseUnifiedDiff(stdout, "file.txt");
+    const result = parseUnifiedDiff(stdout, "file.txt");
 
-		expect(result.hunks).toHaveLength(1);
-		// The backslash lines should be skipped
-		const allTypes = result.hunks[0].lines.map((l) => l.type);
-		expect(allTypes).toEqual(["context", "delete", "add"]);
-	});
+    expect(result.hunks).toHaveLength(1);
+    // The backslash lines should be skipped
+    const allTypes = result.hunks[0].lines.map(l => l.type);
+    expect(allTypes).toEqual(["context", "delete", "add"]);
+  });
 
-	test("correctly tracks line numbers across add/delete sequences", () => {
-		const stdout = `diff --git a/file.txt b/file.txt
+  test("correctly tracks line numbers across add/delete sequences", () => {
+    const stdout = `diff --git a/file.txt b/file.txt
 --- a/file.txt
 +++ b/file.txt
 @@ -5,7 +5,8 @@ header
@@ -176,59 +172,59 @@ Binary files a/image.png and b/image.png differ
  ctx2
  ctx3
 `;
-		const result = parseUnifiedDiff(stdout, "file.txt");
+    const result = parseUnifiedDiff(stdout, "file.txt");
 
-		expect(result.hunks).toHaveLength(1);
-		const hunk = result.hunks[0];
+    expect(result.hunks).toHaveLength(1);
+    const hunk = result.hunks[0];
 
-		// ctx1: old=5, new=5
-		expect(hunk.lines[0]).toEqual({
-			type: "context",
-			content: "ctx1",
-			oldLineNo: 5,
-			newLineNo: 5,
-		});
-		// del1: old=6
-		expect(hunk.lines[1]).toEqual({
-			type: "delete",
-			content: "del1",
-			oldLineNo: 6,
-		});
-		// del2: old=7
-		expect(hunk.lines[2]).toEqual({
-			type: "delete",
-			content: "del2",
-			oldLineNo: 7,
-		});
-		// add1: new=6
-		expect(hunk.lines[3]).toEqual({
-			type: "add",
-			content: "add1",
-			newLineNo: 6,
-		});
-		// add2: new=7
-		expect(hunk.lines[4]).toEqual({
-			type: "add",
-			content: "add2",
-			newLineNo: 7,
-		});
-		// add3: new=8
-		expect(hunk.lines[5]).toEqual({
-			type: "add",
-			content: "add3",
-			newLineNo: 8,
-		});
-		// ctx2: old=8, new=9
-		expect(hunk.lines[6]).toEqual({
-			type: "context",
-			content: "ctx2",
-			oldLineNo: 8,
-			newLineNo: 9,
-		});
-	});
+    // ctx1: old=5, new=5
+    expect(hunk.lines[0]).toEqual({
+      type: "context",
+      content: "ctx1",
+      oldLineNo: 5,
+      newLineNo: 5,
+    });
+    // del1: old=6
+    expect(hunk.lines[1]).toEqual({
+      type: "delete",
+      content: "del1",
+      oldLineNo: 6,
+    });
+    // del2: old=7
+    expect(hunk.lines[2]).toEqual({
+      type: "delete",
+      content: "del2",
+      oldLineNo: 7,
+    });
+    // add1: new=6
+    expect(hunk.lines[3]).toEqual({
+      type: "add",
+      content: "add1",
+      newLineNo: 6,
+    });
+    // add2: new=7
+    expect(hunk.lines[4]).toEqual({
+      type: "add",
+      content: "add2",
+      newLineNo: 7,
+    });
+    // add3: new=8
+    expect(hunk.lines[5]).toEqual({
+      type: "add",
+      content: "add3",
+      newLineNo: 8,
+    });
+    // ctx2: old=8, new=9
+    expect(hunk.lines[6]).toEqual({
+      type: "context",
+      content: "ctx2",
+      oldLineNo: 8,
+      newLineNo: 9,
+    });
+  });
 
-	test("new file diff (--- /dev/null)", () => {
-		const stdout = `diff --git a/new.txt b/new.txt
+  test("new file diff (--- /dev/null)", () => {
+    const stdout = `diff --git a/new.txt b/new.txt
 new file mode 100644
 index 0000000..abc1234
 --- /dev/null
@@ -238,20 +234,20 @@ index 0000000..abc1234
 +line2
 +line3
 `;
-		const result = parseUnifiedDiff(stdout, "new.txt");
+    const result = parseUnifiedDiff(stdout, "new.txt");
 
-		expect(result.isBinary).toBe(false);
-		expect(result.hunks).toHaveLength(1);
-		expect(result.hunks[0].oldStart).toBe(0);
-		expect(result.hunks[0].oldCount).toBe(0);
-		expect(result.hunks[0].newStart).toBe(1);
-		expect(result.hunks[0].newCount).toBe(3);
-		expect(result.hunks[0].lines).toHaveLength(3);
-		expect(result.hunks[0].lines.every((l) => l.type === "add")).toBe(true);
-	});
+    expect(result.isBinary).toBe(false);
+    expect(result.hunks).toHaveLength(1);
+    expect(result.hunks[0].oldStart).toBe(0);
+    expect(result.hunks[0].oldCount).toBe(0);
+    expect(result.hunks[0].newStart).toBe(1);
+    expect(result.hunks[0].newCount).toBe(3);
+    expect(result.hunks[0].lines).toHaveLength(3);
+    expect(result.hunks[0].lines.every(l => l.type === "add")).toBe(true);
+  });
 
-	test("deleted file diff (+++ /dev/null)", () => {
-		const stdout = `diff --git a/old.txt b/old.txt
+  test("deleted file diff (+++ /dev/null)", () => {
+    const stdout = `diff --git a/old.txt b/old.txt
 deleted file mode 100644
 index abc1234..0000000
 --- a/old.txt
@@ -261,45 +257,42 @@ index abc1234..0000000
 -line2
 -line3
 `;
-		const result = parseUnifiedDiff(stdout, "old.txt");
+    const result = parseUnifiedDiff(stdout, "old.txt");
 
-		expect(result.isBinary).toBe(false);
-		expect(result.hunks).toHaveLength(1);
-		expect(result.hunks[0].oldStart).toBe(1);
-		expect(result.hunks[0].oldCount).toBe(3);
-		expect(result.hunks[0].newStart).toBe(0);
-		expect(result.hunks[0].newCount).toBe(0);
-		expect(result.hunks[0].lines).toHaveLength(3);
-		expect(result.hunks[0].lines.every((l) => l.type === "delete")).toBe(true);
-	});
+    expect(result.isBinary).toBe(false);
+    expect(result.hunks).toHaveLength(1);
+    expect(result.hunks[0].oldStart).toBe(1);
+    expect(result.hunks[0].oldCount).toBe(3);
+    expect(result.hunks[0].newStart).toBe(0);
+    expect(result.hunks[0].newCount).toBe(0);
+    expect(result.hunks[0].lines).toHaveLength(3);
+    expect(result.hunks[0].lines.every(l => l.type === "delete")).toBe(true);
+  });
 
-	test("sets truncated flag when diff exceeds 5000 lines", () => {
-		// Build a diff with 6000 add lines (well over MAX_DIFF_LINES = 5000)
-		const addLines = Array.from(
-			{ length: 6000 },
-			(_, i) => `+line${i + 1}`,
-		).join("\n");
-		const stdout = `diff --git a/big.txt b/big.txt\n--- a/big.txt\n+++ b/big.txt\n@@ -0,0 +1,6000 @@\n${addLines}\n`;
-		const result = parseUnifiedDiff(stdout, "big.txt");
+  test("sets truncated flag when diff exceeds 5000 lines", () => {
+    // Build a diff with 6000 add lines (well over MAX_DIFF_LINES = 5000)
+    const addLines = Array.from({ length: 6000 }, (_, i) => `+line${i + 1}`).join("\n");
+    const stdout = `diff --git a/big.txt b/big.txt\n--- a/big.txt\n+++ b/big.txt\n@@ -0,0 +1,6000 @@\n${addLines}\n`;
+    const result = parseUnifiedDiff(stdout, "big.txt");
 
-		// Should have capped at 5000 stored lines
-		const storedLines = result.hunks.flatMap((h) => h.lines).length;
-		expect(storedLines).toBe(5000);
+    // Should have capped at 5000 stored lines
+    const storedLines = result.hunks.flatMap(h => h.lines).length;
+    expect(storedLines).toBe(5000);
 
-		// truncated flag should be set
-		expect(result.truncated).toBe(true);
-	});
+    // truncated flag should be set
+    expect(result.truncated).toBe(true);
+  });
 
-	test("does not set truncated flag for diffs under the limit", () => {
-		const stdout = `diff --git a/small.txt b/small.txt\n--- a/small.txt\n+++ b/small.txt\n@@ -1,1 +1,2 @@\n context\n+added\n`;
-		const result = parseUnifiedDiff(stdout, "small.txt");
-		expect(result.truncated).toBeUndefined();
-	});
+  test("does not set truncated flag for diffs under the limit", () => {
+    const stdout = `diff --git a/small.txt b/small.txt\n--- a/small.txt\n+++ b/small.txt\n@@ -1,1 +1,2 @@\n context\n+added\n`;
+    const result = parseUnifiedDiff(stdout, "small.txt");
+    expect(result.truncated).toBeUndefined();
+  });
 });
 
 describe("parseBlameOutput", () => {
-	test("parses a simple blame output", () => {
-		const stdout = `abc123456789012345678901234567890123abc0 1 1 3
+  test("parses a simple blame output", () => {
+    const stdout = `abc123456789012345678901234567890123abc0 1 1 3
 author Alice
 author-mail <alice@example.com>
 author-time 1700000000
@@ -316,29 +309,27 @@ abc123456789012345678901234567890123abc0 2 2
 abc123456789012345678901234567890123abc0 3 3
 \tline three content
 `;
-		const result = parseBlameOutput(stdout);
+    const result = parseBlameOutput(stdout);
 
-		expect(result).toHaveLength(3);
+    expect(result).toHaveLength(3);
 
-		expect(result[0].commitHash).toBe(
-			"abc123456789012345678901234567890123abc0",
-		);
-		expect(result[0].shortHash).toBe("abc1234");
-		expect(result[0].author).toBe("Alice");
-		expect(result[0].lineNo).toBe(1);
-		expect(result[0].content).toBe("line one content");
+    expect(result[0].commitHash).toBe("abc123456789012345678901234567890123abc0");
+    expect(result[0].shortHash).toBe("abc1234");
+    expect(result[0].author).toBe("Alice");
+    expect(result[0].lineNo).toBe(1);
+    expect(result[0].content).toBe("line one content");
 
-		expect(result[1].lineNo).toBe(2);
-		expect(result[1].content).toBe("line two content");
-		// Subsequent lines from the same commit may not repeat author
-		// (git blame --porcelain only shows full headers for first occurrence)
+    expect(result[1].lineNo).toBe(2);
+    expect(result[1].content).toBe("line two content");
+    // Subsequent lines from the same commit may not repeat author
+    // (git blame --porcelain only shows full headers for first occurrence)
 
-		expect(result[2].lineNo).toBe(3);
-		expect(result[2].content).toBe("line three content");
-	});
+    expect(result[2].lineNo).toBe(3);
+    expect(result[2].content).toBe("line three content");
+  });
 
-	test("parses blame with multiple commits", () => {
-		const stdout = `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 1 1 1
+  test("parses blame with multiple commits", () => {
+    const stdout = `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 1 1 1
 author Alice
 filename file.txt
 \tfirst line
@@ -349,302 +340,288 @@ filename file.txt
 bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb 3 3
 \tthird line
 `;
-		const result = parseBlameOutput(stdout);
+    const result = parseBlameOutput(stdout);
 
-		expect(result).toHaveLength(3);
-		expect(result[0].author).toBe("Alice");
-		expect(result[0].commitHash).toBe(
-			"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		);
+    expect(result).toHaveLength(3);
+    expect(result[0].author).toBe("Alice");
+    expect(result[0].commitHash).toBe("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
 
-		expect(result[1].author).toBe("Bob");
-		expect(result[1].commitHash).toBe(
-			"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-		);
-		expect(result[1].lineNo).toBe(2);
+    expect(result[1].author).toBe("Bob");
+    expect(result[1].commitHash).toBe("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+    expect(result[1].lineNo).toBe(2);
 
-		// Third line is from same commit as second, but in porcelain format
-		// the author is only listed on first occurrence
-		expect(result[2].commitHash).toBe(
-			"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-		);
-		expect(result[2].lineNo).toBe(3);
-	});
+    // Third line is from same commit as second, but in porcelain format
+    // the author is only listed on first occurrence
+    expect(result[2].commitHash).toBe("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+    expect(result[2].lineNo).toBe(3);
+  });
 
-	test("handles empty output", () => {
-		expect(parseBlameOutput("")).toEqual([]);
-		expect(parseBlameOutput("  \n  ")).toEqual([]);
-	});
+  test("handles empty output", () => {
+    expect(parseBlameOutput("")).toEqual([]);
+    expect(parseBlameOutput("  \n  ")).toEqual([]);
+  });
 
-	test("handles tab in content", () => {
-		const stdout = `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 1 1 1
+  test("handles tab in content", () => {
+    const stdout = `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 1 1 1
 author Dev
 filename main.ts
 \t\tindented with tab
 `;
-		const result = parseBlameOutput(stdout);
+    const result = parseBlameOutput(stdout);
 
-		expect(result).toHaveLength(1);
-		// The leading tab is stripped (porcelain format), but the content tab remains
-		expect(result[0].content).toBe("\tindented with tab");
-	});
+    expect(result).toHaveLength(1);
+    // The leading tab is stripped (porcelain format), but the content tab remains
+    expect(result[0].content).toBe("\tindented with tab");
+  });
 
-	test("handles empty content lines", () => {
-		const stdout = `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 1 1 1
+  test("handles empty content lines", () => {
+    const stdout = `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 1 1 1
 author Dev
 filename file.txt
 \t
 `;
-		const result = parseBlameOutput(stdout);
+    const result = parseBlameOutput(stdout);
 
-		expect(result).toHaveLength(1);
-		expect(result[0].content).toBe("");
-	});
+    expect(result).toHaveLength(1);
+    expect(result[0].content).toBe("");
+  });
 });
 
 describe("formatHunkHeader", () => {
-	test("formats a standard hunk header with both ranges", () => {
-		const result = formatHunkHeader("@@ -5,6 +12,8 @@");
-		expect(result).toBe("Lines 5\u201310 \u2192 12\u201319");
-	});
+  test("formats a standard hunk header with both ranges", () => {
+    const result = formatHunkHeader("@@ -5,6 +12,8 @@");
+    expect(result).toBe("Lines 5\u201310 \u2192 12\u201319");
+  });
 
-	test("includes function context when present", () => {
-		const result = formatHunkHeader("@@ -10,6 +10,7 @@ function main() {");
-		expect(result).toBe(
-			"Lines 10\u201315 \u2192 10\u201316 \u00b7 function main() {",
-		);
-	});
+  test("includes function context when present", () => {
+    const result = formatHunkHeader("@@ -10,6 +10,7 @@ function main() {");
+    expect(result).toBe("Lines 10\u201315 \u2192 10\u201316 \u00b7 function main() {");
+  });
 
-	test("handles count of 1 (single line)", () => {
-		const result = formatHunkHeader("@@ -3,1 +3,1 @@");
-		expect(result).toBe("Lines 3 \u2192 3");
-	});
+  test("handles count of 1 (single line)", () => {
+    const result = formatHunkHeader("@@ -3,1 +3,1 @@");
+    expect(result).toBe("Lines 3 \u2192 3");
+  });
 
-	test("handles implicit count of 1 (no comma)", () => {
-		const result = formatHunkHeader("@@ -3 +3 @@");
-		expect(result).toBe("Lines 3 \u2192 3");
-	});
+  test("handles implicit count of 1 (no comma)", () => {
+    const result = formatHunkHeader("@@ -3 +3 @@");
+    expect(result).toBe("Lines 3 \u2192 3");
+  });
 
-	test("handles count of 0 (empty range)", () => {
-		const result = formatHunkHeader("@@ -5,0 +5,2 @@");
-		expect(result).toBe("Lines (none) \u2192 5\u20136");
-	});
+  test("handles count of 0 (empty range)", () => {
+    const result = formatHunkHeader("@@ -5,0 +5,2 @@");
+    expect(result).toBe("Lines (none) \u2192 5\u20136");
+  });
 
-	test("falls back to raw string for unparseable input", () => {
-		const raw = "not a hunk header";
-		expect(formatHunkHeader(raw)).toBe(raw);
-	});
+  test("falls back to raw string for unparseable input", () => {
+    const raw = "not a hunk header";
+    expect(formatHunkHeader(raw)).toBe(raw);
+  });
 });
 
 // ── Windowed rendering helpers ────────────────────────────────────────
 
 function dl(kind: DisplayLineKind): { kind: DisplayLineKind } {
-	return { kind };
+  return { kind };
 }
 
 describe("buildRowOffsets", () => {
-	test("empty array produces single zero entry", () => {
-		const offsets = buildRowOffsets([]);
-		expect(offsets).toEqual([0]);
-	});
+  test("empty array produces single zero entry", () => {
+    const offsets = buildRowOffsets([]);
+    expect(offsets).toEqual([0]);
+  });
 
-	test("all regular lines (height 1 each)", () => {
-		const lines = [dl("context"), dl("add"), dl("delete"), dl("hunk-header")];
-		const offsets = buildRowOffsets(lines);
-		expect(offsets).toEqual([0, 1, 2, 3, 4]);
-	});
+  test("all regular lines (height 1 each)", () => {
+    const lines = [dl("context"), dl("add"), dl("delete"), dl("hunk-header")];
+    const offsets = buildRowOffsets(lines);
+    expect(offsets).toEqual([0, 1, 2, 3, 4]);
+  });
 
-	test("spacer lines are 1 row", () => {
-		const lines = [dl("context"), dl("spacer"), dl("add")];
-		const offsets = buildRowOffsets(lines);
-		// context=1row, spacer=1row, add=1row → [0, 1, 2, 3]
-		expect(offsets).toEqual([0, 1, 2, 3]);
-	});
+  test("spacer lines are 1 row", () => {
+    const lines = [dl("context"), dl("spacer"), dl("add")];
+    const offsets = buildRowOffsets(lines);
+    // context=1row, spacer=1row, add=1row → [0, 1, 2, 3]
+    expect(offsets).toEqual([0, 1, 2, 3]);
+  });
 
-	test("multiple spacers", () => {
-		const lines = [dl("spacer"), dl("spacer")];
-		const offsets = buildRowOffsets(lines);
-		expect(offsets).toEqual([0, 1, 2]);
-	});
+  test("multiple spacers", () => {
+    const lines = [dl("spacer"), dl("spacer")];
+    const offsets = buildRowOffsets(lines);
+    expect(offsets).toEqual([0, 1, 2]);
+  });
 
-	test("total row count is last element", () => {
-		const lines = [
-			dl("context"),
-			dl("spacer"),
-			dl("context"),
-			dl("spacer"),
-			dl("context"),
-		];
-		const offsets = buildRowOffsets(lines);
-		// 1 + 1 + 1 + 1 + 1 = 5
-		expect(offsets[offsets.length - 1]).toBe(5);
-	});
+  test("total row count is last element", () => {
+    const lines = [dl("context"), dl("spacer"), dl("context"), dl("spacer"), dl("context")];
+    const offsets = buildRowOffsets(lines);
+    // 1 + 1 + 1 + 1 + 1 = 5
+    expect(offsets[offsets.length - 1]).toBe(5);
+  });
 });
 
 describe("findLineAtRow", () => {
-	test("finds first line for row 0", () => {
-		const offsets = buildRowOffsets([dl("context"), dl("add"), dl("delete")]);
-		expect(findLineAtRow(offsets, 0)).toBe(0);
-	});
+  test("finds first line for row 0", () => {
+    const offsets = buildRowOffsets([dl("context"), dl("add"), dl("delete")]);
+    expect(findLineAtRow(offsets, 0)).toBe(0);
+  });
 
-	test("finds correct line for exact row boundary", () => {
-		const offsets = buildRowOffsets([dl("context"), dl("add"), dl("delete")]);
-		// Row 1 starts at line index 1
-		expect(findLineAtRow(offsets, 1)).toBe(1);
-		// Row 2 starts at line index 2
-		expect(findLineAtRow(offsets, 2)).toBe(2);
-	});
+  test("finds correct line for exact row boundary", () => {
+    const offsets = buildRowOffsets([dl("context"), dl("add"), dl("delete")]);
+    // Row 1 starts at line index 1
+    expect(findLineAtRow(offsets, 1)).toBe(1);
+    // Row 2 starts at line index 2
+    expect(findLineAtRow(offsets, 2)).toBe(2);
+  });
 
-	test("finds line at spacer boundary", () => {
-		// context(h=1), spacer(h=1), add(h=1) → offsets [0,1,2,3]
-		const offsets = buildRowOffsets([dl("context"), dl("spacer"), dl("add")]);
-		// Row 0 → line 0 (context)
-		expect(findLineAtRow(offsets, 0)).toBe(0);
-		// Row 1 → line 1 (spacer)
-		expect(findLineAtRow(offsets, 1)).toBe(1);
-		// Row 2 → line 2 (add)
-		expect(findLineAtRow(offsets, 2)).toBe(2);
-	});
+  test("finds line at spacer boundary", () => {
+    // context(h=1), spacer(h=1), add(h=1) → offsets [0,1,2,3]
+    const offsets = buildRowOffsets([dl("context"), dl("spacer"), dl("add")]);
+    // Row 0 → line 0 (context)
+    expect(findLineAtRow(offsets, 0)).toBe(0);
+    // Row 1 → line 1 (spacer)
+    expect(findLineAtRow(offsets, 1)).toBe(1);
+    // Row 2 → line 2 (add)
+    expect(findLineAtRow(offsets, 2)).toBe(2);
+  });
 
-	test("clamps to last line for row beyond total", () => {
-		const offsets = buildRowOffsets([dl("context"), dl("add")]);
-		// Total is 2 rows, asking for row 10 → last line index (1)
-		expect(findLineAtRow(offsets, 10)).toBe(1);
-	});
+  test("clamps to last line for row beyond total", () => {
+    const offsets = buildRowOffsets([dl("context"), dl("add")]);
+    // Total is 2 rows, asking for row 10 → last line index (1)
+    expect(findLineAtRow(offsets, 10)).toBe(1);
+  });
 
-	test("works with single line", () => {
-		const offsets = buildRowOffsets([dl("add")]);
-		expect(findLineAtRow(offsets, 0)).toBe(0);
-	});
+  test("works with single line", () => {
+    const offsets = buildRowOffsets([dl("add")]);
+    expect(findLineAtRow(offsets, 0)).toBe(0);
+  });
 
-	test("works with large array", () => {
-		const lines: { kind: DisplayLineKind }[] = [];
-		for (let i = 0; i < 1000; i++) {
-			lines.push(dl(i % 10 === 0 ? "spacer" : "context"));
-		}
-		const offsets = buildRowOffsets(lines);
-		// Verify a few known positions
-		// First line is spacer (h=1), second is context (h=1)
-		expect(findLineAtRow(offsets, 0)).toBe(0); // spacer at row 0
-		expect(findLineAtRow(offsets, 1)).toBe(1); // context at row 1
+  test("works with large array", () => {
+    const lines: { kind: DisplayLineKind }[] = [];
+    for (let i = 0; i < 1000; i++) {
+      lines.push(dl(i % 10 === 0 ? "spacer" : "context"));
+    }
+    const offsets = buildRowOffsets(lines);
+    // Verify a few known positions
+    // First line is spacer (h=1), second is context (h=1)
+    expect(findLineAtRow(offsets, 0)).toBe(0); // spacer at row 0
+    expect(findLineAtRow(offsets, 1)).toBe(1); // context at row 1
 
-		// Total rows: all kinds are 1 row each → 1000
-		expect(offsets[offsets.length - 1]).toBe(1000);
+    // Total rows: all kinds are 1 row each → 1000
+    expect(offsets[offsets.length - 1]).toBe(1000);
 
-		// Last line is context (index 999), starts at row 999
-		expect(findLineAtRow(offsets, 999)).toBe(999);
-	});
+    // Last line is context (index 999), starts at row 999
+    expect(findLineAtRow(offsets, 999)).toBe(999);
+  });
 });
 
 describe("computeDiffStats", () => {
-	test("counts additions and deletions across a single hunk", () => {
-		const stats = computeDiffStats([
-			{
-				oldStart: 1,
-				oldCount: 3,
-				newStart: 1,
-				newCount: 4,
-				header: "@@ -1,3 +1,4 @@",
-				lines: [
-					{ type: "context", content: "a" },
-					{ type: "delete", content: "b" },
-					{ type: "add", content: "b2" },
-					{ type: "add", content: "b3" },
-					{ type: "context", content: "c" },
-				],
-			},
-		]);
-		expect(stats.additions).toBe(2);
-		expect(stats.deletions).toBe(1);
-	});
+  test("counts additions and deletions across a single hunk", () => {
+    const stats = computeDiffStats([
+      {
+        oldStart: 1,
+        oldCount: 3,
+        newStart: 1,
+        newCount: 4,
+        header: "@@ -1,3 +1,4 @@",
+        lines: [
+          { type: "context", content: "a" },
+          { type: "delete", content: "b" },
+          { type: "add", content: "b2" },
+          { type: "add", content: "b3" },
+          { type: "context", content: "c" },
+        ],
+      },
+    ]);
+    expect(stats.additions).toBe(2);
+    expect(stats.deletions).toBe(1);
+  });
 
-	test("counts across multiple hunks", () => {
-		const stats = computeDiffStats([
-			{
-				oldStart: 1,
-				oldCount: 1,
-				newStart: 1,
-				newCount: 2,
-				header: "@@ -1,1 +1,2 @@",
-				lines: [
-					{ type: "add", content: "new" },
-					{ type: "context", content: "x" },
-				],
-			},
-			{
-				oldStart: 10,
-				oldCount: 2,
-				newStart: 11,
-				newCount: 1,
-				header: "@@ -10,2 +11,1 @@",
-				lines: [
-					{ type: "delete", content: "old1" },
-					{ type: "delete", content: "old2" },
-				],
-			},
-		]);
-		expect(stats.additions).toBe(1);
-		expect(stats.deletions).toBe(2);
-	});
+  test("counts across multiple hunks", () => {
+    const stats = computeDiffStats([
+      {
+        oldStart: 1,
+        oldCount: 1,
+        newStart: 1,
+        newCount: 2,
+        header: "@@ -1,1 +1,2 @@",
+        lines: [
+          { type: "add", content: "new" },
+          { type: "context", content: "x" },
+        ],
+      },
+      {
+        oldStart: 10,
+        oldCount: 2,
+        newStart: 11,
+        newCount: 1,
+        header: "@@ -10,2 +11,1 @@",
+        lines: [
+          { type: "delete", content: "old1" },
+          { type: "delete", content: "old2" },
+        ],
+      },
+    ]);
+    expect(stats.additions).toBe(1);
+    expect(stats.deletions).toBe(2);
+  });
 
-	test("returns zeros for empty hunk list", () => {
-		const stats = computeDiffStats([]);
-		expect(stats.additions).toBe(0);
-		expect(stats.deletions).toBe(0);
-	});
+  test("returns zeros for empty hunk list", () => {
+    const stats = computeDiffStats([]);
+    expect(stats.additions).toBe(0);
+    expect(stats.deletions).toBe(0);
+  });
 
-	test("returns zeros for hunks with only context lines", () => {
-		const stats = computeDiffStats([
-			{
-				oldStart: 1,
-				oldCount: 2,
-				newStart: 1,
-				newCount: 2,
-				header: "@@ -1,2 +1,2 @@",
-				lines: [
-					{ type: "context", content: "a" },
-					{ type: "context", content: "b" },
-				],
-			},
-		]);
-		expect(stats.additions).toBe(0);
-		expect(stats.deletions).toBe(0);
-	});
+  test("returns zeros for hunks with only context lines", () => {
+    const stats = computeDiffStats([
+      {
+        oldStart: 1,
+        oldCount: 2,
+        newStart: 1,
+        newCount: 2,
+        header: "@@ -1,2 +1,2 @@",
+        lines: [
+          { type: "context", content: "a" },
+          { type: "context", content: "b" },
+        ],
+      },
+    ]);
+    expect(stats.additions).toBe(0);
+    expect(stats.deletions).toBe(0);
+  });
 
-	test("pure addition (new file)", () => {
-		const stats = computeDiffStats([
-			{
-				oldStart: 0,
-				oldCount: 0,
-				newStart: 1,
-				newCount: 3,
-				header: "@@ -0,0 +1,3 @@",
-				lines: [
-					{ type: "add", content: "line1" },
-					{ type: "add", content: "line2" },
-					{ type: "add", content: "line3" },
-				],
-			},
-		]);
-		expect(stats.additions).toBe(3);
-		expect(stats.deletions).toBe(0);
-	});
+  test("pure addition (new file)", () => {
+    const stats = computeDiffStats([
+      {
+        oldStart: 0,
+        oldCount: 0,
+        newStart: 1,
+        newCount: 3,
+        header: "@@ -0,0 +1,3 @@",
+        lines: [
+          { type: "add", content: "line1" },
+          { type: "add", content: "line2" },
+          { type: "add", content: "line3" },
+        ],
+      },
+    ]);
+    expect(stats.additions).toBe(3);
+    expect(stats.deletions).toBe(0);
+  });
 
-	test("pure deletion (deleted file)", () => {
-		const stats = computeDiffStats([
-			{
-				oldStart: 1,
-				oldCount: 2,
-				newStart: 0,
-				newCount: 0,
-				header: "@@ -1,2 +0,0 @@",
-				lines: [
-					{ type: "delete", content: "gone1" },
-					{ type: "delete", content: "gone2" },
-				],
-			},
-		]);
-		expect(stats.additions).toBe(0);
-		expect(stats.deletions).toBe(2);
-	});
+  test("pure deletion (deleted file)", () => {
+    const stats = computeDiffStats([
+      {
+        oldStart: 1,
+        oldCount: 2,
+        newStart: 0,
+        newCount: 0,
+        header: "@@ -1,2 +0,0 @@",
+        lines: [
+          { type: "delete", content: "gone1" },
+          { type: "delete", content: "gone2" },
+        ],
+      },
+    ]);
+    expect(stats.additions).toBe(0);
+    expect(stats.deletions).toBe(2);
+  });
 });
