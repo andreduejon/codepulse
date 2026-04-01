@@ -489,7 +489,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
                         </text>
                         <text wrapMode="none" fg={t().accent}>
                           <strong>
-                            {"  "}
+                            {"    "}
                             {formatHunkHeader(line.content)}
                           </strong>
                         </text>
