@@ -86,9 +86,9 @@ function padLineNo(lineNo: number | undefined, width: number): string {
   return String(lineNo).padStart(width);
 }
 
-/** Build the merged gutter string: "oldLineNo│newLineNo". */
+/** Build the merged gutter string: "oldLineNo newLineNo". */
 function buildGutter(line: DisplayLine, oldWidth: number, newWidth: number): string {
-  return `${padLineNo(line.oldLineNo, oldWidth)}\u2502${padLineNo(line.newLineNo, newWidth)}`;
+  return `${padLineNo(line.oldLineNo, oldWidth)} ${padLineNo(line.newLineNo, newWidth)}`;
 }
 
 export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
