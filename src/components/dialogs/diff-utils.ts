@@ -17,7 +17,7 @@ export function formatHunkHeader(raw: string): string {
   const context = m[5]?.trim() ?? "";
 
   const fmtRange = (start: number, count: number): string => {
-    if (count === 0) return `(empty at ${start})`;
+    if (count === 0) return "(none)";
     if (count === 1) return String(start);
     return `${start}\u2013${start + count - 1}`;
   };

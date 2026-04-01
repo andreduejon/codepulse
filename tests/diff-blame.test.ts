@@ -359,7 +359,7 @@ describe("formatHunkHeader", () => {
 
   test("handles count of 0 (empty range)", () => {
     const result = formatHunkHeader("@@ -5,0 +5,2 @@");
-    expect(result).toBe("Lines (empty at 5) \u2192 5\u20136");
+    expect(result).toBe("Lines (none) \u2192 5\u20136");
   });
 
   test("falls back to raw string for unparseable input", () => {

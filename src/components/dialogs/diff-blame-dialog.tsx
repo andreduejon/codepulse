@@ -112,10 +112,9 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
   // ── Load diff reactively (re-runs when target changes) ─────────────
   createEffect(() => {
     const { commitHash, filePath, source } = props.target;
-    // Reset blame state for new file
+    // Reset blame data for new file (but preserve visibility toggle)
     blameFetched = false;
     setBlameLines([]);
-    setShowBlame(false);
 
     setLoading(true);
     (async () => {
@@ -149,6 +148,15 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
       setBlameLoading(false);
     }
   };
+
+  // Re-fetch blame when navigating files if blame is visible
+  createEffect(() => {
+    // Track target changes (reactive read)
+    const _target = props.target;
+    if (showBlame() && !blameFetched) {
+      fetchBlame();
+    }
+  });
 
   // ── Derived display data ───────────────────────────────────────────
   // Single memo builds both line array and truncation flag to avoid
