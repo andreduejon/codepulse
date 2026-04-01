@@ -70,7 +70,7 @@ function buildDisplayLines(diff: FileDiff): DisplayLine[] {
 
 /** Width needed for a line number gutter column. */
 function gutterWidth(maxLineNo: number): number {
-  return Math.max(String(maxLineNo).length, 3);
+  return String(maxLineNo).length;
 }
 
 /** Pad a line number to a fixed width, or return spaces if undefined. */
