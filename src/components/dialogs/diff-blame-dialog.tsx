@@ -461,14 +461,14 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
             scrollX={false}
             verticalScrollbarOptions={{ visible: false }}
           >
-            <box flexDirection="column" paddingX={1}>
+            <box flexDirection="column" paddingX={4}>
               {/* Top spacer — maintains scroll position for offscreen lines above */}
               <box height={windowSlice().topRows} />
 
               <For each={windowedLines()}>
                 {line => {
                   if (line.kind === "spacer") {
-                    const ruleWidth = dialogWidth() - 4;
+                    const ruleWidth = dialogWidth() - 10;
                     return (
                       <text wrapMode="none" fg={t().border}>
                         {"─".repeat(ruleWidth)}
@@ -480,12 +480,18 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
 
                   if (line.kind === "hunk-header") {
                     return (
-                      <box flexDirection="row" width="100%" backgroundColor={lineBg("hunk-header")}>
+                      <box flexDirection="row" width="100%">
                         <Show when={showBlame()}>
                           <box flexShrink={0} width={BLAME_COL_WIDTH} />
                         </Show>
+                        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                          {() => " ".repeat(gutterWidth(maxOldLineNo()) + 1 + gutterWidth(maxNewLineNo()))}
+                        </text>
                         <text wrapMode="none" fg={t().accent}>
-                          <strong>{formatHunkHeader(line.content)}</strong>
+                          <strong>
+                            {"  "}
+                            {formatHunkHeader(line.content)}
+                          </strong>
                         </text>
                       </box>
                     );
