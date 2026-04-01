@@ -268,6 +268,26 @@ index abc1234..0000000
     expect(result.hunks[0].lines).toHaveLength(3);
     expect(result.hunks[0].lines.every(l => l.type === "delete")).toBe(true);
   });
+
+  test("sets totalLineCount when diff exceeds 5000 lines", () => {
+    // Build a diff with 6000 add lines (well over MAX_DIFF_LINES = 5000)
+    const addLines = Array.from({ length: 6000 }, (_, i) => `+line${i + 1}`).join("\n");
+    const stdout = `diff --git a/big.txt b/big.txt\n--- a/big.txt\n+++ b/big.txt\n@@ -0,0 +1,6000 @@\n${addLines}\n`;
+    const result = parseUnifiedDiff(stdout, "big.txt");
+
+    // Should have capped at 5000 stored lines
+    const storedLines = result.hunks.flatMap(h => h.lines).length;
+    expect(storedLines).toBe(5000);
+
+    // totalLineCount should reflect the real total (6000)
+    expect(result.totalLineCount).toBe(6000);
+  });
+
+  test("does not set totalLineCount for diffs under the limit", () => {
+    const stdout = `diff --git a/small.txt b/small.txt\n--- a/small.txt\n+++ b/small.txt\n@@ -1,1 +1,2 @@\n context\n+added\n`;
+    const result = parseUnifiedDiff(stdout, "small.txt");
+    expect(result.totalLineCount).toBeUndefined();
+  });
 });
 
 describe("parseBlameOutput", () => {

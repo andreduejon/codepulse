@@ -87,6 +87,12 @@ export interface FileDiff {
   filePath: string;
   hunks: DiffHunk[];
   isBinary: boolean;
+  /**
+   * Total number of diff lines (add + delete + context) in the raw git output.
+   * Only set when the diff was truncated at MAX_DIFF_LINES — used to show
+   * "5000 of ~N lines (truncated)" in the stats line.
+   */
+  totalLineCount?: number;
 }
 
 /** A single blame annotation line from `git blame --porcelain`. */

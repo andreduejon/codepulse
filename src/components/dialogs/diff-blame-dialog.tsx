@@ -537,7 +537,9 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
               {TITLE_SEP}
             </text>
             <text wrapMode="none" fg={t().foregroundMuted}>
-              {isTruncated() ? `${MAX_DISPLAY_LINES} lines (truncated)` : `${displayLines().length} lines`}
+              {isTruncated() && diff()?.totalLineCount
+                ? `${MAX_DISPLAY_LINES} of ~${diff()?.totalLineCount} lines (truncated)`
+                : `${displayLines().length} lines`}
             </text>
           </box>
         </Show>
@@ -638,15 +640,6 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
 
               {/* Bottom spacer — maintains total content height for offscreen lines below */}
               <box height={windowSlice().bottomRows} />
-
-              {/* Truncation message */}
-              <Show when={isTruncated()}>
-                <box flexDirection="row" width="100%" paddingY={1}>
-                  <text wrapMode="none" fg={t().foregroundMuted}>
-                    {`... diff truncated at ${MAX_DISPLAY_LINES} lines`}
-                  </text>
-                </box>
-              </Show>
             </box>
           </scrollbox>
         </Show>
