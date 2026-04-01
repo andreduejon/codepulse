@@ -86,9 +86,9 @@ function padLineNo(lineNo: number | undefined, width: number): string {
   return String(lineNo).padStart(width);
 }
 
-/** Build the merged gutter string: "oldLineNo newLineNo". */
+/** Build the merged gutter string: "oldLineNo│newLineNo". */
 function buildGutter(line: DisplayLine, oldWidth: number, newWidth: number): string {
-  return `${padLineNo(line.oldLineNo, oldWidth)} ${padLineNo(line.newLineNo, newWidth)}`;
+  return `${padLineNo(line.oldLineNo, oldWidth)}\u2502${padLineNo(line.newLineNo, newWidth)}`;
 }
 
 export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
@@ -210,7 +210,6 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
 
   // ── Dialog sizing ──────────────────────────────────────────────────
   const dialogWidth = createMemo(() => Math.min(Math.max(40, Math.floor(renderer.width * 0.85)), MAX_DIALOG_WIDTH));
-  const dialogHeight = createMemo(() => Math.max(10, Math.floor(renderer.height * 0.9)));
 
   // ── Windowed rendering ─────────────────────────────────────────────
   // Track scroll position reactively via the scrollbar's "change" event.
@@ -244,6 +243,26 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
   const totalRows = createMemo(() => {
     const offsets = rowOffsets();
     return offsets[offsets.length - 1];
+  });
+
+  /**
+   * Fixed row overhead inside the dialog box:
+   *   paddingY={1} top+bottom = 2
+   *   DialogTitleBar: title row + spacer row = 2
+   *   DialogFooter: spacer + spacer + footer row + spacer = 4
+   */
+  const DIALOG_OVERHEAD = 8;
+
+  /**
+   * Content-aware dialog height: shrinks to fit short diffs, caps at 90% of
+   * terminal height for tall diffs. Falls back to max height while loading.
+   */
+  const dialogHeight = createMemo(() => {
+    const maxH = Math.max(10, Math.floor(renderer.height * 0.9));
+    const rows = totalRows();
+    // rows === 0 means loading / binary / empty — use full height
+    if (rows === 0) return maxH;
+    return Math.min(Math.max(10, rows + DIALOG_OVERHEAD), maxH);
   });
 
   /** Compute the windowed slice of lines to render. */

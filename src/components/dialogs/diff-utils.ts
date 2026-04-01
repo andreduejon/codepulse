@@ -23,7 +23,7 @@ export function formatHunkHeader(raw: string): string {
   };
 
   const label = `Lines ${fmtRange(oldStart, oldCount)} \u2192 ${fmtRange(newStart, newCount)}`;
-  return context ? `${label}  ${context}` : label;
+  return context ? `${label}  \u00b7  ${context}` : label;
 }
 
 // ── Windowed rendering helpers ────────────────────────────────────────
