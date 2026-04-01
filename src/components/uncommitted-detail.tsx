@@ -116,10 +116,12 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
       const source = activeTab() as DiffSource;
       const fileList = activeFiles().map(f => f.path);
       const fileIndex = fileList.indexOf(item.filePath);
+      const fileStatus = activeFiles()[fileIndex >= 0 ? fileIndex : 0]?.status;
       props.onOpenDiff({
         commitHash: "",
         filePath: item.filePath,
         source,
+        status: fileStatus,
         fileList,
         fileIndex: fileIndex >= 0 ? fileIndex : 0,
       });

@@ -23,7 +23,29 @@ export function formatHunkHeader(raw: string): string {
   };
 
   const label = `Lines ${fmtRange(oldStart, oldCount)} \u2192 ${fmtRange(newStart, newCount)}`;
-  return context ? `${label}  \u00b7  ${context}` : label;
+  return context ? `${label} \u00b7 ${context}` : label;
+}
+
+// ── Stats helper ──────────────────────────────────────────────────────
+
+import type { DiffHunk } from "../../git/types";
+
+/**
+ * Count total additions and deletions across all hunks of a parsed diff.
+ */
+export function computeDiffStats(hunks: DiffHunk[]): {
+  additions: number;
+  deletions: number;
+} {
+  let additions = 0;
+  let deletions = 0;
+  for (const hunk of hunks) {
+    for (const line of hunk.lines) {
+      if (line.type === "add") additions++;
+      else if (line.type === "delete") deletions++;
+    }
+  }
+  return { additions, deletions };
 }
 
 // ── Windowed rendering helpers ────────────────────────────────────────
