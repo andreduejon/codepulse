@@ -9,9 +9,6 @@ import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 import { buildRowOffsets, computeDiffStats, findLineAtRow, formatHunkHeader } from "./diff-utils";
 import { buildDiffTitleParts, TITLE_SEP } from "./title-utils";
 
-/** Maximum number of diff lines displayed before truncation. */
-const MAX_DISPLAY_LINES = 5000;
-
 /** Maximum dialog width in columns (fits 120-150 char lines with gutter). */
 const MAX_DIALOG_WIDTH = 160;
 
@@ -159,19 +156,13 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
   });
 
   // ── Derived display data ───────────────────────────────────────────
-  // Single memo builds both line array and truncation flag to avoid
-  // calling buildDisplayLines twice.
-  const diffData = createMemo(() => {
+  const displayLines = createMemo(() => {
     const d = diff();
-    if (!d) return { lines: [] as DisplayLine[], truncated: false };
-    const all = buildDisplayLines(d);
-    const truncated = all.length > MAX_DISPLAY_LINES;
-    const lines = truncated ? all.slice(0, MAX_DISPLAY_LINES) : all;
-    return { lines, truncated };
+    if (!d) return [] as DisplayLine[];
+    return buildDisplayLines(d);
   });
 
-  const displayLines = () => diffData().lines;
-  const isTruncated = () => diffData().truncated;
+  const isTruncated = () => diff()?.truncated ?? false;
 
   // Compute +additions / -deletions from the (potentially truncated) diff
   const diffStats = createMemo(() => {
@@ -533,14 +524,14 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
                 {`\u2212${diffStats().deletions}`}
               </text>
             </Show>
-            <text wrapMode="none" fg={t().foregroundMuted}>
-              {TITLE_SEP}
-            </text>
-            <text wrapMode="none" fg={t().foregroundMuted}>
-              {isTruncated() && diff()?.totalLineCount
-                ? `${MAX_DISPLAY_LINES} of ~${diff()?.totalLineCount} lines (truncated)`
-                : `${displayLines().length} lines`}
-            </text>
+            <Show when={isTruncated()}>
+              <text wrapMode="none" fg={t().foregroundMuted}>
+                {TITLE_SEP}
+              </text>
+              <text wrapMode="none" fg={t().foregroundMuted}>
+                truncated
+              </text>
+            </Show>
           </box>
         </Show>
         <Show when={loading()}>

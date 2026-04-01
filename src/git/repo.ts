@@ -702,14 +702,10 @@ export function parseUnifiedDiff(stdout: string, filePath: string): FileDiff {
   let truncated = false;
 
   for (const line of lines) {
-    // Once we hit the line limit, stop adding to hunks but keep counting
+    // Once we hit the line limit, stop parsing
     if (totalLines >= MAX_DIFF_LINES) {
       truncated = true;
-      // Count remaining diff lines (add / delete / context) without storing them
-      if (line.startsWith("+") || line.startsWith("-") || line.startsWith(" ")) {
-        totalLines++;
-      }
-      continue;
+      break;
     }
 
     // Parse hunk header: @@ -oldStart,oldCount +newStart,newCount @@
@@ -768,7 +764,7 @@ export function parseUnifiedDiff(stdout: string, filePath: string): FileDiff {
     filePath,
     hunks,
     isBinary: false,
-    ...(truncated ? { totalLineCount: totalLines } : {}),
+    ...(truncated ? { truncated: true } : {}),
   };
 }
 
