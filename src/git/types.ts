@@ -106,6 +106,8 @@ export interface DiffTarget {
   commitHash: string;
   filePath: string;
   source: DiffSource;
+  /** Git status of this file: A=added, M=modified, D=deleted, R=renamed, etc. */
+  status?: FileChange["status"];
   /** All file paths in the same commit/section, for left/right navigation. */
   fileList: string[];
   /** Index of `filePath` within `fileList`. */
