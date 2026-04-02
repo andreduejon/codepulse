@@ -12,7 +12,7 @@ Built with [Bun](https://bun.sh), [SolidJS](https://solidjs.com), and [@opentui/
 ## Install
 
 ```sh
-bun install -g codepulse
+bun install -g @andreduejon/codepulse
 ```
 
 ## Usage
