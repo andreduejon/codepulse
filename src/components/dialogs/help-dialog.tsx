@@ -14,6 +14,7 @@ export default function HelpDialog(_props: Readonly<{ onClose: () => void }>) {
     ["Enter", "Focus detail / activate"],
     ["Enter (file)", "View diff"],
     ["←/→ (diff)", "Previous / next file"],
+    ["PgUp/PgDn (diff)", "Scroll half page"],
     ["b (diff)", "Toggle blame"],
     ["c (diff)", "Cycle view: mixed/new/old"],
     ["→/←", "Focus detail / return to graph"],

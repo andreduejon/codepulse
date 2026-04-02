@@ -192,7 +192,10 @@ export async function getCommits(
  * @internal Exported for testing. Parse git upstream track string into ahead/behind counts.
  * Input examples: "ahead 3", "behind 2", "ahead 3, behind 2", "" (no tracking).
  */
-export function parseTrackInfo(track: string): { ahead?: number; behind?: number } {
+export function parseTrackInfo(track: string): {
+  ahead?: number;
+  behind?: number;
+} {
   if (!track.trim()) return {};
   const result: { ahead?: number; behind?: number } = {};
   const aheadMatch = track.match(/ahead (\d+)/);
@@ -696,17 +699,12 @@ export function parseUnifiedDiff(stdout: string, filePath: string): FileDiff {
   let oldLine = 0;
   let newLine = 0;
   let totalLines = 0;
+  let truncated = false;
 
   for (const line of lines) {
-    // Stop if we've hit the line limit
+    // Once we hit the line limit, stop parsing
     if (totalLines >= MAX_DIFF_LINES) {
-      // Add a truncation marker as a context line
-      if (currentHunk) {
-        currentHunk.lines.push({
-          type: "context",
-          content: `... (diff truncated at ${MAX_DIFF_LINES} lines)`,
-        });
-      }
+      truncated = true;
       break;
     }
 
@@ -731,16 +729,29 @@ export function parseUnifiedDiff(stdout: string, filePath: string): FileDiff {
     if (!currentHunk) continue;
 
     if (line.startsWith("+")) {
-      currentHunk.lines.push({ type: "add", content: line.slice(1), newLineNo: newLine });
+      currentHunk.lines.push({
+        type: "add",
+        content: line.slice(1),
+        newLineNo: newLine,
+      });
       newLine++;
       totalLines++;
     } else if (line.startsWith("-")) {
-      currentHunk.lines.push({ type: "delete", content: line.slice(1), oldLineNo: oldLine });
+      currentHunk.lines.push({
+        type: "delete",
+        content: line.slice(1),
+        oldLineNo: oldLine,
+      });
       oldLine++;
       totalLines++;
     } else if (line.startsWith(" ")) {
       // Context line
-      currentHunk.lines.push({ type: "context", content: line.slice(1), oldLineNo: oldLine, newLineNo: newLine });
+      currentHunk.lines.push({
+        type: "context",
+        content: line.slice(1),
+        oldLineNo: oldLine,
+        newLineNo: newLine,
+      });
       oldLine++;
       newLine++;
       totalLines++;
@@ -749,7 +760,12 @@ export function parseUnifiedDiff(stdout: string, filePath: string): FileDiff {
     }
   }
 
-  return { filePath, hunks, isBinary: false };
+  return {
+    filePath,
+    hunks,
+    isBinary: false,
+    ...(truncated ? { truncated: true } : {}),
+  };
 }
 
 /**
@@ -902,7 +918,10 @@ async function getUntrackedFileDiff(repoPath: string, filePath: string): Promise
     }));
 
     if (truncated) {
-      diffLines.push({ type: "context", content: `... (file truncated at ${MAX_DIFF_LINES} lines)` });
+      diffLines.push({
+        type: "context",
+        content: `... (file truncated at ${MAX_DIFF_LINES} lines)`,
+      });
     }
 
     return {

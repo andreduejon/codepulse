@@ -94,7 +94,11 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     const gr = row();
     if (!gr) return [];
     return gr.children
-      .map((hash, i) => ({ hash, branch: gr.childBranches[i], color: gr.childColors[i] }))
+      .map((hash, i) => ({
+        hash,
+        branch: gr.childBranches[i],
+        color: gr.childColors[i],
+      }))
       .filter(c => c.hash !== UNCOMMITTED_HASH);
   });
 
@@ -368,7 +372,11 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
       if (stashes.length > 0) {
         for (let si = 0; si < stashes.length; si++) {
           const stash = stashes[si];
-          items.push({ type: "stash-entry", stashHash: stash.hash, stashIndex: si });
+          items.push({
+            type: "stash-entry",
+            stashHash: stash.hash,
+            stashIndex: si,
+          });
 
           // If this stash is expanded, add its file tree items
           if (expandedStashes().has(stash.hash)) {
@@ -376,9 +384,19 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
             for (let fi = 0; fi < rows.length; fi++) {
               const row = rows[fi];
               if (row.isDir) {
-                items.push({ type: "stash-dir", stashHash: stash.hash, dirPath: row.dirPath, index: fi });
+                items.push({
+                  type: "stash-dir",
+                  stashHash: stash.hash,
+                  dirPath: row.dirPath,
+                  index: fi,
+                });
               } else {
-                items.push({ type: "stash-file", stashHash: stash.hash, filePath: row.file?.path, index: fi });
+                items.push({
+                  type: "stash-file",
+                  stashHash: stash.hash,
+                  filePath: row.file?.path,
+                  index: fi,
+                });
               }
             }
           }
@@ -457,10 +475,12 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
           if (c && d) {
             const fileList = d.files.map(f => f.path);
             const fileIndex = fileList.indexOf(item.filePath);
+            const fileStatus = d.files[fileIndex >= 0 ? fileIndex : 0]?.status;
             props.onOpenDiff({
               commitHash: c.hash,
               filePath: item.filePath,
               source: "commit",
+              status: fileStatus,
               fileList,
               fileIndex: fileIndex >= 0 ? fileIndex : 0,
             });
@@ -478,10 +498,12 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
           const stashFiles = stashFileCache().get(item.stashHash);
           const fileList = stashFiles ? stashFiles.map(f => f.path) : [item.filePath];
           const fileIndex = fileList.indexOf(item.filePath);
+          const fileStatus = stashFiles?.[fileIndex >= 0 ? fileIndex : 0]?.status;
           props.onOpenDiff({
             commitHash: item.stashHash,
             filePath: item.filePath,
             source: "stash",
+            status: fileStatus,
             fileList,
             fileIndex: fileIndex >= 0 ? fileIndex : 0,
           });

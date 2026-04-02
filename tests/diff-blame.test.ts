@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   buildRowOffsets,
+  computeDiffStats,
   type DisplayLineKind,
   findLineAtRow,
   formatHunkHeader,
@@ -177,19 +178,49 @@ Binary files a/image.png and b/image.png differ
     const hunk = result.hunks[0];
 
     // ctx1: old=5, new=5
-    expect(hunk.lines[0]).toEqual({ type: "context", content: "ctx1", oldLineNo: 5, newLineNo: 5 });
+    expect(hunk.lines[0]).toEqual({
+      type: "context",
+      content: "ctx1",
+      oldLineNo: 5,
+      newLineNo: 5,
+    });
     // del1: old=6
-    expect(hunk.lines[1]).toEqual({ type: "delete", content: "del1", oldLineNo: 6 });
+    expect(hunk.lines[1]).toEqual({
+      type: "delete",
+      content: "del1",
+      oldLineNo: 6,
+    });
     // del2: old=7
-    expect(hunk.lines[2]).toEqual({ type: "delete", content: "del2", oldLineNo: 7 });
+    expect(hunk.lines[2]).toEqual({
+      type: "delete",
+      content: "del2",
+      oldLineNo: 7,
+    });
     // add1: new=6
-    expect(hunk.lines[3]).toEqual({ type: "add", content: "add1", newLineNo: 6 });
+    expect(hunk.lines[3]).toEqual({
+      type: "add",
+      content: "add1",
+      newLineNo: 6,
+    });
     // add2: new=7
-    expect(hunk.lines[4]).toEqual({ type: "add", content: "add2", newLineNo: 7 });
+    expect(hunk.lines[4]).toEqual({
+      type: "add",
+      content: "add2",
+      newLineNo: 7,
+    });
     // add3: new=8
-    expect(hunk.lines[5]).toEqual({ type: "add", content: "add3", newLineNo: 8 });
+    expect(hunk.lines[5]).toEqual({
+      type: "add",
+      content: "add3",
+      newLineNo: 8,
+    });
     // ctx2: old=8, new=9
-    expect(hunk.lines[6]).toEqual({ type: "context", content: "ctx2", oldLineNo: 8, newLineNo: 9 });
+    expect(hunk.lines[6]).toEqual({
+      type: "context",
+      content: "ctx2",
+      oldLineNo: 8,
+      newLineNo: 9,
+    });
   });
 
   test("new file diff (--- /dev/null)", () => {
@@ -236,6 +267,26 @@ index abc1234..0000000
     expect(result.hunks[0].newCount).toBe(0);
     expect(result.hunks[0].lines).toHaveLength(3);
     expect(result.hunks[0].lines.every(l => l.type === "delete")).toBe(true);
+  });
+
+  test("sets truncated flag when diff exceeds 5000 lines", () => {
+    // Build a diff with 6000 add lines (well over MAX_DIFF_LINES = 5000)
+    const addLines = Array.from({ length: 6000 }, (_, i) => `+line${i + 1}`).join("\n");
+    const stdout = `diff --git a/big.txt b/big.txt\n--- a/big.txt\n+++ b/big.txt\n@@ -0,0 +1,6000 @@\n${addLines}\n`;
+    const result = parseUnifiedDiff(stdout, "big.txt");
+
+    // Should have capped at 5000 stored lines
+    const storedLines = result.hunks.flatMap(h => h.lines).length;
+    expect(storedLines).toBe(5000);
+
+    // truncated flag should be set
+    expect(result.truncated).toBe(true);
+  });
+
+  test("does not set truncated flag for diffs under the limit", () => {
+    const stdout = `diff --git a/small.txt b/small.txt\n--- a/small.txt\n+++ b/small.txt\n@@ -1,1 +1,2 @@\n context\n+added\n`;
+    const result = parseUnifiedDiff(stdout, "small.txt");
+    expect(result.truncated).toBeUndefined();
   });
 });
 
@@ -344,7 +395,7 @@ describe("formatHunkHeader", () => {
 
   test("includes function context when present", () => {
     const result = formatHunkHeader("@@ -10,6 +10,7 @@ function main() {");
-    expect(result).toBe("Lines 10\u201315 \u2192 10\u201316  \u00b7  function main() {");
+    expect(result).toBe("Lines 10\u201315 \u2192 10\u201316 \u00b7 function main() {");
   });
 
   test("handles count of 1 (single line)", () => {
@@ -459,5 +510,118 @@ describe("findLineAtRow", () => {
 
     // Last line is context (index 999), starts at row 999
     expect(findLineAtRow(offsets, 999)).toBe(999);
+  });
+});
+
+describe("computeDiffStats", () => {
+  test("counts additions and deletions across a single hunk", () => {
+    const stats = computeDiffStats([
+      {
+        oldStart: 1,
+        oldCount: 3,
+        newStart: 1,
+        newCount: 4,
+        header: "@@ -1,3 +1,4 @@",
+        lines: [
+          { type: "context", content: "a" },
+          { type: "delete", content: "b" },
+          { type: "add", content: "b2" },
+          { type: "add", content: "b3" },
+          { type: "context", content: "c" },
+        ],
+      },
+    ]);
+    expect(stats.additions).toBe(2);
+    expect(stats.deletions).toBe(1);
+  });
+
+  test("counts across multiple hunks", () => {
+    const stats = computeDiffStats([
+      {
+        oldStart: 1,
+        oldCount: 1,
+        newStart: 1,
+        newCount: 2,
+        header: "@@ -1,1 +1,2 @@",
+        lines: [
+          { type: "add", content: "new" },
+          { type: "context", content: "x" },
+        ],
+      },
+      {
+        oldStart: 10,
+        oldCount: 2,
+        newStart: 11,
+        newCount: 1,
+        header: "@@ -10,2 +11,1 @@",
+        lines: [
+          { type: "delete", content: "old1" },
+          { type: "delete", content: "old2" },
+        ],
+      },
+    ]);
+    expect(stats.additions).toBe(1);
+    expect(stats.deletions).toBe(2);
+  });
+
+  test("returns zeros for empty hunk list", () => {
+    const stats = computeDiffStats([]);
+    expect(stats.additions).toBe(0);
+    expect(stats.deletions).toBe(0);
+  });
+
+  test("returns zeros for hunks with only context lines", () => {
+    const stats = computeDiffStats([
+      {
+        oldStart: 1,
+        oldCount: 2,
+        newStart: 1,
+        newCount: 2,
+        header: "@@ -1,2 +1,2 @@",
+        lines: [
+          { type: "context", content: "a" },
+          { type: "context", content: "b" },
+        ],
+      },
+    ]);
+    expect(stats.additions).toBe(0);
+    expect(stats.deletions).toBe(0);
+  });
+
+  test("pure addition (new file)", () => {
+    const stats = computeDiffStats([
+      {
+        oldStart: 0,
+        oldCount: 0,
+        newStart: 1,
+        newCount: 3,
+        header: "@@ -0,0 +1,3 @@",
+        lines: [
+          { type: "add", content: "line1" },
+          { type: "add", content: "line2" },
+          { type: "add", content: "line3" },
+        ],
+      },
+    ]);
+    expect(stats.additions).toBe(3);
+    expect(stats.deletions).toBe(0);
+  });
+
+  test("pure deletion (deleted file)", () => {
+    const stats = computeDiffStats([
+      {
+        oldStart: 1,
+        oldCount: 2,
+        newStart: 0,
+        newCount: 0,
+        header: "@@ -1,2 +0,0 @@",
+        lines: [
+          { type: "delete", content: "gone1" },
+          { type: "delete", content: "gone2" },
+        ],
+      },
+    ]);
+    expect(stats.additions).toBe(0);
+    expect(stats.deletions).toBe(2);
   });
 });
