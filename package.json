@@ -1,5 +1,5 @@
 {
-	"name": "codepulse",
+	"name": "@andreduejon/codepulse",
 	"version": "0.0.1",
 	"description": "A read-only terminal git graph visualizer",
 	"license": "MIT",
