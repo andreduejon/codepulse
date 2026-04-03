@@ -1,6 +1,6 @@
 {
 	"name": "@andreduejon/codepulse",
-	"version": "0.0.1",
+	"version": "0.0.2",
 	"description": "A read-only terminal git graph visualizer",
 	"license": "MIT",
 	"repository": {
