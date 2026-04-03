@@ -1109,6 +1109,31 @@ export function renderConnectorRow(row: GraphRow, opts: RenderOptions = {}): Gra
 }
 
 /**
+ * Render a gap indicator row for filtered search results.
+ *
+ * Same layout as a connector row, but uses `┊` (light quadruple dash vertical)
+ * instead of `│` for active lanes — signalling that commits were omitted between
+ * two non-adjacent filtered rows. Inactive columns get empty space.
+ */
+export function renderGapRow(row: GraphRow, opts: RenderOptions = {}): GraphChar[] {
+  const padToColumns = opts.padToColumns;
+  const dimColor = opts.padColor ?? "#6c7086";
+  const result: GraphChar[] = [];
+
+  for (let col = 0; col < row.columns.length; col++) {
+    if (row.columns[col].active) {
+      result.push({ char: "┊ ", color: dimColor, bold: false });
+    } else {
+      result.push({ char: "  ", color: dimColor });
+    }
+  }
+
+  padResult(result, padToColumns, opts);
+
+  return result;
+}
+
+/**
  * Compute the maximum graph width (in columns) across all rows.
  * This ensures consistent alignment for content after the graph.
  */

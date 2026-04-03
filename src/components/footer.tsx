@@ -1,4 +1,4 @@
-import { createEffect, createSignal, onCleanup } from "solid-js";
+import { createEffect, createSignal, onCleanup, Show } from "solid-js";
 import { useAppState } from "../context/state";
 import { useTheme } from "../context/theme";
 
@@ -6,7 +6,7 @@ import { useTheme } from "../context/theme";
 const SPINNER_FRAMES = ["\u28FE", "\u28FD", "\u28FB", "\u28BF", "\u287F", "\u283F", "\u28EF", "\u28F7"];
 const SPINNER_FRAME_MS = 120;
 
-export default function Footer() {
+export default function Footer(props: Readonly<{ searchFocused?: boolean }>) {
   const { theme } = useTheme();
   const t = () => theme();
   const { state } = useAppState();
@@ -58,49 +58,63 @@ export default function Footer() {
       {/* Spacer pushes hints right */}
       <box flexGrow={1} />
 
-      {/* Keyboard hints — right-aligned, separate <text> per color segment */}
-      <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-        {enterAction() ? "enter" : ""}
-      </text>
-      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-        {enterAction() ? ` ${enterAction()}  ` : ""}
-      </text>
-      <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-        {"\u2190/\u2192"}
-      </text>
-      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-        {" switch tab  "}
-      </text>
-      <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-        {"\u2191/\u2193"}
-      </text>
-      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-        {" navigate  "}
-      </text>
-      <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-        /
-      </text>
-      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-        {" search  "}
-      </text>
-      <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-        m
-      </text>
-      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-        {" menu  "}
-      </text>
-      <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-        ?
-      </text>
-      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-        {" help  "}
-      </text>
-      <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-        q
-      </text>
-      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-        {" quit"}
-      </text>
+      {/* Keyboard hints — context-dependent on search focus state */}
+      <Show
+        when={!props.searchFocused}
+        fallback={
+          <>
+            <text flexShrink={0} wrapMode="none" fg={t().foreground}>
+              enter
+            </text>
+            <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+              {" search  "}
+            </text>
+            <text flexShrink={0} wrapMode="none" fg={t().foreground}>
+              esc
+            </text>
+            <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+              {" back"}
+            </text>
+          </>
+        }
+      >
+        <text flexShrink={0} wrapMode="none" fg={t().foreground}>
+          {enterAction() ? "enter" : ""}
+        </text>
+        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+          {enterAction() ? ` ${enterAction()}  ` : ""}
+        </text>
+        <text flexShrink={0} wrapMode="none" fg={t().foreground}>
+          {"\u2190/\u2192"}
+        </text>
+        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+          {" switch tab  "}
+        </text>
+        <text flexShrink={0} wrapMode="none" fg={t().foreground}>
+          {"\u2191/\u2193"}
+        </text>
+        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+          {" navigate  "}
+        </text>
+        <text flexShrink={0} wrapMode="none" fg={t().foreground}>
+          /
+        </text>
+        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+          {" search  "}
+        </text>
+        <text flexShrink={0} wrapMode="none" fg={t().foreground}>
+          m
+        </text>
+        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+          {" menu  "}
+        </text>
+        <text flexShrink={0} wrapMode="none" fg={t().foreground}>
+          ?
+        </text>
+        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+          {" help"}
+        </text>
+      </Show>
     </box>
   );
 }

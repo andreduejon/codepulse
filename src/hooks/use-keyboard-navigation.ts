@@ -14,6 +14,8 @@ interface KeyboardNavigationOptions {
   setDialog: (d: DialogId) => void;
   searchFocused: Accessor<boolean>;
   setSearchFocused: (v: boolean) => void;
+  /** Set the local search input value (independent of the active filter). */
+  setSearchInputValue: (v: string) => void;
   /** Returns the current scrollbox ref (may be undefined before mount). */
   getDetailScrollboxRef: () => ScrollBoxRenderable | undefined;
   detailNavRef: DetailNavRef;
@@ -37,6 +39,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     setDialog,
     searchFocused,
     setSearchFocused,
+    setSearchInputValue,
     getDetailScrollboxRef,
     detailNavRef,
     loadData,
@@ -82,11 +85,11 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         actions.setDetailFocused(false);
         return;
       }
-      if (searchFocused()) {
+      if (searchFocused() || state.searchQuery()) {
+        // Close search bar AND clear the active filter in one action.
+        // Next `/` will open an empty bar.
         setSearchFocused(false);
-        return;
-      }
-      if (state.searchQuery()) {
+        setSearchInputValue("");
         actions.setSearchQuery("");
         actions.setCursorIndex(0);
         actions.setScrollTargetIndex(0);
@@ -111,6 +114,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         return;
       }
       if (state.searchQuery()) {
+        setSearchInputValue("");
         actions.setSearchQuery("");
         actions.setCursorIndex(0);
         actions.setScrollTargetIndex(0);
@@ -228,6 +232,12 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
             scrollbox?.scrollTo(Infinity);
           }
           return;
+        case "/":
+          e.preventDefault();
+          actions.setDetailFocused(false);
+          setSearchInputValue(state.searchQuery());
+          setSearchFocused(true);
+          return;
       }
       return; // swallow all other keys when detail is focused
     }
@@ -286,6 +296,8 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
       case "/":
         e.preventDefault();
         actions.setDetailFocused(false);
+        // Pre-fill with the last submitted query (empty if cleared by Esc)
+        setSearchInputValue(state.searchQuery());
         setSearchFocused(true);
         break;
       case "r":

@@ -12,6 +12,7 @@ import {
   MAX_GRAPH_COLUMNS,
   renderConnectorRow,
   renderFanOutRow,
+  renderGapRow,
   renderGraphRow,
   sliceGraphToViewport,
 } from "../git/graph";
@@ -51,10 +52,11 @@ function useGraphDimensions(maxGraphColumns: () => number) {
   return { effectiveGraphColumns, viewportActive, graphWidth };
 }
 
-export function ColumnHeader() {
+export function ColumnHeader(props: Readonly<{ searchFocused?: boolean }>) {
   const { theme } = useTheme();
   const { state } = useAppState();
   const t = () => theme();
+  const graphFocused = () => !state.detailFocused() && !props.searchFocused;
 
   const { graphWidth } = useGraphDimensions(() => state.maxGraphColumns());
 
@@ -65,12 +67,12 @@ export function ColumnHeader() {
         width="100%"
         border={["top"]}
         borderStyle="single"
-        borderColor={state.detailFocused() ? t().border : t().accent}
+        borderColor={graphFocused() ? t().accent : t().foregroundMuted}
       >
         {/* Graph header */}
         <text flexShrink={0} width={graphWidth()} wrapMode="none" paddingLeft={1}>
           <strong>
-            <span fg={!state.detailFocused() ? t().foreground : t().foregroundMuted}>{"Graph "}</span>
+            <span fg={graphFocused() ? t().foreground : t().foregroundMuted}>{"Graph "}</span>
           </strong>
         </text>
 
@@ -78,7 +80,7 @@ export function ColumnHeader() {
         <box flexShrink={0} width={HASH_COL_WIDTH} paddingLeft={1}>
           <text wrapMode="none" truncate>
             <strong>
-              <span fg={!state.detailFocused() ? t().foreground : t().foregroundMuted}>Commit</span>
+              <span fg={graphFocused() ? t().foreground : t().foregroundMuted}>Commit</span>
             </strong>
           </text>
         </box>
@@ -87,7 +89,7 @@ export function ColumnHeader() {
         <box flexDirection="row" flexGrow={1} flexShrink={1} paddingLeft={1} paddingRight={2}>
           <text flexGrow={1} flexShrink={1} wrapMode="none" truncate>
             <strong>
-              <span fg={!state.detailFocused() ? t().foreground : t().foregroundMuted}>Description</span>
+              <span fg={graphFocused() ? t().foreground : t().foregroundMuted}>Description</span>
             </strong>
           </text>
         </box>
@@ -96,7 +98,7 @@ export function ColumnHeader() {
         <box flexShrink={0} width={AUTHOR_COL_WIDTH} paddingRight={2}>
           <text wrapMode="none" truncate>
             <strong>
-              <span fg={!state.detailFocused() ? t().foreground : t().foregroundMuted}>Author</span>
+              <span fg={graphFocused() ? t().foreground : t().foregroundMuted}>Author</span>
             </strong>
           </text>
         </box>
@@ -105,7 +107,7 @@ export function ColumnHeader() {
         <box flexShrink={0} width={DATE_COL_WIDTH}>
           <text wrapMode="none" truncate>
             <strong>
-              <span fg={!state.detailFocused() ? t().foreground : t().foregroundMuted}>Date</span>
+              <span fg={graphFocused() ? t().foreground : t().foregroundMuted}>Date</span>
             </strong>
           </text>
         </box>
@@ -140,6 +142,7 @@ function GraphLine(
     index: number;
     active: boolean;
     isLast: boolean;
+    showGapBelow: boolean;
     viewportOffset: () => number;
     rowRef?: (el: Renderable) => void;
   }>,
@@ -336,6 +339,16 @@ function GraphLine(
     return t().foregroundMuted;
   };
 
+  // Gap content: dimmed ┊ in active lane columns, used as connector row
+  // replacement when search filtered out intermediate commits between rows.
+  const gapContent = () => {
+    const chars = renderGapRow(props.row, renderOpts());
+    const sliced = viewportActive()
+      ? sliceGraphToViewport(chars, props.viewportOffset(), MAX_GRAPH_COLUMNS, props.row, renderOpts())
+      : chars;
+    return graphCharsToContent(withEdgeIndicator(sliced, false));
+  };
+
   return (
     <box
       ref={(el: Renderable) => props.rowRef?.(el)}
@@ -423,9 +436,11 @@ function GraphLine(
         </box>
       </box>
 
-      {/* Connector row: vertical lines only, providing visual continuity */}
+      {/* Connector row: vertical lines between commits.
+          When showGapBelow is true, renders dimmed ┊ instead of │
+          to indicate filtered-out commits between this row and the next. */}
       <Show when={!props.isLast}>
-        <ConnectorRow content={connectorContent} width={graphWidth()} />
+        <ConnectorRow content={props.showGapBelow ? gapContent : connectorContent} width={graphWidth()} />
       </Show>
     </box>
   );
@@ -498,23 +513,53 @@ export default function GraphView() {
   // re-evaluations from N (every row) down to exactly 2.
   const isActive = createSelector(() => state.cursorIndex());
 
+  // Hash → index lookup for the full (unfiltered) graph.
+  // Used to detect whether consecutive filtered rows are truly adjacent
+  // in the original graph, not just parent-child (which can skip many rows
+  // for merge commits).
+  const graphIndexMap = createMemo(() => {
+    const map = new Map<string, number>();
+    const rows = state.graphRows();
+    for (let i = 0; i < rows.length; i++) {
+      map.set(rows[i].commit.hash, i);
+    }
+    return map;
+  });
+
   return (
     <scrollbox ref={scrollboxRef} flexGrow={1} scrollY scrollX={false} verticalScrollbarOptions={{ visible: false }}>
       <box flexDirection="column" flexGrow={1}>
         <Show when={!state.loading()}>
           <For each={state.filteredRows()}>
-            {(row, index) => (
-              <GraphLine
-                row={row}
-                index={index()}
-                active={isActive(index())}
-                isLast={index() === state.filteredRows().length - 1}
-                viewportOffset={viewportOffset}
-                rowRef={el => {
-                  rowRefs[index()] = el;
-                }}
-              />
-            )}
+            {(row, index) => {
+              const showGapBelow = () => {
+                // Only show gap separators between non-adjacent filtered rows
+                if (!state.searchQuery()) return false;
+                const rows = state.filteredRows();
+                const i = index();
+                if (i >= rows.length - 1) return false;
+                const nextRow = rows[i + 1];
+                // Check distance in the original unfiltered graph — adjacent
+                // means their positions differ by exactly 1.
+                const idxMap = graphIndexMap();
+                const currentOrigIdx = idxMap.get(row.commit.hash) ?? -1;
+                const nextOrigIdx = idxMap.get(nextRow.commit.hash) ?? -1;
+                return nextOrigIdx - currentOrigIdx !== 1;
+              };
+              return (
+                <GraphLine
+                  row={row}
+                  index={index()}
+                  active={isActive(index())}
+                  isLast={index() === state.filteredRows().length - 1}
+                  showGapBelow={showGapBelow()}
+                  viewportOffset={viewportOffset}
+                  rowRef={el => {
+                    rowRefs[index()] = el;
+                  }}
+                />
+              );
+            }}
           </For>
         </Show>
       </box>

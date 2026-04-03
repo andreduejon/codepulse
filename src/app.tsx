@@ -504,25 +504,23 @@ function AppContent(props: Readonly<AppProps>) {
                 <GraphView />
               </box>
 
-              {/* Search input bar - top separator */}
+              {/* Search section — background + padding, separators inside */}
               <box
                 width="100%"
-                paddingX={1}
-                border={["top"]}
-                borderStyle="single"
-                borderColor={searchFocused() ? themeState.theme().accent : themeState.theme().border}
+                minHeight={5}
                 backgroundColor={themeState.theme().background}
-              />
-
-              {/* Search input bar content */}
-              <box
-                width="100%"
-                minHeight={3}
-                backgroundColor={themeState.theme().background}
-                paddingX={1}
+                paddingX={2}
                 flexDirection="column"
               >
-                {/* Line 1+: input + search result count */}
+                {/* Top separator */}
+                <box
+                  width="100%"
+                  border={["top"]}
+                  borderStyle="single"
+                  borderColor={searchFocused() ? themeState.theme().accent : themeState.theme().foregroundMuted}
+                />
+
+                {/* Search input + result count */}
                 <box flexGrow={1} flexDirection="row">
                   <input
                     focused={searchFocused()}
@@ -535,25 +533,27 @@ function AppContent(props: Readonly<AppProps>) {
                     fg={themeState.theme().foreground}
                     backgroundColor={themeState.theme().background}
                   />
-                  <Show when={state.searchQuery()}>
-                    <text
-                      flexShrink={0}
-                      wrapMode="none"
-                      fg={
-                        state.filteredRows().length === 0
-                          ? themeState.theme().error
-                          : themeState.theme().foregroundMuted
-                      }
-                    >
-                      {"  "}
-                      {state.filteredRows().length === 0
+                  <text
+                    flexShrink={0}
+                    wrapMode="none"
+                    fg={
+                      state.searchQuery() && state.filteredRows().length === 0
+                        ? themeState.theme().error
+                        : themeState.theme().foregroundMuted
+                    }
+                  >
+                    {"  "}
+                    {state.searchQuery()
+                      ? state.filteredRows().length === 0
                         ? "No matches"
-                        : `${state.filteredRows().length} / ${state.graphRows().length}`}
-                    </text>
-                  </Show>
+                        : `${state.filteredRows().length} / ${state.graphRows().length}`
+                      : `${state.graphRows().length}`}
+                  </text>
                 </box>
 
-                {/* Bottom line: Git label + repo path : branch + version */}
+                <box height={1} />
+
+                {/* Git label + repo path : branch + version */}
                 <box flexDirection="row" width="100%">
                   <Show when={state.error()}>
                     <text flexShrink={0} wrapMode="none" fg={themeState.theme().error}>
@@ -580,17 +580,10 @@ function AppContent(props: Readonly<AppProps>) {
                     codepulse v{packageJson.version}
                   </text>
                 </box>
-              </box>
 
-              {/* Search input bar - bottom separator */}
-              <box
-                width="100%"
-                paddingX={1}
-                border={["top"]}
-                borderStyle="single"
-                borderColor={themeState.theme().border}
-                backgroundColor={themeState.theme().background}
-              />
+                {/* Bottom separator */}
+                <box width="100%" border={["top"]} borderStyle="single" borderColor={themeState.theme().border} />
+              </box>
 
               {/* Footer - hotkey hints, 1 char gap above, right-aligned */}
               <box height={1} />
@@ -644,13 +637,15 @@ function AppContent(props: Readonly<AppProps>) {
                   return tabs.map(tab => {
                     const isActive = state.detailActiveTab() === tab.id;
                     const t = themeState.theme();
-                    const color = tab.disabled
+                    const detailActive = isActive && state.detailFocused() && !searchFocused();
+                    const lineColor = tab.disabled
                       ? t.border
-                      : isActive
-                        ? state.detailFocused() && !searchFocused()
-                          ? t.accent
-                          : t.foregroundMuted
-                        : t.border;
+                      : detailActive
+                        ? t.accent
+                        : isActive
+                          ? t.foregroundMuted
+                          : t.border;
+                    const textColor = tab.disabled ? t.border : detailActive ? t.accent : t.foregroundMuted;
                     return (
                       <box
                         flexGrow={1}
@@ -658,9 +653,9 @@ function AppContent(props: Readonly<AppProps>) {
                         flexDirection="row"
                         border={["top"]}
                         borderStyle="single"
-                        borderColor={color}
+                        borderColor={lineColor}
                       >
-                        <text flexShrink={0} wrapMode="none" fg={color}>
+                        <text flexShrink={0} wrapMode="none" fg={textColor}>
                           <strong>{tab.label}</strong>
                         </text>
                       </box>
