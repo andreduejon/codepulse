@@ -1,8 +1,8 @@
 /**
  * Test: verifies the sliding graph viewport functions.
  *
- * Covers: computeViewportOffsets, computeSingleViewportOffset,
- * sliceGraphToViewport, getMaxGraphColumns, buildEdgeIndicator.
+ * Covers: computeSingleViewportOffset, sliceGraphToViewport,
+ * getMaxGraphColumns, buildEdgeIndicator.
  */
 import { describe, expect, test } from "bun:test";
 import type { RenderOptions } from "../src/git/graph";
@@ -10,7 +10,6 @@ import {
   buildEdgeIndicator,
   buildGraph,
   computeSingleViewportOffset,
-  computeViewportOffsets,
   getMaxGraphColumns,
   renderConnectorRow,
   renderGraphRow,
@@ -29,11 +28,11 @@ describe("Viewport", () => {
     const rows = buildGraph(commits);
     printGraph(rows);
     const maxCols = getMaxGraphColumns(rows);
-    const offsets = computeViewportOffsets(rows, maxCols + 5, maxCols);
 
-    expect(offsets.length).toBe(rows.length);
-    for (let i = 0; i < offsets.length; i++) {
-      expect(offsets[i]).toBe(0);
+    let offset = 0;
+    for (const row of rows) {
+      offset = computeSingleViewportOffset(offset, row.nodeColumn, maxCols + 5, maxCols);
+      expect(offset).toBe(0);
     }
   });
 
@@ -53,14 +52,11 @@ describe("Viewport", () => {
     const maxCols = getMaxGraphColumns(rows);
 
     const depthLimit = 3;
-    const offsets = computeViewportOffsets(rows, depthLimit, maxCols);
-
-    expect(offsets.length).toBe(rows.length);
-
-    for (let i = 0; i < rows.length; i++) {
-      const nc = rows[i].nodeColumn;
-      const off = offsets[i];
-      expect(nc >= off && nc < off + depthLimit).toBe(true);
+    let offset = 0;
+    for (const row of rows) {
+      offset = computeSingleViewportOffset(offset, row.nodeColumn, depthLimit, maxCols);
+      const nc = row.nodeColumn;
+      expect(nc >= offset && nc < offset + depthLimit).toBe(true);
     }
   });
 
@@ -75,10 +71,11 @@ describe("Viewport", () => {
     const rows = buildGraph(commits);
     printGraph(rows);
     const maxCols = getMaxGraphColumns(rows);
-    const offsets = computeViewportOffsets(rows, 2, maxCols);
 
-    for (let i = 0; i < offsets.length; i++) {
-      expect(offsets[i]).toBe(0);
+    let offset = 0;
+    for (const row of rows) {
+      offset = computeSingleViewportOffset(offset, row.nodeColumn, 2, maxCols);
+      expect(offset).toBe(0);
     }
   });
 
@@ -203,20 +200,20 @@ describe("Viewport", () => {
     const depthLimit = 4;
 
     if (maxCols > depthLimit) {
-      const offsets = computeViewportOffsets(rows, depthLimit, maxCols);
-
+      let offset = 0;
       let maxNodeCol = 0;
-      let maxNodeIdx = 0;
-      for (let i = 0; i < rows.length; i++) {
-        if (rows[i].nodeColumn > maxNodeCol) {
-          maxNodeCol = rows[i].nodeColumn;
-          maxNodeIdx = i;
+      let maxNodeOffset = 0;
+      for (const row of rows) {
+        offset = computeSingleViewportOffset(offset, row.nodeColumn, depthLimit, maxCols);
+        if (row.nodeColumn > maxNodeCol) {
+          maxNodeCol = row.nodeColumn;
+          maxNodeOffset = offset;
         }
       }
 
       if (maxNodeCol >= depthLimit) {
-        expect(offsets[maxNodeIdx]).toBeGreaterThan(0);
-        expect(maxNodeCol >= offsets[maxNodeIdx] && maxNodeCol < offsets[maxNodeIdx] + depthLimit).toBe(true);
+        expect(maxNodeOffset).toBeGreaterThan(0);
+        expect(maxNodeCol >= maxNodeOffset && maxNodeCol < maxNodeOffset + depthLimit).toBe(true);
       }
     }
   });

@@ -1286,53 +1286,6 @@ export function renderGraphRow(row: GraphRow, opts: RenderOptions = {}): GraphCh
 }
 
 /**
- * Compute per-row horizontal viewport offsets for the sliding graph viewport.
- *
- * @deprecated Superseded by {@link computeSingleViewportOffset} for runtime use.
- * Retained for test coverage. Use `computeSingleViewportOffset` in new code.
- *
- * The viewport shows `depthLimit` columns at a time. It slides smoothly
- * to keep each row's commit node (█) visible. The offset represents the
- * first visible column index.
- *
- * Algorithm (smooth sliding / camera follow):
- * - Start with offset = 0
- * - For each row: if the node is outside the current viewport, shift
- *   the minimum amount needed to bring it into view (with 1 column margin).
- * - Otherwise keep the current offset.
- *
- * Returns an array of offsets (one per row). When depthLimit >= maxColumns,
- * all offsets are 0 (no sliding needed).
- */
-export function computeViewportOffsets(rows: GraphRow[], depthLimit: number, maxColumns: number): number[] {
-  if (depthLimit >= maxColumns) {
-    return new Array(rows.length).fill(0);
-  }
-
-  const offsets: number[] = [];
-  let offset = 0;
-
-  for (const row of rows) {
-    const nc = row.nodeColumn;
-
-    if (nc >= offset + depthLimit) {
-      // Node is to the right of viewport — shift right.
-      // Place node 2 columns from the right edge for context.
-      offset = nc - depthLimit + 2;
-    } else if (nc < offset) {
-      // Node is to the left of viewport — shift left.
-      // Place node 1 column from the left edge for context.
-      offset = Math.max(0, nc - 1);
-    }
-    // Otherwise keep current offset
-
-    offsets.push(offset);
-  }
-
-  return offsets;
-}
-
-/**
  * Compute a single viewport offset for a given node column.
  *
  * Used reactively: when the selected commit changes, compute the offset
