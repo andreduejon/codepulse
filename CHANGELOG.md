@@ -56,7 +56,3 @@ All notable changes to this project will be documented in this file.
 - Hunk header alignment with line numbers and content
 - Cross-platform clipboard support
 - Git argument sanitization to prevent injection
-
-## [0.0.1] - 2025 (initial release as gittree)
-
-Initial release — read-only terminal git graph visualizer with lane-based graph rendering, color themes, and basic commit detail panel.
