@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.2] - 2026-04-03
+
+### Fixed
+- Global installs now preload the Solid OpenTUI runtime plugin correctly at startup
+
+### Changed
+- CI workflows now use clearer step names and Node 24 consistently
+- Updated README with vision section and roadmap overview
+
 ## [0.0.1] - 2026-04-02
 
 ### Added
@@ -31,7 +40,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - Renamed from **gittree** to **codepulse**
-- Bumped version to `0.2.0`
+- Scoped npm package to `@andreduejon/codepulse`
 - Simplified keybindings — removed Vim aliases, Tab, and Ctrl combos; `m` opens menu, `q` cascades close/unfocus/quit
 - Detail panel now defaults to Files tab; auto-switches away from empty tabs
 - Diff hunk separators unified to single-row horizontal rules with `·` separators
@@ -47,7 +56,3 @@ All notable changes to this project will be documented in this file.
 - Hunk header alignment with line numbers and content
 - Cross-platform clipboard support
 - Git argument sanitization to prevent injection
-
-## [0.0.1] - 2025 (initial release as gittree)
-
-Initial release — read-only terminal git graph visualizer with lane-based graph rendering, color themes, and basic commit detail panel.
