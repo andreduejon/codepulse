@@ -1,7 +1,7 @@
 import { render } from "@opentui/solid";
 import App from "./app";
 import { parseArgs } from "./cli/parse-args";
-import { loadConfig, mergeOptions } from "./config";
+import { loadConfig, mergeOptions, resolveConfigInfo } from "./config";
 import { isGitRepo } from "./git/repo";
 
 export async function main() {
@@ -15,6 +15,7 @@ export async function main() {
   }
 
   // Load config file and merge with CLI args (CLI wins)
+  const configInfo = resolveConfigInfo(cli.repoPath);
   const config = loadConfig(cli.repoPath);
   const opts = mergeOptions(cli, config);
 
@@ -28,6 +29,7 @@ export async function main() {
         maxCount={opts.maxCount}
         themeName={opts.themeName}
         autoRefreshInterval={opts.autoRefreshInterval}
+        configInfo={configInfo}
       />
     ),
     {

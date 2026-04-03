@@ -1,6 +1,7 @@
 import { type Accessor, createContext, createMemo, createSignal, useContext } from "solid-js";
 import { DEFAULT_MAX_COUNT } from "../constants";
 import type { Branch, Commit, CommitDetail, GraphRow, TagInfo, UncommittedDetail } from "../git/types";
+import { matchCommit, parseSearchQuery } from "../search";
 
 export const DEFAULT_AUTO_REFRESH_INTERVAL = 30000;
 
@@ -88,7 +89,7 @@ export interface AppActions {
 
 const AppStateContext = createContext<{ state: AppState; actions: AppActions }>();
 
-export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
+export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, initialAutoRefreshInterval?: number) {
   // ── Repository data ───────────────────────────────────────────────
   const [commits, setCommits] = createSignal<Commit[]>([]);
   const [graphRows, setGraphRows] = createSignal<GraphRow[]>([]);
@@ -120,22 +121,17 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT) {
   const [showAllBranches, setShowAllBranches] = createSignal(true);
   const [maxGraphColumns, setMaxGraphColumns] = createSignal(0);
   const [maxCount, setMaxCount] = createSignal(initialMaxCount);
-  const [autoRefreshInterval, setAutoRefreshInterval] = createSignal(DEFAULT_AUTO_REFRESH_INTERVAL);
+  const [autoRefreshInterval, setAutoRefreshInterval] = createSignal(
+    initialAutoRefreshInterval ?? DEFAULT_AUTO_REFRESH_INTERVAL,
+  );
   const [lastFetchTime, setLastFetchTime] = createSignal<Date | null>(null);
   const [fetching, setFetching] = createSignal(false);
 
   const filteredRows = createMemo(() => {
-    const query = searchQuery().toLowerCase();
+    const query = searchQuery();
     if (!query) return graphRows();
-    return graphRows().filter(row => {
-      const c = row.commit;
-      return (
-        c.subject.toLowerCase().includes(query) ||
-        c.author.toLowerCase().includes(query) ||
-        c.shortHash.toLowerCase().includes(query) ||
-        c.refs.some(r => r.name.toLowerCase().includes(query))
-      );
-    });
+    const parsed = parseSearchQuery(query);
+    return graphRows().filter(row => matchCommit(row.commit, parsed));
   });
 
   const selectedCommit = createMemo(() => {

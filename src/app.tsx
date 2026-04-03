@@ -11,6 +11,7 @@ import ThemeDialog from "./components/dialogs/theme-dialog";
 import Footer from "./components/footer";
 import GraphView, { ColumnHeader } from "./components/graph";
 import UncommittedDetailView from "./components/uncommitted-detail";
+import type { ConfigInfo } from "./config";
 import { DEFAULT_MAX_COUNT, UNCOMMITTED_HASH } from "./constants";
 import { AppStateContext, createAppState } from "./context/state";
 import { createThemeState, ThemeContext } from "./context/theme";
@@ -37,15 +38,22 @@ interface AppProps {
   all?: boolean;
   maxCount?: number;
   themeName?: string;
+  autoRefreshInterval?: number;
+  configInfo?: ConfigInfo;
 }
 
 function AppContent(props: Readonly<AppProps>) {
-  const { state, actions } = createAppState(props.maxCount ?? DEFAULT_MAX_COUNT);
+  const { state, actions } = createAppState(props.maxCount ?? DEFAULT_MAX_COUNT, props.autoRefreshInterval);
   const themeState = createThemeState(props.themeName);
   const renderer = useRenderer();
 
   const [dialog, setDialog] = createSignal<"menu" | "help" | "theme" | "diff-blame" | null>(null);
   const [searchFocused, setSearchFocused] = createSignal(false);
+  /**
+   * Local input value for the search bar — independent of the active filter.
+   * Updated on every keystroke but only applied to the filter on submit (Enter).
+   */
+  const [searchInputValue, setSearchInputValue] = createSignal("");
   /** Target for the diff+blame dialog (set when user activates a file). */
   const [diffTarget, setDiffTarget] = createSignal<DiffTarget | null>(null);
   // Ref for programmatic scrolling of the detail panel
@@ -422,7 +430,7 @@ function AppContent(props: Readonly<AppProps>) {
     }
   });
 
-  // Search input handlers
+  // Search input handlers (submit-only — no live filtering)
   const handleSearchSubmit = (value: string) => {
     batch(() => {
       actions.setSearchQuery(value);
@@ -433,12 +441,8 @@ function AppContent(props: Readonly<AppProps>) {
   };
 
   const handleSearchInput = (value: string) => {
-    // Live filter as user types — cursor moves immediately, detail load is debounced
-    batch(() => {
-      actions.setSearchQuery(value);
-      actions.setCursorIndex(0);
-      actions.setScrollTargetIndex(0);
-    });
+    // Only update the local input value — filter is applied on submit (Enter)
+    setSearchInputValue(value);
   };
 
   /** Open a sub-dialog from within the menu (e.g. theme picker). */
@@ -465,6 +469,7 @@ function AppContent(props: Readonly<AppProps>) {
     setDialog,
     searchFocused,
     setSearchFocused,
+    setSearchInputValue,
     getDetailScrollboxRef: () => detailScrollboxRef,
     detailNavRef,
     loadData,
@@ -494,21 +499,27 @@ function AppContent(props: Readonly<AppProps>) {
               {/* Graph area */}
               <box flexDirection="column" flexGrow={1} paddingBottom={1}>
                 {/* Sticky column headers - above scrollbox */}
-                <ColumnHeader />
+                <ColumnHeader searchFocused={searchFocused()} />
 
                 <GraphView />
               </box>
 
-              {/* Search input bar - main background, inset within grey */}
+              {/* Search input bar - top separator */}
               <box
                 width="100%"
-                minHeight={5}
+                paddingX={1}
+                border={["top"]}
+                borderStyle="single"
+                borderColor={searchFocused() ? themeState.theme().accent : themeState.theme().border}
                 backgroundColor={themeState.theme().background}
-                paddingX={2}
-                paddingY={1}
-                border={["left"]}
-                borderStyle="heavy"
-                borderColor={themeState.theme().accent}
+              />
+
+              {/* Search input bar content */}
+              <box
+                width="100%"
+                minHeight={3}
+                backgroundColor={themeState.theme().background}
+                paddingX={1}
                 flexDirection="column"
               >
                 {/* Line 1+: input + search result count */}
@@ -517,7 +528,7 @@ function AppContent(props: Readonly<AppProps>) {
                     focused={searchFocused()}
                     flexGrow={1}
                     placeholder="Search commits..."
-                    value={state.searchQuery()}
+                    value={searchInputValue()}
                     onInput={handleSearchInput}
                     // biome-ignore lint/suspicious/noExplicitAny: @opentui/solid type bug — InputProps.onSubmit type mismatch
                     onSubmit={handleSearchSubmit as any}
@@ -571,9 +582,19 @@ function AppContent(props: Readonly<AppProps>) {
                 </box>
               </box>
 
+              {/* Search input bar - bottom separator */}
+              <box
+                width="100%"
+                paddingX={1}
+                border={["top"]}
+                borderStyle="single"
+                borderColor={themeState.theme().border}
+                backgroundColor={themeState.theme().background}
+              />
+
               {/* Footer - hotkey hints, 1 char gap above, right-aligned */}
               <box height={1} />
-              <Footer />
+              <Footer searchFocused={searchFocused()} />
             </box>
 
             {/* Detail panel - right (width must match DETAIL_PANEL_WIDTH_FRACTION in constants.ts) */}
@@ -626,7 +647,7 @@ function AppContent(props: Readonly<AppProps>) {
                     const color = tab.disabled
                       ? t.border
                       : isActive
-                        ? state.detailFocused()
+                        ? state.detailFocused() && !searchFocused()
                           ? t.accent
                           : t.foregroundMuted
                         : t.border;
@@ -685,6 +706,7 @@ function AppContent(props: Readonly<AppProps>) {
               onFetch={handleFetch}
               onOpenDialog={handleOpenDialog}
               onViewBranch={handleViewBranch}
+              configInfo={props.configInfo}
             />
           </Show>
           <Show when={dialog() === "help"}>

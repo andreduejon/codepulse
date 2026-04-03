@@ -1,7 +1,10 @@
+import { homedir } from "node:os";
 import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, onCleanup } from "solid-js";
-import { SHIFT_JUMP } from "../../constants";
+import type { CodepulseConfig, ConfigInfo } from "../../config";
+import { writeConfig } from "../../config";
+import { DEFAULT_MAX_COUNT, SHIFT_JUMP } from "../../constants";
 import { DEFAULT_AUTO_REFRESH_INTERVAL, useAppState } from "../../context/state";
 import { themes, useTheme } from "../../context/theme";
 import { getColorForColumn } from "../../git/graph";
@@ -17,6 +20,8 @@ interface MenuDialogProps {
   onOpenDialog?: (dialogId: string) => void;
   /** View graph from a specific branch's perspective. null clears the filter. */
   onViewBranch: (branch: string | null) => void;
+  /** Config file info from startup, used by the Configuration section. */
+  configInfo?: ConfigInfo;
 }
 
 const MAX_COUNT_OPTIONS = [10, 20, 50, 100, 200, 500];
@@ -70,7 +75,7 @@ type SettingItem =
 
 export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   const { state, actions } = useAppState();
-  const { theme, themeName } = useTheme();
+  const { theme, themeName, setTheme } = useTheme();
   const t = () => theme();
 
   // ── Tab state ─────────────────────────────────────────────────────
@@ -116,6 +121,23 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     if (copiedTimer) clearTimeout(copiedTimer);
   });
 
+  // ── Config save feedback ──────────────────────────────────────────
+  const [savedFeedback, setSavedFeedback] = createSignal<string | null>(null);
+  let savedTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const showSavedFeedback = (label: string) => {
+    setSavedFeedback(label);
+    if (savedTimer) clearTimeout(savedTimer);
+    savedTimer = setTimeout(() => setSavedFeedback(null), 1500);
+  };
+  onCleanup(() => {
+    if (savedTimer) clearTimeout(savedTimer);
+  });
+
+  // ── Config save scope ──────────────────────────────────────────────
+  type ConfigScope = "global" | "this repo";
+  const [configScope, setConfigScope] = createSignal<ConfigScope>("global");
+
   // ── Banner scroll for selected copyable rows ──────────────────────
   /** Usable width for copyable text: dialog=70 - 2(paddingX=1) - 8(paddingX=4) = 60 */
   const COPYABLE_VISIBLE_WIDTH = 60;
@@ -147,47 +169,104 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     return `${days}d ago`;
   };
 
-  const repoItems = createMemo<SettingItem[]>(() => [
-    { kind: "header", label: "Origin" },
-    { kind: "copyable", label: "URL", get: () => state.remoteUrl() || "(none)" },
+  const repoItems = createMemo<SettingItem[]>(() => {
+    const items: SettingItem[] = [
+      { kind: "header", label: "Origin" },
+      { kind: "copyable", label: "URL", get: () => state.remoteUrl() || "(none)" },
 
-    { kind: "header", label: "Path" },
-    { kind: "copyable", label: "Directory", get: () => state.repoPath() || "(unknown)" },
+      { kind: "header", label: "Path" },
+      { kind: "copyable", label: "Directory", get: () => state.repoPath() || "(unknown)" },
 
-    { kind: "header", label: "Actions" },
-    { kind: "action", label: "Fetch remote", hotkey: "f", get: lastFetchLabel, run: () => props.onFetch() },
+      { kind: "header", label: "Actions" },
+      { kind: "action", label: "Fetch remote", hotkey: "f", get: lastFetchLabel, run: () => props.onFetch() },
 
-    { kind: "header", label: "Preferences" },
-    {
-      kind: "dialog",
-      label: "Color theme",
-      hotkey: "ctrl+t",
-      dialogId: "theme",
-      get: () => themes[themeName()]?.name ?? themeName(),
-    },
-    {
-      kind: "cycle",
-      label: "Max commits",
-      options: MAX_COUNT_OPTIONS.map(String),
-      get: () => String(state.maxCount()),
-      set: v => actions.setMaxCount(Number.parseInt(v, 10)),
-      needsReload: true,
-    },
-    {
-      kind: "toggle",
-      label: "Show all branches",
-      get: () => state.showAllBranches(),
-      set: v => actions.setShowAllBranches(v),
-      needsReload: true,
-    },
-    {
-      kind: "cycle",
-      label: "Auto refresh",
-      options: AUTO_REFRESH_OPTIONS,
-      get: () => MS_TO_LABEL[state.autoRefreshInterval()] ?? "off",
-      set: v => actions.setAutoRefreshInterval(AUTO_REFRESH_MS[v] ?? DEFAULT_AUTO_REFRESH_INTERVAL),
-    },
-  ]);
+      { kind: "header", label: "Preferences" },
+      {
+        kind: "dialog",
+        label: "Color theme",
+        hotkey: "ctrl+t",
+        dialogId: "theme",
+        get: () => themes[themeName()]?.name ?? themeName(),
+      },
+      {
+        kind: "cycle",
+        label: "Max commits",
+        options: MAX_COUNT_OPTIONS.map(String),
+        get: () => String(state.maxCount()),
+        set: v => actions.setMaxCount(Number.parseInt(v, 10)),
+        needsReload: true,
+      },
+      {
+        kind: "toggle",
+        label: "Show all branches",
+        get: () => state.showAllBranches(),
+        set: v => actions.setShowAllBranches(v),
+        needsReload: true,
+      },
+      {
+        kind: "cycle",
+        label: "Auto refresh",
+        options: AUTO_REFRESH_OPTIONS,
+        get: () => MS_TO_LABEL[state.autoRefreshInterval()] ?? "off",
+        set: v => actions.setAutoRefreshInterval(AUTO_REFRESH_MS[v] ?? DEFAULT_AUTO_REFRESH_INTERVAL),
+      },
+      {
+        kind: "action",
+        label: "Reset to defaults",
+        run: () => {
+          setTheme("catppuccin-mocha");
+          actions.setMaxCount(DEFAULT_MAX_COUNT);
+          actions.setShowAllBranches(true);
+          actions.setAutoRefreshInterval(DEFAULT_AUTO_REFRESH_INTERVAL);
+          props.onReload();
+        },
+      },
+    ];
+
+    // ── Configuration section (only when configInfo is available) ──
+    const ci = props.configInfo;
+    if (ci) {
+      const shortenHome = (p: string) =>
+        p.replace(new RegExp(`^${homedir().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`), "~");
+
+      items.push({ kind: "header", label: "Configuration" });
+      items.push({
+        kind: "info",
+        label: "Config file",
+        get: () => `${shortenHome(ci.globalPath)}  ${ci.globalExists ? "(found)" : "(not found)"}`,
+      });
+      items.push({
+        kind: "cycle",
+        label: "Save scope",
+        options: ["global", "this repo"],
+        get: () => configScope(),
+        set: v => setConfigScope(v as ConfigScope),
+      });
+      items.push({
+        kind: "action",
+        label: "Save to config",
+        get: () => (savedFeedback() === "Save to config" ? "\u2713 Saved!" : ""),
+        run: () => {
+          const autoRefreshMs = state.autoRefreshInterval();
+          const cfg: CodepulseConfig = {
+            theme: themeName(),
+            pageSize: state.maxCount(),
+            showAllBranches: state.showAllBranches(),
+            autoRefreshSeconds: autoRefreshMs / 1000,
+          };
+          const scope = configScope() === "global" ? ("global" as const) : ("repo" as const);
+          const ok = writeConfig(cfg, scope, scope === "repo" ? state.repoPath() : undefined);
+          if (ok) {
+            ci.globalExists = true;
+            if (scope === "repo") ci.hasRepoOverrides = true;
+            showSavedFeedback("Save to config");
+          }
+        },
+      });
+    }
+
+    return items;
+  });
 
   // ── Branch tab items ──────────────────────────────────────────────
   const localBranches = createMemo(() => state.branches().filter(b => !b.isRemote));
