@@ -1,5 +1,5 @@
 import type { Renderable, ScrollBoxRenderable, StyledText, TextRenderable } from "@opentui/core";
-import { createEffect, createMemo, createSelector, createSignal, For, Show } from "solid-js";
+import { createEffect, createMemo, createSelector, createSignal, For, onCleanup, Show } from "solid-js";
 import { AUTHOR_COL_WIDTH, DATE_COL_WIDTH, HASH_COL_WIDTH } from "../constants";
 import { useAppState } from "../context/state";
 import { useTheme } from "../context/theme";
@@ -52,11 +52,11 @@ function useGraphDimensions(maxGraphColumns: () => number) {
   return { effectiveGraphColumns, viewportActive, graphWidth };
 }
 
-export function ColumnHeader(props: Readonly<{ searchFocused?: boolean }>) {
+export function ColumnHeader() {
   const { theme } = useTheme();
   const { state } = useAppState();
   const t = () => theme();
-  const graphFocused = () => !state.detailFocused() && !props.searchFocused;
+  const leftPanelFocused = () => !state.detailFocused();
 
   const { graphWidth } = useGraphDimensions(() => state.maxGraphColumns());
 
@@ -67,48 +67,50 @@ export function ColumnHeader(props: Readonly<{ searchFocused?: boolean }>) {
         width="100%"
         border={["top"]}
         borderStyle="single"
-        borderColor={graphFocused() ? t().accent : t().foregroundMuted}
+        borderColor={leftPanelFocused() ? t().accent : t().foregroundMuted}
       >
         {/* Graph header */}
-        <text flexShrink={0} width={graphWidth()} wrapMode="none" paddingLeft={1}>
-          <strong>
-            <span fg={graphFocused() ? t().foreground : t().foregroundMuted}>{"Graph "}</span>
-          </strong>
+        <text
+          flexShrink={0}
+          width={graphWidth()}
+          wrapMode="none"
+          paddingLeft={1}
+          fg={leftPanelFocused() ? t().accent : t().foregroundMuted}
+        >
+          <strong>{"Graph "}</strong>
         </text>
 
         {/* Commit hash */}
         <box flexShrink={0} width={HASH_COL_WIDTH} paddingLeft={1}>
-          <text wrapMode="none" truncate>
-            <strong>
-              <span fg={graphFocused() ? t().foreground : t().foregroundMuted}>Commit</span>
-            </strong>
+          <text wrapMode="none" truncate fg={leftPanelFocused() ? t().accent : t().foregroundMuted}>
+            <strong>Commit</strong>
           </text>
         </box>
 
         {/* Description (commit message + refs) — box wrapper matches data row structure */}
         <box flexDirection="row" flexGrow={1} flexShrink={1} paddingLeft={1} paddingRight={2}>
-          <text flexGrow={1} flexShrink={1} wrapMode="none" truncate>
-            <strong>
-              <span fg={graphFocused() ? t().foreground : t().foregroundMuted}>Description</span>
-            </strong>
+          <text
+            flexGrow={1}
+            flexShrink={1}
+            wrapMode="none"
+            truncate
+            fg={leftPanelFocused() ? t().accent : t().foregroundMuted}
+          >
+            <strong>Description</strong>
           </text>
         </box>
 
         {/* Author */}
         <box flexShrink={0} width={AUTHOR_COL_WIDTH} paddingRight={2}>
-          <text wrapMode="none" truncate>
-            <strong>
-              <span fg={graphFocused() ? t().foreground : t().foregroundMuted}>Author</span>
-            </strong>
+          <text wrapMode="none" truncate fg={leftPanelFocused() ? t().accent : t().foregroundMuted}>
+            <strong>Author</strong>
           </text>
         </box>
 
         {/* Date */}
         <box flexShrink={0} width={DATE_COL_WIDTH}>
-          <text wrapMode="none" truncate>
-            <strong>
-              <span fg={graphFocused() ? t().foreground : t().foregroundMuted}>Date</span>
-            </strong>
+          <text wrapMode="none" truncate fg={leftPanelFocused() ? t().accent : t().foregroundMuted}>
+            <strong>Date</strong>
           </text>
         </box>
       </box>
@@ -450,7 +452,7 @@ function GraphLine(
 const REF_SORT_ORDER: Record<string, number> = { tag: 0, branch: 1, remote: 2, stash: 3, uncommitted: 4, head: 5 };
 
 export default function GraphView() {
-  const { state } = useAppState();
+  const { state, actions } = useAppState();
 
   // Single viewport offset: reacts to the highlighted commit's node column.
   // All rows share the same offset, giving a horizontal "scroll" effect.
@@ -479,16 +481,13 @@ export default function GraphView() {
     setViewportOffset(prev => computeSingleViewportOffset(prev, nodeCol, MAX_GRAPH_COLUMNS, maxCols));
   });
 
-  // Scroll the target row into view (only triggered by keyboard nav / selection, not mouse hover)
-  createEffect(() => {
-    const idx = state.scrollTargetIndex();
+  /** Scroll a row at `idx` into view within the scrollbox. */
+  const scrollRowIntoView = (idx: number) => {
     const sb = scrollboxRef;
-    if (!sb || idx < 0) return;
-
+    if (!sb) return;
     const rowEl = rowRefs[idx];
     if (!rowEl) return;
 
-    // Get the row's position within the scrollbox content
     const layout = rowEl.getLayoutNode().getComputedLayout();
     const rowTop = layout.top;
     const rowHeight = layout.height;
@@ -506,6 +505,51 @@ export default function GraphView() {
     } else if (rowBottom > visibleBottom - padding) {
       sb.scrollTo(rowBottom - viewportHeight + padding);
     }
+  };
+
+  // Scroll the target row into view (triggered by keyboard nav / selection).
+  createEffect(() => {
+    const idx = state.scrollTargetIndex();
+    if (idx < 0) return;
+    scrollRowIntoView(idx);
+  });
+
+  // Deferred scroll-into-view after filter clear: polls until Yoga layout is ready.
+  // When clearing a search filter, newly rendered rows don't have computed layout
+  // yet because @opentui's requestAnimationFrame fires BEFORE the render pass.
+  // We poll every 16ms until the target row has a valid layout, then scroll to it.
+  let pendingScrollPollId: ReturnType<typeof setTimeout> | undefined;
+  onCleanup(() => clearTimeout(pendingScrollPollId));
+  createEffect(() => {
+    const hash = state.pendingScrollHash();
+    clearTimeout(pendingScrollPollId);
+    if (!hash) return;
+
+    const MAX_ATTEMPTS = 30; // ~480ms max
+    let attempts = 0;
+
+    const poll = () => {
+      attempts++;
+      const rows = state.filteredRows();
+      const idx = rows.findIndex(r => r.commit.hash === hash);
+      if (idx < 0) {
+        actions.setPendingScrollHash(null);
+        return;
+      }
+      const rowEl = rowRefs[idx];
+      if (rowEl && rowEl.getLayoutNode().getComputedLayout().height > 0) {
+        scrollRowIntoView(idx);
+        actions.setPendingScrollHash(null);
+        return;
+      }
+      if (attempts >= MAX_ATTEMPTS) {
+        actions.setPendingScrollHash(null);
+        return;
+      }
+      pendingScrollPollId = setTimeout(poll, 16);
+    };
+
+    pendingScrollPollId = setTimeout(poll, 16);
   });
 
   // createSelector tracks which index is "selected" and only notifies the
@@ -546,6 +590,14 @@ export default function GraphView() {
                 const nextOrigIdx = idxMap.get(nextRow.commit.hash) ?? -1;
                 return nextOrigIdx - currentOrigIdx !== 1;
               };
+              // Capture the element ref so we can reactively update rowRefs
+              // when <For> reindexes this element (e.g. after filter clear).
+              // Ref callbacks only fire on creation; this effect re-runs
+              // whenever index() changes, keeping rowRefs in sync.
+              let elRef: Renderable | undefined;
+              createEffect(() => {
+                if (elRef) rowRefs[index()] = elRef;
+              });
               return (
                 <GraphLine
                   row={row}
@@ -555,6 +607,7 @@ export default function GraphView() {
                   showGapBelow={showGapBelow()}
                   viewportOffset={viewportOffset}
                   rowRef={el => {
+                    elRef = el;
                     rowRefs[index()] = el;
                   }}
                 />

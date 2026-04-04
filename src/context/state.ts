@@ -29,6 +29,8 @@ export interface AppState {
   searchQuery: Accessor<string>;
   filteredRows: Accessor<GraphRow[]>;
   scrollTargetIndex: Accessor<number>;
+  /** Commit hash to scroll into view after layout settles (e.g. after filter clear). */
+  pendingScrollHash: Accessor<string | null>;
   /** Branch being viewed (filtered perspective). null = show all / default. */
   viewingBranch: Accessor<string | null>;
 
@@ -59,6 +61,7 @@ export interface AppActions {
   setCursorIndex: (index: number) => void;
   moveCursor: (delta: number) => void;
   setScrollTargetIndex: (index: number) => void;
+  setPendingScrollHash: (hash: string | null) => void;
   setCommitDetail: (detail: CommitDetail | null) => void;
   setLoading: (loading: boolean) => void;
   setShowAllBranches: (show: boolean) => void;
@@ -103,6 +106,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
   // ── Navigation & selection ────────────────────────────────────────
   const [cursorIndex, setCursorIndex] = createSignal(0);
   const [scrollTargetIndex, setScrollTargetIndex] = createSignal(0);
+  const [pendingScrollHash, setPendingScrollHash] = createSignal<string | null>(null);
   const [commitDetail, setCommitDetail] = createSignal<CommitDetail | null>(null);
   const [searchQuery, setSearchQuery] = createSignal("");
   const [viewingBranch, setViewingBranch] = createSignal<string | null>(null);
@@ -127,10 +131,16 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
   const [lastFetchTime, setLastFetchTime] = createSignal<Date | null>(null);
   const [fetching, setFetching] = createSignal(false);
 
-  const filteredRows = createMemo(() => {
+  // Memoize parsed search separately so regex compilation only happens when
+  // the query text changes, not on every graphRows update (e.g. auto-refresh).
+  const parsedSearch = createMemo(() => {
     const query = searchQuery();
-    if (!query) return graphRows();
-    const parsed = parseSearchQuery(query);
+    return query ? parseSearchQuery(query) : null;
+  });
+
+  const filteredRows = createMemo(() => {
+    const parsed = parsedSearch();
+    if (!parsed) return graphRows();
     return graphRows().filter(row => matchCommit(row.commit, parsed));
   });
 
@@ -184,6 +194,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
     detailFocused,
     detailCursorIndex,
     scrollTargetIndex,
+    pendingScrollHash,
     lastFetchTime,
     fetching,
     detailLoading,
@@ -197,6 +208,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
     setCursorIndex,
     moveCursor,
     setScrollTargetIndex,
+    setPendingScrollHash,
     setCommitDetail,
     setLoading,
     setShowAllBranches,

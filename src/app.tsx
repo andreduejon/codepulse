@@ -430,20 +430,40 @@ function AppContent(props: Readonly<AppProps>) {
     }
   });
 
-  // Search input handlers (submit-only — no live filtering)
-  const handleSearchSubmit = (value: string) => {
-    batch(() => {
+  // Live debounced search: update the active filter 150ms after the user stops typing.
+  // For immediate clear (Esc), the keyboard handler calls actions.setSearchQuery("")
+  // directly and clears this timer.
+  let searchDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+  createEffect(() => {
+    const value = searchInputValue();
+    clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(() => {
       actions.setSearchQuery(value);
-      actions.setCursorIndex(0);
-      actions.setScrollTargetIndex(0);
-    });
-    setSearchFocused(false);
-  };
+    }, 150);
+  });
+  onCleanup(() => clearTimeout(searchDebounceTimer));
 
   const handleSearchInput = (value: string) => {
-    // Only update the local input value — filter is applied on submit (Enter)
     setSearchInputValue(value);
   };
+
+  // Clamp cursor index when filtered results shrink (e.g. search narrowing).
+  // Without this, cursorIndex can exceed filteredRows.length, causing
+  // selectedCommit() to return null and leaving the detail panel stale.
+  createEffect(() => {
+    const rows = state.filteredRows();
+    const idx = state.cursorIndex();
+    if (rows.length === 0) {
+      if (idx !== 0) {
+        actions.setCursorIndex(0);
+        actions.setScrollTargetIndex(0);
+      }
+    } else if (idx >= rows.length) {
+      const clamped = rows.length - 1;
+      actions.setCursorIndex(clamped);
+      actions.setScrollTargetIndex(clamped);
+    }
+  });
 
   /** Open a sub-dialog from within the menu (e.g. theme picker). */
   const handleOpenDialog = (dialogId: string) => {
@@ -470,6 +490,7 @@ function AppContent(props: Readonly<AppProps>) {
     searchFocused,
     setSearchFocused,
     setSearchInputValue,
+    clearSearchDebounce: () => clearTimeout(searchDebounceTimer),
     getDetailScrollboxRef: () => detailScrollboxRef,
     detailNavRef,
     loadData,
@@ -499,27 +520,23 @@ function AppContent(props: Readonly<AppProps>) {
               {/* Graph area */}
               <box flexDirection="column" flexGrow={1} paddingBottom={1}>
                 {/* Sticky column headers - above scrollbox */}
-                <ColumnHeader searchFocused={searchFocused()} />
+                <ColumnHeader />
 
                 <GraphView />
               </box>
 
-              {/* Search section — background + padding, separators inside */}
+              {/* Search section — left accent border, same padding as graph */}
               <box
                 width="100%"
                 minHeight={5}
                 backgroundColor={themeState.theme().background}
                 paddingX={2}
+                paddingY={1}
                 flexDirection="column"
+                border={["left"]}
+                borderStyle="single"
+                borderColor={!state.detailFocused() ? themeState.theme().accent : themeState.theme().border}
               >
-                {/* Top separator */}
-                <box
-                  width="100%"
-                  border={["top"]}
-                  borderStyle="single"
-                  borderColor={searchFocused() ? themeState.theme().accent : themeState.theme().foregroundMuted}
-                />
-
                 {/* Search input + result count */}
                 <box flexGrow={1} flexDirection="row">
                   <input
@@ -528,9 +545,8 @@ function AppContent(props: Readonly<AppProps>) {
                     placeholder="Search commits..."
                     value={searchInputValue()}
                     onInput={handleSearchInput}
-                    // biome-ignore lint/suspicious/noExplicitAny: @opentui/solid type bug — InputProps.onSubmit type mismatch
-                    onSubmit={handleSearchSubmit as any}
                     fg={themeState.theme().foreground}
+                    placeholderColor={themeState.theme().foregroundMuted}
                     backgroundColor={themeState.theme().background}
                   />
                   <text
@@ -544,9 +560,7 @@ function AppContent(props: Readonly<AppProps>) {
                   >
                     {"  "}
                     {state.searchQuery()
-                      ? state.filteredRows().length === 0
-                        ? "No matches"
-                        : `${state.filteredRows().length} / ${state.graphRows().length}`
+                      ? `${state.filteredRows().length} / ${state.graphRows().length}`
                       : `${state.graphRows().length}`}
                   </text>
                 </box>
@@ -580,14 +594,11 @@ function AppContent(props: Readonly<AppProps>) {
                     codepulse v{packageJson.version}
                   </text>
                 </box>
-
-                {/* Bottom separator */}
-                <box width="100%" border={["top"]} borderStyle="single" borderColor={themeState.theme().border} />
               </box>
 
               {/* Footer - hotkey hints, 1 char gap above, right-aligned */}
               <box height={1} />
-              <Footer searchFocused={searchFocused()} />
+              <Footer searchFocused={searchFocused()} filterActive={!!state.searchQuery()} />
             </box>
 
             {/* Detail panel - right (width must match DETAIL_PANEL_WIDTH_FRACTION in constants.ts) */}
