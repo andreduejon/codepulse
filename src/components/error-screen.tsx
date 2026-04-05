@@ -237,16 +237,21 @@ export default function ErrorScreen(props: Readonly<ErrorScreenProps>) {
             </text>
           )}
         </For>
+        {/* 1-row spacer + version bottom-right, subtle — mirrors detail panel placement */}
+        <box height={1} />
+        <box flexDirection="row">
+          <box flexGrow={1} />
+          <text flexShrink={0} wrapMode="none" fg={theme().foregroundMuted}>
+            {`v${packageJson.version}`}
+          </text>
+        </box>
       </box>
 
       {/* Spacer */}
       <box height={1} />
 
-      {/* Footer hint — version left, q quit right; matches main footer style */}
+      {/* Footer hint — q quit right-aligned */}
       <box flexDirection="row" width={63} height={1}>
-        <text flexShrink={0} wrapMode="none" fg={theme().foregroundMuted}>
-          {`v${packageJson.version}`}
-        </text>
         <box flexGrow={1} />
         <text flexShrink={0} wrapMode="none" fg={theme().foreground}>
           q
