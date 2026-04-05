@@ -1,4 +1,5 @@
 import { createEffect, createSignal, onCleanup, Show } from "solid-js";
+import packageJson from "../../package.json";
 import { useAppState } from "../context/state";
 import { useTheme } from "../context/theme";
 
@@ -53,6 +54,12 @@ export default function Footer(props: Readonly<{ searchFocused?: boolean; filter
       </text>
       <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
         {loadingLabel()}
+      </text>
+      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+        {"  "}
+      </text>
+      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+        {`v${packageJson.version}`}
       </text>
 
       {/* Spacer pushes hints right */}

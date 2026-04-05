@@ -1,7 +1,6 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer } from "@opentui/solid";
 import { batch, createEffect, createSignal, onCleanup, onMount, Show } from "solid-js";
-import packageJson from "../package.json";
 import CommitDetailView from "./components/detail";
 import type { DetailNavRef } from "./components/detail-types";
 import DiffBlameDialog from "./components/dialogs/diff-blame-dialog";
@@ -603,9 +602,6 @@ function AppContent(props: Readonly<AppProps>) {
                     </text>
                   </Show>
                   <box flexGrow={1} />
-                  <text flexShrink={0} wrapMode="none" fg={themeState.theme().foregroundMuted}>
-                    codepulse v{packageJson.version}
-                  </text>
                 </box>
               </box>
 
