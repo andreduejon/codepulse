@@ -1,12 +1,15 @@
 import { useKeyboard, useRenderer } from "@opentui/solid";
 import { For } from "solid-js";
+import packageJson from "../../package.json";
 import { useTheme } from "../context/theme";
 
 /**
- * Each logo segment: [text, colorType]
- *   "code"   → theme.foregroundMuted  (dimmed CODE letters: c, o, d, e)
- *   "pulse"  → theme.foreground       (bright PULSE letters: p, u, l, s, e)
- *   "shadow" → theme.border           (half-block edge shadows: ▌ ▀ ▛)
+ * codepulse logo — lowercase, dual-tone blocks with half-block shadows.
+ *
+ * each logo segment: [text, colorType]
+ *   "code"   → theme.foregroundMuted
+ *   "pulse"  → theme.accent
+ *   "shadow" → theme.border
  *   "space"  → transparent spacer
  */
 type ColorType = "code" | "pulse" | "shadow" | "space";
@@ -14,195 +17,145 @@ type Seg = [string, ColorType];
 type LogoRow = Seg[];
 
 /**
- * CODEPULSE logo — lowercase, dual-tone with half-block shadows.
  *
- * Rows transcribed directly from user's design:
- *
- * row0:                  ▒▒▌
- * row1: ▒▒▒▒▒▒▌▒▒▒▒▒▒▌▒▒▒▒▒▒▌▒▒▒▒▒▒▌▒▒▒▒▒▒▌▒▒▌ ▒▒▌▒▒▌    ▒▒▒▒▒▒▌▒▒▒▒▒▒▌
- * row2: ▒▒▌    ▒▒▌ ▒▒▌▒▒▌ ▒▒▌▒▒▌ ▒▒▌▒▒▌ ▒▒▌▒▒▌ ▒▒▌▒▒▌    ▒▒▌    ▒▒▌ ▒▒▌
- * row3: ▒▒▌    ▒▒▌ ▒▒▌▒▒▌ ▒▒▌▒▒▛▀▀▀ ▒▒▌ ▒▒▌▒▒▌ ▒▒▌▒▒▌    ▀▀▀▀▒▒▌▒▒▀▀▀▀
- * row4: ▒▒▒▒▒▒▌▒▒▒▒▒▒▌▒▒▒▒▒▒▌▒▒████▌▒▒▒▒▒▒▌▒▒▒▒▒▒▌▒▒▒▒▒▒▌▒▒▒▒▒▒▌▒▒▒▒▒▒▌
- * row5:                                 ▒▒
- *
- * Letter widths (from row1): c=7, o=7, d=7, e=7, p=7, u=5+gap, l=5+gap, s=7+gap, e=7
- * Split point: CODE = first 4 letters (c,o,d,e), PULSE = last 5 (p,u,l,s,e)
- * 'd' ascender aligns at 4-space indent; 'p' descender aligns at 28-space indent
  */
-
-// Each row is expressed as literal string slices with their color type.
-// We split at the CODE/PULSE boundary character-by-character to apply colors.
-
-// Row 0: 'd' ascender only — aligns under the start of 'd' (4 spaces indent)
 const ROW0: LogoRow = [
-  ["    ", "space"], // 4 spaces to align under 'd' start
-  ["▒▒", "code"],
+  ["                  ", "space"],
+  ["██", "code"],
   ["▌", "shadow"],
 ];
 
-// Row 1: top bars — no spaces between letters
-// c(7) o(7) d(7) e(7) | p(7) u(5) gap(1) l(3) gap(4) s(7) e(7)
-// From user: ▒▒▒▒▒▒▌▒▒▒▒▒▒▌▒▒▒▒▒▒▌▒▒▒▒▒▒▌▒▒▒▒▒▒▌▒▒▌ ▒▒▌▒▒▌    ▒▒▒▒▒▒▌▒▒▒▒▒▒▌
 const ROW1: LogoRow = [
-  // CODE: c o d e
-  ["▒▒▒▒▒▒", "code"],
+  ["██████", "code"],
   ["▌", "shadow"],
-  ["▒▒▒▒▒▒", "code"],
+  ["██████", "code"],
   ["▌", "shadow"],
-  ["▒▒▒▒▒▒", "code"],
+  ["██████", "code"],
   ["▌", "shadow"],
-  ["▒▒▒▒▒▒", "code"],
+  ["██████", "code"],
   ["▌", "shadow"],
-  // PULSE: p u (gap) l (gap) s e
-  ["▒▒▒▒▒▒", "pulse"],
+  ["██████", "pulse"],
   ["▌", "shadow"],
-  ["▒▒", "pulse"],
+  ["██", "pulse"],
   ["▌", "shadow"],
   [" ", "space"],
-  ["▒▒", "pulse"],
+  ["██", "pulse"],
   ["▌", "shadow"],
-  ["▒▒", "pulse"],
+  ["██", "pulse"],
   ["▌", "shadow"],
   ["    ", "space"],
-  ["▒▒▒▒▒▒", "pulse"],
+  ["██████", "pulse"],
   ["▌", "shadow"],
-  ["▒▒▒▒▒▒", "pulse"],
+  ["██████", "pulse"],
   ["▌", "shadow"],
 ];
 
-// Row 2: side verts
-// From user: ▒▒▌    ▒▒▌ ▒▒▌▒▒▌ ▒▒▌▒▒▌ ▒▒▌▒▒▌ ▒▒▌▒▒▌ ▒▒▌▒▒▌    ▒▒▌    ▒▒▌ ▒▒▌
 const ROW2: LogoRow = [
-  // c: left vert + 4 spaces
-  ["▒▒", "code"],
+  ["██", "code"],
   ["▌", "shadow"],
   ["    ", "space"],
-  // o: left vert + space + right vert
-  ["▒▒", "code"],
+  ["██", "code"],
   ["▌", "shadow"],
   [" ", "space"],
-  ["▒▒", "code"],
+  ["██", "code"],
   ["▌", "shadow"],
-  // d: left vert + space + right vert
-  ["▒▒", "code"],
-  ["▌", "shadow"],
-  [" ", "space"],
-  ["▒▒", "code"],
-  ["▌", "shadow"],
-  // e: left vert + space + right vert (counter open)
-  ["▒▒", "code"],
+  ["██", "code"],
   ["▌", "shadow"],
   [" ", "space"],
-  ["▒▒", "code"],
+  ["██", "code"],
   ["▌", "shadow"],
-  // p: left vert + space + right vert
-  ["▒▒", "pulse"],
-  ["▌", "shadow"],
-  [" ", "space"],
-  ["▒▒", "pulse"],
-  ["▌", "shadow"],
-  // u: left vert + space + right vert
-  ["▒▒", "pulse"],
+  ["██", "code"],
   ["▌", "shadow"],
   [" ", "space"],
-  ["▒▒", "pulse"],
+  ["██", "code"],
   ["▌", "shadow"],
-  // l: left vert + 4 spaces
-  ["▒▒", "pulse"],
+  ["██", "pulse"],
+  ["▌", "shadow"],
+  [" ", "space"],
+  ["██", "pulse"],
+  ["▌", "shadow"],
+  ["██", "pulse"],
+  ["▌", "shadow"],
+  [" ", "space"],
+  ["██", "pulse"],
+  ["▌", "shadow"],
+  ["██", "pulse"],
   ["▌", "shadow"],
   ["    ", "space"],
-  // s: left vert only + 4 spaces
-  ["▒▒", "pulse"],
+  ["██", "pulse"],
   ["▌", "shadow"],
   ["    ", "space"],
-  // e: left vert + space + right vert
-  ["▒▒", "pulse"],
+  ["██", "pulse"],
   ["▌", "shadow"],
   [" ", "space"],
-  ["▒▒", "pulse"],
+  ["██", "pulse"],
   ["▌", "shadow"],
 ];
 
-// Row 3: mid row — 'e' opens with ▛▀▀▀, 's' flips with ▀▀▀▀
-// From user: ▒▒▌    ▒▒▌ ▒▒▌▒▒▌ ▒▒▌▒▒▛▀▀▀ ▒▒▌ ▒▒▌▒▒▌ ▒▒▌▒▒▌    ▀▀▀▀▒▒▌▒▒▀▀▀▀
 const ROW3: LogoRow = [
-  // c: left vert + 4 spaces
-  ["▒▒", "code"],
+  ["██", "code"],
   ["▌", "shadow"],
   ["    ", "space"],
-  // o: left vert + space + right vert
-  ["▒▒", "code"],
+  ["██", "code"],
   ["▌", "shadow"],
   [" ", "space"],
-  ["▒▒", "code"],
+  ["██", "code"],
   ["▌", "shadow"],
-  // d: left vert + space + right vert
-  ["▒▒", "code"],
-  ["▌", "shadow"],
-  [" ", "space"],
-  ["▒▒", "code"],
-  ["▌", "shadow"],
-  // e: left vert + ▛▀▀▀ (counter opens — no right vert)
-  ["▒▒", "code"],
-  ["▛▀▀▀", "shadow"],
-  // p: space + left vert + space + right vert
-  [" ", "space"],
-  ["▒▒", "pulse"],
+  ["██", "code"],
   ["▌", "shadow"],
   [" ", "space"],
-  ["▒▒", "pulse"],
+  ["██", "code"],
   ["▌", "shadow"],
-  // u: left vert + space + right vert
-  ["▒▒", "pulse"],
+  ["██", "code"],
+  ["▀▀▀▀", "code"],
+  ["▘", "shadow"],
+  ["██", "pulse"],
   ["▌", "shadow"],
   [" ", "space"],
-  ["▒▒", "pulse"],
+  ["██", "pulse"],
   ["▌", "shadow"],
-  // l: left vert + 4 spaces
-  ["▒▒", "pulse"],
+  ["██", "pulse"],
+  ["▌", "shadow"],
+  [" ", "space"],
+  ["██", "pulse"],
+  ["▌", "shadow"],
+  ["██", "pulse"],
   ["▌", "shadow"],
   ["    ", "space"],
-  // s: ▀▀▀▀ flip (pulse body color) + right vert
   ["▀▀▀▀", "pulse"],
-  ["▒▒", "pulse"],
+  ["██", "pulse"],
   ["▌", "shadow"],
-  // e: left vert + ▀▀▀▀ (counter closes at top) + trailing space to match row width
-  ["▒▒", "pulse"],
-  ["▀▀▀▀", "shadow"],
-  [" ", "space"],
+  ["██", "pulse"],
+  ["▀▀▀▀", "pulse"],
+  ["▘", "shadow"],
 ];
 
-// Row 4: bottom bars — no spaces between letters
-// From user: ▒▒▒▒▒▒▌▒▒▒▒▒▒▌▒▒▒▒▒▒▌▒▒████▌▒▒▒▒▒▒▌▒▒▒▒▒▒▌▒▒▒▒▒▒▌▒▒▒▒▒▒▌▒▒▒▒▒▒▌
 const ROW4: LogoRow = [
-  // CODE: c o d
-  ["▒▒▒▒▒▒", "code"],
+  ["██████", "code"],
   ["▌", "shadow"],
-  ["▒▒▒▒▒▒", "code"],
+  ["██████", "code"],
   ["▌", "shadow"],
-  ["▒▒▒▒▒▒", "code"],
+  ["██████", "code"],
   ["▌", "shadow"],
-  // e: ▒▒ CODE + ████ CODE (same letter, all muted)
-  ["▒▒", "code"],
+  ["██", "code"],
   ["████", "code"],
   ["▌", "shadow"],
-  // PULSE: p u l s e
-  ["▒▒▒▒▒▒", "pulse"],
+  ["██████", "pulse"],
   ["▌", "shadow"],
-  ["▒▒▒▒▒▒", "pulse"],
+  ["██████", "pulse"],
   ["▌", "shadow"],
-  ["▒▒▒▒▒▒", "pulse"],
+  ["██████", "pulse"],
   ["▌", "shadow"],
-  ["▒▒▒▒▒▒", "pulse"],
+  ["██████", "pulse"],
   ["▌", "shadow"],
-  ["▒▒▒▒▒▒", "pulse"],
+  ["██████", "pulse"],
   ["▌", "shadow"],
 ];
 
-// Row 5: 'p' descender only — 'p' starts at char 28 in row4 (c+o+d+e = 4×7 = 28)
 const ROW5: LogoRow = [
-  ["                            ", "space"], // 28 spaces
-  ["▒▒", "pulse"],
+  ["                            ", "space"],
+  ["██", "pulse"],
+  ["▌", "shadow"],
 ];
 
 const LOGO_ROWS: LogoRow[] = [ROW0, ROW1, ROW2, ROW3, ROW4, ROW5];
@@ -227,7 +180,7 @@ export default function ErrorScreen(props: Readonly<ErrorScreenProps>) {
       case "code":
         return theme().foregroundMuted;
       case "pulse":
-        return theme().foreground;
+        return theme().accent;
       case "shadow":
         return theme().border;
       case "space":
@@ -266,7 +219,7 @@ export default function ErrorScreen(props: Readonly<ErrorScreenProps>) {
       {/* Spacer */}
       <box height={2} />
 
-      {/* Error section — same style as search section, width matches logo (~63 chars) */}
+      {/* Error section — width matches logo (63 chars) */}
       <box
         width={63}
         flexDirection="column"
@@ -279,18 +232,26 @@ export default function ErrorScreen(props: Readonly<ErrorScreenProps>) {
       >
         <For each={errorLines()}>
           {(line: string, i: () => number) => (
-            <text wrapMode="none" fg={i() === 0 ? theme().foreground : theme().foregroundMuted}>
+            <text wrapMode="word" fg={i() === 0 ? theme().foreground : theme().foregroundMuted}>
               {line}
             </text>
           )}
         </For>
+        {/* 1-row spacer + version right-aligned */}
+        <box height={1} />
+        <box flexDirection="row">
+          <box flexGrow={1} />
+          <text flexShrink={0} wrapMode="none" fg={theme().foregroundMuted}>
+            {`codepulse v${packageJson.version}`}
+          </text>
+        </box>
       </box>
 
       {/* Spacer */}
-      <box height={2} />
+      <box height={1} />
 
       {/* Footer hint — right-aligned, same key/desc split as main footer */}
-      <box flexDirection="row" width="100%" height={1}>
+      <box flexDirection="row" width={63} height={1}>
         <box flexGrow={1} />
         <text flexShrink={0} wrapMode="none" fg={theme().foreground}>
           q

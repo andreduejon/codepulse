@@ -18,7 +18,7 @@ export async function main() {
   let startupError: string | undefined;
 
   if (!existsSync(opts.repoPath)) {
-    startupError = `Directory does not exist:\n  ${opts.repoPath}`;
+    startupError = `Directory does not exist:\n  ${opts.repoPath}\n\nCheck the path and try again:\n  codepulse /path/to/repo`;
   } else if (!(await isGitAvailable())) {
     startupError = `git is not installed or not on PATH\n\nInstall git: https://git-scm.com/downloads`;
   } else if (!(await isGitRepo(opts.repoPath))) {
