@@ -7,10 +7,9 @@ import { useTheme } from "../context/theme";
  *   "code"   → theme.foregroundMuted  (dimmed CODE letters: c, o, d, e)
  *   "pulse"  → theme.foreground       (bright PULSE letters: p, u, l, s, e)
  *   "shadow" → theme.border           (half-block edge shadows: ▌ ▀ ▛)
- *   "trans"  → theme.foreground       (CODE→PULSE transition blocks ████ in first 'e')
  *   "space"  → transparent spacer
  */
-type ColorType = "code" | "pulse" | "shadow" | "trans" | "space";
+type ColorType = "code" | "pulse" | "shadow" | "space";
 type Seg = [string, ColorType];
 type LogoRow = Seg[];
 
@@ -28,15 +27,15 @@ type LogoRow = Seg[];
  *
  * Letter widths (from row1): c=7, o=7, d=7, e=7, p=7, u=5+gap, l=5+gap, s=7+gap, e=7
  * Split point: CODE = first 4 letters (c,o,d,e), PULSE = last 5 (p,u,l,s,e)
+ * 'd' ascender aligns at 4-space indent; 'p' descender aligns at 28-space indent
  */
 
 // Each row is expressed as literal string slices with their color type.
 // We split at the CODE/PULSE boundary character-by-character to apply colors.
 
-// Row 0: 'd' ascender only — 'd' starts at char 14 in row1 (c=7+o=7 = 14)
-// row1 chars 0-6=c, 7-13=o, 14-20=d, 21-27=e — so 'd' ascender is at offset 14
+// Row 0: 'd' ascender only — aligns under the start of 'd' (4 spaces indent)
 const ROW0: LogoRow = [
-  ["              ", "space"], // 14 spaces to align under 'd' start
+  ["    ", "space"], // 4 spaces to align under 'd' start
   ["▒▒", "code"],
   ["▌", "shadow"],
 ];
@@ -163,8 +162,8 @@ const ROW3: LogoRow = [
   ["▒▒", "pulse"],
   ["▌", "shadow"],
   ["    ", "space"],
-  // s: ▀▀▀▀ flip + right vert
-  ["▀▀▀▀", "shadow"],
+  // s: ▀▀▀▀ flip (pulse body color) + right vert
+  ["▀▀▀▀", "pulse"],
   ["▒▒", "pulse"],
   ["▌", "shadow"],
   // e: left vert + ▀▀▀▀ (counter closes at top) + trailing space to match row width
@@ -183,9 +182,9 @@ const ROW4: LogoRow = [
   ["▌", "shadow"],
   ["▒▒▒▒▒▒", "code"],
   ["▌", "shadow"],
-  // e: ▒▒ CODE + ████ PULSE transition
+  // e: ▒▒ CODE + ████ CODE (same letter, all muted)
   ["▒▒", "code"],
-  ["████", "trans"],
+  ["████", "code"],
   ["▌", "shadow"],
   // PULSE: p u l s e
   ["▒▒▒▒▒▒", "pulse"],
@@ -231,8 +230,6 @@ export default function ErrorScreen(props: Readonly<ErrorScreenProps>) {
         return theme().foreground;
       case "shadow":
         return theme().border;
-      case "trans":
-        return theme().foreground;
       case "space":
         return theme().backgroundPanel;
     }
@@ -292,10 +289,16 @@ export default function ErrorScreen(props: Readonly<ErrorScreenProps>) {
       {/* Spacer */}
       <box height={2} />
 
-      {/* Footer hint */}
-      <text wrapMode="none" fg={theme().foregroundMuted}>
-        q quit
-      </text>
+      {/* Footer hint — right-aligned, same key/desc split as main footer */}
+      <box flexDirection="row" width="100%" height={1}>
+        <box flexGrow={1} />
+        <text flexShrink={0} wrapMode="none" fg={theme().foreground}>
+          q
+        </text>
+        <text flexShrink={0} wrapMode="none" fg={theme().foregroundMuted}>
+          {" quit"}
+        </text>
+      </box>
     </box>
   );
 }
