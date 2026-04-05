@@ -212,7 +212,7 @@ export async function getBranches(repoPath: string, signal?: AbortSignal): Promi
       [
         "branch",
         "-a",
-        `--format=%(HEAD)${RS}%(refname:short)${RS}%(objectname:short)${RS}%(upstream:short)${RS}%(upstream:track,nobracket)${RS}%(symref)`,
+        `--format=%(HEAD)${RS}%(refname:short)${RS}%(objectname)${RS}%(upstream:short)${RS}%(upstream:track,nobracket)${RS}%(symref)`,
       ],
       signal,
     ),

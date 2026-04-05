@@ -394,9 +394,9 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     let addW = 0;
     let delW = 0;
     for (const item of branchItems()) {
-      if (item.kind !== "branch") continue;
-      if (item.ahead != null && item.ahead > 0) addW = Math.max(addW, `↑${item.ahead}`.length);
-      if (item.behind != null && item.behind > 0) delW = Math.max(delW, `↓${item.behind}`.length);
+      if (item.kind !== "branch" || item.upstream == null) continue;
+      addW = Math.max(addW, `↑${item.ahead ?? 0}`.length);
+      delW = Math.max(delW, `↓${item.behind ?? 0}`.length);
     }
     return { addColWidth: addW, delColWidth: delW };
   });
@@ -761,8 +761,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
                 // --- Branch list entry (full-width name, with optional ahead/behind columns) ---
                 if (item.kind === "branch") {
                   const isSel = () => selectedItemIndex() === itemIndex();
-                  const hasTracking = () =>
-                    (item.ahead != null && item.ahead > 0) || (item.behind != null && item.behind > 0);
+                  const hasTracking = () => item.upstream != null;
                   return (
                     <box
                       ref={(el: Renderable) => {
@@ -786,12 +785,8 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
                       {hasTracking() ? (
                         <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
                           {"  "}
-                          {item.ahead != null && item.ahead > 0
-                            ? `↑${item.ahead}`.padStart(branchTrackWidths().addColWidth)
-                            : " ".repeat(branchTrackWidths().addColWidth)}{" "}
-                          {item.behind != null && item.behind > 0
-                            ? `↓${item.behind}`.padStart(branchTrackWidths().delColWidth)
-                            : " ".repeat(branchTrackWidths().delColWidth)}
+                          {`↑${item.ahead ?? 0}`.padStart(branchTrackWidths().addColWidth)}{" "}
+                          {`↓${item.behind ?? 0}`.padStart(branchTrackWidths().delColWidth)}
                         </text>
                       ) : null}
                     </box>

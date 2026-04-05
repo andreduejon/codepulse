@@ -129,6 +129,16 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     return remote?.name ?? null;
   };
 
+  /**
+   * Look up upstream tracking info for a local branch name.
+   * Returns null when the branch has no upstream configured.
+   */
+  const branchTracking = (name: string) => {
+    const b = state.branches().find(br => !br.isRemote && br.name === name);
+    if (!b?.upstream) return null;
+    return { upstream: b.upstream, ahead: b.ahead ?? 0, behind: b.behind ?? 0 };
+  };
+
   // Whether to show committer info (only when different from author)
   const showCommitter = () => {
     const c = commit();
@@ -902,7 +912,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
               <text fg={t().accent} wrapMode="none">
                 <strong>Branch</strong>
               </text>
-              <box flexDirection="row" flexWrap="wrap" gap={1}>
+              <box flexDirection="column">
                 <Show
                   when={branchRefs().length > 0}
                   fallback={
@@ -917,21 +927,56 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                         );
                       })()}
                     >
-                      <DetailBadge name={r().branchName} colorIndex={nodeColorIndex()} />
-                      <Show when={remoteName()}>
-                        <DetailBadge name={remoteName() as string} colorIndex={nodeColorIndex()} />
-                      </Show>
+                      {/* Graph-inferred branch: local badge, optional remote badge, right-aligned tracking */}
+                      <box flexDirection="row" width="100%">
+                        <DetailBadge name={r().branchName} colorIndex={nodeColorIndex()} />
+                        {(() => {
+                          const tr = branchTracking(r().branchName);
+                          if (!tr) {
+                            // No tracking — show remote badge if present
+                            const rn = remoteName();
+                            return rn ? <DetailBadge name={rn} colorIndex={nodeColorIndex()} /> : null;
+                          }
+                          return (
+                            <>
+                              <box flexGrow={1} />
+                              <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                                {`↑${tr.ahead} ↓${tr.behind}`}
+                              </text>
+                            </>
+                          );
+                        })()}
+                      </box>
                     </Show>
                   }
                 >
-                  <For each={branchRefs()}>
-                    {ref => (
-                      <DetailBadge
-                        name={ref.name}
-                        colorIndex={nodeColorIndex()}
-                        dimmed={ref.type === "stash" || ref.type === "uncommitted"}
-                      />
-                    )}
+                  {/* Sort: locals first, remotes after */}
+                  <For
+                    each={[
+                      ...branchRefs().filter(r => r.type !== "remote"),
+                      ...branchRefs().filter(r => r.type === "remote"),
+                    ]}
+                  >
+                    {ref => {
+                      const tr = ref.type === "branch" ? branchTracking(ref.name) : null;
+                      return (
+                        <box flexDirection="row" width="100%">
+                          <DetailBadge
+                            name={ref.name}
+                            colorIndex={nodeColorIndex()}
+                            dimmed={ref.type === "stash" || ref.type === "uncommitted"}
+                          />
+                          {tr ? (
+                            <>
+                              <box flexGrow={1} />
+                              <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                                {`↑${tr.ahead} ↓${tr.behind}`}
+                              </text>
+                            </>
+                          ) : null}
+                        </box>
+                      );
+                    }}
                   </For>
                 </Show>
               </box>
