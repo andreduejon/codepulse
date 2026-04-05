@@ -191,73 +191,69 @@ export default function ErrorScreen(props: Readonly<ErrorScreenProps>) {
   const errorLines = () => props.error.split("\n");
 
   return (
-    <box
-      width="100%"
-      height="100%"
-      flexDirection="column"
-      justifyContent="center"
-      alignItems="center"
-      backgroundColor={theme().backgroundPanel}
-    >
-      {/* Logo */}
-      <box flexDirection="column" alignItems="flex-start" backgroundColor={theme().backgroundPanel}>
-        <For each={LOGO_ROWS}>
-          {(row: LogoRow) => (
-            <box flexDirection="row">
-              <For each={row}>
-                {(seg: Seg) => (
-                  <text wrapMode="none" fg={fgFor(seg[1])}>
-                    {seg[0]}
-                  </text>
-                )}
-              </For>
-            </box>
-          )}
-        </For>
-      </box>
+    <box width="100%" height="100%" flexDirection="column" backgroundColor={theme().backgroundPanel}>
+      {/* Centered content area */}
+      <box flexGrow={1} flexDirection="column" justifyContent="center" alignItems="center">
+        {/* Logo */}
+        <box flexDirection="column" alignItems="flex-start" backgroundColor={theme().backgroundPanel}>
+          <For each={LOGO_ROWS}>
+            {(row: LogoRow) => (
+              <box flexDirection="row">
+                <For each={row}>
+                  {(seg: Seg) => (
+                    <text wrapMode="none" fg={fgFor(seg[1])}>
+                      {seg[0]}
+                    </text>
+                  )}
+                </For>
+              </box>
+            )}
+          </For>
+        </box>
 
-      {/* Spacer */}
-      <box height={2} />
+        {/* Spacer */}
+        <box height={2} />
 
-      {/* Error section — width matches logo (63 chars) */}
-      <box
-        width={63}
-        flexDirection="column"
-        backgroundColor={theme().background}
-        paddingX={2}
-        paddingY={1}
-        border={["left"]}
-        borderStyle="single"
-        borderColor={theme().error}
-      >
-        <For each={errorLines()}>
-          {(line: string, i: () => number) => (
-            <text wrapMode="word" fg={i() === 0 ? theme().foreground : theme().foregroundMuted}>
-              {line}
-            </text>
-          )}
-        </For>
-        {/* 1-row spacer + version bottom-right, subtle — mirrors detail panel placement */}
+        {/* Error section — width matches logo (63 chars) */}
+        <box
+          width={63}
+          flexDirection="column"
+          backgroundColor={theme().background}
+          paddingX={2}
+          paddingY={1}
+          border={["left"]}
+          borderStyle="single"
+          borderColor={theme().error}
+        >
+          <For each={errorLines()}>
+            {(line: string, i: () => number) => (
+              <text wrapMode="word" fg={i() === 0 ? theme().foreground : theme().foregroundMuted}>
+                {line}
+              </text>
+            )}
+          </For>
+        </box>
+
+        {/* Spacer */}
         <box height={1} />
-        <box flexDirection="row">
+
+        {/* Footer hint — q quit right-aligned */}
+        <box flexDirection="row" width={63} height={1}>
           <box flexGrow={1} />
+          <text flexShrink={0} wrapMode="none" fg={theme().foreground}>
+            q
+          </text>
           <text flexShrink={0} wrapMode="none" fg={theme().foregroundMuted}>
-            {`v${packageJson.version}`}
+            {" quit"}
           </text>
         </box>
       </box>
 
-      {/* Spacer */}
-      <box height={1} />
-
-      {/* Footer hint — q quit right-aligned */}
-      <box flexDirection="row" width={63} height={1}>
+      {/* Version — absolute bottom-right, 1 row from bottom, 1 col from right */}
+      <box flexDirection="row" width="100%" height={1} paddingRight={1}>
         <box flexGrow={1} />
-        <text flexShrink={0} wrapMode="none" fg={theme().foreground}>
-          q
-        </text>
         <text flexShrink={0} wrapMode="none" fg={theme().foregroundMuted}>
-          {" quit"}
+          {`v${packageJson.version}`}
         </text>
       </box>
     </box>
