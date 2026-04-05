@@ -32,6 +32,17 @@ interface KeyboardNavigationOptions {
  *
  * Handles: dialog toggles (m, Ctrl+T, ?), escape/q cascade,
  * detail panel navigation, graph list navigation, and search focus.
+ *
+ * ## Search Phases
+ *
+ * **Phase 1 (typing)**: search bar focused, `searchConfirmed = false`.
+ * The display shows the two-zone context window (anchor row pinned at top,
+ * h-line divider, then all matches below). All keys except Escape and Enter
+ * pass through to the input.
+ *
+ * **Phase 2 (browsing)**: search bar defocused, `searchConfirmed = true`.
+ * The display shows only matching rows. Arrow keys navigate between matches.
+ * Right arrow opens the detail panel. Esc clears the filter.
  */
 export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
   const {
@@ -52,16 +63,16 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
   const renderer = useRenderer();
 
   /**
-   * Clear the search filter and keep the cursor on the currently selected
-   * commit. Finds the current commit's position in the full (unfiltered)
-   * graph and scrolls to it via pendingScrollHash (which polls until Yoga
-   * layout is ready for newly rendered rows).
+   * Clear the search filter entirely and restore the cursor to its pre-search
+   * position (or keep the currently selected commit in Phase 2).
    */
-  const clearFilterKeepPosition = () => {
-    const hash = state.selectedCommit()?.hash;
+  const clearFilterAndRestore = (restoreHash?: string) => {
     clearSearchDebounce();
     setSearchInputValue("");
     actions.setSearchQuery("");
+    actions.setSearchConfirmed(false);
+    actions.setPreSearchCursorHash(null);
+    const hash = restoreHash;
     if (hash) {
       const rows = state.graphRows();
       const idx = rows.findIndex(r => r.commit.hash === hash);
@@ -71,6 +82,37 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         return;
       }
     }
+    actions.setCursorIndex(0);
+    actions.setScrollTargetIndex(0);
+  };
+
+  /**
+   * Open the search bar (Phase 1). Saves the current cursor position
+   * as the anchor for the three-zone context window.
+   */
+  const openSearch = () => {
+    const currentHash = state.selectedCommit()?.hash ?? null;
+    actions.setPreSearchCursorHash(currentHash);
+    actions.setSearchConfirmed(false);
+    actions.setDetailFocused(false);
+    // Pre-fill with the current active query (empty if no filter)
+    setSearchInputValue(state.searchQuery());
+    setSearchFocused(true);
+  };
+
+  /**
+   * Confirm the search (Enter from Phase 1 → Phase 2).
+   * Defocuses the search bar and positions the cursor on the first match
+   * (index 0) in the filtered list.
+   */
+  const confirmSearch = () => {
+    const matches = state.searchMatchRows();
+    if (matches.length === 0) return; // nothing to confirm
+
+    setSearchFocused(false);
+    actions.setSearchConfirmed(true);
+
+    // Always go to the first (top) match
     actions.setCursorIndex(0);
     actions.setScrollTargetIndex(0);
   };
@@ -109,9 +151,9 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         return;
       }
       if (searchFocused()) {
-        // Close search bar, clear filter, keep cursor on current commit.
+        // Phase 1: close search bar, clear filter, restore pre-search cursor
         setSearchFocused(false);
-        clearFilterKeepPosition();
+        clearFilterAndRestore(state.preSearchCursorHash() ?? undefined);
         return;
       }
       if (state.detailFocused()) {
@@ -119,8 +161,9 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         return;
       }
       if (state.searchQuery()) {
-        // Graph focused + filter active: clear filter, keep cursor position
-        clearFilterKeepPosition();
+        // Phase 2 (graph focused + filter active): clear filter, keep cursor
+        // on the currently selected commit
+        clearFilterAndRestore(state.selectedCommit()?.hash ?? undefined);
         return;
       }
       if (state.viewingBranch()) {
@@ -142,7 +185,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         return;
       }
       if (state.searchQuery()) {
-        clearFilterKeepPosition();
+        clearFilterAndRestore(state.selectedCommit()?.hash ?? undefined);
         return;
       }
       if (state.viewingBranch()) {
@@ -157,27 +200,15 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
       renderer.destroy();
     }
 
-    // Arrow keys while search bar is focused: defocus search and navigate.
-    // Up/down move the graph cursor; right jumps to the detail panel.
-    if ((e.name === "up" || e.name === "down") && searchFocused()) {
+    // Enter while search bar is focused: confirm search → Phase 2
+    if (e.name === "return" && searchFocused()) {
       e.preventDefault();
-      setSearchFocused(false);
-      const delta = e.name === "down" ? 1 : -1;
-      actions.moveCursor(e.shift ? delta * SHIFT_JUMP : delta);
-      return;
-    }
-    if (e.name === "right" && searchFocused()) {
-      e.preventDefault();
-      setSearchFocused(false);
-      if (state.selectedCommit()) {
-        detailNavRef.pendingJumpDirection = null;
-        actions.setDetailCursorIndex(0);
-        actions.setDetailFocused(true);
-      }
+      confirmSearch();
       return;
     }
 
-    // If search input is focused, let the input handle all other keys
+    // All other keys while search bar is focused: let the input handle them.
+    // This includes arrow keys (text cursor navigation), backspace, etc.
     if (searchFocused()) return;
 
     // If a dialog is open, only handle Escape/q/m/? (handled above)
@@ -279,9 +310,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
           return;
         case "/":
           e.preventDefault();
-          actions.setDetailFocused(false);
-          setSearchInputValue(state.searchQuery());
-          setSearchFocused(true);
+          openSearch();
           return;
       }
       return; // swallow all other keys when detail is focused
@@ -340,10 +369,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         break;
       case "/":
         e.preventDefault();
-        actions.setDetailFocused(false);
-        // Pre-fill with the current active query (empty if no filter)
-        setSearchInputValue(state.searchQuery());
-        setSearchFocused(true);
+        openSearch();
         break;
       case "r":
         // Shift+R = Reload

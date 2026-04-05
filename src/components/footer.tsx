@@ -64,22 +64,16 @@ export default function Footer(props: Readonly<{ searchFocused?: boolean; filter
         fallback={
           <>
             <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-              {"\u2191/\u2193"}
+              enter
             </text>
             <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-              {" navigate  "}
-            </text>
-            <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-              {"\u2192"}
-            </text>
-            <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-              {" detail  "}
+              {" confirm  "}
             </text>
             <text flexShrink={0} wrapMode="none" fg={t().foreground}>
               esc
             </text>
             <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-              {props.filterActive ? " clear" : " back"}
+              {" cancel"}
             </text>
           </>
         }

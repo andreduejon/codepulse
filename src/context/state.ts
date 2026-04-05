@@ -27,7 +27,18 @@ export interface AppState {
   selectedRow: Accessor<GraphRow | null>;
   commitDetail: Accessor<CommitDetail | null>;
   searchQuery: Accessor<string>;
+  /** Whether the user has confirmed the search (Enter). Phase 1 = false, Phase 2 = true. */
+  searchConfirmed: Accessor<boolean>;
+  /** The commit hash that was selected when the user pressed `/` to open search. */
+  preSearchCursorHash: Accessor<string | null>;
+  /** All rows matching the current search (independent of confirmed state). */
+  searchMatchRows: Accessor<GraphRow[]>;
   filteredRows: Accessor<GraphRow[]>;
+  /**
+   * True during Phase 1 (search open, not yet confirmed): a single h-line divider
+   * should be drawn after row 0 (the anchor/cursor row). False otherwise.
+   */
+  searchShowDivider: Accessor<boolean>;
   scrollTargetIndex: Accessor<number>;
   /** Commit hash to scroll into view after layout settles (e.g. after filter clear). */
   pendingScrollHash: Accessor<string | null>;
@@ -66,6 +77,8 @@ export interface AppActions {
   setLoading: (loading: boolean) => void;
   setShowAllBranches: (show: boolean) => void;
   setSearchQuery: (query: string) => void;
+  setSearchConfirmed: (confirmed: boolean) => void;
+  setPreSearchCursorHash: (hash: string | null) => void;
   setDetailFocused: (focused: boolean) => void;
   setDetailCursorIndex: (index: number) => void;
   moveDetailCursor: (delta: number, itemCount: number) => void;
@@ -92,6 +105,22 @@ export interface AppActions {
 
 const AppStateContext = createContext<{ state: AppState; actions: AppActions }>();
 
+/**
+ * Pure function: compute the two-zone row layout for Phase 1 search.
+ *   [cursor/anchor row] + [all matches in graph order]
+ *
+ * The anchor row is always first (pinned). Matches that happen to be the
+ * anchor are deduplicated (excluded from the matches list below it).
+ * Exported for direct unit testing.
+ */
+export function computeTwoZoneRows(matches: GraphRow[], anchorRow: GraphRow | null): GraphRow[] {
+  if (!anchorRow) return matches;
+  const anchorHash = anchorRow.commit.hash;
+  // Anchor first, then all matches that aren't the anchor (preserve graph order)
+  const rest = matches.filter(m => m.commit.hash !== anchorHash);
+  return [anchorRow, ...rest];
+}
+
 export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, initialAutoRefreshInterval?: number) {
   // ── Repository data ───────────────────────────────────────────────
   const [commits, setCommits] = createSignal<Commit[]>([]);
@@ -109,6 +138,8 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
   const [pendingScrollHash, setPendingScrollHash] = createSignal<string | null>(null);
   const [commitDetail, setCommitDetail] = createSignal<CommitDetail | null>(null);
   const [searchQuery, setSearchQuery] = createSignal("");
+  const [searchConfirmed, setSearchConfirmed] = createSignal(false);
+  const [preSearchCursorHash, setPreSearchCursorHash] = createSignal<string | null>(null);
   const [viewingBranch, setViewingBranch] = createSignal<string | null>(null);
 
   // ── Detail panel ──────────────────────────────────────────────────
@@ -131,6 +162,8 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
   const [lastFetchTime, setLastFetchTime] = createSignal<Date | null>(null);
   const [fetching, setFetching] = createSignal(false);
 
+  // ── Search memos ──────────────────────────────────────────────────
+
   // Memoize parsed search separately so regex compilation only happens when
   // the query text changes, not on every graphRows update (e.g. auto-refresh).
   const parsedSearch = createMemo(() => {
@@ -138,11 +171,38 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
     return query ? parseSearchQuery(query) : null;
   });
 
-  const filteredRows = createMemo(() => {
+  // All rows matching the current search query (independent of confirmed state).
+  const searchMatchRows = createMemo(() => {
     const parsed = parsedSearch();
-    if (!parsed) return graphRows();
+    if (!parsed) return [];
     return graphRows().filter(row => matchCommit(row.commit, parsed));
   });
+
+  // The cursor row from the full graph, identified by preSearchCursorHash.
+  const preSearchCursorRow = createMemo(() => {
+    const hash = preSearchCursorHash();
+    if (!hash) return null;
+    const rows = graphRows();
+    return rows.find(r => r.commit.hash === hash) ?? null;
+  });
+
+  /**
+   * Two-zone filtered rows for Phase 1 (typing, not confirmed).
+   * Delegates to the pure `computeTwoZoneRows` function.
+   */
+  const twoZoneRows = createMemo(() => computeTwoZoneRows(searchMatchRows(), preSearchCursorRow()));
+
+  const filteredRows = createMemo(() => {
+    const query = searchQuery();
+    if (!query) return graphRows();
+    // Phase 2 (confirmed): show only matching rows
+    if (searchConfirmed()) return searchMatchRows();
+    // Phase 1 (typing): anchor row first, then all matches
+    return twoZoneRows();
+  });
+
+  // True in Phase 1 (query active, not confirmed): show h-line divider after row 0.
+  const searchShowDivider = createMemo(() => !!(searchQuery() && !searchConfirmed()));
 
   const selectedCommit = createMemo(() => {
     const rows = filteredRows();
@@ -187,7 +247,11 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
     loading,
     showAllBranches,
     searchQuery,
+    searchConfirmed,
+    preSearchCursorHash,
+    searchMatchRows,
     filteredRows,
+    searchShowDivider,
     maxGraphColumns,
     maxCount,
     autoRefreshInterval,
@@ -213,6 +277,8 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
     setLoading,
     setShowAllBranches,
     setSearchQuery,
+    setSearchConfirmed,
+    setPreSearchCursorHash,
     setDetailFocused,
     setDetailCursorIndex,
     moveDetailCursor,

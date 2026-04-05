@@ -448,11 +448,22 @@ function AppContent(props: Readonly<AppProps>) {
   };
 
   // Clamp cursor index when filtered results shrink (e.g. search narrowing).
-  // Without this, cursorIndex can exceed filteredRows.length, causing
-  // selectedCommit() to return null and leaving the detail panel stale.
+  // In Phase 1 (typing, not confirmed), pin the cursor to row 0 (the anchor).
+  // In Phase 2 / no search, clamp normally.
   createEffect(() => {
     const rows = state.filteredRows();
     const idx = state.cursorIndex();
+
+    // Phase 1: pin cursor to row 0 (anchor row is always first)
+    if (state.searchShowDivider()) {
+      if (idx !== 0) {
+        actions.setCursorIndex(0);
+        actions.setScrollTargetIndex(0);
+      }
+      return;
+    }
+
+    // Phase 2 / no search: standard clamping
     if (rows.length === 0) {
       if (idx !== 0) {
         actions.setCursorIndex(0);

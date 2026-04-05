@@ -451,6 +451,12 @@ function GraphLine(
 /** Sort order for ref badges: tags first, then branches, remotes, HEAD last. */
 const REF_SORT_ORDER: Record<string, number> = { tag: 0, branch: 1, remote: 2, stash: 3, uncommitted: 4, head: 5 };
 
+/** Horizontal divider line for the two-zone search context window. */
+function SearchDivider() {
+  const { theme } = useTheme();
+  return <box width="100%" border={["top"]} borderStyle="single" borderColor={theme().border} />;
+}
+
 export default function GraphView() {
   const { state, actions } = useAppState();
 
@@ -576,12 +582,17 @@ export default function GraphView() {
         <Show when={!state.loading()}>
           <For each={state.filteredRows()}>
             {(row, index) => {
+              const showDivider = () => state.searchShowDivider();
+
               const showGapBelow = () => {
-                // Only show gap separators between non-adjacent filtered rows
+                // Only show gap separators between non-adjacent filtered rows.
+                // In Phase 1, suppress the gap below row 0 (the h-line handles it).
                 if (!state.searchQuery()) return false;
                 const rows = state.filteredRows();
                 const i = index();
                 if (i >= rows.length - 1) return false;
+                // In Phase 1, the h-line after row 0 replaces the gap there
+                if (showDivider() && i === 0) return false;
                 const nextRow = rows[i + 1];
                 // Check distance in the original unfiltered graph — adjacent
                 // means their positions differ by exactly 1.
@@ -590,6 +601,7 @@ export default function GraphView() {
                 const nextOrigIdx = idxMap.get(nextRow.commit.hash) ?? -1;
                 return nextOrigIdx - currentOrigIdx !== 1;
               };
+
               // Capture the element ref so we can reactively update rowRefs
               // when <For> reindexes this element (e.g. after filter clear).
               // Ref callbacks only fire on creation; this effect re-runs
@@ -599,18 +611,23 @@ export default function GraphView() {
                 if (elRef) rowRefs[index()] = elRef;
               });
               return (
-                <GraphLine
-                  row={row}
-                  index={index()}
-                  active={isActive(index())}
-                  isLast={index() === state.filteredRows().length - 1}
-                  showGapBelow={showGapBelow()}
-                  viewportOffset={viewportOffset}
-                  rowRef={el => {
-                    elRef = el;
-                    rowRefs[index()] = el;
-                  }}
-                />
+                <>
+                  <GraphLine
+                    row={row}
+                    index={index()}
+                    active={isActive(index())}
+                    isLast={index() === state.filteredRows().length - 1}
+                    showGapBelow={showGapBelow()}
+                    viewportOffset={viewportOffset}
+                    rowRef={el => {
+                      elRef = el;
+                      rowRefs[index()] = el;
+                    }}
+                  />
+                  <Show when={showDivider() && index() === 0}>
+                    <SearchDivider />
+                  </Show>
+                </>
               );
             }}
           </For>
