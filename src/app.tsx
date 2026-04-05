@@ -1,8 +1,7 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer } from "@opentui/solid";
 import { batch, createEffect, createSignal, onCleanup, onMount, Show } from "solid-js";
-import packageJson from "../package.json";
-import CommitDetailView from "./components/detail";
+import DetailPanel from "./components/detail-panel";
 import type { DetailNavRef } from "./components/detail-types";
 import DiffBlameDialog from "./components/dialogs/diff-blame-dialog";
 import HelpDialog from "./components/dialogs/help-dialog";
@@ -11,7 +10,6 @@ import ThemeDialog from "./components/dialogs/theme-dialog";
 import ErrorScreen from "./components/error-screen";
 import Footer from "./components/footer";
 import GraphView, { ColumnHeader } from "./components/graph";
-import UncommittedDetailView from "./components/uncommitted-detail";
 import type { ConfigInfo } from "./config";
 import { DEFAULT_MAX_COUNT, UNCOMMITTED_HASH } from "./constants";
 import { AppStateContext, createAppState } from "./context/state";
@@ -613,111 +611,15 @@ function AppContent(props: Readonly<AppProps>) {
 
             {/* Detail panel - right (width must match DETAIL_PANEL_WIDTH_FRACTION in constants.ts) */}
             <box flexDirection="column" width="25%" minWidth={60} flexShrink={0} paddingX={2} paddingBottom={1}>
-              {/* Tab bar with top accent line per selected tab */}
-              <box flexDirection="row" width="100%" flexShrink={0}>
-                {(() => {
-                  const commit = state.selectedCommit();
-                  const isUncommitted = commit?.hash === UNCOMMITTED_HASH;
-                  const ud = state.uncommittedDetail();
-                  const cd = state.commitDetail();
-                  const tabs = isUncommitted
-                    ? [
-                        {
-                          id: "unstaged",
-                          label: `Unstaged${ud ? ` (${ud.unstaged.length})` : ""}`,
-                          disabled: ud ? ud.unstaged.length === 0 : false,
-                        },
-                        {
-                          id: "staged",
-                          label: `Staged${ud ? ` (${ud.staged.length})` : ""}`,
-                          disabled: ud ? ud.staged.length === 0 : false,
-                        },
-                        {
-                          id: "untracked",
-                          label: `Untracked${ud ? ` (${ud.untracked.length})` : ""}`,
-                          disabled: ud ? ud.untracked.length === 0 : false,
-                        },
-                      ]
-                    : [
-                        {
-                          id: "files",
-                          label: `Files${cd?.files ? ` (${cd.files.length})` : ""}`,
-                          disabled: cd ? cd.files.length === 0 : false,
-                        },
-                        ...(state.stashByParent().has(commit?.hash ?? "")
-                          ? [
-                              {
-                                id: "stashes",
-                                label: `Stashes (${state.stashByParent().get(commit?.hash ?? "")?.length ?? 0})`,
-                                disabled: false,
-                              },
-                            ]
-                          : []),
-                        { id: "detail", label: "Details", disabled: false },
-                      ];
-                  return tabs.map(tab => {
-                    const isActive = state.detailActiveTab() === tab.id;
-                    const t = themeState.theme();
-                    const detailActive = isActive && state.detailFocused() && !searchFocused();
-                    const lineColor = tab.disabled
-                      ? t.border
-                      : detailActive
-                        ? t.accent
-                        : isActive
-                          ? t.foregroundMuted
-                          : t.border;
-                    const textColor = tab.disabled ? t.border : detailActive ? t.accent : t.foregroundMuted;
-                    return (
-                      <box
-                        flexGrow={1}
-                        justifyContent="center"
-                        flexDirection="row"
-                        border={["top"]}
-                        borderStyle="single"
-                        borderColor={lineColor}
-                      >
-                        <text flexShrink={0} wrapMode="none" fg={textColor}>
-                          <strong>{tab.label}</strong>
-                        </text>
-                      </box>
-                    );
-                  });
-                })()}
-              </box>
-              {/* Muted separator below tabs */}
-              <box width="100%" border={["top"]} borderStyle="single" borderColor={themeState.theme().border} />
-
-              <scrollbox
-                ref={detailScrollboxRef}
-                flexGrow={1}
-                scrollY
-                scrollX={false}
-                verticalScrollbarOptions={{ visible: false }}
-              >
-                <Show
-                  when={state.selectedCommit()?.hash !== UNCOMMITTED_HASH}
-                  fallback={
-                    <UncommittedDetailView
-                      onJumpToCommit={handleJumpToCommit}
-                      onOpenDiff={handleOpenDiff}
-                      navRef={detailNavRef}
-                    />
-                  }
-                >
-                  <CommitDetailView
-                    onJumpToCommit={handleJumpToCommit}
-                    onOpenDiff={handleOpenDiff}
-                    navRef={detailNavRef}
-                  />
-                </Show>
-              </scrollbox>
-              {/* Version — bottom-right of detail panel, subtle */}
-              <box flexDirection="row" width="100%">
-                <box flexGrow={1} />
-                <text flexShrink={0} wrapMode="none" fg={themeState.theme().foregroundMuted}>
-                  {`v${packageJson.version}`}
-                </text>
-              </box>
+              <DetailPanel
+                scrollboxRef={el => {
+                  detailScrollboxRef = el;
+                }}
+                navRef={detailNavRef}
+                searchFocused={searchFocused()}
+                onJumpToCommit={handleJumpToCommit}
+                onOpenDiff={handleOpenDiff}
+              />
             </box>
           </box>
 
