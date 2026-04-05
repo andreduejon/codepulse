@@ -256,6 +256,7 @@ export default function ErrorScreen(props: Readonly<ErrorScreenProps>) {
           {`v${packageJson.version}`}
         </text>
       </box>
+      <box height={1} />
     </box>
   );
 }
