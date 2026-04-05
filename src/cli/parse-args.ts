@@ -44,13 +44,20 @@ export function parseArgs(argv: string[]): CliOptions {
         all = false;
         break;
       case "--max-count":
-      case "-n":
+      case "-n": {
         if (i + 1 >= args.length) {
           console.error(`${arg} requires a value`);
           process.exit(1);
         }
-        maxCount = Math.max(1, parseInt(args[++i], 10) || 200);
+        const raw = args[++i];
+        const parsed = parseInt(raw, 10);
+        if (Number.isNaN(parsed) || parsed < 1) {
+          console.error(`${arg} must be a positive integer, got: ${raw}`);
+          process.exit(1);
+        }
+        maxCount = parsed;
         break;
+      }
       case "--theme":
         if (i + 1 >= args.length) {
           console.error(`${arg} requires a value`);

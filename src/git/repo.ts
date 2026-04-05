@@ -632,6 +632,25 @@ export async function getRemoteUrl(repoPath: string, signal?: AbortSignal): Prom
   }
 }
 
+/**
+ * Check whether the `git` binary is available on PATH.
+ * Distinguishes "git not installed" from "not a git repo".
+ */
+export async function isGitAvailable(): Promise<boolean> {
+  try {
+    const proc = Bun.spawn(["git", "--version"], {
+      cwd: process.cwd(),
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    await proc.exited;
+    return (proc.exitCode ?? 1) === 0;
+  } catch {
+    // ENOENT — git binary not found on PATH
+    return false;
+  }
+}
+
 export async function isGitRepo(path: string): Promise<boolean> {
   const { exitCode } = await runGit(path, ["rev-parse", "--is-inside-work-tree"]);
   return exitCode === 0;

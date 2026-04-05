@@ -8,6 +8,7 @@ import DiffBlameDialog from "./components/dialogs/diff-blame-dialog";
 import HelpDialog from "./components/dialogs/help-dialog";
 import MenuDialog from "./components/dialogs/menu-dialog";
 import ThemeDialog from "./components/dialogs/theme-dialog";
+import ErrorScreen from "./components/error-screen";
 import Footer from "./components/footer";
 import GraphView, { ColumnHeader } from "./components/graph";
 import UncommittedDetailView from "./components/uncommitted-detail";
@@ -40,6 +41,7 @@ interface AppProps {
   themeName?: string;
   autoRefreshInterval?: number;
   configInfo?: ConfigInfo;
+  startupError?: string;
 }
 
 function AppContent(props: Readonly<AppProps>) {
@@ -751,5 +753,15 @@ function AppContent(props: Readonly<AppProps>) {
 }
 
 export default function App(props: Readonly<AppProps>) {
+  const themeState = createThemeState(props.themeName);
+
+  if (props.startupError) {
+    return (
+      <themeState.ThemeContext.Provider value={themeState}>
+        <ErrorScreen error={props.startupError} />
+      </themeState.ThemeContext.Provider>
+    );
+  }
+
   return <AppContent {...props} />;
 }
