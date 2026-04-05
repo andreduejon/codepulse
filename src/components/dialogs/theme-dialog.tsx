@@ -14,7 +14,8 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void }>) {
   const { theme, setTheme, themeName } = useTheme();
   const t = () => theme();
   const dimensions = useTerminalDimensions();
-  const dialogWidth = () => Math.min(50, dimensions().width - 4);
+  const dialogWidth = () => 72;
+  const dialogHeight = () => Math.min(themeOptions.length + 9, dimensions().height - 8);
 
   // Remember the original theme to revert on cancel
   const originalTheme = themeName();
@@ -65,7 +66,7 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void }>) {
     <DialogOverlay>
       <box
         width={dialogWidth()}
-        height={themeOptions.length + 9}
+        height={dialogHeight()}
         backgroundColor={t().backgroundPanel}
         flexDirection="column"
         paddingX={1}
@@ -73,30 +74,36 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void }>) {
       >
         <DialogTitleBar title="Color Theme" />
 
-        {/* Theme list */}
-        <box flexDirection="column" flexGrow={1}>
-          <For each={themeOptions}>
-            {(opt, optIndex) => {
-              const isSelected = () => cursor() === optIndex();
+        {/* Theme list — scrollable when terminal height is small */}
+        <scrollbox flexGrow={1} scrollY scrollX={false} verticalScrollbarOptions={{ visible: false }}>
+          <box flexDirection="column">
+            <For each={themeOptions}>
+              {(opt, optIndex) => {
+                const isSelected = () => cursor() === optIndex();
 
-              return (
-                <box
-                  flexDirection="row"
-                  width="100%"
-                  paddingX={4}
-                  backgroundColor={isSelected() ? t().backgroundElement : undefined}
-                >
-                  <text flexGrow={1} wrapMode="none" fg={isSelected() ? t().accent : t().foreground}>
-                    {opt.name}
-                  </text>
-                  <text flexShrink={0} wrapMode="none" fg={isSelected() ? themes[opt.key].accent : t().backgroundPanel}>
-                    {isSelected() ? "  █" : "   "}
-                  </text>
-                </box>
-              );
-            }}
-          </For>
-        </box>
+                return (
+                  <box
+                    flexDirection="row"
+                    width="100%"
+                    paddingX={4}
+                    backgroundColor={isSelected() ? t().backgroundElement : undefined}
+                  >
+                    <text flexGrow={1} wrapMode="none" fg={isSelected() ? t().accent : t().foreground}>
+                      {opt.name}
+                    </text>
+                    <text
+                      flexShrink={0}
+                      wrapMode="none"
+                      fg={isSelected() ? themes[opt.key].accent : t().backgroundPanel}
+                    >
+                      {isSelected() ? "  █" : "   "}
+                    </text>
+                  </box>
+                );
+              }}
+            </For>
+          </box>
+        </scrollbox>
 
         {/* Navigation footer */}
         <DialogFooter>

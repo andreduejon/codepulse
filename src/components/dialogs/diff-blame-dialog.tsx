@@ -207,7 +207,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
   });
 
   // ── Dialog sizing ──────────────────────────────────────────────────
-  const dialogWidth = createMemo(() => Math.min(Math.max(40, Math.floor(dimensions().width * 0.85)), MAX_DIALOG_WIDTH));
+  const dialogWidth = createMemo(() => Math.min(Math.max(72, Math.floor(dimensions().width * 0.85)), MAX_DIALOG_WIDTH));
 
   // ── Windowed rendering ─────────────────────────────────────────────
   // Track scroll position reactively via the scrollbar's "change" event.
@@ -257,7 +257,8 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
    * terminal height for tall diffs. Falls back to max height while loading.
    */
   const dialogHeight = createMemo(() => {
-    const maxH = Math.max(10, Math.floor(dimensions().height * 0.9));
+    const cap = dimensions().height - 8;
+    const maxH = Math.min(Math.max(10, Math.floor(dimensions().height * 0.9)), cap);
     const rows = totalRows();
     // rows === 0 means loading / binary / empty — use full height
     if (rows === 0) return maxH;

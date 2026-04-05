@@ -78,7 +78,8 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   const { theme, themeName, setTheme } = useTheme();
   const t = () => theme();
   const dimensions = useTerminalDimensions();
-  const dialogWidth = () => Math.min(70, dimensions().width - 4);
+  const dialogWidth = () => 72;
+  const dialogHeight = () => Math.min(Math.floor(dimensions().height * 0.7), dimensions().height - 8);
 
   // ── Tab state ─────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = createSignal<MenuTab>(lastMenuTab());
@@ -578,7 +579,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     <DialogOverlay>
       <box
         width={dialogWidth()}
-        height="70%"
+        height={dialogHeight()}
         backgroundColor={t().backgroundPanel}
         flexDirection="column"
         paddingX={1}
