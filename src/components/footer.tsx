@@ -46,91 +46,94 @@ export default function Footer(props: Readonly<{ searchFocused?: boolean; filter
   const enterAction = () => (state.detailFocused() ? state.detailCursorAction() : null);
 
   return (
-    <box flexDirection="row" width="100%" height={1}>
-      {/* Loading indicator — always present to avoid layout shift, left-aligned */}
-      <text flexShrink={0} wrapMode="none" fg={t().accent}>
-        {spinnerChar()}
-      </text>
-      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-        {loadingLabel()}
-      </text>
+    <>
+      <box flexDirection="row" width="100%" height={1}>
+        {/* Loading indicator — always present to avoid layout shift, left-aligned */}
+        <text flexShrink={0} wrapMode="none" fg={t().accent}>
+          {spinnerChar()}
+        </text>
+        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+          {loadingLabel()}
+        </text>
 
-      {/* Spacer pushes hints right */}
-      <box flexGrow={1} />
+        {/* Spacer pushes hints right */}
+        <box flexGrow={1} />
 
-      {/* Keyboard hints — context-dependent on search focus state */}
-      <Show
-        when={!props.searchFocused}
-        fallback={
-          <>
-            <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-              enter
-            </text>
-            <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-              {" confirm  "}
-            </text>
+        {/* Keyboard hints — context-dependent on search focus state */}
+        <Show
+          when={!props.searchFocused}
+          fallback={
+            <>
+              <text flexShrink={0} wrapMode="none" fg={t().foreground}>
+                enter
+              </text>
+              <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                {" confirm  "}
+              </text>
+              <text flexShrink={0} wrapMode="none" fg={t().foreground}>
+                esc
+              </text>
+              <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                {" cancel"}
+              </text>
+            </>
+          }
+        >
+          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
+            {enterAction() ? "enter" : ""}
+          </text>
+          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+            {enterAction() ? ` ${enterAction()}  ` : ""}
+          </text>
+          <Show when={state.detailFocused()}>
             <text flexShrink={0} wrapMode="none" fg={t().foreground}>
               esc
             </text>
             <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-              {" cancel"}
+              {" back  "}
             </text>
-          </>
-        }
-      >
-        <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-          {enterAction() ? "enter" : ""}
-        </text>
-        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-          {enterAction() ? ` ${enterAction()}  ` : ""}
-        </text>
-        <Show when={state.detailFocused()}>
+          </Show>
+          <Show when={props.filterActive && !state.detailFocused()}>
+            <text flexShrink={0} wrapMode="none" fg={t().foreground}>
+              esc
+            </text>
+            <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+              {" clear  "}
+            </text>
+          </Show>
           <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            esc
+            {"\u2190/\u2192"}
           </text>
           <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {" back  "}
+            {" switch tab  "}
           </text>
-        </Show>
-        <Show when={props.filterActive && !state.detailFocused()}>
           <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            esc
+            {"\u2191/\u2193"}
           </text>
           <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {" clear  "}
+            {" navigate  "}
+          </text>
+          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
+            /
+          </text>
+          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+            {" search  "}
+          </text>
+          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
+            m
+          </text>
+          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+            {" menu  "}
+          </text>
+          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
+            ?
+          </text>
+          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+            {" help"}
           </text>
         </Show>
-        <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-          {"\u2190/\u2192"}
-        </text>
-        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-          {" switch tab  "}
-        </text>
-        <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-          {"\u2191/\u2193"}
-        </text>
-        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-          {" navigate  "}
-        </text>
-        <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-          /
-        </text>
-        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-          {" search  "}
-        </text>
-        <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-          m
-        </text>
-        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-          {" menu  "}
-        </text>
-        <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-          ?
-        </text>
-        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-          {" help"}
-        </text>
-      </Show>
-    </box>
+      </box>
+      <box height={1} />
+    </>
   );
 }
