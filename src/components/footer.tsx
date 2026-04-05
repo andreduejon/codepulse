@@ -6,7 +6,9 @@ import { useTheme } from "../context/theme";
 const SPINNER_FRAMES = ["\u28FE", "\u28FD", "\u28FB", "\u28BF", "\u287F", "\u283F", "\u28EF", "\u28F7"];
 const SPINNER_FRAME_MS = 120;
 
-export default function Footer(props: Readonly<{ searchFocused?: boolean; filterActive?: boolean }>) {
+export default function Footer(
+  props: Readonly<{ searchFocused?: boolean; filterActive?: boolean; compact?: boolean }>,
+) {
   const { theme } = useTheme();
   const t = () => theme();
   const { state } = useAppState();
@@ -101,12 +103,26 @@ export default function Footer(props: Readonly<{ searchFocused?: boolean; filter
               {" clear  "}
             </text>
           </Show>
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            {"\u2190/\u2192"}
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {" switch tab  "}
-          </text>
+          <Show
+            when={!props.compact}
+            fallback={
+              <>
+                <text flexShrink={0} wrapMode="none" fg={t().foreground}>
+                  enter
+                </text>
+                <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                  {" details  "}
+                </text>
+              </>
+            }
+          >
+            <text flexShrink={0} wrapMode="none" fg={t().foreground}>
+              {"\u2190/\u2192"}
+            </text>
+            <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+              {" switch tab  "}
+            </text>
+          </Show>
           <text flexShrink={0} wrapMode="none" fg={t().foreground}>
             {"\u2191/\u2193"}
           </text>

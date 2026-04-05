@@ -1,8 +1,9 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
-import { useRenderer } from "@opentui/solid";
-import { batch, createEffect, createSignal, onCleanup, onMount, Show } from "solid-js";
-import DetailPanel from "./components/detail-panel";
+import { useRenderer, useTerminalDimensions } from "@opentui/solid";
+import { batch, createEffect, createMemo, createSignal, onCleanup, onMount, Show } from "solid-js";
+import DetailPanel, { type DetailPanelProps } from "./components/detail-panel";
 import type { DetailNavRef } from "./components/detail-types";
+import { DialogOverlay, DialogTitleBar } from "./components/dialogs/dialog-chrome";
 import DiffBlameDialog from "./components/dialogs/diff-blame-dialog";
 import HelpDialog from "./components/dialogs/help-dialog";
 import MenuDialog from "./components/dialogs/menu-dialog";
@@ -11,9 +12,15 @@ import ErrorScreen from "./components/error-screen";
 import Footer from "./components/footer";
 import GraphView, { ColumnHeader } from "./components/graph";
 import type { ConfigInfo } from "./config";
-import { DEFAULT_MAX_COUNT, UNCOMMITTED_HASH } from "./constants";
+import {
+  COMPACT_THRESHOLD_WIDTH,
+  DEFAULT_MAX_COUNT,
+  MIN_TERMINAL_HEIGHT,
+  MIN_TERMINAL_WIDTH,
+  UNCOMMITTED_HASH,
+} from "./constants";
 import { AppStateContext, createAppState } from "./context/state";
-import { createThemeState, ThemeContext } from "./context/theme";
+import { createThemeState, ThemeContext, useTheme } from "./context/theme";
 import { buildGraph, getMaxGraphColumns } from "./git/graph";
 import {
   fetchRemote,
@@ -42,12 +49,42 @@ interface AppProps {
   startupError?: string;
 }
 
+/** Detail dialog used in compact mode — wraps DetailPanel in a full-height overlay. */
+function DetailDialog(props: Readonly<DetailPanelProps & { onClose: () => void }>) {
+  const dimensions = useTerminalDimensions();
+  const { theme } = useTheme();
+  const dialogWidth = () => Math.min(72, dimensions().width - 8);
+  const dialogHeight = () => dimensions().height - 8;
+
+  return (
+    <DialogOverlay>
+      <box
+        flexDirection="column"
+        width={dialogWidth()}
+        height={dialogHeight()}
+        backgroundColor={theme().backgroundPanel}
+        paddingX={1}
+        paddingY={1}
+      >
+        <DialogTitleBar title="Commit Details" />
+        <DetailPanel
+          scrollboxRef={props.scrollboxRef}
+          navRef={props.navRef}
+          searchFocused={props.searchFocused}
+          onJumpToCommit={props.onJumpToCommit}
+          onOpenDiff={props.onOpenDiff}
+        />
+      </box>
+    </DialogOverlay>
+  );
+}
+
 function AppContent(props: Readonly<AppProps>) {
   const { state, actions } = createAppState(props.maxCount ?? DEFAULT_MAX_COUNT, props.autoRefreshInterval);
   const themeState = createThemeState(props.themeName);
   const renderer = useRenderer();
 
-  const [dialog, setDialog] = createSignal<"menu" | "help" | "theme" | "diff-blame" | null>(null);
+  const [dialog, setDialog] = createSignal<"menu" | "help" | "theme" | "diff-blame" | "detail" | null>(null);
   const [searchFocused, setSearchFocused] = createSignal(false);
   /**
    * Local input value for the search bar — independent of the active filter.
@@ -56,6 +93,32 @@ function AppContent(props: Readonly<AppProps>) {
   const [searchInputValue, setSearchInputValue] = createSignal("");
   /** Target for the diff+blame dialog (set when user activates a file). */
   const [diffTarget, setDiffTarget] = createSignal<DiffTarget | null>(null);
+
+  // Reactive terminal dimensions for adaptive layout
+  const dimensions = useTerminalDimensions();
+
+  /** Derived layout mode based on terminal size. */
+  const layoutMode = createMemo((): "too-small" | "compact" | "normal" => {
+    const { width, height } = dimensions();
+    if (width < MIN_TERMINAL_WIDTH || height < MIN_TERMINAL_HEIGHT) return "too-small";
+    if (width < COMPACT_THRESHOLD_WIDTH) return "compact";
+    return "normal";
+  });
+
+  // Seamless resize transitions between layout modes:
+  // - Normal → Compact while detail is focused: auto-open the detail dialog
+  // - Compact → Normal while detail dialog is open: close dialog, restore panel focus
+  createEffect(() => {
+    const mode = layoutMode();
+    if (mode === "compact" && state.detailFocused()) {
+      setDialog("detail");
+      actions.setDetailFocused(false);
+    } else if (mode === "normal" && dialog() === "detail") {
+      setDialog(null);
+      actions.setDetailFocused(true);
+    }
+  });
+
   // Ref for programmatic scrolling of the detail panel
   let detailScrollboxRef: ScrollBoxRenderable | undefined;
 
@@ -498,6 +561,7 @@ function AppContent(props: Readonly<AppProps>) {
     actions,
     dialog,
     setDialog,
+    layoutMode,
     searchFocused,
     setSearchFocused,
     setSearchInputValue,
@@ -517,101 +581,158 @@ function AppContent(props: Readonly<AppProps>) {
       }}
     >
       <AppStateContext.Provider value={{ state, actions }}>
-        <box flexDirection="column" width="100%" height="100%" backgroundColor={themeState.theme().background}>
-          {/* Main content area */}
-          <box flexDirection="row" flexGrow={1}>
-            {/* Left panel - graph + search + footer, all on grey background */}
-            <box
-              flexDirection="column"
-              flexGrow={1}
-              flexShrink={1}
-              backgroundColor={themeState.theme().backgroundPanel}
-              paddingX={2}
-            >
-              {/* Graph area */}
-              <box flexDirection="column" flexGrow={1} paddingBottom={1}>
-                {/* Sticky column headers - above scrollbox */}
-                <ColumnHeader />
-
-                <GraphView />
-              </box>
-
-              {/* Search section — left accent border, same padding as graph */}
+        <Show
+          when={layoutMode() !== "too-small"}
+          fallback={
+            <ErrorScreen
+              error={`Terminal too small (${dimensions().width}\u00d7${dimensions().height})\n\nResize to at least ${MIN_TERMINAL_WIDTH} columns and ${MIN_TERMINAL_HEIGHT} rows.`}
+            />
+          }
+        >
+          <box flexDirection="column" width="100%" height="100%" backgroundColor={themeState.theme().background}>
+            {/* Main content area */}
+            <box flexDirection="row" flexGrow={1}>
+              {/* Left panel - graph + search + footer, all on grey background */}
               <box
-                width="100%"
-                minHeight={5}
-                backgroundColor={themeState.theme().background}
-                paddingX={2}
-                paddingY={1}
                 flexDirection="column"
-                border={["left"]}
-                borderStyle="single"
-                borderColor={!state.detailFocused() ? themeState.theme().accent : themeState.theme().border}
+                flexGrow={1}
+                flexShrink={1}
+                backgroundColor={themeState.theme().backgroundPanel}
+                paddingX={2}
               >
-                {/* Search input + result count */}
-                <box flexGrow={1} flexDirection="row">
-                  <input
-                    focused={searchFocused()}
-                    flexGrow={1}
-                    placeholder="Search commits..."
-                    value={searchInputValue()}
-                    onInput={handleSearchInput}
-                    fg={themeState.theme().foreground}
-                    placeholderColor={themeState.theme().foregroundMuted}
-                    backgroundColor={themeState.theme().background}
-                  />
-                  <text
-                    flexShrink={0}
-                    wrapMode="none"
-                    fg={
-                      state.searchQuery() && state.filteredRows().length === 0
-                        ? themeState.theme().error
-                        : themeState.theme().foregroundMuted
-                    }
-                  >
-                    {"  "}
-                    {state.searchQuery()
-                      ? `${state.filteredRows().length} / ${state.graphRows().length}`
-                      : `${state.graphRows().length}`}
-                  </text>
+                {/* Graph area */}
+                <box flexDirection="column" flexGrow={1} paddingBottom={1}>
+                  {/* Sticky column headers - above scrollbox */}
+                  <ColumnHeader />
+
+                  <GraphView />
                 </box>
 
-                <box height={1} />
-
-                {/* Git label + repo path : branch + version */}
-                <box flexDirection="row" width="100%">
-                  <Show when={state.error()}>
-                    <text flexShrink={0} wrapMode="none" fg={themeState.theme().error}>
-                      {"error: "}
-                      {state.error()}
+                {/* Search section — left accent border, same padding as graph */}
+                <box
+                  width="100%"
+                  minHeight={5}
+                  backgroundColor={themeState.theme().background}
+                  paddingX={2}
+                  paddingY={1}
+                  flexDirection="column"
+                  border={["left"]}
+                  borderStyle="single"
+                  borderColor={!state.detailFocused() ? themeState.theme().accent : themeState.theme().border}
+                >
+                  {/* Search input + result count */}
+                  <box flexGrow={1} flexDirection="row">
+                    <input
+                      focused={searchFocused()}
+                      flexGrow={1}
+                      placeholder="Search commits..."
+                      value={searchInputValue()}
+                      onInput={handleSearchInput}
+                      fg={themeState.theme().foreground}
+                      placeholderColor={themeState.theme().foregroundMuted}
+                      backgroundColor={themeState.theme().background}
+                    />
+                    <text
+                      flexShrink={0}
+                      wrapMode="none"
+                      fg={
+                        state.searchQuery() && state.filteredRows().length === 0
+                          ? themeState.theme().error
+                          : themeState.theme().foregroundMuted
+                      }
+                    >
                       {"  "}
+                      {state.searchQuery()
+                        ? `${state.filteredRows().length} / ${state.graphRows().length}`
+                        : `${state.graphRows().length}`}
                     </text>
-                  </Show>
-                  <text flexShrink={0} wrapMode="none" fg={themeState.theme().accent}>
-                    Git
-                  </text>
-                  <text flexShrink={0} wrapMode="none" fg={themeState.theme().foregroundMuted}>
-                    {"  "}
-                    {state.repoPath() ? state.repoPath().replace(/^\/Users\/[^/]+/, "~") : ""}
-                    {state.currentBranch() ? `:${state.currentBranch()}` : ""}
-                  </text>
-                  <Show when={state.viewingBranch()}>
+                  </box>
+
+                  <box height={1} />
+
+                  {/* Git label + repo path : branch + version */}
+                  <box flexDirection="row" width="100%">
+                    <Show when={state.error()}>
+                      <text flexShrink={0} wrapMode="none" fg={themeState.theme().error}>
+                        {"error: "}
+                        {state.error()}
+                        {"  "}
+                      </text>
+                    </Show>
                     <text flexShrink={0} wrapMode="none" fg={themeState.theme().accent}>
-                      {`  [viewing: ${state.viewingBranch()}]`}
+                      Git
                     </text>
-                  </Show>
-                  <box flexGrow={1} />
+                    <text flexShrink={0} wrapMode="none" fg={themeState.theme().foregroundMuted}>
+                      {"  "}
+                      {state.repoPath() ? state.repoPath().replace(/^\/Users\/[^/]+/, "~") : ""}
+                      {state.currentBranch() ? `:${state.currentBranch()}` : ""}
+                    </text>
+                    <Show when={state.viewingBranch()}>
+                      <text flexShrink={0} wrapMode="none" fg={themeState.theme().accent}>
+                        {`  [viewing: ${state.viewingBranch()}]`}
+                      </text>
+                    </Show>
+                    <box flexGrow={1} />
+                  </box>
                 </box>
+
+                {/* Footer - hotkey hints, 1 char gap above, right-aligned */}
+                <box height={1} />
+                <Footer
+                  searchFocused={searchFocused()}
+                  filterActive={!!state.searchQuery()}
+                  compact={layoutMode() === "compact"}
+                />
               </box>
 
-              {/* Footer - hotkey hints, 1 char gap above, right-aligned */}
-              <box height={1} />
-              <Footer searchFocused={searchFocused()} filterActive={!!state.searchQuery()} />
+              {/* Detail panel - right, hidden in compact/too-small mode */}
+              <Show when={layoutMode() === "normal"}>
+                <box flexDirection="column" width="25%" minWidth={60} flexShrink={0} paddingX={2} paddingBottom={1}>
+                  <DetailPanel
+                    scrollboxRef={el => {
+                      detailScrollboxRef = el;
+                    }}
+                    navRef={detailNavRef}
+                    searchFocused={searchFocused()}
+                    onJumpToCommit={handleJumpToCommit}
+                    onOpenDiff={handleOpenDiff}
+                  />
+                </box>
+              </Show>
             </box>
 
-            {/* Detail panel - right (width must match DETAIL_PANEL_WIDTH_FRACTION in constants.ts) */}
-            <box flexDirection="column" width="25%" minWidth={60} flexShrink={0} paddingX={2} paddingBottom={1}>
-              <DetailPanel
+            {/* Dialogs */}
+            <Show when={dialog() === "menu"}>
+              <MenuDialog
+                onClose={() => setDialog(null)}
+                onReload={() => loadData()}
+                onFetch={handleFetch}
+                onOpenDialog={handleOpenDialog}
+                onViewBranch={handleViewBranch}
+                configInfo={props.configInfo}
+              />
+            </Show>
+            <Show when={dialog() === "help"}>
+              <HelpDialog onClose={() => setDialog(null)} />
+            </Show>
+            <Show when={dialog() === "theme"}>
+              <ThemeDialog onClose={() => setDialog(null)} />
+            </Show>
+            <Show when={dialog() === "diff-blame" && diffTarget()}>
+              {target => (
+                <DiffBlameDialog
+                  target={target()}
+                  onClose={() => setDialog(null)}
+                  onNavigate={t => {
+                    setDiffTarget(t);
+                    detailNavRef.scrollToFile(t.filePath);
+                  }}
+                />
+              )}
+            </Show>
+            {/* Detail dialog — compact mode only */}
+            <Show when={dialog() === "detail"}>
+              <DetailDialog
                 scrollboxRef={el => {
                   detailScrollboxRef = el;
                 }}
@@ -619,40 +740,11 @@ function AppContent(props: Readonly<AppProps>) {
                 searchFocused={searchFocused()}
                 onJumpToCommit={handleJumpToCommit}
                 onOpenDiff={handleOpenDiff}
-              />
-            </box>
-          </box>
-
-          {/* Dialogs */}
-          <Show when={dialog() === "menu"}>
-            <MenuDialog
-              onClose={() => setDialog(null)}
-              onReload={() => loadData()}
-              onFetch={handleFetch}
-              onOpenDialog={handleOpenDialog}
-              onViewBranch={handleViewBranch}
-              configInfo={props.configInfo}
-            />
-          </Show>
-          <Show when={dialog() === "help"}>
-            <HelpDialog onClose={() => setDialog(null)} />
-          </Show>
-          <Show when={dialog() === "theme"}>
-            <ThemeDialog onClose={() => setDialog(null)} />
-          </Show>
-          <Show when={dialog() === "diff-blame" && diffTarget()}>
-            {target => (
-              <DiffBlameDialog
-                target={target()}
                 onClose={() => setDialog(null)}
-                onNavigate={t => {
-                  setDiffTarget(t);
-                  detailNavRef.scrollToFile(t.filePath);
-                }}
               />
-            )}
-          </Show>
-        </box>
+            </Show>
+          </box>
+        </Show>
       </AppStateContext.Provider>
     </ThemeContext.Provider>
   );

@@ -5,13 +5,16 @@ import type { DetailNavRef } from "../components/detail-types";
 import { PAGE_JUMP, SHIFT_JUMP, UNCOMMITTED_HASH } from "../constants";
 import type { AppActions, AppState, DetailTab } from "../context/state";
 
-type DialogId = "menu" | "help" | "theme" | "diff-blame" | null;
+type DialogId = "menu" | "help" | "theme" | "diff-blame" | "detail" | null;
+type LayoutMode = "too-small" | "compact" | "normal";
 
 interface KeyboardNavigationOptions {
   state: AppState;
   actions: AppActions;
   dialog: Accessor<DialogId>;
   setDialog: (d: DialogId) => void;
+  /** Current adaptive layout mode — controls arrow key behavior and Enter in graph. */
+  layoutMode: Accessor<LayoutMode>;
   searchFocused: Accessor<boolean>;
   setSearchFocused: (v: boolean) => void;
   /** Set the local search input value (independent of the active filter). */
@@ -50,6 +53,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     actions,
     dialog,
     setDialog,
+    layoutMode,
     searchFocused,
     setSearchFocused,
     setSearchInputValue,
@@ -211,12 +215,13 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     // This includes arrow keys (text cursor navigation), backspace, etc.
     if (searchFocused()) return;
 
-    // If a dialog is open, only handle Escape/q/m/? (handled above)
-    if (dialog()) return;
+    // If a non-detail dialog is open, only handle Escape/q/m/? (handled above)
+    if (dialog() && dialog() !== "detail") return;
 
-    // Detail panel focused: up/down navigate interactive items, enter activates,
-    // left/right switch tabs (left on first tab exits detail focus)
-    if (state.detailFocused()) {
+    // Detail panel focused (or detail dialog open in compact mode):
+    // up/down navigate interactive items, enter activates,
+    // left/right switch tabs (left on first tab exits detail focus / closes dialog)
+    if (state.detailFocused() || dialog() === "detail") {
       const scrollbox = getDetailScrollboxRef();
 
       /** Get navigable (non-empty) tab IDs based on commit type */
@@ -248,8 +253,12 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
           const tabs = getAvailableTabs();
           const currentIdx = tabs.indexOf(state.detailActiveTab());
           if (currentIdx <= 0) {
-            // Already on leftmost tab (or unknown tab) — exit detail focus
-            actions.setDetailFocused(false);
+            // Already on leftmost tab — exit detail focus or close detail dialog
+            if (dialog() === "detail") {
+              setDialog(null);
+            } else {
+              actions.setDetailFocused(false);
+            }
           } else {
             actions.setDetailCursorAction(null);
             actions.setDetailActiveTab(tabs[currentIdx - 1]);
@@ -333,6 +342,8 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         resetDetailScroll();
         break;
       case "right":
+        // Disabled in compact/too-small — no side panel to enter
+        if (layoutMode() !== "normal") break;
         e.preventDefault();
         if (state.selectedCommit()) {
           detailNavRef.pendingJumpDirection = null;
@@ -341,9 +352,19 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         }
         break;
       case "left":
+        // Disabled in compact/too-small — no panel tab to re-center
+        if (layoutMode() !== "normal") break;
         e.preventDefault();
         // Re-center scroll on current cursor position
         actions.setScrollTargetIndex(state.cursorIndex());
+        break;
+      case "return":
+        // In compact mode, Enter opens the detail dialog
+        if (layoutMode() === "compact" && state.selectedCommit()) {
+          e.preventDefault();
+          actions.setDetailCursorIndex(0);
+          setDialog("detail");
+        }
         break;
       case "g":
         e.preventDefault();
