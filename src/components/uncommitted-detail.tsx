@@ -1,4 +1,4 @@
-import { useRenderer } from "@opentui/solid";
+import { useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
 import { DETAIL_PANEL_WIDTH_FRACTION } from "../constants";
 import { useAppState } from "../context/state";
@@ -30,10 +30,10 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
   const { state, actions } = useAppState();
   const { theme } = useTheme();
   const t = () => theme();
-  const renderer = useRenderer();
+  const dimensions = useTerminalDimensions();
 
   const panelUsableWidth = () =>
-    Math.max(Math.floor(renderer.width * DETAIL_PANEL_WIDTH_FRACTION), MIN_PANEL_WIDTH) - PANEL_PADDING_X;
+    Math.max(Math.floor(dimensions().width * DETAIL_PANEL_WIDTH_FRACTION), MIN_PANEL_WIDTH) - PANEL_PADDING_X;
 
   // Active tab for uncommitted node: "staged" | "unstaged" | "untracked"
   const activeTab = () => state.detailActiveTab();

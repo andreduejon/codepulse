@@ -1,5 +1,5 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
-import { useKeyboard, useRenderer } from "@opentui/solid";
+import { useKeyboard, useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, type JSX, onCleanup, Show } from "solid-js";
 import { useAppState } from "../../context/state";
 import { useTheme } from "../../context/theme";
@@ -92,7 +92,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
   const { state } = useAppState();
   const { theme } = useTheme();
   const t = () => theme();
-  const renderer = useRenderer();
+  const dimensions = useTerminalDimensions();
 
   // ── State ──────────────────────────────────────────────────────────
   const [diff, setDiff] = createSignal<FileDiff | null>(null);
@@ -207,7 +207,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
   });
 
   // ── Dialog sizing ──────────────────────────────────────────────────
-  const dialogWidth = createMemo(() => Math.min(Math.max(40, Math.floor(renderer.width * 0.85)), MAX_DIALOG_WIDTH));
+  const dialogWidth = createMemo(() => Math.min(Math.max(40, Math.floor(dimensions().width * 0.85)), MAX_DIALOG_WIDTH));
 
   // ── Windowed rendering ─────────────────────────────────────────────
   // Track scroll position reactively via the scrollbar's "change" event.
@@ -257,7 +257,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
    * terminal height for tall diffs. Falls back to max height while loading.
    */
   const dialogHeight = createMemo(() => {
-    const maxH = Math.max(10, Math.floor(renderer.height * 0.9));
+    const maxH = Math.max(10, Math.floor(dimensions().height * 0.9));
     const rows = totalRows();
     // rows === 0 means loading / binary / empty — use full height
     if (rows === 0) return maxH;

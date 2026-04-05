@@ -1,4 +1,4 @@
-import { useKeyboard } from "@opentui/solid";
+import { useKeyboard, useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createSignal, For, onCleanup } from "solid-js";
 import { SHIFT_JUMP } from "../../constants";
 import { themeNames, themes, useTheme } from "../../context/theme";
@@ -13,6 +13,8 @@ const themeOptions = themeNames.map(key => ({
 export default function ThemeDialog(props: Readonly<{ onClose: () => void }>) {
   const { theme, setTheme, themeName } = useTheme();
   const t = () => theme();
+  const dimensions = useTerminalDimensions();
+  const dialogWidth = () => Math.min(50, dimensions().width - 4);
 
   // Remember the original theme to revert on cancel
   const originalTheme = themeName();
@@ -62,7 +64,7 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void }>) {
   return (
     <DialogOverlay>
       <box
-        width={50}
+        width={dialogWidth()}
         height={themeOptions.length + 9}
         backgroundColor={t().backgroundPanel}
         flexDirection="column"

@@ -1,6 +1,6 @@
 import { homedir } from "node:os";
 import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
-import { useKeyboard } from "@opentui/solid";
+import { useKeyboard, useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, onCleanup } from "solid-js";
 import type { CodepulseConfig, ConfigInfo } from "../../config";
 import { writeConfig } from "../../config";
@@ -77,6 +77,8 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   const { state, actions } = useAppState();
   const { theme, themeName, setTheme } = useTheme();
   const t = () => theme();
+  const dimensions = useTerminalDimensions();
+  const dialogWidth = () => Math.min(70, dimensions().width - 4);
 
   // ── Tab state ─────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = createSignal<MenuTab>(lastMenuTab());
@@ -575,7 +577,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   return (
     <DialogOverlay>
       <box
-        width={70}
+        width={dialogWidth()}
         height="70%"
         backgroundColor={t().backgroundPanel}
         flexDirection="column"

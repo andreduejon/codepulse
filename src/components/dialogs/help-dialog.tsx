@@ -1,3 +1,4 @@
+import { useTerminalDimensions } from "@opentui/solid";
 import { For } from "solid-js";
 import { useTheme } from "../../context/theme";
 import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
@@ -5,6 +6,8 @@ import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 export default function HelpDialog(_props: Readonly<{ onClose: () => void }>) {
   const { theme } = useTheme();
   const t = () => theme();
+  const dimensions = useTerminalDimensions();
+  const dialogWidth = () => Math.min(60, dimensions().width - 4);
 
   const keybinds = [
     ["↑/↓", "Navigate list"],
@@ -31,7 +34,7 @@ export default function HelpDialog(_props: Readonly<{ onClose: () => void }>) {
   return (
     <DialogOverlay>
       <box
-        width={60}
+        width={dialogWidth()}
         height={keybinds.length + 5}
         backgroundColor={t().backgroundPanel}
         flexDirection="column"

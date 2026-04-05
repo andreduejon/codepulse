@@ -1,4 +1,4 @@
-import { useRenderer } from "@opentui/solid";
+import { useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import { DETAIL_PANEL_WIDTH_FRACTION, UNCOMMITTED_HASH } from "../constants";
 import { useAppState } from "../context/state";
@@ -45,7 +45,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   const { state, actions } = useAppState();
   const { theme } = useTheme();
   const t = () => theme();
-  const renderer = useRenderer();
+  const dimensions = useTerminalDimensions();
 
   const commit = () => state.selectedCommit();
   const detail = () => state.commitDetail();
@@ -75,7 +75,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   // ── Cursor-aware banner scroll for long text ──────────────────────
   // Only the currently-cursored item scrolls when its text overflows.
   const panelUsableWidth = () =>
-    Math.max(Math.floor(renderer.width * DETAIL_PANEL_WIDTH_FRACTION), MIN_PANEL_WIDTH) - PANEL_PADDING_X;
+    Math.max(Math.floor(dimensions().width * DETAIL_PANEL_WIDTH_FRACTION), MIN_PANEL_WIDTH) - PANEL_PADDING_X;
 
   // Collapsible section state — reset to expanded when commit changes
   const [childrenExpanded, setChildrenExpanded] = createSignal(true);
