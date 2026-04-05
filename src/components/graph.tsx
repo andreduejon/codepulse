@@ -1,6 +1,13 @@
 import type { Renderable, ScrollBoxRenderable, StyledText, TextRenderable } from "@opentui/core";
+import { useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSelector, createSignal, For, onCleanup, Show } from "solid-js";
-import { AUTHOR_COL_WIDTH, DATE_COL_WIDTH, HASH_COL_WIDTH } from "../constants";
+import {
+  AUTHOR_COL_WIDTH,
+  COMPACT_THRESHOLD_WIDTH,
+  DATE_COL_WIDTH,
+  DETAIL_PANEL_WIDTH_FRACTION,
+  HASH_COL_WIDTH,
+} from "../constants";
 import { useAppState } from "../context/state";
 import { useTheme } from "../context/theme";
 import {
@@ -17,6 +24,7 @@ import {
   sliceGraphToViewport,
 } from "../git/graph";
 import type { GraphRow, RefInfo } from "../git/types";
+import { useBannerScroll } from "../hooks/use-banner-scroll";
 import { formatRelativeDate } from "../utils/date";
 
 function RefBadge(
@@ -151,6 +159,7 @@ function GraphLine(
 ) {
   const { theme } = useTheme();
   const { state } = useAppState();
+  const dimensions = useTerminalDimensions();
 
   const commit = () => props.row.commit;
   const padCols = () => state.maxGraphColumns();
@@ -351,6 +360,51 @@ function GraphLine(
     return graphCharsToContent(withEdgeIndicator(sliced, false));
   };
 
+  // --- Banner scroll for the active commit's subject text ---
+
+  // Width of the ref badges area for this row (variable per row).
+  // Each badge renders as " name " (name + 2 spaces), with a gap of 1 between badges
+  // and 1 paddingRight after the badge box. Returns 0 when no refs are visible.
+  const refBadgesWidth = createMemo(() => {
+    const refs = visibleRefs();
+    if (refs.length === 0) return 0;
+    // sum of (name + 2) for each badge + (refs.length - 1) gaps + 1 paddingRight
+    return refs.reduce((acc, r) => acc + r.name.length + 2, 0) + (refs.length - 1) + 1;
+  });
+
+  // Approximate available width for the subject text in the graph panel.
+  // Graph panel takes the remaining width after the detail panel (normal mode)
+  // or the full width minus outer padding (compact mode).
+  // Fixed consumed columns: graphWidth + 1 (hash paddingLeft) + HASH_COL_WIDTH
+  //   + 1 (desc box paddingLeft) + 2 (desc box paddingRight)
+  //   + refBadgesWidth + AUTHOR_COL_WIDTH + 2 (author paddingRight) + DATE_COL_WIDTH
+  //   + 4 (left panel paddingX=2 each side)
+  const subjectAvailableWidth = createMemo(() => {
+    const W = dimensions().width;
+    const detailPanelWidth =
+      W >= COMPACT_THRESHOLD_WIDTH ? Math.max(Math.floor(W * DETAIL_PANEL_WIDTH_FRACTION), 60) + 4 : 0;
+    const graphPanelWidth = W - detailPanelWidth - 4; // 4 = left panel paddingX=2 each side
+    const fixedCols =
+      graphWidth() +
+      1 + // hash paddingLeft
+      HASH_COL_WIDTH +
+      1 + // desc box paddingLeft
+      2 + // desc box paddingRight
+      refBadgesWidth() +
+      AUTHOR_COL_WIDTH +
+      2 + // author paddingRight
+      DATE_COL_WIDTH;
+    return Math.max(0, graphPanelWidth - fixedCols);
+  });
+
+  const subjectText = () => (isUncommitted() ? "Staged and unstaged changes in working tree" : commit().subject);
+
+  const bannerOverflow = () => {
+    if (!props.active) return 0;
+    return Math.max(0, subjectText().length - subjectAvailableWidth());
+  };
+  const bannerOffset = useBannerScroll(bannerOverflow);
+
   return (
     <box
       ref={(el: Renderable) => props.rowRef?.(el)}
@@ -389,16 +443,20 @@ function GraphLine(
               <For each={visibleRefs()}>{ri => <RefBadge info={ri} laneColor={laneColor} />}</For>
             </box>
           </Show>
-          <text flexGrow={1} flexShrink={1} fg={effectiveTextColor()} wrapMode="none" truncate>
+          <text flexGrow={1} flexShrink={1} fg={effectiveTextColor()} wrapMode="none" truncate={bannerOverflow() === 0}>
             {(() => {
-              const v = isUncommitted() ? "Staged and unstaged changes in working tree" : commit().subject;
-              return props.active ? (
-                <strong>
-                  <span fg={effectiveTextColor()}>{v}</span>
-                </strong>
-              ) : (
-                v
-              );
+              const v = subjectText();
+              if (props.active) {
+                const off = bannerOffset();
+                const ov = bannerOverflow();
+                const rendered = ov > 0 ? v.substring(off, off + subjectAvailableWidth()) : v;
+                return (
+                  <strong>
+                    <span fg={effectiveTextColor()}>{rendered}</span>
+                  </strong>
+                );
+              }
+              return v;
             })()}
           </text>
         </box>
