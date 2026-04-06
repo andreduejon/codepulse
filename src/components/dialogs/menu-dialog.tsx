@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useTerminalDimensions } from "@opentui/solid";
-import { createEffect, createMemo, createSignal, For, onCleanup } from "solid-js";
+import { createEffect, createMemo, createSignal, For, type JSX, onCleanup } from "solid-js";
 import type { CodepulseConfig, ConfigInfo } from "../../config";
 import { writeConfig } from "../../config";
 import { DEFAULT_MAX_COUNT, SHIFT_JUMP } from "../../constants";
@@ -526,6 +526,205 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     return item.get();
   };
 
+  // ── Item renderers ─────────────────────────────────────────────────
+  // Each function renders one SettingItem kind, closing over component-level
+  // reactive state (t, selectedItemIndex, itemRefs, etc.).
+
+  const renderHeader = (item: Extract<SettingItem, { kind: "header" }>, idx: number) => (
+    <box
+      ref={(el: Renderable) => {
+        itemRefs[idx] = el;
+      }}
+      flexDirection="column"
+      width="100%"
+      paddingX={4}
+    >
+      {idx > 0 ? <box height={1} /> : null}
+      <text wrapMode="none" fg={t().accent}>
+        <strong>
+          <span fg={t().accent}>{item.label}</span>
+        </strong>
+      </text>
+    </box>
+  );
+
+  const renderInfo = (item: Extract<SettingItem, { kind: "info" }>, idx: number) => (
+    <box
+      ref={(el: Renderable) => {
+        itemRefs[idx] = el;
+      }}
+      flexDirection="row"
+      width="100%"
+      paddingX={4}
+    >
+      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+        {item.label.padEnd(INFO_LABEL_WIDTH)}
+      </text>
+      <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
+        {item.get()}
+      </text>
+    </box>
+  );
+
+  const renderBadge = (item: Extract<SettingItem, { kind: "badge" }>, idx: number) => {
+    const bgColor = () => (item.dimmed ? t().backgroundElement : getColorForColumn(item.colorIndex, t().graphColors));
+    const fgColor = () => (item.dimmed ? t().foregroundMuted : t().background);
+    return (
+      <box
+        ref={(el: Renderable) => {
+          itemRefs[idx] = el;
+        }}
+        flexDirection="row"
+        width="100%"
+        paddingX={4}
+      >
+        <text bg={bgColor()} fg={fgColor()} wrapMode="none">
+          {` ${item.name} `}
+        </text>
+      </box>
+    );
+  };
+
+  const renderCopyable = (item: Extract<SettingItem, { kind: "copyable" }>, idx: number) => {
+    const isSel = () => selectedItemIndex() === idx;
+    const isCopied = () => copiedLabel() === item.label;
+    return (
+      <box
+        ref={(el: Renderable) => {
+          itemRefs[idx] = el;
+        }}
+        flexDirection="row"
+        width="100%"
+        paddingX={4}
+        backgroundColor={isSel() ? t().backgroundElement : undefined}
+      >
+        <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={isSel() ? t().accent : t().foreground}>
+          {copyableBannerText(item.get(), isSel())}
+        </text>
+        {isCopied() ? (
+          <text flexShrink={0} wrapMode="none" bg={t().primary} fg={t().background}>
+            {" \u2713 copied "}
+          </text>
+        ) : null}
+      </box>
+    );
+  };
+
+  const renderSection = (item: Extract<SettingItem, { kind: "section" }>, idx: number) => {
+    const isSel = () => selectedItemIndex() === idx;
+    const indicator = () => (item.collapsed() ? "▸" : "▾");
+    return (
+      <box
+        ref={(el: Renderable) => {
+          itemRefs[idx] = el;
+        }}
+        flexDirection="column"
+        width="100%"
+        paddingX={4}
+      >
+        {idx > 0 ? <box height={1} /> : null}
+        <box flexDirection="row" width="100%" backgroundColor={isSel() ? t().backgroundElement : undefined}>
+          <text flexShrink={0} wrapMode="none" fg={t().accent}>
+            <strong>
+              <span fg={t().accent}>{`${indicator()} ${item.label}`}</span>
+            </strong>
+          </text>
+          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+            {` (${item.count})`}
+          </text>
+        </box>
+      </box>
+    );
+  };
+
+  const renderBranch = (item: Extract<SettingItem, { kind: "branch" }>, idx: number) => {
+    const isSel = () => selectedItemIndex() === idx;
+    const hasTracking = () => item.upstream != null;
+    return (
+      <box
+        ref={(el: Renderable) => {
+          itemRefs[idx] = el;
+        }}
+        flexDirection="row"
+        width="100%"
+        paddingLeft={6}
+        paddingRight={4}
+        backgroundColor={isSel() ? t().backgroundElement : undefined}
+      >
+        <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={isSel() ? t().accent : t().foreground}>
+          {item.name}
+        </text>
+        {hasTracking() ? (
+          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+            {"  "}
+            {`↑${item.ahead ?? 0}`.padStart(branchTrackWidths().addColWidth)}{" "}
+            {`↓${item.behind ?? 0}`.padStart(branchTrackWidths().delColWidth)}
+          </text>
+        ) : null}
+      </box>
+    );
+  };
+
+  const renderSettingRow = (
+    item: Extract<SettingItem, { kind: "toggle" | "cycle" | "dialog" | "action" }>,
+    idx: number,
+  ) => {
+    const isDisabledAction = () => item.kind === "action" && !!item.disabled?.();
+    const isSelected = () => !isDisabledAction() && selectedItemIndex() === idx;
+    const val = () => valueDisplay(item);
+
+    const paddedVal = () => {
+      if (isDisabledAction()) return "";
+      const v = val();
+      if (!v) return " ".padStart(22);
+      if (item.kind === "dialog" || item.kind === "action") return v.padStart(22);
+      return `[${v}]`.padStart(22);
+    };
+    const paddedHotkey = () => {
+      if (isDisabledAction()) return "";
+      const h =
+        item.kind === "toggle" || item.kind === "cycle" || item.kind === "dialog" || item.kind === "action"
+          ? (item.hotkey ?? "")
+          : "";
+      return h.padStart(9);
+    };
+
+    const labelColor = () => (isDisabledAction() ? t().foregroundMuted : isSelected() ? t().accent : t().foreground);
+
+    return (
+      <box
+        ref={(el: Renderable) => {
+          itemRefs[idx] = el;
+        }}
+        flexDirection="row"
+        width="100%"
+        paddingX={4}
+        backgroundColor={isSelected() ? t().backgroundElement : undefined}
+      >
+        <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={labelColor()}>
+          {item.label}
+        </text>
+        <text flexShrink={0} wrapMode="none" fg={t().foreground}>
+          {paddedVal()}
+        </text>
+        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+          {paddedHotkey()}
+        </text>
+      </box>
+    );
+  };
+
+  const renderItem = (item: SettingItem, itemIndex: () => number): JSX.Element => {
+    const idx = itemIndex();
+    if (item.kind === "header") return renderHeader(item, idx);
+    if (item.kind === "info") return renderInfo(item, idx);
+    if (item.kind === "badge") return renderBadge(item, idx);
+    if (item.kind === "copyable") return renderCopyable(item, idx);
+    if (item.kind === "section") return renderSection(item, idx);
+    if (item.kind === "branch") return renderBranch(item, idx);
+    return renderSettingRow(item, idx);
+  };
+
   return (
     <DialogOverlay>
       <box
@@ -583,222 +782,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
           verticalScrollbarOptions={{ visible: false }}
         >
           <box flexDirection="column">
-            <For each={activeItems()}>
-              {(item, itemIndex) => {
-                // --- Header ---
-                if (item.kind === "header") {
-                  return (
-                    <box
-                      ref={(el: Renderable) => {
-                        itemRefs[itemIndex()] = el;
-                      }}
-                      flexDirection="column"
-                      width="100%"
-                      paddingX={4}
-                    >
-                      {itemIndex() > 0 ? <box height={1} /> : null}
-                      <text wrapMode="none" fg={t().accent}>
-                        <strong>
-                          <span fg={t().accent}>{item.label}</span>
-                        </strong>
-                      </text>
-                    </box>
-                  );
-                }
-
-                // --- Info (non-selectable, dimmed) ---
-                if (item.kind === "info") {
-                  return (
-                    <box
-                      ref={(el: Renderable) => {
-                        itemRefs[itemIndex()] = el;
-                      }}
-                      flexDirection="row"
-                      width="100%"
-                      paddingX={4}
-                    >
-                      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                        {item.label.padEnd(INFO_LABEL_WIDTH)}
-                      </text>
-                      <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
-                        {item.get()}
-                      </text>
-                    </box>
-                  );
-                }
-
-                // --- Badge (non-selectable, colored branch badge) ---
-                if (item.kind === "badge") {
-                  const bgColor = () =>
-                    item.dimmed ? t().backgroundElement : getColorForColumn(item.colorIndex, t().graphColors);
-                  const fgColor = () => (item.dimmed ? t().foregroundMuted : t().background);
-                  return (
-                    <box
-                      ref={(el: Renderable) => {
-                        itemRefs[itemIndex()] = el;
-                      }}
-                      flexDirection="row"
-                      width="100%"
-                      paddingX={4}
-                    >
-                      <text bg={bgColor()} fg={fgColor()} wrapMode="none">
-                        {` ${item.name} `}
-                      </text>
-                    </box>
-                  );
-                }
-
-                // --- Copyable (selectable, copies to clipboard on Enter) ---
-                if (item.kind === "copyable") {
-                  const isSel = () => selectedItemIndex() === itemIndex();
-                  const isCopied = () => copiedLabel() === item.label;
-                  return (
-                    <box
-                      ref={(el: Renderable) => {
-                        itemRefs[itemIndex()] = el;
-                      }}
-                      flexDirection="row"
-                      width="100%"
-                      paddingX={4}
-                      backgroundColor={isSel() ? t().backgroundElement : undefined}
-                    >
-                      <text
-                        flexGrow={1}
-                        flexShrink={1}
-                        wrapMode="none"
-                        truncate
-                        fg={isSel() ? t().accent : t().foreground}
-                      >
-                        {copyableBannerText(item.get(), isSel())}
-                      </text>
-                      {isCopied() ? (
-                        <text flexShrink={0} wrapMode="none" bg={t().primary} fg={t().background}>
-                          {" \u2713 copied "}
-                        </text>
-                      ) : null}
-                    </box>
-                  );
-                }
-
-                // --- Collapsible section header (selectable) ---
-                if (item.kind === "section") {
-                  const isSel = () => selectedItemIndex() === itemIndex();
-                  const indicator = () => (item.collapsed() ? "▸" : "▾");
-                  return (
-                    <box
-                      ref={(el: Renderable) => {
-                        itemRefs[itemIndex()] = el;
-                      }}
-                      flexDirection="column"
-                      width="100%"
-                      paddingX={4}
-                    >
-                      {itemIndex() > 0 ? <box height={1} /> : null}
-                      <box
-                        flexDirection="row"
-                        width="100%"
-                        backgroundColor={isSel() ? t().backgroundElement : undefined}
-                      >
-                        <text flexShrink={0} wrapMode="none" fg={t().accent}>
-                          <strong>
-                            <span fg={t().accent}>{`${indicator()} ${item.label}`}</span>
-                          </strong>
-                        </text>
-                        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                          {` (${item.count})`}
-                        </text>
-                      </box>
-                    </box>
-                  );
-                }
-
-                // --- Branch list entry (full-width name, with optional ahead/behind columns) ---
-                if (item.kind === "branch") {
-                  const isSel = () => selectedItemIndex() === itemIndex();
-                  const hasTracking = () => item.upstream != null;
-                  return (
-                    <box
-                      ref={(el: Renderable) => {
-                        itemRefs[itemIndex()] = el;
-                      }}
-                      flexDirection="row"
-                      width="100%"
-                      paddingLeft={6}
-                      paddingRight={4}
-                      backgroundColor={isSel() ? t().backgroundElement : undefined}
-                    >
-                      <text
-                        flexGrow={1}
-                        flexShrink={1}
-                        wrapMode="none"
-                        truncate
-                        fg={isSel() ? t().accent : t().foreground}
-                      >
-                        {item.name}
-                      </text>
-                      {hasTracking() ? (
-                        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                          {"  "}
-                          {`↑${item.ahead ?? 0}`.padStart(branchTrackWidths().addColWidth)}{" "}
-                          {`↓${item.behind ?? 0}`.padStart(branchTrackWidths().delColWidth)}
-                        </text>
-                      ) : null}
-                    </box>
-                  );
-                }
-
-                // --- Selectable items: toggle, cycle, dialog, action ---
-                const isDisabledAction = () => item.kind === "action" && !!item.disabled?.();
-                const isSelected = () => !isDisabledAction() && selectedItemIndex() === itemIndex();
-                const val = () => valueDisplay(item);
-
-                // Pad value and hotkey to fixed widths for right-alignment
-                const paddedVal = () => {
-                  if (isDisabledAction()) return "";
-                  const v = val();
-                  if (!v) return " ".padStart(22);
-                  if (item.kind === "dialog" || item.kind === "action") return v.padStart(22);
-                  return `[${v}]`.padStart(22);
-                };
-                const paddedHotkey = () => {
-                  if (isDisabledAction()) return "";
-                  const h =
-                    item.kind === "toggle" || item.kind === "cycle" || item.kind === "dialog" || item.kind === "action"
-                      ? (item.hotkey ?? "")
-                      : "";
-                  return h.padStart(9);
-                };
-
-                const labelColor = () =>
-                  isDisabledAction() ? t().foregroundMuted : isSelected() ? t().accent : t().foreground;
-
-                return (
-                  <box
-                    ref={(el: Renderable) => {
-                      itemRefs[itemIndex()] = el;
-                    }}
-                    flexDirection="row"
-                    width="100%"
-                    paddingX={4}
-                    backgroundColor={isSelected() ? t().backgroundElement : undefined}
-                  >
-                    <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={labelColor()}>
-                      {item.label}
-                    </text>
-
-                    {/* Current value — right-aligned, in brackets */}
-                    <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-                      {paddedVal()}
-                    </text>
-
-                    {/* Hotkey — right-aligned */}
-                    <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                      {paddedHotkey()}
-                    </text>
-                  </box>
-                );
-              }}
-            </For>
+            <For each={activeItems()}>{(item, itemIndex) => renderItem(item, itemIndex)}</For>
           </box>
         </scrollbox>
 
