@@ -11,7 +11,6 @@ import type { DetailViewProps } from "./detail-types";
 import {
   computeFileWidths,
   DIR_INDICATOR_WIDTH,
-  ENTRY_PADDING_LEFT,
   PANEL_PADDING_X,
   STAT_GAP,
   STAT_PADDING_LEFT,
@@ -209,7 +208,7 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
     if (!treeRow) return null;
 
     if (item.type === "file-dir") {
-      const fixedChars = ENTRY_PADDING_LEFT + treeRow.prefix.length + treeRow.connector.length + DIR_INDICATOR_WIDTH;
+      const fixedChars = treeRow.prefix.length + treeRow.connector.length + DIR_INDICATOR_WIDTH;
       const available = pw - fixedChars;
       if (treeRow.name.length <= available) return null;
       return { text: treeRow.name, visibleWidth: available };
@@ -221,7 +220,7 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
         activeTab() === "untracked"
           ? STAT_PADDING_LEFT + STATUS_COL_WIDTH
           : STAT_PADDING_LEFT + STATUS_COL_WIDTH + STAT_GAP + fw.addColWidth + STAT_GAP + fw.delColWidth;
-      const fixedChars = ENTRY_PADDING_LEFT + treeRow.prefix.length + treeRow.connector.length + statWidth;
+      const fixedChars = treeRow.prefix.length + treeRow.connector.length + statWidth;
       const available = pw - fixedChars;
       if (treeRow.name.length <= available) return null;
       return { text: treeRow.name, visibleWidth: available };
@@ -252,7 +251,7 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
       >
         {/* Total lines changed (skip for untracked which have 0/0 stats) */}
         <Show when={activeTab() !== "untracked" && (fileWidths().totalAdd > 0 || fileWidths().totalDel > 0)}>
-          <box flexDirection="row" paddingLeft={2}>
+          <box flexDirection="row">
             <box flexGrow={1}>
               <text fg={t().foregroundMuted} wrapMode="none">
                 total lines changed
@@ -287,7 +286,7 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
             };
 
             return (
-              <box flexDirection="row" width="100%" paddingLeft={2} backgroundColor={itemHighlightBg(itemIdx())}>
+              <box flexDirection="row" width="100%" backgroundColor={itemHighlightBg(itemIdx())}>
                 <box flexShrink={0}>
                   <text fg={t().border} wrapMode="none">
                     {treeRow.prefix}

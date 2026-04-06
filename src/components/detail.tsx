@@ -644,24 +644,24 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
       }
 
       case "file-dir": {
-        // Layout: paddingLeft + prefix + connector + dirIndicator + name
+        // Layout: prefix + connector + dirIndicator + name
         const rows = fileTreeRows();
         const treeRow = rows[item.index];
         if (!treeRow) return null;
-        const fixedChars = ENTRY_PADDING_LEFT + treeRow.prefix.length + treeRow.connector.length + DIR_INDICATOR_WIDTH;
+        const fixedChars = treeRow.prefix.length + treeRow.connector.length + DIR_INDICATOR_WIDTH;
         const available = pw - fixedChars;
         if (treeRow.name.length <= available) return null;
         return { text: treeRow.name, visibleWidth: available };
       }
 
       case "file": {
-        // Layout: paddingLeft + prefix + connector + name + statPaddingLeft + addCol + statGap + delCol
+        // Layout: prefix + connector + name + statPaddingLeft + status + statGap + addCol + statGap + delCol
         const rows = fileTreeRows();
         const treeRow = rows[item.index];
         if (!treeRow) return null;
         const fw = fileWidths();
         const statWidth = STAT_PADDING_LEFT + STATUS_COL_WIDTH + STAT_GAP + fw.addColWidth + STAT_GAP + fw.delColWidth;
-        const fixedChars = ENTRY_PADDING_LEFT + treeRow.prefix.length + treeRow.connector.length + statWidth;
+        const fixedChars = treeRow.prefix.length + treeRow.connector.length + statWidth;
         const available = pw - fixedChars;
         if (treeRow.name.length <= available) return null;
         return { text: treeRow.name, visibleWidth: available };
@@ -680,28 +680,24 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
       }
 
       case "stash-dir": {
-        // Same layout as file-dir but inside a stash sub-tree (extra indent for stash nesting)
-        const stashIndent = ENTRY_PADDING_LEFT; // stash files are double-indented
+        // Layout: prefix + connector + dirIndicator + name
         const rows = getStashFileTreeRows(item.stashHash);
         const treeRow = rows[item.index];
         if (!treeRow) return null;
-        const fixedChars =
-          ENTRY_PADDING_LEFT + stashIndent + treeRow.prefix.length + treeRow.connector.length + DIR_INDICATOR_WIDTH;
+        const fixedChars = treeRow.prefix.length + treeRow.connector.length + DIR_INDICATOR_WIDTH;
         const available = pw - fixedChars;
         if (treeRow.name.length <= available) return null;
         return { text: treeRow.name, visibleWidth: available };
       }
 
       case "stash-file": {
-        // Same layout as file but inside a stash sub-tree
-        const stashIndent = ENTRY_PADDING_LEFT;
+        // Layout: prefix + connector + name + stat columns
         const rows = getStashFileTreeRows(item.stashHash);
         const treeRow = rows[item.index];
         if (!treeRow) return null;
         const fw = getStashFileWidths(item.stashHash);
         const statWidth = STAT_PADDING_LEFT + STATUS_COL_WIDTH + STAT_GAP + fw.addColWidth + STAT_GAP + fw.delColWidth;
-        const fixedChars =
-          ENTRY_PADDING_LEFT + stashIndent + treeRow.prefix.length + treeRow.connector.length + statWidth;
+        const fixedChars = treeRow.prefix.length + treeRow.connector.length + statWidth;
         const available = pw - fixedChars;
         if (treeRow.name.length <= available) return null;
         return { text: treeRow.name, visibleWidth: available };
@@ -1246,7 +1242,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
 
             {/* ══════════════ Files tab ══════════════ */}
             <Show when={activeTab() === "files" && detail() && detail()?.files.length > 0}>
-              <box flexDirection="row" paddingLeft={2}>
+              <box flexDirection="row">
                 <box flexGrow={1}>
                   <text fg={t().foregroundMuted} wrapMode="none">
                     total lines changed
@@ -1280,7 +1276,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   };
 
                   return (
-                    <box flexDirection="row" width="100%" paddingLeft={2} backgroundColor={itemHighlightBg(itemIdx())}>
+                    <box flexDirection="row" width="100%" backgroundColor={itemHighlightBg(itemIdx())}>
                       <box flexShrink={0}>
                         <text fg={t().border} wrapMode="none">
                           {treeRow.prefix}
@@ -1394,7 +1390,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
 
                         {/* Total lines changed (only after files are loaded) */}
                         <Show when={stashFw().totalAdd > 0 || stashFw().totalDel > 0}>
-                          <box flexDirection="row" paddingLeft={2}>
+                          <box flexDirection="row">
                             <box flexGrow={1}>
                               <text fg={t().foregroundMuted} wrapMode="none">
                                 total lines changed
@@ -1430,12 +1426,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                             };
 
                             return (
-                              <box
-                                flexDirection="row"
-                                width="100%"
-                                paddingLeft={2}
-                                backgroundColor={itemHighlightBg(fileItemIdx())}
-                              >
+                              <box flexDirection="row" width="100%" backgroundColor={itemHighlightBg(fileItemIdx())}>
                                 <box flexShrink={0}>
                                   <text fg={t().border} wrapMode="none">
                                     {treeRow.prefix}

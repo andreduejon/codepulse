@@ -102,9 +102,6 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
         </For>
       </box>
 
-      {/* Muted separator below tabs */}
-      <box width="100%" border={["top"]} borderStyle="single" borderColor={t().border} />
-
       <scrollbox
         ref={props.scrollboxRef}
         flexGrow={1}
