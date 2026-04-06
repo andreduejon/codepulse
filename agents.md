@@ -19,3 +19,10 @@
 ### 4. Effect re-tracking
 - SolidJS effects re-track dependencies on each run. If an effect reads signal X on run 1 but signal Y on run 2, it only depends on signals from the latest run.
 - **Rule**: Be aware that conditional branches in effects change the dependency set. An effect may stop reacting to a signal it read in a previous run.
+
+### 5. Hooks called during setup cannot read their own component's Providers
+- A component's JSX return (where `Context.Provider` lives) is rendered **after** the setup phase completes. Any hook called during setup that does `useContext()` for a Provider the same component owns will get `undefined` — the Provider hasn't been created yet.
+- The failure is **silent**: no crash, no console error. The hook operates on `undefined` state, causing subtle breakage (e.g. terminal garbage strings leaking through before opentui's input parser attaches).
+- When extracting inline code into a hook, the inline code used local variables directly. The extracted hook naturally reaches for `useContext()` — but that context isn't available at setup time.
+- **Rule**: Hooks called during a component's setup phase must receive `state`/`actions` (or any context value) as **parameters**, not via `useContext()`. Only child components rendered *inside* the Provider's JSX subtree can safely call `useContext()`.
+- This caused the Warp garbage string bug (fixed by passing `state`/`actions` directly to `useDataLoader` and `useDetailLoader`).
