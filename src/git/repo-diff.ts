@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { runGit } from "./repo-git";
 import type { BlameLine, DiffSource, FileDiff } from "./types";
 
@@ -210,7 +211,7 @@ export async function getFileDiff(
 /** Read an untracked file and present as an all-added diff. */
 async function getUntrackedFileDiff(repoPath: string, filePath: string): Promise<FileDiff> {
   try {
-    const fullPath = `${repoPath}/${filePath}`;
+    const fullPath = join(repoPath, filePath);
     const file = Bun.file(fullPath);
     const exists = await file.exists();
     if (!exists) return { filePath, hunks: [], isBinary: false };
@@ -242,13 +243,6 @@ async function getUntrackedFileDiff(repoPath: string, filePath: string): Promise
       newLineNo: idx + 1,
     }));
 
-    if (truncated) {
-      diffLines.push({
-        type: "context",
-        content: `... (file truncated at ${MAX_DIFF_LINES} lines)`,
-      });
-    }
-
     return {
       filePath,
       hunks: [
@@ -262,6 +256,7 @@ async function getUntrackedFileDiff(repoPath: string, filePath: string): Promise
         },
       ],
       isBinary: false,
+      ...(truncated ? { truncated: true } : {}),
     };
   } catch {
     return { filePath, hunks: [], isBinary: false };

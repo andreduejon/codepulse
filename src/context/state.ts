@@ -309,7 +309,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
     setViewingBranch,
   };
 
-  return { state, actions, AppStateContext };
+  return { state, actions };
 }
 
 export function useAppState() {

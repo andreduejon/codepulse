@@ -30,7 +30,7 @@ export type SettingItem =
       set: (v: string) => void;
       needsReload?: boolean;
     }
-  | { kind: "dialog"; label: string; hotkey?: string; dialogId: string; get: () => string }
+  | { kind: "dialog"; label: string; hotkey?: string; dialogId: "theme"; get: () => string }
   | { kind: "action"; label: string; hotkey?: string; get?: () => string; run: () => void; disabled?: () => boolean }
   | { kind: "section"; label: string; count: number; collapsed: () => boolean; toggle: () => void }
   | { kind: "badge"; name: string; colorIndex: number; dimmed?: boolean }
@@ -76,7 +76,7 @@ export interface MenuItemsOptions {
   /** Prop callbacks forwarded from the component. */
   onFetch: () => void;
   onReload: () => void;
-  onOpenDialog?: (dialogId: string) => void;
+  onOpenDialog?: (dialogId: "theme") => void;
   onViewBranch: (branch: string | null) => void;
   onClose: () => void;
   configInfo?: ConfigInfo;

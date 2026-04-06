@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { DEFAULT_MAX_COUNT } from "../constants";
 import { runGit } from "./repo-git";
 import { parseDiffTreeOutput } from "./repo-status";
@@ -58,7 +59,15 @@ export function parseRefs(refString: string, remoteNames: Set<string>): RefInfo[
       return { name: ref, type: "stash" as const, isCurrent: false };
     }
     if (ref.includes("/")) {
-      const isRemote = ref.startsWith("refs/remotes/") || [...remoteNames].some(r => ref.startsWith(`${r}/`));
+      let isRemote = ref.startsWith("refs/remotes/");
+      if (!isRemote) {
+        for (const r of remoteNames) {
+          if (ref.startsWith(`${r}/`)) {
+            isRemote = true;
+            break;
+          }
+        }
+      }
       if (isRemote) {
         return {
           name: ref,
@@ -221,7 +230,15 @@ export async function getBranches(repoPath: string, signal?: AbortSignal): Promi
     .map(line => {
       const [head, name, lastCommitHash, upstream, track] = line.split(RS);
       const trimmedName = name.trim();
-      const isRemote = trimmedName.includes("remotes/") || [...remoteNames].some(r => trimmedName.startsWith(`${r}/`));
+      let isRemote = trimmedName.includes("remotes/");
+      if (!isRemote) {
+        for (const r of remoteNames) {
+          if (trimmedName.startsWith(`${r}/`)) {
+            isRemote = true;
+            break;
+          }
+        }
+      }
 
       const branch: Branch = {
         name: trimmedName,
@@ -487,7 +504,7 @@ export async function getLastFetchTime(repoPath: string): Promise<Date | null> {
     const gitDir = stdout.trim();
     // git rev-parse --git-dir returns a relative path for normal repos
     // but an absolute path for linked worktrees — handle both
-    const fetchHeadPath = gitDir.startsWith("/") ? `${gitDir}/FETCH_HEAD` : `${repoPath}/${gitDir}/FETCH_HEAD`;
+    const fetchHeadPath = gitDir.startsWith("/") ? join(gitDir, "FETCH_HEAD") : join(repoPath, gitDir, "FETCH_HEAD");
     const file = Bun.file(fetchHeadPath);
     const exists = await file.exists();
     if (!exists) return null;

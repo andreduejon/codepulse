@@ -3,6 +3,7 @@ import type { DetailNavRef } from "../components/detail-types";
 import { isUncommittedHash } from "../constants";
 import type { AppActions, AppState } from "../context/state";
 import { getCommitDetail, getUncommittedDetail } from "../git/repo";
+import { getAvailableTabs } from "../utils/tab-utils";
 
 const DETAIL_DEBOUNCE_MS = 150;
 
@@ -137,10 +138,10 @@ export function useDetailLoader({
   // ── Auto-switch away from empty tabs after detail data loads ──────
   // Finds the first non-disabled tab if the current tab has 0 items.
   createEffect(() => {
+    const commit = state.selectedCommit();
     const cd = state.commitDetail();
     const ud = state.uncommittedDetail();
     const tab = state.detailActiveTab();
-    const commit = state.selectedCommit();
     if (!commit) return;
 
     const isUncommitted = isUncommittedHash(commit.hash);
@@ -157,26 +158,15 @@ export function useDetailLoader({
 
     if (!isEmpty) return;
 
-    // Find first non-empty tab to switch to
-    if (isUncommitted && ud) {
-      if (ud.unstaged.length > 0) {
-        actions.setDetailActiveTab("unstaged");
-        return;
-      }
-      if (ud.staged.length > 0) {
-        actions.setDetailActiveTab("staged");
-        return;
-      }
-      if (ud.untracked.length > 0) {
-        actions.setDetailActiveTab("untracked");
-        return;
-      }
-    } else if (!isUncommitted) {
-      if (cd && cd.files.length > 0) {
-        actions.setDetailActiveTab("files");
-        return;
-      }
-      actions.setDetailActiveTab("detail");
+    // Switch to the first non-empty tab
+    const available = getAvailableTabs({
+      commit,
+      uncommittedDetail: ud,
+      commitDetail: cd,
+      stashByParent: state.stashByParent(),
+    });
+    if (available.length > 0) {
+      actions.setDetailActiveTab(available[0]);
     }
   });
 }

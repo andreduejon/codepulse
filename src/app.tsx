@@ -1,3 +1,4 @@
+import { homedir } from "node:os";
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, onCleanup, onMount, Show, untrack } from "solid-js";
@@ -251,7 +252,7 @@ function AppContent(props: Readonly<AppContentProps>) {
   });
 
   /** Open a sub-dialog from within the menu (e.g. theme picker). */
-  const handleOpenDialog = (dialogId: string) => {
+  const handleOpenDialog = (dialogId: "theme") => {
     if (dialogId === "theme") {
       setDialog("theme");
     }
@@ -375,7 +376,7 @@ function AppContent(props: Readonly<AppContentProps>) {
                     </text>
                     <text flexShrink={0} wrapMode="none" fg={themeState.theme().foregroundMuted}>
                       {"  "}
-                      {state.repoPath() ? state.repoPath().replace(/^\/Users\/[^/]+/, "~") : ""}
+                      {state.repoPath() ? state.repoPath().replace(homedir(), "~") : ""}
                       {state.currentBranch() ? `:${state.currentBranch()}` : ""}
                     </text>
                     <Show when={state.viewingBranch()}>

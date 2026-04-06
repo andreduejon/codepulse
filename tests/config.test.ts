@@ -28,33 +28,36 @@ afterEach(() => {
 describe("loadConfig", () => {
   test("returns empty object when config file does not exist", () => {
     const configPath = join(makeTempDir("no-config"), "config.json");
-    const result = loadConfig("/tmp/repo", configPath);
+    const { config: result } = loadConfig("/tmp/repo", configPath);
     expect(result).toEqual({});
   });
 
   test("loads global config fields", () => {
     const configPath = makeTempConfig("global-fields", { theme: "gruvbox", pageSize: 100 });
-    const result = loadConfig("/tmp/repo", configPath);
+    const { config: result } = loadConfig("/tmp/repo", configPath);
     expect(result.theme).toBe("gruvbox");
     expect(result.pageSize).toBe(100);
   });
 
   test("returns empty object for invalid JSON", () => {
     const configPath = makeTempConfig("bad-json", "not json!!!");
-    const result = loadConfig("/tmp/repo", configPath);
+    const { config: result, warnings } = loadConfig("/tmp/repo", configPath);
     expect(result).toEqual({});
+    expect(warnings.length).toBeGreaterThan(0);
   });
 
   test("returns empty object when config is an array", () => {
     const configPath = makeTempConfig("array-config", "[1, 2, 3]");
-    const result = loadConfig("/tmp/repo", configPath);
+    const { config: result, warnings } = loadConfig("/tmp/repo", configPath);
     expect(result).toEqual({});
+    expect(warnings.length).toBeGreaterThan(0);
   });
 
   test("returns empty object when config is null", () => {
     const configPath = makeTempConfig("null-config", "null");
-    const result = loadConfig("/tmp/repo", configPath);
+    const { config: result, warnings } = loadConfig("/tmp/repo", configPath);
     expect(result).toEqual({});
+    expect(warnings.length).toBeGreaterThan(0);
   });
 
   test("validates all config fields", () => {
@@ -65,7 +68,7 @@ describe("loadConfig", () => {
       showAllBranches: false,
       autoRefreshSeconds: 10,
     });
-    const result = loadConfig("/tmp/repo", configPath);
+    const { config: result } = loadConfig("/tmp/repo", configPath);
     expect(result).toEqual({
       theme: "catppuccin-latte",
       pageSize: 500,
@@ -77,61 +80,62 @@ describe("loadConfig", () => {
 
   test("drops invalid theme (not a string)", () => {
     const configPath = makeTempConfig("bad-theme", { theme: 42 });
-    const result = loadConfig("/tmp/repo", configPath);
+    const { config: result, warnings } = loadConfig("/tmp/repo", configPath);
     expect(result.theme).toBeUndefined();
+    expect(warnings.length).toBeGreaterThan(0);
   });
 
   test("drops empty theme string", () => {
     const configPath = makeTempConfig("empty-theme", { theme: "" });
-    const result = loadConfig("/tmp/repo", configPath);
+    const { config: result } = loadConfig("/tmp/repo", configPath);
     expect(result.theme).toBeUndefined();
   });
 
   test("drops invalid pageSize (non-integer)", () => {
     const configPath = makeTempConfig("bad-pagesize-float", { pageSize: 1.5 });
-    const result = loadConfig("/tmp/repo", configPath);
+    const { config: result } = loadConfig("/tmp/repo", configPath);
     expect(result.pageSize).toBeUndefined();
   });
 
   test("drops invalid pageSize (zero)", () => {
     const configPath = makeTempConfig("bad-pagesize-zero", { pageSize: 0 });
-    const result = loadConfig("/tmp/repo", configPath);
+    const { config: result } = loadConfig("/tmp/repo", configPath);
     expect(result.pageSize).toBeUndefined();
   });
 
   test("drops invalid pageSize (negative)", () => {
     const configPath = makeTempConfig("bad-pagesize-neg", { pageSize: -10 });
-    const result = loadConfig("/tmp/repo", configPath);
+    const { config: result } = loadConfig("/tmp/repo", configPath);
     expect(result.pageSize).toBeUndefined();
   });
 
   test("drops invalid branch (empty string)", () => {
     const configPath = makeTempConfig("bad-branch", { branch: "" });
-    const result = loadConfig("/tmp/repo", configPath);
+    const { config: result } = loadConfig("/tmp/repo", configPath);
     expect(result.branch).toBeUndefined();
   });
 
   test("drops invalid showAllBranches (not boolean)", () => {
     const configPath = makeTempConfig("bad-show-all", { showAllBranches: "yes" });
-    const result = loadConfig("/tmp/repo", configPath);
+    const { config: result } = loadConfig("/tmp/repo", configPath);
     expect(result.showAllBranches).toBeUndefined();
   });
 
   test("drops invalid autoRefreshSeconds (negative)", () => {
     const configPath = makeTempConfig("bad-refresh", { autoRefreshSeconds: -5 });
-    const result = loadConfig("/tmp/repo", configPath);
+    const { config: result } = loadConfig("/tmp/repo", configPath);
     expect(result.autoRefreshSeconds).toBeUndefined();
   });
 
   test("allows autoRefreshSeconds of 0 (off)", () => {
     const configPath = makeTempConfig("refresh-zero", { autoRefreshSeconds: 0 });
-    const result = loadConfig("/tmp/repo", configPath);
+    const { config: result } = loadConfig("/tmp/repo", configPath);
     expect(result.autoRefreshSeconds).toBe(0);
   });
 
   test("ignores unknown keys silently", () => {
     const configPath = makeTempConfig("unknown-keys", { theme: "nord", unknownKey: true, foo: "bar" });
-    const result = loadConfig("/tmp/repo", configPath);
+    const { config: result } = loadConfig("/tmp/repo", configPath);
     expect(result).toEqual({ theme: "nord" });
     expect((result as Record<string, unknown>).unknownKey).toBeUndefined();
   });
@@ -143,7 +147,7 @@ describe("loadConfig", () => {
       branch: "main",
       showAllBranches: 42,
     });
-    const result = loadConfig("/tmp/repo", configPath);
+    const { config: result } = loadConfig("/tmp/repo", configPath);
     expect(result.theme).toBe("dracula");
     expect(result.pageSize).toBeUndefined();
     expect(result.branch).toBe("main");
@@ -162,7 +166,7 @@ describe("loadConfig", () => {
         },
       },
     });
-    const result = loadConfig(repoPath, configPath);
+    const { config: result } = loadConfig(repoPath, configPath);
     expect(result.theme).toBe("catppuccin-mocha");
     expect(result.pageSize).toBe(500);
     expect(result.branch).toBe("develop");
@@ -180,7 +184,7 @@ describe("loadConfig", () => {
         },
       },
     });
-    const result = loadConfig(repoPath, configPath);
+    const { config: result } = loadConfig(repoPath, configPath);
     expect(result.theme).toBe("nord");
     expect(result.pageSize).toBe(100);
     expect(result.autoRefreshSeconds).toBe(30);
@@ -193,7 +197,7 @@ describe("loadConfig", () => {
         "/some/other/repo": { pageSize: 999 },
       },
     });
-    const result = loadConfig("/tmp/my-repo", configPath);
+    const { config: result } = loadConfig("/tmp/my-repo", configPath);
     expect(result.theme).toBe("gruvbox");
     expect(result.pageSize).toBeUndefined();
   });
@@ -209,7 +213,7 @@ describe("loadConfig", () => {
         },
       },
     });
-    const result = loadConfig(repoPath, configPath);
+    const { config: result } = loadConfig(repoPath, configPath);
     expect(result.theme).toBe("nord");
     expect(result.pageSize).toBeUndefined();
     expect(result.branch).toBe("main");
@@ -220,7 +224,7 @@ describe("loadConfig", () => {
       theme: "nord",
       repos: "invalid",
     });
-    const result = loadConfig("/tmp/repo", configPath);
+    const { config: result } = loadConfig("/tmp/repo", configPath);
     expect(result.theme).toBe("nord");
   });
 
@@ -232,7 +236,7 @@ describe("loadConfig", () => {
         [resolve(repoPath)]: "not an object",
       },
     });
-    const result = loadConfig(repoPath, configPath);
+    const { config: result } = loadConfig(repoPath, configPath);
     expect(result.theme).toBe("nord");
   });
 });
@@ -547,7 +551,7 @@ describe("writeConfig", () => {
       autoRefreshSeconds: 60,
     };
     writeConfig(original, "global", undefined, configPath);
-    const loaded = loadConfig("/tmp/repo", configPath);
+    const { config: loaded } = loadConfig("/tmp/repo", configPath);
     expect(loaded).toEqual(original);
   });
 
@@ -557,7 +561,7 @@ describe("writeConfig", () => {
     const repoPath = "/tmp/my-repo";
     writeConfig({ theme: "nord", pageSize: 200 }, "global", undefined, configPath);
     writeConfig({ pageSize: 500, branch: "develop" }, "repo", repoPath, configPath);
-    const loaded = loadConfig(repoPath, configPath);
+    const { config: loaded } = loadConfig(repoPath, configPath);
     expect(loaded.theme).toBe("nord");
     expect(loaded.pageSize).toBe(500);
     expect(loaded.branch).toBe("develop");

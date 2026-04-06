@@ -4,6 +4,7 @@ import { isUncommittedHash } from "../constants";
 import { useAppState } from "../context/state";
 import type { DiffTarget } from "../git/types";
 import { useT } from "../hooks/use-t";
+import { getAvailableTabs } from "../utils/tab-utils";
 import CommitDetailView from "./detail";
 import type { DetailNavRef } from "./detail-types";
 import UncommittedDetailView from "./uncommitted-detail";
@@ -31,25 +32,30 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
 
   const tabs = () => {
     const commit = state.selectedCommit();
-    const isUncommitted = isUncommittedHash(commit?.hash ?? "");
+    const commitHash = commit?.hash ?? "";
+    const isUncommitted = isUncommittedHash(commitHash);
     const ud = state.uncommittedDetail();
     const cd = state.commitDetail();
+    const stashMap = state.stashByParent();
+    const available = new Set(
+      getAvailableTabs({ commit, uncommittedDetail: ud, commitDetail: cd, stashByParent: stashMap }),
+    );
     if (isUncommitted) {
       return [
         {
           id: "unstaged",
           label: `Unstaged${ud ? ` (${ud.unstaged.length})` : ""}`,
-          disabled: ud ? ud.unstaged.length === 0 : false,
+          disabled: ud ? !available.has("unstaged") : false,
         },
         {
           id: "staged",
           label: `Staged${ud ? ` (${ud.staged.length})` : ""}`,
-          disabled: ud ? ud.staged.length === 0 : false,
+          disabled: ud ? !available.has("staged") : false,
         },
         {
           id: "untracked",
           label: `Untracked${ud ? ` (${ud.untracked.length})` : ""}`,
-          disabled: ud ? ud.untracked.length === 0 : false,
+          disabled: ud ? !available.has("untracked") : false,
         },
       ];
     }
@@ -57,13 +63,13 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
       {
         id: "files",
         label: `Files${cd?.files ? ` (${cd.files.length})` : ""}`,
-        disabled: cd ? cd.files.length === 0 : false,
+        disabled: cd ? !available.has("files") : false,
       },
-      ...(state.stashByParent().has(commit?.hash ?? "")
+      ...(stashMap.has(commitHash)
         ? [
             {
               id: "stashes",
-              label: `Stashes (${state.stashByParent().get(commit?.hash ?? "")?.length ?? 0})`,
+              label: `Stashes (${stashMap.get(commitHash)?.length ?? 0})`,
               disabled: false,
             },
           ]

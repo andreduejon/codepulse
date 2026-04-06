@@ -2,8 +2,9 @@ import type { ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useRenderer } from "@opentui/solid";
 import type { Accessor } from "solid-js";
 import type { DetailNavRef } from "../components/detail-types";
-import { isUncommittedHash, PAGE_JUMP, SHIFT_JUMP } from "../constants";
-import type { AppActions, AppState, DetailTab } from "../context/state";
+import { PAGE_JUMP, SHIFT_JUMP } from "../constants";
+import type { AppActions, AppState } from "../context/state";
+import { getAvailableTabs } from "../utils/tab-utils";
 
 type DialogId = "menu" | "help" | "theme" | "diff-blame" | "detail" | null;
 type LayoutMode = "too-small" | "compact" | "normal";
@@ -127,24 +128,27 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     // Ctrl+T opens theme dialog regardless of dialog/search state
     if (e.ctrl && e.name === "t") {
       setSearchFocused(false);
-      actions.setDetailFocused(false);
-      setDialog(dialog() === "theme" ? null : "theme");
+      const opening = dialog() !== "theme";
+      if (opening) actions.setDetailFocused(false);
+      setDialog(opening ? "theme" : null);
       return;
     }
 
     // m toggles menu (not when typing in search)
     if (e.name === "m" && !searchFocused()) {
       setSearchFocused(false);
-      actions.setDetailFocused(false);
-      setDialog(dialog() === "menu" ? null : "menu");
+      const opening = dialog() !== "menu";
+      if (opening) actions.setDetailFocused(false);
+      setDialog(opening ? "menu" : null);
       return;
     }
 
     // ? opens help (not when typing in search)
     if (e.name === "?" && !searchFocused()) {
       setSearchFocused(false);
-      actions.setDetailFocused(false);
-      setDialog(dialog() === "help" ? null : "help");
+      const opening = dialog() !== "help";
+      if (opening) actions.setDetailFocused(false);
+      setDialog(opening ? "help" : null);
       return;
     }
 
@@ -228,33 +232,15 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     if (state.detailFocused() || dialog() === "detail") {
       const scrollbox = getDetailScrollboxRef();
 
-      /** Get navigable (non-empty) tab IDs based on commit type */
-      const getAvailableTabs = (): DetailTab[] => {
-        const commit = state.selectedCommit();
-        if (isUncommittedHash(commit?.hash ?? "")) {
-          const ud = state.uncommittedDetail();
-          const tabs: DetailTab[] = [];
-          if (ud && ud.unstaged.length > 0) tabs.push("unstaged");
-          if (ud && ud.staged.length > 0) tabs.push("staged");
-          if (ud && ud.untracked.length > 0) tabs.push("untracked");
-          return tabs;
-        }
-        const tabs: DetailTab[] = [];
-        const cd = state.commitDetail();
-        if (cd && cd.files.length > 0) {
-          tabs.push("files");
-        }
-        if (state.stashByParent().has(commit?.hash ?? "")) {
-          tabs.push("stashes");
-        }
-        tabs.push("detail");
-        return tabs;
-      };
-
       switch (e.name) {
         case "left": {
           e.preventDefault();
-          const tabs = getAvailableTabs();
+          const tabs = getAvailableTabs({
+            commit: state.selectedCommit(),
+            uncommittedDetail: state.uncommittedDetail(),
+            commitDetail: state.commitDetail(),
+            stashByParent: state.stashByParent(),
+          });
           const currentIdx = tabs.indexOf(state.detailActiveTab());
           if (currentIdx <= 0) {
             // In normal mode, left on first tab exits detail focus.
@@ -272,7 +258,12 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         }
         case "right": {
           e.preventDefault();
-          const tabs = getAvailableTabs();
+          const tabs = getAvailableTabs({
+            commit: state.selectedCommit(),
+            uncommittedDetail: state.uncommittedDetail(),
+            commitDetail: state.commitDetail(),
+            stashByParent: state.stashByParent(),
+          });
           const currentIdx = tabs.indexOf(state.detailActiveTab());
           if (currentIdx < tabs.length - 1) {
             actions.setDetailCursorAction(null);

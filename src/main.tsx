@@ -9,7 +9,7 @@ export async function main() {
   const cli = parseArgs(process.argv);
 
   const configInfo = resolveConfigInfo(cli.repoPath);
-  const config = loadConfig(cli.repoPath);
+  const { config } = loadConfig(cli.repoPath);
   const opts = mergeOptions(cli, config);
 
   let startupError: string | undefined;

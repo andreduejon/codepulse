@@ -35,11 +35,39 @@ export interface ConfigInfo {
   globalExists: boolean;
   /** Whether the current repo has specific overrides in the config. */
   hasRepoOverrides: boolean;
+  /** Non-fatal warnings encountered while reading/validating the config. */
+  warnings: string[];
 }
 
 /** Default path to the global config file. */
 export function defaultConfigPath(): string {
   return join(homedir(), ".config", "codepulse", "config.json");
+}
+
+/**
+ * Read and parse the raw config JSON from disk.
+ * Returns the parsed object and the resolved path, or null if the file
+ * doesn't exist or can't be parsed. Warnings are pushed to the provided array.
+ */
+function readRawConfig(
+  configPath: string | undefined,
+  warnings: string[],
+): { parsed: Record<string, unknown>; globalPath: string } | null {
+  const globalPath = configPath ?? defaultConfigPath();
+  if (!existsSync(globalPath)) return null;
+
+  try {
+    const raw = readFileSync(globalPath, "utf-8");
+    const parsed = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      warnings.push(`${globalPath} is not a valid config object, ignoring`);
+      return null;
+    }
+    return { parsed, globalPath };
+  } catch (err) {
+    warnings.push(`Failed to read ${globalPath}: ${err instanceof Error ? err.message : err}`);
+    return null;
+  }
 }
 
 /**
@@ -52,71 +80,58 @@ export function defaultConfigPath(): string {
 export function resolveConfigInfo(repoPath: string, configPath?: string): ConfigInfo {
   const globalPath = configPath ?? defaultConfigPath();
   const globalExists = existsSync(globalPath);
+  const warnings: string[] = [];
 
   let hasRepoOverrides = false;
   if (globalExists) {
-    try {
-      const raw = readFileSync(globalPath, "utf-8");
-      const parsed = JSON.parse(raw);
-      if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
-        const repos = parsed.repos;
-        if (typeof repos === "object" && repos !== null && !Array.isArray(repos)) {
-          const absPath = resolve(repoPath);
-          hasRepoOverrides = absPath in repos;
-        }
+    const result = readRawConfig(configPath, warnings);
+    if (result) {
+      const repos = result.parsed.repos;
+      if (typeof repos === "object" && repos !== null && !Array.isArray(repos)) {
+        const absPath = resolve(repoPath);
+        hasRepoOverrides = absPath in (repos as Record<string, unknown>);
       }
-    } catch {
-      // Corrupt file — treat as no overrides
     }
   }
 
-  return { globalPath, globalExists, hasRepoOverrides };
+  return { globalPath, globalExists, hasRepoOverrides, warnings };
 }
 
 /**
  * Load config from the global config file.
  *
  * Reads the config file and merges any repo-specific overrides
- * found under `repos[absoluteRepoPath]`. Returns an empty object if
- * the file doesn't exist or is invalid.
+ * found under `repos[absoluteRepoPath]`. Returns an object with the
+ * parsed config and any non-fatal warnings.
  *
  * @param repoPath - The repository directory (used to resolve repo-specific overrides).
  * @param configPath - Override the global config path (used by tests).
  *
  * Priority: repo overrides > global top-level > (empty).
  */
-export function loadConfig(repoPath: string, configPath?: string): CodepulseConfig {
-  const globalPath = configPath ?? defaultConfigPath();
-  if (!existsSync(globalPath)) return {};
+export function loadConfig(repoPath: string, configPath?: string): { config: CodepulseConfig; warnings: string[] } {
+  const warnings: string[] = [];
+  const result = readRawConfig(configPath, warnings);
+  if (!result) return { config: {}, warnings };
 
-  try {
-    const raw = readFileSync(globalPath, "utf-8");
-    const parsed = JSON.parse(raw);
-    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-      console.error(`Warning: ${globalPath} is not a valid config object, ignoring`);
-      return {};
+  const { parsed, globalPath } = result;
+
+  // Validate global top-level config fields
+  const globalConfig = validateConfig(parsed, globalPath, warnings);
+
+  // Check for repo-specific overrides
+  const repos = parsed.repos;
+  if (typeof repos === "object" && repos !== null && !Array.isArray(repos)) {
+    const absPath = resolve(repoPath);
+    const repoOverrides = (repos as Record<string, unknown>)[absPath];
+    if (typeof repoOverrides === "object" && repoOverrides !== null && !Array.isArray(repoOverrides)) {
+      const repoConfig = validateConfig(repoOverrides as Record<string, unknown>, `${globalPath} [repos]`, warnings);
+      // Merge: repo overrides win over global
+      return { config: { ...globalConfig, ...stripUndefined(repoConfig) }, warnings };
     }
-
-    // Validate global top-level config fields
-    const globalConfig = validateConfig(parsed, globalPath);
-
-    // Check for repo-specific overrides
-    const repos = parsed.repos;
-    if (typeof repos === "object" && repos !== null && !Array.isArray(repos)) {
-      const absPath = resolve(repoPath);
-      const repoOverrides = repos[absPath];
-      if (typeof repoOverrides === "object" && repoOverrides !== null && !Array.isArray(repoOverrides)) {
-        const repoConfig = validateConfig(repoOverrides, `${globalPath} [repos]`);
-        // Merge: repo overrides win over global
-        return { ...globalConfig, ...stripUndefined(repoConfig) };
-      }
-    }
-
-    return globalConfig;
-  } catch (err) {
-    console.error(`Warning: failed to read ${globalPath}: ${err instanceof Error ? err.message : err}`);
-    return {};
   }
+
+  return { config: globalConfig, warnings };
 }
 
 /** Remove keys whose value is undefined so spreading doesn't clobber defined values. */
@@ -132,16 +147,16 @@ function stripUndefined(obj: CodepulseConfig): CodepulseConfig {
 
 /**
  * Validate and sanitize a raw config object. Unknown keys are silently ignored.
- * Invalid values for known keys produce a warning and are dropped.
+ * Invalid values for known keys produce a warning in the provided array.
  */
-function validateConfig(raw: Record<string, unknown>, path: string): CodepulseConfig {
+function validateConfig(raw: Record<string, unknown>, path: string, warnings: string[]): CodepulseConfig {
   const config: CodepulseConfig = {};
 
   if (raw.theme !== undefined) {
     if (typeof raw.theme === "string" && raw.theme.length > 0) {
       config.theme = raw.theme;
     } else {
-      console.error(`Warning: ${path}: "theme" must be a non-empty string, ignoring`);
+      warnings.push(`${path}: "theme" must be a non-empty string, ignoring`);
     }
   }
 
@@ -149,7 +164,7 @@ function validateConfig(raw: Record<string, unknown>, path: string): CodepulseCo
     if (typeof raw.pageSize === "number" && Number.isInteger(raw.pageSize) && raw.pageSize >= 1) {
       config.pageSize = raw.pageSize;
     } else {
-      console.error(`Warning: ${path}: "pageSize" must be a positive integer, ignoring`);
+      warnings.push(`${path}: "pageSize" must be a positive integer, ignoring`);
     }
   }
 
@@ -157,7 +172,7 @@ function validateConfig(raw: Record<string, unknown>, path: string): CodepulseCo
     if (typeof raw.branch === "string" && raw.branch.length > 0) {
       config.branch = raw.branch;
     } else {
-      console.error(`Warning: ${path}: "branch" must be a non-empty string, ignoring`);
+      warnings.push(`${path}: "branch" must be a non-empty string, ignoring`);
     }
   }
 
@@ -165,7 +180,7 @@ function validateConfig(raw: Record<string, unknown>, path: string): CodepulseCo
     if (typeof raw.showAllBranches === "boolean") {
       config.showAllBranches = raw.showAllBranches;
     } else {
-      console.error(`Warning: ${path}: "showAllBranches" must be a boolean, ignoring`);
+      warnings.push(`${path}: "showAllBranches" must be a boolean, ignoring`);
     }
   }
 
@@ -173,7 +188,7 @@ function validateConfig(raw: Record<string, unknown>, path: string): CodepulseCo
     if (typeof raw.autoRefreshSeconds === "number" && raw.autoRefreshSeconds >= 0) {
       config.autoRefreshSeconds = raw.autoRefreshSeconds;
     } else {
-      console.error(`Warning: ${path}: "autoRefreshSeconds" must be a non-negative number, ignoring`);
+      warnings.push(`${path}: "autoRefreshSeconds" must be a non-negative number, ignoring`);
     }
   }
 

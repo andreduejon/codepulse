@@ -22,7 +22,7 @@ interface MenuDialogProps {
   onClose: () => void;
   onReload: () => void;
   onFetch: () => void;
-  onOpenDialog?: (dialogId: string) => void;
+  onOpenDialog?: (dialogId: "theme") => void;
   /** View graph from a specific branch's perspective. null clears the filter. */
   onViewBranch: (branch: string | null) => void;
   /** Config file info from startup, used by the Configuration section. */
