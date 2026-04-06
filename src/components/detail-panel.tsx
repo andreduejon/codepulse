@@ -69,7 +69,7 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
             },
           ]
         : []),
-      { id: "detail", label: "Details", disabled: false },
+      { id: "detail", label: "Info", disabled: false },
     ];
   };
 

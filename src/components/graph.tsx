@@ -386,16 +386,18 @@ function GraphLine(
     const detailPanelWidth =
       W >= COMPACT_THRESHOLD_WIDTH ? Math.max(Math.floor(W * DETAIL_PANEL_WIDTH_FRACTION), 60) : 0;
     const graphPanelWidth = W - detailPanelWidth - 4; // 4 = left panel paddingX=2 each side
+    // Hash box: width=HASH_COL_WIDTH (internal paddingLeft NOT added separately — it's inside the fixed width).
+    // Author box: width=AUTHOR_COL_WIDTH (internal paddingRight NOT added separately — same reason).
+    // Date box: width=DATE_COL_WIDTH (no internal padding).
+    // Desc box: paddingLeft=1 + paddingRight=2 are layout padding on a flex-grow box (no fixed width), so they DO consume space.
     const fixedCols =
       graphWidth() +
-      1 + // hash paddingLeft
-      HASH_COL_WIDTH +
+      HASH_COL_WIDTH + // hash box (width=9, internal paddingLeft is inside that 9)
       1 + // desc box paddingLeft
       2 + // desc box paddingRight
       refBadgesWidth() +
-      AUTHOR_COL_WIDTH +
-      2 + // author paddingRight
-      DATE_COL_WIDTH;
+      AUTHOR_COL_WIDTH + // author box (width=15, internal paddingRight is inside that 15)
+      DATE_COL_WIDTH; // date box (width=15)
     return Math.max(0, graphPanelWidth - fixedCols);
   });
 

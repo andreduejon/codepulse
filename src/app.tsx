@@ -3,7 +3,7 @@ import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { batch, createEffect, createMemo, createSignal, onCleanup, onMount, Show } from "solid-js";
 import DetailPanel, { type DetailPanelProps } from "./components/detail-panel";
 import type { DetailNavRef } from "./components/detail-types";
-import { DialogOverlay, DialogTitleBar } from "./components/dialogs/dialog-chrome";
+import { DialogFooter, DialogOverlay, DialogTitleBar } from "./components/dialogs/dialog-chrome";
 import DiffBlameDialog from "./components/dialogs/diff-blame-dialog";
 import HelpDialog from "./components/dialogs/help-dialog";
 import MenuDialog from "./components/dialogs/menu-dialog";
@@ -66,7 +66,7 @@ function DetailDialog(props: Readonly<DetailPanelProps & { onClose: () => void }
         paddingX={1}
         paddingY={1}
       >
-        <DialogTitleBar title="Commit Details" />
+        <DialogTitleBar title="Details" />
         <DetailPanel
           scrollboxRef={props.scrollboxRef}
           navRef={props.navRef}
@@ -74,6 +74,26 @@ function DetailDialog(props: Readonly<DetailPanelProps & { onClose: () => void }
           onJumpToCommit={props.onJumpToCommit}
           onOpenDiff={props.onOpenDiff}
         />
+        <DialogFooter>
+          <text flexShrink={0} wrapMode="none" fg={theme().accent}>
+            <strong>enter</strong>
+          </text>
+          <text flexShrink={0} wrapMode="none" fg={theme().foregroundMuted}>
+            {" select  "}
+          </text>
+          <text flexShrink={0} wrapMode="none" fg={theme().accent}>
+            <strong>{"←/→"}</strong>
+          </text>
+          <text flexShrink={0} wrapMode="none" fg={theme().foregroundMuted}>
+            {" switch tab  "}
+          </text>
+          <text flexShrink={0} wrapMode="none" fg={theme().accent}>
+            <strong>{"↑/↓"}</strong>
+          </text>
+          <text flexShrink={0} wrapMode="none" fg={theme().foregroundMuted}>
+            {" navigate"}
+          </text>
+        </DialogFooter>
       </box>
     </DialogOverlay>
   );
