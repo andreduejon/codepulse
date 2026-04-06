@@ -435,6 +435,373 @@ function optimizeFanOutMerge(fanOutRows: Connector[][], connectors: Connector[],
   }
 }
 
+/** Mutable lane state threaded through the main build loop. */
+interface LaneState {
+  lanes: (string | null)[];
+  laneRemoteOnly: boolean[];
+  laneColors: number[];
+  nextColorIdx: number;
+}
+
+/**
+ * Assign a lane column to the given commit hash.
+ *
+ * If the hash is already tracked, returns its column. Otherwise, reuses the
+ * first interior null gap (to keep the graph compact) or appends a new lane.
+ * Mutates `ls` when a new lane is allocated.
+ */
+function assignNodeColumn(hash: string, isRemoteOnly: boolean, ls: LaneState): number {
+  const { lanes, laneRemoteOnly, laneColors } = ls;
+  let nodeColumn = lanes.indexOf(hash);
+  if (nodeColumn !== -1) return nodeColumn;
+
+  // Find first interior gap (null surrounded by active lanes on the right)
+  let reuseIdx = -1;
+  for (let j = 0; j < lanes.length; j++) {
+    if (lanes[j] === null) {
+      let hasActiveAfter = false;
+      for (let k = j + 1; k < lanes.length; k++) {
+        if (lanes[k] !== null) {
+          hasActiveAfter = true;
+          break;
+        }
+      }
+      if (hasActiveAfter) {
+        reuseIdx = j;
+        break;
+      }
+    }
+  }
+
+  if (reuseIdx !== -1) {
+    nodeColumn = reuseIdx;
+    lanes[reuseIdx] = hash;
+    laneRemoteOnly[reuseIdx] = isRemoteOnly;
+    laneColors[reuseIdx] = ls.nextColorIdx++;
+  } else {
+    nodeColumn = lanes.length;
+    lanes.push(hash);
+    laneRemoteOnly.push(isRemoteOnly);
+    laneColors.push(ls.nextColorIdx++);
+  }
+  return nodeColumn;
+}
+
+/**
+ * Build the base connector list for a commit row.
+ *
+ * Emits a "node" connector at `nodeColumn`, "straight" for active passing-through
+ * lanes, and "empty" for null lanes.
+ */
+function buildBaseConnectors(nodeColumn: number, isCommitRemoteOnly: boolean, ls: LaneState): Connector[] {
+  const { lanes, laneRemoteOnly, laneColors } = ls;
+  const connectors: Connector[] = [];
+  for (let col = 0; col < lanes.length; col++) {
+    if (col === nodeColumn) {
+      connectors.push({ type: "node", color: laneColors[col], column: col, isRemoteOnly: isCommitRemoteOnly });
+    } else if (lanes[col] !== null) {
+      connectors.push({ type: "straight", color: laneColors[col], column: col, isRemoteOnly: laneRemoteOnly[col] });
+    } else {
+      connectors.push({ type: "empty", color: 0, column: col });
+    }
+  }
+  return connectors;
+}
+
+/**
+ * Build fan-out rows for extra lanes that all point to the same commit hash.
+ *
+ * Mutates `ls` (closes extra lanes) and patches `connectors` to remove stray
+ * straights for lanes that were just closed.
+ *
+ * @returns The fan-out connector rows (one per extra lane, farthest-first).
+ */
+function buildFanOutRows(
+  extraLanes: number[],
+  nodeColumn: number,
+  isCommitRemoteOnly: boolean,
+  connectors: Connector[],
+  ls: LaneState,
+): Connector[][] {
+  const { lanes, laneRemoteOnly, laneColors } = ls;
+  if (extraLanes.length === 0) return [];
+
+  const fanOutRows: Connector[][] = [];
+  // Sort farthest-first: outermost lane closes first (topmost fan-out row)
+  const sorted = [...extraLanes].sort((a, b) => Math.abs(b - nodeColumn) - Math.abs(a - nodeColumn));
+  const stillActive = new Set(extraLanes);
+
+  for (const extraCol of sorted) {
+    const fanOutConnectors: Connector[] = [];
+    const extraRemoteOnly = laneRemoteOnly[extraCol];
+    const goingRight = extraCol > nodeColumn;
+    const lo = Math.min(nodeColumn, extraCol);
+    const hi = Math.max(nodeColumn, extraCol);
+
+    for (let col = 0; col < lanes.length; col++) {
+      if (col === extraCol) {
+        // Closing corner: ╯ (going right) or ╰ (going left)
+        fanOutConnectors.push({
+          type: goingRight ? "corner-bottom-right" : "corner-bottom-left",
+          color: laneColors[extraCol],
+          column: col,
+          isRemoteOnly: extraRemoteOnly,
+        });
+      } else if (col === nodeColumn) {
+        fanOutConnectors.push({
+          type: goingRight ? "tee-left" : "tee-right",
+          color: laneColors[nodeColumn],
+          column: col,
+          isRemoteOnly: isCommitRemoteOnly,
+        });
+      } else if (col > lo && col < hi) {
+        // Between node and extra lane — emit horizontal (plus straight for crossings)
+        const isActiveLane = lanes[col] !== null;
+        if (isActiveLane) {
+          fanOutConnectors.push({
+            type: "straight",
+            color: laneColors[col],
+            column: col,
+            isRemoteOnly: laneRemoteOnly[col],
+          });
+          fanOutConnectors.push({
+            type: "horizontal",
+            color: laneColors[extraCol],
+            column: col,
+            isRemoteOnly: extraRemoteOnly,
+          });
+        } else {
+          fanOutConnectors.push({
+            type: "horizontal",
+            color: laneColors[extraCol],
+            column: col,
+            isRemoteOnly: extraRemoteOnly,
+          });
+        }
+      } else if ((lanes[col] !== null && col !== extraCol) || stillActive.has(col)) {
+        fanOutConnectors.push({
+          type: "straight",
+          color: laneColors[col],
+          column: col,
+          isRemoteOnly: laneRemoteOnly[col],
+        });
+      } else {
+        fanOutConnectors.push({ type: "empty", color: 0, column: col });
+      }
+    }
+
+    fanOutRows.push(fanOutConnectors);
+    stillActive.delete(extraCol);
+    lanes[extraCol] = null;
+    laneRemoteOnly[extraCol] = false;
+  }
+
+  // Patch stray "straight" connectors for now-closed extra lanes
+  for (const extraCol of extraLanes) {
+    const idx = connectors.findIndex(c => c.column === extraCol && c.type === "straight");
+    if (idx !== -1) {
+      connectors[idx] = { type: "empty", color: 0, column: extraCol };
+    }
+  }
+
+  return fanOutRows;
+}
+
+/**
+ * Resolve parent lanes for a commit, mutating `ls` and pushing to `parentLaneColors`.
+ *
+ * Handles three cases: root commit (no parents), single parent, and merge commit
+ * (multiple parents). Emits spanning connectors as needed via `addSpan`.
+ */
+function resolveParentLanes(
+  commit: Commit,
+  nodeColumn: number,
+  nodeColor: number,
+  isCommitRemoteOnly: boolean,
+  remoteOnlyHashes: Set<string>,
+  processedColumns: Map<string, number>,
+  connectors: Connector[],
+  ls: LaneState,
+): number[] {
+  const { lanes, laneRemoteOnly, laneColors } = ls;
+  const parents = commit.parents;
+  const parentLaneColors: number[] = [];
+
+  const addSpan = (from: number, to: number, color: number, kind: "merge" | "branch" | "close", remoteOnly?: boolean) =>
+    addSpanningConnectors(connectors, laneColors, from, to, color, kind, remoteOnly);
+
+  if (parents.length === 0) {
+    // Root commit — close this lane
+    lanes[nodeColumn] = null;
+    laneRemoteOnly[nodeColumn] = false;
+  } else if (parents.length === 1) {
+    const parentHash = parents[0];
+    const parentRemoteOnly = remoteOnlyHashes.has(parentHash);
+    const laneROValue = isCommitRemoteOnly || parentRemoteOnly;
+    const existingLane = lanes.indexOf(parentHash);
+
+    if (existingLane !== -1 && existingLane !== nodeColumn) {
+      if (processedColumns.has(parentHash)) {
+        // Parent already rendered — merge into it
+        if (nodeColumn < existingLane) {
+          addSpan(nodeColumn, existingLane, existingLane, "close", isCommitRemoteOnly);
+          lanes[existingLane] = null;
+          laneRemoteOnly[existingLane] = false;
+          lanes[nodeColumn] = parentHash;
+          laneRemoteOnly[nodeColumn] = laneROValue;
+          parentLaneColors.push(laneColors[nodeColumn]);
+        } else {
+          addSpan(nodeColumn, existingLane, nodeColumn, "merge", isCommitRemoteOnly);
+          lanes[nodeColumn] = null;
+          laneRemoteOnly[nodeColumn] = false;
+          parentLaneColors.push(laneColors[existingLane]);
+        }
+      } else {
+        lanes[nodeColumn] = parentHash;
+        laneRemoteOnly[nodeColumn] = laneROValue;
+        parentLaneColors.push(laneColors[nodeColumn]);
+      }
+    } else if (existingLane === nodeColumn) {
+      lanes[nodeColumn] = parentHash;
+      laneRemoteOnly[nodeColumn] = laneROValue;
+      parentLaneColors.push(laneColors[nodeColumn]);
+    } else if (processedColumns.has(parentHash)) {
+      const parentCol = processedColumns.get(parentHash) ?? nodeColumn;
+      if (parentCol !== nodeColumn) {
+        const targetActive = parentCol < lanes.length && lanes[parentCol] !== null;
+        addSpan(nodeColumn, parentCol, nodeColumn, targetActive ? "merge" : "close", isCommitRemoteOnly);
+      }
+      lanes[nodeColumn] = null;
+      laneRemoteOnly[nodeColumn] = false;
+      parentLaneColors.push(laneColors[parentCol] ?? nodeColor);
+    } else {
+      lanes[nodeColumn] = parentHash;
+      laneRemoteOnly[nodeColumn] = laneROValue;
+      parentLaneColors.push(laneColors[nodeColumn]);
+    }
+  } else {
+    // Merge commit — first parent continues the lane, others open new lanes
+    const firstParent = parents[0];
+    const firstParentRemoteOnly = remoteOnlyHashes.has(firstParent);
+    const firstParentLaneROValue = isCommitRemoteOnly || firstParentRemoteOnly;
+    const firstParentLane = lanes.indexOf(firstParent);
+
+    if (firstParentLane !== -1 && firstParentLane !== nodeColumn) {
+      if (processedColumns.has(firstParent)) {
+        addSpan(nodeColumn, firstParentLane, firstParentLane, "close", isCommitRemoteOnly);
+        lanes[firstParentLane] = null;
+        laneRemoteOnly[firstParentLane] = false;
+      }
+      lanes[nodeColumn] = firstParent;
+      laneRemoteOnly[nodeColumn] = firstParentLaneROValue;
+      parentLaneColors.push(laneColors[nodeColumn]);
+    } else if (processedColumns.has(firstParent) && firstParentLane === -1) {
+      const parentCol = processedColumns.get(firstParent) ?? nodeColumn;
+      if (parentCol !== nodeColumn) {
+        const targetActive = parentCol < lanes.length && lanes[parentCol] !== null;
+        addSpan(nodeColumn, parentCol, nodeColumn, targetActive ? "merge" : "close", isCommitRemoteOnly);
+      }
+      lanes[nodeColumn] = null;
+      laneRemoteOnly[nodeColumn] = false;
+      parentLaneColors.push(laneColors[parentCol] ?? nodeColor);
+    } else {
+      lanes[nodeColumn] = firstParent;
+      laneRemoteOnly[nodeColumn] = firstParentLaneROValue;
+      parentLaneColors.push(laneColors[nodeColumn]);
+    }
+
+    // Secondary parents — find or open a lane for each
+    for (let p = 1; p < parents.length; p++) {
+      const parentHash = parents[p];
+      const pRemoteOnly = remoteOnlyHashes.has(parentHash);
+      const pLaneROValue = isCommitRemoteOnly || pRemoteOnly;
+      const existingLane = lanes.indexOf(parentHash);
+
+      if (existingLane !== -1) {
+        parentLaneColors.push(laneColors[existingLane]);
+        if (existingLane !== nodeColumn) {
+          addSpan(nodeColumn, existingLane, existingLane, "merge", pLaneROValue);
+        }
+      } else if (processedColumns.has(parentHash)) {
+        const parentCol = processedColumns.get(parentHash) ?? nodeColumn;
+        parentLaneColors.push(laneColors[parentCol] ?? parentCol);
+        if (parentCol !== nodeColumn) {
+          const kind = parentCol < lanes.length && lanes[parentCol] !== null ? "merge" : "branch";
+          addSpan(nodeColumn, parentCol, laneColors[parentCol] ?? parentCol, kind, pLaneROValue);
+        }
+      } else {
+        // Open a new lane for this parent
+        const emptyIdx = lanes.indexOf(null);
+        let newLane: number;
+        if (emptyIdx !== -1) {
+          newLane = emptyIdx;
+          lanes[emptyIdx] = parentHash;
+          laneRemoteOnly[emptyIdx] = pLaneROValue;
+          laneColors[emptyIdx] = ls.nextColorIdx++;
+        } else {
+          newLane = lanes.length;
+          lanes.push(parentHash);
+          laneRemoteOnly.push(pLaneROValue);
+          laneColors.push(ls.nextColorIdx++);
+        }
+        parentLaneColors.push(laneColors[newLane]);
+        addSpan(nodeColumn, newLane, laneColors[newLane], "branch", pLaneROValue);
+      }
+    }
+  }
+
+  return parentLaneColors;
+}
+
+/**
+ * Build sorted parent and child relation lists for a graph row.
+ *
+ * Each list is sorted so same-branch entries come first (stable sort).
+ * Returns { parentHashes, parentBranches, parentColors, children, childBranches, childColors }.
+ */
+function buildRelationEntries(
+  commit: Commit,
+  commitBranch: string,
+  parentLaneColors: number[],
+  nodeColor: number,
+  branchNameMap: Map<string, string>,
+  childrenMap: Map<string, string[]>,
+  nodeColorByHash: Map<string, number>,
+): {
+  parentHashes: string[];
+  parentBranches: string[];
+  parentColors: number[];
+  children: string[];
+  childBranches: string[];
+  childColors: number[];
+} {
+  const sameBranchFirst = (branch: string) => (branch === commitBranch && commitBranch !== "" ? 0 : 1);
+
+  const parentEntries = commit.parents.map((p, i) => ({
+    hash: p,
+    branch: branchNameMap.get(p) ?? "",
+    color: parentLaneColors[i],
+  }));
+  parentEntries.sort((a, b) => sameBranchFirst(a.branch) - sameBranchFirst(b.branch));
+
+  const rawChildren = childrenMap.get(commit.hash) ?? [];
+  const childEntries = rawChildren.map(h => ({
+    hash: h,
+    branch: branchNameMap.get(h) ?? "",
+    color: nodeColorByHash.get(h) ?? nodeColor,
+  }));
+  childEntries.sort((a, b) => sameBranchFirst(a.branch) - sameBranchFirst(b.branch));
+
+  return {
+    parentHashes: parentEntries.map(e => e.hash),
+    parentBranches: parentEntries.map(e => e.branch),
+    parentColors: parentEntries.map(e => e.color),
+    children: childEntries.map(e => e.hash),
+    childBranches: childEntries.map(e => e.branch),
+    childColors: childEntries.map(e => e.color),
+  };
+}
+
 /**
  * Build graph layout from a list of commits.
  *
@@ -455,418 +822,78 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
 
   // Phase 3: Main loop — assign lanes, build connectors, create rows
   const rows: GraphRow[] = [];
-  const lanes: (string | null)[] = [];
-  const laneRemoteOnly: boolean[] = [];
-  const laneColors: number[] = [];
-  let nextColorIdx = 0;
+  const ls: LaneState = { lanes: [], laneRemoteOnly: [], laneColors: [], nextColorIdx: 0 };
   const nodeColorByHash = new Map<string, number>();
   const processedColumns = new Map<string, number>();
 
-  // Pre-seed lane 0 for the uncommitted-changes node.
-  //
-  // When the first commit is an uncommitted-changes synthetic node, it's a
-  // forward reference (appears before its parent). Without pre-seeding,
-  // it would claim lane 0, making it look like a straight-line continuation
-  // instead of a side branch. By reserving lane 0 for the parent hash,
-  // the uncommitted node gets a side lane.
-  //
-  // However, the uncommitted node is special: it SHOULD be on lane 0 as
-  // a natural continuation of the current branch. So we do NOT pre-seed
-  // for it — it claims lane 0 naturally and its parent (HEAD) flows into
-  // lane 0 after it.
-  //
-  // No pre-seeding is needed for this design.
+  for (const commit of commits) {
+    const isCommitRemoteOnly = remoteOnlyHashes.has(commit.hash);
 
-  for (let i = 0; i < commits.length; i++) {
-    const commit = commits[i];
+    // 3a. Assign the commit's lane column (reuse gap or append)
+    const nodeColumn = assignNodeColumn(commit.hash, isCommitRemoteOnly, ls);
 
-    // Find which lane this commit occupies
-    let nodeColumn = lanes.indexOf(commit.hash);
-    if (nodeColumn === -1) {
-      // New commit not tracked in any lane.
-      // Try to reuse an interior null lane (a gap between active lanes) to
-      // keep the graph compact. Only reuse gaps, not trailing nulls — the
-      // trailing null cleanup already handles those.
-      let reuseIdx = -1;
-      for (let j = 0; j < lanes.length; j++) {
-        if (lanes[j] === null) {
-          // Check if there's an active lane after this one (i.e., it's a gap)
-          let hasActiveAfter = false;
-          for (let k = j + 1; k < lanes.length; k++) {
-            if (lanes[k] !== null) {
-              hasActiveAfter = true;
-              break;
-            }
-          }
-          if (hasActiveAfter) {
-            reuseIdx = j;
-            break;
-          }
-        }
-      }
-      if (reuseIdx !== -1) {
-        nodeColumn = reuseIdx;
-        lanes[reuseIdx] = commit.hash;
-        laneRemoteOnly[reuseIdx] = remoteOnlyHashes.has(commit.hash);
-        laneColors[reuseIdx] = nextColorIdx++;
-      } else {
-        nodeColumn = lanes.length;
-        lanes.push(commit.hash);
-        laneRemoteOnly.push(remoteOnlyHashes.has(commit.hash));
-        laneColors.push(nextColorIdx++);
-      }
-    }
-
-    // Fan-out: find all OTHER lanes that also track this commit's hash.
-    // This happens when multiple children pointed to the same parent
-    // and we didn't merge them early (we keep lanes independent until the
-    // parent commit is reached). Now close those extra lanes with
-    // branch-off connectors (╰ or ╯) so the graph shows the fan-out.
+    // 3b. Find extra lanes tracking the same hash (fan-out)
     const extraLanes: number[] = [];
-    for (let col = 0; col < lanes.length; col++) {
-      if (col !== nodeColumn && lanes[col] === commit.hash) {
-        extraLanes.push(col);
-      }
+    for (let col = 0; col < ls.lanes.length; col++) {
+      if (col !== nodeColumn && ls.lanes[col] === commit.hash) extraLanes.push(col);
     }
 
     const isCommitOnCurrentBranch = currentBranchHashes.has(commit.hash);
+    // Capture node color BEFORE parent processing may overwrite laneColors
+    const nodeColor = ls.laneColors[nodeColumn];
 
-    // Capture the node's lane color BEFORE any parent processing or lane cleanup,
-    // because those operations may pop/overwrite laneColors entries.
-    const nodeColor = laneColors[nodeColumn];
+    // 3c. Build base connectors (node + straights + empties)
+    const connectors = buildBaseConnectors(nodeColumn, isCommitRemoteOnly, ls);
 
-    // Build connectors for this row
-    const connectors: Connector[] = [];
+    // 3d. Build fan-out rows, closing extra lanes (mutates ls + connectors)
+    const fanOutRows = buildFanOutRows(extraLanes, nodeColumn, isCommitRemoteOnly, connectors, ls);
 
-    // First, draw all passing-through lanes and the node.
-    // Use laneFocused[] to determine if a lane belongs to the focused branch path.
-    const isCommitRemoteOnly = remoteOnlyHashes.has(commit.hash);
-
-    for (let col = 0; col < lanes.length; col++) {
-      if (col === nodeColumn) {
-        connectors.push({
-          type: "node",
-          color: laneColors[col],
-          column: col,
-          isRemoteOnly: isCommitRemoteOnly,
-        });
-      } else if (lanes[col] !== null) {
-        connectors.push({
-          type: "straight",
-          color: laneColors[col],
-          column: col,
-          isRemoteOnly: laneRemoteOnly[col],
-        });
-      } else {
-        connectors.push({
-          type: "empty",
-          color: 0,
-          column: col,
-        });
-      }
-    }
-
-    // Spanning connectors (merge/branch/close) between node and target lanes
-    const addSpan = (
-      from: number,
-      to: number,
-      color: number,
-      kind: "merge" | "branch" | "close",
-      remoteOnly?: boolean,
-    ) => addSpanningConnectors(connectors, laneColors, from, to, color, kind, remoteOnly);
-
-    // Build fan-out rows: when this commit has multiple lanes pointing to it,
-    // each extra lane gets its own connector row showing a branch-off corner.
-    // Fan-out rows render ABOVE the parent commit (graph flows bottom-to-top:
-    // oldest at bottom, newest at top). Children's lanes come from above and
-    // converge at the parent. Sort farthest-first so outermost lanes close
-    // first (topmost fan-out row) and closest lanes close last (right above ●).
-    const fanOutRows: Connector[][] = [];
-    if (extraLanes.length > 0) {
-      const sorted = [...extraLanes].sort((a, b) => Math.abs(b - nodeColumn) - Math.abs(a - nodeColumn));
-
-      // Track which extra lanes are still active (not yet closed).
-      // We'll close them one per fan-out row, farthest first.
-      const stillActive = new Set(extraLanes);
-
-      for (const extraCol of sorted) {
-        const fanOutConnectors: Connector[] = [];
-        const extraRemoteOnly = laneRemoteOnly[extraCol];
-        const goingRight = extraCol > nodeColumn;
-        const lo = Math.min(nodeColumn, extraCol);
-        const hi = Math.max(nodeColumn, extraCol);
-
-        // Build the connector row: straight lines for all active lanes,
-        // horizontal connectors between node and extra lane, corner at the end.
-        // When a horizontal crosses an active lane, we emit BOTH a straight and
-        // a horizontal connector at the same column — renderFanOutRow will
-        // combine them into a crossing glyph (┼─).
-        //
-        // Fan-out rows render ABOVE the parent commit. The child lane comes
-        // from above (going DOWN) and terminates here, curving inward to the
-        // parent column. So the corner is "bottom" (╯/╰) — line ends here,
-        // connecting upward to the child and horizontally to the parent.
-        for (let col = 0; col < lanes.length; col++) {
-          if (col === extraCol) {
-            // This is the lane we're closing — bottom corner here
-            // ╯ if extra is to the right (line from above turns left to parent)
-            // ╰ if extra is to the left (line from above turns right to parent)
-            fanOutConnectors.push({
-              type: goingRight ? "corner-bottom-right" : "corner-bottom-left",
-              color: laneColors[extraCol],
-              column: col,
-              isRemoteOnly: extraRemoteOnly,
-            });
-          } else if (col === nodeColumn) {
-            fanOutConnectors.push({
-              type: goingRight ? "tee-left" : "tee-right",
-              color: laneColors[nodeColumn],
-              column: col,
-              isRemoteOnly: isCommitRemoteOnly,
-            });
-          } else if (col > lo && col < hi) {
-            // Between node and extra lane.
-            // Check if there's an active lane at this column (crossing).
-            const isActiveLane = lanes[col] !== null;
-            if (isActiveLane) {
-              // Active lane being crossed by the horizontal — emit both
-              // connectors. The renderer will combine these into ┼─.
-              fanOutConnectors.push({
-                type: "straight",
-                color: laneColors[col],
-                column: col,
-                isRemoteOnly: laneRemoteOnly[col],
-              });
-              fanOutConnectors.push({
-                type: "horizontal",
-                color: laneColors[extraCol],
-                column: col,
-                isRemoteOnly: extraRemoteOnly,
-              });
-            } else {
-              // Empty column — just horizontal passing through
-              fanOutConnectors.push({
-                type: "horizontal",
-                color: laneColors[extraCol],
-                column: col,
-                isRemoteOnly: extraRemoteOnly,
-              });
-            }
-          } else if ((lanes[col] !== null && col !== extraCol) || stillActive.has(col)) {
-            // Active lane passing through (either regular lane or another extra)
-            fanOutConnectors.push({
-              type: "straight",
-              color: laneColors[col],
-              column: col,
-              isRemoteOnly: laneRemoteOnly[col],
-            });
-          } else {
-            fanOutConnectors.push({
-              type: "empty",
-              color: 0,
-              column: col,
-            });
-          }
-        }
-
-        fanOutRows.push(fanOutConnectors);
-
-        // Mark this extra lane as closed
-        stillActive.delete(extraCol);
-        lanes[extraCol] = null;
-        laneRemoteOnly[extraCol] = false;
-      }
-
-      // Remove stray "straight" connectors for lanes closed by fan-out.
-      // The initial connectors were built before fan-out processing, so they
-      // still contain │ for extra lanes that are now closed. Replace them with
-      // empties so the commit row doesn't show dangling vertical lines.
-      for (const extraCol of extraLanes) {
-        const idx = connectors.findIndex(c => c.column === extraCol && c.type === "straight");
-        if (idx !== -1) {
-          connectors[idx] = { type: "empty", color: 0, column: extraCol };
-        }
-      }
-    }
-
-    // Now handle parents and generate merge/branch connectors
-    const parents = commit.parents;
-    const parentLaneColors: number[] = [];
-
-    if (parents.length === 0) {
-      // Root commit -- close this lane
-      lanes[nodeColumn] = null;
-      laneRemoteOnly[nodeColumn] = false;
-    } else if (parents.length === 1) {
-      const parentHash = parents[0];
-      const parentRemoteOnly = remoteOnlyHashes.has(parentHash);
-      const laneRemoteOnlyValue = isCommitRemoteOnly || parentRemoteOnly;
-      const existingLane = lanes.indexOf(parentHash);
-      if (existingLane !== -1 && existingLane !== nodeColumn) {
-        if (processedColumns.has(parentHash)) {
-          // Parent already rendered — merge into it
-          if (nodeColumn < existingLane) {
-            addSpan(nodeColumn, existingLane, existingLane, "close", isCommitRemoteOnly);
-            lanes[existingLane] = null;
-            laneRemoteOnly[existingLane] = false;
-            lanes[nodeColumn] = parentHash;
-            laneRemoteOnly[nodeColumn] = laneRemoteOnlyValue;
-            parentLaneColors.push(laneColors[nodeColumn]);
-          } else {
-            addSpan(nodeColumn, existingLane, nodeColumn, "merge", isCommitRemoteOnly);
-            lanes[nodeColumn] = null;
-            laneRemoteOnly[nodeColumn] = false;
-            parentLaneColors.push(laneColors[existingLane]);
-          }
-        } else {
-          lanes[nodeColumn] = parentHash;
-          laneRemoteOnly[nodeColumn] = laneRemoteOnlyValue;
-          parentLaneColors.push(laneColors[nodeColumn]);
-        }
-      } else if (existingLane === nodeColumn) {
-        lanes[nodeColumn] = parentHash;
-        laneRemoteOnly[nodeColumn] = laneRemoteOnlyValue;
-        parentLaneColors.push(laneColors[nodeColumn]);
-      } else if (processedColumns.has(parentHash)) {
-        const parentCol = processedColumns.get(parentHash) ?? nodeColumn;
-        if (parentCol !== nodeColumn) {
-          const targetActive = parentCol < lanes.length && lanes[parentCol] !== null;
-          addSpan(nodeColumn, parentCol, nodeColumn, targetActive ? "merge" : "close", isCommitRemoteOnly);
-        }
-        lanes[nodeColumn] = null;
-        laneRemoteOnly[nodeColumn] = false;
-        parentLaneColors.push(laneColors[parentCol] ?? nodeColor);
-      } else {
-        lanes[nodeColumn] = parentHash;
-        laneRemoteOnly[nodeColumn] = laneRemoteOnlyValue;
-        parentLaneColors.push(laneColors[nodeColumn]);
-      }
-    } else {
-      // Merge commit -- first parent continues the lane, others open new lanes.
-      const firstParent = parents[0];
-      const firstParentRemoteOnly = remoteOnlyHashes.has(firstParent);
-      const firstParentLaneROValue = isCommitRemoteOnly || firstParentRemoteOnly;
-      const firstParentLane = lanes.indexOf(firstParent);
-      if (firstParentLane !== -1 && firstParentLane !== nodeColumn) {
-        if (processedColumns.has(firstParent)) {
-          addSpan(nodeColumn, firstParentLane, firstParentLane, "close", isCommitRemoteOnly);
-          lanes[firstParentLane] = null;
-          laneRemoteOnly[firstParentLane] = false;
-        }
-        lanes[nodeColumn] = firstParent;
-        laneRemoteOnly[nodeColumn] = firstParentLaneROValue;
-        parentLaneColors.push(laneColors[nodeColumn]);
-      } else if (processedColumns.has(firstParent) && firstParentLane === -1) {
-        const parentCol = processedColumns.get(firstParent) ?? nodeColumn;
-        if (parentCol !== nodeColumn) {
-          const targetActive = parentCol < lanes.length && lanes[parentCol] !== null;
-          addSpan(nodeColumn, parentCol, nodeColumn, targetActive ? "merge" : "close", isCommitRemoteOnly);
-        }
-        lanes[nodeColumn] = null;
-        laneRemoteOnly[nodeColumn] = false;
-        parentLaneColors.push(laneColors[parentCol] ?? nodeColor);
-      } else {
-        lanes[nodeColumn] = firstParent;
-        laneRemoteOnly[nodeColumn] = firstParentLaneROValue;
-        parentLaneColors.push(laneColors[nodeColumn]);
-      }
-
-      for (let p = 1; p < parents.length; p++) {
-        const parentHash = parents[p];
-        const pRemoteOnly = remoteOnlyHashes.has(parentHash);
-        const pLaneROValue = isCommitRemoteOnly || pRemoteOnly;
-        const existingLane = lanes.indexOf(parentHash);
-        if (existingLane !== -1) {
-          parentLaneColors.push(laneColors[existingLane]);
-          if (existingLane !== nodeColumn) {
-            addSpan(nodeColumn, existingLane, existingLane, "merge", pLaneROValue);
-          }
-        } else if (processedColumns.has(parentHash)) {
-          const parentCol = processedColumns.get(parentHash) ?? nodeColumn;
-          parentLaneColors.push(laneColors[parentCol] ?? parentCol);
-          if (parentCol !== nodeColumn) {
-            const kind = parentCol < lanes.length && lanes[parentCol] !== null ? "merge" : "branch";
-            addSpan(nodeColumn, parentCol, laneColors[parentCol] ?? parentCol, kind, pLaneROValue);
-          }
-        } else {
-          // Open a new lane for this parent
-          const emptyIdx = lanes.indexOf(null);
-          let newLane: number;
-          if (emptyIdx !== -1) {
-            newLane = emptyIdx;
-            lanes[emptyIdx] = parentHash;
-            laneRemoteOnly[emptyIdx] = pLaneROValue;
-            laneColors[emptyIdx] = nextColorIdx++;
-          } else {
-            newLane = lanes.length;
-            lanes.push(parentHash);
-            laneRemoteOnly.push(pLaneROValue);
-            laneColors.push(nextColorIdx++);
-          }
-          parentLaneColors.push(laneColors[newLane]);
-          // Add spanning connectors from nodeColumn to the new lane
-          addSpan(nodeColumn, newLane, laneColors[newLane], "branch", pLaneROValue);
-        }
-      }
-    }
+    // 3e. Resolve parent lanes, emit spanning connectors (mutates ls)
+    const parentLaneColors = resolveParentLanes(
+      commit,
+      nodeColumn,
+      nodeColor,
+      isCommitRemoteOnly,
+      remoteOnlyHashes,
+      processedColumns,
+      connectors,
+      ls,
+    );
 
     const mergeSourceColor = parentLaneColors.length >= 2 ? parentLaneColors[1] : undefined;
 
-    // ── Fan-out + commit-row merge optimization ──
+    // 3f. Optimize fan-out + merge connector layout
     optimizeFanOutMerge(fanOutRows, connectors, nodeColumn);
 
-    // Clean up trailing null lanes.
-    // Always pop trailing nulls to keep the graph compact.
-    while (lanes.length > 0 && lanes[lanes.length - 1] === null) {
-      lanes.pop();
-      laneRemoteOnly.pop();
-      laneColors.pop();
+    // 3g. Pop trailing null lanes to keep graph compact
+    while (ls.lanes.length > 0 && ls.lanes[ls.lanes.length - 1] === null) {
+      ls.lanes.pop();
+      ls.laneRemoteOnly.pop();
+      ls.laneColors.pop();
     }
 
-    // Build the columns for this row (snapshot of active lanes AFTER parent processing)
-    const columns: GraphColumn[] = lanes.map((lane, idx) => ({
-      color: laneColors[idx] ?? idx,
+    // 3h. Snapshot active lane columns for this row
+    const columns: GraphColumn[] = ls.lanes.map((lane, idx) => ({
+      color: ls.laneColors[idx] ?? idx,
       active: lane !== null,
-      isRemoteOnly: laneRemoteOnly[idx],
+      isRemoteOnly: ls.laneRemoteOnly[idx],
     }));
 
-    // Record this commit's lane color for child lookups.
+    // Record this commit's color so children can look it up
     nodeColorByHash.set(commit.hash, nodeColor);
 
     const commitBranch = branchNameMap.get(commit.hash) ?? "";
 
-    // Build parent list with branch names and colors.
-    // Sort: same-branch parents first (stable, preserving row order within groups).
-    const parentEntries = parents.map((p, i) => ({
-      hash: p,
-      branch: branchNameMap.get(p) ?? "",
-      color: parentLaneColors[i],
-    }));
-    parentEntries.sort((a, b) => {
-      const aMatch = a.branch === commitBranch && commitBranch !== "" ? 0 : 1;
-      const bMatch = b.branch === commitBranch && commitBranch !== "" ? 0 : 1;
-      return aMatch - bMatch;
-    });
-    const parentHashes = parentEntries.map(e => e.hash);
-    const parentBranches = parentEntries.map(e => e.branch);
-    const parentColors = parentEntries.map(e => e.color);
-
-    // Build child list with branch names and colors.
-    // Sort: same-branch children first (stable, preserving row order within groups).
-    const rawChildren = childrenMap.get(commit.hash) ?? [];
-    const childEntries = rawChildren.map(h => ({
-      hash: h,
-      branch: branchNameMap.get(h) ?? "",
-      color: nodeColorByHash.get(h) ?? nodeColor,
-    }));
-    childEntries.sort((a, b) => {
-      const aMatch = a.branch === commitBranch && commitBranch !== "" ? 0 : 1;
-      const bMatch = b.branch === commitBranch && commitBranch !== "" ? 0 : 1;
-      return aMatch - bMatch;
-    });
-    const children = childEntries.map(e => e.hash);
-    const childBranches = childEntries.map(e => e.branch);
-    const childColors = childEntries.map(e => e.color);
+    // 3i. Build sorted parent/child relation entries
+    const { parentHashes, parentBranches, parentColors, children, childBranches, childColors } = buildRelationEntries(
+      commit,
+      commitBranch,
+      parentLaneColors,
+      nodeColor,
+      branchNameMap,
+      childrenMap,
+      nodeColorByHash,
+    );
 
     rows.push({
       commit,
@@ -875,9 +902,9 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       connectors,
       isOnCurrentBranch: isCommitOnCurrentBranch,
       nodeColor,
-      branchName: branchNameMap.get(commit.hash) ?? "",
-      mergeBranch: parents.length >= 2 ? (branchNameMap.get(parents[1]) ?? "") : undefined,
-      mergeTarget: parents.length >= 2 ? (branchNameMap.get(parents[0]) ?? "") : undefined,
+      branchName: commitBranch,
+      mergeBranch: commit.parents.length >= 2 ? (branchNameMap.get(commit.parents[1]) ?? "") : undefined,
+      mergeTarget: commit.parents.length >= 2 ? (branchNameMap.get(commit.parents[0]) ?? "") : undefined,
       mergeSourceColor,
       parentHashes,
       parentBranches,
@@ -890,8 +917,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
       fanOutRows: fanOutRows.length > 0 ? fanOutRows : undefined,
     });
 
-    // Record this commit as processed with its column, so later commits
-    // whose parents point here can detect the parent was already rendered.
+    // Mark this commit as processed so later commits can detect already-rendered parents
     processedColumns.set(commit.hash, nodeColumn);
   }
 
