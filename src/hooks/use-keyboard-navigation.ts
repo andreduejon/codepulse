@@ -151,6 +151,8 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     // Escape handling
     if (e.name === "escape") {
       if (dialog()) {
+        // Closing the detail dialog must also clear detailFocused
+        if (dialog() === "detail") actions.setDetailFocused(false);
         setDialog(null);
         return;
       }
@@ -181,6 +183,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     // q: same cascade as Escape, but quits if nothing left to close
     if (e.name === "q" && !searchFocused()) {
       if (dialog()) {
+        if (dialog() === "detail") actions.setDetailFocused(false);
         setDialog(null);
         return;
       }
@@ -253,10 +256,9 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
           const tabs = getAvailableTabs();
           const currentIdx = tabs.indexOf(state.detailActiveTab());
           if (currentIdx <= 0) {
-            // Already on leftmost tab — exit detail focus or close detail dialog
-            if (dialog() === "detail") {
-              setDialog(null);
-            } else {
+            // In normal mode, left on first tab exits detail focus.
+            // In dialog mode, only esc/q can close — left does nothing.
+            if (dialog() !== "detail") {
               actions.setDetailFocused(false);
             }
           } else {
@@ -363,6 +365,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         if (layoutMode() === "compact" && state.selectedCommit()) {
           e.preventDefault();
           actions.setDetailCursorIndex(0);
+          actions.setDetailFocused(true);
           setDialog("detail");
         }
         break;

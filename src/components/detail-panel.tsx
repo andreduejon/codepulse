@@ -18,8 +18,6 @@ export interface DetailPanelProps {
   searchFocused: boolean;
   onJumpToCommit: (hash: string, from: "child" | "parent") => void;
   onOpenDiff: (target: DiffTarget) => void;
-  /** When true, treat the panel as focused for accent highlighting (compact dialog mode). */
-  inDialog?: boolean;
 }
 
 /**
@@ -82,8 +80,7 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
         <For each={tabs()}>
           {tab => {
             const isActive = () => state.detailActiveTab() === tab.id;
-            const detailActive = () =>
-              isActive() && (state.detailFocused() || !!props.inDialog) && !props.searchFocused;
+            const detailActive = () => isActive() && state.detailFocused() && !props.searchFocused;
             const lineColor = () =>
               tab.disabled ? t().border : detailActive() ? t().accent : isActive() ? t().foregroundMuted : t().border;
             const textColor = () => (tab.disabled ? t().border : detailActive() ? t().accent : t().foregroundMuted);

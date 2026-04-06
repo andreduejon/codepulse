@@ -19,7 +19,7 @@ import {
   MIN_TERMINAL_WIDTH,
   UNCOMMITTED_HASH,
 } from "./constants";
-import { AppStateContext, createAppState } from "./context/state";
+import { AppStateContext, createAppState, useAppState } from "./context/state";
 import { createThemeState, ThemeContext, useTheme } from "./context/theme";
 import { buildGraph, getMaxGraphColumns } from "./git/graph";
 import {
@@ -53,8 +53,12 @@ interface AppProps {
 function DetailDialog(props: Readonly<DetailPanelProps & { onClose: () => void }>) {
   const dimensions = useTerminalDimensions();
   const { theme } = useTheme();
+  const { state } = useAppState();
   const dialogWidth = () => Math.min(72, dimensions().width - 8);
   const dialogHeight = () => dimensions().height - 8;
+
+  // Dynamic enter verb based on what the cursored item does
+  const enterVerb = () => state.detailCursorAction() ?? "select";
 
   return (
     <DialogOverlay>
@@ -67,32 +71,31 @@ function DetailDialog(props: Readonly<DetailPanelProps & { onClose: () => void }
         paddingY={1}
       >
         <DialogTitleBar title="Details" />
-        {/* Extra paddingX=3 matches other dialogs' inner paddingX=4 (outer box already has paddingX=1) */}
-        <box flexDirection="column" flexGrow={1} paddingX={3}>
+        {/* paddingX=4 matches other dialogs' inner content padding (outer box already has paddingX=1) */}
+        <box flexDirection="column" flexGrow={1} paddingX={4}>
           <DetailPanel
             scrollboxRef={props.scrollboxRef}
             navRef={props.navRef}
             searchFocused={props.searchFocused}
             onJumpToCommit={props.onJumpToCommit}
             onOpenDiff={props.onOpenDiff}
-            inDialog
           />
         </box>
         <DialogFooter>
-          <text flexShrink={0} wrapMode="none" fg={theme().accent}>
-            <strong>enter</strong>
+          <text flexShrink={0} wrapMode="none" fg={theme().foreground}>
+            enter
           </text>
           <text flexShrink={0} wrapMode="none" fg={theme().foregroundMuted}>
-            {" open  "}
+            {` ${enterVerb()}  `}
           </text>
-          <text flexShrink={0} wrapMode="none" fg={theme().accent}>
-            <strong>{"←/→"}</strong>
+          <text flexShrink={0} wrapMode="none" fg={theme().foreground}>
+            {"←/→"}
           </text>
           <text flexShrink={0} wrapMode="none" fg={theme().foregroundMuted}>
             {" switch tab  "}
           </text>
-          <text flexShrink={0} wrapMode="none" fg={theme().accent}>
-            <strong>{"↑/↓"}</strong>
+          <text flexShrink={0} wrapMode="none" fg={theme().foreground}>
+            {"↑/↓"}
           </text>
           <text flexShrink={0} wrapMode="none" fg={theme().foregroundMuted}>
             {" navigate"}
@@ -131,15 +134,15 @@ function AppContent(props: Readonly<AppProps>) {
 
   // Seamless resize transitions between layout modes:
   // - Normal → Compact while detail is focused: auto-open the detail dialog
-  // - Compact → Normal while detail dialog is open: close dialog, restore panel focus
+  // - Compact → Normal while detail dialog is open: close dialog, keep detail focused
   createEffect(() => {
     const mode = layoutMode();
-    if (mode === "compact" && state.detailFocused()) {
+    if (mode === "compact" && state.detailFocused() && dialog() !== "detail") {
+      // Only open the dialog if it's not already open (avoids re-triggering)
       setDialog("detail");
-      actions.setDetailFocused(false);
     } else if (mode === "normal" && dialog() === "detail") {
       setDialog(null);
-      actions.setDetailFocused(true);
+      // detailFocused stays true — panel is now visible in two-column layout
     }
   });
 
