@@ -4,14 +4,12 @@ import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
 import { DETAIL_PANEL_WIDTH_FRACTION, UNCOMMITTED_HASH } from "../constants";
 import { useAppState } from "../context/state";
 import { useTheme } from "../context/theme";
-import { getStashFiles } from "../git/repo";
-import type { Commit, FileChange, GraphRow } from "../git/types";
+import type { Commit, GraphRow } from "../git/types";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
 import { useClipboard } from "../hooks/use-clipboard";
 import { useFileTree } from "../hooks/use-file-tree";
+import { useStashState } from "../hooks/use-stash-state";
 import { formatDate } from "../utils/date";
-import type { FileTreeRow } from "../utils/file-tree";
-import { buildFileTree, flattenFileTree } from "../utils/file-tree";
 import DetailBadge from "./detail-badge";
 import type { DetailViewProps } from "./detail-types";
 import {
@@ -198,77 +196,16 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   } = useFileTree(() => detail()?.files ?? [], commit);
 
   // ── Stash section state ─────────────────────────────────────────────
-  /** Stash entries for the currently selected commit (from stashByParent map). */
-  const stashEntries = createMemo((): Commit[] => {
-    const c = commit();
-    if (!c) return [];
-    return state.stashByParent().get(c.hash) ?? [];
-  });
-
-  /** Which stash hashes are expanded in the detail panel. */
-  const [expandedStashes, setExpandedStashes] = createSignal(new Set<string>());
-  /** Cached stash file data: stashHash → FileChange[]. */
-  const [stashFileCache, setStashFileCache] = createSignal(new Map<string, FileChange[]>());
-  /** Collapsed dirs per stash: stashHash → Set of collapsed dir paths. */
-  const [stashCollapsedDirs, setStashCollapsedDirs] = createSignal(new Map<string, Set<string>>());
-
-  // Reset stash state when selected commit changes
-  createEffect(() => {
-    commit();
-    setExpandedStashes(new Set<string>());
-    setStashFileCache(new Map<string, FileChange[]>());
-    setStashCollapsedDirs(new Map<string, Set<string>>());
-  });
-
-  /** Toggle a stash's expanded state and lazily load files. */
-  const toggleStash = async (stashHash: string) => {
-    const next = new Set(expandedStashes());
-    if (next.has(stashHash)) {
-      next.delete(stashHash);
-      setExpandedStashes(next);
-      return;
-    }
-    next.add(stashHash);
-    setExpandedStashes(next);
-
-    // Lazy load files if not cached
-    if (!stashFileCache().has(stashHash)) {
-      const files = await getStashFiles(state.repoPath(), stashHash);
-      setStashFileCache(prev => {
-        const m = new Map(prev);
-        m.set(stashHash, files);
-        return m;
-      });
-    }
-  };
-
-  /** Toggle a directory within a stash's file tree. */
-  const toggleStashDir = (stashHash: string, dirPath: string) => {
-    setStashCollapsedDirs(prev => {
-      const m = new Map(prev);
-      const dirs = new Set(m.get(stashHash) ?? []);
-      if (dirs.has(dirPath)) dirs.delete(dirPath);
-      else dirs.add(dirPath);
-      m.set(stashHash, dirs);
-      return m;
-    });
-  };
-
-  /** Build file tree rows for a specific stash. */
-  const getStashFileTreeRows = (stashHash: string): FileTreeRow[] => {
-    const files = stashFileCache().get(stashHash);
-    if (!files || files.length === 0) return [];
-    const tree = buildFileTree(files);
-    const collapsed = stashCollapsedDirs().get(stashHash) ?? new Set<string>();
-    return flattenFileTree(tree, collapsed);
-  };
-
-  /** Get column widths for a stash's file stats. */
-  const getStashFileWidths = (stashHash: string) => {
-    const files = stashFileCache().get(stashHash);
-    if (!files) return { totalAdd: 0, totalDel: 0, addColWidth: 2, delColWidth: 2 };
-    return computeFileWidths(files);
-  };
+  const {
+    stashEntries,
+    expandedStashes,
+    stashFileCache,
+    stashCollapsedDirs,
+    toggleStash,
+    toggleStashDir,
+    getStashFileTreeRows,
+    getStashFileWidths,
+  } = useStashState(commit);
 
   // ── Build flat list of interactive items (tab-aware) ──
   // IMPORTANT: This memo must be defined AFTER fileTreeRows, stashEntries,
