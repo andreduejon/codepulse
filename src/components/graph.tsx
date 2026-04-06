@@ -213,11 +213,7 @@ function GraphLine(
   const dimChars = (chars: GraphChar[]): GraphChar[] => {
     if (!isUncommitted()) return chars;
     const mutedColor = t().foregroundMuted;
-    for (const c of chars) {
-      c.color = mutedColor;
-      c.bold = false;
-    }
-    return chars;
+    return chars.map(c => ({ ...c, color: mutedColor, bold: false }));
   };
 
   // Full-width renders — memoized, depend on row data + renderOpts, NOT viewportOffset
@@ -256,10 +252,7 @@ function GraphLine(
       const chars = renderFanOutRow(foConnectors, renderOpts(), props.row.nodeColumn);
       if (dimAll) {
         const mutedColor = t().foregroundMuted;
-        for (const c of chars) {
-          c.color = mutedColor;
-          c.bold = false;
-        }
+        return chars.map(c => ({ ...c, color: mutedColor, bold: false }));
       }
       return chars;
     });
@@ -558,11 +551,6 @@ export default function GraphView(props: Readonly<{ onLoadMore?: () => void }>) 
   // Refs for programmatic scroll-into-view
   let scrollboxRef: ScrollBoxRenderable | undefined;
   const rowRefs: Renderable[] = [];
-
-  // Clean up stale rowRefs when filtered row count changes
-  createEffect(() => {
-    rowRefs.length = state.filteredRows().length;
-  });
 
   createEffect(() => {
     const rows = state.filteredRows();

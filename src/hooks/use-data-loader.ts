@@ -162,7 +162,12 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
       // Skip update if nothing changed (avoids flicker on auto-refresh)
       if (silent) {
         const oldCommits = state.commits();
-        if (oldCommits.length === commits.length && oldCommits.every((c, i) => c.hash === commits[i].hash)) {
+        if (
+          oldCommits.length === commits.length &&
+          oldCommits.every(
+            (c, i) => c.hash === commits[i].hash && JSON.stringify(c.refs) === JSON.stringify(commits[i].refs),
+          )
+        ) {
           return;
         }
       }
@@ -214,8 +219,10 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
   let loadMoreAbortCtrl: AbortController | null = null;
 
   async function loadMoreData() {
-    // Guards: don't load if there's nothing more, or if a page fetch is already running
+    // Guards: don't load if there's nothing more, or if any fetch/load is already running
     if (!state.hasMore()) return;
+    if (state.fetching()) return; // handleFetch in-flight
+    if (loadAbortCtrl !== null) return; // loadData in-flight
     if (loadMoreAbortCtrl) return;
 
     const ctrl = new AbortController();
