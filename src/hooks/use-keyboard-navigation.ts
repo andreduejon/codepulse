@@ -25,7 +25,7 @@ interface KeyboardNavigationOptions {
   getDetailScrollboxRef: () => ScrollBoxRenderable | undefined;
   detailNavRef: DetailNavRef;
   /** Reload git data, optionally preserving scroll position via stickyHash. */
-  loadData: (branch?: string, stickyHash?: string) => void;
+  loadData: (branch?: string, stickyHash?: string, silent?: boolean, preserveLoaded?: boolean) => void;
   /** Fetch from all remotes and reload data. */
   handleFetch: () => void;
 }
@@ -412,7 +412,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         // Shift+R = Reload
         if (e.shift && !e.ctrl) {
           const stickyHash = state.selectedCommit()?.hash;
-          loadData(undefined, stickyHash);
+          loadData(undefined, stickyHash, false, true);
         }
         break;
       case "f":

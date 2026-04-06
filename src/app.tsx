@@ -191,7 +191,7 @@ function AppContent(props: Readonly<AppProps>) {
 
   // Load git data (cancels any in-flight load so user actions always win)
   let loadAbortCtrl: AbortController | null = null;
-  async function loadData(branch?: string, stickyHash?: string, silent = false) {
+  async function loadData(branch?: string, stickyHash?: string, silent = false, preserveLoaded = false) {
     // Cancel any in-flight load — user-initiated actions take priority
     if (loadAbortCtrl) loadAbortCtrl.abort();
     const ctrl = new AbortController();
@@ -209,10 +209,14 @@ function AppContent(props: Readonly<AppProps>) {
       const effectiveBranch = viewBranch ?? branch;
       const effectiveAll = viewBranch ? false : state.showAllBranches();
 
-      // For silent auto-refresh, fetch at least as many commits as currently loaded
-      // so we don't drop already-paged history.
+      // Preserve scroll depth when reloading due to settings changes or manual refresh:
+      // fetch at least as many commits as are currently loaded so the user doesn't
+      // lose history they've already paged through.
       const pageSize = state.maxCount();
-      const silentMaxCount = silent ? Math.max(pageSize, state.commits().length) : pageSize;
+      const silentMaxCount =
+        silent || preserveLoaded
+          ? Math.max(pageSize, state.commits().filter(c => c.hash !== UNCOMMITTED_HASH).length)
+          : pageSize;
 
       const [commits, branches, currentBranch, remoteUrl, tagDetails, stashes, wtStatus] = await Promise.all([
         getCommits(
@@ -452,7 +456,7 @@ function AppContent(props: Readonly<AppProps>) {
         const fetchTime = await getLastFetchTime(props.repoPath);
         actions.setLastFetchTime(fetchTime);
         const stickyHash = state.selectedCommit()?.hash;
-        await loadData(undefined, stickyHash);
+        await loadData(undefined, stickyHash, false, true);
       } else {
         actions.setError(result.error ?? "Fetch failed");
       }
@@ -843,7 +847,7 @@ function AppContent(props: Readonly<AppProps>) {
             <Show when={dialog() === "menu"}>
               <MenuDialog
                 onClose={() => setDialog(null)}
-                onReload={() => loadData()}
+                onReload={() => loadData(undefined, undefined, false, true)}
                 onFetch={handleFetch}
                 onOpenDialog={handleOpenDialog}
                 onViewBranch={handleViewBranch}
