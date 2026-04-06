@@ -1,5 +1,5 @@
 import { Show } from "solid-js";
-import { useTheme } from "../context/theme";
+import { useT } from "../hooks/use-t";
 import type { FileTreeRow } from "../utils/file-tree";
 
 interface FileTreeEntryProps {
@@ -31,8 +31,7 @@ interface FileTreeEntryProps {
  * status letter → optional +/- stat columns.
  */
 export function FileTreeEntry(props: FileTreeEntryProps) {
-  const { theme } = useTheme();
-  const t = () => theme();
+  const t = useT();
 
   return (
     <box flexDirection="row" width="100%" backgroundColor={props.highlightBg}>

@@ -9,7 +9,6 @@ import {
   HASH_COL_WIDTH,
 } from "../constants";
 import { useAppState } from "../context/state";
-import { useTheme } from "../context/theme";
 import {
   buildEdgeIndicator,
   computeSingleViewportOffset,
@@ -25,6 +24,7 @@ import {
 } from "../git/graph";
 import type { GraphRow, RefInfo } from "../git/types";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
+import { useT } from "../hooks/use-t";
 import { formatRelativeDate } from "../utils/date";
 import { scrollElementIntoView } from "../utils/scroll";
 
@@ -34,8 +34,7 @@ function RefBadge(
     laneColor: () => string;
   }>,
 ) {
-  const { theme } = useTheme();
-  const t = () => theme();
+  const t = useT();
 
   const isDimmed = () => props.info.type === "stash" || props.info.type === "uncommitted";
 
@@ -61,9 +60,8 @@ function useGraphDimensions(maxGraphColumns: () => number) {
 }
 
 export function ColumnHeader() {
-  const { theme } = useTheme();
+  const t = useT();
   const { state } = useAppState();
-  const t = () => theme();
   const leftPanelFocused = () => !state.detailFocused();
 
   const { graphWidth } = useGraphDimensions(() => state.maxGraphColumns());
@@ -157,7 +155,7 @@ function GraphLine(
     rowRef?: (el: Renderable) => void;
   }>,
 ) {
-  const { theme } = useTheme();
+  const t = useT();
   const { state } = useAppState();
   const dimensions = useTerminalDimensions();
 
@@ -168,9 +166,9 @@ function GraphLine(
 
   const renderOpts = () => {
     return {
-      themeColors: theme().graphColors,
+      themeColors: t().graphColors,
       padToColumns: padCols(),
-      padColor: theme().foregroundMuted,
+      padColor: t().foregroundMuted,
     };
   };
 
@@ -179,7 +177,7 @@ function GraphLine(
   const isUncommitted = () => commit().refs.some(r => r.type === "uncommitted");
 
   // Edge indicator helper — single 2-char column appended to the right
-  const edgeColor = () => theme().foregroundMuted;
+  const edgeColor = () => t().foregroundMuted;
   const blankEdge = (): GraphChar => ({ char: "  ", color: edgeColor() });
 
   // Append edge indicator column to the right of the graph chars.
@@ -213,7 +211,7 @@ function GraphLine(
   // so the entire row visually recedes. Uses foregroundMuted for a uniformly muted look.
   const dimChars = (chars: GraphChar[]): GraphChar[] => {
     if (!isUncommitted()) return chars;
-    const mutedColor = theme().foregroundMuted;
+    const mutedColor = t().foregroundMuted;
     for (const c of chars) {
       c.color = mutedColor;
       c.bold = false;
@@ -274,7 +272,8 @@ function GraphLine(
     return foRows.map(foConnectors => {
       const chars = renderFanOutRow(foConnectors, renderOpts(), props.row.nodeColumn);
       if (dimAll) {
-        const mutedColor = theme().foregroundMuted;
+        const mutedColor = t().foregroundMuted;
+
         for (const c of chars) {
           c.color = mutedColor;
           c.bold = false;
@@ -329,8 +328,7 @@ function GraphLine(
     const allRefs = commit().refs;
     return [...allRefs].sort((a, b) => (REF_SORT_ORDER[a.type] ?? 9) - (REF_SORT_ORDER[b.type] ?? 9));
   });
-  const laneColor = () => getColorForColumn(props.row.nodeColor, theme().graphColors);
-  const t = () => theme();
+  const laneColor = () => getColorForColumn(props.row.nodeColor, t().graphColors);
 
   // Effective text color for the commit subject (primary column).
   // Active row uses accent color with bold. Inactive rows use foreground.
@@ -515,8 +513,8 @@ const REF_SORT_ORDER: Record<string, number> = { tag: 0, branch: 1, remote: 2, s
 
 /** Horizontal divider line for the two-zone search context window. */
 function SearchDivider() {
-  const { theme } = useTheme();
-  return <box width="100%" border={["top"]} borderStyle="single" borderColor={theme().border} />;
+  const t = useT();
+  return <box width="100%" border={["top"]} borderStyle="single" borderColor={t().border} />;
 }
 
 export default function GraphView(props: Readonly<{ onLoadMore?: () => void }>) {

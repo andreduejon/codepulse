@@ -1,6 +1,6 @@
 import { For, Show } from "solid-js";
-import { useTheme } from "../context/theme";
 import type { Commit } from "../git/types";
+import { useT } from "../hooks/use-t";
 import type { FileTreeRow } from "../utils/file-tree";
 import { ENTRY_PADDING_LEFT } from "./detail-types";
 import { FileTreeEntry } from "./file-tree-entry";
@@ -44,8 +44,7 @@ export interface StashEntryProps {
  * plain props, keeping this component purely presentational.
  */
 export function StashEntry(props: Readonly<StashEntryProps>) {
-  const { theme } = useTheme();
-  const t = () => theme();
+  const t = useT();
 
   const label = () => props.stash.refs[0]?.name ?? "stash";
 

@@ -1,5 +1,5 @@
 import type { JSX } from "solid-js";
-import { useTheme } from "../../context/theme";
+import { useT } from "../../hooks/use-t";
 import { KeyHint } from "../key-hint";
 
 /**
@@ -32,8 +32,7 @@ export function DialogOverlay(props: Readonly<{ children: JSX.Element }>) {
  * for per-segment colors).
  */
 export function DialogTitleBar(props: Readonly<{ title: string | JSX.Element }>) {
-  const { theme } = useTheme();
-  const t = () => theme();
+  const t = useT();
 
   return (
     <>

@@ -3,12 +3,12 @@ import type { JSXElement } from "solid-js";
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
 import { DETAIL_PANEL_WIDTH_FRACTION, UNCOMMITTED_HASH } from "../constants";
 import { useAppState } from "../context/state";
-import { useTheme } from "../context/theme";
 import type { Commit, GraphRow } from "../git/types";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
 import { useClipboard } from "../hooks/use-clipboard";
 import { useFileTree } from "../hooks/use-file-tree";
 import { useStashState } from "../hooks/use-stash-state";
+import { useT } from "../hooks/use-t";
 import { formatDate } from "../utils/date";
 import DetailBadge from "./detail-badge";
 import type { DetailViewProps } from "./detail-types";
@@ -49,8 +49,7 @@ type InteractiveItem =
 
 export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   const { state, actions } = useAppState();
-  const { theme } = useTheme();
-  const t = () => theme();
+  const t = useT();
   const dimensions = useTerminalDimensions();
 
   const commit = () => state.selectedCommit();

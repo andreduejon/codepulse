@@ -1,11 +1,10 @@
 import { useTerminalDimensions } from "@opentui/solid";
 import { For } from "solid-js";
-import { useTheme } from "../../context/theme";
+import { useT } from "../../hooks/use-t";
 import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
 export default function HelpDialog(_props: Readonly<{ onClose: () => void }>) {
-  const { theme } = useTheme();
-  const t = () => theme();
+  const t = useT();
   const dimensions = useTerminalDimensions();
   const dialogWidth = () => 72;
   const dialogHeight = () => Math.min(keybinds.length + 5, dimensions().height - 8);

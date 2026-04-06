@@ -1,7 +1,7 @@
 import { useKeyboard, useRenderer } from "@opentui/solid";
 import { For } from "solid-js";
 import packageJson from "../../package.json";
-import { useTheme } from "../context/theme";
+import { useT } from "../hooks/use-t";
 
 /**
  * codepulse logo — lowercase, dual-tone blocks with half-block shadows.
@@ -165,7 +165,7 @@ interface ErrorScreenProps {
 }
 
 export default function ErrorScreen(props: Readonly<ErrorScreenProps>) {
-  const { theme } = useTheme();
+  const t = useT();
   const renderer = useRenderer();
 
   useKeyboard(e => {
@@ -178,24 +178,24 @@ export default function ErrorScreen(props: Readonly<ErrorScreenProps>) {
   const fgFor = (type: ColorType): string => {
     switch (type) {
       case "code":
-        return theme().foregroundMuted;
+        return t().foregroundMuted;
       case "pulse":
-        return theme().accent;
+        return t().accent;
       case "shadow":
-        return theme().border;
+        return t().border;
       case "space":
-        return theme().backgroundPanel;
+        return t().backgroundPanel;
     }
   };
 
   const errorLines = () => props.error.split("\n");
 
   return (
-    <box width="100%" height="100%" flexDirection="column" backgroundColor={theme().backgroundPanel}>
+    <box width="100%" height="100%" flexDirection="column" backgroundColor={t().backgroundPanel}>
       {/* Centered content area */}
       <box flexGrow={1} flexDirection="column" justifyContent="center" alignItems="center">
         {/* Logo */}
-        <box flexDirection="column" alignItems="flex-start" backgroundColor={theme().backgroundPanel}>
+        <box flexDirection="column" alignItems="flex-start" backgroundColor={t().backgroundPanel}>
           <For each={LOGO_ROWS}>
             {(row: LogoRow) => (
               <box flexDirection="row">
@@ -218,16 +218,16 @@ export default function ErrorScreen(props: Readonly<ErrorScreenProps>) {
         <box
           width={63}
           flexDirection="column"
-          backgroundColor={theme().background}
+          backgroundColor={t().background}
           paddingX={2}
           paddingY={1}
           border={["left"]}
           borderStyle="single"
-          borderColor={theme().error}
+          borderColor={t().error}
         >
           <For each={errorLines()}>
             {(line: string, i: () => number) => (
-              <text wrapMode="word" fg={i() === 0 ? theme().foreground : theme().foregroundMuted}>
+              <text wrapMode="word" fg={i() === 0 ? t().foreground : t().foregroundMuted}>
                 {line}
               </text>
             )}
@@ -240,10 +240,10 @@ export default function ErrorScreen(props: Readonly<ErrorScreenProps>) {
         {/* Footer hint — q quit right-aligned */}
         <box flexDirection="row" width={63} height={1}>
           <box flexGrow={1} />
-          <text flexShrink={0} wrapMode="none" fg={theme().foreground}>
+          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
             q
           </text>
-          <text flexShrink={0} wrapMode="none" fg={theme().foregroundMuted}>
+          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
             {" quit"}
           </text>
         </box>
@@ -252,7 +252,7 @@ export default function ErrorScreen(props: Readonly<ErrorScreenProps>) {
       {/* Version — absolute bottom-right, 1 row from bottom, 1 col from right */}
       <box flexDirection="row" width="100%" height={1} paddingRight={1}>
         <box flexGrow={1} />
-        <text flexShrink={0} wrapMode="none" fg={theme().foregroundMuted}>
+        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
           {`v${packageJson.version}`}
         </text>
       </box>

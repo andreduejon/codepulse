@@ -2,10 +2,10 @@ import { useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, For, Show } from "solid-js";
 import { DETAIL_PANEL_WIDTH_FRACTION } from "../constants";
 import { useAppState } from "../context/state";
-import { useTheme } from "../context/theme";
 import type { DiffSource } from "../git/types";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
 import { useFileTree } from "../hooks/use-file-tree";
+import { useT } from "../hooks/use-t";
 import type { DetailViewProps } from "./detail-types";
 import {
   computeFileWidths,
@@ -28,8 +28,7 @@ type UncommittedItem =
 
 export default function UncommittedDetailView(props: Readonly<DetailViewProps>) {
   const { state, actions } = useAppState();
-  const { theme } = useTheme();
-  const t = () => theme();
+  const t = useT();
   const dimensions = useTerminalDimensions();
 
   const panelUsableWidth = () =>

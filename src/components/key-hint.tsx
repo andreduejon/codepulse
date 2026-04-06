@@ -1,5 +1,5 @@
 import type { JSX } from "solid-js";
-import { useTheme } from "../context/theme";
+import { useT } from "../hooks/use-t";
 
 interface KeyHintProps {
   key: JSX.Element | string;
@@ -14,8 +14,7 @@ interface KeyHintProps {
  * e.g. desc=" confirm  " or desc=" help".
  */
 export function KeyHint(props: Readonly<KeyHintProps>) {
-  const { theme } = useTheme();
-  const t = () => theme();
+  const t = useT();
   return (
     <>
       <text flexShrink={0} wrapMode="none" fg={t().foreground}>

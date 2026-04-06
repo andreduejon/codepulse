@@ -2,9 +2,9 @@ import type { ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, type JSX, onCleanup, Show } from "solid-js";
 import { useAppState } from "../../context/state";
-import { useTheme } from "../../context/theme";
 import { getFileBlame, getFileDiff } from "../../git/repo";
 import type { BlameLine, DiffTarget, FileDiff } from "../../git/types";
+import { useT } from "../../hooks/use-t";
 import { KeyHint } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 import { buildRowOffsets, computeDiffStats, findLineAtRow, formatHunkHeader } from "./diff-utils";
@@ -91,8 +91,7 @@ function buildGutter(line: DisplayLine, oldWidth: number, newWidth: number): str
 
 export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
   const { state } = useAppState();
-  const { theme } = useTheme();
-  const t = () => theme();
+  const t = useT();
   const dimensions = useTerminalDimensions();
 
   // ── State ──────────────────────────────────────────────────────────

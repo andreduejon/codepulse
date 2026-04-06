@@ -1,6 +1,6 @@
 import { createEffect, createSignal, onCleanup, Show } from "solid-js";
 import { useAppState } from "../context/state";
-import { useTheme } from "../context/theme";
+import { useT } from "../hooks/use-t";
 import { KeyHint } from "./key-hint";
 
 /** Full braille rotation spinner — 8 frames, smooth circular motion. */
@@ -10,8 +10,7 @@ const SPINNER_FRAME_MS = 120;
 export default function Footer(
   props: Readonly<{ searchFocused?: boolean; filterActive?: boolean; compact?: boolean }>,
 ) {
-  const { theme } = useTheme();
-  const t = () => theme();
+  const t = useT();
   const { state } = useAppState();
 
   const isLoading = () => state.loading() || state.fetching() || state.detailLoading();

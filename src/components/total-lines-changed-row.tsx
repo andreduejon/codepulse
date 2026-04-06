@@ -1,4 +1,4 @@
-import { useTheme } from "../context/theme";
+import { useT } from "../hooks/use-t";
 
 interface TotalLinesChangedRowProps {
   totalAdd: number;
@@ -10,8 +10,7 @@ interface TotalLinesChangedRowProps {
  * Renders a muted label on the left and colored +/- counts on the right.
  */
 export function TotalLinesChangedRow(props: Readonly<TotalLinesChangedRowProps>) {
-  const { theme } = useTheme();
-  const t = () => theme();
+  const t = useT();
   return (
     <box flexDirection="row">
       <box flexGrow={1}>

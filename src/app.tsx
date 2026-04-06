@@ -15,11 +15,12 @@ import GraphView, { ColumnHeader } from "./components/graph";
 import type { ConfigInfo } from "./config";
 import { COMPACT_THRESHOLD_WIDTH, DEFAULT_MAX_COUNT, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH } from "./constants";
 import { AppStateContext, createAppState, useAppState } from "./context/state";
-import { createThemeState, ThemeContext, useTheme } from "./context/theme";
+import { createThemeState, ThemeContext } from "./context/theme";
 import type { DiffTarget } from "./git/types";
 import { useDataLoader } from "./hooks/use-data-loader";
 import { useDetailLoader } from "./hooks/use-detail-loader";
 import { useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
+import { useT } from "./hooks/use-t";
 
 interface AppProps {
   repoPath: string;
@@ -35,7 +36,7 @@ interface AppProps {
 /** Detail dialog used in compact mode — wraps DetailPanel in a full-height overlay. */
 function DetailDialog(props: Readonly<DetailPanelProps & { onClose: () => void }>) {
   const dimensions = useTerminalDimensions();
-  const { theme } = useTheme();
+  const t = useT();
   const { state } = useAppState();
   const dialogWidth = () => Math.min(72, dimensions().width - 8);
   const dialogHeight = () => dimensions().height - 8;
@@ -49,7 +50,7 @@ function DetailDialog(props: Readonly<DetailPanelProps & { onClose: () => void }
         flexDirection="column"
         width={dialogWidth()}
         height={dialogHeight()}
-        backgroundColor={theme().backgroundPanel}
+        backgroundColor={t().backgroundPanel}
         paddingX={1}
         paddingY={1}
       >
@@ -65,22 +66,22 @@ function DetailDialog(props: Readonly<DetailPanelProps & { onClose: () => void }
           />
         </box>
         <DialogFooter>
-          <text flexShrink={0} wrapMode="none" fg={theme().foreground}>
+          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
             enter
           </text>
-          <text flexShrink={0} wrapMode="none" fg={theme().foregroundMuted}>
+          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
             {` ${enterVerb()}  `}
           </text>
-          <text flexShrink={0} wrapMode="none" fg={theme().foreground}>
+          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
             {"←/→"}
           </text>
-          <text flexShrink={0} wrapMode="none" fg={theme().foregroundMuted}>
+          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
             {" switch tab  "}
           </text>
-          <text flexShrink={0} wrapMode="none" fg={theme().foreground}>
+          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
             {"↑/↓"}
           </text>
-          <text flexShrink={0} wrapMode="none" fg={theme().foregroundMuted}>
+          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
             {" navigate"}
           </text>
         </DialogFooter>

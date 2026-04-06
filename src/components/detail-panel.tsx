@@ -2,8 +2,8 @@ import type { ScrollBoxRenderable } from "@opentui/core";
 import { For, Show } from "solid-js";
 import { UNCOMMITTED_HASH } from "../constants";
 import { useAppState } from "../context/state";
-import { useTheme } from "../context/theme";
 import type { DiffTarget } from "../git/types";
+import { useT } from "../hooks/use-t";
 import CommitDetailView from "./detail";
 import type { DetailNavRef } from "./detail-types";
 import UncommittedDetailView from "./uncommitted-detail";
@@ -27,7 +27,7 @@ export interface DetailPanelProps {
  */
 export default function DetailPanel(props: Readonly<DetailPanelProps>) {
   const { state } = useAppState();
-  const { theme: t } = useTheme();
+  const t = useT();
 
   const tabs = () => {
     const commit = state.selectedCommit();
