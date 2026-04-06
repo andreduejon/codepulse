@@ -24,6 +24,7 @@ import {
   STAT_PADDING_LEFT,
   STATUS_COL_WIDTH,
 } from "./detail-types";
+import { FileTreeEntry } from "./file-tree-entry";
 
 // ── Layout constants ────────────────────────────────────────────────
 /** Minimum panel width in characters before padding is subtracted. */
@@ -1175,55 +1176,15 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   };
 
                   return (
-                    <box flexDirection="row" width="100%" backgroundColor={itemHighlightBg(itemIdx())}>
-                      <box flexShrink={0}>
-                        <text fg={t().border} wrapMode="none">
-                          {treeRow.prefix}
-                          {treeRow.connector}
-                        </text>
-                      </box>
-                      <Show when={treeRow.isDir}>
-                        <box flexShrink={0}>
-                          <text fg={cursored() ? t().accent : t().foregroundMuted} wrapMode="none">
-                            {collapsed() ? "▸ " : "▾ "}
-                          </text>
-                        </box>
-                      </Show>
-                      <box flexGrow={1}>
-                        <text
-                          fg={
-                            treeRow.isDir
-                              ? cursored()
-                                ? t().accent
-                                : t().foregroundMuted
-                              : cursored()
-                                ? t().accent
-                                : t().foreground
-                          }
-                          wrapMode="none"
-                          truncate={scrolledName() == null}
-                        >
-                          {scrolledName() ?? treeRow.name}
-                        </text>
-                      </box>
-                      <Show when={treeRow.file}>
-                        <box flexShrink={0} paddingLeft={1}>
-                          <text fg={t().foregroundMuted} wrapMode="none">
-                            {treeRow.file?.status}
-                          </text>
-                        </box>
-                        <box flexShrink={0} paddingLeft={1}>
-                          <text fg={t().diffAdded} wrapMode="none">
-                            {`+${treeRow.file?.additions}`.padStart(fileWidths().addColWidth)}
-                          </text>
-                        </box>
-                        <box flexShrink={0} paddingLeft={1}>
-                          <text fg={t().diffRemoved} wrapMode="none">
-                            {`-${treeRow.file?.deletions}`.padStart(fileWidths().delColWidth)}
-                          </text>
-                        </box>
-                      </Show>
-                    </box>
+                    <FileTreeEntry
+                      row={treeRow}
+                      cursored={cursored()}
+                      collapsed={collapsed()}
+                      highlightBg={itemHighlightBg(itemIdx())}
+                      scrolledName={scrolledName()}
+                      addColWidth={fileWidths().addColWidth}
+                      delColWidth={fileWidths().delColWidth}
+                    />
                   );
                 }}
               </For>
@@ -1325,55 +1286,15 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                             };
 
                             return (
-                              <box flexDirection="row" width="100%" backgroundColor={itemHighlightBg(fileItemIdx())}>
-                                <box flexShrink={0}>
-                                  <text fg={t().border} wrapMode="none">
-                                    {treeRow.prefix}
-                                    {treeRow.connector}
-                                  </text>
-                                </box>
-                                <Show when={treeRow.isDir}>
-                                  <box flexShrink={0}>
-                                    <text fg={fileCursored() ? t().accent : t().foregroundMuted} wrapMode="none">
-                                      {fileCollapsed() ? "▸ " : "▾ "}
-                                    </text>
-                                  </box>
-                                </Show>
-                                <box flexGrow={1}>
-                                  <text
-                                    fg={
-                                      treeRow.isDir
-                                        ? fileCursored()
-                                          ? t().accent
-                                          : t().foregroundMuted
-                                        : fileCursored()
-                                          ? t().accent
-                                          : t().foreground
-                                    }
-                                    wrapMode="none"
-                                    truncate={scrolledFileName() == null}
-                                  >
-                                    {scrolledFileName() ?? treeRow.name}
-                                  </text>
-                                </box>
-                                <Show when={treeRow.file}>
-                                  <box flexShrink={0} paddingLeft={1}>
-                                    <text fg={t().foregroundMuted} wrapMode="none">
-                                      {treeRow.file?.status}
-                                    </text>
-                                  </box>
-                                  <box flexShrink={0} paddingLeft={1}>
-                                    <text fg={t().diffAdded} wrapMode="none">
-                                      {`+${treeRow.file?.additions}`.padStart(stashFw().addColWidth)}
-                                    </text>
-                                  </box>
-                                  <box flexShrink={0} paddingLeft={1}>
-                                    <text fg={t().diffRemoved} wrapMode="none">
-                                      {`-${treeRow.file?.deletions}`.padStart(stashFw().delColWidth)}
-                                    </text>
-                                  </box>
-                                </Show>
-                              </box>
+                              <FileTreeEntry
+                                row={treeRow}
+                                cursored={fileCursored()}
+                                collapsed={fileCollapsed()}
+                                highlightBg={itemHighlightBg(fileItemIdx())}
+                                scrolledName={scrolledFileName()}
+                                addColWidth={stashFw().addColWidth}
+                                delColWidth={stashFw().delColWidth}
+                              />
                             );
                           }}
                         </For>

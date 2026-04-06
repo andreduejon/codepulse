@@ -16,6 +16,7 @@ import {
   STAT_PADDING_LEFT,
   STATUS_COL_WIDTH,
 } from "./detail-types";
+import { FileTreeEntry } from "./file-tree-entry";
 
 // ── Layout constants ────────────────────────────────────────────────
 const MIN_PANEL_WIDTH = 60;
@@ -286,58 +287,16 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
             };
 
             return (
-              <box flexDirection="row" width="100%" backgroundColor={itemHighlightBg(itemIdx())}>
-                <box flexShrink={0}>
-                  <text fg={t().border} wrapMode="none">
-                    {treeRow.prefix}
-                    {treeRow.connector}
-                  </text>
-                </box>
-                <Show when={treeRow.isDir}>
-                  <box flexShrink={0}>
-                    <text fg={cursored() ? t().accent : t().foregroundMuted} wrapMode="none">
-                      {collapsed() ? "▸ " : "▾ "}
-                    </text>
-                  </box>
-                </Show>
-                <box flexGrow={1}>
-                  <text
-                    fg={
-                      treeRow.isDir
-                        ? cursored()
-                          ? t().accent
-                          : t().foregroundMuted
-                        : cursored()
-                          ? t().accent
-                          : t().foreground
-                    }
-                    wrapMode="none"
-                    truncate={scrolledName() == null}
-                  >
-                    {scrolledName() ?? treeRow.name}
-                  </text>
-                </box>
-                {/* Status letter + stats for staged/unstaged; status only for untracked */}
-                <Show when={treeRow.file}>
-                  <box flexShrink={0} paddingLeft={1}>
-                    <text fg={t().foregroundMuted} wrapMode="none">
-                      {treeRow.file?.status}
-                    </text>
-                  </box>
-                </Show>
-                <Show when={treeRow.file && activeTab() !== "untracked"}>
-                  <box flexShrink={0} paddingLeft={1}>
-                    <text fg={t().diffAdded} wrapMode="none">
-                      {`+${treeRow.file?.additions}`.padStart(fileWidths().addColWidth)}
-                    </text>
-                  </box>
-                  <box flexShrink={0} paddingLeft={1}>
-                    <text fg={t().diffRemoved} wrapMode="none">
-                      {`-${treeRow.file?.deletions}`.padStart(fileWidths().delColWidth)}
-                    </text>
-                  </box>
-                </Show>
-              </box>
+              <FileTreeEntry
+                row={treeRow}
+                cursored={cursored()}
+                collapsed={collapsed()}
+                highlightBg={itemHighlightBg(itemIdx())}
+                scrolledName={scrolledName()}
+                addColWidth={fileWidths().addColWidth}
+                delColWidth={fileWidths().delColWidth}
+                hideStats={activeTab() === "untracked"}
+              />
             );
           }}
         </For>
