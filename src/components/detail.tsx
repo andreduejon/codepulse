@@ -10,6 +10,7 @@ import { useFileTree } from "../hooks/use-file-tree";
 import { useStashState } from "../hooks/use-stash-state";
 import { useT } from "../hooks/use-t";
 import { formatDate } from "../utils/date";
+import { isCursored as _isCursored, itemHighlightBg as _itemHighlightBg } from "../utils/detail-cursor";
 import DetailBadge from "./detail-badge";
 import type { DetailViewProps } from "./detail-types";
 import {
@@ -616,19 +617,9 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   });
   const bannerOffset = useBannerScroll(bannerOverflow);
 
-  // Highlight color for the cursor'd interactive item
-  const highlightBgFocused = () => t().backgroundElementActive;
-
-  /** Check if a given interactive item index should be highlighted, and return its bg color */
-  const itemHighlightBg = (itemIndex: number): string | undefined => {
-    if (state.detailFocused() && state.detailCursorIndex() === itemIndex) {
-      return highlightBgFocused();
-    }
-    return undefined;
-  };
-
-  /** Check if item is the focused cursor (for accent text color) */
-  const isCursored = (itemIndex: number) => state.detailFocused() && state.detailCursorIndex() === itemIndex;
+  // Highlight helpers — thin wrappers binding local state/theme
+  const itemHighlightBg = (itemIndex: number) => _itemHighlightBg(state, t(), itemIndex);
+  const isCursored = (itemIndex: number) => _isCursored(state, itemIndex);
 
   // ── Copyable field rendering helpers ────────────────────────────────
   /** Get the interactive item index for a copyable field. */

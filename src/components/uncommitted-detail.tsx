@@ -6,6 +6,7 @@ import type { DiffSource } from "../git/types";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
 import { useFileTree } from "../hooks/use-file-tree";
 import { useT } from "../hooks/use-t";
+import { isCursored as _isCursored, itemHighlightBg as _itemHighlightBg } from "../utils/detail-cursor";
 import type { DetailViewProps } from "./detail-types";
 import {
   computeFileWidths,
@@ -161,16 +162,8 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
 
   const findItemIndex = (type: "file-dir" | "file", idx: number): number => itemIndexMap().get(`${type}:${idx}`) ?? -1;
 
-  const isCursored = (itemIndex: number) => state.detailFocused() && state.detailCursorIndex() === itemIndex;
-
-  const highlightBgFocused = () => t().backgroundElementActive;
-
-  const itemHighlightBg = (itemIndex: number): string | undefined => {
-    if (state.detailFocused() && state.detailCursorIndex() === itemIndex) {
-      return highlightBgFocused();
-    }
-    return undefined;
-  };
+  const isCursored = (itemIndex: number) => _isCursored(state, itemIndex);
+  const itemHighlightBg = (itemIndex: number): string | undefined => _itemHighlightBg(state, t(), itemIndex);
 
   const cursoredTextInfo = createMemo((): { text: string; visibleWidth: number } | null => {
     if (!state.detailFocused()) return null;
