@@ -152,8 +152,15 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     if (e.name === "escape") {
       if (dialog()) {
         // Closing the detail dialog must also clear detailFocused
-        if (dialog() === "detail") actions.setDetailFocused(false);
-        setDialog(null);
+        if (dialog() === "detail") {
+          actions.setDetailFocused(false);
+          setDialog(null);
+        } else if (dialog() === "diff-blame" && layoutMode() === "compact" && state.detailFocused()) {
+          // In compact mode, closing diff-blame returns to the detail dialog
+          setDialog("detail");
+        } else {
+          setDialog(null);
+        }
         return;
       }
       if (searchFocused()) {
@@ -183,8 +190,14 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     // q: same cascade as Escape, but quits if nothing left to close
     if (e.name === "q" && !searchFocused()) {
       if (dialog()) {
-        if (dialog() === "detail") actions.setDetailFocused(false);
-        setDialog(null);
+        if (dialog() === "detail") {
+          actions.setDetailFocused(false);
+          setDialog(null);
+        } else if (dialog() === "diff-blame" && layoutMode() === "compact" && state.detailFocused()) {
+          setDialog("detail");
+        } else {
+          setDialog(null);
+        }
         return;
       }
       if (state.detailFocused()) {
