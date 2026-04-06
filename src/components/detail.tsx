@@ -9,6 +9,7 @@ import type { Commit, FileChange, GraphRow } from "../git/types";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
 import { useClipboard } from "../hooks/use-clipboard";
 import { useFileTree } from "../hooks/use-file-tree";
+import { formatDate } from "../utils/date";
 import type { FileTreeRow } from "../utils/file-tree";
 import { buildFileTree, flattenFileTree } from "../utils/file-tree";
 import DetailBadge from "./detail-badge";
@@ -1241,16 +1242,4 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
       </Show>
     </box>
   );
-}
-
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleString("en-US", {
-    weekday: "short",
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }
