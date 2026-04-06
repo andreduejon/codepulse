@@ -1,4 +1,5 @@
 import { useTerminalDimensions } from "@opentui/solid";
+import type { JSXElement } from "solid-js";
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
 import { DETAIL_PANEL_WIDTH_FRACTION, UNCOMMITTED_HASH } from "../constants";
 import { useAppState } from "../context/state";
@@ -727,6 +728,40 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     return text.substring(off, off + info.visibleWidth);
   };
 
+  /**
+   * Local component: renders a single copyable row with cursor highlight,
+   * banner-scroll, and "✓ copied" feedback badge.
+   *
+   * Closes over: copyableHighlightBg, isCopyableCursored, scrolledCopyableText,
+   * copiedField, t().
+   */
+  const CopyableRow = (props: {
+    field: CopyableField;
+    /** Fallback content shown when not banner-scrolling. */
+    children: JSXElement;
+    /** Text color when not cursored. Defaults to t().foreground. */
+    fg?: string;
+    /** wrapMode for the text element. Defaults to "none". */
+    wrapMode?: "none" | "char" | "word";
+  }) => (
+    <box flexDirection="row" backgroundColor={copyableHighlightBg(props.field)}>
+      <text
+        flexGrow={1}
+        flexShrink={1}
+        fg={isCopyableCursored(props.field) ? t().accent : (props.fg ?? t().foreground)}
+        wrapMode={props.wrapMode ?? "none"}
+        truncate={props.wrapMode !== "word" && !isCopyableCursored(props.field)}
+      >
+        {scrolledCopyableText(props.field) ?? props.children}
+      </text>
+      <Show when={copiedField() === props.field}>
+        <text flexShrink={0} bg={t().primary} fg={t().background} wrapMode="none">
+          {" \u2713 copied "}
+        </text>
+      </Show>
+    </box>
+  );
+
   /** Memo'd index map for O(1) lookup of interactive item positions.
    *  Keys are "section-header:children", "child:0", "file-dir:3", "stash-entry:abc123", etc. */
   const itemIndexMap = createMemo(() => {
@@ -971,22 +1006,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   </text>
                 }
               >
-                <box flexDirection="row" backgroundColor={copyableHighlightBg("hash")}>
-                  <text
-                    flexGrow={1}
-                    flexShrink={1}
-                    fg={isCopyableCursored("hash") ? t().accent : t().foreground}
-                    wrapMode="none"
-                    truncate={!isCopyableCursored("hash")}
-                  >
-                    {scrolledCopyableText("hash") ?? c().hash}
-                  </text>
-                  <Show when={copiedField() === "hash"}>
-                    <text flexShrink={0} bg={t().primary} fg={t().background} wrapMode="none">
-                      {" \u2713 copied "}
-                    </text>
-                  </Show>
-                </box>
+                <CopyableRow field="hash">{c().hash}</CopyableRow>
               </Show>
 
               <box height={1} />
@@ -1001,28 +1021,11 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   </text>
                 }
               >
-                <box flexDirection="row" backgroundColor={copyableHighlightBg("author")}>
-                  <text
-                    flexGrow={1}
-                    flexShrink={1}
-                    fg={isCopyableCursored("author") ? t().accent : t().foreground}
-                    wrapMode="none"
-                    truncate={!isCopyableCursored("author")}
-                  >
-                    {scrolledCopyableText("author") ?? (
-                      <>
-                        {c().author} {"<"}
-                        {c().authorEmail}
-                        {">"}
-                      </>
-                    )}
-                  </text>
-                  <Show when={copiedField() === "author"}>
-                    <text flexShrink={0} bg={t().primary} fg={t().background} wrapMode="none">
-                      {" \u2713 copied "}
-                    </text>
-                  </Show>
-                </box>
+                <CopyableRow field="author">
+                  {c().author} {"<"}
+                  {c().authorEmail}
+                  {">"}
+                </CopyableRow>
               </Show>
 
               <box height={1} />
@@ -1037,22 +1040,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   </text>
                 }
               >
-                <box flexDirection="row" backgroundColor={copyableHighlightBg("date")}>
-                  <text
-                    flexGrow={1}
-                    flexShrink={1}
-                    fg={isCopyableCursored("date") ? t().accent : t().foreground}
-                    wrapMode="none"
-                    truncate={!isCopyableCursored("date")}
-                  >
-                    {scrolledCopyableText("date") ?? formatDate(c().authorDate)}
-                  </text>
-                  <Show when={copiedField() === "date"}>
-                    <text flexShrink={0} bg={t().primary} fg={t().background} wrapMode="none">
-                      {" \u2713 copied "}
-                    </text>
-                  </Show>
-                </box>
+                <CopyableRow field="date">{formatDate(c().authorDate)}</CopyableRow>
               </Show>
 
               <Show when={!isUncommitted() && showCommitter()}>
@@ -1060,49 +1048,17 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 <text fg={t().accent} wrapMode="none">
                   <strong>Committer</strong>
                 </text>
-                <box flexDirection="row" backgroundColor={copyableHighlightBg("committer")}>
-                  <text
-                    flexGrow={1}
-                    flexShrink={1}
-                    fg={isCopyableCursored("committer") ? t().accent : t().foreground}
-                    wrapMode="none"
-                    truncate={!isCopyableCursored("committer")}
-                  >
-                    {scrolledCopyableText("committer") ?? (
-                      <>
-                        {c().committer} {"<"}
-                        {c().committerEmail}
-                        {">"}
-                      </>
-                    )}
-                  </text>
-                  <Show when={copiedField() === "committer"}>
-                    <text flexShrink={0} bg={t().primary} fg={t().background} wrapMode="none">
-                      {" \u2713 copied "}
-                    </text>
-                  </Show>
-                </box>
+                <CopyableRow field="committer">
+                  {c().committer} {"<"}
+                  {c().committerEmail}
+                  {">"}
+                </CopyableRow>
 
                 <box height={1} />
                 <text fg={t().accent} wrapMode="none">
                   <strong>Commit Date</strong>
                 </text>
-                <box flexDirection="row" backgroundColor={copyableHighlightBg("commitDate")}>
-                  <text
-                    flexGrow={1}
-                    flexShrink={1}
-                    fg={isCopyableCursored("commitDate") ? t().accent : t().foreground}
-                    wrapMode="none"
-                    truncate={!isCopyableCursored("commitDate")}
-                  >
-                    {scrolledCopyableText("commitDate") ?? formatDate(c().commitDate)}
-                  </text>
-                  <Show when={copiedField() === "commitDate"}>
-                    <text flexShrink={0} bg={t().primary} fg={t().background} wrapMode="none">
-                      {" \u2713 copied "}
-                    </text>
-                  </Show>
-                </box>
+                <CopyableRow field="commitDate">{formatDate(c().commitDate)}</CopyableRow>
               </Show>
 
               <box height={1} />
@@ -1119,22 +1075,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   </text>
                 }
               >
-                <box flexDirection="row" backgroundColor={copyableHighlightBg("subject")}>
-                  <text
-                    flexGrow={1}
-                    flexShrink={1}
-                    fg={isCopyableCursored("subject") ? t().accent : t().foreground}
-                    wrapMode="none"
-                    truncate={!isCopyableCursored("subject")}
-                  >
-                    {scrolledCopyableText("subject") ?? c().subject}
-                  </text>
-                  <Show when={copiedField() === "subject"}>
-                    <text flexShrink={0} bg={t().primary} fg={t().background} wrapMode="none">
-                      {" \u2713 copied "}
-                    </text>
-                  </Show>
-                </box>
+                <CopyableRow field="subject">{c().subject}</CopyableRow>
               </Show>
 
               <Show when={!isUncommitted() && detail()?.body}>
@@ -1142,21 +1083,9 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 <text fg={t().accent} wrapMode="none">
                   <strong>Body</strong>
                 </text>
-                <box flexDirection="row" backgroundColor={copyableHighlightBg("body")}>
-                  <text
-                    flexGrow={1}
-                    flexShrink={1}
-                    fg={isCopyableCursored("body") ? t().accent : t().foregroundMuted}
-                    wrapMode="word"
-                  >
-                    {detail()?.body}
-                  </text>
-                  <Show when={copiedField() === "body"}>
-                    <text flexShrink={0} bg={t().primary} fg={t().background} wrapMode="none">
-                      {" \u2713 copied "}
-                    </text>
-                  </Show>
-                </box>
+                <CopyableRow field="body" fg={t().foregroundMuted} wrapMode="word">
+                  {detail()?.body}
+                </CopyableRow>
               </Show>
 
               <box height={1} />
