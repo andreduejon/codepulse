@@ -1,7 +1,7 @@
 import { createEffect, onCleanup } from "solid-js";
 import type { DetailNavRef } from "../components/detail-types";
 import { UNCOMMITTED_HASH } from "../constants";
-import { useAppState } from "../context/state";
+import type { AppActions, AppState } from "../context/state";
 import { getCommitDetail, getUncommittedDetail } from "../git/repo";
 
 const DETAIL_DEBOUNCE_MS = 150;
@@ -9,6 +9,10 @@ const DETAIL_DEBOUNCE_MS = 150;
 interface UseDetailLoaderOptions {
   /** Absolute path to the git repository. */
   repoPath: string;
+  /** Reactive app state — passed directly to avoid reading from context before the Provider renders. */
+  state: AppState;
+  /** App actions — passed directly to avoid reading from context before the Provider renders. */
+  actions: AppActions;
   /**
    * Returns true when the current cursor change is a child/parent jump navigation.
    * Read synchronously when the commit-change effect fires.
@@ -27,10 +31,18 @@ interface UseDetailLoaderOptions {
  * 2. Auto-switches away from empty tabs after detail data arrives.
  *
  * Also resets `detailNavRef.pendingJumpDirection` on non-jump navigations.
+ *
+ * Accepts `state` and `actions` directly rather than calling `useAppState()`, because
+ * this hook is called during AppContent's setup phase — before the AppStateContext.Provider
+ * is rendered in the JSX return. Reading from context at that point would return undefined.
  */
-export function useDetailLoader({ repoPath, getIsJumpNavigation, detailNavRef }: UseDetailLoaderOptions): void {
-  const { state, actions } = useAppState();
-
+export function useDetailLoader({
+  repoPath,
+  state,
+  actions,
+  getIsJumpNavigation,
+  detailNavRef,
+}: UseDetailLoaderOptions): void {
   // ── Detail load on commit change ──────────────────────────────────
   let detailAbortCtrl: AbortController | null = null;
   let detailDebounceTimer: ReturnType<typeof setTimeout> | null = null;

@@ -33,6 +33,10 @@ interface AppProps {
   startupError?: string;
 }
 
+interface AppContentProps extends AppProps {
+  themeState: ReturnType<typeof createThemeState>;
+}
+
 /** Detail dialog used in compact mode — wraps DetailPanel in a full-height overlay. */
 function DetailDialog(props: Readonly<DetailPanelProps & { onClose: () => void }>) {
   const dimensions = useTerminalDimensions();
@@ -90,9 +94,9 @@ function DetailDialog(props: Readonly<DetailPanelProps & { onClose: () => void }
   );
 }
 
-function AppContent(props: Readonly<AppProps>) {
+function AppContent(props: Readonly<AppContentProps>) {
   const { state, actions } = createAppState(props.maxCount ?? DEFAULT_MAX_COUNT, props.autoRefreshInterval);
-  const themeState = createThemeState(props.themeName);
+  const themeState = props.themeState;
   const renderer = useRenderer();
 
   const [dialog, setDialog] = createSignal<"menu" | "help" | "theme" | "diff-blame" | "detail" | null>(null);
@@ -176,6 +180,8 @@ function AppContent(props: Readonly<AppProps>) {
   const { loadData, loadMoreData, handleFetch } = useDataLoader({
     repoPath: props.repoPath,
     initialBranch: props.branch,
+    state,
+    actions,
   });
 
   onMount(() => {
@@ -186,6 +192,8 @@ function AppContent(props: Readonly<AppProps>) {
   // and auto-switch away from empty tabs after detail data arrives.
   useDetailLoader({
     repoPath: props.repoPath,
+    state,
+    actions,
     getIsJumpNavigation: () => isJumpNavigation,
     detailNavRef,
   });
@@ -474,5 +482,5 @@ export default function App(props: Readonly<AppProps>) {
     );
   }
 
-  return <AppContent {...props} />;
+  return <AppContent {...props} themeState={themeState} />;
 }

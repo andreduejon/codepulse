@@ -1,6 +1,6 @@
 import { batch, createEffect, onCleanup, onMount } from "solid-js";
 import { UNCOMMITTED_HASH } from "../constants";
-import { useAppState } from "../context/state";
+import type { AppActions, AppState } from "../context/state";
 import { buildGraph, getMaxGraphColumns } from "../git/graph";
 import { mergeCommitPages } from "../git/merge-pages";
 import {
@@ -21,6 +21,10 @@ interface UseDataLoaderOptions {
   repoPath: string;
   /** Initial branch to scope the log to on mount. */
   initialBranch?: string;
+  /** Reactive app state — passed directly to avoid reading from context before the Provider renders. */
+  state: AppState;
+  /** App actions — passed directly to avoid reading from context before the Provider renders. */
+  actions: AppActions;
 }
 
 interface UseDataLoaderResult {
@@ -41,10 +45,12 @@ interface UseDataLoaderResult {
  * - Auto-refresh timer (driven by `state.autoRefreshInterval()`)
  *
  * All abort controllers and timers are cleaned up via `onCleanup`.
+ *
+ * Accepts `state` and `actions` directly rather than calling `useAppState()`, because
+ * this hook is called during AppContent's setup phase — before the AppStateContext.Provider
+ * is rendered in the JSX return. Reading from context at that point would return undefined.
  */
-export function useDataLoader({ repoPath, initialBranch }: UseDataLoaderOptions): UseDataLoaderResult {
-  const { state, actions } = useAppState();
-
+export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDataLoaderOptions): UseDataLoaderResult {
   // ── loadData ──────────────────────────────────────────────────────
   let loadAbortCtrl: AbortController | null = null;
 
