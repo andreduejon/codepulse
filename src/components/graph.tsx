@@ -240,27 +240,9 @@ function GraphLine(
 
   // Check if the commit row has merge/branch connectors (horizontals, corners, tees).
   // If so, the commit row carries connection info and can't be replaced by a fan-out row.
-  const commitRowHasConnections = () =>
-    props.row.connectors.some(
-      c =>
-        c.type === "horizontal" ||
-        c.type === "tee-left" ||
-        c.type === "tee-right" ||
-        c.type === "corner-top-right" ||
-        c.type === "corner-top-left" ||
-        c.type === "corner-bottom-right" ||
-        c.type === "corner-bottom-left",
-    );
-
-  // Fan-out rows: extra connector rows showing branch-off corners.
-  // When fan-out rows exist AND the commit row is "simple" (no merge/branch
-  // connectors), the LAST fan-out row is used as the commit row's graph
-  // (since its █ at the node column would be adjacent to a redundant commit █).
-  // When the commit row HAS connections (e.g., a merge), all fan-out rows
-  // render separately and the commit row keeps its own graph.
-  const canMergeFanOut = () => {
+  const canMergeFanOut = (): boolean => {
     const foRows = props.row.fanOutRows;
-    return foRows && foRows.length > 0 && !commitRowHasConnections();
+    return !!foRows && foRows.length > 0 && !rowHasConnections(props.row);
   };
 
   // Full-width fan-out renders — memoized, NOT dependent on viewportOffset.
@@ -273,7 +255,6 @@ function GraphLine(
       const chars = renderFanOutRow(foConnectors, renderOpts(), props.row.nodeColumn);
       if (dimAll) {
         const mutedColor = t().foregroundMuted;
-
         for (const c of chars) {
           c.color = mutedColor;
           c.bold = false;
@@ -283,37 +264,18 @@ function GraphLine(
     });
   });
 
-  // Fan-out rows ABOVE the commit row
-  const fanOutAboveContents = () => {
-    const allFanOut = fullFanOutChars();
-    if (allFanOut.length === 0) return [];
-    const active = viewportActive();
-    const applySlice = (chars: GraphChar[]) =>
-      active ? sliceGraphToViewport(chars, props.viewportOffset(), MAX_GRAPH_COLUMNS, props.row, renderOpts()) : chars;
-    // If merging last fan-out into commit row, show all except the last
-    if (canMergeFanOut()) {
-      if (allFanOut.length <= 1) return [];
-      return allFanOut.slice(0, -1).map(chars => graphCharsToContent(withEdgeIndicator(applySlice(chars), false)));
-    }
-    // Otherwise show all fan-out rows separately
-    return allFanOut.map(chars => graphCharsToContent(withEdgeIndicator(applySlice(chars), false)));
-  };
-
-  // The commit row graph: if we can merge, use the last fan-out row's graph;
-  // otherwise use the normal commit row graph.
-  const commitRowGraphContent = () => {
-    if (canMergeFanOut()) {
-      const allFanOut = fullFanOutChars();
-      const chars = allFanOut.at(-1);
-      const sliced = viewportActive()
+  // Derive fan-out display: rows above the commit + the commit row's graph content.
+  // applyViewport and addEdge are passed as callbacks to keep buildFanOutDisplay pure.
+  const fanOutDisplay = () => {
+    const applyViewport = (chars: GraphChar[]) =>
+      viewportActive()
         ? sliceGraphToViewport(chars, props.viewportOffset(), MAX_GRAPH_COLUMNS, props.row, renderOpts())
         : chars;
-      // Merged fan-out row IS the commit row — use isCommitRow=true for edge indicators
-      return graphCharsToContent(withEdgeIndicator(sliced, true));
-    }
-    // graphContent() already has viewport slicing and edge indicators applied
-    return graphContent();
+    return buildFanOutDisplay(fullFanOutChars(), canMergeFanOut(), graphContent(), applyViewport, withEdgeIndicator);
   };
+
+  const fanOutAboveContents = () => fanOutDisplay().fanOutAboveContents;
+  const commitRowGraphContent = () => fanOutDisplay().commitRowGraphContent;
 
   // Use refs to set StyledText content directly on TextRenderable,
   // bypassing the Solid reconciler which stringifies the content prop.
@@ -510,6 +472,76 @@ function GraphLine(
 
 /** Sort order for ref badges: tags first, then branches, remotes, HEAD last. */
 const REF_SORT_ORDER: Record<string, number> = { tag: 0, branch: 1, remote: 2, stash: 3, uncommitted: 4, head: 5 };
+
+/**
+ * Returns true when the commit row has merge/branch connectors (horizontals,
+ * corners, tees). In that case the commit row carries connection info and
+ * can't be replaced by a fan-out row.
+ */
+function rowHasConnections(row: GraphRow): boolean {
+  return row.connectors.some(
+    c =>
+      c.type === "horizontal" ||
+      c.type === "tee-left" ||
+      c.type === "tee-right" ||
+      c.type === "corner-top-right" ||
+      c.type === "corner-top-left" ||
+      c.type === "corner-bottom-right" ||
+      c.type === "corner-bottom-left",
+  );
+}
+
+interface FanOutDisplay {
+  /** StyledText content for each fan-out row rendered above the commit row. */
+  fanOutAboveContents: StyledText[];
+  /** StyledText content for the commit row's graph cell. */
+  commitRowGraphContent: StyledText;
+}
+
+/**
+ * Derives the fan-out display data from pre-computed full-width chars.
+ *
+ * Fan-out rows: extra connector rows showing branch-off corners.
+ * When fan-out rows exist AND the commit row is "simple" (no merge/branch
+ * connectors), the LAST fan-out row is used as the commit row's graph
+ * (since its █ at the node column would be adjacent to a redundant commit █).
+ * When the commit row HAS connections (e.g., a merge), all fan-out rows
+ * render separately and the commit row keeps its own graph.
+ *
+ * @param allFanOutChars  Full-width char arrays for each fan-out row (from createMemo).
+ * @param canMerge        Whether the last fan-out row can replace the commit row graph.
+ * @param normalGraphContent  The pre-computed commit-row graph content (used when !canMerge).
+ * @param applyViewport   Callback that applies optional viewport slicing to a char array.
+ * @param addEdge         Callback that appends the edge-indicator column.
+ */
+function buildFanOutDisplay(
+  allFanOutChars: GraphChar[][],
+  canMerge: boolean,
+  normalGraphContent: StyledText,
+  applyViewport: (chars: GraphChar[]) => GraphChar[],
+  addEdge: (chars: GraphChar[], isCommitRow: boolean) => GraphChar[],
+): FanOutDisplay {
+  if (allFanOutChars.length === 0) {
+    return { fanOutAboveContents: [], commitRowGraphContent: normalGraphContent };
+  }
+
+  const toContent = (chars: GraphChar[], isCommitRow: boolean): StyledText =>
+    graphCharsToContent(addEdge(applyViewport(chars), isCommitRow));
+
+  if (canMerge) {
+    // Show all fan-out rows except the last (which merges into the commit row)
+    const aboveContents = allFanOutChars.length <= 1 ? [] : allFanOutChars.slice(0, -1).map(c => toContent(c, false));
+    // The last fan-out row IS the commit row graph
+    const lastChars = allFanOutChars.at(-1) as GraphChar[];
+    return { fanOutAboveContents: aboveContents, commitRowGraphContent: toContent(lastChars, true) };
+  }
+
+  // All fan-out rows render separately; commit row keeps its own graph
+  return {
+    fanOutAboveContents: allFanOutChars.map(c => toContent(c, false)),
+    commitRowGraphContent: normalGraphContent,
+  };
+}
 
 /** Horizontal divider line for the two-zone search context window. */
 function SearchDivider() {
