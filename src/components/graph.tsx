@@ -381,8 +381,10 @@ function GraphLine(
   //   + 4 (left panel paddingX=2 each side)
   const subjectAvailableWidth = createMemo(() => {
     const W = dimensions().width;
+    // Detail panel box width = 25% of W (minWidth=60). Its paddingX=2 is internal,
+    // so it does NOT reduce the left panel's allocated width.
     const detailPanelWidth =
-      W >= COMPACT_THRESHOLD_WIDTH ? Math.max(Math.floor(W * DETAIL_PANEL_WIDTH_FRACTION), 60) + 4 : 0;
+      W >= COMPACT_THRESHOLD_WIDTH ? Math.max(Math.floor(W * DETAIL_PANEL_WIDTH_FRACTION), 60) : 0;
     const graphPanelWidth = W - detailPanelWidth - 4; // 4 = left panel paddingX=2 each side
     const fixedCols =
       graphWidth() +

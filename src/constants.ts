@@ -14,9 +14,9 @@ export const PAGE_JUMP = 20;
 export const DETAIL_PANEL_WIDTH_FRACTION = 0.25;
 
 /** Terminal size breakpoints for adaptive layout. */
-export const MIN_TERMINAL_WIDTH = 80;
-export const MIN_TERMINAL_HEIGHT = 20;
-export const COMPACT_THRESHOLD_WIDTH = 120;
+export const MIN_TERMINAL_WIDTH = 90;
+export const MIN_TERMINAL_HEIGHT = 30;
+export const COMPACT_THRESHOLD_WIDTH = 180;
 
 /** Sentinel hash used for the synthetic "uncommitted changes" node. */
 export const UNCOMMITTED_HASH = "0".repeat(40);
