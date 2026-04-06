@@ -1,5 +1,5 @@
 import { batch, createEffect, onCleanup, onMount } from "solid-js";
-import { UNCOMMITTED_HASH } from "../constants";
+import { isUncommittedHash, UNCOMMITTED_HASH } from "../constants";
 import type { AppActions, AppState } from "../context/state";
 import { buildGraph, getMaxGraphColumns } from "../git/graph";
 import { mergeCommitPages } from "../git/merge-pages";
@@ -77,7 +77,7 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
       const pageSize = state.maxCount();
       const silentMaxCount =
         silent || preserveLoaded
-          ? Math.max(pageSize, state.commits().filter(c => c.hash !== UNCOMMITTED_HASH).length)
+          ? Math.max(pageSize, state.commits().filter(c => !isUncommittedHash(c.hash)).length)
           : pageSize;
 
       const [commits, branches, currentBranch, remoteUrl, tagDetails, stashes, wtStatus] = await Promise.all([
@@ -226,7 +226,7 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
       const pageSize = state.maxCount();
 
       // Skip past already-loaded real commits (exclude synthetic uncommitted node)
-      const existingCommits = state.commits().filter(c => c.hash !== UNCOMMITTED_HASH);
+      const existingCommits = state.commits().filter(c => !isUncommittedHash(c.hash));
       const skip = existingCommits.length;
 
       const viewBranch = state.viewingBranch();

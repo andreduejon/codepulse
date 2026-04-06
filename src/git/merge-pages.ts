@@ -4,7 +4,7 @@
  * Extracted from App.loadMoreData() so it can be unit-tested without
  * SolidJS, reactive state, or git subprocess dependencies.
  */
-import { UNCOMMITTED_HASH } from "../constants";
+import { isUncommittedHash } from "../constants";
 import type { Commit } from "./types";
 
 /**
@@ -24,11 +24,11 @@ export function mergeCommitPages(
   newCommits: Commit[],
   stashByParent: Map<string, unknown[]>,
 ): Commit[] {
-  const hadUncommitted = existingCommits[0]?.hash === UNCOMMITTED_HASH;
+  const hadUncommitted = isUncommittedHash(existingCommits[0]?.hash ?? "");
   const uncommittedNode = hadUncommitted ? existingCommits[0] : null;
 
   // Strip uncommitted node for the real-commit merge
-  const realExisting = existingCommits.filter(c => c.hash !== UNCOMMITTED_HASH);
+  const realExisting = existingCommits.filter(c => !isUncommittedHash(c.hash));
   const merged = [...realExisting, ...newCommits];
 
   // Re-inject stash badges onto parent commits

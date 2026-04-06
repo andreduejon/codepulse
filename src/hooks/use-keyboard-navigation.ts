@@ -2,7 +2,7 @@ import type { ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useRenderer } from "@opentui/solid";
 import type { Accessor } from "solid-js";
 import type { DetailNavRef } from "../components/detail-types";
-import { PAGE_JUMP, SHIFT_JUMP, UNCOMMITTED_HASH } from "../constants";
+import { isUncommittedHash, PAGE_JUMP, SHIFT_JUMP } from "../constants";
 import type { AppActions, AppState, DetailTab } from "../context/state";
 
 type DialogId = "menu" | "help" | "theme" | "diff-blame" | "detail" | null;
@@ -243,7 +243,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
       /** Get navigable (non-empty) tab IDs based on commit type */
       const getAvailableTabs = (): DetailTab[] => {
         const commit = state.selectedCommit();
-        if (commit?.hash === UNCOMMITTED_HASH) {
+        if (isUncommittedHash(commit?.hash ?? "")) {
           const ud = state.uncommittedDetail();
           const tabs: DetailTab[] = [];
           if (ud && ud.unstaged.length > 0) tabs.push("unstaged");

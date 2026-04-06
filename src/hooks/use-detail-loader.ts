@@ -1,6 +1,6 @@
 import { createEffect, onCleanup } from "solid-js";
 import type { DetailNavRef } from "../components/detail-types";
-import { UNCOMMITTED_HASH } from "../constants";
+import { isUncommittedHash } from "../constants";
 import type { AppActions, AppState } from "../context/state";
 import { getCommitDetail, getUncommittedDetail } from "../git/repo";
 
@@ -67,7 +67,7 @@ export function useDetailLoader({
       return;
     }
 
-    const isUncommitted = commit.hash === UNCOMMITTED_HASH;
+    const isUncommitted = isUncommittedHash(commit.hash);
 
     // Reset active tab — but preserve it on child/parent jump navigation
     // so the user stays on the Details tab when walking the commit graph.
@@ -143,7 +143,7 @@ export function useDetailLoader({
     const commit = state.selectedCommit();
     if (!commit) return;
 
-    const isUncommitted = commit.hash === UNCOMMITTED_HASH;
+    const isUncommitted = isUncommittedHash(commit.hash);
 
     // Check if current tab is empty
     let isEmpty = false;

@@ -1,6 +1,6 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { For, Show } from "solid-js";
-import { UNCOMMITTED_HASH } from "../constants";
+import { isUncommittedHash } from "../constants";
 import { useAppState } from "../context/state";
 import type { DiffTarget } from "../git/types";
 import { useT } from "../hooks/use-t";
@@ -31,7 +31,7 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
 
   const tabs = () => {
     const commit = state.selectedCommit();
-    const isUncommitted = commit?.hash === UNCOMMITTED_HASH;
+    const isUncommitted = isUncommittedHash(commit?.hash ?? "");
     const ud = state.uncommittedDetail();
     const cd = state.commitDetail();
     if (isUncommitted) {
@@ -116,7 +116,7 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
         verticalScrollbarOptions={{ visible: false }}
       >
         <Show
-          when={state.selectedCommit()?.hash !== UNCOMMITTED_HASH}
+          when={!isUncommittedHash(state.selectedCommit()?.hash ?? "")}
           fallback={
             <UncommittedDetailView
               onJumpToCommit={props.onJumpToCommit}

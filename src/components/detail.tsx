@@ -1,7 +1,7 @@
 import { useTerminalDimensions } from "@opentui/solid";
 import type { JSXElement } from "solid-js";
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
-import { DETAIL_PANEL_WIDTH_FRACTION, UNCOMMITTED_HASH, UNCOMMITTED_PLACEHOLDER } from "../constants";
+import { DETAIL_PANEL_WIDTH_FRACTION, isUncommittedHash, UNCOMMITTED_PLACEHOLDER } from "../constants";
 import { useAppState } from "../context/state";
 import type { Commit, GraphRow } from "../git/types";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
@@ -104,7 +104,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
         branch: gr.childBranches[i],
         color: gr.childColors[i],
       }))
-      .filter(c => c.hash !== UNCOMMITTED_HASH);
+      .filter(c => !isUncommittedHash(c.hash));
   });
 
   // Active tab for committed commits: "detail" | "files" | "stashes"
@@ -152,7 +152,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   };
 
   // Whether the selected commit is the synthetic uncommitted-changes node
-  const isUncommitted = () => commit()?.hash === UNCOMMITTED_HASH;
+  const isUncommitted = () => isUncommittedHash(commit()?.hash ?? "");
 
   // ── Clipboard copy with "✓ copied" feedback ────────────────────────
   const { copiedId: copiedField, copyToClipboard } = useClipboard<CopyableField>();
@@ -221,7 +221,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
 
     if (tab === "detail") {
       // Copyable metadata fields (skip for uncommitted node — values are all "·······")
-      if (c.hash !== UNCOMMITTED_HASH) {
+      if (!isUncommittedHash(c.hash)) {
         items.push({ type: "copyable", field: "hash" });
         items.push({ type: "copyable", field: "author" });
         items.push({ type: "copyable", field: "date" });
