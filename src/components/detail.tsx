@@ -189,12 +189,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   });
 
   // File tree state — resets collapsed dirs when commit changes
-  const {
-    fileTree: _fileTree,
-    fileTreeRows,
-    collapsedDirs,
-    toggleDir,
-  } = useFileTree(() => detail()?.files ?? [], commit);
+  const { fileTreeRows, collapsedDirs, toggleDir } = useFileTree(() => detail()?.files ?? [], commit);
 
   // ── Stash section state ─────────────────────────────────────────────
   const {
