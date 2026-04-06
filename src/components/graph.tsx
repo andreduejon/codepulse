@@ -26,6 +26,7 @@ import {
 import type { GraphRow, RefInfo } from "../git/types";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
 import { formatRelativeDate } from "../utils/date";
+import { scrollElementIntoView } from "../utils/scroll";
 
 function RefBadge(
   props: Readonly<{
@@ -555,24 +556,7 @@ export default function GraphView(props: Readonly<{ onLoadMore?: () => void }>) 
     if (!sb) return;
     const rowEl = rowRefs[idx];
     if (!rowEl) return;
-
-    const layout = rowEl.getLayoutNode().getComputedLayout();
-    const rowTop = layout.top;
-    const rowHeight = layout.height;
-    const rowBottom = rowTop + rowHeight;
-
-    const viewportHeight = sb.viewport.height;
-    const currentScroll = sb.scrollTop;
-    const visibleTop = currentScroll;
-    const visibleBottom = currentScroll + viewportHeight;
-
-    const padding = 1; // keep at least 1 row of context visible above/below
-
-    if (rowTop < visibleTop + padding) {
-      sb.scrollTo(Math.max(0, rowTop - padding));
-    } else if (rowBottom > visibleBottom - padding) {
-      sb.scrollTo(rowBottom - viewportHeight + padding);
-    }
+    scrollElementIntoView(sb, rowEl);
   };
 
   // Scroll the target row into view (triggered by keyboard nav / selection).

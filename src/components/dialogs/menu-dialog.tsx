@@ -10,6 +10,7 @@ import { themes, useTheme } from "../../context/theme";
 import { getColorForColumn } from "../../git/graph";
 import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useClipboard } from "../../hooks/use-clipboard";
+import { scrollElementIntoView } from "../../utils/scroll";
 import { KeyHint } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
@@ -510,27 +511,9 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     const idx = selectedItemIndex();
     const sb = scrollboxRef;
     if (!sb || idx == null || idx < 0) return;
-
     const el = itemRefs[idx];
     if (!el) return;
-
-    const layout = el.getLayoutNode().getComputedLayout();
-    const rowTop = layout.top;
-    const rowHeight = layout.height;
-    const rowBottom = rowTop + rowHeight;
-
-    const viewportHeight = sb.viewport.height;
-    const currentScroll = sb.scrollTop;
-    const visibleTop = currentScroll;
-    const visibleBottom = currentScroll + viewportHeight;
-
-    const padding = 1;
-
-    if (rowTop < visibleTop + padding) {
-      sb.scrollTo(Math.max(0, rowTop - padding));
-    } else if (rowBottom > visibleBottom - padding) {
-      sb.scrollTo(rowBottom - viewportHeight + padding);
-    }
+    scrollElementIntoView(sb, el);
   });
 
   // Format the value display for an item
