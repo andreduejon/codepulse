@@ -83,9 +83,9 @@ describe("mergeCommitPages", () => {
     const stashByParent = new Map([["aaa", [{ index: 0 }]]]);
     const merged = mergeCommitPages(existing, [], stashByParent);
 
-    const parentInMerged = merged.find(c => c.hash === "aaa")!;
-    expect(parentInMerged.refs.some(r => r.type === "stash")).toBe(true);
-    expect(parentInMerged.refs.find(r => r.type === "stash")!.name).toBe("stash (1)");
+    const parentInMerged = merged.find(c => c.hash === "aaa");
+    expect(parentInMerged?.refs.some(r => r.type === "stash")).toBe(true);
+    expect(parentInMerged?.refs.find(r => r.type === "stash")?.name).toBe("stash (1)");
   });
 
   test("stash badge count reflects number of stashes", () => {
@@ -94,8 +94,8 @@ describe("mergeCommitPages", () => {
     const stashByParent = new Map([["aaa", [{ index: 0 }, { index: 1 }, { index: 2 }]]]);
     const merged = mergeCommitPages(existing, [], stashByParent);
 
-    const stashRef = merged.find(c => c.hash === "aaa")!.refs.find(r => r.type === "stash")!;
-    expect(stashRef.name).toBe("stash (3)");
+    const stashRef = merged.find(c => c.hash === "aaa")?.refs.find(r => r.type === "stash");
+    expect(stashRef?.name).toBe("stash (3)");
   });
 
   test("does NOT duplicate stash badge if already present", () => {
@@ -104,8 +104,8 @@ describe("mergeCommitPages", () => {
     const stashByParent = new Map([["aaa", [{ index: 0 }]]]);
     const merged = mergeCommitPages(existing, [], stashByParent);
 
-    const stashRefs = merged.find(c => c.hash === "aaa")!.refs.filter(r => r.type === "stash");
-    expect(stashRefs.length).toBe(1);
+    const stashRefs = merged.find(c => c.hash === "aaa")?.refs.filter(r => r.type === "stash");
+    expect(stashRefs?.length).toBe(1);
   });
 
   test("stash badge is injected onto new-page commit if parent is in new page", () => {
@@ -114,8 +114,8 @@ describe("mergeCommitPages", () => {
     const stashByParent = new Map([["bbb", [{ index: 0 }]]]);
     const merged = mergeCommitPages(existing, [newParent], stashByParent);
 
-    const parentInMerged = merged.find(c => c.hash === "bbb")!;
-    expect(parentInMerged.refs.some(r => r.type === "stash")).toBe(true);
+    const parentInMerged = merged.find(c => c.hash === "bbb");
+    expect(parentInMerged?.refs.some(r => r.type === "stash")).toBe(true);
   });
 
   test("stash badge is not injected when parent hash not in merged list", () => {
@@ -156,8 +156,8 @@ describe("mergeCommitPages", () => {
     expect(merged[4].hash).toBe("ddd");
 
     // Stash badges
-    expect(merged[2].refs.find(r => r.type === "stash")!.name).toBe("stash (2)");
-    expect(merged[4].refs.find(r => r.type === "stash")!.name).toBe("stash (1)");
+    expect(merged[2].refs.find(r => r.type === "stash")?.name).toBe("stash (2)");
+    expect(merged[4].refs.find(r => r.type === "stash")?.name).toBe("stash (1)");
 
     // No stash on commits that shouldn't have them
     expect(merged[0].refs.some(r => r.type === "stash")).toBe(false);

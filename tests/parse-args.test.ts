@@ -7,7 +7,7 @@
  * Note: --help, --version, and error paths call process.exit().
  * We mock process.exit to capture exit codes without terminating the test runner.
  */
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { parseArgs } from "../src/cli/parse-args";
 
 /** Fake argv prefix: parseArgs slices from index 2. */
