@@ -380,14 +380,15 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
           if (c && d) {
             const fileList = d.files.map(f => f.path);
             const fileIndex = fileList.indexOf(item.filePath);
-            const fileStatus = d.files[fileIndex >= 0 ? fileIndex : 0]?.status;
+            const clampedIdx = Math.max(0, fileIndex);
+            const fileStatus = d.files[clampedIdx]?.status;
             props.onOpenDiff({
               commitHash: c.hash,
               filePath: item.filePath,
               source: "commit",
               status: fileStatus,
               fileList,
-              fileIndex: fileIndex >= 0 ? fileIndex : 0,
+              fileIndex: clampedIdx,
             });
           }
         }
@@ -403,14 +404,15 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
           const stashFiles = stashFileCache().get(item.stashHash);
           const fileList = stashFiles ? stashFiles.map(f => f.path) : [item.filePath];
           const fileIndex = fileList.indexOf(item.filePath);
-          const fileStatus = stashFiles?.[fileIndex >= 0 ? fileIndex : 0]?.status;
+          const clampedIdx = Math.max(0, fileIndex);
+          const fileStatus = stashFiles?.[clampedIdx]?.status;
           props.onOpenDiff({
             commitHash: item.stashHash,
             filePath: item.filePath,
             source: "stash",
             status: fileStatus,
             fileList,
-            fileIndex: fileIndex >= 0 ? fileIndex : 0,
+            fileIndex: clampedIdx,
           });
         }
         break;
