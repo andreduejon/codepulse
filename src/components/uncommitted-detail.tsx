@@ -16,6 +16,7 @@ import {
   STATUS_COL_WIDTH,
 } from "./detail-types";
 import { FileTreeEntry } from "./file-tree-entry";
+import { TotalLinesChangedRow } from "./total-lines-changed-row";
 
 // ── Layout constants ────────────────────────────────────────────────
 const MIN_PANEL_WIDTH = 60;
@@ -228,24 +229,7 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
       >
         {/* Total lines changed (skip for untracked which have 0/0 stats) */}
         <Show when={activeTab() !== "untracked" && (fileWidths().totalAdd > 0 || fileWidths().totalDel > 0)}>
-          <box flexDirection="row">
-            <box flexGrow={1}>
-              <text fg={t().foregroundMuted} wrapMode="none">
-                total lines changed
-              </text>
-            </box>
-            <box flexShrink={0} width={2} />
-            <box flexShrink={0} paddingLeft={1}>
-              <text fg={t().diffAdded} wrapMode="none">
-                +{fileWidths().totalAdd}
-              </text>
-            </box>
-            <box flexShrink={0} paddingLeft={1}>
-              <text fg={t().diffRemoved} wrapMode="none">
-                -{fileWidths().totalDel}
-              </text>
-            </box>
-          </box>
+          <TotalLinesChangedRow totalAdd={fileWidths().totalAdd} totalDel={fileWidths().totalDel} />
         </Show>
 
         <For each={fileTreeRows()}>

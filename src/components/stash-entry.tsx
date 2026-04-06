@@ -4,6 +4,7 @@ import type { Commit } from "../git/types";
 import type { FileTreeRow } from "../utils/file-tree";
 import { ENTRY_PADDING_LEFT } from "./detail-types";
 import { FileTreeEntry } from "./file-tree-entry";
+import { TotalLinesChangedRow } from "./total-lines-changed-row";
 
 /** Pre-computed display data for a single file row inside a stash. */
 export interface StashFileRowData {
@@ -77,24 +78,7 @@ export function StashEntry(props: Readonly<StashEntryProps>) {
 
         {/* Total lines changed (only after files are loaded) */}
         <Show when={props.totalAdd > 0 || props.totalDel > 0}>
-          <box flexDirection="row">
-            <box flexGrow={1}>
-              <text fg={t().foregroundMuted} wrapMode="none">
-                total lines changed
-              </text>
-            </box>
-            <box flexShrink={0} width={2} />
-            <box flexShrink={0} paddingLeft={1}>
-              <text fg={t().diffAdded} wrapMode="none">
-                +{props.totalAdd}
-              </text>
-            </box>
-            <box flexShrink={0} paddingLeft={1}>
-              <text fg={t().diffRemoved} wrapMode="none">
-                -{props.totalDel}
-              </text>
-            </box>
-          </box>
+          <TotalLinesChangedRow totalAdd={props.totalAdd} totalDel={props.totalDel} />
         </Show>
 
         <For each={props.fileRows}>

@@ -28,6 +28,7 @@ import {
 import { FileTreeEntry } from "./file-tree-entry";
 import type { StashFileRowData } from "./stash-entry";
 import { StashEntry } from "./stash-entry";
+import { TotalLinesChangedRow } from "./total-lines-changed-row";
 
 // ── Layout constants ────────────────────────────────────────────────
 /** Minimum panel width in characters before padding is subtracted. */
@@ -1126,24 +1127,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
 
             {/* ══════════════ Files tab ══════════════ */}
             <Show when={activeTab() === "files" && detail() && detail()?.files.length > 0}>
-              <box flexDirection="row">
-                <box flexGrow={1}>
-                  <text fg={t().foregroundMuted} wrapMode="none">
-                    total lines changed
-                  </text>
-                </box>
-                <box flexShrink={0} width={2} />
-                <box flexShrink={0} paddingLeft={1}>
-                  <text fg={t().diffAdded} wrapMode="none">
-                    +{fileWidths().totalAdd}
-                  </text>
-                </box>
-                <box flexShrink={0} paddingLeft={1}>
-                  <text fg={t().diffRemoved} wrapMode="none">
-                    -{fileWidths().totalDel}
-                  </text>
-                </box>
-              </box>
+              <TotalLinesChangedRow totalAdd={fileWidths().totalAdd} totalDel={fileWidths().totalDel} />
               <For each={fileTreeRows()}>
                 {(treeRow, i) => {
                   const itemIdx = () => findItemIndex(treeRow.isDir ? "file-dir" : "file", undefined, i());
