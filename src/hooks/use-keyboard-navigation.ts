@@ -148,8 +148,12 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
       return;
     }
 
-    // Escape handling
-    if (e.name === "escape") {
+    /**
+     * Close the topmost open layer (dialog → search → detail focus → filter → branch).
+     * Returns true if something was closed, false if there was nothing left to close.
+     * Used by both Escape and q to share the same cascade logic.
+     */
+    const closeOneCascadeStep = (skipSearch = false): boolean => {
       if (dialog()) {
         // Closing the detail dialog must also clear detailFocused
         if (dialog() === "detail") {
@@ -161,63 +165,47 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         } else {
           setDialog(null);
         }
-        return;
+        return true;
       }
-      if (searchFocused()) {
+      if (!skipSearch && searchFocused()) {
         // Phase 1: close search bar, clear filter, restore pre-search cursor
         setSearchFocused(false);
         clearFilterAndRestore(state.preSearchCursorHash() ?? undefined);
-        return;
+        return true;
       }
       if (state.detailFocused()) {
         actions.setDetailFocused(false);
-        return;
+        return true;
       }
       if (state.searchQuery()) {
         // Phase 2 (graph focused + filter active): clear filter, keep cursor
         // on the currently selected commit
         clearFilterAndRestore(state.selectedCommit()?.hash ?? undefined);
-        return;
+        return true;
       }
       if (state.viewingBranch()) {
         actions.setViewingBranch(null);
         loadData();
-        return;
+        return true;
       }
+      return false;
+    };
+
+    // Escape handling
+    if (e.name === "escape") {
+      closeOneCascadeStep();
       return;
     }
 
     // q: same cascade as Escape, but quits if nothing left to close
     if (e.name === "q" && !searchFocused()) {
-      if (dialog()) {
-        if (dialog() === "detail") {
-          actions.setDetailFocused(false);
-          setDialog(null);
-        } else if (dialog() === "diff-blame" && layoutMode() === "compact" && state.detailFocused()) {
-          setDialog("detail");
-        } else {
-          setDialog(null);
-        }
-        return;
+      if (!closeOneCascadeStep(/* skipSearch */ true)) {
+        // Nothing to close — quit.
+        // renderer.destroy() restores the terminal and resolves the render()
+        // promise, letting the process exit cleanly via the event loop.
+        // Avoid process.exit() here as it would bypass onCleanup handlers.
+        renderer.destroy();
       }
-      if (state.detailFocused()) {
-        actions.setDetailFocused(false);
-        return;
-      }
-      if (state.searchQuery()) {
-        clearFilterAndRestore(state.selectedCommit()?.hash ?? undefined);
-        return;
-      }
-      if (state.viewingBranch()) {
-        actions.setViewingBranch(null);
-        loadData();
-        return;
-      }
-      // Nothing to close — quit.
-      // renderer.destroy() restores the terminal and resolves the render()
-      // promise, letting the process exit cleanly via the event loop.
-      // Avoid process.exit() here as it would bypass onCleanup handlers.
-      renderer.destroy();
     }
 
     // Enter while search bar is focused: confirm search → Phase 2
