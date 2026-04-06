@@ -67,19 +67,23 @@ function DetailDialog(props: Readonly<DetailPanelProps & { onClose: () => void }
         paddingY={1}
       >
         <DialogTitleBar title="Details" />
-        <DetailPanel
-          scrollboxRef={props.scrollboxRef}
-          navRef={props.navRef}
-          searchFocused={props.searchFocused}
-          onJumpToCommit={props.onJumpToCommit}
-          onOpenDiff={props.onOpenDiff}
-        />
+        {/* Extra paddingX=3 matches other dialogs' inner paddingX=4 (outer box already has paddingX=1) */}
+        <box flexDirection="column" flexGrow={1} paddingX={3}>
+          <DetailPanel
+            scrollboxRef={props.scrollboxRef}
+            navRef={props.navRef}
+            searchFocused={props.searchFocused}
+            onJumpToCommit={props.onJumpToCommit}
+            onOpenDiff={props.onOpenDiff}
+            inDialog
+          />
+        </box>
         <DialogFooter>
           <text flexShrink={0} wrapMode="none" fg={theme().accent}>
             <strong>enter</strong>
           </text>
           <text flexShrink={0} wrapMode="none" fg={theme().foregroundMuted}>
-            {" select  "}
+            {" open  "}
           </text>
           <text flexShrink={0} wrapMode="none" fg={theme().accent}>
             <strong>{"←/→"}</strong>
