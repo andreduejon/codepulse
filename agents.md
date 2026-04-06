@@ -6,7 +6,6 @@
 - `createMemo` evaluates **immediately** on creation. `createEffect` is **deferred** (runs after component setup).
 - A `createMemo` that references a `const` declared later in the component body hits the **Temporal Dead Zone** and throws a `ReferenceError`. SolidJS swallows this error silently, leaving the reactive system broken (app freezes).
 - **Rule**: Every `createMemo` must appear **after** all `const` declarations it references. When refactoring `createEffect` to `createMemo`, check for forward references.
-- This caused the dialog freeze bug (commit `f9b7267`).
 
 ### 2. `batch()` is a no-op inside effects
 - `batch()` calls `runUpdates(fn, false)` which checks `if (Updates) return fn()`. Inside an effect, `Updates` is already set, so `batch()` just calls `fn()` directly with no deferred behavior.
@@ -25,4 +24,3 @@
 - The failure is **silent**: no crash, no console error. The hook operates on `undefined` state, causing subtle breakage (e.g. terminal garbage strings leaking through before opentui's input parser attaches).
 - When extracting inline code into a hook, the inline code used local variables directly. The extracted hook naturally reaches for `useContext()` — but that context isn't available at setup time.
 - **Rule**: Hooks called during a component's setup phase must receive `state`/`actions` (or any context value) as **parameters**, not via `useContext()`. Only child components rendered *inside* the Provider's JSX subtree can safely call `useContext()`.
-- This caused the Warp garbage string bug (fixed by passing `state`/`actions` directly to `useDataLoader` and `useDetailLoader`).
