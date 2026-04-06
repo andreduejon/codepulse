@@ -11,6 +11,7 @@ import { useStashState } from "../hooks/use-stash-state";
 import { useT } from "../hooks/use-t";
 import { formatDate } from "../utils/date";
 import { isCursored as _isCursored, itemHighlightBg as _itemHighlightBg } from "../utils/detail-cursor";
+import { buildDiffTarget } from "../utils/diff-target";
 import DetailBadge from "./detail-badge";
 import type { DetailViewProps } from "./detail-types";
 import {
@@ -378,18 +379,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
           const c = commit();
           const d = detail();
           if (c && d) {
-            const fileList = d.files.map(f => f.path);
-            const fileIndex = fileList.indexOf(item.filePath);
-            const clampedIdx = Math.max(0, fileIndex);
-            const fileStatus = d.files[clampedIdx]?.status;
-            props.onOpenDiff({
-              commitHash: c.hash,
-              filePath: item.filePath,
-              source: "commit",
-              status: fileStatus,
-              fileList,
-              fileIndex: clampedIdx,
-            });
+            props.onOpenDiff(buildDiffTarget(c.hash, item.filePath, "commit", d.files));
           }
         }
         break;
@@ -402,18 +392,18 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
       case "stash-file":
         if (props.onOpenDiff && item.filePath) {
           const stashFiles = stashFileCache().get(item.stashHash);
-          const fileList = stashFiles ? stashFiles.map(f => f.path) : [item.filePath];
-          const fileIndex = fileList.indexOf(item.filePath);
-          const clampedIdx = Math.max(0, fileIndex);
-          const fileStatus = stashFiles?.[clampedIdx]?.status;
-          props.onOpenDiff({
-            commitHash: item.stashHash,
-            filePath: item.filePath,
-            source: "stash",
-            status: fileStatus,
-            fileList,
-            fileIndex: clampedIdx,
-          });
+          if (stashFiles) {
+            props.onOpenDiff(buildDiffTarget(item.stashHash, item.filePath, "stash", stashFiles));
+          } else {
+            // Cache miss — open with single-file list (no left/right navigation)
+            props.onOpenDiff({
+              commitHash: item.stashHash,
+              filePath: item.filePath,
+              source: "stash",
+              fileList: [item.filePath],
+              fileIndex: 0,
+            });
+          }
         }
         break;
     }

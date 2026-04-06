@@ -7,6 +7,7 @@ import { useBannerScroll } from "../hooks/use-banner-scroll";
 import { useFileTree } from "../hooks/use-file-tree";
 import { useT } from "../hooks/use-t";
 import { isCursored as _isCursored, itemHighlightBg as _itemHighlightBg } from "../utils/detail-cursor";
+import { buildDiffTarget } from "../utils/diff-target";
 import type { DetailViewProps } from "./detail-types";
 import {
   computeFileWidths,
@@ -91,18 +92,7 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
       toggleDir(item.dirPath);
     } else if (item.type === "file" && props.onOpenDiff && item.filePath) {
       const source = activeTab() as DiffSource;
-      const fileList = activeFiles().map(f => f.path);
-      const fileIndex = fileList.indexOf(item.filePath);
-      const clampedIdx = Math.max(0, fileIndex);
-      const fileStatus = activeFiles()[clampedIdx]?.status;
-      props.onOpenDiff({
-        commitHash: "",
-        filePath: item.filePath,
-        source,
-        status: fileStatus,
-        fileList,
-        fileIndex: clampedIdx,
-      });
+      props.onOpenDiff(buildDiffTarget("", item.filePath, source, activeFiles()));
     }
   };
 
