@@ -1,6 +1,6 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
-import { batch, createEffect, createMemo, createSignal, onCleanup, onMount, Show } from "solid-js";
+import { batch, createEffect, createMemo, createSignal, onCleanup, onMount, Show, untrack } from "solid-js";
 import DetailPanel, { type DetailPanelProps } from "./components/detail-panel";
 import type { DetailNavRef } from "./components/detail-types";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./components/dialogs/dialog-chrome";
@@ -135,12 +135,15 @@ function AppContent(props: Readonly<AppProps>) {
   // Seamless resize transitions between layout modes:
   // - Normal → Compact while detail is focused: auto-open the detail dialog
   // - Compact → Normal while detail dialog is open: close dialog, keep detail focused
+  // Uses untrack() for dialog() so this effect only fires on layoutMode changes,
+  // not every time any dialog (e.g. diff-blame) opens/closes.
   createEffect(() => {
     const mode = layoutMode();
-    if (mode === "compact" && state.detailFocused() && dialog() !== "detail") {
-      // Only open the dialog if it's not already open (avoids re-triggering)
+    const currentDialog = untrack(dialog);
+    if (mode === "compact" && state.detailFocused() && currentDialog !== "detail") {
+      // Only open the detail dialog on resize — not when another dialog (e.g. diff-blame) opens
       setDialog("detail");
-    } else if (mode === "normal" && dialog() === "detail") {
+    } else if (mode === "normal" && currentDialog === "detail") {
       setDialog(null);
       // detailFocused stays true — panel is now visible in two-column layout
     }
@@ -749,7 +752,14 @@ function AppContent(props: Readonly<AppProps>) {
               {target => (
                 <DiffBlameDialog
                   target={target()}
-                  onClose={() => setDialog(null)}
+                  onClose={() => {
+                    // In compact mode with detail focused, return to the detail dialog
+                    if (layoutMode() === "compact" && state.detailFocused()) {
+                      setDialog("detail");
+                    } else {
+                      setDialog(null);
+                    }
+                  }}
                   onNavigate={t => {
                     setDiffTarget(t);
                     detailNavRef.scrollToFile(t.filePath);
