@@ -92,7 +92,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
 
   /**
    * Open the search bar (Phase 1). Saves the current cursor position
-   * as the anchor for the three-zone context window.
+   * as the anchor for the two-zone context window.
    */
   const openSearch = () => {
     const currentHash = state.selectedCommit()?.hash ?? null;
