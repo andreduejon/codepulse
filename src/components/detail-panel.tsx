@@ -75,8 +75,15 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
 
   return (
     <>
-      {/* Tab bar with top accent line per selected tab */}
-      <box flexDirection="row" width="100%" flexShrink={0}>
+      {/* Tab bar: each tab has its own top accent line; wrapper provides continuous bottom border */}
+      <box
+        flexDirection="row"
+        width="100%"
+        flexShrink={0}
+        border={["bottom"]}
+        borderStyle="single"
+        borderColor={t().border}
+      >
         <For each={tabs()}>
           {tab => {
             const isActive = () => state.detailActiveTab() === tab.id;
