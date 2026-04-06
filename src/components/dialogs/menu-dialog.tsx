@@ -1,77 +1,43 @@
 import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
-import { useKeyboard } from "@opentui/solid";
-import { createEffect, createMemo, createSignal, For, onCleanup } from "solid-js";
+import { useKeyboard, useTerminalDimensions } from "@opentui/solid";
+import { createEffect, createSignal, For, type JSX, onCleanup } from "solid-js";
+import type { ConfigInfo } from "../../config";
 import { SHIFT_JUMP } from "../../constants";
-import { DEFAULT_AUTO_REFRESH_INTERVAL, useAppState } from "../../context/state";
-import { themes, useTheme } from "../../context/theme";
+import { useTheme } from "../../context/theme";
 import { getColorForColumn } from "../../git/graph";
 import { useBannerScroll } from "../../hooks/use-banner-scroll";
+import { useClipboard } from "../../hooks/use-clipboard";
+import { COPYABLE_VISIBLE_WIDTH, INFO_LABEL_WIDTH, type SettingItem, useMenuItems } from "../../hooks/use-menu-items";
+import { scrollElementIntoView } from "../../utils/scroll";
+import { KeyHint } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
 type MenuTab = "repository" | "branch";
+
+/** Column widths for the menu item value and hotkey display columns. */
+const VALUE_COL_WIDTH = 22;
+const HOTKEY_COL_WIDTH = 9;
 
 interface MenuDialogProps {
   onClose: () => void;
   onReload: () => void;
   onFetch: () => void;
-  onOpenDialog?: (dialogId: string) => void;
+  onOpenDialog?: (dialogId: "theme") => void;
   /** View graph from a specific branch's perspective. null clears the filter. */
   onViewBranch: (branch: string | null) => void;
+  /** Config file info from startup, used by the Configuration section. */
+  configInfo?: ConfigInfo;
 }
-
-const MAX_COUNT_OPTIONS = [10, 20, 50, 100, 200, 500];
-
-const AUTO_REFRESH_OPTIONS = ["off", "10s", "30s", "60s"];
-const AUTO_REFRESH_MS: Record<string, number> = {
-  off: 0,
-  "10s": 10000,
-  "30s": 30000,
-  "60s": 60000,
-};
-const MS_TO_LABEL: Record<number, string> = {
-  0: "off",
-  10000: "10s",
-  30000: "30s",
-  60000: "60s",
-};
-
-/** Width of the info label column (characters). */
-const INFO_LABEL_WIDTH = 12;
 
 /** Persists the last-used tab across dialog open/close cycles. */
 const [lastMenuTab, setLastMenuTab] = createSignal<MenuTab>("repository");
 
-type SettingItem =
-  | { kind: "header"; label: string }
-  | { kind: "info"; label: string; get: () => string }
-  | { kind: "copyable"; label: string; get: () => string }
-  | {
-      kind: "toggle";
-      label: string;
-      hotkey?: string;
-      get: () => boolean;
-      set: (v: boolean) => void;
-      needsReload?: boolean;
-    }
-  | {
-      kind: "cycle";
-      label: string;
-      hotkey?: string;
-      options: string[];
-      get: () => string;
-      set: (v: string) => void;
-      needsReload?: boolean;
-    }
-  | { kind: "dialog"; label: string; hotkey?: string; dialogId: string; get: () => string }
-  | { kind: "action"; label: string; hotkey?: string; get?: () => string; run: () => void; disabled?: () => boolean }
-  | { kind: "section"; label: string; count: number; collapsed: () => boolean; toggle: () => void }
-  | { kind: "badge"; name: string; colorIndex: number; dimmed?: boolean }
-  | { kind: "branch"; name: string; run: () => void; upstream?: string; ahead?: number; behind?: number };
-
 export default function MenuDialog(props: Readonly<MenuDialogProps>) {
-  const { state, actions } = useAppState();
-  const { theme, themeName } = useTheme();
+  const { theme, themeName, setTheme } = useTheme();
   const t = () => theme();
+  const dimensions = useTerminalDimensions();
+  const dialogWidth = () => 72;
+  const dialogHeight = () => Math.min(Math.floor(dimensions().height * 0.7), dimensions().height - 8);
 
   // ── Tab state ─────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = createSignal<MenuTab>(lastMenuTab());
@@ -80,45 +46,55 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   });
 
   // ── Clipboard feedback ────────────────────────────────────────────
-  const [copiedLabel, setCopiedLabel] = createSignal<string | null>(null);
-  let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+  const { copiedId: copiedLabel, copyToClipboard } = useClipboard();
 
-  const copyToClipboard = (text: string, label: string) => {
-    try {
-      // Cross-platform clipboard: pbcopy (macOS), xclip (Linux), clip.exe (WSL/Windows)
-      const platform = process.platform;
-      let cmd: string[];
-      if (platform === "darwin") {
-        cmd = ["pbcopy"];
-      } else if (platform === "win32") {
-        cmd = ["clip.exe"];
-      } else {
-        // Linux / WSL fallback
-        cmd = ["xclip", "-selection", "clipboard"];
-      }
-      const proc = Bun.spawn(cmd, { stdin: new Response(text).body });
-      // Kill after 5s to prevent zombie if clipboard utility hangs (e.g. xclip without X11)
-      const killTimer = setTimeout(() => {
-        try {
-          proc.kill();
-        } catch {}
-      }, 5000);
-      proc.exited.then(() => clearTimeout(killTimer)).catch(() => clearTimeout(killTimer));
-    } catch {
-      // Clipboard utility not available — silently ignore
-    }
-    setCopiedLabel(label);
-    if (copiedTimer) clearTimeout(copiedTimer);
-    copiedTimer = setTimeout(() => setCopiedLabel(null), 1500);
+  // ── Config save feedback ──────────────────────────────────────────
+  const [savedFeedback, setSavedFeedback] = createSignal<string | null>(null);
+  let savedTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const showSavedFeedback = (label: string) => {
+    setSavedFeedback(label);
+    if (savedTimer) clearTimeout(savedTimer);
+    savedTimer = setTimeout(() => setSavedFeedback(null), 1500);
   };
-
   onCleanup(() => {
-    if (copiedTimer) clearTimeout(copiedTimer);
+    if (savedTimer) clearTimeout(savedTimer);
+  });
+
+  // ── Config save scope ──────────────────────────────────────────────
+  type ConfigScope = "global" | "this repo";
+  const [configScope, setConfigScope] = createSignal<ConfigScope>("global");
+
+  // ── Menu items hook ───────────────────────────────────────────────
+  const {
+    activeItems,
+    selectedItemIndex,
+    branchTrackWidths,
+    bannerOverflow,
+    moveCursor,
+    activateItem,
+    valueDisplay,
+    footerVerb,
+  } = useMenuItems({
+    activeTab,
+    themeName,
+    setTheme,
+    configScope,
+    setConfigScope,
+    savedFeedback,
+    showSavedFeedback,
+    copyToClipboard,
+    onFetch: () => props.onFetch(),
+    onReload: () => props.onReload(),
+    onOpenDialog: props.onOpenDialog,
+    onViewBranch: branch => props.onViewBranch(branch),
+    onClose: () => props.onClose(),
+    configInfo: props.configInfo,
   });
 
   // ── Banner scroll for selected copyable rows ──────────────────────
   /** Usable width for copyable text: dialog=70 - 2(paddingX=1) - 8(paddingX=4) = 60 */
-  const COPYABLE_VISIBLE_WIDTH = 60;
+  const bannerOffset = useBannerScroll(bannerOverflow);
 
   /** Returns the visible slice of a copyable value, applying banner offset when selected. */
   const copyableBannerText = (text: string, isSelected: boolean): string => {
@@ -126,303 +102,6 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     if (!isSelected) return text; // let the TUI truncate when not selected
     const off = bannerOffset();
     return text.substring(off, off + COPYABLE_VISIBLE_WIDTH);
-  };
-
-  // ── Collapsed state for branch sections ───────────────────────────
-  const [localCollapsed, setLocalCollapsed] = createSignal(false);
-  const [remoteCollapsed, setRemoteCollapsed] = createSignal(false);
-
-  // ── Repository tab items ──────────────────────────────────────────
-  const lastFetchLabel = (): string => {
-    if (state.fetching()) return "fetching...";
-    const time = state.lastFetchTime();
-    if (!time) return "never";
-    const secs = Math.round((Date.now() - time.getTime()) / 1000);
-    if (secs < 60) return `${secs}s ago`;
-    const mins = Math.round(secs / 60);
-    if (mins < 60) return `${mins}m ago`;
-    const hours = Math.round(mins / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.round(hours / 24);
-    return `${days}d ago`;
-  };
-
-  const repoItems = createMemo<SettingItem[]>(() => [
-    { kind: "header", label: "Origin" },
-    { kind: "copyable", label: "URL", get: () => state.remoteUrl() || "(none)" },
-
-    { kind: "header", label: "Path" },
-    { kind: "copyable", label: "Directory", get: () => state.repoPath() || "(unknown)" },
-
-    { kind: "header", label: "Actions" },
-    { kind: "action", label: "Fetch remote", hotkey: "f", get: lastFetchLabel, run: () => props.onFetch() },
-
-    { kind: "header", label: "Preferences" },
-    {
-      kind: "dialog",
-      label: "Color theme",
-      hotkey: "ctrl+t",
-      dialogId: "theme",
-      get: () => themes[themeName()]?.name ?? themeName(),
-    },
-    {
-      kind: "cycle",
-      label: "Max commits",
-      options: MAX_COUNT_OPTIONS.map(String),
-      get: () => String(state.maxCount()),
-      set: v => actions.setMaxCount(Number.parseInt(v, 10)),
-      needsReload: true,
-    },
-    {
-      kind: "toggle",
-      label: "Show all branches",
-      get: () => state.showAllBranches(),
-      set: v => actions.setShowAllBranches(v),
-      needsReload: true,
-    },
-    {
-      kind: "cycle",
-      label: "Auto refresh",
-      options: AUTO_REFRESH_OPTIONS,
-      get: () => MS_TO_LABEL[state.autoRefreshInterval()] ?? "off",
-      set: v => actions.setAutoRefreshInterval(AUTO_REFRESH_MS[v] ?? DEFAULT_AUTO_REFRESH_INTERVAL),
-    },
-  ]);
-
-  // ── Branch tab items ──────────────────────────────────────────────
-  const localBranches = createMemo(() => state.branches().filter(b => !b.isRemote));
-
-  const remoteBranches = createMemo(() => state.branches().filter(b => b.isRemote));
-
-  const makeBranchItem = (b: { name: string; upstream?: string; ahead?: number; behind?: number }): SettingItem => ({
-    kind: "branch" as const,
-    name: b.name,
-    upstream: b.upstream,
-    ahead: b.ahead,
-    behind: b.behind,
-    run: () => {
-      // View graph from this branch's perspective
-      props.onViewBranch(b.name);
-      props.onClose();
-    },
-  });
-
-  /** Pre-built map from branch name → graph color index (O(1) lookup). */
-  const branchColorMap = createMemo(() => {
-    const map = new Map<string, number>();
-    for (const r of state.graphRows()) {
-      if (r.branchName && !map.has(r.branchName)) {
-        map.set(r.branchName, r.nodeColor);
-      }
-    }
-    return map;
-  });
-
-  /** Look up the graph color index for a branch name (falls back to 0). */
-  const branchColorIndex = (name: string): number => branchColorMap().get(name) ?? 0;
-
-  const branchItems = createMemo<SettingItem[]>(() => {
-    const locals = localBranches();
-    const remotes = remoteBranches();
-    const currentBranch = state.currentBranch();
-
-    const result: SettingItem[] = [];
-
-    // ── Checked-out branch (always shown) ──────────────────────────
-    result.push({ kind: "header", label: "Checked Out" });
-    result.push({
-      kind: "badge",
-      name: currentBranch || "(unknown)",
-      colorIndex: currentBranch ? branchColorIndex(currentBranch) : 0,
-      dimmed: !currentBranch,
-    });
-
-    // ── Showing filter (always shown) ──────────────────────────────
-    result.push({ kind: "header", label: "Showing" });
-    const viewing = state.viewingBranch();
-    if (viewing) {
-      result.push({
-        kind: "badge",
-        name: viewing,
-        colorIndex: branchColorIndex(viewing),
-      });
-    } else {
-      result.push({
-        kind: "badge",
-        name: "(all branches)",
-        colorIndex: 0,
-        dimmed: true,
-      });
-    }
-
-    // ── Actions (always shown) ────────────────────────────────────
-    result.push({ kind: "header", label: "Actions" });
-    result.push({
-      kind: "action",
-      label: "Clear filter",
-      disabled: () => !state.viewingBranch(),
-      run: () => {
-        props.onViewBranch(null);
-        props.onClose();
-      },
-    });
-
-    // ── Local section (collapsible) ───────────────────────────────
-    result.push({
-      kind: "section",
-      label: "Local",
-      count: locals.length,
-      collapsed: localCollapsed,
-      toggle: () => setLocalCollapsed(v => !v),
-    });
-    if (!localCollapsed()) {
-      if (locals.length === 0) {
-        result.push({ kind: "info", label: "", get: () => "(no local branches)" });
-      } else {
-        const sorted = [...locals].sort((a, b) => {
-          if (a.isCurrent) return -1;
-          if (b.isCurrent) return 1;
-          return a.name.localeCompare(b.name);
-        });
-        for (const b of sorted) {
-          result.push(makeBranchItem(b));
-        }
-      }
-    }
-
-    // ── Remote section (collapsible) ──────────────────────────────
-    if (remotes.length > 0) {
-      result.push({
-        kind: "section",
-        label: "Remote",
-        count: remotes.length,
-        collapsed: remoteCollapsed,
-        toggle: () => setRemoteCollapsed(v => !v),
-      });
-      if (!remoteCollapsed()) {
-        const sorted = [...remotes].sort((a, b) => a.name.localeCompare(b.name));
-        for (const b of sorted) {
-          result.push(makeBranchItem({ name: b.name }));
-        }
-      }
-    }
-
-    return result;
-  });
-
-  /** Max column widths for ahead/behind counts across all visible branch items. */
-  const branchTrackWidths = createMemo(() => {
-    let addW = 0;
-    let delW = 0;
-    for (const item of branchItems()) {
-      if (item.kind !== "branch") continue;
-      if (item.ahead != null && item.ahead > 0) addW = Math.max(addW, `↑${item.ahead}`.length);
-      if (item.behind != null && item.behind > 0) delW = Math.max(delW, `↓${item.behind}`.length);
-    }
-    return { addColWidth: addW, delColWidth: delW };
-  });
-
-  // ── Active items depend on tab ────────────────────────────────────
-  const activeItems = (): SettingItem[] => (activeTab() === "repository" ? repoItems() : branchItems());
-
-  // ── Cursor per tab ────────────────────────────────────────────────
-  const [repoCursor, setRepoCursor] = createSignal(0);
-  const [branchCursor, setBranchCursor] = createSignal(0);
-
-  const currentCursor = () => (activeTab() === "repository" ? repoCursor() : branchCursor());
-  const setCurrentCursor = (v: number | ((prev: number) => number)) => {
-    const setter = activeTab() === "repository" ? setRepoCursor : setBranchCursor;
-    if (typeof v === "function") setter(v);
-    else setter(v);
-  };
-
-  const selectableIndices = (): number[] =>
-    activeItems()
-      .map((item, i) =>
-        item.kind === "toggle" ||
-        item.kind === "cycle" ||
-        item.kind === "dialog" ||
-        item.kind === "branch" ||
-        item.kind === "section" ||
-        item.kind === "copyable" ||
-        (item.kind === "action" && !item.disabled?.())
-          ? i
-          : -1,
-      )
-      .filter(i => i >= 0);
-
-  const selectedItemIndex = () => selectableIndices()[currentCursor()];
-
-  // Overflow memo for the currently-selected copyable item
-  // NOTE: must be placed after selectedItemIndex/activeItems to avoid TDZ with createMemo's eager evaluation
-  const bannerOverflow = createMemo(() => {
-    const idx = selectedItemIndex();
-    const items = activeItems();
-    const item = items[idx];
-    if (!item || item.kind !== "copyable") return 0;
-    return Math.max(0, item.get().length - COPYABLE_VISIBLE_WIDTH);
-  });
-  const bannerOffset = useBannerScroll(bannerOverflow);
-
-  const moveCursor = (delta: number) => {
-    const indices = selectableIndices();
-    const len = indices.length;
-    setCurrentCursor((c: number) => Math.max(0, Math.min(len - 1, c + delta)));
-  };
-
-  const activateItemAt = (itemIdx: number) => {
-    const items = activeItems();
-    const item = items[itemIdx];
-    if (!item || item.kind === "header" || item.kind === "info" || item.kind === "badge") return;
-    if (item.kind === "action" && item.disabled?.()) return;
-
-    if (item.kind === "copyable") {
-      copyToClipboard(item.get(), item.label);
-    } else if (item.kind === "toggle") {
-      item.set(!item.get());
-      if (item.needsReload) props.onReload();
-    } else if (item.kind === "cycle") {
-      const currentVal = item.get();
-      const currentIdx = item.options.indexOf(currentVal);
-      const nextIdx = (currentIdx + 1) % item.options.length;
-      item.set(item.options[nextIdx]);
-      if (item.needsReload) props.onReload();
-    } else if (item.kind === "dialog") {
-      props.onOpenDialog?.(item.dialogId);
-    } else if (item.kind === "action") {
-      item.run();
-    } else if (item.kind === "section") {
-      item.toggle();
-    } else if (item.kind === "branch") {
-      item.run();
-    }
-  };
-
-  const activateItem = () => activateItemAt(selectedItemIndex());
-
-  // Context-aware verb for the footer
-  const footerVerb = (): string => {
-    const items = activeItems();
-    const item = items[selectedItemIndex()];
-    if (!item) return "select";
-    switch (item.kind) {
-      case "copyable":
-        return "copy";
-      case "toggle":
-        return "toggle";
-      case "cycle":
-        return "cycle";
-      case "dialog":
-        return "open";
-      case "action":
-        return "confirm";
-      case "section":
-        return item.collapsed() ? "expand" : "collapse";
-      case "branch":
-        return "view";
-      default:
-        return "select";
-    }
   };
 
   // ── Keyboard ──────────────────────────────────────────────────────
@@ -460,44 +139,215 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     const idx = selectedItemIndex();
     const sb = scrollboxRef;
     if (!sb || idx == null || idx < 0) return;
-
     const el = itemRefs[idx];
     if (!el) return;
-
-    const layout = el.getLayoutNode().getComputedLayout();
-    const rowTop = layout.top;
-    const rowHeight = layout.height;
-    const rowBottom = rowTop + rowHeight;
-
-    const viewportHeight = sb.viewport.height;
-    const currentScroll = sb.scrollTop;
-    const visibleTop = currentScroll;
-    const visibleBottom = currentScroll + viewportHeight;
-
-    const padding = 1;
-
-    if (rowTop < visibleTop + padding) {
-      sb.scrollTo(Math.max(0, rowTop - padding));
-    } else if (rowBottom > visibleBottom - padding) {
-      sb.scrollTo(rowBottom - viewportHeight + padding);
-    }
+    scrollElementIntoView(sb, el);
   });
 
-  // Format the value display for an item
-  const valueDisplay = (item: SettingItem): string => {
-    if (item.kind === "header" || item.kind === "branch" || item.kind === "section" || item.kind === "badge") return "";
-    if (item.kind === "action") return item.get ? item.get() : "";
-    if (item.kind === "info") return item.get();
-    if (item.kind === "copyable") return item.get();
-    if (item.kind === "toggle") return item.get() ? "on" : "off";
-    return item.get();
+  // ── Item renderers ─────────────────────────────────────────────────
+  // Each function renders one SettingItem kind, closing over component-level
+  // reactive state (t, selectedItemIndex, itemRefs, etc.).
+
+  const renderHeader = (item: Extract<SettingItem, { kind: "header" }>, idx: number) => (
+    <box
+      ref={(el: Renderable) => {
+        itemRefs[idx] = el;
+      }}
+      flexDirection="column"
+      width="100%"
+      paddingX={4}
+    >
+      {idx > 0 ? <box height={1} /> : null}
+      <text wrapMode="none" fg={t().accent}>
+        <strong>
+          <span fg={t().accent}>{item.label}</span>
+        </strong>
+      </text>
+    </box>
+  );
+
+  const renderInfo = (item: Extract<SettingItem, { kind: "info" }>, idx: number) => (
+    <box
+      ref={(el: Renderable) => {
+        itemRefs[idx] = el;
+      }}
+      flexDirection="row"
+      width="100%"
+      paddingX={4}
+    >
+      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+        {item.label.padEnd(INFO_LABEL_WIDTH)}
+      </text>
+      <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
+        {item.get()}
+      </text>
+    </box>
+  );
+
+  const renderBadge = (item: Extract<SettingItem, { kind: "badge" }>, idx: number) => {
+    const bgColor = () => (item.dimmed ? t().backgroundElement : getColorForColumn(item.colorIndex, t().graphColors));
+    const fgColor = () => (item.dimmed ? t().foregroundMuted : t().background);
+    return (
+      <box
+        ref={(el: Renderable) => {
+          itemRefs[idx] = el;
+        }}
+        flexDirection="row"
+        width="100%"
+        paddingX={4}
+      >
+        <text bg={bgColor()} fg={fgColor()} wrapMode="none">
+          {` ${item.name} `}
+        </text>
+      </box>
+    );
+  };
+
+  const renderCopyable = (item: Extract<SettingItem, { kind: "copyable" }>, idx: number) => {
+    const isSel = () => selectedItemIndex() === idx;
+    const isCopied = () => copiedLabel() === item.label;
+    return (
+      <box
+        ref={(el: Renderable) => {
+          itemRefs[idx] = el;
+        }}
+        flexDirection="row"
+        width="100%"
+        paddingX={4}
+        backgroundColor={isSel() ? t().backgroundElement : undefined}
+      >
+        <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={isSel() ? t().accent : t().foreground}>
+          {copyableBannerText(item.get(), isSel())}
+        </text>
+        {isCopied() ? (
+          <text flexShrink={0} wrapMode="none" bg={t().primary} fg={t().background}>
+            {" \u2713 copied "}
+          </text>
+        ) : null}
+      </box>
+    );
+  };
+
+  const renderSection = (item: Extract<SettingItem, { kind: "section" }>, idx: number) => {
+    const isSel = () => selectedItemIndex() === idx;
+    const indicator = () => (item.collapsed() ? "▸" : "▾");
+    return (
+      <box
+        ref={(el: Renderable) => {
+          itemRefs[idx] = el;
+        }}
+        flexDirection="column"
+        width="100%"
+        paddingX={4}
+      >
+        {idx > 0 ? <box height={1} /> : null}
+        <box flexDirection="row" width="100%" backgroundColor={isSel() ? t().backgroundElement : undefined}>
+          <text flexShrink={0} wrapMode="none" fg={t().accent}>
+            <strong>
+              <span fg={t().accent}>{`${indicator()} ${item.label}`}</span>
+            </strong>
+          </text>
+          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+            {` (${item.count})`}
+          </text>
+        </box>
+      </box>
+    );
+  };
+
+  const renderBranch = (item: Extract<SettingItem, { kind: "branch" }>, idx: number) => {
+    const isSel = () => selectedItemIndex() === idx;
+    const hasTracking = () => item.upstream != null;
+    return (
+      <box
+        ref={(el: Renderable) => {
+          itemRefs[idx] = el;
+        }}
+        flexDirection="row"
+        width="100%"
+        paddingLeft={6}
+        paddingRight={4}
+        backgroundColor={isSel() ? t().backgroundElement : undefined}
+      >
+        <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={isSel() ? t().accent : t().foreground}>
+          {item.name}
+        </text>
+        {hasTracking() ? (
+          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+            {"  "}
+            {`↑${item.ahead ?? 0}`.padStart(branchTrackWidths().addColWidth)}{" "}
+            {`↓${item.behind ?? 0}`.padStart(branchTrackWidths().delColWidth)}
+          </text>
+        ) : null}
+      </box>
+    );
+  };
+
+  const renderSettingRow = (
+    item: Extract<SettingItem, { kind: "toggle" | "cycle" | "dialog" | "action" }>,
+    idx: number,
+  ) => {
+    const isDisabledAction = () => item.kind === "action" && !!item.disabled?.();
+    const isSelected = () => !isDisabledAction() && selectedItemIndex() === idx;
+    const val = () => valueDisplay(item);
+
+    const paddedVal = () => {
+      if (isDisabledAction()) return "";
+      const v = val();
+      if (!v) return " ".padStart(VALUE_COL_WIDTH);
+      if (item.kind === "dialog" || item.kind === "action") return v.padStart(VALUE_COL_WIDTH);
+      return `[${v}]`.padStart(VALUE_COL_WIDTH);
+    };
+    const paddedHotkey = () => {
+      if (isDisabledAction()) return "";
+      const h =
+        item.kind === "toggle" || item.kind === "cycle" || item.kind === "dialog" || item.kind === "action"
+          ? (item.hotkey ?? "")
+          : "";
+      return h.padStart(HOTKEY_COL_WIDTH);
+    };
+
+    const labelColor = () => (isDisabledAction() ? t().foregroundMuted : isSelected() ? t().accent : t().foreground);
+
+    return (
+      <box
+        ref={(el: Renderable) => {
+          itemRefs[idx] = el;
+        }}
+        flexDirection="row"
+        width="100%"
+        paddingX={4}
+        backgroundColor={isSelected() ? t().backgroundElement : undefined}
+      >
+        <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={labelColor()}>
+          {item.label}
+        </text>
+        <text flexShrink={0} wrapMode="none" fg={t().foreground}>
+          {paddedVal()}
+        </text>
+        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+          {paddedHotkey()}
+        </text>
+      </box>
+    );
+  };
+
+  const renderItem = (item: SettingItem, itemIndex: () => number): JSX.Element => {
+    const idx = itemIndex();
+    if (item.kind === "header") return renderHeader(item, idx);
+    if (item.kind === "info") return renderInfo(item, idx);
+    if (item.kind === "badge") return renderBadge(item, idx);
+    if (item.kind === "copyable") return renderCopyable(item, idx);
+    if (item.kind === "section") return renderSection(item, idx);
+    if (item.kind === "branch") return renderBranch(item, idx);
+    return renderSettingRow(item, idx);
   };
 
   return (
     <DialogOverlay>
       <box
-        width={70}
-        height="70%"
+        width={dialogWidth()}
+        height={dialogHeight()}
         backgroundColor={t().backgroundPanel}
         flexDirection="column"
         paddingX={1}
@@ -550,248 +400,15 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
           verticalScrollbarOptions={{ visible: false }}
         >
           <box flexDirection="column">
-            <For each={activeItems()}>
-              {(item, itemIndex) => {
-                // --- Header ---
-                if (item.kind === "header") {
-                  return (
-                    <box
-                      ref={(el: Renderable) => {
-                        itemRefs[itemIndex()] = el;
-                      }}
-                      flexDirection="column"
-                      width="100%"
-                      paddingX={4}
-                    >
-                      {itemIndex() > 0 ? <box height={1} /> : null}
-                      <text wrapMode="none" fg={t().accent}>
-                        <strong>
-                          <span fg={t().accent}>{item.label}</span>
-                        </strong>
-                      </text>
-                    </box>
-                  );
-                }
-
-                // --- Info (non-selectable, dimmed) ---
-                if (item.kind === "info") {
-                  return (
-                    <box
-                      ref={(el: Renderable) => {
-                        itemRefs[itemIndex()] = el;
-                      }}
-                      flexDirection="row"
-                      width="100%"
-                      paddingX={4}
-                    >
-                      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                        {item.label.padEnd(INFO_LABEL_WIDTH)}
-                      </text>
-                      <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
-                        {item.get()}
-                      </text>
-                    </box>
-                  );
-                }
-
-                // --- Badge (non-selectable, colored branch badge) ---
-                if (item.kind === "badge") {
-                  const bgColor = () =>
-                    item.dimmed ? t().backgroundElement : getColorForColumn(item.colorIndex, t().graphColors);
-                  const fgColor = () => (item.dimmed ? t().foregroundMuted : t().background);
-                  return (
-                    <box
-                      ref={(el: Renderable) => {
-                        itemRefs[itemIndex()] = el;
-                      }}
-                      flexDirection="row"
-                      width="100%"
-                      paddingX={4}
-                    >
-                      <text bg={bgColor()} fg={fgColor()} wrapMode="none">
-                        {` ${item.name} `}
-                      </text>
-                    </box>
-                  );
-                }
-
-                // --- Copyable (selectable, copies to clipboard on Enter) ---
-                if (item.kind === "copyable") {
-                  const isSel = () => selectedItemIndex() === itemIndex();
-                  const isCopied = () => copiedLabel() === item.label;
-                  return (
-                    <box
-                      ref={(el: Renderable) => {
-                        itemRefs[itemIndex()] = el;
-                      }}
-                      flexDirection="row"
-                      width="100%"
-                      paddingX={4}
-                      backgroundColor={isSel() ? t().backgroundElement : undefined}
-                    >
-                      <text
-                        flexGrow={1}
-                        flexShrink={1}
-                        wrapMode="none"
-                        truncate
-                        fg={isSel() ? t().accent : t().foreground}
-                      >
-                        {copyableBannerText(item.get(), isSel())}
-                      </text>
-                      {isCopied() ? (
-                        <text flexShrink={0} wrapMode="none" bg={t().primary} fg={t().background}>
-                          {" \u2713 copied "}
-                        </text>
-                      ) : null}
-                    </box>
-                  );
-                }
-
-                // --- Collapsible section header (selectable) ---
-                if (item.kind === "section") {
-                  const isSel = () => selectedItemIndex() === itemIndex();
-                  const indicator = () => (item.collapsed() ? "▸" : "▾");
-                  return (
-                    <box
-                      ref={(el: Renderable) => {
-                        itemRefs[itemIndex()] = el;
-                      }}
-                      flexDirection="column"
-                      width="100%"
-                      paddingX={4}
-                    >
-                      {itemIndex() > 0 ? <box height={1} /> : null}
-                      <box
-                        flexDirection="row"
-                        width="100%"
-                        backgroundColor={isSel() ? t().backgroundElement : undefined}
-                      >
-                        <text flexShrink={0} wrapMode="none" fg={t().accent}>
-                          <strong>
-                            <span fg={t().accent}>{`${indicator()} ${item.label}`}</span>
-                          </strong>
-                        </text>
-                        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                          {` (${item.count})`}
-                        </text>
-                      </box>
-                    </box>
-                  );
-                }
-
-                // --- Branch list entry (full-width name, with optional ahead/behind columns) ---
-                if (item.kind === "branch") {
-                  const isSel = () => selectedItemIndex() === itemIndex();
-                  const hasTracking = () =>
-                    (item.ahead != null && item.ahead > 0) || (item.behind != null && item.behind > 0);
-                  return (
-                    <box
-                      ref={(el: Renderable) => {
-                        itemRefs[itemIndex()] = el;
-                      }}
-                      flexDirection="row"
-                      width="100%"
-                      paddingLeft={6}
-                      paddingRight={4}
-                      backgroundColor={isSel() ? t().backgroundElement : undefined}
-                    >
-                      <text
-                        flexGrow={1}
-                        flexShrink={1}
-                        wrapMode="none"
-                        truncate
-                        fg={isSel() ? t().accent : t().foreground}
-                      >
-                        {item.name}
-                      </text>
-                      {hasTracking() ? (
-                        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                          {"  "}
-                          {item.ahead != null && item.ahead > 0
-                            ? `↑${item.ahead}`.padStart(branchTrackWidths().addColWidth)
-                            : " ".repeat(branchTrackWidths().addColWidth)}{" "}
-                          {item.behind != null && item.behind > 0
-                            ? `↓${item.behind}`.padStart(branchTrackWidths().delColWidth)
-                            : " ".repeat(branchTrackWidths().delColWidth)}
-                        </text>
-                      ) : null}
-                    </box>
-                  );
-                }
-
-                // --- Selectable items: toggle, cycle, dialog, action ---
-                const isDisabledAction = () => item.kind === "action" && !!item.disabled?.();
-                const isSelected = () => !isDisabledAction() && selectedItemIndex() === itemIndex();
-                const val = () => valueDisplay(item);
-
-                // Pad value and hotkey to fixed widths for right-alignment
-                const paddedVal = () => {
-                  if (isDisabledAction()) return "";
-                  const v = val();
-                  if (!v) return " ".padStart(22);
-                  if (item.kind === "dialog" || item.kind === "action") return v.padStart(22);
-                  return `[${v}]`.padStart(22);
-                };
-                const paddedHotkey = () => {
-                  if (isDisabledAction()) return "";
-                  const h =
-                    item.kind === "toggle" || item.kind === "cycle" || item.kind === "dialog" || item.kind === "action"
-                      ? (item.hotkey ?? "")
-                      : "";
-                  return h.padStart(9);
-                };
-
-                const labelColor = () =>
-                  isDisabledAction() ? t().foregroundMuted : isSelected() ? t().accent : t().foreground;
-
-                return (
-                  <box
-                    ref={(el: Renderable) => {
-                      itemRefs[itemIndex()] = el;
-                    }}
-                    flexDirection="row"
-                    width="100%"
-                    paddingX={4}
-                    backgroundColor={isSelected() ? t().backgroundElement : undefined}
-                  >
-                    <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={labelColor()}>
-                      {item.label}
-                    </text>
-
-                    {/* Current value — right-aligned, in brackets */}
-                    <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-                      {paddedVal()}
-                    </text>
-
-                    {/* Hotkey — right-aligned */}
-                    <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                      {paddedHotkey()}
-                    </text>
-                  </box>
-                );
-              }}
-            </For>
+            <For each={activeItems()}>{(item, itemIndex) => renderItem(item, itemIndex)}</For>
           </box>
         </scrollbox>
 
         {/* Context-aware footer */}
         <DialogFooter>
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            enter
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{` ${footerVerb()}  `}</text>
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            ←/→
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {" switch tab  "}
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            ↑/↓
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {" navigate"}
-          </text>
+          <KeyHint key="enter" desc={` ${footerVerb()}  `} />
+          <KeyHint key="←/→" desc=" switch tab  " />
+          <KeyHint key="↑/↓" desc=" navigate" />
         </DialogFooter>
       </box>
     </DialogOverlay>

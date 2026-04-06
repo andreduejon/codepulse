@@ -45,8 +45,7 @@ function assertNoColumnJumping(_label: string, commits: Commit[]) {
     }
   }
 
-  // If we got here, all branches are stable
-  expect(true).toBe(true);
+  // If we got here, all branches are stable — no assertion needed
 }
 
 describe("Column Stability", () => {

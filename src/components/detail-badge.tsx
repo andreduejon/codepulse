@@ -1,5 +1,5 @@
-import { useTheme } from "../context/theme";
 import { getColorForColumn } from "../git/graph";
+import { useT } from "../hooks/use-t";
 
 /** Colored badge for branch/tag labels in the detail view */
 export default function DetailBadge(
@@ -12,8 +12,7 @@ export default function DetailBadge(
     bannerOffset?: number;
   }>,
 ) {
-  const { theme } = useTheme();
-  const t = () => theme();
+  const t = useT();
 
   const bgColor = () => {
     if (props.dimmed) return t().backgroundElementActive;

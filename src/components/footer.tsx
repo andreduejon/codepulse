@@ -1,14 +1,16 @@
-import { createEffect, createSignal, onCleanup } from "solid-js";
+import { createEffect, createSignal, onCleanup, Show } from "solid-js";
 import { useAppState } from "../context/state";
-import { useTheme } from "../context/theme";
+import { useT } from "../hooks/use-t";
+import { KeyHint } from "./key-hint";
 
 /** Full braille rotation spinner — 8 frames, smooth circular motion. */
 const SPINNER_FRAMES = ["\u28FE", "\u28FD", "\u28FB", "\u28BF", "\u287F", "\u283F", "\u28EF", "\u28F7"];
 const SPINNER_FRAME_MS = 120;
 
-export default function Footer() {
-  const { theme } = useTheme();
-  const t = () => theme();
+export default function Footer(
+  props: Readonly<{ searchFocused?: boolean; filterActive?: boolean; compact?: boolean }>,
+) {
+  const t = useT();
   const { state } = useAppState();
 
   const isLoading = () => state.loading() || state.fetching() || state.detailLoading();
@@ -46,61 +48,46 @@ export default function Footer() {
   const enterAction = () => (state.detailFocused() ? state.detailCursorAction() : null);
 
   return (
-    <box flexDirection="row" width="100%" height={1}>
-      {/* Loading indicator — always present to avoid layout shift, left-aligned */}
-      <text flexShrink={0} wrapMode="none" fg={t().accent}>
-        {spinnerChar()}
-      </text>
-      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-        {loadingLabel()}
-      </text>
+    <>
+      <box flexDirection="row" width="100%" height={1}>
+        {/* Loading indicator — always present to avoid layout shift, left-aligned */}
+        <text flexShrink={0} wrapMode="none" fg={t().accent}>
+          {spinnerChar()}
+        </text>
+        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+          {loadingLabel()}
+        </text>
 
-      {/* Spacer pushes hints right */}
-      <box flexGrow={1} />
+        {/* Spacer pushes hints right */}
+        <box flexGrow={1} />
 
-      {/* Keyboard hints — right-aligned, separate <text> per color segment */}
-      <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-        {enterAction() ? "enter" : ""}
-      </text>
-      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-        {enterAction() ? ` ${enterAction()}  ` : ""}
-      </text>
-      <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-        {"\u2190/\u2192"}
-      </text>
-      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-        {" switch tab  "}
-      </text>
-      <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-        {"\u2191/\u2193"}
-      </text>
-      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-        {" navigate  "}
-      </text>
-      <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-        /
-      </text>
-      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-        {" search  "}
-      </text>
-      <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-        m
-      </text>
-      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-        {" menu  "}
-      </text>
-      <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-        ?
-      </text>
-      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-        {" help  "}
-      </text>
-      <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-        q
-      </text>
-      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-        {" quit"}
-      </text>
-    </box>
+        {/* Keyboard hints — context-dependent on search focus state */}
+        <Show
+          when={!props.searchFocused}
+          fallback={
+            <>
+              <KeyHint key="enter" desc=" confirm  " />
+              <KeyHint key="esc" desc=" cancel" />
+            </>
+          }
+        >
+          <KeyHint key={enterAction() ? "enter" : ""} desc={enterAction() ? ` ${enterAction()}  ` : ""} />
+          <Show when={state.detailFocused()}>
+            <KeyHint key="esc" desc=" back  " />
+          </Show>
+          <Show when={props.filterActive && !state.detailFocused()}>
+            <KeyHint key="esc" desc=" clear  " />
+          </Show>
+          <Show when={!props.compact} fallback={<KeyHint key="enter" desc=" show details  " />}>
+            <KeyHint key={"\u2190/\u2192"} desc=" switch tab  " />
+          </Show>
+          <KeyHint key={"\u2191/\u2193"} desc=" navigate  " />
+          <KeyHint key="/" desc=" search  " />
+          <KeyHint key="m" desc=" menu  " />
+          <KeyHint key="?" desc=" help" />
+        </Show>
+      </box>
+      <box height={1} />
+    </>
   );
 }

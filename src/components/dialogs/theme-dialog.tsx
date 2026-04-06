@@ -1,7 +1,8 @@
-import { useKeyboard } from "@opentui/solid";
+import { useKeyboard, useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createSignal, For, onCleanup } from "solid-js";
 import { SHIFT_JUMP } from "../../constants";
 import { themeNames, themes, useTheme } from "../../context/theme";
+import { KeyHint } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
 /** Pre-computed theme options — themeNames and themes are module-level constants. */
@@ -13,6 +14,9 @@ const themeOptions = themeNames.map(key => ({
 export default function ThemeDialog(props: Readonly<{ onClose: () => void }>) {
   const { theme, setTheme, themeName } = useTheme();
   const t = () => theme();
+  const dimensions = useTerminalDimensions();
+  const dialogWidth = () => 72;
+  const dialogHeight = () => Math.min(themeOptions.length + 9, dimensions().height - 8);
 
   // Remember the original theme to revert on cancel
   const originalTheme = themeName();
@@ -62,8 +66,8 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void }>) {
   return (
     <DialogOverlay>
       <box
-        width={50}
-        height={themeOptions.length + 9}
+        width={dialogWidth()}
+        height={dialogHeight()}
         backgroundColor={t().backgroundPanel}
         flexDirection="column"
         paddingX={1}
@@ -71,45 +75,41 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void }>) {
       >
         <DialogTitleBar title="Color Theme" />
 
-        {/* Theme list */}
-        <box flexDirection="column" flexGrow={1}>
-          <For each={themeOptions}>
-            {(opt, optIndex) => {
-              const isSelected = () => cursor() === optIndex();
+        {/* Theme list — scrollable when terminal height is small */}
+        <scrollbox flexGrow={1} scrollY scrollX={false} verticalScrollbarOptions={{ visible: false }}>
+          <box flexDirection="column">
+            <For each={themeOptions}>
+              {(opt, optIndex) => {
+                const isSelected = () => cursor() === optIndex();
 
-              return (
-                <box
-                  flexDirection="row"
-                  width="100%"
-                  paddingX={4}
-                  backgroundColor={isSelected() ? t().backgroundElement : undefined}
-                >
-                  <text flexGrow={1} wrapMode="none" fg={isSelected() ? t().accent : t().foreground}>
-                    {opt.name}
-                  </text>
-                  <text flexShrink={0} wrapMode="none" fg={isSelected() ? themes[opt.key].accent : t().backgroundPanel}>
-                    {isSelected() ? "  █" : "   "}
-                  </text>
-                </box>
-              );
-            }}
-          </For>
-        </box>
+                return (
+                  <box
+                    flexDirection="row"
+                    width="100%"
+                    paddingX={4}
+                    backgroundColor={isSelected() ? t().backgroundElement : undefined}
+                  >
+                    <text flexGrow={1} wrapMode="none" fg={isSelected() ? t().accent : t().foreground}>
+                      {opt.name}
+                    </text>
+                    <text
+                      flexShrink={0}
+                      wrapMode="none"
+                      fg={isSelected() ? themes[opt.key].accent : t().backgroundPanel}
+                    >
+                      {isSelected() ? "  █" : "   "}
+                    </text>
+                  </box>
+                );
+              }}
+            </For>
+          </box>
+        </scrollbox>
 
         {/* Navigation footer */}
         <DialogFooter>
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            enter
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {" confirm  "}
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            ↑/↓
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {" navigate"}
-          </text>
+          <KeyHint key="enter" desc=" confirm  " />
+          <KeyHint key="↑/↓" desc=" navigate" />
         </DialogFooter>
       </box>
     </DialogOverlay>

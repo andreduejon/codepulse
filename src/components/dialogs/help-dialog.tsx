@@ -1,10 +1,13 @@
+import { useTerminalDimensions } from "@opentui/solid";
 import { For } from "solid-js";
-import { useTheme } from "../../context/theme";
+import { useT } from "../../hooks/use-t";
 import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
 export default function HelpDialog(_props: Readonly<{ onClose: () => void }>) {
-  const { theme } = useTheme();
-  const t = () => theme();
+  const t = useT();
+  const dimensions = useTerminalDimensions();
+  const dialogWidth = () => 72;
+  const dialogHeight = () => Math.min(keybinds.length + 5, dimensions().height - 8);
 
   const keybinds = [
     ["↑/↓", "Navigate list"],
@@ -31,8 +34,8 @@ export default function HelpDialog(_props: Readonly<{ onClose: () => void }>) {
   return (
     <DialogOverlay>
       <box
-        width={60}
-        height={keybinds.length + 5}
+        width={dialogWidth()}
+        height={dialogHeight()}
         backgroundColor={t().backgroundPanel}
         flexDirection="column"
         paddingX={1}
@@ -40,21 +43,23 @@ export default function HelpDialog(_props: Readonly<{ onClose: () => void }>) {
       >
         <DialogTitleBar title="Keyboard Shortcuts" />
 
-        {/* Keybind list */}
-        <box flexDirection="column" flexGrow={1}>
-          <For each={keybinds}>
-            {([key, desc]) => (
-              <box flexDirection="row" width="100%" paddingX={4}>
-                <text flexShrink={0} wrapMode="none" fg={t().accent}>
-                  <strong>{(key ?? "").padEnd(16)}</strong>
-                </text>
-                <text flexGrow={1} wrapMode="none" fg={t().foreground}>
-                  {desc}
-                </text>
-              </box>
-            )}
-          </For>
-        </box>
+        {/* Keybind list — scrollable when terminal height is small */}
+        <scrollbox flexGrow={1} scrollY scrollX={false} verticalScrollbarOptions={{ visible: false }}>
+          <box flexDirection="column">
+            <For each={keybinds}>
+              {([key, desc]) => (
+                <box flexDirection="row" width="100%" paddingX={4}>
+                  <text flexShrink={0} wrapMode="none" fg={t().accent}>
+                    <strong>{(key ?? "").padEnd(16)}</strong>
+                  </text>
+                  <text flexGrow={1} wrapMode="none" fg={t().foreground}>
+                    {desc}
+                  </text>
+                </box>
+              )}
+            </For>
+          </box>
+        </scrollbox>
       </box>
     </DialogOverlay>
   );
