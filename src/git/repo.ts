@@ -10,7 +10,6 @@ export {
   getStagedFiles,
   getStashFiles,
   getUncommittedDetail,
-  getUncommittedFiles,
   getUnstagedFiles,
   getUntrackedFiles,
   getWorkingTreeStatus,
