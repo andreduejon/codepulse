@@ -193,7 +193,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
       },
       {
         kind: "cycle",
-        label: "Max commits",
+        label: "Page size",
         options: MAX_COUNT_OPTIONS.map(String),
         get: () => String(state.maxCount()),
         set: v => actions.setMaxCount(Number.parseInt(v, 10)),
