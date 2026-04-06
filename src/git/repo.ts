@@ -145,6 +145,7 @@ export async function getCommits(
   repoPath: string,
   options: {
     maxCount?: number;
+    skip?: number;
     branch?: string;
     all?: boolean;
   } = {},
@@ -156,6 +157,10 @@ export async function getCommits(
     `--format=${GIT_LOG_FORMAT}`,
     `--max-count=${options.maxCount ?? DEFAULT_MAX_COUNT}`,
   ];
+
+  if (options.skip && options.skip > 0) {
+    args.push(`--skip=${options.skip}`);
+  }
 
   if (options.all) {
     // Exclude stash refs so their internal commits (index, untracked) don't

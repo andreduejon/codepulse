@@ -198,6 +198,8 @@ function AppContent(props: Readonly<AppProps>) {
     loadAbortCtrl = ctrl;
 
     if (!silent) actions.setLoading(true);
+    // Reset pagination on every fresh load
+    actions.setHasMore(true);
     try {
       const repoPath = props.repoPath;
       actions.setRepoPath(repoPath);
@@ -207,11 +209,16 @@ function AppContent(props: Readonly<AppProps>) {
       const effectiveBranch = viewBranch ?? branch;
       const effectiveAll = viewBranch ? false : state.showAllBranches();
 
+      // For silent auto-refresh, fetch at least as many commits as currently loaded
+      // so we don't drop already-paged history.
+      const pageSize = state.maxCount();
+      const silentMaxCount = silent ? Math.max(pageSize, state.commits().length) : pageSize;
+
       const [commits, branches, currentBranch, remoteUrl, tagDetails, stashes, wtStatus] = await Promise.all([
         getCommits(
           repoPath,
           {
-            maxCount: state.maxCount(),
+            maxCount: silentMaxCount,
             branch: effectiveBranch,
             all: effectiveAll,
           },
@@ -227,6 +234,12 @@ function AppContent(props: Readonly<AppProps>) {
 
       // If we were superseded by a newer loadData call, discard results
       if (ctrl.signal.aborted) return;
+
+      // Detect whether more commits exist beyond this page.
+      // Compare raw git result count against the requested page size (not silentMaxCount,
+      // which may be larger — we only care about the configured page size for hasMore).
+      const rawCount = commits.length;
+      actions.setHasMore(rawCount >= pageSize);
 
       // Capture the HEAD commit hash before any synthetic commits are injected.
       const headHash = commits[0]?.hash;
@@ -327,6 +340,97 @@ function AppContent(props: Readonly<AppProps>) {
       if (loadAbortCtrl === ctrl) {
         loadAbortCtrl = null;
         if (!silent) actions.setLoading(false);
+      }
+    }
+  }
+
+  // Load next page of commits and append to the existing list.
+  let loadMoreAbortCtrl: AbortController | null = null;
+  async function loadMoreData() {
+    // Guards: don't load if there's nothing more, or if a page fetch is already running
+    if (!state.hasMore()) return;
+    if (loadMoreAbortCtrl) return;
+
+    const ctrl = new AbortController();
+    loadMoreAbortCtrl = ctrl;
+    actions.setFetching(true);
+
+    try {
+      const repoPath = props.repoPath;
+      const pageSize = state.maxCount();
+
+      // Skip past already-loaded real commits (exclude synthetic uncommitted node)
+      const existingCommits = state.commits().filter(c => c.hash !== UNCOMMITTED_HASH);
+      const skip = existingCommits.length;
+
+      const viewBranch = state.viewingBranch();
+      const effectiveAll = viewBranch ? false : state.showAllBranches();
+
+      const newCommits = await getCommits(
+        repoPath,
+        {
+          maxCount: pageSize,
+          skip,
+          branch: viewBranch ?? undefined,
+          all: effectiveAll,
+        },
+        ctrl.signal,
+      );
+
+      if (ctrl.signal.aborted) return;
+
+      // If we got fewer commits than a full page, we've reached the end
+      actions.setHasMore(newCommits.length >= pageSize);
+
+      if (newCommits.length === 0) return;
+
+      // Merge: existing real commits + new page (both exclude uncommitted node)
+      const merged = [...existingCommits, ...newCommits];
+
+      // Re-inject stash badges onto the merged list using the existing stashByParent map
+      const stashByParent = state.stashByParent();
+      for (const [parentHash, stashGroup] of stashByParent) {
+        const parentCommit = merged.find(c => c.hash === parentHash);
+        if (parentCommit && !parentCommit.refs.some(r => r.type === "stash")) {
+          parentCommit.refs.push({
+            name: `stash (${stashGroup.length})`,
+            type: "stash" as const,
+            isCurrent: false,
+          });
+        }
+      }
+
+      // Re-prepend uncommitted node if it was present
+      const hadUncommitted = state.commits()[0]?.hash === UNCOMMITTED_HASH;
+      if (hadUncommitted) {
+        const uncommittedNode = state.commits()[0];
+        merged.unshift(uncommittedNode);
+      }
+
+      const rows = buildGraph(merged);
+
+      // Preserve current cursor position (don't jump on page load)
+      const stickyHash = state.selectedCommit()?.hash;
+      let targetIndex = state.cursorIndex();
+      if (stickyHash) {
+        const idx = rows.findIndex(r => r.commit.hash === stickyHash);
+        if (idx >= 0) targetIndex = idx;
+      }
+
+      batch(() => {
+        actions.setCommits(merged);
+        actions.setGraphRows(rows);
+        actions.setMaxGraphColumns(getMaxGraphColumns(rows));
+        actions.setCursorIndex(targetIndex);
+      });
+    } catch (err) {
+      if (ctrl.signal.aborted) return;
+      // Non-fatal: log but don't surface to user (partial data is still valid)
+      console.error("loadMoreData failed:", err);
+    } finally {
+      if (loadMoreAbortCtrl === ctrl) {
+        loadMoreAbortCtrl = null;
+        actions.setFetching(false);
       }
     }
   }
@@ -636,7 +740,7 @@ function AppContent(props: Readonly<AppProps>) {
                   {/* Sticky column headers - above scrollbox */}
                   <ColumnHeader />
 
-                  <GraphView />
+                  <GraphView onLoadMore={loadMoreData} />
                 </box>
 
                 {/* Search section — left accent border, same padding as graph */}

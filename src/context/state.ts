@@ -66,6 +66,8 @@ export interface AppState {
   autoRefreshInterval: Accessor<number>;
   lastFetchTime: Accessor<Date | null>;
   fetching: Accessor<boolean>;
+  /** True if there are likely more commits to load beyond the current page. */
+  hasMore: Accessor<boolean>;
 }
 
 export interface AppActions {
@@ -101,6 +103,7 @@ export interface AppActions {
   setDetailActiveTab: (tab: DetailTab) => void;
   setUncommittedDetail: (detail: UncommittedDetail | null) => void;
   setViewingBranch: (branch: string | null) => void;
+  setHasMore: (hasMore: boolean) => void;
 }
 
 const AppStateContext = createContext<{ state: AppState; actions: AppActions }>();
@@ -161,6 +164,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
   );
   const [lastFetchTime, setLastFetchTime] = createSignal<Date | null>(null);
   const [fetching, setFetching] = createSignal(false);
+  const [hasMore, setHasMore] = createSignal(true);
 
   // ── Search memos ──────────────────────────────────────────────────
 
@@ -261,6 +265,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
     pendingScrollHash,
     lastFetchTime,
     fetching,
+    hasMore,
     detailLoading,
     detailCursorAction,
     detailActiveTab,
@@ -296,6 +301,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
     setAutoRefreshInterval,
     setLastFetchTime,
     setFetching,
+    setHasMore,
     setDetailLoading,
     setDetailCursorAction,
     setDetailActiveTab,

@@ -519,7 +519,7 @@ function SearchDivider() {
   return <box width="100%" border={["top"]} borderStyle="single" borderColor={theme().border} />;
 }
 
-export default function GraphView() {
+export default function GraphView(props: Readonly<{ onLoadMore?: () => void }>) {
   const { state, actions } = useAppState();
 
   // Single viewport offset: reacts to the highlighted commit's node column.
@@ -618,6 +618,21 @@ export default function GraphView() {
     };
 
     pendingScrollPollId = setTimeout(poll, 16);
+  });
+
+  // Trigger pagination when cursor approaches the end of loaded rows.
+  // Only fires when there are more commits to load and no load is in progress.
+  const LOAD_MORE_THRESHOLD = 5;
+  createEffect(() => {
+    const idx = state.cursorIndex();
+    const rows = state.filteredRows();
+    const total = rows.length;
+    if (total === 0) return;
+    if (!state.hasMore()) return;
+    if (state.fetching()) return;
+    if (idx >= total - LOAD_MORE_THRESHOLD) {
+      props.onLoadMore?.();
+    }
   });
 
   // createSelector tracks which index is "selected" and only notifies the
