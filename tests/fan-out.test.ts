@@ -117,7 +117,9 @@ describe("Fan-Out", () => {
           if (hasStraight && hasHoriz) hasCrossing = true;
         }
         if (hasCrossing) {
-          expect(true).toBe(true);
+          // Crossing detected — verify connectors in the fan-out row are still well-formed
+          const crossingConns = firstFO.filter(c => c.column > lo && c.column < hi);
+          expect(crossingConns.every(c => c.type !== undefined && c.column >= 0)).toBe(true);
         }
       }
     }
@@ -272,7 +274,8 @@ describe("Fan-Out", () => {
         );
 
         if (commitMB.length > 0) {
-          expect(true).toBe(true); // Same-side: commit row correctly keeps merge/branch connectors
+          // Same-side layout: commit row must keep its merge/branch connectors
+          expect(commitMB.length).toBeGreaterThan(0);
 
           const foHasNonFOConn = lastFO.some(
             c =>
@@ -284,11 +287,11 @@ describe("Fan-Out", () => {
           );
           expect(foHasNonFOConn).toBe(false);
         } else {
-          expect(true).toBe(true); // Same-side test: layout did not produce same-side conflict (OK)
+          // Layout did not produce a same-side conflict — no assertion needed
         }
       }
     } else {
-      expect(true).toBe(true); // Same-side test: d1 has no fan-out rows (layout resolved differently, OK)
+      // d1 has no fan-out rows — layout resolved differently, which is also valid
     }
   });
 

@@ -96,23 +96,17 @@ function computeBranchOwnership(
   }
 
   // A remote branch is remote-only if stripping the remote prefix gives a
-  // name that is NOT in localBranchNames.
+  // name that is NOT in localBranchNames. Simultaneously, track which local
+  // branches have a remote tracking counterpart.
   const remoteOnlyBranches = new Set<string>();
-  for (const remoteName of remoteBranchTipNames) {
-    const slashIdx = remoteName.indexOf("/");
-    const localEquivalent = slashIdx !== -1 ? remoteName.slice(slashIdx + 1) : remoteName;
-    if (!localBranchNames.has(localEquivalent)) {
-      remoteOnlyBranches.add(remoteName);
-    }
-  }
-
-  // Determine which local branches have a remote tracking counterpart.
   const trackedLocalBranches = new Set<string>();
   for (const remoteName of remoteBranchTipNames) {
     const slashIdx = remoteName.indexOf("/");
     const localEquivalent = slashIdx !== -1 ? remoteName.slice(slashIdx + 1) : remoteName;
     if (localBranchNames.has(localEquivalent)) {
       trackedLocalBranches.add(localEquivalent);
+    } else {
+      remoteOnlyBranches.add(remoteName);
     }
   }
 

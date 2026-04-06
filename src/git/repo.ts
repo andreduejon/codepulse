@@ -38,11 +38,12 @@ async function getRemoteNames(repoPath: string, signal?: AbortSignal): Promise<S
 /** @internal Exported for testing. Parse a git ref decoration string into structured RefInfo[]. */
 export function parseRefs(refString: string, remoteNames: Set<string>): RefInfo[] {
   if (!refString.trim()) return [];
-  return refString.split(",").map(ref => {
-    ref = ref.trim();
+  return refString.split(",").map(rawRef => {
+    const trimmed = rawRef.trim();
     let isCurrent = false;
-    if (ref.startsWith("HEAD -> ")) {
-      ref = ref.replace("HEAD -> ", "");
+    let ref = trimmed;
+    if (trimmed.startsWith("HEAD -> ")) {
+      ref = trimmed.slice("HEAD -> ".length);
       isCurrent = true;
     }
     if (ref === "HEAD") {
@@ -50,7 +51,7 @@ export function parseRefs(refString: string, remoteNames: Set<string>): RefInfo[
     }
     if (ref.startsWith("tag: ")) {
       return {
-        name: ref.replace("tag: ", ""),
+        name: ref.slice("tag: ".length),
         type: "tag" as const,
         isCurrent: false,
       };

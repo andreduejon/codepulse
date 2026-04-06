@@ -77,13 +77,12 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     actions.setSearchQuery("");
     actions.setSearchConfirmed(false);
     actions.setPreSearchCursorHash(null);
-    const hash = restoreHash;
-    if (hash) {
+    if (restoreHash) {
       const rows = state.graphRows();
-      const idx = rows.findIndex(r => r.commit.hash === hash);
+      const idx = rows.findIndex(r => r.commit.hash === restoreHash);
       if (idx >= 0) {
         actions.setCursorIndex(idx);
-        actions.setPendingScrollHash(hash);
+        actions.setPendingScrollHash(restoreHash);
         return;
       }
     }

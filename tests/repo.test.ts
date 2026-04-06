@@ -17,6 +17,7 @@ import {
   parseTrackInfo,
   RS,
 } from "../src/git/repo";
+import { computeFileWidths } from "../src/components/detail-types";
 
 describe("repo.ts parsing", () => {
   test("parseRefs — empty/blank string returns []", () => {
@@ -564,9 +565,6 @@ describe("parseDiffTreeOutput", () => {
 });
 
 describe("computeFileWidths", () => {
-  // Import from detail-types (shared between committed and uncommitted detail views)
-  const { computeFileWidths } = require("../src/components/detail-types");
-
   test("sums additions and deletions across all files", () => {
     const files = [
       { additions: 10, deletions: 3 },

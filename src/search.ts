@@ -63,7 +63,7 @@ export function matchCommit(commit: Commit, search: ParsedSearch): boolean {
   const fields = [commit.subject, commit.author, commit.shortHash, ...commit.refs.map(r => r.name)];
 
   if (search.mode === "regex" && search.regex) {
-    return fields.some(f => search.regex?.test(f));
+    return fields.some(f => search.regex!.test(f));
   }
 
   // Substring mode
