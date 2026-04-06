@@ -1,15 +1,13 @@
-import { homedir } from "node:os";
 import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useTerminalDimensions } from "@opentui/solid";
-import { createEffect, createMemo, createSignal, For, type JSX, onCleanup } from "solid-js";
-import type { CodepulseConfig, ConfigInfo } from "../../config";
-import { writeConfig } from "../../config";
-import { DEFAULT_MAX_COUNT, SHIFT_JUMP } from "../../constants";
-import { DEFAULT_AUTO_REFRESH_INTERVAL, useAppState } from "../../context/state";
-import { themes, useTheme } from "../../context/theme";
+import { createEffect, createSignal, For, type JSX, onCleanup } from "solid-js";
+import type { ConfigInfo } from "../../config";
+import { SHIFT_JUMP } from "../../constants";
+import { useTheme } from "../../context/theme";
 import { getColorForColumn } from "../../git/graph";
 import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useClipboard } from "../../hooks/use-clipboard";
+import { COPYABLE_VISIBLE_WIDTH, INFO_LABEL_WIDTH, type SettingItem, useMenuItems } from "../../hooks/use-menu-items";
 import { scrollElementIntoView } from "../../utils/scroll";
 import { KeyHint } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
@@ -27,57 +25,10 @@ interface MenuDialogProps {
   configInfo?: ConfigInfo;
 }
 
-const MAX_COUNT_OPTIONS = [10, 20, 50, 100, 200, 500];
-
-const AUTO_REFRESH_OPTIONS = ["off", "10s", "30s", "60s"];
-const AUTO_REFRESH_MS: Record<string, number> = {
-  off: 0,
-  "10s": 10000,
-  "30s": 30000,
-  "60s": 60000,
-};
-const MS_TO_LABEL: Record<number, string> = {
-  0: "off",
-  10000: "10s",
-  30000: "30s",
-  60000: "60s",
-};
-
-/** Width of the info label column (characters). */
-const INFO_LABEL_WIDTH = 12;
-
 /** Persists the last-used tab across dialog open/close cycles. */
 const [lastMenuTab, setLastMenuTab] = createSignal<MenuTab>("repository");
 
-type SettingItem =
-  | { kind: "header"; label: string }
-  | { kind: "info"; label: string; get: () => string }
-  | { kind: "copyable"; label: string; get: () => string }
-  | {
-      kind: "toggle";
-      label: string;
-      hotkey?: string;
-      get: () => boolean;
-      set: (v: boolean) => void;
-      needsReload?: boolean;
-    }
-  | {
-      kind: "cycle";
-      label: string;
-      hotkey?: string;
-      options: string[];
-      get: () => string;
-      set: (v: string) => void;
-      needsReload?: boolean;
-    }
-  | { kind: "dialog"; label: string; hotkey?: string; dialogId: string; get: () => string }
-  | { kind: "action"; label: string; hotkey?: string; get?: () => string; run: () => void; disabled?: () => boolean }
-  | { kind: "section"; label: string; count: number; collapsed: () => boolean; toggle: () => void }
-  | { kind: "badge"; name: string; colorIndex: number; dimmed?: boolean }
-  | { kind: "branch"; name: string; run: () => void; upstream?: string; ahead?: number; behind?: number };
-
 export default function MenuDialog(props: Readonly<MenuDialogProps>) {
-  const { state, actions } = useAppState();
   const { theme, themeName, setTheme } = useTheme();
   const t = () => theme();
   const dimensions = useTerminalDimensions();
@@ -110,9 +61,36 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   type ConfigScope = "global" | "this repo";
   const [configScope, setConfigScope] = createSignal<ConfigScope>("global");
 
+  // ── Menu items hook ───────────────────────────────────────────────
+  const {
+    activeItems,
+    selectedItemIndex,
+    branchTrackWidths,
+    bannerOverflow,
+    moveCursor,
+    activateItem,
+    valueDisplay,
+    footerVerb,
+  } = useMenuItems({
+    activeTab,
+    themeName,
+    setTheme,
+    configScope,
+    setConfigScope,
+    savedFeedback,
+    showSavedFeedback,
+    copyToClipboard,
+    onFetch: () => props.onFetch(),
+    onReload: () => props.onReload(),
+    onOpenDialog: props.onOpenDialog,
+    onViewBranch: branch => props.onViewBranch(branch),
+    onClose: () => props.onClose(),
+    configInfo: props.configInfo,
+  });
+
   // ── Banner scroll for selected copyable rows ──────────────────────
   /** Usable width for copyable text: dialog=70 - 2(paddingX=1) - 8(paddingX=4) = 60 */
-  const COPYABLE_VISIBLE_WIDTH = 60;
+  const bannerOffset = useBannerScroll(bannerOverflow);
 
   /** Returns the visible slice of a copyable value, applying banner offset when selected. */
   const copyableBannerText = (text: string, isSelected: boolean): string => {
@@ -120,360 +98,6 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     if (!isSelected) return text; // let the TUI truncate when not selected
     const off = bannerOffset();
     return text.substring(off, off + COPYABLE_VISIBLE_WIDTH);
-  };
-
-  // ── Collapsed state for branch sections ───────────────────────────
-  const [localCollapsed, setLocalCollapsed] = createSignal(false);
-  const [remoteCollapsed, setRemoteCollapsed] = createSignal(false);
-
-  // ── Repository tab items ──────────────────────────────────────────
-  const lastFetchLabel = (): string => {
-    if (state.fetching()) return "fetching...";
-    const time = state.lastFetchTime();
-    if (!time) return "never";
-    const secs = Math.round((Date.now() - time.getTime()) / 1000);
-    if (secs < 60) return `${secs}s ago`;
-    const mins = Math.round(secs / 60);
-    if (mins < 60) return `${mins}m ago`;
-    const hours = Math.round(mins / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.round(hours / 24);
-    return `${days}d ago`;
-  };
-
-  const repoItems = createMemo<SettingItem[]>(() => {
-    const items: SettingItem[] = [
-      { kind: "header", label: "Origin" },
-      { kind: "copyable", label: "URL", get: () => state.remoteUrl() || "(none)" },
-
-      { kind: "header", label: "Path" },
-      { kind: "copyable", label: "Directory", get: () => state.repoPath() || "(unknown)" },
-
-      { kind: "header", label: "Actions" },
-      { kind: "action", label: "Fetch remote", hotkey: "f", get: lastFetchLabel, run: () => props.onFetch() },
-
-      { kind: "header", label: "Preferences" },
-      {
-        kind: "dialog",
-        label: "Color theme",
-        hotkey: "ctrl+t",
-        dialogId: "theme",
-        get: () => themes[themeName()]?.name ?? themeName(),
-      },
-      {
-        kind: "cycle",
-        label: "Page size",
-        options: MAX_COUNT_OPTIONS.map(String),
-        get: () => String(state.maxCount()),
-        set: v => actions.setMaxCount(Number.parseInt(v, 10)),
-        needsReload: true,
-      },
-      {
-        kind: "toggle",
-        label: "Show all branches",
-        get: () => state.showAllBranches(),
-        set: v => actions.setShowAllBranches(v),
-        needsReload: true,
-      },
-      {
-        kind: "cycle",
-        label: "Auto refresh",
-        options: AUTO_REFRESH_OPTIONS,
-        get: () => MS_TO_LABEL[state.autoRefreshInterval()] ?? "off",
-        set: v => actions.setAutoRefreshInterval(AUTO_REFRESH_MS[v] ?? DEFAULT_AUTO_REFRESH_INTERVAL),
-      },
-      {
-        kind: "action",
-        label: "Reset to defaults",
-        run: () => {
-          setTheme("catppuccin-mocha");
-          actions.setMaxCount(DEFAULT_MAX_COUNT);
-          actions.setShowAllBranches(true);
-          actions.setAutoRefreshInterval(DEFAULT_AUTO_REFRESH_INTERVAL);
-          props.onReload();
-        },
-      },
-    ];
-
-    // ── Configuration section (only when configInfo is available) ──
-    const ci = props.configInfo;
-    if (ci) {
-      const shortenHome = (p: string) =>
-        p.replace(new RegExp(`^${homedir().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`), "~");
-
-      items.push({ kind: "header", label: "Configuration" });
-      items.push({
-        kind: "info",
-        label: "Config file",
-        get: () => `${shortenHome(ci.globalPath)}  ${ci.globalExists ? "(found)" : "(not found)"}`,
-      });
-      items.push({
-        kind: "cycle",
-        label: "Save scope",
-        options: ["global", "this repo"],
-        get: () => configScope(),
-        set: v => setConfigScope(v as ConfigScope),
-      });
-      items.push({
-        kind: "action",
-        label: "Save to config",
-        get: () => (savedFeedback() === "Save to config" ? "\u2713 Saved!" : ""),
-        run: () => {
-          const autoRefreshMs = state.autoRefreshInterval();
-          const cfg: CodepulseConfig = {
-            theme: themeName(),
-            pageSize: state.maxCount(),
-            showAllBranches: state.showAllBranches(),
-            autoRefreshSeconds: autoRefreshMs / 1000,
-          };
-          const scope = configScope() === "global" ? ("global" as const) : ("repo" as const);
-          const ok = writeConfig(cfg, scope, scope === "repo" ? state.repoPath() : undefined);
-          if (ok) {
-            ci.globalExists = true;
-            if (scope === "repo") ci.hasRepoOverrides = true;
-            showSavedFeedback("Save to config");
-          }
-        },
-      });
-    }
-
-    return items;
-  });
-
-  // ── Branch tab items ──────────────────────────────────────────────
-  const localBranches = createMemo(() => state.branches().filter(b => !b.isRemote));
-
-  const remoteBranches = createMemo(() => state.branches().filter(b => b.isRemote));
-
-  const makeBranchItem = (b: { name: string; upstream?: string; ahead?: number; behind?: number }): SettingItem => ({
-    kind: "branch" as const,
-    name: b.name,
-    upstream: b.upstream,
-    ahead: b.ahead,
-    behind: b.behind,
-    run: () => {
-      // View graph from this branch's perspective
-      props.onViewBranch(b.name);
-      props.onClose();
-    },
-  });
-
-  /** Pre-built map from branch name → graph color index (O(1) lookup). */
-  const branchColorMap = createMemo(() => {
-    const map = new Map<string, number>();
-    for (const r of state.graphRows()) {
-      if (r.branchName && !map.has(r.branchName)) {
-        map.set(r.branchName, r.nodeColor);
-      }
-    }
-    return map;
-  });
-
-  /** Look up the graph color index for a branch name (falls back to 0). */
-  const branchColorIndex = (name: string): number => branchColorMap().get(name) ?? 0;
-
-  const branchItems = createMemo<SettingItem[]>(() => {
-    const locals = localBranches();
-    const remotes = remoteBranches();
-    const currentBranch = state.currentBranch();
-
-    const result: SettingItem[] = [];
-
-    // ── Checked-out branch (always shown) ──────────────────────────
-    result.push({ kind: "header", label: "Checked Out" });
-    result.push({
-      kind: "badge",
-      name: currentBranch || "(unknown)",
-      colorIndex: currentBranch ? branchColorIndex(currentBranch) : 0,
-      dimmed: !currentBranch,
-    });
-
-    // ── Showing filter (always shown) ──────────────────────────────
-    result.push({ kind: "header", label: "Showing" });
-    const viewing = state.viewingBranch();
-    if (viewing) {
-      result.push({
-        kind: "badge",
-        name: viewing,
-        colorIndex: branchColorIndex(viewing),
-      });
-    } else {
-      result.push({
-        kind: "badge",
-        name: "(all branches)",
-        colorIndex: 0,
-        dimmed: true,
-      });
-    }
-
-    // ── Actions (always shown) ────────────────────────────────────
-    result.push({ kind: "header", label: "Actions" });
-    result.push({
-      kind: "action",
-      label: "Clear filter",
-      disabled: () => !state.viewingBranch(),
-      run: () => {
-        props.onViewBranch(null);
-        props.onClose();
-      },
-    });
-
-    // ── Local section (collapsible) ───────────────────────────────
-    result.push({
-      kind: "section",
-      label: "Local",
-      count: locals.length,
-      collapsed: localCollapsed,
-      toggle: () => setLocalCollapsed(v => !v),
-    });
-    if (!localCollapsed()) {
-      if (locals.length === 0) {
-        result.push({ kind: "info", label: "", get: () => "(no local branches)" });
-      } else {
-        const sorted = [...locals].sort((a, b) => {
-          if (a.isCurrent) return -1;
-          if (b.isCurrent) return 1;
-          return a.name.localeCompare(b.name);
-        });
-        for (const b of sorted) {
-          result.push(makeBranchItem(b));
-        }
-      }
-    }
-
-    // ── Remote section (collapsible) ──────────────────────────────
-    if (remotes.length > 0) {
-      result.push({
-        kind: "section",
-        label: "Remote",
-        count: remotes.length,
-        collapsed: remoteCollapsed,
-        toggle: () => setRemoteCollapsed(v => !v),
-      });
-      if (!remoteCollapsed()) {
-        const sorted = [...remotes].sort((a, b) => a.name.localeCompare(b.name));
-        for (const b of sorted) {
-          result.push(makeBranchItem({ name: b.name }));
-        }
-      }
-    }
-
-    return result;
-  });
-
-  /** Max column widths for ahead/behind counts across all visible branch items. */
-  const branchTrackWidths = createMemo(() => {
-    let addW = 0;
-    let delW = 0;
-    for (const item of branchItems()) {
-      if (item.kind !== "branch" || item.upstream == null) continue;
-      addW = Math.max(addW, `↑${item.ahead ?? 0}`.length);
-      delW = Math.max(delW, `↓${item.behind ?? 0}`.length);
-    }
-    return { addColWidth: addW, delColWidth: delW };
-  });
-
-  // ── Active items depend on tab ────────────────────────────────────
-  const activeItems = (): SettingItem[] => (activeTab() === "repository" ? repoItems() : branchItems());
-
-  // ── Cursor per tab ────────────────────────────────────────────────
-  const [repoCursor, setRepoCursor] = createSignal(0);
-  const [branchCursor, setBranchCursor] = createSignal(0);
-
-  const currentCursor = () => (activeTab() === "repository" ? repoCursor() : branchCursor());
-  const setCurrentCursor = (v: number | ((prev: number) => number)) => {
-    const setter = activeTab() === "repository" ? setRepoCursor : setBranchCursor;
-    if (typeof v === "function") setter(v);
-    else setter(v);
-  };
-
-  const selectableIndices = (): number[] =>
-    activeItems()
-      .map((item, i) =>
-        item.kind === "toggle" ||
-        item.kind === "cycle" ||
-        item.kind === "dialog" ||
-        item.kind === "branch" ||
-        item.kind === "section" ||
-        item.kind === "copyable" ||
-        (item.kind === "action" && !item.disabled?.())
-          ? i
-          : -1,
-      )
-      .filter(i => i >= 0);
-
-  const selectedItemIndex = () => selectableIndices()[currentCursor()];
-
-  // Overflow memo for the currently-selected copyable item
-  // NOTE: must be placed after selectedItemIndex/activeItems to avoid TDZ with createMemo's eager evaluation
-  const bannerOverflow = createMemo(() => {
-    const idx = selectedItemIndex();
-    const items = activeItems();
-    const item = items[idx];
-    if (!item || item.kind !== "copyable") return 0;
-    return Math.max(0, item.get().length - COPYABLE_VISIBLE_WIDTH);
-  });
-  const bannerOffset = useBannerScroll(bannerOverflow);
-
-  const moveCursor = (delta: number) => {
-    const indices = selectableIndices();
-    const len = indices.length;
-    setCurrentCursor((c: number) => Math.max(0, Math.min(len - 1, c + delta)));
-  };
-
-  const activateItemAt = (itemIdx: number) => {
-    const items = activeItems();
-    const item = items[itemIdx];
-    if (!item || item.kind === "header" || item.kind === "info" || item.kind === "badge") return;
-    if (item.kind === "action" && item.disabled?.()) return;
-
-    if (item.kind === "copyable") {
-      copyToClipboard(item.get(), item.label);
-    } else if (item.kind === "toggle") {
-      item.set(!item.get());
-      if (item.needsReload) props.onReload();
-    } else if (item.kind === "cycle") {
-      const currentVal = item.get();
-      const currentIdx = item.options.indexOf(currentVal);
-      const nextIdx = (currentIdx + 1) % item.options.length;
-      item.set(item.options[nextIdx]);
-      if (item.needsReload) props.onReload();
-    } else if (item.kind === "dialog") {
-      props.onOpenDialog?.(item.dialogId);
-    } else if (item.kind === "action") {
-      item.run();
-    } else if (item.kind === "section") {
-      item.toggle();
-    } else if (item.kind === "branch") {
-      item.run();
-    }
-  };
-
-  const activateItem = () => activateItemAt(selectedItemIndex());
-
-  // Context-aware verb for the footer
-  const footerVerb = (): string => {
-    const items = activeItems();
-    const item = items[selectedItemIndex()];
-    if (!item) return "select";
-    switch (item.kind) {
-      case "copyable":
-        return "copy";
-      case "toggle":
-        return "toggle";
-      case "cycle":
-        return "cycle";
-      case "dialog":
-        return "open";
-      case "action":
-        return "confirm";
-      case "section":
-        return item.collapsed() ? "expand" : "collapse";
-      case "branch":
-        return "view";
-      default:
-        return "select";
-    }
   };
 
   // ── Keyboard ──────────────────────────────────────────────────────
@@ -515,16 +139,6 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     if (!el) return;
     scrollElementIntoView(sb, el);
   });
-
-  // Format the value display for an item
-  const valueDisplay = (item: SettingItem): string => {
-    if (item.kind === "header" || item.kind === "branch" || item.kind === "section" || item.kind === "badge") return "";
-    if (item.kind === "action") return item.get ? item.get() : "";
-    if (item.kind === "info") return item.get();
-    if (item.kind === "copyable") return item.get();
-    if (item.kind === "toggle") return item.get() ? "on" : "off";
-    return item.get();
-  };
 
   // ── Item renderers ─────────────────────────────────────────────────
   // Each function renders one SettingItem kind, closing over component-level
