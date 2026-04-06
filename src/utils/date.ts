@@ -71,10 +71,28 @@ export function formatRelativeDate(dateStr: string): string {
     }
   }
 
-  // Evict oldest entries if cache is full
+  // Evict the oldest entries if cache is full
   if (dateFormatCache.size >= DATE_CACHE_MAX) {
     evictDateCache();
   }
   dateFormatCache.set(dateStr, { result, cachedAt: now, isStable });
   return result;
+}
+
+/**
+ * Format a date string as a full locale-formatted date-time string.
+ * Used in the commit detail panel for the author/committer date fields.
+ *
+ * Example: "Mon, Apr 6, 2026, 09:30 AM"
+ */
+export function formatDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  return date.toLocaleString("en-US", {
+    weekday: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }

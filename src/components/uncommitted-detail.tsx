@@ -1,22 +1,24 @@
-import { useRenderer } from "@opentui/solid";
-import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
+import { useTerminalDimensions } from "@opentui/solid";
+import { createEffect, createMemo, For, Show } from "solid-js";
 import { DETAIL_PANEL_WIDTH_FRACTION } from "../constants";
 import { useAppState } from "../context/state";
-import { useTheme } from "../context/theme";
 import type { DiffSource } from "../git/types";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
-import type { FileTreeNode, FileTreeRow } from "../utils/file-tree";
-import { buildFileTree, flattenFileTree } from "../utils/file-tree";
+import { useFileTree } from "../hooks/use-file-tree";
+import { useT } from "../hooks/use-t";
+import { isCursored as _isCursored, itemHighlightBg as _itemHighlightBg } from "../utils/detail-cursor";
+import { buildDiffTarget } from "../utils/diff-target";
 import type { DetailViewProps } from "./detail-types";
 import {
   computeFileWidths,
   DIR_INDICATOR_WIDTH,
-  ENTRY_PADDING_LEFT,
   PANEL_PADDING_X,
   STAT_GAP,
   STAT_PADDING_LEFT,
   STATUS_COL_WIDTH,
 } from "./detail-types";
+import { FileTreeEntry } from "./file-tree-entry";
+import { TotalLinesChangedRow } from "./total-lines-changed-row";
 
 // ── Layout constants ────────────────────────────────────────────────
 const MIN_PANEL_WIDTH = 60;
@@ -28,12 +30,11 @@ type UncommittedItem =
 
 export default function UncommittedDetailView(props: Readonly<DetailViewProps>) {
   const { state, actions } = useAppState();
-  const { theme } = useTheme();
-  const t = () => theme();
-  const renderer = useRenderer();
+  const t = useT();
+  const dimensions = useTerminalDimensions();
 
   const panelUsableWidth = () =>
-    Math.max(Math.floor(renderer.width * DETAIL_PANEL_WIDTH_FRACTION), MIN_PANEL_WIDTH) - PANEL_PADDING_X;
+    Math.max(Math.floor(dimensions().width * DETAIL_PANEL_WIDTH_FRACTION), MIN_PANEL_WIDTH) - PANEL_PADDING_X;
 
   // Active tab for uncommitted node: "staged" | "unstaged" | "untracked"
   const activeTab = () => state.detailActiveTab();
@@ -56,31 +57,8 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
     return computeFileWidths(files);
   });
 
-  // Build file tree from flat file paths
-  const fileTree = createMemo((): FileTreeNode => {
-    const files = activeFiles();
-    if (files.length === 0) return { name: "/", fullPath: "/", children: [] };
-    return buildFileTree(files);
-  });
-
-  // Collapsed directory paths (tracked by fullPath)
-  const [collapsedDirs, setCollapsedDirs] = createSignal(new Set<string>());
-
-  // Reset collapsed dirs when tab changes
-  createEffect(() => {
-    activeTab();
-    setCollapsedDirs(new Set<string>());
-  });
-
-  const toggleDir = (dirPath: string) => {
-    const next = new Set(collapsedDirs());
-    if (next.has(dirPath)) next.delete(dirPath);
-    else next.add(dirPath);
-    setCollapsedDirs(next);
-  };
-
-  // Flatten tree into renderable rows
-  const fileTreeRows = createMemo((): FileTreeRow[] => flattenFileTree(fileTree(), collapsedDirs()));
+  // File tree state — resets collapsed dirs when active tab changes
+  const { fileTreeRows, collapsedDirs, toggleDir } = useFileTree(activeFiles, activeTab);
 
   // ── Build flat list of interactive items ──
   const interactiveItems = createMemo((): UncommittedItem[] => {
@@ -114,17 +92,7 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
       toggleDir(item.dirPath);
     } else if (item.type === "file" && props.onOpenDiff && item.filePath) {
       const source = activeTab() as DiffSource;
-      const fileList = activeFiles().map(f => f.path);
-      const fileIndex = fileList.indexOf(item.filePath);
-      const fileStatus = activeFiles()[fileIndex >= 0 ? fileIndex : 0]?.status;
-      props.onOpenDiff({
-        commitHash: "",
-        filePath: item.filePath,
-        source,
-        status: fileStatus,
-        fileList,
-        fileIndex: fileIndex >= 0 ? fileIndex : 0,
-      });
+      props.onOpenDiff(buildDiffTarget("", item.filePath, source, activeFiles()));
     }
   };
 
@@ -185,16 +153,8 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
 
   const findItemIndex = (type: "file-dir" | "file", idx: number): number => itemIndexMap().get(`${type}:${idx}`) ?? -1;
 
-  const isCursored = (itemIndex: number) => state.detailFocused() && state.detailCursorIndex() === itemIndex;
-
-  const highlightBgFocused = () => t().backgroundElementActive;
-
-  const itemHighlightBg = (itemIndex: number): string | undefined => {
-    if (state.detailFocused() && state.detailCursorIndex() === itemIndex) {
-      return highlightBgFocused();
-    }
-    return undefined;
-  };
+  const isCursored = (itemIndex: number) => _isCursored(state, itemIndex);
+  const itemHighlightBg = (itemIndex: number): string | undefined => _itemHighlightBg(state, t(), itemIndex);
 
   const cursoredTextInfo = createMemo((): { text: string; visibleWidth: number } | null => {
     if (!state.detailFocused()) return null;
@@ -209,7 +169,7 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
     if (!treeRow) return null;
 
     if (item.type === "file-dir") {
-      const fixedChars = ENTRY_PADDING_LEFT + treeRow.prefix.length + treeRow.connector.length + DIR_INDICATOR_WIDTH;
+      const fixedChars = treeRow.prefix.length + treeRow.connector.length + DIR_INDICATOR_WIDTH;
       const available = pw - fixedChars;
       if (treeRow.name.length <= available) return null;
       return { text: treeRow.name, visibleWidth: available };
@@ -221,7 +181,7 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
         activeTab() === "untracked"
           ? STAT_PADDING_LEFT + STATUS_COL_WIDTH
           : STAT_PADDING_LEFT + STATUS_COL_WIDTH + STAT_GAP + fw.addColWidth + STAT_GAP + fw.delColWidth;
-      const fixedChars = ENTRY_PADDING_LEFT + treeRow.prefix.length + treeRow.connector.length + statWidth;
+      const fixedChars = treeRow.prefix.length + treeRow.connector.length + statWidth;
       const available = pw - fixedChars;
       if (treeRow.name.length <= available) return null;
       return { text: treeRow.name, visibleWidth: available };
@@ -252,24 +212,7 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
       >
         {/* Total lines changed (skip for untracked which have 0/0 stats) */}
         <Show when={activeTab() !== "untracked" && (fileWidths().totalAdd > 0 || fileWidths().totalDel > 0)}>
-          <box flexDirection="row" paddingLeft={2}>
-            <box flexGrow={1}>
-              <text fg={t().foregroundMuted} wrapMode="none">
-                total lines changed
-              </text>
-            </box>
-            <box flexShrink={0} width={2} />
-            <box flexShrink={0} paddingLeft={1}>
-              <text fg={t().diffAdded} wrapMode="none">
-                +{fileWidths().totalAdd}
-              </text>
-            </box>
-            <box flexShrink={0} paddingLeft={1}>
-              <text fg={t().diffRemoved} wrapMode="none">
-                -{fileWidths().totalDel}
-              </text>
-            </box>
-          </box>
+          <TotalLinesChangedRow totalAdd={fileWidths().totalAdd} totalDel={fileWidths().totalDel} />
         </Show>
 
         <For each={fileTreeRows()}>
@@ -287,58 +230,16 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
             };
 
             return (
-              <box flexDirection="row" width="100%" paddingLeft={2} backgroundColor={itemHighlightBg(itemIdx())}>
-                <box flexShrink={0}>
-                  <text fg={t().border} wrapMode="none">
-                    {treeRow.prefix}
-                    {treeRow.connector}
-                  </text>
-                </box>
-                <Show when={treeRow.isDir}>
-                  <box flexShrink={0}>
-                    <text fg={cursored() ? t().accent : t().foregroundMuted} wrapMode="none">
-                      {collapsed() ? "▸ " : "▾ "}
-                    </text>
-                  </box>
-                </Show>
-                <box flexGrow={1}>
-                  <text
-                    fg={
-                      treeRow.isDir
-                        ? cursored()
-                          ? t().accent
-                          : t().foregroundMuted
-                        : cursored()
-                          ? t().accent
-                          : t().foreground
-                    }
-                    wrapMode="none"
-                    truncate={scrolledName() == null}
-                  >
-                    {scrolledName() ?? treeRow.name}
-                  </text>
-                </box>
-                {/* Status letter + stats for staged/unstaged; status only for untracked */}
-                <Show when={treeRow.file}>
-                  <box flexShrink={0} paddingLeft={1}>
-                    <text fg={t().foregroundMuted} wrapMode="none">
-                      {treeRow.file?.status}
-                    </text>
-                  </box>
-                </Show>
-                <Show when={treeRow.file && activeTab() !== "untracked"}>
-                  <box flexShrink={0} paddingLeft={1}>
-                    <text fg={t().diffAdded} wrapMode="none">
-                      {`+${treeRow.file?.additions}`.padStart(fileWidths().addColWidth)}
-                    </text>
-                  </box>
-                  <box flexShrink={0} paddingLeft={1}>
-                    <text fg={t().diffRemoved} wrapMode="none">
-                      {`-${treeRow.file?.deletions}`.padStart(fileWidths().delColWidth)}
-                    </text>
-                  </box>
-                </Show>
-              </box>
+              <FileTreeEntry
+                row={treeRow}
+                cursored={cursored()}
+                collapsed={collapsed()}
+                highlightBg={itemHighlightBg(itemIdx())}
+                scrolledName={scrolledName()}
+                addColWidth={fileWidths().addColWidth}
+                delColWidth={fileWidths().delColWidth}
+                hideStats={activeTab() === "untracked"}
+              />
             );
           }}
         </For>

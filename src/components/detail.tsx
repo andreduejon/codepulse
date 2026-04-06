@@ -1,13 +1,17 @@
-import { useRenderer } from "@opentui/solid";
-import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
-import { DETAIL_PANEL_WIDTH_FRACTION, UNCOMMITTED_HASH } from "../constants";
+import { useTerminalDimensions } from "@opentui/solid";
+import type { JSXElement } from "solid-js";
+import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
+import { DETAIL_PANEL_WIDTH_FRACTION, isUncommittedHash, UNCOMMITTED_PLACEHOLDER } from "../constants";
 import { useAppState } from "../context/state";
-import { useTheme } from "../context/theme";
-import { getStashFiles } from "../git/repo";
-import type { Commit, FileChange, GraphRow } from "../git/types";
+import type { Commit, GraphRow } from "../git/types";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
-import type { FileTreeNode, FileTreeRow } from "../utils/file-tree";
-import { buildFileTree, flattenFileTree } from "../utils/file-tree";
+import { useClipboard } from "../hooks/use-clipboard";
+import { useFileTree } from "../hooks/use-file-tree";
+import { useStashState } from "../hooks/use-stash-state";
+import { useT } from "../hooks/use-t";
+import { formatDate } from "../utils/date";
+import { isCursored as _isCursored, itemHighlightBg as _itemHighlightBg } from "../utils/detail-cursor";
+import { buildDiffTarget } from "../utils/diff-target";
 import DetailBadge from "./detail-badge";
 import type { DetailViewProps } from "./detail-types";
 import {
@@ -22,6 +26,10 @@ import {
   STAT_PADDING_LEFT,
   STATUS_COL_WIDTH,
 } from "./detail-types";
+import { FileTreeEntry } from "./file-tree-entry";
+import type { StashFileRowData } from "./stash-entry";
+import { StashEntry } from "./stash-entry";
+import { TotalLinesChangedRow } from "./total-lines-changed-row";
 
 // ── Layout constants ────────────────────────────────────────────────
 /** Minimum panel width in characters before padding is subtracted. */
@@ -43,9 +51,8 @@ type InteractiveItem =
 
 export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   const { state, actions } = useAppState();
-  const { theme } = useTheme();
-  const t = () => theme();
-  const renderer = useRenderer();
+  const t = useT();
+  const dimensions = useTerminalDimensions();
 
   const commit = () => state.selectedCommit();
   const detail = () => state.commitDetail();
@@ -75,7 +82,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   // ── Cursor-aware banner scroll for long text ──────────────────────
   // Only the currently-cursored item scrolls when its text overflows.
   const panelUsableWidth = () =>
-    Math.max(Math.floor(renderer.width * DETAIL_PANEL_WIDTH_FRACTION), MIN_PANEL_WIDTH) - PANEL_PADDING_X;
+    Math.max(Math.floor(dimensions().width * DETAIL_PANEL_WIDTH_FRACTION), MIN_PANEL_WIDTH) - PANEL_PADDING_X;
 
   // Collapsible section state — reset to expanded when commit changes
   const [childrenExpanded, setChildrenExpanded] = createSignal(true);
@@ -99,7 +106,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
         branch: gr.childBranches[i],
         color: gr.childColors[i],
       }))
-      .filter(c => c.hash !== UNCOMMITTED_HASH);
+      .filter(c => !isUncommittedHash(c.hash));
   });
 
   // Active tab for committed commits: "detail" | "files" | "stashes"
@@ -129,6 +136,16 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     return remote?.name ?? null;
   };
 
+  /**
+   * Look up upstream tracking info for a local branch name.
+   * Returns null when the branch has no upstream configured.
+   */
+  const branchTracking = (name: string) => {
+    const b = state.branches().find(br => !br.isRemote && br.name === name);
+    if (!b?.upstream) return null;
+    return { upstream: b.upstream, ahead: b.ahead ?? 0, behind: b.behind ?? 0 };
+  };
+
   // Whether to show committer info (only when different from author)
   const showCommitter = () => {
     const c = commit();
@@ -137,41 +154,10 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   };
 
   // Whether the selected commit is the synthetic uncommitted-changes node
-  const isUncommitted = () => commit()?.hash === UNCOMMITTED_HASH;
+  const isUncommitted = () => isUncommittedHash(commit()?.hash ?? "");
 
   // ── Clipboard copy with "✓ copied" feedback ────────────────────────
-  const [copiedField, setCopiedField] = createSignal<CopyableField | null>(null);
-  let copiedTimer: ReturnType<typeof setTimeout> | undefined;
-
-  const copyToClipboard = (text: string, field: CopyableField) => {
-    try {
-      const platform = process.platform;
-      let cmd: string[];
-      if (platform === "darwin") {
-        cmd = ["pbcopy"];
-      } else if (platform === "win32") {
-        cmd = ["clip.exe"];
-      } else {
-        cmd = ["xclip", "-selection", "clipboard"];
-      }
-      const proc = Bun.spawn(cmd, { stdin: new Response(text).body });
-      const killTimer = setTimeout(() => {
-        try {
-          proc.kill();
-        } catch {}
-      }, 5000);
-      proc.exited.then(() => clearTimeout(killTimer)).catch(() => clearTimeout(killTimer));
-      setCopiedField(field);
-      if (copiedTimer) clearTimeout(copiedTimer);
-      copiedTimer = setTimeout(() => setCopiedField(null), 1500);
-    } catch {
-      // Clipboard utility not available — silently ignore
-    }
-  };
-
-  onCleanup(() => {
-    if (copiedTimer) clearTimeout(copiedTimer);
-  });
+  const { copiedId: copiedField, copyToClipboard } = useClipboard<CopyableField>();
 
   /** Get the text to copy for a given copyable field. */
   const getCopyableText = (field: CopyableField): string => {
@@ -202,105 +188,20 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     return computeFileWidths(d.files);
   });
 
-  // Build file tree from flat file paths
-  const fileTree = createMemo((): FileTreeNode => {
-    const d = detail();
-    if (!d) return { name: "/", fullPath: "/", children: [] };
-    return buildFileTree(d.files);
-  });
-
-  // Collapsed directory paths (tracked by fullPath)
-  const [collapsedDirs, setCollapsedDirs] = createSignal(new Set<string>());
-
-  // Reset collapsed dirs when commit changes
-  createEffect(() => {
-    commit();
-    setCollapsedDirs(new Set<string>());
-  });
+  // File tree state — resets collapsed dirs when commit changes
+  const { fileTreeRows, collapsedDirs, toggleDir } = useFileTree(() => detail()?.files ?? [], commit);
 
   // ── Stash section state ─────────────────────────────────────────────
-  /** Stash entries for the currently selected commit (from stashByParent map). */
-  const stashEntries = createMemo((): Commit[] => {
-    const c = commit();
-    if (!c) return [];
-    return state.stashByParent().get(c.hash) ?? [];
-  });
-
-  /** Which stash hashes are expanded in the detail panel. */
-  const [expandedStashes, setExpandedStashes] = createSignal(new Set<string>());
-  /** Cached stash file data: stashHash → FileChange[]. */
-  const [stashFileCache, setStashFileCache] = createSignal(new Map<string, FileChange[]>());
-  /** Collapsed dirs per stash: stashHash → Set of collapsed dir paths. */
-  const [stashCollapsedDirs, setStashCollapsedDirs] = createSignal(new Map<string, Set<string>>());
-
-  // Reset stash state when selected commit changes
-  createEffect(() => {
-    commit();
-    setExpandedStashes(new Set<string>());
-    setStashFileCache(new Map<string, FileChange[]>());
-    setStashCollapsedDirs(new Map<string, Set<string>>());
-  });
-
-  /** Toggle a stash's expanded state and lazily load files. */
-  const toggleStash = async (stashHash: string) => {
-    const next = new Set(expandedStashes());
-    if (next.has(stashHash)) {
-      next.delete(stashHash);
-      setExpandedStashes(next);
-      return;
-    }
-    next.add(stashHash);
-    setExpandedStashes(next);
-
-    // Lazy load files if not cached
-    if (!stashFileCache().has(stashHash)) {
-      const files = await getStashFiles(state.repoPath(), stashHash);
-      setStashFileCache(prev => {
-        const m = new Map(prev);
-        m.set(stashHash, files);
-        return m;
-      });
-    }
-  };
-
-  /** Toggle a directory within a stash's file tree. */
-  const toggleStashDir = (stashHash: string, dirPath: string) => {
-    setStashCollapsedDirs(prev => {
-      const m = new Map(prev);
-      const dirs = new Set(m.get(stashHash) ?? []);
-      if (dirs.has(dirPath)) dirs.delete(dirPath);
-      else dirs.add(dirPath);
-      m.set(stashHash, dirs);
-      return m;
-    });
-  };
-
-  /** Build file tree rows for a specific stash. */
-  const getStashFileTreeRows = (stashHash: string): FileTreeRow[] => {
-    const files = stashFileCache().get(stashHash);
-    if (!files || files.length === 0) return [];
-    const tree = buildFileTree(files);
-    const collapsed = stashCollapsedDirs().get(stashHash) ?? new Set<string>();
-    return flattenFileTree(tree, collapsed);
-  };
-
-  /** Get column widths for a stash's file stats. */
-  const getStashFileWidths = (stashHash: string) => {
-    const files = stashFileCache().get(stashHash);
-    if (!files) return { totalAdd: 0, totalDel: 0, addColWidth: 2, delColWidth: 2 };
-    return computeFileWidths(files);
-  };
-
-  /** Toggle a directory's collapsed state */
-  const toggleDir = (dirPath: string) => {
-    const next = new Set(collapsedDirs());
-    if (next.has(dirPath)) next.delete(dirPath);
-    else next.add(dirPath);
-    setCollapsedDirs(next);
-  };
-
-  // Flatten tree into renderable rows with connector prefixes
-  const fileTreeRows = createMemo((): FileTreeRow[] => flattenFileTree(fileTree(), collapsedDirs()));
+  const {
+    stashEntries,
+    expandedStashes,
+    stashFileCache,
+    stashCollapsedDirs,
+    toggleStash,
+    toggleStashDir,
+    getStashFileTreeRows,
+    getStashFileWidths,
+  } = useStashState(commit);
 
   // ── Build flat list of interactive items (tab-aware) ──
   // IMPORTANT: This memo must be defined AFTER fileTreeRows, stashEntries,
@@ -317,7 +218,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
 
     if (tab === "detail") {
       // Copyable metadata fields (skip for uncommitted node — values are all "·······")
-      if (c.hash !== UNCOMMITTED_HASH) {
+      if (!isUncommittedHash(c.hash)) {
         items.push({ type: "copyable", field: "hash" });
         items.push({ type: "copyable", field: "author" });
         items.push({ type: "copyable", field: "date" });
@@ -473,17 +374,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
           const c = commit();
           const d = detail();
           if (c && d) {
-            const fileList = d.files.map(f => f.path);
-            const fileIndex = fileList.indexOf(item.filePath);
-            const fileStatus = d.files[fileIndex >= 0 ? fileIndex : 0]?.status;
-            props.onOpenDiff({
-              commitHash: c.hash,
-              filePath: item.filePath,
-              source: "commit",
-              status: fileStatus,
-              fileList,
-              fileIndex: fileIndex >= 0 ? fileIndex : 0,
-            });
+            props.onOpenDiff(buildDiffTarget(c.hash, item.filePath, "commit", d.files));
           }
         }
         break;
@@ -496,17 +387,18 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
       case "stash-file":
         if (props.onOpenDiff && item.filePath) {
           const stashFiles = stashFileCache().get(item.stashHash);
-          const fileList = stashFiles ? stashFiles.map(f => f.path) : [item.filePath];
-          const fileIndex = fileList.indexOf(item.filePath);
-          const fileStatus = stashFiles?.[fileIndex >= 0 ? fileIndex : 0]?.status;
-          props.onOpenDiff({
-            commitHash: item.stashHash,
-            filePath: item.filePath,
-            source: "stash",
-            status: fileStatus,
-            fileList,
-            fileIndex: fileIndex >= 0 ? fileIndex : 0,
-          });
+          if (stashFiles) {
+            props.onOpenDiff(buildDiffTarget(item.stashHash, item.filePath, "stash", stashFiles));
+          } else {
+            // Cache miss — open with single-file list (no left/right navigation)
+            props.onOpenDiff({
+              commitHash: item.stashHash,
+              filePath: item.filePath,
+              source: "stash",
+              fileList: [item.filePath],
+              fileIndex: 0,
+            });
+          }
         }
         break;
     }
@@ -634,24 +526,24 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
       }
 
       case "file-dir": {
-        // Layout: paddingLeft + prefix + connector + dirIndicator + name
+        // Layout: prefix + connector + dirIndicator + name
         const rows = fileTreeRows();
         const treeRow = rows[item.index];
         if (!treeRow) return null;
-        const fixedChars = ENTRY_PADDING_LEFT + treeRow.prefix.length + treeRow.connector.length + DIR_INDICATOR_WIDTH;
+        const fixedChars = treeRow.prefix.length + treeRow.connector.length + DIR_INDICATOR_WIDTH;
         const available = pw - fixedChars;
         if (treeRow.name.length <= available) return null;
         return { text: treeRow.name, visibleWidth: available };
       }
 
       case "file": {
-        // Layout: paddingLeft + prefix + connector + name + statPaddingLeft + addCol + statGap + delCol
+        // Layout: prefix + connector + name + statPaddingLeft + status + statGap + addCol + statGap + delCol
         const rows = fileTreeRows();
         const treeRow = rows[item.index];
         if (!treeRow) return null;
         const fw = fileWidths();
         const statWidth = STAT_PADDING_LEFT + STATUS_COL_WIDTH + STAT_GAP + fw.addColWidth + STAT_GAP + fw.delColWidth;
-        const fixedChars = ENTRY_PADDING_LEFT + treeRow.prefix.length + treeRow.connector.length + statWidth;
+        const fixedChars = treeRow.prefix.length + treeRow.connector.length + statWidth;
         const available = pw - fixedChars;
         if (treeRow.name.length <= available) return null;
         return { text: treeRow.name, visibleWidth: available };
@@ -670,28 +562,24 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
       }
 
       case "stash-dir": {
-        // Same layout as file-dir but inside a stash sub-tree (extra indent for stash nesting)
-        const stashIndent = ENTRY_PADDING_LEFT; // stash files are double-indented
+        // Layout: prefix + connector + dirIndicator + name
         const rows = getStashFileTreeRows(item.stashHash);
         const treeRow = rows[item.index];
         if (!treeRow) return null;
-        const fixedChars =
-          ENTRY_PADDING_LEFT + stashIndent + treeRow.prefix.length + treeRow.connector.length + DIR_INDICATOR_WIDTH;
+        const fixedChars = treeRow.prefix.length + treeRow.connector.length + DIR_INDICATOR_WIDTH;
         const available = pw - fixedChars;
         if (treeRow.name.length <= available) return null;
         return { text: treeRow.name, visibleWidth: available };
       }
 
       case "stash-file": {
-        // Same layout as file but inside a stash sub-tree
-        const stashIndent = ENTRY_PADDING_LEFT;
+        // Layout: prefix + connector + name + stat columns
         const rows = getStashFileTreeRows(item.stashHash);
         const treeRow = rows[item.index];
         if (!treeRow) return null;
         const fw = getStashFileWidths(item.stashHash);
         const statWidth = STAT_PADDING_LEFT + STATUS_COL_WIDTH + STAT_GAP + fw.addColWidth + STAT_GAP + fw.delColWidth;
-        const fixedChars =
-          ENTRY_PADDING_LEFT + stashIndent + treeRow.prefix.length + treeRow.connector.length + statWidth;
+        const fixedChars = treeRow.prefix.length + treeRow.connector.length + statWidth;
         const available = pw - fixedChars;
         if (treeRow.name.length <= available) return null;
         return { text: treeRow.name, visibleWidth: available };
@@ -716,19 +604,9 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   });
   const bannerOffset = useBannerScroll(bannerOverflow);
 
-  // Highlight color for the cursor'd interactive item
-  const highlightBgFocused = () => t().backgroundElementActive;
-
-  /** Check if a given interactive item index should be highlighted, and return its bg color */
-  const itemHighlightBg = (itemIndex: number): string | undefined => {
-    if (state.detailFocused() && state.detailCursorIndex() === itemIndex) {
-      return highlightBgFocused();
-    }
-    return undefined;
-  };
-
-  /** Check if item is the focused cursor (for accent text color) */
-  const isCursored = (itemIndex: number) => state.detailFocused() && state.detailCursorIndex() === itemIndex;
+  // Highlight helpers — thin wrappers binding local state/theme
+  const itemHighlightBg = (itemIndex: number) => _itemHighlightBg(state, t(), itemIndex);
+  const isCursored = (itemIndex: number) => _isCursored(state, itemIndex);
 
   // ── Copyable field rendering helpers ────────────────────────────────
   /** Get the interactive item index for a copyable field. */
@@ -750,6 +628,40 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     const off = bannerOffset();
     return text.substring(off, off + info.visibleWidth);
   };
+
+  /**
+   * Local component: renders a single copyable row with cursor highlight,
+   * banner-scroll, and "✓ copied" feedback badge.
+   *
+   * Closes over: copyableHighlightBg, isCopyableCursored, scrolledCopyableText,
+   * copiedField, t().
+   */
+  const CopyableRow = (props: {
+    field: CopyableField;
+    /** Fallback content shown when not banner-scrolling. */
+    children: JSXElement;
+    /** Text color when not cursored. Defaults to t().foreground. */
+    fg?: string;
+    /** wrapMode for the text element. Defaults to "none". */
+    wrapMode?: "none" | "char" | "word";
+  }) => (
+    <box flexDirection="row" backgroundColor={copyableHighlightBg(props.field)}>
+      <text
+        flexGrow={1}
+        flexShrink={1}
+        fg={isCopyableCursored(props.field) ? t().accent : (props.fg ?? t().foreground)}
+        wrapMode={props.wrapMode ?? "none"}
+        truncate={props.wrapMode !== "word" && !isCopyableCursored(props.field)}
+      >
+        {scrolledCopyableText(props.field) ?? props.children}
+      </text>
+      <Show when={copiedField() === props.field}>
+        <text flexShrink={0} bg={t().primary} fg={t().background} wrapMode="none">
+          {" \u2713 copied "}
+        </text>
+      </Show>
+    </box>
+  );
 
   /** Memo'd index map for O(1) lookup of interactive item positions.
    *  Keys are "section-header:children", "child:0", "file-dir:3", "stash-entry:abc123", etc. */
@@ -902,7 +814,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
               <text fg={t().accent} wrapMode="none">
                 <strong>Branch</strong>
               </text>
-              <box flexDirection="row" flexWrap="wrap" gap={1}>
+              <box flexDirection="column">
                 <Show
                   when={branchRefs().length > 0}
                   fallback={
@@ -917,21 +829,56 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                         );
                       })()}
                     >
-                      <DetailBadge name={r().branchName} colorIndex={nodeColorIndex()} />
-                      <Show when={remoteName()}>
-                        <DetailBadge name={remoteName() as string} colorIndex={nodeColorIndex()} />
-                      </Show>
+                      {/* Graph-inferred branch: local badge, optional remote badge, right-aligned tracking */}
+                      <box flexDirection="row" width="100%">
+                        <DetailBadge name={r().branchName} colorIndex={nodeColorIndex()} />
+                        {(() => {
+                          const tr = branchTracking(r().branchName);
+                          if (!tr) {
+                            // No tracking — show remote badge if present
+                            const rn = remoteName();
+                            return rn ? <DetailBadge name={rn} colorIndex={nodeColorIndex()} /> : null;
+                          }
+                          return (
+                            <>
+                              <box flexGrow={1} />
+                              <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                                {`↑${tr.ahead} ↓${tr.behind}`}
+                              </text>
+                            </>
+                          );
+                        })()}
+                      </box>
                     </Show>
                   }
                 >
-                  <For each={branchRefs()}>
-                    {ref => (
-                      <DetailBadge
-                        name={ref.name}
-                        colorIndex={nodeColorIndex()}
-                        dimmed={ref.type === "stash" || ref.type === "uncommitted"}
-                      />
-                    )}
+                  {/* Sort: locals first, remotes after */}
+                  <For
+                    each={[
+                      ...branchRefs().filter(r => r.type !== "remote"),
+                      ...branchRefs().filter(r => r.type === "remote"),
+                    ]}
+                  >
+                    {ref => {
+                      const tr = ref.type === "branch" ? branchTracking(ref.name) : null;
+                      return (
+                        <box flexDirection="row" width="100%">
+                          <DetailBadge
+                            name={ref.name}
+                            colorIndex={nodeColorIndex()}
+                            dimmed={ref.type === "stash" || ref.type === "uncommitted"}
+                          />
+                          {tr ? (
+                            <>
+                              <box flexGrow={1} />
+                              <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                                {`↑${tr.ahead} ↓${tr.behind}`}
+                              </text>
+                            </>
+                          ) : null}
+                        </box>
+                      );
+                    }}
                   </For>
                 </Show>
               </box>
@@ -956,26 +903,11 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 when={!isUncommitted()}
                 fallback={
                   <text fg={t().foregroundMuted} wrapMode="none">
-                    {"\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7"}
+                    {UNCOMMITTED_PLACEHOLDER}
                   </text>
                 }
               >
-                <box flexDirection="row" backgroundColor={copyableHighlightBg("hash")}>
-                  <text
-                    flexGrow={1}
-                    flexShrink={1}
-                    fg={isCopyableCursored("hash") ? t().accent : t().foreground}
-                    wrapMode="none"
-                    truncate={!isCopyableCursored("hash")}
-                  >
-                    {scrolledCopyableText("hash") ?? c().hash}
-                  </text>
-                  <Show when={copiedField() === "hash"}>
-                    <text flexShrink={0} bg={t().primary} fg={t().background} wrapMode="none">
-                      {" \u2713 copied "}
-                    </text>
-                  </Show>
-                </box>
+                <CopyableRow field="hash">{c().hash}</CopyableRow>
               </Show>
 
               <box height={1} />
@@ -986,32 +918,15 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 when={!isUncommitted()}
                 fallback={
                   <text fg={t().foregroundMuted} wrapMode="none">
-                    {"\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7"}
+                    {UNCOMMITTED_PLACEHOLDER}
                   </text>
                 }
               >
-                <box flexDirection="row" backgroundColor={copyableHighlightBg("author")}>
-                  <text
-                    flexGrow={1}
-                    flexShrink={1}
-                    fg={isCopyableCursored("author") ? t().accent : t().foreground}
-                    wrapMode="none"
-                    truncate={!isCopyableCursored("author")}
-                  >
-                    {scrolledCopyableText("author") ?? (
-                      <>
-                        {c().author} {"<"}
-                        {c().authorEmail}
-                        {">"}
-                      </>
-                    )}
-                  </text>
-                  <Show when={copiedField() === "author"}>
-                    <text flexShrink={0} bg={t().primary} fg={t().background} wrapMode="none">
-                      {" \u2713 copied "}
-                    </text>
-                  </Show>
-                </box>
+                <CopyableRow field="author">
+                  {c().author} {"<"}
+                  {c().authorEmail}
+                  {">"}
+                </CopyableRow>
               </Show>
 
               <box height={1} />
@@ -1022,26 +937,11 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 when={!isUncommitted()}
                 fallback={
                   <text fg={t().foregroundMuted} wrapMode="none">
-                    {"\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7"}
+                    {UNCOMMITTED_PLACEHOLDER}
                   </text>
                 }
               >
-                <box flexDirection="row" backgroundColor={copyableHighlightBg("date")}>
-                  <text
-                    flexGrow={1}
-                    flexShrink={1}
-                    fg={isCopyableCursored("date") ? t().accent : t().foreground}
-                    wrapMode="none"
-                    truncate={!isCopyableCursored("date")}
-                  >
-                    {scrolledCopyableText("date") ?? formatDate(c().authorDate)}
-                  </text>
-                  <Show when={copiedField() === "date"}>
-                    <text flexShrink={0} bg={t().primary} fg={t().background} wrapMode="none">
-                      {" \u2713 copied "}
-                    </text>
-                  </Show>
-                </box>
+                <CopyableRow field="date">{formatDate(c().authorDate)}</CopyableRow>
               </Show>
 
               <Show when={!isUncommitted() && showCommitter()}>
@@ -1049,49 +949,17 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 <text fg={t().accent} wrapMode="none">
                   <strong>Committer</strong>
                 </text>
-                <box flexDirection="row" backgroundColor={copyableHighlightBg("committer")}>
-                  <text
-                    flexGrow={1}
-                    flexShrink={1}
-                    fg={isCopyableCursored("committer") ? t().accent : t().foreground}
-                    wrapMode="none"
-                    truncate={!isCopyableCursored("committer")}
-                  >
-                    {scrolledCopyableText("committer") ?? (
-                      <>
-                        {c().committer} {"<"}
-                        {c().committerEmail}
-                        {">"}
-                      </>
-                    )}
-                  </text>
-                  <Show when={copiedField() === "committer"}>
-                    <text flexShrink={0} bg={t().primary} fg={t().background} wrapMode="none">
-                      {" \u2713 copied "}
-                    </text>
-                  </Show>
-                </box>
+                <CopyableRow field="committer">
+                  {c().committer} {"<"}
+                  {c().committerEmail}
+                  {">"}
+                </CopyableRow>
 
                 <box height={1} />
                 <text fg={t().accent} wrapMode="none">
                   <strong>Commit Date</strong>
                 </text>
-                <box flexDirection="row" backgroundColor={copyableHighlightBg("commitDate")}>
-                  <text
-                    flexGrow={1}
-                    flexShrink={1}
-                    fg={isCopyableCursored("commitDate") ? t().accent : t().foreground}
-                    wrapMode="none"
-                    truncate={!isCopyableCursored("commitDate")}
-                  >
-                    {scrolledCopyableText("commitDate") ?? formatDate(c().commitDate)}
-                  </text>
-                  <Show when={copiedField() === "commitDate"}>
-                    <text flexShrink={0} bg={t().primary} fg={t().background} wrapMode="none">
-                      {" \u2713 copied "}
-                    </text>
-                  </Show>
-                </box>
+                <CopyableRow field="commitDate">{formatDate(c().commitDate)}</CopyableRow>
               </Show>
 
               <box height={1} />
@@ -1108,22 +976,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   </text>
                 }
               >
-                <box flexDirection="row" backgroundColor={copyableHighlightBg("subject")}>
-                  <text
-                    flexGrow={1}
-                    flexShrink={1}
-                    fg={isCopyableCursored("subject") ? t().accent : t().foreground}
-                    wrapMode="none"
-                    truncate={!isCopyableCursored("subject")}
-                  >
-                    {scrolledCopyableText("subject") ?? c().subject}
-                  </text>
-                  <Show when={copiedField() === "subject"}>
-                    <text flexShrink={0} bg={t().primary} fg={t().background} wrapMode="none">
-                      {" \u2713 copied "}
-                    </text>
-                  </Show>
-                </box>
+                <CopyableRow field="subject">{c().subject}</CopyableRow>
               </Show>
 
               <Show when={!isUncommitted() && detail()?.body}>
@@ -1131,21 +984,9 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 <text fg={t().accent} wrapMode="none">
                   <strong>Body</strong>
                 </text>
-                <box flexDirection="row" backgroundColor={copyableHighlightBg("body")}>
-                  <text
-                    flexGrow={1}
-                    flexShrink={1}
-                    fg={isCopyableCursored("body") ? t().accent : t().foregroundMuted}
-                    wrapMode="word"
-                  >
-                    {detail()?.body}
-                  </text>
-                  <Show when={copiedField() === "body"}>
-                    <text flexShrink={0} bg={t().primary} fg={t().background} wrapMode="none">
-                      {" \u2713 copied "}
-                    </text>
-                  </Show>
-                </box>
+                <CopyableRow field="body" fg={t().foregroundMuted} wrapMode="word">
+                  {detail()?.body}
+                </CopyableRow>
               </Show>
 
               <box height={1} />
@@ -1201,24 +1042,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
 
             {/* ══════════════ Files tab ══════════════ */}
             <Show when={activeTab() === "files" && detail() && detail()?.files.length > 0}>
-              <box flexDirection="row" paddingLeft={2}>
-                <box flexGrow={1}>
-                  <text fg={t().foregroundMuted} wrapMode="none">
-                    total lines changed
-                  </text>
-                </box>
-                <box flexShrink={0} width={2} />
-                <box flexShrink={0} paddingLeft={1}>
-                  <text fg={t().diffAdded} wrapMode="none">
-                    +{fileWidths().totalAdd}
-                  </text>
-                </box>
-                <box flexShrink={0} paddingLeft={1}>
-                  <text fg={t().diffRemoved} wrapMode="none">
-                    -{fileWidths().totalDel}
-                  </text>
-                </box>
-              </box>
+              <TotalLinesChangedRow totalAdd={fileWidths().totalAdd} totalDel={fileWidths().totalDel} />
               <For each={fileTreeRows()}>
                 {(treeRow, i) => {
                   const itemIdx = () => findItemIndex(treeRow.isDir ? "file-dir" : "file", undefined, i());
@@ -1235,55 +1059,15 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   };
 
                   return (
-                    <box flexDirection="row" width="100%" paddingLeft={2} backgroundColor={itemHighlightBg(itemIdx())}>
-                      <box flexShrink={0}>
-                        <text fg={t().border} wrapMode="none">
-                          {treeRow.prefix}
-                          {treeRow.connector}
-                        </text>
-                      </box>
-                      <Show when={treeRow.isDir}>
-                        <box flexShrink={0}>
-                          <text fg={cursored() ? t().accent : t().foregroundMuted} wrapMode="none">
-                            {collapsed() ? "▸ " : "▾ "}
-                          </text>
-                        </box>
-                      </Show>
-                      <box flexGrow={1}>
-                        <text
-                          fg={
-                            treeRow.isDir
-                              ? cursored()
-                                ? t().accent
-                                : t().foregroundMuted
-                              : cursored()
-                                ? t().accent
-                                : t().foreground
-                          }
-                          wrapMode="none"
-                          truncate={scrolledName() == null}
-                        >
-                          {scrolledName() ?? treeRow.name}
-                        </text>
-                      </box>
-                      <Show when={treeRow.file}>
-                        <box flexShrink={0} paddingLeft={1}>
-                          <text fg={t().foregroundMuted} wrapMode="none">
-                            {treeRow.file?.status}
-                          </text>
-                        </box>
-                        <box flexShrink={0} paddingLeft={1}>
-                          <text fg={t().diffAdded} wrapMode="none">
-                            {`+${treeRow.file?.additions}`.padStart(fileWidths().addColWidth)}
-                          </text>
-                        </box>
-                        <box flexShrink={0} paddingLeft={1}>
-                          <text fg={t().diffRemoved} wrapMode="none">
-                            {`-${treeRow.file?.deletions}`.padStart(fileWidths().delColWidth)}
-                          </text>
-                        </box>
-                      </Show>
-                    </box>
+                    <FileTreeEntry
+                      row={treeRow}
+                      cursored={cursored()}
+                      collapsed={collapsed()}
+                      highlightBg={itemHighlightBg(itemIdx())}
+                      scrolledName={scrolledName()}
+                      addColWidth={fileWidths().addColWidth}
+                      delColWidth={fileWidths().delColWidth}
+                    />
                   );
                 }}
               </For>
@@ -1304,7 +1088,6 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   const cursored = () => isCursored(itemIdx());
                   const expanded = () => expandedStashes().has(stash.hash);
                   const label = () => stash.refs[0]?.name ?? "stash";
-                  const fileCount = () => stashFileCache().get(stash.hash)?.length;
 
                   /** Banner scroll for the stash header label when cursored */
                   const scrolledHeaderText = () => {
@@ -1320,130 +1103,43 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   const stashFileRows = () => getStashFileTreeRows(stash.hash);
                   const stashFw = () => getStashFileWidths(stash.hash);
 
+                  /** Pre-compute per-file row display data for StashEntry */
+                  const fileRowsData = (): StashFileRowData[] =>
+                    stashFileRows().map((treeRow, fi) => {
+                      const fileItemIdx = findItemIndex(treeRow.isDir ? "stash-dir" : "stash-file", stash.hash, fi);
+                      const fileCursored = isCursored(fileItemIdx);
+                      const fileCollapsed =
+                        treeRow.isDir && (stashCollapsedDirs().get(stash.hash)?.has(treeRow.dirPath) ?? false);
+                      const scrolledFileName = (): string | null => {
+                        if (!fileCursored) return null;
+                        const info = cursoredTextInfo();
+                        if (!info || info.text !== treeRow.name) return null;
+                        const off = bannerOffset();
+                        return treeRow.name.substring(off, off + info.visibleWidth);
+                      };
+                      return {
+                        row: treeRow,
+                        cursored: fileCursored,
+                        collapsed: fileCollapsed,
+                        highlightBg: itemHighlightBg(fileItemIdx),
+                        scrolledName: scrolledFileName(),
+                      };
+                    });
+
                   return (
-                    <>
-                      {/* Spacer between stash entries (not before the first one) */}
-                      <Show when={si() > 0}>
-                        <box height={1} />
-                      </Show>
-
-                      {/* Stash entry header — label + file count only */}
-                      <box backgroundColor={itemHighlightBg(itemIdx())}>
-                        <text fg={t().accent} wrapMode="none" truncate={scrolledHeaderText() == null}>
-                          <strong>
-                            {expanded() ? "▾" : "▸"} {scrolledHeaderText() ?? label()}
-                            {fileCount() != null ? ` (${fileCount()})` : ""}
-                          </strong>
-                        </text>
-                      </box>
-
-                      {/* Expanded area: description + total lines changed + file tree */}
-                      <Show when={expanded()}>
-                        {/* Stash description (subject line) */}
-                        <box paddingLeft={ENTRY_PADDING_LEFT}>
-                          <text fg={t().foregroundMuted} wrapMode="none" truncate>
-                            {stash.subject}
-                          </text>
-                        </box>
-                        <box height={1} />
-
-                        {/* Total lines changed (only after files are loaded) */}
-                        <Show when={stashFw().totalAdd > 0 || stashFw().totalDel > 0}>
-                          <box flexDirection="row" paddingLeft={2}>
-                            <box flexGrow={1}>
-                              <text fg={t().foregroundMuted} wrapMode="none">
-                                total lines changed
-                              </text>
-                            </box>
-                            <box flexShrink={0} width={2} />
-                            <box flexShrink={0} paddingLeft={1}>
-                              <text fg={t().diffAdded} wrapMode="none">
-                                +{stashFw().totalAdd}
-                              </text>
-                            </box>
-                            <box flexShrink={0} paddingLeft={1}>
-                              <text fg={t().diffRemoved} wrapMode="none">
-                                -{stashFw().totalDel}
-                              </text>
-                            </box>
-                          </box>
-                        </Show>
-                        <For each={stashFileRows()}>
-                          {(treeRow, fi) => {
-                            const fileItemIdx = () =>
-                              findItemIndex(treeRow.isDir ? "stash-dir" : "stash-file", stash.hash, fi());
-                            const fileCursored = () => isCursored(fileItemIdx());
-                            const fileCollapsed = () =>
-                              treeRow.isDir && (stashCollapsedDirs().get(stash.hash)?.has(treeRow.dirPath) ?? false);
-
-                            const scrolledFileName = () => {
-                              if (!fileCursored()) return null;
-                              const info = cursoredTextInfo();
-                              if (!info || info.text !== treeRow.name) return null;
-                              const off = bannerOffset();
-                              return treeRow.name.substring(off, off + info.visibleWidth);
-                            };
-
-                            return (
-                              <box
-                                flexDirection="row"
-                                width="100%"
-                                paddingLeft={2}
-                                backgroundColor={itemHighlightBg(fileItemIdx())}
-                              >
-                                <box flexShrink={0}>
-                                  <text fg={t().border} wrapMode="none">
-                                    {treeRow.prefix}
-                                    {treeRow.connector}
-                                  </text>
-                                </box>
-                                <Show when={treeRow.isDir}>
-                                  <box flexShrink={0}>
-                                    <text fg={fileCursored() ? t().accent : t().foregroundMuted} wrapMode="none">
-                                      {fileCollapsed() ? "▸ " : "▾ "}
-                                    </text>
-                                  </box>
-                                </Show>
-                                <box flexGrow={1}>
-                                  <text
-                                    fg={
-                                      treeRow.isDir
-                                        ? fileCursored()
-                                          ? t().accent
-                                          : t().foregroundMuted
-                                        : fileCursored()
-                                          ? t().accent
-                                          : t().foreground
-                                    }
-                                    wrapMode="none"
-                                    truncate={scrolledFileName() == null}
-                                  >
-                                    {scrolledFileName() ?? treeRow.name}
-                                  </text>
-                                </box>
-                                <Show when={treeRow.file}>
-                                  <box flexShrink={0} paddingLeft={1}>
-                                    <text fg={t().foregroundMuted} wrapMode="none">
-                                      {treeRow.file?.status}
-                                    </text>
-                                  </box>
-                                  <box flexShrink={0} paddingLeft={1}>
-                                    <text fg={t().diffAdded} wrapMode="none">
-                                      {`+${treeRow.file?.additions}`.padStart(stashFw().addColWidth)}
-                                    </text>
-                                  </box>
-                                  <box flexShrink={0} paddingLeft={1}>
-                                    <text fg={t().diffRemoved} wrapMode="none">
-                                      {`-${treeRow.file?.deletions}`.padStart(stashFw().delColWidth)}
-                                    </text>
-                                  </box>
-                                </Show>
-                              </box>
-                            );
-                          }}
-                        </For>
-                      </Show>
-                    </>
+                    <StashEntry
+                      stash={stash}
+                      showSpacer={si() > 0}
+                      expanded={expanded()}
+                      headerHighlightBg={itemHighlightBg(itemIdx())}
+                      scrolledHeaderText={scrolledHeaderText()}
+                      fileRows={fileRowsData()}
+                      fileCount={stashFileCache().get(stash.hash)?.length}
+                      addColWidth={stashFw().addColWidth}
+                      delColWidth={stashFw().delColWidth}
+                      totalAdd={stashFw().totalAdd}
+                      totalDel={stashFw().totalDel}
+                    />
                   );
                 }}
               </For>
@@ -1460,16 +1156,4 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
       </Show>
     </box>
   );
-}
-
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleString("en-US", {
-    weekday: "short",
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }

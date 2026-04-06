@@ -13,5 +13,16 @@ export const PAGE_JUMP = 20;
 /** Detail panel width as a fraction of terminal width. */
 export const DETAIL_PANEL_WIDTH_FRACTION = 0.25;
 
+/** Terminal size breakpoints for adaptive layout. */
+export const MIN_TERMINAL_WIDTH = 90;
+export const MIN_TERMINAL_HEIGHT = 30;
+export const COMPACT_THRESHOLD_WIDTH = 180;
+
 /** Sentinel hash used for the synthetic "uncommitted changes" node. */
 export const UNCOMMITTED_HASH = "0".repeat(40);
+
+/** Returns true when `hash` refers to the synthetic uncommitted-changes node. */
+export const isUncommittedHash = (hash: string): boolean => hash === UNCOMMITTED_HASH;
+
+/** Placeholder text shown in columns where the uncommitted node has no real value. */
+export const UNCOMMITTED_PLACEHOLDER = "\u00b7".repeat(7);

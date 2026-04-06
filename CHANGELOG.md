@@ -2,6 +2,49 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.0] - 2026-04-07
+
+### Added
+- **Config file support** — `~/.config/codepulse/config.json` with save/reset from the menu dialog and CLI override precedence
+- **Regex search** — `/pattern/` syntax in the search input; invalid regex falls back to substring match
+- **Lazy commit loading** — cursor-triggered pagination replaces the hard commit cap; page size configurable via menu
+- **Adaptive compact mode** — detail panel switches to a dialog overlay on narrow terminals; too-small terminal guard prevents rendering artifacts
+- **In-TUI error screen** — friendly startup error display with dual-tone logo, wrapped messages, and resolution hints
+- **Upstream ahead/behind** — `↑N ↓M` shown inline in the branch section and menu dialog
+- **Banner scroll** — long graph commit descriptions scroll horizontally when highlighted
+- **Live debounced search** — results update as you type with cursor position preserved on filter clear
+
+### Changed
+- Menu label renamed from "Max commits" to "Page size"
+- Dialogs harmonized to width 72 and H-8 height cap
+- Version display moved to footer left section
+- Process title set to `codepulse` on startup for consistent terminal tab names
+
+### Fixed
+- Detail dialog focus, padding, footer label, and left-arrow behavior
+- Diff-blame dialog opens correctly from detail dialog in compact mode
+- Continuous bottom border on tab bar
+- Banner width accuracy across resize
+- Compact footer label for "show details"
+- Race condition in data loading with concurrent page fetches
+- Stale ref labels after branch switches
+- `dimChars` mutation on shared commit objects
+- `rowRefs` array truncation on graph rebuild
+- Silent wrong-file fallback in diff target resolution (`Math.max` masking "not found")
+- Unhandled promise rejection in stash state hook
+
+### Refactored
+- Split `graph.ts` into `graph-build.ts`, `graph-render.ts`, `graph-viewport.ts`
+- Split `repo.ts` into `repo-git.ts`, `repo-diff.ts`, `repo-status.ts`
+- Decomposed `buildGraph` main loop into `assignNodeColumn`, `buildBaseConnectors`, `buildFanOutRows`, `resolveParentLanes`, `buildRelationEntries`
+- Extracted hooks: `useDataLoader`, `useDetailLoader`, `useClipboard`, `useFileTree`, `useStashState`, `useMenuItems`, `useBannerScroll`, `useT`
+- Extracted components: `KeyHint`, `FileTreeEntry`, `StashEntry`, `TotalLinesChangedRow`, `DetailPanel`, `CopyableRow`
+- Extracted utilities: `scrollElementIntoView`, `buildDiffTarget`, `isUncommittedHash`, `detail-cursor` helpers
+- Extracted CLI parsing into `src/cli/` module
+- Removed deprecated `computeViewportOffsets`
+- Removed dead code: unused exports, stale signals, redundant destructures
+- Eliminated cross-file duplication (~400 lines removed across clipboard, file-tree, scroll, theme access, and key-hint patterns)
+
 ## [0.0.2] - 2026-04-03
 
 ### Fixed

@@ -1,10 +1,11 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
-import { useKeyboard, useRenderer } from "@opentui/solid";
+import { useKeyboard, useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, type JSX, onCleanup, Show } from "solid-js";
 import { useAppState } from "../../context/state";
-import { useTheme } from "../../context/theme";
 import { getFileBlame, getFileDiff } from "../../git/repo";
 import type { BlameLine, DiffTarget, FileDiff } from "../../git/types";
+import { useT } from "../../hooks/use-t";
+import { KeyHint } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 import { buildRowOffsets, computeDiffStats, findLineAtRow, formatHunkHeader } from "./diff-utils";
 import { buildDiffTitleParts, TITLE_SEP } from "./title-utils";
@@ -90,9 +91,8 @@ function buildGutter(line: DisplayLine, oldWidth: number, newWidth: number): str
 
 export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
   const { state } = useAppState();
-  const { theme } = useTheme();
-  const t = () => theme();
-  const renderer = useRenderer();
+  const t = useT();
+  const dimensions = useTerminalDimensions();
 
   // ── State ──────────────────────────────────────────────────────────
   const [diff, setDiff] = createSignal<FileDiff | null>(null);
@@ -207,7 +207,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
   });
 
   // ── Dialog sizing ──────────────────────────────────────────────────
-  const dialogWidth = createMemo(() => Math.min(Math.max(40, Math.floor(renderer.width * 0.85)), MAX_DIALOG_WIDTH));
+  const dialogWidth = createMemo(() => Math.min(Math.max(72, Math.floor(dimensions().width * 0.85)), MAX_DIALOG_WIDTH));
 
   // ── Windowed rendering ─────────────────────────────────────────────
   // Track scroll position reactively via the scrollbar's "change" event.
@@ -257,7 +257,8 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
    * terminal height for tall diffs. Falls back to max height while loading.
    */
   const dialogHeight = createMemo(() => {
-    const maxH = Math.max(10, Math.floor(renderer.height * 0.9));
+    const cap = dimensions().height - 8;
+    const maxH = Math.min(Math.max(10, Math.floor(dimensions().height * 0.9)), cap);
     const rows = totalRows();
     // rows === 0 means loading / binary / empty — use full height
     if (rows === 0) return maxH;
@@ -643,37 +644,12 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
             </text>
           </Show>
           <Show when={hasMultipleFiles()}>
-            <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-              {"\u2190/\u2192"}
-            </text>
-            <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-              {" file  "}
-            </text>
+            <KeyHint key={"\u2190/\u2192"} desc=" file  " />
           </Show>
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            {"\u2191/\u2193"}
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {" scroll  "}
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            b
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {showBlame() ? " hide blame  " : " show blame  "}
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            c
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {` ${VIEW_MODE_NEXT_LABEL[viewMode()]}  `}
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            g/G
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {" top/bottom"}
-          </text>
+          <KeyHint key={"\u2191/\u2193"} desc=" scroll  " />
+          <KeyHint key="b" desc={showBlame() ? " hide blame  " : " show blame  "} />
+          <KeyHint key="c" desc={` ${VIEW_MODE_NEXT_LABEL[viewMode()]}  `} />
+          <KeyHint key="g/G" desc=" top/bottom" />
         </DialogFooter>
       </box>
     </DialogOverlay>

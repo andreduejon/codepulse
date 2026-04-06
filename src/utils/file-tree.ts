@@ -64,8 +64,8 @@ export function buildFileTree(files: FileChange[]): FileTreeNode {
   // Compact single-child directory chains
   // (e.g. src/ → components/ → dialogs/ becomes src/components/dialogs/)
   const compact = (n: FileTreeNode) => {
-    for (let i = 0; i < n.children.length; i++) {
-      const child = n.children[i];
+    for (const element of n.children) {
+      const child = element;
       if (child.file) continue;
       while (child.children.length === 1 && !child.children[0].file) {
         const grandchild = child.children[0];
