@@ -1,6 +1,7 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { batch, createEffect, createMemo, createSignal, onCleanup, onMount, Show, untrack } from "solid-js";
+import packageJson from "../package.json";
 import DetailPanel, { type DetailPanelProps } from "./components/detail-panel";
 import type { DetailNavRef } from "./components/detail-types";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./components/dialogs/dialog-chrome";
@@ -703,6 +704,9 @@ function AppContent(props: Readonly<AppProps>) {
                       </text>
                     </Show>
                     <box flexGrow={1} />
+                    <text flexShrink={0} wrapMode="none" fg={themeState.theme().foregroundMuted}>
+                      {`codepulse v${packageJson.version}`}
+                    </text>
                   </box>
                 </box>
 

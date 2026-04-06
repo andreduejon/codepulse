@@ -111,7 +111,7 @@ export default function Footer(
                   enter
                 </text>
                 <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                  {" details  "}
+                  {" show details  "}
                 </text>
               </>
             }

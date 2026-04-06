@@ -1,6 +1,5 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { For, Show } from "solid-js";
-import packageJson from "../../package.json";
 import { UNCOMMITTED_HASH } from "../constants";
 import { useAppState } from "../context/state";
 import { useTheme } from "../context/theme";
@@ -129,14 +128,6 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
           <CommitDetailView onJumpToCommit={props.onJumpToCommit} onOpenDiff={props.onOpenDiff} navRef={props.navRef} />
         </Show>
       </scrollbox>
-
-      {/* Version — bottom-right, subtle */}
-      <box flexDirection="row" width="100%">
-        <box flexGrow={1} />
-        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-          {`v${packageJson.version}`}
-        </text>
-      </box>
     </>
   );
 }
