@@ -85,14 +85,11 @@ export interface MenuItemsOptions {
 export interface MenuItemsResult {
   activeItems: Accessor<SettingItem[]>;
   selectedItemIndex: Accessor<number | undefined>;
-  repoItems: Accessor<SettingItem[]>;
-  branchItems: Accessor<SettingItem[]>;
   branchTrackWidths: Accessor<{ addColWidth: number; delColWidth: number }>;
   /** Overflow chars for the currently-selected copyable item (for banner scroll). */
   bannerOverflow: Accessor<number>;
   moveCursor: (delta: number) => void;
   activateItem: () => void;
-  activateItemAt: (itemIdx: number) => void;
   valueDisplay: (item: SettingItem) => string;
   footerVerb: () => string;
 }
@@ -470,13 +467,10 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
   return {
     activeItems,
     selectedItemIndex,
-    repoItems,
-    branchItems,
     branchTrackWidths,
     bannerOverflow,
     moveCursor,
     activateItem,
-    activateItemAt,
     valueDisplay,
     footerVerb,
   };
