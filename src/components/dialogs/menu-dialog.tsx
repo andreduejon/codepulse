@@ -9,6 +9,7 @@ import { DEFAULT_AUTO_REFRESH_INTERVAL, useAppState } from "../../context/state"
 import { themes, useTheme } from "../../context/theme";
 import { getColorForColumn } from "../../git/graph";
 import { useBannerScroll } from "../../hooks/use-banner-scroll";
+import { useClipboard } from "../../hooks/use-clipboard";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
 type MenuTab = "repository" | "branch";
@@ -88,41 +89,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   });
 
   // ── Clipboard feedback ────────────────────────────────────────────
-  const [copiedLabel, setCopiedLabel] = createSignal<string | null>(null);
-  let copiedTimer: ReturnType<typeof setTimeout> | undefined;
-
-  const copyToClipboard = (text: string, label: string) => {
-    try {
-      // Cross-platform clipboard: pbcopy (macOS), xclip (Linux), clip.exe (WSL/Windows)
-      const platform = process.platform;
-      let cmd: string[];
-      if (platform === "darwin") {
-        cmd = ["pbcopy"];
-      } else if (platform === "win32") {
-        cmd = ["clip.exe"];
-      } else {
-        // Linux / WSL fallback
-        cmd = ["xclip", "-selection", "clipboard"];
-      }
-      const proc = Bun.spawn(cmd, { stdin: new Response(text).body });
-      // Kill after 5s to prevent zombie if clipboard utility hangs (e.g. xclip without X11)
-      const killTimer = setTimeout(() => {
-        try {
-          proc.kill();
-        } catch {}
-      }, 5000);
-      proc.exited.then(() => clearTimeout(killTimer)).catch(() => clearTimeout(killTimer));
-    } catch {
-      // Clipboard utility not available — silently ignore
-    }
-    setCopiedLabel(label);
-    if (copiedTimer) clearTimeout(copiedTimer);
-    copiedTimer = setTimeout(() => setCopiedLabel(null), 1500);
-  };
-
-  onCleanup(() => {
-    if (copiedTimer) clearTimeout(copiedTimer);
-  });
+  const { copiedId: copiedLabel, copyToClipboard } = useClipboard();
 
   // ── Config save feedback ──────────────────────────────────────────
   const [savedFeedback, setSavedFeedback] = createSignal<string | null>(null);

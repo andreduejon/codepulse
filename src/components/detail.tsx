@@ -1,11 +1,12 @@
 import { useTerminalDimensions } from "@opentui/solid";
-import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
 import { DETAIL_PANEL_WIDTH_FRACTION, UNCOMMITTED_HASH } from "../constants";
 import { useAppState } from "../context/state";
 import { useTheme } from "../context/theme";
 import { getStashFiles } from "../git/repo";
 import type { Commit, FileChange, GraphRow } from "../git/types";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
+import { useClipboard } from "../hooks/use-clipboard";
 import type { FileTreeNode, FileTreeRow } from "../utils/file-tree";
 import { buildFileTree, flattenFileTree } from "../utils/file-tree";
 import DetailBadge from "./detail-badge";
@@ -150,38 +151,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   const isUncommitted = () => commit()?.hash === UNCOMMITTED_HASH;
 
   // ── Clipboard copy with "✓ copied" feedback ────────────────────────
-  const [copiedField, setCopiedField] = createSignal<CopyableField | null>(null);
-  let copiedTimer: ReturnType<typeof setTimeout> | undefined;
-
-  const copyToClipboard = (text: string, field: CopyableField) => {
-    try {
-      const platform = process.platform;
-      let cmd: string[];
-      if (platform === "darwin") {
-        cmd = ["pbcopy"];
-      } else if (platform === "win32") {
-        cmd = ["clip.exe"];
-      } else {
-        cmd = ["xclip", "-selection", "clipboard"];
-      }
-      const proc = Bun.spawn(cmd, { stdin: new Response(text).body });
-      const killTimer = setTimeout(() => {
-        try {
-          proc.kill();
-        } catch {}
-      }, 5000);
-      proc.exited.then(() => clearTimeout(killTimer)).catch(() => clearTimeout(killTimer));
-      setCopiedField(field);
-      if (copiedTimer) clearTimeout(copiedTimer);
-      copiedTimer = setTimeout(() => setCopiedField(null), 1500);
-    } catch {
-      // Clipboard utility not available — silently ignore
-    }
-  };
-
-  onCleanup(() => {
-    if (copiedTimer) clearTimeout(copiedTimer);
-  });
+  const { copiedId: copiedField, copyToClipboard } = useClipboard<CopyableField>();
 
   /** Get the text to copy for a given copyable field. */
   const getCopyableText = (field: CopyableField): string => {
