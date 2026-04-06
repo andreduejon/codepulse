@@ -7,9 +7,7 @@ import type { Theme } from "../context/theme";
  * Both CommitDetailView and UncommittedDetailView render interactive item
  * lists with cursor highlighting. These functions capture the shared pattern:
  * pure functions of `state` and the current theme.
- */
-
-/**
+ *
  * Returns the highlight background color for item at `itemIndex`,
  * or undefined if it is not the currently-cursored item.
  */

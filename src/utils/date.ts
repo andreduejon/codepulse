@@ -71,7 +71,7 @@ export function formatRelativeDate(dateStr: string): string {
     }
   }
 
-  // Evict oldest entries if cache is full
+  // Evict the oldest entries if cache is full
   if (dateFormatCache.size >= DATE_CACHE_MAX) {
     evictDateCache();
   }

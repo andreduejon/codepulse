@@ -330,7 +330,7 @@ function AppContent(props: Readonly<AppContentProps>) {
                   flexDirection="column"
                   border={["left"]}
                   borderStyle="single"
-                  borderColor={!state.detailFocused() ? themeState.theme().accent : themeState.theme().border}
+                  borderColor={state.detailFocused() ? themeState.theme().border : themeState.theme().accent}
                 >
                   {/* Search input + result count */}
                   <box flexGrow={1} flexDirection="row">

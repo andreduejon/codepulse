@@ -50,7 +50,7 @@ export function parseArgs(argv: string[]): CliOptions {
           process.exit(1);
         }
         const raw = args[++i];
-        const parsed = parseInt(raw, 10);
+        const parsed = Number.parseInt(raw, 10);
         if (Number.isNaN(parsed) || parsed < 1) {
           console.error(`${arg} must be a positive integer, got: ${raw}`);
           process.exit(1);

@@ -7,6 +7,7 @@
  * These are unit tests for the parsing layer — they don't spawn git subprocesses.
  */
 import { describe, expect, test } from "bun:test";
+import { computeFileWidths } from "../src/components/detail-types";
 import {
   parseCommitLine,
   parseDiffTreeOutput,
@@ -17,7 +18,6 @@ import {
   parseTrackInfo,
   RS,
 } from "../src/git/repo";
-import { computeFileWidths } from "../src/components/detail-types";
 
 describe("repo.ts parsing", () => {
   test("parseRefs — empty/blank string returns []", () => {
