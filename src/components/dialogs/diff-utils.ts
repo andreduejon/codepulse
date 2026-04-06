@@ -50,21 +50,17 @@ export function computeDiffStats(hunks: DiffHunk[]): {
 
 // ── Windowed rendering helpers ────────────────────────────────────────
 
-/** Row height of each display line kind. All kinds occupy 1 row. */
-export function lineRowHeight(_kind: DisplayLineKind): number {
-  return 1;
-}
-
 /**
  * Build a prefix-sum array mapping line index → cumulative row offset.
  * `rowOffsets[i]` is the row at which line `i` starts.
  * `rowOffsets[lines.length]` is the total row count.
+ * Each display line kind occupies exactly 1 row.
  */
 export function buildRowOffsets(lines: readonly { kind: DisplayLineKind }[]): number[] {
   const offsets = new Array<number>(lines.length + 1);
   offsets[0] = 0;
   for (let i = 0; i < lines.length; i++) {
-    offsets[i + 1] = offsets[i] + lineRowHeight(lines[i].kind);
+    offsets[i + 1] = offsets[i] + 1;
   }
   return offsets;
 }

@@ -37,7 +37,6 @@ function RefBadge(
   const { theme } = useTheme();
   const t = () => theme();
 
-  const _isStash = () => props.info.type === "stash";
   const isDimmed = () => props.info.type === "stash" || props.info.type === "uncommitted";
 
   const bgColor = () => (isDimmed() ? t().backgroundElementActive : props.laneColor());
