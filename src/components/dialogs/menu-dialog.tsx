@@ -14,6 +14,10 @@ import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
 type MenuTab = "repository" | "branch";
 
+/** Column widths for the menu item value and hotkey display columns. */
+const VALUE_COL_WIDTH = 22;
+const HOTKEY_COL_WIDTH = 9;
+
 interface MenuDialogProps {
   onClose: () => void;
   onReload: () => void;
@@ -290,9 +294,9 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     const paddedVal = () => {
       if (isDisabledAction()) return "";
       const v = val();
-      if (!v) return " ".padStart(22);
-      if (item.kind === "dialog" || item.kind === "action") return v.padStart(22);
-      return `[${v}]`.padStart(22);
+      if (!v) return " ".padStart(VALUE_COL_WIDTH);
+      if (item.kind === "dialog" || item.kind === "action") return v.padStart(VALUE_COL_WIDTH);
+      return `[${v}]`.padStart(VALUE_COL_WIDTH);
     };
     const paddedHotkey = () => {
       if (isDisabledAction()) return "";
@@ -300,7 +304,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
         item.kind === "toggle" || item.kind === "cycle" || item.kind === "dialog" || item.kind === "action"
           ? (item.hotkey ?? "")
           : "";
-      return h.padStart(9);
+      return h.padStart(HOTKEY_COL_WIDTH);
     };
 
     const labelColor = () => (isDisabledAction() ? t().foregroundMuted : isSelected() ? t().accent : t().foreground);
