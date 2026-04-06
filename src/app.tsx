@@ -23,6 +23,7 @@ import {
 import { AppStateContext, createAppState, useAppState } from "./context/state";
 import { createThemeState, ThemeContext, useTheme } from "./context/theme";
 import { buildGraph, getMaxGraphColumns } from "./git/graph";
+import { mergeCommitPages } from "./git/merge-pages";
 import {
   fetchRemote,
   getBranches,
@@ -388,28 +389,8 @@ function AppContent(props: Readonly<AppProps>) {
 
       if (newCommits.length === 0) return;
 
-      // Merge: existing real commits + new page (both exclude uncommitted node)
-      const merged = [...existingCommits, ...newCommits];
-
-      // Re-inject stash badges onto the merged list using the existing stashByParent map
-      const stashByParent = state.stashByParent();
-      for (const [parentHash, stashGroup] of stashByParent) {
-        const parentCommit = merged.find(c => c.hash === parentHash);
-        if (parentCommit && !parentCommit.refs.some(r => r.type === "stash")) {
-          parentCommit.refs.push({
-            name: `stash (${stashGroup.length})`,
-            type: "stash" as const,
-            isCurrent: false,
-          });
-        }
-      }
-
-      // Re-prepend uncommitted node if it was present
-      const hadUncommitted = state.commits()[0]?.hash === UNCOMMITTED_HASH;
-      if (hadUncommitted) {
-        const uncommittedNode = state.commits()[0];
-        merged.unshift(uncommittedNode);
-      }
+      // Merge: existing commits + new page (handles uncommitted node & stash badges)
+      const merged = mergeCommitPages(state.commits(), newCommits, state.stashByParent());
 
       const rows = buildGraph(merged);
 

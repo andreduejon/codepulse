@@ -141,16 +141,16 @@ export function parseCommitLine(line: string, remoteNames: Set<string>): Commit 
   };
 }
 
-export async function getCommits(
-  repoPath: string,
-  options: {
-    maxCount?: number;
-    skip?: number;
-    branch?: string;
-    all?: boolean;
-  } = {},
-  signal?: AbortSignal,
-): Promise<Commit[]> {
+/**
+ * @internal Exported for testing. Build the git-log argument array from options.
+ * Pure function — no I/O.
+ */
+export function buildCommitLogArgs(options: {
+  maxCount?: number;
+  skip?: number;
+  branch?: string;
+  all?: boolean;
+}): string[] {
   const args = [
     "log",
     "--topo-order",
@@ -171,6 +171,21 @@ export async function getCommits(
     // The "--" prevents ambiguity if a file exists with the same name as the branch.
     args.push(options.branch, "--");
   }
+
+  return args;
+}
+
+export async function getCommits(
+  repoPath: string,
+  options: {
+    maxCount?: number;
+    skip?: number;
+    branch?: string;
+    all?: boolean;
+  } = {},
+  signal?: AbortSignal,
+): Promise<Commit[]> {
+  const args = buildCommitLogArgs(options);
 
   const [logResult, remoteNames] = await Promise.all([
     runGit(repoPath, args, signal),
