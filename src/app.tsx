@@ -27,17 +27,16 @@ import { mergeCommitPages } from "./git/merge-pages";
 import {
   fetchRemote,
   getBranches,
-  getCommitDetail,
   getCommits,
   getCurrentBranch,
   getLastFetchTime,
   getRemoteUrl,
   getStashList,
   getTagDetails,
-  getUncommittedDetail,
   getWorkingTreeStatus,
 } from "./git/repo";
 import type { Commit, DiffTarget } from "./git/types";
+import { useDetailLoader } from "./hooks/use-detail-loader";
 import { useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
 
 interface AppProps {
@@ -467,150 +466,18 @@ function AppContent(props: Readonly<AppProps>) {
     if (autoRefreshTimer) clearInterval(autoRefreshTimer);
   });
 
-  // Load commit detail when cursor changes (with debounce + abort of stale loads).
-  // The debounce prevents spawning git subprocesses during rapid navigation
-  // (e.g. trackpad scroll, which has natural micro-pauses of 100–300ms between
-  // inertial batches that would defeat shorter debounce windows).
-  let detailAbortCtrl: AbortController | null = null;
-  let detailDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-  const DETAIL_DEBOUNCE_MS = 150;
-
-  createEffect(() => {
-    const commit = state.selectedCommit();
-
-    // Cancel any pending debounce and abort in-flight git subprocesses
-    if (detailDebounceTimer) {
-      clearTimeout(detailDebounceTimer);
-      detailDebounceTimer = null;
-    }
-    if (detailAbortCtrl) {
-      detailAbortCtrl.abort();
-      detailAbortCtrl = null;
-    }
-
-    if (!commit) {
-      actions.setCommitDetail(null);
-      actions.setUncommittedDetail(null);
-      actions.setDetailLoading(false);
-      return;
-    }
-
-    const isUncommitted = commit.hash === UNCOMMITTED_HASH;
-
-    // Reset active tab — but preserve it on child/parent jump navigation
-    // so the user stays on the Details tab when walking the commit graph.
-    // isJumpNavigation is a plain JS flag set synchronously by handleJumpToCommit
-    // around the setCursorIndex call. Since SolidJS effects run synchronously when
-    // a signal updates, this flag is still true when this effect fires.
-    if (isJumpNavigation) {
-      // Jump — keep current tab, don't reset cursor (detail.tsx cursor effect
-      // will position it on the correct parent/child entry using pendingJumpDirection).
-    } else {
-      actions.setDetailActiveTab(isUncommitted ? "unstaged" : "files");
-      actions.setDetailCursorIndex(0);
-      // Clear any stale jump direction on normal (non-jump) navigation
-      detailNavRef.pendingJumpDirection = null;
-    }
-
-    // Clear stale detail immediately so the old file tree nodes are removed
-    // from the render tree during scroll (a 334-file commit's tree = ~3K nodes).
-    actions.setCommitDetail(null);
-    actions.setUncommittedDetail(null);
-    actions.setDetailLoading(true);
-
-    // Debounce the detail load to avoid spawning git subprocesses on rapid navigation
-    detailDebounceTimer = setTimeout(async () => {
-      detailDebounceTimer = null;
-      const ctrl = new AbortController();
-      detailAbortCtrl = ctrl;
-      try {
-        if (isUncommitted) {
-          // Uncommitted node: load staged/unstaged/untracked file lists in parallel
-          const ud = await getUncommittedDetail(props.repoPath, ctrl.signal);
-          if (!ctrl.signal.aborted) {
-            actions.setUncommittedDetail(ud);
-            // Also set a basic CommitDetail so any fallback code still has commit info
-            actions.setCommitDetail({ ...commit, files: [...ud.staged, ...ud.unstaged, ...ud.untracked] });
-            actions.setDetailLoading(false);
-          }
-        } else {
-          const detail = await getCommitDetail(props.repoPath, commit.hash, commit, ctrl.signal);
-          if (!ctrl.signal.aborted) {
-            actions.setCommitDetail(detail);
-            actions.setDetailLoading(false);
-          }
-        }
-      } catch (err) {
-        if (!ctrl.signal.aborted) {
-          actions.setCommitDetail(null);
-          actions.setUncommittedDetail(null);
-          actions.setDetailLoading(false);
-          actions.setError(err instanceof Error ? err.message : String(err));
-        }
-      }
-    }, DETAIL_DEBOUNCE_MS);
-  });
-  onCleanup(() => {
-    if (detailDebounceTimer) {
-      clearTimeout(detailDebounceTimer);
-      detailDebounceTimer = null;
-    }
-    if (detailAbortCtrl) {
-      detailAbortCtrl.abort();
-      detailAbortCtrl = null;
-    }
+  // Load commit detail when cursor changes (with debounce + abort of stale loads),
+  // and auto-switch away from empty tabs after detail data arrives.
+  useDetailLoader({
+    repoPath: props.repoPath,
+    getIsJumpNavigation: () => isJumpNavigation,
+    detailNavRef,
   });
 
   // Scroll detail panel to top when active tab changes
   createEffect(() => {
     state.detailActiveTab(); // track
     detailScrollboxRef?.scrollTo(0);
-  });
-
-  // Auto-switch away from empty tabs after detail data loads.
-  // Finds the first non-disabled tab if the current tab has 0 items.
-  createEffect(() => {
-    const cd = state.commitDetail();
-    const ud = state.uncommittedDetail();
-    const tab = state.detailActiveTab();
-    const commit = state.selectedCommit();
-    if (!commit) return;
-
-    const isUncommitted = commit.hash === UNCOMMITTED_HASH;
-
-    // Check if current tab is empty
-    let isEmpty = false;
-    if (isUncommitted && ud) {
-      if (tab === "unstaged") isEmpty = ud.unstaged.length === 0;
-      else if (tab === "staged") isEmpty = ud.staged.length === 0;
-      else if (tab === "untracked") isEmpty = ud.untracked.length === 0;
-    } else if (!isUncommitted && cd) {
-      if (tab === "files") isEmpty = cd.files.length === 0;
-    }
-
-    if (!isEmpty) return;
-
-    // Find first non-empty tab to switch to
-    if (isUncommitted && ud) {
-      if (ud.unstaged.length > 0) {
-        actions.setDetailActiveTab("unstaged");
-        return;
-      }
-      if (ud.staged.length > 0) {
-        actions.setDetailActiveTab("staged");
-        return;
-      }
-      if (ud.untracked.length > 0) {
-        actions.setDetailActiveTab("untracked");
-        return;
-      }
-    } else if (!isUncommitted) {
-      if (cd && cd.files.length > 0) {
-        actions.setDetailActiveTab("files");
-        return;
-      }
-      actions.setDetailActiveTab("detail");
-    }
   });
 
   // Live debounced search: update the active filter 150ms after the user stops typing.
