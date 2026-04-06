@@ -8,7 +8,8 @@ import { getStashFiles } from "../git/repo";
 import type { Commit, FileChange, GraphRow } from "../git/types";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
 import { useClipboard } from "../hooks/use-clipboard";
-import type { FileTreeNode, FileTreeRow } from "../utils/file-tree";
+import { useFileTree } from "../hooks/use-file-tree";
+import type { FileTreeRow } from "../utils/file-tree";
 import { buildFileTree, flattenFileTree } from "../utils/file-tree";
 import DetailBadge from "./detail-badge";
 import type { DetailViewProps } from "./detail-types";
@@ -184,21 +185,13 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     return computeFileWidths(d.files);
   });
 
-  // Build file tree from flat file paths
-  const fileTree = createMemo((): FileTreeNode => {
-    const d = detail();
-    if (!d) return { name: "/", fullPath: "/", children: [] };
-    return buildFileTree(d.files);
-  });
-
-  // Collapsed directory paths (tracked by fullPath)
-  const [collapsedDirs, setCollapsedDirs] = createSignal(new Set<string>());
-
-  // Reset collapsed dirs when commit changes
-  createEffect(() => {
-    commit();
-    setCollapsedDirs(new Set<string>());
-  });
+  // File tree state — resets collapsed dirs when commit changes
+  const {
+    fileTree: _fileTree,
+    fileTreeRows,
+    collapsedDirs,
+    toggleDir,
+  } = useFileTree(() => detail()?.files ?? [], commit);
 
   // ── Stash section state ─────────────────────────────────────────────
   /** Stash entries for the currently selected commit (from stashByParent map). */
@@ -272,17 +265,6 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     if (!files) return { totalAdd: 0, totalDel: 0, addColWidth: 2, delColWidth: 2 };
     return computeFileWidths(files);
   };
-
-  /** Toggle a directory's collapsed state */
-  const toggleDir = (dirPath: string) => {
-    const next = new Set(collapsedDirs());
-    if (next.has(dirPath)) next.delete(dirPath);
-    else next.add(dirPath);
-    setCollapsedDirs(next);
-  };
-
-  // Flatten tree into renderable rows with connector prefixes
-  const fileTreeRows = createMemo((): FileTreeRow[] => flattenFileTree(fileTree(), collapsedDirs()));
 
   // ── Build flat list of interactive items (tab-aware) ──
   // IMPORTANT: This memo must be defined AFTER fileTreeRows, stashEntries,

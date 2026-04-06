@@ -1,12 +1,11 @@
 import { useTerminalDimensions } from "@opentui/solid";
-import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
+import { createEffect, createMemo, For, Show } from "solid-js";
 import { DETAIL_PANEL_WIDTH_FRACTION } from "../constants";
 import { useAppState } from "../context/state";
 import { useTheme } from "../context/theme";
 import type { DiffSource } from "../git/types";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
-import type { FileTreeNode, FileTreeRow } from "../utils/file-tree";
-import { buildFileTree, flattenFileTree } from "../utils/file-tree";
+import { useFileTree } from "../hooks/use-file-tree";
 import type { DetailViewProps } from "./detail-types";
 import {
   computeFileWidths,
@@ -56,31 +55,8 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
     return computeFileWidths(files);
   });
 
-  // Build file tree from flat file paths
-  const fileTree = createMemo((): FileTreeNode => {
-    const files = activeFiles();
-    if (files.length === 0) return { name: "/", fullPath: "/", children: [] };
-    return buildFileTree(files);
-  });
-
-  // Collapsed directory paths (tracked by fullPath)
-  const [collapsedDirs, setCollapsedDirs] = createSignal(new Set<string>());
-
-  // Reset collapsed dirs when tab changes
-  createEffect(() => {
-    activeTab();
-    setCollapsedDirs(new Set<string>());
-  });
-
-  const toggleDir = (dirPath: string) => {
-    const next = new Set(collapsedDirs());
-    if (next.has(dirPath)) next.delete(dirPath);
-    else next.add(dirPath);
-    setCollapsedDirs(next);
-  };
-
-  // Flatten tree into renderable rows
-  const fileTreeRows = createMemo((): FileTreeRow[] => flattenFileTree(fileTree(), collapsedDirs()));
+  // File tree state — resets collapsed dirs when active tab changes
+  const { fileTreeRows, collapsedDirs, toggleDir } = useFileTree(activeFiles, activeTab);
 
   // ── Build flat list of interactive items ──
   const interactiveItems = createMemo((): UncommittedItem[] => {
