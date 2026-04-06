@@ -26,6 +26,8 @@ import {
   STATUS_COL_WIDTH,
 } from "./detail-types";
 import { FileTreeEntry } from "./file-tree-entry";
+import type { StashFileRowData } from "./stash-entry";
+import { StashEntry } from "./stash-entry";
 
 // ── Layout constants ────────────────────────────────────────────────
 /** Minimum panel width in characters before padding is subtracted. */
@@ -1187,7 +1189,6 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   const cursored = () => isCursored(itemIdx());
                   const expanded = () => expandedStashes().has(stash.hash);
                   const label = () => stash.refs[0]?.name ?? "stash";
-                  const fileCount = () => stashFileCache().get(stash.hash)?.length;
 
                   /** Banner scroll for the stash header label when cursored */
                   const scrolledHeaderText = () => {
@@ -1203,85 +1204,43 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   const stashFileRows = () => getStashFileTreeRows(stash.hash);
                   const stashFw = () => getStashFileWidths(stash.hash);
 
+                  /** Pre-compute per-file row display data for StashEntry */
+                  const fileRowsData = (): StashFileRowData[] =>
+                    stashFileRows().map((treeRow, fi) => {
+                      const fileItemIdx = findItemIndex(treeRow.isDir ? "stash-dir" : "stash-file", stash.hash, fi);
+                      const fileCursored = isCursored(fileItemIdx);
+                      const fileCollapsed =
+                        treeRow.isDir && (stashCollapsedDirs().get(stash.hash)?.has(treeRow.dirPath) ?? false);
+                      const scrolledFileName = (): string | null => {
+                        if (!fileCursored) return null;
+                        const info = cursoredTextInfo();
+                        if (!info || info.text !== treeRow.name) return null;
+                        const off = bannerOffset();
+                        return treeRow.name.substring(off, off + info.visibleWidth);
+                      };
+                      return {
+                        row: treeRow,
+                        cursored: fileCursored,
+                        collapsed: fileCollapsed,
+                        highlightBg: itemHighlightBg(fileItemIdx),
+                        scrolledName: scrolledFileName(),
+                      };
+                    });
+
                   return (
-                    <>
-                      {/* Spacer between stash entries (not before the first one) */}
-                      <Show when={si() > 0}>
-                        <box height={1} />
-                      </Show>
-
-                      {/* Stash entry header — label + file count only */}
-                      <box backgroundColor={itemHighlightBg(itemIdx())}>
-                        <text fg={t().accent} wrapMode="none" truncate={scrolledHeaderText() == null}>
-                          <strong>
-                            {expanded() ? "▾" : "▸"} {scrolledHeaderText() ?? label()}
-                            {fileCount() != null ? ` (${fileCount()})` : ""}
-                          </strong>
-                        </text>
-                      </box>
-
-                      {/* Expanded area: description + total lines changed + file tree */}
-                      <Show when={expanded()}>
-                        {/* Stash description (subject line) */}
-                        <box paddingLeft={ENTRY_PADDING_LEFT}>
-                          <text fg={t().foregroundMuted} wrapMode="none" truncate>
-                            {stash.subject}
-                          </text>
-                        </box>
-                        <box height={1} />
-
-                        {/* Total lines changed (only after files are loaded) */}
-                        <Show when={stashFw().totalAdd > 0 || stashFw().totalDel > 0}>
-                          <box flexDirection="row">
-                            <box flexGrow={1}>
-                              <text fg={t().foregroundMuted} wrapMode="none">
-                                total lines changed
-                              </text>
-                            </box>
-                            <box flexShrink={0} width={2} />
-                            <box flexShrink={0} paddingLeft={1}>
-                              <text fg={t().diffAdded} wrapMode="none">
-                                +{stashFw().totalAdd}
-                              </text>
-                            </box>
-                            <box flexShrink={0} paddingLeft={1}>
-                              <text fg={t().diffRemoved} wrapMode="none">
-                                -{stashFw().totalDel}
-                              </text>
-                            </box>
-                          </box>
-                        </Show>
-                        <For each={stashFileRows()}>
-                          {(treeRow, fi) => {
-                            const fileItemIdx = () =>
-                              findItemIndex(treeRow.isDir ? "stash-dir" : "stash-file", stash.hash, fi());
-                            const fileCursored = () => isCursored(fileItemIdx());
-                            const fileCollapsed = () =>
-                              treeRow.isDir && (stashCollapsedDirs().get(stash.hash)?.has(treeRow.dirPath) ?? false);
-
-                            const scrolledFileName = () => {
-                              if (!fileCursored()) return null;
-                              const info = cursoredTextInfo();
-                              if (!info || info.text !== treeRow.name) return null;
-                              const off = bannerOffset();
-                              return treeRow.name.substring(off, off + info.visibleWidth);
-                            };
-
-                            return (
-                              <FileTreeEntry
-                                row={treeRow}
-                                cursored={fileCursored()}
-                                collapsed={fileCollapsed()}
-                                highlightBg={itemHighlightBg(fileItemIdx())}
-                                scrolledName={scrolledFileName()}
-                                addColWidth={stashFw().addColWidth}
-                                delColWidth={stashFw().delColWidth}
-                              />
-                            );
-                          }}
-                        </For>
-                      </Show>
-                    </>
+                    <StashEntry
+                      stash={stash}
+                      showSpacer={si() > 0}
+                      expanded={expanded()}
+                      headerHighlightBg={itemHighlightBg(itemIdx())}
+                      scrolledHeaderText={scrolledHeaderText()}
+                      fileRows={fileRowsData()}
+                      fileCount={stashFileCache().get(stash.hash)?.length}
+                      addColWidth={stashFw().addColWidth}
+                      delColWidth={stashFw().delColWidth}
+                      totalAdd={stashFw().totalAdd}
+                      totalDel={stashFw().totalDel}
+                    />
                   );
                 }}
               </For>
