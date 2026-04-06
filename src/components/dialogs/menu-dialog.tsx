@@ -10,6 +10,7 @@ import { themes, useTheme } from "../../context/theme";
 import { getColorForColumn } from "../../git/graph";
 import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useClipboard } from "../../hooks/use-clipboard";
+import { KeyHint } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
 type MenuTab = "repository" | "branch";
@@ -820,22 +821,9 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
 
         {/* Context-aware footer */}
         <DialogFooter>
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            enter
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>{` ${footerVerb()}  `}</text>
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            ←/→
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {" switch tab  "}
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            ↑/↓
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {" navigate"}
-          </text>
+          <KeyHint key="enter" desc={` ${footerVerb()}  `} />
+          <KeyHint key="←/→" desc=" switch tab  " />
+          <KeyHint key="↑/↓" desc=" navigate" />
         </DialogFooter>
       </box>
     </DialogOverlay>

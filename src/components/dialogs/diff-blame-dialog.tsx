@@ -5,6 +5,7 @@ import { useAppState } from "../../context/state";
 import { useTheme } from "../../context/theme";
 import { getFileBlame, getFileDiff } from "../../git/repo";
 import type { BlameLine, DiffTarget, FileDiff } from "../../git/types";
+import { KeyHint } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 import { buildRowOffsets, computeDiffStats, findLineAtRow, formatHunkHeader } from "./diff-utils";
 import { buildDiffTitleParts, TITLE_SEP } from "./title-utils";
@@ -644,37 +645,12 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
             </text>
           </Show>
           <Show when={hasMultipleFiles()}>
-            <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-              {"\u2190/\u2192"}
-            </text>
-            <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-              {" file  "}
-            </text>
+            <KeyHint key={"\u2190/\u2192"} desc=" file  " />
           </Show>
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            {"\u2191/\u2193"}
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {" scroll  "}
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            b
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {showBlame() ? " hide blame  " : " show blame  "}
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            c
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {` ${VIEW_MODE_NEXT_LABEL[viewMode()]}  `}
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            g/G
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {" top/bottom"}
-          </text>
+          <KeyHint key={"\u2191/\u2193"} desc=" scroll  " />
+          <KeyHint key="b" desc={showBlame() ? " hide blame  " : " show blame  "} />
+          <KeyHint key="c" desc={` ${VIEW_MODE_NEXT_LABEL[viewMode()]}  `} />
+          <KeyHint key="g/G" desc=" top/bottom" />
         </DialogFooter>
       </box>
     </DialogOverlay>

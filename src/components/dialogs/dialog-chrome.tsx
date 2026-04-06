@@ -1,5 +1,6 @@
 import type { JSX } from "solid-js";
 import { useTheme } from "../../context/theme";
+import { KeyHint } from "../key-hint";
 
 /**
  * Full-screen semi-transparent overlay that centers its children.
@@ -46,12 +47,7 @@ export function DialogTitleBar(props: Readonly<{ title: string | JSX.Element }>)
             props.title
           )}
         </text>
-        <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-          esc
-        </text>
-        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-          {" close"}
-        </text>
+        <KeyHint key="esc" desc=" close" />
       </box>
       <box height={1} flexShrink={0} />
     </>

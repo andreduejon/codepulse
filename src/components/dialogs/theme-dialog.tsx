@@ -2,6 +2,7 @@ import { useKeyboard, useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createSignal, For, onCleanup } from "solid-js";
 import { SHIFT_JUMP } from "../../constants";
 import { themeNames, themes, useTheme } from "../../context/theme";
+import { KeyHint } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
 /** Pre-computed theme options — themeNames and themes are module-level constants. */
@@ -107,18 +108,8 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void }>) {
 
         {/* Navigation footer */}
         <DialogFooter>
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            enter
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {" confirm  "}
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            ↑/↓
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {" navigate"}
-          </text>
+          <KeyHint key="enter" desc=" confirm  " />
+          <KeyHint key="↑/↓" desc=" navigate" />
         </DialogFooter>
       </box>
     </DialogOverlay>

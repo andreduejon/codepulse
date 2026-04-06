@@ -1,6 +1,7 @@
 import { createEffect, createSignal, onCleanup, Show } from "solid-js";
 import { useAppState } from "../context/state";
 import { useTheme } from "../context/theme";
+import { KeyHint } from "./key-hint";
 
 /** Full braille rotation spinner — 8 frames, smooth circular motion. */
 const SPINNER_FRAMES = ["\u28FE", "\u28FD", "\u28FB", "\u28BF", "\u287F", "\u283F", "\u28EF", "\u28F7"];
@@ -66,87 +67,25 @@ export default function Footer(
           when={!props.searchFocused}
           fallback={
             <>
-              <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-                enter
-              </text>
-              <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                {" confirm  "}
-              </text>
-              <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-                esc
-              </text>
-              <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                {" cancel"}
-              </text>
+              <KeyHint key="enter" desc=" confirm  " />
+              <KeyHint key="esc" desc=" cancel" />
             </>
           }
         >
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            {enterAction() ? "enter" : ""}
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {enterAction() ? ` ${enterAction()}  ` : ""}
-          </text>
+          <KeyHint key={enterAction() ? "enter" : ""} desc={enterAction() ? ` ${enterAction()}  ` : ""} />
           <Show when={state.detailFocused()}>
-            <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-              esc
-            </text>
-            <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-              {" back  "}
-            </text>
+            <KeyHint key="esc" desc=" back  " />
           </Show>
           <Show when={props.filterActive && !state.detailFocused()}>
-            <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-              esc
-            </text>
-            <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-              {" clear  "}
-            </text>
+            <KeyHint key="esc" desc=" clear  " />
           </Show>
-          <Show
-            when={!props.compact}
-            fallback={
-              <>
-                <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-                  enter
-                </text>
-                <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                  {" show details  "}
-                </text>
-              </>
-            }
-          >
-            <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-              {"\u2190/\u2192"}
-            </text>
-            <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-              {" switch tab  "}
-            </text>
+          <Show when={!props.compact} fallback={<KeyHint key="enter" desc=" show details  " />}>
+            <KeyHint key={"\u2190/\u2192"} desc=" switch tab  " />
           </Show>
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            {"\u2191/\u2193"}
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {" navigate  "}
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            /
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {" search  "}
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            m
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {" menu  "}
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            ?
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {" help"}
-          </text>
+          <KeyHint key={"\u2191/\u2193"} desc=" navigate  " />
+          <KeyHint key="/" desc=" search  " />
+          <KeyHint key="m" desc=" menu  " />
+          <KeyHint key="?" desc=" help" />
         </Show>
       </box>
       <box height={1} />
