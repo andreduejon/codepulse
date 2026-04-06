@@ -20,3 +20,6 @@ export const COMPACT_THRESHOLD_WIDTH = 180;
 
 /** Sentinel hash used for the synthetic "uncommitted changes" node. */
 export const UNCOMMITTED_HASH = "0".repeat(40);
+
+/** Placeholder text shown in columns where the uncommitted node has no real value. */
+export const UNCOMMITTED_PLACEHOLDER = "\u00b7".repeat(7);

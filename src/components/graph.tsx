@@ -7,6 +7,7 @@ import {
   DATE_COL_WIDTH,
   DETAIL_PANEL_WIDTH_FRACTION,
   HASH_COL_WIDTH,
+  UNCOMMITTED_PLACEHOLDER,
 } from "../constants";
 import { useAppState } from "../context/state";
 import {
@@ -429,7 +430,7 @@ function GraphLine(
         <box flexShrink={0} width={AUTHOR_COL_WIDTH} paddingRight={2} overflow="hidden">
           <text fg={secondaryColumnColor()} wrapMode="none" truncate>
             {(() => {
-              const v = isUncommitted() ? "\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7" : commit().author;
+              const v = isUncommitted() ? UNCOMMITTED_PLACEHOLDER : commit().author;
               return props.active ? (
                 <strong>
                   <span fg={secondaryColumnColor()}>{v}</span>
@@ -445,9 +446,7 @@ function GraphLine(
         <box flexShrink={0} width={DATE_COL_WIDTH} overflow="hidden">
           <text fg={secondaryColumnColor()} wrapMode="none" truncate>
             {(() => {
-              const v = isUncommitted()
-                ? "\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7"
-                : formatRelativeDate(commit().authorDate);
+              const v = isUncommitted() ? UNCOMMITTED_PLACEHOLDER : formatRelativeDate(commit().authorDate);
               return props.active ? (
                 <strong>
                   <span fg={secondaryColumnColor()}>{v}</span>

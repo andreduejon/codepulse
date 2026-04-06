@@ -1,7 +1,7 @@
 import { useTerminalDimensions } from "@opentui/solid";
 import type { JSXElement } from "solid-js";
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
-import { DETAIL_PANEL_WIDTH_FRACTION, UNCOMMITTED_HASH } from "../constants";
+import { DETAIL_PANEL_WIDTH_FRACTION, UNCOMMITTED_HASH, UNCOMMITTED_PLACEHOLDER } from "../constants";
 import { useAppState } from "../context/state";
 import type { Commit, GraphRow } from "../git/types";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
@@ -925,7 +925,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 when={!isUncommitted()}
                 fallback={
                   <text fg={t().foregroundMuted} wrapMode="none">
-                    {"\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7"}
+                    {UNCOMMITTED_PLACEHOLDER}
                   </text>
                 }
               >
@@ -940,7 +940,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 when={!isUncommitted()}
                 fallback={
                   <text fg={t().foregroundMuted} wrapMode="none">
-                    {"\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7"}
+                    {UNCOMMITTED_PLACEHOLDER}
                   </text>
                 }
               >
@@ -959,7 +959,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 when={!isUncommitted()}
                 fallback={
                   <text fg={t().foregroundMuted} wrapMode="none">
-                    {"\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7"}
+                    {UNCOMMITTED_PLACEHOLDER}
                   </text>
                 }
               >
