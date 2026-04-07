@@ -18,12 +18,15 @@ export function KeyHint(props: Readonly<KeyHintProps>) {
   const t = useT();
   return (
     <>
-      <text flexShrink={0} wrapMode="none" fg={t().accent} bg={t().backgroundElement}>
+      <text flexShrink={0} wrapMode="none" fg={t().foreground} bg={t().backgroundElement}>
         {" "}
         {props.key}
       </text>
       <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted} bg={t().backgroundElement}>
         {props.desc}{" "}
+      </text>
+      <text flexShrink={0} wrapMode="none">
+        {" "}
       </text>
     </>
   );
