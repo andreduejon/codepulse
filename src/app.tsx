@@ -391,41 +391,17 @@ function AppContent(props: Readonly<AppContentProps>) {
                 >
                   {/* Command bar input + result count */}
                   <box flexGrow={1} flexDirection="row">
-                    {/*
-                      Flat layout — single always-mounted <input>.
-                      Idle: placeholder "Enter command..." shown muted, no prefix.
-                      Command/path/search: no prefix text, no placeholder — just
-                      the native cursor at position 0.
-                    */}
-                    {/* Mode badge — dimmed pill, matches stash/uncommitted badge style */}
-                    <text
-                      flexShrink={0}
-                      wrapMode="none"
-                      fg={themeState.theme().foreground}
-                      bg={themeState.theme().backgroundElementActive}
-                    >
-                      {commandBarMode() === "command"
-                        ? " COMMAND "
-                        : commandBarMode() === "search"
-                          ? " SEARCH "
-                          : commandBarMode() === "path"
-                            ? " PATH "
-                            : " IDLE "}
-                    </text>
-                    <text flexShrink={0} wrapMode="none">
-                      {" "}
-                    </text>
                     {/* Single <input> for all modes — focused whenever any mode is active */}
                     <input
                       focused={searchFocused() || commandBarMode() === "command" || commandBarMode() === "path"}
                       flexGrow={1}
                       placeholder={
                         commandBarMode() === "command"
-                          ? "type command..."
+                          ? "Enter command..."
                           : commandBarMode() === "search"
-                            ? "search commits..."
+                            ? "Search commits..."
                             : commandBarMode() === "path"
-                              ? "filter by path..."
+                              ? "Enter path..."
                               : ""
                       }
                       value={
@@ -478,6 +454,24 @@ function AppContent(props: Readonly<AppContentProps>) {
                       bg={themeState.theme().accent}
                     >
                       {" Git "}
+                    </text>
+                    <text flexShrink={0} wrapMode="none">
+                      {" "}
+                    </text>
+                    {/* Mode badge — accent text on muted bg, visually paired with Git badge */}
+                    <text
+                      flexShrink={0}
+                      wrapMode="none"
+                      fg={themeState.theme().accent}
+                      bg={themeState.theme().backgroundElementActive}
+                    >
+                      {commandBarMode() === "command"
+                        ? " command "
+                        : commandBarMode() === "search"
+                          ? " search "
+                          : commandBarMode() === "path"
+                            ? " path "
+                            : " idle "}
                     </text>
                     <text flexShrink={0} wrapMode="none" fg={themeState.theme().foregroundMuted}>
                       {"  "}

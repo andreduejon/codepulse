@@ -210,6 +210,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
 
     // `:` opens COMMAND mode
     if (e.sequence === ":" && !searchFocused()) {
+      e.preventDefault();
       setCommandBarMode("command");
       setCommandBarValue("");
       return;
