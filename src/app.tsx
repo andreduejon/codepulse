@@ -158,6 +158,74 @@ function AppContent(props: Readonly<AppContentProps>) {
   // Set synchronously before setCursorIndex, read inside the commit-change effect.
   let isJumpNavigation = false;
 
+  // ── Ancestry highlighting ─────────────────────────────────────────────────
+  // Mutable ref: the hash of the commit used as the anchor.
+  // A ref (not signal) because it must persist across multiple effect firings
+  // in the same reactive flush without being consumed (see AGENTS.md rule 3).
+  let ancestryAnchorHash: string | null = null;
+
+  /**
+   * Compute the first-parent chain passing through anchorHash in both directions.
+   *
+   * - Backward: follow parentHashes[0] from anchorHash up through ancestors.
+   * - Forward: follow the reverse first-parent map (find rows whose first parent
+   *   is already in the set) down through descendants.
+   *
+   * Result: the mainline "backbone" that passes through the selected commit —
+   * its first-parent past and its first-parent future. Merge branches and
+   * off-mainline commits are excluded (and therefore dimmed).
+   */
+  const buildFirstParentChain = (anchorHash: string): Set<string> => {
+    const rows = state.graphRows();
+
+    // Build two lookup maps using the TRUE git first parent (commit.parents[0]), NOT the
+    // display-reordered parentHashes[0]. parentHashes is reordered by sameBranchFirst so
+    // the "same branch" parent sorts to position 0 — which can differ from git's first parent
+    // and would cause the chain to jump to a different branch at merge commits.
+    //   firstParentOf[hash]    = hash's git first parent (commit.parents[0])
+    //   firstChildOf[parent]   = the child whose git first parent is `parent`
+    //                            (only the first such child encountered, graph order)
+    const firstParentOf = new Map<string, string>();
+    const firstChildOf = new Map<string, string>();
+    for (const row of rows) {
+      const hash = row.commit.hash;
+      const fp = row.commit.parents[0]; // git first parent — preserves true mainline
+      if (fp) {
+        firstParentOf.set(hash, fp);
+        if (!firstChildOf.has(fp)) firstChildOf.set(fp, hash);
+      }
+    }
+
+    const chain = new Set<string>();
+    chain.add(anchorHash);
+
+    // Walk backward (ancestors via first-parent)
+    let cur: string | undefined = firstParentOf.get(anchorHash);
+    while (cur && !chain.has(cur)) {
+      chain.add(cur);
+      cur = firstParentOf.get(cur);
+    }
+
+    // Walk forward (descendants via first-parent)
+    cur = firstChildOf.get(anchorHash);
+    while (cur && !chain.has(cur)) {
+      chain.add(cur);
+      cur = firstChildOf.get(cur);
+    }
+
+    return chain;
+  };
+
+  // Re-run chain computation when graphRows() changes and ancestry is active (lazy-loading support).
+  createEffect(() => {
+    // Track graphRows() reactively
+    state.graphRows();
+    // Re-run only when ancestry is currently active
+    if (ancestryAnchorHash !== null) {
+      actions.setAncestrySet(buildFirstParentChain(ancestryAnchorHash));
+    }
+  });
+
   // Jump to a commit by hash (used by detail panel parent/child entries)
   const handleJumpToCommit = (hash: string, from: "child" | "parent") => {
     const rows = state.filteredRows();
@@ -311,6 +379,23 @@ function AppContent(props: Readonly<AppContentProps>) {
         setCommandBarMode("path");
         setCommandBarValue("");
         break;
+      case "a":
+      case "ancestry": {
+        // Toggle ancestry highlighting on/off.
+        // If already active, clear it; otherwise compute the first-parent chain
+        // through the selected commit (both backward ancestors and forward descendants).
+        if (state.ancestrySet() !== null) {
+          ancestryAnchorHash = null;
+          actions.setAncestrySet(null);
+        } else {
+          const anchor = state.selectedCommit()?.hash ?? null;
+          if (anchor) {
+            ancestryAnchorHash = anchor;
+            actions.setAncestrySet(buildFirstParentChain(anchor));
+          }
+        }
+        break;
+      }
       default:
         // Unknown command — ignore silently
         break;
@@ -338,6 +423,10 @@ function AppContent(props: Readonly<AppContentProps>) {
     commandBarValue,
     setCommandBarValue,
     onCommandExecute: handleCommandExecute,
+    onClearAncestry: () => {
+      ancestryAnchorHash = null;
+      actions.setAncestrySet(null);
+    },
   });
 
   return (

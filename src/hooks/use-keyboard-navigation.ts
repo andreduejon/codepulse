@@ -42,6 +42,8 @@ interface KeyboardNavigationOptions {
   setCommandBarValue: (v: string) => void;
   /** Callback to execute a command (dispatched from the keyboard handler). */
   onCommandExecute: (cmd: string) => void;
+  /** Callback to clear ancestry highlighting (called when search opens or on Esc). */
+  onClearAncestry: () => void;
 }
 
 /**
@@ -93,6 +95,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     commandBarValue,
     setCommandBarValue,
     onCommandExecute,
+    onClearAncestry,
   } = opts;
 
   /**
@@ -121,12 +124,15 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
   /**
    * Open the search bar (Phase 1). Saves the current cursor position
    * as the anchor for the two-zone context window.
+   * Clears ancestry highlighting (mutual exclusivity).
    */
   const openSearch = () => {
     const currentHash = state.selectedCommit()?.hash ?? null;
     actions.setPreSearchCursorHash(currentHash);
     actions.setSearchConfirmed(false);
     actions.setDetailFocused(false);
+    // Ancestry and search are mutually exclusive
+    onClearAncestry();
     // Pre-fill with the current active query (empty if no filter)
     setSearchInputValue(state.searchQuery());
     setCommandBarMode("search");
@@ -365,19 +371,64 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     /** Reset detail scrollbox to top — called when the graph cursor moves. */
     const resetDetailScroll = () => scrollbox?.scrollTo(0);
 
+    /**
+     * When ancestry highlighting is active, find the nearest highlighted row
+     * in the given direction from `from`, stepping `count` entries.
+     * Returns the index of the target row, or `from` if no match found.
+     */
+    const findAncestryIndex = (from: number, direction: 1 | -1, count: number): number => {
+      const aSet = state.ancestrySet();
+      if (!aSet) return from;
+      const rows = state.filteredRows();
+      let idx = from;
+      let steps = 0;
+      let next = from + direction;
+      while (next >= 0 && next < rows.length) {
+        if (aSet.has(rows[next].commit.hash)) {
+          idx = next;
+          steps++;
+          if (steps >= count) break;
+        }
+        next += direction;
+      }
+      return steps > 0 ? idx : from;
+    };
+
     switch (e.name) {
       case "down":
-      case "j":
+      case "j": {
         e.preventDefault();
-        actions.moveCursor(e.shift ? SHIFT_JUMP : 1);
+        const aSet = state.ancestrySet();
+        if (aSet) {
+          const count = e.shift ? SHIFT_JUMP : 1;
+          const target = findAncestryIndex(state.cursorIndex(), 1, count);
+          if (target !== state.cursorIndex()) {
+            actions.setCursorIndex(target);
+            actions.setScrollTargetIndex(target);
+          }
+        } else {
+          actions.moveCursor(e.shift ? SHIFT_JUMP : 1);
+        }
         resetDetailScroll();
         break;
+      }
       case "up":
-      case "k":
+      case "k": {
         e.preventDefault();
-        actions.moveCursor(e.shift ? -SHIFT_JUMP : -1);
+        const aSet = state.ancestrySet();
+        if (aSet) {
+          const count = e.shift ? SHIFT_JUMP : 1;
+          const target = findAncestryIndex(state.cursorIndex(), -1, count);
+          if (target !== state.cursorIndex()) {
+            actions.setCursorIndex(target);
+            actions.setScrollTargetIndex(target);
+          }
+        } else {
+          actions.moveCursor(e.shift ? -SHIFT_JUMP : -1);
+        }
         resetDetailScroll();
         break;
+      }
       case "right":
       case "l":
         // Disabled in compact/too-small — no side panel to enter
@@ -402,18 +453,43 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
           setDialog("detail");
         }
         break;
-      case "g":
-        e.preventDefault();
+      case "space":
+        // Space toggles ancestry highlighting (first-parent chain through cursor commit).
+        // Shift+Space is reserved for range selection (v0.2.0 #2).
         if (!e.shift) {
-          actions.setCursorIndex(0);
-          actions.setScrollTargetIndex(0);
+          e.preventDefault();
+          onCommandExecute("a");
+        }
+        break;
+      case "g": {
+        e.preventDefault();
+        const aSet = state.ancestrySet();
+        if (!e.shift) {
+          if (aSet) {
+            // Jump to first highlighted row
+            const target = findAncestryIndex(-1, 1, 1);
+            actions.setCursorIndex(target);
+            actions.setScrollTargetIndex(target);
+          } else {
+            actions.setCursorIndex(0);
+            actions.setScrollTargetIndex(0);
+          }
         } else {
-          const lastIdx = state.filteredRows().length - 1;
-          actions.setCursorIndex(lastIdx);
-          actions.setScrollTargetIndex(lastIdx);
+          if (aSet) {
+            // Jump to last highlighted row
+            const rows = state.filteredRows();
+            const target = findAncestryIndex(rows.length, -1, 1);
+            actions.setCursorIndex(target);
+            actions.setScrollTargetIndex(target);
+          } else {
+            const lastIdx = state.filteredRows().length - 1;
+            actions.setCursorIndex(lastIdx);
+            actions.setScrollTargetIndex(lastIdx);
+          }
         }
         resetDetailScroll();
         break;
+      }
     }
   });
 
@@ -461,7 +537,12 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
       clearFilterAndRestore(state.selectedCommit()?.hash ?? undefined);
       return true;
     }
-    // Step 6: branch view active
+    // Step 6: ancestry highlighting active
+    if (state.ancestrySet() !== null) {
+      onClearAncestry();
+      return true;
+    }
+    // Step 7: branch view active
     if (state.viewingBranch()) {
       actions.setViewingBranch(null);
       loadData();

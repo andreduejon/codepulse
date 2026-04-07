@@ -76,7 +76,7 @@ export default function Footer(
         <Show when={!state.detailFocused() && mode() !== "idle"}>
           <KeyHint key="enter" desc=" confirm  " />
           <KeyHint key="esc" desc=" cancel  " />
-          <KeyHint key="Shift+←/→" desc=" switch mode" />
+          <KeyHint key="shift ←/→" desc=" switch mode" />
         </Show>
 
         {/* ── Graph idle ───────────────────────────────────────────────────── */}
@@ -87,7 +87,7 @@ export default function Footer(
           <Show when={props.compact} fallback={<KeyHint key="←/→" desc=" switch tab  " />}>
             <KeyHint key="enter" desc=" show details  " />
           </Show>
-          <KeyHint key="Shift+←/→" desc=" switch mode  " />
+          <KeyHint key="shift ←/→" desc=" switch mode  " />
           <KeyHint key="↑/↓" desc=" navigate" />
         </Show>
       </box>

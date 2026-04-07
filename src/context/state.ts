@@ -45,6 +45,13 @@ export interface AppState {
   /** Branch being viewed (filtered perspective). null = show all / default. */
   viewingBranch: Accessor<string | null>;
 
+  // ── Ancestry highlighting ────────────────────────────────────────────
+  /**
+   * Set of commit hashes that are ancestors of the selected anchor commit
+   * (including the anchor itself). null = ancestry highlighting inactive.
+   */
+  ancestrySet: Accessor<Set<string> | null>;
+
   // ── Detail panel ────────────────────────────────────────────────────
   detailFocused: Accessor<boolean>;
   detailCursorIndex: Accessor<number>;
@@ -104,6 +111,7 @@ export interface AppActions {
   setUncommittedDetail: (detail: UncommittedDetail | null) => void;
   setViewingBranch: (branch: string | null) => void;
   setHasMore: (hasMore: boolean) => void;
+  setAncestrySet: (set: Set<string> | null) => void;
 }
 
 const AppStateContext = createContext<{ state: AppState; actions: AppActions }>();
@@ -144,6 +152,9 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
   const [searchConfirmed, setSearchConfirmed] = createSignal(false);
   const [preSearchCursorHash, setPreSearchCursorHash] = createSignal<string | null>(null);
   const [viewingBranch, setViewingBranch] = createSignal<string | null>(null);
+
+  // ── Ancestry highlighting ─────────────────────────────────────────────
+  const [ancestrySet, setAncestrySet] = createSignal<Set<string> | null>(null);
 
   // ── Detail panel ──────────────────────────────────────────────────
   const [detailFocused, setDetailFocused] = createSignal(false);
@@ -271,6 +282,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
     detailActiveTab,
     uncommittedDetail,
     viewingBranch,
+    ancestrySet,
   };
 
   const actions: AppActions = {
@@ -307,6 +319,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
     setDetailActiveTab,
     setUncommittedDetail,
     setViewingBranch,
+    setAncestrySet,
   };
 
   return { state, actions };
