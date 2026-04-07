@@ -392,36 +392,16 @@ function AppContent(props: Readonly<AppContentProps>) {
                   {/* Command bar input + result count */}
                   <box flexGrow={1} flexDirection="row">
                     {/*
-                      Flat layout — no Show toggling the <input> in/out.
-                      The single <input> widget is always mounted and always
-                      visible (flexGrow=1). The mode prefix changes text,
-                      and the value/focused props are mode-aware so the native
-                      cursor renders identically across command, path, and search
-                      modes.
+                      Flat layout — single always-mounted <input>.
+                      Idle: placeholder "Enter command..." shown muted, no prefix.
+                      Command/path/search: no prefix text, no placeholder — just
+                      the native cursor at position 0.
                     */}
-                    {/* Mode prefix (always rendered, empty string in idle) */}
-                    <text flexShrink={0} wrapMode="none" fg={themeState.theme().accent}>
-                      {commandBarMode() === "command"
-                        ? ":"
-                        : commandBarMode() === "path"
-                          ? "path: "
-                          : commandBarMode() === "search"
-                            ? "/"
-                            : ""}
-                    </text>
                     {/* Single <input> for all modes — focused whenever any mode is active */}
                     <input
                       focused={searchFocused() || commandBarMode() === "command" || commandBarMode() === "path"}
                       flexGrow={1}
-                      placeholder={
-                        commandBarMode() === "search"
-                          ? "Search commits..."
-                          : commandBarMode() === "command"
-                            ? "command..."
-                            : commandBarMode() === "path"
-                              ? "path filter..."
-                              : "/ search  : command"
-                      }
+                      placeholder={commandBarMode() === "idle" ? "Enter command..." : ""}
                       value={
                         commandBarMode() === "command" || commandBarMode() === "path"
                           ? commandBarValue()
