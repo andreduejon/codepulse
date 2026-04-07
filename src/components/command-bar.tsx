@@ -59,7 +59,7 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
       case "path":
         return " path ";
       default:
-        return " idle ";
+        return " normal ";
     }
   };
 
