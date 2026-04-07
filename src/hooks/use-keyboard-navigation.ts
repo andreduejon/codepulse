@@ -2,7 +2,7 @@ import type { ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard } from "@opentui/solid";
 import type { Accessor } from "solid-js";
 import type { DetailNavRef } from "../components/detail-types";
-import { PAGE_JUMP, SHIFT_JUMP } from "../constants";
+import { SHIFT_JUMP } from "../constants";
 import type { AppActions, AppState } from "../context/state";
 import { getAvailableTabs } from "../utils/tab-utils";
 
@@ -357,6 +357,23 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         break;
       case "right":
       case "l":
+        // Shift+→ cycles command bar mode forward (graph focused only)
+        if (e.shift) {
+          e.preventDefault();
+          const modes: CommandBarMode[] = ["idle", "command", "search", "path"];
+          const cur = modes.indexOf(commandBarMode());
+          const nextMode = modes[(cur + 1) % modes.length];
+          if (nextMode === "idle") {
+            exitCommandBar();
+            setSearchFocused(false);
+          } else if (nextMode === "search") {
+            openSearch();
+          } else {
+            setCommandBarMode(nextMode);
+            setCommandBarValue("");
+          }
+          break;
+        }
         // Disabled in compact/too-small — no side panel to enter
         if (layoutMode() !== "normal") break;
         e.preventDefault();
@@ -368,11 +385,23 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         break;
       case "left":
       case "h":
-        // Disabled in compact/too-small — no panel tab to re-center
-        if (layoutMode() !== "normal") break;
-        e.preventDefault();
-        // Re-center scroll on current cursor position
-        actions.setScrollTargetIndex(state.cursorIndex());
+        // Shift+← cycles command bar mode backward (graph focused only)
+        if (e.shift) {
+          e.preventDefault();
+          const modes: CommandBarMode[] = ["idle", "command", "search", "path"];
+          const cur = modes.indexOf(commandBarMode());
+          const prev = (cur - 1 + modes.length) % modes.length;
+          const nextMode = modes[prev];
+          if (nextMode === "idle") {
+            exitCommandBar();
+            setSearchFocused(false);
+          } else if (nextMode === "search") {
+            openSearch();
+          } else {
+            setCommandBarMode(nextMode);
+            setCommandBarValue("");
+          }
+        }
         break;
       case "return":
         // In compact mode, Enter opens the detail dialog
@@ -393,16 +422,6 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
           actions.setCursorIndex(lastIdx);
           actions.setScrollTargetIndex(lastIdx);
         }
-        resetDetailScroll();
-        break;
-      case "pagedown":
-        e.preventDefault();
-        actions.moveCursor(PAGE_JUMP);
-        resetDetailScroll();
-        break;
-      case "pageup":
-        e.preventDefault();
-        actions.moveCursor(-PAGE_JUMP);
         resetDetailScroll();
         break;
     }
