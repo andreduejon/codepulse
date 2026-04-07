@@ -706,12 +706,12 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
             </text>
           </Show>
           <Show when={hasMultipleFiles()}>
-            <KeyHint key={"\u2190/\u2192"} desc=" file" />
+            <KeyHint key={"\u2190/\u2192"} desc=" file  " />
           </Show>
-          <KeyHint key={"\u2191/\u2193"} desc=" scroll" />
-          <KeyHint key="b" desc={showBlame() ? " hide blame" : " show blame"} />
-          <KeyHint key="c" desc={` ${VIEW_MODE_NEXT_LABEL[viewMode()]}`} />
-          <KeyHint key="w" desc={wrapEnabled() ? " wrap off" : " wrap on"} />
+          <KeyHint key={"\u2191/\u2193"} desc=" scroll  " />
+          <KeyHint key="b" desc={showBlame() ? " hide blame  " : " show blame  "} />
+          <KeyHint key="c" desc={` ${VIEW_MODE_NEXT_LABEL[viewMode()]}  `} />
+          <KeyHint key="w" desc={wrapEnabled() ? " wrap off  " : " wrap on  "} />
           <KeyHint key="g/G" desc=" top/bottom" />
         </DialogFooter>
       </box>

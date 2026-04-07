@@ -66,28 +66,28 @@ export default function Footer(
 
         {/* ── Detail focused ───────────────────────────────────────────────── */}
         <Show when={state.detailFocused()}>
-          <KeyHint key={enterAction() ? "enter" : ""} desc={enterAction() ? ` ${enterAction()}` : ""} />
-          <KeyHint key="esc" desc=" back" />
-          <KeyHint key="←/→" desc=" switch tab" />
+          <KeyHint key={enterAction() ? "enter" : ""} desc={enterAction() ? ` ${enterAction()}  ` : ""} />
+          <KeyHint key="esc" desc=" back  " />
+          <KeyHint key="←/→" desc=" switch tab  " />
           <KeyHint key="↑/↓" desc=" navigate" />
         </Show>
 
         {/* ── Input modes (command / search / path) ────────────────────────── */}
         <Show when={!state.detailFocused() && mode() !== "idle"}>
-          <KeyHint key="enter" desc=" confirm" />
-          <KeyHint key="esc" desc=" cancel" />
+          <KeyHint key="enter" desc=" confirm  " />
+          <KeyHint key="esc" desc=" cancel  " />
           <KeyHint key="Shift+←/→" desc=" switch mode" />
         </Show>
 
         {/* ── Graph idle ───────────────────────────────────────────────────── */}
         <Show when={!state.detailFocused() && mode() === "idle"}>
           <Show when={props.filterActive}>
-            <KeyHint key="esc" desc=" clear" />
+            <KeyHint key="esc" desc=" clear  " />
           </Show>
-          <KeyHint key="Shift+←/→" desc=" switch mode" />
-          <Show when={props.compact} fallback={<KeyHint key="←/→" desc=" switch tab" />}>
-            <KeyHint key="enter" desc=" show details" />
+          <Show when={props.compact} fallback={<KeyHint key="←/→" desc=" switch tab  " />}>
+            <KeyHint key="enter" desc=" show details  " />
           </Show>
+          <KeyHint key="Shift+←/→" desc=" switch mode  " />
           <KeyHint key="↑/↓" desc=" navigate" />
         </Show>
       </box>

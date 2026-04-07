@@ -406,8 +406,8 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
 
         {/* Context-aware footer */}
         <DialogFooter>
-          <KeyHint key="enter" desc={` ${footerVerb()}`} />
-          <KeyHint key="←/→" desc=" switch tab" />
+          <KeyHint key="enter" desc={` ${footerVerb()}  `} />
+          <KeyHint key="←/→" desc=" switch tab  " />
           <KeyHint key="↑/↓" desc=" navigate" />
         </DialogFooter>
       </box>

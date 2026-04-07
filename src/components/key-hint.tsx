@@ -7,26 +7,21 @@ interface KeyHintProps {
 }
 
 /**
- * A duotone badge hint: key in accent + desc in muted, both on a shared
- * backgroundElement background. Single padded pill per hint.
+ * A keybind hint strip: bold key label followed by a muted description.
+ * Used in footers and title bars across the app.
  *
- * Usage: wrap consecutive hints with a gap between them by including
- * trailing spaces in `desc`, e.g. desc=" switch tab  " (two trailing spaces
- * act as the inter-badge gap since the next badge's leading space follows).
+ * The `desc` prop should include its own leading/trailing spaces for spacing,
+ * e.g. desc=" confirm  " or desc=" help".
  */
 export function KeyHint(props: Readonly<KeyHintProps>) {
   const t = useT();
   return (
     <>
-      <text flexShrink={0} wrapMode="none" fg={t().foreground} bg={t().backgroundElement}>
-        {" "}
+      <text flexShrink={0} wrapMode="none" fg={t().foreground}>
         {props.key}
       </text>
-      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted} bg={t().backgroundElement}>
-        {props.desc}{" "}
-      </text>
-      <text flexShrink={0} wrapMode="none">
-        {" "}
+      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+        {props.desc}
       </text>
     </>
   );
