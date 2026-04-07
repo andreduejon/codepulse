@@ -20,7 +20,7 @@ import { createThemeState, ThemeContext } from "./context/theme";
 import type { DiffTarget } from "./git/types";
 import { useDataLoader } from "./hooks/use-data-loader";
 import { useDetailLoader } from "./hooks/use-detail-loader";
-import { useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
+import { type CommandBarMode, useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
 import { useT } from "./hooks/use-t";
 
 interface AppProps {
@@ -109,6 +109,11 @@ function AppContent(props: Readonly<AppContentProps>) {
   const [searchInputValue, setSearchInputValue] = createSignal("");
   /** Target for the diff+blame dialog (set when user activates a file). */
   const [diffTarget, setDiffTarget] = createSignal<DiffTarget | null>(null);
+
+  /** Command bar mode — drives placeholder text and key routing. */
+  const [commandBarMode, setCommandBarMode] = createSignal<CommandBarMode>("idle");
+  /** Raw text typed in the command bar (e.g. "search", "path src/"). */
+  const [commandBarValue, setCommandBarValue] = createSignal("");
 
   // Reactive terminal dimensions for adaptive layout
   const dimensions = useTerminalDimensions();
@@ -267,6 +272,52 @@ function AppContent(props: Readonly<AppContentProps>) {
     loadData(undefined, stickyHash);
   };
 
+  /**
+   * Execute a command dispatched from the command bar.
+   * Receives the trimmed value entered after `:` (e.g. "q", "quit", "m", "search").
+   */
+  const handleCommandExecute = (cmd: string) => {
+    const normalized = cmd.toLowerCase().replace(/^:/, "");
+    switch (normalized) {
+      case "q":
+      case "quit":
+        renderer.destroy();
+        break;
+      case "m":
+      case "menu":
+        setDialog("menu");
+        break;
+      case "help":
+        setDialog("help");
+        break;
+      case "theme":
+        setDialog("theme");
+        break;
+      case "f":
+      case "fetch":
+        handleFetch();
+        break;
+      case "r":
+      case "reload":
+        loadData(undefined, undefined, false, true);
+        break;
+      case "search":
+        // Re-open search mode (keyboard hook openSearch handles it via setCommandBarMode)
+        setSearchFocused(true);
+        setCommandBarMode("search");
+        break;
+      case "p":
+      case "path":
+        // Switch to PATH input mode — user types a path filter next
+        setCommandBarMode("path");
+        setCommandBarValue("");
+        break;
+      default:
+        // Unknown command — ignore silently
+        break;
+    }
+  };
+
   // Keyboard handling
   useKeyboardNavigation({
     state,
@@ -282,6 +333,11 @@ function AppContent(props: Readonly<AppContentProps>) {
     detailNavRef,
     loadData,
     handleFetch,
+    commandBarMode,
+    setCommandBarMode,
+    commandBarValue,
+    setCommandBarValue,
+    onCommandExecute: handleCommandExecute,
   });
 
   return (
@@ -320,7 +376,7 @@ function AppContent(props: Readonly<AppContentProps>) {
                   <GraphView onLoadMore={loadMoreData} />
                 </box>
 
-                {/* Search section — left accent border, same padding as graph */}
+                {/* Command bar section — left accent border, same padding as graph */}
                 <box
                   width="100%"
                   minHeight={5}
@@ -332,18 +388,40 @@ function AppContent(props: Readonly<AppContentProps>) {
                   borderStyle="single"
                   borderColor={state.detailFocused() ? themeState.theme().border : themeState.theme().accent}
                 >
-                  {/* Search input + result count */}
+                  {/* Command bar input + result count */}
                   <box flexGrow={1} flexDirection="row">
-                    <input
-                      focused={searchFocused()}
-                      flexGrow={1}
-                      placeholder="Search commits..."
-                      value={searchInputValue()}
-                      onInput={handleSearchInput}
-                      fg={themeState.theme().foreground}
-                      placeholderColor={themeState.theme().foregroundMuted}
-                      backgroundColor={themeState.theme().background}
-                    />
+                    {/* Command mode prefix */}
+                    <Show when={commandBarMode() === "command"}>
+                      <text flexShrink={0} wrapMode="none" fg={themeState.theme().accent}>
+                        {":"}
+                      </text>
+                    </Show>
+                    {/* Path mode prefix */}
+                    <Show when={commandBarMode() === "path"}>
+                      <text flexShrink={0} wrapMode="none" fg={themeState.theme().accent}>
+                        {"path: "}
+                      </text>
+                    </Show>
+                    {/* Command / path text display (non-interactive) */}
+                    <Show when={commandBarMode() === "command" || commandBarMode() === "path"}>
+                      <text flexGrow={1} wrapMode="none" fg={themeState.theme().foreground}>
+                        {commandBarValue()}
+                        <text fg={themeState.theme().accent}>{"█"}</text>
+                      </text>
+                    </Show>
+                    {/* Search / idle: real <input> */}
+                    <Show when={commandBarMode() === "search" || commandBarMode() === "idle"}>
+                      <input
+                        focused={searchFocused()}
+                        flexGrow={1}
+                        placeholder={commandBarMode() === "idle" ? "Enter command..." : "Search commits..."}
+                        value={searchInputValue()}
+                        onInput={handleSearchInput}
+                        fg={themeState.theme().foreground}
+                        placeholderColor={themeState.theme().foregroundMuted}
+                        backgroundColor={themeState.theme().background}
+                      />
+                    </Show>
                     <text
                       flexShrink={0}
                       wrapMode="none"

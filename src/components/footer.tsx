@@ -83,8 +83,7 @@ export default function Footer(
           </Show>
           <KeyHint key={"\u2191/\u2193"} desc=" navigate  " />
           <KeyHint key="/" desc=" search  " />
-          <KeyHint key="m" desc=" menu  " />
-          <KeyHint key="?" desc=" help" />
+          <KeyHint key=":" desc=" cmd" />
         </Show>
       </box>
       <box height={1} />

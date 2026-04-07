@@ -7,28 +7,40 @@ export default function HelpDialog(_props: Readonly<{ onClose: () => void }>) {
   const t = useT();
   const dimensions = useTerminalDimensions();
   const dialogWidth = () => 72;
-  const dialogHeight = () => Math.min(keybinds.length + 5, dimensions().height - 8);
+  const dialogHeight = () => Math.min(keybinds.length + 8, dimensions().height - 8);
 
   const keybinds = [
-    ["↑/↓", "Navigate list"],
-    ["Shift+↑/↓", "Jump 10 entries"],
-    ["PgUp/PgDn", "Jump 20 entries"],
-    ["g/G", "First / last commit"],
-    ["Enter", "Focus detail / activate"],
+    // Navigation
+    ["↑/↓  or  j/k", "Navigate list (1 row)"],
+    ["Shift+↑/↓  or  J/K", "Jump 10 rows"],
+    ["PgUp/PgDn", "Jump 20 rows"],
+    ["g / G", "First / last commit"],
+    ["→ / l", "Focus detail panel"],
+    ["← / h", "Return to graph"],
+    ["Enter", "Open detail / activate item"],
+    // Detail panel
+    ["←/→ (detail)", "Switch tab"],
+    ["↑/↓ (detail)", "Navigate items"],
+    // Diff dialog
     ["Enter (file)", "View diff"],
     ["←/→ (diff)", "Previous / next file"],
     ["PgUp/PgDn (diff)", "Scroll half page"],
     ["b (diff)", "Toggle blame"],
     ["c (diff)", "Cycle view: mixed/new/old"],
-    ["→/←", "Focus detail / return to graph"],
-    ["Esc", "Back (cascade)"],
-    ["q", "Back, or quit"],
+    ["w (diff)", "Toggle line wrap"],
+    // Command bar
+    [":", "Open command bar"],
     ["/", "Search commits"],
-    ["f", "Fetch from remote"],
-    ["R", "Reload data"],
-    ["m", "Menu"],
-    ["Ctrl+T", "Change theme"],
-    ["?", "Show this help"],
+    ["Esc", "Back / cancel (cascade)"],
+    // Commands (via :)
+    [":q  /  :quit", "Quit the application"],
+    [":m  /  :menu", "Open menu"],
+    [":f  /  :fetch", "Fetch from remote"],
+    [":r  /  :reload", "Reload data"],
+    [":p  /  :path", "Filter by path"],
+    [":search", "Open search"],
+    [":theme", "Change theme"],
+    [":help", "Show this help"],
   ];
 
   return (

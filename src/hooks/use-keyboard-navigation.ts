@@ -1,5 +1,5 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
-import { useKeyboard, useRenderer } from "@opentui/solid";
+import { useKeyboard } from "@opentui/solid";
 import type { Accessor } from "solid-js";
 import type { DetailNavRef } from "../components/detail-types";
 import { PAGE_JUMP, SHIFT_JUMP } from "../constants";
@@ -8,6 +8,9 @@ import { getAvailableTabs } from "../utils/tab-utils";
 
 type DialogId = "menu" | "help" | "theme" | "diff-blame" | "detail" | null;
 type LayoutMode = "too-small" | "compact" | "normal";
+
+/** Command bar mode — drives placeholder text and key routing. */
+export type CommandBarMode = "idle" | "command" | "search" | "path";
 
 interface KeyboardNavigationOptions {
   state: AppState;
@@ -29,13 +32,33 @@ interface KeyboardNavigationOptions {
   loadData: (branch?: string, stickyHash?: string, silent?: boolean, preserveLoaded?: boolean) => void;
   /** Fetch from all remotes and reload data. */
   handleFetch: () => void;
+  /** Current command bar mode. */
+  commandBarMode: Accessor<CommandBarMode>;
+  setCommandBarMode: (m: CommandBarMode) => void;
+  /** Raw text typed into the command bar. */
+  commandBarValue: Accessor<string>;
+  setCommandBarValue: (v: string) => void;
+  /** Callback to execute a command (dispatched from the keyboard handler). */
+  onCommandExecute: (cmd: string) => void;
 }
 
 /**
  * Global keyboard handler for the main app.
  *
- * Handles: dialog toggles (m, Ctrl+T, ?), escape/q cascade,
- * detail panel navigation, graph list navigation, and search focus.
+ * ## Command Bar
+ *
+ * `:` opens COMMAND mode. User types a command and presses Enter to execute.
+ * `/` opens SEARCH mode directly (bypasses command bar). `:search` also opens SEARCH.
+ * `:path` (or `:p`) opens PATH mode — type a path, Enter applies.
+ *
+ * ## Navigation (bare keys)
+ *
+ * `↑/↓`, `j/k` — navigate 1 row (Shift = 10 rows)
+ * `←/→`, `h/l` — switch focus / navigate tabs
+ * `g/G` — jump to top/bottom
+ * `space` — range mark (v0.2.0 range selection)
+ * `Enter` — open/confirm/activate
+ * `Esc` — close/back/cancel cascade
  *
  * ## Search Phases
  *
@@ -62,10 +85,12 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     getDetailScrollboxRef,
     detailNavRef,
     loadData,
-    handleFetch,
+    commandBarMode,
+    setCommandBarMode,
+    commandBarValue,
+    setCommandBarValue,
+    onCommandExecute,
   } = opts;
-
-  const renderer = useRenderer();
 
   /**
    * Clear the search filter entirely and restore the cursor to its pre-search
@@ -101,6 +126,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     actions.setDetailFocused(false);
     // Pre-fill with the current active query (empty if no filter)
     setSearchInputValue(state.searchQuery());
+    setCommandBarMode("search");
     setSearchFocused(true);
   };
 
@@ -114,6 +140,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     if (matches.length === 0) return; // nothing to confirm
 
     setSearchFocused(false);
+    setCommandBarMode("idle");
     actions.setSearchConfirmed(true);
 
     // Always go to the first (top) match
@@ -121,94 +148,81 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     actions.setScrollTargetIndex(0);
   };
 
+  /**
+   * Return to idle mode, clearing any command bar input.
+   */
+  const exitCommandBar = () => {
+    setCommandBarMode("idle");
+    setCommandBarValue("");
+  };
+
   useKeyboard(e => {
     if (e.eventType === "release") return;
 
-    // Ctrl+T opens theme dialog regardless of dialog/search state
-    if (e.ctrl && e.name === "t") {
-      setSearchFocused(false);
-      const opening = dialog() !== "theme";
-      if (opening) actions.setDetailFocused(false);
-      setDialog(opening ? "theme" : null);
-      return;
-    }
-
-    // m toggles menu (not when typing in search)
-    if (e.name === "m" && !searchFocused()) {
-      setSearchFocused(false);
-      const opening = dialog() !== "menu";
-      if (opening) actions.setDetailFocused(false);
-      setDialog(opening ? "menu" : null);
-      return;
-    }
-
-    // ? opens help (not when typing in search)
-    if (e.name === "?" && !searchFocused()) {
-      setSearchFocused(false);
-      const opening = dialog() !== "help";
-      if (opening) actions.setDetailFocused(false);
-      setDialog(opening ? "help" : null);
-      return;
-    }
-
-    /**
-     * Close the topmost open layer (dialog → search → detail focus → filter → branch).
-     * Returns true if something was closed, false if there was nothing left to close.
-     * Used by both Escape and q to share the same cascade logic.
-     */
-    const closeOneCascadeStep = (skipSearch = false): boolean => {
-      if (dialog()) {
-        // Closing the detail dialog must also clear detailFocused
-        if (dialog() === "detail") {
-          actions.setDetailFocused(false);
-          setDialog(null);
-        } else if (dialog() === "diff-blame" && layoutMode() === "compact" && state.detailFocused()) {
-          // In compact mode, closing diff-blame returns to the detail dialog
-          setDialog("detail");
-        } else {
-          setDialog(null);
-        }
-        return true;
+    // ── COMMAND mode ──────────────────────────────────────────────────────────
+    // When the command bar is open in COMMAND or PATH mode, route keys there.
+    if (commandBarMode() === "command" || commandBarMode() === "path") {
+      if (e.name === "escape") {
+        exitCommandBar();
+        return;
       }
-      if (!skipSearch && searchFocused()) {
+      if (e.name === "return") {
+        e.preventDefault();
+        const cmd = commandBarValue().trim();
+        exitCommandBar();
+        if (cmd) onCommandExecute(cmd);
+        return;
+      }
+      if (e.name === "backspace") {
+        setCommandBarValue(commandBarValue().slice(0, -1));
+        return;
+      }
+      // Printable single character
+      if (e.sequence && e.sequence.length === 1 && !e.ctrl && !e.meta) {
+        setCommandBarValue(commandBarValue() + e.sequence);
+        return;
+      }
+      return;
+    }
+
+    // ── SEARCH mode ───────────────────────────────────────────────────────────
+    if (commandBarMode() === "search") {
+      if (e.name === "escape") {
         // Phase 1: close search bar, clear filter, restore pre-search cursor
         setSearchFocused(false);
         clearFilterAndRestore(state.preSearchCursorHash() ?? undefined);
-        return true;
+        setCommandBarMode("idle");
+        return;
       }
-      if (state.detailFocused()) {
-        actions.setDetailFocused(false);
-        return true;
+      if (e.name === "return" && searchFocused()) {
+        e.preventDefault();
+        confirmSearch();
+        return;
       }
-      if (state.searchQuery()) {
-        // Phase 2 (graph focused + filter active): clear filter, keep cursor
-        // on the currently selected commit
-        clearFilterAndRestore(state.selectedCommit()?.hash ?? undefined);
-        return true;
-      }
-      if (state.viewingBranch()) {
-        actions.setViewingBranch(null);
-        loadData();
-        return true;
-      }
-      return false;
-    };
-
-    // Escape handling
-    if (e.name === "escape") {
-      closeOneCascadeStep();
+      // All other keys pass to the native <input> while focused
       return;
     }
 
-    // q: same cascade as Escape, but quits if nothing left to close
-    if (e.name === "q" && !searchFocused()) {
-      if (!closeOneCascadeStep(/* skipSearch */ true)) {
-        // Nothing to close — quit.
-        // renderer.destroy() restores the terminal and resolves the render()
-        // promise, letting the process exit cleanly via the event loop.
-        // Avoid process.exit() here as it would bypass onCleanup handlers.
-        renderer.destroy();
-      }
+    // ── IDLE mode (no dialog, no search) ─────────────────────────────────────
+
+    // `:` opens COMMAND mode
+    if (e.sequence === ":" && !searchFocused()) {
+      setCommandBarMode("command");
+      setCommandBarValue("");
+      return;
+    }
+
+    // `/` opens SEARCH mode directly
+    if (e.name === "/" && !searchFocused()) {
+      e.preventDefault();
+      openSearch();
+      return;
+    }
+
+    // Escape cascade
+    if (e.name === "escape") {
+      closeOneCascadeStep();
+      return;
     }
 
     // Enter while search bar is focused: confirm search → Phase 2
@@ -219,20 +233,18 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     }
 
     // All other keys while search bar is focused: let the input handle them.
-    // This includes arrow keys (text cursor navigation), backspace, etc.
     if (searchFocused()) return;
 
-    // If a non-detail dialog is open, only handle Escape/q/m/? (handled above)
+    // If a non-detail dialog is open, only Escape acts (handled above)
     if (dialog() && dialog() !== "detail") return;
 
     // Detail panel focused (or detail dialog open in compact mode):
-    // up/down navigate interactive items, enter activates,
-    // left/right switch tabs (left on first tab exits detail focus / closes dialog)
     if (state.detailFocused() || dialog() === "detail") {
       const scrollbox = getDetailScrollboxRef();
 
       switch (e.name) {
-        case "left": {
+        case "left":
+        case "h": {
           e.preventDefault();
           const tabs = getAvailableTabs({
             commit: state.selectedCommit(),
@@ -243,7 +255,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
           const currentIdx = tabs.indexOf(state.detailActiveTab());
           if (currentIdx <= 0) {
             // In normal mode, left on first tab exits detail focus.
-            // In dialog mode, only esc/q can close — left does nothing.
+            // In dialog mode, only esc can close — left does nothing.
             if (dialog() !== "detail") {
               actions.setDetailFocused(false);
             }
@@ -255,7 +267,8 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
           }
           return;
         }
-        case "right": {
+        case "right":
+        case "l": {
           e.preventDefault();
           const tabs = getAvailableTabs({
             commit: state.selectedCommit(),
@@ -270,17 +283,18 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
             actions.setDetailCursorIndex(0);
             scrollbox?.scrollTo(0);
           }
-          // On rightmost tab, do nothing
           return;
         }
-        case "up": {
+        case "up":
+        case "k": {
           e.preventDefault();
           const delta = e.shift ? -SHIFT_JUMP : -1;
           actions.moveDetailCursor(delta, detailNavRef.itemCount);
           scrollbox?.scrollBy(delta, "absolute");
           return;
         }
-        case "down": {
+        case "down":
+        case "j": {
           e.preventDefault();
           const delta = e.shift ? SHIFT_JUMP : 1;
           actions.moveDetailCursor(delta, detailNavRef.itemCount);
@@ -310,10 +324,6 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
             scrollbox?.scrollTo(Infinity);
           }
           return;
-        case "/":
-          e.preventDefault();
-          openSearch();
-          return;
       }
       return; // swallow all other keys when detail is focused
     }
@@ -325,16 +335,19 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
 
     switch (e.name) {
       case "down":
+      case "j":
         e.preventDefault();
         actions.moveCursor(e.shift ? SHIFT_JUMP : 1);
         resetDetailScroll();
         break;
       case "up":
+      case "k":
         e.preventDefault();
         actions.moveCursor(e.shift ? -SHIFT_JUMP : -1);
         resetDetailScroll();
         break;
       case "right":
+      case "l":
         // Disabled in compact/too-small — no side panel to enter
         if (layoutMode() !== "normal") break;
         e.preventDefault();
@@ -345,6 +358,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         }
         break;
       case "left":
+      case "h":
         // Disabled in compact/too-small — no panel tab to re-center
         if (layoutMode() !== "normal") break;
         e.preventDefault();
@@ -382,20 +396,59 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         actions.moveCursor(-PAGE_JUMP);
         resetDetailScroll();
         break;
-      case "/":
-        e.preventDefault();
-        openSearch();
-        break;
-      case "r":
-        // Shift+R = Reload
-        if (e.shift && !e.ctrl) {
-          const stickyHash = state.selectedCommit()?.hash;
-          loadData(undefined, stickyHash, false, true);
-        }
-        break;
-      case "f":
-        handleFetch();
-        break;
     }
   });
+
+  /**
+   * Close the topmost open layer.
+   * Order: command bar → dialog → search → detail focus → search filter →
+   *        path filter (v0.2.0) → branch view
+   * Returns true if something was closed, false if there was nothing left.
+   */
+  function closeOneCascadeStep(): boolean {
+    // Step 1: command bar open
+    if (commandBarMode() !== "idle") {
+      exitCommandBar();
+      if (searchFocused()) {
+        setSearchFocused(false);
+        clearFilterAndRestore(state.preSearchCursorHash() ?? undefined);
+      }
+      return true;
+    }
+    // Step 2: dialog open
+    if (dialog()) {
+      if (dialog() === "detail") {
+        actions.setDetailFocused(false);
+        setDialog(null);
+      } else if (dialog() === "diff-blame" && layoutMode() === "compact" && state.detailFocused()) {
+        setDialog("detail");
+      } else {
+        setDialog(null);
+      }
+      return true;
+    }
+    // Step 3: search Phase 1 (typing)
+    if (searchFocused()) {
+      setSearchFocused(false);
+      clearFilterAndRestore(state.preSearchCursorHash() ?? undefined);
+      return true;
+    }
+    // Step 4: detail panel focused
+    if (state.detailFocused()) {
+      actions.setDetailFocused(false);
+      return true;
+    }
+    // Step 5: search Phase 2 (filter active, graph focused)
+    if (state.searchQuery()) {
+      clearFilterAndRestore(state.selectedCommit()?.hash ?? undefined);
+      return true;
+    }
+    // Step 6: branch view active
+    if (state.viewingBranch()) {
+      actions.setViewingBranch(null);
+      loadData();
+      return true;
+    }
+    return false;
+  }
 }
