@@ -95,7 +95,7 @@ export default function HelpDialog(_props: Readonly<{ onClose: () => void }>) {
         height={dialogHeight()}
         backgroundColor={t().backgroundPanel}
         flexDirection="column"
-        paddingX={1}
+        paddingX={0}
         paddingY={1}
       >
         <DialogTitleBar title="Help" />

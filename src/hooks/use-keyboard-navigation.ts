@@ -162,6 +162,29 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
   useKeyboard(e => {
     if (e.eventType === "release") return;
 
+    // ── Shift+←/→ mode cycling ────────────────────────────────────────────────
+    // Cycles command bar mode regardless of current mode, but only when the
+    // graph is the active context (no dialog open, detail not focused).
+    if (e.shift && (e.name === "left" || e.name === "right") && !dialog() && !state.detailFocused()) {
+      e.preventDefault();
+      const modes: CommandBarMode[] = ["idle", "command", "search", "path"];
+      const cur = modes.indexOf(commandBarMode());
+      const delta = e.name === "right" ? 1 : -1;
+      const nextMode = modes[(cur + delta + modes.length) % modes.length];
+      if (nextMode === "idle") {
+        exitCommandBar();
+        setSearchFocused(false);
+        clearFilterAndRestore(state.preSearchCursorHash() ?? undefined);
+      } else if (nextMode === "search") {
+        openSearch();
+      } else {
+        setSearchFocused(false);
+        setCommandBarMode(nextMode);
+        setCommandBarValue("");
+      }
+      return;
+    }
+
     // ── COMMAND mode ──────────────────────────────────────────────────────────
     // When the command bar is open in COMMAND or PATH mode, route keys there.
     if (commandBarMode() === "command" || commandBarMode() === "path") {
@@ -357,23 +380,6 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         break;
       case "right":
       case "l":
-        // Shift+→ cycles command bar mode forward (graph focused only)
-        if (e.shift) {
-          e.preventDefault();
-          const modes: CommandBarMode[] = ["idle", "command", "search", "path"];
-          const cur = modes.indexOf(commandBarMode());
-          const nextMode = modes[(cur + 1) % modes.length];
-          if (nextMode === "idle") {
-            exitCommandBar();
-            setSearchFocused(false);
-          } else if (nextMode === "search") {
-            openSearch();
-          } else {
-            setCommandBarMode(nextMode);
-            setCommandBarValue("");
-          }
-          break;
-        }
         // Disabled in compact/too-small — no side panel to enter
         if (layoutMode() !== "normal") break;
         e.preventDefault();
@@ -385,23 +391,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         break;
       case "left":
       case "h":
-        // Shift+← cycles command bar mode backward (graph focused only)
-        if (e.shift) {
-          e.preventDefault();
-          const modes: CommandBarMode[] = ["idle", "command", "search", "path"];
-          const cur = modes.indexOf(commandBarMode());
-          const prev = (cur - 1 + modes.length) % modes.length;
-          const nextMode = modes[prev];
-          if (nextMode === "idle") {
-            exitCommandBar();
-            setSearchFocused(false);
-          } else if (nextMode === "search") {
-            openSearch();
-          } else {
-            setCommandBarMode(nextMode);
-            setCommandBarValue("");
-          }
-        }
+        // bare ←/h on graph: no-op (Shift+← handled at top level)
         break;
       case "return":
         // In compact mode, Enter opens the detail dialog
