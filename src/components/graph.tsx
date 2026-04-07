@@ -12,7 +12,9 @@ import {
 import { useAppState } from "../context/state";
 import {
   buildEdgeIndicator,
+  computeBrightColumns,
   computeSingleViewportOffset,
+  dimGraphChars,
   type GraphChar,
   getColorForColumn,
   graphCharsToContent,
@@ -229,60 +231,14 @@ function GraphLine(
   // Node lane color — used for selective ancestry dimming (must be before dimChars).
   const laneColor = () => getColorForColumn(props.row.nodeColor, t().graphColors);
 
-  /**
-   * Unified dimming for all graph chars.
-   *
-   * @param chars   The rendered GraphChar[] for this row.
-   * @param hBright Optional set of column indices where horizontal glyphs (─, corners,
-   *                tees) stay bright. Used for per-fan-out-row horizontal brightening.
-   *                When omitted, no horizontal brightening is applied (commit rows).
-   *
-   * Rules:
-   *   - uncommitted node        → full dim always
-   *   - ancestry inactive       → no dim (pass through)
-   *   - bright set present      → char-position tracking: colIdx = floor(pos/2) where pos
-   *                               accumulates char.length.
-   *                               Vertical-bright cols keep │ and █ vivid.
-   *                               Horizontal-bright cols (from hBright) keep ─, corners,
-   *                               and tees vivid (but NOT ┼ crossings or ─ after ┼).
-   *   - no bright set           → full dim
-   *
-   * NOTE: array index ≠ column index for renderGraphRow/renderFanOutRow because a single
-   * column can be split into two 1-char entries. Char-position tracking is the only
-   * correct mapping: column c occupies char positions [c*2, c*2+2).
-   */
-  const dimChars = (chars: GraphChar[], hBright?: Set<number>): GraphChar[] => {
-    const mutedColor = t().foregroundMuted;
-    if (isUncommitted()) return chars.map(c => ({ ...c, color: mutedColor, bold: false }));
-    const aSet = state.ancestrySet();
-    if (aSet === null) return chars;
-    const bright = props.brightColumns();
-    const hasBright = (bright && bright.size > 0) || (hBright && hBright.size > 0);
-    if (hasBright) {
-      let pos = 0;
-      let prevWasCrossing = false;
-      return chars.map(c => {
-        const colIdx = Math.floor(pos / 2);
-        pos += c.char.length;
-        const ch = c.char[0];
-
-        // Vertical passthrough │ and node █ stay bright at vertical-bright columns.
-        const isVerticalBright = bright?.has(colIdx) && (ch === "│" || ch === "█");
-
-        // Horizontal glyphs stay bright at horizontal-bright columns,
-        // EXCEPT crossings (┼ and the ─ immediately after ┼): those stay dimmed
-        // to avoid confusion about which lane the crossing belongs to.
-        const isCrossing = ch === "┼";
-        const isDashAfterCrossing = prevWasCrossing && ch === "─";
-        prevWasCrossing = isCrossing;
-        const isHorizontalBright = hBright?.has(colIdx) && !isCrossing && !isDashAfterCrossing && ch !== "│";
-
-        const isBright = isVerticalBright || isHorizontalBright;
-        return isBright ? c : { ...c, color: mutedColor, bold: false };
-      });
-    }
-    return chars.map(c => ({ ...c, color: mutedColor, bold: false }));
-  };
+  /** Thin wrapper around the pure `dimGraphChars` function, binding reactive closure values. */
+  const dimChars = (chars: GraphChar[], hBright?: Set<number>): GraphChar[] =>
+    dimGraphChars(chars, t().foregroundMuted, {
+      isUncommitted: isUncommitted(),
+      ancestryActive: state.ancestrySet() !== null,
+      brightColumns: props.brightColumns(),
+      brightHorizontal: hBright,
+    });
 
   // Full-width renders — memoized, depend on row data + renderOpts, NOT viewportOffset.
   // Commit and connector rows use only vertical bright sets (no horizontal brightening).
@@ -614,117 +570,13 @@ function SearchDivider() {
 export default function GraphView(props: Readonly<{ onLoadMore?: () => void }>) {
   const { state, actions } = useAppState();
 
-  // For each row (ancestry and non-ancestry), compute which column indices
-  // should stay bright when ancestry highlighting is active:
-  //   - vertical: columns where │ passthroughs and █ nodes stay bright.
-  //   - fanOutHorizontal: per-fan-out-row sets of columns where ─, corners,
-  //     and tees stay bright (the arm connecting an ancestry child to its
-  //     parent's nodeColumn). Only the specific fan-out row that reaches the
-  //     ancestry child gets brightened — other fan-out rows stay dimmed.
-  //     Commit-row merge/branch connectors are never brightened.
-  //
-  // Algorithm:
-  //   1. Walk graphRows() top-to-bottom, collecting ancestry row indices.
-  //   2. For each ancestry row: add its nodeColumn to vertical.
-  //   3. For each consecutive pair (child @ i, parent @ j):
-  //      Intermediate rows r in (i, j): add childCol if active, else parentCol
-  //      to vertical.
-  //   4. When childCol ≠ parentCol, find the specific fan-out row on the parent
-  //      that reaches childCol, and store its index + column span.
-  //   5. Returns { vertical, fanOutHorizontal } | null (null when ancestry inactive).
-  const brightColumnsByHash = createMemo(
-    (): {
-      vertical: Map<string, Set<number>>;
-      fanOutHorizontal: Map<string, Map<number, Set<number>>>;
-    } | null => {
-      const aSet = state.ancestrySet();
-      if (aSet === null) return null;
-      const rows = state.graphRows();
-      const vertical = new Map<string, Set<number>>();
-      // Map<parentHash, Map<fanOutRowIndex, Set<columnIndex>>>
-      const fanOutHorizontal = new Map<string, Map<number, Set<number>>>();
-
-      const addCol = (hash: string, col: number) => {
-        let set = vertical.get(hash);
-        if (!set) {
-          set = new Set<number>();
-          vertical.set(hash, set);
-        }
-        set.add(col);
-      };
-
-      const addFoHCol = (hash: string, foIdx: number, col: number) => {
-        let byRow = fanOutHorizontal.get(hash);
-        if (!byRow) {
-          byRow = new Map<number, Set<number>>();
-          fanOutHorizontal.set(hash, byRow);
-        }
-        let set = byRow.get(foIdx);
-        if (!set) {
-          set = new Set<number>();
-          byRow.set(foIdx, set);
-        }
-        set.add(col);
-      };
-
-      // Gather ancestry row indices and seed each with its nodeColumn
-      const ancestryIndices: number[] = [];
-      for (let i = 0; i < rows.length; i++) {
-        if (aSet.has(rows[i].commit.hash)) {
-          ancestryIndices.push(i);
-          addCol(rows[i].commit.hash, rows[i].nodeColumn);
-        }
-      }
-
-      // For each consecutive pair of ancestry rows, compute passthrough columns
-      // and per-fan-out-row horizontal bright sets.
-      for (let p = 0; p + 1 < ancestryIndices.length; p++) {
-        const childIdx = ancestryIndices[p];
-        const parentIdx = ancestryIndices[p + 1];
-        const childRow = rows[childIdx];
-        const parentRow = rows[parentIdx];
-        const childCol = childRow.nodeColumn;
-        const parentCol = parentRow.nodeColumn;
-
-        // Intermediate rows: brighten childCol if active, else try parentCol.
-        // The glyph filter in dimChars ensures only │ passthrough glyphs actually
-        // stay bright — ┼ crossings at the same column remain dimmed.
-        for (let r = childIdx + 1; r < parentIdx; r++) {
-          const row = rows[r];
-          if (row.columns[childCol]?.active) {
-            addCol(row.commit.hash, childCol);
-          } else if (childCol !== parentCol && row.columns[parentCol]?.active) {
-            addCol(row.commit.hash, parentCol);
-          }
-        }
-
-        // When two consecutive ancestry nodes are in different lanes, the horizontal
-        // connector arm on the parent's fan-out row should stay bright. We find the
-        // specific fan-out row that reaches the ancestry child's column and mark only
-        // that row's columns as bright. Commit-row merge/branch connectors are NOT
-        // brightened — only fan-out rows carry the ancestry connection visual.
-        if (childCol !== parentCol) {
-          const lo = Math.min(childCol, parentCol);
-          const hi = Math.max(childCol, parentCol);
-          const parentHash = parentRow.commit.hash;
-
-          const foRows = parentRow.fanOutRows;
-          if (foRows) {
-            for (let fi = 0; fi < foRows.length; fi++) {
-              const reachesChild = foRows[fi].some(
-                c => c.column === childCol && (c.type === "corner-bottom-right" || c.type === "corner-bottom-left"),
-              );
-              if (reachesChild) {
-                for (let c = lo; c <= hi; c++) addFoHCol(parentHash, fi, c);
-                break;
-              }
-            }
-          }
-        }
-      }
-      return { vertical, fanOutHorizontal };
-    },
-  );
+  // For each row, compute which columns stay bright when ancestry highlighting
+  // is active. Delegates to the pure `computeBrightColumns` function.
+  const brightColumnsByHash = createMemo(() => {
+    const aSet = state.ancestrySet();
+    if (aSet === null) return null;
+    return computeBrightColumns(aSet, state.graphRows());
+  });
 
   // Single viewport offset: reacts to the highlighted commit's node column.
   // All rows share the same offset, giving a horizontal "scroll" effect.
