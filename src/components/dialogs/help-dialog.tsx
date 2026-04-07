@@ -95,20 +95,13 @@ export default function HelpDialog(_props: Readonly<{ onClose: () => void }>) {
         height={dialogHeight()}
         backgroundColor={t().backgroundPanel}
         flexDirection="column"
-        paddingX={0}
+        paddingX={1}
         paddingY={1}
       >
         <DialogTitleBar title="Help" />
 
-        {/* Tab bar — matches detail panel style exactly */}
-        <box
-          flexDirection="row"
-          width="100%"
-          flexShrink={0}
-          border={["bottom"]}
-          borderStyle="single"
-          borderColor={t().border}
-        >
+        {/* Tab bar — paddingX={4} matches menu-dialog convention (outer=1, inner=4) */}
+        <box flexDirection="row" width="100%" paddingX={4} flexShrink={0}>
           <For each={TABS}>
             {tab => {
               const isActive = () => activeTab() === tab.id;
@@ -130,6 +123,10 @@ export default function HelpDialog(_props: Readonly<{ onClose: () => void }>) {
               );
             }}
           </For>
+        </box>
+        {/* Muted separator below tabs */}
+        <box width="100%" paddingX={4} flexShrink={0}>
+          <box flexGrow={1} border={["top"]} borderStyle="single" borderColor={t().border} />
         </box>
 
         {/* Keybind list */}
