@@ -84,10 +84,10 @@ export default function Footer(
           <Show when={props.filterActive}>
             <KeyHint key="esc" desc=" clear  " />
           </Show>
+          <KeyHint key="Shift+←/→" desc=" switch mode  " />
           <Show when={props.compact} fallback={<KeyHint key="←/→" desc=" switch tab  " />}>
             <KeyHint key="enter" desc=" show details  " />
           </Show>
-          <KeyHint key="Shift+←/→" desc=" switch mode  " />
           <KeyHint key="↑/↓" desc=" navigate" />
         </Show>
       </box>
