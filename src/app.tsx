@@ -419,7 +419,15 @@ function AppContent(props: Readonly<AppContentProps>) {
                     <input
                       focused={searchFocused() || commandBarMode() === "command" || commandBarMode() === "path"}
                       flexGrow={1}
-                      placeholder={commandBarMode() === "idle" ? "Enter command..." : ""}
+                      placeholder={
+                        commandBarMode() === "command"
+                          ? "type command..."
+                          : commandBarMode() === "search"
+                            ? "search commits..."
+                            : commandBarMode() === "path"
+                              ? "filter by path..."
+                              : ""
+                      }
                       value={
                         commandBarMode() === "command" || commandBarMode() === "path"
                           ? commandBarValue()
@@ -463,8 +471,13 @@ function AppContent(props: Readonly<AppContentProps>) {
                         {"  "}
                       </text>
                     </Show>
-                    <text flexShrink={0} wrapMode="none" fg={themeState.theme().accent}>
-                      Git
+                    <text
+                      flexShrink={0}
+                      wrapMode="none"
+                      fg={themeState.theme().background}
+                      bg={themeState.theme().accent}
+                    >
+                      {" Git "}
                     </text>
                     <text flexShrink={0} wrapMode="none" fg={themeState.theme().foregroundMuted}>
                       {"  "}
