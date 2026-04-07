@@ -390,27 +390,39 @@ function AppContent(props: Readonly<AppContentProps>) {
                 >
                   {/* Command bar input + result count */}
                   <box flexGrow={1} flexDirection="row">
-                    {/* Command mode prefix */}
+                    {/* Mode prefix — shown in command/path/search modes */}
                     <Show when={commandBarMode() === "command"}>
                       <text flexShrink={0} wrapMode="none" fg={themeState.theme().accent}>
                         {":"}
                       </text>
                     </Show>
-                    {/* Path mode prefix */}
                     <Show when={commandBarMode() === "path"}>
                       <text flexShrink={0} wrapMode="none" fg={themeState.theme().accent}>
                         {"path: "}
                       </text>
                     </Show>
-                    {/* Command / path text display (non-interactive) */}
-                    <Show when={commandBarMode() === "command" || commandBarMode() === "path"}>
-                      <text flexGrow={1} wrapMode="none" fg={themeState.theme().foreground}>
-                        {commandBarValue()}
-                        <text fg={themeState.theme().accent}>{"█"}</text>
+                    <Show when={commandBarMode() === "search"}>
+                      <text flexShrink={0} wrapMode="none" fg={themeState.theme().accent}>
+                        {"/"}
                       </text>
                     </Show>
-                    {/* Search / idle: real <input> */}
-                    <Show when={commandBarMode() === "search" || commandBarMode() === "idle"}>
+                    {/*
+                      The <input> is always mounted to avoid opentui renderer state issues
+                      that occur when an input is unmounted mid-keypress.
+                      - idle: unfocused, shows placeholder "Enter command..."
+                      - search: focused, shows search text
+                      - command/path: unfocused, hidden via width=0 — text shown separately
+                    */}
+                    <Show
+                      when={commandBarMode() === "idle" || commandBarMode() === "search"}
+                      fallback={
+                        /* command / path mode: show typed text as plain text, input hidden */
+                        <text flexGrow={1} wrapMode="none" fg={themeState.theme().foreground}>
+                          {commandBarValue()}
+                          <text fg={themeState.theme().accent}>{"█"}</text>
+                        </text>
+                      }
+                    >
                       <input
                         focused={searchFocused()}
                         flexGrow={1}
