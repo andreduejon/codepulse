@@ -21,6 +21,8 @@ interface KeyboardNavigationOptions {
   layoutMode: Accessor<LayoutMode>;
   searchFocused: Accessor<boolean>;
   setSearchFocused: (v: boolean) => void;
+  /** Current search input value (the raw text in the input, before debounce). */
+  searchInputValue: Accessor<string>;
   /** Set the local search input value (independent of the active filter). */
   setSearchInputValue: (v: string) => void;
   /** Cancel the pending search debounce timer (for immediate clear on Esc). */
@@ -80,6 +82,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     layoutMode,
     searchFocused,
     setSearchFocused,
+    searchInputValue,
     setSearchInputValue,
     clearSearchDebounce,
     getDetailScrollboxRef,
@@ -173,15 +176,8 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         if (cmd) onCommandExecute(cmd);
         return;
       }
-      if (e.name === "backspace") {
-        setCommandBarValue(commandBarValue().slice(0, -1));
-        return;
-      }
-      // Printable single character
-      if (e.sequence && e.sequence.length === 1 && !e.ctrl && !e.meta) {
-        setCommandBarValue(commandBarValue() + e.sequence);
-        return;
-      }
+      // All other keys (printable chars, backspace, arrows) pass through to
+      // the native <input> widget which manages editing state directly.
       return;
     }
 
@@ -196,7 +192,14 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
       }
       if (e.name === "return" && searchFocused()) {
         e.preventDefault();
-        confirmSearch();
+        // Empty input: clear filter and return to idle
+        if (!searchInputValue().trim()) {
+          setSearchFocused(false);
+          clearFilterAndRestore(state.preSearchCursorHash() ?? undefined);
+          setCommandBarMode("idle");
+        } else {
+          confirmSearch();
+        }
         return;
       }
       // All other keys pass to the native <input> while focused

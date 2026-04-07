@@ -327,6 +327,7 @@ function AppContent(props: Readonly<AppContentProps>) {
     layoutMode,
     searchFocused,
     setSearchFocused,
+    searchInputValue,
     setSearchInputValue,
     clearSearchDebounce: () => clearTimeout(searchDebounceTimer),
     getDetailScrollboxRef: () => detailScrollboxRef,
@@ -392,17 +393,13 @@ function AppContent(props: Readonly<AppContentProps>) {
                   <box flexGrow={1} flexDirection="row">
                     {/*
                       Flat layout — no Show toggling the <input> in/out.
-                      All elements are always mounted; visibility is driven
-                      by width/flexGrow so opentui never unmounts the input
-                      mid-keypress (which breaks the renderer state).
-
-                      Layout by mode:
-                        idle    → input flexGrow=1, prefix hidden, cmdText hidden
-                        search  → prefix "/" + input flexGrow=1, cmdText hidden
-                        command → prefix ":" + cmdText flexGrow=1, input width=0
-                        path    → prefix "path: " + cmdText flexGrow=1, input width=0
+                      The single <input> widget is always mounted and always
+                      visible (flexGrow=1). The mode prefix changes text,
+                      and the value/focused props are mode-aware so the native
+                      cursor renders identically across command, path, and search
+                      modes.
                     */}
-                    {/* Mode prefix (always rendered, empty string when not active) */}
+                    {/* Mode prefix (always rendered, empty string in idle) */}
                     <text flexShrink={0} wrapMode="none" fg={themeState.theme().accent}>
                       {commandBarMode() === "command"
                         ? ":"
@@ -412,23 +409,31 @@ function AppContent(props: Readonly<AppContentProps>) {
                             ? "/"
                             : ""}
                     </text>
-                    {/* Command / path typed text — visible only in command/path modes */}
-                    <text
-                      flexGrow={commandBarMode() === "command" || commandBarMode() === "path" ? 1 : 0}
-                      wrapMode="none"
-                      fg={themeState.theme().foreground}
-                    >
-                      {commandBarMode() === "command" || commandBarMode() === "path" ? `${commandBarValue()}█` : ""}
-                    </text>
-                    {/* The <input> is always mounted. In command/path mode its width
-                        is clamped to 0 so it is invisible but still exists in the tree. */}
+                    {/* Single <input> for all modes — focused whenever any mode is active */}
                     <input
-                      focused={searchFocused()}
-                      flexGrow={commandBarMode() === "idle" || commandBarMode() === "search" ? 1 : 0}
-                      width={commandBarMode() === "idle" || commandBarMode() === "search" ? undefined : 0}
-                      placeholder={commandBarMode() === "idle" ? "Enter command..." : "Search commits..."}
-                      value={searchInputValue()}
-                      onInput={handleSearchInput}
+                      focused={searchFocused() || commandBarMode() === "command" || commandBarMode() === "path"}
+                      flexGrow={1}
+                      placeholder={
+                        commandBarMode() === "search"
+                          ? "Search commits..."
+                          : commandBarMode() === "command"
+                            ? "command..."
+                            : commandBarMode() === "path"
+                              ? "path filter..."
+                              : "/ search  : command"
+                      }
+                      value={
+                        commandBarMode() === "command" || commandBarMode() === "path"
+                          ? commandBarValue()
+                          : searchInputValue()
+                      }
+                      onInput={val => {
+                        if (commandBarMode() === "command" || commandBarMode() === "path") {
+                          setCommandBarValue(val);
+                        } else {
+                          handleSearchInput(val);
+                        }
+                      }}
                       fg={themeState.theme().foreground}
                       placeholderColor={themeState.theme().foregroundMuted}
                       backgroundColor={themeState.theme().background}
