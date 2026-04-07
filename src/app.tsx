@@ -1,8 +1,7 @@
-import { homedir } from "node:os";
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, onCleanup, onMount, Show, untrack } from "solid-js";
-import packageJson from "../package.json";
+import CommandBar from "./components/command-bar";
 import DetailPanel, { type DetailPanelProps } from "./components/detail-panel";
 import type { DetailNavRef } from "./components/detail-types";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./components/dialogs/dialog-chrome";
@@ -377,118 +376,21 @@ function AppContent(props: Readonly<AppContentProps>) {
                   <GraphView onLoadMore={loadMoreData} />
                 </box>
 
-                {/* Command bar section — left accent border, same padding as graph */}
-                <box
-                  width="100%"
-                  minHeight={5}
-                  backgroundColor={themeState.theme().background}
-                  paddingX={2}
-                  paddingY={1}
-                  flexDirection="column"
-                  border={["left"]}
-                  borderStyle="single"
-                  borderColor={state.detailFocused() ? themeState.theme().border : themeState.theme().accent}
-                >
-                  {/* Command bar input + result count */}
-                  <box flexGrow={1} flexDirection="row">
-                    {/* Single <input> for all modes — focused whenever any mode is active */}
-                    <input
-                      focused={searchFocused() || commandBarMode() === "command" || commandBarMode() === "path"}
-                      flexGrow={1}
-                      placeholder={
-                        commandBarMode() === "command"
-                          ? "Enter command..."
-                          : commandBarMode() === "search"
-                            ? "Search commits..."
-                            : commandBarMode() === "path"
-                              ? "Enter path..."
-                              : ""
-                      }
-                      value={
-                        commandBarMode() === "command" || commandBarMode() === "path"
-                          ? commandBarValue()
-                          : searchInputValue()
-                      }
-                      onInput={val => {
-                        if (commandBarMode() === "command" || commandBarMode() === "path") {
-                          setCommandBarValue(val);
-                        } else {
-                          handleSearchInput(val);
-                        }
-                      }}
-                      fg={themeState.theme().foreground}
-                      placeholderColor={themeState.theme().foregroundMuted}
-                      backgroundColor={themeState.theme().background}
-                    />
-                    <text
-                      flexShrink={0}
-                      wrapMode="none"
-                      fg={
-                        state.searchQuery() && state.filteredRows().length === 0
-                          ? themeState.theme().error
-                          : themeState.theme().foregroundMuted
-                      }
-                    >
-                      {"  "}
-                      {state.searchQuery()
-                        ? `${state.filteredRows().length} / ${state.graphRows().length}`
-                        : `${state.graphRows().length}`}
-                    </text>
-                  </box>
-
-                  <box height={1} />
-
-                  {/* Git label + repo path : branch + version */}
-                  <box flexDirection="row" width="100%">
-                    <Show when={state.error()}>
-                      <text flexShrink={0} wrapMode="none" fg={themeState.theme().error}>
-                        {"error: "}
-                        {state.error()}
-                        {"  "}
-                      </text>
-                    </Show>
-                    <text
-                      flexShrink={0}
-                      wrapMode="none"
-                      fg={themeState.theme().background}
-                      bg={themeState.theme().accent}
-                    >
-                      {" git "}
-                    </text>
-                    <text flexShrink={0} wrapMode="none">
-                      {" "}
-                    </text>
-                    {/* Mode badge — accent text on muted bg, visually paired with Git badge */}
-                    <text
-                      flexShrink={0}
-                      wrapMode="none"
-                      fg={themeState.theme().accent}
-                      bg={themeState.theme().backgroundElementActive}
-                    >
-                      {commandBarMode() === "command"
-                        ? " command "
-                        : commandBarMode() === "search"
-                          ? " search "
-                          : commandBarMode() === "path"
-                            ? " path "
-                            : " idle "}
-                    </text>
-                    <text flexShrink={0} wrapMode="none" fg={themeState.theme().foregroundMuted}>
-                      {"  "}
-                      {state.repoPath() ? state.repoPath().replace(homedir(), "~") : ""}
-                      {state.currentBranch() ? `:${state.currentBranch()}` : ""}
-                    </text>
-                    <Show when={state.viewingBranch()}>
-                      <text flexShrink={0} wrapMode="none" fg={themeState.theme().accent}>
-                        {`  [viewing: ${state.viewingBranch()}]`}
-                      </text>
-                    </Show>
-                    <box flexGrow={1} />
-                    <text flexShrink={0} wrapMode="none" fg={themeState.theme().foregroundMuted}>
-                      {`codepulse v${packageJson.version}`}
-                    </text>
-                  </box>
-                </box>
+                {/* Command bar section */}
+                <CommandBar
+                  commandBarMode={commandBarMode}
+                  commandBarValue={commandBarValue}
+                  searchInputValue={searchInputValue}
+                  searchFocused={searchFocused}
+                  onInput={val => {
+                    if (commandBarMode() === "command" || commandBarMode() === "path") {
+                      setCommandBarValue(val);
+                    } else {
+                      handleSearchInput(val);
+                    }
+                  }}
+                  detailFocused={state.detailFocused}
+                />
 
                 {/* Footer - hotkey hints, 1 char gap above, right-aligned */}
                 <box height={1} />
