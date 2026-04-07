@@ -1,5 +1,50 @@
 /** The kind of a display line in the diff viewer. */
-export type DisplayLineKind = "hunk-header" | "add" | "delete" | "context" | "spacer";
+export type DisplayLineKind = "hunk-header" | "add" | "delete" | "context" | "spacer" | "continuation";
+
+/**
+ * Expand a display line array so that each logical line whose content
+ * exceeds `maxWidth` characters is followed by one or more `"continuation"`
+ * synthetic rows containing the overflow text.
+ *
+ * This keeps the virtual-windowing model (1 entry = 1 row) correct while
+ * giving the renderer pre-split strings to display directly with `wrapMode="none"`.
+ *
+ * Lines of kind `"spacer"`, `"hunk-header"`, and `"continuation"` are never
+ * split (spacers have no content; hunk-headers are always one line; continuations
+ * are already split).
+ */
+export function expandWithContinuations<T extends { kind: DisplayLineKind; content: string }>(
+  lines: T[],
+  maxWidth: number,
+): Array<T | { kind: "continuation"; content: string; originalKind: DisplayLineKind }> {
+  if (maxWidth <= 0) return lines;
+  const result: Array<T | { kind: "continuation"; content: string; originalKind: DisplayLineKind }> = [];
+
+  for (const line of lines) {
+    if (line.kind === "spacer" || line.kind === "hunk-header" || line.kind === "continuation") {
+      result.push(line);
+      continue;
+    }
+    const text = line.content;
+    if (text.length <= maxWidth) {
+      result.push(line);
+      continue;
+    }
+    // Push the original line with content truncated to first chunk
+    result.push({ ...line, content: text.slice(0, maxWidth) });
+    // Push continuation rows for the rest
+    let offset = maxWidth;
+    while (offset < text.length) {
+      result.push({
+        kind: "continuation",
+        content: text.slice(offset, offset + maxWidth),
+        originalKind: line.kind,
+      });
+      offset += maxWidth;
+    }
+  }
+  return result;
+}
 
 /**
  * Convert a raw hunk header like `@@ -5,6 +12,8 @@ function foo()` into

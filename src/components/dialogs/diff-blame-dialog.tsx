@@ -7,7 +7,14 @@ import type { BlameLine, DiffTarget, FileDiff } from "../../git/types";
 import { useT } from "../../hooks/use-t";
 import { KeyHint } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
-import { buildRowOffsets, computeDiffStats, findLineAtRow, formatHunkHeader } from "./diff-utils";
+import {
+  buildRowOffsets,
+  computeDiffStats,
+  type DisplayLineKind,
+  expandWithContinuations,
+  findLineAtRow,
+  formatHunkHeader,
+} from "./diff-utils";
 import { buildDiffTitleParts, TITLE_SEP } from "./title-utils";
 
 /** Maximum dialog width in columns (fits 120-150 char lines with gutter). */
@@ -103,6 +110,8 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
   /** Whether blame has ever been fetched (lazy — only on first `b` press). */
   let blameFetched = false;
   const [viewMode, setViewMode] = createSignal<DiffViewMode>("mixed");
+  /** Whether line wrapping is enabled (default on). */
+  const [wrapEnabled, setWrapEnabled] = createSignal(true);
 
   let scrollboxRef: ScrollBoxRenderable | undefined;
 
@@ -189,12 +198,32 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
   });
 
   // Filter lines based on view mode (mixed / new only / old only)
-  const visibleLines = createMemo(() => {
+  const filteredLines = createMemo(() => {
     const mode = viewMode();
     const lines = displayLines();
     if (mode === "mixed") return lines;
     if (mode === "new") return lines.filter(l => l.kind !== "delete");
     return lines.filter(l => l.kind !== "add");
+  });
+
+  /**
+   * Width available for line content inside the scrollbox:
+   *   dialogWidth - paddingX*2 (4) - gutter - prefix " + " (4) - blame col (conditional)
+   * The gutter is 2*gutterWidth + 1 space. We add a small safety margin of 2.
+   */
+  const contentWidth = createMemo(() => {
+    const dw = dialogWidth();
+    const gutterW = gutterWidth(maxOldLineNo()) + 1 + gutterWidth(maxNewLineNo()); // "old new"
+    const prefixW = 4; // "  + " or "  - "
+    const blameW = showBlame() ? BLAME_COL_WIDTH : 0;
+    const paddingW = 8; // paddingX={4} * 2
+    return Math.max(20, dw - paddingW - blameW - gutterW - prefixW - 2);
+  });
+
+  /** Lines with wrapping applied (or raw filtered lines when wrap is off). */
+  const visibleLines = createMemo(() => {
+    if (!wrapEnabled()) return filteredLines();
+    return expandWithContinuations(filteredLines(), contentWidth());
   });
 
   // Build a blame lookup: newLineNo → BlameLine
@@ -373,6 +402,10 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
           const idx = VIEW_MODE_CYCLE.indexOf(prev);
           return VIEW_MODE_CYCLE[(idx + 1) % VIEW_MODE_CYCLE.length];
         });
+        break;
+      case "w":
+        e.preventDefault();
+        setWrapEnabled(prev => !prev);
         break;
     }
   });
@@ -584,8 +617,6 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
                     );
                   }
 
-                  const prefix = linePrefix(line.kind);
-
                   if (line.kind === "hunk-header") {
                     return (
                       <box flexDirection="row" width="100%">
@@ -602,6 +633,36 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
                       </box>
                     );
                   }
+
+                  // Continuation row — overflow from a wrapped line above
+                  if (line.kind === "continuation") {
+                    const origKind = (line as { kind: "continuation"; originalKind: DisplayLineKind }).originalKind;
+                    const gutterSpaces = " ".repeat(gutterWidth(maxOldLineNo()) + 1 + gutterWidth(maxNewLineNo()));
+                    return (
+                      <box flexDirection="row" width="100%" backgroundColor={lineBg(origKind)}>
+                        <Show when={showBlame()}>
+                          <box flexShrink={0} width={BLAME_COL_WIDTH} backgroundColor={t().backgroundElement}>
+                            <text wrapMode="none" fg={t().foregroundMuted}>
+                              {" ".repeat(BLAME_COL_WIDTH)}
+                            </text>
+                          </box>
+                        </Show>
+                        {/* Empty gutter — aligns with line number columns */}
+                        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                          {gutterSpaces}
+                        </text>
+                        {/* Indent to match prefix column */}
+                        <text flexShrink={0} wrapMode="none" fg={lineColor(origKind)}>
+                          {"   ↵ "}
+                        </text>
+                        <text flexGrow={1} wrapMode="none" fg={lineColor(origKind)}>
+                          {line.content}
+                        </text>
+                      </box>
+                    );
+                  }
+
+                  const prefix = linePrefix(line.kind);
 
                   return (
                     <box flexDirection="row" width="100%" backgroundColor={lineBg(line.kind)}>
@@ -649,6 +710,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
           <KeyHint key={"\u2191/\u2193"} desc=" scroll  " />
           <KeyHint key="b" desc={showBlame() ? " hide blame  " : " show blame  "} />
           <KeyHint key="c" desc={` ${VIEW_MODE_NEXT_LABEL[viewMode()]}  `} />
+          <KeyHint key="w" desc={wrapEnabled() ? " wrap off  " : " wrap on  "} />
           <KeyHint key="g/G" desc=" top/bottom" />
         </DialogFooter>
       </box>
