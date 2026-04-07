@@ -172,8 +172,13 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
       if (e.name === "return") {
         e.preventDefault();
         const cmd = commandBarValue().trim();
-        exitCommandBar();
+        // Execute BEFORE exitCommandBar so setDialog() fires before blur's requestRender.
+        // For commands that set a new mode (e.g. :search, :path), onCommandExecute
+        // will set commandBarMode away from "command" — exitCommandBar detects this
+        // and skips the redundant mode change.
         if (cmd) onCommandExecute(cmd);
+        // Only exit if the command didn't transition to another mode itself
+        if (commandBarMode() === "command") exitCommandBar();
         return;
       }
       // All other keys (printable chars, backspace, arrows) pass through to

@@ -197,6 +197,10 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
     return max;
   });
 
+  // ── Dialog sizing ──────────────────────────────────────────────────
+  // Must be declared before contentWidth (which reads dialogWidth()) to avoid TDZ.
+  const dialogWidth = createMemo(() => Math.min(Math.max(72, Math.floor(dimensions().width * 0.85)), MAX_DIALOG_WIDTH));
+
   // Filter lines based on view mode (mixed / new only / old only)
   const filteredLines = createMemo(() => {
     const mode = viewMode();
@@ -234,9 +238,6 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
     }
     return map;
   });
-
-  // ── Dialog sizing ──────────────────────────────────────────────────
-  const dialogWidth = createMemo(() => Math.min(Math.max(72, Math.floor(dimensions().width * 0.85)), MAX_DIALOG_WIDTH));
 
   // ── Windowed rendering ─────────────────────────────────────────────
   // Track scroll position reactively via the scrollbar's "change" event.

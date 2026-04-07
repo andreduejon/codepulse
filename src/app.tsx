@@ -453,7 +453,7 @@ function AppContent(props: Readonly<AppContentProps>) {
                       fg={themeState.theme().background}
                       bg={themeState.theme().accent}
                     >
-                      {" Git "}
+                      {" git "}
                     </text>
                     <text flexShrink={0} wrapMode="none">
                       {" "}
