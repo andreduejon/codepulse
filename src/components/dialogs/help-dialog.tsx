@@ -4,56 +4,56 @@ import { useT } from "../../hooks/use-t";
 import { KeyHint } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
-type HelpTab = "general" | "detail" | "diff" | "commands";
+type HelpTab = "general" | "details" | "diff" | "commands";
 
 const TABS: { id: HelpTab; label: string }[] = [
   { id: "general", label: "General" },
-  { id: "detail", label: "Detail" },
+  { id: "details", label: "Details" },
   { id: "diff", label: "Diff" },
   { id: "commands", label: "Commands" },
 ];
 
 const KEYBINDS: Record<HelpTab, [string, string][]> = {
   general: [
-    ["↑/↓  or  j/k", "Navigate list (1 row)"],
-    ["Shift+↑/↓  or  J/K", "Jump 10 rows"],
-    ["g / G", "First / last commit"],
-    ["→ / l", "Focus detail panel"],
-    ["Enter (compact)", "Open detail dialog"],
-    [":", "Open command bar"],
-    ["/", "Search commits"],
-    ["Shift+←/→", "Cycle command bar mode"],
-    ["Esc", "Back / cancel (cascade)"],
+    ["↑/↓  or  j/k", "Navigate list"],
+    ["shift + ↑/↓  or shift + j/k", "Scroll 10 rows"],
+    ["g", "Navigate to first commit"],
+    ["G", "Navigate to last commit"],
+    ["→ or l", "Focus details panel"],
+    ["enter (compact)", "Open details dialog"],
+    [":", "Switch to command mode"],
+    ["/", "Switch to search mode"],
+    ["shift + ←/→", "Switch mode"],
+    ["esc", "Cancel, back (cascading)"],
   ],
-  detail: [
-    ["← / h", "Previous tab / exit detail"],
-    ["→ / l", "Next tab"],
-    ["↑/↓ (detail)", "Navigate items"],
-    ["Shift+↑/↓", "Jump 10 rows"],
-    ["g / G", "First / last item"],
-    ["PgUp/PgDn", "Scroll half page"],
-    ["Enter", "Activate item"],
+  details: [
+    ["← or h", "Previous tab, Exit details"],
+    ["→ or l", "Next tab"],
+    ["↑/↓", "Navigate items"],
+    ["shift + ↑/↓", "Scroll 10 items"],
+    ["g", "Navigate to first item"],
+    ["G", "Navigate to last item"],
+    ["enter", "Activate item"],
   ],
   diff: [
-    ["Enter (file)", "View diff"],
-    ["← / →", "Previous / next file"],
-    ["↑/↓  or  j/k", "Scroll 1 line"],
-    ["Shift+↑/↓", "Scroll 10 lines"],
-    ["PgUp/PgDn", "Scroll half page"],
+    ["← or h", "Previous file"],
+    ["→ or l", "Next file"],
+    ["↑/↓  or  j/k", "Navigate items"],
+    ["shift + ↑/↓", "Scroll 10 items"],
     ["b", "Toggle blame"],
     ["c", "Cycle view: mixed/new/old"],
     ["w", "Toggle line wrap"],
-    ["Esc", "Close diff"],
+    ["esc", "Close diff dialog"],
   ],
   commands: [
-    [":q  /  :quit", "Quit the application"],
-    [":m  /  :menu", "Open menu"],
-    [":f  /  :fetch", "Fetch from remote"],
-    [":r  /  :reload", "Reload data"],
-    [":p  /  :path", "Filter by path"],
-    [":search", "Open search"],
-    [":theme", "Change theme"],
-    [":help", "Show this help"],
+    [":q or :quit", "Quit the application"],
+    [":m or :menu", "Open menu dialog"],
+    [":f or :fetch", "Fetch from remote"],
+    [":r or :reload", "Reload data from disk"],
+    [":p or :path", "Switch to path mode"],
+    [":search", "Switch to search mode"],
+    [":theme", "Open theme dialog"],
+    [":help", "Open help dialog"],
   ],
 };
 
@@ -136,7 +136,7 @@ export default function HelpDialog(_props: Readonly<{ onClose: () => void }>) {
               {([key, desc]) => (
                 <box flexDirection="row" width="100%" paddingX={4}>
                   <text flexShrink={0} wrapMode="none" fg={t().accent}>
-                    <strong>{(key ?? "").padEnd(20)}</strong>
+                    <strong>{(key ?? "").padEnd(36)}</strong>
                   </text>
                   <text flexGrow={1} wrapMode="none" fg={t().foreground}>
                     {desc}
