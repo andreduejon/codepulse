@@ -397,6 +397,24 @@ function AppContent(props: Readonly<AppContentProps>) {
                       Command/path/search: no prefix text, no placeholder — just
                       the native cursor at position 0.
                     */}
+                    {/* Mode badge — dimmed pill, matches stash/uncommitted badge style */}
+                    <text
+                      flexShrink={0}
+                      wrapMode="none"
+                      fg={themeState.theme().foreground}
+                      bg={themeState.theme().backgroundElementActive}
+                    >
+                      {commandBarMode() === "command"
+                        ? " COMMAND "
+                        : commandBarMode() === "search"
+                          ? " SEARCH "
+                          : commandBarMode() === "path"
+                            ? " PATH "
+                            : " IDLE "}
+                    </text>
+                    <text flexShrink={0} wrapMode="none">
+                      {" "}
+                    </text>
                     {/* Single <input> for all modes — focused whenever any mode is active */}
                     <input
                       focused={searchFocused() || commandBarMode() === "command" || commandBarMode() === "path"}
