@@ -1,5 +1,6 @@
 import { createEffect, createSignal, onCleanup, Show } from "solid-js";
 import { useAppState } from "../context/state";
+import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
 import { useT } from "../hooks/use-t";
 import { KeyHint } from "./key-hint";
 
@@ -8,7 +9,7 @@ const SPINNER_FRAMES = ["\u28FE", "\u28FD", "\u28FB", "\u28BF", "\u287F", "\u283
 const SPINNER_FRAME_MS = 120;
 
 export default function Footer(
-  props: Readonly<{ searchFocused?: boolean; filterActive?: boolean; compact?: boolean }>,
+  props: Readonly<{ commandBarMode: () => CommandBarMode; filterActive?: boolean; compact?: boolean }>,
 ) {
   const t = useT();
   const { state } = useAppState();
@@ -47,6 +48,8 @@ export default function Footer(
 
   const enterAction = () => (state.detailFocused() ? state.detailCursorAction() : null);
 
+  const mode = () => props.commandBarMode();
+
   return (
     <>
       <box flexDirection="row" width="100%" height={1}>
@@ -61,29 +64,31 @@ export default function Footer(
         {/* Spacer pushes hints right */}
         <box flexGrow={1} />
 
-        {/* Keyboard hints — context-dependent on search focus state */}
-        <Show
-          when={!props.searchFocused}
-          fallback={
-            <>
-              <KeyHint key="enter" desc=" confirm  " />
-              <KeyHint key="esc" desc=" cancel" />
-            </>
-          }
-        >
+        {/* ── Detail focused ───────────────────────────────────────────────── */}
+        <Show when={state.detailFocused()}>
           <KeyHint key={enterAction() ? "enter" : ""} desc={enterAction() ? ` ${enterAction()}  ` : ""} />
-          <Show when={state.detailFocused()}>
-            <KeyHint key="esc" desc=" back  " />
-          </Show>
-          <Show when={props.filterActive && !state.detailFocused()}>
+          <KeyHint key="esc" desc=" back  " />
+          <KeyHint key="←/→" desc=" switch tab  " />
+          <KeyHint key="↑/↓" desc=" navigate" />
+        </Show>
+
+        {/* ── Input modes (command / search / path) ────────────────────────── */}
+        <Show when={!state.detailFocused() && mode() !== "idle"}>
+          <KeyHint key="enter" desc=" confirm  " />
+          <KeyHint key="esc" desc=" cancel  " />
+          <KeyHint key="Shift+←/→" desc=" switch mode" />
+        </Show>
+
+        {/* ── Graph idle ───────────────────────────────────────────────────── */}
+        <Show when={!state.detailFocused() && mode() === "idle"}>
+          <Show when={props.filterActive}>
             <KeyHint key="esc" desc=" clear  " />
           </Show>
-          <Show when={!props.compact} fallback={<KeyHint key="enter" desc=" show details  " />}>
-            <KeyHint key={"\u2190/\u2192"} desc=" switch tab  " />
+          <Show when={props.compact} fallback={<KeyHint key="←/→" desc=" switch tab  " />}>
+            <KeyHint key="enter" desc=" show details  " />
           </Show>
-          <KeyHint key={"\u2191/\u2193"} desc=" navigate  " />
-          <KeyHint key="/" desc=" search  " />
-          <KeyHint key=":" desc=" cmd" />
+          <KeyHint key="Shift+←/→" desc=" switch mode  " />
+          <KeyHint key="↑/↓" desc=" navigate" />
         </Show>
       </box>
       <box height={1} />

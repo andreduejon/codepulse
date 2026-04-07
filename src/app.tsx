@@ -395,7 +395,7 @@ function AppContent(props: Readonly<AppContentProps>) {
                 {/* Footer - hotkey hints, 1 char gap above, right-aligned */}
                 <box height={1} />
                 <Footer
-                  searchFocused={searchFocused()}
+                  commandBarMode={commandBarMode}
                   filterActive={!!state.searchQuery()}
                   compact={layoutMode() === "compact"}
                 />
