@@ -390,50 +390,49 @@ function AppContent(props: Readonly<AppContentProps>) {
                 >
                   {/* Command bar input + result count */}
                   <box flexGrow={1} flexDirection="row">
-                    {/* Mode prefix — shown in command/path/search modes */}
-                    <Show when={commandBarMode() === "command"}>
-                      <text flexShrink={0} wrapMode="none" fg={themeState.theme().accent}>
-                        {":"}
-                      </text>
-                    </Show>
-                    <Show when={commandBarMode() === "path"}>
-                      <text flexShrink={0} wrapMode="none" fg={themeState.theme().accent}>
-                        {"path: "}
-                      </text>
-                    </Show>
-                    <Show when={commandBarMode() === "search"}>
-                      <text flexShrink={0} wrapMode="none" fg={themeState.theme().accent}>
-                        {"/"}
-                      </text>
-                    </Show>
                     {/*
-                      The <input> is always mounted to avoid opentui renderer state issues
-                      that occur when an input is unmounted mid-keypress.
-                      - idle: unfocused, shows placeholder "Enter command..."
-                      - search: focused, shows search text
-                      - command/path: unfocused, hidden via width=0 — text shown separately
+                      Flat layout — no Show toggling the <input> in/out.
+                      All elements are always mounted; visibility is driven
+                      by width/flexGrow so opentui never unmounts the input
+                      mid-keypress (which breaks the renderer state).
+
+                      Layout by mode:
+                        idle    → input flexGrow=1, prefix hidden, cmdText hidden
+                        search  → prefix "/" + input flexGrow=1, cmdText hidden
+                        command → prefix ":" + cmdText flexGrow=1, input width=0
+                        path    → prefix "path: " + cmdText flexGrow=1, input width=0
                     */}
-                    <Show
-                      when={commandBarMode() === "idle" || commandBarMode() === "search"}
-                      fallback={
-                        /* command / path mode: show typed text as plain text, input hidden */
-                        <text flexGrow={1} wrapMode="none" fg={themeState.theme().foreground}>
-                          {commandBarValue()}
-                          <text fg={themeState.theme().accent}>{"█"}</text>
-                        </text>
-                      }
+                    {/* Mode prefix (always rendered, empty string when not active) */}
+                    <text flexShrink={0} wrapMode="none" fg={themeState.theme().accent}>
+                      {commandBarMode() === "command"
+                        ? ":"
+                        : commandBarMode() === "path"
+                          ? "path: "
+                          : commandBarMode() === "search"
+                            ? "/"
+                            : ""}
+                    </text>
+                    {/* Command / path typed text — visible only in command/path modes */}
+                    <text
+                      flexGrow={commandBarMode() === "command" || commandBarMode() === "path" ? 1 : 0}
+                      wrapMode="none"
+                      fg={themeState.theme().foreground}
                     >
-                      <input
-                        focused={searchFocused()}
-                        flexGrow={1}
-                        placeholder={commandBarMode() === "idle" ? "Enter command..." : "Search commits..."}
-                        value={searchInputValue()}
-                        onInput={handleSearchInput}
-                        fg={themeState.theme().foreground}
-                        placeholderColor={themeState.theme().foregroundMuted}
-                        backgroundColor={themeState.theme().background}
-                      />
-                    </Show>
+                      {commandBarMode() === "command" || commandBarMode() === "path" ? `${commandBarValue()}█` : ""}
+                    </text>
+                    {/* The <input> is always mounted. In command/path mode its width
+                        is clamped to 0 so it is invisible but still exists in the tree. */}
+                    <input
+                      focused={searchFocused()}
+                      flexGrow={commandBarMode() === "idle" || commandBarMode() === "search" ? 1 : 0}
+                      width={commandBarMode() === "idle" || commandBarMode() === "search" ? undefined : 0}
+                      placeholder={commandBarMode() === "idle" ? "Enter command..." : "Search commits..."}
+                      value={searchInputValue()}
+                      onInput={handleSearchInput}
+                      fg={themeState.theme().foreground}
+                      placeholderColor={themeState.theme().foregroundMuted}
+                      backgroundColor={themeState.theme().background}
+                    />
                     <text
                       flexShrink={0}
                       wrapMode="none"
