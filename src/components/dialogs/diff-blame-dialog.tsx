@@ -343,9 +343,9 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
     });
   };
 
-  // ── Reset scroll when visible lines change (file nav or view mode toggle) ──
+  // ── Reset scroll when underlying lines change (file nav or view mode toggle) ──
   createEffect(() => {
-    const _lines = visibleLines();
+    const _lines = filteredLines();
     setScrollTop(0);
     scrollboxRef?.scrollTo(0);
   });
@@ -654,7 +654,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
                         </text>
                         {/* Indent to match prefix column */}
                         <text flexShrink={0} wrapMode="none" fg={lineColor(origKind)}>
-                          {"   ↵ "}
+                          {"  ↵ "}
                         </text>
                         <text flexGrow={1} wrapMode="none" fg={lineColor(origKind)}>
                           {line.content}
