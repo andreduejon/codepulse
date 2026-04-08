@@ -44,7 +44,7 @@ const KEYBINDS: Record<HelpTab, [string, string][]> = {
     ["shift  ↑/↓", "Scroll 10 items"],
     ["b", "Toggle blame"],
     ["c", "Cycle view: mixed/new/old"],
-    ["w", "Toggle line wrap"],
+    ["w", "Enable/disable line wrap"],
     ["esc", "Close diff dialog"],
   ],
   commands: [

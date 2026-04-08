@@ -711,7 +711,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
           <KeyHint key={"\u2191/\u2193"} desc=" scroll  " />
           <KeyHint key="b" desc={showBlame() ? " hide blame  " : " show blame  "} />
           <KeyHint key="c" desc={` ${VIEW_MODE_NEXT_LABEL[viewMode()]}  `} />
-          <KeyHint key="w" desc={wrapEnabled() ? " wrap off  " : " wrap on  "} />
+          <KeyHint key="w" desc={wrapEnabled() ? " disable wrap  " : " enable wrap  "} />
         </DialogFooter>
       </box>
     </DialogOverlay>
