@@ -1,52 +1,9 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/solid";
 import { createSignal, For } from "solid-js";
 import { useT } from "../../hooks/use-t";
+import { HELP_TABS, type HelpTab, KEYBINDS } from "../../keybinds";
 import { KeyHint } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
-
-type HelpTab = "general" | "diff" | "commands";
-
-const TABS: { id: HelpTab; label: string }[] = [
-  { id: "general", label: "General" },
-  { id: "diff", label: "Diff" },
-  { id: "commands", label: "Commands" },
-];
-
-const KEYBINDS: Record<HelpTab, [string, string][]> = {
-  general: [
-    ["↑/↓  or  j/k", "Navigate"],
-    ["shift  ↑/↓  or  shift  j/k", "Jump 10 items"],
-    ["g", "First item"],
-    ["G", "Last item"],
-    ["←  or  h", "Exit details / previous tab"],
-    ["→  or  l", "Focus details / next tab"],
-    ["enter", "Activate / confirm"],
-    ["esc", "Back (cascading)"],
-    ["space", "Toggle ancestry highlighting"],
-    [":", "Command mode"],
-    ["/", "Search mode"],
-    ["shift  ←/→", "Switch mode"],
-  ],
-  diff: [
-    ["←  or  h", "Previous file"],
-    ["→  or  l", "Next file"],
-    ["b", "Toggle blame"],
-    ["c", "Cycle view mode"],
-    ["w", "Toggle line wrap"],
-    ["esc", "Close diff dialog"],
-  ],
-  commands: [
-    [":q or :quit", "Quit the application"],
-    [":m or :menu", "Open menu dialog"],
-    [":f or :fetch", "Fetch from remote"],
-    [":r or :reload", "Reload data from disk"],
-    [":p or :path", "Switch to path mode"],
-    [":search", "Switch to search mode"],
-    [":a or :ancestry", "Toggle ancestry highlighting"],
-    [":theme", "Open theme dialog"],
-    [":help", "Open help dialog"],
-  ],
-};
 
 export default function HelpDialog(_props: Readonly<{ onClose: () => void }>) {
   const t = useT();
@@ -56,16 +13,16 @@ export default function HelpDialog(_props: Readonly<{ onClose: () => void }>) {
 
   const [activeTab, setActiveTab] = createSignal<HelpTab>("general");
 
-  const tabIndex = () => TABS.findIndex(t => t.id === activeTab());
+  const tabIndex = () => HELP_TABS.findIndex(t => t.id === activeTab());
 
   const prevTab = () => {
     const idx = tabIndex();
-    if (idx > 0) setActiveTab(TABS[idx - 1].id);
+    if (idx > 0) setActiveTab(HELP_TABS[idx - 1].id);
   };
 
   const nextTab = () => {
     const idx = tabIndex();
-    if (idx < TABS.length - 1) setActiveTab(TABS[idx + 1].id);
+    if (idx < HELP_TABS.length - 1) setActiveTab(HELP_TABS[idx + 1].id);
   };
 
   useKeyboard(e => {
@@ -93,7 +50,7 @@ export default function HelpDialog(_props: Readonly<{ onClose: () => void }>) {
 
         {/* Tab bar — paddingX={4} matches menu-dialog convention (outer=1, inner=4) */}
         <box flexDirection="row" width="100%" paddingX={4} flexShrink={0}>
-          <For each={TABS}>
+          <For each={HELP_TABS}>
             {tab => {
               const isActive = () => activeTab() === tab.id;
               const lineColor = () => (isActive() ? t().accent : t().border);
