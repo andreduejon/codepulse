@@ -83,10 +83,10 @@ export default function HelpDialog(_props: Readonly<{ onClose: () => void }>) {
             <For each={KEYBINDS[activeTab()]}>
               {([key, desc]) => (
                 <box flexDirection="row" width="100%" paddingX={4}>
-                  <text flexShrink={0} wrapMode="none" fg={t().accent}>
-                    <strong>{(key ?? "").padEnd(36)}</strong>
+                  <text flexShrink={0} width={28} wrapMode="none" fg={t().accent}>
+                    <strong>{key}</strong>
                   </text>
-                  <text flexGrow={1} wrapMode="none" fg={t().foreground}>
+                  <text flexGrow={1} wrapMode="none" truncate fg={t().foreground}>
                     {desc}
                   </text>
                 </box>
