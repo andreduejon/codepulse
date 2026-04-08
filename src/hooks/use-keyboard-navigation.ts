@@ -4,6 +4,7 @@ import type { Accessor } from "solid-js";
 import type { DetailNavRef } from "../components/detail-types";
 import { SHIFT_JUMP } from "../constants";
 import type { AppActions, AppState } from "../context/state";
+import { scrollElementIntoView } from "../utils/scroll";
 import { getAvailableTabs } from "../utils/tab-utils";
 
 type DialogId = "menu" | "help" | "theme" | "diff-blame" | "detail" | null;
@@ -328,7 +329,9 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
           e.preventDefault();
           const delta = e.shift ? -SHIFT_JUMP : -1;
           actions.moveDetailCursor(delta, detailNavRef.itemCount);
-          scrollbox?.scrollBy(delta, "absolute");
+          const newIdx = state.detailCursorIndex();
+          const el = detailNavRef.itemRefs[newIdx];
+          if (scrollbox && el) scrollElementIntoView(scrollbox, el);
           return;
         }
         case "down":
@@ -336,7 +339,9 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
           e.preventDefault();
           const delta = e.shift ? SHIFT_JUMP : 1;
           actions.moveDetailCursor(delta, detailNavRef.itemCount);
-          scrollbox?.scrollBy(delta, "absolute");
+          const newIdx = state.detailCursorIndex();
+          const el = detailNavRef.itemRefs[newIdx];
+          if (scrollbox && el) scrollElementIntoView(scrollbox, el);
           return;
         }
         case "return":

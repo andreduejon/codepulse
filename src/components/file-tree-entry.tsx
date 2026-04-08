@@ -1,3 +1,4 @@
+import type { Renderable } from "@opentui/core";
 import { Show } from "solid-js";
 import { useT } from "../hooks/use-t";
 import type { FileTreeRow } from "../utils/file-tree";
@@ -22,6 +23,8 @@ interface FileTreeEntryProps {
    * Used by uncommitted-detail's "untracked" tab where stats are unavailable.
    */
   hideStats?: boolean;
+  /** Optional ref callback forwarded to the outermost box for scroll-into-view. */
+  ref?: (el: Renderable) => void;
 }
 
 /**
@@ -34,7 +37,7 @@ export function FileTreeEntry(props: FileTreeEntryProps) {
   const t = useT();
 
   return (
-    <box flexDirection="row" width="100%" backgroundColor={props.highlightBg}>
+    <box ref={props.ref} flexDirection="row" width="100%" backgroundColor={props.highlightBg}>
       {/* Tree connector prefix */}
       <box flexShrink={0}>
         <text fg={t().border} wrapMode="none">

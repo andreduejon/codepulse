@@ -152,6 +152,7 @@ function AppContent(props: Readonly<AppContentProps>) {
     lastJumpFrom: null,
     pendingJumpDirection: null,
     scrollToFile: () => {},
+    itemRefs: [],
   };
 
   // Flag to suppress tab reset during child/parent jump navigation.

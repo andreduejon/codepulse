@@ -1,3 +1,4 @@
+import type { Renderable } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/solid";
 import type { JSXElement } from "solid-js";
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
@@ -202,6 +203,11 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     getStashFileTreeRows,
     getStashFileWidths,
   } = useStashState(commit);
+
+  // Element refs for each interactive item, indexed by flat item position.
+  // Populated via ref callbacks on each rendered interactive item, used by
+  // use-keyboard-navigation to call scrollElementIntoView after cursor moves.
+  const itemRefs: Renderable[] = [];
 
   // ── Build flat list of interactive items (tab-aware) ──
   // IMPORTANT: This memo must be defined AFTER fileTreeRows, stashEntries,
@@ -421,6 +427,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     if (props.navRef) {
       props.navRef.itemCount = interactiveItems().length;
       props.navRef.activateCurrentItem = activateCurrentItem;
+      props.navRef.itemRefs = itemRefs;
       props.navRef.scrollToFile = (filePath: string) => {
         // Find the file tree row index for this path
         const tab = activeTab();
@@ -644,8 +651,10 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     fg?: string;
     /** wrapMode for the text element. Defaults to "none". */
     wrapMode?: "none" | "char" | "word";
+    /** Optional ref callback forwarded to the outer box for scroll-into-view. */
+    ref?: (el: Renderable) => void;
   }) => (
-    <box flexDirection="row" backgroundColor={copyableHighlightBg(props.field)}>
+    <box ref={props.ref} flexDirection="row" backgroundColor={copyableHighlightBg(props.field)}>
       <text
         flexGrow={1}
         flexShrink={1}
@@ -733,12 +742,13 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
       count: number;
       expanded: boolean;
       section: "children" | "parents";
+      ref?: (el: Renderable) => void;
     }>,
   ) {
     const itemIdx = () => findItemIndex("section-header", headerProps.section);
 
     return (
-      <box backgroundColor={itemHighlightBg(itemIdx())}>
+      <box ref={headerProps.ref} backgroundColor={itemHighlightBg(itemIdx())}>
         <text fg={t().accent} wrapMode="none">
           <strong>
             {headerProps.expanded ? "▾" : "▸"} {headerProps.title} ({headerProps.count})
@@ -756,6 +766,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
       type: "child" | "parent";
       branchName: string;
       colorIndex: number;
+      ref?: (el: Renderable) => void;
     }>,
   ) {
     const itemIdx = () => findItemIndex(entryProps.type, undefined, entryProps.entryIndex);
@@ -778,7 +789,14 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     };
 
     return (
-      <box flexDirection="row" flexWrap="wrap" gap={1} paddingLeft={2} backgroundColor={itemHighlightBg(itemIdx())}>
+      <box
+        ref={entryProps.ref}
+        flexDirection="row"
+        flexWrap="wrap"
+        gap={1}
+        paddingLeft={2}
+        backgroundColor={itemHighlightBg(itemIdx())}
+      >
         <text fg={cursored() ? t().accent : t().foreground} wrapMode="none">
           {entryProps.hash.substring(0, SHORT_HASH_LEN)}
         </text>
@@ -907,7 +925,14 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   </text>
                 }
               >
-                <CopyableRow field="hash">{c().hash}</CopyableRow>
+                <CopyableRow
+                  field="hash"
+                  ref={(el: Renderable) => {
+                    itemRefs[findItemIndex("copyable", "hash")] = el;
+                  }}
+                >
+                  {c().hash}
+                </CopyableRow>
               </Show>
 
               <box height={1} />
@@ -922,7 +947,12 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   </text>
                 }
               >
-                <CopyableRow field="author">
+                <CopyableRow
+                  field="author"
+                  ref={(el: Renderable) => {
+                    itemRefs[findItemIndex("copyable", "author")] = el;
+                  }}
+                >
                   {c().author} {"<"}
                   {c().authorEmail}
                   {">"}
@@ -941,7 +971,14 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   </text>
                 }
               >
-                <CopyableRow field="date">{formatDate(c().authorDate)}</CopyableRow>
+                <CopyableRow
+                  field="date"
+                  ref={(el: Renderable) => {
+                    itemRefs[findItemIndex("copyable", "date")] = el;
+                  }}
+                >
+                  {formatDate(c().authorDate)}
+                </CopyableRow>
               </Show>
 
               <Show when={!isUncommitted() && showCommitter()}>
@@ -949,7 +986,12 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 <text fg={t().accent} wrapMode="none">
                   <strong>Committer</strong>
                 </text>
-                <CopyableRow field="committer">
+                <CopyableRow
+                  field="committer"
+                  ref={(el: Renderable) => {
+                    itemRefs[findItemIndex("copyable", "committer")] = el;
+                  }}
+                >
                   {c().committer} {"<"}
                   {c().committerEmail}
                   {">"}
@@ -959,7 +1001,14 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 <text fg={t().accent} wrapMode="none">
                   <strong>Commit Date</strong>
                 </text>
-                <CopyableRow field="commitDate">{formatDate(c().commitDate)}</CopyableRow>
+                <CopyableRow
+                  field="commitDate"
+                  ref={(el: Renderable) => {
+                    itemRefs[findItemIndex("copyable", "commitDate")] = el;
+                  }}
+                >
+                  {formatDate(c().commitDate)}
+                </CopyableRow>
               </Show>
 
               <box height={1} />
@@ -976,7 +1025,14 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   </text>
                 }
               >
-                <CopyableRow field="subject">{c().subject}</CopyableRow>
+                <CopyableRow
+                  field="subject"
+                  ref={(el: Renderable) => {
+                    itemRefs[findItemIndex("copyable", "subject")] = el;
+                  }}
+                >
+                  {c().subject}
+                </CopyableRow>
               </Show>
 
               <Show when={!isUncommitted() && detail()?.body}>
@@ -984,7 +1040,14 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 <text fg={t().accent} wrapMode="none">
                   <strong>Body</strong>
                 </text>
-                <CopyableRow field="body" fg={t().foregroundMuted} wrapMode="word">
+                <CopyableRow
+                  field="body"
+                  fg={t().foregroundMuted}
+                  wrapMode="word"
+                  ref={(el: Renderable) => {
+                    itemRefs[findItemIndex("copyable", "body")] = el;
+                  }}
+                >
                   {detail()?.body}
                 </CopyableRow>
               </Show>
@@ -998,6 +1061,9 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   count={filteredChildren().length}
                   expanded={childrenExpanded()}
                   section="children"
+                  ref={(el: Renderable) => {
+                    itemRefs[findItemIndex("section-header", "children")] = el;
+                  }}
                 />
                 <Show when={childrenExpanded()}>
                   <For each={filteredChildren()}>
@@ -1008,6 +1074,9 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                         type="child"
                         branchName={child.branch}
                         colorIndex={child.color}
+                        ref={(el: Renderable) => {
+                          itemRefs[findItemIndex("child", undefined, i())] = el;
+                        }}
                       />
                     )}
                   </For>
@@ -1022,6 +1091,9 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   count={r().parentHashes.length}
                   expanded={parentsExpanded()}
                   section="parents"
+                  ref={(el: Renderable) => {
+                    itemRefs[findItemIndex("section-header", "parents")] = el;
+                  }}
                 />
                 <Show when={parentsExpanded()}>
                   <For each={r().parentHashes}>
@@ -1032,6 +1104,9 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                         type="parent"
                         branchName={r().parentBranches[i()]}
                         colorIndex={r().parentColors[i()]}
+                        ref={(el: Renderable) => {
+                          itemRefs[findItemIndex("parent", undefined, i())] = el;
+                        }}
                       />
                     )}
                   </For>
@@ -1067,6 +1142,9 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                       scrolledName={scrolledName()}
                       addColWidth={fileWidths().addColWidth}
                       delColWidth={fileWidths().delColWidth}
+                      ref={(el: Renderable) => {
+                        itemRefs[itemIdx()] = el;
+                      }}
                     />
                   );
                 }}
@@ -1123,6 +1201,9 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                         collapsed: fileCollapsed,
                         highlightBg: itemHighlightBg(fileItemIdx),
                         scrolledName: scrolledFileName(),
+                        ref: (el: Renderable) => {
+                          itemRefs[fileItemIdx] = el;
+                        },
                       };
                     });
 
@@ -1139,6 +1220,9 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                       delColWidth={stashFw().delColWidth}
                       totalAdd={stashFw().totalAdd}
                       totalDel={stashFw().totalDel}
+                      headerRef={(el: Renderable) => {
+                        itemRefs[itemIdx()] = el;
+                      }}
                     />
                   );
                 }}
