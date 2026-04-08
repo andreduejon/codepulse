@@ -4,47 +4,35 @@ import { useT } from "../../hooks/use-t";
 import { KeyHint } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
-type HelpTab = "general" | "details" | "diff" | "commands";
+type HelpTab = "general" | "diff" | "commands";
 
 const TABS: { id: HelpTab; label: string }[] = [
   { id: "general", label: "General" },
-  { id: "details", label: "Details" },
   { id: "diff", label: "Diff" },
   { id: "commands", label: "Commands" },
 ];
 
 const KEYBINDS: Record<HelpTab, [string, string][]> = {
   general: [
-    ["↑/↓  or  j/k", "Navigate list"],
-    ["shift  ↑/↓  or  shift  j/k", "Scroll 10 rows"],
-    ["g", "Navigate to first commit"],
-    ["G", "Navigate to last commit"],
-    ["→  or  l", "Focus details panel"],
+    ["↑/↓  or  j/k", "Navigate"],
+    ["shift  ↑/↓  or  shift  j/k", "Jump 10 items"],
+    ["g", "First item"],
+    ["G", "Last item"],
+    ["←  or  h", "Exit details / previous tab"],
+    ["→  or  l", "Focus details / next tab"],
+    ["enter", "Activate / confirm"],
+    ["esc", "Back (cascading)"],
     ["space", "Toggle ancestry highlighting"],
-    ["enter (mode)", "Confirm"],
-    ["enter (compact)", "Open details dialog"],
-    [":", "Switch to command mode"],
-    ["/", "Switch to search mode"],
+    [":", "Command mode"],
+    ["/", "Search mode"],
     ["shift  ←/→", "Switch mode"],
-    ["esc", "Cancel, back (cascading)"],
-  ],
-  details: [
-    ["←  or  h", "Previous tab, Exit details"],
-    ["→  or  l", "Next tab"],
-    ["↑/↓", "Navigate items"],
-    ["shift  ↑/↓", "Scroll 10 items"],
-    ["g", "Navigate to first item"],
-    ["G", "Navigate to last item"],
-    ["enter", "Activate item"],
   ],
   diff: [
     ["←  or  h", "Previous file"],
     ["→  or  l", "Next file"],
-    ["↑/↓  or  j/k", "Navigate items"],
-    ["shift  ↑/↓", "Scroll 10 items"],
     ["b", "Toggle blame"],
-    ["c", "Cycle view: mixed/new/old"],
-    ["w", "Enable/disable line wrap"],
+    ["c", "Cycle view mode"],
+    ["w", "Toggle line wrap"],
     ["esc", "Close diff dialog"],
   ],
   commands: [
