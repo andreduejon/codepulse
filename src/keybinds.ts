@@ -11,7 +11,7 @@ export const HELP_TABS: { id: HelpTab; label: string }[] = [
 export const KEYBINDS: Record<HelpTab, [string, string][]> = {
   general: [
     ["↑/↓  or  j/k", "Navigate"],
-    ["shift  ↑/↓  or  shift  j/k", "Jump 10 items"],
+    ["shift ↑/↓  or  shift j/k", "Jump 10 items"],
     ["g", "First item"],
     ["G", "Last item"],
     ["←  or  h", "Exit details / previous tab"],
