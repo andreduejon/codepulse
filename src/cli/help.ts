@@ -20,19 +20,14 @@ OPTIONS:
   -v, --version          Show version
 
 KEYBOARD SHORTCUTS:
-  ↑/↓                    Navigate list
-  Shift+↑/↓              Jump 10 entries
-  PgUp/PgDn              Jump 20 entries
-  g/G                    First / last commit
-  Enter                  Focus detail / activate
-  →/←                    Focus detail / return to graph
-  Esc                    Back (cascade)
-  q                      Back, or quit
-  /                      Search commits
-  f                      Fetch from remote
-  R                      Reload data
-  m                      Menu
-  Ctrl+T                 Change theme
-  ?                      Show help
+  ↑/↓  or  j/k           Navigate
+  Shift+↑/↓              Jump 10 items
+  g / G                  First / last item
+  → / ←                  Focus details / return to graph
+  Enter                  Activate / confirm
+  Esc                    Back (cascading)
+  Space                  Toggle ancestry highlighting
+  /                      Search mode
+  :                      Command mode (try :help for commands)
 `);
 }
