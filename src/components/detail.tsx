@@ -13,7 +13,7 @@ import { formatDate } from "../utils/date";
 import { isCursored as _isCursored, itemHighlightBg as _itemHighlightBg } from "../utils/detail-cursor";
 import { buildDiffTarget } from "../utils/diff-target";
 import DetailBadge from "./detail-badge";
-import type { DetailViewProps } from "./detail-types";
+import type { DetailNavRef, DetailViewProps } from "./detail-types";
 import {
   BADGE_PADDING,
   DIR_INDICATOR_WIDTH,
@@ -1044,7 +1044,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 commitHash={() => commit()?.hash ?? ""}
                 diffSource={() => "commit"}
                 resetTrigger={commit}
-                navRef={props.navRef!}
+                navRef={props.navRef as DetailNavRef}
                 onOpenDiff={props.onOpenDiff}
               />
             </Show>

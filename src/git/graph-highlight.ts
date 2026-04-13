@@ -344,7 +344,7 @@ export function dimGraphChars(chars: GraphChar[], mutedColor: string, opts: DimO
         // (├ is always split from ─ in the renderer), so the separate ─
         // entry that follows will be dimmed normally by the rest of the logic.
         // ┤ renders as "┤ " (2-char with space) — slice(1) keeps the space.
-        const replacement = "│" + c.char.slice(1);
+        const replacement = `│${c.char.slice(1)}`;
         return { ...c, char: replacement, bold: true };
       }
 
@@ -354,7 +354,7 @@ export function dimGraphChars(chars: GraphChar[], mutedColor: string, opts: DimO
         // The junction's original color is the vertical lane's color, which
         // is wrong for the replacement ─. Pick up the horizontal color from
         // the adjacent ─ entry (the next char in the array).
-        const replacement = "─" + c.char.slice(1);
+        const replacement = `─${c.char.slice(1)}`;
         const hColor = chars[i + 1]?.color ?? c.color;
         return { ...c, char: replacement, color: hColor };
       }

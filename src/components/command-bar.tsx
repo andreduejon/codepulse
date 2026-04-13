@@ -35,17 +35,21 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
         return "Search commits...";
       case "path":
         return "Enter path...";
-      default: {
-        // IDLE mode: show active path filter indicator if set
-        const pf = state.pathFilter();
-        return pf ? `Path: ${pf}    Enter command...` : "";
-      }
+      default:
+        return "";
     }
   };
 
   const inputValue = () => {
     const mode = props.commandBarMode();
-    return mode === "command" || mode === "path" ? props.commandBarValue() : props.searchInputValue();
+    if (mode === "command") return props.commandBarValue();
+    if (mode === "path") return props.commandBarValue();
+    if (mode === "search") return props.searchInputValue();
+    // Idle: show the active filter value (search query or path filter)
+    const hMode = state.highlightMode();
+    if (hMode === "search") return props.searchInputValue();
+    if (hMode === "path") return state.pathFilter() ?? "";
+    return "";
   };
 
   const inputFocused = () => {
@@ -54,16 +58,17 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
   };
 
   const modeBadgeLabel = () => {
-    switch (props.commandBarMode()) {
-      case "command":
-        return " command ";
-      case "search":
-        return " search ";
-      case "path":
-        return " path ";
-      default:
-        return " normal ";
-    }
+    const barMode = props.commandBarMode();
+    // When the command bar is actively open, show its mode
+    if (barMode === "command") return " command ";
+    if (barMode === "search") return " search ";
+    if (barMode === "path") return " path ";
+    // Idle: show the active highlight mode if any
+    const hMode = state.highlightMode();
+    if (hMode === "search") return " search ";
+    if (hMode === "path") return " path ";
+    if (hMode === "ancestry") return " ancestry ";
+    return " normal ";
   };
 
   const countColor = () => {
@@ -140,11 +145,6 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
         <Show when={state.viewingBranch()}>
           <text flexShrink={0} wrapMode="none" fg={t().accent}>
             {`  [viewing: ${state.viewingBranch()}]`}
-          </text>
-        </Show>
-        <Show when={state.pathFilter()}>
-          <text flexShrink={0} wrapMode="none" fg={t().accent}>
-            {`  [path: ${state.pathFilter()}]`}
           </text>
         </Show>
         <box flexGrow={1} />

@@ -590,7 +590,7 @@ export function resolveRenamePath(rawPath: string): string {
 export function parseNumstatOutput(stdout: string): FileChange[] {
   const files: FileChange[] = [];
   for (const line of stdout.split("\n")) {
-    if (!line || !line.includes("\t")) continue;
+    if (!line?.includes("\t")) continue;
     const [additions, deletions, ...pathParts] = line.split("\t");
     const rawPath = pathParts.join("\t");
     if (!rawPath) continue;
@@ -613,7 +613,7 @@ export function parseNumstatOutput(stdout: string): FileChange[] {
 export function parseNameStatusOutput(stdout: string): Map<string, FileChange["status"]> {
   const map = new Map<string, FileChange["status"]>();
   for (const line of stdout.split("\n")) {
-    if (!line || !line.includes("\t")) continue;
+    if (!line?.includes("\t")) continue;
     const parts = line.split("\t");
     const rawStatus = parts[0].charAt(0) as FileChange["status"];
     // For rename/copy the destination path is the last part
