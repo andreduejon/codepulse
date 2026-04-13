@@ -170,7 +170,6 @@ describe("Edge Cases", () => {
     printGraph(rows);
 
     const c2Row = rows.find(r => r.commit.hash === "c2");
-    const _p1Row = findRow(rows, "p1");
     assertDefined(c2Row, "c2Row");
 
     const spanConns = c2Row.connectors.filter(
