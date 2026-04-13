@@ -11,8 +11,15 @@ import type { GraphRow } from "./types";
 // ── Bright-column computation ───────────────────────────────────────────────
 
 export interface BrightColumns {
-  /** Per-row-hash set of column indices where │ passthroughs and █ nodes stay bright. */
+  /** Per-row-hash set of column indices where │ passthroughs and █ nodes stay bright.
+   *  Used by commit rows and connector rows. */
   vertical: Map<string, Set<number>>;
+  /** Per-row-hash set of extra column indices that should be vertical-bright ONLY
+   *  on fan-out rows (not on commit or connector rows). This is used when the
+   *  ancestry child's column passes through the parent's fan-out row as a ┼
+   *  crossing — the vertical arm (│) should stay bright, but the same column's
+   *  │ on the connector row below belongs to a different branch and must stay dimmed. */
+  fanOutVertical: Map<string, Set<number>>;
   /** Per-row-hash, per-fan-out-row-index set of column indices where ─, corners,
    *  and tees stay bright (the arm connecting an ancestry child to the parent's
    *  nodeColumn). Only the specific fan-out row that reaches the ancestry child
@@ -42,6 +49,7 @@ export interface BrightColumns {
  */
 export function computeBrightColumns(ancestrySet: Set<string>, rows: GraphRow[]): BrightColumns {
   const vertical = new Map<string, Set<number>>();
+  const fanOutVertical = new Map<string, Set<number>>();
   const fanOutHorizontal = new Map<string, Map<number, Set<number>>>();
   const commitHorizontal = new Map<string, Set<number>>();
 
@@ -50,6 +58,15 @@ export function computeBrightColumns(ancestrySet: Set<string>, rows: GraphRow[])
     if (!set) {
       set = new Set<number>();
       vertical.set(hash, set);
+    }
+    set.add(col);
+  };
+
+  const addFoVCol = (hash: string, col: number) => {
+    let set = fanOutVertical.get(hash);
+    if (!set) {
+      set = new Set<number>();
+      fanOutVertical.set(hash, set);
     }
     set.add(col);
   };
@@ -107,18 +124,20 @@ export function computeBrightColumns(ancestrySet: Set<string>, rows: GraphRow[])
       }
     }
 
-    // When two consecutive ancestry nodes are in different lanes, find the
-    // specific fan-out row that reaches the ancestry child's column and mark
-    // only that row's columns [lo..hi] as bright. If the connection goes through
-    // the commit row's own connectors instead, mark commitHorizontal.
-    //
-    // NOTE: childCol is NOT added to the parent's vertical bright set. The
-    // vertical set is shared across commit, connector, and fan-out rows for
-    // this hash. Adding childCol would incorrectly brighten │ on the connector
-    // row below (which belongs to a different branch's passthrough). Junctions
-    // like ┼ at childCol on the fan-out row are handled by the horizontal
-    // bright set — isJunctionOnHorizontalAncestry replaces them with ─.
+    // When two consecutive ancestry nodes are in different lanes, the
+    // child's column may pass through the parent's fan-out row as a ┼
+    // crossing. Add childCol to fanOutVertical so the vertical arm of that
+    // junction is replaced with │. This is NOT added to the shared `vertical`
+    // set because that would also brighten the │ on the connector row below,
+    // which belongs to a different branch's passthrough.
+    // Also find the specific fan-out row that reaches the ancestry child's
+    // column and mark its columns [lo..hi] as bright in fanOutHorizontal.
+    // If the connection goes through the commit row's own connectors instead,
+    // mark commitHorizontal.
     if (childCol !== parentCol) {
+      if (parentRow.columns[childCol]?.active) {
+        addFoVCol(parentRow.commit.hash, childCol);
+      }
       const lo = Math.min(childCol, parentCol);
       const hi = Math.max(childCol, parentCol);
       const parentHash = parentRow.commit.hash;
@@ -159,7 +178,7 @@ export function computeBrightColumns(ancestrySet: Set<string>, rows: GraphRow[])
     }
   }
 
-  return { vertical, fanOutHorizontal, commitHorizontal };
+  return { vertical, fanOutVertical, fanOutHorizontal, commitHorizontal };
 }
 
 // ── Debug flag ──────────────────────────────────────────────────────────────

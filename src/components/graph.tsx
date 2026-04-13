@@ -157,14 +157,26 @@ function GraphLine(
     showGapBelow: boolean;
     viewportOffset: () => number;
     rowRef?: (el: Renderable) => void;
+    /** Whether ancestry highlighting is currently active (any commit selected).
+     *  Derived from brightColumnsByHash in the parent — avoids a second signal read. */
+    ancestryActive: () => boolean;
+    /** Whether this specific row should be dimmed by ancestry highlighting.
+     *  True when ancestry is active AND this row is NOT in the first-parent chain. */
+    isDimmedByAncestry: () => boolean;
     /** Set of column indices that should stay bright on this row (passthrough ancestry
      *  lanes). Undefined = ancestry inactive or this row has no passthrough lanes. */
     brightColumns: () => Set<number> | undefined;
     /** Per-fan-out-row horizontal bright columns. Map from fan-out row index to the set
      *  of column indices where ─, corners, and tees should stay bright. Only the specific
-     *  fan-out row connecting an ancestry child to this parent gets brightened.
-     *  Crossings (┼) are excluded — they stay dimmed. */
+     *  fan-out row connecting an ancestry child to this parent gets brightened. */
     brightFanOutHorizontals: () => Map<number, Set<number>> | undefined;
+    /** Extra vertical-bright columns that apply only to fan-out rows (not commit or
+     *  connector rows). Used when the ancestry child's column passes through the
+     *  parent's fan-out row as a ┼ crossing. */
+    brightFanOutVerticals: () => Set<number> | undefined;
+    /** Set of column indices where horizontal glyphs on the commit row itself should
+     *  stay bright (ancestry connection via commit-row merge arms, not fan-out rows). */
+    brightCommitHorizontals: () => Set<number> | undefined;
   }>,
 ) {
   const t = useT();
@@ -187,15 +199,6 @@ function GraphLine(
   // Uncommitted-changes node renders in dimmed/muted style.
   // IMPORTANT: Must be defined BEFORE fullGraphChars (createMemo evaluates eagerly).
   const isUncommitted = () => commit().refs.some(r => r.type === "uncommitted");
-
-  // Ancestry dimming: true when ancestry highlighting is active AND this row is
-  // NOT in the first-parent chain of the anchor commit (i.e. it should visually recede).
-  // Used by effectiveTextColor and secondaryColumnColor for text column dimming.
-  const isDimmedByAncestry = () => {
-    const aSet = state.ancestrySet();
-    if (!aSet) return false;
-    return !aSet.has(commit().hash);
-  };
 
   // Edge indicator helper — single 2-char column appended to the right
   const edgeColor = () => t().foregroundMuted;
@@ -232,18 +235,30 @@ function GraphLine(
   const laneColor = () => getColorForColumn(props.row.nodeColor, t().graphColors);
 
   /** Thin wrapper around the pure `dimGraphChars` function, binding reactive closure values. */
-  const dimChars = (chars: GraphChar[], hBright?: Set<number>): GraphChar[] =>
-    dimGraphChars(chars, t().foregroundMuted, {
+  const dimChars = (chars: GraphChar[], hBright?: Set<number>, extraVertical?: Set<number>): GraphChar[] => {
+    let vBright = props.brightColumns();
+    // Merge extra vertical-bright columns (fan-out rows only) into the set.
+    if (extraVertical && extraVertical.size > 0) {
+      const merged = new Set(vBright);
+      for (const col of extraVertical) merged.add(col);
+      vBright = merged;
+    }
+    return dimGraphChars(chars, t().foregroundMuted, {
       isUncommitted: isUncommitted(),
-      ancestryActive: state.ancestrySet() !== null,
-      brightColumns: props.brightColumns(),
+      ancestryActive: props.ancestryActive(),
+      brightColumns: vBright,
       brightHorizontal: hBright,
     });
+  };
 
   // Full-width renders — memoized, depend on row data + renderOpts, NOT viewportOffset.
-  // Commit and connector rows use only vertical bright sets (no horizontal brightening).
+  // Commit rows get horizontal brightening via brightCommitHorizontals (when the
+  // ancestry connection uses the commit row's own merge connectors).
+  // Connector rows use only vertical bright sets (no horizontal brightening).
   // Fan-out rows get per-row horizontal bright sets via the hBright parameter.
-  const fullGraphChars = createMemo(() => dimChars(renderGraphRow(props.row, renderOpts())));
+  const fullGraphChars = createMemo(() =>
+    dimChars(renderGraphRow(props.row, renderOpts()), props.brightCommitHorizontals()),
+  );
   const fullConnectorChars = createMemo(() => dimChars(renderConnectorRow(props.row, renderOpts())));
 
   // Viewport-sliced renders — depend on memoized full-width + viewportOffset (cheap)
@@ -276,8 +291,9 @@ function GraphLine(
     const foRows = props.row.fanOutRows;
     if (!foRows || foRows.length === 0) return [];
     const foHBrightMap = props.brightFanOutHorizontals();
+    const foVBright = props.brightFanOutVerticals();
     return foRows.map((foConnectors, idx) =>
-      dimChars(renderFanOutRow(foConnectors, renderOpts(), props.row.nodeColumn), foHBrightMap?.get(idx)),
+      dimChars(renderFanOutRow(foConnectors, renderOpts(), props.row.nodeColumn), foHBrightMap?.get(idx), foVBright),
     );
   });
 
@@ -313,7 +329,7 @@ function GraphLine(
   // Uncommitted-changes row always uses muted color.
   // Non-ancestor rows (when ancestry highlighting is active) use muted color.
   const effectiveTextColor = () => {
-    if (isUncommitted() || isDimmedByAncestry()) return t().foregroundMuted;
+    if (isUncommitted() || props.isDimmedByAncestry()) return t().foregroundMuted;
     if (props.active) return t().accent;
     return t().foreground;
   };
@@ -323,7 +339,7 @@ function GraphLine(
   // Uncommitted-changes row always uses muted.
   // Non-ancestor rows (when ancestry highlighting is active) use muted.
   const secondaryColumnColor = () => {
-    if (isUncommitted() || isDimmedByAncestry()) return t().foregroundMuted;
+    if (isUncommitted() || props.isDimmedByAncestry()) return t().foregroundMuted;
     if (props.active) return t().accent;
     return t().foregroundMuted;
   };
@@ -423,7 +439,7 @@ function GraphLine(
           <Show when={visibleRefs().length > 0}>
             <box flexDirection="row" flexShrink={0} gap={1} paddingRight={1}>
               <For each={visibleRefs()}>
-                {ri => <RefBadge info={ri} laneColor={laneColor} ancestryDimmed={isDimmedByAncestry} />}
+                {ri => <RefBadge info={ri} laneColor={laneColor} ancestryDimmed={props.isDimmedByAncestry} />}
               </For>
             </box>
           </Show>
@@ -730,8 +746,15 @@ export default function GraphView(props: Readonly<{ onLoadMore?: () => void }>) 
                     isLast={index() === state.filteredRows().length - 1}
                     showGapBelow={showGapBelow()}
                     viewportOffset={viewportOffset}
+                    ancestryActive={() => brightColumnsByHash() !== null}
+                    isDimmedByAncestry={() => {
+                      const aSet = state.ancestrySet();
+                      return aSet !== null && !aSet.has(row.commit.hash);
+                    }}
                     brightColumns={() => brightColumnsByHash()?.vertical.get(row.commit.hash)}
+                    brightFanOutVerticals={() => brightColumnsByHash()?.fanOutVertical.get(row.commit.hash)}
                     brightFanOutHorizontals={() => brightColumnsByHash()?.fanOutHorizontal.get(row.commit.hash)}
+                    brightCommitHorizontals={() => brightColumnsByHash()?.commitHorizontal.get(row.commit.hash)}
                     rowRef={el => {
                       elRef = el;
                       rowRefs[index()] = el;
