@@ -111,6 +111,13 @@ export function computeBrightColumns(ancestrySet: Set<string>, rows: GraphRow[])
     // specific fan-out row that reaches the ancestry child's column and mark
     // only that row's columns [lo..hi] as bright. If the connection goes through
     // the commit row's own connectors instead, mark commitHorizontal.
+    //
+    // NOTE: childCol is NOT added to the parent's vertical bright set. The
+    // vertical set is shared across commit, connector, and fan-out rows for
+    // this hash. Adding childCol would incorrectly brighten │ on the connector
+    // row below (which belongs to a different branch's passthrough). Junctions
+    // like ┼ at childCol on the fan-out row are handled by the horizontal
+    // bright set — isJunctionOnHorizontalAncestry replaces them with ─.
     if (childCol !== parentCol) {
       const lo = Math.min(childCol, parentCol);
       const hi = Math.max(childCol, parentCol);
@@ -155,6 +162,12 @@ export function computeBrightColumns(ancestrySet: Set<string>, rows: GraphRow[])
   return { vertical, fanOutHorizontal, commitHorizontal };
 }
 
+// ── Debug flag ──────────────────────────────────────────────────────────────
+// Set to true to replace bright chars with 'o' and dimmed chars with 'x'
+// instead of actual dimming. Makes it immediately visible in the TUI
+// which glyphs the algorithm considers bright vs dimmed.
+const DEBUG_DIM = false;
+
 // ── Graph-char dimming ──────────────────────────────────────────────────────
 
 export interface DimOptions {
@@ -177,13 +190,16 @@ export interface DimOptions {
  *   - bright set present      → char-position tracking: colIdx = floor(pos/2)
  *                               where pos accumulates char.length.
  *                               Vertical-bright cols keep │ and █ vivid.
- *                               Horizontal-bright cols keep ─, corners, and
- *                               tees vivid.
- *                               Crossings (┼) stay bright only when the
- *                               vertical lane through them is in the
- *                               ancestry path (the glyph carries the
- *                               vertical lane's color). The ─ after a ┼
- *                               follows normal horizontal-bright rules.
+ *                               Junction glyphs (┼, ├, ┤, ┬, ┴) on
+ *                               vertical-bright columns are replaced with
+ *                               │. The ─ that follows (always a separate
+ *                               entry) is dimmed normally by the standard
+ *                               bright-check logic.
+ *                               Junctions on horizontal-bright (but NOT
+ *                               vertical-bright) columns are replaced with
+ *                               ─ (the vertical arm is removed).
+ *                               Horizontal-bright cols keep ─ and corners
+ *                               vivid.
  *   - no bright set           → full dim
  *
  * NOTE: array index ≠ column index because a single column can be split into
@@ -200,7 +216,7 @@ export function dimGraphChars(chars: GraphChar[], mutedColor: string, opts: DimO
 
   if (hasBright) {
     let pos = 0;
-    return chars.map(c => {
+    return chars.map((c, i) => {
       const colIdx = Math.floor(pos / 2);
       pos += c.char.length;
       const ch = c.char[0];
@@ -208,20 +224,50 @@ export function dimGraphChars(chars: GraphChar[], mutedColor: string, opts: DimO
       // Vertical passthrough │ and node █ stay bright at vertical-bright columns.
       const isVerticalBright = bright?.has(colIdx) && (ch === "│" || ch === "█");
 
-      // Crossings (┼) stay bright only when the vertical lane through them is
-      // in the ancestry path. The ┼ glyph is rendered with the vertical lane's
-      // color, so it must stay bright to avoid a dimmed "hole" in an otherwise
-      // bright vertical lane. When only the horizontal arm is ancestry, the ┼
-      // is dimmed because we can't recolor it to the horizontal arm's color.
-      const isCrossing = ch === "┼";
-      const isCrossingBright = isCrossing && bright?.has(colIdx);
+      // Junction glyphs (┼, ├, ┤, ┬, ┴) on vertical-bright columns are
+      // replaced with │ — the horizontal arm through them is removed so the
+      // ancestry line appears as a clean uninterrupted vertical line.
+      // On horizontal-bright columns (but NOT vertical-bright), junctions are
+      // replaced with ─ — the vertical arm is removed so the ancestry
+      // horizontal connection appears as a clean line.
+      const isJunction = ch === "┼" || ch === "├" || ch === "┤" || ch === "┬" || ch === "┴";
+      const isJunctionOnVerticalAncestry = isJunction && bright?.has(colIdx);
+      const isJunctionOnHorizontalAncestry = isJunction && !isJunctionOnVerticalAncestry && hBright?.has(colIdx);
 
-      // Horizontal glyphs (─, corners, tees) stay bright at horizontal-bright
-      // columns. The ─ after a ┼ also stays bright when the horizontal is bright
-      // (it represents the horizontal arm continuing through the crossing).
-      const isHorizontalBright = hBright?.has(colIdx) && !isCrossing && ch !== "│";
+      if (isJunctionOnVerticalAncestry) {
+        // Replace junction glyph with │. All junctions are 1-char entries
+        // (├ is always split from ─ in the renderer), so the separate ─
+        // entry that follows will be dimmed normally by the rest of the logic.
+        // ┤ renders as "┤ " (2-char with space) — slice(1) keeps the space.
+        const replacement = "│" + c.char.slice(1);
+        return { ...c, char: replacement, bold: true };
+      }
 
-      const isBright = isVerticalBright || isCrossingBright || isHorizontalBright;
+      if (isJunctionOnHorizontalAncestry) {
+        // Replace junction glyph with ─ (keep the horizontal arm, remove
+        // the vertical). 2-char entries like "┤ " → "─ ".
+        // The junction's original color is the vertical lane's color, which
+        // is wrong for the replacement ─. Pick up the horizontal color from
+        // the adjacent ─ entry (the next char in the array).
+        const replacement = "─" + c.char.slice(1);
+        const hColor = chars[i + 1]?.color ?? c.color;
+        return { ...c, char: replacement, color: hColor };
+      }
+
+      // Horizontal glyphs (─, corners) stay bright at horizontal-bright columns.
+      // Junctions not on the ancestry lane and │/█ are excluded.
+      const isHorizontalBright = hBright?.has(colIdx) && !isJunction && ch !== "│" && ch !== "█";
+
+      const isBright = isVerticalBright || isHorizontalBright;
+
+      if (DEBUG_DIM) {
+        const isSpace = c.char.trim().length === 0;
+        if (isSpace) return c;
+        const marker = isBright ? "o" : "x";
+        const debugChar = marker + c.char.slice(1);
+        return { ...c, char: debugChar };
+      }
+
       return isBright ? c : { ...c, color: mutedColor, bold: false };
     });
   }

@@ -4,8 +4,8 @@
  *
  * Tests cover all dimming rules: uncommitted full-dim, ancestry inactive
  * passthrough, vertical bright columns (│, █), horizontal bright columns
- * (─, corners, tees), crossing exclusion (┼ and ─ after ┼), and combined
- * vertical + horizontal brightening.
+ * (─, corners, tees), junction replacement (┼/├/┤/┬/┴ → │ on ancestry
+ * columns), and combined vertical + horizontal brightening.
  */
 import { describe, expect, test } from "bun:test";
 import type { GraphChar } from "../src/git/graph";
@@ -166,10 +166,17 @@ describe("dimGraphChars", () => {
     expectBright(result[1], chars[1]); // ─ at col 0 (pos=1, floor(1/2)=0)
   });
 
-  // ── Crossing exclusion ─────────────────────────────────────────────
+  // ── Junction replacement (┼, ├, ┤, ┬, ┴) ────────────────────────────
+  // Junction glyphs on vertical-bright columns are replaced with │ to give
+  // the ancestry line a clean appearance. The ─ that follows (always a
+  // separate entry) is dimmed normally by the standard bright-check logic.
+  // Junctions on horizontal-bright (but NOT vertical-bright) columns are
+  // replaced with ─ (the vertical arm is removed).
+  // When neither the vertical nor horizontal arm is bright, junctions
+  // are dimmed normally — no replacement occurs.
 
-  test("crossing ┼ always dimmed even in horizontal bright set", () => {
-    // col 0: █  (2), col 1: ─ (1), ┼ (1) at col 1, ─ (1) at col 1 after crossing
+  test("crossing ┼ replaced with ─ when only horizontal arm is bright", () => {
+    // col 0: █  (2), col 1: ─ (1), ┼ (1) at col 1, ─ (1) at col 2
     const chars = [gc("█ "), gc("─"), gc("┼"), gc("─")];
     const result = dimGraphChars(chars, MUTED, {
       isUncommitted: false,
@@ -177,62 +184,179 @@ describe("dimGraphChars", () => {
       brightHorizontal: new Set([1]),
     });
     expectDimmed(result[0]); // col 0 not bright
-    expectBright(result[1], chars[1]); // ─ at col 1, before crossing — bright
-    expectDimmed(result[2]); // ┼ at col 1 — always dimmed
-    expectDimmed(result[3]); // ─ after ┼ — always dimmed
+    expectBright(result[1], chars[1]); // ─ at col 1 — bright (horizontal arm)
+    expect(result[2].char).toBe("─"); // ┼ at col 1 → ─ (horizontal bright replaces vertical arm)
+    expectDimmed(result[3]); // ─ at col 2 — not in bright set
   });
 
-  test("─ after ┼ is dimmed even at a horizontal bright column", () => {
-    // Specifically test the "dash after crossing" rule
-    // col 0: ┼ (1 char), col 0: ─ (1 char, still col 0)
-    const chars = [gc("┼"), gc("─")];
+  test("crossing ┼ replaced with ─ uses horizontal color, not vertical", () => {
+    // ┼ has vertical color (BRIGHT_A), adjacent ─ has horizontal color (BRIGHT_B)
+    const chars = [gc("┼", BRIGHT_A), gc("─", BRIGHT_B)];
     const result = dimGraphChars(chars, MUTED, {
       isUncommitted: false,
       ancestryActive: true,
       brightHorizontal: new Set([0]),
     });
-    expectDimmed(result[0]); // ┼ always dimmed
-    expectDimmed(result[1]); // ─ after ┼ always dimmed
+    expect(result[0].char).toBe("─"); // ┼ → ─
+    expect(result[0].color).toBe(BRIGHT_B); // uses adjacent ─ color, not ┼ color
   });
 
-  test("─ NOT after ┼ is bright (prevWasCrossing resets)", () => {
-    // ┼ at col 0, ─ at col 0 (dimmed), then new col: ─ at col 1 should be bright
-    // col 0: ┼ (1 char, pos 0→1, col 0), ─ (1 char, pos 1→2, col 1)
-    // Actually: floor(0/2)=0, floor(1/2)=0 — both at col 0
-    // We need bigger spacing. Let's use 2-char entries:
-    // col 0: ┼  (but ┼ is always 1 char in practice)
-    // Let's do: col 0 = "│ " (2 chars), col 1 = "┼" (1 char), "─" (1 char, col 1),
-    //           col 2 = "─" (1 char), "─" (1 char, col 2 still? pos=6, floor(6/2)=3)
-    // Simpler approach: use padded entries
+  test("crossing ┼ replaced with │ when vertical lane is bright", () => {
+    const chars = [gc("┼"), gc("─")];
+    const result = dimGraphChars(chars, MUTED, {
+      isUncommitted: false,
+      ancestryActive: true,
+      brightColumns: new Set([0]),
+    });
+    expect(result[0].char).toBe("│"); // ┼ replaced with │
+    expect(result[0].color).toBe(chars[0].color); // keeps original color
+    expectDimmed(result[1]); // ─ dimmed normally (no suppression)
+  });
+
+  test("crossing ┼ dimmed when neither vertical nor horizontal is bright", () => {
+    const chars = [gc("┼"), gc("─")];
+    const result = dimGraphChars(chars, MUTED, {
+      isUncommitted: false,
+      ancestryActive: true,
+      brightColumns: new Set([1]), // different column
+      brightHorizontal: new Set([1]), // different column
+    });
+    expectDimmed(result[0]); // ┼ at col 0 — not bright
+    expectDimmed(result[1]); // ─ at col 0 — not bright
+  });
+
+  test("crossing ┼ replaced with │ when both vertical and horizontal are bright", () => {
+    const chars = [gc("┼"), gc("─")];
+    const result = dimGraphChars(chars, MUTED, {
+      isUncommitted: false,
+      ancestryActive: true,
+      brightColumns: new Set([0]),
+      brightHorizontal: new Set([0]),
+    });
+    expect(result[0].char).toBe("│"); // ┼ replaced with │ (junction replacement takes priority)
+    expectBright(result[1], chars[1]); // ─ at col 0 — horizontal bright (not suppressed)
+  });
+
+  test("┼ replaced with ─ when horizontal arm is bright and ┼ not on vertical ancestry", () => {
+    // col 0: ┼  (2 chars), col 1: ─  (2 chars)
     const chars = [gc("┼ "), gc("─ ")];
-    // pos: ┼  → 2 chars (col 0), ─  → 2 chars (col 1)
     const result = dimGraphChars(chars, MUTED, {
       isUncommitted: false,
       ancestryActive: true,
       brightHorizontal: new Set([0, 1]),
     });
-    expectDimmed(result[0]); // ┼ at col 0 — dimmed
-    // ─ at col 1 — prevWasCrossing was true for ┼ at col 0, but the ─ is at col 1.
-    // The isDashAfterCrossing check uses prevWasCrossing which was set by the ┼.
-    // But the char is at a different position. Let's check: prevWasCrossing = true
-    // after ┼, then ─ → isDashAfterCrossing = true. So it's dimmed.
-    // Actually, the "after" is sequential in the array, not by column.
-    expectDimmed(result[1]); // ─ immediately after ┼ in array order — dimmed
+    expect(result[0].char).toBe("─ "); // ┼ at col 0 → ─ (horizontal bright, vertical arm removed)
+    expectBright(result[1], chars[1]); // ─ at col 1 — bright (horizontal arm)
   });
 
-  test("crossing dimming resets after one ─", () => {
-    // ┼, ─ (dimmed), then another ─ (should be bright if in hBright)
-    // pos: ┼(1)=col0, ─(1)=col0, ─(1)=col1
+  test("─ after replaced ┼ is not suppressed", () => {
+    // ┼ at col 0 (vertical bright), ─ at col 0 (dimmed normally), ─  at col 1 (unrelated)
     const chars = [gc("┼"), gc("─"), gc("─ ")];
-    // pos 0: col 0 (┼), pos 1: col 0 (─), pos 2: col 1 (─ )
+    const result = dimGraphChars(chars, MUTED, {
+      isUncommitted: false,
+      ancestryActive: true,
+      brightColumns: new Set([0]),
+    });
+    expect(result[0].char).toBe("│"); // ┼ → │
+    expectDimmed(result[1]); // ─ at col 0 — dimmed normally (no suppression)
+    expectDimmed(result[2]); // ─ at col 1 — no bright sets for col 1
+  });
+
+  // ── Tee-left (├) replacement ──────────────────────────────────────
+
+  test("tee-left ├ replaced with │ when vertical lane is bright, ─ dimmed", () => {
+    // Renderer always emits ├ and ─ as separate 1-char entries.
+    const chars = [gc("├"), gc("─"), gc("╮ ")];
+    const result = dimGraphChars(chars, MUTED, {
+      isUncommitted: false,
+      ancestryActive: true,
+      brightColumns: new Set([0]),
+    });
+    expect(result[0].char).toBe("│"); // ├ → │
+    expect(result[0].color).toBe(chars[0].color); // keeps original color
+    expectDimmed(result[1]); // ─ at col 0 — dimmed (not on ancestry)
+    expectDimmed(result[2]); // ╮ at col 1 — not bright
+  });
+
+  test("tee-left ├ replaced with │ when vertical bright, ─ stays bright when horizontal bright", () => {
+    const chars = [gc("├", BRIGHT_A), gc("─", BRIGHT_B), gc("╮ ")];
+    const result = dimGraphChars(chars, MUTED, {
+      isUncommitted: false,
+      ancestryActive: true,
+      brightColumns: new Set([0]),
+      brightHorizontal: new Set([0, 1]),
+    });
+    expect(result[0].char).toBe("│"); // ├ → │
+    expect(result[0].color).toBe(BRIGHT_A); // keeps original color
+    expectBright(result[1], chars[1]); // ─ at col 0 — horizontal bright
+    expectBright(result[2], chars[2]); // ╮ at col 1 — horizontal bright
+  });
+
+  test("tee-left ├ replaced with ─ when only horizontal arm is bright", () => {
+    // ├ has vertical color (BRIGHT_A), adjacent ─ has horizontal color (BRIGHT_B)
+    const chars = [gc("├", BRIGHT_A), gc("─", BRIGHT_B), gc("╮ ")];
     const result = dimGraphChars(chars, MUTED, {
       isUncommitted: false,
       ancestryActive: true,
       brightHorizontal: new Set([0, 1]),
     });
-    expectDimmed(result[0]); // ┼ dimmed
-    expectDimmed(result[1]); // ─ after ┼ dimmed
-    expectBright(result[2], chars[2]); // ─ at col 1 — prevWasCrossing is false (previous was ─ not ┼)
+    expect(result[0].char).toBe("─"); // ├ at col 0 → ─ (horizontal bright, vertical arm removed)
+    expect(result[0].color).toBe(BRIGHT_B); // uses adjacent ─ color (horizontal), not ├ color (vertical)
+    expectBright(result[1], chars[1]); // ─ at col 0 — horizontal bright
+    expectBright(result[2], chars[2]); // ╮ at col 1 — horizontal bright
+  });
+
+  // ── Tee-right (┤) replacement ─────────────────────────────────────
+
+  test("tee-right ┤ replaced with │ when vertical lane is bright", () => {
+    const chars = [gc("──"), gc("┤ ")];
+    // pos 0→2 (──), col=0; pos 2→4 (┤ ), col=1
+    const result = dimGraphChars(chars, MUTED, {
+      isUncommitted: false,
+      ancestryActive: true,
+      brightColumns: new Set([1]),
+    });
+    expectDimmed(result[0]); // ── at col 0 — not bright
+    expect(result[1].char).toBe("│ "); // ┤  → │ (space)
+    expect(result[1].color).toBe(chars[1].color); // keeps original color
+  });
+
+  // ── Junction ┬ and ┴ replacement ──────────────────────────────────
+
+  test("junction ┬ replaced with │ when vertical lane is bright", () => {
+    const chars = [gc("┬"), gc("─")];
+    const result = dimGraphChars(chars, MUTED, {
+      isUncommitted: false,
+      ancestryActive: true,
+      brightColumns: new Set([0]),
+    });
+    expect(result[0].char).toBe("│"); // ┬ → │
+    expectDimmed(result[1]); // ─ at col 0 — dimmed normally
+  });
+
+  test("junction ┴ replaced with │ when vertical lane is bright", () => {
+    const chars = [gc("┴"), gc("─")];
+    const result = dimGraphChars(chars, MUTED, {
+      isUncommitted: false,
+      ancestryActive: true,
+      brightColumns: new Set([0]),
+    });
+    expect(result[0].char).toBe("│"); // ┴ → │
+    expectDimmed(result[1]); // ─ at col 0 — dimmed normally
+  });
+
+  test("junction ┴ replaced with ─ when only horizontal arm is bright", () => {
+    // ┴ has vertical color (BRIGHT_A), adjacent ─ has horizontal color (BRIGHT_B)
+    const chars = [gc("──"), gc("┴", BRIGHT_A), gc("─", BRIGHT_B)];
+    // pos 0→2 (──), col=0; pos 2→3 (┴), col=1; pos 3→4 (─), col=1
+    const result = dimGraphChars(chars, MUTED, {
+      isUncommitted: false,
+      ancestryActive: true,
+      brightHorizontal: new Set([1]),
+    });
+    expectDimmed(result[0]); // ── at col 0 — not in bright set
+    expect(result[1].char).toBe("─"); // ┴ at col 1 → ─ (horizontal bright, vertical arm removed)
+    expect(result[1].color).toBe(BRIGHT_B); // uses adjacent ─ color (horizontal), not ┴ color (vertical)
   });
 
   // ── │ at horizontal-bright col stays dimmed ────────────────────────
