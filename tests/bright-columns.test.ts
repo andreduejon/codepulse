@@ -431,36 +431,21 @@ describe("computeBrightColumns", () => {
     }
   });
 
-  test("fanOutVertical — childCol added when active at parent for ┼ replacement", () => {
+  test("fanOutVertical — childCol NOT added when no straight passthrough on fan-out rows", () => {
     // Graph:
-    //   █       s1  (side1)       col 0
-    //   │
-    //   │ █     c1  (main)        col 1  ← ancestry
-    //   │ │
-    //   │ │ █   s2  (side2)       col 2
-    //   │ │ │
-    //   █─┼─╯                     fan-out: ┼ at col 1 (straight + horizontal)
-    //   █─╯     c2  ()            col 0  ← ancestry
-    //
-    // Here col 1 closes at c2 (╯), so childCol is NOT active.
-    // fanOutVertical should NOT have c1Col for c2 in this graph shape.
-    //
-    // For a graph where childCol IS active at the parent, we need
-    // the child's branch to continue past the parent as a different lane.
-    // This requires a more complex graph:
-    //
     //   █       s1  (side1)       col 0
     //   │
     //   │ █     c1  (main)        col 1  ← ancestry child
     //   │ │
     //   │ │ █   s2  (side2)       col 2
     //   │ │ │
-    //   █─╯ │   c2  ()            col 0  ← ancestry parent (c1 col closes here)
+    //   █─╯ │   c2  ()            col 0  ← ancestry parent (c1 col closes here via ╯)
     //   │   │
     //   █───╯   c3  ()            col 0  ← ancestry
     //
-    // In this test graph, c1Col (1) is inactive at c2, so fanOutVertical
-    // should be empty for c2. We verify the basic "inactive → not added" path.
+    // c2's fan-out row has a ╯ (corner-bottom-right) at c1Col, NOT a straight
+    // passthrough. So there is no ┼ crossing to worry about, and fanOutVertical
+    // should NOT have c1Col.
     const commits = [
       makeCommit("s1", ["c2"], [{ name: "side1", type: "branch", isCurrent: false }]),
       makeCommit("c1", ["c2"], [{ name: "main", type: "branch", isCurrent: true }]),
@@ -479,11 +464,61 @@ describe("computeBrightColumns", () => {
 
     const c1Col = c1Row.nodeColumn;
 
-    // c1Col is inactive at c2 → fanOutVertical should NOT have it
+    // c1Col is inactive at c2's commit row and has no straight on any fan-out row
     expect(c2Row.columns[c1Col]?.active).toBe(false);
     expect(result.fanOutVertical.get("c2")?.has(c1Col)).toBeFalsy();
 
     // vertical should also NOT have c1Col for c2
     expect(result.vertical.get("c2")?.has(c1Col)).toBeFalsy();
+  });
+
+  test("fanOutVertical — childCol added when straight exists on earlier fan-out row", () => {
+    // Graph:
+    //   █       s1  (side)        col 0
+    //   │
+    //   │ █     f1  (feat-F)      col 1  ← ancestry child
+    //   │ │
+    //   │ │ █   g1  (feat-G)      col 2
+    //   │ │ │
+    //   █─┼─╯                     FO[0]: ┼ at col 1 (straight + horizontal)
+    //   █─╯     d1  (develop)     FO[1] merged: ╯ at col 1 (lane closes)
+    //   │
+    //   █       d0               col 0
+    //
+    // f1 at col 1 (ancestry child), d1 at col 0 (ancestry parent).
+    // d1.columns[1] is inactive (lane closed by FO[1]), but FO[0] still has
+    // a straight passthrough at col 1 creating a ┼. fanOutVertical must
+    // include col 1 so the ┼ is replaced with │.
+    const commits = [
+      makeCommit("s1", ["d1"], [{ name: "side", type: "branch", isCurrent: false }]),
+      makeCommit("f1", ["d1"], [{ name: "feat-F", type: "branch", isCurrent: false }]),
+      makeCommit("g1", ["d1"], [{ name: "feat-G", type: "branch", isCurrent: false }]),
+      makeCommit("d1", ["d0"], [{ name: "develop", type: "branch", isCurrent: true }]),
+      makeCommit("d0", []),
+    ];
+    const rows = buildGraph(commits);
+    printGraph(rows);
+
+    const f1Row = findRow(rows, "f1");
+    const d1Row = findRow(rows, "d1");
+
+    // Ancestry: f1 → d1 → d0
+    const ancestrySet = new Set(["f1", "d1", "d0"]);
+    const result = computeBrightColumns(ancestrySet, rows);
+
+    const f1Col = f1Row.nodeColumn;
+
+    // f1Col is inactive at d1's commit row (lane closed by fan-out ╯)
+    expect(d1Row.columns[f1Col]?.active).toBeFalsy();
+
+    // But FO[0] has a straight at f1Col → fanOutVertical should have it
+    const foRows = d1Row.fanOutRows;
+    expect(foRows).toBeDefined();
+    if (foRows) {
+      const hasStraight = foRows.some(fo => fo.some(c => c.column === f1Col && c.type === "straight"));
+      expect(hasStraight).toBe(true);
+    }
+
+    expect(result.fanOutVertical.get("d1")?.has(f1Col)).toBe(true);
   });
 });

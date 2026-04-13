@@ -130,14 +130,21 @@ export function computeBrightColumns(ancestrySet: Set<string>, rows: GraphRow[])
     // junction is replaced with │. This is NOT added to the shared `vertical`
     // set because that would also brighten the │ on the connector row below,
     // which belongs to a different branch's passthrough.
+    //
+    // NOTE: We check for a `straight` connector on any fan-out row, NOT
+    // `parentRow.columns[childCol]?.active`. The `columns[].active` flag
+    // reflects state at the commit row level — AFTER all fan-out rows have
+    // been processed. A lane may close on a later fan-out row (e.g., ╯ on
+    // FO[1]) while still having a straight passthrough on an earlier one
+    // (e.g., ┼ on FO[0]). Checking the fan-out connectors directly catches
+    // both cases: lanes that stay active AND lanes that close partway through
+    // the fan-out sequence.
+    //
     // Also find the specific fan-out row that reaches the ancestry child's
     // column and mark its columns [lo..hi] as bright in fanOutHorizontal.
     // If the connection goes through the commit row's own connectors instead,
     // mark commitHorizontal.
     if (childCol !== parentCol) {
-      if (parentRow.columns[childCol]?.active) {
-        addFoVCol(parentRow.commit.hash, childCol);
-      }
       const lo = Math.min(childCol, parentCol);
       const hi = Math.max(childCol, parentCol);
       const parentHash = parentRow.commit.hash;
@@ -145,6 +152,13 @@ export function computeBrightColumns(ancestrySet: Set<string>, rows: GraphRow[])
       let foundInFanOut = false;
       const foRows = parentRow.fanOutRows;
       if (foRows) {
+        // Check if any fan-out row has a straight passthrough at childCol.
+        // If so, the vertical arm of a ┼ crossing needs to stay bright.
+        const hasStraight = foRows.some(fo => fo.some(c => c.column === childCol && c.type === "straight"));
+        if (hasStraight) {
+          addFoVCol(parentHash, childCol);
+        }
+
         for (let fi = 0; fi < foRows.length; fi++) {
           const reachesChild = foRows[fi].some(
             c => c.column === childCol && (c.type === "corner-bottom-right" || c.type === "corner-bottom-left"),
