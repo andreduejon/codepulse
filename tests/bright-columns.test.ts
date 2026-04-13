@@ -576,4 +576,82 @@ describe("computeBrightColumns", () => {
     expect(result.vertical.get("b")).toBeDefined();
     expect(result.vertical.get("c")).toBeDefined();
   });
+
+  test("leading rows — ancestry continues above loaded window", () => {
+    // Graph:
+    //   █   c  ()                col 0  ← NOT ancestry, but passthrough
+    //   │                               should stay bright (lane continues up)
+    //   █   d  ()                col 0  ← NOT ancestry, same
+    //   │
+    //   █   a  (main)            col 0  ← ancestry (first ancestry node)
+    //   │
+    //   █   b  ()                col 0  ← ancestry
+    //
+    // The forward walk (descendants) couldn't find a's child because it's
+    // not loaded. Rows above a (c, d) should still have col 0 brightened
+    // because the lane is active above a — the ancestry continues past
+    // the loaded data boundary upward.
+    const commits = [
+      makeCommit("c", ["d"]),
+      makeCommit("d", ["a"]),
+      makeCommit("a", ["b"], [{ name: "main", type: "branch", isCurrent: true }]),
+      makeCommit("b", []),
+    ];
+    const rows = buildGraph(commits);
+    printGraph(rows);
+
+    // Ancestry: only a and b (the forward walk found no descendants)
+    const ancestrySet = new Set(["a", "b"]);
+    const result = computeBrightColumns(ancestrySet, rows);
+
+    const aRow = findRow(rows, "a");
+    const aCol = aRow.nodeColumn;
+
+    // c and d should have aCol in their vertical bright set
+    expect(result.vertical.get("c")?.has(aCol)).toBe(true);
+    expect(result.vertical.get("d")?.has(aCol)).toBe(true);
+  });
+
+  test("leading rows — no extension when first ancestry node is at row 0", () => {
+    // When the first ancestry node is at the very top of the graph,
+    // there are no rows above it — no leading extension needed.
+    const commits = [makeCommit("a", ["b"], [{ name: "main", type: "branch", isCurrent: true }]), makeCommit("b", [])];
+    const rows = buildGraph(commits);
+
+    const ancestrySet = new Set(["a", "b"]);
+    const result = computeBrightColumns(ancestrySet, rows);
+
+    // Both should have vertical entries from normal seed logic, no leading rows
+    expect(result.vertical.get("a")).toBeDefined();
+    expect(result.vertical.get("b")).toBeDefined();
+  });
+
+  test("leading rows — no extension when lane is inactive above first ancestry node", () => {
+    // Graph:
+    //   █       s1  (side)       col 0  ← side branch, col 0 lane belongs to side
+    //   │
+    //   │ █     a   (main)       col 1  ← ancestry (first ancestry node)
+    //   │ │
+    //   │ █     b   ()           col 1  ← ancestry
+    //
+    // s1 is at col 0 which is NOT the ancestry lane (col 1). Col 1 is
+    // not active on s1's row (the lane starts at a). So no leading
+    // extension should happen — the bright line correctly starts at a.
+    const commits = [
+      makeCommit("s1", ["b"], [{ name: "side", type: "branch", isCurrent: false }]),
+      makeCommit("a", ["b"], [{ name: "main", type: "branch", isCurrent: true }]),
+      makeCommit("b", []),
+    ];
+    const rows = buildGraph(commits);
+    printGraph(rows);
+
+    const ancestrySet = new Set(["a", "b"]);
+    const result = computeBrightColumns(ancestrySet, rows);
+
+    const aRow = findRow(rows, "a");
+    const aCol = aRow.nodeColumn;
+
+    // s1 should NOT have aCol brightened — the lane isn't active above a
+    expect(result.vertical.get("s1")?.has(aCol)).toBeFalsy();
+  });
 });

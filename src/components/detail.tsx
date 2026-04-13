@@ -7,7 +7,6 @@ import { useAppState } from "../context/state";
 import type { Commit, GraphRow } from "../git/types";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
 import { useClipboard } from "../hooks/use-clipboard";
-import { useFileTree } from "../hooks/use-file-tree";
 import { useStashState } from "../hooks/use-stash-state";
 import { useT } from "../hooks/use-t";
 import { formatDate } from "../utils/date";
@@ -17,7 +16,6 @@ import DetailBadge from "./detail-badge";
 import type { DetailViewProps } from "./detail-types";
 import {
   BADGE_PADDING,
-  computeFileWidths,
   DIR_INDICATOR_WIDTH,
   ENTRY_PADDING_LEFT,
   HASH_BADGE_GAP,
@@ -27,10 +25,9 @@ import {
   STAT_PADDING_LEFT,
   STATUS_COL_WIDTH,
 } from "./detail-types";
-import { FileTreeEntry } from "./file-tree-entry";
+import FileListView from "./file-list-view";
 import type { StashFileRowData } from "./stash-entry";
 import { StashEntry } from "./stash-entry";
-import { TotalLinesChangedRow } from "./total-lines-changed-row";
 
 // ── Layout constants ────────────────────────────────────────────────
 /** Minimum panel width in characters before padding is subtracted. */
@@ -44,8 +41,6 @@ type InteractiveItem =
   | { type: "copyable"; field: CopyableField }
   | { type: "child"; hash: string; index: number }
   | { type: "parent"; hash: string; index: number }
-  | { type: "file-dir"; dirPath: string; index: number }
-  | { type: "file"; filePath: string; index: number }
   | { type: "stash-entry"; stashHash: string; stashIndex: number }
   | { type: "stash-dir"; stashHash: string; dirPath: string; index: number }
   | { type: "stash-file"; stashHash: string; filePath: string; index: number };
@@ -182,16 +177,6 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     }
   };
 
-  // Column widths for file changes — derived from totals (always >= per-file values)
-  const fileWidths = createMemo(() => {
-    const d = detail();
-    if (!d) return { totalAdd: 0, totalDel: 0, addColWidth: 2, delColWidth: 2 };
-    return computeFileWidths(d.files);
-  });
-
-  // File tree state — resets collapsed dirs when commit changes
-  const { fileTreeRows, collapsedDirs, toggleDir } = useFileTree(() => detail()?.files ?? [], commit);
-
   // ── Stash section state ─────────────────────────────────────────────
   const {
     stashEntries,
@@ -256,20 +241,6 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
         if (parentsExpanded()) {
           for (let i = 0; i < r.parentHashes.length; i++) {
             items.push({ type: "parent", hash: r.parentHashes[i], index: i });
-          }
-        }
-      }
-    } else if (tab === "files") {
-      // Files tab: file tree items directly (no section header)
-      const d = detail();
-      if (d && d.files.length > 0) {
-        const rows = fileTreeRows();
-        for (let i = 0; i < rows.length; i++) {
-          const row = rows[i];
-          if (row.isDir) {
-            items.push({ type: "file-dir", dirPath: row.dirPath, index: i });
-          } else {
-            items.push({ type: "file", filePath: row.file?.path, index: i });
           }
         }
       }
@@ -372,18 +343,6 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
       case "parent":
         if (props.onJumpToCommit) props.onJumpToCommit(item.hash, item.type);
         break;
-      case "file-dir":
-        toggleDir(item.dirPath);
-        break;
-      case "file":
-        if (props.onOpenDiff && item.filePath) {
-          const c = commit();
-          const d = detail();
-          if (c && d) {
-            props.onOpenDiff(buildDiffTarget(c.hash, item.filePath, "commit", d.files));
-          }
-        }
-        break;
       case "stash-entry":
         toggleStash(item.stashHash);
         break;
@@ -429,16 +388,8 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
       props.navRef.activateCurrentItem = activateCurrentItem;
       props.navRef.itemRefs = itemRefs;
       props.navRef.scrollToFile = (filePath: string) => {
-        // Find the file tree row index for this path
         const tab = activeTab();
-        if (tab === "files") {
-          const rows = fileTreeRows();
-          const treeIdx = rows.findIndex(r => !r.isDir && r.file?.path === filePath);
-          if (treeIdx >= 0) {
-            const itemIdx = findItemIndex("file", undefined, treeIdx);
-            if (itemIdx >= 0) actions.setDetailCursorIndex(itemIdx);
-          }
-        } else if (tab === "stashes") {
+        if (tab === "stashes") {
           // For stash files, search expanded stash file trees
           const stashes = stashEntries();
           for (const stash of stashes) {
@@ -473,9 +424,6 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
         actions.setDetailCursorAction(expanded ? "collapse" : "expand");
         break;
       }
-      case "file-dir":
-        actions.setDetailCursorAction(collapsedDirs().has(item.dirPath) ? "expand" : "collapse");
-        break;
       case "copyable":
         actions.setDetailCursorAction("copy");
         break;
@@ -491,7 +439,6 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
         actions.setDetailCursorAction(dirs?.has(item.dirPath) ? "expand" : "collapse");
         break;
       }
-      case "file":
       case "stash-file":
         actions.setDetailCursorAction("diff");
         break;
@@ -499,7 +446,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   });
 
   // ── Cursor-aware banner scroll (deferred part) ────────────────────
-  // Must be defined after interactiveItems, fileTreeRows, and fileWidths.
+  // Must be defined after interactiveItems and stash state.
 
   /** Compute the visible width and text for the currently-cursored item.
    *  Returns null if the item doesn't need scrolling (section-header or text fits). */
@@ -530,30 +477,6 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
         const available = pw - ENTRY_PADDING_LEFT - SHORT_HASH_LEN - HASH_BADGE_GAP - BADGE_PADDING;
         if (name.length <= available) return null;
         return { text: name, visibleWidth: available };
-      }
-
-      case "file-dir": {
-        // Layout: prefix + connector + dirIndicator + name
-        const rows = fileTreeRows();
-        const treeRow = rows[item.index];
-        if (!treeRow) return null;
-        const fixedChars = treeRow.prefix.length + treeRow.connector.length + DIR_INDICATOR_WIDTH;
-        const available = pw - fixedChars;
-        if (treeRow.name.length <= available) return null;
-        return { text: treeRow.name, visibleWidth: available };
-      }
-
-      case "file": {
-        // Layout: prefix + connector + name + statPaddingLeft + status + statGap + addCol + statGap + delCol
-        const rows = fileTreeRows();
-        const treeRow = rows[item.index];
-        if (!treeRow) return null;
-        const fw = fileWidths();
-        const statWidth = STAT_PADDING_LEFT + STATUS_COL_WIDTH + STAT_GAP + fw.addColWidth + STAT_GAP + fw.delColWidth;
-        const fixedChars = treeRow.prefix.length + treeRow.connector.length + statWidth;
-        const available = pw - fixedChars;
-        if (treeRow.name.length <= available) return null;
-        return { text: treeRow.name, visibleWidth: available };
       }
 
       case "stash-entry": {
@@ -673,7 +596,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   );
 
   /** Memo'd index map for O(1) lookup of interactive item positions.
-   *  Keys are "section-header:children", "child:0", "file-dir:3", "stash-entry:abc123", etc. */
+   *  Keys are "section-header:children", "child:0", "stash-entry:abc123", etc. */
   const itemIndexMap = createMemo(() => {
     const map = new Map<string, number>();
     const items = interactiveItems();
@@ -688,8 +611,6 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
           break;
         case "child":
         case "parent":
-        case "file-dir":
-        case "file":
           map.set(`${item.type}:${item.index}`, i);
           break;
         case "stash-entry":
@@ -1116,46 +1037,16 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
             </Show>
 
             {/* ══════════════ Files tab ══════════════ */}
-            <Show when={activeTab() === "files" && detail() && detail()?.files.length > 0}>
-              <TotalLinesChangedRow totalAdd={fileWidths().totalAdd} totalDel={fileWidths().totalDel} />
-              <For each={fileTreeRows()}>
-                {(treeRow, i) => {
-                  const itemIdx = () => findItemIndex(treeRow.isDir ? "file-dir" : "file", undefined, i());
-                  const cursored = () => isCursored(itemIdx());
-                  const collapsed = () => treeRow.isDir && collapsedDirs().has(treeRow.dirPath);
-
-                  /** When this row is cursored and overflows, apply banner scroll */
-                  const scrolledName = () => {
-                    if (!cursored()) return null;
-                    const info = cursoredTextInfo();
-                    if (!info || info.text !== treeRow.name) return null;
-                    const off = bannerOffset();
-                    return treeRow.name.substring(off, off + info.visibleWidth);
-                  };
-
-                  return (
-                    <FileTreeEntry
-                      row={treeRow}
-                      cursored={cursored()}
-                      collapsed={collapsed()}
-                      highlightBg={itemHighlightBg(itemIdx())}
-                      scrolledName={scrolledName()}
-                      addColWidth={fileWidths().addColWidth}
-                      delColWidth={fileWidths().delColWidth}
-                      ref={(el: Renderable) => {
-                        itemRefs[itemIdx()] = el;
-                      }}
-                    />
-                  );
-                }}
-              </For>
-            </Show>
-
-            {/* Show "no files" message when files tab has no content */}
-            <Show when={activeTab() === "files" && (!detail() || detail()?.files.length === 0)}>
-              <box flexGrow={1} alignItems="center" justifyContent="center">
-                <text fg={t().foregroundMuted}>{state.detailLoading() ? "Loading..." : "No modified files"}</text>
-              </box>
+            <Show when={activeTab() === "files"}>
+              <FileListView
+                files={() => detail()?.files ?? []}
+                loading={() => state.detailLoading()}
+                commitHash={() => commit()?.hash ?? ""}
+                diffSource={() => "commit"}
+                resetTrigger={commit}
+                navRef={props.navRef!}
+                onOpenDiff={props.onOpenDiff}
+              />
             </Show>
 
             {/* ══════════════ Stashes tab ══════════════ */}

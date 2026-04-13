@@ -192,6 +192,30 @@ export function computeBrightColumns(ancestrySet: Set<string>, rows: GraphRow[])
     }
   }
 
+  // Leading rows: when the ancestry chain extends beyond the loaded data
+  // upward (the first ancestry node has no loaded first-child — the forward
+  // walk stopped because descendants aren't loaded), the rows above the
+  // first ancestry node should still have the ancestry column brightened.
+  // We detect this by checking whether the lane is active on the row
+  // immediately above the first ancestry node — if so, the lane continues
+  // upward past the loaded boundary.
+  if (ancestryIndices.length > 0) {
+    const firstIdx = ancestryIndices[0];
+    const firstRow = rows[firstIdx];
+    const firstCol = firstRow.nodeColumn;
+    // Only extend if there are rows above AND the lane is active on the row above
+    if (firstIdx > 0 && rows[firstIdx - 1].columns[firstCol]?.active) {
+      for (let r = firstIdx - 1; r >= 0; r--) {
+        const row = rows[r];
+        if (row.columns[firstCol]?.active) {
+          addCol(row.commit.hash, firstCol);
+        } else {
+          break; // lane ended — no need to keep walking
+        }
+      }
+    }
+  }
+
   // Trailing rows: when the ancestry chain extends beyond the loaded data
   // (the last ancestry node's first parent is not in the loaded rows), the
   // rows below the last ancestry node should still have the ancestry column

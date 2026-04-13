@@ -11,12 +11,14 @@ import { computeFileWidths } from "../src/components/detail-types";
 import {
   parseCommitLine,
   parseDiffTreeOutput,
+  parseNumstatOutput,
   parseRefs,
   parseStashEntry,
   parseStatusPorcelain,
   parseTagLine,
   parseTrackInfo,
   RS,
+  resolveRenamePath,
 } from "../src/git/repo";
 
 describe("repo.ts parsing", () => {
@@ -606,5 +608,70 @@ describe("computeFileWidths", () => {
     expect(result.totalDel).toBe(0);
     expect(result.addColWidth).toBe(2);
     expect(result.delColWidth).toBe(2);
+  });
+});
+
+describe("resolveRenamePath", () => {
+  test("plain path — no braces, returned as-is", () => {
+    expect(resolveRenamePath("src/git/repo.ts")).toBe("src/git/repo.ts");
+  });
+
+  test("top-level rename {old => new}", () => {
+    expect(resolveRenamePath("{old.txt => new.txt}")).toBe("new.txt");
+  });
+
+  test("rename within directory dir/{old => new}", () => {
+    expect(resolveRenamePath("src/components/dialogs/{operations-dialog.tsx => menu-dialog.tsx}")).toBe(
+      "src/components/dialogs/menu-dialog.tsx",
+    );
+  });
+
+  test("directory move {src/old => dst/new}/file.txt", () => {
+    expect(resolveRenamePath("{src/old => dst/new}/file.txt")).toBe("dst/new/file.txt");
+  });
+
+  test("move to subdirectory with shared prefix dir/{old.jar => sub/new.jar}", () => {
+    expect(
+      resolveRenamePath(
+        "cicd/{api/openapi-generator-cli-7.9.0.jar => openapi-generator/openapi-generator-cli-7.10.0.jar}",
+      ),
+    ).toBe("cicd/openapi-generator/openapi-generator-cli-7.10.0.jar");
+  });
+
+  test("rename with empty old part { => new}/file (new file added to subdir)", () => {
+    expect(resolveRenamePath("{ => src}/file.ts")).toBe("src/file.ts");
+  });
+
+  test("rename with empty new part {old => }/file (moved to root)", () => {
+    expect(resolveRenamePath("{src => }/file.ts")).toBe("file.ts");
+  });
+});
+
+describe("parseNumstatOutput", () => {
+  test("normal files parsed correctly", () => {
+    const stdout = "10\t5\tsrc/app.tsx\n3\t1\tsrc/utils.ts\n";
+    const files = parseNumstatOutput(stdout);
+    expect(files).toHaveLength(2);
+    expect(files[0]).toEqual({ path: "src/app.tsx", additions: 10, deletions: 5, status: "M" });
+    expect(files[1]).toEqual({ path: "src/utils.ts", additions: 3, deletions: 1, status: "M" });
+  });
+
+  test("rename paths resolved to destination", () => {
+    const stdout = "5\t5\tsrc/components/dialogs/{operations-dialog.tsx => menu-dialog.tsx}\n";
+    const files = parseNumstatOutput(stdout);
+    expect(files).toHaveLength(1);
+    expect(files[0].path).toBe("src/components/dialogs/menu-dialog.tsx");
+  });
+
+  test("binary files with - stats parsed as 0", () => {
+    const stdout = "-\t-\timage.png\n";
+    const files = parseNumstatOutput(stdout);
+    expect(files).toHaveLength(1);
+    expect(files[0]).toEqual({ path: "image.png", additions: 0, deletions: 0, status: "M" });
+  });
+
+  test("empty input returns empty array", () => {
+    expect(parseNumstatOutput("")).toEqual([]);
+    expect(parseNumstatOutput("\n")).toEqual([]);
   });
 });

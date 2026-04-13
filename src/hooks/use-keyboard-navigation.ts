@@ -2,7 +2,7 @@ import type { ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard } from "@opentui/solid";
 import type { Accessor } from "solid-js";
 import type { DetailNavRef } from "../components/detail-types";
-import { SHIFT_JUMP } from "../constants";
+import { ANCESTRY_PRELOAD_ROWS, SHIFT_JUMP } from "../constants";
 import type { AppActions, AppState } from "../context/state";
 import { scrollElementIntoView } from "../utils/scroll";
 import { getAvailableTabs } from "../utils/tab-utils";
@@ -33,6 +33,8 @@ interface KeyboardNavigationOptions {
   detailNavRef: DetailNavRef;
   /** Reload git data, optionally preserving scroll position via stickyHash. */
   loadData: (branch?: string, stickyHash?: string, silent?: boolean, preserveLoaded?: boolean) => void;
+  /** Load more commits (pagination) — triggered when ancestry navigation reaches the end of loaded data. */
+  loadMoreData: () => void;
   /** Fetch from all remotes and reload data. */
   handleFetch: () => void;
   /** Current command bar mode. */
@@ -61,7 +63,6 @@ interface KeyboardNavigationOptions {
  * `↑/↓`, `j/k` — navigate 1 row (Shift = 10 rows)
  * `←/→`, `h/l` — switch focus / navigate tabs
  * `g/G` — jump to top/bottom
- * `space` — range mark (v0.2.0 range selection)
  * `Enter` — open/confirm/activate
  * `Esc` — close/back/cancel cascade
  *
@@ -91,6 +92,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     getDetailScrollboxRef,
     detailNavRef,
     loadData,
+    loadMoreData,
     commandBarMode,
     setCommandBarMode,
     commandBarValue,
@@ -399,6 +401,18 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
       return steps > 0 ? idx : from;
     };
 
+    /** Count how many ancestry rows exist below `from` (up to `limit`). */
+    const countAncestryBelow = (from: number, limit: number): number => {
+      const aSet = state.ancestrySet();
+      if (!aSet) return 0;
+      const rows = state.filteredRows();
+      let count = 0;
+      for (let i = from + 1; i < rows.length && count < limit; i++) {
+        if (aSet.has(rows[i].commit.hash)) count++;
+      }
+      return count;
+    };
+
     switch (e.name) {
       case "down":
       case "j": {
@@ -410,6 +424,15 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
           if (target !== state.cursorIndex()) {
             actions.setCursorIndex(target);
             actions.setScrollTargetIndex(target);
+            // Preload: when fewer than N ancestry rows remain below the
+            // cursor, start loading the next page so the data is ready
+            // before the user reaches the boundary.
+            if (state.hasMore() && countAncestryBelow(target, ANCESTRY_PRELOAD_ROWS) < ANCESTRY_PRELOAD_ROWS) {
+              loadMoreData();
+            }
+          } else if (state.hasMore()) {
+            // No more ancestry rows in loaded data — trigger lazy load
+            loadMoreData();
           }
         } else {
           actions.moveCursor(e.shift ? SHIFT_JUMP : 1);
@@ -458,13 +481,12 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
           setDialog("detail");
         }
         break;
-      case "space":
-        // Space toggles ancestry highlighting (first-parent chain through cursor commit).
-        // Shift+Space is reserved for range selection (v0.2.0 #2).
-        if (!e.shift) {
-          e.preventDefault();
-          onCommandExecute("a");
-        }
+      case "a":
+        // 'a' toggles ancestry highlighting (first-parent chain through cursor commit).
+        // Blocked during search — ancestry and search are mutually exclusive.
+        e.preventDefault();
+        if (state.searchQuery()) break;
+        onCommandExecute("ancestry");
         break;
       case "g": {
         e.preventDefault();
@@ -486,6 +508,8 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
             const target = findAncestryIndex(rows.length, -1, 1);
             actions.setCursorIndex(target);
             actions.setScrollTargetIndex(target);
+            // If the last ancestry row isn't at the very end, trigger lazy load
+            if (state.hasMore()) loadMoreData();
           } else {
             const lastIdx = state.filteredRows().length - 1;
             actions.setCursorIndex(lastIdx);
@@ -500,8 +524,8 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
 
   /**
    * Close the topmost open layer.
-   * Order: command bar → dialog → search → detail focus → search filter →
-   *        path filter (v0.2.0) → branch view
+   * Order: command bar → dialog → search (typing) → detail focus → search (filter) →
+   *        ancestry → branch view
    * Returns true if something was closed, false if there was nothing left.
    */
   function closeOneCascadeStep(): boolean {

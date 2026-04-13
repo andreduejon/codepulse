@@ -10,6 +10,10 @@ export const DATE_COL_WIDTH = 15;
 export const SHIFT_JUMP = 10;
 export const PAGE_JUMP = 20;
 
+/** When navigating in ancestry mode, preload the next page when fewer than
+ *  this many ancestry rows remain below the cursor. */
+export const ANCESTRY_PRELOAD_ROWS = 5;
+
 /** Detail panel width as a fraction of terminal width. */
 export const DETAIL_PANEL_WIDTH_FRACTION = 0.25;
 

@@ -188,8 +188,10 @@ function AppContent(props: Readonly<AppContentProps>) {
     //                            (only the first such child encountered, graph order)
     const firstParentOf = new Map<string, string>();
     const firstChildOf = new Map<string, string>();
+    const loadedHashes = new Set<string>();
     for (const row of rows) {
       const hash = row.commit.hash;
+      loadedHashes.add(hash);
       const fp = row.commit.parents[0]; // git first parent — preserves true mainline
       if (fp) {
         firstParentOf.set(hash, fp);
@@ -200,9 +202,13 @@ function AppContent(props: Readonly<AppContentProps>) {
     const chain = new Set<string>();
     chain.add(anchorHash);
 
-    // Walk backward (ancestors via first-parent)
+    // Walk backward (ancestors via first-parent).
+    // Only add hashes that have loaded rows — if the parent isn't loaded,
+    // stop. Adding unloaded hashes to the chain would break
+    // computeBrightColumns' trailing-rows extension (it checks
+    // ancestrySet.has(lastFirstParent) to decide whether to extend).
     let cur: string | undefined = firstParentOf.get(anchorHash);
-    while (cur && !chain.has(cur)) {
+    while (cur && !chain.has(cur) && loadedHashes.has(cur)) {
       chain.add(cur);
       cur = firstParentOf.get(cur);
     }
@@ -218,12 +224,33 @@ function AppContent(props: Readonly<AppContentProps>) {
   };
 
   // Re-run chain computation when graphRows() changes and ancestry is active (lazy-loading support).
+  // The prevGraphRows ref prevents redundant recomputation during the same reactive flush
+  // that initially activates ancestry (command handler already sets the chain; this effect
+  // should only fire when NEW data loads, not on the activation flush itself).
+  let prevGraphRows: readonly object[] | null = null;
   createEffect(() => {
-    // Track graphRows() reactively
-    state.graphRows();
-    // Re-run only when ancestry is currently active
+    const rows = state.graphRows();
+    if (rows === prevGraphRows) return; // same reference — skip redundant flush
+    prevGraphRows = rows;
     if (ancestryAnchorHash !== null) {
-      actions.setAncestrySet(buildFirstParentChain(ancestryAnchorHash));
+      const newSet = buildFirstParentChain(ancestryAnchorHash);
+      // Structural comparison: skip setAncestrySet if the chain hasn't changed.
+      // buildFirstParentChain always returns a new Set, but SolidJS uses ===
+      // for signals, so a new Set always fires even when contents are identical.
+      // This prevents the full render cascade (computeBrightColumns → dimChars →
+      // every GraphLine) from re-running needlessly on auto-refresh / lazy load.
+      const current = state.ancestrySet();
+      if (current !== null && current.size === newSet.size) {
+        let same = true;
+        for (const h of newSet) {
+          if (!current.has(h)) {
+            same = false;
+            break;
+          }
+        }
+        if (same) return;
+      }
+      actions.setAncestrySet(newSet);
     }
   });
 
@@ -363,14 +390,20 @@ function AppContent(props: Readonly<AppContentProps>) {
         break;
       case "f":
       case "fetch":
+        ancestryAnchorHash = null;
+        actions.setAncestrySet(null);
         handleFetch();
         break;
       case "r":
       case "reload":
+        ancestryAnchorHash = null;
+        actions.setAncestrySet(null);
         loadData(undefined, undefined, false, true);
         break;
       case "search":
-        // Re-open search mode (keyboard hook openSearch handles it via setCommandBarMode)
+        // Re-open search mode — ancestry and search are mutually exclusive
+        ancestryAnchorHash = null;
+        actions.setAncestrySet(null);
         setSearchFocused(true);
         setCommandBarMode("search");
         break;
@@ -382,18 +415,18 @@ function AppContent(props: Readonly<AppContentProps>) {
         break;
       case "a":
       case "ancestry": {
-        // Toggle ancestry highlighting on/off.
-        // If already active, clear it; otherwise compute the first-parent chain
-        // through the selected commit (both backward ancestors and forward descendants).
+        // Toggle ancestry mode — highlights the first-parent chain through the
+        // selected commit (both backward ancestors and forward descendants).
         if (state.ancestrySet() !== null) {
+          // Already active — toggle off
           ancestryAnchorHash = null;
           actions.setAncestrySet(null);
-        } else {
-          const anchor = state.selectedCommit()?.hash ?? null;
-          if (anchor) {
-            ancestryAnchorHash = anchor;
-            actions.setAncestrySet(buildFirstParentChain(anchor));
-          }
+          break;
+        }
+        const anchor = state.selectedCommit()?.hash ?? null;
+        if (anchor) {
+          ancestryAnchorHash = anchor;
+          actions.setAncestrySet(buildFirstParentChain(anchor));
         }
         break;
       }
@@ -418,6 +451,7 @@ function AppContent(props: Readonly<AppContentProps>) {
     getDetailScrollboxRef: () => detailScrollboxRef,
     detailNavRef,
     loadData,
+    loadMoreData,
     handleFetch,
     commandBarMode,
     setCommandBarMode,

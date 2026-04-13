@@ -50,6 +50,8 @@ export default function Footer(
 
   const mode = () => props.commandBarMode();
 
+  const ancestryMode = () => state.ancestrySet() !== null;
+
   return (
     <>
       <box flexDirection="row" width="100%" height={1}>
@@ -81,13 +83,24 @@ export default function Footer(
 
         {/* ── Graph idle ───────────────────────────────────────────────────── */}
         <Show when={!state.detailFocused() && mode() === "idle"}>
-          <Show when={props.filterActive}>
+          {/* Ancestry mode active */}
+          <Show when={ancestryMode()}>
             <KeyHint key="esc" desc=" clear  " />
           </Show>
+
+          {/* No ancestry active */}
+          <Show when={!ancestryMode()}>
+            <Show when={props.filterActive}>
+              <KeyHint key="esc" desc=" clear  " />
+            </Show>
+          </Show>
+
+          {/* Switch tab / show details — always shown in graph idle */}
           <Show when={props.compact} fallback={<KeyHint key="←/→" desc=" switch tab  " />}>
             <KeyHint key="enter" desc=" show details  " />
           </Show>
           <KeyHint key="shift ←/→" desc=" switch mode  " />
+
           <KeyHint key="↑/↓" desc=" navigate" />
         </Show>
       </box>
