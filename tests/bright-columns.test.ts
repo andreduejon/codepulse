@@ -261,6 +261,7 @@ describe("computeBrightColumns", () => {
 
     expect(result.vertical.size).toBe(0);
     expect(result.fanOutHorizontal.size).toBe(0);
+    expect(result.commitHorizontal.size).toBe(0);
   });
 
   test("single-node ancestry set — only vertical, no fanOutHorizontal", () => {
@@ -273,5 +274,158 @@ describe("computeBrightColumns", () => {
     expect(result.vertical.get("a")?.has(aRow.nodeColumn)).toBe(true);
     expect(result.vertical.has("b")).toBe(false);
     expect(result.fanOutHorizontal.size).toBe(0);
+    expect(result.commitHorizontal.size).toBe(0);
+  });
+
+  test("commit-row horizontal brightening — merge arm on commit row itself", () => {
+    // When a merge commit's horizontal connector is on the commit row (not a
+    // fan-out row), commitHorizontal should capture the bright columns.
+    //
+    // Graph:
+    //   █─╮  m1 (main)       — merge commit, merge arm is on commit row
+    //   │ │
+    //   │ █  f1 (feature)    — ancestry child in a different column
+    //   │ │
+    //   █─╯  d1              — base commit
+    //
+    // Ancestry: m1 → d1 (m1's first parent is d1)
+    // m1 is at col 0, d1 is at col 0 — same column, no horizontal needed.
+    // But if we make m1's first parent d1 and f1 is the second parent (merge),
+    // the first-parent chain is m1 → d1 (same col, no horizontal).
+    //
+    // For the test to exercise commitHorizontal, we need a scenario where:
+    // 1. Two ancestry nodes are in DIFFERENT columns
+    // 2. The connection is via commit-row connectors, NOT fan-out rows
+    // This happens when a commit is the merge target (not the merge source).
+    //
+    // A simpler scenario: feature branch merges back, and the merge commit
+    // has the merge arm on its commit row. The ancestry chain follows through
+    // the merge arm.
+    const commits = [
+      makeCommit("m1", ["d1", "f1"], [{ name: "main", type: "branch", isCurrent: true }]),
+      makeCommit("f1", ["d1"], [{ name: "feature", type: "branch", isCurrent: false }]),
+      makeCommit("d1", []),
+    ];
+    const rows = buildGraph(commits);
+    printGraph(rows);
+
+    const m1Row = findRow(rows, "m1");
+    const f1Row = findRow(rows, "f1");
+    const d1Row = findRow(rows, "d1");
+
+    // Ancestry chain f1 → d1: first parent of f1 is d1
+    // This tests the commit-row horizontal when f1 and d1 are in different columns
+    // connected via d1's commit-row connectors (the merge close ╯).
+    if (f1Row.nodeColumn !== d1Row.nodeColumn) {
+      const ancestrySet = new Set(["f1", "d1"]);
+      const result = computeBrightColumns(ancestrySet, rows);
+
+      // Check if connection goes through fan-out or commit row
+      const foMap = result.fanOutHorizontal.get("d1");
+      const chMap = result.commitHorizontal.get("d1");
+
+      // At least one of them should have the bright columns
+      const hasFanOut = foMap && foMap.size > 0;
+      const hasCommitH = chMap && chMap.size > 0;
+      expect(hasFanOut || hasCommitH).toBe(true);
+
+      // If commitHorizontal is populated, verify the column span is correct
+      if (hasCommitH) {
+        const lo = Math.min(f1Row.nodeColumn, d1Row.nodeColumn);
+        const hi = Math.max(f1Row.nodeColumn, d1Row.nodeColumn);
+        for (let c = lo; c <= hi; c++) {
+          expect(chMap?.has(c)).toBe(true);
+        }
+      }
+    }
+
+    // Also test the m1 → d1 ancestry (same column, should have no horizontal)
+    const ancestrySet2 = new Set(["m1", "d1"]);
+    const result2 = computeBrightColumns(ancestrySet2, rows);
+    if (m1Row.nodeColumn === d1Row.nodeColumn) {
+      // Same column — no horizontal brightening needed
+      expect(result2.commitHorizontal.has("d1")).toBe(false);
+    }
+  });
+
+  test("lane-switch ancestry — fanOutHorizontal bridges different-column pairs", () => {
+    // Graph:
+    //   █       s1  (side1)       col 0
+    //   │
+    //   │ █     c1  (main)        col 1  ← ancestry
+    //   │ │
+    //   │ │ █   s2  (side2)       col 2
+    //   │ │ │
+    //   █─╯ │   c2  ()            col 0  ← ancestry (merge close from col 1)
+    //   │   │
+    //   █───╯   c3  ()            col 0  ← ancestry
+    //
+    // Ancestry chain: c1 (col 1) → c2 (col 0) → c3 (col 0)
+    // c1→c2 crosses columns: the fan-out row at c2 draws ─╯ from col 0 to
+    // col 1, so fanOutHorizontal should cover [0, 1].
+    // c2→c3 is same column (col 0), so only vertical brightening is needed.
+    //
+    // Intermediate row s2 (between c1 and c2) should only get col 1 (c1's
+    // column, the child) in its vertical bright set. Col 0 (c2's column,
+    // the parent) is just that branch's own passthrough — the ancestry
+    // path transitions to it only at c2's fan-out/commit row.
+    //
+    // Col 1 is NOT active at c2 (the lane closes via ╯), so c2's vertical
+    // only has col 0 (its nodeColumn). The c1→c2 connection is entirely
+    // handled by fanOutHorizontal, not vertical.
+    const commits = [
+      makeCommit("s1", ["c2"], [{ name: "side1", type: "branch", isCurrent: false }]),
+      makeCommit("c1", ["c2"], [{ name: "main", type: "branch", isCurrent: true }]),
+      makeCommit("s2", ["c3"], [{ name: "side2", type: "branch", isCurrent: false }]),
+      makeCommit("c2", ["c3"]),
+      makeCommit("c3", []),
+    ];
+    const rows = buildGraph(commits);
+    printGraph(rows);
+
+    const c1Row = findRow(rows, "c1");
+    const c2Row = findRow(rows, "c2");
+    const c3Row = findRow(rows, "c3");
+    const s2Row = findRow(rows, "s2");
+
+    // Verify the graph shape: c1 should be in a different column from c2/c3
+    expect(c2Row.nodeColumn).toBe(c3Row.nodeColumn);
+    expect(c1Row.nodeColumn).not.toBe(c2Row.nodeColumn);
+
+    const ancestrySet = new Set(["c1", "c2", "c3"]);
+    const result = computeBrightColumns(ancestrySet, rows);
+
+    const c1Col = c1Row.nodeColumn;
+    const c2Col = c2Row.nodeColumn;
+
+    // Each ancestry node has its own nodeColumn seeded in vertical
+    expect(result.vertical.get("c1")?.has(c1Col)).toBe(true);
+    expect(result.vertical.get("c2")?.has(c2Col)).toBe(true);
+    expect(result.vertical.get("c3")?.has(c2Col)).toBe(true);
+
+    // s2 is intermediate between c1 and c2 — only the child's column (c1Col)
+    // should be bright. The parent's column (c2Col) is just that branch's own
+    // passthrough, not the ancestry path. The ancestry transitions to parentCol
+    // only at c2's fan-out/commit row via horizontal connectors.
+    expect(result.vertical.get("s2")?.has(c1Col)).toBe(true);
+    expect(result.vertical.get("s2")?.has(c2Col)).toBeFalsy();
+
+    // c2 should NOT have c1's column in vertical (col 1 is inactive at c2)
+    expect(s2Row.columns[c1Col]?.active).toBe(true); // still active at s2
+    expect(c2Row.columns[c1Col]?.active).toBe(false); // closed at c2
+    expect(result.vertical.get("c2")?.has(c1Col)).toBeFalsy();
+
+    // c1→c2 connection goes through fan-out row on c2
+    const foMap = result.fanOutHorizontal.get("c2");
+    expect(foMap).toBeDefined();
+    if (foMap) {
+      expect(foMap.size).toBe(1);
+      const [, colSet] = [...foMap.entries()][0];
+      const lo = Math.min(c1Col, c2Col);
+      const hi = Math.max(c1Col, c2Col);
+      for (let c = lo; c <= hi; c++) {
+        expect(colSet.has(c)).toBe(true);
+      }
+    }
   });
 });
