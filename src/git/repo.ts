@@ -475,6 +475,41 @@ export async function isGitAvailable(): Promise<boolean> {
   }
 }
 
+/**
+ * Return the set of commit hashes that touch the given pathspec.
+ * Runs `git log --format=%H [--all | branch] -- <path>` to get the full list
+ * of hashes matching the path, without loading commit metadata.
+ *
+ * Used for display-level path filtering: the set is stored in state and used
+ * to dim non-matching rows while keeping the full graph topology intact.
+ */
+export async function getPathMatchingHashes(
+  repoPath: string,
+  pathspec: string,
+  options: { branch?: string; all?: boolean } = {},
+  signal?: AbortSignal,
+): Promise<Set<string>> {
+  const args = ["log", "--format=%H"];
+
+  if (options.all) {
+    args.push("--exclude=refs/stash*", "--all");
+  } else if (options.branch) {
+    args.push(options.branch);
+  }
+
+  args.push("--", pathspec);
+
+  const { stdout, exitCode } = await runGit(repoPath, args, signal);
+  if (exitCode !== 0) return new Set();
+
+  const hashes = new Set<string>();
+  for (const line of stdout.trim().split("\n")) {
+    const h = line.trim();
+    if (h) hashes.add(h);
+  }
+  return hashes;
+}
+
 export async function isGitRepo(path: string): Promise<boolean> {
   const { exitCode } = await runGit(path, ["rev-parse", "--is-inside-work-tree"]);
   return exitCode === 0;

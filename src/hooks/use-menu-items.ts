@@ -78,6 +78,8 @@ export interface MenuItemsOptions {
   onReload: () => void;
   onOpenDialog?: (dialogId: "theme") => void;
   onViewBranch: (branch: string | null) => void;
+  /** Clear path filter callback. */
+  onClearPathFilter: () => void;
   onClose: () => void;
   configInfo?: ConfigInfo;
 }
@@ -294,6 +296,31 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
         opts.onClose();
       },
     });
+
+    // ── Path filter (always shown) ─────────────────────────────────
+    result.push({ kind: "header", label: "Path Filter" });
+    const pathFilter = state.pathFilter();
+    if (pathFilter) {
+      result.push({
+        kind: "info",
+        label: "Path",
+        get: () => pathFilter,
+      });
+      result.push({
+        kind: "action",
+        label: "Clear path filter",
+        run: () => {
+          opts.onClearPathFilter();
+          opts.onClose();
+        },
+      });
+    } else {
+      result.push({
+        kind: "info",
+        label: "Path",
+        get: () => "(none)",
+      });
+    }
 
     // ── Local section (collapsible) ───────────────────────────────
     result.push({

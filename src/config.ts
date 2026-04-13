@@ -25,6 +25,8 @@ export interface AppOptions {
   maxCount: number;
   themeName: string;
   autoRefreshInterval: number;
+  /** Initial pathspec filter from CLI (session-scoped, not persisted). */
+  path: string | undefined;
 }
 
 /** Information about the global config file and repo-specific overrides. */
@@ -206,6 +208,7 @@ export function mergeOptions(
     all?: boolean;
     maxCount?: number;
     themeName?: string;
+    path?: string;
   },
   config: CodepulseConfig,
 ): AppOptions {
@@ -234,6 +237,7 @@ export function mergeOptions(
     themeName: cli.themeName ?? config.theme ?? "catppuccin-mocha",
     autoRefreshInterval:
       config.autoRefreshSeconds !== undefined ? config.autoRefreshSeconds * 1000 : DEFAULT_AUTO_REFRESH_INTERVAL,
+    path: cli.path,
   };
 }
 

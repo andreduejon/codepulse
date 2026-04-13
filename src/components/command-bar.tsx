@@ -35,8 +35,11 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
         return "Search commits...";
       case "path":
         return "Enter path...";
-      default:
-        return "";
+      default: {
+        // IDLE mode: show active path filter indicator if set
+        const pf = state.pathFilter();
+        return pf ? `Path: ${pf}    Enter command...` : "";
+      }
     }
   };
 
@@ -63,12 +66,16 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
     }
   };
 
-  const countColor = () => (state.searchQuery() && state.filteredRows().length === 0 ? t().error : t().foregroundMuted);
+  const countColor = () => {
+    const hSet = state.highlightSet();
+    if (hSet && hSet.size === 0) return t().error;
+    return t().foregroundMuted;
+  };
 
-  const countText = () =>
-    state.searchQuery()
-      ? `${state.filteredRows().length} / ${state.graphRows().length}`
-      : `${state.graphRows().length}`;
+  const countText = () => {
+    const hSet = state.highlightSet();
+    return hSet !== null ? `${hSet.size} / ${state.graphRows().length}` : `${state.graphRows().length}`;
+  };
 
   const borderColor = () => (props.detailFocused() ? t().border : t().accent);
 
@@ -133,6 +140,11 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
         <Show when={state.viewingBranch()}>
           <text flexShrink={0} wrapMode="none" fg={t().accent}>
             {`  [viewing: ${state.viewingBranch()}]`}
+          </text>
+        </Show>
+        <Show when={state.pathFilter()}>
+          <text flexShrink={0} wrapMode="none" fg={t().accent}>
+            {`  [path: ${state.pathFilter()}]`}
           </text>
         </Show>
         <box flexGrow={1} />

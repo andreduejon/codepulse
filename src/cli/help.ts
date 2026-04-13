@@ -23,6 +23,7 @@ ARGUMENTS:
 OPTIONS:
   -b, --branch <name>    Show only a specific branch
   -n, --max-count <n>    Maximum number of commits to show (default: ${DEFAULT_MAX_COUNT})
+      --path <pathspec>  Filter commits by file/directory path (e.g. src/git/)
       --theme <name>     Color theme (use :theme in-app to browse)
       --no-all           Don't show all branches
   -h, --help             Show this help message

@@ -16,6 +16,7 @@ import type { ConfigInfo } from "./config";
 import { COMPACT_THRESHOLD_WIDTH, DEFAULT_MAX_COUNT, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH } from "./constants";
 import { AppStateContext, createAppState, useAppState } from "./context/state";
 import { createThemeState, ThemeContext } from "./context/theme";
+import { getPathMatchingHashes } from "./git/repo";
 import type { DiffTarget } from "./git/types";
 import { useDataLoader } from "./hooks/use-data-loader";
 import { useDetailLoader } from "./hooks/use-detail-loader";
@@ -29,6 +30,8 @@ interface AppProps {
   maxCount?: number;
   themeName?: string;
   autoRefreshInterval?: number;
+  /** Initial pathspec filter from CLI (session-scoped). */
+  path?: string;
   configInfo?: ConfigInfo;
   startupError?: string;
 }
@@ -98,6 +101,9 @@ function AppContent(props: Readonly<AppContentProps>) {
   const { state, actions } = createAppState(props.maxCount ?? DEFAULT_MAX_COUNT, props.autoRefreshInterval);
   const themeState = props.themeState;
   const renderer = useRenderer();
+
+  // Initialize path filter from CLI --path flag (before first loadData)
+  if (props.path) actions.setPathFilter(props.path);
 
   const [dialog, setDialog] = createSignal<"menu" | "help" | "theme" | "diff-blame" | "detail" | null>(null);
   const [searchFocused, setSearchFocused] = createSignal(false);
@@ -254,9 +260,67 @@ function AppContent(props: Readonly<AppContentProps>) {
     }
   });
 
+  // Re-compute pathMatchSet when graphRows changes and path filter is active
+  // (pagination / auto-refresh may load new commits that touch the path).
+  // Uses the same prevGraphRows guard pattern as the ancestry effect — the
+  // initial path execution already sets the match set; this only fires on
+  // subsequent graphRows changes.
+  let prevPathGraphRows: readonly object[] | null = null;
+  createEffect(() => {
+    const rows = state.graphRows();
+    if (rows === prevPathGraphRows) return;
+    prevPathGraphRows = rows;
+    const pf = state.pathFilter();
+    if (!pf) return;
+    // Re-run the hash query asynchronously
+    const viewBranch = state.viewingBranch();
+    const effectiveAll = viewBranch ? false : state.showAllBranches();
+    getPathMatchingHashes(props.repoPath, pf, {
+      branch: viewBranch ?? undefined,
+      all: effectiveAll,
+    }).then(hashes => {
+      // Only update if path filter is still the same (guard against race)
+      if (state.pathFilter() === pf) {
+        actions.setPathMatchSet(hashes.size > 0 ? hashes : new Set());
+        // If cursor is on a non-matching row, jump to the nearest match
+        const matchSet = hashes;
+        if (matchSet.size > 0) {
+          const rows = state.graphRows();
+          const curIdx = state.cursorIndex();
+          if (curIdx >= rows.length || !matchSet.has(rows[curIdx].commit.hash)) {
+            let fwd = -1;
+            for (let i = curIdx + 1; i < rows.length; i++) {
+              if (matchSet.has(rows[i].commit.hash)) {
+                fwd = i;
+                break;
+              }
+            }
+            let bwd = -1;
+            for (let i = curIdx - 1; i >= 0; i--) {
+              if (matchSet.has(rows[i].commit.hash)) {
+                bwd = i;
+                break;
+              }
+            }
+            let target: number;
+            if (fwd >= 0 && bwd >= 0) {
+              target = curIdx - bwd <= fwd - curIdx ? bwd : fwd;
+            } else {
+              target = fwd >= 0 ? fwd : bwd;
+            }
+            if (target >= 0) {
+              actions.setCursorIndex(target);
+              actions.setScrollTargetIndex(target);
+            }
+          }
+        }
+      }
+    });
+  });
+
   // Jump to a commit by hash (used by detail panel parent/child entries)
   const handleJumpToCommit = (hash: string, from: "child" | "parent") => {
-    const rows = state.filteredRows();
+    const rows = state.graphRows();
     const idx = rows.findIndex(r => r.commit.hash === hash);
     if (idx >= 0) {
       detailNavRef.lastJumpFrom = from;
@@ -322,23 +386,11 @@ function AppContent(props: Readonly<AppContentProps>) {
     setSearchInputValue(value);
   };
 
-  // Clamp cursor index when filtered results shrink (e.g. search narrowing).
-  // In Phase 1 (typing, not confirmed), pin the cursor to row 0 (the anchor).
-  // In Phase 2 / no search, clamp normally.
+  // Clamp cursor index when graphRows shrinks (e.g. branch change, reload).
   createEffect(() => {
-    const rows = state.filteredRows();
+    const rows = state.graphRows();
     const idx = state.cursorIndex();
 
-    // Phase 1: pin cursor to row 0 (anchor row is always first)
-    if (state.searchShowDivider()) {
-      if (idx !== 0) {
-        actions.setCursorIndex(0);
-        actions.setScrollTargetIndex(0);
-      }
-      return;
-    }
-
-    // Phase 2 / no search: standard clamping
     if (rows.length === 0) {
       if (idx !== 0) {
         actions.setCursorIndex(0);
@@ -401,9 +453,11 @@ function AppContent(props: Readonly<AppContentProps>) {
         loadData(undefined, undefined, false, true);
         break;
       case "search":
-        // Re-open search mode — ancestry and search are mutually exclusive
+        // Re-open search mode — mutually exclusive with ancestry and path
         ancestryAnchorHash = null;
         actions.setAncestrySet(null);
+        actions.setPathFilter(null);
+        actions.setPathMatchSet(null);
         setSearchFocused(true);
         setCommandBarMode("search");
         break;
@@ -423,6 +477,10 @@ function AppContent(props: Readonly<AppContentProps>) {
           actions.setAncestrySet(null);
           break;
         }
+        // Mutually exclusive with search and path
+        actions.setSearchQuery("");
+        actions.setPathFilter(null);
+        actions.setPathMatchSet(null);
         const anchor = state.selectedCommit()?.hash ?? null;
         if (anchor) {
           ancestryAnchorHash = anchor;
@@ -434,6 +492,35 @@ function AppContent(props: Readonly<AppContentProps>) {
         // Unknown command — ignore silently
         break;
     }
+  };
+
+  /**
+   * Apply a path filter from the command bar PATH_INPUT mode.
+   * Empty string clears the filter; non-empty sets it and computes
+   * the set of matching commit hashes for display-level dimming.
+   * Mutually exclusive with search and ancestry.
+   */
+  const handlePathExecute = async (pathValue: string) => {
+    const newPath = pathValue || null;
+    actions.setPathFilter(newPath);
+    if (!newPath) {
+      actions.setPathMatchSet(null);
+      return;
+    }
+    // Clear other highlight modes (mutual exclusion)
+    actions.setSearchQuery("");
+    setSearchInputValue("");
+    clearTimeout(searchDebounceTimer);
+    ancestryAnchorHash = null;
+    actions.setAncestrySet(null);
+    // Compute matching hashes using the same branch/all settings as the current view
+    const viewBranch = state.viewingBranch();
+    const effectiveAll = viewBranch ? false : state.showAllBranches();
+    const hashes = await getPathMatchingHashes(props.repoPath, newPath, {
+      branch: viewBranch ?? undefined,
+      all: effectiveAll,
+    });
+    actions.setPathMatchSet(hashes.size > 0 ? hashes : new Set());
   };
 
   // Keyboard handling
@@ -458,6 +545,7 @@ function AppContent(props: Readonly<AppContentProps>) {
     commandBarValue,
     setCommandBarValue,
     onCommandExecute: handleCommandExecute,
+    onPathExecute: handlePathExecute,
     onClearAncestry: () => {
       ancestryAnchorHash = null;
       actions.setAncestrySet(null);
@@ -520,7 +608,7 @@ function AppContent(props: Readonly<AppContentProps>) {
                 <box height={1} />
                 <Footer
                   commandBarMode={commandBarMode}
-                  filterActive={!!state.searchQuery()}
+                  filterActive={!!state.highlightSet() || !!state.viewingBranch()}
                   compact={layoutMode() === "compact"}
                 />
               </box>
@@ -549,6 +637,7 @@ function AppContent(props: Readonly<AppContentProps>) {
                 onFetch={handleFetch}
                 onOpenDialog={handleOpenDialog}
                 onViewBranch={handleViewBranch}
+                onClearPathFilter={() => handlePathExecute("")}
                 configInfo={props.configInfo}
               />
             </Show>

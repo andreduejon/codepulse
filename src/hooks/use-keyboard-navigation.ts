@@ -33,7 +33,7 @@ interface KeyboardNavigationOptions {
   detailNavRef: DetailNavRef;
   /** Reload git data, optionally preserving scroll position via stickyHash. */
   loadData: (branch?: string, stickyHash?: string, silent?: boolean, preserveLoaded?: boolean) => void;
-  /** Load more commits (pagination) — triggered when ancestry navigation reaches the end of loaded data. */
+  /** Load more commits (pagination) — triggered when highlight navigation reaches the end of loaded data. */
   loadMoreData: () => void;
   /** Fetch from all remotes and reload data. */
   handleFetch: () => void;
@@ -45,6 +45,8 @@ interface KeyboardNavigationOptions {
   setCommandBarValue: (v: string) => void;
   /** Callback to execute a command (dispatched from the keyboard handler). */
   onCommandExecute: (cmd: string) => void;
+  /** Callback to apply a path filter (dispatched when Enter is pressed in path mode). */
+  onPathExecute: (pathValue: string) => void;
   /** Callback to clear ancestry highlighting (called when search opens or on Esc). */
   onClearAncestry: () => void;
 }
@@ -62,20 +64,15 @@ interface KeyboardNavigationOptions {
  *
  * `↑/↓`, `j/k` — navigate 1 row (Shift = 10 rows)
  * `←/→`, `h/l` — switch focus / navigate tabs
- * `g/G` — jump to top/bottom
+ * `g/G` — jump to top/bottom (when highlight is active: first/last highlighted)
  * `Enter` — open/confirm/activate
  * `Esc` — close/back/cancel cascade
  *
- * ## Search Phases
+ * ## Unified Highlighting
  *
- * **Phase 1 (typing)**: search bar focused, `searchConfirmed = false`.
- * The display shows the two-zone context window (anchor row pinned at top,
- * h-line divider, then all matches below). All keys except Escape and Enter
- * pass through to the input.
- *
- * **Phase 2 (browsing)**: search bar defocused, `searchConfirmed = true`.
- * The display shows only matching rows. Arrow keys navigate between matches.
- * Right arrow opens the detail panel. Esc clears the filter.
+ * Search, ancestry, and path are mutually exclusive highlighting modes.
+ * When any is active, j/k skip dimmed rows (jump to next/prev highlighted).
+ * Esc clears the active highlight mode.
  */
 export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
   const {
@@ -98,44 +95,28 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     commandBarValue,
     setCommandBarValue,
     onCommandExecute,
+    onPathExecute,
     onClearAncestry,
   } = opts;
 
   /**
-   * Clear the search filter entirely and restore the cursor to its pre-search
-   * position (or keep the currently selected commit in Phase 2).
+   * Clear the search filter entirely.
    */
-  const clearFilterAndRestore = (restoreHash?: string) => {
+  const clearSearch = () => {
     clearSearchDebounce();
     setSearchInputValue("");
     actions.setSearchQuery("");
-    actions.setSearchConfirmed(false);
-    actions.setPreSearchCursorHash(null);
-    if (restoreHash) {
-      const rows = state.graphRows();
-      const idx = rows.findIndex(r => r.commit.hash === restoreHash);
-      if (idx >= 0) {
-        actions.setCursorIndex(idx);
-        actions.setPendingScrollHash(restoreHash);
-        return;
-      }
-    }
-    actions.setCursorIndex(0);
-    actions.setScrollTargetIndex(0);
   };
 
   /**
-   * Open the search bar (Phase 1). Saves the current cursor position
-   * as the anchor for the two-zone context window.
-   * Clears ancestry highlighting (mutual exclusivity).
+   * Open the search bar. Clears other highlight modes (mutual exclusivity).
    */
   const openSearch = () => {
-    const currentHash = state.selectedCommit()?.hash ?? null;
-    actions.setPreSearchCursorHash(currentHash);
-    actions.setSearchConfirmed(false);
     actions.setDetailFocused(false);
-    // Ancestry and search are mutually exclusive
+    // Mutual exclusion: clear ancestry and path
     onClearAncestry();
+    actions.setPathFilter(null);
+    actions.setPathMatchSet(null);
     // Pre-fill with the current active query (empty if no filter)
     setSearchInputValue(state.searchQuery());
     setCommandBarMode("search");
@@ -143,21 +124,56 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
   };
 
   /**
-   * Confirm the search (Enter from Phase 1 → Phase 2).
-   * Defocuses the search bar and positions the cursor on the first match
-   * (index 0) in the filtered list.
+   * If the cursor is on a dimmed (non-highlighted) row, jump to the nearest
+   * highlighted row. Prefers forward direction, falls back to backward.
+   */
+  const displaceIfDimmed = () => {
+    const hSet = state.highlightSet();
+    if (!hSet || hSet.size === 0) return;
+    const rows = state.graphRows();
+    const curIdx = state.cursorIndex();
+    if (curIdx < rows.length && hSet.has(rows[curIdx].commit.hash)) return; // already on a match
+
+    // Search forward first, then backward
+    let fwd = -1;
+    for (let i = curIdx + 1; i < rows.length; i++) {
+      if (hSet.has(rows[i].commit.hash)) {
+        fwd = i;
+        break;
+      }
+    }
+    let bwd = -1;
+    for (let i = curIdx - 1; i >= 0; i--) {
+      if (hSet.has(rows[i].commit.hash)) {
+        bwd = i;
+        break;
+      }
+    }
+
+    let target: number;
+    if (fwd >= 0 && bwd >= 0) {
+      // Pick the closer one; on tie prefer forward
+      target = curIdx - bwd <= fwd - curIdx ? bwd : fwd;
+    } else {
+      target = fwd >= 0 ? fwd : bwd;
+    }
+
+    if (target >= 0) {
+      actions.setCursorIndex(target);
+      actions.setScrollTargetIndex(target);
+    }
+  };
+
+  /**
+   * Confirm the search (Enter in search mode).
+   * Closes the search bar but keeps the highlight active.
    */
   const confirmSearch = () => {
-    const matches = state.searchMatchRows();
-    if (matches.length === 0) return; // nothing to confirm
-
     setSearchFocused(false);
     setCommandBarMode("idle");
-    actions.setSearchConfirmed(true);
-
-    // Always go to the first (top) match
-    actions.setCursorIndex(0);
-    actions.setScrollTargetIndex(0);
+    // searchQuery stays set — highlighting persists via highlightSet
+    // If cursor is on a dimmed row, jump to the nearest match
+    displaceIfDimmed();
   };
 
   /**
@@ -183,7 +199,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
       if (nextMode === "idle") {
         exitCommandBar();
         setSearchFocused(false);
-        clearFilterAndRestore(state.preSearchCursorHash() ?? undefined);
+        clearSearch();
       } else if (nextMode === "search") {
         openSearch();
       } else {
@@ -203,14 +219,21 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
       }
       if (e.name === "return") {
         e.preventDefault();
-        const cmd = commandBarValue().trim();
-        // Execute BEFORE exitCommandBar so setDialog() fires before blur's requestRender.
-        // For commands that set a new mode (e.g. :search, :path), onCommandExecute
-        // will set commandBarMode away from "command" — exitCommandBar detects this
-        // and skips the redundant mode change.
-        if (cmd) onCommandExecute(cmd);
-        // Only exit if the command didn't transition to another mode itself
-        if (commandBarMode() === "command") exitCommandBar();
+        const value = commandBarValue().trim();
+        if (commandBarMode() === "path") {
+          // Path mode: apply the typed text as a path filter (empty = clear).
+          onPathExecute(value);
+          exitCommandBar();
+        } else {
+          // Command mode: dispatch the typed command.
+          // Execute BEFORE exitCommandBar so setDialog() fires before blur's requestRender.
+          // For commands that set a new mode (e.g. :search, :path), onCommandExecute
+          // will set commandBarMode away from "command" — exitCommandBar detects this
+          // and skips the redundant mode change.
+          if (value) onCommandExecute(value);
+          // Only exit if the command didn't transition to another mode itself
+          if (commandBarMode() === "command") exitCommandBar();
+        }
         return;
       }
       // All other keys (printable chars, backspace, arrows) pass through to
@@ -221,9 +244,9 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     // ── SEARCH mode ───────────────────────────────────────────────────────────
     if (commandBarMode() === "search") {
       if (e.name === "escape") {
-        // Phase 1: close search bar, clear filter, restore pre-search cursor
+        // Close search bar, clear filter
         setSearchFocused(false);
-        clearFilterAndRestore(state.preSearchCursorHash() ?? undefined);
+        clearSearch();
         setCommandBarMode("idle");
         return;
       }
@@ -232,7 +255,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         // Empty input: clear filter and return to idle
         if (!searchInputValue().trim()) {
           setSearchFocused(false);
-          clearFilterAndRestore(state.preSearchCursorHash() ?? undefined);
+          clearSearch();
           setCommandBarMode("idle");
         } else {
           confirmSearch();
@@ -243,7 +266,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
       return;
     }
 
-    // ── IDLE mode (no dialog, no search) ─────────────────────────────────────
+    // ── IDLE mode (no dialog, no search bar open) ───────────────────────────
 
     // `:` opens COMMAND mode
     if (e.sequence === ":" && !searchFocused()) {
@@ -263,13 +286,6 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     // Escape cascade
     if (e.name === "escape") {
       closeOneCascadeStep();
-      return;
-    }
-
-    // Enter while search bar is focused: confirm search → Phase 2
-    if (e.name === "return" && searchFocused()) {
-      e.preventDefault();
-      confirmSearch();
       return;
     }
 
@@ -379,19 +395,19 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     const resetDetailScroll = () => scrollbox?.scrollTo(0);
 
     /**
-     * When ancestry highlighting is active, find the nearest highlighted row
+     * When any highlighting is active, find the nearest highlighted row
      * in the given direction from `from`, stepping `count` entries.
      * Returns the index of the target row, or `from` if no match found.
      */
-    const findAncestryIndex = (from: number, direction: 1 | -1, count: number): number => {
-      const aSet = state.ancestrySet();
-      if (!aSet) return from;
-      const rows = state.filteredRows();
+    const findHighlightedIndex = (from: number, direction: 1 | -1, count: number): number => {
+      const hSet = state.highlightSet();
+      if (!hSet) return from;
+      const rows = state.graphRows();
       let idx = from;
       let steps = 0;
       let next = from + direction;
       while (next >= 0 && next < rows.length) {
-        if (aSet.has(rows[next].commit.hash)) {
+        if (hSet.has(rows[next].commit.hash)) {
           idx = next;
           steps++;
           if (steps >= count) break;
@@ -401,14 +417,14 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
       return steps > 0 ? idx : from;
     };
 
-    /** Count how many ancestry rows exist below `from` (up to `limit`). */
-    const countAncestryBelow = (from: number, limit: number): number => {
-      const aSet = state.ancestrySet();
-      if (!aSet) return 0;
-      const rows = state.filteredRows();
+    /** Count how many highlighted rows exist below `from` (up to `limit`). */
+    const countHighlightedBelow = (from: number, limit: number): number => {
+      const hSet = state.highlightSet();
+      if (!hSet) return 0;
+      const rows = state.graphRows();
       let count = 0;
       for (let i = from + 1; i < rows.length && count < limit; i++) {
-        if (aSet.has(rows[i].commit.hash)) count++;
+        if (hSet.has(rows[i].commit.hash)) count++;
       }
       return count;
     };
@@ -417,21 +433,21 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
       case "down":
       case "j": {
         e.preventDefault();
-        const aSet = state.ancestrySet();
-        if (aSet) {
+        const hSet = state.highlightSet();
+        if (hSet) {
           const count = e.shift ? SHIFT_JUMP : 1;
-          const target = findAncestryIndex(state.cursorIndex(), 1, count);
+          const target = findHighlightedIndex(state.cursorIndex(), 1, count);
           if (target !== state.cursorIndex()) {
             actions.setCursorIndex(target);
             actions.setScrollTargetIndex(target);
-            // Preload: when fewer than N ancestry rows remain below the
+            // Preload: when fewer than N highlighted rows remain below the
             // cursor, start loading the next page so the data is ready
             // before the user reaches the boundary.
-            if (state.hasMore() && countAncestryBelow(target, ANCESTRY_PRELOAD_ROWS) < ANCESTRY_PRELOAD_ROWS) {
+            if (state.hasMore() && countHighlightedBelow(target, ANCESTRY_PRELOAD_ROWS) < ANCESTRY_PRELOAD_ROWS) {
               loadMoreData();
             }
           } else if (state.hasMore()) {
-            // No more ancestry rows in loaded data — trigger lazy load
+            // No more highlighted rows in loaded data — trigger lazy load
             loadMoreData();
           }
         } else {
@@ -443,10 +459,10 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
       case "up":
       case "k": {
         e.preventDefault();
-        const aSet = state.ancestrySet();
-        if (aSet) {
+        const hSet = state.highlightSet();
+        if (hSet) {
           const count = e.shift ? SHIFT_JUMP : 1;
-          const target = findAncestryIndex(state.cursorIndex(), -1, count);
+          const target = findHighlightedIndex(state.cursorIndex(), -1, count);
           if (target !== state.cursorIndex()) {
             actions.setCursorIndex(target);
             actions.setScrollTargetIndex(target);
@@ -482,19 +498,25 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         }
         break;
       case "a":
-        // 'a' toggles ancestry highlighting (first-parent chain through cursor commit).
-        // Blocked during search — ancestry and search are mutually exclusive.
+        // 'a' toggles ancestry highlighting.
+        // Blocked during other highlight modes — they are mutually exclusive.
         e.preventDefault();
-        if (state.searchQuery()) break;
+        if (state.searchQuery() || state.pathFilter()) break;
         onCommandExecute("ancestry");
+        break;
+      case "p":
+        // 'p' opens path mode with the current filter pre-filled for editing.
+        e.preventDefault();
+        setCommandBarMode("path");
+        setCommandBarValue(state.pathFilter() ?? "");
         break;
       case "g": {
         e.preventDefault();
-        const aSet = state.ancestrySet();
+        const hSet = state.highlightSet();
         if (!e.shift) {
-          if (aSet) {
+          if (hSet) {
             // Jump to first highlighted row
-            const target = findAncestryIndex(-1, 1, 1);
+            const target = findHighlightedIndex(-1, 1, 1);
             actions.setCursorIndex(target);
             actions.setScrollTargetIndex(target);
           } else {
@@ -502,16 +524,16 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
             actions.setScrollTargetIndex(0);
           }
         } else {
-          if (aSet) {
+          if (hSet) {
             // Jump to last highlighted row
-            const rows = state.filteredRows();
-            const target = findAncestryIndex(rows.length, -1, 1);
+            const rows = state.graphRows();
+            const target = findHighlightedIndex(rows.length, -1, 1);
             actions.setCursorIndex(target);
             actions.setScrollTargetIndex(target);
-            // If the last ancestry row isn't at the very end, trigger lazy load
+            // If the last highlighted row isn't at the very end, trigger lazy load
             if (state.hasMore()) loadMoreData();
           } else {
-            const lastIdx = state.filteredRows().length - 1;
+            const lastIdx = state.graphRows().length - 1;
             actions.setCursorIndex(lastIdx);
             actions.setScrollTargetIndex(lastIdx);
           }
@@ -524,8 +546,8 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
 
   /**
    * Close the topmost open layer.
-   * Order: command bar → dialog → search (typing) → detail focus → search (filter) →
-   *        ancestry → branch view
+   * Order: command bar → dialog → search bar focused → detail focus →
+   *        active highlight (search/ancestry/path) → branch view
    * Returns true if something was closed, false if there was nothing left.
    */
   function closeOneCascadeStep(): boolean {
@@ -534,7 +556,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
       exitCommandBar();
       if (searchFocused()) {
         setSearchFocused(false);
-        clearFilterAndRestore(state.preSearchCursorHash() ?? undefined);
+        clearSearch();
       }
       return true;
     }
@@ -550,10 +572,10 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
       }
       return true;
     }
-    // Step 3: search Phase 1 (typing)
+    // Step 3: search bar focused (typing)
     if (searchFocused()) {
       setSearchFocused(false);
-      clearFilterAndRestore(state.preSearchCursorHash() ?? undefined);
+      clearSearch();
       return true;
     }
     // Step 4: detail panel focused
@@ -561,17 +583,24 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
       actions.setDetailFocused(false);
       return true;
     }
-    // Step 5: search Phase 2 (filter active, graph focused)
-    if (state.searchQuery()) {
-      clearFilterAndRestore(state.selectedCommit()?.hash ?? undefined);
-      return true;
+    // Step 5: any active highlight mode (search / ancestry / path)
+    if (state.highlightSet() !== null) {
+      // Clear whichever is active
+      if (state.searchQuery()) {
+        clearSearch();
+        return true;
+      }
+      if (state.ancestrySet() !== null) {
+        onClearAncestry();
+        return true;
+      }
+      if (state.pathFilter()) {
+        actions.setPathFilter(null);
+        actions.setPathMatchSet(null);
+        return true;
+      }
     }
-    // Step 6: ancestry highlighting active
-    if (state.ancestrySet() !== null) {
-      onClearAncestry();
-      return true;
-    }
-    // Step 7: branch view active
+    // Step 6: branch view active
     if (state.viewingBranch()) {
       actions.setViewingBranch(null);
       loadData();

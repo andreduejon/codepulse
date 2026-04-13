@@ -14,6 +14,8 @@ export interface CliOptions {
   all?: boolean;
   maxCount?: number;
   themeName?: string;
+  /** Pathspec filter for git log (e.g. "src/git/" or "*.test.ts"). */
+  path?: string;
 }
 
 /**
@@ -30,6 +32,7 @@ export function parseArgs(argv: string[]): CliOptions {
   let all: boolean | undefined;
   let maxCount: number | undefined;
   let themeName: string | undefined;
+  let path: string | undefined;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -65,6 +68,13 @@ export function parseArgs(argv: string[]): CliOptions {
         }
         themeName = args[++i];
         break;
+      case "--path":
+        if (i + 1 >= args.length) {
+          console.error(`${arg} requires a value`);
+          process.exit(1);
+        }
+        path = args[++i];
+        break;
       case "--no-all":
         all = false;
         break;
@@ -89,5 +99,5 @@ export function parseArgs(argv: string[]): CliOptions {
     }
   }
 
-  return { repoPath, branch, all, maxCount, themeName };
+  return { repoPath, branch, all, maxCount, themeName, path };
 }

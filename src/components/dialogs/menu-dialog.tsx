@@ -25,6 +25,8 @@ interface MenuDialogProps {
   onOpenDialog?: (dialogId: "theme") => void;
   /** View graph from a specific branch's perspective. null clears the filter. */
   onViewBranch: (branch: string | null) => void;
+  /** Clear the active path filter and reload. */
+  onClearPathFilter: () => void;
   /** Config file info from startup, used by the Configuration section. */
   configInfo?: ConfigInfo;
 }
@@ -88,6 +90,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     onReload: () => props.onReload(),
     onOpenDialog: props.onOpenDialog,
     onViewBranch: branch => props.onViewBranch(branch),
+    onClearPathFilter: () => props.onClearPathFilter(),
     onClose: () => props.onClose(),
     configInfo: props.configInfo,
   });

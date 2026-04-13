@@ -253,6 +253,18 @@ export interface DimOptions {
   brightColumns?: Set<number>;
   /** Column indices where ─, corners, and tees stay bright (fan-out rows). */
   brightHorizontal?: Set<number>;
+  /** Whether a non-ancestry highlight mode (search/path) is currently active.
+   *  When true, graph chars are dimmed even on matching rows (only the commit
+   *  node stays bright). */
+  highlightActive: boolean;
+  /** Whether this specific row is dimmed by the active highlight (not in match set).
+   *  Only meaningful when highlightActive is true. When true, ALL graph chars are
+   *  dimmed including the node. When false, all graph chars except the commit node
+   *  at `nodeColumn` are dimmed. */
+  highlightDimmed: boolean;
+  /** The column index of this row's commit node (█ symbol). Used to keep the
+   *  node bright on matching rows in search/path mode. */
+  nodeColumn: number;
 }
 
 /**
@@ -282,6 +294,25 @@ export interface DimOptions {
  */
 export function dimGraphChars(chars: GraphChar[], mutedColor: string, opts: DimOptions): GraphChar[] {
   if (opts.isUncommitted) return chars.map(c => ({ ...c, color: mutedColor, bold: false }));
+
+  // Search/path highlight mode: dim graph chars uniformly (no per-column brightness).
+  // Non-matching rows: dim everything including the node.
+  // Matching rows: dim all graph chars EXCEPT the commit node at nodeColumn.
+  if (opts.highlightActive) {
+    if (opts.highlightDimmed) {
+      // Non-matching row — dim everything
+      return chars.map(c => ({ ...c, color: mutedColor, bold: false }));
+    }
+    // Matching row — dim all graph chars except the commit node (█) at nodeColumn
+    let pos = 0;
+    return chars.map(c => {
+      const colIdx = Math.floor(pos / 2);
+      pos += c.char.length;
+      const isNode = colIdx === opts.nodeColumn && c.char[0] === "█";
+      return isNode ? c : { ...c, color: mutedColor, bold: false };
+    });
+  }
+
   if (!opts.ancestryActive) return chars;
 
   const bright = opts.brightColumns;

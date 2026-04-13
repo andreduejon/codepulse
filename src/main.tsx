@@ -29,6 +29,7 @@ export async function main() {
         maxCount={opts.maxCount}
         themeName={opts.themeName}
         autoRefreshInterval={opts.autoRefreshInterval}
+        path={opts.path}
         configInfo={configInfo}
         startupError={startupError}
       />
