@@ -8,7 +8,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { buildGraph, computeBrightColumns } from "../src/git/graph";
-import { findRow, makeCommit, printGraph } from "./test-helpers";
+import { assertDefined, findRow, makeCommit, printGraph } from "./test-helpers";
 
 describe("computeBrightColumns", () => {
   test("same-column ancestry pair — vertical only, no fanOutHorizontal", () => {
@@ -60,8 +60,7 @@ describe("computeBrightColumns", () => {
     // d1 should have fanOutHorizontal entry since a1 is at a different column
     if (a1Row.nodeColumn !== d1Row.nodeColumn) {
       const foMap = result.fanOutHorizontal.get("d1");
-      expect(foMap).toBeDefined();
-      if (!foMap) throw new Error("Expected fanOutHorizontal for d1");
+      assertDefined(foMap, "fanOutHorizontal for d1");
 
       // Should have exactly one fan-out row index entry
       expect(foMap.size).toBe(1);
@@ -127,8 +126,7 @@ describe("computeBrightColumns", () => {
 
     if (a1Row.nodeColumn !== d1Row.nodeColumn) {
       const foMap = result.fanOutHorizontal.get("d1");
-      expect(foMap).toBeDefined();
-      if (!foMap) throw new Error("Expected fanOutHorizontal for d1");
+      assertDefined(foMap, "fanOutHorizontal for d1");
 
       // Only ONE fan-out row should be brightened
       expect(foMap.size).toBe(1);
@@ -136,8 +134,7 @@ describe("computeBrightColumns", () => {
       // Verify it's the one that actually reaches a1's column
       const [foIdx] = [...foMap.keys()];
       const foRows = d1Row.fanOutRows;
-      expect(foRows).toBeDefined();
-      if (!foRows) throw new Error("Expected fanOutRows on d1");
+      assertDefined(foRows, "fanOutRows on d1");
 
       const targetFoRow = foRows[foIdx];
       const reachesA1 = targetFoRow.some(

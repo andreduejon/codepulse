@@ -242,12 +242,6 @@ export function computeBrightColumns(ancestrySet: Set<string>, rows: GraphRow[])
   return { vertical, fanOutVertical, fanOutHorizontal, commitHorizontal };
 }
 
-// ── Debug flag ──────────────────────────────────────────────────────────────
-// Set to true to replace bright chars with 'o' and dimmed chars with 'x'
-// instead of actual dimming. Makes it immediately visible in the TUI
-// which glyphs the algorithm considers bright vs dimmed.
-const DEBUG_DIM = false;
-
 // ── Graph-char dimming ──────────────────────────────────────────────────────
 
 export interface DimOptions {
@@ -339,14 +333,6 @@ export function dimGraphChars(chars: GraphChar[], mutedColor: string, opts: DimO
       const isHorizontalBright = hBright?.has(colIdx) && !isJunction && ch !== "│" && ch !== "█";
 
       const isBright = isVerticalBright || isHorizontalBright;
-
-      if (DEBUG_DIM) {
-        const isSpace = c.char.trim().length === 0;
-        if (isSpace) return c;
-        const marker = isBright ? "o" : "x";
-        const debugChar = marker + c.char.slice(1);
-        return { ...c, char: debugChar };
-      }
 
       return isBright ? c : { ...c, color: mutedColor, bold: false };
     });

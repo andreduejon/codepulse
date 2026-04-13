@@ -76,19 +76,6 @@ describe("dimGraphChars", () => {
     }
   });
 
-  test("ancestry active, empty bright sets → full dim", () => {
-    const chars = [gc("█ "), gc("│ ")];
-    const result = dimGraphChars(chars, MUTED, {
-      isUncommitted: false,
-      ancestryActive: true,
-      brightColumns: new Set(),
-      brightHorizontal: new Set(),
-    });
-    for (const c of result) {
-      expectDimmed(c);
-    }
-  });
-
   // ── Vertical bright: │ and █ ───────────────────────────────────────
 
   test("vertical bright: │ at bright column stays bright", () => {

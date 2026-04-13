@@ -78,53 +78,30 @@ describe("loadConfig", () => {
     });
   });
 
-  test("drops invalid theme (not a string)", () => {
-    const configPath = makeTempConfig("bad-theme", { theme: 42 });
+  test.each([
+    { label: "theme (not a string)", config: { theme: 42 }, field: "theme" as const, hasWarning: true },
+    { label: "empty theme string", config: { theme: "" }, field: "theme" as const, hasWarning: false },
+    { label: "pageSize (non-integer)", config: { pageSize: 1.5 }, field: "pageSize" as const, hasWarning: false },
+    { label: "pageSize (zero)", config: { pageSize: 0 }, field: "pageSize" as const, hasWarning: false },
+    { label: "pageSize (negative)", config: { pageSize: -10 }, field: "pageSize" as const, hasWarning: false },
+    { label: "branch (empty string)", config: { branch: "" }, field: "branch" as const, hasWarning: false },
+    {
+      label: "showAllBranches (not boolean)",
+      config: { showAllBranches: "yes" },
+      field: "showAllBranches" as const,
+      hasWarning: false,
+    },
+    {
+      label: "autoRefreshSeconds (negative)",
+      config: { autoRefreshSeconds: -5 },
+      field: "autoRefreshSeconds" as const,
+      hasWarning: false,
+    },
+  ])("drops invalid $label", ({ config, field, hasWarning }) => {
+    const configPath = makeTempConfig(`bad-${field}`, config);
     const { config: result, warnings } = loadConfig("/tmp/repo", configPath);
-    expect(result.theme).toBeUndefined();
-    expect(warnings.length).toBeGreaterThan(0);
-  });
-
-  test("drops empty theme string", () => {
-    const configPath = makeTempConfig("empty-theme", { theme: "" });
-    const { config: result } = loadConfig("/tmp/repo", configPath);
-    expect(result.theme).toBeUndefined();
-  });
-
-  test("drops invalid pageSize (non-integer)", () => {
-    const configPath = makeTempConfig("bad-pagesize-float", { pageSize: 1.5 });
-    const { config: result } = loadConfig("/tmp/repo", configPath);
-    expect(result.pageSize).toBeUndefined();
-  });
-
-  test("drops invalid pageSize (zero)", () => {
-    const configPath = makeTempConfig("bad-pagesize-zero", { pageSize: 0 });
-    const { config: result } = loadConfig("/tmp/repo", configPath);
-    expect(result.pageSize).toBeUndefined();
-  });
-
-  test("drops invalid pageSize (negative)", () => {
-    const configPath = makeTempConfig("bad-pagesize-neg", { pageSize: -10 });
-    const { config: result } = loadConfig("/tmp/repo", configPath);
-    expect(result.pageSize).toBeUndefined();
-  });
-
-  test("drops invalid branch (empty string)", () => {
-    const configPath = makeTempConfig("bad-branch", { branch: "" });
-    const { config: result } = loadConfig("/tmp/repo", configPath);
-    expect(result.branch).toBeUndefined();
-  });
-
-  test("drops invalid showAllBranches (not boolean)", () => {
-    const configPath = makeTempConfig("bad-show-all", { showAllBranches: "yes" });
-    const { config: result } = loadConfig("/tmp/repo", configPath);
-    expect(result.showAllBranches).toBeUndefined();
-  });
-
-  test("drops invalid autoRefreshSeconds (negative)", () => {
-    const configPath = makeTempConfig("bad-refresh", { autoRefreshSeconds: -5 });
-    const { config: result } = loadConfig("/tmp/repo", configPath);
-    expect(result.autoRefreshSeconds).toBeUndefined();
+    expect(result[field]).toBeUndefined();
+    if (hasWarning) expect(warnings.length).toBeGreaterThan(0);
   });
 
   test("allows autoRefreshSeconds of 0 (off)", () => {
