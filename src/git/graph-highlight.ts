@@ -192,6 +192,29 @@ export function computeBrightColumns(ancestrySet: Set<string>, rows: GraphRow[])
     }
   }
 
+  // Trailing rows: when the ancestry chain extends beyond the loaded data
+  // (the last ancestry node's first parent is not in the loaded rows), the
+  // rows below the last ancestry node should still have the ancestry column
+  // brightened. This prevents the bright line from abruptly stopping and
+  // looking like the ancestry ends when it actually continues past the
+  // loaded data boundary.
+  if (ancestryIndices.length > 0) {
+    const lastIdx = ancestryIndices[ancestryIndices.length - 1];
+    const lastRow = rows[lastIdx];
+    const lastCol = lastRow.nodeColumn;
+    const lastFirstParent = lastRow.commit.parents[0];
+    // Only extend if the chain continues (has a first parent that's not loaded)
+    const parentLoaded = lastFirstParent && ancestrySet.has(lastFirstParent);
+    if (lastFirstParent && !parentLoaded) {
+      for (let r = lastIdx + 1; r < rows.length; r++) {
+        const row = rows[r];
+        if (row.columns[lastCol]?.active) {
+          addCol(row.commit.hash, lastCol);
+        }
+      }
+    }
+  }
+
   return { vertical, fanOutVertical, fanOutHorizontal, commitHorizontal };
 }
 

@@ -521,4 +521,59 @@ describe("computeBrightColumns", () => {
 
     expect(result.fanOutVertical.get("d1")?.has(f1Col)).toBe(true);
   });
+
+  test("trailing rows — ancestry continues beyond loaded data", () => {
+    // Graph:
+    //   █   a  (main)            col 0  ← ancestry (selected)
+    //   │
+    //   █   b  ()                col 0  ← ancestry (last loaded ancestor)
+    //   │                               b's first parent is "unloaded" (not in rows)
+    //   █   c  ()                col 0  ← NOT ancestry, but col 0 passthrough
+    //   │                               should stay bright
+    //   █   d  ()                col 0  ← same
+    //
+    // b's first parent ("unloaded") is not in the loaded rows. The rows
+    // below b (c, d) should still have col 0 brightened because the
+    // ancestry line continues past the loaded data boundary.
+    const commits = [
+      makeCommit("a", ["b"], [{ name: "main", type: "branch", isCurrent: true }]),
+      makeCommit("b", ["unloaded"]), // first parent not in loaded rows
+      makeCommit("c", ["d"]),
+      makeCommit("d", []),
+    ];
+    const rows = buildGraph(commits);
+    printGraph(rows);
+
+    const ancestrySet = new Set(["a", "b"]);
+    const result = computeBrightColumns(ancestrySet, rows);
+
+    const bRow = findRow(rows, "b");
+    const bCol = bRow.nodeColumn;
+
+    // c and d should have bCol in their vertical bright set
+    expect(result.vertical.get("c")?.has(bCol)).toBe(true);
+    expect(result.vertical.get("d")?.has(bCol)).toBe(true);
+  });
+
+  test("trailing rows — no extension when last ancestor's parent IS loaded", () => {
+    // When the last ancestry node's first parent is loaded (and in the
+    // ancestry set), no trailing extension is needed — the normal
+    // consecutive-pair logic handles it.
+    const commits = [
+      makeCommit("a", ["b"], [{ name: "main", type: "branch", isCurrent: true }]),
+      makeCommit("b", ["c"]),
+      makeCommit("c", []),
+    ];
+    const rows = buildGraph(commits);
+
+    // Ancestry includes b and c — c is loaded, so no trailing extension
+    const ancestrySet = new Set(["a", "b", "c"]);
+    const result = computeBrightColumns(ancestrySet, rows);
+
+    // c is the last ancestry node and has no first parent → no trailing rows
+    // All three should have vertical entries from the normal seed logic
+    expect(result.vertical.get("a")).toBeDefined();
+    expect(result.vertical.get("b")).toBeDefined();
+    expect(result.vertical.get("c")).toBeDefined();
+  });
 });
