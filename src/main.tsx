@@ -1,9 +1,16 @@
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { render } from "@opentui/solid";
 import App from "./app";
 import { parseArgs } from "./cli/parse-args";
-import { loadConfig, mergeOptions, resolveConfigInfo } from "./config";
+import { getKnownRepos, loadConfig, mergeOptions, resolveConfigInfo } from "./config";
 import { isGitAvailable, isGitRepo } from "./git/repo";
+
+/** Startup mode determines which screen the app shows first. */
+export type StartupMode =
+  | { kind: "graph" }
+  | { kind: "setup" }
+  | { kind: "selector"; message?: string; messagePath?: string; knownRepos: string[] }
+  | { kind: "error"; message: string };
 
 export async function main() {
   const cli = parseArgs(process.argv);
@@ -12,14 +19,43 @@ export async function main() {
   const { config } = loadConfig(cli.repoPath);
   const opts = mergeOptions(cli, config);
 
-  let startupError: string | undefined;
-  if (!existsSync(opts.repoPath)) {
-    startupError = `Directory does not exist:\n\n${opts.repoPath}`;
-  } else if (!(await isGitAvailable())) {
-    startupError = `Git is not installed or not on PATH.`;
+  let startupMode: StartupMode;
+
+  if (!(await isGitAvailable())) {
+    // Fatal — can't do anything without git
+    startupMode = { kind: "error", message: "Git is not installed or not on PATH." };
+  } else if (!existsSync(opts.repoPath)) {
+    // Path doesn't exist — show project selector with message
+    startupMode = {
+      kind: "selector",
+      message: "Hmm, that directory doesn't exist",
+      messagePath: opts.repoPath,
+      knownRepos: getKnownRepos(),
+    };
+  } else if (!statSync(opts.repoPath).isDirectory()) {
+    // Path is a file, not a directory — show project selector with message
+    startupMode = {
+      kind: "selector",
+      message: "That path is a file, not a directory",
+      messagePath: opts.repoPath,
+      knownRepos: getKnownRepos(),
+    };
   } else if (!(await isGitRepo(opts.repoPath))) {
-    startupError = `Not a git repository:\n\n${opts.repoPath}`;
+    // Not a git repo — show project selector with message
+    startupMode = {
+      kind: "selector",
+      message: "Doesn't look like a git repo",
+      messagePath: opts.repoPath,
+      knownRepos: getKnownRepos(),
+    };
+  } else if (!configInfo.hasRepoOverrides) {
+    // Git repo but not yet known — show welcome screen
+    startupMode = { kind: "setup" };
+  } else {
+    // Git repo + known — start graph directly
+    startupMode = { kind: "graph" };
   }
+
   await render(
     () => (
       <App
@@ -31,7 +67,7 @@ export async function main() {
         autoRefreshInterval={opts.autoRefreshInterval}
         path={opts.path}
         configInfo={configInfo}
-        startupError={startupError}
+        startupMode={startupMode}
       />
     ),
     {

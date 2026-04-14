@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import packageJson from "../../package.json";
 import { printHelp } from "./help";
 
@@ -94,7 +95,7 @@ export function parseArgs(argv: string[]): CliOptions {
           printHelp();
           process.exit(1);
         } else {
-          repoPath = arg.startsWith("/") ? arg : `${process.cwd()}/${arg}`;
+          repoPath = resolve(arg);
         }
     }
   }

@@ -188,22 +188,35 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     if (e.eventType === "release") return;
 
     // ── Shift+←/→ mode cycling ────────────────────────────────────────────────
-    // Cycles command bar mode regardless of current mode, but only when the
-    // graph is the active context (no dialog open, detail not focused).
+    // Cycles through: idle → command → search → path → ancestry.
+    // Only when the graph is the active context (no dialog open, detail not focused).
     if (e.shift && (e.name === "left" || e.name === "right") && !dialog() && !state.detailFocused()) {
       e.preventDefault();
-      const modes: CommandBarMode[] = ["idle", "command", "search", "path"];
-      const cur = modes.indexOf(commandBarMode());
+      type CycleMode = CommandBarMode | "ancestry";
+      const modes: CycleMode[] = ["idle", "command", "search", "path", "ancestry"];
+      // Determine the effective current position — ancestry is active when
+      // the command bar is idle and ancestrySet is non-null.
+      const isAncestry = commandBarMode() === "idle" && state.ancestrySet() !== null;
+      const cur = isAncestry ? modes.indexOf("ancestry") : modes.indexOf(commandBarMode());
       const delta = e.name === "right" ? 1 : -1;
       const nextMode = modes[(cur + delta + modes.length) % modes.length];
-      if (nextMode === "idle") {
-        exitCommandBar();
+
+      // Clear previous mode state
+      if (isAncestry) onClearAncestry();
+      if (searchFocused()) {
         setSearchFocused(false);
         clearSearch();
+      }
+      if (commandBarMode() !== "idle") exitCommandBar();
+
+      // Enter the new mode
+      if (nextMode === "idle") {
+        // Already cleared above
       } else if (nextMode === "search") {
         openSearch();
+      } else if (nextMode === "ancestry") {
+        onCommandExecute("ancestry");
       } else {
-        setSearchFocused(false);
         setCommandBarMode(nextMode);
         setCommandBarValue("");
       }
@@ -294,6 +307,30 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
 
     // If a non-detail dialog is open, only Escape acts (handled above)
     if (dialog() && dialog() !== "detail") return;
+
+    // ── Global single-key shortcuts ─────────────────────────────────────────
+    // Available from any context except dialogs (handled above) and text input
+    // (command/search/path modes return early above).
+    if (e.name === "q") {
+      e.preventDefault();
+      onCommandExecute("quit");
+      return;
+    }
+    if (e.name === "m") {
+      e.preventDefault();
+      onCommandExecute("menu");
+      return;
+    }
+    if (e.name === "f" && !e.shift) {
+      e.preventDefault();
+      onCommandExecute("fetch");
+      return;
+    }
+    if (e.sequence === "?") {
+      e.preventDefault();
+      onCommandExecute("help");
+      return;
+    }
 
     // Detail panel focused (or detail dialog open in compact mode):
     if (state.detailFocused() || dialog() === "detail") {

@@ -137,19 +137,19 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
           {modeBadgeLabel()}
         </text>
         {/* Repo path + branch */}
-        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+        <text flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
           {"  "}
           {state.repoPath() ? state.repoPath().replace(homedir(), "~") : ""}
           {state.currentBranch() ? `:${state.currentBranch()}` : ""}
         </text>
         <Show when={state.viewingBranch()}>
-          <text flexShrink={0} wrapMode="none" fg={t().accent}>
+          <text flexShrink={1} wrapMode="none" truncate fg={t().accent}>
             {`  [viewing: ${state.viewingBranch()}]`}
           </text>
         </Show>
         <box flexGrow={1} />
         <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-          {`codepulse v${packageJson.version}`}
+          {`v${packageJson.version}`}
         </text>
       </box>
     </box>

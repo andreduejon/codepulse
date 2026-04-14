@@ -160,7 +160,6 @@ export default function FileListView(props: Readonly<FileListViewProps>) {
       }
     >
       <TotalLinesChangedRow totalAdd={fileWidths().totalAdd} totalDel={fileWidths().totalDel} />
-      <box height={1} />
       <For each={fileTreeRows()}>
         {(treeRow, i) => {
           const itemIdx = () => findItemIndex(treeRow.isDir ? "file-dir" : "file", i());

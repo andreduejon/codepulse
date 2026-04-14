@@ -30,3 +30,26 @@ export const isUncommittedHash = (hash: string): boolean => hash === UNCOMMITTED
 
 /** Placeholder text shown in columns where the uncommitted node has no real value. */
 export const UNCOMMITTED_PLACEHOLDER = "\u00b7".repeat(7);
+
+// ── Settings constants (shared by menu dialog and setup screen) ────────
+/** Available page-size options for the "Page size" setting. */
+export const MAX_COUNT_OPTIONS = [10, 20, 50, 100, 200, 500];
+
+/** Available auto-refresh interval labels. */
+export const AUTO_REFRESH_OPTIONS = ["off", "10s", "30s", "60s"];
+
+/** Maps an auto-refresh label to its millisecond value. */
+export const AUTO_REFRESH_MS: Record<string, number> = {
+  off: 0,
+  "10s": 10000,
+  "30s": 30000,
+  "60s": 60000,
+};
+
+/** Maps a millisecond value to its display label. */
+export const MS_TO_LABEL: Record<number, string> = {
+  0: "off",
+  10000: "10s",
+  30000: "30s",
+  60000: "60s",
+};

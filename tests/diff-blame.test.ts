@@ -3,6 +3,7 @@ import {
   buildRowOffsets,
   computeDiffStats,
   type DisplayLineKind,
+  expandWithContinuations,
   findLineAtRow,
   formatHunkHeader,
 } from "../src/components/dialogs/diff-utils";
@@ -623,5 +624,80 @@ describe("computeDiffStats", () => {
     ]);
     expect(stats.additions).toBe(0);
     expect(stats.deletions).toBe(2);
+  });
+});
+
+describe("expandWithContinuations", () => {
+  /** Build a minimal DisplayLine-like object for testing. */
+  const line = (kind: DisplayLineKind, content: string) => ({ kind, content });
+
+  test("zero-length content emits 1 row", () => {
+    const result = expandWithContinuations([line("context", "")], 10);
+    expect(result).toHaveLength(1);
+    expect(result[0].kind).toBe("context");
+  });
+
+  test("content shorter than maxWidth emits 1 row", () => {
+    const result = expandWithContinuations([line("add", "short")], 10);
+    expect(result).toHaveLength(1);
+    expect(result[0].content).toBe("short");
+  });
+
+  test("content exactly fitting maxWidth emits 1 row", () => {
+    const result = expandWithContinuations([line("delete", "1234567890")], 10);
+    expect(result).toHaveLength(1);
+    expect(result[0].content).toBe("1234567890");
+  });
+
+  test("content 1 char over maxWidth emits 2 rows (1 real + 1 continuation)", () => {
+    const result = expandWithContinuations([line("context", "12345678901")], 10);
+    expect(result).toHaveLength(2);
+    expect(result[0].kind).toBe("context");
+    expect(result[0].content).toBe("1234567890");
+    expect(result[1].kind).toBe("continuation");
+    expect((result[1] as { originalKind: DisplayLineKind }).originalKind).toBe("context");
+    expect(result[1].content).toBe("1");
+  });
+
+  test("content requiring 3 rows emits 1 real + 2 continuations", () => {
+    const result = expandWithContinuations([line("add", "abcdefghijklmnopqrstu")], 7);
+    // 21 chars / 7 = 3 rows exactly
+    expect(result).toHaveLength(3);
+    expect(result[0].content).toBe("abcdefg");
+    expect(result[1].kind).toBe("continuation");
+    expect(result[1].content).toBe("hijklmn");
+    expect(result[2].kind).toBe("continuation");
+    expect(result[2].content).toBe("opqrstu");
+  });
+
+  test("hunk-header is always 1 row regardless of length", () => {
+    const longHeader = "@@ -1,100 +1,200 @@ ".padEnd(200, "x");
+    const result = expandWithContinuations([line("hunk-header", longHeader)], 10);
+    expect(result).toHaveLength(1);
+    expect(result[0].kind).toBe("hunk-header");
+  });
+
+  test("spacer is always 1 row regardless of content", () => {
+    const result = expandWithContinuations([line("spacer", "x".repeat(100))], 10);
+    expect(result).toHaveLength(1);
+    expect(result[0].kind).toBe("spacer");
+  });
+
+  test("mixed lines: short, long, hunk-header produces correct total rows", () => {
+    const input = [
+      line("hunk-header", "@@ -1,2 +1,2 @@"),
+      line("context", "short"), // 1 row
+      line("add", "a".repeat(25)), // 3 rows at width=10 (10+10+5)
+      line("delete", "b".repeat(10)), // 1 row (exact fit)
+    ];
+    const result = expandWithContinuations(input, 10);
+    // 1 (hunk-header) + 1 (context) + 3 (add expanded) + 1 (delete exact) = 6
+    expect(result).toHaveLength(6);
+    expect(result[0].kind).toBe("hunk-header");
+    expect(result[1].kind).toBe("context");
+    expect(result[2].kind).toBe("add");
+    expect(result[3].kind).toBe("continuation");
+    expect(result[4].kind).toBe("continuation");
+    expect(result[5].kind).toBe("delete");
   });
 });

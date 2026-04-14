@@ -8,12 +8,22 @@
  * columns), and combined vertical + horizontal brightening.
  */
 import { describe, expect, test } from "bun:test";
-import type { GraphChar } from "../src/git/graph";
-import { dimGraphChars } from "../src/git/graph";
+import { type DimOptions, dimGraphChars, type GraphChar } from "../src/git/graph";
 
 const MUTED = "#666";
 const BRIGHT_A = "#fff";
 const BRIGHT_B = "#0f0";
+
+/** Default highlight fields — all tests here exercise ancestry dimming, not search/path. */
+const HIGHLIGHT_OFF = { highlightActive: false, highlightDimmed: false, nodeColumn: 0 } as const;
+
+/** Convenience: merge highlight defaults into DimOptions. */
+function dim(
+  chars: GraphChar[],
+  opts: Omit<DimOptions, "highlightActive" | "highlightDimmed" | "nodeColumn">,
+): GraphChar[] {
+  return dimGraphChars(chars, MUTED, { ...HIGHLIGHT_OFF, ...opts });
+}
 
 /** Helper: make a GraphChar with a given char and optional color/bold. */
 function gc(char: string, color = BRIGHT_A, bold = false): GraphChar {
@@ -37,7 +47,7 @@ describe("dimGraphChars", () => {
 
   test("uncommitted → full dim always", () => {
     const chars = [gc("█ "), gc("│ "), gc("─"), gc("╮ ")];
-    const result = dimGraphChars(chars, MUTED, {
+    const result = dim(chars, {
       isUncommitted: true,
       ancestryActive: true,
       brightColumns: new Set([0, 1]),
@@ -51,7 +61,7 @@ describe("dimGraphChars", () => {
 
   test("ancestry inactive → passthrough (no dimming)", () => {
     const chars = [gc("█ "), gc("│ "), gc("─"), gc("╮ ")];
-    const result = dimGraphChars(chars, MUTED, {
+    const result = dim(chars, {
       isUncommitted: false,
       ancestryActive: false,
     });
@@ -66,7 +76,7 @@ describe("dimGraphChars", () => {
 
   test("ancestry active, no bright sets → full dim", () => {
     const chars = [gc("█ "), gc("│ ")];
-    const result = dimGraphChars(chars, MUTED, {
+    const result = dim(chars, {
       isUncommitted: false,
       ancestryActive: true,
       // no brightColumns, no brightHorizontal
@@ -81,7 +91,7 @@ describe("dimGraphChars", () => {
   test("vertical bright: │ at bright column stays bright", () => {
     // col 0: █ , col 1: │
     const chars = [gc("█ "), gc("│ ")];
-    const result = dimGraphChars(chars, MUTED, {
+    const result = dim(chars, {
       isUncommitted: false,
       ancestryActive: true,
       brightColumns: new Set([1]),
@@ -92,7 +102,7 @@ describe("dimGraphChars", () => {
 
   test("vertical bright: █ at bright column stays bright", () => {
     const chars = [gc("█ ")];
-    const result = dimGraphChars(chars, MUTED, {
+    const result = dim(chars, {
       isUncommitted: false,
       ancestryActive: true,
       brightColumns: new Set([0]),
@@ -104,7 +114,7 @@ describe("dimGraphChars", () => {
     // ─ is a horizontal glyph — vertical bright should not affect it
     // col 0: ─ (1 char), col 0 still (pos goes 0→1, floor(1/2)=0)
     const chars = [gc("─"), gc("─")];
-    const result = dimGraphChars(chars, MUTED, {
+    const result = dim(chars, {
       isUncommitted: false,
       ancestryActive: true,
       brightColumns: new Set([0]),
@@ -118,7 +128,7 @@ describe("dimGraphChars", () => {
   test("horizontal bright: ─ stays bright", () => {
     // col 0: │  (2 chars), col 1: ─ (1 char), ─ (1 char) = col 1 still
     const chars = [gc("│ "), gc("─"), gc("─")];
-    const result = dimGraphChars(chars, MUTED, {
+    const result = dim(chars, {
       isUncommitted: false,
       ancestryActive: true,
       brightHorizontal: new Set([1]),
@@ -131,7 +141,7 @@ describe("dimGraphChars", () => {
   test("horizontal bright: ╮ stays bright", () => {
     // col 0: █  (2 chars), col 1: ─ (1), ╮  (2) at col 1
     const chars = [gc("█ "), gc("─"), gc("╮ ")];
-    const result = dimGraphChars(chars, MUTED, {
+    const result = dim(chars, {
       isUncommitted: false,
       ancestryActive: true,
       brightHorizontal: new Set([1]),
@@ -144,7 +154,7 @@ describe("dimGraphChars", () => {
 
   test("horizontal bright: ╰ stays bright", () => {
     const chars = [gc("╰"), gc("─")];
-    const result = dimGraphChars(chars, MUTED, {
+    const result = dim(chars, {
       isUncommitted: false,
       ancestryActive: true,
       brightHorizontal: new Set([0]),
@@ -165,7 +175,7 @@ describe("dimGraphChars", () => {
   test("crossing ┼ replaced with ─ when only horizontal arm is bright", () => {
     // col 0: █  (2), col 1: ─ (1), ┼ (1) at col 1, ─ (1) at col 2
     const chars = [gc("█ "), gc("─"), gc("┼"), gc("─")];
-    const result = dimGraphChars(chars, MUTED, {
+    const result = dim(chars, {
       isUncommitted: false,
       ancestryActive: true,
       brightHorizontal: new Set([1]),
@@ -179,7 +189,7 @@ describe("dimGraphChars", () => {
   test("crossing ┼ replaced with ─ uses horizontal color, not vertical", () => {
     // ┼ has vertical color (BRIGHT_A), adjacent ─ has horizontal color (BRIGHT_B)
     const chars = [gc("┼", BRIGHT_A), gc("─", BRIGHT_B)];
-    const result = dimGraphChars(chars, MUTED, {
+    const result = dim(chars, {
       isUncommitted: false,
       ancestryActive: true,
       brightHorizontal: new Set([0]),
@@ -190,7 +200,7 @@ describe("dimGraphChars", () => {
 
   test("crossing ┼ replaced with │ when vertical lane is bright", () => {
     const chars = [gc("┼"), gc("─")];
-    const result = dimGraphChars(chars, MUTED, {
+    const result = dim(chars, {
       isUncommitted: false,
       ancestryActive: true,
       brightColumns: new Set([0]),
@@ -202,7 +212,7 @@ describe("dimGraphChars", () => {
 
   test("crossing ┼ dimmed when neither vertical nor horizontal is bright", () => {
     const chars = [gc("┼"), gc("─")];
-    const result = dimGraphChars(chars, MUTED, {
+    const result = dim(chars, {
       isUncommitted: false,
       ancestryActive: true,
       brightColumns: new Set([1]), // different column
@@ -214,7 +224,7 @@ describe("dimGraphChars", () => {
 
   test("crossing ┼ replaced with │ when both vertical and horizontal are bright", () => {
     const chars = [gc("┼"), gc("─")];
-    const result = dimGraphChars(chars, MUTED, {
+    const result = dim(chars, {
       isUncommitted: false,
       ancestryActive: true,
       brightColumns: new Set([0]),
@@ -227,7 +237,7 @@ describe("dimGraphChars", () => {
   test("┼ replaced with ─ when horizontal arm is bright and ┼ not on vertical ancestry", () => {
     // col 0: ┼  (2 chars), col 1: ─  (2 chars)
     const chars = [gc("┼ "), gc("─ ")];
-    const result = dimGraphChars(chars, MUTED, {
+    const result = dim(chars, {
       isUncommitted: false,
       ancestryActive: true,
       brightHorizontal: new Set([0, 1]),
@@ -239,7 +249,7 @@ describe("dimGraphChars", () => {
   test("─ after replaced ┼ is not suppressed", () => {
     // ┼ at col 0 (vertical bright), ─ at col 0 (dimmed normally), ─  at col 1 (unrelated)
     const chars = [gc("┼"), gc("─"), gc("─ ")];
-    const result = dimGraphChars(chars, MUTED, {
+    const result = dim(chars, {
       isUncommitted: false,
       ancestryActive: true,
       brightColumns: new Set([0]),
@@ -254,7 +264,7 @@ describe("dimGraphChars", () => {
   test("tee-left ├ replaced with │ when vertical lane is bright, ─ dimmed", () => {
     // Renderer always emits ├ and ─ as separate 1-char entries.
     const chars = [gc("├"), gc("─"), gc("╮ ")];
-    const result = dimGraphChars(chars, MUTED, {
+    const result = dim(chars, {
       isUncommitted: false,
       ancestryActive: true,
       brightColumns: new Set([0]),
@@ -267,7 +277,7 @@ describe("dimGraphChars", () => {
 
   test("tee-left ├ replaced with │ when vertical bright, ─ stays bright when horizontal bright", () => {
     const chars = [gc("├", BRIGHT_A), gc("─", BRIGHT_B), gc("╮ ")];
-    const result = dimGraphChars(chars, MUTED, {
+    const result = dim(chars, {
       isUncommitted: false,
       ancestryActive: true,
       brightColumns: new Set([0]),
@@ -282,7 +292,7 @@ describe("dimGraphChars", () => {
   test("tee-left ├ replaced with ─ when only horizontal arm is bright", () => {
     // ├ has vertical color (BRIGHT_A), adjacent ─ has horizontal color (BRIGHT_B)
     const chars = [gc("├", BRIGHT_A), gc("─", BRIGHT_B), gc("╮ ")];
-    const result = dimGraphChars(chars, MUTED, {
+    const result = dim(chars, {
       isUncommitted: false,
       ancestryActive: true,
       brightHorizontal: new Set([0, 1]),
@@ -298,7 +308,7 @@ describe("dimGraphChars", () => {
   test("tee-right ┤ replaced with │ when vertical lane is bright", () => {
     const chars = [gc("──"), gc("┤ ")];
     // pos 0→2 (──), col=0; pos 2→4 (┤ ), col=1
-    const result = dimGraphChars(chars, MUTED, {
+    const result = dim(chars, {
       isUncommitted: false,
       ancestryActive: true,
       brightColumns: new Set([1]),
@@ -312,7 +322,7 @@ describe("dimGraphChars", () => {
 
   test("junction ┬ replaced with │ when vertical lane is bright", () => {
     const chars = [gc("┬"), gc("─")];
-    const result = dimGraphChars(chars, MUTED, {
+    const result = dim(chars, {
       isUncommitted: false,
       ancestryActive: true,
       brightColumns: new Set([0]),
@@ -323,7 +333,7 @@ describe("dimGraphChars", () => {
 
   test("junction ┴ replaced with │ when vertical lane is bright", () => {
     const chars = [gc("┴"), gc("─")];
-    const result = dimGraphChars(chars, MUTED, {
+    const result = dim(chars, {
       isUncommitted: false,
       ancestryActive: true,
       brightColumns: new Set([0]),
@@ -336,7 +346,7 @@ describe("dimGraphChars", () => {
     // ┴ has vertical color (BRIGHT_A), adjacent ─ has horizontal color (BRIGHT_B)
     const chars = [gc("──"), gc("┴", BRIGHT_A), gc("─", BRIGHT_B)];
     // pos 0→2 (──), col=0; pos 2→3 (┴), col=1; pos 3→4 (─), col=1
-    const result = dimGraphChars(chars, MUTED, {
+    const result = dim(chars, {
       isUncommitted: false,
       ancestryActive: true,
       brightHorizontal: new Set([1]),
@@ -350,7 +360,7 @@ describe("dimGraphChars", () => {
 
   test("│ at horizontal-bright column stays dimmed (no vertical bright)", () => {
     const chars = [gc("│ ")];
-    const result = dimGraphChars(chars, MUTED, {
+    const result = dim(chars, {
       isUncommitted: false,
       ancestryActive: true,
       brightHorizontal: new Set([0]),
@@ -365,7 +375,7 @@ describe("dimGraphChars", () => {
   test("combined vertical + horizontal brightening", () => {
     // col 0: │  (vertical bright), col 1: ─ (horizontal bright), col 1: ╮  (horizontal bright)
     const chars = [gc("│ "), gc("─"), gc("╮ ")];
-    const result = dimGraphChars(chars, MUTED, {
+    const result = dim(chars, {
       isUncommitted: false,
       ancestryActive: true,
       brightColumns: new Set([0]),
@@ -379,7 +389,7 @@ describe("dimGraphChars", () => {
   test("vertical bright does not affect horizontal glyphs at same column", () => {
     // ─ at a column that's in brightColumns but not brightHorizontal → dimmed
     const chars = [gc("─"), gc("─")];
-    const result = dimGraphChars(chars, MUTED, {
+    const result = dim(chars, {
       isUncommitted: false,
       ancestryActive: true,
       brightColumns: new Set([0]),
@@ -397,7 +407,7 @@ describe("dimGraphChars", () => {
     // col 1: "─" (1 char, pos 2→3, col 1), "─" (1 char, pos 3→4, col 1)
     // col 2: "│ " (2 chars, pos 4→6, col 2)
     const chars = [gc("│ ", BRIGHT_A), gc("─", BRIGHT_B), gc("─", BRIGHT_B), gc("│ ", BRIGHT_A)];
-    const result = dimGraphChars(chars, MUTED, {
+    const result = dim(chars, {
       isUncommitted: false,
       ancestryActive: true,
       brightColumns: new Set([2]),
@@ -413,7 +423,7 @@ describe("dimGraphChars", () => {
 
   test("bright chars preserve original bold flag", () => {
     const chars = [{ char: "█ ", color: BRIGHT_A, bold: true }];
-    const result = dimGraphChars(chars, MUTED, {
+    const result = dim(chars, {
       isUncommitted: false,
       ancestryActive: true,
       brightColumns: new Set([0]),
@@ -424,7 +434,7 @@ describe("dimGraphChars", () => {
 
   test("dimmed chars have bold set to false", () => {
     const chars = [{ char: "│ ", color: BRIGHT_A, bold: true }];
-    const result = dimGraphChars(chars, MUTED, {
+    const result = dim(chars, {
       isUncommitted: false,
       ancestryActive: true,
       // no bright sets → full dim

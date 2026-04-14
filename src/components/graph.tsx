@@ -24,35 +24,13 @@ import {
   renderGraphRow,
   sliceGraphToViewport,
 } from "../git/graph";
-import type { GraphRow, RefInfo } from "../git/types";
+import type { GraphRow } from "../git/types";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
 import { useT } from "../hooks/use-t";
 import { formatRelativeDate } from "../utils/date";
 import { scrollElementIntoView } from "../utils/scroll";
-
-function RefBadge(
-  props: Readonly<{
-    info: RefInfo;
-    laneColor: () => string;
-    isDimmed: () => boolean;
-  }>,
-) {
-  const t = useT();
-
-  const isDimmed = () => props.info.type === "stash" || props.info.type === "uncommitted" || props.isDimmed();
-
-  const bgColor = () => (isDimmed() ? t().backgroundElementActive : props.laneColor());
-
-  // Dimmed badges (stash, uncommitted, non-highlighted) use muted foreground on muted background;
-  // regular badges use dark background color for contrast against bright lane colors.
-  const fgColor = () => (isDimmed() ? t().foregroundMuted : t().background);
-
-  return (
-    <text flexShrink={0} wrapMode="none" fg={fgColor()} bg={bgColor()}>
-      {` ${props.info.name} `}
-    </text>
-  );
-}
+import { truncateName } from "../utils/truncate";
+import Badge from "./badge";
 
 /** Shared graph dimension computations used by ColumnHeader and GraphLine. */
 function useGraphDimensions(maxGraphColumns: () => number) {
@@ -364,8 +342,9 @@ function GraphLine(
   const refBadgesWidth = createMemo(() => {
     const refs = visibleRefs();
     if (refs.length === 0) return 0;
-    // sum of (name + 2) for each badge + (refs.length - 1) gaps + 1 paddingRight
-    return refs.reduce((acc, r) => acc + r.name.length + 2, 0) + (refs.length - 1) + 1;
+    // sum of (displayName + 2) for each badge + (refs.length - 1) gaps + 1 paddingRight
+    // Use truncateName to match the actual rendered width (capped at 30 chars).
+    return refs.reduce((acc, r) => acc + truncateName(r.name, 30).length + 2, 0) + (refs.length - 1) + 1;
   });
 
   // Approximate available width for the subject text in the graph panel.
@@ -441,7 +420,15 @@ function GraphLine(
           <Show when={visibleRefs().length > 0}>
             <box flexDirection="row" flexShrink={0} gap={1} paddingRight={1}>
               <For each={visibleRefs()}>
-                {ri => <RefBadge info={ri} laneColor={laneColor} isDimmed={() => isDimmed()} />}
+                {ri => (
+                  <Badge
+                    name={ri.name}
+                    color={laneColor()}
+                    dimmed={ri.type === "stash" || ri.type === "uncommitted" || isDimmed()}
+                    maxLength={30}
+                    noShrink
+                  />
+                )}
               </For>
             </box>
           </Show>
