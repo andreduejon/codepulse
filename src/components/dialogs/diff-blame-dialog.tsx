@@ -7,13 +7,15 @@ import type { BlameLine, DiffTarget, FileDiff } from "../../git/types";
 import { useT } from "../../hooks/use-t";
 import { KeyHint } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
+import { BLAME_COL_WIDTH, DiffLineRow } from "./diff-line-row";
 import {
+  buildDisplayLines,
   buildRowOffsets,
   computeDiffStats,
-  type DisplayLineKind,
+  type DisplayLine,
   expandWithContinuations,
   findLineAtRow,
-  formatHunkHeader,
+  gutterWidth,
 } from "./diff-utils";
 import { buildDiffTitleParts, TITLE_SEP } from "./title-utils";
 
@@ -22,9 +24,6 @@ const MAX_DIALOG_WIDTH = 160;
 
 /** Number of offscreen lines to render above/below viewport as buffer. */
 const WINDOW_BUFFER = 30;
-
-/** Blame annotation width: "abc1234 Author " — short hash (7) + space + author (capped) + space */
-const BLAME_COL_WIDTH = 22;
 
 type DiffViewMode = "mixed" | "new" | "old";
 
@@ -47,53 +46,6 @@ interface DiffBlameDialogProps {
   onClose: () => void;
   /** Navigate to a different file within the same commit (left/right arrows). */
   onNavigate: (target: DiffTarget) => void;
-}
-
-/** Flatten all hunks into a single line array with hunk headers interspersed. */
-interface DisplayLine {
-  kind: "hunk-header" | "add" | "delete" | "context" | "spacer";
-  content: string;
-  oldLineNo?: number;
-  newLineNo?: number;
-}
-
-function buildDisplayLines(diff: FileDiff): DisplayLine[] {
-  const lines: DisplayLine[] = [];
-  for (let i = 0; i < diff.hunks.length; i++) {
-    // Spacer (horizontal rule) before every hunk — including the first
-    lines.push({ kind: "spacer", content: "" });
-    const hunk = diff.hunks[i];
-    lines.push({ kind: "hunk-header", content: hunk.header });
-    for (const line of hunk.lines) {
-      lines.push({
-        kind: line.type,
-        content: line.content,
-        oldLineNo: line.oldLineNo,
-        newLineNo: line.newLineNo,
-      });
-    }
-  }
-  // Spacer (horizontal rule) after the last hunk
-  if (diff.hunks.length > 0) {
-    lines.push({ kind: "spacer", content: "" });
-  }
-  return lines;
-}
-
-/** Width needed for a line number gutter column. */
-function gutterWidth(maxLineNo: number): number {
-  return String(maxLineNo).length;
-}
-
-/** Pad a line number to a fixed width, or return spaces if undefined. */
-function padLineNo(lineNo: number | undefined, width: number): string {
-  if (lineNo === undefined) return " ".repeat(width);
-  return String(lineNo).padStart(width);
-}
-
-/** Build the merged gutter string: "oldLineNo newLineNo". */
-function buildGutter(line: DisplayLine, oldWidth: number, newWidth: number): string {
-  return `${padLineNo(line.oldLineNo, oldWidth)} ${padLineNo(line.newLineNo, newWidth)}`;
 }
 
 export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
@@ -411,51 +363,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
     }
   });
 
-  // ── Line rendering helpers ─────────────────────────────────────────
-
-  /** Get the foreground color for a diff line type. */
-  const lineColor = (kind: DisplayLine["kind"]): string => {
-    switch (kind) {
-      case "add":
-        return t().diffAdded;
-      case "delete":
-        return t().diffRemoved;
-      case "hunk-header":
-        return t().accent;
-      case "context":
-      case "spacer":
-        return t().foreground;
-    }
-  };
-
-  /** Get the prefix character for a diff line. */
-  const linePrefix = (kind: DisplayLine["kind"]): string => {
-    switch (kind) {
-      case "add":
-        return "+";
-      case "delete":
-        return "-";
-      case "hunk-header":
-      case "spacer":
-        return "";
-      case "context":
-        return " ";
-    }
-  };
-
-  /** Get the background color for a diff line row. */
-  const lineBg = (kind: DisplayLine["kind"]): string | undefined => {
-    switch (kind) {
-      case "add":
-        return t().diffAddedBg;
-      case "delete":
-        return t().diffRemovedBg;
-      case "hunk-header":
-      case "context":
-      case "spacer":
-        return undefined;
-    }
-  };
+  // ── Blame annotation helper ────────────────────────────────────────
 
   const blameAnnotation = (line: DisplayLine): string => {
     if (!showBlame() || line.kind === "hunk-header") return "";
@@ -608,88 +516,17 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
               <box height={windowSlice().topRows} />
 
               <For each={windowedLines()}>
-                {line => {
-                  if (line.kind === "spacer") {
-                    const ruleWidth = dialogWidth() - 10;
-                    return (
-                      <text wrapMode="none" fg={t().border}>
-                        {"─".repeat(ruleWidth)}
-                      </text>
-                    );
-                  }
-
-                  if (line.kind === "hunk-header") {
-                    return (
-                      <box flexDirection="row" width="100%">
-                        <Show when={showBlame()}>
-                          <box flexShrink={0} width={BLAME_COL_WIDTH} backgroundColor={t().backgroundElement}>
-                            <text wrapMode="none" fg={t().foregroundMuted}>
-                              {() => blameAnnotation(line)}
-                            </text>
-                          </box>
-                        </Show>
-                        <text wrapMode="none" fg={t().accent}>
-                          <strong>{formatHunkHeader(line.content)}</strong>
-                        </text>
-                      </box>
-                    );
-                  }
-
-                  // Continuation row — overflow from a wrapped line above
-                  if (line.kind === "continuation") {
-                    const origKind = (line as { kind: "continuation"; originalKind: DisplayLineKind }).originalKind;
-                    const gutterSpaces = " ".repeat(gutterWidth(maxOldLineNo()) + 1 + gutterWidth(maxNewLineNo()));
-                    return (
-                      <box flexDirection="row" width="100%" backgroundColor={lineBg(origKind)}>
-                        <Show when={showBlame()}>
-                          <box flexShrink={0} width={BLAME_COL_WIDTH} backgroundColor={t().backgroundElement}>
-                            <text wrapMode="none" fg={t().foregroundMuted}>
-                              {" ".repeat(BLAME_COL_WIDTH)}
-                            </text>
-                          </box>
-                        </Show>
-                        {/* Empty gutter — aligns with line number columns */}
-                        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                          {gutterSpaces}
-                        </text>
-                        {/* Indent to match prefix column */}
-                        <text flexShrink={0} wrapMode="none" fg={lineColor(origKind)}>
-                          {"  ↵ "}
-                        </text>
-                        <text flexGrow={1} wrapMode="none" fg={lineColor(origKind)}>
-                          {line.content}
-                        </text>
-                      </box>
-                    );
-                  }
-
-                  const prefix = linePrefix(line.kind);
-
-                  return (
-                    <box flexDirection="row" width="100%" backgroundColor={lineBg(line.kind)}>
-                      {/* Blame annotation (conditional, fixed-width) */}
-                      <Show when={showBlame()}>
-                        <box flexShrink={0} width={BLAME_COL_WIDTH} backgroundColor={t().backgroundElement}>
-                          <text wrapMode="none" fg={t().foregroundMuted}>
-                            {() => blameAnnotation(line)}
-                          </text>
-                        </box>
-                      </Show>
-                      {/* Line numbers (old + new merged) */}
-                      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                        {() => buildGutter(line, gutterWidth(maxOldLineNo()), gutterWidth(maxNewLineNo()))}
-                      </text>
-                      {/* Prefix (+/-/space) */}
-                      <text flexShrink={0} wrapMode="none" fg={lineColor(line.kind)}>
-                        {`  ${prefix} `}
-                      </text>
-                      {/* Content */}
-                      <text flexGrow={1} wrapMode="none" fg={lineColor(line.kind)}>
-                        {line.content}
-                      </text>
-                    </box>
-                  );
-                }}
+                {line => (
+                  <DiffLineRow
+                    line={line}
+                    showBlame={showBlame()}
+                    blameAnnotation={blameAnnotation}
+                    maxOldLineNo={maxOldLineNo()}
+                    maxNewLineNo={maxNewLineNo()}
+                    dialogWidth={dialogWidth()}
+                    t={t()}
+                  />
+                )}
               </For>
 
               {/* Bottom spacer — maintains total content height for offscreen lines below */}

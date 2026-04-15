@@ -1,6 +1,113 @@
 /** The kind of a display line in the diff viewer. */
 export type DisplayLineKind = "hunk-header" | "add" | "delete" | "context" | "spacer" | "continuation";
 
+/** A single flattened display line built from a parsed diff. */
+export interface DisplayLine {
+  kind: "hunk-header" | "add" | "delete" | "context" | "spacer";
+  content: string;
+  oldLineNo?: number;
+  newLineNo?: number;
+}
+
+/** Flatten all hunks of a FileDiff into a single display-line array. */
+import type { FileDiff } from "../../git/types";
+export function buildDisplayLines(diff: FileDiff): DisplayLine[] {
+  const lines: DisplayLine[] = [];
+  for (let i = 0; i < diff.hunks.length; i++) {
+    lines.push({ kind: "spacer", content: "" });
+    const hunk = diff.hunks[i];
+    lines.push({ kind: "hunk-header", content: hunk.header });
+    for (const line of hunk.lines) {
+      lines.push({
+        kind: line.type,
+        content: line.content,
+        oldLineNo: line.oldLineNo,
+        newLineNo: line.newLineNo,
+      });
+    }
+  }
+  if (diff.hunks.length > 0) {
+    lines.push({ kind: "spacer", content: "" });
+  }
+  return lines;
+}
+
+// ── Gutter helpers ────────────────────────────────────────────────────
+
+/** Width (in characters) needed for a line-number gutter column. */
+export function gutterWidth(maxLineNo: number): number {
+  return String(maxLineNo).length;
+}
+
+/** Pad a line number to a fixed width, or return spaces if undefined. */
+export function padLineNo(lineNo: number | undefined, width: number): string {
+  if (lineNo === undefined) return " ".repeat(width);
+  return String(lineNo).padStart(width);
+}
+
+/** Build the merged gutter string: "oldLineNo newLineNo". */
+export function buildGutter(
+  line: Pick<DisplayLine, "oldLineNo" | "newLineNo">,
+  oldWidth: number,
+  newWidth: number,
+): string {
+  return `${padLineNo(line.oldLineNo, oldWidth)} ${padLineNo(line.newLineNo, newWidth)}`;
+}
+
+// ── Per-line style helpers ─────────────────────────────────────────────
+// These accept theme color strings as parameters so they remain pure and
+// framework-agnostic (no SolidJS or opentui imports needed).
+
+/** Foreground color for a diff line kind. */
+export function diffLineColor(
+  kind: DisplayLineKind,
+  colors: { diffAdded: string; diffRemoved: string; accent: string; foreground: string },
+): string {
+  switch (kind) {
+    case "add":
+      return colors.diffAdded;
+    case "delete":
+      return colors.diffRemoved;
+    case "hunk-header":
+      return colors.accent;
+    case "context":
+    case "spacer":
+    case "continuation":
+      return colors.foreground;
+  }
+}
+
+/** Prefix character (+/-/space/empty) for a diff line kind. */
+export function diffLinePrefix(kind: DisplayLineKind): string {
+  switch (kind) {
+    case "add":
+      return "+";
+    case "delete":
+      return "-";
+    case "hunk-header":
+    case "spacer":
+    case "continuation":
+      return "";
+    case "context":
+      return " ";
+  }
+}
+
+/** Background color (or undefined) for a diff line kind. */
+export function diffLineBg(
+  kind: DisplayLineKind,
+  colors: { diffAddedBg: string; diffRemovedBg: string },
+): string | undefined {
+  switch (kind) {
+    case "add":
+      return colors.diffAddedBg;
+    case "delete":
+      return colors.diffRemovedBg;
+    default:
+      return undefined;
+  }
+}
+
 /**
  * Expand a display line array so that each logical line whose content
  * exceeds `maxWidth` characters is followed by one or more `"continuation"`
