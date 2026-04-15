@@ -12,7 +12,7 @@ import Badge from "../badge";
 import { KeyHint } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
-type MenuTab = "repository" | "branch";
+type MenuTab = "repository" | "branch" | "providers";
 
 /** Column widths for the menu item value and hotkey display columns. */
 const VALUE_COL_WIDTH = 22;
@@ -29,6 +29,10 @@ interface MenuDialogProps {
   configInfo?: ConfigInfo;
   /** Open the project selector to switch repos. */
   onSwitchRepo?: () => void;
+  /** Current GitHub provider config (passed through to Providers tab). */
+  githubConfig?: { enabled: boolean; tokenEnvVar: string };
+  /** Callback to update GitHub provider config. */
+  onGithubConfigChange?: (cfg: { enabled: boolean; tokenEnvVar: string }) => void;
 }
 
 /** Persists the last-used tab across dialog open/close cycles. */
@@ -87,6 +91,8 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     onClose: () => props.onClose(),
     configInfo: props.configInfo,
     onSwitchRepo: props.onSwitchRepo,
+    githubConfig: props.githubConfig,
+    onGithubConfigChange: props.onGithubConfigChange,
   });
 
   // ── Banner scroll for selected copyable rows ──────────────────────
@@ -102,6 +108,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   };
 
   // ── Keyboard ──────────────────────────────────────────────────────
+  const TAB_ORDER: MenuTab[] = ["repository", "branch", "providers"];
   useKeyboard(e => {
     if (e.eventType === "release") return;
 
@@ -115,16 +122,16 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
       case "return":
         activateItem();
         break;
-      case "left":
-        if (activeTab() !== "repository") {
-          setActiveTab("repository");
-        }
+      case "left": {
+        const idx = TAB_ORDER.indexOf(activeTab());
+        if (idx > 0) setActiveTab(TAB_ORDER[idx - 1]);
         break;
-      case "right":
-        if (activeTab() !== "branch") {
-          setActiveTab("branch");
-        }
+      }
+      case "right": {
+        const idx = TAB_ORDER.indexOf(activeTab());
+        if (idx < TAB_ORDER.length - 1) setActiveTab(TAB_ORDER[idx + 1]);
         break;
+      }
     }
   });
 
@@ -374,6 +381,19 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
           >
             <text flexShrink={0} wrapMode="none" fg={activeTab() === "branch" ? t().accent : t().foregroundMuted}>
               <strong>{"Branches"}</strong>
+            </text>
+          </box>
+          {/* Providers tab */}
+          <box
+            flexGrow={1}
+            justifyContent="center"
+            flexDirection="row"
+            border={["top"]}
+            borderStyle="single"
+            borderColor={activeTab() === "providers" ? t().accent : t().border}
+          >
+            <text flexShrink={0} wrapMode="none" fg={activeTab() === "providers" ? t().accent : t().foregroundMuted}>
+              <strong>{"Providers"}</strong>
             </text>
           </box>
         </box>

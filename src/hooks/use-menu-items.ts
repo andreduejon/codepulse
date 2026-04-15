@@ -6,8 +6,9 @@ import { writeConfig } from "../config";
 import { AUTO_REFRESH_MS, AUTO_REFRESH_OPTIONS, DEFAULT_MAX_COUNT, MAX_COUNT_OPTIONS, MS_TO_LABEL } from "../constants";
 import { DEFAULT_AUTO_REFRESH_INTERVAL, useAppState } from "../context/state";
 import { themes } from "../context/theme";
+import { getGitHubToken, parseGitHubRemote } from "../providers/github-actions/api";
 
-type MenuTab = "repository" | "branch";
+type MenuTab = "repository" | "branch" | "providers";
 
 export type SettingItem =
   | { kind: "header"; label: string }
@@ -63,6 +64,10 @@ export interface MenuItemsOptions {
   configInfo?: ConfigInfo;
   /** Open the project selector to switch repos. */
   onSwitchRepo?: () => void;
+  /** Current GitHub provider config (tokenEnvVar, enabled). */
+  githubConfig?: { enabled: boolean; tokenEnvVar: string };
+  /** Callback to update GitHub provider config. */
+  onGithubConfigChange?: (cfg: { enabled: boolean; tokenEnvVar: string }) => void;
 }
 
 export interface MenuItemsResult {
@@ -327,18 +332,63 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
     return { addColWidth: addW, delColWidth: delW };
   });
 
+  // ── Provider tab items ────────────────────────────────────────────
+  const providerItems = createMemo<SettingItem[]>(() => {
+    const ghCfg = opts.githubConfig ?? { enabled: false, tokenEnvVar: "GITHUB_TOKEN" };
+    const remoteUrl = state.remoteUrl();
+    const repo = parseGitHubRemote(remoteUrl);
+    const tokenFound = !!getGitHubToken(ghCfg.tokenEnvVar);
+
+    const items: SettingItem[] = [
+      { kind: "header", label: "GitHub Actions" },
+      {
+        kind: "toggle",
+        label: "Enabled",
+        get: () => ghCfg.enabled,
+        set: v => opts.onGithubConfigChange?.({ ...ghCfg, enabled: v }),
+      },
+      {
+        kind: "info",
+        label: "Token env",
+        get: () => ghCfg.tokenEnvVar,
+      },
+      {
+        kind: "info",
+        label: "Token",
+        get: () => (tokenFound ? "found" : "not found"),
+      },
+      {
+        kind: "info",
+        label: "Repository",
+        get: () => (repo ? `${repo.owner}/${repo.repo}` : "(not detected)"),
+      },
+    ];
+
+    return items;
+  });
+
   // ── Active items depend on tab ────────────────────────────────────
-  const activeItems = createMemo<SettingItem[]>(() =>
-    opts.activeTab() === "repository" ? repoItems() : branchItems(),
-  );
+  const activeItems = createMemo<SettingItem[]>(() => {
+    const tab = opts.activeTab();
+    if (tab === "repository") return repoItems();
+    if (tab === "branch") return branchItems();
+    return providerItems();
+  });
 
   // ── Cursor per tab ────────────────────────────────────────────────
   const [repoCursor, setRepoCursor] = createSignal(0);
   const [branchCursor, setBranchCursor] = createSignal(0);
+  const [providersCursor, setProvidersCursor] = createSignal(0);
 
-  const currentCursor = () => (opts.activeTab() === "repository" ? repoCursor() : branchCursor());
+  const currentCursor = () => {
+    const tab = opts.activeTab();
+    if (tab === "repository") return repoCursor();
+    if (tab === "branch") return branchCursor();
+    return providersCursor();
+  };
   const setCurrentCursor = (v: number | ((prev: number) => number)) => {
-    const setter = opts.activeTab() === "repository" ? setRepoCursor : setBranchCursor;
+    const tab = opts.activeTab();
+    const setter = tab === "repository" ? setRepoCursor : tab === "branch" ? setBranchCursor : setProvidersCursor;
     if (typeof v === "function") setter(v);
     else setter(v);
   };
