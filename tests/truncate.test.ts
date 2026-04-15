@@ -20,11 +20,29 @@ describe("truncateName", () => {
     expect(result.length).toBe(10);
   });
 
-  it("handles maxLen of 3 (only ellipsis)", () => {
-    expect(truncateName("abcdefg", 3)).toBe("...");
-  });
-
   it("handles empty string", () => {
     expect(truncateName("", 20)).toBe("");
+  });
+
+  it("maxLen=3 returns hard slice without ellipsis", () => {
+    expect(truncateName("abcdefg", 3)).toBe("abc");
+    expect(truncateName("abcdefg", 3).length).toBeLessThanOrEqual(3);
+  });
+
+  it("maxLen=2 returns hard slice without ellipsis", () => {
+    expect(truncateName("abcdefg", 2)).toBe("ab");
+    expect(truncateName("abcdefg", 2).length).toBeLessThanOrEqual(2);
+  });
+
+  it("maxLen=1 returns single character", () => {
+    expect(truncateName("abcdefg", 1)).toBe("a");
+  });
+
+  it("maxLen=0 returns empty string", () => {
+    expect(truncateName("abcdefg", 0)).toBe("");
+  });
+
+  it("maxLen negative returns empty string", () => {
+    expect(truncateName("abcdefg", -5)).toBe("");
   });
 });

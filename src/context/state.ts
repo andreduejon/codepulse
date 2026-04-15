@@ -194,6 +194,15 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
     return null;
   });
 
+  // Mutable ref caching the last search-derived highlight set.
+  // createMemo uses reference equality (===), so returning a new Set on every
+  // graphRows() change (e.g. pagination, auto-refresh) would trigger downstream
+  // recomputation even when the matching hashes are identical. By returning the
+  // cached reference when contents are unchanged we avoid spurious re-renders —
+  // the same pattern used in use-ancestry.ts for ancestrySet.
+  // (AGENTS.md rule 3: mutable refs for state that must survive multiple effect firings.)
+  let prevSearchSet: Set<string> | null = null;
+
   const highlightSet = createMemo((): Set<string> | null => {
     const aSet = ancestrySet();
     if (aSet) return aSet;
@@ -207,9 +216,24 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
       for (const row of graphRows()) {
         if (matchCommit(row.commit, parsed)) matches.add(row.commit.hash);
       }
-      return matches.size > 0 ? matches : new Set();
+      const newSet = matches.size > 0 ? matches : new Set<string>();
+      // Structural equality check: return cached ref when contents are unchanged
+      // so downstream dimming/navigation memos don't recompute unnecessarily.
+      if (prevSearchSet !== null && prevSearchSet.size === newSet.size) {
+        let same = true;
+        for (const h of newSet) {
+          if (!prevSearchSet.has(h)) {
+            same = false;
+            break;
+          }
+        }
+        if (same) return prevSearchSet;
+      }
+      prevSearchSet = newSet;
+      return newSet;
     }
 
+    prevSearchSet = null;
     return null;
   });
 
