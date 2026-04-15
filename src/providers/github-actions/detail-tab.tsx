@@ -135,6 +135,12 @@ export interface ActionsDetailTabProps {
    * run data.  The string is the human-readable reason from providerStatus.
    */
   unavailableReason?: string | null;
+  /**
+   * True while the initial CI data fetch is in-flight.  Shown as a loading
+   * indicator in the fallback so the user doesn't see "No CI data for this
+   * commit" before the request has even completed.
+   */
+  loading?: boolean;
 }
 
 // ── Top-level component ───────────────────────────────────────────────────
@@ -175,7 +181,7 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
       when={actionsData()}
       fallback={
         <box flexGrow={1} alignItems="center" justifyContent="center">
-          <text fg={t().foregroundMuted}>No CI data for this commit</text>
+          <text fg={t().foregroundMuted}>{props.loading ? "Loading CI data..." : "No CI data for this commit"}</text>
         </box>
       }
     >

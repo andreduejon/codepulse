@@ -872,6 +872,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 // biome-ignore lint/style/noNonNullAssertion: guarded by Show when condition above
                 fetchJobsForRun={props.githubFetchJobsForRun!}
                 unavailableReason={props.githubProviderStatus !== "loading" ? props.githubProviderStatus : null}
+                loading={props.githubProviderStatus === "loading"}
               />
             </Show>
           </>
