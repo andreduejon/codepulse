@@ -56,13 +56,17 @@ export function registerProvider(p: ProviderRegistration): void {
 
 /**
  * Returns the ordered list of ProviderView values available for Tab cycling:
- * always starts with "git", then any registered providers that are currently
- * available.
+ * always starts with "git", then all registered providers (regardless of
+ * availability).  Registration is the gating mechanism — a disabled provider
+ * is never registered, so it never appears here.
+ *
+ * An unavailable-but-registered provider shows a setup guidance screen when
+ * the user tabs to it, instead of being silently excluded from Tab cycling.
  */
 export function getEnabledProviderViews(): ProviderView[] {
   const views: ProviderView[] = ["git"];
   for (const p of providerRegistry) {
-    if (p.isAvailable()) views.push(p.id);
+    views.push(p.id);
   }
   return views;
 }

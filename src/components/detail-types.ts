@@ -29,6 +29,12 @@ export interface DetailViewProps {
   githubGetCommitData?: (sha: string) => GitHubCommitData | null;
   /** Fetch full job details (with steps) for a CI run on demand. Optional. */
   githubFetchJobsForRun?: (run: GitHubWorkflowRun) => Promise<GitHubJob[]>;
+  /**
+   * Current provider status string (from state.providerStatus).
+   * Non-null when the provider is unavailable (e.g. missing token / remote).
+   * Passed to ActionsDetailTab to show setup guidance.
+   */
+  githubProviderStatus?: string | null;
 }
 
 /** Layout constants shared between committed and uncommitted detail views */

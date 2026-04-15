@@ -482,6 +482,7 @@ function AppContent(props: Readonly<AppContentProps>) {
                         onOpenDiff={handleOpenDiff}
                         githubGetCommitData={gitHubCI.getCommitData}
                         githubFetchJobsForRun={gitHubCI.fetchJobsForRun}
+                        githubProviderStatus={state.providerStatus()}
                       />
                     </box>
                   </Show>

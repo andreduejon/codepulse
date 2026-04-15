@@ -74,11 +74,18 @@ export function useGitHubCI(opts: {
   };
 
   // ── Provider registration ─────────────────────────────────────────────
-  registerProvider({
-    id: "github-actions",
-    displayName: "github",
-    isAvailable,
-  });
+  // Only register when the provider is enabled.  An enabled-but-unavailable
+  // provider (missing token / remote) is still registered so Tab cycling can
+  // reach it and show a setup guidance screen.  A disabled provider
+  // (config.enabled === false) is the kill switch — it is never registered
+  // and therefore never appears in the Tab cycle at all.
+  if (config.enabled) {
+    registerProvider({
+      id: "github-actions",
+      displayName: "github",
+      isAvailable,
+    });
+  }
 
   // ── In-memory caches ──────────────────────────────────────────────────
   /** SHA → all runs for that commit */

@@ -129,6 +129,12 @@ export interface ActionsDetailTabProps {
    * Called when the user expands a run entry. Checks cache first.
    */
   fetchJobsForRun: (run: GitHubWorkflowRun) => Promise<GitHubJob[]>;
+  /**
+   * When set, the provider is enabled but not yet available (e.g. missing
+   * token or no GitHub remote).  The tab shows setup guidance instead of
+   * run data.  The string is the human-readable reason from providerStatus.
+   */
+  unavailableReason?: string | null;
 }
 
 // ── Top-level component ───────────────────────────────────────────────────
@@ -136,6 +142,33 @@ export interface ActionsDetailTabProps {
 export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
   const t = useT();
   const actionsData = () => props.getCommitData(props.sha);
+
+  // When the provider is registered but unavailable, show setup guidance.
+  if (props.unavailableReason) {
+    return (
+      <box flexDirection="column" flexGrow={1} paddingX={2} paddingTop={2}>
+        <text fg={t().foregroundMuted} wrapMode="word">
+          {props.unavailableReason}
+        </text>
+        <box height={1} />
+        <text fg={t().foregroundMuted} wrapMode="word">
+          To authenticate with GitHub, run one of:
+        </text>
+        <box height={1} />
+        <text fg={t().accent} wrapMode="none">
+          {"  gh auth login"}
+        </text>
+        <box height={1} />
+        <text fg={t().accent} wrapMode="none">
+          {"  export GITHUB_TOKEN=<token>"}
+        </text>
+        <box height={1} />
+        <text fg={t().foregroundMuted} wrapMode="word">
+          {"See :help \u2192 Providers for more details."}
+        </text>
+      </box>
+    );
+  }
 
   return (
     <Show
