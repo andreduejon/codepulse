@@ -1,11 +1,12 @@
 /** Help dialog / CLI keybind reference — single source of truth. */
 
-export type HelpTab = "general" | "diff" | "commands";
+export type HelpTab = "general" | "diff" | "commands" | "providers";
 
 export const HELP_TABS: { id: HelpTab; label: string }[] = [
   { id: "general", label: "General" },
   { id: "diff", label: "Diff" },
   { id: "commands", label: "Commands" },
+  { id: "providers", label: "Providers" },
 ];
 
 export const KEYBINDS: Record<HelpTab, [string, string][]> = {
@@ -49,5 +50,20 @@ export const KEYBINDS: Record<HelpTab, [string, string][]> = {
     [":repo", "Open menu (repository tab)"],
     [":search", "Switch to search mode"],
     [":theme", "Open theme dialog"],
+  ],
+  providers: [
+    ["── GitHub Actions ──", ""],
+    ["", "Authenticate via the GitHub CLI:"],
+    ["  gh auth login", ""],
+    ["", "Or export a Personal Access Token:"],
+    ["  export GITHUB_TOKEN=<token>", ""],
+    ["", ""],
+    ["── GitHub Enterprise ──", ""],
+    ["", "Point to a GHE token env var via:"],
+    ["  tokenEnvVar: MY_GHE_TOKEN", "in the config file"],
+    ["", ""],
+    ["── Config fields ──", ""],
+    ["providers.github.enabled", "Show/hide the GitHub Actions tab"],
+    ["providers.github.tokenEnvVar", "Env var holding the PAT"],
   ],
 };
