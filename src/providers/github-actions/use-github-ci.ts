@@ -338,21 +338,27 @@ export function useGitHubCI(opts: {
     }
   });
 
-  // When graphRows changes (new commits loaded after git fetch), query any
-  // newly-appeared SHAs that are in the top INITIAL_SHA_LIMIT and not yet queried.
+  // When graphRows changes (new commits loaded after git fetch or on initial
+  // data load), eagerly query any SHAs in the top INITIAL_SHA_LIMIT that have
+  // not been queried yet.  This fires in the background regardless of which
+  // provider view is currently active — so CI badges are pre-populated before
+  // the user even tabs to the GitHub Actions view.
   createEffect(() => {
     // Track graphRows reactively so this effect fires when new commits load
     const rows = state.graphRows();
     if (rows.length === 0) return;
-    if (state.activeProviderView() !== "github-actions") return;
 
     const allSHAs = collectTopSHAs(INITIAL_SHA_LIMIT);
     const newSHAs = allSHAs.filter(sha => !queriedSHAs.has(sha));
     if (newSHAs.length === 0) return;
 
+    // Mark hasFetchedOnce so the provider-view effect doesn't double-fetch
+    hasFetchedOnce = true;
+    lastFetchedAt = Date.now();
+
     const ctrl = new AbortController();
     fetchAbortCtrl = ctrl;
-    // Pass newSHAs directly to avoid a redundant collectTopSHAs() call inside doInitialFetch
+    // Pass allSHAs directly to avoid a redundant collectTopSHAs() call inside doInitialFetch
     doInitialFetch(ctrl.signal, allSHAs);
   });
 
