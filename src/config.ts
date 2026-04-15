@@ -15,10 +15,20 @@ export interface CodepulseConfig {
   showAllBranches?: boolean;
   /** Auto-refresh interval in seconds. 0 = off. */
   autoRefreshSeconds?: number;
+  /** Provider-specific configuration. */
+  providers?: {
+    github?: {
+      /** Whether the GitHub Actions provider is enabled. Defaults to true. */
+      enabled?: boolean;
+      /** Name of the environment variable holding the GitHub Personal Access Token.
+       *  Defaults to "GITHUB_TOKEN". */
+      tokenEnvVar?: string;
+    };
+  };
 }
 
 /** Return the built-in default config (all fields populated). */
-export function defaultConfig(): Required<Omit<CodepulseConfig, "branch">> {
+export function defaultConfig(): Required<Omit<CodepulseConfig, "branch" | "providers">> {
   return {
     theme: "catppuccin-mocha",
     pageSize: DEFAULT_MAX_COUNT,
@@ -208,6 +218,33 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
     }
   }
 
+  if (raw.providers !== undefined) {
+    if (typeof raw.providers === "object" && raw.providers !== null && !Array.isArray(raw.providers)) {
+      const providers = raw.providers as Record<string, unknown>;
+      config.providers = {};
+      if (typeof providers.github === "object" && providers.github !== null && !Array.isArray(providers.github)) {
+        const gh = providers.github as Record<string, unknown>;
+        config.providers.github = {};
+        if (gh.enabled !== undefined) {
+          if (typeof gh.enabled === "boolean") {
+            config.providers.github.enabled = gh.enabled;
+          } else {
+            warnings.push(`${path}: "providers.github.enabled" must be a boolean, ignoring`);
+          }
+        }
+        if (gh.tokenEnvVar !== undefined) {
+          if (typeof gh.tokenEnvVar === "string" && gh.tokenEnvVar.length > 0) {
+            config.providers.github.tokenEnvVar = gh.tokenEnvVar;
+          } else {
+            warnings.push(`${path}: "providers.github.tokenEnvVar" must be a non-empty string, ignoring`);
+          }
+        }
+      }
+    } else {
+      warnings.push(`${path}: "providers" must be an object, ignoring`);
+    }
+  }
+
   return config;
 }
 
@@ -325,4 +362,24 @@ function applyConfigFields(target: Record<string, unknown>, config: CodepulseCon
   if (config.branch !== undefined) target.branch = config.branch;
   if (config.showAllBranches !== undefined) target.showAllBranches = config.showAllBranches;
   if (config.autoRefreshSeconds !== undefined) target.autoRefreshSeconds = config.autoRefreshSeconds;
+  if (config.providers !== undefined) {
+    // Deep-merge providers into existing target.providers to preserve other provider configs
+    const existingProviders =
+      typeof target.providers === "object" && target.providers !== null && !Array.isArray(target.providers)
+        ? { ...(target.providers as Record<string, unknown>) }
+        : {};
+    if (config.providers.github !== undefined) {
+      const existingGh =
+        typeof existingProviders.github === "object" &&
+        existingProviders.github !== null &&
+        !Array.isArray(existingProviders.github)
+          ? { ...(existingProviders.github as Record<string, unknown>) }
+          : {};
+      if (config.providers.github.enabled !== undefined) existingGh.enabled = config.providers.github.enabled;
+      if (config.providers.github.tokenEnvVar !== undefined)
+        existingGh.tokenEnvVar = config.providers.github.tokenEnvVar;
+      existingProviders.github = existingGh;
+    }
+    target.providers = existingProviders;
+  }
 }

@@ -39,6 +39,8 @@ export const openCodeOriginal: Theme = {
   diffRemoved: "#e06c75",
   diffAddedBg: "#23251d",
   diffRemovedBg: "#2c1b1c",
+  githubActionsFg: "#131010",
+  githubActionsBg: "#61afef",
 };
 
 export const catppuccinMocha: Theme = {
@@ -72,6 +74,8 @@ export const catppuccinMocha: Theme = {
   diffRemoved: "#f38ba8",
   diffAddedBg: "#2e363c",
   diffRemovedBg: "#382b3d",
+  githubActionsFg: "#1e1e2e",
+  githubActionsBg: "#89b4fa",
 };
 
 export const tokyoNight: Theme = {
@@ -105,6 +109,8 @@ export const tokyoNight: Theme = {
   diffRemoved: "#f7768e",
   diffAddedBg: "#2a302e",
   diffRemovedBg: "#352632",
+  githubActionsFg: "#1a1b26",
+  githubActionsBg: "#7aa2f7",
 };
 
 export const dracula: Theme = {
@@ -138,6 +144,8 @@ export const dracula: Theme = {
   diffRemoved: "#ff5555",
   diffAddedBg: "#2d433e",
   diffRemovedBg: "#422f3a",
+  githubActionsFg: "#282a36",
+  githubActionsBg: "#8be9fd",
 };
 
 export const nord: Theme = {
@@ -171,6 +179,8 @@ export const nord: Theme = {
   diffRemoved: "#bf616a",
   diffAddedBg: "#3c4549",
   diffRemovedBg: "#3f3945",
+  githubActionsFg: "#2e3440",
+  githubActionsBg: "#88c0d0",
 };
 
 export const oneDark: Theme = {
@@ -204,6 +214,8 @@ export const oneDark: Theme = {
   diffRemoved: "#e06c75",
   diffAddedBg: "#353e3c",
   diffRemovedBg: "#3e343c",
+  githubActionsFg: "#282c34",
+  githubActionsBg: "#61afef",
 };
 
 export const gruvbox: Theme = {
@@ -237,6 +249,8 @@ export const gruvbox: Theme = {
   diffRemoved: "#fb4934",
   diffAddedBg: "#393a28",
   diffRemovedBg: "#412c29",
+  githubActionsFg: "#282828",
+  githubActionsBg: "#83a598",
 };
 
 export const monokai: Theme = {
@@ -270,6 +284,8 @@ export const monokai: Theme = {
   diffRemoved: "#ff6188",
   diffAddedBg: "#3c3f37",
   diffRemovedBg: "#463139",
+  githubActionsFg: "#2d2a2e",
+  githubActionsBg: "#78dce8",
 };
 
 export const ayuDark: Theme = {
@@ -303,6 +319,8 @@ export const ayuDark: Theme = {
   diffRemoved: "#ff3333",
   diffAddedBg: "#323b39",
   diffRemovedBg: "#3a2630",
+  githubActionsFg: "#1f2430",
+  githubActionsBg: "#5ccfe6",
 };
 
 export const synthwave: Theme = {
@@ -336,6 +354,8 @@ export const synthwave: Theme = {
   diffRemoved: "#fe4450",
   diffAddedBg: "#2f3c45",
   diffRemovedBg: "#402738",
+  githubActionsFg: "#262335",
+  githubActionsBg: "#36f9f6",
 };
 
 export const rosePine: Theme = {
@@ -369,4 +389,6 @@ export const rosePine: Theme = {
   diffRemoved: "#eb6f92",
   diffAddedBg: "#292d3a",
   diffRemovedBg: "#322231",
+  githubActionsFg: "#191724",
+  githubActionsBg: "#c4a7e7",
 };
