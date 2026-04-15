@@ -54,6 +54,14 @@ export function registerProvider(p: ProviderRegistration): void {
   }
 }
 
+/** Unregister a provider by ID.  Called when the provider is disabled at runtime. */
+export function unregisterProvider(id: ProviderView): void {
+  const idx = providerRegistry.findIndex(r => r.id === id);
+  if (idx !== -1) {
+    providerRegistry.splice(idx, 1);
+  }
+}
+
 /**
  * Returns the ordered list of ProviderView values available for Tab cycling:
  * always starts with "git", then all registered providers (regardless of

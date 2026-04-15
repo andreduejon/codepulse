@@ -20,9 +20,10 @@
  * renders in JSX (see AGENTS.md rule 5).
  */
 
-import { createEffect, createSignal, onCleanup } from "solid-js";
+import type { Accessor } from "solid-js";
+import { createEffect, createMemo, createSignal, onCleanup } from "solid-js";
 import type { AppActions, AppState } from "../../context/state";
-import { registerProvider } from "../../providers/provider";
+import { registerProvider, unregisterProvider } from "../../providers/provider";
 import {
   buildCommitDataMap,
   buildGraphBadges,
@@ -56,10 +57,35 @@ export interface UseGitHubCIResult {
 export function useGitHubCI(opts: {
   state: AppState;
   actions: AppActions;
-  config?: Partial<GitHubProviderConfig>;
+  /**
+   * Provider config — accepts either a plain object snapshot or a reactive
+   * accessor.  Pass `Accessor<Partial<GitHubProviderConfig>>` (i.e. the signal
+   * without calling it) so that toggling `enabled` in the Providers menu is
+   * reflected immediately without a restart.
+   */
+  config?: Partial<GitHubProviderConfig> | Accessor<Partial<GitHubProviderConfig>>;
 }): UseGitHubCIResult {
-  const config: GitHubProviderConfig = { ...DEFAULT_GITHUB_CONFIG, ...opts.config };
   const { state, actions } = opts;
+
+  // ── Reactive config ───────────────────────────────────────────────────
+  // Normalise: if opts.config is a function (Accessor) use it directly;
+  // if it's a plain object (or undefined) wrap it in a constant accessor so
+  // the rest of the hook always reads config() uniformly.
+  const configAccessor: Accessor<Partial<GitHubProviderConfig>> =
+    typeof opts.config === "function"
+      ? (opts.config as Accessor<Partial<GitHubProviderConfig>>)
+      : ((() => opts.config ?? {}) as Accessor<Partial<GitHubProviderConfig>>);
+
+  // createMemo merges the partial config with defaults reactively.
+  // NOTE: all const declarations that configMemo depends on (none here beyond
+  // DEFAULT_GITHUB_CONFIG which is a module-level const) must precede this
+  // memo to avoid TDZ errors (AGENTS.md rule 1).
+  const configMemo = createMemo(
+    (): GitHubProviderConfig => ({
+      ...DEFAULT_GITHUB_CONFIG,
+      ...configAccessor(),
+    }),
+  );
 
   // ── Availability (reactive) ───────────────────────────────────────────
   // Use a signal so effects that read cachedGitHubRepo() re-run when the
@@ -71,25 +97,33 @@ export function useGitHubCI(opts: {
   });
 
   const isAvailable = (): boolean => {
-    if (!config.enabled) return false;
+    if (!configMemo().enabled) return false;
     const repo = cachedGitHubRepo();
     if (!repo) return false;
-    return getGitHubToken(config.tokenEnvVar, repo.hostname) !== null;
+    return getGitHubToken(configMemo().tokenEnvVar, repo.hostname) !== null;
   };
 
   // ── Provider registration ─────────────────────────────────────────────
-  // Only register when the provider is enabled.  An enabled-but-unavailable
-  // provider (missing token / remote) is still registered so Tab cycling can
-  // reach it and show a setup guidance screen.  A disabled provider
-  // (config.enabled === false) is the kill switch — it is never registered
-  // and therefore never appears in the Tab cycle at all.
-  if (config.enabled) {
-    registerProvider({
-      id: "github-actions",
-      displayName: "github",
-      isAvailable,
-    });
-  }
+  // Reactive: register when enabled becomes true, unregister when it becomes
+  // false.  An enabled-but-unavailable provider (missing token / remote) is
+  // still registered so Tab cycling can reach it and show setup guidance.
+  // A disabled provider is unregistered and never appears in Tab cycling.
+  createEffect(() => {
+    if (configMemo().enabled) {
+      registerProvider({
+        id: "github-actions",
+        displayName: "github",
+        isAvailable,
+      });
+    } else {
+      unregisterProvider("github-actions");
+      // If the user is currently in the CI view and disables the provider,
+      // switch back to the git view immediately.
+      if (state.activeProviderView() === "github-actions") {
+        actions.setActiveProviderView("git");
+      }
+    }
+  });
 
   // ── In-memory caches ──────────────────────────────────────────────────
   /** SHA → all runs for that commit */
@@ -154,7 +188,7 @@ export function useGitHubCI(opts: {
   async function fetchForSHAs(shas: string[], signal?: AbortSignal): Promise<void> {
     if (shas.length === 0) return;
     const repo = cachedGitHubRepo();
-    const token = getGitHubToken(config.tokenEnvVar, repo?.hostname);
+    const token = getGitHubToken(configMemo().tokenEnvVar, repo?.hostname);
     if (!repo || !token) return;
 
     // Split into batches of GQL_BATCH_SIZE and fire in parallel
@@ -215,13 +249,13 @@ export function useGitHubCI(opts: {
     if (!isAvailable()) {
       if (showStatus) {
         const repo = cachedGitHubRepo();
-        const token = getGitHubToken(config.tokenEnvVar, repo?.hostname);
-        if (!config.enabled) {
+        const token = getGitHubToken(configMemo().tokenEnvVar, repo?.hostname);
+        if (!configMemo().enabled) {
           actions.setProviderStatus("CI provider disabled");
         } else if (!repo) {
           actions.setProviderStatus("No GitHub remote detected");
         } else if (!token) {
-          actions.setProviderStatus(`Token not found: $${config.tokenEnvVar}`);
+          actions.setProviderStatus(`Token not found: $${configMemo().tokenEnvVar}`);
         }
       }
       return;
@@ -410,7 +444,7 @@ export function useGitHubCI(opts: {
     if (cached) return cached;
 
     const repo = cachedGitHubRepo();
-    const token = getGitHubToken(config.tokenEnvVar, repo?.hostname);
+    const token = getGitHubToken(configMemo().tokenEnvVar, repo?.hostname);
     if (!repo || !token) return [];
 
     const jobs = await fetchRunJobs(repo, token, run.id);

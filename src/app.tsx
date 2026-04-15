@@ -62,7 +62,7 @@ function AppContent(props: Readonly<AppContentProps>) {
   const gitHubCI = useGitHubCI({
     state,
     actions,
-    config: githubConfig(),
+    config: githubConfig,
   });
 
   // Setup screen visibility — shown when startup mode is "setup"
