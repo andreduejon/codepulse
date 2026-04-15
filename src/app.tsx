@@ -363,10 +363,23 @@ function AppContent(props: Readonly<AppContentProps>) {
     onClearAncestry: clearAnchor,
   });
 
+  // ── Provider-aware theme: override accent with githubActionsFg in CI mode ──
+  // createMemo is placed here — after all const declarations above — to respect
+  // AGENTS.md rule 1 (eager memo must not reference TDZ variables).
+  // All components that call useT() read from ThemeContext, so overriding the
+  // theme value here propagates the accent change to every component automatically.
+  const providerTheme = createMemo(() => {
+    const base = themeState.theme();
+    if (state.activeProviderView() === "github-actions") {
+      return { ...base, accent: base.githubActionsFg };
+    }
+    return base;
+  });
+
   return (
     <ThemeContext.Provider
       value={{
-        theme: themeState.theme,
+        theme: providerTheme,
         setTheme: themeState.setTheme,
         themeName: themeState.themeName,
       }}

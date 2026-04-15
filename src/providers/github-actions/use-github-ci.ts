@@ -94,9 +94,13 @@ export function useGitHubCI(opts: {
     const token = getGitHubToken(config.tokenEnvVar);
     if (!repo || !token) return;
 
-    // Resolve the branch to query: prefer the current branch, fall back to
-    // "HEAD" which GitHub resolves to the default branch.
-    const branch = state.currentBranch() || "HEAD";
+    // Resolve the branch to query using a fully-qualified ref name, which is
+    // what the GraphQL ref(qualifiedName:) field requires.
+    // state.currentBranch() returns a short name like "main" — prefix it.
+    // Fall back to "HEAD" only as a last resort; GitHub resolves HEAD to the
+    // default branch on the repository but it may not work as qualifiedName.
+    const rawBranch = state.currentBranch();
+    const branch = rawBranch ? `refs/heads/${rawBranch}` : "HEAD";
 
     fetchInFlight = true;
     try {
