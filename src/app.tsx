@@ -15,7 +15,7 @@ import GraphView, { ColumnHeader } from "./components/graph";
 import ProjectSelector from "./components/project-selector";
 import SetupScreen from "./components/setup-screen";
 import type { ConfigInfo } from "./config";
-import { defaultConfig, getKnownRepos, writeConfig } from "./config";
+import { backfillRepoConfig, getKnownRepos, writeConfig } from "./config";
 import { COMPACT_THRESHOLD_WIDTH, DEFAULT_MAX_COUNT, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH } from "./constants";
 import { AppStateContext, createAppState } from "./context/state";
 import { createThemeState, ThemeContext } from "./context/theme";
@@ -71,10 +71,19 @@ function AppContent(props: Readonly<AppContentProps>) {
   const [repoSelectorVisible, setRepoSelectorVisible] = createSignal(false);
 
   const handleSetupComplete = () => {
-    // Write default settings so the user can see and edit them in the config file
-    writeConfig(defaultConfig(), props.repoPath);
+    // Backfill all default settings so the user can see and edit them in the config file
+    backfillRepoConfig(props.repoPath);
     setSetupVisible(false);
   };
+
+  // Backfill missing config keys for this repo on every startup
+  backfillRepoConfig(props.repoPath);
+
+  // Auto-persist theme changes (confirmed selections and reverts from ThemeDialog)
+  createEffect(() => {
+    const name = themeState.themeName();
+    writeConfig({ theme: name }, props.repoPath);
+  });
 
   // Initialize path filter from CLI --path flag (before first loadData)
   if (props.path) actions.setPathFilter(props.path);

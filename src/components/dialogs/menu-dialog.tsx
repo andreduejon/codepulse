@@ -1,6 +1,6 @@
 import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useTerminalDimensions } from "@opentui/solid";
-import { createEffect, createSignal, For, type JSX, onCleanup } from "solid-js";
+import { createEffect, createSignal, For, type JSX } from "solid-js";
 import type { ConfigInfo } from "../../config";
 import { SHIFT_JUMP } from "../../constants";
 import { useTheme } from "../../context/theme";
@@ -54,19 +54,6 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   // ── Clipboard feedback ────────────────────────────────────────────
   const { copiedId: copiedLabel, copyToClipboard } = useClipboard();
 
-  // ── Config save feedback ──────────────────────────────────────────
-  const [savedFeedback, setSavedFeedback] = createSignal<string | null>(null);
-  let savedTimer: ReturnType<typeof setTimeout> | undefined;
-
-  const showSavedFeedback = (label: string) => {
-    setSavedFeedback(label);
-    if (savedTimer) clearTimeout(savedTimer);
-    savedTimer = setTimeout(() => setSavedFeedback(null), 1500);
-  };
-  onCleanup(() => {
-    if (savedTimer) clearTimeout(savedTimer);
-  });
-
   // ── Menu items hook ───────────────────────────────────────────────
   const {
     activeItems,
@@ -81,8 +68,6 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     activeTab,
     themeName,
     setTheme,
-    savedFeedback,
-    showSavedFeedback,
     copyToClipboard,
     onFetch: () => props.onFetch(),
     onReload: () => props.onReload(),

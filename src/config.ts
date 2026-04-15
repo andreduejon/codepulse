@@ -28,13 +28,66 @@ export interface CodepulseConfig {
 }
 
 /** Return the built-in default config (all fields populated). */
-export function defaultConfig(): Required<Omit<CodepulseConfig, "branch" | "providers">> {
+export function defaultConfig(): Required<Omit<CodepulseConfig, "branch">> {
   return {
     theme: "catppuccin-mocha",
     pageSize: DEFAULT_MAX_COUNT,
     showAllBranches: true,
     autoRefreshSeconds: DEFAULT_AUTO_REFRESH_INTERVAL / 1000,
+    providers: {
+      github: {
+        enabled: true,
+        tokenEnvVar: "GITHUB_TOKEN",
+      },
+    },
   };
+}
+
+/**
+ * Backfill missing config keys for the current repo on startup.
+ *
+ * Reads the current repo entry, deep-merges with defaults writing back
+ * **only the keys that are missing** — never overwrites existing values.
+ * Other repos and other keys are left untouched.
+ *
+ * @param repoPath - The repository directory (absolute path).
+ * @param configPath - Override the global config path (used by tests).
+ */
+export function backfillRepoConfig(repoPath: string, configPath?: string): void {
+  const { config: existing } = loadConfig(repoPath, configPath);
+  const defaults = defaultConfig();
+
+  // Build a partial config containing only the fields missing from the existing entry
+  const missing: CodepulseConfig = {};
+
+  if (existing.theme === undefined) missing.theme = defaults.theme;
+  if (existing.pageSize === undefined) missing.pageSize = defaults.pageSize;
+  if (existing.showAllBranches === undefined) missing.showAllBranches = defaults.showAllBranches;
+  if (existing.autoRefreshSeconds === undefined) missing.autoRefreshSeconds = defaults.autoRefreshSeconds;
+
+  // Deep-check providers.github fields
+  const existingGh = existing.providers?.github;
+  const defaultGh = defaults.providers.github ?? { enabled: true, tokenEnvVar: "GITHUB_TOKEN" };
+  if (existingGh?.enabled === undefined || existingGh?.tokenEnvVar === undefined) {
+    missing.providers = {
+      github: {
+        ...(existingGh?.enabled === undefined ? { enabled: defaultGh.enabled } : {}),
+        ...(existingGh?.tokenEnvVar === undefined ? { tokenEnvVar: defaultGh.tokenEnvVar } : {}),
+      },
+    };
+  }
+
+  // Only write if there is anything missing
+  const hasAnyMissing =
+    missing.theme !== undefined ||
+    missing.pageSize !== undefined ||
+    missing.showAllBranches !== undefined ||
+    missing.autoRefreshSeconds !== undefined ||
+    missing.providers !== undefined;
+
+  if (hasAnyMissing) {
+    writeConfig(missing, repoPath, configPath);
+  }
 }
 
 /** Resolved options ready for the app (all fields required). */

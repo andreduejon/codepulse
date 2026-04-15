@@ -3,7 +3,7 @@ import type { Accessor } from "solid-js";
 import { createMemo, createSignal } from "solid-js";
 import type { CodepulseConfig, ConfigInfo } from "../config";
 import { writeConfig } from "../config";
-import { AUTO_REFRESH_MS, AUTO_REFRESH_OPTIONS, DEFAULT_MAX_COUNT, MAX_COUNT_OPTIONS, MS_TO_LABEL } from "../constants";
+import { AUTO_REFRESH_MS, AUTO_REFRESH_OPTIONS, MAX_COUNT_OPTIONS, MS_TO_LABEL } from "../constants";
 import { DEFAULT_AUTO_REFRESH_INTERVAL, useAppState } from "../context/state";
 import { themes } from "../context/theme";
 import { getGitHubToken, parseGitHubRemote } from "../providers/github-actions/api";
@@ -50,9 +50,6 @@ export interface MenuItemsOptions {
   themeName: Accessor<string>;
   /** Set the active theme by name. */
   setTheme: (name: string) => void;
-  /** Saved-feedback label signal and trigger. */
-  savedFeedback: Accessor<string | null>;
-  showSavedFeedback: (label: string) => void;
   /** Clipboard copy callback. */
   copyToClipboard: (text: string, id: string) => void;
   /** Prop callbacks forwarded from the component. */
@@ -88,6 +85,29 @@ export interface MenuItemsResult {
  */
 export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
   const { state, actions } = useAppState();
+
+  /**
+   * Persist all current settings to the config file immediately.
+   * Called after every individual setting change so no manual "Save" is needed.
+   */
+  const persistFullConfig = (overrides?: Partial<CodepulseConfig>) => {
+    const cfg: CodepulseConfig = {
+      theme: opts.themeName(),
+      pageSize: state.maxCount(),
+      showAllBranches: state.showAllBranches(),
+      autoRefreshSeconds: state.autoRefreshInterval() / 1000,
+      ...overrides,
+    };
+    if (opts.githubConfig) {
+      cfg.providers = {
+        github: {
+          enabled: opts.githubConfig.enabled,
+          tokenEnvVar: opts.githubConfig.tokenEnvVar,
+        },
+      };
+    }
+    writeConfig(cfg, state.repoPath());
+  };
 
   // ── Collapsed state for branch sections ───────────────────────────
   const [localCollapsed, setLocalCollapsed] = createSignal(false);
@@ -134,14 +154,20 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
         label: "Page size",
         options: MAX_COUNT_OPTIONS.map(String),
         get: () => String(state.maxCount()),
-        set: v => actions.setMaxCount(Number.parseInt(v, 10)),
+        set: v => {
+          actions.setMaxCount(Number.parseInt(v, 10));
+          persistFullConfig({ pageSize: Number.parseInt(v, 10) });
+        },
         needsReload: true,
       },
       {
         kind: "toggle",
         label: "Show all branches",
         get: () => state.showAllBranches(),
-        set: v => actions.setShowAllBranches(v),
+        set: v => {
+          actions.setShowAllBranches(v);
+          persistFullConfig({ showAllBranches: v });
+        },
         needsReload: true,
       },
       {
@@ -149,17 +175,10 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
         label: "Auto refresh",
         options: AUTO_REFRESH_OPTIONS,
         get: () => MS_TO_LABEL[state.autoRefreshInterval()] ?? "off",
-        set: v => actions.setAutoRefreshInterval(AUTO_REFRESH_MS[v] ?? DEFAULT_AUTO_REFRESH_INTERVAL),
-      },
-      {
-        kind: "action",
-        label: "Reset to defaults",
-        run: () => {
-          opts.setTheme("catppuccin-mocha");
-          actions.setMaxCount(DEFAULT_MAX_COUNT);
-          actions.setShowAllBranches(true);
-          actions.setAutoRefreshInterval(DEFAULT_AUTO_REFRESH_INTERVAL);
-          opts.onReload();
+        set: v => {
+          const ms = AUTO_REFRESH_MS[v] ?? DEFAULT_AUTO_REFRESH_INTERVAL;
+          actions.setAutoRefreshInterval(ms);
+          persistFullConfig({ autoRefreshSeconds: ms / 1000 });
         },
       },
     ];
@@ -175,26 +194,6 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
         kind: "info",
         label: "Config file",
         get: () => `${shortenHome(ci.globalPath)}  ${ci.globalExists ? "(found)" : "(not found)"}`,
-      });
-      items.push({
-        kind: "action",
-        label: "Save to config",
-        get: () => (opts.savedFeedback() === "Save to config" ? "\u2713 Saved!" : ""),
-        run: () => {
-          const autoRefreshMs = state.autoRefreshInterval();
-          const cfg: CodepulseConfig = {
-            theme: opts.themeName(),
-            pageSize: state.maxCount(),
-            showAllBranches: state.showAllBranches(),
-            autoRefreshSeconds: autoRefreshMs / 1000,
-          };
-          const ok = writeConfig(cfg, state.repoPath());
-          if (ok) {
-            ci.globalExists = true;
-            ci.hasRepoOverrides = true;
-            opts.showSavedFeedback("Save to config");
-          }
-        },
       });
     }
 
@@ -345,7 +344,12 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
         kind: "toggle",
         label: "Enabled",
         get: () => ghCfg.enabled,
-        set: v => opts.onGithubConfigChange?.({ ...ghCfg, enabled: v }),
+        set: v => {
+          opts.onGithubConfigChange?.({ ...ghCfg, enabled: v });
+          persistFullConfig({
+            providers: { github: { ...ghCfg, enabled: v } },
+          });
+        },
       },
       {
         kind: "info",
