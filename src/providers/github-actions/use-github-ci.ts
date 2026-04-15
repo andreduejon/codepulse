@@ -192,7 +192,7 @@ export function useGitHubCI(opts: {
   async function fetchForSHAs(shas: string[], signal?: AbortSignal): Promise<void> {
     if (shas.length === 0) return;
     const repo = cachedGitHubRepo();
-    const token = getGitHubToken(tokenEnvVar, repo?.hostname);
+    const token = getGitHubToken(config.tokenEnvVar, repo?.hostname);
     if (!repo || !token) return;
 
     // Split into batches of GQL_BATCH_SIZE and fire in parallel
@@ -253,13 +253,13 @@ export function useGitHubCI(opts: {
     if (!isAvailable()) {
       if (showStatus) {
         const repo = cachedGitHubRepo();
-        const token = getGitHubToken(tokenEnvVar, repo?.hostname);
-        if (!enabled) {
+        const token = getGitHubToken(config.tokenEnvVar, repo?.hostname);
+        if (!config.enabled) {
           actions.setProviderStatus("CI provider disabled");
         } else if (!repo) {
           actions.setProviderStatus("No GitHub remote detected");
         } else if (!token) {
-          actions.setProviderStatus(`Token not found: $${tokenEnvVar}`);
+          actions.setProviderStatus(`Token not found: $${config.tokenEnvVar}`);
         }
       }
       return;
@@ -448,7 +448,7 @@ export function useGitHubCI(opts: {
     if (cached) return cached;
 
     const repo = cachedGitHubRepo();
-    const token = getGitHubToken(tokenEnvVar, repo?.hostname);
+    const token = getGitHubToken(config.tokenEnvVar, repo?.hostname);
     if (!repo || !token) return [];
 
     const jobs = await fetchRunJobs(repo, token, run.id);
