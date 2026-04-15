@@ -6,7 +6,9 @@
  *   - Lazy initial fetch (triggered on first Tab switch to CI view)
  *   - Viewport-driven SHA batching: queries the top ~100 commits from
  *     state.graphRows() — covering all branches — rather than walking a
- *     single branch's history.  Works for any commit on any branch.
+ *     single branch's history.  Works for any commit on any branch,
+ *     including ancestors of remote branches that have no origin/* ref
+ *     attached directly.
  *   - Auto-refresh only re-queries SHAs with non-terminal (running/queued)
  *     status, keeping polling cheap.
  *   - Manual refresh / post-git-fetch: queries any newly-appeared SHAs that
@@ -97,26 +99,18 @@ export function useGitHubCI(opts: {
   // ── SHA collection helpers ────────────────────────────────────────────
 
   /**
-   * Collect up to `limit` commit SHAs from the top of graphRows, restricted
-   * to commits that exist on a remote branch (origin/*).
+   * Collect up to `limit` commit SHAs from the top of graphRows.
    *
-   * Only remote-tracked commits can have GitHub Actions check suites — local-
-   * only commits (branches not pushed to origin) will always return empty
-   * checkSuites nodes and waste API quota.
-   *
-   * A commit is considered remote-tracked if:
-   *   - It has at least one ref with type "remote" (e.g. origin/main), OR
-   *   - Its lane is remote-only (isRemoteOnly = true)
+   * No remote-ref filter is applied: ancestor commits of a remote branch do
+   * not have an `origin/*` ref attached directly, yet GitHub does have CI data
+   * for them.  GitHub returns empty `checkSuites.nodes: []` for commits with
+   * no CI runs (not an error), so querying local-only commits is harmless.
    */
   function collectTopSHAs(limit: number): string[] {
     const rows = state.graphRows();
     const shas: string[] = [];
     for (let i = 0; i < rows.length && shas.length < limit; i++) {
-      const row = rows[i];
-      const hasRemoteRef = row.isRemoteOnly || row.commit.refs.some(r => r.type === "remote");
-      if (hasRemoteRef) {
-        shas.push(row.commit.hash);
-      }
+      shas.push(rows[i].commit.hash);
     }
     return shas;
   }
