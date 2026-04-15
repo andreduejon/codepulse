@@ -131,12 +131,12 @@ export function ActionsColumnHeaders() {
     <>
       <box flexShrink={0} width={AUTHOR_COL_WIDTH} paddingRight={2}>
         <text wrapMode="none" truncate fg={color()}>
-          <strong>CI Runs</strong>
+          <strong>Status</strong>
         </text>
       </box>
       <box flexShrink={0} width={DATE_COL_WIDTH}>
         <text wrapMode="none" truncate fg={color()}>
-          <strong>CI Status</strong>
+          <strong>Last Run</strong>
         </text>
       </box>
     </>
