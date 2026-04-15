@@ -27,8 +27,6 @@ export interface DetailViewProps {
   navRef?: DetailNavRef;
   /** Get CI data for a commit SHA (from the GitHub Actions provider). Optional. */
   ciGetCommitData?: (sha: string) => GitHubCommitData | null;
-  /** Get pre-fetched jobs for a run ID from the GraphQL cache. Optional. */
-  ciGetCachedJobs?: (runId: number) => GitHubJob[] | null;
   /** Fetch full job details (with steps) for a CI run on demand. Optional. */
   ciFetchJobsForRun?: (run: GitHubWorkflowRun) => Promise<GitHubJob[]>;
 }

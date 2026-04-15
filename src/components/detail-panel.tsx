@@ -21,8 +21,6 @@ export interface DetailPanelProps {
   onOpenDiff: (target: DiffTarget) => void;
   /** CI data getter from the GitHub Actions provider (optional). */
   ciGetCommitData?: (sha: string) => GitHubCommitData | null;
-  /** CI pre-fetched jobs getter from the GraphQL cache (optional). */
-  ciGetCachedJobs?: (runId: number) => GitHubJob[] | null;
   /** CI job fetcher from the GitHub Actions provider (optional). */
   ciFetchJobsForRun?: (run: GitHubWorkflowRun) => Promise<GitHubJob[]>;
 }
@@ -157,7 +155,6 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
             onOpenDiff={props.onOpenDiff}
             navRef={props.navRef}
             ciGetCommitData={props.ciGetCommitData}
-            ciGetCachedJobs={props.ciGetCachedJobs}
             ciFetchJobsForRun={props.ciFetchJobsForRun}
           />
         </Show>

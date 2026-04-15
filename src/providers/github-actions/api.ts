@@ -260,16 +260,6 @@ interface GqlCheckSuite {
     updatedAt: string;
     workflow: { name: string };
   } | null;
-  checkRuns: {
-    nodes: Array<{
-      databaseId: number;
-      name: string;
-      status: string;
-      conclusion: string | null;
-      startedAt: string | null;
-      completedAt: string | null;
-    }>;
-  };
 }
 
 /** A single commit object returned by the aliased object(oid:) query. */
@@ -323,19 +313,6 @@ function mapGqlCheckSuiteToRun(suite: GqlCheckSuite, sha: string): GitHubWorkflo
   };
 }
 
-function mapGqlCheckRunToJob(cr: GqlCheckSuite["checkRuns"]["nodes"][number]): GitHubJob {
-  const { status, conclusion } = gqlNormalise(cr.status, cr.conclusion);
-  return {
-    id: cr.databaseId,
-    name: cr.name,
-    status,
-    conclusion,
-    startedAt: cr.startedAt,
-    completedAt: cr.completedAt,
-    steps: [], // steps not included in batch query — fetched on demand via fetchRunJobs
-  };
-}
-
 // ── GraphQL API fetch ──────────────────────────────────────────────────────
 
 const GRAPHQL_URL = "https://api.github.com/graphql";
@@ -351,12 +328,11 @@ export const GQL_BATCH_SIZE = 100;
 /**
  * Inline fragment shared by every aliased commit object.
  *
- * Node budget per SHA: 10 suites × 20 checkRuns = 200 nodes.
- * At GQL_BATCH_SIZE=100: 100 × 200 = 20,000 nodes — well under GitHub's 500K limit.
+ * Node budget per SHA: 10 check-suites (scalars only, no checkRuns connection).
+ * At GQL_BATCH_SIZE=100: 100 × 10 = 1,000 nodes — ~1-2 rate-limit points.
  *
- * first: 10 suites  — covers repos with multiple CI providers with room to spare.
- * first: 20 runs    — covers monorepos with many workflow files.
- * Steps intentionally omitted — fetched on demand via fetchRunJobs (REST).
+ * checkRuns intentionally omitted — jobs are fetched on demand via fetchRunJobs
+ * (REST) when the user expands a run in the Actions tab.
  */
 const COMMIT_FRAGMENT = `
 ... on Commit {
@@ -375,16 +351,6 @@ const COMMIT_FRAGMENT = `
         createdAt
         updatedAt
         workflow { name }
-      }
-      checkRuns(first: 20) {
-        nodes {
-          databaseId
-          name
-          status
-          conclusion
-          startedAt
-          completedAt
-        }
       }
     }
   }
@@ -405,12 +371,6 @@ function buildBatchQuery(shas: string[]): string {
 export interface GraphQLFetchResult {
   /** Runs grouped by commit SHA — branch-agnostic. */
   runs: GitHubWorkflowRun[];
-  /**
-   * Pre-fetched jobs keyed by run ID.
-   * Populated from check run data embedded in the GraphQL response —
-   * no extra round-trips needed for the queried commits.
-   */
-  jobsByRunId: Map<number, GitHubJob[]>;
   /**
    * Set when the request failed (HTTP error, GraphQL errors, or network error).
    * null means success. The hook uses this to surface errors in the UI.
@@ -436,7 +396,7 @@ export async function fetchCIDataForSHAs(
   opts: { signal?: AbortSignal } = {},
 ): Promise<GraphQLFetchResult> {
   const { signal } = opts;
-  const empty: GraphQLFetchResult = { runs: [], jobsByRunId: new Map(), error: null };
+  const empty: GraphQLFetchResult = { runs: [], error: null };
   if (shas.length === 0) return empty;
 
   try {
@@ -466,7 +426,6 @@ export async function fetchCIDataForSHAs(
 
     const repoData = json.data?.repository ?? {};
     const runs: GitHubWorkflowRun[] = [];
-    const jobsByRunId = new Map<number, GitHubJob[]>();
 
     // Iterate alias keys c0, c1, … in the same order as the input shas array
     for (let i = 0; i < shas.length; i++) {
@@ -477,12 +436,10 @@ export async function fetchCIDataForSHAs(
         const run = mapGqlCheckSuiteToRun(suite, sha);
         if (!run) continue;
         runs.push(run);
-        const jobs = suite.checkRuns.nodes.map(mapGqlCheckRunToJob);
-        jobsByRunId.set(run.id, jobs);
       }
     }
 
-    return { runs, jobsByRunId, error: null };
+    return { runs, error: null };
   } catch (err) {
     if (signal?.aborted) throw err;
     const msg = err instanceof Error ? err.message : String(err);

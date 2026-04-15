@@ -867,7 +867,6 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 sha={c().hash}
                 // biome-ignore lint/style/noNonNullAssertion: guarded by Show when condition above
                 getCommitData={props.ciGetCommitData!}
-                getCachedJobs={props.ciGetCachedJobs ?? (() => null)}
                 // biome-ignore lint/style/noNonNullAssertion: guarded by Show when condition above
                 fetchJobsForRun={props.ciFetchJobsForRun!}
               />

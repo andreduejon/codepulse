@@ -475,7 +475,6 @@ function makeBatchResponse(
       wfName?: string;
       event?: string;
       url?: string;
-      checkRuns?: Array<{ id?: number; name?: string; status?: string; conclusion?: string | null }>;
     }>;
   }>,
 ) {
@@ -501,16 +500,6 @@ function makeBatchResponse(
                   workflow: { name: s.wfName ?? "CI" },
                 }
               : null,
-          checkRuns: {
-            nodes: (s.checkRuns ?? []).map(cr => ({
-              databaseId: cr.id ?? 10,
-              name: cr.name ?? "build",
-              status: cr.status ?? "COMPLETED",
-              conclusion: cr.conclusion ?? "SUCCESS",
-              startedAt: "2024-01-01T00:00:00Z",
-              completedAt: "2024-01-01T00:01:00Z",
-            })),
-          },
         })),
       },
     };
@@ -523,11 +512,11 @@ describe("fetchCIDataForSHAs", () => {
     globalThis.fetch = fetch;
   });
 
-  it("returns runs and pre-populated jobs for two commits on different branches", async () => {
+  it("returns runs for two commits on different branches", async () => {
     const response = makeBatchResponse([
       {
         sha: "aaa",
-        suites: [{ wfRunId: 1, wfName: "CI", checkRuns: [{ id: 10, name: "build" }] }],
+        suites: [{ wfRunId: 1, wfName: "CI" }],
       },
       {
         sha: "bbb",
@@ -537,7 +526,6 @@ describe("fetchCIDataForSHAs", () => {
             wfName: "Deploy",
             status: "IN_PROGRESS",
             conclusion: null,
-            checkRuns: [{ id: 20, name: "deploy" }],
           },
         ],
       },
@@ -553,12 +541,6 @@ describe("fetchCIDataForSHAs", () => {
     expect(result.runs[1].headSha).toBe("bbb");
     expect(result.runs[1].status).toBe("in_progress");
     expect(result.runs[1].conclusion).toBeNull();
-
-    // Jobs should be pre-populated
-    expect(result.jobsByRunId.get(1)).toHaveLength(1);
-    expect(result.jobsByRunId.get(1)?.[0].name).toBe("build");
-    expect(result.jobsByRunId.get(2)).toHaveLength(1);
-    expect(result.jobsByRunId.get(2)?.[0].name).toBe("deploy");
   });
 
   it("skips check suites with no workflowRun (non-Actions checks)", async () => {
@@ -594,7 +576,7 @@ describe("fetchCIDataForSHAs", () => {
     mockFetch(mock(async () => new Response(null, { status: 403 })));
     const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
     expect(result.runs).toHaveLength(0);
-    expect(result.jobsByRunId.size).toBe(0);
+    expect(result.error).toBeTruthy();
   });
 
   it("returns empty result on GraphQL errors field", async () => {
@@ -633,7 +615,6 @@ describe("fetchCIDataForSHAs", () => {
     mockFetch(mock(async () => new Response(JSON.stringify(response), { status: 200 })));
     const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["eee"]);
     expect(result.runs).toHaveLength(0);
-    expect(result.jobsByRunId.size).toBe(0);
   });
 
   it("handles a SHA not found in repository (null alias) gracefully", async () => {
@@ -679,20 +660,6 @@ describe("fetchCIDataForSHAs", () => {
     );
     await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
     expect(authHeader).toBe(`Bearer ${TEST_TOKEN}`);
-  });
-
-  it("batch query returns empty steps — steps are fetched on demand via fetchRunJobs", async () => {
-    const response = makeBatchResponse([
-      {
-        sha: "fff",
-        suites: [{ wfRunId: 9, checkRuns: [{ id: 30, name: "test" }] }],
-      },
-    ]);
-    mockFetch(mock(async () => new Response(JSON.stringify(response), { status: 200 })));
-    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["fff"]);
-    const jobs = result.jobsByRunId.get(9);
-    // Steps intentionally omitted from batch query (node limit) — always empty here
-    expect(jobs?.[0].steps).toEqual([]);
   });
 
   it("maps multiple runs per commit to separate entries in runs array", async () => {

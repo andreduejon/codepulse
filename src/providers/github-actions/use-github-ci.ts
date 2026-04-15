@@ -41,8 +41,6 @@ const INITIAL_SHA_LIMIT = 100;
 export interface UseGitHubCIResult {
   /** Retrieve all runs for a given commit SHA (null if not fetched yet). */
   getCommitData: (sha: string) => GitHubCommitData | null;
-  /** Retrieve cached jobs for a run.  null = not yet fetched. */
-  getCachedJobs: (runId: number) => GitHubJob[] | null;
   /**
    * Fetch jobs for a run on demand and cache them.
    * Returns the jobs once fetched (or from cache).
@@ -162,19 +160,6 @@ export function useGitHubCI(opts: {
     const allRuns: GitHubWorkflowRun[] = [];
     for (const result of results) {
       allRuns.push(...result.runs);
-      // Populate jobs cache from pre-fetched check run data
-      for (const run of result.runs) {
-        const jobs = result.jobsByRunId.get(run.id);
-        if (jobs && jobs.length > 0) {
-          if (run.status === "completed") {
-            // Completed runs: only cache if we have jobs (don't overwrite with empty)
-            jobsCache.set(run.id, jobs);
-          } else {
-            // In-progress: always use the freshest data
-            jobsCache.set(run.id, jobs);
-          }
-        }
-      }
     }
 
     // Merge new runs into commitDataCache (additive — don't discard other SHAs)
@@ -387,7 +372,6 @@ export function useGitHubCI(opts: {
   // ── Public API ────────────────────────────────────────────────────────
   return {
     getCommitData: (sha: string) => commitDataCache.get(sha) ?? null,
-    getCachedJobs: (runId: number) => jobsCache.get(runId) ?? null,
     fetchJobsForRun,
     refresh: doForceRefresh,
     isAvailable,

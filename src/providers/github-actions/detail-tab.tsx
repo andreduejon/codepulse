@@ -3,8 +3,7 @@
  *
  * Layout:
  *   - Each run header shows: status icon, workflow name, run number, time, event
- *   - Jobs from the GraphQL cache are shown immediately below each run (no REST call)
- *   - Expanding a job (TODO: keyboard) fetches its steps on demand via fetchJobsForRun
+ *   - Expanding a run (enter key) fetches its jobs+steps on demand via fetchJobsForRun (REST)
  *
  * Receives props directly (not via useContext) because this component may be
  * rendered during setup before the AppStateContext.Provider mounts (AGENTS.md rule 5).
@@ -126,13 +125,8 @@ export interface CIDetailTabProps {
   /** Get all CI data for the commit (run list). */
   getCommitData: (sha: string) => GitHubCommitData | null;
   /**
-   * Get jobs that were pre-fetched from GraphQL for a run.
-   * Returns null if the run has not been queried yet (shouldn't happen in practice).
-   */
-  getCachedJobs: (runId: number) => GitHubJob[] | null;
-  /**
    * Fetch full job details (with steps) for a run on demand.
-   * Called when the user expands a job entry. Checks cache first.
+   * Called when the user expands a run entry. Checks cache first.
    */
   fetchJobsForRun: (run: GitHubWorkflowRun) => Promise<GitHubJob[]>;
 }
@@ -160,14 +154,7 @@ export function CIDetailTab(props: Readonly<CIDetailTabProps>) {
           </text>
           <box height={1} />
           <For each={data().runs}>
-            {(run, i) => (
-              <RunEntry
-                run={run}
-                index={i()}
-                getCachedJobs={props.getCachedJobs}
-                fetchJobsForRun={props.fetchJobsForRun}
-              />
-            )}
+            {(run, i) => <RunEntry run={run} index={i()} fetchJobsForRun={props.fetchJobsForRun} />}
           </For>
         </box>
       )}
@@ -175,12 +162,11 @@ export function CIDetailTab(props: Readonly<CIDetailTabProps>) {
   );
 }
 
-// ── RunEntry — shows run header + pre-fetched jobs inline ─────────────────
+// ── RunEntry — shows run header; expands to fetch and show jobs ───────────
 
 interface RunEntryProps {
   run: GitHubWorkflowRun;
   index: number;
-  getCachedJobs: (runId: number) => GitHubJob[] | null;
   fetchJobsForRun: (run: GitHubWorkflowRun) => Promise<GitHubJob[]>;
 }
 
@@ -189,10 +175,21 @@ function RunEntry(props: Readonly<RunEntryProps>) {
   const colors = useRunColors(props.run);
   const relTime = () => formatRelativeDate(props.run.updatedAt);
 
-  // Jobs come from the GraphQL cache — already populated, no REST call needed.
-  // Fallback to empty array (null means not yet cached; shouldn't happen since
-  // jobs are fetched in the same batch request as the run data).
-  const cachedJobs = () => props.getCachedJobs(props.run.id) ?? [];
+  const [expanded, setExpanded] = createSignal(false);
+  const [jobs, setJobs] = createSignal<GitHubJob[]>([]);
+  const [jobsLoading, setJobsLoading] = createSignal(false);
+
+  // TODO: wire toggleExpand to keyboard cursor activation in a future commit
+  const _toggleExpand = async () => {
+    const nowExpanded = !expanded();
+    setExpanded(nowExpanded);
+    if (nowExpanded && jobs().length === 0 && !jobsLoading()) {
+      setJobsLoading(true);
+      const fetched = await props.fetchJobsForRun(props.run);
+      setJobs(fetched);
+      setJobsLoading(false);
+    }
+  };
 
   return (
     <box flexDirection="column" width="100%" paddingLeft={2}>
@@ -225,11 +222,19 @@ function RunEntry(props: Readonly<RunEntryProps>) {
         </text>
       </box>
 
-      {/* Jobs — shown inline from GraphQL cache, no REST call required */}
-      <Show when={cachedJobs().length > 0}>
-        <For each={cachedJobs()}>
-          {job => <JobEntry job={job} fetchJobsForRun={props.fetchJobsForRun} run={props.run} />}
-        </For>
+      {/* Jobs — loaded on expansion via REST */}
+      <Show when={expanded()}>
+        <Show when={jobsLoading()}>
+          <box paddingLeft={4}>
+            <text fg={t().foregroundMuted}>Loading jobs…</text>
+          </box>
+        </Show>
+        <Show when={!jobsLoading() && jobs().length === 0}>
+          <box paddingLeft={4}>
+            <text fg={t().foregroundMuted}>No jobs found</text>
+          </box>
+        </Show>
+        <For each={jobs()}>{job => <JobEntry job={job} fetchJobsForRun={props.fetchJobsForRun} run={props.run} />}</For>
       </Show>
     </box>
   );
