@@ -97,15 +97,26 @@ export function useGitHubCI(opts: {
   // ── SHA collection helpers ────────────────────────────────────────────
 
   /**
-   * Collect up to `limit` commit SHAs from the top of graphRows.
-   * graphRows is already sorted newest-first across all branches, so the
-   * first N rows naturally cover the most-recent commits on every branch.
+   * Collect up to `limit` commit SHAs from the top of graphRows, restricted
+   * to commits that exist on a remote branch (origin/*).
+   *
+   * Only remote-tracked commits can have GitHub Actions check suites — local-
+   * only commits (branches not pushed to origin) will always return empty
+   * checkSuites nodes and waste API quota.
+   *
+   * A commit is considered remote-tracked if:
+   *   - It has at least one ref with type "remote" (e.g. origin/main), OR
+   *   - Its lane is remote-only (isRemoteOnly = true)
    */
   function collectTopSHAs(limit: number): string[] {
     const rows = state.graphRows();
     const shas: string[] = [];
-    for (let i = 0; i < Math.min(rows.length, limit); i++) {
-      shas.push(rows[i].commit.hash);
+    for (let i = 0; i < rows.length && shas.length < limit; i++) {
+      const row = rows[i];
+      const hasRemoteRef = row.isRemoteOnly || row.commit.refs.some(r => r.type === "remote");
+      if (hasRemoteRef) {
+        shas.push(row.commit.hash);
+      }
     }
     return shas;
   }
