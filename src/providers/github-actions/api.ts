@@ -293,14 +293,6 @@ interface GqlCheckSuite {
       conclusion: string | null;
       startedAt: string | null;
       completedAt: string | null;
-      steps: {
-        nodes: Array<{
-          name: string;
-          status: string;
-          conclusion: string | null;
-          number: number;
-        }>;
-      } | null;
     }>;
   };
 }
@@ -365,10 +357,7 @@ function mapGqlCheckRunToJob(cr: GqlCheckSuite["checkRuns"]["nodes"][number]): G
     conclusion,
     startedAt: cr.startedAt,
     completedAt: cr.completedAt,
-    steps: (cr.steps?.nodes ?? []).map(s => {
-      const sm = gqlNormalise(s.status, s.conclusion);
-      return { name: s.name, status: sm.status, conclusion: sm.conclusion, number: s.number };
-    }),
+    steps: [], // steps not included in batch query — fetched on demand via fetchRunJobs
   };
 }
 
@@ -378,14 +367,22 @@ const GRAPHQL_URL = "https://api.github.com/graphql";
 
 /**
  * Maximum number of SHAs per GraphQL batch request.
- * GitHub's GraphQL complexity limit is 500 K nodes. Each SHA alias expands to
- * roughly 20 check-suite nodes × 50 check-run nodes × 30 step nodes ≈ 30 K
- * nodes in the worst case, so 50 SHAs is a safe upper bound that stays well
- * under the limit in all real-world repos.
+ * Node budget: 50 SHAs × 20 check-suites × 50 check-runs = 50,000 nodes,
+ * well under GitHub's 500K limit.  Steps are not included in the batch query
+ * (fetched on demand via fetchRunJobs) to keep the node count low.
  */
 export const GQL_BATCH_SIZE = 50;
 
-/** Inline fragment shared by every aliased commit object. */
+/**
+ * Inline fragment shared by every aliased commit object.
+ *
+ * Steps are intentionally omitted here to stay under GitHub's 500K node limit:
+ *   50 SHAs × 20 suites × 50 checkRuns × 30 steps = 1,500,000 nodes (rejected)
+ *   50 SHAs × 20 suites × 50 checkRuns             =    50,000 nodes (accepted)
+ *
+ * Steps are fetched on demand via fetchRunJobs (REST) when the user expands
+ * a run in the detail panel.
+ */
 const COMMIT_FRAGMENT = `
 ... on Commit {
   oid
@@ -412,9 +409,6 @@ const COMMIT_FRAGMENT = `
           conclusion
           startedAt
           completedAt
-          steps(first: 30) {
-            nodes { name status conclusion number }
-          }
         }
       }
     }

@@ -634,7 +634,6 @@ function makeBatchResponse(
               conclusion: cr.conclusion ?? "SUCCESS",
               startedAt: "2024-01-01T00:00:00Z",
               completedAt: "2024-01-01T00:01:00Z",
-              steps: { nodes: [] },
             })),
           },
         })),
@@ -807,32 +806,18 @@ describe("fetchCIDataForSHAs", () => {
     expect(authHeader).toBe(`Bearer ${TEST_TOKEN}`);
   });
 
-  it("maps check run steps correctly", async () => {
+  it("batch query returns empty steps — steps are fetched on demand via fetchRunJobs", async () => {
     const response = makeBatchResponse([
       {
         sha: "fff",
         suites: [{ wfRunId: 9, checkRuns: [{ id: 30, name: "test" }] }],
       },
     ]);
-    // Inject steps directly into the response structure
-    const suite = (response.data.repository.c0 as Record<string, { nodes: Record<string, unknown>[] }>).checkSuites
-      .nodes[0];
-    (suite.checkRuns as { nodes: unknown[] }).nodes[0] = {
-      ...(suite.checkRuns as { nodes: Record<string, unknown>[] }).nodes[0],
-      steps: {
-        nodes: [
-          { name: "Checkout", status: "COMPLETED", conclusion: "SUCCESS", number: 1 },
-          { name: "Run tests", status: "COMPLETED", conclusion: "FAILURE", number: 2 },
-        ],
-      },
-    };
     mockFetch(mock(async () => new Response(JSON.stringify(response), { status: 200 })));
     const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["fff"]);
     const jobs = result.jobsByRunId.get(9);
-    expect(jobs?.[0].steps).toHaveLength(2);
-    expect(jobs?.[0].steps[0].name).toBe("Checkout");
-    expect(jobs?.[0].steps[1].conclusion).toBe("failure");
-    expect(jobs?.[0].steps[1].number).toBe(2);
+    // Steps intentionally omitted from batch query (node limit) — always empty here
+    expect(jobs?.[0].steps).toEqual([]);
   });
 
   it("maps multiple runs per commit to separate entries in runs array", async () => {
