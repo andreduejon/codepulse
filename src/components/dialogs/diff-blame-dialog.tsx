@@ -7,7 +7,16 @@ import type { BlameLine, DiffTarget, FileDiff } from "../../git/types";
 import { useT } from "../../hooks/use-t";
 import { KeyHint } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
-import { buildRowOffsets, computeDiffStats, findLineAtRow, formatHunkHeader } from "./diff-utils";
+import { BLAME_COL_WIDTH, DiffLineRow } from "./diff-line-row";
+import {
+  buildDisplayLines,
+  buildRowOffsets,
+  computeDiffStats,
+  type DisplayLine,
+  expandWithContinuations,
+  findLineAtRow,
+  gutterWidth,
+} from "./diff-utils";
 import { buildDiffTitleParts, TITLE_SEP } from "./title-utils";
 
 /** Maximum dialog width in columns (fits 120-150 char lines with gutter). */
@@ -15,9 +24,6 @@ const MAX_DIALOG_WIDTH = 160;
 
 /** Number of offscreen lines to render above/below viewport as buffer. */
 const WINDOW_BUFFER = 30;
-
-/** Blame annotation width: "abc1234 Author " — short hash (7) + space + author (capped) + space */
-const BLAME_COL_WIDTH = 22;
 
 type DiffViewMode = "mixed" | "new" | "old";
 
@@ -42,53 +48,6 @@ interface DiffBlameDialogProps {
   onNavigate: (target: DiffTarget) => void;
 }
 
-/** Flatten all hunks into a single line array with hunk headers interspersed. */
-interface DisplayLine {
-  kind: "hunk-header" | "add" | "delete" | "context" | "spacer";
-  content: string;
-  oldLineNo?: number;
-  newLineNo?: number;
-}
-
-function buildDisplayLines(diff: FileDiff): DisplayLine[] {
-  const lines: DisplayLine[] = [];
-  for (let i = 0; i < diff.hunks.length; i++) {
-    // Spacer (horizontal rule) before every hunk — including the first
-    lines.push({ kind: "spacer", content: "" });
-    const hunk = diff.hunks[i];
-    lines.push({ kind: "hunk-header", content: hunk.header });
-    for (const line of hunk.lines) {
-      lines.push({
-        kind: line.type,
-        content: line.content,
-        oldLineNo: line.oldLineNo,
-        newLineNo: line.newLineNo,
-      });
-    }
-  }
-  // Spacer (horizontal rule) after the last hunk
-  if (diff.hunks.length > 0) {
-    lines.push({ kind: "spacer", content: "" });
-  }
-  return lines;
-}
-
-/** Width needed for a line number gutter column. */
-function gutterWidth(maxLineNo: number): number {
-  return String(maxLineNo).length;
-}
-
-/** Pad a line number to a fixed width, or return spaces if undefined. */
-function padLineNo(lineNo: number | undefined, width: number): string {
-  if (lineNo === undefined) return " ".repeat(width);
-  return String(lineNo).padStart(width);
-}
-
-/** Build the merged gutter string: "oldLineNo newLineNo". */
-function buildGutter(line: DisplayLine, oldWidth: number, newWidth: number): string {
-  return `${padLineNo(line.oldLineNo, oldWidth)} ${padLineNo(line.newLineNo, newWidth)}`;
-}
-
 export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
   const { state } = useAppState();
   const t = useT();
@@ -103,6 +62,8 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
   /** Whether blame has ever been fetched (lazy — only on first `b` press). */
   let blameFetched = false;
   const [viewMode, setViewMode] = createSignal<DiffViewMode>("mixed");
+  /** Whether line wrapping is enabled (default on). */
+  const [wrapEnabled, setWrapEnabled] = createSignal(true);
 
   let scrollboxRef: ScrollBoxRenderable | undefined;
 
@@ -188,13 +149,37 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
     return max;
   });
 
+  // ── Dialog sizing ──────────────────────────────────────────────────
+  // Must be declared before contentWidth (which reads dialogWidth()) to avoid TDZ.
+  const dialogWidth = createMemo(() => Math.min(Math.max(72, Math.floor(dimensions().width * 0.85)), MAX_DIALOG_WIDTH));
+
   // Filter lines based on view mode (mixed / new only / old only)
-  const visibleLines = createMemo(() => {
+  const filteredLines = createMemo(() => {
     const mode = viewMode();
     const lines = displayLines();
     if (mode === "mixed") return lines;
     if (mode === "new") return lines.filter(l => l.kind !== "delete");
     return lines.filter(l => l.kind !== "add");
+  });
+
+  /**
+   * Width available for line content inside the scrollbox:
+   *   dialogWidth - paddingX*2 (4) - gutter - prefix " + " (4) - blame col (conditional)
+   * The gutter is 2*gutterWidth + 1 space. We add a small safety margin of 2.
+   */
+  const contentWidth = createMemo(() => {
+    const dw = dialogWidth();
+    const gutterW = gutterWidth(maxOldLineNo()) + 1 + gutterWidth(maxNewLineNo()); // "old new"
+    const prefixW = 4; // "  + " or "  - "
+    const blameW = showBlame() ? BLAME_COL_WIDTH : 0;
+    const paddingW = 8; // paddingX={4} * 2
+    return Math.max(20, dw - paddingW - blameW - gutterW - prefixW - 2);
+  });
+
+  /** Lines with wrapping applied (or raw filtered lines when wrap is off). */
+  const visibleLines = createMemo(() => {
+    if (!wrapEnabled()) return filteredLines();
+    return expandWithContinuations(filteredLines(), contentWidth());
   });
 
   // Build a blame lookup: newLineNo → BlameLine
@@ -205,9 +190,6 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
     }
     return map;
   });
-
-  // ── Dialog sizing ──────────────────────────────────────────────────
-  const dialogWidth = createMemo(() => Math.min(Math.max(72, Math.floor(dimensions().width * 0.85)), MAX_DIALOG_WIDTH));
 
   // ── Windowed rendering ─────────────────────────────────────────────
   // Track scroll position reactively via the scrollbar's "change" event.
@@ -313,9 +295,9 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
     });
   };
 
-  // ── Reset scroll when visible lines change (file nav or view mode toggle) ──
+  // ── Reset scroll when underlying lines change (file nav or view mode toggle) ──
   createEffect(() => {
-    const _lines = visibleLines();
+    const _lines = filteredLines();
     setScrollTop(0);
     scrollboxRef?.scrollTo(0);
   });
@@ -374,54 +356,14 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
           return VIEW_MODE_CYCLE[(idx + 1) % VIEW_MODE_CYCLE.length];
         });
         break;
+      case "w":
+        e.preventDefault();
+        setWrapEnabled(prev => !prev);
+        break;
     }
   });
 
-  // ── Line rendering helpers ─────────────────────────────────────────
-
-  /** Get the foreground color for a diff line type. */
-  const lineColor = (kind: DisplayLine["kind"]): string => {
-    switch (kind) {
-      case "add":
-        return t().diffAdded;
-      case "delete":
-        return t().diffRemoved;
-      case "hunk-header":
-        return t().accent;
-      case "context":
-      case "spacer":
-        return t().foreground;
-    }
-  };
-
-  /** Get the prefix character for a diff line. */
-  const linePrefix = (kind: DisplayLine["kind"]): string => {
-    switch (kind) {
-      case "add":
-        return "+";
-      case "delete":
-        return "-";
-      case "hunk-header":
-      case "spacer":
-        return "";
-      case "context":
-        return " ";
-    }
-  };
-
-  /** Get the background color for a diff line row. */
-  const lineBg = (kind: DisplayLine["kind"]): string | undefined => {
-    switch (kind) {
-      case "add":
-        return t().diffAddedBg;
-      case "delete":
-        return t().diffRemovedBg;
-      case "hunk-header":
-      case "context":
-      case "spacer":
-        return undefined;
-    }
-  };
+  // ── Blame annotation helper ────────────────────────────────────────
 
   const blameAnnotation = (line: DisplayLine): string => {
     if (!showBlame() || line.kind === "hunk-header") return "";
@@ -574,60 +516,17 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
               <box height={windowSlice().topRows} />
 
               <For each={windowedLines()}>
-                {line => {
-                  if (line.kind === "spacer") {
-                    const ruleWidth = dialogWidth() - 10;
-                    return (
-                      <text wrapMode="none" fg={t().border}>
-                        {"─".repeat(ruleWidth)}
-                      </text>
-                    );
-                  }
-
-                  const prefix = linePrefix(line.kind);
-
-                  if (line.kind === "hunk-header") {
-                    return (
-                      <box flexDirection="row" width="100%">
-                        <Show when={showBlame()}>
-                          <box flexShrink={0} width={BLAME_COL_WIDTH} backgroundColor={t().backgroundElement}>
-                            <text wrapMode="none" fg={t().foregroundMuted}>
-                              {() => blameAnnotation(line)}
-                            </text>
-                          </box>
-                        </Show>
-                        <text wrapMode="none" fg={t().accent}>
-                          <strong>{formatHunkHeader(line.content)}</strong>
-                        </text>
-                      </box>
-                    );
-                  }
-
-                  return (
-                    <box flexDirection="row" width="100%" backgroundColor={lineBg(line.kind)}>
-                      {/* Blame annotation (conditional, fixed-width) */}
-                      <Show when={showBlame()}>
-                        <box flexShrink={0} width={BLAME_COL_WIDTH} backgroundColor={t().backgroundElement}>
-                          <text wrapMode="none" fg={t().foregroundMuted}>
-                            {() => blameAnnotation(line)}
-                          </text>
-                        </box>
-                      </Show>
-                      {/* Line numbers (old + new merged) */}
-                      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                        {() => buildGutter(line, gutterWidth(maxOldLineNo()), gutterWidth(maxNewLineNo()))}
-                      </text>
-                      {/* Prefix (+/-/space) */}
-                      <text flexShrink={0} wrapMode="none" fg={lineColor(line.kind)}>
-                        {`  ${prefix} `}
-                      </text>
-                      {/* Content */}
-                      <text flexGrow={1} wrapMode="none" fg={lineColor(line.kind)}>
-                        {line.content}
-                      </text>
-                    </box>
-                  );
-                }}
+                {line => (
+                  <DiffLineRow
+                    line={line}
+                    showBlame={showBlame()}
+                    blameAnnotation={blameAnnotation}
+                    maxOldLineNo={maxOldLineNo()}
+                    maxNewLineNo={maxNewLineNo()}
+                    dialogWidth={dialogWidth()}
+                    t={t()}
+                  />
+                )}
               </For>
 
               {/* Bottom spacer — maintains total content height for offscreen lines below */}
@@ -649,7 +548,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
           <KeyHint key={"\u2191/\u2193"} desc=" scroll  " />
           <KeyHint key="b" desc={showBlame() ? " hide blame  " : " show blame  "} />
           <KeyHint key="c" desc={` ${VIEW_MODE_NEXT_LABEL[viewMode()]}  `} />
-          <KeyHint key="g/G" desc=" top/bottom" />
+          <KeyHint key="w" desc={wrapEnabled() ? " disable wrap  " : " enable wrap  "} />
         </DialogFooter>
       </box>
     </DialogOverlay>

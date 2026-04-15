@@ -9,7 +9,15 @@
 import { describe, expect, test } from "bun:test";
 import { buildGraph, type GraphChar, renderFanOutRow } from "../src/git/graph";
 import type { Connector } from "../src/git/types";
-import { findRow, graphCharsToAscii, makeCommit, printGraph, THEME_COLORS } from "./test-helpers";
+import {
+  assertDefined,
+  findRow,
+  graphCharsToAscii,
+  hasMergeConnectors,
+  makeCommit,
+  printGraph,
+  THEME_COLORS,
+} from "./test-helpers";
 
 /**
  * Assert that every non-empty connector in a fan-out row renders visible
@@ -46,9 +54,8 @@ describe("Fan-Out", () => {
     printGraph(rows);
 
     const d1Row = findRow(rows, "d1");
-    expect(d1Row.fanOutRows).toBeDefined();
+    assertDefined(d1Row.fanOutRows, "d1Row.fanOutRows");
     const fanOut = d1Row.fanOutRows;
-    if (!fanOut) throw new Error("Expected fanOutRows");
     expect(fanOut.length).toBeGreaterThan(0);
 
     // Each fan-out row should have exactly one corner (bottom-right or bottom-left)
@@ -95,9 +102,8 @@ describe("Fan-Out", () => {
     printGraph(rows);
 
     const d1Row = findRow(rows, "d1");
-    expect(d1Row.fanOutRows).toBeDefined();
+    assertDefined(d1Row.fanOutRows, "d1Row.fanOutRows");
     const fanOut = d1Row.fanOutRows;
-    if (!fanOut) throw new Error("Expected fanOutRows");
     expect(fanOut.length).toBeGreaterThanOrEqual(2);
 
     const firstFO = fanOut[0];
@@ -139,7 +145,7 @@ describe("Fan-Out", () => {
     const d1Row = findRow(rows, "d1");
     const fanOut = d1Row.fanOutRows;
     expect(fanOut !== undefined && fanOut.length >= 2).toBe(true);
-    if (!fanOut) throw new Error("Expected fanOutRows");
+    assertDefined(fanOut, "fanOutRows");
 
     const cornerColumns: number[] = [];
     for (const foRow of fanOut) {
@@ -194,11 +200,10 @@ describe("Fan-Out", () => {
     const d1Row = findRow(rows, "d1");
 
     expect(d1Row.fanOutRows !== undefined && d1Row.fanOutRows.length > 0).toBe(true);
-    if (!d1Row.fanOutRows) throw new Error("Expected fanOutRows");
+    assertDefined(d1Row.fanOutRows, "d1Row.fanOutRows");
 
     const lastFO = d1Row.fanOutRows.at(-1);
-    expect(lastFO).toBeDefined();
-    if (!lastFO) throw new Error("Expected lastFO");
+    assertDefined(lastFO, "lastFO");
 
     const foCorner = lastFO.find(c => c.type === "corner-bottom-right" || c.type === "corner-bottom-left");
     expect(foCorner).toBeDefined();
@@ -220,17 +225,7 @@ describe("Fan-Out", () => {
     const hasMergeInFanOut = mergeConn !== undefined || mergeHoriz !== undefined;
     expect(hasMergeInFanOut).toBe(true);
 
-    const commitHasMB = d1Row.connectors.some(
-      c =>
-        c.column !== d1Row.nodeColumn &&
-        (c.type === "horizontal" ||
-          c.type === "tee-left" ||
-          c.type === "tee-right" ||
-          c.type === "corner-top-right" ||
-          c.type === "corner-top-left" ||
-          c.type === "corner-bottom-right" ||
-          c.type === "corner-bottom-left"),
-    );
+    const commitHasMB = d1Row.connectors.some(c => c.column !== d1Row.nodeColumn && hasMergeConnectors([c]));
     expect(commitHasMB).toBe(false);
   });
 
@@ -255,23 +250,12 @@ describe("Fan-Out", () => {
 
     if (d1Row.fanOutRows && d1Row.fanOutRows.length > 0) {
       const lastFO = d1Row.fanOutRows.at(-1);
-      expect(lastFO).toBeDefined();
-      if (!lastFO) throw new Error("Expected lastFO");
+      assertDefined(lastFO, "lastFO");
 
       const foCorner = lastFO.find(c => c.type === "corner-bottom-right" || c.type === "corner-bottom-left");
 
       if (foCorner) {
-        const commitMB = d1Row.connectors.filter(
-          c =>
-            c.column !== d1Row.nodeColumn &&
-            (c.type === "horizontal" ||
-              c.type === "tee-left" ||
-              c.type === "tee-right" ||
-              c.type === "corner-top-right" ||
-              c.type === "corner-top-left" ||
-              c.type === "corner-bottom-right" ||
-              c.type === "corner-bottom-left"),
-        );
+        const commitMB = d1Row.connectors.filter(c => c.column !== d1Row.nodeColumn && hasMergeConnectors([c]));
 
         if (commitMB.length > 0) {
           // Same-side layout: commit row must keep its merge/branch connectors
@@ -315,11 +299,10 @@ describe("Fan-Out", () => {
     const r1Row = findRow(rows, "r1");
 
     expect(r1Row.fanOutRows !== undefined && r1Row.fanOutRows.length > 0).toBe(true);
-    if (!r1Row.fanOutRows) throw new Error("Expected fanOutRows");
+    assertDefined(r1Row.fanOutRows, "r1Row.fanOutRows");
 
     const lastFO = r1Row.fanOutRows.at(-1);
-    expect(lastFO).toBeDefined();
-    if (!lastFO) throw new Error("Expected lastFO");
+    assertDefined(lastFO, "lastFO");
 
     const foCorner = lastFO.find(c => c.type === "corner-bottom-right" || c.type === "corner-bottom-left");
     expect(foCorner).toBeDefined();
@@ -343,15 +326,7 @@ describe("Fan-Out", () => {
       expect(glyphAtCol.includes("╭") || glyphAtCol.includes("╮") || glyphAtCol.includes("┬")).toBe(true);
     }
 
-    const commitHasMB = r1Row.connectors.some(
-      c =>
-        c.column !== r1Row.nodeColumn &&
-        (c.type === "horizontal" ||
-          c.type === "tee-left" ||
-          c.type === "tee-right" ||
-          c.type === "corner-top-right" ||
-          c.type === "corner-top-left"),
-    );
+    const commitHasMB = r1Row.connectors.some(c => c.column !== r1Row.nodeColumn && hasMergeConnectors([c]));
     expect(commitHasMB).toBe(false);
   });
 
@@ -421,7 +396,7 @@ describe("Fan-Out", () => {
     printGraph(rows);
     const s1Row = findRow(rows, "s1");
     expect(s1Row.fanOutRows !== undefined && s1Row.fanOutRows.length > 0).toBe(true);
-    if (!s1Row.fanOutRows) throw new Error("Expected fanOutRows");
+    assertDefined(s1Row.fanOutRows, "s1Row.fanOutRows");
 
     for (let i = 0; i < s1Row.fanOutRows.length; i++) {
       const foRow = s1Row.fanOutRows[i];

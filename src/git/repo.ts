@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { DEFAULT_MAX_COUNT } from "../constants";
 import { runGit } from "./repo-git";
 import { parseDiffTreeOutput } from "./repo-status";
-import type { Branch, Commit, CommitDetail, RefInfo, TagInfo } from "./types";
+import type { Branch, Commit, CommitDetail, FileChange, RefInfo, TagInfo } from "./types";
 
 export { getFileBlame, getFileDiff, parseBlameOutput, parseUnifiedDiff } from "./repo-diff";
 export { runGit } from "./repo-git";
@@ -475,6 +475,41 @@ export async function isGitAvailable(): Promise<boolean> {
   }
 }
 
+/**
+ * Return the set of commit hashes that touch the given pathspec.
+ * Runs `git log --format=%H [--all | branch] -- <path>` to get the full list
+ * of hashes matching the path, without loading commit metadata.
+ *
+ * Used for display-level path filtering: the set is stored in state and used
+ * to dim non-matching rows while keeping the full graph topology intact.
+ */
+export async function getPathMatchingHashes(
+  repoPath: string,
+  pathspec: string,
+  options: { branch?: string; all?: boolean } = {},
+  signal?: AbortSignal,
+): Promise<Set<string>> {
+  const args = ["log", "--format=%H"];
+
+  if (options.all) {
+    args.push("--exclude=refs/stash*", "--all");
+  } else if (options.branch) {
+    args.push(options.branch);
+  }
+
+  args.push("--", pathspec);
+
+  const { stdout, exitCode } = await runGit(repoPath, args, signal);
+  if (exitCode !== 0) return new Set();
+
+  const hashes = new Set<string>();
+  for (const line of stdout.trim().split("\n")) {
+    const h = line.trim();
+    if (h) hashes.add(h);
+  }
+  return hashes;
+}
+
 export async function isGitRepo(path: string): Promise<boolean> {
   const { exitCode } = await runGit(path, ["rev-parse", "--is-inside-work-tree"]);
   return exitCode === 0;
@@ -515,4 +550,75 @@ export async function getLastFetchTime(repoPath: string): Promise<Date | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * Resolve git's compact rename format to the destination path.
+ * Handles patterns like:
+ *   `dir/{old.txt => new.txt}`        → `dir/new.txt`
+ *   `{src/old => dst/new}/file.txt`   → `dst/new/file.txt`
+ *   `{old.txt => new.txt}`            → `new.txt`
+ *   `plain/path.txt`                  → `plain/path.txt` (no-op)
+ *
+ * @internal Exported for testing.
+ */
+export function resolveRenamePath(rawPath: string): string {
+  const braceOpen = rawPath.indexOf("{");
+  if (braceOpen === -1) return rawPath;
+  const braceClose = rawPath.indexOf("}", braceOpen);
+  if (braceClose === -1) return rawPath;
+  const arrow = rawPath.indexOf(" => ", braceOpen);
+  if (arrow === -1 || arrow > braceClose) return rawPath;
+
+  const prefix = rawPath.slice(0, braceOpen);
+  const newPart = rawPath.slice(arrow + 4, braceClose);
+  const suffix = rawPath.slice(braceClose + 1);
+
+  // Combine and clean up double/trailing slashes from empty parts
+  const result = prefix + newPart + suffix;
+  return result.replace(/\/\//g, "/").replace(/^\/|\/$/g, "");
+}
+
+/**
+ * Parse `git diff --numstat` output (no raw lines — just numstat).
+ * Format per line: `<additions>\t<deletions>\t<path>`
+ *
+ * Renames appear in compact `{old => new}` format; resolved to the destination path.
+ *
+ * @internal Exported for testing.
+ */
+export function parseNumstatOutput(stdout: string): FileChange[] {
+  const files: FileChange[] = [];
+  for (const line of stdout.split("\n")) {
+    if (!line?.includes("\t")) continue;
+    const [additions, deletions, ...pathParts] = line.split("\t");
+    const rawPath = pathParts.join("\t");
+    if (!rawPath) continue;
+    files.push({
+      path: resolveRenamePath(rawPath),
+      additions: additions === "-" ? 0 : parseInt(additions, 10),
+      deletions: deletions === "-" ? 0 : parseInt(deletions, 10),
+      status: "M", // numstat alone doesn't provide status — default to Modified
+    });
+  }
+  return files;
+}
+
+/**
+ * Parse `git diff --name-status` output into a map of path → status letter.
+ *
+ * Lines look like:  M\tsrc/foo.ts   or  R100\told.ts\tnew.ts
+ * For renames/copies the second path (destination) is used as the key.
+ */
+export function parseNameStatusOutput(stdout: string): Map<string, FileChange["status"]> {
+  const map = new Map<string, FileChange["status"]>();
+  for (const line of stdout.split("\n")) {
+    if (!line?.includes("\t")) continue;
+    const parts = line.split("\t");
+    const rawStatus = parts[0].charAt(0) as FileChange["status"];
+    // For rename/copy the destination path is the last part
+    const filePath = parts.length >= 3 ? parts[parts.length - 1] : parts[1];
+    if (filePath) map.set(filePath, rawStatus);
+  }
+  return map;
 }

@@ -4,6 +4,9 @@ on:
   release:
     types: [published]
 
+env:
+  NODE_VERSION: "24"
+
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -20,7 +23,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "24"
+          node-version: ${{ env.NODE_VERSION }}
           registry-url: "https://registry.npmjs.org"
 
       - name: Install dependencies

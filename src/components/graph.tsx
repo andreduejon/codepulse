@@ -12,45 +12,25 @@ import {
 import { useAppState } from "../context/state";
 import {
   buildEdgeIndicator,
+  computeBrightColumns,
   computeSingleViewportOffset,
+  dimGraphChars,
   type GraphChar,
   getColorForColumn,
   graphCharsToContent,
   MAX_GRAPH_COLUMNS,
   renderConnectorRow,
   renderFanOutRow,
-  renderGapRow,
   renderGraphRow,
   sliceGraphToViewport,
 } from "../git/graph";
-import type { GraphRow, RefInfo } from "../git/types";
+import type { GraphRow } from "../git/types";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
 import { useT } from "../hooks/use-t";
 import { formatRelativeDate } from "../utils/date";
 import { scrollElementIntoView } from "../utils/scroll";
-
-function RefBadge(
-  props: Readonly<{
-    info: RefInfo;
-    laneColor: () => string;
-  }>,
-) {
-  const t = useT();
-
-  const isDimmed = () => props.info.type === "stash" || props.info.type === "uncommitted";
-
-  const bgColor = () => (isDimmed() ? t().backgroundElementActive : props.laneColor());
-
-  // Dimmed badges (stash, uncommitted) use normal foreground on muted background;
-  // regular badges use dark background color for contrast against bright lane colors.
-  const fgColor = () => (isDimmed() ? t().foreground : t().background);
-
-  return (
-    <text flexShrink={0} wrapMode="none" fg={fgColor()} bg={bgColor()}>
-      {` ${props.info.name} `}
-    </text>
-  );
-}
+import { truncateName } from "../utils/truncate";
+import Badge from "./badge";
 
 /** Shared graph dimension computations used by ColumnHeader and GraphLine. */
 function useGraphDimensions(maxGraphColumns: () => number) {
@@ -151,9 +131,31 @@ function GraphLine(
     index: number;
     active: boolean;
     isLast: boolean;
-    showGapBelow: boolean;
     viewportOffset: () => number;
     rowRef?: (el: Renderable) => void;
+    /** Whether ancestry highlighting is currently active (any commit selected).
+     *  Derived from brightColumnsByHash in the parent — avoids a second signal read. */
+    ancestryActive: () => boolean;
+    /** Whether this specific row should be dimmed by ancestry highlighting.
+     *  True when ancestry is active AND this row is NOT in the first-parent chain. */
+    isDimmedByAncestry: () => boolean;
+    /** Whether this row is dimmed by search/path highlighting (non-ancestry).
+     *  When true, the entire row (graph + text) is dimmed except the commit node. */
+    isDimmedByHighlight: () => boolean;
+    /** Set of column indices that should stay bright on this row (passthrough ancestry
+     *  lanes). Undefined = ancestry inactive or this row has no passthrough lanes. */
+    brightColumns: () => Set<number> | undefined;
+    /** Per-fan-out-row horizontal bright columns. Map from fan-out row index to the set
+     *  of column indices where ─, corners, and tees should stay bright. Only the specific
+     *  fan-out row connecting an ancestry child to this parent gets brightened. */
+    brightFanOutHorizontals: () => Map<number, Set<number>> | undefined;
+    /** Extra vertical-bright columns that apply only to fan-out rows (not commit or
+     *  connector rows). Used when the ancestry child's column passes through the
+     *  parent's fan-out row as a ┼ crossing. */
+    brightFanOutVerticals: () => Set<number> | undefined;
+    /** Set of column indices where horizontal glyphs on the commit row itself should
+     *  stay bright (ancestry connection via commit-row merge arms, not fan-out rows). */
+    brightCommitHorizontals: () => Set<number> | undefined;
   }>,
 ) {
   const t = useT();
@@ -176,6 +178,9 @@ function GraphLine(
   // Uncommitted-changes node renders in dimmed/muted style.
   // IMPORTANT: Must be defined BEFORE fullGraphChars (createMemo evaluates eagerly).
   const isUncommitted = () => commit().refs.some(r => r.type === "uncommitted");
+
+  // Combined dimming: true when the row is dimmed by any highlight mode or is uncommitted
+  const isDimmed = () => isUncommitted() || props.isDimmedByAncestry() || props.isDimmedByHighlight();
 
   // Edge indicator helper — single 2-char column appended to the right
   const edgeColor = () => t().foregroundMuted;
@@ -208,16 +213,44 @@ function GraphLine(
   // viewport slicing (cheap). When only viewportOffset changes, the memoized
   // full-width renders are reused and only the cheap slice re-runs. ---
 
-  // Dim ALL graph chars for the uncommitted-changes row — including the █ node —
-  // so the entire row visually recedes. Uses foregroundMuted for a uniformly muted look.
-  const dimChars = (chars: GraphChar[]): GraphChar[] => {
-    if (!isUncommitted()) return chars;
-    const mutedColor = t().foregroundMuted;
-    return chars.map(c => ({ ...c, color: mutedColor, bold: false }));
+  // Node lane color — used for selective ancestry dimming (must be before dimChars).
+  const laneColor = () => getColorForColumn(props.row.nodeColor, t().graphColors);
+
+  /** Thin wrapper around the pure `dimGraphChars` function, binding reactive closure values. */
+  const dimChars = (chars: GraphChar[], hBright?: Set<number>, extraVertical?: Set<number>): GraphChar[] => {
+    let vBright = props.brightColumns();
+    // Merge extra vertical-bright columns (fan-out rows only) into the set.
+    if (extraVertical && extraVertical.size > 0) {
+      const merged = new Set(vBright);
+      for (const col of extraVertical) merged.add(col);
+      vBright = merged;
+    }
+
+    // For search/path highlighting: dim all graph chars uniformly (no per-column brightness).
+    // Only the commit node stays bright on matching rows (handled separately below).
+    const highlightDimmed = props.isDimmedByHighlight();
+    const mode = state.highlightMode();
+    const highlightActive = mode === "search" || mode === "path";
+
+    return dimGraphChars(chars, t().foregroundMuted, {
+      isUncommitted: isUncommitted(),
+      ancestryActive: props.ancestryActive(),
+      brightColumns: vBright,
+      brightHorizontal: hBright,
+      highlightActive,
+      highlightDimmed,
+      nodeColumn: props.row.nodeColumn,
+    });
   };
 
-  // Full-width renders — memoized, depend on row data + renderOpts, NOT viewportOffset
-  const fullGraphChars = createMemo(() => dimChars(renderGraphRow(props.row, renderOpts())));
+  // Full-width renders — memoized, depend on row data + renderOpts, NOT viewportOffset.
+  // Commit rows get horizontal brightening via brightCommitHorizontals (when the
+  // ancestry connection uses the commit row's own merge connectors).
+  // Connector rows use only vertical bright sets (no horizontal brightening).
+  // Fan-out rows get per-row horizontal bright sets via the hBright parameter.
+  const fullGraphChars = createMemo(() =>
+    dimChars(renderGraphRow(props.row, renderOpts()), props.brightCommitHorizontals()),
+  );
   const fullConnectorChars = createMemo(() => dimChars(renderConnectorRow(props.row, renderOpts())));
 
   // Viewport-sliced renders — depend on memoized full-width + viewportOffset (cheap)
@@ -243,19 +276,17 @@ function GraphLine(
   };
 
   // Full-width fan-out renders — memoized, NOT dependent on viewportOffset.
-  // When the commit is the uncommitted-changes node, dim all fan-out chars.
+  // Each fan-out row gets its own horizontal bright set (if any) from
+  // brightFanOutHorizontals — only the fan-out row connecting an ancestry child
+  // to this parent's nodeColumn gets horizontal brightening.
   const fullFanOutChars = createMemo(() => {
     const foRows = props.row.fanOutRows;
     if (!foRows || foRows.length === 0) return [];
-    const dimAll = isUncommitted();
-    return foRows.map(foConnectors => {
-      const chars = renderFanOutRow(foConnectors, renderOpts(), props.row.nodeColumn);
-      if (dimAll) {
-        const mutedColor = t().foregroundMuted;
-        return chars.map(c => ({ ...c, color: mutedColor, bold: false }));
-      }
-      return chars;
-    });
+    const foHBrightMap = props.brightFanOutHorizontals();
+    const foVBright = props.brightFanOutVerticals();
+    return foRows.map((foConnectors, idx) =>
+      dimChars(renderFanOutRow(foConnectors, renderOpts(), props.row.nodeColumn), foHBrightMap?.get(idx), foVBright),
+    );
   });
 
   // Derive fan-out display: rows above the commit + the commit row's graph content.
@@ -284,34 +315,23 @@ function GraphLine(
     const allRefs = commit().refs;
     return [...allRefs].sort((a, b) => (REF_SORT_ORDER[a.type] ?? 9) - (REF_SORT_ORDER[b.type] ?? 9));
   });
-  const laneColor = () => getColorForColumn(props.row.nodeColor, t().graphColors);
 
   // Effective text color for the commit subject (primary column).
   // Active row uses accent color with bold. Inactive rows use foreground.
-  // Uncommitted-changes row always uses muted color.
+  // Dimmed rows (uncommitted, non-highlighted, non-ancestry) use muted color.
   const effectiveTextColor = () => {
-    if (isUncommitted()) return t().foregroundMuted;
+    if (isDimmed()) return t().foregroundMuted;
     if (props.active) return t().accent;
     return t().foreground;
   };
 
   // Secondary column color (author, date, hash).
   // Active → accent (bold applied separately). Otherwise, muted.
-  // Uncommitted-changes row always uses muted.
+  // Dimmed rows always use muted.
   const secondaryColumnColor = () => {
-    if (isUncommitted()) return t().foregroundMuted;
+    if (isDimmed()) return t().foregroundMuted;
     if (props.active) return t().accent;
     return t().foregroundMuted;
-  };
-
-  // Gap content: dimmed ┊ in active lane columns, used as connector row
-  // replacement when search filtered out intermediate commits between rows.
-  const gapContent = () => {
-    const chars = renderGapRow(props.row, renderOpts());
-    const sliced = viewportActive()
-      ? sliceGraphToViewport(chars, props.viewportOffset(), MAX_GRAPH_COLUMNS, props.row, renderOpts())
-      : chars;
-    return graphCharsToContent(withEdgeIndicator(sliced, false));
   };
 
   // --- Banner scroll for the active commit's subject text ---
@@ -322,8 +342,9 @@ function GraphLine(
   const refBadgesWidth = createMemo(() => {
     const refs = visibleRefs();
     if (refs.length === 0) return 0;
-    // sum of (name + 2) for each badge + (refs.length - 1) gaps + 1 paddingRight
-    return refs.reduce((acc, r) => acc + r.name.length + 2, 0) + (refs.length - 1) + 1;
+    // sum of (displayName + 2) for each badge + (refs.length - 1) gaps + 1 paddingRight
+    // Use truncateName to match the actual rendered width (capped at 30 chars).
+    return refs.reduce((acc, r) => acc + truncateName(r.name, 30).length + 2, 0) + (refs.length - 1) + 1;
   });
 
   // Approximate available width for the subject text in the graph panel.
@@ -398,7 +419,17 @@ function GraphLine(
         <box flexDirection="row" flexGrow={1} flexShrink={1} paddingLeft={1} paddingRight={2}>
           <Show when={visibleRefs().length > 0}>
             <box flexDirection="row" flexShrink={0} gap={1} paddingRight={1}>
-              <For each={visibleRefs()}>{ri => <RefBadge info={ri} laneColor={laneColor} />}</For>
+              <For each={visibleRefs()}>
+                {ri => (
+                  <Badge
+                    name={ri.name}
+                    color={laneColor()}
+                    dimmed={ri.type === "stash" || ri.type === "uncommitted" || isDimmed()}
+                    maxLength={30}
+                    noShrink
+                  />
+                )}
+              </For>
             </box>
           </Show>
           <text flexGrow={1} flexShrink={1} fg={effectiveTextColor()} wrapMode="none" truncate={bannerOverflow() === 0}>
@@ -452,11 +483,9 @@ function GraphLine(
         </box>
       </box>
 
-      {/* Connector row: vertical lines between commits.
-          When showGapBelow is true, renders dimmed ┊ instead of │
-          to indicate filtered-out commits between this row and the next. */}
+      {/* Connector row: vertical lines between commits. */}
       <Show when={!props.isLast}>
-        <ConnectorRow content={props.showGapBelow ? gapContent : connectorContent} width={graphWidth()} />
+        <ConnectorRow content={connectorContent} width={graphWidth()} />
       </Show>
     </box>
   );
@@ -535,14 +564,16 @@ function buildFanOutDisplay(
   };
 }
 
-/** Horizontal divider line for the two-zone search context window. */
-function SearchDivider() {
-  const t = useT();
-  return <box width="100%" border={["top"]} borderStyle="single" borderColor={t().border} />;
-}
-
 export default function GraphView(props: Readonly<{ onLoadMore?: () => void }>) {
   const { state, actions } = useAppState();
+
+  // For each row, compute which columns stay bright when ancestry highlighting
+  // is active. Delegates to the pure `computeBrightColumns` function.
+  const brightColumnsByHash = createMemo(() => {
+    const aSet = state.ancestrySet();
+    if (aSet === null) return null;
+    return computeBrightColumns(aSet, state.graphRows());
+  });
 
   // Single viewport offset: reacts to the highlighted commit's node column.
   // All rows share the same offset, giving a horizontal "scroll" effect.
@@ -553,7 +584,7 @@ export default function GraphView(props: Readonly<{ onLoadMore?: () => void }>) 
   const rowRefs: Renderable[] = [];
 
   createEffect(() => {
-    const rows = state.filteredRows();
+    const rows = state.graphRows();
     const idx = state.cursorIndex();
     const maxCols = state.maxGraphColumns();
 
@@ -598,7 +629,7 @@ export default function GraphView(props: Readonly<{ onLoadMore?: () => void }>) 
 
     const poll = () => {
       attempts++;
-      const rows = state.filteredRows();
+      const rows = state.graphRows();
       const idx = rows.findIndex(r => r.commit.hash === hash);
       if (idx < 0) {
         actions.setPendingScrollHash(null);
@@ -625,7 +656,7 @@ export default function GraphView(props: Readonly<{ onLoadMore?: () => void }>) 
   const LOAD_MORE_THRESHOLD = 5;
   createEffect(() => {
     const idx = state.cursorIndex();
-    const rows = state.filteredRows();
+    const rows = state.graphRows();
     const total = rows.length;
     if (total === 0) return;
     if (!state.hasMore()) return;
@@ -640,47 +671,14 @@ export default function GraphView(props: Readonly<{ onLoadMore?: () => void }>) 
   // re-evaluations from N (every row) down to exactly 2.
   const isActive = createSelector(() => state.cursorIndex());
 
-  // Hash → index lookup for the full (unfiltered) graph.
-  // Used to detect whether consecutive filtered rows are truly adjacent
-  // in the original graph, not just parent-child (which can skip many rows
-  // for merge commits).
-  const graphIndexMap = createMemo(() => {
-    const map = new Map<string, number>();
-    const rows = state.graphRows();
-    for (let i = 0; i < rows.length; i++) {
-      map.set(rows[i].commit.hash, i);
-    }
-    return map;
-  });
-
   return (
     <scrollbox ref={scrollboxRef} flexGrow={1} scrollY scrollX={false} verticalScrollbarOptions={{ visible: false }}>
       <box flexDirection="column" flexGrow={1}>
         <Show when={!state.loading()}>
-          <For each={state.filteredRows()}>
+          <For each={state.graphRows()}>
             {(row, index) => {
-              const showDivider = () => state.searchShowDivider();
-
-              const showGapBelow = () => {
-                // Only show gap separators between non-adjacent filtered rows.
-                // In Phase 1, suppress the gap below row 0 (the h-line handles it).
-                if (!state.searchQuery()) return false;
-                const rows = state.filteredRows();
-                const i = index();
-                if (i >= rows.length - 1) return false;
-                // In Phase 1, the h-line after row 0 replaces the gap there
-                if (showDivider() && i === 0) return false;
-                const nextRow = rows[i + 1];
-                // Check distance in the original unfiltered graph — adjacent
-                // means their positions differ by exactly 1.
-                const idxMap = graphIndexMap();
-                const currentOrigIdx = idxMap.get(row.commit.hash) ?? -1;
-                const nextOrigIdx = idxMap.get(nextRow.commit.hash) ?? -1;
-                return nextOrigIdx - currentOrigIdx !== 1;
-              };
-
               // Capture the element ref so we can reactively update rowRefs
-              // when <For> reindexes this element (e.g. after filter clear).
+              // when <For> reindexes this element (e.g. after data reload).
               // Ref callbacks only fire on creation; this effect re-runs
               // whenever index() changes, keeping rowRefs in sync.
               let elRef: Renderable | undefined;
@@ -688,23 +686,32 @@ export default function GraphView(props: Readonly<{ onLoadMore?: () => void }>) 
                 if (elRef) rowRefs[index()] = elRef;
               });
               return (
-                <>
-                  <GraphLine
-                    row={row}
-                    index={index()}
-                    active={isActive(index())}
-                    isLast={index() === state.filteredRows().length - 1}
-                    showGapBelow={showGapBelow()}
-                    viewportOffset={viewportOffset}
-                    rowRef={el => {
-                      elRef = el;
-                      rowRefs[index()] = el;
-                    }}
-                  />
-                  <Show when={showDivider() && index() === 0}>
-                    <SearchDivider />
-                  </Show>
-                </>
+                <GraphLine
+                  row={row}
+                  index={index()}
+                  active={isActive(index())}
+                  isLast={index() === state.graphRows().length - 1}
+                  viewportOffset={viewportOffset}
+                  ancestryActive={() => brightColumnsByHash() !== null}
+                  isDimmedByAncestry={() => {
+                    const aSet = state.ancestrySet();
+                    return aSet !== null && !aSet.has(row.commit.hash);
+                  }}
+                  isDimmedByHighlight={() => {
+                    const mode = state.highlightMode();
+                    if (mode === "ancestry" || mode === null) return false;
+                    const hSet = state.highlightSet();
+                    return hSet !== null && !hSet.has(row.commit.hash);
+                  }}
+                  brightColumns={() => brightColumnsByHash()?.vertical.get(row.commit.hash)}
+                  brightFanOutVerticals={() => brightColumnsByHash()?.fanOutVertical.get(row.commit.hash)}
+                  brightFanOutHorizontals={() => brightColumnsByHash()?.fanOutHorizontal.get(row.commit.hash)}
+                  brightCommitHorizontals={() => brightColumnsByHash()?.commitHorizontal.get(row.commit.hash)}
+                  rowRef={el => {
+                    elRef = el;
+                    rowRefs[index()] = el;
+                  }}
+                />
               );
             }}
           </For>

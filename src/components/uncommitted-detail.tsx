@@ -1,3 +1,4 @@
+import type { Renderable } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, For, Show } from "solid-js";
 import { DETAIL_PANEL_WIDTH_FRACTION } from "../constants";
@@ -60,6 +61,9 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
   // File tree state — resets collapsed dirs when active tab changes
   const { fileTreeRows, collapsedDirs, toggleDir } = useFileTree(activeFiles, activeTab);
 
+  // Mutable array of element refs for scroll-into-view (same pattern as detail.tsx)
+  const itemRefs: Renderable[] = [];
+
   // ── Build flat list of interactive items ──
   const interactiveItems = createMemo((): UncommittedItem[] => {
     const rows = fileTreeRows();
@@ -110,6 +114,7 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
   createEffect(() => {
     if (props.navRef) {
       props.navRef.itemCount = interactiveItems().length;
+      props.navRef.itemRefs = itemRefs;
       props.navRef.activateCurrentItem = activateCurrentItem;
       props.navRef.scrollToFile = (filePath: string) => {
         const rows = fileTreeRows();
@@ -239,6 +244,9 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
                 addColWidth={fileWidths().addColWidth}
                 delColWidth={fileWidths().delColWidth}
                 hideStats={activeTab() === "untracked"}
+                ref={(el: Renderable) => {
+                  itemRefs[itemIdx()] = el;
+                }}
               />
             );
           }}

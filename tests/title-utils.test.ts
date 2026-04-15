@@ -87,8 +87,8 @@ describe("middleTruncate", () => {
 // ── buildDiffTitleParts ──────────────────────────────────────────────
 
 describe("buildDiffTitleParts", () => {
-  // Constants from title-utils.ts: TITLE_PADDING=8, ESC_CLOSE_WIDTH=9, SEP_LEN=3
-  // Usable width = dialogWidth - 8 - 9 = dialogWidth - 17
+  // Constants from title-utils.ts: TITLE_PADDING=8, ESC_CLOSE_WIDTH=10, SEP_LEN=3
+  // Usable width = dialogWidth - 8 - 10 = dialogWidth - 18
 
   /** Helper: compute the display width of assembled title parts. */
   function partsWidth(p: DiffTitleParts): number {
@@ -216,7 +216,7 @@ describe("buildDiffTitleParts", () => {
     // "[1/2] · abc1234 · src/app.ts · new only"
     // counter=5, source=7, dir=4, basename=6, mode=8
     // = 5 + 3 + 7 + 3 + (4+6) + 3 + 8 = 39
-    const result = buildDiffTitleParts("src/app.ts", "abc1234", "[1/2]", "new only", 39 + 17);
+    const result = buildDiffTitleParts("src/app.ts", "abc1234", "[1/2]", "new only", 39 + 18);
     expect(result.counter).toBe("[1/2]");
     expect(result.source).toBe("abc1234");
     expect(result.dirPrefix).toBe("src/");

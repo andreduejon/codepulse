@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main, develop]
 
+env:
+  NODE_VERSION: "24"
+
 jobs:
   check:
     runs-on: ubuntu-latest

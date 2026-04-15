@@ -12,6 +12,16 @@ import {
 } from "../src/git/graph";
 import type { Commit, Connector, GraphRow, RefInfo } from "../src/git/types";
 
+/**
+ * Assert that a value is defined (not `undefined` and not `null`), narrowing
+ * the type to `NonNullable<T>`. Combines `expect(x).toBeDefined()` +
+ * `if (!x) throw` into a single call.
+ */
+export function assertDefined<T>(value: T, label = "value"): asserts value is NonNullable<T> {
+  expect(value).toBeDefined();
+  if (value == null) throw new Error(`Expected ${label} to be defined`);
+}
+
 /** Find a row by commit hash, failing the test if not found. */
 export function findRow(rows: GraphRow[], hash: string): GraphRow {
   const row = rows.find(r => r.commit.hash === hash);
@@ -61,52 +71,8 @@ export function graphCharsToAscii(chars: GraphChar[]): string {
 
 export const THEME_COLORS = ["#c0c001", "#c0c002", "#c0c003", "#c0c004", "#c0c005", "#c0c006", "#c0c007", "#c0c008"];
 
-/** Build render options with the shared test theme colors. */
-export function renderOpts(padToColumns?: number): RenderOptions {
-  return { themeColors: THEME_COLORS, padToColumns };
-}
-
-/** Check if any GraphChar in an array contains a specific character. */
-export function hasChar(chars: GraphChar[], ch: string): boolean {
-  return chars.some(gc => gc.char === ch || gc.char.includes(ch));
-}
-
-/** Find all GraphChars containing a specific character. */
-export function findChars(chars: GraphChar[], ch: string): GraphChar[] {
-  return chars.filter(gc => gc.char === ch || gc.char.includes(ch));
-}
-
-/** Get total character width of a GraphChar array. */
-export function totalCharWidth(chars: GraphChar[]): number {
-  return chars.reduce((sum, gc) => sum + gc.char.length, 0);
-}
-
-/**
- * Assert that every connector, column, and fan-out connector on the given row
- * has `isRemoteOnly === true`. Used by tests that verify post-pass dimming.
- */
-export function assertRowFullyDimmed(row: GraphRow) {
-  for (const conn of row.connectors) {
-    expect(conn.isRemoteOnly).toBe(true);
-  }
-
-  for (const element of row.columns) {
-    const column = element;
-    expect(column.isRemoteOnly).toBeDefined();
-    expect(column.isRemoteOnly).toBe(true);
-  }
-
-  if (row.fanOutRows) {
-    for (const element of row.fanOutRows) {
-      for (const conn of element) {
-        expect(conn.isRemoteOnly).toBe(true);
-      }
-    }
-  }
-}
-
 /** Connector types that indicate a merge/branch connection (not just a straight pass-through). */
-const CONNECTION_TYPES = new Set([
+export const CONNECTION_TYPES = new Set([
   "horizontal",
   "tee-left",
   "tee-right",
@@ -116,9 +82,9 @@ const CONNECTION_TYPES = new Set([
   "corner-bottom-left",
 ]);
 
-/** Check whether a commit row has merge/branch connectors (mirrors canMergeFanOut from graph.tsx). */
-function hasConnectionConnectors(row: GraphRow): boolean {
-  return row.connectors.some(c => CONNECTION_TYPES.has(c.type));
+/** Check whether a connector list has merge/branch connectors (mirrors canMergeFanOut from graph.tsx). */
+export function hasMergeConnectors(connectors: Connector[]): boolean {
+  return connectors.some(c => CONNECTION_TYPES.has(c.type));
 }
 
 /** Print fan-out rows above a commit, optionally excluding the last one when it will be merged. */
@@ -134,14 +100,17 @@ function printFanOutRows(foRows: Connector[][], count: number, opts: RenderOptio
  * visual output. Mirrors the `canMergeFanOut` optimization from graph.tsx:
  * when a commit row has no merge/branch connectors, the last fan-out row
  * is used as the commit row's graph (single █ block).
+ *
+ * Only prints when `process.env.DEBUG` is set (e.g. `DEBUG=1 bun test`).
  */
 export function printGraph(rows: GraphRow[], themeColors: string[] = THEME_COLORS) {
+  if (!process.env.DEBUG) return;
   const maxCols = getMaxGraphColumns(rows);
   const opts = { themeColors, padToColumns: maxCols };
 
   for (const row of rows) {
     const foRows = row.fanOutRows;
-    const canMerge = foRows && foRows.length > 0 && !hasConnectionConnectors(row);
+    const canMerge = foRows && foRows.length > 0 && !hasMergeConnectors(row.connectors);
 
     if (foRows) {
       const count = canMerge ? foRows.length - 1 : foRows.length;

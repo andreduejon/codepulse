@@ -2,6 +2,43 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0] - 2026-04-15
+
+### Added
+- **Command bar** — `:` opens command mode; supports `:quit`, `:menu`, `:help`, `:theme`, `:fetch`, `:reload`, `:search`, `:path`, `:ancestry`, `:repo`
+- **Ancestry highlighting** — `a` or `:ancestry` highlights the first-parent chain through the selected commit with dimming of non-ancestor rows
+- **Path filter** — `:path <glob>` highlights commits that touched files matching the given path, dimming the rest
+- **Unified highlighting** — search, ancestry, and path are mutually exclusive modes; `↑/↓` skip dimmed rows when any is active
+- **Diff line wrapping** — `w` toggles line wrap in the diff dialog
+- **Mode cycling** — `Shift+←/→` cycles through idle → command → search → path → ancestry
+- **Setup screen** — first-launch welcome screen with logo banner shown when a repo has no config entry yet
+- **Project selector** — switch between repos from the menu or at startup; shown when launched from a non-git directory
+- **`:repo` command** — opens the menu dialog pre-focused on the Repository tab
+- **Proximity preload** — lazy-loads next page when highlight navigation approaches the boundary
+
+### Changed
+- Help dialog rewritten as 3-tab layout (General / Diff / Commands)
+- Keybinds extracted to shared `keybinds.ts` module, reused in help dialog and CLI `--help`
+- Badge component unified — replaces old `detail-badge.tsx` with a single `Badge` component
+- `Ctrl+T` theme shortcut removed; use `:theme` command instead
+- Footer hints are now context-aware (detail / input modes / graph idle)
+
+### Fixed
+- Shell injection in `project-selector.tsx` — replaced `execSync` shell string with `spawnSync` array args
+- Renderer freeze when toggling command bar input mount/unmount
+- Dialog rendering bugs — command bar execute order and TDZ in diff dialog
+- Ancestry highlighting edge cases — junction replacement, fan-out vertical, intermediate row brightening
+- Stale `ctrl+t` hotkey label in menu dialog (displayed but non-functional)
+
+### Refactored
+- Extracted pure utilities with new tests: `keyboard-nav-utils.ts`, `command-bar-utils.ts`, `data-loader-utils.ts`
+- Extracted `useDetailCursor` hook from `detail.tsx`
+- Extracted `useAncestry`, `usePathFilter` hooks and `DetailDialog` from `app.tsx`
+- Extracted per-mode keyboard handlers from `useKeyboardNavigation`: `handle-command-bar-keys.ts`, `handle-detail-keys.ts`, `handle-graph-keys.ts`, `handle-cascade-close.ts`
+- Extracted `DiffLineRow` component and `diff-utils` pure helpers with new tests
+- Extracted `CommandBar`, `FileListView`, `LogoBanner` components
+- Extracted ancestry highlight logic into testable pure functions (`graph-highlight.ts`)
+
 ## [0.1.0] - 2026-04-07
 
 ### Added

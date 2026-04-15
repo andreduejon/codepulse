@@ -1,27 +1,31 @@
-import { homedir } from "node:os";
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, onCleanup, onMount, Show, untrack } from "solid-js";
-import packageJson from "../package.json";
-import DetailPanel, { type DetailPanelProps } from "./components/detail-panel";
+import CommandBar from "./components/command-bar";
+import DetailPanel from "./components/detail-panel";
 import type { DetailNavRef } from "./components/detail-types";
-import { DialogFooter, DialogOverlay, DialogTitleBar } from "./components/dialogs/dialog-chrome";
+import { DetailDialog } from "./components/dialogs/detail-dialog";
 import DiffBlameDialog from "./components/dialogs/diff-blame-dialog";
 import HelpDialog from "./components/dialogs/help-dialog";
-import MenuDialog from "./components/dialogs/menu-dialog";
+import MenuDialog, { setLastMenuTab } from "./components/dialogs/menu-dialog";
 import ThemeDialog from "./components/dialogs/theme-dialog";
 import ErrorScreen from "./components/error-screen";
 import Footer from "./components/footer";
 import GraphView, { ColumnHeader } from "./components/graph";
+import ProjectSelector from "./components/project-selector";
+import SetupScreen from "./components/setup-screen";
 import type { ConfigInfo } from "./config";
+import { defaultConfig, getKnownRepos, writeConfig } from "./config";
 import { COMPACT_THRESHOLD_WIDTH, DEFAULT_MAX_COUNT, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH } from "./constants";
-import { AppStateContext, createAppState, useAppState } from "./context/state";
+import { AppStateContext, createAppState } from "./context/state";
 import { createThemeState, ThemeContext } from "./context/theme";
 import type { DiffTarget } from "./git/types";
+import { useAncestry } from "./hooks/use-ancestry";
 import { useDataLoader } from "./hooks/use-data-loader";
 import { useDetailLoader } from "./hooks/use-detail-loader";
-import { useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
-import { useT } from "./hooks/use-t";
+import { type CommandBarMode, useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
+import { usePathFilter } from "./hooks/use-path-filter";
+import type { StartupMode } from "./main";
 
 interface AppProps {
   repoPath: string;
@@ -30,69 +34,14 @@ interface AppProps {
   maxCount?: number;
   themeName?: string;
   autoRefreshInterval?: number;
+  /** Initial pathspec filter from CLI (session-scoped). */
+  path?: string;
   configInfo?: ConfigInfo;
-  startupError?: string;
+  startupMode: StartupMode;
 }
 
 interface AppContentProps extends AppProps {
   themeState: ReturnType<typeof createThemeState>;
-}
-
-/** Detail dialog used in compact mode — wraps DetailPanel in a full-height overlay. */
-function DetailDialog(props: Readonly<DetailPanelProps & { onClose: () => void }>) {
-  const dimensions = useTerminalDimensions();
-  const t = useT();
-  const { state } = useAppState();
-  const dialogWidth = () => Math.min(72, dimensions().width - 8);
-  const dialogHeight = () => dimensions().height - 8;
-
-  // Dynamic enter verb based on what the cursored item does
-  const enterVerb = () => state.detailCursorAction() ?? "select";
-
-  return (
-    <DialogOverlay>
-      <box
-        flexDirection="column"
-        width={dialogWidth()}
-        height={dialogHeight()}
-        backgroundColor={t().backgroundPanel}
-        paddingX={1}
-        paddingY={1}
-      >
-        <DialogTitleBar title="Details" />
-        {/* paddingX=4 matches other dialogs' inner content padding (outer box already has paddingX=1) */}
-        <box flexDirection="column" flexGrow={1} paddingX={4}>
-          <DetailPanel
-            scrollboxRef={props.scrollboxRef}
-            navRef={props.navRef}
-            searchFocused={props.searchFocused}
-            onJumpToCommit={props.onJumpToCommit}
-            onOpenDiff={props.onOpenDiff}
-          />
-        </box>
-        <DialogFooter>
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            enter
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {` ${enterVerb()}  `}
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            {"←/→"}
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {" switch tab  "}
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            {"↑/↓"}
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {" navigate"}
-          </text>
-        </DialogFooter>
-      </box>
-    </DialogOverlay>
-  );
 }
 
 function AppContent(props: Readonly<AppContentProps>) {
@@ -100,7 +49,22 @@ function AppContent(props: Readonly<AppContentProps>) {
   const themeState = props.themeState;
   const renderer = useRenderer();
 
+  // Setup screen visibility — shown when startup mode is "setup"
+  const [setupVisible, setSetupVisible] = createSignal(props.startupMode.kind === "setup");
+  // Repo selector visibility — shown when "Switch repository" is selected from menu
+  const [repoSelectorVisible, setRepoSelectorVisible] = createSignal(false);
+
+  const handleSetupComplete = () => {
+    // Write default settings so the user can see and edit them in the config file
+    writeConfig(defaultConfig(), props.repoPath);
+    setSetupVisible(false);
+  };
+
+  // Initialize path filter from CLI --path flag (before first loadData)
+  if (props.path) actions.setPathFilter(props.path);
+
   const [dialog, setDialog] = createSignal<"menu" | "help" | "theme" | "diff-blame" | "detail" | null>(null);
+
   const [searchFocused, setSearchFocused] = createSignal(false);
   /**
    * Local input value for the search bar — independent of the active filter.
@@ -109,6 +73,11 @@ function AppContent(props: Readonly<AppContentProps>) {
   const [searchInputValue, setSearchInputValue] = createSignal("");
   /** Target for the diff+blame dialog (set when user activates a file). */
   const [diffTarget, setDiffTarget] = createSignal<DiffTarget | null>(null);
+
+  /** Command bar mode — drives placeholder text and key routing. */
+  const [commandBarMode, setCommandBarMode] = createSignal<CommandBarMode>("idle");
+  /** Raw text typed in the command bar (e.g. "search", "path src/"). */
+  const [commandBarValue, setCommandBarValue] = createSignal("");
 
   // Reactive terminal dimensions for adaptive layout
   const dimensions = useTerminalDimensions();
@@ -148,15 +117,19 @@ function AppContent(props: Readonly<AppContentProps>) {
     lastJumpFrom: null,
     pendingJumpDirection: null,
     scrollToFile: () => {},
+    itemRefs: [],
   };
 
   // Flag to suppress tab reset during child/parent jump navigation.
   // Set synchronously before setCursorIndex, read inside the commit-change effect.
   let isJumpNavigation = false;
 
-  // Jump to a commit by hash (used by detail panel parent/child entries)
+  // ── Ancestry highlighting ─────────────────────────────────────────────────
+  const { setAnchor, clearAnchor } = useAncestry(state, actions);
+
+  // ── Path filter ───────────────────────────────────────────────────────────
   const handleJumpToCommit = (hash: string, from: "child" | "parent") => {
-    const rows = state.filteredRows();
+    const rows = state.graphRows();
     const idx = rows.findIndex(r => r.commit.hash === hash);
     if (idx >= 0) {
       detailNavRef.lastJumpFrom = from;
@@ -222,23 +195,11 @@ function AppContent(props: Readonly<AppContentProps>) {
     setSearchInputValue(value);
   };
 
-  // Clamp cursor index when filtered results shrink (e.g. search narrowing).
-  // In Phase 1 (typing, not confirmed), pin the cursor to row 0 (the anchor).
-  // In Phase 2 / no search, clamp normally.
+  // Clamp cursor index when graphRows shrinks (e.g. branch change, reload).
   createEffect(() => {
-    const rows = state.filteredRows();
+    const rows = state.graphRows();
     const idx = state.cursorIndex();
 
-    // Phase 1: pin cursor to row 0 (anchor row is always first)
-    if (state.searchShowDivider()) {
-      if (idx !== 0) {
-        actions.setCursorIndex(0);
-        actions.setScrollTargetIndex(0);
-      }
-      return;
-    }
-
-    // Phase 2 / no search: standard clamping
     if (rows.length === 0) {
       if (idx !== 0) {
         actions.setCursorIndex(0);
@@ -267,6 +228,95 @@ function AppContent(props: Readonly<AppContentProps>) {
     loadData(undefined, stickyHash);
   };
 
+  /**
+   * Execute a command dispatched from the command bar.
+   * Receives the trimmed value entered after `:` (e.g. "q", "quit", "m", "search").
+   */
+  const handleCommandExecute = (cmd: string) => {
+    const normalized = cmd.toLowerCase().replace(/^:/, "");
+    switch (normalized) {
+      case "q":
+      case "quit":
+        renderer.destroy();
+        break;
+      case "m":
+      case "menu":
+        setDialog("menu");
+        break;
+      case "repo":
+        setLastMenuTab("repository");
+        setDialog("menu");
+        break;
+      case "help":
+        setDialog("help");
+        break;
+      case "theme":
+        setDialog("theme");
+        break;
+      case "f":
+      case "fetch":
+        clearAnchor();
+        handleFetch();
+        break;
+      case "r":
+      case "reload":
+        clearAnchor();
+        loadData(undefined, undefined, false, true);
+        break;
+      case "search":
+        // Re-open search mode — mutually exclusive with ancestry and path
+        clearAnchor();
+        actions.setPathFilter(null);
+        actions.setPathMatchSet(null);
+        setSearchFocused(true);
+        setCommandBarMode("search");
+        break;
+      case "p":
+      case "path":
+        // Switch to PATH input mode — user types a path filter next
+        setCommandBarMode("path");
+        setCommandBarValue("");
+        break;
+      case "a":
+      case "ancestry": {
+        // Toggle ancestry mode — highlights the first-parent chain through the
+        // selected commit (both backward ancestors and forward descendants).
+        if (state.ancestrySet() !== null) {
+          // Already active — toggle off
+          clearAnchor();
+          break;
+        }
+        // Mutually exclusive with search and path
+        actions.setSearchQuery("");
+        actions.setPathFilter(null);
+        actions.setPathMatchSet(null);
+        const anchor = state.selectedCommit()?.hash ?? null;
+        if (anchor) {
+          setAnchor(anchor);
+        }
+        break;
+      }
+      default:
+        // Unknown command — ignore silently
+        break;
+    }
+  };
+
+  /**
+   * Apply a path filter from the command bar PATH_INPUT mode.
+   * Empty string clears the filter; non-empty sets it and computes
+   * the set of matching commit hashes for display-level dimming.
+   * Mutually exclusive with search and ancestry.
+   */
+  const { handlePathExecute } = usePathFilter({
+    repoPath: props.repoPath,
+    state,
+    actions,
+    clearAnchor,
+    setSearchInputValue,
+    clearSearchDebounce: () => clearTimeout(searchDebounceTimer),
+  });
+
   // Keyboard handling
   useKeyboardNavigation({
     state,
@@ -276,12 +326,21 @@ function AppContent(props: Readonly<AppContentProps>) {
     layoutMode,
     searchFocused,
     setSearchFocused,
+    searchInputValue,
     setSearchInputValue,
     clearSearchDebounce: () => clearTimeout(searchDebounceTimer),
     getDetailScrollboxRef: () => detailScrollboxRef,
     detailNavRef,
     loadData,
+    loadMoreData,
     handleFetch,
+    commandBarMode,
+    setCommandBarMode,
+    commandBarValue,
+    setCommandBarValue,
+    onCommandExecute: handleCommandExecute,
+    onPathExecute: handlePathExecute,
+    onClearAncestry: clearAnchor,
   });
 
   return (
@@ -297,113 +356,133 @@ function AppContent(props: Readonly<AppContentProps>) {
           when={layoutMode() !== "too-small"}
           fallback={
             <ErrorScreen
-              error={`Terminal too small (${dimensions().width}\u00d7${dimensions().height})\n\nResize to at least ${MIN_TERMINAL_WIDTH} columns and ${MIN_TERMINAL_HEIGHT} rows.`}
+              error={`Terminal too small (${dimensions().width}\u00d7${dimensions().height})\nResize to at least ${MIN_TERMINAL_WIDTH} columns and ${MIN_TERMINAL_HEIGHT} rows.`}
             />
           }
         >
-          <box flexDirection="column" width="100%" height="100%" backgroundColor={themeState.theme().background}>
-            {/* Main content area */}
-            <box flexDirection="row" flexGrow={1}>
-              {/* Left panel - graph + search + footer, all on grey background */}
-              <box
-                flexDirection="column"
-                flexGrow={1}
-                flexShrink={1}
-                backgroundColor={themeState.theme().backgroundPanel}
-                paddingX={2}
-              >
-                {/* Graph area */}
-                <box flexDirection="column" flexGrow={1} paddingBottom={1}>
-                  {/* Sticky column headers - above scrollbox */}
-                  <ColumnHeader />
-
-                  <GraphView onLoadMore={loadMoreData} />
-                </box>
-
-                {/* Search section — left accent border, same padding as graph */}
-                <box
-                  width="100%"
-                  minHeight={5}
-                  backgroundColor={themeState.theme().background}
-                  paddingX={2}
-                  paddingY={1}
-                  flexDirection="column"
-                  border={["left"]}
-                  borderStyle="single"
-                  borderColor={state.detailFocused() ? themeState.theme().border : themeState.theme().accent}
-                >
-                  {/* Search input + result count */}
-                  <box flexGrow={1} flexDirection="row">
-                    <input
-                      focused={searchFocused()}
-                      flexGrow={1}
-                      placeholder="Search commits..."
-                      value={searchInputValue()}
-                      onInput={handleSearchInput}
-                      fg={themeState.theme().foreground}
-                      placeholderColor={themeState.theme().foregroundMuted}
-                      backgroundColor={themeState.theme().background}
-                    />
-                    <text
-                      flexShrink={0}
-                      wrapMode="none"
-                      fg={
-                        state.searchQuery() && state.filteredRows().length === 0
-                          ? themeState.theme().error
-                          : themeState.theme().foregroundMuted
-                      }
-                    >
-                      {"  "}
-                      {state.searchQuery()
-                        ? `${state.filteredRows().length} / ${state.graphRows().length}`
-                        : `${state.graphRows().length}`}
-                    </text>
-                  </box>
-
-                  <box height={1} />
-
-                  {/* Git label + repo path : branch + version */}
-                  <box flexDirection="row" width="100%">
-                    <Show when={state.error()}>
-                      <text flexShrink={0} wrapMode="none" fg={themeState.theme().error}>
-                        {"error: "}
-                        {state.error()}
-                        {"  "}
-                      </text>
-                    </Show>
-                    <text flexShrink={0} wrapMode="none" fg={themeState.theme().accent}>
-                      Git
-                    </text>
-                    <text flexShrink={0} wrapMode="none" fg={themeState.theme().foregroundMuted}>
-                      {"  "}
-                      {state.repoPath() ? state.repoPath().replace(homedir(), "~") : ""}
-                      {state.currentBranch() ? `:${state.currentBranch()}` : ""}
-                    </text>
-                    <Show when={state.viewingBranch()}>
-                      <text flexShrink={0} wrapMode="none" fg={themeState.theme().accent}>
-                        {`  [viewing: ${state.viewingBranch()}]`}
-                      </text>
-                    </Show>
-                    <box flexGrow={1} />
-                    <text flexShrink={0} wrapMode="none" fg={themeState.theme().foregroundMuted}>
-                      {`codepulse v${packageJson.version}`}
-                    </text>
-                  </box>
-                </box>
-
-                {/* Footer - hotkey hints, 1 char gap above, right-aligned */}
-                <box height={1} />
-                <Footer
-                  searchFocused={searchFocused()}
-                  filterActive={!!state.searchQuery()}
-                  compact={layoutMode() === "compact"}
+          <Show
+            when={!setupVisible()}
+            fallback={
+              <SetupScreen
+                repoPath={props.repoPath}
+                onComplete={handleSetupComplete}
+                onQuit={() => renderer.destroy()}
+              />
+            }
+          >
+            <Show
+              when={!repoSelectorVisible()}
+              fallback={
+                <ProjectSelector
+                  knownRepos={getKnownRepos()}
+                  currentRepo={props.repoPath}
+                  onCancel={() => setRepoSelectorVisible(false)}
                 />
-              </box>
+              }
+            >
+              <box flexDirection="column" width="100%" height="100%" backgroundColor={themeState.theme().background}>
+                {/* Main content area */}
+                <box flexDirection="row" flexGrow={1}>
+                  {/* Left panel - graph + search + footer, all on grey background */}
+                  <box
+                    flexDirection="column"
+                    flexGrow={1}
+                    flexShrink={1}
+                    backgroundColor={themeState.theme().backgroundPanel}
+                    paddingX={2}
+                  >
+                    {/* Graph area */}
+                    <box flexDirection="column" flexGrow={1} paddingBottom={1}>
+                      {/* Sticky column headers - above scrollbox */}
+                      <ColumnHeader />
 
-              {/* Detail panel - right, hidden in compact/too-small mode */}
-              <Show when={layoutMode() === "normal"}>
-                <box flexDirection="column" width="25%" minWidth={60} flexShrink={0} paddingX={2} paddingBottom={1}>
-                  <DetailPanel
+                      <GraphView onLoadMore={loadMoreData} />
+                    </box>
+
+                    {/* Command bar section */}
+                    <CommandBar
+                      commandBarMode={commandBarMode}
+                      commandBarValue={commandBarValue}
+                      searchInputValue={searchInputValue}
+                      searchFocused={searchFocused}
+                      onInput={val => {
+                        if (commandBarMode() === "command" || commandBarMode() === "path") {
+                          setCommandBarValue(val);
+                        } else {
+                          handleSearchInput(val);
+                        }
+                      }}
+                      detailFocused={state.detailFocused}
+                    />
+
+                    {/* Footer - hotkey hints, 1 char gap above, right-aligned */}
+                    <box height={1} />
+                    <Footer
+                      commandBarMode={commandBarMode}
+                      filterActive={!!state.highlightSet() || !!state.viewingBranch()}
+                      compact={layoutMode() === "compact"}
+                    />
+                  </box>
+
+                  {/* Detail panel - right, hidden in compact/too-small mode */}
+                  <Show when={layoutMode() === "normal"}>
+                    <box flexDirection="column" width="25%" minWidth={60} flexShrink={0} paddingX={2} paddingBottom={1}>
+                      <DetailPanel
+                        scrollboxRef={el => {
+                          detailScrollboxRef = el;
+                        }}
+                        navRef={detailNavRef}
+                        searchFocused={searchFocused()}
+                        onJumpToCommit={handleJumpToCommit}
+                        onOpenDiff={handleOpenDiff}
+                      />
+                    </box>
+                  </Show>
+                </box>
+
+                {/* Dialogs */}
+                <Show when={dialog() === "menu"}>
+                  <MenuDialog
+                    onClose={() => setDialog(null)}
+                    onReload={() => loadData(undefined, undefined, false, true)}
+                    onFetch={handleFetch}
+                    onOpenDialog={handleOpenDialog}
+                    onViewBranch={handleViewBranch}
+                    configInfo={props.configInfo}
+                    onSwitchRepo={() => {
+                      setDialog(null);
+                      setRepoSelectorVisible(true);
+                    }}
+                  />
+                </Show>
+                <Show when={dialog() === "help"}>
+                  <HelpDialog onClose={() => setDialog(null)} />
+                </Show>
+                <Show when={dialog() === "theme"}>
+                  <ThemeDialog onClose={() => setDialog(null)} />
+                </Show>
+                <Show when={dialog() === "diff-blame" && diffTarget()}>
+                  {target => (
+                    <DiffBlameDialog
+                      target={target()}
+                      onClose={() => {
+                        // In compact mode with detail focused, return to the detail dialog
+                        if (layoutMode() === "compact" && state.detailFocused()) {
+                          setDialog("detail");
+                        } else {
+                          setDialog(null);
+                        }
+                      }}
+                      onNavigate={t => {
+                        setDiffTarget(t);
+                        detailNavRef.scrollToFile(t.filePath);
+                      }}
+                    />
+                  )}
+                </Show>
+                {/* Detail dialog — compact mode only */}
+                <Show when={dialog() === "detail"}>
+                  <DetailDialog
                     scrollboxRef={el => {
                       detailScrollboxRef = el;
                     }}
@@ -411,61 +490,12 @@ function AppContent(props: Readonly<AppContentProps>) {
                     searchFocused={searchFocused()}
                     onJumpToCommit={handleJumpToCommit}
                     onOpenDiff={handleOpenDiff}
+                    onClose={() => setDialog(null)}
                   />
-                </box>
-              </Show>
-            </box>
-
-            {/* Dialogs */}
-            <Show when={dialog() === "menu"}>
-              <MenuDialog
-                onClose={() => setDialog(null)}
-                onReload={() => loadData(undefined, undefined, false, true)}
-                onFetch={handleFetch}
-                onOpenDialog={handleOpenDialog}
-                onViewBranch={handleViewBranch}
-                configInfo={props.configInfo}
-              />
+                </Show>
+              </box>
             </Show>
-            <Show when={dialog() === "help"}>
-              <HelpDialog onClose={() => setDialog(null)} />
-            </Show>
-            <Show when={dialog() === "theme"}>
-              <ThemeDialog onClose={() => setDialog(null)} />
-            </Show>
-            <Show when={dialog() === "diff-blame" && diffTarget()}>
-              {target => (
-                <DiffBlameDialog
-                  target={target()}
-                  onClose={() => {
-                    // In compact mode with detail focused, return to the detail dialog
-                    if (layoutMode() === "compact" && state.detailFocused()) {
-                      setDialog("detail");
-                    } else {
-                      setDialog(null);
-                    }
-                  }}
-                  onNavigate={t => {
-                    setDiffTarget(t);
-                    detailNavRef.scrollToFile(t.filePath);
-                  }}
-                />
-              )}
-            </Show>
-            {/* Detail dialog — compact mode only */}
-            <Show when={dialog() === "detail"}>
-              <DetailDialog
-                scrollboxRef={el => {
-                  detailScrollboxRef = el;
-                }}
-                navRef={detailNavRef}
-                searchFocused={searchFocused()}
-                onJumpToCommit={handleJumpToCommit}
-                onOpenDiff={handleOpenDiff}
-                onClose={() => setDialog(null)}
-              />
-            </Show>
-          </box>
+          </Show>
         </Show>
       </AppStateContext.Provider>
     </ThemeContext.Provider>
@@ -475,13 +505,26 @@ function AppContent(props: Readonly<AppContentProps>) {
 export default function App(props: Readonly<AppProps>) {
   const themeState = createThemeState(props.themeName);
 
-  if (props.startupError) {
+  const mode = props.startupMode;
+
+  // Fatal error — git not installed
+  if (mode.kind === "error") {
     return (
       <themeState.ThemeContext.Provider value={themeState}>
-        <ErrorScreen error={props.startupError} />
+        <ErrorScreen error={mode.message} />
       </themeState.ThemeContext.Provider>
     );
   }
 
+  // Not a git repo — show project selector
+  if (mode.kind === "selector") {
+    return (
+      <themeState.ThemeContext.Provider value={themeState}>
+        <ProjectSelector message={mode.message} messagePath={mode.messagePath} knownRepos={mode.knownRepos} />
+      </themeState.ThemeContext.Provider>
+    );
+  }
+
+  // Git repo (setup or graph) — render AppContent which handles both
   return <AppContent {...props} themeState={themeState} />;
 }

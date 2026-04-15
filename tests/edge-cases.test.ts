@@ -7,7 +7,15 @@
  */
 import { describe, expect, test } from "bun:test";
 import { buildGraph } from "../src/git/graph";
-import { findConnector, findRow, hasConnector, makeCommit, printGraph } from "./test-helpers";
+import {
+  assertDefined,
+  CONNECTION_TYPES,
+  findConnector,
+  findRow,
+  hasConnector,
+  makeCommit,
+  printGraph,
+} from "./test-helpers";
 
 describe("Edge Cases", () => {
   test("Octopus merge (3 parents)", () => {
@@ -29,16 +37,7 @@ describe("Edge Cases", () => {
     expect(hasConnector(mergeRow.connectors, "node", mergeRow.nodeColumn)).toBe(true);
 
     // Should have spanning connectors for each secondary parent
-    const spanTypes = new Set([
-      "horizontal",
-      "corner-top-right",
-      "corner-top-left",
-      "corner-bottom-right",
-      "corner-bottom-left",
-      "tee-left",
-      "tee-right",
-    ]);
-    const spanConnectors = mergeRow.connectors.filter(c => spanTypes.has(c.type));
+    const spanConnectors = mergeRow.connectors.filter(c => CONNECTION_TYPES.has(c.type));
     expect(spanConnectors.length).toBeGreaterThanOrEqual(2);
   });
 
@@ -52,8 +51,7 @@ describe("Edge Cases", () => {
     expect(rows[0].nodeColumn).toBe(0);
 
     const nodeConn = findConnector(rows[0].connectors, "node");
-    expect(nodeConn).toBeDefined();
-    if (!nodeConn) throw new Error("nodeConn not found");
+    assertDefined(nodeConn, "nodeConn");
     expect(nodeConn.column).toBe(0);
 
     // Should only have one meaningful connector (the node)
@@ -144,8 +142,7 @@ describe("Edge Cases", () => {
     printGraph(rows);
 
     const c2Row = rows.find(r => r.commit.hash === "c2");
-    expect(c2Row).toBeDefined();
-    if (!c2Row) throw new Error("c2Row not found");
+    assertDefined(c2Row, "c2Row");
 
     const closeConns = c2Row.connectors.filter(
       c =>
@@ -158,8 +155,7 @@ describe("Edge Cases", () => {
     expect(closeConns.length).toBeGreaterThan(0);
 
     const p1Row = rows.find(r => r.commit.hash === "p1");
-    expect(p1Row).toBeDefined();
-    if (!p1Row) throw new Error("p1Row not found");
+    assertDefined(p1Row, "p1Row");
     expect(p1Row.columns.some(c => c.active)).toBe(true);
   });
 
@@ -174,10 +170,7 @@ describe("Edge Cases", () => {
     printGraph(rows);
 
     const c2Row = rows.find(r => r.commit.hash === "c2");
-    const p1Row = findRow(rows, "p1");
-    expect(c2Row).toBeDefined();
-    expect(p1Row).toBeDefined();
-    if (!c2Row) throw new Error("c2Row not found");
+    assertDefined(c2Row, "c2Row");
 
     const spanConns = c2Row.connectors.filter(
       c =>
@@ -205,7 +198,7 @@ describe("Edge Cases", () => {
     expect(typeof c2Row.parentColors[0]).toBe("number");
   });
 
-  test("Detached HEAD is on current branch path", () => {
+  test("Detached HEAD: on current branch, not remote-only, branchName from branchNameMap", () => {
     const commits = [
       makeCommit("d2", ["d1"], [{ name: "HEAD", type: "head", isCurrent: true }]),
       makeCommit("d1", [], [{ name: "main", type: "branch", isCurrent: false }]),
@@ -214,27 +207,7 @@ describe("Edge Cases", () => {
     printGraph(rows);
 
     expect(rows[0].isOnCurrentBranch).toBe(true);
-  });
-
-  test("Detached HEAD commit is not remote-only", () => {
-    const commits = [
-      makeCommit("d2", ["d1"], [{ name: "HEAD", type: "head", isCurrent: true }]),
-      makeCommit("d1", [], [{ name: "main", type: "branch", isCurrent: false }]),
-    ];
-    const rows = buildGraph(commits);
-    printGraph(rows);
-
     expect(rows[0].isRemoteOnly).toBe(false);
-  });
-
-  test("Detached HEAD branchName assigned from branchNameMap", () => {
-    const commits = [
-      makeCommit("d2", ["d1"], [{ name: "HEAD", type: "head", isCurrent: true }]),
-      makeCommit("d1", [], [{ name: "main", type: "branch", isCurrent: false }]),
-    ];
-    const rows = buildGraph(commits);
-    printGraph(rows);
-
     expect(rows[0].branchName).toBe("HEAD");
   });
 

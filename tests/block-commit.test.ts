@@ -9,8 +9,28 @@
  * 12-13. Additional merge/fan-out edge cases
  */
 import { describe, expect, test } from "bun:test";
-import { buildGraph, renderFanOutRow, renderGraphRow } from "../src/git/graph";
-import { findChars, findRow, hasChar, makeCommit, printGraph, renderOpts, totalCharWidth } from "./test-helpers";
+import { buildGraph, type GraphChar, type RenderOptions, renderFanOutRow, renderGraphRow } from "../src/git/graph";
+import { assertDefined, findRow, hasMergeConnectors, makeCommit, printGraph, THEME_COLORS } from "./test-helpers";
+
+/** Build render options with the shared test theme colors. */
+function renderOpts(padToColumns?: number): RenderOptions {
+  return { themeColors: THEME_COLORS, padToColumns };
+}
+
+/** Check if any GraphChar in an array contains a specific character. */
+function hasChar(chars: GraphChar[], ch: string): boolean {
+  return chars.some(gc => gc.char === ch || gc.char.includes(ch));
+}
+
+/** Find all GraphChars containing a specific character. */
+function findChars(chars: GraphChar[], ch: string): GraphChar[] {
+  return chars.filter(gc => gc.char === ch || gc.char.includes(ch));
+}
+
+/** Get total character width of a GraphChar array. */
+function totalCharWidth(chars: GraphChar[]): number {
+  return chars.reduce((sum, gc) => sum + gc.char.length, 0);
+}
 
 describe("Block Commit", () => {
   test("Basic node glyph is █ (linear commits)", () => {
@@ -84,10 +104,9 @@ describe("Block Commit", () => {
     printGraph(rows);
 
     const parentRow = rows.find(r => r.commit.hash === "p1");
-    expect(parentRow).toBeDefined();
-    if (!parentRow) throw new Error("parentRow not found");
-    expect(parentRow.fanOutRows !== undefined && parentRow.fanOutRows.length > 0).toBe(true);
-    if (!parentRow.fanOutRows) throw new Error("fanOutRows not found");
+    assertDefined(parentRow, "parentRow");
+    assertDefined(parentRow.fanOutRows, "parentRow.fanOutRows");
+    expect(parentRow.fanOutRows.length).toBeGreaterThan(0);
 
     for (let fi = 0; fi < parentRow.fanOutRows.length; fi++) {
       const foConnectors = parentRow.fanOutRows[fi];
@@ -109,10 +128,8 @@ describe("Block Commit", () => {
     const rows = buildGraph(commits);
     printGraph(rows);
     const parentRow = rows.find(r => r.commit.hash === "p1");
-    expect(parentRow).toBeDefined();
-    if (!parentRow) throw new Error("parentRow not found");
-    expect(parentRow.fanOutRows).toBeDefined();
-    if (!parentRow.fanOutRows) throw new Error("fanOutRows not found");
+    assertDefined(parentRow, "parentRow");
+    assertDefined(parentRow.fanOutRows, "parentRow.fanOutRows");
 
     for (let fi = 0; fi < parentRow.fanOutRows.length; fi++) {
       const foConnectors = parentRow.fanOutRows[fi];
@@ -138,25 +155,21 @@ describe("Block Commit", () => {
     const rows = buildGraph(commits);
     printGraph(rows);
     const parentRow = rows.find(r => r.commit.hash === "p1");
-    expect(parentRow).toBeDefined();
-    if (!parentRow) throw new Error("parentRow not found");
+    assertDefined(parentRow, "parentRow");
 
     const opts = renderOpts();
 
     const commitChars = renderGraphRow(parentRow, opts);
     const commitBlock = commitChars.find(gc => gc.char.includes("█"));
-    expect(commitBlock).toBeDefined();
-    if (!commitBlock) throw new Error("commitBlock not found");
+    assertDefined(commitBlock, "commitBlock");
 
     const fanOutRows = parentRow.fanOutRows;
-    expect(fanOutRows).toBeDefined();
-    if (!fanOutRows) throw new Error("fanOutRows not found");
+    assertDefined(fanOutRows, "fanOutRows");
 
     for (let fi = 0; fi < fanOutRows.length; fi++) {
       const foChars = renderFanOutRow(fanOutRows[fi], opts);
       const foBlock = foChars.find(gc => gc.char.includes("█"));
-      expect(foBlock).toBeDefined();
-      if (!foBlock) throw new Error("foBlock not found");
+      assertDefined(foBlock, "foBlock");
       expect(foBlock.color).toBe(commitBlock.color);
     }
   });
@@ -192,20 +205,10 @@ describe("Block Commit", () => {
     printGraph(rows);
     const parentRow = findRow(rows, "p1");
 
-    const hasConnections = parentRow.connectors.some(
-      c =>
-        c.type === "horizontal" ||
-        c.type === "tee-left" ||
-        c.type === "tee-right" ||
-        c.type === "corner-top-right" ||
-        c.type === "corner-top-left" ||
-        c.type === "corner-bottom-right" ||
-        c.type === "corner-bottom-left",
-    );
+    const hasConnections = hasMergeConnectors(parentRow.connectors);
     expect(hasConnections).toBe(false);
 
-    expect(parentRow.fanOutRows !== undefined && parentRow.fanOutRows.length > 0).toBe(true);
-    if (!parentRow.fanOutRows) throw new Error("fanOutRows not found");
+    assertDefined(parentRow.fanOutRows, "parentRow.fanOutRows");
     expect(parentRow.fanOutRows.length).toBeGreaterThanOrEqual(1);
   });
 
@@ -223,19 +226,10 @@ describe("Block Commit", () => {
 
     expect(parentRow.fanOutRows !== undefined && parentRow.fanOutRows.length >= 2).toBe(true);
 
-    const hasConnections = parentRow.connectors.some(
-      c =>
-        c.type === "horizontal" ||
-        c.type === "tee-left" ||
-        c.type === "tee-right" ||
-        c.type === "corner-top-right" ||
-        c.type === "corner-top-left" ||
-        c.type === "corner-bottom-right" ||
-        c.type === "corner-bottom-left",
-    );
+    const hasConnections = hasMergeConnectors(parentRow.connectors);
     expect(hasConnections).toBe(false);
 
-    if (!parentRow.fanOutRows) throw new Error("fanOutRows not found");
+    assertDefined(parentRow.fanOutRows, "parentRow.fanOutRows");
     const aboveCount = parentRow.fanOutRows.length - 1;
     expect(aboveCount).toBeGreaterThanOrEqual(1);
   });
@@ -255,17 +249,7 @@ describe("Block Commit", () => {
 
     expect(mergeRow.fanOutRows !== undefined && mergeRow.fanOutRows.length > 0).toBe(true);
 
-    const hasConnections = mergeRow.connectors.some(
-      c =>
-        c.type === "horizontal" ||
-        c.type === "tee-left" ||
-        c.type === "tee-right" ||
-        c.type === "corner-top-right" ||
-        c.type === "corner-top-left" ||
-        c.type === "corner-bottom-right" ||
-        c.type === "corner-bottom-left",
-    );
-    expect(hasConnections).toBe(true);
+    expect(hasMergeConnectors(mergeRow.connectors)).toBe(true);
   });
 
   test("Fan-out merge skipped (commit has branch-off connector)", () => {
@@ -281,17 +265,7 @@ describe("Block Commit", () => {
     printGraph(rows);
     const mergeRow = findRow(rows, "m1");
 
-    const hasConnections = mergeRow.connectors.some(
-      c =>
-        c.type === "horizontal" ||
-        c.type === "tee-left" ||
-        c.type === "tee-right" ||
-        c.type === "corner-top-right" ||
-        c.type === "corner-top-left" ||
-        c.type === "corner-bottom-right" ||
-        c.type === "corner-bottom-left",
-    );
-    expect(hasConnections).toBe(true);
+    expect(hasMergeConnectors(mergeRow.connectors)).toBe(true);
   });
 
   test("Width consistency (fan-out █ rows vs commit row)", () => {
@@ -310,7 +284,7 @@ describe("Block Commit", () => {
     const commitChars = renderGraphRow(parentRow, renderOpts(padCols));
     const commitWidth = totalCharWidth(commitChars);
 
-    if (!parentRow.fanOutRows) throw new Error("fanOutRows not found");
+    assertDefined(parentRow.fanOutRows, "parentRow.fanOutRows");
     for (let fi = 0; fi < parentRow.fanOutRows.length; fi++) {
       const foChars = renderFanOutRow(parentRow.fanOutRows[fi], renderOpts(padCols));
       const foWidth = totalCharWidth(foChars);

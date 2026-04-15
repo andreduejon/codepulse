@@ -1,3 +1,4 @@
+import type { Renderable } from "@opentui/core";
 import type { DiffTarget } from "../git/types";
 
 /** Mutable ref populated by a detail view for app.tsx to call */
@@ -13,6 +14,8 @@ export interface DetailNavRef {
   pendingJumpDirection: "child" | "parent" | null;
   /** Move the detail cursor to the file with the given path (if visible in the current tab). */
   scrollToFile: (filePath: string) => void;
+  /** Element refs for all interactive items, indexed by item position in the flat list. */
+  itemRefs: Renderable[];
 }
 
 export interface DetailViewProps {

@@ -1,3 +1,4 @@
+import type { Renderable } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/solid";
 import type { JSXElement } from "solid-js";
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
@@ -6,17 +7,15 @@ import { useAppState } from "../context/state";
 import type { Commit, GraphRow } from "../git/types";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
 import { useClipboard } from "../hooks/use-clipboard";
-import { useFileTree } from "../hooks/use-file-tree";
+import { type CopyableField, useDetailCursor } from "../hooks/use-detail-cursor";
 import { useStashState } from "../hooks/use-stash-state";
 import { useT } from "../hooks/use-t";
 import { formatDate } from "../utils/date";
 import { isCursored as _isCursored, itemHighlightBg as _itemHighlightBg } from "../utils/detail-cursor";
-import { buildDiffTarget } from "../utils/diff-target";
-import DetailBadge from "./detail-badge";
-import type { DetailViewProps } from "./detail-types";
+import Badge from "./badge";
+import type { DetailNavRef, DetailViewProps } from "./detail-types";
 import {
   BADGE_PADDING,
-  computeFileWidths,
   DIR_INDICATOR_WIDTH,
   ENTRY_PADDING_LEFT,
   HASH_BADGE_GAP,
@@ -26,28 +25,13 @@ import {
   STAT_PADDING_LEFT,
   STATUS_COL_WIDTH,
 } from "./detail-types";
-import { FileTreeEntry } from "./file-tree-entry";
+import FileListView from "./file-list-view";
 import type { StashFileRowData } from "./stash-entry";
 import { StashEntry } from "./stash-entry";
-import { TotalLinesChangedRow } from "./total-lines-changed-row";
 
 // ── Layout constants ────────────────────────────────────────────────
 /** Minimum panel width in characters before padding is subtracted. */
 const MIN_PANEL_WIDTH = 60;
-
-/** Types for interactive items in the detail panel */
-type CopyableField = "hash" | "author" | "date" | "committer" | "commitDate" | "subject" | "body";
-
-type InteractiveItem =
-  | { type: "section-header"; section: "children" | "parents" }
-  | { type: "copyable"; field: CopyableField }
-  | { type: "child"; hash: string; index: number }
-  | { type: "parent"; hash: string; index: number }
-  | { type: "file-dir"; dirPath: string; index: number }
-  | { type: "file"; filePath: string; index: number }
-  | { type: "stash-entry"; stashHash: string; stashIndex: number }
-  | { type: "stash-dir"; stashHash: string; dirPath: string; index: number }
-  | { type: "stash-file"; stashHash: string; filePath: string; index: number };
 
 export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   const { state, actions } = useAppState();
@@ -181,16 +165,6 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     }
   };
 
-  // Column widths for file changes — derived from totals (always >= per-file values)
-  const fileWidths = createMemo(() => {
-    const d = detail();
-    if (!d) return { totalAdd: 0, totalDel: 0, addColWidth: 2, delColWidth: 2 };
-    return computeFileWidths(d.files);
-  });
-
-  // File tree state — resets collapsed dirs when commit changes
-  const { fileTreeRows, collapsedDirs, toggleDir } = useFileTree(() => detail()?.files ?? [], commit);
-
   // ── Stash section state ─────────────────────────────────────────────
   const {
     stashEntries,
@@ -203,296 +177,47 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     getStashFileWidths,
   } = useStashState(commit);
 
-  // ── Build flat list of interactive items (tab-aware) ──
-  // IMPORTANT: This memo must be defined AFTER fileTreeRows, stashEntries,
-  // expandedStashes, getStashFileTreeRows, collapsedDirs, and stashCollapsedDirs
-  // because createMemo evaluates eagerly (unlike createEffect).
-  // Moving it earlier causes a TDZ crash.
-  const interactiveItems = createMemo((): InteractiveItem[] => {
-    const r = row();
-    const c = commit();
-    if (!r || !c) return [];
+  // Element refs for each interactive item, indexed by flat item position.
+  // Populated via ref callbacks on each rendered interactive item, used by
+  // use-keyboard-navigation to call scrollElementIntoView after cursor moves.
+  const itemRefs: Renderable[] = [];
 
-    const tab = activeTab();
-    const items: InteractiveItem[] = [];
-
-    if (tab === "detail") {
-      // Copyable metadata fields (skip for uncommitted node — values are all "·······")
-      if (!isUncommittedHash(c.hash)) {
-        items.push({ type: "copyable", field: "hash" });
-        items.push({ type: "copyable", field: "author" });
-        items.push({ type: "copyable", field: "date" });
-        if (c.committer !== c.author || c.committerEmail !== c.authorEmail) {
-          items.push({ type: "copyable", field: "committer" });
-          items.push({ type: "copyable", field: "commitDate" });
-        }
-        items.push({ type: "copyable", field: "subject" });
-        const d = detail();
-        if (d?.body) {
-          items.push({ type: "copyable", field: "body" });
-        }
-      }
-
-      // Children section (only if children exist; excludes synthetic uncommitted node)
-      const fc = filteredChildren();
-      if (fc.length > 0) {
-        items.push({ type: "section-header", section: "children" });
-        if (childrenExpanded()) {
-          for (let i = 0; i < fc.length; i++) {
-            items.push({ type: "child", hash: fc[i].hash, index: i });
-          }
-        }
-      }
-
-      // Parents section (only if parents exist)
-      if (r.parentHashes.length > 0) {
-        items.push({ type: "section-header", section: "parents" });
-        if (parentsExpanded()) {
-          for (let i = 0; i < r.parentHashes.length; i++) {
-            items.push({ type: "parent", hash: r.parentHashes[i], index: i });
-          }
-        }
-      }
-    } else if (tab === "files") {
-      // Files tab: file tree items directly (no section header)
-      const d = detail();
-      if (d && d.files.length > 0) {
-        const rows = fileTreeRows();
-        for (let i = 0; i < rows.length; i++) {
-          const row = rows[i];
-          if (row.isDir) {
-            items.push({ type: "file-dir", dirPath: row.dirPath, index: i });
-          } else {
-            items.push({ type: "file", filePath: row.file?.path, index: i });
-          }
-        }
-      }
-    } else if (tab === "stashes") {
-      // Stash entries (each stash is its own collapsible header)
-      const stashes = stashEntries();
-      if (stashes.length > 0) {
-        for (let si = 0; si < stashes.length; si++) {
-          const stash = stashes[si];
-          items.push({
-            type: "stash-entry",
-            stashHash: stash.hash,
-            stashIndex: si,
-          });
-
-          // If this stash is expanded, add its file tree items
-          if (expandedStashes().has(stash.hash)) {
-            const rows = getStashFileTreeRows(stash.hash);
-            for (let fi = 0; fi < rows.length; fi++) {
-              const row = rows[fi];
-              if (row.isDir) {
-                items.push({
-                  type: "stash-dir",
-                  stashHash: stash.hash,
-                  dirPath: row.dirPath,
-                  index: fi,
-                });
-              } else {
-                items.push({
-                  type: "stash-file",
-                  stashHash: stash.hash,
-                  filePath: row.file?.path,
-                  index: fi,
-                });
-              }
-            }
-          }
-        }
-      }
-    }
-
-    return items;
+  // ── Cursor management (delegated to useDetailCursor) ─────────────────
+  // IMPORTANT: useDetailCursor must be called AFTER all the state it depends on
+  // (stashEntries, expandedStashes, getStashFileTreeRows, etc.) is initialized,
+  // because it contains createMemo calls that evaluate eagerly.
+  const { interactiveItems, findItemIndex } = useDetailCursor({
+    state,
+    actions,
+    navRef: props.navRef,
+    itemRefs,
+    row,
+    commit,
+    detail,
+    activeTab,
+    filteredChildren,
+    childrenExpanded,
+    parentsExpanded,
+    stashEntries,
+    expandedStashes,
+    stashFileCache,
+    stashCollapsedDirs,
+    getStashFileTreeRows,
+    toggleStash,
+    toggleStashDir,
+    setChildrenExpanded,
+    setParentsExpanded,
+    copyToClipboard,
+    getCopyableText,
+    onJumpToCommit: props.onJumpToCommit,
+    onOpenDiff: props.onOpenDiff,
   });
 
-  // Clamp cursor when interactive items change, and position cursor after jump
-  createEffect(() => {
-    const items = interactiveItems();
-    const count = items.length;
-
-    // If we navigated via child/parent jump, position cursor on the matching entry.
-    // pendingJumpDirection is a mutable ref set by handleJumpToCommit. Unlike a signal,
-    // it persists across multiple interactiveItems recomputations — so even if this
-    // effect fires multiple times (e.g., once when commit changes, again when commitDetail
-    // is cleared to null), it consistently re-positions the cursor on the target entry.
-    // The ref is only cleared on the next non-jump navigation (in the app.tsx commit-change effect).
-    const jumpDir = props.navRef?.pendingJumpDirection;
-    if (jumpDir && count > 0) {
-      // When jumping from a parent entry → continue walking parents (first parent)
-      // When jumping from a child entry → continue walking children (first child)
-      const targetType = jumpDir === "parent" ? "parent" : "child";
-      for (let i = 0; i < items.length; i++) {
-        if (items[i].type === targetType) {
-          actions.setDetailCursorIndex(i);
-          return;
-        }
-      }
-      // Fallback: try the other type
-      const fallbackType = targetType === "parent" ? "child" : "parent";
-      for (let i = 0; i < items.length; i++) {
-        if (items[i].type === fallbackType) {
-          actions.setDetailCursorIndex(i);
-          return;
-        }
-      }
-      // No parent/child entries — fall back to first item
-      actions.setDetailCursorIndex(0);
-      return;
-    }
-
-    // Normal clamping: keep cursor in bounds when items change (e.g., section collapse)
-    const cursor = state.detailCursorIndex();
-    if (count === 0) {
-      actions.setDetailCursorIndex(0);
-    } else if (cursor >= count) {
-      actions.setDetailCursorIndex(count - 1);
-    }
-  });
-
-  /** Execute the action for the currently-cursor'd item */
-  const activateItem = (item: InteractiveItem) => {
-    switch (item.type) {
-      case "section-header":
-        if (item.section === "children") setChildrenExpanded(!childrenExpanded());
-        else if (item.section === "parents") setParentsExpanded(!parentsExpanded());
-        break;
-      case "copyable":
-        copyToClipboard(getCopyableText(item.field), item.field);
-        break;
-      case "child":
-      case "parent":
-        if (props.onJumpToCommit) props.onJumpToCommit(item.hash, item.type);
-        break;
-      case "file-dir":
-        toggleDir(item.dirPath);
-        break;
-      case "file":
-        if (props.onOpenDiff && item.filePath) {
-          const c = commit();
-          const d = detail();
-          if (c && d) {
-            props.onOpenDiff(buildDiffTarget(c.hash, item.filePath, "commit", d.files));
-          }
-        }
-        break;
-      case "stash-entry":
-        toggleStash(item.stashHash);
-        break;
-      case "stash-dir":
-        toggleStashDir(item.stashHash, item.dirPath);
-        break;
-      case "stash-file":
-        if (props.onOpenDiff && item.filePath) {
-          const stashFiles = stashFileCache().get(item.stashHash);
-          if (stashFiles) {
-            props.onOpenDiff(buildDiffTarget(item.stashHash, item.filePath, "stash", stashFiles));
-          } else {
-            // Cache miss — open with single-file list (no left/right navigation)
-            props.onOpenDiff({
-              commitHash: item.stashHash,
-              filePath: item.filePath,
-              source: "stash",
-              fileList: [item.filePath],
-              fileIndex: 0,
-            });
-          }
-        }
-        break;
-    }
-  };
-
-  /** Activate the item at the current cursor index. Returns true if it was a jump. */
-  const activateCurrentItem = (): boolean => {
-    const items = interactiveItems();
-    const idx = state.detailCursorIndex();
-    if (idx >= 0 && idx < items.length) {
-      const item = items[idx];
-      activateItem(item);
-      return item.type === "child" || item.type === "parent";
-    }
-    return false;
-  };
-
-  // Keep navRef updated whenever interactive items change
-  createEffect(() => {
-    if (props.navRef) {
-      props.navRef.itemCount = interactiveItems().length;
-      props.navRef.activateCurrentItem = activateCurrentItem;
-      props.navRef.scrollToFile = (filePath: string) => {
-        // Find the file tree row index for this path
-        const tab = activeTab();
-        if (tab === "files") {
-          const rows = fileTreeRows();
-          const treeIdx = rows.findIndex(r => !r.isDir && r.file?.path === filePath);
-          if (treeIdx >= 0) {
-            const itemIdx = findItemIndex("file", undefined, treeIdx);
-            if (itemIdx >= 0) actions.setDetailCursorIndex(itemIdx);
-          }
-        } else if (tab === "stashes") {
-          // For stash files, search expanded stash file trees
-          const stashes = stashEntries();
-          for (const stash of stashes) {
-            if (!expandedStashes().has(stash.hash)) continue;
-            const rows = getStashFileTreeRows(stash.hash);
-            const treeIdx = rows.findIndex(r => !r.isDir && r.file?.path === filePath);
-            if (treeIdx >= 0) {
-              const itemIdx = findItemIndex("stash-file", stash.hash, treeIdx);
-              if (itemIdx >= 0) {
-                actions.setDetailCursorIndex(itemIdx);
-                return;
-              }
-            }
-          }
-        }
-      };
-    }
-  });
-
-  // Keep the footer's contextual enter-key hint in sync with the cursor position
-  createEffect(() => {
-    const items = interactiveItems();
-    const idx = state.detailCursorIndex();
-    if (!state.detailFocused() || idx < 0 || idx >= items.length) {
-      actions.setDetailCursorAction(null);
-      return;
-    }
-    const item = items[idx];
-    switch (item.type) {
-      case "section-header": {
-        const expanded = item.section === "children" ? childrenExpanded() : parentsExpanded();
-        actions.setDetailCursorAction(expanded ? "collapse" : "expand");
-        break;
-      }
-      case "file-dir":
-        actions.setDetailCursorAction(collapsedDirs().has(item.dirPath) ? "expand" : "collapse");
-        break;
-      case "copyable":
-        actions.setDetailCursorAction("copy");
-        break;
-      case "child":
-      case "parent":
-        actions.setDetailCursorAction("navigate");
-        break;
-      case "stash-entry":
-        actions.setDetailCursorAction(expandedStashes().has(item.stashHash) ? "collapse" : "expand");
-        break;
-      case "stash-dir": {
-        const dirs = stashCollapsedDirs().get(item.stashHash);
-        actions.setDetailCursorAction(dirs?.has(item.dirPath) ? "expand" : "collapse");
-        break;
-      }
-      case "file":
-      case "stash-file":
-        actions.setDetailCursorAction("diff");
-        break;
-    }
-  });
+  // Track interactive item indices for each rendered section/entry
+  // These are derived from the interactiveItems memo
 
   // ── Cursor-aware banner scroll (deferred part) ────────────────────
-  // Must be defined after interactiveItems, fileTreeRows, and fileWidths.
+  // Must be defined after interactiveItems and stash state.
 
   /** Compute the visible width and text for the currently-cursored item.
    *  Returns null if the item doesn't need scrolling (section-header or text fits). */
@@ -523,30 +248,6 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
         const available = pw - ENTRY_PADDING_LEFT - SHORT_HASH_LEN - HASH_BADGE_GAP - BADGE_PADDING;
         if (name.length <= available) return null;
         return { text: name, visibleWidth: available };
-      }
-
-      case "file-dir": {
-        // Layout: prefix + connector + dirIndicator + name
-        const rows = fileTreeRows();
-        const treeRow = rows[item.index];
-        if (!treeRow) return null;
-        const fixedChars = treeRow.prefix.length + treeRow.connector.length + DIR_INDICATOR_WIDTH;
-        const available = pw - fixedChars;
-        if (treeRow.name.length <= available) return null;
-        return { text: treeRow.name, visibleWidth: available };
-      }
-
-      case "file": {
-        // Layout: prefix + connector + name + statPaddingLeft + status + statGap + addCol + statGap + delCol
-        const rows = fileTreeRows();
-        const treeRow = rows[item.index];
-        if (!treeRow) return null;
-        const fw = fileWidths();
-        const statWidth = STAT_PADDING_LEFT + STATUS_COL_WIDTH + STAT_GAP + fw.addColWidth + STAT_GAP + fw.delColWidth;
-        const fixedChars = treeRow.prefix.length + treeRow.connector.length + statWidth;
-        const available = pw - fixedChars;
-        if (treeRow.name.length <= available) return null;
-        return { text: treeRow.name, visibleWidth: available };
       }
 
       case "stash-entry": {
@@ -636,7 +337,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
    * Closes over: copyableHighlightBg, isCopyableCursored, scrolledCopyableText,
    * copiedField, t().
    */
-  const CopyableRow = (props: {
+  const CopyableRow = (rowProps: {
     field: CopyableField;
     /** Fallback content shown when not banner-scrolling. */
     children: JSXElement;
@@ -644,87 +345,26 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     fg?: string;
     /** wrapMode for the text element. Defaults to "none". */
     wrapMode?: "none" | "char" | "word";
+    /** Optional ref callback forwarded to the outer box for scroll-into-view. */
+    ref?: (el: Renderable) => void;
   }) => (
-    <box flexDirection="row" backgroundColor={copyableHighlightBg(props.field)}>
+    <box ref={rowProps.ref} flexDirection="row" backgroundColor={copyableHighlightBg(rowProps.field)}>
       <text
         flexGrow={1}
         flexShrink={1}
-        fg={isCopyableCursored(props.field) ? t().accent : (props.fg ?? t().foreground)}
-        wrapMode={props.wrapMode ?? "none"}
-        truncate={props.wrapMode !== "word" && !isCopyableCursored(props.field)}
+        fg={isCopyableCursored(rowProps.field) ? t().accent : (rowProps.fg ?? t().foreground)}
+        wrapMode={rowProps.wrapMode ?? "none"}
+        truncate={rowProps.wrapMode !== "word" && !isCopyableCursored(rowProps.field)}
       >
-        {scrolledCopyableText(props.field) ?? props.children}
+        {scrolledCopyableText(rowProps.field) ?? rowProps.children}
       </text>
-      <Show when={copiedField() === props.field}>
+      <Show when={copiedField() === rowProps.field}>
         <text flexShrink={0} bg={t().primary} fg={t().background} wrapMode="none">
           {" \u2713 copied "}
         </text>
       </Show>
     </box>
   );
-
-  /** Memo'd index map for O(1) lookup of interactive item positions.
-   *  Keys are "section-header:children", "child:0", "file-dir:3", "stash-entry:abc123", etc. */
-  const itemIndexMap = createMemo(() => {
-    const map = new Map<string, number>();
-    const items = interactiveItems();
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      switch (item.type) {
-        case "section-header":
-          map.set(`section-header:${item.section}`, i);
-          break;
-        case "copyable":
-          map.set(`copyable:${item.field}`, i);
-          break;
-        case "child":
-        case "parent":
-        case "file-dir":
-        case "file":
-          map.set(`${item.type}:${item.index}`, i);
-          break;
-        case "stash-entry":
-          map.set(`stash-entry:${item.stashHash}`, i);
-          break;
-        case "stash-dir":
-          map.set(`stash-dir:${item.stashHash}:${item.index}`, i);
-          break;
-        case "stash-file":
-          map.set(`stash-file:${item.stashHash}:${item.index}`, i);
-          break;
-      }
-    }
-    return map;
-  });
-
-  /** Find the interactive item index for a given item (O(1) via memo'd map). */
-  const findItemIndex = (type: InteractiveItem["type"], keyOrSection?: string, idx?: number): number => {
-    let key: string;
-    switch (type) {
-      case "section-header":
-        key = `section-header:${keyOrSection}`;
-        break;
-      case "copyable":
-        key = `copyable:${keyOrSection}`;
-        break;
-      case "stash-entry":
-        key = `stash-entry:${keyOrSection}`;
-        break;
-      case "stash-dir":
-        key = `stash-dir:${keyOrSection}:${idx}`;
-        break;
-      case "stash-file":
-        key = `stash-file:${keyOrSection}:${idx}`;
-        break;
-      default:
-        key = `${type}:${idx}`;
-        break;
-    }
-    return itemIndexMap().get(key) ?? -1;
-  };
-
-  // Track interactive item indices for each rendered section/entry
-  // These are derived from the interactiveItems memo
 
   /** Render a collapsible section header with interactive highlight */
   function InteractiveSectionHeader(
@@ -733,12 +373,13 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
       count: number;
       expanded: boolean;
       section: "children" | "parents";
+      ref?: (el: Renderable) => void;
     }>,
   ) {
     const itemIdx = () => findItemIndex("section-header", headerProps.section);
 
     return (
-      <box backgroundColor={itemHighlightBg(itemIdx())}>
+      <box ref={headerProps.ref} backgroundColor={itemHighlightBg(itemIdx())}>
         <text fg={t().accent} wrapMode="none">
           <strong>
             {headerProps.expanded ? "▾" : "▸"} {headerProps.title} ({headerProps.count})
@@ -756,6 +397,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
       type: "child" | "parent";
       branchName: string;
       colorIndex: number;
+      ref?: (el: Renderable) => void;
     }>,
   ) {
     const itemIdx = () => findItemIndex(entryProps.type, undefined, entryProps.entryIndex);
@@ -778,19 +420,26 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     };
 
     return (
-      <box flexDirection="row" flexWrap="wrap" gap={1} paddingLeft={2} backgroundColor={itemHighlightBg(itemIdx())}>
+      <box
+        ref={entryProps.ref}
+        flexDirection="row"
+        flexWrap="wrap"
+        gap={1}
+        paddingLeft={2}
+        backgroundColor={itemHighlightBg(itemIdx())}
+      >
         <text fg={cursored() ? t().accent : t().foreground} wrapMode="none">
           {entryProps.hash.substring(0, SHORT_HASH_LEN)}
         </text>
         <Show
           when={entryProps.branchName !== ""}
           fallback={
-            <Show when={tag()} fallback={<DetailBadge name="deleted" colorIndex={0} dimmed />}>
-              <DetailBadge name={tag() as string} colorIndex={entryProps.colorIndex} {...badgeScrollProps()} />
+            <Show when={tag()} fallback={<Badge name="deleted" colorIndex={0} dimmed />}>
+              <Badge name={tag() as string} colorIndex={entryProps.colorIndex} {...badgeScrollProps()} />
             </Show>
           }
         >
-          <DetailBadge name={entryProps.branchName} colorIndex={entryProps.colorIndex} {...badgeScrollProps()} />
+          <Badge name={entryProps.branchName} colorIndex={entryProps.colorIndex} {...badgeScrollProps()} />
         </Show>
       </box>
     );
@@ -823,21 +472,35 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                       fallback={(() => {
                         const tag = getTagForHash(c().hash);
                         return tag ? (
-                          <DetailBadge name={tag} colorIndex={nodeColorIndex()} />
+                          <Badge
+                            name={tag}
+                            colorIndex={nodeColorIndex()}
+                            visibleWidth={panelUsableWidth() - BADGE_PADDING}
+                          />
                         ) : (
-                          <DetailBadge name="deleted" colorIndex={0} dimmed />
+                          <Badge name="deleted" colorIndex={0} dimmed />
                         );
                       })()}
                     >
                       {/* Graph-inferred branch: local badge, optional remote badge, right-aligned tracking */}
                       <box flexDirection="row" width="100%">
-                        <DetailBadge name={r().branchName} colorIndex={nodeColorIndex()} />
+                        <Badge
+                          name={r().branchName}
+                          colorIndex={nodeColorIndex()}
+                          visibleWidth={panelUsableWidth() - BADGE_PADDING}
+                        />
                         {(() => {
                           const tr = branchTracking(r().branchName);
                           if (!tr) {
                             // No tracking — show remote badge if present
                             const rn = remoteName();
-                            return rn ? <DetailBadge name={rn} colorIndex={nodeColorIndex()} /> : null;
+                            return rn ? (
+                              <Badge
+                                name={rn}
+                                colorIndex={nodeColorIndex()}
+                                visibleWidth={panelUsableWidth() - BADGE_PADDING}
+                              />
+                            ) : null;
                           }
                           return (
                             <>
@@ -863,10 +526,11 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                       const tr = ref.type === "branch" ? branchTracking(ref.name) : null;
                       return (
                         <box flexDirection="row" width="100%">
-                          <DetailBadge
+                          <Badge
                             name={ref.name}
                             colorIndex={nodeColorIndex()}
                             dimmed={ref.type === "stash" || ref.type === "uncommitted"}
+                            visibleWidth={panelUsableWidth() - BADGE_PADDING}
                           />
                           {tr ? (
                             <>
@@ -890,7 +554,15 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   <strong>Tags</strong>
                 </text>
                 <box flexDirection="row" flexWrap="wrap" gap={1}>
-                  <For each={tagRefs()}>{ref => <DetailBadge name={ref.name} colorIndex={nodeColorIndex()} />}</For>
+                  <For each={tagRefs()}>
+                    {ref => (
+                      <Badge
+                        name={ref.name}
+                        colorIndex={nodeColorIndex()}
+                        visibleWidth={panelUsableWidth() - BADGE_PADDING}
+                      />
+                    )}
+                  </For>
                 </box>
                 <box height={1} />
               </Show>
@@ -907,7 +579,14 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   </text>
                 }
               >
-                <CopyableRow field="hash">{c().hash}</CopyableRow>
+                <CopyableRow
+                  field="hash"
+                  ref={(el: Renderable) => {
+                    itemRefs[findItemIndex("copyable", "hash")] = el;
+                  }}
+                >
+                  {c().hash}
+                </CopyableRow>
               </Show>
 
               <box height={1} />
@@ -922,7 +601,12 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   </text>
                 }
               >
-                <CopyableRow field="author">
+                <CopyableRow
+                  field="author"
+                  ref={(el: Renderable) => {
+                    itemRefs[findItemIndex("copyable", "author")] = el;
+                  }}
+                >
                   {c().author} {"<"}
                   {c().authorEmail}
                   {">"}
@@ -941,7 +625,14 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   </text>
                 }
               >
-                <CopyableRow field="date">{formatDate(c().authorDate)}</CopyableRow>
+                <CopyableRow
+                  field="date"
+                  ref={(el: Renderable) => {
+                    itemRefs[findItemIndex("copyable", "date")] = el;
+                  }}
+                >
+                  {formatDate(c().authorDate)}
+                </CopyableRow>
               </Show>
 
               <Show when={!isUncommitted() && showCommitter()}>
@@ -949,7 +640,12 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 <text fg={t().accent} wrapMode="none">
                   <strong>Committer</strong>
                 </text>
-                <CopyableRow field="committer">
+                <CopyableRow
+                  field="committer"
+                  ref={(el: Renderable) => {
+                    itemRefs[findItemIndex("copyable", "committer")] = el;
+                  }}
+                >
                   {c().committer} {"<"}
                   {c().committerEmail}
                   {">"}
@@ -959,7 +655,14 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 <text fg={t().accent} wrapMode="none">
                   <strong>Commit Date</strong>
                 </text>
-                <CopyableRow field="commitDate">{formatDate(c().commitDate)}</CopyableRow>
+                <CopyableRow
+                  field="commitDate"
+                  ref={(el: Renderable) => {
+                    itemRefs[findItemIndex("copyable", "commitDate")] = el;
+                  }}
+                >
+                  {formatDate(c().commitDate)}
+                </CopyableRow>
               </Show>
 
               <box height={1} />
@@ -976,7 +679,14 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   </text>
                 }
               >
-                <CopyableRow field="subject">{c().subject}</CopyableRow>
+                <CopyableRow
+                  field="subject"
+                  ref={(el: Renderable) => {
+                    itemRefs[findItemIndex("copyable", "subject")] = el;
+                  }}
+                >
+                  {c().subject}
+                </CopyableRow>
               </Show>
 
               <Show when={!isUncommitted() && detail()?.body}>
@@ -984,7 +694,14 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 <text fg={t().accent} wrapMode="none">
                   <strong>Body</strong>
                 </text>
-                <CopyableRow field="body" fg={t().foregroundMuted} wrapMode="word">
+                <CopyableRow
+                  field="body"
+                  fg={t().foregroundMuted}
+                  wrapMode="word"
+                  ref={(el: Renderable) => {
+                    itemRefs[findItemIndex("copyable", "body")] = el;
+                  }}
+                >
                   {detail()?.body}
                 </CopyableRow>
               </Show>
@@ -998,6 +715,9 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   count={filteredChildren().length}
                   expanded={childrenExpanded()}
                   section="children"
+                  ref={(el: Renderable) => {
+                    itemRefs[findItemIndex("section-header", "children")] = el;
+                  }}
                 />
                 <Show when={childrenExpanded()}>
                   <For each={filteredChildren()}>
@@ -1008,6 +728,9 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                         type="child"
                         branchName={child.branch}
                         colorIndex={child.color}
+                        ref={(el: Renderable) => {
+                          itemRefs[findItemIndex("child", undefined, i())] = el;
+                        }}
                       />
                     )}
                   </For>
@@ -1022,6 +745,9 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   count={r().parentHashes.length}
                   expanded={parentsExpanded()}
                   section="parents"
+                  ref={(el: Renderable) => {
+                    itemRefs[findItemIndex("section-header", "parents")] = el;
+                  }}
                 />
                 <Show when={parentsExpanded()}>
                   <For each={r().parentHashes}>
@@ -1032,6 +758,9 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                         type="parent"
                         branchName={r().parentBranches[i()]}
                         colorIndex={r().parentColors[i()]}
+                        ref={(el: Renderable) => {
+                          itemRefs[findItemIndex("parent", undefined, i())] = el;
+                        }}
                       />
                     )}
                   </For>
@@ -1041,43 +770,16 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
             </Show>
 
             {/* ══════════════ Files tab ══════════════ */}
-            <Show when={activeTab() === "files" && detail() && detail()?.files.length > 0}>
-              <TotalLinesChangedRow totalAdd={fileWidths().totalAdd} totalDel={fileWidths().totalDel} />
-              <For each={fileTreeRows()}>
-                {(treeRow, i) => {
-                  const itemIdx = () => findItemIndex(treeRow.isDir ? "file-dir" : "file", undefined, i());
-                  const cursored = () => isCursored(itemIdx());
-                  const collapsed = () => treeRow.isDir && collapsedDirs().has(treeRow.dirPath);
-
-                  /** When this row is cursored and overflows, apply banner scroll */
-                  const scrolledName = () => {
-                    if (!cursored()) return null;
-                    const info = cursoredTextInfo();
-                    if (!info || info.text !== treeRow.name) return null;
-                    const off = bannerOffset();
-                    return treeRow.name.substring(off, off + info.visibleWidth);
-                  };
-
-                  return (
-                    <FileTreeEntry
-                      row={treeRow}
-                      cursored={cursored()}
-                      collapsed={collapsed()}
-                      highlightBg={itemHighlightBg(itemIdx())}
-                      scrolledName={scrolledName()}
-                      addColWidth={fileWidths().addColWidth}
-                      delColWidth={fileWidths().delColWidth}
-                    />
-                  );
-                }}
-              </For>
-            </Show>
-
-            {/* Show "no files" message when files tab has no content */}
-            <Show when={activeTab() === "files" && (!detail() || detail()?.files.length === 0)}>
-              <box flexGrow={1} alignItems="center" justifyContent="center">
-                <text fg={t().foregroundMuted}>{state.detailLoading() ? "Loading..." : "No modified files"}</text>
-              </box>
+            <Show when={activeTab() === "files"}>
+              <FileListView
+                files={() => detail()?.files ?? []}
+                loading={() => state.detailLoading()}
+                commitHash={() => commit()?.hash ?? ""}
+                diffSource={() => "commit"}
+                resetTrigger={commit}
+                navRef={props.navRef as DetailNavRef}
+                onOpenDiff={props.onOpenDiff}
+              />
             </Show>
 
             {/* ══════════════ Stashes tab ══════════════ */}
@@ -1123,6 +825,9 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                         collapsed: fileCollapsed,
                         highlightBg: itemHighlightBg(fileItemIdx),
                         scrolledName: scrolledFileName(),
+                        ref: (el: Renderable) => {
+                          itemRefs[fileItemIdx] = el;
+                        },
                       };
                     });
 
@@ -1139,6 +844,9 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                       delColWidth={stashFw().delColWidth}
                       totalAdd={stashFw().totalAdd}
                       totalDel={stashFw().totalDel}
+                      headerRef={(el: Renderable) => {
+                        itemRefs[itemIdx()] = el;
+                      }}
                     />
                   );
                 }}

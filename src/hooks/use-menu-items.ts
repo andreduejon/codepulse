@@ -3,7 +3,7 @@ import type { Accessor } from "solid-js";
 import { createMemo, createSignal } from "solid-js";
 import type { CodepulseConfig, ConfigInfo } from "../config";
 import { writeConfig } from "../config";
-import { DEFAULT_MAX_COUNT } from "../constants";
+import { AUTO_REFRESH_MS, AUTO_REFRESH_OPTIONS, DEFAULT_MAX_COUNT, MAX_COUNT_OPTIONS, MS_TO_LABEL } from "../constants";
 import { DEFAULT_AUTO_REFRESH_INTERVAL, useAppState } from "../context/state";
 import { themes } from "../context/theme";
 
@@ -36,22 +36,6 @@ export type SettingItem =
   | { kind: "badge"; name: string; colorIndex: number; dimmed?: boolean }
   | { kind: "branch"; name: string; run: () => void; upstream?: string; ahead?: number; behind?: number };
 
-const MAX_COUNT_OPTIONS = [10, 20, 50, 100, 200, 500];
-
-const AUTO_REFRESH_OPTIONS = ["off", "10s", "30s", "60s"];
-const AUTO_REFRESH_MS: Record<string, number> = {
-  off: 0,
-  "10s": 10000,
-  "30s": 30000,
-  "60s": 60000,
-};
-const MS_TO_LABEL: Record<number, string> = {
-  0: "off",
-  10000: "10s",
-  30000: "30s",
-  60000: "60s",
-};
-
 /** Width of the info label column (characters). */
 export const INFO_LABEL_WIDTH = 12;
 
@@ -65,9 +49,6 @@ export interface MenuItemsOptions {
   themeName: Accessor<string>;
   /** Set the active theme by name. */
   setTheme: (name: string) => void;
-  /** Config scope signal. */
-  configScope: Accessor<"global" | "this repo">;
-  setConfigScope: (v: "global" | "this repo") => void;
   /** Saved-feedback label signal and trigger. */
   savedFeedback: Accessor<string | null>;
   showSavedFeedback: (label: string) => void;
@@ -80,6 +61,8 @@ export interface MenuItemsOptions {
   onViewBranch: (branch: string | null) => void;
   onClose: () => void;
   configInfo?: ConfigInfo;
+  /** Open the project selector to switch repos. */
+  onSwitchRepo?: () => void;
 }
 
 export interface MenuItemsResult {
@@ -130,12 +113,14 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
 
       { kind: "header", label: "Actions" },
       { kind: "action", label: "Fetch remote", hotkey: "f", get: lastFetchLabel, run: () => opts.onFetch() },
+      ...(opts.onSwitchRepo
+        ? [{ kind: "action" as const, label: "Switch repository", run: () => opts.onSwitchRepo?.() }]
+        : []),
 
       { kind: "header", label: "Preferences" },
       {
         kind: "dialog",
         label: "Color theme",
-        hotkey: "ctrl+t",
         dialogId: "theme",
         get: () => themes[opts.themeName()]?.name ?? opts.themeName(),
       },
@@ -187,13 +172,6 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
         get: () => `${shortenHome(ci.globalPath)}  ${ci.globalExists ? "(found)" : "(not found)"}`,
       });
       items.push({
-        kind: "cycle",
-        label: "Save scope",
-        options: ["global", "this repo"],
-        get: () => opts.configScope(),
-        set: v => opts.setConfigScope(v as "global" | "this repo"),
-      });
-      items.push({
         kind: "action",
         label: "Save to config",
         get: () => (opts.savedFeedback() === "Save to config" ? "\u2713 Saved!" : ""),
@@ -205,11 +183,10 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
             showAllBranches: state.showAllBranches(),
             autoRefreshSeconds: autoRefreshMs / 1000,
           };
-          const scope = opts.configScope() === "global" ? ("global" as const) : ("repo" as const);
-          const ok = writeConfig(cfg, scope, scope === "repo" ? state.repoPath() : undefined);
+          const ok = writeConfig(cfg, state.repoPath());
           if (ok) {
             ci.globalExists = true;
-            if (scope === "repo") ci.hasRepoOverrides = true;
+            ci.hasRepoOverrides = true;
             opts.showSavedFeedback("Save to config");
           }
         },

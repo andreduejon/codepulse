@@ -21,6 +21,13 @@ function makeTempConfig(name: string, content: unknown): string {
   return path;
 }
 
+/** Helper: create a config with settings under repos[repoPath]. */
+function makeRepoConfig(name: string, repoPath: string, repoConfig: Record<string, unknown>): string {
+  return makeTempConfig(name, {
+    repos: { [resolve(repoPath)]: repoConfig },
+  });
+}
+
 afterEach(() => {
   rmSync(TEST_ROOT, { recursive: true, force: true });
 });
@@ -32,9 +39,17 @@ describe("loadConfig", () => {
     expect(result).toEqual({});
   });
 
-  test("loads global config fields", () => {
+  test("ignores global top-level fields (repo-only mode)", () => {
     const configPath = makeTempConfig("global-fields", { theme: "gruvbox", pageSize: 100 });
     const { config: result } = loadConfig("/tmp/repo", configPath);
+    // Global top-level fields are ignored — only repos[path] entries are read
+    expect(result).toEqual({});
+  });
+
+  test("loads repo-specific config fields", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("repo-fields", repoPath, { theme: "gruvbox", pageSize: 100 });
+    const { config: result } = loadConfig(repoPath, configPath);
     expect(result.theme).toBe("gruvbox");
     expect(result.pageSize).toBe(100);
   });
@@ -61,14 +76,15 @@ describe("loadConfig", () => {
   });
 
   test("validates all config fields", () => {
-    const configPath = makeTempConfig("full-config", {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("full-config", repoPath, {
       theme: "catppuccin-latte",
       pageSize: 500,
       branch: "develop",
       showAllBranches: false,
       autoRefreshSeconds: 10,
     });
-    const { config: result } = loadConfig("/tmp/repo", configPath);
+    const { config: result } = loadConfig(repoPath, configPath);
     expect(result).toEqual({
       theme: "catppuccin-latte",
       pageSize: 500,
@@ -78,83 +94,64 @@ describe("loadConfig", () => {
     });
   });
 
-  test("drops invalid theme (not a string)", () => {
-    const configPath = makeTempConfig("bad-theme", { theme: 42 });
-    const { config: result, warnings } = loadConfig("/tmp/repo", configPath);
-    expect(result.theme).toBeUndefined();
-    expect(warnings.length).toBeGreaterThan(0);
-  });
-
-  test("drops empty theme string", () => {
-    const configPath = makeTempConfig("empty-theme", { theme: "" });
-    const { config: result } = loadConfig("/tmp/repo", configPath);
-    expect(result.theme).toBeUndefined();
-  });
-
-  test("drops invalid pageSize (non-integer)", () => {
-    const configPath = makeTempConfig("bad-pagesize-float", { pageSize: 1.5 });
-    const { config: result } = loadConfig("/tmp/repo", configPath);
-    expect(result.pageSize).toBeUndefined();
-  });
-
-  test("drops invalid pageSize (zero)", () => {
-    const configPath = makeTempConfig("bad-pagesize-zero", { pageSize: 0 });
-    const { config: result } = loadConfig("/tmp/repo", configPath);
-    expect(result.pageSize).toBeUndefined();
-  });
-
-  test("drops invalid pageSize (negative)", () => {
-    const configPath = makeTempConfig("bad-pagesize-neg", { pageSize: -10 });
-    const { config: result } = loadConfig("/tmp/repo", configPath);
-    expect(result.pageSize).toBeUndefined();
-  });
-
-  test("drops invalid branch (empty string)", () => {
-    const configPath = makeTempConfig("bad-branch", { branch: "" });
-    const { config: result } = loadConfig("/tmp/repo", configPath);
-    expect(result.branch).toBeUndefined();
-  });
-
-  test("drops invalid showAllBranches (not boolean)", () => {
-    const configPath = makeTempConfig("bad-show-all", { showAllBranches: "yes" });
-    const { config: result } = loadConfig("/tmp/repo", configPath);
-    expect(result.showAllBranches).toBeUndefined();
-  });
-
-  test("drops invalid autoRefreshSeconds (negative)", () => {
-    const configPath = makeTempConfig("bad-refresh", { autoRefreshSeconds: -5 });
-    const { config: result } = loadConfig("/tmp/repo", configPath);
-    expect(result.autoRefreshSeconds).toBeUndefined();
+  test.each([
+    { label: "theme (not a string)", config: { theme: 42 }, field: "theme" as const, hasWarning: true },
+    { label: "empty theme string", config: { theme: "" }, field: "theme" as const, hasWarning: false },
+    { label: "pageSize (non-integer)", config: { pageSize: 1.5 }, field: "pageSize" as const, hasWarning: false },
+    { label: "pageSize (zero)", config: { pageSize: 0 }, field: "pageSize" as const, hasWarning: false },
+    { label: "pageSize (negative)", config: { pageSize: -10 }, field: "pageSize" as const, hasWarning: false },
+    { label: "branch (empty string)", config: { branch: "" }, field: "branch" as const, hasWarning: false },
+    {
+      label: "showAllBranches (not boolean)",
+      config: { showAllBranches: "yes" },
+      field: "showAllBranches" as const,
+      hasWarning: false,
+    },
+    {
+      label: "autoRefreshSeconds (negative)",
+      config: { autoRefreshSeconds: -5 },
+      field: "autoRefreshSeconds" as const,
+      hasWarning: false,
+    },
+  ])("drops invalid $label", ({ config, field, hasWarning }) => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig(`bad-${field}`, repoPath, config);
+    const { config: result, warnings } = loadConfig(repoPath, configPath);
+    expect(result[field]).toBeUndefined();
+    if (hasWarning) expect(warnings.length).toBeGreaterThan(0);
   });
 
   test("allows autoRefreshSeconds of 0 (off)", () => {
-    const configPath = makeTempConfig("refresh-zero", { autoRefreshSeconds: 0 });
-    const { config: result } = loadConfig("/tmp/repo", configPath);
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("refresh-zero", repoPath, { autoRefreshSeconds: 0 });
+    const { config: result } = loadConfig(repoPath, configPath);
     expect(result.autoRefreshSeconds).toBe(0);
   });
 
   test("ignores unknown keys silently", () => {
-    const configPath = makeTempConfig("unknown-keys", { theme: "nord", unknownKey: true, foo: "bar" });
-    const { config: result } = loadConfig("/tmp/repo", configPath);
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("unknown-keys", repoPath, { theme: "nord", unknownKey: true, foo: "bar" });
+    const { config: result } = loadConfig(repoPath, configPath);
     expect(result).toEqual({ theme: "nord" });
     expect((result as Record<string, unknown>).unknownKey).toBeUndefined();
   });
 
   test("keeps valid fields and drops invalid ones in same config", () => {
-    const configPath = makeTempConfig("mixed-validity", {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("mixed-validity", repoPath, {
       theme: "dracula",
       pageSize: -1,
       branch: "main",
       showAllBranches: 42,
     });
-    const { config: result } = loadConfig("/tmp/repo", configPath);
+    const { config: result } = loadConfig(repoPath, configPath);
     expect(result.theme).toBe("dracula");
     expect(result.pageSize).toBeUndefined();
     expect(result.branch).toBe("main");
     expect(result.showAllBranches).toBeUndefined();
   });
 
-  test("merges repo-specific overrides over global defaults", () => {
+  test("reads only from repos[path], ignoring global top-level", () => {
     const repoPath = "/tmp/my-repo";
     const configPath = makeTempConfig("repo-overrides", {
       theme: "catppuccin-mocha",
@@ -167,30 +164,13 @@ describe("loadConfig", () => {
       },
     });
     const { config: result } = loadConfig(repoPath, configPath);
-    expect(result.theme).toBe("catppuccin-mocha");
+    // Global top-level theme is NOT inherited — only repo entry fields
+    expect(result.theme).toBeUndefined();
     expect(result.pageSize).toBe(500);
     expect(result.branch).toBe("develop");
   });
 
-  test("repo overrides do not clobber global fields they do not define", () => {
-    const repoPath = "/tmp/my-repo";
-    const configPath = makeTempConfig("repo-partial", {
-      theme: "nord",
-      pageSize: 300,
-      autoRefreshSeconds: 30,
-      repos: {
-        [resolve(repoPath)]: {
-          pageSize: 100,
-        },
-      },
-    });
-    const { config: result } = loadConfig(repoPath, configPath);
-    expect(result.theme).toBe("nord");
-    expect(result.pageSize).toBe(100);
-    expect(result.autoRefreshSeconds).toBe(30);
-  });
-
-  test("returns global config when repos map has no entry for this repo", () => {
+  test("returns empty config when repos map has no entry for this repo", () => {
     const configPath = makeTempConfig("repo-miss", {
       theme: "gruvbox",
       repos: {
@@ -198,23 +178,17 @@ describe("loadConfig", () => {
       },
     });
     const { config: result } = loadConfig("/tmp/my-repo", configPath);
-    expect(result.theme).toBe("gruvbox");
-    expect(result.pageSize).toBeUndefined();
+    // No entry for this repo — returns empty (global top-level ignored)
+    expect(result).toEqual({});
   });
 
-  test("validates repo-specific override fields", () => {
+  test("validates repo-specific config fields", () => {
     const repoPath = "/tmp/my-repo";
-    const configPath = makeTempConfig("repo-invalid", {
-      theme: "nord",
-      repos: {
-        [resolve(repoPath)]: {
-          pageSize: -1,
-          branch: "main",
-        },
-      },
+    const configPath = makeRepoConfig("repo-invalid", repoPath, {
+      pageSize: -1,
+      branch: "main",
     });
     const { config: result } = loadConfig(repoPath, configPath);
-    expect(result.theme).toBe("nord");
     expect(result.pageSize).toBeUndefined();
     expect(result.branch).toBe("main");
   });
@@ -225,7 +199,7 @@ describe("loadConfig", () => {
       repos: "invalid",
     });
     const { config: result } = loadConfig("/tmp/repo", configPath);
-    expect(result.theme).toBe("nord");
+    expect(result).toEqual({});
   });
 
   test("ignores repo entry that is not an object", () => {
@@ -237,7 +211,7 @@ describe("loadConfig", () => {
       },
     });
     const { config: result } = loadConfig(repoPath, configPath);
-    expect(result.theme).toBe("nord");
+    expect(result).toEqual({});
   });
 });
 
@@ -253,6 +227,7 @@ describe("mergeOptions", () => {
       maxCount: DEFAULT_MAX_COUNT,
       themeName: "catppuccin-mocha",
       autoRefreshInterval: DEFAULT_AUTO_REFRESH_INTERVAL,
+      path: undefined,
     });
   });
 
@@ -327,6 +302,11 @@ describe("mergeOptions", () => {
     const result = mergeOptions({ repoPath: "/repo" }, {});
     expect(result.maxCount).toBe(DEFAULT_MAX_COUNT);
   });
+
+  test("CLI path is passed through", () => {
+    const result = mergeOptions({ repoPath: "/repo", path: "src/" }, {});
+    expect(result.path).toBe("src/");
+  });
 });
 
 describe("resolveConfigInfo", () => {
@@ -353,7 +333,6 @@ describe("resolveConfigInfo", () => {
   test("detects repo overrides when present in config", () => {
     const repoPath = "/tmp/my-repo";
     const configPath = makeTempConfig("resolve-repo", {
-      theme: "nord",
       repos: {
         [resolve(repoPath)]: { pageSize: 500 },
       },
@@ -389,105 +368,112 @@ describe("resolveConfigInfo", () => {
 });
 
 describe("writeConfig", () => {
-  test("creates new config file with global scope", () => {
+  test("creates new config file with repo entry", () => {
     const dir = makeTempDir("write-new");
     const configPath = join(dir, "config.json");
-    const result = writeConfig({ theme: "nord", pageSize: 100 }, "global", undefined, configPath);
+    const repoPath = "/tmp/my-repo";
+    const result = writeConfig({ theme: "nord", pageSize: 100 }, repoPath, configPath);
     expect(result).toBe(true);
     expect(existsSync(configPath)).toBe(true);
     const content = JSON.parse(readFileSync(configPath, "utf-8"));
-    expect(content.theme).toBe("nord");
-    expect(content.pageSize).toBe(100);
+    expect(content.repos[resolve(repoPath)].theme).toBe("nord");
+    expect(content.repos[resolve(repoPath)].pageSize).toBe(100);
   });
 
   test("creates parent directories when they do not exist", () => {
     const dir = makeTempDir("write-nested");
     const configPath = join(dir, "deep", "nested", "config.json");
-    const result = writeConfig({ theme: "gruvbox" }, "global", undefined, configPath);
+    const repoPath = "/tmp/my-repo";
+    const result = writeConfig({ theme: "gruvbox" }, repoPath, configPath);
     expect(result).toBe(true);
     expect(existsSync(configPath)).toBe(true);
     const content = JSON.parse(readFileSync(configPath, "utf-8"));
-    expect(content.theme).toBe("gruvbox");
+    expect(content.repos[resolve(repoPath)].theme).toBe("gruvbox");
   });
 
-  test("merges with existing file preserving unknown keys", () => {
+  test("merges with existing file preserving unknown top-level keys", () => {
     const dir = makeTempDir("write-merge");
     const configPath = join(dir, "config.json");
-    writeFileSync(configPath, JSON.stringify({ customKey: "preserve-me", theme: "old-theme" }, null, 2));
-    const result = writeConfig({ theme: "catppuccin-mocha", pageSize: 200 }, "global", undefined, configPath);
+    writeFileSync(configPath, JSON.stringify({ customKey: "preserve-me" }, null, 2));
+    const repoPath = "/tmp/my-repo";
+    const result = writeConfig({ theme: "catppuccin-mocha", pageSize: 200 }, repoPath, configPath);
     expect(result).toBe(true);
     const content = JSON.parse(readFileSync(configPath, "utf-8"));
     expect(content.customKey).toBe("preserve-me");
-    expect(content.theme).toBe("catppuccin-mocha");
-    expect(content.pageSize).toBe(200);
+    expect(content.repos[resolve(repoPath)].theme).toBe("catppuccin-mocha");
+    expect(content.repos[resolve(repoPath)].pageSize).toBe(200);
   });
 
   test("overwrites corrupt existing file", () => {
     const dir = makeTempDir("write-corrupt");
     const configPath = join(dir, "config.json");
     writeFileSync(configPath, "not valid json!!!");
-    const result = writeConfig({ theme: "dracula" }, "global", undefined, configPath);
+    const repoPath = "/tmp/my-repo";
+    const result = writeConfig({ theme: "dracula" }, repoPath, configPath);
     expect(result).toBe(true);
     const content = JSON.parse(readFileSync(configPath, "utf-8"));
-    expect(content.theme).toBe("dracula");
+    expect(content.repos[resolve(repoPath)].theme).toBe("dracula");
   });
 
   test("overwrites existing file that is an array", () => {
     const dir = makeTempDir("write-array");
     const configPath = join(dir, "config.json");
     writeFileSync(configPath, JSON.stringify([1, 2, 3]));
-    const result = writeConfig({ pageSize: 500 }, "global", undefined, configPath);
+    const repoPath = "/tmp/my-repo";
+    const result = writeConfig({ pageSize: 500 }, repoPath, configPath);
     expect(result).toBe(true);
     const content = JSON.parse(readFileSync(configPath, "utf-8"));
-    expect(content.pageSize).toBe(500);
+    expect(content.repos[resolve(repoPath)].pageSize).toBe(500);
     expect(Array.isArray(content)).toBe(false);
   });
 
   test("writes JSON with 2-space indent and trailing newline", () => {
     const dir = makeTempDir("write-format");
     const configPath = join(dir, "config.json");
-    writeConfig({ theme: "nord" }, "global", undefined, configPath);
+    const repoPath = "/tmp/my-repo";
+    writeConfig({ theme: "nord" }, repoPath, configPath);
     const raw = readFileSync(configPath, "utf-8");
-    expect(raw).toContain('  "theme": "nord"');
+    expect(raw).toContain('"theme": "nord"');
     expect(raw.endsWith("\n")).toBe(true);
   });
 
   test("only writes config fields that are defined", () => {
     const dir = makeTempDir("write-partial");
     const configPath = join(dir, "config.json");
-    writeConfig({ theme: "nord" }, "global", undefined, configPath);
+    const repoPath = "/tmp/my-repo";
+    writeConfig({ theme: "nord" }, repoPath, configPath);
     const content = JSON.parse(readFileSync(configPath, "utf-8"));
-    expect(content.theme).toBe("nord");
-    expect(content.pageSize).toBeUndefined();
-    expect(content.branch).toBeUndefined();
-    expect(content.showAllBranches).toBeUndefined();
-    expect(content.autoRefreshSeconds).toBeUndefined();
+    const entry = content.repos[resolve(repoPath)];
+    expect(entry.theme).toBe("nord");
+    expect(entry.pageSize).toBeUndefined();
+    expect(entry.branch).toBeUndefined();
+    expect(entry.showAllBranches).toBeUndefined();
+    expect(entry.autoRefreshSeconds).toBeUndefined();
   });
 
-  test("writes repo-specific overrides under repos map", () => {
+  test("writes under repos map keyed by absolute path", () => {
     const dir = makeTempDir("write-repo");
     const configPath = join(dir, "config.json");
     const repoPath = "/tmp/my-repo";
-    const result = writeConfig({ pageSize: 500, branch: "develop" }, "repo", repoPath, configPath);
+    const result = writeConfig({ pageSize: 500, branch: "develop" }, repoPath, configPath);
     expect(result).toBe(true);
     const content = JSON.parse(readFileSync(configPath, "utf-8"));
     expect(content.repos[resolve(repoPath)].pageSize).toBe(500);
     expect(content.repos[resolve(repoPath)].branch).toBe("develop");
   });
 
-  test("repo scope preserves existing global config", () => {
+  test("preserves existing top-level data in config file", () => {
     const dir = makeTempDir("write-repo-preserve");
     const configPath = join(dir, "config.json");
-    writeFileSync(configPath, JSON.stringify({ theme: "nord", pageSize: 200 }, null, 2));
+    writeFileSync(configPath, JSON.stringify({ legacyKey: "old-value" }, null, 2));
     const repoPath = "/tmp/my-repo";
-    writeConfig({ pageSize: 500 }, "repo", repoPath, configPath);
+    writeConfig({ pageSize: 500 }, repoPath, configPath);
     const content = JSON.parse(readFileSync(configPath, "utf-8"));
-    expect(content.theme).toBe("nord");
-    expect(content.pageSize).toBe(200);
+    expect(content.legacyKey).toBe("old-value");
     expect(content.repos[resolve(repoPath)].pageSize).toBe(500);
   });
 
-  test("repo scope preserves other repo entries", () => {
+  test("preserves other repo entries", () => {
     const dir = makeTempDir("write-repo-others");
     const configPath = join(dir, "config.json");
     const otherRepo = "/tmp/other-repo";
@@ -495,7 +481,6 @@ describe("writeConfig", () => {
       configPath,
       JSON.stringify(
         {
-          theme: "nord",
           repos: {
             [resolve(otherRepo)]: { pageSize: 100 },
           },
@@ -505,13 +490,13 @@ describe("writeConfig", () => {
       ),
     );
     const myRepo = "/tmp/my-repo";
-    writeConfig({ pageSize: 500 }, "repo", myRepo, configPath);
+    writeConfig({ pageSize: 500 }, myRepo, configPath);
     const content = JSON.parse(readFileSync(configPath, "utf-8"));
     expect(content.repos[resolve(otherRepo)].pageSize).toBe(100);
     expect(content.repos[resolve(myRepo)].pageSize).toBe(500);
   });
 
-  test("repo scope merges with existing repo entry", () => {
+  test("merges with existing repo entry", () => {
     const dir = makeTempDir("write-repo-merge");
     const configPath = join(dir, "config.json");
     const repoPath = "/tmp/my-repo";
@@ -527,22 +512,16 @@ describe("writeConfig", () => {
         2,
       ),
     );
-    writeConfig({ pageSize: 500 }, "repo", repoPath, configPath);
+    writeConfig({ pageSize: 500 }, repoPath, configPath);
     const content = JSON.parse(readFileSync(configPath, "utf-8"));
     expect(content.repos[resolve(repoPath)].branch).toBe("main");
     expect(content.repos[resolve(repoPath)].pageSize).toBe(500);
   });
 
-  test("repo scope returns false when repoPath is missing", () => {
-    const dir = makeTempDir("write-repo-no-path");
-    const configPath = join(dir, "config.json");
-    const result = writeConfig({ theme: "nord" }, "repo", undefined, configPath);
-    expect(result).toBe(false);
-  });
-
-  test("round-trip: writeConfig global then loadConfig reads back same values", () => {
+  test("round-trip: writeConfig then loadConfig reads back same values", () => {
     const dir = makeTempDir("write-roundtrip");
     const configPath = join(dir, "config.json");
+    const repoPath = "/tmp/repo";
     const original: CodepulseConfig = {
       theme: "catppuccin-latte",
       pageSize: 300,
@@ -550,20 +529,25 @@ describe("writeConfig", () => {
       showAllBranches: false,
       autoRefreshSeconds: 60,
     };
-    writeConfig(original, "global", undefined, configPath);
-    const { config: loaded } = loadConfig("/tmp/repo", configPath);
+    writeConfig(original, repoPath, configPath);
+    const { config: loaded } = loadConfig(repoPath, configPath);
     expect(loaded).toEqual(original);
   });
 
-  test("round-trip: writeConfig repo then loadConfig reads merged values", () => {
-    const dir = makeTempDir("write-roundtrip-repo");
+  test("round-trip: multiple repos with independent settings", () => {
+    const dir = makeTempDir("write-roundtrip-multi");
     const configPath = join(dir, "config.json");
-    const repoPath = "/tmp/my-repo";
-    writeConfig({ theme: "nord", pageSize: 200 }, "global", undefined, configPath);
-    writeConfig({ pageSize: 500, branch: "develop" }, "repo", repoPath, configPath);
-    const { config: loaded } = loadConfig(repoPath, configPath);
-    expect(loaded.theme).toBe("nord");
-    expect(loaded.pageSize).toBe(500);
-    expect(loaded.branch).toBe("develop");
+    const repo1 = "/tmp/repo-a";
+    const repo2 = "/tmp/repo-b";
+    writeConfig({ theme: "nord", pageSize: 200 }, repo1, configPath);
+    writeConfig({ pageSize: 500, branch: "develop" }, repo2, configPath);
+    const { config: loaded1 } = loadConfig(repo1, configPath);
+    const { config: loaded2 } = loadConfig(repo2, configPath);
+    expect(loaded1.theme).toBe("nord");
+    expect(loaded1.pageSize).toBe(200);
+    expect(loaded1.branch).toBeUndefined();
+    expect(loaded2.theme).toBeUndefined();
+    expect(loaded2.pageSize).toBe(500);
+    expect(loaded2.branch).toBe("develop");
   });
 });
