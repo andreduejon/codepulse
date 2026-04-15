@@ -17,6 +17,16 @@ export interface CodepulseConfig {
   autoRefreshSeconds?: number;
 }
 
+/** Return the built-in default config (all fields populated). */
+export function defaultConfig(): Required<Omit<CodepulseConfig, "branch">> {
+  return {
+    theme: "catppuccin-mocha",
+    pageSize: DEFAULT_MAX_COUNT,
+    showAllBranches: true,
+    autoRefreshSeconds: DEFAULT_AUTO_REFRESH_INTERVAL / 1000,
+  };
+}
+
 /** Resolved options ready for the app (all fields required). */
 export interface AppOptions {
   repoPath: string;
@@ -25,6 +35,8 @@ export interface AppOptions {
   maxCount: number;
   themeName: string;
   autoRefreshInterval: number;
+  /** Initial pathspec filter from CLI (session-scoped, not persisted). */
+  path: string | undefined;
 }
 
 /** Information about the global config file and repo-specific overrides. */
@@ -98,16 +110,33 @@ export function resolveConfigInfo(repoPath: string, configPath?: string): Config
 }
 
 /**
+ * Return all known repository paths from the global config file.
+ *
+ * Reads the `repos` map from `~/.config/codepulse/config.json` and returns
+ * the keys (absolute paths). Used by the project selector to show previously-
+ * opened repos. Returns an empty array if the config file doesn't exist or
+ * has no repos.
+ */
+export function getKnownRepos(configPath?: string): string[] {
+  const warnings: string[] = [];
+  const result = readRawConfig(configPath, warnings);
+  if (!result) return [];
+
+  const repos = result.parsed.repos;
+  if (typeof repos !== "object" || repos === null || Array.isArray(repos)) return [];
+
+  return Object.keys(repos as Record<string, unknown>);
+}
+
+/**
  * Load config from the global config file.
  *
- * Reads the config file and merges any repo-specific overrides
- * found under `repos[absoluteRepoPath]`. Returns an object with the
- * parsed config and any non-fatal warnings.
+ * Reads the repo-specific entry from `repos[absoluteRepoPath]` in the config
+ * file. Global top-level fields are ignored — each repo gets its own settings,
+ * and defaults are hardcoded in the app.
  *
- * @param repoPath - The repository directory (used to resolve repo-specific overrides).
+ * @param repoPath - The repository directory (used to look up the repo entry).
  * @param configPath - Override the global config path (used by tests).
- *
- * Priority: repo overrides > global top-level > (empty).
  */
 export function loadConfig(repoPath: string, configPath?: string): { config: CodepulseConfig; warnings: string[] } {
   const warnings: string[] = [];
@@ -116,33 +145,20 @@ export function loadConfig(repoPath: string, configPath?: string): { config: Cod
 
   const { parsed, globalPath } = result;
 
-  // Validate global top-level config fields
-  const globalConfig = validateConfig(parsed, globalPath, warnings);
-
-  // Check for repo-specific overrides
+  // Only read from repos[repoPath] — no global top-level fields
   const repos = parsed.repos;
   if (typeof repos === "object" && repos !== null && !Array.isArray(repos)) {
     const absPath = resolve(repoPath);
-    const repoOverrides = (repos as Record<string, unknown>)[absPath];
-    if (typeof repoOverrides === "object" && repoOverrides !== null && !Array.isArray(repoOverrides)) {
-      const repoConfig = validateConfig(repoOverrides as Record<string, unknown>, `${globalPath} [repos]`, warnings);
-      // Merge: repo overrides win over global
-      return { config: { ...globalConfig, ...stripUndefined(repoConfig) }, warnings };
+    const repoEntry = (repos as Record<string, unknown>)[absPath];
+    if (typeof repoEntry === "object" && repoEntry !== null && !Array.isArray(repoEntry)) {
+      return {
+        config: validateConfig(repoEntry as Record<string, unknown>, `${globalPath} [repos]`, warnings),
+        warnings,
+      };
     }
   }
 
-  return { config: globalConfig, warnings };
-}
-
-/** Remove keys whose value is undefined so spreading doesn't clobber defined values. */
-function stripUndefined(obj: CodepulseConfig): CodepulseConfig {
-  const result: CodepulseConfig = {};
-  if (obj.theme !== undefined) result.theme = obj.theme;
-  if (obj.pageSize !== undefined) result.pageSize = obj.pageSize;
-  if (obj.branch !== undefined) result.branch = obj.branch;
-  if (obj.showAllBranches !== undefined) result.showAllBranches = obj.showAllBranches;
-  if (obj.autoRefreshSeconds !== undefined) result.autoRefreshSeconds = obj.autoRefreshSeconds;
-  return result;
+  return { config: {}, warnings };
 }
 
 /**
@@ -206,6 +222,7 @@ export function mergeOptions(
     all?: boolean;
     maxCount?: number;
     themeName?: string;
+    path?: string;
   },
   config: CodepulseConfig,
 ): AppOptions {
@@ -226,34 +243,33 @@ export function mergeOptions(
     all = true;
   }
 
+  const defaults = defaultConfig();
+
   return {
     repoPath: cli.repoPath,
     branch,
     all,
-    maxCount: cli.maxCount ?? config.pageSize ?? DEFAULT_MAX_COUNT,
-    themeName: cli.themeName ?? config.theme ?? "catppuccin-mocha",
+    maxCount: cli.maxCount ?? config.pageSize ?? defaults.pageSize,
+    themeName: cli.themeName ?? config.theme ?? defaults.theme,
     autoRefreshInterval:
-      config.autoRefreshSeconds !== undefined ? config.autoRefreshSeconds * 1000 : DEFAULT_AUTO_REFRESH_INTERVAL,
+      config.autoRefreshSeconds !== undefined ? config.autoRefreshSeconds * 1000 : defaults.autoRefreshSeconds * 1000,
+    path: cli.path,
   };
 }
 
 /**
  * Write config to the global config file at `~/.config/codepulse/config.json`.
  *
+ * Always writes under `repos[repoPath]`. Global top-level fields are not used.
+ *
  * @param config - The config fields to write.
- * @param scope - `"global"` writes to top-level keys; `"repo"` writes under `repos[repoPath]`.
- * @param repoPath - Required when scope is `"repo"`. The absolute repo path used as the key.
+ * @param repoPath - The absolute repo path used as the key under `repos`.
  * @param configPath - Override the global config path (used by tests).
  *
- * Reads the existing file first to preserve unknown keys and other repo entries.
+ * Reads the existing file first to preserve other repo entries.
  * Creates parent directories as needed. Returns `true` on success, `false` on failure.
  */
-export function writeConfig(
-  config: CodepulseConfig,
-  scope: "global" | "repo",
-  repoPath?: string,
-  configPath?: string,
-): boolean {
+export function writeConfig(config: CodepulseConfig, repoPath: string, configPath?: string): boolean {
   const globalPath = configPath ?? defaultConfigPath();
 
   try {
@@ -273,29 +289,20 @@ export function writeConfig(
 
     const merged: Record<string, unknown> = { ...existing };
 
-    if (scope === "global") {
-      // Write config fields at the top level
-      applyConfigFields(merged, config);
-    } else {
-      // Write config fields under repos[repoPath]
-      if (!repoPath) {
-        console.error("Error: writeConfig with scope='repo' requires repoPath");
-        return false;
-      }
-      const absPath = resolve(repoPath);
-      let repos = merged.repos as Record<string, unknown> | undefined;
-      if (typeof repos !== "object" || repos === null || Array.isArray(repos)) {
-        repos = {};
-      }
-      const repoEntry: Record<string, unknown> = {};
-      const existingEntry = repos[absPath];
-      if (typeof existingEntry === "object" && existingEntry !== null && !Array.isArray(existingEntry)) {
-        Object.assign(repoEntry, existingEntry);
-      }
-      applyConfigFields(repoEntry, config);
-      repos[absPath] = repoEntry;
-      merged.repos = repos;
+    // Write config fields under repos[repoPath]
+    const absPath = resolve(repoPath);
+    let repos = merged.repos as Record<string, unknown> | undefined;
+    if (typeof repos !== "object" || repos === null || Array.isArray(repos)) {
+      repos = {};
     }
+    const repoEntry: Record<string, unknown> = {};
+    const existingEntry = repos[absPath];
+    if (typeof existingEntry === "object" && existingEntry !== null && !Array.isArray(existingEntry)) {
+      Object.assign(repoEntry, existingEntry);
+    }
+    applyConfigFields(repoEntry, config);
+    repos[absPath] = repoEntry;
+    merged.repos = repos;
 
     // Create parent directories if needed
     const dir = dirname(globalPath);

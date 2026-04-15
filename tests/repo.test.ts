@@ -11,13 +11,21 @@ import { computeFileWidths } from "../src/components/detail-types";
 import {
   parseCommitLine,
   parseDiffTreeOutput,
+  parseNumstatOutput,
   parseRefs,
   parseStashEntry,
   parseStatusPorcelain,
   parseTagLine,
   parseTrackInfo,
   RS,
+  resolveRenamePath,
 } from "../src/git/repo";
+
+/** Assert a value is not null/undefined and narrow its type. */
+function assertNotNull<T>(value: T, label = "value"): asserts value is NonNullable<T> {
+  expect(value).not.toBeNull();
+  if (value == null) throw new Error(`Expected ${label} to be non-null`);
+}
 
 describe("repo.ts parsing", () => {
   test("parseRefs — empty/blank string returns []", () => {
@@ -139,8 +147,7 @@ describe("repo.ts parsing", () => {
     ].join(RS);
 
     const commit = parseCommitLine(line, new Set(["origin"]));
-    expect(commit).not.toBeNull();
-    if (!commit) throw new Error("commit not found");
+    assertNotNull(commit, "commit");
 
     expect(commit.hash).toBe(hash);
     expect(commit.shortHash).toBe(shortHash);
@@ -182,8 +189,7 @@ describe("repo.ts parsing", () => {
     const line = fields.join(RS);
 
     const commit = parseCommitLine(line, new Set());
-    expect(commit).not.toBeNull();
-    if (!commit) throw new Error("commit not found");
+    assertNotNull(commit, "commit");
     expect(commit.parents.length).toBe(0);
     expect(commit.refs.length).toBe(0);
   });
@@ -220,8 +226,7 @@ describe("repo.ts parsing", () => {
     const line = fields.join(RS);
 
     const commit = parseCommitLine(line, new Set());
-    expect(commit).not.toBeNull();
-    if (!commit) throw new Error("commit not found");
+    assertNotNull(commit, "commit");
     expect(commit.subject).toBe(specialSubject);
   });
 });
@@ -231,8 +236,7 @@ describe("parseTagLine", () => {
     const line = ["refs/tags/v1.0.0", "tag", "Jane Doe", "2024-06-15T12:00:00+02:00", "Release v1.0.0"].join(RS);
 
     const tag = parseTagLine(line);
-    expect(tag).not.toBeNull();
-    if (!tag) throw new Error("tag not found");
+    assertNotNull(tag, "tag");
     expect(tag.name).toBe("v1.0.0");
     expect(tag.type).toBe("annotated");
     expect(tag.tagger).toBe("Jane Doe");
@@ -244,8 +248,7 @@ describe("parseTagLine", () => {
     const line = ["refs/tags/v0.1.0", "commit", "", "", ""].join(RS);
 
     const tag = parseTagLine(line);
-    expect(tag).not.toBeNull();
-    if (!tag) throw new Error("tag not found");
+    assertNotNull(tag, "tag");
     expect(tag.name).toBe("v0.1.0");
     expect(tag.type).toBe("lightweight");
     expect(tag.tagger).toBeUndefined();
@@ -257,8 +260,7 @@ describe("parseTagLine", () => {
     const line = ["refs/tags/v2.0", "tag", "", "", ""].join(RS);
 
     const tag = parseTagLine(line);
-    expect(tag).not.toBeNull();
-    if (!tag) throw new Error("tag not found");
+    assertNotNull(tag, "tag");
     expect(tag.name).toBe("v2.0");
     expect(tag.type).toBe("annotated");
     expect(tag.tagger).toBeUndefined();
@@ -275,8 +277,7 @@ describe("parseTagLine", () => {
     const line = ["refs/tags/release/v3.0", "commit", "", "", ""].join(RS);
 
     const tag = parseTagLine(line);
-    expect(tag).not.toBeNull();
-    if (!tag) throw new Error("tag not found");
+    assertNotNull(tag, "tag");
     expect(tag.name).toBe("release/v3.0");
   });
 });
@@ -337,8 +338,7 @@ describe("parseStashEntry", () => {
     ].join(RS);
 
     const entry = parseStashEntry(line);
-    expect(entry).not.toBeNull();
-    if (!entry) throw new Error("entry not found");
+    assertNotNull(entry, "entry");
     expect(entry.hash).toBe("abc123def456abc123def456abc123def456abc123");
     expect(entry.shortHash).toBe("abc123d");
     // Only first parent used for graph topology
@@ -367,8 +367,7 @@ describe("parseStashEntry", () => {
     ].join(RS);
 
     const entry = parseStashEntry(line);
-    expect(entry).not.toBeNull();
-    if (!entry) throw new Error("entry not found");
+    assertNotNull(entry, "entry");
     // Only first parent used
     expect(entry.parents).toEqual(["parent1"]);
     expect(entry.refs[0].name).toBe("stash@{2}");
@@ -414,8 +413,7 @@ describe("parseStashEntry", () => {
     ].join(RS);
 
     const entry = parseStashEntry(line);
-    expect(entry).not.toBeNull();
-    if (!entry) throw new Error("entry not found");
+    assertNotNull(entry, "entry");
     expect(entry.refs[0].name).toBe("stash@{5}");
     expect(entry.refs[0].type).toBe("stash");
   });
@@ -430,8 +428,7 @@ describe("parseStatusPorcelain", () => {
   test("counts staged files (index column)", () => {
     const output = "M  src/app.ts\nA  src/new.ts\nD  old.ts\n";
     const result = parseStatusPorcelain(output);
-    expect(result).not.toBeNull();
-    if (!result) throw new Error("result not found");
+    assertNotNull(result, "result");
     expect(result.staged).toBe(3);
     expect(result.unstaged).toBe(0);
     expect(result.untracked).toBe(0);
@@ -440,8 +437,7 @@ describe("parseStatusPorcelain", () => {
   test("counts unstaged files (worktree column)", () => {
     const output = " M src/app.ts\n M src/other.ts\n";
     const result = parseStatusPorcelain(output);
-    expect(result).not.toBeNull();
-    if (!result) throw new Error("result not found");
+    assertNotNull(result, "result");
     expect(result.staged).toBe(0);
     expect(result.unstaged).toBe(2);
     expect(result.untracked).toBe(0);
@@ -450,8 +446,7 @@ describe("parseStatusPorcelain", () => {
   test("counts untracked files", () => {
     const output = "?? newfile.ts\n?? another.ts\n";
     const result = parseStatusPorcelain(output);
-    expect(result).not.toBeNull();
-    if (!result) throw new Error("result not found");
+    assertNotNull(result, "result");
     expect(result.staged).toBe(0);
     expect(result.unstaged).toBe(0);
     expect(result.untracked).toBe(2);
@@ -465,8 +460,7 @@ describe("parseStatusPorcelain", () => {
       "?? newfile.ts",
     ].join("\n");
     const result = parseStatusPorcelain(output);
-    expect(result).not.toBeNull();
-    if (!result) throw new Error("result not found");
+    assertNotNull(result, "result");
     // "M " = staged, " M" = unstaged, "MM" = both staged+unstaged, "??" = untracked
     expect(result.staged).toBe(2); // M_ and MM
     expect(result.unstaged).toBe(2); // _M and MM
@@ -495,22 +489,19 @@ describe("parseDiffTreeOutput", () => {
     expect(files).toHaveLength(3);
 
     const app = files.find(f => f.path === "src/app.tsx");
-    expect(app).toBeDefined();
-    if (!app) throw new Error("app not found");
+    assertNotNull(app, "app");
     expect(app.additions).toBe(12);
     expect(app.deletions).toBe(3);
     expect(app.status).toBe("M");
 
     const newFile = files.find(f => f.path === "src/new-file.ts");
-    expect(newFile).toBeDefined();
-    if (!newFile) throw new Error("newFile not found");
+    assertNotNull(newFile, "newFile");
     expect(newFile.additions).toBe(45);
     expect(newFile.deletions).toBe(0);
     expect(newFile.status).toBe("A");
 
     const deleted = files.find(f => f.path === "old-file.ts");
-    expect(deleted).toBeDefined();
-    if (!deleted) throw new Error("deleted not found");
+    assertNotNull(deleted, "deleted");
     expect(deleted.additions).toBe(0);
     expect(deleted.deletions).toBe(10);
     expect(deleted.status).toBe("D");
@@ -606,5 +597,70 @@ describe("computeFileWidths", () => {
     expect(result.totalDel).toBe(0);
     expect(result.addColWidth).toBe(2);
     expect(result.delColWidth).toBe(2);
+  });
+});
+
+describe("resolveRenamePath", () => {
+  test("plain path — no braces, returned as-is", () => {
+    expect(resolveRenamePath("src/git/repo.ts")).toBe("src/git/repo.ts");
+  });
+
+  test("top-level rename {old => new}", () => {
+    expect(resolveRenamePath("{old.txt => new.txt}")).toBe("new.txt");
+  });
+
+  test("rename within directory dir/{old => new}", () => {
+    expect(resolveRenamePath("src/components/dialogs/{operations-dialog.tsx => menu-dialog.tsx}")).toBe(
+      "src/components/dialogs/menu-dialog.tsx",
+    );
+  });
+
+  test("directory move {src/old => dst/new}/file.txt", () => {
+    expect(resolveRenamePath("{src/old => dst/new}/file.txt")).toBe("dst/new/file.txt");
+  });
+
+  test("move to subdirectory with shared prefix dir/{old.jar => sub/new.jar}", () => {
+    expect(
+      resolveRenamePath(
+        "cicd/{api/openapi-generator-cli-7.9.0.jar => openapi-generator/openapi-generator-cli-7.10.0.jar}",
+      ),
+    ).toBe("cicd/openapi-generator/openapi-generator-cli-7.10.0.jar");
+  });
+
+  test("rename with empty old part { => new}/file (new file added to subdir)", () => {
+    expect(resolveRenamePath("{ => src}/file.ts")).toBe("src/file.ts");
+  });
+
+  test("rename with empty new part {old => }/file (moved to root)", () => {
+    expect(resolveRenamePath("{src => }/file.ts")).toBe("file.ts");
+  });
+});
+
+describe("parseNumstatOutput", () => {
+  test("normal files parsed correctly", () => {
+    const stdout = "10\t5\tsrc/app.tsx\n3\t1\tsrc/utils.ts\n";
+    const files = parseNumstatOutput(stdout);
+    expect(files).toHaveLength(2);
+    expect(files[0]).toEqual({ path: "src/app.tsx", additions: 10, deletions: 5, status: "M" });
+    expect(files[1]).toEqual({ path: "src/utils.ts", additions: 3, deletions: 1, status: "M" });
+  });
+
+  test("rename paths resolved to destination", () => {
+    const stdout = "5\t5\tsrc/components/dialogs/{operations-dialog.tsx => menu-dialog.tsx}\n";
+    const files = parseNumstatOutput(stdout);
+    expect(files).toHaveLength(1);
+    expect(files[0].path).toBe("src/components/dialogs/menu-dialog.tsx");
+  });
+
+  test("binary files with - stats parsed as 0", () => {
+    const stdout = "-\t-\timage.png\n";
+    const files = parseNumstatOutput(stdout);
+    expect(files).toHaveLength(1);
+    expect(files[0]).toEqual({ path: "image.png", additions: 0, deletions: 0, status: "M" });
+  });
+
+  test("empty input returns empty array", () => {
+    expect(parseNumstatOutput("")).toEqual([]);
+    expect(parseNumstatOutput("\n")).toEqual([]);
   });
 });

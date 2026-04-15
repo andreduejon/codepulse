@@ -107,12 +107,11 @@ function renderConnectorGlyphs(
     const extraTypes = config.teeLeftDashExtraTypes ?? [];
     const nextH = nextConns?.find(c => c.type === "horizontal" || extraTypes.includes(c.type));
     const dashColor = nextH ? connColor(nextH) : teeColor;
-    if (dashColor === teeColor) {
-      result.push({ char: `${config.teeLeftChar}─`, color: teeColor });
-    } else {
-      result.push({ char: config.teeLeftChar, color: teeColor });
-      result.push({ char: "─", color: dashColor });
-    }
+    // Always emit tee-left and ─ as separate 1-char entries so that
+    // dimGraphChars can dim them independently (junction → │ bright,
+    // ─ dimmed).
+    result.push({ char: config.teeLeftChar, color: teeColor });
+    result.push({ char: "─", color: dashColor });
   } else if (teeRight) {
     result.push({ char: config.teeRightGlyph, color: connColor(teeRight) });
   } else if (straight && horizontal) {

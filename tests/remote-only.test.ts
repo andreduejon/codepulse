@@ -13,7 +13,29 @@
  */
 import { describe, expect, test } from "bun:test";
 import { buildGraph } from "../src/git/graph";
-import { assertRowFullyDimmed, findConnector, makeCommit, printGraph } from "./test-helpers";
+import type { GraphRow } from "../src/git/types";
+import { assertDefined, CONNECTION_TYPES, findConnector, makeCommit, printGraph } from "./test-helpers";
+
+/**
+ * Assert that every connector, column, and fan-out connector on the given row
+ * has `isRemoteOnly === true`. Used by tests that verify post-pass dimming.
+ */
+function assertRowFullyDimmed(row: GraphRow) {
+  for (const conn of row.connectors) {
+    expect(conn.isRemoteOnly).toBe(true);
+  }
+  for (const col of row.columns) {
+    expect(col.isRemoteOnly).toBeDefined();
+    expect(col.isRemoteOnly).toBe(true);
+  }
+  if (row.fanOutRows) {
+    for (const foRow of row.fanOutRows) {
+      for (const conn of foRow) {
+        expect(conn.isRemoteOnly).toBe(true);
+      }
+    }
+  }
+}
 
 describe("Remote-Only", () => {
   test("Remote-only lane propagation (single parent)", () => {
@@ -28,15 +50,13 @@ describe("Remote-Only", () => {
     expect(rows[0].isRemoteOnly).toBe(true);
 
     const f1Node = findConnector(rows[0].connectors, "node");
-    expect(f1Node).toBeDefined();
-    if (!f1Node) throw new Error("f1Node not found");
+    assertDefined(f1Node, "f1Node");
     expect(f1Node.isRemoteOnly).toBe(true);
 
     expect(rows[1].isRemoteOnly).toBeFalsy();
 
     const d1Node = findConnector(rows[1].connectors, "node");
-    expect(d1Node).toBeDefined();
-    if (!d1Node) throw new Error("d1Node not found");
+    assertDefined(d1Node, "d1Node");
     expect(d1Node.isRemoteOnly).not.toBe(true);
   });
 
@@ -82,16 +102,7 @@ describe("Remote-Only", () => {
     expect(mergeRow.commit.hash).toBe("m1");
     expect(mergeRow.isRemoteOnly).toBeFalsy();
 
-    const spanTypes = new Set([
-      "horizontal",
-      "corner-top-right",
-      "corner-top-left",
-      "corner-bottom-right",
-      "corner-bottom-left",
-      "tee-left",
-      "tee-right",
-    ]);
-    const spanConns = mergeRow.connectors.filter(c => spanTypes.has(c.type));
+    const spanConns = mergeRow.connectors.filter(c => CONNECTION_TYPES.has(c.type));
     expect(spanConns.length).toBeGreaterThan(0);
   });
 
@@ -107,8 +118,7 @@ describe("Remote-Only", () => {
     printGraph(rows);
 
     const d1Row = rows.find(r => r.commit.hash === "d1");
-    expect(d1Row).toBeDefined();
-    if (!d1Row) throw new Error("d1Row not found");
+    assertDefined(d1Row, "d1Row");
     expect(d1Row.fanOutRows !== undefined && d1Row.fanOutRows.length > 0).toBe(true);
 
     if (d1Row.fanOutRows) {

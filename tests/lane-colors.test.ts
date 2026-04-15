@@ -7,7 +7,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { buildGraph, getColorForColumn, renderGraphRow } from "../src/git/graph";
-import { findRow, makeCommit, printGraph } from "./test-helpers";
+import { assertDefined, findRow, makeCommit, printGraph } from "./test-helpers";
 
 describe("Lane Color Consistency", () => {
   test("New lane at reused interior slot gets fresh color", () => {
@@ -23,8 +23,7 @@ describe("Lane Color Consistency", () => {
     printGraph(rows);
 
     const rowB = rows.find(r => r.commit.hash === "B");
-    expect(rowB).toBeDefined();
-    if (!rowB) throw new Error("rowB not found");
+    assertDefined(rowB, "rowB");
 
     const bNodeColor = rowB.nodeColor;
 

@@ -164,4 +164,33 @@ describe("parseArgs", () => {
     expect(opts.themeName).toBe("catppuccin");
     expect(opts.repoPath).toBe("/my/repo");
   });
+
+  // ── --path ────────────────────────────────────────────────────────
+
+  test("--path sets path filter", () => {
+    const opts = parseArgs([...ARGV_PREFIX, "--path", "src/git/"]);
+    expect(opts.path).toBe("src/git/");
+  });
+
+  test("--path accepts a file path", () => {
+    const opts = parseArgs([...ARGV_PREFIX, "--path", "src/app.tsx"]);
+    expect(opts.path).toBe("src/app.tsx");
+  });
+
+  test("--path without value exits with code 1", () => {
+    expect(() => parseArgs([...ARGV_PREFIX, "--path"])).toThrow("process.exit");
+    expect(lastExitCode).toBe(1);
+  });
+
+  test("--path combines with other options", () => {
+    const opts = parseArgs([...ARGV_PREFIX, "-b", "main", "--path", "src/", "/my/repo"]);
+    expect(opts.branch).toBe("main");
+    expect(opts.path).toBe("src/");
+    expect(opts.repoPath).toBe("/my/repo");
+  });
+
+  test("no --path leaves path undefined", () => {
+    const opts = parseArgs([...ARGV_PREFIX]);
+    expect(opts.path).toBeUndefined();
+  });
 });

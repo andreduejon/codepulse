@@ -46,6 +46,7 @@ export function DialogTitleBar(props: Readonly<{ title: string | JSX.Element }>)
             props.title
           )}
         </text>
+        <box width={1} flexShrink={0} />
         <KeyHint key="esc" desc=" close" />
       </box>
       <box height={1} flexShrink={0} />

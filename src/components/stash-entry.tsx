@@ -1,3 +1,4 @@
+import type { Renderable } from "@opentui/core";
 import { For, Show } from "solid-js";
 import type { Commit } from "../git/types";
 import { useT } from "../hooks/use-t";
@@ -13,6 +14,8 @@ export interface StashFileRowData {
   collapsed: boolean;
   highlightBg: string | undefined;
   scrolledName: string | null;
+  /** Optional ref callback forwarded to the FileTreeEntry for scroll-into-view. */
+  ref?: (el: Renderable) => void;
 }
 
 export interface StashEntryProps {
@@ -35,6 +38,8 @@ export interface StashEntryProps {
   delColWidth: number;
   totalAdd: number;
   totalDel: number;
+  /** Optional ref callback for the header row box (scroll-into-view). */
+  headerRef?: (el: Renderable) => void;
 }
 
 /**
@@ -56,7 +61,7 @@ export function StashEntry(props: Readonly<StashEntryProps>) {
       </Show>
 
       {/* Stash entry header — label + file count only */}
-      <box backgroundColor={props.headerHighlightBg}>
+      <box ref={props.headerRef} backgroundColor={props.headerHighlightBg}>
         <text fg={t().accent} wrapMode="none" truncate={props.scrolledHeaderText == null}>
           <strong>
             {props.expanded ? "▾" : "▸"} {props.scrolledHeaderText ?? label()}
@@ -83,6 +88,7 @@ export function StashEntry(props: Readonly<StashEntryProps>) {
         <For each={props.fileRows}>
           {fileRowData => (
             <FileTreeEntry
+              ref={fileRowData.ref}
               row={fileRowData.row}
               cursored={fileRowData.cursored}
               collapsed={fileRowData.collapsed}

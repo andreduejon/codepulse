@@ -1,5 +1,11 @@
 export { buildGraph } from "./graph-build";
 export {
+  type BrightColumns,
+  computeBrightColumns,
+  type DimOptions,
+  dimGraphChars,
+} from "./graph-highlight";
+export {
   type GraphChar,
   getColorForColumn,
   graphCharsToContent,

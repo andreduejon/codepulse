@@ -8,6 +8,14 @@ export const DEFAULT_AUTO_REFRESH_INTERVAL = 30000;
 /** Valid tab identifiers for the detail panel. */
 export type DetailTab = "files" | "detail" | "stashes" | "staged" | "unstaged" | "untracked";
 
+/**
+ * Which highlighting mode is currently active.
+ * - "ancestry": per-column graph lane brightness (computeBrightColumns)
+ * - "path" | "search": per-row dimming, only commit node stays bright on matching rows
+ * - null: no highlighting active
+ */
+export type HighlightMode = "ancestry" | "path" | "search" | null;
+
 export interface AppState {
   // ── Repository data ─────────────────────────────────────────────────
   commits: Accessor<Commit[]>;
@@ -27,23 +35,34 @@ export interface AppState {
   selectedRow: Accessor<GraphRow | null>;
   commitDetail: Accessor<CommitDetail | null>;
   searchQuery: Accessor<string>;
-  /** Whether the user has confirmed the search (Enter). Phase 1 = false, Phase 2 = true. */
-  searchConfirmed: Accessor<boolean>;
-  /** The commit hash that was selected when the user pressed `/` to open search. */
-  preSearchCursorHash: Accessor<string | null>;
-  /** All rows matching the current search (independent of confirmed state). */
-  searchMatchRows: Accessor<GraphRow[]>;
-  filteredRows: Accessor<GraphRow[]>;
-  /**
-   * True during Phase 1 (search open, not yet confirmed): a single h-line divider
-   * should be drawn after row 0 (the anchor/cursor row). False otherwise.
-   */
-  searchShowDivider: Accessor<boolean>;
   scrollTargetIndex: Accessor<number>;
   /** Commit hash to scroll into view after layout settles (e.g. after filter clear). */
   pendingScrollHash: Accessor<string | null>;
   /** Branch being viewed (filtered perspective). null = show all / default. */
   viewingBranch: Accessor<string | null>;
+
+  // ── Path filtering ──────────────────────────────────────────────────
+  /** Active pathspec filter string for display. null = no filter. */
+  pathFilter: Accessor<string | null>;
+  /** Set of commit hashes touching the active pathspec. null = inactive. */
+  pathMatchSet: Accessor<Set<string> | null>;
+
+  // ── Ancestry highlighting ────────────────────────────────────────────
+  /**
+   * Set of commit hashes that are ancestors of the selected anchor commit
+   * (including the anchor itself). null = ancestry highlighting inactive.
+   */
+  ancestrySet: Accessor<Set<string> | null>;
+
+  // ── Unified highlighting ────────────────────────────────────────────
+  /**
+   * Derived set of commit hashes that should be highlighted (bright).
+   * Picks from whichever mode is active: ancestry > path > search.
+   * null = no highlighting active (all rows normal).
+   */
+  highlightSet: Accessor<Set<string> | null>;
+  /** Which highlighting mode is currently active. */
+  highlightMode: Accessor<HighlightMode>;
 
   // ── Detail panel ────────────────────────────────────────────────────
   detailFocused: Accessor<boolean>;
@@ -79,8 +98,6 @@ export interface AppActions {
   setLoading: (loading: boolean) => void;
   setShowAllBranches: (show: boolean) => void;
   setSearchQuery: (query: string) => void;
-  setSearchConfirmed: (confirmed: boolean) => void;
-  setPreSearchCursorHash: (hash: string | null) => void;
   setDetailFocused: (focused: boolean) => void;
   setDetailCursorIndex: (index: number) => void;
   moveDetailCursor: (delta: number, itemCount: number) => void;
@@ -103,26 +120,13 @@ export interface AppActions {
   setDetailActiveTab: (tab: DetailTab) => void;
   setUncommittedDetail: (detail: UncommittedDetail | null) => void;
   setViewingBranch: (branch: string | null) => void;
+  setPathFilter: (path: string | null) => void;
+  setPathMatchSet: (set: Set<string> | null) => void;
   setHasMore: (hasMore: boolean) => void;
+  setAncestrySet: (set: Set<string> | null) => void;
 }
 
 const AppStateContext = createContext<{ state: AppState; actions: AppActions }>();
-
-/**
- * Pure function: compute the two-zone row layout for Phase 1 search.
- *   [cursor/anchor row] + [all matches in graph order]
- *
- * The anchor row is always first (pinned). Matches that happen to be the
- * anchor are deduplicated (excluded from the matches list below it).
- * Exported for direct unit testing.
- */
-export function computeTwoZoneRows(matches: GraphRow[], anchorRow: GraphRow | null): GraphRow[] {
-  if (!anchorRow) return matches;
-  const anchorHash = anchorRow.commit.hash;
-  // Anchor first, then all matches that aren't the anchor (preserve graph order)
-  const rest = matches.filter(m => m.commit.hash !== anchorHash);
-  return [anchorRow, ...rest];
-}
 
 export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, initialAutoRefreshInterval?: number) {
   // ── Repository data ───────────────────────────────────────────────
@@ -141,9 +145,14 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
   const [pendingScrollHash, setPendingScrollHash] = createSignal<string | null>(null);
   const [commitDetail, setCommitDetail] = createSignal<CommitDetail | null>(null);
   const [searchQuery, setSearchQuery] = createSignal("");
-  const [searchConfirmed, setSearchConfirmed] = createSignal(false);
-  const [preSearchCursorHash, setPreSearchCursorHash] = createSignal<string | null>(null);
   const [viewingBranch, setViewingBranch] = createSignal<string | null>(null);
+
+  // ── Path filtering ────────────────────────────────────────────────────
+  const [pathFilter, setPathFilter] = createSignal<string | null>(null);
+  const [pathMatchSet, setPathMatchSet] = createSignal<Set<string> | null>(null);
+
+  // ── Ancestry highlighting ─────────────────────────────────────────────
+  const [ancestrySet, setAncestrySet] = createSignal<Set<string> | null>(null);
 
   // ── Detail panel ──────────────────────────────────────────────────
   const [detailFocused, setDetailFocused] = createSignal(false);
@@ -166,8 +175,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
   const [fetching, setFetching] = createSignal(false);
   const [hasMore, setHasMore] = createSignal(true);
 
-  // ── Search memos ──────────────────────────────────────────────────
-
+  // ── Search memo ───────────────────────────────────────────────────
   // Memoize parsed search separately so regex compilation only happens when
   // the query text changes, not on every graphRows update (e.g. auto-refresh).
   const parsedSearch = createMemo(() => {
@@ -175,53 +183,51 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
     return query ? parseSearchQuery(query) : null;
   });
 
-  // All rows matching the current search query (independent of confirmed state).
-  const searchMatchRows = createMemo(() => {
+  // ── Unified highlight system ──────────────────────────────────────
+  // Priority: ancestry > path > search. Only one mode active at a time
+  // (mutual exclusion enforced by the keyboard handler / command dispatch).
+
+  const highlightMode = createMemo((): HighlightMode => {
+    if (ancestrySet()) return "ancestry";
+    if (pathMatchSet()) return "path";
+    if (searchQuery()) return "search";
+    return null;
+  });
+
+  const highlightSet = createMemo((): Set<string> | null => {
+    const aSet = ancestrySet();
+    if (aSet) return aSet;
+
+    const pSet = pathMatchSet();
+    if (pSet) return pSet;
+
     const parsed = parsedSearch();
-    if (!parsed) return [];
-    return graphRows().filter(row => matchCommit(row.commit, parsed));
+    if (parsed) {
+      const matches = new Set<string>();
+      for (const row of graphRows()) {
+        if (matchCommit(row.commit, parsed)) matches.add(row.commit.hash);
+      }
+      return matches.size > 0 ? matches : new Set();
+    }
+
+    return null;
   });
 
-  // The cursor row from the full graph, identified by preSearchCursorHash.
-  const preSearchCursorRow = createMemo(() => {
-    const hash = preSearchCursorHash();
-    if (!hash) return null;
-    const rows = graphRows();
-    return rows.find(r => r.commit.hash === hash) ?? null;
-  });
-
-  /**
-   * Two-zone filtered rows for Phase 1 (typing, not confirmed).
-   * Delegates to the pure `computeTwoZoneRows` function.
-   */
-  const twoZoneRows = createMemo(() => computeTwoZoneRows(searchMatchRows(), preSearchCursorRow()));
-
-  const filteredRows = createMemo(() => {
-    const query = searchQuery();
-    if (!query) return graphRows();
-    // Phase 2 (confirmed): show only matching rows
-    if (searchConfirmed()) return searchMatchRows();
-    // Phase 1 (typing): anchor row first, then all matches
-    return twoZoneRows();
-  });
-
-  // True in Phase 1 (query active, not confirmed): show h-line divider after row 0.
-  const searchShowDivider = createMemo(() => !!(searchQuery() && !searchConfirmed()));
-
+  // ── Selection memos (always use full graphRows) ───────────────────
   const selectedCommit = createMemo(() => {
-    const rows = filteredRows();
+    const rows = graphRows();
     const idx = cursorIndex();
     return idx >= 0 && idx < rows.length ? rows[idx].commit : null;
   });
 
   const selectedRow = createMemo(() => {
-    const rows = filteredRows();
+    const rows = graphRows();
     const idx = cursorIndex();
     return idx >= 0 && idx < rows.length ? rows[idx] : null;
   });
 
   const moveCursor = (delta: number) => {
-    const rows = filteredRows();
+    const rows = graphRows();
     const newIndex = Math.max(0, Math.min(rows.length - 1, cursorIndex() + delta));
     setCursorIndex(newIndex);
     setScrollTargetIndex(newIndex);
@@ -251,11 +257,6 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
     loading,
     showAllBranches,
     searchQuery,
-    searchConfirmed,
-    preSearchCursorHash,
-    searchMatchRows,
-    filteredRows,
-    searchShowDivider,
     maxGraphColumns,
     maxCount,
     autoRefreshInterval,
@@ -271,6 +272,11 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
     detailActiveTab,
     uncommittedDetail,
     viewingBranch,
+    pathFilter,
+    pathMatchSet,
+    ancestrySet,
+    highlightSet,
+    highlightMode,
   };
 
   const actions: AppActions = {
@@ -282,8 +288,6 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
     setLoading,
     setShowAllBranches,
     setSearchQuery,
-    setSearchConfirmed,
-    setPreSearchCursorHash,
     setDetailFocused,
     setDetailCursorIndex,
     moveDetailCursor,
@@ -307,6 +311,9 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
     setDetailActiveTab,
     setUncommittedDetail,
     setViewingBranch,
+    setPathFilter,
+    setPathMatchSet,
+    setAncestrySet,
   };
 
   return { state, actions };

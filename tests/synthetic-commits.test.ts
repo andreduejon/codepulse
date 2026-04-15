@@ -7,7 +7,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { buildGraph } from "../src/git/graph";
-import { findRow, makeCommit, printGraph } from "./test-helpers";
+import { assertDefined, findRow, makeCommit, printGraph } from "./test-helpers";
 
 describe("Uncommitted Changes Node", () => {
   test("uncommitted on lane 0 as continuation of current branch", () => {
@@ -85,8 +85,7 @@ describe("Stash Badge on Parent Commits", () => {
     expect(rows[0].fanOutRows).toBeUndefined();
     // Stash ref should be present on the commit
     const stashRef = rows[0].commit.refs.find(r => r.type === "stash");
-    expect(stashRef).toBeDefined();
-    if (!stashRef) throw new Error("stashRef not found");
+    assertDefined(stashRef, "stashRef");
     expect(stashRef.name).toBe("stash (2)");
   });
 

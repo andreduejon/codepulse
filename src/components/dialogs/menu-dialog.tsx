@@ -4,11 +4,11 @@ import { createEffect, createSignal, For, type JSX, onCleanup } from "solid-js";
 import type { ConfigInfo } from "../../config";
 import { SHIFT_JUMP } from "../../constants";
 import { useTheme } from "../../context/theme";
-import { getColorForColumn } from "../../git/graph";
 import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useClipboard } from "../../hooks/use-clipboard";
 import { COPYABLE_VISIBLE_WIDTH, INFO_LABEL_WIDTH, type SettingItem, useMenuItems } from "../../hooks/use-menu-items";
 import { scrollElementIntoView } from "../../utils/scroll";
+import Badge from "../badge";
 import { KeyHint } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
@@ -27,10 +27,12 @@ interface MenuDialogProps {
   onViewBranch: (branch: string | null) => void;
   /** Config file info from startup, used by the Configuration section. */
   configInfo?: ConfigInfo;
+  /** Open the project selector to switch repos. */
+  onSwitchRepo?: () => void;
 }
 
 /** Persists the last-used tab across dialog open/close cycles. */
-const [lastMenuTab, setLastMenuTab] = createSignal<MenuTab>("repository");
+export const [lastMenuTab, setLastMenuTab] = createSignal<MenuTab>("repository");
 
 export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   const { theme, themeName, setTheme } = useTheme();
@@ -61,10 +63,6 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     if (savedTimer) clearTimeout(savedTimer);
   });
 
-  // ── Config save scope ──────────────────────────────────────────────
-  type ConfigScope = "global" | "this repo";
-  const [configScope, setConfigScope] = createSignal<ConfigScope>("global");
-
   // ── Menu items hook ───────────────────────────────────────────────
   const {
     activeItems,
@@ -79,8 +77,6 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     activeTab,
     themeName,
     setTheme,
-    configScope,
-    setConfigScope,
     savedFeedback,
     showSavedFeedback,
     copyToClipboard,
@@ -90,6 +86,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     onViewBranch: branch => props.onViewBranch(branch),
     onClose: () => props.onClose(),
     configInfo: props.configInfo,
+    onSwitchRepo: props.onSwitchRepo,
   });
 
   // ── Banner scroll for selected copyable rows ──────────────────────
@@ -185,8 +182,6 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   );
 
   const renderBadge = (item: Extract<SettingItem, { kind: "badge" }>, idx: number) => {
-    const bgColor = () => (item.dimmed ? t().backgroundElement : getColorForColumn(item.colorIndex, t().graphColors));
-    const fgColor = () => (item.dimmed ? t().foregroundMuted : t().background);
     return (
       <box
         ref={(el: Renderable) => {
@@ -196,9 +191,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
         width="100%"
         paddingX={4}
       >
-        <text bg={bgColor()} fg={fgColor()} wrapMode="none">
-          {` ${item.name} `}
-        </text>
+        <Badge name={item.name} colorIndex={item.colorIndex} dimmed={item.dimmed} maxLength={30} />
       </box>
     );
   };

@@ -61,7 +61,7 @@ If no path is given, the current directory is used.
 | `f` | Fetch from remote |
 | `R` | Reload |
 | `m` | Menu (repository, branches) |
-| `Ctrl+T` | Change theme |
+| `:theme` | Change theme |
 | `?` | Show help |
 
 ### Detail panel
@@ -85,7 +85,7 @@ If no path is given, the current directory is used.
 
 ## Themes
 
-Pass the theme name via `--theme <name>` or switch live with `Ctrl+T`.
+Pass the theme name via `--theme <name>` or switch live with `:theme`.
 
 | Name | `--theme` value |
 |------|----------------|

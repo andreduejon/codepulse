@@ -30,7 +30,7 @@ export const TITLE_SEP = " \u00b7 ";
 const SEP_LEN = 3;
 
 /** Width reserved for "esc close" on the right side of the title bar. */
-const ESC_CLOSE_WIDTH = 9;
+const ESC_CLOSE_WIDTH = 10;
 
 /** Title bar has paddingX={4}, so 4 chars on each side. */
 const TITLE_PADDING = 8;
