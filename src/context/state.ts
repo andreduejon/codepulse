@@ -1,12 +1,13 @@
 import { type Accessor, createContext, createMemo, createSignal, useContext } from "solid-js";
 import { DEFAULT_MAX_COUNT } from "../constants";
 import type { Branch, Commit, CommitDetail, GraphRow, TagInfo, UncommittedDetail } from "../git/types";
+import type { GraphBadge, ProviderView } from "../providers/provider";
 import { matchCommit, parseSearchQuery } from "../search";
 
 export const DEFAULT_AUTO_REFRESH_INTERVAL = 30000;
 
 /** Valid tab identifiers for the detail panel. */
-export type DetailTab = "files" | "detail" | "stashes" | "staged" | "unstaged" | "untracked";
+export type DetailTab = "files" | "detail" | "stashes" | "staged" | "unstaged" | "untracked" | "ci";
 
 /**
  * Which highlighting mode is currently active.
@@ -87,6 +88,15 @@ export interface AppState {
   fetching: Accessor<boolean>;
   /** True if there are likely more commits to load beyond the current page. */
   hasMore: Accessor<boolean>;
+
+  // ── Provider / CI ────────────────────────────────────────────────────
+  /** Which provider view is active — "git" (default) or a CI provider. */
+  activeProviderView: Accessor<ProviderView>;
+  /**
+   * SHA → GraphBadge map populated by the active CI provider.
+   * Empty map when no CI provider is active or no data has been fetched yet.
+   */
+  graphBadges: Accessor<Map<string, GraphBadge>>;
 }
 
 export interface AppActions {
@@ -124,6 +134,9 @@ export interface AppActions {
   setPathMatchSet: (set: Set<string> | null) => void;
   setHasMore: (hasMore: boolean) => void;
   setAncestrySet: (set: Set<string> | null) => void;
+  // ── Provider / CI ────────────────────────────────────────────────────
+  setActiveProviderView: (view: ProviderView) => void;
+  setGraphBadges: (map: Map<string, GraphBadge>) => void;
 }
 
 const AppStateContext = createContext<{ state: AppState; actions: AppActions }>();
@@ -174,6 +187,10 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
   const [lastFetchTime, setLastFetchTime] = createSignal<Date | null>(null);
   const [fetching, setFetching] = createSignal(false);
   const [hasMore, setHasMore] = createSignal(true);
+
+  // ── Provider / CI ─────────────────────────────────────────────────
+  const [activeProviderView, setActiveProviderView] = createSignal<ProviderView>("git");
+  const [graphBadges, setGraphBadges] = createSignal<Map<string, GraphBadge>>(new Map());
 
   // ── Search memo ───────────────────────────────────────────────────
   // Memoize parsed search separately so regex compilation only happens when
@@ -301,6 +318,8 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
     ancestrySet,
     highlightSet,
     highlightMode,
+    activeProviderView,
+    graphBadges,
   };
 
   const actions: AppActions = {
@@ -330,6 +349,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
     setLastFetchTime,
     setFetching,
     setHasMore,
+    setAncestrySet,
     setDetailLoading,
     setDetailCursorAction,
     setDetailActiveTab,
@@ -337,7 +357,8 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
     setViewingBranch,
     setPathFilter,
     setPathMatchSet,
-    setAncestrySet,
+    setActiveProviderView,
+    setGraphBadges,
   };
 
   return { state, actions };
