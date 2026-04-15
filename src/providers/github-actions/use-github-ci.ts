@@ -94,6 +94,12 @@ export function useGitHubCI(opts: {
   // ── In-memory caches ──────────────────────────────────────────────────
   /** SHA → all runs for that commit */
   let commitDataCache = new Map<string, GitHubCommitData>();
+  /**
+   * Version counter — incremented every time commitDataCache is written.
+   * Reading this signal in getCommitData() makes the detail tab reactive:
+   * when data arrives after the view is already open, the tab re-renders.
+   */
+  const [commitDataVersion, setCommitDataVersion] = createSignal(0);
   /** runId → jobs (pre-populated from GraphQL; REST fallback for on-demand fetches) */
   const jobsCache = new Map<number, GitHubJob[]>();
   /**
@@ -178,6 +184,9 @@ export function useGitHubCI(opts: {
     for (const [sha, data] of newCommitData) {
       commitDataCache.set(sha, data);
     }
+    // Bump version so getCommitData() re-runs in any reactive context
+    // (e.g. detail tab open while background fetch completes).
+    setCommitDataVersion(v => v + 1);
 
     // Merge new badges into graphBadges (additive)
     const newBadges = buildGraphBadges(allRuns);
@@ -276,6 +285,7 @@ export function useGitHubCI(opts: {
   async function doForceRefresh(): Promise<void> {
     queriedSHAs.clear();
     commitDataCache = new Map();
+    setCommitDataVersion(v => v + 1);
     actions.setGraphBadges(new Map());
     actions.setProviderStatus(null);
     await doInitialFetch(undefined, undefined, true);
@@ -285,7 +295,16 @@ export function useGitHubCI(opts: {
   let hasFetchedOnce = false;
   let lastFetchedAt = 0;
   let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
+  /** AbortController for view-switch fetches and auto-refresh ticks. */
   let fetchAbortCtrl: AbortController | null = null;
+  /**
+   * AbortController for the eager background fetch fired on startup by the
+   * graphRows effect.  Kept separate from fetchAbortCtrl so that
+   * stopAutoRefresh() (called when tabbing away from the CI view) does NOT
+   * cancel an in-flight background fetch — which would leave hasFetchedOnce=true
+   * but the cache empty, preventing any future fetch.
+   */
+  let backgroundFetchAbortCtrl: AbortController | null = null;
 
   function startAutoRefresh(): void {
     if (autoRefreshTimer) return;
@@ -356,6 +375,9 @@ export function useGitHubCI(opts: {
   // as cachedGitHubRepo becomes non-null.
   // hasFetchedOnce / lastFetchedAt are managed inside doInitialFetch so that
   // they are only set when a fetch actually starts (i.e. isAvailable() passes).
+  // Uses backgroundFetchAbortCtrl (not fetchAbortCtrl) so stopAutoRefresh()
+  // — called when the user tabs away from the CI view — does not abort this
+  // in-flight request.
   createEffect(() => {
     const rows = state.graphRows();
     // Track the remote signal so this re-runs when the remote URL loads
@@ -367,13 +389,19 @@ export function useGitHubCI(opts: {
     const newSHAs = allSHAs.filter(sha => !queriedSHAs.has(sha));
     if (newSHAs.length === 0) return;
 
+    // Cancel any previous background fetch before starting a new one
+    if (backgroundFetchAbortCtrl) backgroundFetchAbortCtrl.abort();
     const ctrl = new AbortController();
-    fetchAbortCtrl = ctrl;
+    backgroundFetchAbortCtrl = ctrl;
     doInitialFetch(ctrl.signal, allSHAs);
   });
 
   onCleanup(() => {
     stopAutoRefresh();
+    if (backgroundFetchAbortCtrl) {
+      backgroundFetchAbortCtrl.abort();
+      backgroundFetchAbortCtrl = null;
+    }
   });
 
   // ── On-demand job fetching ────────────────────────────────────────────
@@ -394,7 +422,14 @@ export function useGitHubCI(opts: {
 
   // ── Public API ────────────────────────────────────────────────────────
   return {
-    getCommitData: (sha: string) => commitDataCache.get(sha) ?? null,
+    getCommitData: (sha: string) => {
+      // Reading commitDataVersion() subscribes this call to cache updates,
+      // so any reactive context (e.g. detail tab JSX) re-runs when new data
+      // arrives — including when the background fetch completes while the
+      // view is already open.
+      commitDataVersion();
+      return commitDataCache.get(sha) ?? null;
+    },
     fetchJobsForRun,
     refresh: doForceRefresh,
     isAvailable,
