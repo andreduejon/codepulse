@@ -353,6 +353,11 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
       },
       {
         kind: "info",
+        label: "Host",
+        get: () => repo?.hostname ?? "(not detected)",
+      },
+      {
+        kind: "info",
         label: "Token env",
         get: () => ghCfg.tokenEnvVar,
       },

@@ -110,6 +110,8 @@ export interface GitHubCommitData {
 export interface GitHubRepo {
   owner: string;
   repo: string;
+  /** Hostname of the GitHub instance (e.g. "github.com" or "github.example.com"). */
+  hostname: string;
 }
 
 /** Config for the GitHub Actions provider (subset of CodepulseConfig). */

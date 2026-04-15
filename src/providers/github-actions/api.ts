@@ -12,17 +12,15 @@ import type { GitHubApiJob, GitHubCommitData, GitHubJob, GitHubRepo, GitHubStep,
 // ── Remote URL parsing ────────────────────────────────────────────────────
 
 /**
- * Parse a GitHub repository's `owner` and `repo` from a git remote URL.
+ * Parse a GitHub (or GitHub Enterprise) repository's `owner`, `repo`, and
+ * `hostname` from a git remote URL.
  *
- * Supported formats:
- *   https://github.com/owner/repo.git
- *   https://github.com/owner/repo
- *   git@github.com:owner/repo.git
- *   git@github.com:owner/repo
- *   ssh://git@github.com/owner/repo.git
- *   ssh://git@github.com/owner/repo
+ * Supported formats (any hostname):
+ *   https://<host>/owner/repo[.git][/]
+ *   git@<host>:owner/repo[.git]
+ *   ssh://[git@]<host>/owner/repo[.git][/]
  *
- * Returns `null` for non-GitHub URLs (GitLab, Bitbucket, self-hosted, …)
+ * Returns `null` for URLs that do not match the owner/repo path pattern,
  * or any malformed input.
  */
 export function parseGitHubRemote(url: string): GitHubRepo | null {
@@ -30,28 +28,31 @@ export function parseGitHubRemote(url: string): GitHubRepo | null {
 
   const trimmed = url.trim();
 
-  // HTTPS: https://github.com/owner/repo[.git][/]
-  const httpsMatch = trimmed.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/i);
+  // HTTPS: https://<host>/owner/repo[.git][/]
+  const httpsMatch = trimmed.match(/^https?:\/\/([^/]+)\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/i);
   if (httpsMatch) {
-    const owner = httpsMatch[1];
-    const repo = httpsMatch[2];
-    if (owner && repo) return { owner, repo };
+    const hostname = httpsMatch[1];
+    const owner = httpsMatch[2];
+    const repo = httpsMatch[3];
+    if (hostname && owner && repo) return { hostname, owner, repo };
   }
 
-  // SSH scp-style: git@github.com:owner/repo[.git]
-  const sshScpMatch = trimmed.match(/^git@github\.com:([^/]+)\/([^/]+?)(?:\.git)?$/i);
+  // SSH scp-style: git@<host>:owner/repo[.git]
+  const sshScpMatch = trimmed.match(/^git@([^:]+):([^/]+)\/([^/]+?)(?:\.git)?$/i);
   if (sshScpMatch) {
-    const owner = sshScpMatch[1];
-    const repo = sshScpMatch[2];
-    if (owner && repo) return { owner, repo };
+    const hostname = sshScpMatch[1];
+    const owner = sshScpMatch[2];
+    const repo = sshScpMatch[3];
+    if (hostname && owner && repo) return { hostname, owner, repo };
   }
 
-  // SSH protocol: ssh://git@github.com/owner/repo[.git][/]
-  const sshProtoMatch = trimmed.match(/^ssh:\/\/(?:git@)?github\.com\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/i);
+  // SSH protocol: ssh://[git@]<host>/owner/repo[.git][/]
+  const sshProtoMatch = trimmed.match(/^ssh:\/\/(?:git@)?([^/]+)\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/i);
   if (sshProtoMatch) {
-    const owner = sshProtoMatch[1];
-    const repo = sshProtoMatch[2];
-    if (owner && repo) return { owner, repo };
+    const hostname = sshProtoMatch[1];
+    const owner = sshProtoMatch[2];
+    const repo = sshProtoMatch[3];
+    if (hostname && owner && repo) return { hostname, owner, repo };
   }
 
   return null;
@@ -79,7 +80,19 @@ function createHeaders(token: string): Record<string, string> {
 }
 
 function apiBase(repo: GitHubRepo): string {
-  return `https://api.github.com/repos/${repo.owner}/${repo.repo}`;
+  if (repo.hostname === "github.com") {
+    return `https://api.github.com/repos/${repo.owner}/${repo.repo}`;
+  }
+  // GitHub Enterprise Server uses /api/v3 prefix
+  return `https://${repo.hostname}/api/v3/repos/${repo.owner}/${repo.repo}`;
+}
+
+function graphqlEndpoint(repo: GitHubRepo): string {
+  if (repo.hostname === "github.com") {
+    return "https://api.github.com/graphql";
+  }
+  // GitHub Enterprise Server uses /api/graphql
+  return `https://${repo.hostname}/api/graphql`;
 }
 
 // ── Status mapping ────────────────────────────────────────────────────────
@@ -307,8 +320,6 @@ function mapGqlCheckSuiteToRun(suite: GqlCheckSuite, sha: string): GitHubWorkflo
 
 // ── GraphQL API fetch ──────────────────────────────────────────────────────
 
-const GRAPHQL_URL = "https://api.github.com/graphql";
-
 /**
  * Maximum number of SHAs per GraphQL batch request.
  * Node budget: 100 SHAs × 10 check-suites × 20 check-runs = 20,000 nodes,
@@ -388,7 +399,7 @@ export async function fetchCIDataForSHAs(
   if (shas.length === 0) return empty;
 
   try {
-    const res = await fetch(GRAPHQL_URL, {
+    const res = await fetch(graphqlEndpoint(repo), {
       method: "POST",
       headers: { ...createHeaders(token), "Content-Type": "application/json" },
       body: JSON.stringify({

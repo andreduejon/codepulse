@@ -18,6 +18,7 @@ describe("parseGitHubRemote", () => {
   describe("HTTPS URLs", () => {
     it("parses standard HTTPS URL with .git suffix", () => {
       expect(parseGitHubRemote("https://github.com/owner/repo.git")).toEqual({
+        hostname: "github.com",
         owner: "owner",
         repo: "repo",
       });
@@ -25,6 +26,7 @@ describe("parseGitHubRemote", () => {
 
     it("parses HTTPS URL without .git suffix", () => {
       expect(parseGitHubRemote("https://github.com/owner/repo")).toEqual({
+        hostname: "github.com",
         owner: "owner",
         repo: "repo",
       });
@@ -32,6 +34,7 @@ describe("parseGitHubRemote", () => {
 
     it("parses HTTPS URL with trailing slash", () => {
       expect(parseGitHubRemote("https://github.com/owner/repo/")).toEqual({
+        hostname: "github.com",
         owner: "owner",
         repo: "repo",
       });
@@ -39,6 +42,7 @@ describe("parseGitHubRemote", () => {
 
     it("parses HTTPS URL with .git and trailing slash", () => {
       expect(parseGitHubRemote("https://github.com/owner/repo.git/")).toEqual({
+        hostname: "github.com",
         owner: "owner",
         repo: "repo",
       });
@@ -46,6 +50,7 @@ describe("parseGitHubRemote", () => {
 
     it("handles org names with hyphens", () => {
       expect(parseGitHubRemote("https://github.com/my-org/my-repo.git")).toEqual({
+        hostname: "github.com",
         owner: "my-org",
         repo: "my-repo",
       });
@@ -53,6 +58,7 @@ describe("parseGitHubRemote", () => {
 
     it("handles org names with underscores and dots", () => {
       expect(parseGitHubRemote("https://github.com/my_org/my.repo")).toEqual({
+        hostname: "github.com",
         owner: "my_org",
         repo: "my.repo",
       });
@@ -60,8 +66,17 @@ describe("parseGitHubRemote", () => {
 
     it("is case-insensitive for the domain", () => {
       expect(parseGitHubRemote("https://GitHub.COM/Owner/Repo.git")).toEqual({
+        hostname: "GitHub.COM",
         owner: "Owner",
         repo: "Repo",
+      });
+    });
+
+    it("parses GitHub Enterprise HTTPS URL", () => {
+      expect(parseGitHubRemote("https://github.example.com/owner/repo.git")).toEqual({
+        hostname: "github.example.com",
+        owner: "owner",
+        repo: "repo",
       });
     });
   });
@@ -69,6 +84,7 @@ describe("parseGitHubRemote", () => {
   describe("SSH scp-style URLs", () => {
     it("parses git@ SSH URL with .git suffix", () => {
       expect(parseGitHubRemote("git@github.com:owner/repo.git")).toEqual({
+        hostname: "github.com",
         owner: "owner",
         repo: "repo",
       });
@@ -76,6 +92,7 @@ describe("parseGitHubRemote", () => {
 
     it("parses git@ SSH URL without .git suffix", () => {
       expect(parseGitHubRemote("git@github.com:owner/repo")).toEqual({
+        hostname: "github.com",
         owner: "owner",
         repo: "repo",
       });
@@ -83,8 +100,17 @@ describe("parseGitHubRemote", () => {
 
     it("handles org/repo with hyphens in SSH format", () => {
       expect(parseGitHubRemote("git@github.com:my-org/my-repo.git")).toEqual({
+        hostname: "github.com",
         owner: "my-org",
         repo: "my-repo",
+      });
+    });
+
+    it("parses GitHub Enterprise SSH URL", () => {
+      expect(parseGitHubRemote("git@github.example.com:owner/repo.git")).toEqual({
+        hostname: "github.example.com",
+        owner: "owner",
+        repo: "repo",
       });
     });
   });
@@ -92,6 +118,7 @@ describe("parseGitHubRemote", () => {
   describe("SSH protocol URLs", () => {
     it("parses ssh:// URL with git@ prefix", () => {
       expect(parseGitHubRemote("ssh://git@github.com/owner/repo.git")).toEqual({
+        hostname: "github.com",
         owner: "owner",
         repo: "repo",
       });
@@ -99,6 +126,7 @@ describe("parseGitHubRemote", () => {
 
     it("parses ssh:// URL without git@ prefix", () => {
       expect(parseGitHubRemote("ssh://github.com/owner/repo.git")).toEqual({
+        hostname: "github.com",
         owner: "owner",
         repo: "repo",
       });
@@ -106,29 +134,48 @@ describe("parseGitHubRemote", () => {
 
     it("parses ssh:// URL without .git suffix", () => {
       expect(parseGitHubRemote("ssh://git@github.com/owner/repo")).toEqual({
+        hostname: "github.com",
         owner: "owner",
         repo: "repo",
       });
     });
   });
 
-  describe("non-GitHub URLs — return null", () => {
-    it("returns null for GitLab HTTPS URL", () => {
-      expect(parseGitHubRemote("https://gitlab.com/owner/repo.git")).toBeNull();
+  describe("non-GitHub hosted services — parsed with their hostname", () => {
+    it("parses GitLab HTTPS URL (hostname=gitlab.com)", () => {
+      expect(parseGitHubRemote("https://gitlab.com/owner/repo.git")).toEqual({
+        hostname: "gitlab.com",
+        owner: "owner",
+        repo: "repo",
+      });
     });
 
-    it("returns null for GitLab SSH URL", () => {
-      expect(parseGitHubRemote("git@gitlab.com:owner/repo.git")).toBeNull();
+    it("parses GitLab SSH URL (hostname=gitlab.com)", () => {
+      expect(parseGitHubRemote("git@gitlab.com:owner/repo.git")).toEqual({
+        hostname: "gitlab.com",
+        owner: "owner",
+        repo: "repo",
+      });
     });
 
-    it("returns null for Bitbucket URL", () => {
-      expect(parseGitHubRemote("https://bitbucket.org/owner/repo.git")).toBeNull();
+    it("parses Bitbucket URL (hostname=bitbucket.org)", () => {
+      expect(parseGitHubRemote("https://bitbucket.org/owner/repo.git")).toEqual({
+        hostname: "bitbucket.org",
+        owner: "owner",
+        repo: "repo",
+      });
     });
 
-    it("returns null for self-hosted git URL", () => {
-      expect(parseGitHubRemote("https://git.example.com/owner/repo.git")).toBeNull();
+    it("parses self-hosted git URL", () => {
+      expect(parseGitHubRemote("https://git.example.com/owner/repo.git")).toEqual({
+        hostname: "git.example.com",
+        owner: "owner",
+        repo: "repo",
+      });
     });
+  });
 
+  describe("malformed URLs — return null", () => {
     it("returns null for empty string", () => {
       expect(parseGitHubRemote("")).toBeNull();
     });
@@ -153,6 +200,7 @@ describe("parseGitHubRemote", () => {
   describe("whitespace handling", () => {
     it("trims leading/trailing whitespace", () => {
       expect(parseGitHubRemote("  https://github.com/owner/repo.git  ")).toEqual({
+        hostname: "github.com",
         owner: "owner",
         repo: "repo",
       });
@@ -381,7 +429,7 @@ describe("buildCommitDataMap", () => {
 
 // ── Shared test helpers ───────────────────────────────────────────────────
 
-const TEST_REPO = { owner: "owner", repo: "repo" };
+const TEST_REPO = { hostname: "github.com", owner: "owner", repo: "repo" };
 const TEST_TOKEN = "ghp_test";
 
 /** Helper to assign a mock function as globalThis.fetch without TS complaining
