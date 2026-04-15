@@ -2,9 +2,9 @@ import type { ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, onCleanup, onMount, Show, untrack } from "solid-js";
 import CommandBar from "./components/command-bar";
-import DetailPanel, { type DetailPanelProps } from "./components/detail-panel";
+import DetailPanel from "./components/detail-panel";
 import type { DetailNavRef } from "./components/detail-types";
-import { DialogFooter, DialogOverlay, DialogTitleBar } from "./components/dialogs/dialog-chrome";
+import { DetailDialog } from "./components/dialogs/detail-dialog";
 import DiffBlameDialog from "./components/dialogs/diff-blame-dialog";
 import HelpDialog from "./components/dialogs/help-dialog";
 import MenuDialog from "./components/dialogs/menu-dialog";
@@ -17,14 +17,14 @@ import SetupScreen from "./components/setup-screen";
 import type { ConfigInfo } from "./config";
 import { defaultConfig, getKnownRepos, writeConfig } from "./config";
 import { COMPACT_THRESHOLD_WIDTH, DEFAULT_MAX_COUNT, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH } from "./constants";
-import { AppStateContext, createAppState, useAppState } from "./context/state";
+import { AppStateContext, createAppState } from "./context/state";
 import { createThemeState, ThemeContext } from "./context/theme";
-import { getPathMatchingHashes } from "./git/repo";
 import type { DiffTarget } from "./git/types";
+import { useAncestry } from "./hooks/use-ancestry";
 import { useDataLoader } from "./hooks/use-data-loader";
 import { useDetailLoader } from "./hooks/use-detail-loader";
 import { type CommandBarMode, useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
-import { useT } from "./hooks/use-t";
+import { usePathFilter } from "./hooks/use-path-filter";
 import type { StartupMode } from "./main";
 
 interface AppProps {
@@ -42,63 +42,6 @@ interface AppProps {
 
 interface AppContentProps extends AppProps {
   themeState: ReturnType<typeof createThemeState>;
-}
-
-/** Detail dialog used in compact mode — wraps DetailPanel in a full-height overlay. */
-function DetailDialog(props: Readonly<DetailPanelProps & { onClose: () => void }>) {
-  const dimensions = useTerminalDimensions();
-  const t = useT();
-  const { state } = useAppState();
-  const dialogWidth = () => Math.min(72, dimensions().width - 8);
-  const dialogHeight = () => dimensions().height - 8;
-
-  // Dynamic enter verb based on what the cursored item does
-  const enterVerb = () => state.detailCursorAction() ?? "select";
-
-  return (
-    <DialogOverlay>
-      <box
-        flexDirection="column"
-        width={dialogWidth()}
-        height={dialogHeight()}
-        backgroundColor={t().backgroundPanel}
-        paddingX={1}
-        paddingY={1}
-      >
-        <DialogTitleBar title="Details" />
-        {/* paddingX=4 matches other dialogs' inner content padding (outer box already has paddingX=1) */}
-        <box flexDirection="column" flexGrow={1} paddingX={4}>
-          <DetailPanel
-            scrollboxRef={props.scrollboxRef}
-            navRef={props.navRef}
-            searchFocused={props.searchFocused}
-            onJumpToCommit={props.onJumpToCommit}
-            onOpenDiff={props.onOpenDiff}
-          />
-        </box>
-        <DialogFooter>
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            enter
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {` ${enterVerb()}  `}
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            {"←/→"}
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {" switch tab  "}
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            {"↑/↓"}
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {" navigate"}
-          </text>
-        </DialogFooter>
-      </box>
-    </DialogOverlay>
-  );
 }
 
 function AppContent(props: Readonly<AppContentProps>) {
@@ -182,159 +125,9 @@ function AppContent(props: Readonly<AppContentProps>) {
   let isJumpNavigation = false;
 
   // ── Ancestry highlighting ─────────────────────────────────────────────────
-  // Mutable ref: the hash of the commit used as the anchor.
-  // A ref (not signal) because it must persist across multiple effect firings
-  // in the same reactive flush without being consumed (see AGENTS.md rule 3).
-  let ancestryAnchorHash: string | null = null;
+  const { setAnchor, clearAnchor } = useAncestry(state, actions);
 
-  /**
-   * Compute the first-parent chain passing through anchorHash in both directions.
-   *
-   * - Backward: follow parentHashes[0] from anchorHash up through ancestors.
-   * - Forward: follow the reverse first-parent map (find rows whose first parent
-   *   is already in the set) down through descendants.
-   *
-   * Result: the mainline "backbone" that passes through the selected commit —
-   * its first-parent past and its first-parent future. Merge branches and
-   * off-mainline commits are excluded (and therefore dimmed).
-   */
-  const buildFirstParentChain = (anchorHash: string): Set<string> => {
-    const rows = state.graphRows();
-
-    // Build two lookup maps using the TRUE git first parent (commit.parents[0]), NOT the
-    // display-reordered parentHashes[0]. parentHashes is reordered by sameBranchFirst so
-    // the "same branch" parent sorts to position 0 — which can differ from git's first parent
-    // and would cause the chain to jump to a different branch at merge commits.
-    //   firstParentOf[hash]    = hash's git first parent (commit.parents[0])
-    //   firstChildOf[parent]   = the child whose git first parent is `parent`
-    //                            (only the first such child encountered, graph order)
-    const firstParentOf = new Map<string, string>();
-    const firstChildOf = new Map<string, string>();
-    const loadedHashes = new Set<string>();
-    for (const row of rows) {
-      const hash = row.commit.hash;
-      loadedHashes.add(hash);
-      const fp = row.commit.parents[0]; // git first parent — preserves true mainline
-      if (fp) {
-        firstParentOf.set(hash, fp);
-        if (!firstChildOf.has(fp)) firstChildOf.set(fp, hash);
-      }
-    }
-
-    const chain = new Set<string>();
-    chain.add(anchorHash);
-
-    // Walk backward (ancestors via first-parent).
-    // Only add hashes that have loaded rows — if the parent isn't loaded,
-    // stop. Adding unloaded hashes to the chain would break
-    // computeBrightColumns' trailing-rows extension (it checks
-    // ancestrySet.has(lastFirstParent) to decide whether to extend).
-    let cur: string | undefined = firstParentOf.get(anchorHash);
-    while (cur && !chain.has(cur) && loadedHashes.has(cur)) {
-      chain.add(cur);
-      cur = firstParentOf.get(cur);
-    }
-
-    // Walk forward (descendants via first-parent)
-    cur = firstChildOf.get(anchorHash);
-    while (cur && !chain.has(cur)) {
-      chain.add(cur);
-      cur = firstChildOf.get(cur);
-    }
-
-    return chain;
-  };
-
-  // Re-run chain computation when graphRows() changes and ancestry is active (lazy-loading support).
-  // The prevGraphRows ref prevents redundant recomputation during the same reactive flush
-  // that initially activates ancestry (command handler already sets the chain; this effect
-  // should only fire when NEW data loads, not on the activation flush itself).
-  let prevGraphRows: readonly object[] | null = null;
-  createEffect(() => {
-    const rows = state.graphRows();
-    if (rows === prevGraphRows) return; // same reference — skip redundant flush
-    prevGraphRows = rows;
-    if (ancestryAnchorHash !== null) {
-      const newSet = buildFirstParentChain(ancestryAnchorHash);
-      // Structural comparison: skip setAncestrySet if the chain hasn't changed.
-      // buildFirstParentChain always returns a new Set, but SolidJS uses ===
-      // for signals, so a new Set always fires even when contents are identical.
-      // This prevents the full render cascade (computeBrightColumns → dimChars →
-      // every GraphLine) from re-running needlessly on auto-refresh / lazy load.
-      const current = state.ancestrySet();
-      if (current !== null && current.size === newSet.size) {
-        let same = true;
-        for (const h of newSet) {
-          if (!current.has(h)) {
-            same = false;
-            break;
-          }
-        }
-        if (same) return;
-      }
-      actions.setAncestrySet(newSet);
-    }
-  });
-
-  // Re-compute pathMatchSet when graphRows changes and path filter is active
-  // (pagination / auto-refresh may load new commits that touch the path).
-  // Uses the same prevGraphRows guard pattern as the ancestry effect — the
-  // initial path execution already sets the match set; this only fires on
-  // subsequent graphRows changes.
-  let prevPathGraphRows: readonly object[] | null = null;
-  createEffect(() => {
-    const rows = state.graphRows();
-    if (rows === prevPathGraphRows) return;
-    prevPathGraphRows = rows;
-    const pf = state.pathFilter();
-    if (!pf) return;
-    // Re-run the hash query asynchronously
-    const viewBranch = state.viewingBranch();
-    const effectiveAll = viewBranch ? false : state.showAllBranches();
-    getPathMatchingHashes(props.repoPath, pf, {
-      branch: viewBranch ?? undefined,
-      all: effectiveAll,
-    }).then(hashes => {
-      // Only update if path filter is still the same (guard against race)
-      if (state.pathFilter() === pf) {
-        actions.setPathMatchSet(hashes.size > 0 ? hashes : new Set());
-        // If cursor is on a non-matching row, jump to the nearest match
-        const matchSet = hashes;
-        if (matchSet.size > 0) {
-          const rows = state.graphRows();
-          const curIdx = state.cursorIndex();
-          if (curIdx >= rows.length || !matchSet.has(rows[curIdx].commit.hash)) {
-            let fwd = -1;
-            for (let i = curIdx + 1; i < rows.length; i++) {
-              if (matchSet.has(rows[i].commit.hash)) {
-                fwd = i;
-                break;
-              }
-            }
-            let bwd = -1;
-            for (let i = curIdx - 1; i >= 0; i--) {
-              if (matchSet.has(rows[i].commit.hash)) {
-                bwd = i;
-                break;
-              }
-            }
-            let target: number;
-            if (fwd >= 0 && bwd >= 0) {
-              target = curIdx - bwd <= fwd - curIdx ? bwd : fwd;
-            } else {
-              target = fwd >= 0 ? fwd : bwd;
-            }
-            if (target >= 0) {
-              actions.setCursorIndex(target);
-              actions.setScrollTargetIndex(target);
-            }
-          }
-        }
-      }
-    });
-  });
-
-  // Jump to a commit by hash (used by detail panel parent/child entries)
+  // ── Path filter ───────────────────────────────────────────────────────────
   const handleJumpToCommit = (hash: string, from: "child" | "parent") => {
     const rows = state.graphRows();
     const idx = rows.findIndex(r => r.commit.hash === hash);
@@ -458,20 +251,17 @@ function AppContent(props: Readonly<AppContentProps>) {
         break;
       case "f":
       case "fetch":
-        ancestryAnchorHash = null;
-        actions.setAncestrySet(null);
+        clearAnchor();
         handleFetch();
         break;
       case "r":
       case "reload":
-        ancestryAnchorHash = null;
-        actions.setAncestrySet(null);
+        clearAnchor();
         loadData(undefined, undefined, false, true);
         break;
       case "search":
         // Re-open search mode — mutually exclusive with ancestry and path
-        ancestryAnchorHash = null;
-        actions.setAncestrySet(null);
+        clearAnchor();
         actions.setPathFilter(null);
         actions.setPathMatchSet(null);
         setSearchFocused(true);
@@ -489,8 +279,7 @@ function AppContent(props: Readonly<AppContentProps>) {
         // selected commit (both backward ancestors and forward descendants).
         if (state.ancestrySet() !== null) {
           // Already active — toggle off
-          ancestryAnchorHash = null;
-          actions.setAncestrySet(null);
+          clearAnchor();
           break;
         }
         // Mutually exclusive with search and path
@@ -499,8 +288,7 @@ function AppContent(props: Readonly<AppContentProps>) {
         actions.setPathMatchSet(null);
         const anchor = state.selectedCommit()?.hash ?? null;
         if (anchor) {
-          ancestryAnchorHash = anchor;
-          actions.setAncestrySet(buildFirstParentChain(anchor));
+          setAnchor(anchor);
         }
         break;
       }
@@ -516,28 +304,14 @@ function AppContent(props: Readonly<AppContentProps>) {
    * the set of matching commit hashes for display-level dimming.
    * Mutually exclusive with search and ancestry.
    */
-  const handlePathExecute = async (pathValue: string) => {
-    const newPath = pathValue || null;
-    actions.setPathFilter(newPath);
-    if (!newPath) {
-      actions.setPathMatchSet(null);
-      return;
-    }
-    // Clear other highlight modes (mutual exclusion)
-    actions.setSearchQuery("");
-    setSearchInputValue("");
-    clearTimeout(searchDebounceTimer);
-    ancestryAnchorHash = null;
-    actions.setAncestrySet(null);
-    // Compute matching hashes using the same branch/all settings as the current view
-    const viewBranch = state.viewingBranch();
-    const effectiveAll = viewBranch ? false : state.showAllBranches();
-    const hashes = await getPathMatchingHashes(props.repoPath, newPath, {
-      branch: viewBranch ?? undefined,
-      all: effectiveAll,
-    });
-    actions.setPathMatchSet(hashes.size > 0 ? hashes : new Set());
-  };
+  const { handlePathExecute } = usePathFilter({
+    repoPath: props.repoPath,
+    state,
+    actions,
+    clearAnchor,
+    setSearchInputValue,
+    clearSearchDebounce: () => clearTimeout(searchDebounceTimer),
+  });
 
   // Keyboard handling
   useKeyboardNavigation({
@@ -562,10 +336,7 @@ function AppContent(props: Readonly<AppContentProps>) {
     setCommandBarValue,
     onCommandExecute: handleCommandExecute,
     onPathExecute: handlePathExecute,
-    onClearAncestry: () => {
-      ancestryAnchorHash = null;
-      actions.setAncestrySet(null);
-    },
+    onClearAncestry: clearAnchor,
   });
 
   return (
