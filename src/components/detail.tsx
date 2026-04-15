@@ -862,11 +862,12 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
             </Show>
 
             {/* ══════════════ CI tab ══════════════ */}
-            <Show when={activeTab() === "ci" && !!props.ciGetCommitData && !!props.ciFetchJobsForRun}>
+            <Show when={activeTab() === "github-actions" && !!props.ciGetCommitData && !!props.ciFetchJobsForRun}>
               <CIDetailTab
                 sha={c().hash}
                 // biome-ignore lint/style/noNonNullAssertion: guarded by Show when condition above
                 getCommitData={props.ciGetCommitData!}
+                getCachedJobs={props.ciGetCachedJobs ?? (() => null)}
                 // biome-ignore lint/style/noNonNullAssertion: guarded by Show when condition above
                 fetchJobsForRun={props.ciFetchJobsForRun!}
               />

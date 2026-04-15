@@ -8,7 +8,7 @@ import { matchCommit, parseSearchQuery } from "../search";
 export const DEFAULT_AUTO_REFRESH_INTERVAL = 30000;
 
 /** Valid tab identifiers for the detail panel. */
-export type DetailTab = "files" | "detail" | "stashes" | "staged" | "unstaged" | "untracked" | "ci";
+export type DetailTab = "files" | "detail" | "stashes" | "staged" | "unstaged" | "untracked" | "github-actions";
 
 /**
  * Which highlighting mode is currently active.

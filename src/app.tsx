@@ -472,6 +472,7 @@ function AppContent(props: Readonly<AppContentProps>) {
                         onJumpToCommit={handleJumpToCommit}
                         onOpenDiff={handleOpenDiff}
                         ciGetCommitData={gitHubCI.getCommitData}
+                        ciGetCachedJobs={gitHubCI.getCachedJobs}
                         ciFetchJobsForRun={gitHubCI.fetchJobsForRun}
                       />
                     </box>

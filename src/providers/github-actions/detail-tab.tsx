@@ -1,23 +1,23 @@
 /**
  * GitHub Actions CI detail tab.
  *
- * Renders the "CI" tab in the commit detail panel when the selected commit
- * has GitHub Actions run data. Shows all runs (from the already-fetched badge
- * cache) with key metadata. Each run can be expanded to show jobs and steps
- * (fetched on demand via fetchJobsForRun).
+ * Layout:
+ *   - Each run header shows: status icon, workflow name, run number, time, event
+ *   - Jobs from the GraphQL cache are shown immediately below each run (no REST call)
+ *   - Expanding a job (TODO: keyboard) fetches its steps on demand via fetchJobsForRun
  *
- * Receives getCommitData/fetchJobsForRun via props (not useContext) because
- * this component may be rendered during setup before the Provider mounts.
+ * Receives props directly (not via useContext) because this component may be
+ * rendered during setup before the AppStateContext.Provider mounts (AGENTS.md rule 5).
  */
 
 import { createSignal, For, Show } from "solid-js";
 import { useT } from "../../hooks/use-t";
 import { formatRelativeDate } from "../../utils/date";
-import type { GitHubCommitData, GitHubJob, GitHubWorkflowRun } from "./types";
+import type { GitHubCommitData, GitHubJob, GitHubStep, GitHubWorkflowRun } from "./types";
 
 // ── Status helpers ────────────────────────────────────────────────────────
 
-function statusIcon(run: GitHubWorkflowRun): string {
+function runStatusIcon(run: GitHubWorkflowRun): string {
   if (run.status !== "completed") return "●";
   switch (run.conclusion) {
     case "success":
@@ -35,17 +35,44 @@ function statusIcon(run: GitHubWorkflowRun): string {
   }
 }
 
-function statusLabel(run: GitHubWorkflowRun): string {
+function runStatusLabel(run: GitHubWorkflowRun): string {
   if (run.status !== "completed") return run.status.replace("_", " ");
   return run.conclusion ?? "completed";
 }
 
-interface StatusColors {
-  icon: string;
-  text: string;
+function jobStatusIcon(job: GitHubJob): string {
+  if (job.status !== "completed") return "●";
+  switch (job.conclusion) {
+    case "success":
+      return "✓";
+    case "failure":
+    case "timed_out":
+      return "✗";
+    case "cancelled":
+      return "○";
+    case "skipped":
+      return "–";
+    default:
+      return "?";
+  }
 }
 
-function useRunStatusColors(run: GitHubWorkflowRun): () => StatusColors {
+function stepStatusIcon(step: GitHubStep): string {
+  if (step.status !== "completed") return "●";
+  switch (step.conclusion) {
+    case "success":
+      return "✓";
+    case "failure":
+    case "timed_out":
+      return "✗";
+    case "skipped":
+      return "–";
+    default:
+      return "?";
+  }
+}
+
+function useRunColors(run: GitHubWorkflowRun) {
   const t = useT();
   return () => {
     if (run.status !== "completed") {
@@ -65,9 +92,22 @@ function useRunStatusColors(run: GitHubWorkflowRun): () => StatusColors {
   };
 }
 
-function jobStatusColor(t: ReturnType<typeof useT>, job: GitHubJob): string {
+function jobColor(t: ReturnType<typeof useT>, job: GitHubJob): string {
   if (job.status !== "completed") return t().accent;
   switch (job.conclusion) {
+    case "success":
+      return t().success;
+    case "failure":
+    case "timed_out":
+      return t().error;
+    default:
+      return t().foregroundMuted;
+  }
+}
+
+function stepColor(t: ReturnType<typeof useT>, step: GitHubStep): string {
+  if (step.status !== "completed") return t().accent;
+  switch (step.conclusion) {
     case "success":
       return t().success;
     case "failure":
@@ -83,17 +123,24 @@ function jobStatusColor(t: ReturnType<typeof useT>, job: GitHubJob): string {
 export interface CIDetailTabProps {
   /** SHA of the selected commit. */
   sha: string;
-  /** Get all CI data for the commit. */
+  /** Get all CI data for the commit (run list). */
   getCommitData: (sha: string) => GitHubCommitData | null;
-  /** Fetch jobs for a run on demand. */
+  /**
+   * Get jobs that were pre-fetched from GraphQL for a run.
+   * Returns null if the run has not been queried yet (shouldn't happen in practice).
+   */
+  getCachedJobs: (runId: number) => GitHubJob[] | null;
+  /**
+   * Fetch full job details (with steps) for a run on demand.
+   * Called when the user expands a job entry. Checks cache first.
+   */
   fetchJobsForRun: (run: GitHubWorkflowRun) => Promise<GitHubJob[]>;
 }
 
-// ── Component ─────────────────────────────────────────────────────────────
+// ── Top-level component ───────────────────────────────────────────────────
 
 export function CIDetailTab(props: Readonly<CIDetailTabProps>) {
   const t = useT();
-
   const ciData = () => props.getCommitData(props.sha);
 
   return (
@@ -113,7 +160,14 @@ export function CIDetailTab(props: Readonly<CIDetailTabProps>) {
           </text>
           <box height={1} />
           <For each={data().runs}>
-            {(run, i) => <RunEntry run={run} index={i()} fetchJobsForRun={props.fetchJobsForRun} />}
+            {(run, i) => (
+              <RunEntry
+                run={run}
+                index={i()}
+                getCachedJobs={props.getCachedJobs}
+                fetchJobsForRun={props.fetchJobsForRun}
+              />
+            )}
           </For>
         </box>
       )}
@@ -121,48 +175,33 @@ export function CIDetailTab(props: Readonly<CIDetailTabProps>) {
   );
 }
 
-// ── RunEntry ──────────────────────────────────────────────────────────────
+// ── RunEntry — shows run header + pre-fetched jobs inline ─────────────────
 
 interface RunEntryProps {
   run: GitHubWorkflowRun;
   index: number;
+  getCachedJobs: (runId: number) => GitHubJob[] | null;
   fetchJobsForRun: (run: GitHubWorkflowRun) => Promise<GitHubJob[]>;
 }
 
 function RunEntry(props: Readonly<RunEntryProps>) {
   const t = useT();
-  const [expanded, setExpanded] = createSignal(false);
-  const [jobs, setJobs] = createSignal<GitHubJob[]>([]);
-  const [jobsLoading, setJobsLoading] = createSignal(false);
+  const colors = useRunColors(props.run);
+  const relTime = () => formatRelativeDate(props.run.updatedAt);
 
-  const colors = useRunStatusColors(props.run);
-
-  // TODO: wire toggleExpand to keyboard cursor activation in a future commit
-  const _toggleExpand = async () => {
-    const nowExpanded = !expanded();
-    setExpanded(nowExpanded);
-    if (nowExpanded && jobs().length === 0 && !jobsLoading()) {
-      setJobsLoading(true);
-      const result = await props.fetchJobsForRun(props.run);
-      setJobs(result);
-      setJobsLoading(false);
-    }
-  };
-
-  const relTime = () => {
-    return formatRelativeDate(props.run.updatedAt);
-  };
+  // Jobs come from the GraphQL cache — already populated, no REST call needed.
+  // Fallback to empty array (null means not yet cached; shouldn't happen since
+  // jobs are fetched in the same batch request as the run data).
+  const cachedJobs = () => props.getCachedJobs(props.run.id) ?? [];
 
   return (
     <box flexDirection="column" width="100%" paddingLeft={2}>
-      {/* Spacer between runs */}
       {props.index > 0 ? <box height={1} /> : null}
 
-      {/* Run header row */}
+      {/* Run header */}
       <box flexDirection="row" width="100%">
         <text flexShrink={0} wrapMode="none" fg={colors().icon}>
-          {expanded() ? "▾ " : "▸ "}
-          {statusIcon(props.run)}{" "}
+          {runStatusIcon(props.run)}{" "}
         </text>
         <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foreground}>
           {props.run.name}
@@ -174,9 +213,9 @@ function RunEntry(props: Readonly<RunEntryProps>) {
       </box>
 
       {/* Run sub-info */}
-      <box flexDirection="row" width="100%" paddingLeft={4}>
+      <box flexDirection="row" width="100%" paddingLeft={3}>
         <text flexShrink={0} wrapMode="none" fg={colors().text}>
-          {statusLabel(props.run)}
+          {runStatusLabel(props.run)}
         </text>
         <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
           {"  "}
@@ -186,45 +225,96 @@ function RunEntry(props: Readonly<RunEntryProps>) {
         </text>
       </box>
 
-      {/* Expanded jobs */}
-      <Show when={expanded()}>
-        <Show when={jobsLoading()}>
-          <box paddingLeft={4}>
-            <text fg={t().foregroundMuted}>Loading jobs…</text>
-          </box>
-        </Show>
-        <Show when={!jobsLoading() && jobs().length === 0}>
-          <box paddingLeft={4}>
-            <text fg={t().foregroundMuted}>No jobs found</text>
-          </box>
-        </Show>
-        <For each={jobs()}>{job => <JobEntry job={job} />}</For>
+      {/* Jobs — shown inline from GraphQL cache, no REST call required */}
+      <Show when={cachedJobs().length > 0}>
+        <For each={cachedJobs()}>
+          {job => <JobEntry job={job} fetchJobsForRun={props.fetchJobsForRun} run={props.run} />}
+        </For>
       </Show>
     </box>
   );
 }
 
-// ── JobEntry ──────────────────────────────────────────────────────────────
+// ── JobEntry — shows job status inline; expands to show steps ────────────
 
 interface JobEntryProps {
   job: GitHubJob;
+  run: GitHubWorkflowRun;
+  fetchJobsForRun: (run: GitHubWorkflowRun) => Promise<GitHubJob[]>;
 }
 
 function JobEntry(props: Readonly<JobEntryProps>) {
   const t = useT();
-  const color = () => jobStatusColor(t, props.job);
+  const [expanded, setExpanded] = createSignal(false);
+  const [steps, setSteps] = createSignal<GitHubStep[]>(props.job.steps ?? []);
+  const [stepsLoading, setStepsLoading] = createSignal(false);
+
+  const color = () => jobColor(t, props.job);
+
+  // TODO: wire toggleExpand to keyboard cursor activation in a future commit
+  const _toggleExpand = async () => {
+    const nowExpanded = !expanded();
+    setExpanded(nowExpanded);
+    // Fetch steps on first expansion if not already available
+    if (nowExpanded && steps().length === 0 && !stepsLoading()) {
+      setStepsLoading(true);
+      // fetchJobsForRun checks the cache first, then falls back to REST
+      const jobs = await props.fetchJobsForRun(props.run);
+      const thisJob = jobs.find(j => j.id === props.job.id);
+      setSteps(thisJob?.steps ?? []);
+      setStepsLoading(false);
+    }
+  };
 
   return (
     <box flexDirection="column" width="100%" paddingLeft={4}>
+      {/* Job row */}
       <box flexDirection="row" width="100%">
         <text flexShrink={0} wrapMode="none" fg={color()}>
-          {"  "}
-          {props.job.status !== "completed" ? "●" : props.job.conclusion === "success" ? "✓" : "✗"}{" "}
+          {expanded() ? "▾ " : "▸ "}
+          {jobStatusIcon(props.job)}{" "}
         </text>
         <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foreground}>
           {props.job.name}
         </text>
       </box>
+
+      {/* Steps — shown on expansion */}
+      <Show when={expanded()}>
+        <Show when={stepsLoading()}>
+          <box paddingLeft={4}>
+            <text fg={t().foregroundMuted}>Loading steps…</text>
+          </box>
+        </Show>
+        <Show when={!stepsLoading() && steps().length === 0}>
+          <box paddingLeft={4}>
+            <text fg={t().foregroundMuted}>No steps found</text>
+          </box>
+        </Show>
+        <For each={steps()}>{step => <StepEntry step={step} />}</For>
+      </Show>
+    </box>
+  );
+}
+
+// ── StepEntry ─────────────────────────────────────────────────────────────
+
+interface StepEntryProps {
+  step: GitHubStep;
+}
+
+function StepEntry(props: Readonly<StepEntryProps>) {
+  const t = useT();
+  const color = () => stepColor(t, props.step);
+
+  return (
+    <box flexDirection="row" width="100%" paddingLeft={6}>
+      <text flexShrink={0} wrapMode="none" fg={color()}>
+        {stepStatusIcon(props.step)}{" "}
+      </text>
+      <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
+        {props.step.name}
+      </text>
     </box>
   );
 }

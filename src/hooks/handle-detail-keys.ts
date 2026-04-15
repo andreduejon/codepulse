@@ -43,7 +43,6 @@ export function handleDetailKey(e: KeyEvent, opts: DetailKeyOptions): boolean {
         uncommittedDetail: state.uncommittedDetail(),
         commitDetail: state.commitDetail(),
         stashByParent: state.stashByParent(),
-        hasCIData: !!state.graphBadges().get(state.selectedCommit()?.hash ?? ""),
         activeProviderView: state.activeProviderView(),
       });
       const currentIdx = tabs.indexOf(state.detailActiveTab());
@@ -69,7 +68,6 @@ export function handleDetailKey(e: KeyEvent, opts: DetailKeyOptions): boolean {
         uncommittedDetail: state.uncommittedDetail(),
         commitDetail: state.commitDetail(),
         stashByParent: state.stashByParent(),
-        hasCIData: !!state.graphBadges().get(state.selectedCommit()?.hash ?? ""),
         activeProviderView: state.activeProviderView(),
       });
       const currentIdx = tabs.indexOf(state.detailActiveTab());

@@ -8,19 +8,18 @@ interface TabAvailabilityInput {
   uncommittedDetail: UncommittedDetail | null;
   commitDetail: CommitDetail | null;
   stashByParent: Map<string, Commit[]>;
-  /** Whether the active CI provider has data for this commit. */
-  hasCIData?: boolean;
-  /** The active provider view — when "github-actions", CI tab replaces Files tab. */
+  /** The active provider view — when "github-actions", Actions tab replaces Files tab. */
   activeProviderView?: ProviderView;
 }
 
 /**
  * Returns the list of non-empty (navigable) tabs for the current commit.
  *
- * When `activeProviderView` is `"github-actions"` and CI data is available,
- * the "ci" tab takes the first position (replacing "files").  The "files"
- * tab is hidden in that mode — CI status is more relevant than raw file lists
- * when the user has explicitly switched to the GitHub Actions provider view.
+ * When `activeProviderView` is `"github-actions"`, the "github-actions" (Actions) tab
+ * takes the first position and the "files" tab is hidden — CI status is more
+ * relevant when the user has explicitly switched to the GitHub Actions view.
+ *
+ * The CI tab is never shown outside of github-actions provider mode.
  *
  * This is the single source of truth shared by:
  *  - keyboard navigation (left/right tab switching)
@@ -28,7 +27,7 @@ interface TabAvailabilityInput {
  *  - detail panel tab bar (to determine which tabs are disabled)
  */
 export function getAvailableTabs(input: TabAvailabilityInput): DetailTab[] {
-  const { commit, uncommittedDetail, commitDetail, stashByParent, hasCIData, activeProviderView } = input;
+  const { commit, uncommittedDetail, commitDetail, stashByParent, activeProviderView } = input;
 
   if (commit && isUncommittedHash(commit.hash)) {
     const ud = uncommittedDetail;
@@ -43,9 +42,9 @@ export function getAvailableTabs(input: TabAvailabilityInput): DetailTab[] {
   const tabs: DetailTab[] = [];
 
   if (isCIMode) {
-    // In CI mode: CI tab always takes first position (may show "no data" for
-    // commits with no runs). Files tab is hidden — CI status is the focus.
-    tabs.push("ci");
+    // In CI mode: Actions tab always takes first position (may show "no data"
+    // for commits with no runs). Files tab is hidden — CI status is the focus.
+    tabs.push("github-actions");
   } else {
     if (commitDetail && commitDetail.files.length > 0) {
       tabs.push("files");
@@ -56,11 +55,6 @@ export function getAvailableTabs(input: TabAvailabilityInput): DetailTab[] {
     tabs.push("stashes");
   }
   tabs.push("detail");
-
-  if (!isCIMode && hasCIData) {
-    // Normal mode: CI tab appended at end (original behaviour)
-    tabs.push("ci");
-  }
 
   return tabs;
 }

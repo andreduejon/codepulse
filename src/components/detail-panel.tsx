@@ -21,6 +21,8 @@ export interface DetailPanelProps {
   onOpenDiff: (target: DiffTarget) => void;
   /** CI data getter from the GitHub Actions provider (optional). */
   ciGetCommitData?: (sha: string) => GitHubCommitData | null;
+  /** CI pre-fetched jobs getter from the GraphQL cache (optional). */
+  ciGetCachedJobs?: (runId: number) => GitHubJob[] | null;
   /** CI job fetcher from the GitHub Actions provider (optional). */
   ciFetchJobsForRun?: (run: GitHubWorkflowRun) => Promise<GitHubJob[]>;
 }
@@ -43,7 +45,6 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
     const cd = state.commitDetail();
     const stashMap = state.stashByParent();
     const providerView = state.activeProviderView();
-    const hasCIData = !isUncommitted && !!props.ciGetCommitData && !!props.ciGetCommitData(commitHash);
     const isCIMode = providerView === "github-actions";
     const available = new Set(
       getAvailableTabs({
@@ -51,7 +52,6 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
         uncommittedDetail: ud,
         commitDetail: cd,
         stashByParent: stashMap,
-        hasCIData,
         activeProviderView: providerView,
       }),
     );
@@ -75,10 +75,10 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
       ];
     }
     return [
-      // In CI mode the CI tab always takes the first position (shows "no data"
+      // In CI mode the Actions tab always takes the first position (shows "no data"
       // for commits with no runs). Files tab is hidden in CI mode.
       ...(isCIMode
-        ? [{ id: "ci", label: "CI", disabled: false }]
+        ? [{ id: "github-actions", label: "Actions", disabled: false }]
         : [
             {
               id: "files",
@@ -96,8 +96,6 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
           ]
         : []),
       { id: "detail", label: "Info", disabled: false },
-      // In normal mode append CI tab at end when data is available
-      ...(!isCIMode && hasCIData ? [{ id: "ci", label: "CI", disabled: false }] : []),
     ];
   };
 
@@ -159,6 +157,7 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
             onOpenDiff={props.onOpenDiff}
             navRef={props.navRef}
             ciGetCommitData={props.ciGetCommitData}
+            ciGetCachedJobs={props.ciGetCachedJobs}
             ciFetchJobsForRun={props.ciFetchJobsForRun}
           />
         </Show>
