@@ -183,6 +183,11 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     if (dialog() && dialog() !== "detail") return;
 
     // ── Global single-key shortcuts ─────────────────────────────────────────
+    if (e.name === "tab") {
+      e.preventDefault();
+      actions.cycleProviderView();
+      return;
+    }
     if (e.name === "q") {
       e.preventDefault();
       onCommandExecute("quit");
