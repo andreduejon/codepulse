@@ -56,9 +56,11 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
   // ── State ──────────────────────────────────────────────────────────
   const [diff, setDiff] = createSignal<FileDiff | null>(null);
   const [loading, setLoading] = createSignal(true);
+  const [diffError, setDiffError] = createSignal<string | null>(null);
   const [blameLines, setBlameLines] = createSignal<BlameLine[]>([]);
   const [showBlame, setShowBlame] = createSignal(false);
   const [blameLoading, setBlameLoading] = createSignal(false);
+  const [blameError, setBlameError] = createSignal<string | null>(null);
   /** Whether blame has ever been fetched (lazy — only on first `b` press). */
   let blameFetched = false;
   const [viewMode, setViewMode] = createSignal<DiffViewMode>("mixed");
@@ -73,14 +75,17 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
     // Reset blame data for new file (but preserve visibility toggle)
     blameFetched = false;
     setBlameLines([]);
+    setDiffError(null);
+    setBlameError(null);
 
     setLoading(true);
     (async () => {
       try {
         const result = await getFileDiff(state.repoPath(), commitHash, filePath, source);
         setDiff(result);
-      } catch {
-        setDiff({ filePath, hunks: [], isBinary: false });
+      } catch (err) {
+        setDiff(null);
+        setDiffError(err instanceof Error ? err.message : String(err));
       } finally {
         setLoading(false);
       }
@@ -92,6 +97,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
     if (blameFetched) return;
     blameFetched = true;
     setBlameLoading(true);
+    setBlameError(null);
     try {
       const result = await getFileBlame(
         state.repoPath(),
@@ -100,8 +106,9 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
         props.target.source,
       );
       setBlameLines(result);
-    } catch {
+    } catch (err) {
       setBlameLines([]);
+      setBlameError(err instanceof Error ? err.message : String(err));
     } finally {
       setBlameLoading(false);
     }
@@ -483,22 +490,31 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
           </box>
         </Show>
 
+        {/* Diff load error */}
+        <Show when={!loading() && !!diffError()}>
+          <box flexGrow={1} flexDirection="column" alignItems="center" justifyContent="center">
+            <text fg={t().error}>Error loading diff</text>
+            <box height={1} />
+            <text fg={t().foregroundMuted}>{diffError()}</text>
+          </box>
+        </Show>
+
         {/* Binary file */}
-        <Show when={!loading() && diff()?.isBinary}>
+        <Show when={!loading() && !diffError() && diff()?.isBinary}>
           <box flexGrow={1} alignItems="center" justifyContent="center">
             <text fg={t().foregroundMuted}>Binary file — cannot display diff</text>
           </box>
         </Show>
 
         {/* Empty diff */}
-        <Show when={!loading() && !diff()?.isBinary && displayLines().length === 0}>
+        <Show when={!loading() && !diffError() && !diff()?.isBinary && displayLines().length === 0}>
           <box flexGrow={1} alignItems="center" justifyContent="center">
             <text fg={t().foregroundMuted}>No changes</text>
           </box>
         </Show>
 
         {/* Diff content */}
-        <Show when={!loading() && !diff()?.isBinary && displayLines().length > 0}>
+        <Show when={!loading() && !diffError() && !diff()?.isBinary && displayLines().length > 0}>
           <scrollbox
             ref={(el: ScrollBoxRenderable) => {
               scrollboxRef = el;
@@ -540,6 +556,11 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
           <Show when={blameLoading()}>
             <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
               {"loading blame...  "}
+            </text>
+          </Show>
+          <Show when={!!blameError()}>
+            <text flexShrink={0} wrapMode="none" fg={t().error}>
+              {"blame error  "}
             </text>
           </Show>
           <Show when={hasMultipleFiles()}>
