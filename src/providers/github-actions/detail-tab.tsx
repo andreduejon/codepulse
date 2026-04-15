@@ -109,7 +109,7 @@ export function CIDetailTab(props: Readonly<CIDetailTabProps>) {
         <box flexDirection="column" width="100%">
           <box height={1} />
           <text fg={t().accent} wrapMode="none">
-            <strong>GitHub Actions</strong>
+            <strong>github</strong>
           </text>
           <box height={1} />
           <For each={data().runs}>

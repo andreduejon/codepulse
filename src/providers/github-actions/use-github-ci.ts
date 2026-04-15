@@ -78,7 +78,7 @@ export function useGitHubCI(opts: {
   // ── Provider registration ─────────────────────────────────────────────
   registerProvider({
     id: "github-actions",
-    displayName: "GitHub Actions",
+    displayName: "github",
     isAvailable,
   });
 

@@ -340,7 +340,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
     const tokenFound = !!getGitHubToken(ghCfg.tokenEnvVar);
 
     const items: SettingItem[] = [
-      { kind: "header", label: "GitHub Actions" },
+      { kind: "header", label: "github" },
       {
         kind: "toggle",
         label: "Enabled",
