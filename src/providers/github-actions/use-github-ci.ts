@@ -97,10 +97,11 @@ export function useGitHubCI(opts: {
     // Resolve the branch to query using a fully-qualified ref name, which is
     // what the GraphQL ref(qualifiedName:) field requires.
     // state.currentBranch() returns a short name like "main" — prefix it.
-    // Fall back to "HEAD" only as a last resort; GitHub resolves HEAD to the
-    // default branch on the repository but it may not work as qualifiedName.
+    // If branch is empty (detached HEAD or not yet loaded) skip the fetch;
+    // there is no sensible branch to query.
     const rawBranch = state.currentBranch();
-    const branch = rawBranch ? `refs/heads/${rawBranch}` : "HEAD";
+    if (!rawBranch) return;
+    const branch = `refs/heads/${rawBranch}`;
 
     fetchInFlight = true;
     try {
