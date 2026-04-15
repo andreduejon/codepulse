@@ -32,7 +32,7 @@ interface MenuDialogProps {
 }
 
 /** Persists the last-used tab across dialog open/close cycles. */
-const [lastMenuTab, setLastMenuTab] = createSignal<MenuTab>("repository");
+export const [lastMenuTab, setLastMenuTab] = createSignal<MenuTab>("repository");
 
 export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   const { theme, themeName, setTheme } = useTheme();

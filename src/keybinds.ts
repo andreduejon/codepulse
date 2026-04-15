@@ -43,6 +43,7 @@ export const KEYBINDS: Record<HelpTab, [string, string][]> = {
     [":path", "Switch to path mode"],
     [":quit", "Quit the application"],
     [":reload", "Reload data from disk"],
+    [":repo", "Open menu (repository tab)"],
     [":search", "Switch to search mode"],
     [":theme", "Open theme dialog"],
   ],

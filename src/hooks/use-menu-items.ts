@@ -121,7 +121,6 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
       {
         kind: "dialog",
         label: "Color theme",
-        hotkey: "ctrl+t",
         dialogId: "theme",
         get: () => themes[opts.themeName()]?.name ?? opts.themeName(),
       },

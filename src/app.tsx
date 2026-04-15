@@ -7,7 +7,7 @@ import type { DetailNavRef } from "./components/detail-types";
 import { DetailDialog } from "./components/dialogs/detail-dialog";
 import DiffBlameDialog from "./components/dialogs/diff-blame-dialog";
 import HelpDialog from "./components/dialogs/help-dialog";
-import MenuDialog from "./components/dialogs/menu-dialog";
+import MenuDialog, { setLastMenuTab } from "./components/dialogs/menu-dialog";
 import ThemeDialog from "./components/dialogs/theme-dialog";
 import ErrorScreen from "./components/error-screen";
 import Footer from "./components/footer";
@@ -241,6 +241,10 @@ function AppContent(props: Readonly<AppContentProps>) {
         break;
       case "m":
       case "menu":
+        setDialog("menu");
+        break;
+      case "repo":
+        setLastMenuTab("repository");
         setDialog("menu");
         break;
       case "help":
