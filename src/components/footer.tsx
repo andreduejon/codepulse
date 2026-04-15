@@ -19,7 +19,16 @@ export default function Footer(
   const providerStatus = () => state.providerStatus();
   const showProviderStatus = () => state.activeProviderView() === "github-actions" && !!providerStatus();
 
-  const loadingLabel = () => (isLoading() ? " loading" : showProviderStatus() ? ` ${providerStatus()}` : "");
+  const loadingLabel = () => {
+    if (isLoading()) return " loading";
+    // providerStatus === "loading" means a background CI fetch is in-flight.
+    // Show the text regardless of which view is active — the spinner char is
+    // already shown in this case, so the label should match to avoid the
+    // visual inconsistency of a spinning braille with no accompanying text.
+    if (providerStatus() === "loading") return " loading";
+    if (showProviderStatus()) return ` ${providerStatus()}`;
+    return "";
+  };
 
   // Animation frame counter, cycles while loading
   const [frame, setFrame] = createSignal(0);
