@@ -1,5 +1,6 @@
 import type { Renderable } from "@opentui/core";
 import type { DiffTarget } from "../git/types";
+import type { GitHubCommitData, GitHubJob, GitHubWorkflowRun } from "../providers/github-actions/types";
 
 /** Mutable ref populated by a detail view for app.tsx to call */
 export interface DetailNavRef {
@@ -24,6 +25,10 @@ export interface DetailViewProps {
   onOpenDiff?: (target: DiffTarget) => void;
   /** Mutable ref object populated by the detail view with navigation callbacks */
   navRef?: DetailNavRef;
+  /** Get CI data for a commit SHA (from the GitHub Actions provider). Optional. */
+  ciGetCommitData?: (sha: string) => GitHubCommitData | null;
+  /** Fetch jobs for a CI run on demand. Optional. */
+  ciFetchJobsForRun?: (run: GitHubWorkflowRun) => Promise<GitHubJob[]>;
 }
 
 /** Layout constants shared between committed and uncommitted detail views */

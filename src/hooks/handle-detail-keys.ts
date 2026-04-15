@@ -43,6 +43,7 @@ export function handleDetailKey(e: KeyEvent, opts: DetailKeyOptions): boolean {
         uncommittedDetail: state.uncommittedDetail(),
         commitDetail: state.commitDetail(),
         stashByParent: state.stashByParent(),
+        hasCIData: !!state.graphBadges().get(state.selectedCommit()?.hash ?? ""),
       });
       const currentIdx = tabs.indexOf(state.detailActiveTab());
       if (currentIdx <= 0) {
@@ -67,6 +68,7 @@ export function handleDetailKey(e: KeyEvent, opts: DetailKeyOptions): boolean {
         uncommittedDetail: state.uncommittedDetail(),
         commitDetail: state.commitDetail(),
         stashByParent: state.stashByParent(),
+        hasCIData: !!state.graphBadges().get(state.selectedCommit()?.hash ?? ""),
       });
       const currentIdx = tabs.indexOf(state.detailActiveTab());
       if (currentIdx < tabs.length - 1) {

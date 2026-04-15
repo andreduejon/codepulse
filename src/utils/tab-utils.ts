@@ -7,6 +7,8 @@ interface TabAvailabilityInput {
   uncommittedDetail: UncommittedDetail | null;
   commitDetail: CommitDetail | null;
   stashByParent: Map<string, Commit[]>;
+  /** Whether the active CI provider has data for this commit. */
+  hasCIData?: boolean;
 }
 
 /**
@@ -18,7 +20,7 @@ interface TabAvailabilityInput {
  *  - detail panel tab bar (to determine which tabs are disabled)
  */
 export function getAvailableTabs(input: TabAvailabilityInput): DetailTab[] {
-  const { commit, uncommittedDetail, commitDetail, stashByParent } = input;
+  const { commit, uncommittedDetail, commitDetail, stashByParent, hasCIData } = input;
 
   if (commit && isUncommittedHash(commit.hash)) {
     const ud = uncommittedDetail;
@@ -37,5 +39,8 @@ export function getAvailableTabs(input: TabAvailabilityInput): DetailTab[] {
     tabs.push("stashes");
   }
   tabs.push("detail");
+  if (hasCIData) {
+    tabs.push("ci");
+  }
   return tabs;
 }

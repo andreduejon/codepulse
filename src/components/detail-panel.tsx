@@ -4,6 +4,7 @@ import { isUncommittedHash } from "../constants";
 import { useAppState } from "../context/state";
 import type { DiffTarget } from "../git/types";
 import { useT } from "../hooks/use-t";
+import type { GitHubCommitData, GitHubJob, GitHubWorkflowRun } from "../providers/github-actions/types";
 import { getAvailableTabs } from "../utils/tab-utils";
 import CommitDetailView from "./detail";
 import type { DetailNavRef } from "./detail-types";
@@ -18,6 +19,10 @@ export interface DetailPanelProps {
   searchFocused: boolean;
   onJumpToCommit: (hash: string, from: "child" | "parent") => void;
   onOpenDiff: (target: DiffTarget) => void;
+  /** CI data getter from the GitHub Actions provider (optional). */
+  ciGetCommitData?: (sha: string) => GitHubCommitData | null;
+  /** CI job fetcher from the GitHub Actions provider (optional). */
+  ciFetchJobsForRun?: (run: GitHubWorkflowRun) => Promise<GitHubJob[]>;
 }
 
 /**
@@ -37,8 +42,9 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
     const ud = state.uncommittedDetail();
     const cd = state.commitDetail();
     const stashMap = state.stashByParent();
+    const hasCIData = !isUncommitted && !!props.ciGetCommitData && !!props.ciGetCommitData(commitHash);
     const available = new Set(
-      getAvailableTabs({ commit, uncommittedDetail: ud, commitDetail: cd, stashByParent: stashMap }),
+      getAvailableTabs({ commit, uncommittedDetail: ud, commitDetail: cd, stashByParent: stashMap, hasCIData }),
     );
     if (isUncommitted) {
       return [
@@ -75,6 +81,7 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
           ]
         : []),
       { id: "detail", label: "Info", disabled: false },
+      ...(hasCIData ? [{ id: "ci", label: "CI", disabled: false }] : []),
     ];
   };
 
@@ -131,7 +138,13 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
             />
           }
         >
-          <CommitDetailView onJumpToCommit={props.onJumpToCommit} onOpenDiff={props.onOpenDiff} navRef={props.navRef} />
+          <CommitDetailView
+            onJumpToCommit={props.onJumpToCommit}
+            onOpenDiff={props.onOpenDiff}
+            navRef={props.navRef}
+            ciGetCommitData={props.ciGetCommitData}
+            ciFetchJobsForRun={props.ciFetchJobsForRun}
+          />
         </Show>
       </scrollbox>
     </>
