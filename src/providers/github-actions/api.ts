@@ -7,15 +7,7 @@
  */
 
 import type { GraphBadge } from "../../providers/provider";
-import type {
-  GitHubApiJob,
-  GitHubApiRun,
-  GitHubCommitData,
-  GitHubJob,
-  GitHubRepo,
-  GitHubStep,
-  GitHubWorkflowRun,
-} from "./types";
+import type { GitHubApiJob, GitHubCommitData, GitHubJob, GitHubRepo, GitHubStep, GitHubWorkflowRun } from "./types";
 
 // ── Remote URL parsing ────────────────────────────────────────────────────
 
@@ -120,23 +112,6 @@ export function mapRunToBadge(status: string, conclusion: string | null): GraphB
 }
 
 // ── Response mapping ──────────────────────────────────────────────────────
-
-function mapApiRun(r: GitHubApiRun): GitHubWorkflowRun {
-  return {
-    id: r.id,
-    name: r.name ?? "(unnamed)",
-    status: r.status,
-    conclusion: r.conclusion,
-    headSha: r.head_sha,
-    headBranch: r.head_branch ?? "",
-    event: r.event,
-    runNumber: r.run_number,
-    url: r.html_url,
-    createdAt: r.created_at,
-    updatedAt: r.updated_at,
-    runStartedAt: r.run_started_at ?? null,
-  };
-}
 
 function mapApiJob(j: GitHubApiJob): GitHubJob {
   return {
@@ -367,26 +342,26 @@ const GRAPHQL_URL = "https://api.github.com/graphql";
 
 /**
  * Maximum number of SHAs per GraphQL batch request.
- * Node budget: 50 SHAs × 20 check-suites × 50 check-runs = 50,000 nodes,
+ * Node budget: 100 SHAs × 10 check-suites × 20 check-runs = 20,000 nodes,
  * well under GitHub's 500K limit.  Steps are not included in the batch query
  * (fetched on demand via fetchRunJobs) to keep the node count low.
  */
-export const GQL_BATCH_SIZE = 50;
+export const GQL_BATCH_SIZE = 100;
 
 /**
  * Inline fragment shared by every aliased commit object.
  *
- * Steps are intentionally omitted here to stay under GitHub's 500K node limit:
- *   50 SHAs × 20 suites × 50 checkRuns × 30 steps = 1,500,000 nodes (rejected)
- *   50 SHAs × 20 suites × 50 checkRuns             =    50,000 nodes (accepted)
+ * Node budget per SHA: 10 suites × 20 checkRuns = 200 nodes.
+ * At GQL_BATCH_SIZE=100: 100 × 200 = 20,000 nodes — well under GitHub's 500K limit.
  *
- * Steps are fetched on demand via fetchRunJobs (REST) when the user expands
- * a run in the detail panel.
+ * first: 10 suites  — covers repos with multiple CI providers with room to spare.
+ * first: 20 runs    — covers monorepos with many workflow files.
+ * Steps intentionally omitted — fetched on demand via fetchRunJobs (REST).
  */
 const COMMIT_FRAGMENT = `
 ... on Commit {
   oid
-  checkSuites(first: 20) {
+  checkSuites(first: 10) {
     nodes {
       status
       conclusion
@@ -401,7 +376,7 @@ const COMMIT_FRAGMENT = `
         updatedAt
         workflow { name }
       }
-      checkRuns(first: 50) {
+      checkRuns(first: 20) {
         nodes {
           databaseId
           name
@@ -516,61 +491,7 @@ export async function fetchCIDataForSHAs(
   }
 }
 
-// ── API calls ─────────────────────────────────────────────────────────────
-
-/**
- * Fetch recent workflow runs for a repository.
- *
- * Uses ETag-based conditional requests: pass the ETag from a previous
- * response in `opts.etag` to get a 304 (no change) response when nothing
- * has changed, saving rate-limit quota.
- *
- * Returns:
- *   - `changed: false` + unchanged `runs`/`etag` when the server returns 304
- *   - `changed: true` + new `runs` + new `etag` on a 200 response
- *   - Empty runs array (no throw) on API errors (4xx / 5xx / network)
- */
-export async function fetchWorkflowRuns(
-  repo: GitHubRepo,
-  token: string,
-  opts: {
-    perPage?: number;
-    etag?: string | null;
-    signal?: AbortSignal;
-  } = {},
-): Promise<{ changed: boolean; runs: GitHubWorkflowRun[]; etag: string | null }> {
-  const { perPage = 100, etag = null, signal } = opts;
-  const url = `${apiBase(repo)}/actions/runs?per_page=${perPage}`;
-
-  const headers: Record<string, string> = createHeaders(token);
-  if (etag) headers["If-None-Match"] = etag;
-
-  try {
-    const res = await fetch(url, { headers, signal });
-
-    // 304 Not Modified — nothing changed
-    if (res.status === 304) {
-      return { changed: false, runs: [], etag };
-    }
-
-    // Extract new ETag for next request
-    const newEtag = res.headers.get("etag");
-
-    if (!res.ok) {
-      // 401/403/404/422 — log to console but don't throw (graceful degradation)
-      console.error(`[github-actions] fetchWorkflowRuns: HTTP ${res.status} for ${repo.owner}/${repo.repo}`);
-      return { changed: true, runs: [], etag: newEtag };
-    }
-
-    const json = (await res.json()) as { workflow_runs?: GitHubApiRun[] };
-    const runs = (json.workflow_runs ?? []).map(mapApiRun);
-    return { changed: true, runs, etag: newEtag };
-  } catch (err) {
-    if (signal?.aborted) throw err; // propagate AbortError so callers can check
-    console.error("[github-actions] fetchWorkflowRuns: network error:", err);
-    return { changed: false, runs: [], etag };
-  }
-}
+// ── REST API calls ────────────────────────────────────────────────────────
 
 /**
  * Fetch all jobs (with steps) for a single workflow run.

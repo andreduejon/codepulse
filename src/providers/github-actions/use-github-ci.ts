@@ -171,7 +171,6 @@ export function useGitHubCI(opts: {
             jobsCache.set(run.id, jobs);
           } else {
             // In-progress: always use the freshest data
-            jobsCache.delete(run.id);
             jobsCache.set(run.id, jobs);
           }
         }
@@ -198,8 +197,11 @@ export function useGitHubCI(opts: {
   /**
    * Initial / catch-up fetch: query the top INITIAL_SHA_LIMIT SHAs from
    * graphRows that haven't been queried yet.
+   *
+   * Pass `shas` when the caller has already computed the unqueried list to
+   * avoid a redundant collectTopSHAs() call.
    */
-  async function doInitialFetch(signal?: AbortSignal): Promise<void> {
+  async function doInitialFetch(signal?: AbortSignal, shas?: string[]): Promise<void> {
     if (fetchInFlight) return;
     if (!isAvailable()) {
       const repo = cachedGitHubRepo;
@@ -214,7 +216,7 @@ export function useGitHubCI(opts: {
       return;
     }
 
-    const allSHAs = collectTopSHAs(INITIAL_SHA_LIMIT);
+    const allSHAs = shas ?? collectTopSHAs(INITIAL_SHA_LIMIT);
     const unqueried = allSHAs.filter(sha => !queriedSHAs.has(sha));
     if (unqueried.length === 0) return;
 
@@ -358,7 +360,8 @@ export function useGitHubCI(opts: {
 
     const ctrl = new AbortController();
     fetchAbortCtrl = ctrl;
-    doInitialFetch(ctrl.signal);
+    // Pass newSHAs directly to avoid a redundant collectTopSHAs() call inside doInitialFetch
+    doInitialFetch(ctrl.signal, allSHAs);
   });
 
   onCleanup(() => {

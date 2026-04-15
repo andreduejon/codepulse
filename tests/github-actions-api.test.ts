@@ -5,13 +5,12 @@ import {
   buildGraphBadges,
   fetchCIDataForSHAs,
   fetchRunJobs,
-  fetchWorkflowRuns,
   GQL_BATCH_SIZE,
   getGitHubToken,
   mapRunToBadge,
   parseGitHubRemote,
 } from "../src/providers/github-actions/api";
-import type { GitHubApiJob, GitHubApiRun } from "../src/providers/github-actions/types";
+import type { GitHubApiJob } from "../src/providers/github-actions/types";
 
 // ── parseGitHubRemote ─────────────────────────────────────────────────────
 
@@ -384,25 +383,7 @@ describe("buildCommitDataMap", () => {
   });
 });
 
-// ── fetchWorkflowRuns (mocked fetch) ──────────────────────────────────────
-
-function makeApiRun(overrides: Partial<GitHubApiRun> = {}): GitHubApiRun {
-  return {
-    id: 1,
-    name: "CI",
-    status: "completed",
-    conclusion: "success",
-    head_sha: "abc123",
-    head_branch: "main",
-    event: "push",
-    run_number: 1,
-    html_url: "https://github.com/owner/repo/actions/runs/1",
-    created_at: "2024-01-01T00:00:00Z",
-    updated_at: "2024-01-01T01:00:00Z",
-    run_started_at: "2024-01-01T00:00:01Z",
-    ...overrides,
-  };
-}
+// ── Shared test helpers ───────────────────────────────────────────────────
 
 const TEST_REPO = { owner: "owner", repo: "repo" };
 const TEST_TOKEN = "ghp_test";
@@ -414,112 +395,6 @@ function mockFetch(fn: (...args: any[]) => Promise<Response>): void {
   // biome-ignore lint/suspicious/noExplicitAny: intentional test helper cast
   globalThis.fetch = fn as any;
 }
-
-describe("fetchWorkflowRuns", () => {
-  afterEach(() => {
-    // Reset global fetch mock
-    globalThis.fetch = fetch;
-  });
-
-  it("returns mapped runs on successful response", async () => {
-    mockFetch(
-      mock(
-        async () =>
-          new Response(JSON.stringify({ workflow_runs: [makeApiRun()] }), {
-            status: 200,
-            headers: { etag: '"abc"' },
-          }),
-      ),
-    );
-    const result = await fetchWorkflowRuns(TEST_REPO, TEST_TOKEN);
-    expect(result.changed).toBe(true);
-    expect(result.runs).toHaveLength(1);
-    expect(result.runs[0].name).toBe("CI");
-    expect(result.runs[0].headSha).toBe("abc123");
-    expect(result.etag).toBe('"abc"');
-  });
-
-  it("sends If-None-Match header when etag is provided", async () => {
-    let capturedHeaders: Record<string, string> = {};
-    mockFetch(
-      mock(async (_url: string, init: RequestInit) => {
-        capturedHeaders = Object.fromEntries(new Headers(init.headers as HeadersInit).entries());
-        return new Response(JSON.stringify({ workflow_runs: [] }), { status: 200 });
-      }),
-    );
-    await fetchWorkflowRuns(TEST_REPO, TEST_TOKEN, { etag: '"cached-etag"' });
-    expect(capturedHeaders["if-none-match"]).toBe('"cached-etag"');
-  });
-
-  it("returns changed=false with unchanged runs on 304", async () => {
-    mockFetch(mock(async () => new Response(null, { status: 304 })));
-    const result = await fetchWorkflowRuns(TEST_REPO, TEST_TOKEN, { etag: '"old-etag"' });
-    expect(result.changed).toBe(false);
-    expect(result.runs).toHaveLength(0);
-    expect(result.etag).toBe('"old-etag"'); // preserves old etag
-  });
-
-  it("returns empty runs (no throw) on 401", async () => {
-    mockFetch(mock(async () => new Response(null, { status: 401 })));
-    const result = await fetchWorkflowRuns(TEST_REPO, TEST_TOKEN);
-    expect(result.changed).toBe(true);
-    expect(result.runs).toHaveLength(0);
-  });
-
-  it("returns empty runs (no throw) on 403", async () => {
-    mockFetch(mock(async () => new Response(null, { status: 403 })));
-    const result = await fetchWorkflowRuns(TEST_REPO, TEST_TOKEN);
-    expect(result.runs).toHaveLength(0);
-  });
-
-  it("returns empty runs (no throw) on 404", async () => {
-    mockFetch(mock(async () => new Response(null, { status: 404 })));
-    const result = await fetchWorkflowRuns(TEST_REPO, TEST_TOKEN);
-    expect(result.runs).toHaveLength(0);
-  });
-
-  it("returns empty runs (no throw) on network error", async () => {
-    mockFetch(
-      mock(async () => {
-        throw new Error("Network failure");
-      }),
-    );
-    const result = await fetchWorkflowRuns(TEST_REPO, TEST_TOKEN);
-    expect(result.changed).toBe(false);
-    expect(result.runs).toHaveLength(0);
-  });
-
-  it("maps null run name to (unnamed)", async () => {
-    mockFetch(
-      mock(async () => new Response(JSON.stringify({ workflow_runs: [makeApiRun({ name: null })] }), { status: 200 })),
-    );
-    const result = await fetchWorkflowRuns(TEST_REPO, TEST_TOKEN);
-    expect(result.runs[0].name).toBe("(unnamed)");
-  });
-
-  it("maps null head_branch to empty string", async () => {
-    mockFetch(
-      mock(
-        async () =>
-          new Response(JSON.stringify({ workflow_runs: [makeApiRun({ head_branch: null })] }), { status: 200 }),
-      ),
-    );
-    const result = await fetchWorkflowRuns(TEST_REPO, TEST_TOKEN);
-    expect(result.runs[0].headBranch).toBe("");
-  });
-
-  it("sends correct Authorization header", async () => {
-    let authHeader = "";
-    mockFetch(
-      mock(async (_url: string, init: RequestInit) => {
-        authHeader = new Headers(init.headers as HeadersInit).get("authorization") ?? "";
-        return new Response(JSON.stringify({ workflow_runs: [] }), { status: 200 });
-      }),
-    );
-    await fetchWorkflowRuns(TEST_REPO, TEST_TOKEN);
-    expect(authHeader).toBe(`Bearer ${TEST_TOKEN}`);
-  });
-});
 
 // ── fetchRunJobs (mocked fetch) ───────────────────────────────────────────
 
