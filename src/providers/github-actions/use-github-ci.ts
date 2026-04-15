@@ -4,10 +4,13 @@
  * Manages the full lifecycle of CI data for the GitHub Actions provider:
  *   - Registers the provider in the shared registry
  *   - Lazy initial fetch (triggered on first Tab switch to CI view)
- *   - Auto-refresh only while the CI provider view is active
- *   - GraphQL-based fetch: single request returns runs + jobs for 50 commits
- *     (~90% smaller payload than the REST /actions/runs endpoint)
- *   - REST fetchRunJobs fallback for runs not covered by the GraphQL response
+ *   - Viewport-driven SHA batching: queries the top ~100 commits from
+ *     state.graphRows() — covering all branches — rather than walking a
+ *     single branch's history.  Works for any commit on any branch.
+ *   - Auto-refresh only re-queries SHAs with non-terminal (running/queued)
+ *     status, keeping polling cheap.
+ *   - Manual refresh / post-git-fetch: queries any newly-appeared SHAs that
+ *     have not been queried yet (queriedSHAs dedup set).
  *   - In-memory caches: runs per SHA, jobs per run ID
  *
  * Accepts state/actions directly (not via useContext) because this hook is
@@ -17,18 +20,21 @@
 
 import { createEffect, onCleanup } from "solid-js";
 import type { AppActions, AppState } from "../../context/state";
-import type { GraphBadge } from "../../providers/provider";
 import { registerProvider } from "../../providers/provider";
 import {
   buildCommitDataMap,
   buildGraphBadges,
-  fetchCIDataGraphQL,
+  fetchCIDataForSHAs,
   fetchRunJobs,
+  GQL_BATCH_SIZE,
   getGitHubToken,
   parseGitHubRemote,
 } from "./api";
 import type { GitHubCommitData, GitHubJob, GitHubProviderConfig, GitHubRunDetail, GitHubWorkflowRun } from "./types";
 import { DEFAULT_GITHUB_CONFIG } from "./types";
+
+/** Number of rows taken from the top of graphRows() for the initial fetch. */
+const INITIAL_SHA_LIMIT = 100;
 
 export interface UseGitHubCIResult {
   /** Retrieve all runs for a given commit SHA (null if not fetched yet). */
@@ -56,7 +62,6 @@ export function useGitHubCI(opts: {
   const { state, actions } = opts;
 
   // ── Availability (reactive) ───────────────────────────────────────────
-  // Compute once per remoteUrl change; parseGitHubRemote is pure
   let cachedGitHubRepo = parseGitHubRemote(state.remoteUrl());
   createEffect(() => {
     cachedGitHubRepo = parseGitHubRemote(state.remoteUrl());
@@ -80,74 +85,170 @@ export function useGitHubCI(opts: {
   let commitDataCache = new Map<string, GitHubCommitData>();
   /** runId → jobs (pre-populated from GraphQL; REST fallback for on-demand fetches) */
   const jobsCache = new Map<number, GitHubJob[]>();
-  /** Timestamp of last successful fetch (ms) */
-  let lastFetchedAt = 0;
+  /**
+   * Set of SHAs that have already been queried.
+   * Used to avoid re-fetching completed runs and to detect new commits after
+   * a git fetch.  Cleared on manual refresh to force a full re-query.
+   */
+  const queriedSHAs = new Set<string>();
   /** Guard: is a fetch already in-flight? */
   let fetchInFlight = false;
 
-  // ── Core fetch function ───────────────────────────────────────────────
-  async function doFetch(_forceRefresh = false, signal?: AbortSignal): Promise<void> {
-    if (fetchInFlight) return;
-    if (!isAvailable()) return;
+  // ── SHA collection helpers ────────────────────────────────────────────
 
+  /**
+   * Collect up to `limit` commit SHAs from the top of graphRows.
+   * graphRows is already sorted newest-first across all branches, so the
+   * first N rows naturally cover the most-recent commits on every branch.
+   */
+  function collectTopSHAs(limit: number): string[] {
+    const rows = state.graphRows();
+    const shas: string[] = [];
+    for (let i = 0; i < Math.min(rows.length, limit); i++) {
+      shas.push(rows[i].commit.hash);
+    }
+    return shas;
+  }
+
+  /**
+   * Returns SHAs that have `running` or `queued` badge status.
+   * Used for cheap auto-refresh polling — only re-query in-flight commits.
+   */
+  function collectRunningSHAs(): string[] {
+    const badges = state.graphBadges();
+    const running: string[] = [];
+    for (const [sha, badge] of badges) {
+      if (badge.badge === "running") running.push(sha);
+    }
+    return running;
+  }
+
+  // ── Core fetch function ───────────────────────────────────────────────
+
+  /**
+   * Fetch CI data for the given SHAs and merge results into caches.
+   *
+   * @param shas      SHAs to query — caller is responsible for dedup/filtering.
+   * @param signal    Optional AbortSignal for cancellation.
+   */
+  async function fetchForSHAs(shas: string[], signal?: AbortSignal): Promise<void> {
+    if (shas.length === 0) return;
     const repo = cachedGitHubRepo;
     const token = getGitHubToken(config.tokenEnvVar);
     if (!repo || !token) return;
 
-    // Resolve the branch to query using a fully-qualified ref name, which is
-    // what the GraphQL ref(qualifiedName:) field requires.
-    // state.currentBranch() returns a short name like "main" — prefix it.
-    // If branch is empty (detached HEAD or not yet loaded) skip the fetch;
-    // there is no sensible branch to query.
-    const rawBranch = state.currentBranch();
-    if (!rawBranch) return;
-    const branch = `refs/heads/${rawBranch}`;
+    // Split into batches of GQL_BATCH_SIZE and fire in parallel
+    const batches: string[][] = [];
+    for (let i = 0; i < shas.length; i += GQL_BATCH_SIZE) {
+      batches.push(shas.slice(i, i + GQL_BATCH_SIZE));
+    }
 
-    fetchInFlight = true;
-    try {
-      const result = await fetchCIDataGraphQL(repo, token, branch, { signal });
+    const results = await Promise.all(batches.map(batch => fetchCIDataForSHAs(repo, token, batch, { signal })));
 
-      if (signal?.aborted) return;
+    if (signal?.aborted) return;
 
-      lastFetchedAt = Date.now();
-
-      // Rebuild commit data cache from the new runs
-      commitDataCache = buildCommitDataMap(result.runs);
-
-      // Populate jobs cache from the pre-fetched check run data.
-      // Only cache permanently for completed runs; invalidate in-progress ones.
+    // Merge all batch results
+    const allRuns: GitHubWorkflowRun[] = [];
+    for (const result of results) {
+      allRuns.push(...result.runs);
+      // Populate jobs cache from pre-fetched check run data
       for (const run of result.runs) {
-        if (run.status === "completed") {
-          // Only set if we have data — don't overwrite a previously cached entry
-          // with an empty array if the GraphQL response had 0 check runs.
-          const jobs = result.jobsByRunId.get(run.id);
-          if (jobs && jobs.length > 0) {
+        const jobs = result.jobsByRunId.get(run.id);
+        if (jobs && jobs.length > 0) {
+          if (run.status === "completed") {
+            // Completed runs: only cache if we have jobs (don't overwrite with empty)
             jobsCache.set(run.id, jobs);
-          }
-        } else {
-          // In-progress: always refresh from the latest response
-          jobsCache.delete(run.id);
-          const jobs = result.jobsByRunId.get(run.id);
-          if (jobs && jobs.length > 0) {
+          } else {
+            // In-progress: always use the freshest data
+            jobsCache.delete(run.id);
             jobsCache.set(run.id, jobs);
           }
         }
       }
+    }
 
-      // Build badges and update state
-      const badges: Map<string, GraphBadge> = buildGraphBadges(result.runs);
-      actions.setGraphBadges(badges);
+    // Merge new runs into commitDataCache (additive — don't discard other SHAs)
+    const newCommitData = buildCommitDataMap(allRuns);
+    for (const [sha, data] of newCommitData) {
+      commitDataCache.set(sha, data);
+    }
+
+    // Merge new badges into graphBadges (additive)
+    const newBadges = buildGraphBadges(allRuns);
+    const currentBadges = new Map(state.graphBadges());
+    for (const [sha, badge] of newBadges) {
+      currentBadges.set(sha, badge);
+    }
+    actions.setGraphBadges(currentBadges);
+  }
+
+  // ── Main fetch entry points ───────────────────────────────────────────
+
+  /**
+   * Initial / catch-up fetch: query the top INITIAL_SHA_LIMIT SHAs from
+   * graphRows that haven't been queried yet.
+   */
+  async function doInitialFetch(signal?: AbortSignal): Promise<void> {
+    if (fetchInFlight) return;
+    if (!isAvailable()) return;
+
+    const allSHAs = collectTopSHAs(INITIAL_SHA_LIMIT);
+    const unqueried = allSHAs.filter(sha => !queriedSHAs.has(sha));
+    if (unqueried.length === 0) return;
+
+    // Mark as queried before the async call so concurrent triggers don't
+    // duplicate the request.
+    for (const sha of unqueried) queriedSHAs.add(sha);
+
+    fetchInFlight = true;
+    try {
+      await fetchForSHAs(unqueried, signal);
     } catch (err) {
-      if (signal?.aborted) return; // intentional cancellation — not an error
-      console.error("[github-actions] fetch failed:", err);
+      if (signal?.aborted) return;
+      console.error("[github-actions] initial fetch failed:", err);
+      // On error, un-mark so a future retry can re-query these SHAs
+      for (const sha of unqueried) queriedSHAs.delete(sha);
     } finally {
       fetchInFlight = false;
     }
   }
 
+  /**
+   * Auto-refresh: only re-query SHAs with running/queued badge status.
+   * Cheap — typically 0-5 SHAs, one small GraphQL request.
+   */
+  async function doRefreshRunning(signal?: AbortSignal): Promise<void> {
+    if (fetchInFlight) return;
+    if (!isAvailable()) return;
+
+    const runningSHAs = collectRunningSHAs();
+    if (runningSHAs.length === 0) return;
+
+    fetchInFlight = true;
+    try {
+      await fetchForSHAs(runningSHAs, signal);
+    } catch (err) {
+      if (signal?.aborted) return;
+      console.error("[github-actions] refresh failed:", err);
+    } finally {
+      fetchInFlight = false;
+    }
+  }
+
+  /**
+   * Manual / forced full refresh: clears queriedSHAs and re-queries the top
+   * INITIAL_SHA_LIMIT rows.  Called when the user presses `f` or `:reload`.
+   */
+  async function doForceRefresh(): Promise<void> {
+    queriedSHAs.clear();
+    commitDataCache = new Map();
+    actions.setGraphBadges(new Map());
+    await doInitialFetch();
+  }
+
   // ── Lazy initial fetch + auto-refresh while in CI view ───────────────
-  // We track whether we've done the initial fetch to support lazy loading.
   let hasFetchedOnce = false;
+  let lastFetchedAt = 0;
   let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
   let fetchAbortCtrl: AbortController | null = null;
 
@@ -157,12 +258,12 @@ export function useGitHubCI(opts: {
     if (interval <= 0) return;
 
     autoRefreshTimer = setInterval(() => {
-      // Only refresh when CI view is active
       if (state.activeProviderView() !== "github-actions") return;
       if (fetchAbortCtrl) fetchAbortCtrl.abort();
       const ctrl = new AbortController();
       fetchAbortCtrl = ctrl;
-      doFetch(false, ctrl.signal);
+      doRefreshRunning(ctrl.signal);
+      lastFetchedAt = Date.now();
     }, interval);
   }
 
@@ -178,7 +279,7 @@ export function useGitHubCI(opts: {
   }
 
   // React to provider view changes:
-  //  - Switch TO github-actions → do initial/catch-up fetch; start refresh timer
+  //  - Switch TO github-actions → do initial fetch; start refresh timer
   //  - Switch AWAY from github-actions → stop refresh timer
   createEffect(() => {
     const view = state.activeProviderView();
@@ -187,15 +288,18 @@ export function useGitHubCI(opts: {
         hasFetchedOnce = true;
         const ctrl = new AbortController();
         fetchAbortCtrl = ctrl;
-        doFetch(false, ctrl.signal);
+        doInitialFetch(ctrl.signal);
+        lastFetchedAt = Date.now();
       } else {
-        // Check staleness: re-fetch if data is older than the refresh interval
+        // Re-check for new unqueried SHAs (e.g. after a git fetch loaded more commits)
+        // and catch-up if data is stale
         const interval = state.autoRefreshInterval();
-        const staleThreshold = interval > 0 ? interval : 30000;
+        const staleThreshold = interval > 0 ? interval : 30_000;
         if (Date.now() - lastFetchedAt > staleThreshold) {
           const ctrl = new AbortController();
           fetchAbortCtrl = ctrl;
-          doFetch(false, ctrl.signal);
+          doInitialFetch(ctrl.signal);
+          lastFetchedAt = Date.now();
         }
       }
       startAutoRefresh();
@@ -204,13 +308,30 @@ export function useGitHubCI(opts: {
     }
   });
 
-  // Also restart the auto-refresh timer if the interval setting changes
+  // Restart the auto-refresh timer if the interval setting changes
   createEffect(() => {
-    const _interval = state.autoRefreshInterval(); // track reactive dependency
+    const _interval = state.autoRefreshInterval();
     if (state.activeProviderView() === "github-actions") {
       stopAutoRefresh();
       startAutoRefresh();
     }
+  });
+
+  // When graphRows changes (new commits loaded after git fetch), query any
+  // newly-appeared SHAs that are in the top INITIAL_SHA_LIMIT and not yet queried.
+  createEffect(() => {
+    // Track graphRows reactively so this effect fires when new commits load
+    const rows = state.graphRows();
+    if (rows.length === 0) return;
+    if (state.activeProviderView() !== "github-actions") return;
+
+    const allSHAs = collectTopSHAs(INITIAL_SHA_LIMIT);
+    const newSHAs = allSHAs.filter(sha => !queriedSHAs.has(sha));
+    if (newSHAs.length === 0) return;
+
+    const ctrl = new AbortController();
+    fetchAbortCtrl = ctrl;
+    doInitialFetch(ctrl.signal);
   });
 
   onCleanup(() => {
@@ -227,7 +348,6 @@ export function useGitHubCI(opts: {
     if (!repo || !token) return [];
 
     const jobs = await fetchRunJobs(repo, token, run.id);
-    // Only cache permanently for completed runs; in-progress runs may update
     if (run.status === "completed") {
       jobsCache.set(run.id, jobs);
     }
@@ -239,7 +359,7 @@ export function useGitHubCI(opts: {
     getCommitData: (sha: string) => commitDataCache.get(sha) ?? null,
     getCachedJobs: (runId: number) => jobsCache.get(runId) ?? null,
     fetchJobsForRun,
-    refresh: () => doFetch(true),
+    refresh: doForceRefresh,
     isAvailable,
   };
 }

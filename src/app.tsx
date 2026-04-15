@@ -363,15 +363,18 @@ function AppContent(props: Readonly<AppContentProps>) {
     onClearAncestry: clearAnchor,
   });
 
-  // ── Provider-aware theme: override accent with githubActionsFg in CI mode ──
+  // ── Provider-aware theme: override accent with githubActionsBg in CI mode ──
   // createMemo is placed here — after all const declarations above — to respect
   // AGENTS.md rule 1 (eager memo must not reference TDZ variables).
   // All components that call useT() read from ThemeContext, so overriding the
   // theme value here propagates the accent change to every component automatically.
+  //
+  // githubActionsBg is the bright badge color (e.g. #89b4fa) — used as accent.
+  // githubActionsFg is the dark badge text color — NOT suitable as a global accent.
   const providerTheme = createMemo(() => {
     const base = themeState.theme();
     if (state.activeProviderView() === "github-actions") {
-      return { ...base, accent: base.githubActionsFg };
+      return { ...base, accent: base.githubActionsBg };
     }
     return base;
   });

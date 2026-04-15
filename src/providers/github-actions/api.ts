@@ -305,26 +305,18 @@ interface GqlCheckSuite {
   };
 }
 
-/** Raw GraphQL commit history node. */
-interface GqlCommitNode {
+/** A single commit object returned by the aliased object(oid:) query. */
+interface GqlCommitObject {
   oid: string;
   checkSuites: {
     nodes: GqlCheckSuite[];
   } | null;
 }
 
-/** Shape of our GraphQL query result. */
-interface GqlQueryResult {
+/** Shape of the batched object(oid:) GraphQL query result. */
+interface GqlBatchQueryResult {
   data?: {
-    repository?: {
-      ref?: {
-        target?: {
-          history?: {
-            nodes: GqlCommitNode[];
-          };
-        };
-      } | null;
-    } | null;
+    repository?: Record<string, GqlCommitObject | null> | null;
   };
   errors?: Array<{ message: string }>;
 }
@@ -332,41 +324,40 @@ interface GqlQueryResult {
 // ── GraphQL status mapping ─────────────────────────────────────────────────
 
 /**
- * Map GraphQL CheckSuite status/conclusion (UPPER_SNAKE_CASE) to the same
- * normalised lower-case strings used by the REST mapper.
+ * Map GraphQL CheckSuite / CheckRun status/conclusion (UPPER_SNAKE_CASE) to
+ * the normalised lower-case strings used by the REST mapper and badge logic.
+ *
+ * GraphQL enums:  IN_PROGRESS, QUEUED, COMPLETED  (status)
+ *                 SUCCESS, FAILURE, CANCELLED, TIMED_OUT, SKIPPED,
+ *                 NEUTRAL, ACTION_REQUIRED, STALE  (conclusion)
  */
-function gqlSuiteStatus(status: string, conclusion: string | null): { status: string; conclusion: string | null } {
-  const s = status.toLowerCase().replace(/_/g, "_"); // already fine
-  const c = conclusion ? conclusion.toLowerCase() : null;
-  // GraphQL uses IN_PROGRESS, QUEUED, COMPLETED (status) and
-  // SUCCESS, FAILURE, CANCELLED, TIMED_OUT, SKIPPED, NEUTRAL, ACTION_REQUIRED, STALE (conclusion)
-  return { status: s, conclusion: c };
+function gqlNormalise(status: string, conclusion: string | null): { status: string; conclusion: string | null } {
+  return { status: status.toLowerCase(), conclusion: conclusion ? conclusion.toLowerCase() : null };
 }
 
 function mapGqlCheckSuiteToRun(suite: GqlCheckSuite, sha: string): GitHubWorkflowRun | null {
-  // We need a workflowRun to get the run id and name; suites without one are
-  // non-Actions checks (e.g. Dependabot status checks) — skip them.
+  // Suites without a workflowRun are non-Actions checks (e.g. Dependabot) — skip.
   if (!suite.workflowRun) return null;
   const wr = suite.workflowRun;
-  const { status, conclusion } = gqlSuiteStatus(suite.status, suite.conclusion);
+  const { status, conclusion } = gqlNormalise(suite.status, suite.conclusion);
   return {
     id: wr.databaseId,
     name: wr.workflow.name || "(unnamed)",
     status,
     conclusion,
     headSha: sha,
-    headBranch: "", // not available from commit-history traversal
+    headBranch: "", // not available from commit-object traversal
     event: wr.event,
     runNumber: wr.runNumber,
     url: wr.url,
     createdAt: wr.createdAt,
     updatedAt: wr.updatedAt,
-    runStartedAt: wr.createdAt, // best approximation available from GraphQL
+    runStartedAt: wr.createdAt,
   };
 }
 
 function mapGqlCheckRunToJob(cr: GqlCheckSuite["checkRuns"]["nodes"][number]): GitHubJob {
-  const { status, conclusion } = gqlSuiteStatus(cr.status, cr.conclusion);
+  const { status, conclusion } = gqlNormalise(cr.status, cr.conclusion);
   return {
     id: cr.databaseId,
     name: cr.name,
@@ -375,7 +366,7 @@ function mapGqlCheckRunToJob(cr: GqlCheckSuite["checkRuns"]["nodes"][number]): G
     startedAt: cr.startedAt,
     completedAt: cr.completedAt,
     steps: (cr.steps?.nodes ?? []).map(s => {
-      const sm = gqlSuiteStatus(s.status, s.conclusion);
+      const sm = gqlNormalise(s.status, s.conclusion);
       return { name: s.name, status: sm.status, conclusion: sm.conclusion, number: s.number };
     }),
   };
@@ -385,96 +376,102 @@ function mapGqlCheckRunToJob(cr: GqlCheckSuite["checkRuns"]["nodes"][number]): G
 
 const GRAPHQL_URL = "https://api.github.com/graphql";
 
-/** GraphQL query: fetch the last N commits on a branch with their check suites. */
-const CI_QUERY = `
-query CIData($owner: String!, $repo: String!, $branch: String!, $count: Int!) {
-  repository(owner: $owner, name: $repo) {
-    ref(qualifiedName: $branch) {
-      target {
-        ... on Commit {
-          history(first: $count) {
-            nodes {
-              oid
-              checkSuites(first: 20) {
-                nodes {
-                  status
-                  conclusion
-                  updatedAt
-                  createdAt
-                  workflowRun {
-                    databaseId
-                    runNumber
-                    event
-                    url
-                    createdAt
-                    updatedAt
-                    workflow { name }
-                  }
-                  checkRuns(first: 50) {
-                    nodes {
-                      databaseId
-                      name
-                      status
-                      conclusion
-                      startedAt
-                      completedAt
-                      steps(first: 30) {
-                        nodes { name status conclusion number }
-                      }
-                    }
-                  }
-                }
-              }
-            }
+/**
+ * Maximum number of SHAs per GraphQL batch request.
+ * GitHub's GraphQL complexity limit is 500 K nodes. Each SHA alias expands to
+ * roughly 20 check-suite nodes × 50 check-run nodes × 30 step nodes ≈ 30 K
+ * nodes in the worst case, so 50 SHAs is a safe upper bound that stays well
+ * under the limit in all real-world repos.
+ */
+export const GQL_BATCH_SIZE = 50;
+
+/** Inline fragment shared by every aliased commit object. */
+const COMMIT_FRAGMENT = `
+... on Commit {
+  oid
+  checkSuites(first: 20) {
+    nodes {
+      status
+      conclusion
+      updatedAt
+      createdAt
+      workflowRun {
+        databaseId
+        runNumber
+        event
+        url
+        createdAt
+        updatedAt
+        workflow { name }
+      }
+      checkRuns(first: 50) {
+        nodes {
+          databaseId
+          name
+          status
+          conclusion
+          startedAt
+          completedAt
+          steps(first: 30) {
+            nodes { name status conclusion number }
           }
         }
       }
     }
   }
+}`.trim();
+
+/**
+ * Build a GraphQL query string that fetches check suites for up to
+ * GQL_BATCH_SIZE commit SHAs using aliased `object(oid:)` fields.
+ *
+ * Each alias is `c<index>` so the response keys are predictable.
+ * Works for any commit on any branch — no branch restriction.
+ */
+function buildBatchQuery(shas: string[]): string {
+  const aliases = shas.map((sha, i) => `  c${i}: object(oid: "${sha}") { ${COMMIT_FRAGMENT} }`).join("\n");
+  return `query CIBatch($owner: String!, $repo: String!) {\n  repository(owner: $owner, name: $repo) {\n${aliases}\n  }\n}`;
 }
-`.trim();
 
 export interface GraphQLFetchResult {
-  /** Runs grouped by commit SHA (same shape as REST fetchWorkflowRuns result). */
+  /** Runs grouped by commit SHA — branch-agnostic. */
   runs: GitHubWorkflowRun[];
   /**
    * Pre-fetched jobs keyed by run ID.
-   * Populated from check runs data embedded in the GraphQL response —
-   * no extra round-trips needed for jobs on the fetched commits.
+   * Populated from check run data embedded in the GraphQL response —
+   * no extra round-trips needed for the queried commits.
    */
   jobsByRunId: Map<number, GitHubJob[]>;
 }
 
 /**
- * Fetch CI data for recent commits on a branch using the GitHub GraphQL API.
+ * Fetch CI check-suite data for a batch of commit SHAs using the GitHub
+ * GraphQL API.  Works for commits on ANY branch — not limited to a single
+ * branch's history.
+ *
+ * Callers should split large SHA arrays into chunks of ≤ GQL_BATCH_SIZE
+ * before calling this function.
  *
  * Returns runs + pre-populated jobs map in a single HTTP request.
- * Compared with the REST endpoint this typically reduces payload by ~90%.
- *
  * Falls back gracefully on errors (returns empty result, never throws).
  */
-export async function fetchCIDataGraphQL(
+export async function fetchCIDataForSHAs(
   repo: GitHubRepo,
   token: string,
-  branch: string,
-  opts: {
-    count?: number;
-    signal?: AbortSignal;
-  } = {},
+  shas: string[],
+  opts: { signal?: AbortSignal } = {},
 ): Promise<GraphQLFetchResult> {
-  const { count = 50, signal } = opts;
+  const { signal } = opts;
   const empty: GraphQLFetchResult = { runs: [], jobsByRunId: new Map() };
+  if (shas.length === 0) return empty;
 
   try {
     const res = await fetch(GRAPHQL_URL, {
       method: "POST",
-      headers: {
-        ...createHeaders(token),
-        "Content-Type": "application/json",
-      },
+      headers: { ...createHeaders(token), "Content-Type": "application/json" },
       body: JSON.stringify({
-        query: CI_QUERY,
-        variables: { owner: repo.owner, repo: repo.repo, branch, count },
+        query: buildBatchQuery(shas),
+        variables: { owner: repo.owner, repo: repo.repo },
       }),
       signal,
     });
@@ -484,26 +481,26 @@ export async function fetchCIDataGraphQL(
       return empty;
     }
 
-    const json = (await res.json()) as GqlQueryResult;
+    const json = (await res.json()) as GqlBatchQueryResult;
 
     if (json.errors?.length) {
       console.error("[github-actions] GraphQL errors:", json.errors.map(e => e.message).join("; "));
       return empty;
     }
 
-    const commitNodes = json.data?.repository?.ref?.target?.history?.nodes ?? [];
-
+    const repoData = json.data?.repository ?? {};
     const runs: GitHubWorkflowRun[] = [];
     const jobsByRunId = new Map<number, GitHubJob[]>();
 
-    for (const commit of commitNodes) {
-      const sha = commit.oid;
-      for (const suite of commit.checkSuites?.nodes ?? []) {
+    // Iterate alias keys c0, c1, … in the same order as the input shas array
+    for (let i = 0; i < shas.length; i++) {
+      const commitObj = repoData[`c${i}`];
+      if (!commitObj) continue; // SHA not found or not a Commit object
+      const sha = commitObj.oid;
+      for (const suite of commitObj.checkSuites?.nodes ?? []) {
         const run = mapGqlCheckSuiteToRun(suite, sha);
         if (!run) continue;
         runs.push(run);
-
-        // Pre-populate jobs from check runs (free — already in the response)
         const jobs = suite.checkRuns.nodes.map(mapGqlCheckRunToJob);
         jobsByRunId.set(run.id, jobs);
       }

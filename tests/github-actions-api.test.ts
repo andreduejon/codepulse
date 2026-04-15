@@ -3,9 +3,10 @@ import {
   aggregateRunsToGraphBadge,
   buildCommitDataMap,
   buildGraphBadges,
-  fetchCIDataGraphQL,
+  fetchCIDataForSHAs,
   fetchRunJobs,
   fetchWorkflowRuns,
+  GQL_BATCH_SIZE,
   getGitHubToken,
   mapRunToBadge,
   parseGitHubRemote,
@@ -577,10 +578,18 @@ describe("fetchRunJobs", () => {
   });
 });
 
-// ── fetchCIDataGraphQL ────────────────────────────────────────────────────
+// ── fetchCIDataForSHAs ────────────────────────────────────────────────────
 
-/** Build a minimal valid GraphQL CI response. */
-function makeGqlResponse(
+/**
+ * Build a minimal valid GraphQL batch-object response for fetchCIDataForSHAs.
+ *
+ * The response shape is:
+ *   { data: { repository: { c0: { oid, checkSuites: { nodes: [...] } }, c1: ..., ... } } }
+ *
+ * Each entry in `commits` corresponds to one alias key (c0, c1, …) in the
+ * same order as the shas array passed to fetchCIDataForSHAs.
+ */
+function makeBatchResponse(
   commits: Array<{
     sha: string;
     suites: Array<{
@@ -595,61 +604,53 @@ function makeGqlResponse(
     }>;
   }>,
 ) {
-  return {
-    data: {
-      repository: {
-        ref: {
-          target: {
-            history: {
-              nodes: commits.map(c => ({
-                oid: c.sha,
-                checkSuites: {
-                  nodes: c.suites.map(s => ({
-                    status: s.status ?? "COMPLETED",
-                    conclusion: s.conclusion !== undefined ? s.conclusion : "SUCCESS",
-                    updatedAt: "2024-01-02T00:00:00Z",
-                    createdAt: "2024-01-01T00:00:00Z",
-                    workflowRun:
-                      s.wfRunId !== undefined
-                        ? {
-                            databaseId: s.wfRunId,
-                            runNumber: s.wfRunNumber ?? 1,
-                            event: s.event ?? "push",
-                            url: s.url ?? "https://github.com/owner/repo/actions/runs/1",
-                            createdAt: "2024-01-01T00:00:00Z",
-                            updatedAt: "2024-01-02T00:00:00Z",
-                            workflow: { name: s.wfName ?? "CI" },
-                          }
-                        : null,
-                    checkRuns: {
-                      nodes: (s.checkRuns ?? []).map(cr => ({
-                        databaseId: cr.id ?? 10,
-                        name: cr.name ?? "build",
-                        status: cr.status ?? "COMPLETED",
-                        conclusion: cr.conclusion ?? "SUCCESS",
-                        startedAt: "2024-01-01T00:00:00Z",
-                        completedAt: "2024-01-01T00:01:00Z",
-                        steps: { nodes: [] },
-                      })),
-                    },
-                  })),
-                },
-              })),
-            },
+  const repository: Record<string, unknown> = {};
+  commits.forEach((c, i) => {
+    repository[`c${i}`] = {
+      oid: c.sha,
+      checkSuites: {
+        nodes: c.suites.map(s => ({
+          status: s.status ?? "COMPLETED",
+          conclusion: s.conclusion !== undefined ? s.conclusion : "SUCCESS",
+          updatedAt: "2024-01-02T00:00:00Z",
+          createdAt: "2024-01-01T00:00:00Z",
+          workflowRun:
+            s.wfRunId !== undefined
+              ? {
+                  databaseId: s.wfRunId,
+                  runNumber: s.wfRunNumber ?? 1,
+                  event: s.event ?? "push",
+                  url: s.url ?? "https://github.com/owner/repo/actions/runs/1",
+                  createdAt: "2024-01-01T00:00:00Z",
+                  updatedAt: "2024-01-02T00:00:00Z",
+                  workflow: { name: s.wfName ?? "CI" },
+                }
+              : null,
+          checkRuns: {
+            nodes: (s.checkRuns ?? []).map(cr => ({
+              databaseId: cr.id ?? 10,
+              name: cr.name ?? "build",
+              status: cr.status ?? "COMPLETED",
+              conclusion: cr.conclusion ?? "SUCCESS",
+              startedAt: "2024-01-01T00:00:00Z",
+              completedAt: "2024-01-01T00:01:00Z",
+              steps: { nodes: [] },
+            })),
           },
-        },
+        })),
       },
-    },
-  };
+    };
+  });
+  return { data: { repository } };
 }
 
-describe("fetchCIDataGraphQL", () => {
+describe("fetchCIDataForSHAs", () => {
   afterEach(() => {
     globalThis.fetch = fetch;
   });
 
-  it("returns runs and pre-populated jobs for two commits", async () => {
-    const response = makeGqlResponse([
+  it("returns runs and pre-populated jobs for two commits on different branches", async () => {
+    const response = makeBatchResponse([
       {
         sha: "aaa",
         suites: [{ wfRunId: 1, wfName: "CI", checkRuns: [{ id: 10, name: "build" }] }],
@@ -668,7 +669,7 @@ describe("fetchCIDataGraphQL", () => {
       },
     ]);
     mockFetch(mock(async () => new Response(JSON.stringify(response), { status: 200 })));
-    const result = await fetchCIDataGraphQL(TEST_REPO, TEST_TOKEN, "main");
+    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["aaa", "bbb"]);
 
     expect(result.runs).toHaveLength(2);
     expect(result.runs[0].headSha).toBe("aaa");
@@ -687,7 +688,7 @@ describe("fetchCIDataGraphQL", () => {
   });
 
   it("skips check suites with no workflowRun (non-Actions checks)", async () => {
-    const response = makeGqlResponse([
+    const response = makeBatchResponse([
       {
         sha: "ccc",
         suites: [
@@ -697,27 +698,27 @@ describe("fetchCIDataGraphQL", () => {
       },
     ]);
     mockFetch(mock(async () => new Response(JSON.stringify(response), { status: 200 })));
-    const result = await fetchCIDataGraphQL(TEST_REPO, TEST_TOKEN, "main");
+    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["ccc"]);
     expect(result.runs).toHaveLength(1);
     expect(result.runs[0].id).toBe(5);
   });
 
   it("normalises UPPER_SNAKE_CASE status/conclusion to lower_snake_case", async () => {
-    const response = makeGqlResponse([
+    const response = makeBatchResponse([
       {
         sha: "ddd",
         suites: [{ wfRunId: 7, status: "COMPLETED", conclusion: "FAILURE" }],
       },
     ]);
     mockFetch(mock(async () => new Response(JSON.stringify(response), { status: 200 })));
-    const result = await fetchCIDataGraphQL(TEST_REPO, TEST_TOKEN, "main");
+    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["ddd"]);
     expect(result.runs[0].status).toBe("completed");
     expect(result.runs[0].conclusion).toBe("failure");
   });
 
   it("returns empty result on HTTP error (graceful degradation)", async () => {
     mockFetch(mock(async () => new Response(null, { status: 403 })));
-    const result = await fetchCIDataGraphQL(TEST_REPO, TEST_TOKEN, "main");
+    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
     expect(result.runs).toHaveLength(0);
     expect(result.jobsByRunId.size).toBe(0);
   });
@@ -725,7 +726,7 @@ describe("fetchCIDataGraphQL", () => {
   it("returns empty result on GraphQL errors field", async () => {
     const response = { errors: [{ message: "Not Found" }] };
     mockFetch(mock(async () => new Response(JSON.stringify(response), { status: 200 })));
-    const result = await fetchCIDataGraphQL(TEST_REPO, TEST_TOKEN, "main");
+    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
     expect(result.runs).toHaveLength(0);
   });
 
@@ -735,41 +736,63 @@ describe("fetchCIDataGraphQL", () => {
         throw new Error("Network failure");
       }),
     );
-    const result = await fetchCIDataGraphQL(TEST_REPO, TEST_TOKEN, "main");
+    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
     expect(result.runs).toHaveLength(0);
   });
 
-  it("handles empty commit history gracefully", async () => {
-    const response = makeGqlResponse([]);
+  it("returns empty result immediately for empty shas array", async () => {
+    // fetch should not be called at all
+    let fetchCalled = false;
+    mockFetch(
+      mock(async () => {
+        fetchCalled = true;
+        return new Response("{}", { status: 200 });
+      }),
+    );
+    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, []);
+    expect(result.runs).toHaveLength(0);
+    expect(fetchCalled).toBe(false);
+  });
+
+  it("handles commits with no check suites gracefully", async () => {
+    const response = makeBatchResponse([{ sha: "eee", suites: [] }]);
     mockFetch(mock(async () => new Response(JSON.stringify(response), { status: 200 })));
-    const result = await fetchCIDataGraphQL(TEST_REPO, TEST_TOKEN, "main");
+    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["eee"]);
     expect(result.runs).toHaveLength(0);
     expect(result.jobsByRunId.size).toBe(0);
   });
 
-  it("handles missing ref (branch not found) gracefully", async () => {
-    const response = { data: { repository: { ref: null } } };
+  it("handles a SHA not found in repository (null alias) gracefully", async () => {
+    // GitHub returns null for an unknown object oid
+    const response = { data: { repository: { c0: null } } };
     mockFetch(mock(async () => new Response(JSON.stringify(response), { status: 200 })));
-    const result = await fetchCIDataGraphQL(TEST_REPO, TEST_TOKEN, "nonexistent-branch");
+    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["unknown-sha"]);
     expect(result.runs).toHaveLength(0);
   });
 
-  it("sends POST to GraphQL endpoint with correct body", async () => {
+  it("sends POST to GraphQL endpoint with correct body shape", async () => {
     let capturedUrl = "";
     let capturedBody: Record<string, unknown> = {};
     mockFetch(
       mock(async (url: string, init: RequestInit) => {
         capturedUrl = url;
         capturedBody = JSON.parse(init.body as string) as Record<string, unknown>;
-        return new Response(JSON.stringify(makeGqlResponse([])), { status: 200 });
+        return new Response(JSON.stringify(makeBatchResponse([])), { status: 200 });
       }),
     );
-    await fetchCIDataGraphQL(TEST_REPO, TEST_TOKEN, "main", { count: 30 });
+    await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["sha1", "sha2"]);
     expect(capturedUrl).toBe("https://api.github.com/graphql");
-    expect((capturedBody.variables as Record<string, unknown>)?.owner).toBe("owner");
-    expect((capturedBody.variables as Record<string, unknown>)?.repo).toBe("repo");
-    expect((capturedBody.variables as Record<string, unknown>)?.branch).toBe("main");
-    expect((capturedBody.variables as Record<string, unknown>)?.count).toBe(30);
+    // Variables contain owner and repo but NOT branch (branch-agnostic)
+    const vars = capturedBody.variables as Record<string, unknown>;
+    expect(vars?.owner).toBe("owner");
+    expect(vars?.repo).toBe("repo");
+    expect(vars?.branch).toBeUndefined();
+    // Query should contain aliased object(oid:) calls for each SHA
+    const query = capturedBody.query as string;
+    expect(query).toContain('object(oid: "sha1")');
+    expect(query).toContain('object(oid: "sha2")');
+    expect(query).toContain("c0:");
+    expect(query).toContain("c1:");
   });
 
   it("sends Authorization Bearer header", async () => {
@@ -777,40 +800,34 @@ describe("fetchCIDataGraphQL", () => {
     mockFetch(
       mock(async (_url: string, init: RequestInit) => {
         authHeader = new Headers(init.headers as HeadersInit).get("authorization") ?? "";
-        return new Response(JSON.stringify(makeGqlResponse([])), { status: 200 });
+        return new Response(JSON.stringify(makeBatchResponse([])), { status: 200 });
       }),
     );
-    await fetchCIDataGraphQL(TEST_REPO, TEST_TOKEN, "main");
+    await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
     expect(authHeader).toBe(`Bearer ${TEST_TOKEN}`);
   });
 
   it("maps check run steps correctly", async () => {
-    const response = makeGqlResponse([
+    const response = makeBatchResponse([
       {
-        sha: "eee",
-        suites: [
-          {
-            wfRunId: 9,
-            checkRuns: [
-              {
-                id: 30,
-                name: "test",
-              },
-            ],
-          },
-        ],
+        sha: "fff",
+        suites: [{ wfRunId: 9, checkRuns: [{ id: 30, name: "test" }] }],
       },
     ]);
-    // Add steps to the check run node
-    const suite = response.data.repository.ref.target.history.nodes[0].checkSuites.nodes[0];
-    (suite.checkRuns.nodes[0] as Record<string, unknown>).steps = {
-      nodes: [
-        { name: "Checkout", status: "COMPLETED", conclusion: "SUCCESS", number: 1 },
-        { name: "Run tests", status: "COMPLETED", conclusion: "FAILURE", number: 2 },
-      ],
+    // Inject steps directly into the response structure
+    const suite = (response.data.repository.c0 as Record<string, { nodes: Record<string, unknown>[] }>).checkSuites
+      .nodes[0];
+    (suite.checkRuns as { nodes: unknown[] }).nodes[0] = {
+      ...(suite.checkRuns as { nodes: Record<string, unknown>[] }).nodes[0],
+      steps: {
+        nodes: [
+          { name: "Checkout", status: "COMPLETED", conclusion: "SUCCESS", number: 1 },
+          { name: "Run tests", status: "COMPLETED", conclusion: "FAILURE", number: 2 },
+        ],
+      },
     };
     mockFetch(mock(async () => new Response(JSON.stringify(response), { status: 200 })));
-    const result = await fetchCIDataGraphQL(TEST_REPO, TEST_TOKEN, "main");
+    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["fff"]);
     const jobs = result.jobsByRunId.get(9);
     expect(jobs?.[0].steps).toHaveLength(2);
     expect(jobs?.[0].steps[0].name).toBe("Checkout");
@@ -819,9 +836,9 @@ describe("fetchCIDataGraphQL", () => {
   });
 
   it("maps multiple runs per commit to separate entries in runs array", async () => {
-    const response = makeGqlResponse([
+    const response = makeBatchResponse([
       {
-        sha: "fff",
+        sha: "ggg",
         suites: [
           { wfRunId: 100, wfName: "CI" },
           { wfRunId: 101, wfName: "Deploy" },
@@ -830,13 +847,17 @@ describe("fetchCIDataGraphQL", () => {
       },
     ]);
     mockFetch(mock(async () => new Response(JSON.stringify(response), { status: 200 })));
-    const result = await fetchCIDataGraphQL(TEST_REPO, TEST_TOKEN, "main");
+    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["ggg"]);
     expect(result.runs).toHaveLength(3);
-    const shas = result.runs.map(r => r.headSha);
-    expect(shas).toEqual(["fff", "fff", "fff"]);
+    expect(result.runs.every(r => r.headSha === "ggg")).toBe(true);
     const names = result.runs.map(r => r.name);
     expect(names).toContain("CI");
     expect(names).toContain("Deploy");
     expect(names).toContain("Lint");
+  });
+
+  it("exports GQL_BATCH_SIZE as a positive integer", () => {
+    expect(typeof GQL_BATCH_SIZE).toBe("number");
+    expect(GQL_BATCH_SIZE).toBeGreaterThan(0);
   });
 });
