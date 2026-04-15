@@ -20,7 +20,7 @@
  * renders in JSX (see AGENTS.md rule 5).
  */
 
-import { createEffect, onCleanup } from "solid-js";
+import { createEffect, createSignal, onCleanup } from "solid-js";
 import type { AppActions, AppState } from "../../context/state";
 import { registerProvider } from "../../providers/provider";
 import {
@@ -62,15 +62,19 @@ export function useGitHubCI(opts: {
   const { state, actions } = opts;
 
   // ── Availability (reactive) ───────────────────────────────────────────
-  let cachedGitHubRepo = parseGitHubRemote(state.remoteUrl());
+  // Use a signal so effects that read cachedGitHubRepo() re-run when the
+  // remote URL is parsed — this lets the graphRows eager-fetch effect retry
+  // as soon as the remote becomes available.
+  const [cachedGitHubRepo, setCachedGitHubRepo] = createSignal(parseGitHubRemote(state.remoteUrl()));
   createEffect(() => {
-    cachedGitHubRepo = parseGitHubRemote(state.remoteUrl());
+    setCachedGitHubRepo(parseGitHubRemote(state.remoteUrl()));
   });
 
   const isAvailable = (): boolean => {
     if (!config.enabled) return false;
-    if (!cachedGitHubRepo) return false;
-    return getGitHubToken(config.tokenEnvVar, cachedGitHubRepo.hostname) !== null;
+    const repo = cachedGitHubRepo();
+    if (!repo) return false;
+    return getGitHubToken(config.tokenEnvVar, repo.hostname) !== null;
   };
 
   // ── Provider registration ─────────────────────────────────────────────
@@ -143,7 +147,7 @@ export function useGitHubCI(opts: {
    */
   async function fetchForSHAs(shas: string[], signal?: AbortSignal): Promise<void> {
     if (shas.length === 0) return;
-    const repo = cachedGitHubRepo;
+    const repo = cachedGitHubRepo();
     const token = getGitHubToken(config.tokenEnvVar, repo?.hostname);
     if (!repo || !token) return;
 
@@ -201,7 +205,7 @@ export function useGitHubCI(opts: {
     if (fetchInFlight) return;
     if (!isAvailable()) {
       if (showStatus) {
-        const repo = cachedGitHubRepo;
+        const repo = cachedGitHubRepo();
         const token = getGitHubToken(config.tokenEnvVar, repo?.hostname);
         if (!config.enabled) {
           actions.setProviderStatus("CI provider disabled");
@@ -345,14 +349,19 @@ export function useGitHubCI(opts: {
     }
   });
 
-  // When graphRows changes (new commits loaded after git fetch or on initial
-  // data load), eagerly queue a background fetch for any new SHAs.
+  // When graphRows or the remote URL changes, eagerly queue a background fetch
+  // for any new SHAs.  Reading cachedGitHubRepo() here means this effect also
+  // re-runs when the remote URL is parsed — so if the initial graphRows fire
+  // happened before the remote was available, a second attempt fires as soon
+  // as cachedGitHubRepo becomes non-null.
   // hasFetchedOnce / lastFetchedAt are managed inside doInitialFetch so that
   // they are only set when a fetch actually starts (i.e. isAvailable() passes).
   createEffect(() => {
-    // Track graphRows reactively so this effect fires when new commits load
     const rows = state.graphRows();
+    // Track the remote signal so this re-runs when the remote URL loads
+    const repo = cachedGitHubRepo();
     if (rows.length === 0) return;
+    if (!repo) return; // remote not yet parsed — re-runs when cachedGitHubRepo() changes
 
     const allSHAs = collectTopSHAs(INITIAL_SHA_LIMIT);
     const newSHAs = allSHAs.filter(sha => !queriedSHAs.has(sha));
@@ -360,7 +369,6 @@ export function useGitHubCI(opts: {
 
     const ctrl = new AbortController();
     fetchAbortCtrl = ctrl;
-    // Pass allSHAs directly to avoid a redundant collectTopSHAs() call inside doInitialFetch
     doInitialFetch(ctrl.signal, allSHAs);
   });
 
@@ -373,7 +381,7 @@ export function useGitHubCI(opts: {
     const cached = jobsCache.get(run.id);
     if (cached) return cached;
 
-    const repo = cachedGitHubRepo;
+    const repo = cachedGitHubRepo();
     const token = getGitHubToken(config.tokenEnvVar, repo?.hostname);
     if (!repo || !token) return [];
 
