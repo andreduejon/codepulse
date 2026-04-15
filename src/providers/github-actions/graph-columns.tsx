@@ -13,7 +13,7 @@
  */
 
 import { For } from "solid-js";
-import { AUTHOR_COL_WIDTH, DATE_COL_WIDTH } from "../../constants";
+import { AUTHOR_COL_WIDTH, DATE_COL_WIDTH, UNCOMMITTED_PLACEHOLDER } from "../../constants";
 import { useAppState } from "../../context/state";
 import { useT } from "../../hooks/use-t";
 import type { GraphBadge } from "../provider";
@@ -34,7 +34,7 @@ export function CICountsColumn(props: Readonly<CICountsProps>) {
         if (!b) {
           return (
             <text fg={t().foregroundMuted} wrapMode="none">
-              {"—"}
+              {UNCOMMITTED_PLACEHOLDER}
             </text>
           );
         }
@@ -47,7 +47,7 @@ export function CICountsColumn(props: Readonly<CICountsProps>) {
         if (blocks.length === 0) {
           return (
             <text fg={t().foregroundMuted} wrapMode="none">
-              {"—"}
+              {UNCOMMITTED_PLACEHOLDER}
             </text>
           );
         }
@@ -95,7 +95,7 @@ export function CIDateColumn(props: Readonly<CIDateProps>) {
         if (!b) {
           return (
             <text fg={t().foregroundMuted} wrapMode="none" truncate>
-              {"—"}
+              {UNCOMMITTED_PLACEHOLDER}
             </text>
           );
         }
