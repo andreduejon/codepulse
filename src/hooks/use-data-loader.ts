@@ -241,7 +241,10 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
         const fetchTime = await getLastFetchTime(repoPath);
         actions.setLastFetchTime(fetchTime);
         const stickyHash = state.selectedCommit()?.hash;
-        await loadData(undefined, stickyHash, false, true);
+        // silent=true: don't toggle state.loading() — that unmounts the entire
+        // graph <For> list and destroys the scrollbox position.  state.fetching()
+        // already drives the footer spinner, so there is no visual regression.
+        await loadData(undefined, stickyHash, true, true);
       } else {
         actions.setError(result.error ?? "Fetch failed");
       }
