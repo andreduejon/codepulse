@@ -20,9 +20,9 @@ export interface DetailPanelProps {
   onJumpToCommit: (hash: string, from: "child" | "parent") => void;
   onOpenDiff: (target: DiffTarget) => void;
   /** CI data getter from the GitHub Actions provider (optional). */
-  ciGetCommitData?: (sha: string) => GitHubCommitData | null;
+  githubGetCommitData?: (sha: string) => GitHubCommitData | null;
   /** CI job fetcher from the GitHub Actions provider (optional). */
-  ciFetchJobsForRun?: (run: GitHubWorkflowRun) => Promise<GitHubJob[]>;
+  githubFetchJobsForRun?: (run: GitHubWorkflowRun) => Promise<GitHubJob[]>;
 }
 
 /**
@@ -43,7 +43,7 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
     const cd = state.commitDetail();
     const stashMap = state.stashByParent();
     const providerView = state.activeProviderView();
-    const isCIMode = providerView === "github-actions";
+    const isProviderMode = providerView === "github-actions";
     const available = new Set(
       getAvailableTabs({
         commit,
@@ -73,9 +73,9 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
       ];
     }
     return [
-      // In CI mode the Actions tab always takes the first position (shows "no data"
-      // for commits with no runs). Files tab is hidden in CI mode.
-      ...(isCIMode
+      // In provider mode the Actions tab always takes the first position (shows "no data"
+      // for commits with no runs). Files tab is hidden in provider mode.
+      ...(isProviderMode
         ? [{ id: "github-actions", label: "Actions", disabled: false }]
         : [
             {
@@ -154,8 +154,8 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
             onJumpToCommit={props.onJumpToCommit}
             onOpenDiff={props.onOpenDiff}
             navRef={props.navRef}
-            ciGetCommitData={props.ciGetCommitData}
-            ciFetchJobsForRun={props.ciFetchJobsForRun}
+            githubGetCommitData={props.githubGetCommitData}
+            githubFetchJobsForRun={props.githubFetchJobsForRun}
           />
         </Show>
       </scrollbox>

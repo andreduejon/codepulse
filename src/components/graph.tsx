@@ -27,7 +27,11 @@ import {
 import type { GraphRow } from "../git/types";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
 import { useT } from "../hooks/use-t";
-import { CIColumnHeaders, CICountsColumn, CIDateColumn } from "../providers/github-actions/graph-columns";
+import {
+  ActionsColumnHeaders,
+  ActionsCountsColumn,
+  ActionsDateColumn,
+} from "../providers/github-actions/graph-columns";
 import { formatRelativeDate } from "../utils/date";
 import { scrollElementIntoView } from "../utils/scroll";
 import { truncateName } from "../utils/truncate";
@@ -45,7 +49,7 @@ export function ColumnHeader() {
   const t = useT();
   const { state } = useAppState();
   const leftPanelFocused = () => !state.detailFocused();
-  const isCIView = () => state.activeProviderView() !== "git";
+  const isProviderView = () => state.activeProviderView() !== "git";
 
   const { graphWidth } = useGraphDimensions(() => state.maxGraphColumns());
 
@@ -89,9 +93,9 @@ export function ColumnHeader() {
           </text>
         </box>
 
-        {/* Author / Date columns — swapped for CI headers when in CI view */}
-        {isCIView() ? (
-          <CIColumnHeaders />
+        {/* Author / Date columns — swapped for provider headers when in provider view */}
+        {isProviderView() ? (
+          <ActionsColumnHeaders />
         ) : (
           <>
             {/* Author */}
@@ -462,8 +466,8 @@ function GraphLine(
         {/* Author / Date — replaced by CI columns when in CI view */}
         {state.activeProviderView() !== "git" ? (
           <>
-            <CICountsColumn badge={state.graphBadges().get(commit().hash)} active={props.active} />
-            <CIDateColumn badge={state.graphBadges().get(commit().hash)} active={props.active} />
+            <ActionsCountsColumn badge={state.graphBadges().get(commit().hash)} active={props.active} />
+            <ActionsDateColumn badge={state.graphBadges().get(commit().hash)} active={props.active} />
           </>
         ) : (
           <>

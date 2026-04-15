@@ -153,7 +153,7 @@ export function useGitHubCI(opts: {
     // Surface first error encountered across batches (if any)
     const firstError = results.find(r => r.error)?.error ?? null;
     if (firstError) {
-      actions.setCiStatus(firstError);
+      actions.setProviderStatus(firstError);
     }
 
     // Merge all batch results (include successful batches even if others errored)
@@ -192,11 +192,11 @@ export function useGitHubCI(opts: {
       const repo = cachedGitHubRepo;
       const token = getGitHubToken(config.tokenEnvVar);
       if (!config.enabled) {
-        actions.setCiStatus("CI provider disabled");
+        actions.setProviderStatus("CI provider disabled");
       } else if (!repo) {
-        actions.setCiStatus("No GitHub remote detected");
+        actions.setProviderStatus("No GitHub remote detected");
       } else if (!token) {
-        actions.setCiStatus(`Token not found: $${config.tokenEnvVar}`);
+        actions.setProviderStatus(`Token not found: $${config.tokenEnvVar}`);
       }
       return;
     }
@@ -210,15 +210,15 @@ export function useGitHubCI(opts: {
     for (const sha of unqueried) queriedSHAs.add(sha);
 
     fetchInFlight = true;
-    actions.setCiStatus("loading");
+    actions.setProviderStatus("loading");
     try {
       await fetchForSHAs(unqueried, signal);
-      actions.setCiStatus(null);
+      actions.setProviderStatus(null);
     } catch (err) {
       if (signal?.aborted) return;
       const msg = err instanceof Error ? err.message : String(err);
       console.error("[github-actions] initial fetch failed:", err);
-      actions.setCiStatus(`CI fetch error: ${msg}`);
+      actions.setProviderStatus(`CI fetch error: ${msg}`);
       // On error, un-mark so a future retry can re-query these SHAs
       for (const sha of unqueried) queriedSHAs.delete(sha);
     } finally {
@@ -256,7 +256,7 @@ export function useGitHubCI(opts: {
     queriedSHAs.clear();
     commitDataCache = new Map();
     actions.setGraphBadges(new Map());
-    actions.setCiStatus(null);
+    actions.setProviderStatus(null);
     await doInitialFetch();
   }
 

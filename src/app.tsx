@@ -480,8 +480,8 @@ function AppContent(props: Readonly<AppContentProps>) {
                         searchFocused={searchFocused()}
                         onJumpToCommit={handleJumpToCommit}
                         onOpenDiff={handleOpenDiff}
-                        ciGetCommitData={gitHubCI.getCommitData}
-                        ciFetchJobsForRun={gitHubCI.fetchJobsForRun}
+                        githubGetCommitData={gitHubCI.getCommitData}
+                        githubFetchJobsForRun={gitHubCI.fetchJobsForRun}
                       />
                     </box>
                   </Show>

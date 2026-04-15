@@ -103,7 +103,7 @@ export interface AppState {
    * null = idle/ok, "loading" = fetching in progress,
    * any other string = last error message (shown in footer).
    */
-  ciStatus: Accessor<string | null>;
+  providerStatus: Accessor<string | null>;
 }
 
 export interface AppActions {
@@ -145,7 +145,7 @@ export interface AppActions {
   setActiveProviderView: (view: ProviderView) => void;
   setGraphBadges: (map: Map<string, GraphBadge>) => void;
   /** Set the CI provider status message (null = ok, "loading", or error string). */
-  setCiStatus: (status: string | null) => void;
+  setProviderStatus: (status: string | null) => void;
   /** Advance to the next available provider view (Tab key cycling). */
   cycleProviderView: () => void;
 }
@@ -202,7 +202,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
   // ── Provider / CI ─────────────────────────────────────────────────
   const [activeProviderView, setActiveProviderView] = createSignal<ProviderView>("git");
   const [graphBadges, setGraphBadges] = createSignal<Map<string, GraphBadge>>(new Map());
-  const [ciStatus, setCiStatus] = createSignal<string | null>(null);
+  const [providerStatus, setProviderStatus] = createSignal<string | null>(null);
 
   // ── Search memo ───────────────────────────────────────────────────
   // Memoize parsed search separately so regex compilation only happens when
@@ -332,7 +332,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
     highlightMode,
     activeProviderView,
     graphBadges,
-    ciStatus,
+    providerStatus,
   };
 
   const actions: AppActions = {
@@ -372,7 +372,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
     setPathMatchSet,
     setActiveProviderView,
     setGraphBadges,
-    setCiStatus,
+    setProviderStatus,
     cycleProviderView: () => setActiveProviderView(nextProviderView(activeProviderView())),
   };
 

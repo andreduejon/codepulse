@@ -10,7 +10,7 @@ import { useClipboard } from "../hooks/use-clipboard";
 import { type CopyableField, useDetailCursor } from "../hooks/use-detail-cursor";
 import { useStashState } from "../hooks/use-stash-state";
 import { useT } from "../hooks/use-t";
-import { CIDetailTab } from "../providers/github-actions/detail-tab";
+import { ActionsDetailTab } from "../providers/github-actions/detail-tab";
 import { formatDate } from "../utils/date";
 import { isCursored as _isCursored, itemHighlightBg as _itemHighlightBg } from "../utils/detail-cursor";
 import Badge from "./badge";
@@ -861,14 +861,16 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
               </Show>
             </Show>
 
-            {/* ══════════════ CI tab ══════════════ */}
-            <Show when={activeTab() === "github-actions" && !!props.ciGetCommitData && !!props.ciFetchJobsForRun}>
-              <CIDetailTab
+            {/* ══════════════ Actions tab ══════════════ */}
+            <Show
+              when={activeTab() === "github-actions" && !!props.githubGetCommitData && !!props.githubFetchJobsForRun}
+            >
+              <ActionsDetailTab
                 sha={c().hash}
                 // biome-ignore lint/style/noNonNullAssertion: guarded by Show when condition above
-                getCommitData={props.ciGetCommitData!}
+                getCommitData={props.githubGetCommitData!}
                 // biome-ignore lint/style/noNonNullAssertion: guarded by Show when condition above
-                fetchJobsForRun={props.ciFetchJobsForRun!}
+                fetchJobsForRun={props.githubFetchJobsForRun!}
               />
             </Show>
           </>

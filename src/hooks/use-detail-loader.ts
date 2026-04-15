@@ -52,7 +52,7 @@ export function useDetailLoader({
     const commit = state.selectedCommit();
     // Read activeProviderView reactively so this effect re-fires when the user
     // switches between git and github-actions views (lazy load on view change).
-    const isCIMode = state.activeProviderView() === "github-actions";
+    const isProviderMode = state.activeProviderView() === "github-actions";
 
     // Cancel any pending debounce and abort in-flight git subprocesses
     if (detailDebounceTimer) {
@@ -84,7 +84,7 @@ export function useDetailLoader({
     } else {
       // In CI mode default to the "github-actions" tab; otherwise default to "files" (or
       // "unstaged" for the uncommitted node).
-      const defaultTab = isUncommitted ? "unstaged" : isCIMode ? "github-actions" : "files";
+      const defaultTab = isUncommitted ? "unstaged" : isProviderMode ? "github-actions" : "files";
       actions.setDetailActiveTab(defaultTab);
       actions.setDetailCursorIndex(0);
       // Clear any stale jump direction on normal (non-jump) navigation
@@ -96,12 +96,12 @@ export function useDetailLoader({
     actions.setCommitDetail(null);
     actions.setUncommittedDetail(null);
 
-    // In CI mode there is no Files tab — skip the git subprocess entirely.
-    // The loading spinner should only reflect CI data fetching (ciStatus),
+    // In provider mode there is no Files tab — skip the git subprocess entirely.
+    // The loading spinner should only reflect CI data fetching (providerStatus),
     // not file-diff loading that will never be displayed.
     // When the user later tabs back to "git" view, activeProviderView changes,
     // this effect re-fires, and the detail is loaded at that point.
-    if (isCIMode && !isUncommitted) {
+    if (isProviderMode && !isUncommitted) {
       actions.setDetailLoading(false);
       return;
     }

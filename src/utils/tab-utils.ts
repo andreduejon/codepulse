@@ -38,11 +38,11 @@ export function getAvailableTabs(input: TabAvailabilityInput): DetailTab[] {
     return tabs;
   }
 
-  const isCIMode = activeProviderView === "github-actions";
+  const isProviderMode = activeProviderView === "github-actions";
   const tabs: DetailTab[] = [];
 
-  if (isCIMode) {
-    // In CI mode: Actions tab always takes first position (may show "no data"
+  if (isProviderMode) {
+    // In provider mode: Actions tab always takes first position (may show "no data"
     // for commits with no runs). Files tab is hidden — CI status is the focus.
     tabs.push("github-actions");
   } else {

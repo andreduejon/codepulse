@@ -26,9 +26,9 @@ export interface DetailViewProps {
   /** Mutable ref object populated by the detail view with navigation callbacks */
   navRef?: DetailNavRef;
   /** Get CI data for a commit SHA (from the GitHub Actions provider). Optional. */
-  ciGetCommitData?: (sha: string) => GitHubCommitData | null;
+  githubGetCommitData?: (sha: string) => GitHubCommitData | null;
   /** Fetch full job details (with steps) for a CI run on demand. Optional. */
-  ciFetchJobsForRun?: (run: GitHubWorkflowRun) => Promise<GitHubJob[]>;
+  githubFetchJobsForRun?: (run: GitHubWorkflowRun) => Promise<GitHubJob[]>;
 }
 
 /** Layout constants shared between committed and uncommitted detail views */

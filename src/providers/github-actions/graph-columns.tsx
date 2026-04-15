@@ -18,13 +18,13 @@ import { useAppState } from "../../context/state";
 import { useT } from "../../hooks/use-t";
 import type { GraphBadge } from "../provider";
 
-interface CICountsProps {
+interface ActionsCountsProps {
   badge: GraphBadge | undefined;
   active: boolean;
 }
 
 /** Render coloured run-count blocks in the author column. */
-export function CICountsColumn(props: Readonly<CICountsProps>) {
+export function ActionsCountsColumn(props: Readonly<ActionsCountsProps>) {
   const t = useT();
 
   return (
@@ -66,13 +66,13 @@ export function CICountsColumn(props: Readonly<CICountsProps>) {
   );
 }
 
-interface CIDateProps {
+interface ActionsDateProps {
   badge: GraphBadge | undefined;
   active: boolean;
 }
 
 /** Render the latest-run relative time in the date column, coloured by status. */
-export function CIDateColumn(props: Readonly<CIDateProps>) {
+export function ActionsDateColumn(props: Readonly<ActionsDateProps>) {
   const t = useT();
 
   const statusColor = (status: GraphBadge["latestStatus"]): string => {
@@ -120,8 +120,8 @@ export function CIDateColumn(props: Readonly<CIDateProps>) {
   );
 }
 
-/** Column headers for CI mode (replaces Author / Date headers). */
-export function CIColumnHeaders() {
+/** Column headers for provider mode (replaces Author / Date headers). */
+export function ActionsColumnHeaders() {
   const { state } = useAppState();
   const t = useT();
   const leftPanelFocused = () => !state.detailFocused();

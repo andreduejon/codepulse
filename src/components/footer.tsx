@@ -16,17 +16,17 @@ export default function Footer(
 
   const isLoading = () => state.loading() || state.fetching() || state.detailLoading();
 
-  const ciStatus = () => state.ciStatus();
-  const showCIStatus = () => state.activeProviderView() === "github-actions" && !!ciStatus();
+  const providerStatus = () => state.providerStatus();
+  const showProviderStatus = () => state.activeProviderView() === "github-actions" && !!providerStatus();
 
-  const loadingLabel = () => (isLoading() ? " loading" : showCIStatus() ? ` ${ciStatus()}` : "");
+  const loadingLabel = () => (isLoading() ? " loading" : showProviderStatus() ? ` ${providerStatus()}` : "");
 
   // Animation frame counter, cycles while loading
   const [frame, setFrame] = createSignal(0);
   let spinnerTimer: ReturnType<typeof setInterval> | null = null;
 
   createEffect(() => {
-    if (isLoading() || ciStatus() === "loading") {
+    if (isLoading() || providerStatus() === "loading") {
       setFrame(0);
       if (!spinnerTimer) {
         spinnerTimer = setInterval(() => {
@@ -47,9 +47,9 @@ export default function Footer(
 
   // Always render the spinner element to avoid layout shift;
   // show the braille char when loading, empty space when idle.
-  const spinnerChar = () => (isLoading() || ciStatus() === "loading" ? SPINNER_FRAMES[frame()] : " ");
-  // CI error messages use error color; normal loading uses accent
-  const spinnerColor = () => (showCIStatus() && ciStatus() !== "loading" ? t().error : t().accent);
+  const spinnerChar = () => (isLoading() || providerStatus() === "loading" ? SPINNER_FRAMES[frame()] : " ");
+  // Provider error messages use error color; normal loading uses accent
+  const spinnerColor = () => (showProviderStatus() && providerStatus() !== "loading" ? t().error : t().accent);
 
   const enterAction = () => (state.detailFocused() ? state.detailCursorAction() : null);
 
@@ -67,7 +67,7 @@ export default function Footer(
         <text
           flexShrink={0}
           wrapMode="none"
-          fg={showCIStatus() && ciStatus() !== "loading" ? t().error : t().foregroundMuted}
+          fg={showProviderStatus() && providerStatus() !== "loading" ? t().error : t().foregroundMuted}
         >
           {loadingLabel()}
         </text>

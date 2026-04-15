@@ -119,7 +119,7 @@ function stepColor(t: ReturnType<typeof useT>, step: GitHubStep): string {
 
 // ── Props ─────────────────────────────────────────────────────────────────
 
-export interface CIDetailTabProps {
+export interface ActionsDetailTabProps {
   /** SHA of the selected commit. */
   sha: string;
   /** Get all CI data for the commit (run list). */
@@ -133,13 +133,13 @@ export interface CIDetailTabProps {
 
 // ── Top-level component ───────────────────────────────────────────────────
 
-export function CIDetailTab(props: Readonly<CIDetailTabProps>) {
+export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
   const t = useT();
-  const ciData = () => props.getCommitData(props.sha);
+  const actionsData = () => props.getCommitData(props.sha);
 
   return (
     <Show
-      when={ciData()}
+      when={actionsData()}
       fallback={
         <box flexGrow={1} alignItems="center" justifyContent="center">
           <text fg={t().foregroundMuted}>No CI data for this commit</text>
