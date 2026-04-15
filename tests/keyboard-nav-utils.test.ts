@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import type { GraphRow } from "../src/git/types";
 import {
+  type CascadeState,
   computeCascadeTarget,
   computeDisplacedIndex,
   countHighlightedBelow,
   findHighlightedIndex,
-  type CascadeState,
 } from "../src/utils/keyboard-nav-utils";
 import { makeCommit } from "./test-helpers";
-import type { GraphRow } from "../src/git/types";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
