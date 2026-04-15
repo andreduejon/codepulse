@@ -263,6 +263,10 @@ function AppContent(props: Readonly<AppContentProps>) {
         setLastMenuTab("repository");
         setDialog("menu");
         break;
+      case "providers":
+        setLastMenuTab("providers");
+        setDialog("menu");
+        break;
       case "help":
         setDialog("help");
         break;

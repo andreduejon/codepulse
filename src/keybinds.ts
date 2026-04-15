@@ -16,6 +16,7 @@ export const KEYBINDS: Record<HelpTab, [string, string][]> = {
     ["G", "Last item"],
     ["←  or  h", "Exit details / previous tab"],
     ["→  or  l", "Focus details / next tab"],
+    ["tab", "Cycle provider view (git → CI)"],
     ["enter", "Activate / confirm"],
     ["esc", "Back (cascading)"],
     ["a", "Enter ancestry mode"],
@@ -26,6 +27,7 @@ export const KEYBINDS: Record<HelpTab, [string, string][]> = {
     [":", "Command mode"],
     ["/", "Search mode"],
     ["shift  ←/→", "Switch mode"],
+    ["PgUp / PgDn", "Scroll detail panel one page"],
   ],
   diff: [
     ["←  or  h", "Previous file"],
@@ -41,6 +43,7 @@ export const KEYBINDS: Record<HelpTab, [string, string][]> = {
     [":help", "Open help dialog"],
     [":menu", "Open menu dialog"],
     [":path", "Switch to path mode"],
+    [":providers", "Open menu (providers tab)"],
     [":quit", "Quit the application"],
     [":reload", "Reload data from disk"],
     [":repo", "Open menu (repository tab)"],
