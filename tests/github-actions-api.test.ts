@@ -280,13 +280,9 @@ function makeRun(
     status: overrides.status ?? "completed",
     conclusion: overrides.conclusion ?? "success",
     headSha: overrides.headSha ?? "abc123",
-    headBranch: "main",
     event: "push",
     runNumber: 1,
-    url: "https://github.com/owner/repo/actions/runs/1",
-    createdAt: "2024-01-01T00:00:00Z",
     updatedAt: overrides.updatedAt ?? "2024-01-01T01:00:00Z",
-    runStartedAt: "2024-01-01T00:00:01Z",
   };
 }
 
@@ -474,7 +470,6 @@ function makeBatchResponse(
       wfRunNumber?: number;
       wfName?: string;
       event?: string;
-      url?: string;
     }>;
   }>,
 ) {
@@ -486,16 +481,12 @@ function makeBatchResponse(
         nodes: c.suites.map(s => ({
           status: s.status ?? "COMPLETED",
           conclusion: s.conclusion !== undefined ? s.conclusion : "SUCCESS",
-          updatedAt: "2024-01-02T00:00:00Z",
-          createdAt: "2024-01-01T00:00:00Z",
           workflowRun:
             s.wfRunId !== undefined
               ? {
                   databaseId: s.wfRunId,
                   runNumber: s.wfRunNumber ?? 1,
                   event: s.event ?? "push",
-                  url: s.url ?? "https://github.com/owner/repo/actions/runs/1",
-                  createdAt: "2024-01-01T00:00:00Z",
                   updatedAt: "2024-01-02T00:00:00Z",
                   workflow: { name: s.wfName ?? "CI" },
                 }

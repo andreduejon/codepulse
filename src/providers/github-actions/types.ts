@@ -63,14 +63,9 @@ export interface GitHubWorkflowRun {
   status: string;
   conclusion: string | null;
   headSha: string;
-  headBranch: string;
   event: string;
   runNumber: number;
-  /** Direct link to the run on github.com */
-  url: string;
-  createdAt: string;
   updatedAt: string;
-  runStartedAt: string | null;
 }
 
 /** Mapped job within a workflow run. */

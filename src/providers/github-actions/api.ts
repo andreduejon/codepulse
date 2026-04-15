@@ -249,14 +249,10 @@ export function buildCommitDataMap(runs: GitHubWorkflowRun[]): Map<string, GitHu
 interface GqlCheckSuite {
   status: string;
   conclusion: string | null;
-  updatedAt: string;
-  createdAt: string;
   workflowRun: {
     databaseId: number;
     runNumber: number;
     event: string;
-    url: string;
-    createdAt: string;
     updatedAt: string;
     workflow: { name: string };
   } | null;
@@ -303,13 +299,9 @@ function mapGqlCheckSuiteToRun(suite: GqlCheckSuite, sha: string): GitHubWorkflo
     status,
     conclusion,
     headSha: sha,
-    headBranch: "", // not available from commit-object traversal
     event: wr.event,
     runNumber: wr.runNumber,
-    url: wr.url,
-    createdAt: wr.createdAt,
     updatedAt: wr.updatedAt,
-    runStartedAt: wr.createdAt,
   };
 }
 
@@ -341,14 +333,10 @@ const COMMIT_FRAGMENT = `
     nodes {
       status
       conclusion
-      updatedAt
-      createdAt
       workflowRun {
         databaseId
         runNumber
         event
-        url
-        createdAt
         updatedAt
         workflow { name }
       }
