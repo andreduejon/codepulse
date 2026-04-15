@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { useKeyboard, useRenderer } from "@opentui/solid";
@@ -284,6 +284,9 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
  * Re-exec codepulse with the given repository path.
  * Replaces the current process — does not return.
  *
+ * Uses spawnSync with an array of arguments (not a shell string) to prevent
+ * shell interpretation of special characters in the repo path.
+ *
  * NOTE: the caller must call `renderer.destroy()` first to cleanly
  * restore the terminal before spawning the child process.
  */
@@ -291,16 +294,12 @@ function reExecWith(repoPath: string): void {
   // Resolve ~ to home directory
   const resolved = repoPath.startsWith("~") ? repoPath.replace("~", homedir()) : repoPath;
 
-  try {
-    // Use execSync to cleanly hand off — the current process exits after.
-    // We pass the resolved path as the sole positional argument.
-    const args = [process.argv[0], process.argv[1], resolved];
-    execSync(args.map(a => JSON.stringify(a)).join(" "), {
-      stdio: "inherit",
-      env: process.env,
-    });
-  } catch {
-    // execSync throws if the child exits non-zero; either way we're done
-  }
+  // Use spawnSync with an array to avoid shell interpolation of the repo path.
+  // execSync(string) passes through a shell and is vulnerable to injection via
+  // special characters in the path (backticks, $(), etc.).
+  spawnSync(process.argv[0], [process.argv[1], resolved], {
+    stdio: "inherit",
+    env: process.env,
+  });
   process.exit(0);
 }
