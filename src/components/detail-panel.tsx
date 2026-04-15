@@ -42,9 +42,18 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
     const ud = state.uncommittedDetail();
     const cd = state.commitDetail();
     const stashMap = state.stashByParent();
+    const providerView = state.activeProviderView();
     const hasCIData = !isUncommitted && !!props.ciGetCommitData && !!props.ciGetCommitData(commitHash);
+    const isCIMode = providerView === "github-actions";
     const available = new Set(
-      getAvailableTabs({ commit, uncommittedDetail: ud, commitDetail: cd, stashByParent: stashMap, hasCIData }),
+      getAvailableTabs({
+        commit,
+        uncommittedDetail: ud,
+        commitDetail: cd,
+        stashByParent: stashMap,
+        hasCIData,
+        activeProviderView: providerView,
+      }),
     );
     if (isUncommitted) {
       return [
@@ -66,11 +75,18 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
       ];
     }
     return [
-      {
-        id: "files",
-        label: `Files${cd?.files ? ` (${cd.files.length})` : ""}`,
-        disabled: cd ? !available.has("files") : false,
-      },
+      // In CI mode the CI tab takes the first position; files tab is hidden
+      ...(isCIMode
+        ? hasCIData
+          ? [{ id: "ci", label: "CI", disabled: false }]
+          : []
+        : [
+            {
+              id: "files",
+              label: `Files${cd?.files ? ` (${cd.files.length})` : ""}`,
+              disabled: cd ? !available.has("files") : false,
+            },
+          ]),
       ...(stashMap.has(commitHash)
         ? [
             {
@@ -81,7 +97,8 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
           ]
         : []),
       { id: "detail", label: "Info", disabled: false },
-      ...(hasCIData ? [{ id: "ci", label: "CI", disabled: false }] : []),
+      // In normal mode append CI tab at end when data is available
+      ...(!isCIMode && hasCIData ? [{ id: "ci", label: "CI", disabled: false }] : []),
     ];
   };
 

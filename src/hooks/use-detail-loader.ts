@@ -79,7 +79,11 @@ export function useDetailLoader({
       // Jump — keep current tab, don't reset cursor (detail.tsx cursor effect
       // will position it on the correct parent/child entry using pendingJumpDirection).
     } else {
-      actions.setDetailActiveTab(isUncommitted ? "unstaged" : "files");
+      // In CI mode default to the "ci" tab; otherwise default to "files" (or
+      // "unstaged" for the uncommitted node).
+      const isCIMode = state.activeProviderView() === "github-actions";
+      const defaultTab = isUncommitted ? "unstaged" : isCIMode ? "ci" : "files";
+      actions.setDetailActiveTab(defaultTab);
       actions.setDetailCursorIndex(0);
       // Clear any stale jump direction on normal (non-jump) navigation
       detailNavRef.pendingJumpDirection = null;
@@ -164,6 +168,7 @@ export function useDetailLoader({
       uncommittedDetail: ud,
       commitDetail: cd,
       stashByParent: state.stashByParent(),
+      activeProviderView: state.activeProviderView(),
     });
     if (available.length > 0) {
       actions.setDetailActiveTab(available[0]);

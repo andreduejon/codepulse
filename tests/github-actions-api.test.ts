@@ -3,6 +3,7 @@ import {
   aggregateRunsToGraphBadge,
   buildCommitDataMap,
   buildGraphBadges,
+  fetchCIDataGraphQL,
   fetchRunJobs,
   fetchWorkflowRuns,
   getGitHubToken,
@@ -573,5 +574,269 @@ describe("fetchRunJobs", () => {
     mockFetch(mock(async () => new Response(JSON.stringify({ jobs: [jobWithoutSteps] }), { status: 200 })));
     const jobs = await fetchRunJobs(TEST_REPO, TEST_TOKEN, 123);
     expect(jobs[0].steps).toEqual([]);
+  });
+});
+
+// ── fetchCIDataGraphQL ────────────────────────────────────────────────────
+
+/** Build a minimal valid GraphQL CI response. */
+function makeGqlResponse(
+  commits: Array<{
+    sha: string;
+    suites: Array<{
+      status?: string;
+      conclusion?: string | null;
+      wfRunId?: number;
+      wfRunNumber?: number;
+      wfName?: string;
+      event?: string;
+      url?: string;
+      checkRuns?: Array<{ id?: number; name?: string; status?: string; conclusion?: string | null }>;
+    }>;
+  }>,
+) {
+  return {
+    data: {
+      repository: {
+        ref: {
+          target: {
+            history: {
+              nodes: commits.map(c => ({
+                oid: c.sha,
+                checkSuites: {
+                  nodes: c.suites.map(s => ({
+                    status: s.status ?? "COMPLETED",
+                    conclusion: s.conclusion !== undefined ? s.conclusion : "SUCCESS",
+                    updatedAt: "2024-01-02T00:00:00Z",
+                    createdAt: "2024-01-01T00:00:00Z",
+                    workflowRun:
+                      s.wfRunId !== undefined
+                        ? {
+                            databaseId: s.wfRunId,
+                            runNumber: s.wfRunNumber ?? 1,
+                            event: s.event ?? "push",
+                            url: s.url ?? "https://github.com/owner/repo/actions/runs/1",
+                            createdAt: "2024-01-01T00:00:00Z",
+                            updatedAt: "2024-01-02T00:00:00Z",
+                            workflow: { name: s.wfName ?? "CI" },
+                          }
+                        : null,
+                    checkRuns: {
+                      nodes: (s.checkRuns ?? []).map(cr => ({
+                        databaseId: cr.id ?? 10,
+                        name: cr.name ?? "build",
+                        status: cr.status ?? "COMPLETED",
+                        conclusion: cr.conclusion ?? "SUCCESS",
+                        startedAt: "2024-01-01T00:00:00Z",
+                        completedAt: "2024-01-01T00:01:00Z",
+                        steps: { nodes: [] },
+                      })),
+                    },
+                  })),
+                },
+              })),
+            },
+          },
+        },
+      },
+    },
+  };
+}
+
+describe("fetchCIDataGraphQL", () => {
+  afterEach(() => {
+    globalThis.fetch = fetch;
+  });
+
+  it("returns runs and pre-populated jobs for two commits", async () => {
+    const response = makeGqlResponse([
+      {
+        sha: "aaa",
+        suites: [{ wfRunId: 1, wfName: "CI", checkRuns: [{ id: 10, name: "build" }] }],
+      },
+      {
+        sha: "bbb",
+        suites: [
+          {
+            wfRunId: 2,
+            wfName: "Deploy",
+            status: "IN_PROGRESS",
+            conclusion: null,
+            checkRuns: [{ id: 20, name: "deploy" }],
+          },
+        ],
+      },
+    ]);
+    mockFetch(mock(async () => new Response(JSON.stringify(response), { status: 200 })));
+    const result = await fetchCIDataGraphQL(TEST_REPO, TEST_TOKEN, "main");
+
+    expect(result.runs).toHaveLength(2);
+    expect(result.runs[0].headSha).toBe("aaa");
+    expect(result.runs[0].name).toBe("CI");
+    expect(result.runs[0].status).toBe("completed");
+    expect(result.runs[0].conclusion).toBe("success");
+    expect(result.runs[1].headSha).toBe("bbb");
+    expect(result.runs[1].status).toBe("in_progress");
+    expect(result.runs[1].conclusion).toBeNull();
+
+    // Jobs should be pre-populated
+    expect(result.jobsByRunId.get(1)).toHaveLength(1);
+    expect(result.jobsByRunId.get(1)?.[0].name).toBe("build");
+    expect(result.jobsByRunId.get(2)).toHaveLength(1);
+    expect(result.jobsByRunId.get(2)?.[0].name).toBe("deploy");
+  });
+
+  it("skips check suites with no workflowRun (non-Actions checks)", async () => {
+    const response = makeGqlResponse([
+      {
+        sha: "ccc",
+        suites: [
+          { wfRunId: undefined as unknown as number }, // no workflowRun
+          { wfRunId: 5, wfName: "CI" },
+        ],
+      },
+    ]);
+    mockFetch(mock(async () => new Response(JSON.stringify(response), { status: 200 })));
+    const result = await fetchCIDataGraphQL(TEST_REPO, TEST_TOKEN, "main");
+    expect(result.runs).toHaveLength(1);
+    expect(result.runs[0].id).toBe(5);
+  });
+
+  it("normalises UPPER_SNAKE_CASE status/conclusion to lower_snake_case", async () => {
+    const response = makeGqlResponse([
+      {
+        sha: "ddd",
+        suites: [{ wfRunId: 7, status: "COMPLETED", conclusion: "FAILURE" }],
+      },
+    ]);
+    mockFetch(mock(async () => new Response(JSON.stringify(response), { status: 200 })));
+    const result = await fetchCIDataGraphQL(TEST_REPO, TEST_TOKEN, "main");
+    expect(result.runs[0].status).toBe("completed");
+    expect(result.runs[0].conclusion).toBe("failure");
+  });
+
+  it("returns empty result on HTTP error (graceful degradation)", async () => {
+    mockFetch(mock(async () => new Response(null, { status: 403 })));
+    const result = await fetchCIDataGraphQL(TEST_REPO, TEST_TOKEN, "main");
+    expect(result.runs).toHaveLength(0);
+    expect(result.jobsByRunId.size).toBe(0);
+  });
+
+  it("returns empty result on GraphQL errors field", async () => {
+    const response = { errors: [{ message: "Not Found" }] };
+    mockFetch(mock(async () => new Response(JSON.stringify(response), { status: 200 })));
+    const result = await fetchCIDataGraphQL(TEST_REPO, TEST_TOKEN, "main");
+    expect(result.runs).toHaveLength(0);
+  });
+
+  it("returns empty result on network error", async () => {
+    mockFetch(
+      mock(async () => {
+        throw new Error("Network failure");
+      }),
+    );
+    const result = await fetchCIDataGraphQL(TEST_REPO, TEST_TOKEN, "main");
+    expect(result.runs).toHaveLength(0);
+  });
+
+  it("handles empty commit history gracefully", async () => {
+    const response = makeGqlResponse([]);
+    mockFetch(mock(async () => new Response(JSON.stringify(response), { status: 200 })));
+    const result = await fetchCIDataGraphQL(TEST_REPO, TEST_TOKEN, "main");
+    expect(result.runs).toHaveLength(0);
+    expect(result.jobsByRunId.size).toBe(0);
+  });
+
+  it("handles missing ref (branch not found) gracefully", async () => {
+    const response = { data: { repository: { ref: null } } };
+    mockFetch(mock(async () => new Response(JSON.stringify(response), { status: 200 })));
+    const result = await fetchCIDataGraphQL(TEST_REPO, TEST_TOKEN, "nonexistent-branch");
+    expect(result.runs).toHaveLength(0);
+  });
+
+  it("sends POST to GraphQL endpoint with correct body", async () => {
+    let capturedUrl = "";
+    let capturedBody: Record<string, unknown> = {};
+    mockFetch(
+      mock(async (url: string, init: RequestInit) => {
+        capturedUrl = url;
+        capturedBody = JSON.parse(init.body as string) as Record<string, unknown>;
+        return new Response(JSON.stringify(makeGqlResponse([])), { status: 200 });
+      }),
+    );
+    await fetchCIDataGraphQL(TEST_REPO, TEST_TOKEN, "main", { count: 30 });
+    expect(capturedUrl).toBe("https://api.github.com/graphql");
+    expect((capturedBody.variables as Record<string, unknown>)?.owner).toBe("owner");
+    expect((capturedBody.variables as Record<string, unknown>)?.repo).toBe("repo");
+    expect((capturedBody.variables as Record<string, unknown>)?.branch).toBe("main");
+    expect((capturedBody.variables as Record<string, unknown>)?.count).toBe(30);
+  });
+
+  it("sends Authorization Bearer header", async () => {
+    let authHeader = "";
+    mockFetch(
+      mock(async (_url: string, init: RequestInit) => {
+        authHeader = new Headers(init.headers as HeadersInit).get("authorization") ?? "";
+        return new Response(JSON.stringify(makeGqlResponse([])), { status: 200 });
+      }),
+    );
+    await fetchCIDataGraphQL(TEST_REPO, TEST_TOKEN, "main");
+    expect(authHeader).toBe(`Bearer ${TEST_TOKEN}`);
+  });
+
+  it("maps check run steps correctly", async () => {
+    const response = makeGqlResponse([
+      {
+        sha: "eee",
+        suites: [
+          {
+            wfRunId: 9,
+            checkRuns: [
+              {
+                id: 30,
+                name: "test",
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+    // Add steps to the check run node
+    const suite = response.data.repository.ref.target.history.nodes[0].checkSuites.nodes[0];
+    (suite.checkRuns.nodes[0] as Record<string, unknown>).steps = {
+      nodes: [
+        { name: "Checkout", status: "COMPLETED", conclusion: "SUCCESS", number: 1 },
+        { name: "Run tests", status: "COMPLETED", conclusion: "FAILURE", number: 2 },
+      ],
+    };
+    mockFetch(mock(async () => new Response(JSON.stringify(response), { status: 200 })));
+    const result = await fetchCIDataGraphQL(TEST_REPO, TEST_TOKEN, "main");
+    const jobs = result.jobsByRunId.get(9);
+    expect(jobs?.[0].steps).toHaveLength(2);
+    expect(jobs?.[0].steps[0].name).toBe("Checkout");
+    expect(jobs?.[0].steps[1].conclusion).toBe("failure");
+    expect(jobs?.[0].steps[1].number).toBe(2);
+  });
+
+  it("maps multiple runs per commit to separate entries in runs array", async () => {
+    const response = makeGqlResponse([
+      {
+        sha: "fff",
+        suites: [
+          { wfRunId: 100, wfName: "CI" },
+          { wfRunId: 101, wfName: "Deploy" },
+          { wfRunId: 102, wfName: "Lint" },
+        ],
+      },
+    ]);
+    mockFetch(mock(async () => new Response(JSON.stringify(response), { status: 200 })));
+    const result = await fetchCIDataGraphQL(TEST_REPO, TEST_TOKEN, "main");
+    expect(result.runs).toHaveLength(3);
+    const shas = result.runs.map(r => r.headSha);
+    expect(shas).toEqual(["fff", "fff", "fff"]);
+    const names = result.runs.map(r => r.name);
+    expect(names).toContain("CI");
+    expect(names).toContain("Deploy");
+    expect(names).toContain("Lint");
   });
 });
