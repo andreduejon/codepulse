@@ -2,6 +2,7 @@ import { type Accessor, createContext, createMemo, createSignal, useContext } fr
 import { DEFAULT_MAX_COUNT } from "../constants";
 import type { Branch, Commit, CommitDetail, GraphRow, TagInfo, UncommittedDetail } from "../git/types";
 import type { GraphBadge, ProviderView } from "../providers/provider";
+import { nextProviderView } from "../providers/provider";
 import { matchCommit, parseSearchQuery } from "../search";
 
 export const DEFAULT_AUTO_REFRESH_INTERVAL = 30000;
@@ -137,6 +138,8 @@ export interface AppActions {
   // ── Provider / CI ────────────────────────────────────────────────────
   setActiveProviderView: (view: ProviderView) => void;
   setGraphBadges: (map: Map<string, GraphBadge>) => void;
+  /** Advance to the next available provider view (Tab key cycling). */
+  cycleProviderView: () => void;
 }
 
 const AppStateContext = createContext<{ state: AppState; actions: AppActions }>();
@@ -359,6 +362,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
     setPathMatchSet,
     setActiveProviderView,
     setGraphBadges,
+    cycleProviderView: () => setActiveProviderView(nextProviderView(activeProviderView())),
   };
 
   return { state, actions };
