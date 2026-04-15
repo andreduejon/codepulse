@@ -57,6 +57,8 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
         commitDetail: cd,
         stashByParent: stashMap,
         activeProviderView: providerView,
+        getCommitData: props.githubGetCommitData,
+        providerLoading: props.githubProviderStatus === "loading",
       }),
     );
     if (isUncommitted) {
@@ -82,7 +84,7 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
       // In provider mode the Actions tab always takes the first position (shows "no data"
       // for commits with no runs). Files tab is hidden in provider mode.
       ...(isProviderMode
-        ? [{ id: "github-actions", label: "Actions", disabled: false }]
+        ? [{ id: "github-actions", label: "Actions", disabled: !available.has("github-actions") }]
         : [
             {
               id: "files",

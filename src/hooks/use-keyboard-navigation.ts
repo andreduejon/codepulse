@@ -55,6 +55,10 @@ interface KeyboardNavigationOptions {
   onPathExecute: (pathValue: string) => void;
   /** Callback to clear ancestry highlighting (called when search opens or on Esc). */
   onClearAncestry: () => void;
+  /** CI data getter — forwarded to handleDetailKey for tab availability checks. */
+  getCommitData?: (sha: string) => unknown;
+  /** Returns true while the initial CI fetch is in-flight. */
+  getProviderLoading?: () => boolean;
 }
 
 /**
@@ -103,6 +107,8 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     onCommandExecute,
     onPathExecute,
     onClearAncestry,
+    getCommitData,
+    getProviderLoading,
   } = opts;
 
   // Build command-bar helpers (clearSearch, openSearch, confirmSearch, exitCommandBar)
@@ -210,7 +216,18 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     }
 
     // ── Detail panel focused (or detail dialog open in compact mode) ─────────
-    if (handleDetailKey(e, { state, actions, dialog, getDetailScrollboxRef, detailNavRef })) return;
+    if (
+      handleDetailKey(e, {
+        state,
+        actions,
+        dialog,
+        getDetailScrollboxRef,
+        detailNavRef,
+        getCommitData,
+        getProviderLoading,
+      })
+    )
+      return;
 
     // ── Graph navigation ─────────────────────────────────────────────────────
     handleGraphKey(e, {

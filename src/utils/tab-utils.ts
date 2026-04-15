@@ -10,6 +10,18 @@ interface TabAvailabilityInput {
   stashByParent: Map<string, Commit[]>;
   /** The active provider view — when "github-actions", Actions tab replaces Files tab. */
   activeProviderView?: ProviderView;
+  /**
+   * CI data getter — used to determine whether the Actions tab has data for
+   * the current commit.  When omitted the Actions tab is always included
+   * (backwards-compatible default for callers that don't have access to CI state).
+   */
+  getCommitData?: (sha: string) => unknown;
+  /**
+   * True while the initial CI fetch is in-flight.  When loading, the Actions
+   * tab is kept in the available set so the user isn't switched to Info
+   * before the request completes.
+   */
+  providerLoading?: boolean;
 }
 
 /**
@@ -19,6 +31,11 @@ interface TabAvailabilityInput {
  * takes the first position and the "files" tab is hidden — CI status is more
  * relevant when the user has explicitly switched to the GitHub Actions view.
  *
+ * The Actions tab is only included when:
+ *   - CI data is present for the commit (`getCommitData(sha)` returns non-null), OR
+ *   - The CI fetch is still in-flight (`providerLoading === true`), OR
+ *   - `getCommitData` was not provided (backwards-compatible: always include).
+ *
  * The CI tab is never shown outside of github-actions provider mode.
  *
  * This is the single source of truth shared by:
@@ -27,7 +44,8 @@ interface TabAvailabilityInput {
  *  - detail panel tab bar (to determine which tabs are disabled)
  */
 export function getAvailableTabs(input: TabAvailabilityInput): DetailTab[] {
-  const { commit, uncommittedDetail, commitDetail, stashByParent, activeProviderView } = input;
+  const { commit, uncommittedDetail, commitDetail, stashByParent, activeProviderView, getCommitData, providerLoading } =
+    input;
 
   if (commit && isUncommittedHash(commit.hash)) {
     const ud = uncommittedDetail;
@@ -42,9 +60,14 @@ export function getAvailableTabs(input: TabAvailabilityInput): DetailTab[] {
   const tabs: DetailTab[] = [];
 
   if (isProviderMode) {
-    // In provider mode: Actions tab always takes first position (may show "no data"
-    // for commits with no runs). Files tab is hidden — CI status is the focus.
-    tabs.push("github-actions");
+    // Actions tab is available when:
+    //  - no getCommitData provided (backwards-compatible, always include)
+    //  - provider is still loading (don't switch away prematurely)
+    //  - CI data exists for this commit
+    const hasData = !getCommitData || providerLoading || (commit && !!getCommitData(commit.hash));
+    if (hasData) {
+      tabs.push("github-actions");
+    }
   } else {
     if (commitDetail && commitDetail.files.length > 0) {
       tabs.push("files");

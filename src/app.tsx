@@ -195,6 +195,8 @@ function AppContent(props: Readonly<AppContentProps>) {
     actions,
     getIsJumpNavigation: () => isJumpNavigation,
     detailNavRef,
+    getCommitData: gitHubCI.getCommitData,
+    getProviderLoading: () => state.providerStatus() === "loading",
   });
 
   // Scroll detail panel to top when active tab changes
@@ -370,6 +372,8 @@ function AppContent(props: Readonly<AppContentProps>) {
     onCommandExecute: handleCommandExecute,
     onPathExecute: handlePathExecute,
     onClearAncestry: clearAnchor,
+    getCommitData: gitHubCI.getCommitData,
+    getProviderLoading: () => state.providerStatus() === "loading",
   });
 
   // ── Provider-aware theme: override accent with githubActionsBg in CI mode ──

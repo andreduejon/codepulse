@@ -21,6 +21,18 @@ interface UseDetailLoaderOptions {
   getIsJumpNavigation: () => boolean;
   /** Mutable navigation ref shared with the detail panel component. */
   detailNavRef: DetailNavRef;
+  /**
+   * CI data getter from the GitHub Actions provider.  When provided, used to
+   * determine whether the Actions tab has data for the current commit — mirroring
+   * how the Files tab is disabled when a commit has no changed files.
+   */
+  getCommitData?: (sha: string) => unknown;
+  /**
+   * Returns true while the initial CI fetch is in-flight.  Passed to
+   * getAvailableTabs so the Actions tab is not switched away from prematurely
+   * before the first fetch completes.
+   */
+  getProviderLoading?: () => boolean;
 }
 
 /**
@@ -43,6 +55,8 @@ export function useDetailLoader({
   actions,
   getIsJumpNavigation,
   detailNavRef,
+  getCommitData,
+  getProviderLoading,
 }: UseDetailLoaderOptions): void {
   // ── Detail load on commit change ──────────────────────────────────
   let detailAbortCtrl: AbortController | null = null;
@@ -171,6 +185,13 @@ export function useDetailLoader({
       else if (tab === "untracked") isEmpty = ud.untracked.length === 0;
     } else if (!isUncommitted && cd) {
       if (tab === "files") isEmpty = cd.files.length === 0;
+    } else if (!isUncommitted && tab === "github-actions" && getCommitData) {
+      // Actions tab: treat as empty when the fetch is not in-flight and there
+      // is no CI data for this commit — mirrors the Files tab behaviour.
+      const isLoading = getProviderLoading?.() ?? false;
+      if (!isLoading) {
+        isEmpty = !getCommitData(commit.hash);
+      }
     }
 
     if (!isEmpty) return;
@@ -182,6 +203,8 @@ export function useDetailLoader({
       commitDetail: cd,
       stashByParent: state.stashByParent(),
       activeProviderView: state.activeProviderView(),
+      getCommitData,
+      providerLoading: getProviderLoading?.(),
     });
     if (available.length > 0) {
       actions.setDetailActiveTab(available[0]);

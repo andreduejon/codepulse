@@ -20,6 +20,10 @@ export interface DetailKeyOptions {
   dialog: () => DialogId;
   getDetailScrollboxRef: () => ScrollBoxRenderable | undefined;
   detailNavRef: DetailNavRef;
+  /** CI data getter — used to keep getAvailableTabs in sync with the detail panel. */
+  getCommitData?: (sha: string) => unknown;
+  /** Returns true while the initial CI fetch is in-flight. */
+  getProviderLoading?: () => boolean;
 }
 
 /**
@@ -27,7 +31,7 @@ export interface DetailKeyOptions {
  * Returns true if the event was consumed (caller should stop processing).
  */
 export function handleDetailKey(e: KeyEvent, opts: DetailKeyOptions): boolean {
-  const { state, actions, dialog, getDetailScrollboxRef, detailNavRef } = opts;
+  const { state, actions, dialog, getDetailScrollboxRef, detailNavRef, getCommitData, getProviderLoading } = opts;
 
   // Only active when detail is focused or the detail dialog is open
   if (!state.detailFocused() && dialog() !== "detail") return false;
@@ -44,6 +48,8 @@ export function handleDetailKey(e: KeyEvent, opts: DetailKeyOptions): boolean {
         commitDetail: state.commitDetail(),
         stashByParent: state.stashByParent(),
         activeProviderView: state.activeProviderView(),
+        getCommitData,
+        providerLoading: getProviderLoading?.(),
       });
       const currentIdx = tabs.indexOf(state.detailActiveTab());
       if (currentIdx <= 0) {
@@ -69,6 +75,8 @@ export function handleDetailKey(e: KeyEvent, opts: DetailKeyOptions): boolean {
         commitDetail: state.commitDetail(),
         stashByParent: state.stashByParent(),
         activeProviderView: state.activeProviderView(),
+        getCommitData,
+        providerLoading: getProviderLoading?.(),
       });
       const currentIdx = tabs.indexOf(state.detailActiveTab());
       if (currentIdx < tabs.length - 1) {
