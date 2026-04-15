@@ -192,18 +192,24 @@ export function useGitHubCI(opts: {
    *
    * Pass `shas` when the caller has already computed the unqueried list to
    * avoid a redundant collectTopSHAs() call.
+   *
+   * Pass `showStatus` = true only when the user is actively in the provider
+   * view — background fetches (e.g. on startup) should silently skip rather
+   * than surfacing "No GitHub remote detected" before the remote URL loads.
    */
-  async function doInitialFetch(signal?: AbortSignal, shas?: string[]): Promise<void> {
+  async function doInitialFetch(signal?: AbortSignal, shas?: string[], showStatus = false): Promise<void> {
     if (fetchInFlight) return;
     if (!isAvailable()) {
-      const repo = cachedGitHubRepo;
-      const token = getGitHubToken(config.tokenEnvVar, repo?.hostname);
-      if (!config.enabled) {
-        actions.setProviderStatus("CI provider disabled");
-      } else if (!repo) {
-        actions.setProviderStatus("No GitHub remote detected");
-      } else if (!token) {
-        actions.setProviderStatus(`Token not found: $${config.tokenEnvVar}`);
+      if (showStatus) {
+        const repo = cachedGitHubRepo;
+        const token = getGitHubToken(config.tokenEnvVar, repo?.hostname);
+        if (!config.enabled) {
+          actions.setProviderStatus("CI provider disabled");
+        } else if (!repo) {
+          actions.setProviderStatus("No GitHub remote detected");
+        } else if (!token) {
+          actions.setProviderStatus(`Token not found: $${config.tokenEnvVar}`);
+        }
       }
       return;
     }
@@ -264,7 +270,7 @@ export function useGitHubCI(opts: {
     commitDataCache = new Map();
     actions.setGraphBadges(new Map());
     actions.setProviderStatus(null);
-    await doInitialFetch();
+    await doInitialFetch(undefined, undefined, true);
   }
 
   // ── Lazy initial fetch + auto-refresh while in CI view ───────────────
@@ -309,7 +315,7 @@ export function useGitHubCI(opts: {
         hasFetchedOnce = true;
         const ctrl = new AbortController();
         fetchAbortCtrl = ctrl;
-        doInitialFetch(ctrl.signal);
+        doInitialFetch(ctrl.signal, undefined, true);
         lastFetchedAt = Date.now();
       } else {
         // Re-check for new unqueried SHAs (e.g. after a git fetch loaded more commits)
@@ -319,7 +325,7 @@ export function useGitHubCI(opts: {
         if (Date.now() - lastFetchedAt > staleThreshold) {
           const ctrl = new AbortController();
           fetchAbortCtrl = ctrl;
-          doInitialFetch(ctrl.signal);
+          doInitialFetch(ctrl.signal, undefined, true);
           lastFetchedAt = Date.now();
         }
       }

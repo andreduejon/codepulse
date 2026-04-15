@@ -16,6 +16,7 @@ import { For } from "solid-js";
 import { AUTHOR_COL_WIDTH, DATE_COL_WIDTH, UNCOMMITTED_PLACEHOLDER } from "../../constants";
 import { useAppState } from "../../context/state";
 import { useT } from "../../hooks/use-t";
+import { formatRelativeDate } from "../../utils/date";
 import type { GraphBadge } from "../provider";
 
 interface ActionsCountsProps {
@@ -71,47 +72,31 @@ interface ActionsDateProps {
   active: boolean;
 }
 
-/** Render the latest-run relative time in the date column, coloured by status. */
+/** Render the latest-run date in the date column, in muted color. */
 export function ActionsDateColumn(props: Readonly<ActionsDateProps>) {
   const t = useT();
-
-  const statusColor = (status: GraphBadge["latestStatus"]): string => {
-    switch (status) {
-      case "pass":
-        return t().success;
-      case "fail":
-        return t().error;
-      case "running":
-        return t().accent;
-      default:
-        return t().foregroundMuted;
-    }
-  };
 
   return (
     <box flexShrink={0} width={DATE_COL_WIDTH} overflow="hidden">
       {(() => {
         const b = props.badge;
-        if (!b) {
+        if (!b?.latestRunAt) {
           return (
             <text fg={t().foregroundMuted} wrapMode="none" truncate>
               {UNCOMMITTED_PLACEHOLDER}
             </text>
           );
         }
-        const color = statusColor(b.latestStatus);
-        const label = b.latestStatus === "running" ? "running" : b.latestRunAt;
+        const label = b.latestStatus === "running" ? "running" : formatRelativeDate(b.latestRunAt);
         if (props.active) {
           return (
-            <text fg={color} wrapMode="none" truncate>
-              <strong>
-                <span fg={color}>{label}</span>
-              </strong>
+            <text fg={t().foregroundMuted} wrapMode="none" truncate>
+              <strong>{label}</strong>
             </text>
           );
         }
         return (
-          <text fg={color} wrapMode="none" truncate>
+          <text fg={t().foregroundMuted} wrapMode="none" truncate>
             {label}
           </text>
         );
