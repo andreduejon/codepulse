@@ -218,6 +218,10 @@ export function useGitHubCI(opts: {
     const unqueried = allSHAs.filter(sha => !queriedSHAs.has(sha));
     if (unqueried.length === 0) return;
 
+    // Record that a real fetch has been initiated — only after passing all guards.
+    hasFetchedOnce = true;
+    lastFetchedAt = Date.now();
+
     // Mark as queried before the async call so concurrent triggers don't
     // duplicate the request.
     for (const sha of unqueried) queriedSHAs.add(sha);
@@ -312,11 +316,9 @@ export function useGitHubCI(opts: {
     const view = state.activeProviderView();
     if (view === "github-actions") {
       if (!hasFetchedOnce) {
-        hasFetchedOnce = true;
         const ctrl = new AbortController();
         fetchAbortCtrl = ctrl;
         doInitialFetch(ctrl.signal, undefined, true);
-        lastFetchedAt = Date.now();
       } else {
         // Re-check for new unqueried SHAs (e.g. after a git fetch loaded more commits)
         // and catch-up if data is stale
@@ -326,7 +328,6 @@ export function useGitHubCI(opts: {
           const ctrl = new AbortController();
           fetchAbortCtrl = ctrl;
           doInitialFetch(ctrl.signal, undefined, true);
-          lastFetchedAt = Date.now();
         }
       }
       startAutoRefresh();
@@ -345,10 +346,9 @@ export function useGitHubCI(opts: {
   });
 
   // When graphRows changes (new commits loaded after git fetch or on initial
-  // data load), eagerly query any SHAs in the top INITIAL_SHA_LIMIT that have
-  // not been queried yet.  This fires in the background regardless of which
-  // provider view is currently active — so CI badges are pre-populated before
-  // the user even tabs to the GitHub Actions view.
+  // data load), eagerly queue a background fetch for any new SHAs.
+  // hasFetchedOnce / lastFetchedAt are managed inside doInitialFetch so that
+  // they are only set when a fetch actually starts (i.e. isAvailable() passes).
   createEffect(() => {
     // Track graphRows reactively so this effect fires when new commits load
     const rows = state.graphRows();
@@ -357,10 +357,6 @@ export function useGitHubCI(opts: {
     const allSHAs = collectTopSHAs(INITIAL_SHA_LIMIT);
     const newSHAs = allSHAs.filter(sha => !queriedSHAs.has(sha));
     if (newSHAs.length === 0) return;
-
-    // Mark hasFetchedOnce so the provider-view effect doesn't double-fetch
-    hasFetchedOnce = true;
-    lastFetchedAt = Date.now();
 
     const ctrl = new AbortController();
     fetchAbortCtrl = ctrl;
