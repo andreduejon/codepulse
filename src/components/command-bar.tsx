@@ -4,6 +4,7 @@ import packageJson from "../../package.json";
 import { useAppState } from "../context/state";
 import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
 import { useT } from "../hooks/use-t";
+import { getProvider } from "../providers/provider";
 import {
   commandBarInputValue,
   commandBarPlaceholder,
@@ -102,10 +103,24 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
             {"  "}
           </text>
         </Show>
-        {/* Git view badge */}
-        <text flexShrink={0} wrapMode="none" fg={t().background} bg={t().accent}>
-          {" git "}
-        </text>
+        {/* Provider view badge */}
+        {(() => {
+          const view = state.activeProviderView();
+          if (view === "git") {
+            return (
+              <text flexShrink={0} wrapMode="none" fg={t().background} bg={t().accent}>
+                {" git "}
+              </text>
+            );
+          }
+          const reg = getProvider(view);
+          const label = reg ? reg.displayName : view;
+          return (
+            <text flexShrink={0} wrapMode="none" fg={t().githubActionsFg} bg={t().githubActionsBg}>
+              {` ${label} `}
+            </text>
+          );
+        })()}
         <text flexShrink={0} wrapMode="none">
           {" "}
         </text>
