@@ -27,6 +27,7 @@ import {
 import type { GraphRow } from "../git/types";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
 import { useT } from "../hooks/use-t";
+import { CIColumnHeaders, CICountsColumn, CIDateColumn } from "../providers/github-actions/graph-columns";
 import { formatRelativeDate } from "../utils/date";
 import { scrollElementIntoView } from "../utils/scroll";
 import { truncateName } from "../utils/truncate";
@@ -44,6 +45,7 @@ export function ColumnHeader() {
   const t = useT();
   const { state } = useAppState();
   const leftPanelFocused = () => !state.detailFocused();
+  const isCIView = () => state.activeProviderView() !== "git";
 
   const { graphWidth } = useGraphDimensions(() => state.maxGraphColumns());
 
@@ -87,19 +89,26 @@ export function ColumnHeader() {
           </text>
         </box>
 
-        {/* Author */}
-        <box flexShrink={0} width={AUTHOR_COL_WIDTH} paddingRight={2}>
-          <text wrapMode="none" truncate fg={leftPanelFocused() ? t().accent : t().foregroundMuted}>
-            <strong>Author</strong>
-          </text>
-        </box>
+        {/* Author / Date columns — swapped for CI headers when in CI view */}
+        {isCIView() ? (
+          <CIColumnHeaders />
+        ) : (
+          <>
+            {/* Author */}
+            <box flexShrink={0} width={AUTHOR_COL_WIDTH} paddingRight={2}>
+              <text wrapMode="none" truncate fg={leftPanelFocused() ? t().accent : t().foregroundMuted}>
+                <strong>Author</strong>
+              </text>
+            </box>
 
-        {/* Date */}
-        <box flexShrink={0} width={DATE_COL_WIDTH}>
-          <text wrapMode="none" truncate fg={leftPanelFocused() ? t().accent : t().foregroundMuted}>
-            <strong>Date</strong>
-          </text>
-        </box>
+            {/* Date */}
+            <box flexShrink={0} width={DATE_COL_WIDTH}>
+              <text wrapMode="none" truncate fg={leftPanelFocused() ? t().accent : t().foregroundMuted}>
+                <strong>Date</strong>
+              </text>
+            </box>
+          </>
+        )}
       </box>
       {/* Muted separator below headers */}
       <box width="100%" border={["top"]} borderStyle="single" borderColor={t().border} />
@@ -450,37 +459,47 @@ function GraphLine(
           </text>
         </box>
 
-        {/* Author */}
-        <box flexShrink={0} width={AUTHOR_COL_WIDTH} paddingRight={2} overflow="hidden">
-          <text fg={secondaryColumnColor()} wrapMode="none" truncate>
-            {(() => {
-              const v = isUncommitted() ? UNCOMMITTED_PLACEHOLDER : commit().author;
-              return props.active ? (
-                <strong>
-                  <span fg={secondaryColumnColor()}>{v}</span>
-                </strong>
-              ) : (
-                v
-              );
-            })()}
-          </text>
-        </box>
+        {/* Author / Date — replaced by CI columns when in CI view */}
+        {state.activeProviderView() !== "git" ? (
+          <>
+            <CICountsColumn badge={state.graphBadges().get(commit().hash)} active={props.active} />
+            <CIDateColumn badge={state.graphBadges().get(commit().hash)} active={props.active} />
+          </>
+        ) : (
+          <>
+            {/* Author */}
+            <box flexShrink={0} width={AUTHOR_COL_WIDTH} paddingRight={2} overflow="hidden">
+              <text fg={secondaryColumnColor()} wrapMode="none" truncate>
+                {(() => {
+                  const v = isUncommitted() ? UNCOMMITTED_PLACEHOLDER : commit().author;
+                  return props.active ? (
+                    <strong>
+                      <span fg={secondaryColumnColor()}>{v}</span>
+                    </strong>
+                  ) : (
+                    v
+                  );
+                })()}
+              </text>
+            </box>
 
-        {/* Date */}
-        <box flexShrink={0} width={DATE_COL_WIDTH} overflow="hidden">
-          <text fg={secondaryColumnColor()} wrapMode="none" truncate>
-            {(() => {
-              const v = isUncommitted() ? UNCOMMITTED_PLACEHOLDER : formatRelativeDate(commit().authorDate);
-              return props.active ? (
-                <strong>
-                  <span fg={secondaryColumnColor()}>{v}</span>
-                </strong>
-              ) : (
-                v
-              );
-            })()}
-          </text>
-        </box>
+            {/* Date */}
+            <box flexShrink={0} width={DATE_COL_WIDTH} overflow="hidden">
+              <text fg={secondaryColumnColor()} wrapMode="none" truncate>
+                {(() => {
+                  const v = isUncommitted() ? UNCOMMITTED_PLACEHOLDER : formatRelativeDate(commit().authorDate);
+                  return props.active ? (
+                    <strong>
+                      <span fg={secondaryColumnColor()}>{v}</span>
+                    </strong>
+                  ) : (
+                    v
+                  );
+                })()}
+              </text>
+            </box>
+          </>
+        )}
       </box>
 
       {/* Connector row: vertical lines between commits. */}
