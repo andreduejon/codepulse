@@ -16,14 +16,17 @@ export default function Footer(
 
   const isLoading = () => state.loading() || state.fetching() || state.detailLoading();
 
-  const loadingLabel = () => (isLoading() ? " loading" : "");
+  const ciStatus = () => state.ciStatus();
+  const showCIStatus = () => state.activeProviderView() === "github-actions" && !!ciStatus();
+
+  const loadingLabel = () => (isLoading() ? " loading" : showCIStatus() ? ` ${ciStatus()}` : "");
 
   // Animation frame counter, cycles while loading
   const [frame, setFrame] = createSignal(0);
   let spinnerTimer: ReturnType<typeof setInterval> | null = null;
 
   createEffect(() => {
-    if (isLoading()) {
+    if (isLoading() || ciStatus() === "loading") {
       setFrame(0);
       if (!spinnerTimer) {
         spinnerTimer = setInterval(() => {
@@ -44,7 +47,9 @@ export default function Footer(
 
   // Always render the spinner element to avoid layout shift;
   // show the braille char when loading, empty space when idle.
-  const spinnerChar = () => (isLoading() ? SPINNER_FRAMES[frame()] : " ");
+  const spinnerChar = () => (isLoading() || ciStatus() === "loading" ? SPINNER_FRAMES[frame()] : " ");
+  // CI error messages use error color; normal loading uses accent
+  const spinnerColor = () => (showCIStatus() && ciStatus() !== "loading" ? t().error : t().accent);
 
   const enterAction = () => (state.detailFocused() ? state.detailCursorAction() : null);
 
@@ -56,10 +61,14 @@ export default function Footer(
     <>
       <box flexDirection="row" width="100%" height={1}>
         {/* Loading indicator — always present to avoid layout shift, left-aligned */}
-        <text flexShrink={0} wrapMode="none" fg={t().accent}>
+        <text flexShrink={0} wrapMode="none" fg={spinnerColor()}>
           {spinnerChar()}
         </text>
-        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+        <text
+          flexShrink={0}
+          wrapMode="none"
+          fg={showCIStatus() && ciStatus() !== "loading" ? t().error : t().foregroundMuted}
+        >
           {loadingLabel()}
         </text>
 

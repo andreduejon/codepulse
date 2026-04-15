@@ -442,6 +442,11 @@ export interface GraphQLFetchResult {
    * no extra round-trips needed for the queried commits.
    */
   jobsByRunId: Map<number, GitHubJob[]>;
+  /**
+   * Set when the request failed (HTTP error, GraphQL errors, or network error).
+   * null means success. The hook uses this to surface errors in the UI.
+   */
+  error: string | null;
 }
 
 /**
@@ -462,7 +467,7 @@ export async function fetchCIDataForSHAs(
   opts: { signal?: AbortSignal } = {},
 ): Promise<GraphQLFetchResult> {
   const { signal } = opts;
-  const empty: GraphQLFetchResult = { runs: [], jobsByRunId: new Map() };
+  const empty: GraphQLFetchResult = { runs: [], jobsByRunId: new Map(), error: null };
   if (shas.length === 0) return empty;
 
   try {
@@ -477,15 +482,17 @@ export async function fetchCIDataForSHAs(
     });
 
     if (!res.ok) {
-      console.error(`[github-actions] GraphQL HTTP ${res.status} for ${repo.owner}/${repo.repo}`);
-      return empty;
+      const msg = `GraphQL HTTP ${res.status}`;
+      console.error(`[github-actions] ${msg} for ${repo.owner}/${repo.repo}`);
+      return { ...empty, error: msg };
     }
 
     const json = (await res.json()) as GqlBatchQueryResult;
 
     if (json.errors?.length) {
-      console.error("[github-actions] GraphQL errors:", json.errors.map(e => e.message).join("; "));
-      return empty;
+      const msg = json.errors.map(e => e.message).join("; ");
+      console.error("[github-actions] GraphQL errors:", msg);
+      return { ...empty, error: msg };
     }
 
     const repoData = json.data?.repository ?? {};
@@ -506,11 +513,12 @@ export async function fetchCIDataForSHAs(
       }
     }
 
-    return { runs, jobsByRunId };
+    return { runs, jobsByRunId, error: null };
   } catch (err) {
     if (signal?.aborted) throw err;
+    const msg = err instanceof Error ? err.message : String(err);
     console.error("[github-actions] GraphQL fetch error:", err);
-    return empty;
+    return { ...empty, error: msg };
   }
 }
 

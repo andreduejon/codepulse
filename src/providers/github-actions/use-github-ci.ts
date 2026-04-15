@@ -147,7 +147,13 @@ export function useGitHubCI(opts: {
 
     if (signal?.aborted) return;
 
-    // Merge all batch results
+    // Surface first error encountered across batches (if any)
+    const firstError = results.find(r => r.error)?.error ?? null;
+    if (firstError) {
+      actions.setCiStatus(firstError);
+    }
+
+    // Merge all batch results (include successful batches even if others errored)
     const allRuns: GitHubWorkflowRun[] = [];
     for (const result of results) {
       allRuns.push(...result.runs);
@@ -190,7 +196,18 @@ export function useGitHubCI(opts: {
    */
   async function doInitialFetch(signal?: AbortSignal): Promise<void> {
     if (fetchInFlight) return;
-    if (!isAvailable()) return;
+    if (!isAvailable()) {
+      const repo = cachedGitHubRepo;
+      const token = getGitHubToken(config.tokenEnvVar);
+      if (!config.enabled) {
+        actions.setCiStatus("CI provider disabled");
+      } else if (!repo) {
+        actions.setCiStatus("No GitHub remote detected");
+      } else if (!token) {
+        actions.setCiStatus(`Token not found: $${config.tokenEnvVar}`);
+      }
+      return;
+    }
 
     const allSHAs = collectTopSHAs(INITIAL_SHA_LIMIT);
     const unqueried = allSHAs.filter(sha => !queriedSHAs.has(sha));
@@ -201,11 +218,15 @@ export function useGitHubCI(opts: {
     for (const sha of unqueried) queriedSHAs.add(sha);
 
     fetchInFlight = true;
+    actions.setCiStatus("loading");
     try {
       await fetchForSHAs(unqueried, signal);
+      actions.setCiStatus(null);
     } catch (err) {
       if (signal?.aborted) return;
+      const msg = err instanceof Error ? err.message : String(err);
       console.error("[github-actions] initial fetch failed:", err);
+      actions.setCiStatus(`CI fetch error: ${msg}`);
       // On error, un-mark so a future retry can re-query these SHAs
       for (const sha of unqueried) queriedSHAs.delete(sha);
     } finally {
@@ -243,6 +264,7 @@ export function useGitHubCI(opts: {
     queriedSHAs.clear();
     commitDataCache = new Map();
     actions.setGraphBadges(new Map());
+    actions.setCiStatus(null);
     await doInitialFetch();
   }
 

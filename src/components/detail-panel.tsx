@@ -75,11 +75,10 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
       ];
     }
     return [
-      // In CI mode the CI tab takes the first position; files tab is hidden
+      // In CI mode the CI tab always takes the first position (shows "no data"
+      // for commits with no runs). Files tab is hidden in CI mode.
       ...(isCIMode
-        ? hasCIData
-          ? [{ id: "ci", label: "CI", disabled: false }]
-          : []
+        ? [{ id: "ci", label: "CI", disabled: false }]
         : [
             {
               id: "files",
