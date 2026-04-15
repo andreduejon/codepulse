@@ -1,5 +1,5 @@
 import { batch, createEffect, onCleanup, onMount } from "solid-js";
-import { isUncommittedHash, UNCOMMITTED_HASH } from "../constants";
+import { isUncommittedHash } from "../constants";
 import type { AppActions, AppState } from "../context/state";
 import { buildGraph, getMaxGraphColumns } from "../git/graph";
 import { mergeCommitPages } from "../git/merge-pages";
@@ -14,7 +14,13 @@ import {
   getTagDetails,
   getWorkingTreeStatus,
 } from "../git/repo";
-import type { Commit } from "../git/types";
+import {
+  buildStashByParent,
+  computeSilentMaxCount,
+  computeTargetIndex,
+  injectUncommittedNode,
+  isStaleResult,
+} from "../utils/data-loader-utils";
 
 interface UseDataLoaderOptions {
   /** Absolute path to the git repository. */
@@ -75,10 +81,7 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
       // fetch at least as many commits as are currently loaded so the user doesn't
       // lose history they've already paged through.
       const pageSize = state.maxCount();
-      const silentMaxCount =
-        silent || preserveLoaded
-          ? Math.max(pageSize, state.commits().filter(c => !isUncommittedHash(c.hash)).length)
-          : pageSize;
+      const silentMaxCount = computeSilentMaxCount(pageSize, state.commits(), silent, preserveLoaded);
 
       const [commits, branches, currentBranch, remoteUrl, tagDetails, stashes, wtStatus] = await Promise.all([
         getCommits(
@@ -110,84 +113,23 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
       // Capture the HEAD commit hash before any synthetic commits are injected.
       const headHash = commits[0]?.hash;
 
-      // Build stash-by-parent map: parent hash → stash Commit[].
-      // Used for (a) injecting "stash (N)" badges on parent commits in the
-      // graph, and (b) showing stash entries in the detail panel.
-      const stashByParent = new Map<string, Commit[]>();
-      if (stashes.length > 0) {
-        const commitHashSet = new Set(commits.map(c => c.hash));
-        for (const s of stashes) {
-          const parentHash = s.parents[0];
-          if (!parentHash || !commitHashSet.has(parentHash)) continue;
-          const group = stashByParent.get(parentHash);
-          if (group) group.push(s);
-          else stashByParent.set(parentHash, [s]);
-        }
-        // Inject synthetic "stash (N)" ref on each parent commit so the
-        // graph renders a dimmed badge. This does NOT add stash commits
-        // to the commit list — they only appear in the detail panel.
-        for (const [parentHash, stashGroup] of stashByParent) {
-          const parentCommit = commits.find(c => c.hash === parentHash);
-          if (parentCommit) {
-            parentCommit.refs.push({
-              name: `stash (${stashGroup.length})`,
-              type: "stash" as const,
-              isCurrent: false,
-            });
-          }
-        }
-      }
+      // Build stash-by-parent map and inject stash badges onto parent commits.
+      const stashByParent = buildStashByParent(stashes, commits);
 
       // Inject a synthetic "uncommitted changes" node at index 0 when the
-      // working tree is dirty.  Its parent is the current HEAD commit so
+      // working tree is dirty. Its parent is the current HEAD commit so
       // buildGraph draws it as a side branch off the tip.
       if (wtStatus && headHash) {
-        const uncommitted: Commit = {
-          hash: UNCOMMITTED_HASH,
-          shortHash: "\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7",
-          parents: [headHash],
-          subject: "Uncommitted changes",
-          body: "",
-          author: "",
-          authorEmail: "",
-          authorDate: "",
-          committer: "",
-          committerEmail: "",
-          commitDate: "",
-          refs: [{ name: "uncommitted", type: "uncommitted" as const, isCurrent: false }],
-        };
-        commits.unshift(uncommitted);
+        injectUncommittedNode(commits, headHash);
       }
 
       // Skip update if nothing changed (avoids flicker on auto-refresh)
-      if (silent) {
-        const oldCommits = state.commits();
-        if (
-          oldCommits.length === commits.length &&
-          oldCommits.every(
-            (c, i) => c.hash === commits[i].hash && JSON.stringify(c.refs) === JSON.stringify(commits[i].refs),
-          )
-        ) {
-          return;
-        }
-      }
+      if (silent && isStaleResult(state.commits(), commits)) return;
 
       const rows = buildGraph(commits);
 
       // Selection priority: sticky hash > current branch tip > 0
-      let targetIndex = 0;
-      if (stickyHash) {
-        const idx = rows.findIndex(r => r.commit.hash === stickyHash);
-        if (idx >= 0) {
-          targetIndex = idx;
-        } else {
-          const cbIdx = rows.findIndex(r => r.isOnCurrentBranch);
-          if (cbIdx >= 0) targetIndex = cbIdx;
-        }
-      } else {
-        const cbIdx = rows.findIndex(r => r.isOnCurrentBranch);
-        if (cbIdx >= 0) targetIndex = cbIdx;
-      }
+      const targetIndex = computeTargetIndex(rows, stickyHash);
 
       // Batch all signal updates to avoid intermediate reactive cascades
       batch(() => {
@@ -264,11 +206,12 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
 
       // Preserve current cursor position (don't jump on page load)
       const stickyHash = state.selectedCommit()?.hash;
-      let targetIndex = state.cursorIndex();
-      if (stickyHash) {
-        const idx = rows.findIndex(r => r.commit.hash === stickyHash);
-        if (idx >= 0) targetIndex = idx;
-      }
+      const targetIndex = stickyHash
+        ? (() => {
+            const idx = rows.findIndex(r => r.commit.hash === stickyHash);
+            return idx >= 0 ? idx : state.cursorIndex();
+          })()
+        : state.cursorIndex();
 
       batch(() => {
         actions.setCommits(merged);

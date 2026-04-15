@@ -4,6 +4,12 @@ import packageJson from "../../package.json";
 import { useAppState } from "../context/state";
 import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
 import { useT } from "../hooks/use-t";
+import {
+  commandBarInputValue,
+  commandBarPlaceholder,
+  commitCountText,
+  modeBadgeLabel,
+} from "../utils/command-bar-utils";
 
 interface CommandBarProps {
   commandBarMode: () => CommandBarMode;
@@ -27,49 +33,23 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
   const { state } = useAppState();
   const t = useT();
 
-  const placeholder = () => {
-    switch (props.commandBarMode()) {
-      case "command":
-        return "Enter command...";
-      case "search":
-        return "Search commits...";
-      case "path":
-        return "Enter path...";
-      default:
-        return "";
-    }
-  };
+  const placeholder = () => commandBarPlaceholder(props.commandBarMode());
 
-  const inputValue = () => {
-    const mode = props.commandBarMode();
-    if (mode === "command") return props.commandBarValue();
-    if (mode === "path") return props.commandBarValue();
-    if (mode === "search") return props.searchInputValue();
-    // Idle: show the active filter value (search query or path filter)
-    const hMode = state.highlightMode();
-    if (hMode === "search") return props.searchInputValue();
-    if (hMode === "path") return state.pathFilter() ?? "";
-    return "";
-  };
+  const inputValue = () =>
+    commandBarInputValue({
+      commandBarMode: props.commandBarMode(),
+      commandBarValue: props.commandBarValue(),
+      searchInputValue: props.searchInputValue(),
+      highlightMode: state.highlightMode(),
+      pathFilter: state.pathFilter(),
+    });
 
   const inputFocused = () => {
     const mode = props.commandBarMode();
     return props.searchFocused() || mode === "command" || mode === "path";
   };
 
-  const modeBadgeLabel = () => {
-    const barMode = props.commandBarMode();
-    // When the command bar is actively open, show its mode
-    if (barMode === "command") return " command ";
-    if (barMode === "search") return " search ";
-    if (barMode === "path") return " path ";
-    // Idle: show the active highlight mode if any
-    const hMode = state.highlightMode();
-    if (hMode === "search") return " search ";
-    if (hMode === "path") return " path ";
-    if (hMode === "ancestry") return " ancestry ";
-    return " normal ";
-  };
+  const modeBadge = () => modeBadgeLabel(props.commandBarMode(), state.highlightMode());
 
   const countColor = () => {
     const hSet = state.highlightSet();
@@ -77,10 +57,7 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
     return t().foregroundMuted;
   };
 
-  const countText = () => {
-    const hSet = state.highlightSet();
-    return hSet !== null ? `${hSet.size} / ${state.graphRows().length}` : `${state.graphRows().length}`;
-  };
+  const countText = () => commitCountText(state.highlightSet(), state.graphRows().length);
 
   const borderColor = () => (props.detailFocused() ? t().border : t().accent);
 
@@ -134,7 +111,7 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
         </text>
         {/* Mode badge */}
         <text flexShrink={0} wrapMode="none" fg={t().accent} bg={t().backgroundElementActive}>
-          {modeBadgeLabel()}
+          {modeBadge()}
         </text>
         {/* Repo path + branch */}
         <text flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>

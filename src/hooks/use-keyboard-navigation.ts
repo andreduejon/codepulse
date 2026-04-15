@@ -4,6 +4,12 @@ import type { Accessor } from "solid-js";
 import type { DetailNavRef } from "../components/detail-types";
 import { ANCESTRY_PRELOAD_ROWS, SHIFT_JUMP } from "../constants";
 import type { AppActions, AppState } from "../context/state";
+import {
+  computeCascadeTarget,
+  computeDisplacedIndex,
+  countHighlightedBelow,
+  findHighlightedIndex,
+} from "../utils/keyboard-nav-utils";
 import { scrollElementIntoView } from "../utils/scroll";
 import { getAvailableTabs } from "../utils/tab-utils";
 
@@ -128,37 +134,8 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
    * highlighted row. Prefers forward direction, falls back to backward.
    */
   const displaceIfDimmed = () => {
-    const hSet = state.highlightSet();
-    if (!hSet || hSet.size === 0) return;
-    const rows = state.graphRows();
-    const curIdx = state.cursorIndex();
-    if (curIdx < rows.length && hSet.has(rows[curIdx].commit.hash)) return; // already on a match
-
-    // Search forward first, then backward
-    let fwd = -1;
-    for (let i = curIdx + 1; i < rows.length; i++) {
-      if (hSet.has(rows[i].commit.hash)) {
-        fwd = i;
-        break;
-      }
-    }
-    let bwd = -1;
-    for (let i = curIdx - 1; i >= 0; i--) {
-      if (hSet.has(rows[i].commit.hash)) {
-        bwd = i;
-        break;
-      }
-    }
-
-    let target: number;
-    if (fwd >= 0 && bwd >= 0) {
-      // Pick the closer one; on tie prefer forward
-      target = curIdx - bwd <= fwd - curIdx ? bwd : fwd;
-    } else {
-      target = fwd >= 0 ? fwd : bwd;
-    }
-
-    if (target >= 0) {
+    const target = computeDisplacedIndex(state.graphRows(), state.highlightSet(), state.cursorIndex());
+    if (target !== state.cursorIndex()) {
       actions.setCursorIndex(target);
       actions.setScrollTargetIndex(target);
     }
@@ -436,35 +413,12 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
      * in the given direction from `from`, stepping `count` entries.
      * Returns the index of the target row, or `from` if no match found.
      */
-    const findHighlightedIndex = (from: number, direction: 1 | -1, count: number): number => {
-      const hSet = state.highlightSet();
-      if (!hSet) return from;
-      const rows = state.graphRows();
-      let idx = from;
-      let steps = 0;
-      let next = from + direction;
-      while (next >= 0 && next < rows.length) {
-        if (hSet.has(rows[next].commit.hash)) {
-          idx = next;
-          steps++;
-          if (steps >= count) break;
-        }
-        next += direction;
-      }
-      return steps > 0 ? idx : from;
-    };
+    const findHighlighted = (from: number, direction: 1 | -1, count: number): number =>
+      findHighlightedIndex(state.graphRows(), state.highlightSet(), from, direction, count);
 
     /** Count how many highlighted rows exist below `from` (up to `limit`). */
-    const countHighlightedBelow = (from: number, limit: number): number => {
-      const hSet = state.highlightSet();
-      if (!hSet) return 0;
-      const rows = state.graphRows();
-      let count = 0;
-      for (let i = from + 1; i < rows.length && count < limit; i++) {
-        if (hSet.has(rows[i].commit.hash)) count++;
-      }
-      return count;
-    };
+    const countBelow = (from: number, limit: number): number =>
+      countHighlightedBelow(state.graphRows(), state.highlightSet(), from, limit);
 
     switch (e.name) {
       case "down":
@@ -473,14 +427,14 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         const hSet = state.highlightSet();
         if (hSet) {
           const count = e.shift ? SHIFT_JUMP : 1;
-          const target = findHighlightedIndex(state.cursorIndex(), 1, count);
+          const target = findHighlighted(state.cursorIndex(), 1, count);
           if (target !== state.cursorIndex()) {
             actions.setCursorIndex(target);
             actions.setScrollTargetIndex(target);
             // Preload: when fewer than N highlighted rows remain below the
             // cursor, start loading the next page so the data is ready
             // before the user reaches the boundary.
-            if (state.hasMore() && countHighlightedBelow(target, ANCESTRY_PRELOAD_ROWS) < ANCESTRY_PRELOAD_ROWS) {
+            if (state.hasMore() && countBelow(target, ANCESTRY_PRELOAD_ROWS) < ANCESTRY_PRELOAD_ROWS) {
               loadMoreData();
             }
           } else if (state.hasMore()) {
@@ -499,7 +453,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         const hSet = state.highlightSet();
         if (hSet) {
           const count = e.shift ? SHIFT_JUMP : 1;
-          const target = findHighlightedIndex(state.cursorIndex(), -1, count);
+          const target = findHighlighted(state.cursorIndex(), -1, count);
           if (target !== state.cursorIndex()) {
             actions.setCursorIndex(target);
             actions.setScrollTargetIndex(target);
@@ -553,7 +507,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
         if (!e.shift) {
           if (hSet) {
             // Jump to first highlighted row
-            const target = findHighlightedIndex(-1, 1, 1);
+            const target = findHighlighted(-1, 1, 1);
             actions.setCursorIndex(target);
             actions.setScrollTargetIndex(target);
           } else {
@@ -564,7 +518,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
           if (hSet) {
             // Jump to last highlighted row
             const rows = state.graphRows();
-            const target = findHighlightedIndex(rows.length, -1, 1);
+            const target = findHighlighted(rows.length, -1, 1);
             actions.setCursorIndex(target);
             actions.setScrollTargetIndex(target);
             // If the last highlighted row isn't at the very end, trigger lazy load
@@ -588,61 +542,60 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
    * Returns true if something was closed, false if there was nothing left.
    */
   function closeOneCascadeStep(): boolean {
-    // Step 1: command bar open
-    if (commandBarMode() !== "idle") {
-      exitCommandBar();
-      if (searchFocused()) {
-        setSearchFocused(false);
-        clearSearch();
-      }
-      return true;
-    }
-    // Step 2: dialog open
-    if (dialog()) {
-      if (dialog() === "detail") {
+    const target = computeCascadeTarget({
+      commandBarMode: commandBarMode(),
+      searchFocused: searchFocused(),
+      dialog: dialog(),
+      layoutMode: layoutMode(),
+      detailFocused: state.detailFocused(),
+      highlightSet: state.highlightSet(),
+      searchQuery: state.searchQuery(),
+      ancestrySet: state.ancestrySet(),
+      pathFilter: state.pathFilter(),
+      viewingBranch: state.viewingBranch(),
+    });
+
+    switch (target) {
+      case "command-bar":
+        exitCommandBar();
+        if (searchFocused()) {
+          setSearchFocused(false);
+          clearSearch();
+        }
+        return true;
+      case "detail-dialog":
         actions.setDetailFocused(false);
         setDialog(null);
-      } else if (dialog() === "diff-blame" && layoutMode() === "compact" && state.detailFocused()) {
+        return true;
+      case "diff-blame-compact":
         setDialog("detail");
-      } else {
+        return true;
+      case "dialog":
         setDialog(null);
-      }
-      return true;
-    }
-    // Step 3: search bar focused (typing)
-    if (searchFocused()) {
-      setSearchFocused(false);
-      clearSearch();
-      return true;
-    }
-    // Step 4: detail panel focused
-    if (state.detailFocused()) {
-      actions.setDetailFocused(false);
-      return true;
-    }
-    // Step 5: any active highlight mode (search / ancestry / path)
-    if (state.highlightSet() !== null) {
-      // Clear whichever is active
-      if (state.searchQuery()) {
+        return true;
+      case "search-focused":
+        setSearchFocused(false);
         clearSearch();
         return true;
-      }
-      if (state.ancestrySet() !== null) {
+      case "detail-focused":
+        actions.setDetailFocused(false);
+        return true;
+      case "search-highlight":
+        clearSearch();
+        return true;
+      case "ancestry-highlight":
         onClearAncestry();
         return true;
-      }
-      if (state.pathFilter()) {
+      case "path-highlight":
         actions.setPathFilter(null);
         actions.setPathMatchSet(null);
         return true;
-      }
+      case "branch-view":
+        actions.setViewingBranch(null);
+        loadData();
+        return true;
+      default:
+        return false;
     }
-    // Step 6: branch view active
-    if (state.viewingBranch()) {
-      actions.setViewingBranch(null);
-      loadData();
-      return true;
-    }
-    return false;
   }
 }
