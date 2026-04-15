@@ -60,13 +60,74 @@ export function parseGitHubRemote(url: string): GitHubRepo | null {
 
 // ── Authentication ────────────────────────────────────────────────────────
 
+/** Per-hostname cache for `gh auth token` results. null = not found / error. */
+const ghAuthTokenCache = new Map<string, string | null>();
+
 /**
- * Read a GitHub Personal Access Token from an environment variable.
- * Returns `null` when the variable is absent or empty.
+ * Run `gh auth token --hostname <hostname>` to retrieve a token for the given
+ * GitHub instance.  Caches the result so subsequent calls within the same
+ * process are instant.
+ *
+ * Returns the token string on success, or `null` if `gh` is not installed,
+ * the user is not authenticated, or any error occurs.
  */
-export function getGitHubToken(envVarName: string): string | null {
+export async function resolveGhAuthToken(hostname: string): Promise<string | null> {
+  if (ghAuthTokenCache.has(hostname)) {
+    return ghAuthTokenCache.get(hostname) ?? null;
+  }
+
+  try {
+    const proc = Bun.spawn(["gh", "auth", "token", "--hostname", hostname], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const exitCode = await proc.exited;
+    if (exitCode !== 0) {
+      ghAuthTokenCache.set(hostname, null);
+      return null;
+    }
+    const raw = await new Response(proc.stdout).text();
+    const token = raw.trim();
+    const result = token.length > 0 ? token : null;
+    ghAuthTokenCache.set(hostname, result);
+    return result;
+  } catch {
+    ghAuthTokenCache.set(hostname, null);
+    return null;
+  }
+}
+
+/**
+ * Return the cached `gh auth token` result for the given hostname.
+ * Returns `null` if the cache has not been warmed yet (call `resolveGhAuthToken` first).
+ */
+export function getCachedGhAuthToken(hostname: string): string | null {
+  return ghAuthTokenCache.get(hostname) ?? null;
+}
+
+/**
+ * Determine where the token comes from for display purposes.
+ *
+ * @returns `"env"` when the env var is set, `"gh auth"` when the `gh` CLI
+ *   cache has a token, or `null` when no token is available.
+ */
+export function getTokenSource(envVarName: string, hostname?: string): "env" | "gh auth" | null {
+  const envVal = process.env[envVarName];
+  if (envVal?.trim()) return "env";
+  if (hostname && getCachedGhAuthToken(hostname)) return "gh auth";
+  return null;
+}
+
+/**
+ * Read a GitHub Personal Access Token — first from the environment variable,
+ * then from the `gh auth` cache (warmed at startup via `resolveGhAuthToken`).
+ * Returns `null` when neither source has a token.
+ */
+export function getGitHubToken(envVarName: string, hostname?: string): string | null {
   const val = process.env[envVarName];
-  return val?.trim() ? val.trim() : null;
+  if (val?.trim()) return val.trim();
+  if (hostname) return getCachedGhAuthToken(hostname);
+  return null;
 }
 
 // ── HTTP helpers ──────────────────────────────────────────────────────────

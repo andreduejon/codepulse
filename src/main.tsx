@@ -3,7 +3,8 @@ import { render } from "@opentui/solid";
 import App from "./app";
 import { parseArgs } from "./cli/parse-args";
 import { getKnownRepos, loadConfig, mergeOptions, resolveConfigInfo } from "./config";
-import { isGitAvailable, isGitRepo } from "./git/repo";
+import { getRemoteUrl, isGitAvailable, isGitRepo } from "./git/repo";
+import { parseGitHubRemote, resolveGhAuthToken } from "./providers/github-actions/api";
 
 /** Startup mode determines which screen the app shows first. */
 export type StartupMode =
@@ -54,6 +55,25 @@ export async function main() {
   } else {
     // Git repo + known — start graph directly
     startupMode = { kind: "graph" };
+  }
+
+  // Pre-warm the gh auth token cache for the detected remote hostname.
+  // This is a best-effort async call — failures are silently ignored.
+  // The result is cached so getGitHubToken() can use it without blocking.
+  try {
+    const { config: preConfig } = loadConfig(opts.repoPath);
+    const tokenEnvVar = preConfig.providers?.github?.tokenEnvVar ?? "GITHUB_TOKEN";
+    const envVal = process.env[tokenEnvVar];
+    if (!envVal?.trim()) {
+      // Only bother with gh auth if env var isn't already set
+      const remoteUrl = await getRemoteUrl(opts.repoPath).catch(() => "");
+      const parsed = parseGitHubRemote(remoteUrl);
+      if (parsed) {
+        await resolveGhAuthToken(parsed.hostname);
+      }
+    }
+  } catch {
+    // Ignore — gh auth warm-up is best-effort
   }
 
   await render(

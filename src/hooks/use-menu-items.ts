@@ -6,7 +6,7 @@ import { writeConfig } from "../config";
 import { AUTO_REFRESH_MS, AUTO_REFRESH_OPTIONS, MAX_COUNT_OPTIONS, MS_TO_LABEL } from "../constants";
 import { DEFAULT_AUTO_REFRESH_INTERVAL, useAppState } from "../context/state";
 import { themes } from "../context/theme";
-import { getGitHubToken, parseGitHubRemote } from "../providers/github-actions/api";
+import { getTokenSource, parseGitHubRemote } from "../providers/github-actions/api";
 
 type MenuTab = "repository" | "branch" | "providers";
 
@@ -336,7 +336,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
     const ghCfg = opts.githubConfig ?? { enabled: false, tokenEnvVar: "GITHUB_TOKEN" };
     const remoteUrl = state.remoteUrl();
     const repo = parseGitHubRemote(remoteUrl);
-    const tokenFound = !!getGitHubToken(ghCfg.tokenEnvVar);
+    const tokenSource = getTokenSource(ghCfg.tokenEnvVar, repo?.hostname);
 
     const items: SettingItem[] = [
       { kind: "header", label: "github" },
@@ -364,7 +364,8 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
       {
         kind: "info",
         label: "Token",
-        get: () => (tokenFound ? "found" : "not found"),
+        get: () =>
+          tokenSource === "env" ? "found (env)" : tokenSource === "gh auth" ? "found (gh auth)" : "not found",
       },
       {
         kind: "info",

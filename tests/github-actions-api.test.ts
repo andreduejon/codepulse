@@ -6,9 +6,12 @@ import {
   fetchCIDataForSHAs,
   fetchRunJobs,
   GQL_BATCH_SIZE,
+  getCachedGhAuthToken,
   getGitHubToken,
+  getTokenSource,
   mapRunToBadge,
   parseGitHubRemote,
+  resolveGhAuthToken,
 } from "../src/providers/github-actions/api";
 import type { GitHubApiJob } from "../src/providers/github-actions/types";
 
@@ -248,6 +251,222 @@ describe("getGitHubToken", () => {
   it("reads from a custom env var name", () => {
     process.env.TEST_GH_TOKEN = "ghp_custom";
     expect(getGitHubToken("TEST_GH_TOKEN")).toBe("ghp_custom");
+  });
+
+  it("returns gh auth cache token when env var is missing and hostname is provided", async () => {
+    // Pre-warm the cache for this hostname using resolveGhAuthToken
+    const origSpawn = Bun.spawn;
+    const fakeToken = "ghs_fromghauth";
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
+    (Bun as any).spawn = mock((_args: string[]) => ({
+      exited: Promise.resolve(0),
+      stdout: new Blob([fakeToken]).stream(),
+      stderr: new Blob([""]).stream(),
+    }));
+    try {
+      await resolveGhAuthToken("test-ghauth-fallback.example.com");
+      delete process.env.TEST_GH_TOKEN;
+      expect(getGitHubToken("TEST_GH_TOKEN", "test-ghauth-fallback.example.com")).toBe(fakeToken);
+    } finally {
+      // biome-ignore lint/suspicious/noExplicitAny: test mock
+      (Bun as any).spawn = origSpawn;
+    }
+  });
+
+  it("prefers env var over gh auth cache token", async () => {
+    process.env.TEST_GH_TOKEN = "ghp_envtoken";
+    // Even if gh auth cache has a token, env var wins
+    expect(getGitHubToken("TEST_GH_TOKEN", "github.com")).toBe("ghp_envtoken");
+  });
+
+  it("returns null when env var is missing and no hostname is provided", () => {
+    delete process.env.TEST_GH_TOKEN;
+    expect(getGitHubToken("TEST_GH_TOKEN")).toBeNull();
+  });
+});
+
+// ── resolveGhAuthToken ────────────────────────────────────────────────────
+
+describe("resolveGhAuthToken", () => {
+  it("returns token from gh auth when process exits 0", async () => {
+    const origSpawn = Bun.spawn;
+    const fakeToken = "ghs_abc123resolved";
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
+    (Bun as any).spawn = mock((_args: string[]) => ({
+      exited: Promise.resolve(0),
+      stdout: new Blob([`${fakeToken}\n`]).stream(),
+      stderr: new Blob([""]).stream(),
+    }));
+    try {
+      const result = await resolveGhAuthToken("resolve-test-success.example.com");
+      expect(result).toBe(fakeToken);
+    } finally {
+      // biome-ignore lint/suspicious/noExplicitAny: test mock
+      (Bun as any).spawn = origSpawn;
+    }
+  });
+
+  it("returns null when gh exits with non-zero code", async () => {
+    const origSpawn = Bun.spawn;
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
+    (Bun as any).spawn = mock((_args: string[]) => ({
+      exited: Promise.resolve(1),
+      stdout: new Blob([""]).stream(),
+      stderr: new Blob(["not logged in"]).stream(),
+    }));
+    try {
+      const result = await resolveGhAuthToken("resolve-test-fail.example.com");
+      expect(result).toBeNull();
+    } finally {
+      // biome-ignore lint/suspicious/noExplicitAny: test mock
+      (Bun as any).spawn = origSpawn;
+    }
+  });
+
+  it("returns null and does not throw when gh spawn throws", async () => {
+    const origSpawn = Bun.spawn;
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
+    (Bun as any).spawn = mock(() => {
+      throw new Error("gh not found");
+    });
+    try {
+      const result = await resolveGhAuthToken("resolve-test-throw.example.com");
+      expect(result).toBeNull();
+    } finally {
+      // biome-ignore lint/suspicious/noExplicitAny: test mock
+      (Bun as any).spawn = origSpawn;
+    }
+  });
+
+  it("caches result — second call does not invoke Bun.spawn again", async () => {
+    const origSpawn = Bun.spawn;
+    let callCount = 0;
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
+    (Bun as any).spawn = mock((_args: string[]) => {
+      callCount++;
+      return {
+        exited: Promise.resolve(0),
+        stdout: new Blob(["ghs_cached"]).stream(),
+        stderr: new Blob([""]).stream(),
+      };
+    });
+    try {
+      const hostname = "resolve-test-cache.example.com";
+      await resolveGhAuthToken(hostname);
+      await resolveGhAuthToken(hostname);
+      expect(callCount).toBe(1);
+    } finally {
+      // biome-ignore lint/suspicious/noExplicitAny: test mock
+      (Bun as any).spawn = origSpawn;
+    }
+  });
+
+  it("returns null for empty stdout (whitespace only)", async () => {
+    const origSpawn = Bun.spawn;
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
+    (Bun as any).spawn = mock((_args: string[]) => ({
+      exited: Promise.resolve(0),
+      stdout: new Blob(["   \n"]).stream(),
+      stderr: new Blob([""]).stream(),
+    }));
+    try {
+      const result = await resolveGhAuthToken("resolve-test-empty.example.com");
+      expect(result).toBeNull();
+    } finally {
+      // biome-ignore lint/suspicious/noExplicitAny: test mock
+      (Bun as any).spawn = origSpawn;
+    }
+  });
+});
+
+// ── getCachedGhAuthToken ──────────────────────────────────────────────────
+
+describe("getCachedGhAuthToken", () => {
+  it("returns null for a hostname that has never been resolved", () => {
+    expect(getCachedGhAuthToken("never-seen-hostname.example.com")).toBeNull();
+  });
+
+  it("returns the cached token after resolveGhAuthToken succeeds", async () => {
+    const origSpawn = Bun.spawn;
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
+    (Bun as any).spawn = mock((_args: string[]) => ({
+      exited: Promise.resolve(0),
+      stdout: new Blob(["ghs_cached_check"]).stream(),
+      stderr: new Blob([""]).stream(),
+    }));
+    try {
+      await resolveGhAuthToken("cached-check.example.com");
+      expect(getCachedGhAuthToken("cached-check.example.com")).toBe("ghs_cached_check");
+    } finally {
+      // biome-ignore lint/suspicious/noExplicitAny: test mock
+      (Bun as any).spawn = origSpawn;
+    }
+  });
+});
+
+// ── getTokenSource ────────────────────────────────────────────────────────
+
+describe("getTokenSource", () => {
+  afterEach(() => {
+    delete process.env.TEST_TOKEN_SRC;
+  });
+
+  it('returns "env" when env var is set', () => {
+    process.env.TEST_TOKEN_SRC = "ghp_env";
+    expect(getTokenSource("TEST_TOKEN_SRC")).toBe("env");
+  });
+
+  it('returns "env" even when gh auth cache also has a token', async () => {
+    // Pre-warm a cache entry
+    const origSpawn = Bun.spawn;
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
+    (Bun as any).spawn = mock((_args: string[]) => ({
+      exited: Promise.resolve(0),
+      stdout: new Blob(["ghs_tok"]).stream(),
+      stderr: new Blob([""]).stream(),
+    }));
+    try {
+      await resolveGhAuthToken("tokensrc-both.example.com");
+      process.env.TEST_TOKEN_SRC = "ghp_envpriority";
+      expect(getTokenSource("TEST_TOKEN_SRC", "tokensrc-both.example.com")).toBe("env");
+    } finally {
+      // biome-ignore lint/suspicious/noExplicitAny: test mock
+      (Bun as any).spawn = origSpawn;
+      delete process.env.TEST_TOKEN_SRC;
+    }
+  });
+
+  it('returns "gh auth" when env var is unset but gh auth cache has a token', async () => {
+    const origSpawn = Bun.spawn;
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
+    (Bun as any).spawn = mock((_args: string[]) => ({
+      exited: Promise.resolve(0),
+      stdout: new Blob(["ghs_ghauth"]).stream(),
+      stderr: new Blob([""]).stream(),
+    }));
+    try {
+      delete process.env.TEST_TOKEN_SRC;
+      await resolveGhAuthToken("tokensrc-ghauth.example.com");
+      expect(getTokenSource("TEST_TOKEN_SRC", "tokensrc-ghauth.example.com")).toBe("gh auth");
+    } finally {
+      // biome-ignore lint/suspicious/noExplicitAny: test mock
+      (Bun as any).spawn = origSpawn;
+    }
+  });
+
+  it("returns null when neither env var nor gh auth cache has a token", () => {
+    delete process.env.TEST_TOKEN_SRC;
+    expect(getTokenSource("TEST_TOKEN_SRC", "no-token-anywhere.example.com")).toBeNull();
+  });
+
+  it("returns null when env var is whitespace only and no hostname given", () => {
+    process.env.TEST_TOKEN_SRC = "   ";
+    expect(getTokenSource("TEST_TOKEN_SRC")).toBeNull();
+  });
+
+  it("returns null when no hostname is provided and env var is unset", () => {
+    delete process.env.TEST_TOKEN_SRC;
+    expect(getTokenSource("TEST_TOKEN_SRC")).toBeNull();
   });
 });
 
