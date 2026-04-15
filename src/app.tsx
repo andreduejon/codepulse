@@ -26,6 +26,7 @@ import { useDetailLoader } from "./hooks/use-detail-loader";
 import { type CommandBarMode, useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
 import { usePathFilter } from "./hooks/use-path-filter";
 import type { StartupMode } from "./main";
+import { useGitHubCI } from "./providers/github-actions/use-github-ci";
 
 interface AppProps {
   repoPath: string;
@@ -38,6 +39,8 @@ interface AppProps {
   path?: string;
   configInfo?: ConfigInfo;
   startupMode: StartupMode;
+  /** Initial GitHub Actions provider config from the loaded config file. */
+  initialGithubConfig?: { enabled?: boolean; tokenEnvVar?: string };
 }
 
 interface AppContentProps extends AppProps {
@@ -48,6 +51,19 @@ function AppContent(props: Readonly<AppContentProps>) {
   const { state, actions } = createAppState(props.maxCount ?? DEFAULT_MAX_COUNT, props.autoRefreshInterval);
   const themeState = props.themeState;
   const renderer = useRenderer();
+
+  // ── GitHub Actions provider config (mutable signal for Providers menu tab) ──
+  const [githubConfig, setGithubConfig] = createSignal({
+    enabled: props.initialGithubConfig?.enabled ?? true,
+    tokenEnvVar: props.initialGithubConfig?.tokenEnvVar ?? "GITHUB_TOKEN",
+  });
+
+  // ── GitHub CI data hook (called during setup, before Provider renders — per AGENTS.md rule 5) ──
+  const gitHubCI = useGitHubCI({
+    state,
+    actions,
+    config: githubConfig(),
+  });
 
   // Setup screen visibility — shown when startup mode is "setup"
   const [setupVisible, setSetupVisible] = createSignal(props.startupMode.kind === "setup");
@@ -435,6 +451,8 @@ function AppContent(props: Readonly<AppContentProps>) {
                         searchFocused={searchFocused()}
                         onJumpToCommit={handleJumpToCommit}
                         onOpenDiff={handleOpenDiff}
+                        ciGetCommitData={gitHubCI.getCommitData}
+                        ciFetchJobsForRun={gitHubCI.fetchJobsForRun}
                       />
                     </box>
                   </Show>
@@ -453,6 +471,8 @@ function AppContent(props: Readonly<AppContentProps>) {
                       setDialog(null);
                       setRepoSelectorVisible(true);
                     }}
+                    githubConfig={githubConfig()}
+                    onGithubConfigChange={setGithubConfig}
                   />
                 </Show>
                 <Show when={dialog() === "help"}>

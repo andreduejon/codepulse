@@ -68,6 +68,7 @@ export async function main() {
         path={opts.path}
         configInfo={configInfo}
         startupMode={startupMode}
+        initialGithubConfig={config.providers?.github}
       />
     ),
     {
