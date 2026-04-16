@@ -101,7 +101,7 @@ export function useGitHubCI(opts: {
     if (!config.enabled) return false;
     const repo = cachedGitHubRepo();
     if (!repo) return false;
-    return getGitHubToken(config.tokenEnvVar, repo.hostname) !== null;
+    return getGitHubToken(config.tokenEnvVar) !== null;
   };
 
   // ── Provider registration ─────────────────────────────────────────────
@@ -192,7 +192,7 @@ export function useGitHubCI(opts: {
   async function fetchForSHAs(shas: string[], signal?: AbortSignal): Promise<void> {
     if (shas.length === 0) return;
     const repo = cachedGitHubRepo();
-    const token = getGitHubToken(config.tokenEnvVar, repo?.hostname);
+    const token = getGitHubToken(config.tokenEnvVar);
     if (!repo || !token) return;
 
     // Split into batches of GQL_BATCH_SIZE and fire in parallel
@@ -253,7 +253,7 @@ export function useGitHubCI(opts: {
     if (!isAvailable()) {
       if (showStatus) {
         const repo = cachedGitHubRepo();
-        const token = getGitHubToken(config.tokenEnvVar, repo?.hostname);
+        const token = getGitHubToken(config.tokenEnvVar);
         if (!config.enabled) {
           actions.setProviderStatus("CI provider disabled");
         } else if (!repo) {
@@ -448,7 +448,7 @@ export function useGitHubCI(opts: {
     if (cached) return cached;
 
     const repo = cachedGitHubRepo();
-    const token = getGitHubToken(config.tokenEnvVar, repo?.hostname);
+    const token = getGitHubToken(config.tokenEnvVar);
     if (!repo || !token) return [];
 
     const jobs = await fetchRunJobs(repo, token, run.id);

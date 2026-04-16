@@ -158,15 +158,15 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
         </text>
         <box height={1} />
         <text fg={t().foregroundMuted} wrapMode="word">
-          To authenticate with GitHub, run one of:
-        </text>
-        <box height={1} />
-        <text fg={t().accent} wrapMode="none">
-          {"  gh auth login"}
+          Set a GitHub Personal Access Token via environment variable:
         </text>
         <box height={1} />
         <text fg={t().accent} wrapMode="none">
           {"  export GITHUB_TOKEN=<token>"}
+        </text>
+        <box height={1} />
+        <text fg={t().foregroundMuted} wrapMode="word">
+          {"Configure the variable name in Menu \u2192 Providers \u2192 Token env."}
         </text>
         <box height={1} />
         <text fg={t().foregroundMuted} wrapMode="word">

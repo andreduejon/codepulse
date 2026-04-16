@@ -336,7 +336,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
     const ghCfg = opts.githubConfig ?? { enabled: false, tokenEnvVar: "GITHUB_TOKEN" };
     const remoteUrl = state.remoteUrl();
     const repo = parseGitHubRemote(remoteUrl);
-    const tokenSource = getTokenSource(ghCfg.tokenEnvVar, repo?.hostname);
+    const tokenSource = getTokenSource(ghCfg.tokenEnvVar);
 
     const items: SettingItem[] = [
       { kind: "header", label: "github" },
@@ -364,8 +364,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
       {
         kind: "info",
         label: "Token",
-        get: () =>
-          tokenSource === "env" ? "found (env)" : tokenSource === "gh auth" ? "found (gh auth)" : "not found",
+        get: () => (tokenSource === "env" ? "found (env)" : "not found"),
       },
       {
         kind: "info",
