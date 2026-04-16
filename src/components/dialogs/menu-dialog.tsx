@@ -380,7 +380,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
         flexDirection="row"
         width="100%"
         paddingX={4}
-        backgroundColor={isSel() ? t().backgroundElement : undefined}
+        backgroundColor={isEditing() ? t().backgroundElementActive : isSel() ? t().backgroundElement : undefined}
       >
         <text flexShrink={0} wrapMode="none" fg={isSel() ? t().accent : t().foregroundMuted}>
           {item.label.padEnd(INFO_LABEL_WIDTH)}
@@ -392,7 +392,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
           truncate
           fg={isEditing() ? t().foreground : isSel() ? t().accent : t().foregroundMuted}
         >
-          {isEditing() ? `${editValue()}_` : item.get()}
+          {isEditing() ? `${editValue()}▌` : item.get()}
         </text>
         {isEditing() ? (
           <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>

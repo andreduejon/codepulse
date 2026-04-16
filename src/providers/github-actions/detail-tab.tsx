@@ -171,8 +171,8 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
     const cursor = untrack(() => props.detailCursorIndex());
     if (count === 0) {
       props.setDetailCursorIndex(0);
-    } else if (cursor >= count) {
-      props.setDetailCursorIndex(count - 1);
+    } else if (cursor < 0 || cursor >= count) {
+      props.setDetailCursorIndex(Math.max(0, Math.min(count - 1, cursor)));
     }
   });
 

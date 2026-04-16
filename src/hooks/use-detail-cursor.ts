@@ -185,7 +185,7 @@ export function useDetailCursor({
   // Skip this effect on the files tab to avoid resetting the cursor to 0 based
   // on detail.tsx's empty interactiveItems() (which has no "files" branch).
   createEffect(() => {
-    if (activeTab() === "files") return;
+    if (activeTab() === "files" || activeTab() === "github-actions") return;
     const items = interactiveItems();
     const count = items.length;
 
