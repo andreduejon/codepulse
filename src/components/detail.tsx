@@ -873,6 +873,11 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 fetchJobsForRun={props.githubFetchJobsForRun!}
                 unavailableReason={props.githubProviderStatus !== "loading" ? props.githubProviderStatus : null}
                 loading={props.githubProviderStatus === "loading"}
+                navRef={props.navRef}
+                detailCursorIndex={() => state.detailCursorIndex()}
+                detailFocused={() => state.detailFocused()}
+                setDetailCursorAction={actions.setDetailCursorAction}
+                setDetailCursorIndex={actions.setDetailCursorIndex}
               />
             </Show>
           </>

@@ -340,10 +340,10 @@ export function useDetailCursor({
 
   // Keep navRef updated whenever interactive items change.
   // IMPORTANT: When the files tab is active, FileListView owns navRef exclusively.
-  // We must not overwrite it here — FileListView has its own createEffect that
-  // writes the correct itemCount and activateCurrentItem for file navigation.
+  // When the github-actions tab is active, ActionsDetailTab owns navRef exclusively.
+  // We must not overwrite it here in those cases.
   createEffect(() => {
-    if (navRef && activeTab() !== "files") {
+    if (navRef && activeTab() !== "files" && activeTab() !== "github-actions") {
       navRef.itemCount = interactiveItems().length;
       navRef.activateCurrentItem = activateCurrentItem;
       navRef.itemRefs = itemRefs;
@@ -371,8 +371,9 @@ export function useDetailCursor({
 
   // Keep the footer's contextual enter-key hint in sync with the cursor position.
   // IMPORTANT: FileListView owns this on the files tab via its own createEffect.
+  // ActionsDetailTab owns this on the github-actions tab via its own createEffect.
   createEffect(() => {
-    if (activeTab() === "files") return;
+    if (activeTab() === "files" || activeTab() === "github-actions") return;
     const items = interactiveItems();
     const idx = state.detailCursorIndex();
     if (!state.detailFocused() || idx < 0 || idx >= items.length) {
