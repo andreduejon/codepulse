@@ -234,7 +234,6 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
               const cat = categorize(run.status, run.conclusion);
               const color = () => statusColor(t(), cat);
               const icon = statusIcon(cat);
-              const label = run.status !== "completed" ? run.status.replace("_", " ") : (run.conclusion ?? "completed");
               const relTime = () => formatRelativeDate(run.updatedAt);
 
               return (

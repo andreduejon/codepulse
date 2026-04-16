@@ -323,6 +323,7 @@ export function useGitHubCI(opts: {
   async function doForceRefresh(): Promise<void> {
     queriedSHAs.clear();
     commitDataCache = new Map();
+    jobsCache.clear();
     setCommitDataVersion(v => v + 1);
     actions.setGraphBadges(new Map());
     actions.setProviderStatus(null);
