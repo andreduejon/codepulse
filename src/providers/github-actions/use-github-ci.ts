@@ -33,7 +33,7 @@ import {
   getGitHubToken,
   parseGitHubRemote,
 } from "./api";
-import type { GitHubCommitData, GitHubJob, GitHubProviderConfig, GitHubRunDetail, GitHubWorkflowRun } from "./types";
+import type { GitHubCommitData, GitHubJob, GitHubProviderConfig, GitHubWorkflowRun } from "./types";
 import { DEFAULT_GITHUB_CONFIG } from "./types";
 
 /** Number of rows taken from the top of graphRows() for the initial fetch. */
@@ -473,6 +473,3 @@ export function useGitHubCI(opts: {
     isAvailable,
   };
 }
-
-/** Re-export detail type for consumers that don't need to import from types.ts directly. */
-export type { GitHubRunDetail };
