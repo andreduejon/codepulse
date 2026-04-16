@@ -145,6 +145,8 @@ function mapApiJob(j: GitHubApiJob): GitHubJob {
         status: s.status,
         conclusion: s.conclusion,
         number: s.number,
+        startedAt: s.started_at ?? null,
+        completedAt: s.completed_at ?? null,
       }),
     ),
   };

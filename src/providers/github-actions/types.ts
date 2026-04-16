@@ -23,6 +23,8 @@ export interface GitHubApiStep {
   status: string;
   conclusion: string | null;
   number: number;
+  started_at: string | null;
+  completed_at: string | null;
 }
 
 // ── Derived / mapped types used by the UI ────────────────────────────────
@@ -60,6 +62,8 @@ export interface GitHubStep {
   status: string;
   conclusion: string | null;
   number: number;
+  startedAt: string | null;
+  completedAt: string | null;
 }
 
 /**
