@@ -291,8 +291,8 @@ describe("mapRunToBadge", () => {
     expect(mapRunToBadge("completed", "failure")).toBe("fail");
   });
 
-  it('maps completed + cancelled → "fail"', () => {
-    expect(mapRunToBadge("completed", "cancelled")).toBe("fail");
+  it('maps completed + cancelled → "unknown" (not a build failure)', () => {
+    expect(mapRunToBadge("completed", "cancelled")).toBe("unknown");
   });
 
   it('maps completed + timed_out → "fail"', () => {

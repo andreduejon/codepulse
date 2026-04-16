@@ -10,111 +10,41 @@
  */
 
 import { createSignal, For, Show } from "solid-js";
+import type { Theme } from "../../context/theme";
 import { useT } from "../../hooks/use-t";
 import { formatRelativeDate } from "../../utils/date";
+import { categorize, statusColor, statusIcon } from "./status";
 import type { GitHubCommitData, GitHubJob, GitHubStep, GitHubWorkflowRun } from "./types";
 
-// ── Status helpers ────────────────────────────────────────────────────────
+// ── Status helpers (thin wrappers that extract status/conclusion) ──────────
 
-function runStatusIcon(run: GitHubWorkflowRun): string {
-  if (run.status !== "completed") return "●";
-  switch (run.conclusion) {
-    case "success":
-      return "✓";
-    case "failure":
-    case "timed_out":
-    case "startup_failure":
-      return "✗";
-    case "cancelled":
-      return "○";
-    case "skipped":
-      return "–";
-    default:
-      return "?";
-  }
+function runIcon(run: GitHubWorkflowRun): string {
+  return statusIcon(categorize(run.status, run.conclusion));
+}
+
+function runColor(t: Theme, run: GitHubWorkflowRun): string {
+  return statusColor(t, categorize(run.status, run.conclusion));
+}
+
+function jobIcon(job: GitHubJob): string {
+  return statusIcon(categorize(job.status, job.conclusion));
+}
+
+function jobColorFn(t: Theme, job: GitHubJob): string {
+  return statusColor(t, categorize(job.status, job.conclusion));
+}
+
+function stepIcon(step: GitHubStep): string {
+  return statusIcon(categorize(step.status, step.conclusion));
+}
+
+function stepColorFn(t: Theme, step: GitHubStep): string {
+  return statusColor(t, categorize(step.status, step.conclusion));
 }
 
 function runStatusLabel(run: GitHubWorkflowRun): string {
   if (run.status !== "completed") return run.status.replace("_", " ");
   return run.conclusion ?? "completed";
-}
-
-function jobStatusIcon(job: GitHubJob): string {
-  if (job.status !== "completed") return "●";
-  switch (job.conclusion) {
-    case "success":
-      return "✓";
-    case "failure":
-    case "timed_out":
-      return "✗";
-    case "cancelled":
-      return "○";
-    case "skipped":
-      return "–";
-    default:
-      return "?";
-  }
-}
-
-function stepStatusIcon(step: GitHubStep): string {
-  if (step.status !== "completed") return "●";
-  switch (step.conclusion) {
-    case "success":
-      return "✓";
-    case "failure":
-    case "timed_out":
-      return "✗";
-    case "skipped":
-      return "–";
-    default:
-      return "?";
-  }
-}
-
-function useRunColors(run: GitHubWorkflowRun) {
-  const t = useT();
-  return () => {
-    if (run.status !== "completed") {
-      const c = t().accent;
-      return { icon: c, text: c };
-    }
-    switch (run.conclusion) {
-      case "success":
-        return { icon: t().success, text: t().success };
-      case "failure":
-      case "timed_out":
-      case "startup_failure":
-        return { icon: t().error, text: t().error };
-      default:
-        return { icon: t().foregroundMuted, text: t().foregroundMuted };
-    }
-  };
-}
-
-function jobColor(t: ReturnType<typeof useT>, job: GitHubJob): string {
-  if (job.status !== "completed") return t().accent;
-  switch (job.conclusion) {
-    case "success":
-      return t().success;
-    case "failure":
-    case "timed_out":
-      return t().error;
-    default:
-      return t().foregroundMuted;
-  }
-}
-
-function stepColor(t: ReturnType<typeof useT>, step: GitHubStep): string {
-  if (step.status !== "completed") return t().accent;
-  switch (step.conclusion) {
-    case "success":
-      return t().success;
-    case "failure":
-    case "timed_out":
-      return t().error;
-    default:
-      return t().foregroundMuted;
-  }
 }
 
 // ── Props ─────────────────────────────────────────────────────────────────
@@ -211,7 +141,7 @@ interface RunEntryProps {
 
 function RunEntry(props: Readonly<RunEntryProps>) {
   const t = useT();
-  const colors = useRunColors(props.run);
+  const color = () => runColor(t(), props.run);
   const relTime = () => formatRelativeDate(props.run.updatedAt);
 
   const [expanded, setExpanded] = createSignal(false);
@@ -236,8 +166,8 @@ function RunEntry(props: Readonly<RunEntryProps>) {
 
       {/* Run header */}
       <box flexDirection="row" width="100%">
-        <text flexShrink={0} wrapMode="none" fg={colors().icon}>
-          {runStatusIcon(props.run)}{" "}
+        <text flexShrink={0} wrapMode="none" fg={color()}>
+          {runIcon(props.run)}{" "}
         </text>
         <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foreground}>
           {props.run.name}
@@ -250,7 +180,7 @@ function RunEntry(props: Readonly<RunEntryProps>) {
 
       {/* Run sub-info */}
       <box flexDirection="row" width="100%" paddingLeft={3}>
-        <text flexShrink={0} wrapMode="none" fg={colors().text}>
+        <text flexShrink={0} wrapMode="none" fg={color()}>
           {runStatusLabel(props.run)}
         </text>
         <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
@@ -293,7 +223,7 @@ function JobEntry(props: Readonly<JobEntryProps>) {
   const [steps, setSteps] = createSignal<GitHubStep[]>(props.job.steps ?? []);
   const [stepsLoading, setStepsLoading] = createSignal(false);
 
-  const color = () => jobColor(t, props.job);
+  const color = () => jobColorFn(t(), props.job);
 
   // TODO: wire toggleExpand to keyboard cursor activation in a future commit
   const _toggleExpand = async () => {
@@ -316,7 +246,7 @@ function JobEntry(props: Readonly<JobEntryProps>) {
       <box flexDirection="row" width="100%">
         <text flexShrink={0} wrapMode="none" fg={color()}>
           {expanded() ? "▾ " : "▸ "}
-          {jobStatusIcon(props.job)}{" "}
+          {jobIcon(props.job)}{" "}
         </text>
         <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foreground}>
           {props.job.name}
@@ -349,12 +279,12 @@ interface StepEntryProps {
 
 function StepEntry(props: Readonly<StepEntryProps>) {
   const t = useT();
-  const color = () => stepColor(t, props.step);
+  const color = () => stepColorFn(t(), props.step);
 
   return (
     <box flexDirection="row" width="100%" paddingLeft={6}>
       <text flexShrink={0} wrapMode="none" fg={color()}>
-        {stepStatusIcon(props.step)}{" "}
+        {stepIcon(props.step)}{" "}
       </text>
       <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
         {props.step.name}

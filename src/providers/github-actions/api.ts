@@ -7,6 +7,7 @@
  */
 
 import type { GraphBadge } from "../../providers/provider";
+import { categorize } from "./status";
 import type { GitHubApiJob, GitHubCommitData, GitHubJob, GitHubRepo, GitHubStep, GitHubWorkflowRun } from "./types";
 
 // ── Remote URL parsing ────────────────────────────────────────────────────
@@ -110,25 +111,19 @@ function graphqlEndpoint(repo: GitHubRepo): string {
 /**
  * Map a GitHub run's `status` + `conclusion` to the simplified badge value
  * used across the provider boundary.
+ *
+ * Note: `cancelled` maps to `"unknown"` (not counted as failure) to avoid
+ * inflating fail counts when a user manually cancels a run.
  */
 export function mapRunToBadge(status: string, conclusion: string | null): GraphBadge["badge"] {
-  if (status !== "completed") {
-    // in_progress, queued, waiting, requested, pending
-    return "running";
-  }
-  switch (conclusion) {
-    case "success":
+  const cat = categorize(status, conclusion);
+  switch (cat) {
+    case "pass":
       return "pass";
-    case "failure":
-    case "cancelled":
-    case "timed_out":
-    case "startup_failure":
+    case "fail":
       return "fail";
-    case "skipped":
-    case "neutral":
-    case "action_required":
-    case "stale":
-      return "unknown";
+    case "running":
+      return "running";
     default:
       return "unknown";
   }
