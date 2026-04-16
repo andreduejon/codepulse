@@ -26,6 +26,8 @@ import { useDetailLoader } from "./hooks/use-detail-loader";
 import { type CommandBarMode, useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
 import { usePathFilter } from "./hooks/use-path-filter";
 import type { StartupMode } from "./main";
+import JobLogDialog from "./providers/github-actions/log-dialog";
+import type { GitHubJob, GitHubWorkflowRun } from "./providers/github-actions/types";
 import { useGitHubCI } from "./providers/github-actions/use-github-ci";
 
 interface AppProps {
@@ -88,7 +90,9 @@ function AppContent(props: Readonly<AppContentProps>) {
   // Initialize path filter from CLI --path flag (before first loadData)
   if (props.path) actions.setPathFilter(props.path);
 
-  const [dialog, setDialog] = createSignal<"menu" | "help" | "theme" | "diff-blame" | "detail" | null>(null);
+  const [dialog, setDialog] = createSignal<"menu" | "help" | "theme" | "diff-blame" | "detail" | "job-log" | null>(
+    null,
+  );
 
   const [searchFocused, setSearchFocused] = createSignal(false);
   /**
@@ -98,6 +102,8 @@ function AppContent(props: Readonly<AppContentProps>) {
   const [searchInputValue, setSearchInputValue] = createSignal("");
   /** Target for the diff+blame dialog (set when user activates a file). */
   const [diffTarget, setDiffTarget] = createSignal<DiffTarget | null>(null);
+  /** Target for the job log dialog (set when user opens a job log). */
+  const [jobLogTarget, setJobLogTarget] = createSignal<{ job: GitHubJob; run: GitHubWorkflowRun } | null>(null);
 
   /** Command bar mode — drives placeholder text and key routing. */
   const [commandBarMode, setCommandBarMode] = createSignal<CommandBarMode>("idle");
@@ -173,6 +179,11 @@ function AppContent(props: Readonly<AppContentProps>) {
   const handleOpenDiff = (target: DiffTarget) => {
     setDiffTarget(target);
     setDialog("diff-blame");
+  };
+
+  const handleOpenJobLog = (job: GitHubJob, run: GitHubWorkflowRun) => {
+    setJobLogTarget({ job, run });
+    setDialog("job-log");
   };
 
   // All git data loading: initial load, pagination, fetch, and auto-refresh timer.
@@ -486,7 +497,9 @@ function AppContent(props: Readonly<AppContentProps>) {
                         onOpenDiff={handleOpenDiff}
                         githubGetCommitData={gitHubCI.getCommitData}
                         githubFetchJobsForRun={gitHubCI.fetchJobsForRun}
+                        githubFetchJobLog={gitHubCI.fetchJobLogForJob}
                         githubProviderStatus={state.providerStatus()}
+                        onOpenJobLog={handleOpenJobLog}
                       />
                     </box>
                   </Show>
@@ -546,6 +559,17 @@ function AppContent(props: Readonly<AppContentProps>) {
                     onOpenDiff={handleOpenDiff}
                     onClose={() => setDialog(null)}
                   />
+                </Show>
+                {/* Job log dialog */}
+                <Show when={dialog() === "job-log" && jobLogTarget()}>
+                  {target => (
+                    <JobLogDialog
+                      job={target().job}
+                      run={target().run}
+                      fetchLog={() => gitHubCI.fetchJobLogForJob(target().job.id)}
+                      onClose={() => setDialog(null)}
+                    />
+                  )}
                 </Show>
               </box>
             </Show>

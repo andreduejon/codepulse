@@ -29,6 +29,10 @@ export interface DetailViewProps {
   githubGetCommitData?: (sha: string) => GitHubCommitData | null;
   /** Fetch full job details (with steps) for a CI run on demand. Optional. */
   githubFetchJobsForRun?: (run: GitHubWorkflowRun) => Promise<GitHubJob[]>;
+  /** Fetch the plain-text log for a specific GitHub Actions job. Optional. */
+  githubFetchJobLog?: (jobId: number, signal?: AbortSignal) => Promise<string>;
+  /** Open the job log dialog for a specific job. */
+  onOpenJobLog?: (job: GitHubJob, run: GitHubWorkflowRun) => void;
   /**
    * Current provider status string (from state.providerStatus).
    * Non-null when the provider is unavailable (e.g. missing token / remote).

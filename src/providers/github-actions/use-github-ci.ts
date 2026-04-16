@@ -28,6 +28,7 @@ import {
   buildCommitDataMap,
   buildGraphBadges,
   fetchCIDataForSHAs,
+  fetchJobLog,
   fetchRunJobs,
   GQL_BATCH_SIZE,
   getGitHubToken,
@@ -48,6 +49,11 @@ export interface UseGitHubCIResult {
    * Resolves to an empty array on error — never throws.
    */
   fetchJobsForRun: (run: GitHubWorkflowRun) => Promise<GitHubJob[]>;
+  /**
+   * Fetch the plain-text log for a specific job ID.
+   * Resolves to an empty string if token or repo is unavailable.
+   */
+  fetchJobLogForJob: (jobId: number, signal?: AbortSignal) => Promise<string>;
   /** Trigger an immediate (non-conditional) refresh of CI data. */
   refresh: () => Promise<void>;
   /** True when the provider is available (token + GitHub remote detected). */
@@ -470,6 +476,12 @@ export function useGitHubCI(opts: {
       return commitDataCache.get(sha) ?? null;
     },
     fetchJobsForRun,
+    fetchJobLogForJob: (jobId: number, signal?: AbortSignal): Promise<string> => {
+      const repo = cachedGitHubRepo();
+      const token = getGitHubToken(config.tokenEnvVar);
+      if (!repo || !token) return Promise.resolve("");
+      return fetchJobLog(repo, token, jobId, signal);
+    },
     refresh: doForceRefresh,
     isAvailable,
   };

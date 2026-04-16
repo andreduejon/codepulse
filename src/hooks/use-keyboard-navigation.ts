@@ -13,7 +13,7 @@ import {
 import { handleDetailKey } from "./handle-detail-keys";
 import { handleGraphKey } from "./handle-graph-keys";
 
-export type DialogId = "menu" | "help" | "theme" | "diff-blame" | "detail" | null;
+export type DialogId = "menu" | "help" | "theme" | "diff-blame" | "detail" | "job-log" | null;
 type LayoutMode = "too-small" | "compact" | "normal";
 
 /** Command bar mode — drives placeholder text and key routing. */

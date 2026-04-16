@@ -23,12 +23,16 @@ export interface DetailPanelProps {
   githubGetCommitData?: (sha: string) => GitHubCommitData | null;
   /** CI job fetcher from the GitHub Actions provider (optional). */
   githubFetchJobsForRun?: (run: GitHubWorkflowRun) => Promise<GitHubJob[]>;
+  /** CI job log fetcher from the GitHub Actions provider (optional). */
+  githubFetchJobLog?: (jobId: number, signal?: AbortSignal) => Promise<string>;
   /**
    * Current provider status string.  Non-null when the provider is unavailable
    * (e.g. missing token / remote) — forwarded to CommitDetailView for setup
    * guidance in the Actions tab.
    */
   githubProviderStatus?: string | null;
+  /** Open the job log dialog for a specific job. */
+  onOpenJobLog?: (job: GitHubJob, run: GitHubWorkflowRun) => void;
 }
 
 /**
@@ -164,7 +168,9 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
             navRef={props.navRef}
             githubGetCommitData={props.githubGetCommitData}
             githubFetchJobsForRun={props.githubFetchJobsForRun}
+            githubFetchJobLog={props.githubFetchJobLog}
             githubProviderStatus={props.githubProviderStatus}
+            onOpenJobLog={props.onOpenJobLog}
           />
         </Show>
       </scrollbox>

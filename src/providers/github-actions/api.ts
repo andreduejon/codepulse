@@ -484,3 +484,35 @@ export async function fetchRunJobs(
     return [];
   }
 }
+
+/**
+ * Fetch the plain-text log output for a single job.
+ *
+ * The GitHub API returns a redirect to a temporary pre-signed URL for the log
+ * content.  We follow the redirect and return the raw text.
+ *
+ * Returns an empty string (never throws) on any error.
+ */
+export async function fetchJobLog(
+  repo: GitHubRepo,
+  token: string,
+  jobId: number,
+  signal?: AbortSignal,
+): Promise<string> {
+  const url = `${apiBase(repo)}/actions/jobs/${jobId}/logs`;
+  const headers = createHeaders(token);
+
+  try {
+    // GitHub redirects to a pre-signed S3/Azure URL — follow the redirect
+    const res = await fetch(url, { headers, signal, redirect: "follow" });
+    if (!res.ok) {
+      console.error(`[github-actions] fetchJobLog: HTTP ${res.status} for job ${jobId}`);
+      return "";
+    }
+    return await res.text();
+  } catch (err) {
+    if (signal?.aborted) throw err;
+    console.error("[github-actions] fetchJobLog: network error:", err);
+    return "";
+  }
+}
