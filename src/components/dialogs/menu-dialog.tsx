@@ -92,10 +92,54 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     return text.substring(off, off + COPYABLE_VISIBLE_WIDTH);
   };
 
+  // ── Edit mode (for editable items) ───────────────────────────────
+  const [editingIdx, setEditingIdx] = createSignal<number | null>(null);
+  const [editValue, setEditValue] = createSignal("");
+
+  const startEditing = (idx: number, currentValue: string) => {
+    setEditingIdx(idx);
+    setEditValue(currentValue);
+  };
+
+  const confirmEdit = () => {
+    const idx = editingIdx();
+    if (idx == null) return;
+    const item = activeItems()[idx];
+    if (item?.kind === "editable") item.set(editValue());
+    setEditingIdx(null);
+    setEditValue("");
+  };
+
+  const cancelEdit = () => {
+    setEditingIdx(null);
+    setEditValue("");
+  };
+
   // ── Keyboard ──────────────────────────────────────────────────────
   const TAB_ORDER: MenuTab[] = ["repository", "branch", "providers"];
   useKeyboard(e => {
     if (e.eventType === "release") return;
+
+    // Edit mode intercept — capture all input for the editable field
+    if (editingIdx() != null) {
+      switch (e.name) {
+        case "return":
+          confirmEdit();
+          break;
+        case "escape":
+          cancelEdit();
+          break;
+        case "backspace":
+          setEditValue(v => v.slice(0, -1));
+          break;
+        default:
+          // Append printable characters
+          if (e.sequence && e.sequence.length === 1 && e.sequence.charCodeAt(0) >= 32) {
+            setEditValue(v => v + e.sequence);
+          }
+      }
+      return;
+    }
 
     switch (e.name) {
       case "down":
@@ -104,9 +148,17 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
       case "up":
         moveCursor(e.shift ? -SHIFT_JUMP : -1);
         break;
-      case "return":
-        activateItem();
+      case "return": {
+        const idx = selectedItemIndex();
+        if (idx == null) break;
+        const item = activeItems()[idx];
+        if (item?.kind === "editable") {
+          startEditing(idx, item.get());
+        } else {
+          activateItem();
+        }
         break;
+      }
       case "left": {
         const idx = TAB_ORDER.indexOf(activeTab());
         if (idx > 0) setActiveTab(TAB_ORDER[idx - 1]);
@@ -317,6 +369,40 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     );
   };
 
+  const renderEditable = (item: Extract<SettingItem, { kind: "editable" }>, idx: number) => {
+    const isSel = () => selectedItemIndex() === idx;
+    const isEditing = () => editingIdx() === idx;
+    return (
+      <box
+        ref={(el: Renderable) => {
+          itemRefs[idx] = el;
+        }}
+        flexDirection="row"
+        width="100%"
+        paddingX={4}
+        backgroundColor={isSel() ? t().backgroundElement : undefined}
+      >
+        <text flexShrink={0} wrapMode="none" fg={isSel() ? t().accent : t().foregroundMuted}>
+          {item.label.padEnd(INFO_LABEL_WIDTH)}
+        </text>
+        <text
+          flexGrow={1}
+          flexShrink={1}
+          wrapMode="none"
+          truncate
+          fg={isEditing() ? t().foreground : isSel() ? t().accent : t().foregroundMuted}
+        >
+          {isEditing() ? `${editValue()}_` : item.get()}
+        </text>
+        {isEditing() ? (
+          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+            {" Esc cancel"}
+          </text>
+        ) : null}
+      </box>
+    );
+  };
+
   const renderItem = (item: SettingItem, itemIndex: () => number): JSX.Element => {
     const idx = itemIndex();
     if (item.kind === "header") return renderHeader(item, idx);
@@ -325,6 +411,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     if (item.kind === "copyable") return renderCopyable(item, idx);
     if (item.kind === "section") return renderSection(item, idx);
     if (item.kind === "branch") return renderBranch(item, idx);
+    if (item.kind === "editable") return renderEditable(item, idx);
     return renderSettingRow(item, idx);
   };
 
@@ -404,9 +491,18 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
 
         {/* Context-aware footer */}
         <DialogFooter>
-          <KeyHint key="enter" desc={` ${footerVerb()}  `} />
-          <KeyHint key="←/→" desc=" switch tab  " />
-          <KeyHint key="↑/↓" desc=" navigate" />
+          {editingIdx() != null ? (
+            <>
+              <KeyHint key="enter" desc=" confirm  " />
+              <KeyHint key="esc" desc=" cancel" />
+            </>
+          ) : (
+            <>
+              <KeyHint key="enter" desc={` ${footerVerb()}  `} />
+              <KeyHint key="←/→" desc=" switch tab  " />
+              <KeyHint key="↑/↓" desc=" navigate" />
+            </>
+          )}
         </DialogFooter>
       </box>
     </DialogOverlay>

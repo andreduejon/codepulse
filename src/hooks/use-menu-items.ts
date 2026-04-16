@@ -35,7 +35,13 @@ export type SettingItem =
   | { kind: "action"; label: string; hotkey?: string; get?: () => string; run: () => void; disabled?: () => boolean }
   | { kind: "section"; label: string; count: number; collapsed: () => boolean; toggle: () => void }
   | { kind: "badge"; name: string; colorIndex: number; dimmed?: boolean }
-  | { kind: "branch"; name: string; run: () => void; upstream?: string; ahead?: number; behind?: number };
+  | { kind: "branch"; name: string; run: () => void; upstream?: string; ahead?: number; behind?: number }
+  | {
+      kind: "editable";
+      label: string;
+      get: () => string;
+      set: (v: string) => void;
+    };
 
 /** Width of the info label column (characters). */
 export const INFO_LABEL_WIDTH = 12;
@@ -357,9 +363,16 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
         get: () => repo?.hostname ?? "(not detected)",
       },
       {
-        kind: "info",
+        kind: "editable",
         label: "Token env",
         get: () => ghCfg.tokenEnvVar,
+        set: (v: string) => {
+          const trimmed = v.trim();
+          if (!trimmed) return;
+          const newCfg = { ...ghCfg, tokenEnvVar: trimmed };
+          opts.onGithubConfigChange?.(newCfg);
+          persistFullConfig({ providers: { github: newCfg } });
+        },
       },
       {
         kind: "info",
@@ -411,6 +424,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
         item.kind === "branch" ||
         item.kind === "section" ||
         item.kind === "copyable" ||
+        item.kind === "editable" ||
         (item.kind === "action" && !item.disabled?.())
           ? i
           : -1,
@@ -471,6 +485,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
     if (item.kind === "action") return item.get ? item.get() : "";
     if (item.kind === "info") return item.get();
     if (item.kind === "copyable") return item.get();
+    if (item.kind === "editable") return item.get();
     if (item.kind === "toggle") return item.get() ? "on" : "off";
     return item.get();
   };
@@ -495,6 +510,8 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
         return item.collapsed() ? "expand" : "collapse";
       case "branch":
         return "view";
+      case "editable":
+        return "edit";
       default:
         return "select";
     }
