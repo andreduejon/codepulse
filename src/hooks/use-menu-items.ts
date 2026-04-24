@@ -6,13 +6,13 @@ import { writeConfig } from "../config";
 import { AUTO_REFRESH_MS, AUTO_REFRESH_OPTIONS, MAX_COUNT_OPTIONS, MS_TO_LABEL } from "../constants";
 import { DEFAULT_AUTO_REFRESH_INTERVAL, useAppState } from "../context/state";
 import { themes } from "../context/theme";
-import { getTokenSource, parseGitHubRemote } from "../providers/github-actions/api";
+import { getTokenSource } from "../providers/github-actions/api";
 
 type MenuTab = "repository" | "branch" | "providers";
 
 export type SettingItem =
   | { kind: "header"; label: string }
-  | { kind: "info"; label: string; get: () => string }
+  | { kind: "info"; label: string; get: () => string; valid?: () => boolean }
   | { kind: "copyable"; label: string; get: () => string }
   | {
       kind: "toggle";
@@ -41,6 +41,7 @@ export type SettingItem =
       label: string;
       get: () => string;
       set: (v: string) => void;
+      valid?: () => boolean;
     };
 
 /** Width of the info label column (characters). */
@@ -68,7 +69,7 @@ export interface MenuItemsOptions {
   /** Open the project selector to switch repos. */
   onSwitchRepo?: () => void;
   /** Current GitHub provider config (tokenEnvVar, enabled). */
-  githubConfig?: { enabled: boolean; tokenEnvVar: string };
+  githubConfig?: Accessor<{ enabled: boolean; tokenEnvVar: string } | undefined>;
   /** Callback to update GitHub provider config. */
   onGithubConfigChange?: (cfg: { enabled: boolean; tokenEnvVar: string }) => void;
 }
@@ -104,11 +105,13 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
       autoRefreshSeconds: state.autoRefreshInterval() / 1000,
       ...overrides,
     };
-    if (opts.githubConfig) {
+    if (!overrides?.providers && opts.githubConfig?.()) {
+      const ghCfg = opts.githubConfig();
+      if (!ghCfg) return;
       cfg.providers = {
         github: {
-          enabled: opts.githubConfig.enabled,
-          tokenEnvVar: opts.githubConfig.tokenEnvVar,
+          enabled: ghCfg.enabled,
+          tokenEnvVar: ghCfg.tokenEnvVar,
         },
       };
     }
@@ -199,7 +202,8 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
       items.push({
         kind: "info",
         label: "Config file",
-        get: () => `${shortenHome(ci.globalPath)}  ${ci.globalExists ? "(found)" : "(not found)"}`,
+        get: () => shortenHome(ci.globalPath),
+        valid: () => ci.globalExists,
       });
     }
 
@@ -339,9 +343,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
 
   // ── Provider tab items ────────────────────────────────────────────
   const providerItems = createMemo<SettingItem[]>(() => {
-    const ghCfg = opts.githubConfig ?? { enabled: false, tokenEnvVar: "GITHUB_TOKEN" };
-    const remoteUrl = state.remoteUrl();
-    const repo = parseGitHubRemote(remoteUrl);
+    const ghCfg = opts.githubConfig?.() ?? { enabled: false, tokenEnvVar: "GITHUB_TOKEN" };
     const tokenSource = getTokenSource(ghCfg.tokenEnvVar);
 
     const items: SettingItem[] = [
@@ -358,13 +360,8 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
         },
       },
       {
-        kind: "info",
-        label: "Host",
-        get: () => repo?.hostname ?? "(not detected)",
-      },
-      {
         kind: "editable",
-        label: "Token env",
+        label: "Token",
         get: () => ghCfg.tokenEnvVar,
         set: (v: string) => {
           const trimmed = v.trim();
@@ -373,16 +370,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
           opts.onGithubConfigChange?.(newCfg);
           persistFullConfig({ providers: { github: newCfg } });
         },
-      },
-      {
-        kind: "info",
-        label: "Token",
-        get: () => (tokenSource === "env" ? "found (env)" : "not found"),
-      },
-      {
-        kind: "info",
-        label: "Repository",
-        get: () => (repo ? `${repo.owner}/${repo.repo}` : "(not detected)"),
+        valid: () => tokenSource === "env",
       },
     ];
 

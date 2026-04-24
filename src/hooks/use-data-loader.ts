@@ -257,13 +257,16 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
 
   // ── Initial load on mount ─────────────────────────────────────────
   onMount(() => {
-    loadData(initialBranch);
+    void (async () => {
+      await loadData(initialBranch);
+      await handleFetch();
+    })();
     // Load initial fetch time
     getLastFetchTime(repoPath).then(time => actions.setLastFetchTime(time));
   });
 
   // ── Auto-refresh timer ────────────────────────────────────────────
-  // Re-reads local git data at the configured interval.
+  // Fetches remote refs and re-reads local git data at the configured interval.
   let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
   createEffect(() => {
     const interval = state.autoRefreshInterval();
@@ -273,8 +276,7 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
     }
     if (interval > 0) {
       autoRefreshTimer = setInterval(() => {
-        const stickyHash = state.selectedCommit()?.hash;
-        loadData(undefined, stickyHash, true);
+        void handleFetch();
       }, interval);
     }
   });

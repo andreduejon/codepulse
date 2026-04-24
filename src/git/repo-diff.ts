@@ -1,9 +1,40 @@
 import { join } from "node:path";
 import { runGit } from "./repo-git";
-import type { BlameLine, DiffSource, FileDiff } from "./types";
+import type { BlameLine, DiffSource, FileContent, FileDiff } from "./types";
 
 /** Maximum number of diff lines before truncation. */
 const MAX_DIFF_LINES = 5000;
+
+function bytesAreBinary(view: Uint8Array): boolean {
+  const checkLen = Math.min(view.length, 8192);
+  for (let i = 0; i < checkLen; i++) {
+    if (view[i] === 0) return true;
+  }
+  return false;
+}
+
+function textToFileContent(filePath: string, content: string): FileContent {
+  const lines = content.split("\n");
+  if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+  const truncated = lines.length > MAX_DIFF_LINES;
+  return {
+    filePath,
+    lines: truncated ? lines.slice(0, MAX_DIFF_LINES) : lines,
+    isBinary: false,
+    ...(truncated ? { truncated: true } : {}),
+  };
+}
+
+async function readWorktreeFile(repoPath: string, filePath: string): Promise<FileContent> {
+  const fullPath = join(repoPath, filePath);
+  const file = Bun.file(fullPath);
+  const exists = await file.exists();
+  if (!exists) return { filePath, lines: [], isBinary: false };
+  const bytes = await file.arrayBuffer();
+  const view = new Uint8Array(bytes);
+  if (bytesAreBinary(view)) return { filePath, lines: [], isBinary: true };
+  return textToFileContent(filePath, new TextDecoder().decode(view));
+}
 
 /**
  * @internal Exported for testing.
@@ -216,16 +247,9 @@ async function getUntrackedFileDiff(repoPath: string, filePath: string): Promise
     const exists = await file.exists();
     if (!exists) return { filePath, hunks: [], isBinary: false };
 
-    // Check if binary by looking at the first chunk
     const bytes = await file.arrayBuffer();
     const view = new Uint8Array(bytes);
-    // Simple binary detection: check for null bytes in the first 8KB
-    const checkLen = Math.min(view.length, 8192);
-    for (let i = 0; i < checkLen; i++) {
-      if (view[i] === 0) {
-        return { filePath, hunks: [], isBinary: true };
-      }
-    }
+    if (bytesAreBinary(view)) return { filePath, hunks: [], isBinary: true };
 
     const content = new TextDecoder().decode(view);
     const lines = content.split("\n");
@@ -261,6 +285,47 @@ async function getUntrackedFileDiff(repoPath: string, filePath: string): Promise
   } catch {
     return { filePath, hunks: [], isBinary: false };
   }
+}
+
+/**
+ * Fetch full-file content for a diff target.
+ * Uses the target/right side of the diff when possible; deleted commit files
+ * fall back to the first parent so the removed file can still be inspected.
+ */
+export async function getFileContent(
+  repoPath: string,
+  commitHash: string,
+  filePath: string,
+  source: DiffSource,
+  signal?: AbortSignal,
+): Promise<FileContent> {
+  if (source === "unstaged" || source === "untracked") return readWorktreeFile(repoPath, filePath);
+
+  const specs = (() => {
+    switch (source) {
+      case "commit":
+        return [`${commitHash}:${filePath}`, `${commitHash}^:${filePath}`];
+      case "stash":
+        return [`${commitHash}:${filePath}`, `${commitHash}^1:${filePath}`];
+      case "staged":
+        return [`:${filePath}`];
+      case "unstaged":
+      case "untracked":
+        return [];
+    }
+  })();
+
+  for (const spec of specs) {
+    const { stdout, exitCode, stderr } = await runGit(repoPath, ["show", spec], signal);
+    if (exitCode === 0) {
+      // Git emits this for binary blobs through stdout; keep behavior conservative.
+      if (stdout.includes("\0")) return { filePath, lines: [], isBinary: true };
+      return textToFileContent(filePath, stdout);
+    }
+    if (stderr.includes("exists on disk, but not in")) continue;
+  }
+
+  return { filePath, lines: [], isBinary: false };
 }
 
 /**

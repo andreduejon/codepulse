@@ -1,6 +1,7 @@
 import { type Accessor, createContext, createMemo, createSignal, useContext } from "solid-js";
 import { DEFAULT_MAX_COUNT } from "../constants";
 import type { Branch, Commit, CommitDetail, GraphRow, TagInfo, UncommittedDetail } from "../git/types";
+import type { KeyboardScope } from "../keyboard/scope";
 import type { GraphBadge, ProviderView } from "../providers/provider";
 import { nextProviderView } from "../providers/provider";
 import { matchCommit, parseSearchQuery } from "../search";
@@ -104,6 +105,8 @@ export interface AppState {
    * any other string = last error message (shown in footer).
    */
   providerStatus: Accessor<string | null>;
+  /** Optional scope override for modal sub-modes (e.g. menu token edit). */
+  keyboardScopeOverride: Accessor<KeyboardScope | null>;
 }
 
 export interface AppActions {
@@ -148,6 +151,7 @@ export interface AppActions {
   setProviderStatus: (status: string | null) => void;
   /** Advance to the next available provider view (Tab key cycling). */
   cycleProviderView: () => void;
+  setKeyboardScopeOverride: (scope: KeyboardScope | null) => void;
 }
 
 const AppStateContext = createContext<{ state: AppState; actions: AppActions }>();
@@ -203,6 +207,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
   const [activeProviderView, setActiveProviderView] = createSignal<ProviderView>("git");
   const [graphBadges, setGraphBadges] = createSignal<Map<string, GraphBadge>>(new Map());
   const [providerStatus, setProviderStatus] = createSignal<string | null>(null);
+  const [keyboardScopeOverride, setKeyboardScopeOverride] = createSignal<KeyboardScope | null>(null);
 
   // ── Search memo ───────────────────────────────────────────────────
   // Memoize parsed search separately so regex compilation only happens when
@@ -333,6 +338,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
     activeProviderView,
     graphBadges,
     providerStatus,
+    keyboardScopeOverride,
   };
 
   const actions: AppActions = {
@@ -373,6 +379,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
     setActiveProviderView,
     setGraphBadges,
     setProviderStatus,
+    setKeyboardScopeOverride,
     cycleProviderView: () => setActiveProviderView(nextProviderView(activeProviderView())),
   };
 

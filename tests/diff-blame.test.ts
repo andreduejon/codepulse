@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   buildDisplayLines,
+  buildFileDisplayLines,
   buildGutter,
   buildRowOffsets,
   computeDiffStats,
@@ -295,6 +296,53 @@ index abc1234..0000000
     const stdout = `diff --git a/small.txt b/small.txt\n--- a/small.txt\n+++ b/small.txt\n@@ -1,1 +1,2 @@\n context\n+added\n`;
     const result = parseUnifiedDiff(stdout, "small.txt");
     expect(result.truncated).toBeUndefined();
+  });
+});
+
+describe("buildFileDisplayLines", () => {
+  test("maps full file lines to neutral context display lines", () => {
+    const result = buildFileDisplayLines({ filePath: "f.ts", lines: ["one", "two"], isBinary: false });
+
+    expect(result).toEqual([
+      { kind: "spacer", content: "" },
+      { kind: "context", content: "one", newLineNo: 1 },
+      { kind: "context", content: "two", newLineNo: 2 },
+      { kind: "spacer", content: "" },
+    ]);
+  });
+
+  test("overlays diff styling while adding unchanged rows between hunks", () => {
+    const result = buildFileDisplayLines(
+      { filePath: "f.ts", lines: ["before", "same", "new", "after"], isBinary: false },
+      {
+        filePath: "f.ts",
+        isBinary: false,
+        hunks: [
+          {
+            oldStart: 2,
+            oldCount: 2,
+            newStart: 2,
+            newCount: 2,
+            header: "@@ -2,2 +2,2 @@",
+            lines: [
+              { type: "context", content: "same", oldLineNo: 2, newLineNo: 2 },
+              { type: "delete", content: "old", oldLineNo: 3 },
+              { type: "add", content: "new", newLineNo: 3 },
+            ],
+          },
+        ],
+      },
+    );
+
+    expect(result).toEqual([
+      { kind: "spacer", content: "" },
+      { kind: "context", content: "before", newLineNo: 1 },
+      { kind: "context", content: "same", oldLineNo: 2, newLineNo: 2 },
+      { kind: "delete", content: "old", oldLineNo: 3, newLineNo: undefined },
+      { kind: "add", content: "new", oldLineNo: undefined, newLineNo: 3 },
+      { kind: "context", content: "after", newLineNo: 4 },
+      { kind: "spacer", content: "" },
+    ]);
   });
 });
 

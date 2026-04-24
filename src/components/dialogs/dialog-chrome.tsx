@@ -58,12 +58,13 @@ export function DialogTitleBar(props: Readonly<{ title: string | JSX.Element }>)
  * Shared footer for dialogs: right-aligned keybind hints preceded by spacers.
  * Wrap keybind hint pairs (key + description `<text>` elements) as children.
  */
-export function DialogFooter(props: Readonly<{ children: JSX.Element }>) {
+export function DialogFooter(props: Readonly<{ children: JSX.Element; left?: JSX.Element }>) {
   return (
     <>
       <box height={1} flexShrink={0} />
       <box height={1} flexShrink={0} />
       <box flexDirection="row" width="100%" paddingX={4} flexShrink={0}>
+        {props.left}
         <box flexGrow={1} />
         {props.children}
       </box>

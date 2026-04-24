@@ -3,6 +3,7 @@ import { useKeyboard } from "@opentui/solid";
 import type { Accessor } from "solid-js";
 import type { DetailNavRef } from "../components/detail-types";
 import type { AppActions, AppState } from "../context/state";
+import { routeGlobalKey } from "../keyboard/router";
 import { createCloseOneCascadeStep } from "./handle-cascade-close";
 import {
   createCommandBarHelpers,
@@ -150,6 +151,12 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
   useKeyboard(e => {
     if (e.eventType === "release") return;
 
+    const route = routeGlobalKey({ dialog: dialog(), overrideScope: state.keyboardScopeOverride() }, e.name);
+    if (!route.runAppHandler) {
+      if (route.runCascadeClose) closeOneCascadeStep();
+      return;
+    }
+
     // ── Shift+←/→ mode cycling ────────────────────────────────────────────────
     if (handleModeCycling(e, cbOpts, helpers)) return;
 
@@ -184,9 +191,6 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
 
     // All other keys while search bar is focused: let the input handle them.
     if (searchFocused()) return;
-
-    // If a non-detail dialog is open, only Escape acts (handled above)
-    if (dialog() && dialog() !== "detail") return;
 
     // ── Global single-key shortcuts ─────────────────────────────────────────
     if (e.name === "tab") {

@@ -36,58 +36,56 @@ interface DiffLineRowProps {
 }
 
 export function DiffLineRow(props: Readonly<DiffLineRowProps>) {
-  const { line, showBlame, blameAnnotation, maxOldLineNo, maxNewLineNo, dialogWidth, t } = props;
-
   const colors = {
-    diffAdded: t.diffAdded,
-    diffRemoved: t.diffRemoved,
-    accent: t.accent,
-    foreground: t.foreground,
-    diffAddedBg: t.diffAddedBg,
-    diffRemovedBg: t.diffRemovedBg,
+    diffAdded: props.t.diffAdded,
+    diffRemoved: props.t.diffRemoved,
+    accent: props.t.accent,
+    foreground: props.t.foreground,
+    diffAddedBg: props.t.diffAddedBg,
+    diffRemovedBg: props.t.diffRemovedBg,
   };
 
-  if (line.kind === "spacer") {
-    const ruleWidth = dialogWidth - 10;
+  if (props.line.kind === "spacer") {
+    const ruleWidth = props.dialogWidth - 10;
     return (
-      <text wrapMode="none" fg={t.border}>
+      <text wrapMode="none" fg={props.t.border}>
         {"─".repeat(ruleWidth)}
       </text>
     );
   }
 
-  if (line.kind === "hunk-header") {
-    const hunkLine = line as DisplayLine;
+  if (props.line.kind === "hunk-header") {
+    const hunkLine = props.line as DisplayLine;
     return (
       <box flexDirection="row" width="100%">
-        <Show when={showBlame}>
-          <box flexShrink={0} width={BLAME_COL_WIDTH} backgroundColor={t.backgroundElement}>
-            <text wrapMode="none" fg={t.foregroundMuted}>
-              {blameAnnotation(hunkLine)}
+        <Show when={props.showBlame}>
+          <box flexShrink={0} width={BLAME_COL_WIDTH} backgroundColor={props.t.backgroundElement}>
+            <text wrapMode="none" fg={props.t.foregroundMuted}>
+              {props.blameAnnotation(hunkLine)}
             </text>
           </box>
         </Show>
-        <text wrapMode="none" fg={t.accent}>
+        <text wrapMode="none" fg={props.t.accent}>
           <strong>{formatHunkHeader(hunkLine.content)}</strong>
         </text>
       </box>
     );
   }
 
-  if (line.kind === "continuation") {
-    const contLine = line as { kind: "continuation"; content: string; originalKind: DisplayLineKind };
-    const gutterSpaces = " ".repeat(gutterWidth(maxOldLineNo) + 1 + gutterWidth(maxNewLineNo));
+  if (props.line.kind === "continuation") {
+    const contLine = props.line as { kind: "continuation"; content: string; originalKind: DisplayLineKind };
+    const gutterSpaces = " ".repeat(gutterWidth(props.maxOldLineNo) + 1 + gutterWidth(props.maxNewLineNo));
     const origKind = contLine.originalKind;
     return (
       <box flexDirection="row" width="100%" backgroundColor={diffLineBg(origKind, colors)}>
-        <Show when={showBlame}>
-          <box flexShrink={0} width={BLAME_COL_WIDTH} backgroundColor={t.backgroundElement}>
-            <text wrapMode="none" fg={t.foregroundMuted}>
+        <Show when={props.showBlame}>
+          <box flexShrink={0} width={BLAME_COL_WIDTH} backgroundColor={props.t.backgroundElement}>
+            <text wrapMode="none" fg={props.t.foregroundMuted}>
               {" ".repeat(BLAME_COL_WIDTH)}
             </text>
           </box>
         </Show>
-        <text flexShrink={0} wrapMode="none" fg={t.foregroundMuted}>
+        <text flexShrink={0} wrapMode="none" fg={props.t.foregroundMuted}>
           {gutterSpaces}
         </text>
         <text flexShrink={0} wrapMode="none" fg={diffLineColor(origKind, colors)}>
@@ -101,20 +99,20 @@ export function DiffLineRow(props: Readonly<DiffLineRowProps>) {
   }
 
   // Regular line: add / delete / context
-  const regularLine = line as DisplayLine;
+  const regularLine = props.line as DisplayLine;
   const prefix = diffLinePrefix(regularLine.kind);
 
   return (
     <box flexDirection="row" width="100%" backgroundColor={diffLineBg(regularLine.kind, colors)}>
-      <Show when={showBlame}>
-        <box flexShrink={0} width={BLAME_COL_WIDTH} backgroundColor={t.backgroundElement}>
-          <text wrapMode="none" fg={t.foregroundMuted}>
-            {blameAnnotation(regularLine)}
+      <Show when={props.showBlame}>
+        <box flexShrink={0} width={BLAME_COL_WIDTH} backgroundColor={props.t.backgroundElement}>
+          <text wrapMode="none" fg={props.t.foregroundMuted}>
+            {props.blameAnnotation(regularLine)}
           </text>
         </box>
       </Show>
-      <text flexShrink={0} wrapMode="none" fg={t.foregroundMuted}>
-        {buildGutter(regularLine, gutterWidth(maxOldLineNo), gutterWidth(maxNewLineNo))}
+      <text flexShrink={0} wrapMode="none" fg={props.t.foregroundMuted}>
+        {buildGutter(regularLine, gutterWidth(props.maxOldLineNo), gutterWidth(props.maxNewLineNo))}
       </text>
       <text flexShrink={0} wrapMode="none" fg={diffLineColor(regularLine.kind, colors)}>
         {`  ${prefix} `}

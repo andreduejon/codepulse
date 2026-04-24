@@ -1,22 +1,26 @@
 import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useTerminalDimensions } from "@opentui/solid";
-import { createEffect, createSignal, For, type JSX } from "solid-js";
+import { createEffect, createSignal, For, type JSX, onCleanup } from "solid-js";
 import type { ConfigInfo } from "../../config";
 import { SHIFT_JUMP } from "../../constants";
+import { useAppState } from "../../context/state";
 import { useTheme } from "../../context/theme";
 import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useClipboard } from "../../hooks/use-clipboard";
-import { COPYABLE_VISIBLE_WIDTH, INFO_LABEL_WIDTH, type SettingItem, useMenuItems } from "../../hooks/use-menu-items";
+import { COPYABLE_VISIBLE_WIDTH, type SettingItem, useMenuItems } from "../../hooks/use-menu-items";
 import { scrollElementIntoView } from "../../utils/scroll";
 import Badge from "../badge";
 import { KeyHint } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
+import { type MenuKeyAction, routeMenuKey } from "./menu-keymap";
 
 type MenuTab = "repository" | "branch" | "providers";
 
 /** Column widths for the menu item value and hotkey display columns. */
-const VALUE_COL_WIDTH = 22;
+const VALUE_COL_WIDTH = 34;
 const HOTKEY_COL_WIDTH = 9;
+
+const clipLeft = (value: string, width: number) => (value.length <= width ? value : `…${value.slice(-(width - 1))}`);
 
 interface MenuDialogProps {
   onClose: () => void;
@@ -39,6 +43,7 @@ interface MenuDialogProps {
 export const [lastMenuTab, setLastMenuTab] = createSignal<MenuTab>("repository");
 
 export default function MenuDialog(props: Readonly<MenuDialogProps>) {
+  const { actions } = useAppState();
   const { theme, themeName, setTheme } = useTheme();
   const t = () => theme();
   const dimensions = useTerminalDimensions();
@@ -76,7 +81,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     onClose: () => props.onClose(),
     configInfo: props.configInfo,
     onSwitchRepo: props.onSwitchRepo,
-    githubConfig: props.githubConfig,
+    githubConfig: () => props.githubConfig,
     onGithubConfigChange: props.onGithubConfigChange,
   });
 
@@ -92,83 +97,95 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     return text.substring(off, off + COPYABLE_VISIBLE_WIDTH);
   };
 
-  // ── Edit mode (for editable items) ───────────────────────────────
+  // ── Token edit mode (native OpenTUI input only while explicitly editing) ──
   const [editingIdx, setEditingIdx] = createSignal<number | null>(null);
-  const [editValue, setEditValue] = createSignal("");
+  const [editDraft, setEditDraft] = createSignal("");
 
-  const startEditing = (idx: number, currentValue: string) => {
+  createEffect(() => {
+    actions.setKeyboardScopeOverride(editingIdx() == null ? null : "menu-token-edit");
+  });
+
+  onCleanup(() => actions.setKeyboardScopeOverride(null));
+
+  const startEdit = () => {
+    const idx = selectedItemIndex();
+    const item = activeItems()[idx];
+    if (idx == null || item?.kind !== "editable") return;
     setEditingIdx(idx);
-    setEditValue(currentValue);
+    setEditDraft(item.get());
   };
 
-  const confirmEdit = () => {
+  const saveEdit = () => {
     const idx = editingIdx();
     if (idx == null) return;
     const item = activeItems()[idx];
-    if (item?.kind === "editable") item.set(editValue());
+    if (item?.kind === "editable") item.set(editDraft());
     setEditingIdx(null);
-    setEditValue("");
+    setEditDraft("");
   };
 
   const cancelEdit = () => {
     setEditingIdx(null);
-    setEditValue("");
+    setEditDraft("");
   };
 
   // ── Keyboard ──────────────────────────────────────────────────────
   const TAB_ORDER: MenuTab[] = ["repository", "branch", "providers"];
-  useKeyboard(e => {
-    if (e.eventType === "release") return;
-
-    // Edit mode intercept — capture all input for the editable field
-    if (editingIdx() != null) {
-      switch (e.name) {
-        case "return":
-          confirmEdit();
-          break;
-        case "escape":
-          cancelEdit();
-          break;
-        case "backspace":
-          setEditValue(v => v.slice(0, -1));
-          break;
-        default:
-          // Append printable characters
-          if (e.sequence && e.sequence.length === 1 && e.sequence.charCodeAt(0) >= 32) {
-            setEditValue(v => v + e.sequence);
-          }
-      }
-      return;
-    }
-
-    switch (e.name) {
-      case "down":
-        moveCursor(e.shift ? SHIFT_JUMP : 1);
+  const runMenuAction = (action: MenuKeyAction, shift?: boolean) => {
+    switch (action) {
+      case "close":
+        props.onClose();
         break;
-      case "up":
-        moveCursor(e.shift ? -SHIFT_JUMP : -1);
+      case "move-down":
+        if (editingIdx() != null) saveEdit();
+        moveCursor(shift ? SHIFT_JUMP : 1);
         break;
-      case "return": {
-        const idx = selectedItemIndex();
-        if (idx == null) break;
-        const item = activeItems()[idx];
-        if (item?.kind === "editable") {
-          startEditing(idx, item.get());
-        } else {
-          activateItem();
-        }
+      case "move-up":
+        if (editingIdx() != null) saveEdit();
+        moveCursor(shift ? -SHIFT_JUMP : -1);
         break;
-      }
-      case "left": {
+      case "activate":
+        activateItem();
+        break;
+      case "start-edit":
+        startEdit();
+        break;
+      case "save-edit":
+        saveEdit();
+        break;
+      case "cancel-edit":
+        cancelEdit();
+        break;
+      case "prev-tab": {
         const idx = TAB_ORDER.indexOf(activeTab());
         if (idx > 0) setActiveTab(TAB_ORDER[idx - 1]);
         break;
       }
-      case "right": {
+      case "next-tab": {
         const idx = TAB_ORDER.indexOf(activeTab());
         if (idx < TAB_ORDER.length - 1) setActiveTab(TAB_ORDER[idx + 1]);
         break;
       }
+      default:
+    }
+  };
+
+  useKeyboard(e => {
+    if (e.eventType === "release") return;
+
+    const idx = selectedItemIndex();
+    const selected = activeItems()[idx];
+    const decision = routeMenuKey({
+      mode: editingIdx() == null ? "normal" : "token-edit",
+      keyName: e.name,
+      shift: e.shift,
+      selectedKind: selected?.kind === "editable" ? "editable" : selected ? "other" : null,
+    });
+
+    if (decision.consume) {
+      e.preventDefault();
+      e.stopPropagation();
+      runMenuAction(decision.action, e.shift);
     }
   });
 
@@ -207,23 +224,40 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     </box>
   );
 
-  const renderInfo = (item: Extract<SettingItem, { kind: "info" }>, idx: number) => (
-    <box
-      ref={(el: Renderable) => {
-        itemRefs[idx] = el;
-      }}
-      flexDirection="row"
-      width="100%"
-      paddingX={4}
-    >
-      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-        {item.label.padEnd(INFO_LABEL_WIDTH)}
-      </text>
-      <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
-        {item.get()}
-      </text>
-    </box>
-  );
+  const renderInfo = (item: Extract<SettingItem, { kind: "info" }>, idx: number) => {
+    const hasStatus = () => item.valid != null;
+    const isValid = () => item.valid?.() ?? false;
+    return (
+      <box
+        ref={(el: Renderable) => {
+          itemRefs[idx] = el;
+        }}
+        flexDirection="row"
+        width="100%"
+        paddingX={4}
+      >
+        <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
+          {item.label}
+        </text>
+        {hasStatus() ? (
+          <>
+            <box width={VALUE_COL_WIDTH} flexShrink={0} flexDirection="row" justifyContent="flex-end">
+              <text wrapMode="none" truncate fg={t().foregroundMuted}>
+                {clipLeft(item.get(), VALUE_COL_WIDTH)}
+              </text>
+            </box>
+            <text flexShrink={0} width={HOTKEY_COL_WIDTH} wrapMode="none" fg={isValid() ? t().success : t().error}>
+              {(isValid() ? "✓" : "✕").padStart(HOTKEY_COL_WIDTH)}
+            </text>
+          </>
+        ) : (
+          <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
+            {item.get()}
+          </text>
+        )}
+      </box>
+    );
+  };
 
   const renderBadge = (item: Extract<SettingItem, { kind: "badge" }>, idx: number) => {
     return (
@@ -372,6 +406,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   const renderEditable = (item: Extract<SettingItem, { kind: "editable" }>, idx: number) => {
     const isSel = () => selectedItemIndex() === idx;
     const isEditing = () => editingIdx() === idx;
+    const valid = () => item.valid?.();
     return (
       <box
         ref={(el: Renderable) => {
@@ -382,23 +417,30 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
         paddingX={4}
         backgroundColor={isEditing() ? t().backgroundElementActive : isSel() ? t().backgroundElement : undefined}
       >
-        <text flexShrink={0} wrapMode="none" fg={isSel() ? t().accent : t().foregroundMuted}>
-          {item.label.padEnd(INFO_LABEL_WIDTH)}
-        </text>
-        <text
-          flexGrow={1}
-          flexShrink={1}
-          wrapMode="none"
-          truncate
-          fg={isEditing() ? t().foreground : isSel() ? t().accent : t().foregroundMuted}
-        >
-          {isEditing() ? `${editValue()}▌` : item.get()}
+        <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={isSel() ? t().accent : t().foregroundMuted}>
+          {item.label}
         </text>
         {isEditing() ? (
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {" Esc cancel"}
+          <input
+            focused
+            width={VALUE_COL_WIDTH + HOTKEY_COL_WIDTH}
+            value={editDraft()}
+            onInput={setEditDraft}
+            fg={t().foreground}
+            backgroundColor={t().backgroundElementActive}
+          />
+        ) : (
+          <box width={VALUE_COL_WIDTH} flexShrink={0} flexDirection="row" justifyContent="flex-end">
+            <text wrapMode="none" truncate fg={isSel() ? t().accent : t().foregroundMuted}>
+              {clipLeft(item.get(), VALUE_COL_WIDTH)}
+            </text>
+          </box>
+        )}
+        {isEditing() ? null : (
+          <text flexShrink={0} width={HOTKEY_COL_WIDTH} wrapMode="none" fg={valid() ? t().success : t().error}>
+            {(valid() ? "✓" : "✕").padStart(HOTKEY_COL_WIDTH)}
           </text>
-        ) : null}
+        )}
       </box>
     );
   };
@@ -491,16 +533,17 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
 
         {/* Context-aware footer */}
         <DialogFooter>
-          {editingIdx() != null ? (
+          {editingIdx() == null ? (
             <>
-              <KeyHint key="enter" desc=" confirm  " />
-              <KeyHint key="esc" desc=" cancel" />
+              <KeyHint key="enter" desc={` ${footerVerb()}  `} />
+              <KeyHint key="esc" desc=" close  " />
+              <KeyHint key="←/→" desc=" switch tab  " />
+              <KeyHint key="↑/↓" desc=" navigate" />
             </>
           ) : (
             <>
-              <KeyHint key="enter" desc={` ${footerVerb()}  `} />
-              <KeyHint key="←/→" desc=" switch tab  " />
-              <KeyHint key="↑/↓" desc=" navigate" />
+              <KeyHint key="enter" desc=" save  " />
+              <KeyHint key="esc" desc=" cancel" />
             </>
           )}
         </DialogFooter>

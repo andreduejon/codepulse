@@ -4,7 +4,7 @@ import { runGit } from "./repo-git";
 import { parseDiffTreeOutput } from "./repo-status";
 import type { Branch, Commit, CommitDetail, FileChange, RefInfo, TagInfo } from "./types";
 
-export { getFileBlame, getFileDiff, parseBlameOutput, parseUnifiedDiff } from "./repo-diff";
+export { getFileBlame, getFileContent, getFileDiff, parseBlameOutput, parseUnifiedDiff } from "./repo-diff";
 export { runGit } from "./repo-git";
 export type { WorkingTreeStatus } from "./repo-status";
 export {
