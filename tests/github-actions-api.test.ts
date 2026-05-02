@@ -480,8 +480,22 @@ function makeApiJob(overrides: Partial<GitHubApiJob> = {}): GitHubApiJob {
     started_at: "2024-01-01T00:00:00Z",
     completed_at: "2024-01-01T00:01:00Z",
     steps: [
-      { name: "Checkout", status: "completed", conclusion: "success", number: 1 },
-      { name: "Build", status: "completed", conclusion: "success", number: 2 },
+      {
+        name: "Checkout",
+        status: "completed",
+        conclusion: "success",
+        number: 1,
+        started_at: "2024-01-01T00:00:00Z",
+        completed_at: "2024-01-01T00:00:10Z",
+      },
+      {
+        name: "Build",
+        status: "completed",
+        conclusion: "success",
+        number: 2,
+        started_at: "2024-01-01T00:00:10Z",
+        completed_at: "2024-01-01T00:01:00Z",
+      },
     ],
     ...overrides,
   };

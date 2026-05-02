@@ -438,6 +438,14 @@ export async function getCurrentBranch(repoPath: string, signal?: AbortSignal): 
   return stdout.trim();
 }
 
+/** Resolve any path inside a repo to its git top-level directory. */
+export async function getRepoRoot(repoPath: string, signal?: AbortSignal): Promise<string | null> {
+  const { stdout, exitCode } = await runGit(repoPath, ["rev-parse", "--show-toplevel"], signal);
+  if (exitCode !== 0) return null;
+  const root = stdout.trim();
+  return root || null;
+}
+
 export async function getRemoteUrl(repoPath: string, signal?: AbortSignal): Promise<string> {
   try {
     // Try "origin" first (most common), then fall back to the first available remote

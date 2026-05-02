@@ -309,9 +309,6 @@ export async function getFileContent(
         return [`${commitHash}:${filePath}`, `${commitHash}^1:${filePath}`];
       case "staged":
         return [`:${filePath}`];
-      case "unstaged":
-      case "untracked":
-        return [];
     }
   })();
 
