@@ -49,6 +49,12 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   const dimensions = useTerminalDimensions();
   const dialogWidth = () => 72;
   const dialogHeight = () => Math.min(Math.floor(dimensions().height * 0.7), dimensions().height - 8);
+  const tabBarInnerWidth = () => dialogWidth() - 2 - 8;
+  const tabWidth = (idx: number) => {
+    const base = Math.floor(tabBarInnerWidth() / 3);
+    const remainder = tabBarInnerWidth() % 3;
+    return base + (idx < remainder ? 1 : 0);
+  };
 
   // ── Tab state ─────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = createSignal<MenuTab>(lastMenuTab());
@@ -109,8 +115,9 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
 
   const startEdit = () => {
     const idx = selectedItemIndex();
+    if (idx == null) return;
     const item = activeItems()[idx];
-    if (idx == null || item?.kind !== "editable") return;
+    if (item?.kind !== "editable") return;
     setEditingIdx(idx);
     setEditDraft(item.get());
   };
@@ -174,6 +181,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     if (e.eventType === "release") return;
 
     const idx = selectedItemIndex();
+    if (idx == null) return;
     const selected = activeItems()[idx];
     const decision = routeMenuKey({
       mode: editingIdx() == null ? "normal" : "token-edit",
@@ -218,7 +226,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
       {idx > 0 ? <box height={1} /> : null}
       <text wrapMode="none" fg={t().accent}>
         <strong>
-          <span fg={t().accent}>{item.label}</span>
+          <span>{item.label}</span>
         </strong>
       </text>
     </box>
@@ -315,7 +323,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
         <box flexDirection="row" width="100%" backgroundColor={isSel() ? t().backgroundElement : undefined}>
           <text flexShrink={0} wrapMode="none" fg={t().accent}>
             <strong>
-              <span fg={t().accent}>{`${indicator()} ${item.label}`}</span>
+              <span>{`${indicator()} ${item.label}`}</span>
             </strong>
           </text>
           <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
@@ -407,6 +415,9 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     const isSel = () => selectedItemIndex() === idx;
     const isEditing = () => editingIdx() === idx;
     const valid = () => item.valid?.();
+    const savedValue = () => item.get().trim();
+    const displayValue = () => savedValue() || item.placeholder || "";
+    const displayColor = () => (savedValue() ? (isSel() ? t().accent : t().foregroundMuted) : t().foregroundMuted);
     return (
       <box
         ref={(el: Renderable) => {
@@ -424,15 +435,20 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
           <input
             focused
             width={VALUE_COL_WIDTH + HOTKEY_COL_WIDTH}
+            placeholder={item.placeholder}
             value={editDraft()}
             onInput={setEditDraft}
-            fg={t().foreground}
+            textColor={t().foreground}
+            focusedTextColor={t().foreground}
+            placeholderColor={t().foregroundMuted}
+            cursorColor={t().accent}
             backgroundColor={t().backgroundElementActive}
+            focusedBackgroundColor={t().backgroundElementActive}
           />
         ) : (
           <box width={VALUE_COL_WIDTH} flexShrink={0} flexDirection="row" justifyContent="flex-end">
-            <text wrapMode="none" truncate fg={isSel() ? t().accent : t().foregroundMuted}>
-              {clipLeft(item.get(), VALUE_COL_WIDTH)}
+            <text wrapMode="none" truncate fg={displayColor()}>
+              {clipLeft(displayValue(), VALUE_COL_WIDTH)}
             </text>
           </box>
         )}
@@ -462,7 +478,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
       <box
         width={dialogWidth()}
         height={dialogHeight()}
-        backgroundColor={t().backgroundPanel}
+        backgroundColor={t().background}
         flexDirection="column"
         paddingX={1}
         paddingY={1}
@@ -473,6 +489,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
         <box flexDirection="row" width="100%" paddingX={4} flexShrink={0}>
           {/* Repository tab */}
           <box
+            width={tabWidth(0)}
             flexGrow={1}
             justifyContent="center"
             flexDirection="row"
@@ -486,6 +503,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
           </box>
           {/* Branch tab */}
           <box
+            width={tabWidth(1)}
             flexGrow={1}
             justifyContent="center"
             flexDirection="row"
@@ -499,6 +517,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
           </box>
           {/* Providers tab */}
           <box
+            width={tabWidth(2)}
             flexGrow={1}
             justifyContent="center"
             flexDirection="row"
@@ -536,7 +555,6 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
           {editingIdx() == null ? (
             <>
               <KeyHint key="enter" desc={` ${footerVerb()}  `} />
-              <KeyHint key="esc" desc=" close  " />
               <KeyHint key="←/→" desc=" switch tab  " />
               <KeyHint key="↑/↓" desc=" navigate" />
             </>

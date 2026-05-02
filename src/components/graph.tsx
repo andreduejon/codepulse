@@ -420,7 +420,7 @@ function GraphLine(
           <text fg={secondaryColumnColor()} wrapMode="none" truncate>
             {props.active ? (
               <strong>
-                <span fg={secondaryColumnColor()}>{commit().shortHash}</span>
+                <span>{commit().shortHash}</span>
               </strong>
             ) : (
               commit().shortHash
@@ -454,7 +454,7 @@ function GraphLine(
                 const rendered = ov > 0 ? v.substring(off, off + subjectAvailableWidth()) : v;
                 return (
                   <strong>
-                    <span fg={effectiveTextColor()}>{rendered}</span>
+                    <span>{rendered}</span>
                   </strong>
                 );
               }
@@ -478,7 +478,7 @@ function GraphLine(
                   const v = isUncommitted() ? UNCOMMITTED_PLACEHOLDER : commit().author;
                   return props.active ? (
                     <strong>
-                      <span fg={secondaryColumnColor()}>{v}</span>
+                      <span>{v}</span>
                     </strong>
                   ) : (
                     v
@@ -494,7 +494,7 @@ function GraphLine(
                   const v = isUncommitted() ? UNCOMMITTED_PLACEHOLDER : formatRelativeDate(commit().authorDate);
                   return props.active ? (
                     <strong>
-                      <span fg={secondaryColumnColor()}>{v}</span>
+                      <span>{v}</span>
                     </strong>
                   ) : (
                     v

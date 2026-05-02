@@ -103,7 +103,11 @@ function AppContent(props: Readonly<AppContentProps>) {
   /** Target for the diff+blame dialog (set when user activates a file). */
   const [diffTarget, setDiffTarget] = createSignal<DiffTarget | null>(null);
   /** Target for the job log dialog (set when user opens a job log). */
-  const [jobLogTarget, setJobLogTarget] = createSignal<{ job: GitHubJob; run: GitHubWorkflowRun } | null>(null);
+  const [jobLogTarget, setJobLogTarget] = createSignal<{
+    job: GitHubJob;
+    run: GitHubWorkflowRun;
+    jobs: GitHubJob[];
+  } | null>(null);
 
   /** Command bar mode — drives placeholder text and key routing. */
   const [commandBarMode, setCommandBarMode] = createSignal<CommandBarMode>("idle");
@@ -181,8 +185,8 @@ function AppContent(props: Readonly<AppContentProps>) {
     setDialog("diff-blame");
   };
 
-  const handleOpenJobLog = (job: GitHubJob, run: GitHubWorkflowRun) => {
-    setJobLogTarget({ job, run });
+  const handleOpenJobLog = (job: GitHubJob, run: GitHubWorkflowRun, jobs: GitHubJob[] = [job]) => {
+    setJobLogTarget({ job, run, jobs: jobs.length > 0 ? jobs : [job] });
     setDialog("job-log");
   };
 
@@ -285,9 +289,16 @@ function AppContent(props: Readonly<AppContentProps>) {
         setLastMenuTab("repository");
         setDialog("menu");
         break;
+      case "branches":
+        setLastMenuTab("branch");
+        setDialog("menu");
+        break;
       case "providers":
         setLastMenuTab("providers");
         setDialog("menu");
+        break;
+      case "switch":
+        setRepoSelectorVisible(true);
         break;
       case "help":
         setDialog("help");
@@ -565,8 +576,9 @@ function AppContent(props: Readonly<AppContentProps>) {
                   {target => (
                     <JobLogDialog
                       job={target().job}
+                      jobs={target().jobs}
                       run={target().run}
-                      fetchLog={() => gitHubCI.fetchJobLogForJob(target().job.id)}
+                      fetchLog={job => gitHubCI.fetchJobLogForJob(job.id)}
                       onClose={() => setDialog(null)}
                     />
                   )}

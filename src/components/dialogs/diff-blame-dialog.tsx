@@ -6,7 +6,7 @@ import { getFileBlame, getFileContent, getFileDiff } from "../../git/repo";
 import type { BlameLine, DiffTarget, FileContent, FileDiff } from "../../git/types";
 import { useT } from "../../hooks/use-t";
 import { KeyHint } from "../key-hint";
-import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
+import { DialogFooter, DialogOverlay, DialogTitleBar, getStandardDialogFrame } from "./dialog-chrome";
 import { BLAME_COL_WIDTH, DiffLineRow } from "./diff-line-row";
 import {
   buildDisplayLines,
@@ -19,9 +19,6 @@ import {
   gutterWidth,
 } from "./diff-utils";
 import { buildDiffTitleParts, TITLE_SEP } from "./title-utils";
-
-/** Maximum dialog width in columns (fits 120-150 char lines with gutter). */
-const MAX_DIALOG_WIDTH = 160;
 
 /** Number of offscreen lines to render above/below viewport as buffer. */
 const WINDOW_BUFFER = 30;
@@ -182,7 +179,8 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
 
   // ── Dialog sizing ──────────────────────────────────────────────────
   // Must be declared before contentWidth (which reads dialogWidth()) to avoid TDZ.
-  const dialogWidth = createMemo(() => Math.min(Math.max(72, Math.floor(dimensions().width * 0.85)), MAX_DIALOG_WIDTH));
+  const dialogFrame = createMemo(() => getStandardDialogFrame(dimensions()));
+  const dialogWidth = createMemo(() => dialogFrame().width);
 
   // Filter lines based on view mode (mixed / new only / old only)
   const filteredLines = createMemo(() => {
@@ -274,27 +272,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
     return offsets[offsets.length - 1];
   });
 
-  /**
-   * Fixed row overhead inside the dialog box:
-   *   paddingY={1} top+bottom = 2
-   *   DialogTitleBar: title row + spacer row = 2
-   *   Stats line + spacer: 2 rows = 2
-   *   DialogFooter: spacer + spacer + footer row + spacer = 4
-   */
-  const DIALOG_OVERHEAD = 10;
-
-  /**
-   * Content-aware dialog height: shrinks to fit short diffs, caps at 90% of
-   * terminal height for tall diffs. Falls back to max height while loading.
-   */
-  const dialogHeight = createMemo(() => {
-    const cap = dimensions().height - 8;
-    const maxH = Math.min(Math.max(10, Math.floor(dimensions().height * 0.9)), cap);
-    const rows = totalRows();
-    // rows === 0 means loading / binary / empty — use full height
-    if (rows === 0) return maxH;
-    return Math.min(Math.max(10, rows + DIALOG_OVERHEAD), maxH);
-  });
+  const dialogHeight = createMemo(() => dialogFrame().height);
 
   /** Compute the windowed slice of lines to render. */
   const windowSlice = createMemo(() => {
@@ -455,30 +433,30 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
 
     if (p.counter) {
       // Counter is muted — navigational metadata, not the primary content
-      segments.push(() => <span fg={t().foregroundMuted}>{p.counter}</span>);
+      segments.push(() => <span>{p.counter}</span>);
     }
     if (p.source) {
-      segments.push(() => <span fg={t().foregroundMuted}>{p.source}</span>);
+      segments.push(() => <span>{p.source}</span>);
     }
     // Dir prefix + basename are one visual group; basename is bold foreground
     // (matches the bold-foreground pattern used by Help/Theme/Menu dialog titles)
     segments.push(() => (
       <>
-        {p.dirPrefix ? <span fg={t().foregroundMuted}>{p.dirPrefix}</span> : null}
+        {p.dirPrefix ? <span>{p.dirPrefix}</span> : null}
         <strong>
-          <span fg={t().foreground}>{p.basename}</span>
+          <span>{p.basename}</span>
         </strong>
       </>
     ));
     if (p.mode) {
-      segments.push(() => <span fg={t().foregroundMuted}>{p.mode}</span>);
+      segments.push(() => <span>{p.mode}</span>);
     }
 
     return (
       <>
         {segments.map((render, i) => (
           <>
-            {i > 0 ? <span fg={t().foregroundMuted}>{TITLE_SEP}</span> : null}
+            {i > 0 ? <span>{TITLE_SEP}</span> : null}
             {render()}
           </>
         ))}
@@ -487,11 +465,11 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
   });
 
   return (
-    <DialogOverlay>
+    <DialogOverlay align="top" topOffset={2}>
       <box
         width={dialogWidth()}
         height={dialogHeight()}
-        backgroundColor={t().backgroundPanel}
+        backgroundColor={t().background}
         flexDirection="column"
         paddingX={1}
         paddingY={1}

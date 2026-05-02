@@ -32,7 +32,7 @@ export interface DetailPanelProps {
    */
   githubProviderStatus?: string | null;
   /** Open the job log dialog for a specific job. */
-  onOpenJobLog?: (job: GitHubJob, run: GitHubWorkflowRun) => void;
+  onOpenJobLog?: (job: GitHubJob, run: GitHubWorkflowRun, jobs?: GitHubJob[]) => void;
 }
 
 /**

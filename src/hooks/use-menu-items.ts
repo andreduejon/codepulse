@@ -39,6 +39,7 @@ export type SettingItem =
   | {
       kind: "editable";
       label: string;
+      placeholder?: string;
       get: () => string;
       set: (v: string) => void;
       valid?: () => boolean;
@@ -362,15 +363,15 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
       {
         kind: "editable",
         label: "Token",
+        placeholder: "Enter token...",
         get: () => ghCfg.tokenEnvVar,
         set: (v: string) => {
           const trimmed = v.trim();
-          if (!trimmed) return;
           const newCfg = { ...ghCfg, tokenEnvVar: trimmed };
           opts.onGithubConfigChange?.(newCfg);
           persistFullConfig({ providers: { github: newCfg } });
         },
-        valid: () => tokenSource === "env",
+        valid: () => !!ghCfg.tokenEnvVar.trim() && tokenSource === "env",
       },
     ];
 

@@ -4,6 +4,7 @@ export type KeyboardScope =
   | "app"
   | "menu"
   | "menu-token-edit"
+  | "repo-selector"
   | "help"
   | "theme"
   | "diff-blame"

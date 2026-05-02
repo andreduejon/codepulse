@@ -20,8 +20,8 @@ import { createEffect, createMemo, createSignal, For, Show, untrack } from "soli
 import type { DetailNavRef } from "../../components/detail-types";
 import { useT } from "../../hooks/use-t";
 import { formatDuration, formatRelativeDate } from "../../utils/date";
-import { categorize, statusColor, statusIcon } from "./status";
-import type { GitHubCommitData, GitHubJob, GitHubWorkflowRun } from "./types";
+import { categorize, statusColor } from "./status";
+import type { GitHubCommitData, GitHubJob, GitHubStep, GitHubWorkflowRun } from "./types";
 
 // ── Flat item list ─────────────────────────────────────────────────────────
 
@@ -67,7 +67,7 @@ export interface ActionsDetailTabProps {
   /** Move the detail cursor to a specific index. */
   setDetailCursorIndex: (idx: number) => void;
   /** Called when Enter is pressed on a job — opens the log dialog. */
-  onOpenJobLog?: (job: GitHubJob, run: GitHubWorkflowRun) => void;
+  onOpenJobLog?: (job: GitHubJob, run: GitHubWorkflowRun, jobs?: GitHubJob[]) => void;
 }
 
 // ── Top-level component ───────────────────────────────────────────────────
@@ -75,6 +75,27 @@ export interface ActionsDetailTabProps {
 export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
   const t = useT();
   const actionsData = () => props.getCommitData(props.sha);
+
+  const STATUS_COL_WIDTH = 2;
+
+  const formatStepDuration = (step: GitHubStep) => formatDuration(step.startedAt, step.completedAt);
+  const statusMark = (status: string, conclusion: string | null) => {
+    const cat = categorize(status, conclusion);
+    switch (cat) {
+      case "pass":
+        return "✓";
+      case "fail":
+        return "✕";
+      case "running":
+        return "●";
+      case "cancelled":
+        return "○";
+      case "skipped":
+        return "–";
+      default:
+        return "?";
+    }
+  };
 
   // When the provider is registered but unavailable, show setup guidance.
   if (props.unavailableReason) {
@@ -111,6 +132,13 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
   const [fetchedJobs, setFetchedJobs] = createSignal<Map<number, GitHubJob[]>>(new Map());
   /** Set of run IDs with an in-flight job fetch. */
   const [loadingRuns, setLoadingRuns] = createSignal<Set<number>>(new Set());
+
+  createEffect(() => {
+    const runs = actionsData()?.runs ?? [];
+    if (runs.length !== 1) return;
+    if (expandedRuns().has(runs[0].id)) return;
+    toggleRun(runs[0]);
+  });
 
   /** Element refs for all interactive flat items. */
   const itemRefs: Renderable[] = [];
@@ -188,7 +216,7 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
       if (item.kind === "run") {
         toggleRun(item.run);
       } else if (item.kind === "job") {
-        props.onOpenJobLog?.(item.job, item.run);
+        props.onOpenJobLog?.(item.job, item.run, fetchedJobs().get(item.run.id) ?? []);
       }
       return false;
     };
@@ -223,7 +251,17 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
     >
       {data => (
         <box flexDirection="column" width="100%">
-          <box height={1} />
+          <box flexDirection="row" width="100%">
+            <box flexGrow={1}>
+              <text fg={t().foregroundMuted} wrapMode="none">
+                total workflow runs
+              </text>
+            </box>
+            <box flexShrink={0} width={2} />
+            <text fg={t().foregroundMuted} wrapMode="none">
+              {data().runs.length}
+            </text>
+          </box>
           <For each={data().runs}>
             {(run, runIndexFn) => {
               const runFlatIndex = () => flatItems().findIndex(it => it.kind === "run" && it.run.id === run.id);
@@ -233,13 +271,14 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
               const isCursored = () => props.detailFocused() && props.detailCursorIndex() === runFlatIndex();
               const cat = categorize(run.status, run.conclusion);
               const color = () => statusColor(t(), cat);
-              const icon = statusIcon(cat);
               const relTime = () => formatRelativeDate(run.updatedAt);
+              const runTreePrefix = () => (runIndexFn() === data().runs.length - 1 ? "└─ " : "├─ ");
+              const runIndicatorColor = () => (isCursored() ? t().accent : t().foregroundMuted);
+              const runTextColor = () => (isCursored() ? t().accent : t().foregroundMuted);
+              const runIsLast = () => runIndexFn() === data().runs.length - 1;
 
               return (
-                <box flexDirection="column" width="100%" paddingLeft={2}>
-                  {runIndexFn() > 0 ? <box height={1} /> : null}
-
+                <box flexDirection="column" width="100%">
                   {/* Run header */}
                   <box
                     ref={(el: Renderable) => {
@@ -250,43 +289,39 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
                     width="100%"
                     backgroundColor={isCursored() ? t().backgroundElementActive : undefined}
                   >
-                    <text flexShrink={0} wrapMode="none" fg={color()}>
-                      {isExpanded() ? "▾ " : "▸ "}
-                      {icon}{" "}
+                    <text flexShrink={0} wrapMode="none" fg={t().border}>
+                      {runTreePrefix()}
                     </text>
-                    <text
-                      flexGrow={1}
-                      flexShrink={1}
-                      wrapMode="none"
-                      truncate
-                      fg={isCursored() ? t().foreground : t().foreground}
-                    >
-                      {run.name}
+                    <text flexShrink={0} wrapMode="none" fg={runIndicatorColor()}>
+                      {isExpanded() ? "▾ " : "▸ "}
+                    </text>
+                    <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={runTextColor()}>
+                      {`${run.name}  #${run.runNumber}`}
                     </text>
                     <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                      {" "}
-                      #{run.runNumber}
-                      {"  "}
                       {relTime()}
                       {"  "}
                       {run.event}
+                    </text>
+                    <text flexShrink={0} width={STATUS_COL_WIDTH} wrapMode="none" fg={color()}>
+                      {statusMark(run.status, run.conclusion).padStart(STATUS_COL_WIDTH)}
                     </text>
                   </box>
 
                   {/* Jobs — shown when expanded */}
                   <Show when={isExpanded()}>
                     <Show when={isLoading()}>
-                      <box paddingLeft={4}>
+                      <box>
                         <text fg={t().foregroundMuted}>Loading jobs…</text>
                       </box>
                     </Show>
                     <Show when={!isLoading() && jobs().length === 0}>
-                      <box paddingLeft={4}>
+                      <box>
                         <text fg={t().foregroundMuted}>No jobs found</text>
                       </box>
                     </Show>
                     <For each={jobs()}>
-                      {job => {
+                      {(job, jobIndexFn) => {
                         const jobFlatIndex = () =>
                           flatItems().findIndex(
                             it => it.kind === "job" && it.job.id === job.id && it.run.id === run.id,
@@ -295,32 +330,72 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
                           props.detailFocused() && props.detailCursorIndex() === jobFlatIndex();
                         const jobCat = categorize(job.status, job.conclusion);
                         const jobColor = () => statusColor(t(), jobCat);
-                        const jobIcon = statusIcon(jobCat);
                         const duration = formatDuration(job.startedAt, job.completedAt);
+                        const jobTextColor = () => (isJobCursored() ? t().accent : t().foregroundMuted);
+                        const jobTreeLead = () => (runIsLast() ? "   " : "│  ");
+                        const jobTreePrefix = () => (jobIndexFn() === jobs().length - 1 ? "└─ " : "├─ ");
+                        const jobIsLast = () => jobIndexFn() === jobs().length - 1;
 
                         return (
-                          <box
-                            ref={(el: Renderable) => {
-                              const fi = jobFlatIndex();
-                              if (fi >= 0) itemRefs[fi] = el;
-                            }}
-                            flexDirection="row"
-                            width="100%"
-                            paddingLeft={4}
-                            backgroundColor={isJobCursored() ? t().backgroundElementActive : undefined}
-                          >
-                            <text flexShrink={0} wrapMode="none" fg={jobColor()}>
-                              {jobIcon}{" "}
-                            </text>
-                            <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foreground}>
-                              {job.name}
-                            </text>
-                            {duration ? (
-                              <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                                {"  "}
-                                {duration}
+                          <box flexDirection="column" width="100%">
+                            <box
+                              ref={(el: Renderable) => {
+                                const fi = jobFlatIndex();
+                                if (fi >= 0) itemRefs[fi] = el;
+                              }}
+                              flexDirection="row"
+                              width="100%"
+                              backgroundColor={isJobCursored() ? t().backgroundElementActive : undefined}
+                            >
+                              <text flexShrink={0} wrapMode="none" fg={t().border}>
+                                {jobTreeLead()}
+                                {jobTreePrefix()}
                               </text>
-                            ) : null}
+                              <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={jobTextColor()}>
+                                {job.name}
+                              </text>
+                              <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                                {job.steps.length > 0
+                                  ? `  ${job.steps.length} step${job.steps.length === 1 ? "" : "s"}`
+                                  : ""}
+                                {duration ? `  ${duration}` : ""}
+                              </text>
+                              <text flexShrink={0} width={STATUS_COL_WIDTH} wrapMode="none" fg={jobColor()}>
+                                {statusMark(job.status, job.conclusion).padStart(STATUS_COL_WIDTH)}
+                              </text>
+                            </box>
+
+                            <Show when={job.steps.length > 0}>
+                              <For each={job.steps}>
+                                {(step, stepIndexFn) => {
+                                  const stepCat = categorize(step.status, step.conclusion);
+                                  const stepColor = () => statusColor(t(), stepCat);
+                                  const stepDuration = () => formatStepDuration(step);
+                                  const stepTreePrefix = () => jobTreeLead() + (jobIsLast() ? "   " : "│  ");
+                                  const stepConnector = () => (stepIndexFn() === job.steps.length - 1 ? "└─ " : "├─ ");
+
+                                  return (
+                                    <box flexDirection="row" width="100%">
+                                      <text flexShrink={0} wrapMode="none" fg={t().border}>
+                                        {stepTreePrefix()}
+                                        {stepConnector()}
+                                      </text>
+                                      <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foreground}>
+                                        {`${step.number}. ${step.name}`}
+                                      </text>
+                                      {stepDuration() ? (
+                                        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                                          {stepDuration()}
+                                        </text>
+                                      ) : null}
+                                      <text flexShrink={0} width={STATUS_COL_WIDTH} wrapMode="none" fg={stepColor()}>
+                                        {statusMark(step.status, step.conclusion).padStart(STATUS_COL_WIDTH)}
+                                      </text>
+                                    </box>
+                                  );
+                                }}
+                              </For>
+                            </Show>
                           </box>
                         );
                       }}

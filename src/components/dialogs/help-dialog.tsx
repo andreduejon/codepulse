@@ -41,7 +41,7 @@ export default function HelpDialog(_props: Readonly<{ onClose: () => void }>) {
       <box
         width={dialogWidth()}
         height={dialogHeight()}
-        backgroundColor={t().backgroundPanel}
+        backgroundColor={t().background}
         flexDirection="column"
         paddingX={1}
         paddingY={1}

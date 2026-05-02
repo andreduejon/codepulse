@@ -65,7 +65,7 @@ export default function SetupScreen(props: Readonly<SetupScreenProps>) {
           <box paddingX={4}>
             <text wrapMode="word">
               <strong>
-                <span fg={t().accent}>Welcome to your git graph visualizer!</span>
+                <span>Welcome to your git graph visualizer!</span>
               </strong>
             </text>
           </box>
@@ -78,7 +78,7 @@ export default function SetupScreen(props: Readonly<SetupScreenProps>) {
           <box paddingX={4}>
             <text wrapMode="none">
               <strong>
-                <span fg={t().accent}>Handy keys to remember</span>
+                <span>Handy keys to remember</span>
               </strong>
             </text>
           </box>
