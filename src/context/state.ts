@@ -7,6 +7,7 @@ import { nextProviderView } from "../providers/provider";
 import { matchCommit, parseSearchQuery } from "../search";
 
 export const DEFAULT_AUTO_REFRESH_INTERVAL = 30000;
+export const DEFAULT_AUTO_FETCH_INTERVAL = 0;
 
 /** Valid tab identifiers for the detail panel. */
 export type DetailTab = "files" | "detail" | "stashes" | "staged" | "unstaged" | "untracked" | "github-actions";
@@ -86,6 +87,7 @@ export interface AppState {
   maxGraphColumns: Accessor<number>;
   maxCount: Accessor<number>;
   autoRefreshInterval: Accessor<number>;
+  autoFetchInterval: Accessor<number>;
   lastFetchTime: Accessor<Date | null>;
   fetching: Accessor<boolean>;
   /** True if there are likely more commits to load beyond the current page. */
@@ -133,6 +135,7 @@ export interface AppActions {
   setMaxGraphColumns: (cols: number) => void;
   setMaxCount: (n: number) => void;
   setAutoRefreshInterval: (ms: number) => void;
+  setAutoFetchInterval: (ms: number) => void;
   setLastFetchTime: (time: Date | null) => void;
   setFetching: (fetching: boolean) => void;
   setDetailLoading: (loading: boolean) => void;
@@ -159,6 +162,7 @@ const AppStateContext = createContext<{ state: AppState; actions: AppActions }>(
 export function createAppState(
   initialMaxCount: number = DEFAULT_MAX_COUNT,
   initialAutoRefreshInterval?: number,
+  initialAutoFetchInterval?: number,
   initialShowAllBranches: boolean = true,
 ) {
   // ── Repository data ───────────────────────────────────────────────
@@ -202,6 +206,9 @@ export function createAppState(
   const [maxCount, setMaxCount] = createSignal(initialMaxCount);
   const [autoRefreshInterval, setAutoRefreshInterval] = createSignal(
     initialAutoRefreshInterval ?? DEFAULT_AUTO_REFRESH_INTERVAL,
+  );
+  const [autoFetchInterval, setAutoFetchInterval] = createSignal(
+    initialAutoFetchInterval ?? DEFAULT_AUTO_FETCH_INTERVAL,
   );
   const [lastFetchTime, setLastFetchTime] = createSignal<Date | null>(null);
   const [fetching, setFetching] = createSignal(false);
@@ -322,6 +329,7 @@ export function createAppState(
     maxGraphColumns,
     maxCount,
     autoRefreshInterval,
+    autoFetchInterval,
     detailFocused,
     detailCursorIndex,
     scrollTargetIndex,
@@ -369,6 +377,7 @@ export function createAppState(
     setMaxGraphColumns,
     setMaxCount,
     setAutoRefreshInterval,
+    setAutoFetchInterval,
     setLastFetchTime,
     setFetching,
     setHasMore,

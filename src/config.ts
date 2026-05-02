@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { DEFAULT_MAX_COUNT } from "./constants";
-import { DEFAULT_AUTO_REFRESH_INTERVAL } from "./context/state";
+import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL } from "./context/state";
 import { normalizeGitHubHost } from "./providers/github-actions/api";
 
 /**
@@ -16,6 +16,8 @@ export interface CodepulseConfig {
   showAllBranches?: boolean;
   /** Auto-refresh interval in seconds. 0 = off. */
   autoRefreshSeconds?: number;
+  /** Auto-fetch interval in seconds. 0 = off. */
+  autoFetchSeconds?: number;
   /** Provider-specific configuration. */
   providers?: {
     github?: {
@@ -37,6 +39,7 @@ export function defaultConfig(): Required<Omit<CodepulseConfig, "branch">> {
     pageSize: DEFAULT_MAX_COUNT,
     showAllBranches: true,
     autoRefreshSeconds: DEFAULT_AUTO_REFRESH_INTERVAL / 1000,
+    autoFetchSeconds: DEFAULT_AUTO_FETCH_INTERVAL / 1000,
     providers: {
       github: {
         enabled: true,
@@ -68,6 +71,7 @@ export function backfillRepoConfig(repoPath: string, configPath?: string): void 
   if (existing.pageSize === undefined) missing.pageSize = defaults.pageSize;
   if (existing.showAllBranches === undefined) missing.showAllBranches = defaults.showAllBranches;
   if (existing.autoRefreshSeconds === undefined) missing.autoRefreshSeconds = defaults.autoRefreshSeconds;
+  if (existing.autoFetchSeconds === undefined) missing.autoFetchSeconds = defaults.autoFetchSeconds;
 
   // Deep-check providers.github fields
   const existingGh = existing.providers?.github;
@@ -98,6 +102,7 @@ export function backfillRepoConfig(repoPath: string, configPath?: string): void 
     missing.pageSize !== undefined ||
     missing.showAllBranches !== undefined ||
     missing.autoRefreshSeconds !== undefined ||
+    missing.autoFetchSeconds !== undefined ||
     missing.providers !== undefined;
 
   if (hasAnyMissing) {
@@ -113,6 +118,7 @@ export interface AppOptions {
   maxCount: number;
   themeName: string;
   autoRefreshInterval: number;
+  autoFetchInterval: number;
 }
 
 /** Information about the global config file and repo-specific overrides. */
@@ -298,6 +304,14 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
     }
   }
 
+  if (raw.autoFetchSeconds !== undefined) {
+    if (typeof raw.autoFetchSeconds === "number" && raw.autoFetchSeconds >= 0) {
+      config.autoFetchSeconds = raw.autoFetchSeconds;
+    } else {
+      warnings.push(`${path}: "autoFetchSeconds" must be a non-negative number, ignoring`);
+    }
+  }
+
   if (raw.providers !== undefined) {
     if (typeof raw.providers === "object" && raw.providers !== null && !Array.isArray(raw.providers)) {
       const providers = raw.providers as Record<string, unknown>;
@@ -349,6 +363,8 @@ export function mergeOptions(cli: { repoPath: string }, config: CodepulseConfig)
     themeName: config.theme ?? defaults.theme,
     autoRefreshInterval:
       config.autoRefreshSeconds !== undefined ? config.autoRefreshSeconds * 1000 : defaults.autoRefreshSeconds * 1000,
+    autoFetchInterval:
+      config.autoFetchSeconds !== undefined ? config.autoFetchSeconds * 1000 : defaults.autoFetchSeconds * 1000,
   };
 }
 
@@ -451,6 +467,7 @@ function applyConfigFields(target: Record<string, unknown>, config: CodepulseCon
   if (config.branch !== undefined) target.branch = config.branch;
   if (config.showAllBranches !== undefined) target.showAllBranches = config.showAllBranches;
   if (config.autoRefreshSeconds !== undefined) target.autoRefreshSeconds = config.autoRefreshSeconds;
+  if (config.autoFetchSeconds !== undefined) target.autoFetchSeconds = config.autoFetchSeconds;
   if (config.providers !== undefined) {
     // Deep-merge providers into existing target.providers to preserve other provider configs
     const existingProviders =

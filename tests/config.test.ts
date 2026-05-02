@@ -102,6 +102,7 @@ describe("loadConfig", () => {
       branch: "develop",
       showAllBranches: false,
       autoRefreshSeconds: 10,
+      autoFetchSeconds: 60,
     });
     const { config: result } = loadConfig(repoPath, configPath);
     expect(result).toEqual({
@@ -110,6 +111,7 @@ describe("loadConfig", () => {
       branch: "develop",
       showAllBranches: false,
       autoRefreshSeconds: 10,
+      autoFetchSeconds: 60,
     });
   });
 
@@ -132,6 +134,12 @@ describe("loadConfig", () => {
       field: "autoRefreshSeconds" as const,
       hasWarning: false,
     },
+    {
+      label: "autoFetchSeconds (negative)",
+      config: { autoFetchSeconds: -5 },
+      field: "autoFetchSeconds" as const,
+      hasWarning: false,
+    },
   ])("drops invalid $label", ({ config, field, hasWarning }) => {
     const repoPath = "/tmp/repo";
     const configPath = makeRepoConfig(`bad-${field}`, repoPath, config);
@@ -145,6 +153,13 @@ describe("loadConfig", () => {
     const configPath = makeRepoConfig("refresh-zero", repoPath, { autoRefreshSeconds: 0 });
     const { config: result } = loadConfig(repoPath, configPath);
     expect(result.autoRefreshSeconds).toBe(0);
+  });
+
+  test("allows autoFetchSeconds of 0 (off)", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("fetch-zero", repoPath, { autoFetchSeconds: 0 });
+    const { config: result } = loadConfig(repoPath, configPath);
+    expect(result.autoFetchSeconds).toBe(0);
   });
 
   test("ignores unknown keys silently", () => {
@@ -246,19 +261,28 @@ describe("mergeOptions", () => {
       maxCount: DEFAULT_MAX_COUNT,
       themeName: "catppuccin-mocha",
       autoRefreshInterval: DEFAULT_AUTO_REFRESH_INTERVAL,
+      autoFetchInterval: 0,
     });
   });
 
   test("config values used when present", () => {
     const result = mergeOptions(
       { repoPath: "/repo" },
-      { theme: "gruvbox", pageSize: 300, branch: "develop", showAllBranches: false, autoRefreshSeconds: 10 },
+      {
+        theme: "gruvbox",
+        pageSize: 300,
+        branch: "develop",
+        showAllBranches: false,
+        autoRefreshSeconds: 10,
+        autoFetchSeconds: 60,
+      },
     );
     expect(result.branch).toBe("develop");
     expect(result.all).toBe(false);
     expect(result.maxCount).toBe(300);
     expect(result.themeName).toBe("gruvbox");
     expect(result.autoRefreshInterval).toBe(10000);
+    expect(result.autoFetchInterval).toBe(60000);
   });
 
   test("config showAllBranches respected when no CLI branch and no CLI all", () => {
@@ -290,9 +314,19 @@ describe("mergeOptions", () => {
     expect(result.autoRefreshInterval).toBe(0);
   });
 
+  test("autoFetchSeconds=0 in config produces 0ms interval", () => {
+    const result = mergeOptions({ repoPath: "/repo" }, { autoFetchSeconds: 0 });
+    expect(result.autoFetchInterval).toBe(0);
+  });
+
   test("default autoRefreshInterval used when config has no autoRefreshSeconds", () => {
     const result = mergeOptions({ repoPath: "/repo" }, {});
     expect(result.autoRefreshInterval).toBe(DEFAULT_AUTO_REFRESH_INTERVAL);
+  });
+
+  test("default autoFetchInterval is off", () => {
+    const result = mergeOptions({ repoPath: "/repo" }, {});
+    expect(result.autoFetchInterval).toBe(0);
   });
 
   test("default theme is catppuccin-mocha", () => {
@@ -446,6 +480,7 @@ describe("writeConfig", () => {
     expect(entry.branch).toBeUndefined();
     expect(entry.showAllBranches).toBeUndefined();
     expect(entry.autoRefreshSeconds).toBeUndefined();
+    expect(entry.autoFetchSeconds).toBeUndefined();
   });
 
   test("writes under repos map keyed by absolute path", () => {
@@ -525,6 +560,7 @@ describe("writeConfig", () => {
       branch: "develop",
       showAllBranches: false,
       autoRefreshSeconds: 60,
+      autoFetchSeconds: 120,
     };
     writeConfig(original, repoPath, configPath);
     const { config: loaded } = loadConfig(repoPath, configPath);

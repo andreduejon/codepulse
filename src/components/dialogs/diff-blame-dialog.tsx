@@ -5,6 +5,13 @@ import { useAppState } from "../../context/state";
 import { getFileBlame, getFileContent, getFileDiff } from "../../git/repo";
 import type { BlameLine, DiffTarget, FileContent, FileDiff } from "../../git/types";
 import { useT } from "../../hooks/use-t";
+import {
+  type AbortableRequestState,
+  abortActiveRequest,
+  finishAbortableRequest,
+  isActiveAbortableRequest,
+  startAbortableRequest,
+} from "../../utils/abortable-request";
 import { KeyHint } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitleBar, getStandardDialogFrame } from "./dialog-chrome";
 import { BLAME_COL_WIDTH, DiffLineRow } from "./diff-line-row";
@@ -65,21 +72,28 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
   const [blameLoading, setBlameLoading] = createSignal(false);
   const [blameError, setBlameError] = createSignal<string | null>(null);
   const [spinnerFrame, setSpinnerFrame] = createSignal(0);
-  /** Whether blame has ever been fetched (lazy — only on first `b` press). */
-  let blameFetched = false;
   const [viewMode, setViewMode] = createSignal<DiffViewMode>("mixed");
   const [fullFileMode, setFullFileMode] = createSignal(false);
   /** Whether line wrapping is enabled (default on). */
   const [wrapEnabled, setWrapEnabled] = createSignal(true);
+  const diffRequestState: AbortableRequestState = { currentId: 0, abortCtrl: null };
+  const blameRequestState: AbortableRequestState = { currentId: 0, abortCtrl: null };
+  /** Tracks which target already triggered lazy blame fetch. */
+  let blameFetchedForKey: string | null = null;
 
   let scrollboxRef: ScrollBoxRenderable | undefined;
+  const targetKey = () => `${props.target.source}:${props.target.commitHash}:${props.target.filePath}`;
+  const blameFetched = () => blameFetchedForKey === targetKey();
 
   // ── Load diff reactively (re-runs when target changes) ─────────────
   createEffect(() => {
     const { commitHash, filePath, source } = props.target;
+    const request = startAbortableRequest(diffRequestState);
     // Reset blame data for new file (but preserve visibility toggle)
-    blameFetched = false;
+    blameFetchedForKey = null;
+    abortActiveRequest(blameRequestState);
     setBlameLines([]);
+    setBlameLoading(false);
     setDiffError(null);
     setFileError(null);
     setBlameError(null);
@@ -89,27 +103,33 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
     (async () => {
       try {
         const [diffResult, fileResult] = await Promise.all([
-          getFileDiff(state.repoPath(), commitHash, filePath, source),
-          getFileContent(state.repoPath(), commitHash, filePath, source),
+          getFileDiff(state.repoPath(), commitHash, filePath, source, request.controller.signal),
+          getFileContent(state.repoPath(), commitHash, filePath, source, request.controller.signal),
         ]);
+        if (!isActiveAbortableRequest(diffRequestState, request)) return;
         setDiff(diffResult);
         setFileContent(fileResult);
       } catch (err) {
+        if (!isActiveAbortableRequest(diffRequestState, request)) return;
         setDiff(null);
         setFileContent(null);
         setDiffError(err instanceof Error ? err.message : String(err));
         setFileError(err instanceof Error ? err.message : String(err));
       } finally {
-        setLoading(false);
-        setFileLoading(false);
+        if (isActiveAbortableRequest(diffRequestState, request)) {
+          setLoading(false);
+          setFileLoading(false);
+        }
+        finishAbortableRequest(diffRequestState, request);
       }
     })();
   });
 
   // ── Lazy blame fetch ───────────────────────────────────────────────
   const fetchBlame = async () => {
-    if (blameFetched) return;
-    blameFetched = true;
+    if (blameFetched()) return;
+    blameFetchedForKey = targetKey();
+    const request = startAbortableRequest(blameRequestState);
     setBlameLoading(true);
     setBlameError(null);
     try {
@@ -118,13 +138,19 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
         props.target.commitHash,
         props.target.filePath,
         props.target.source,
+        request.controller.signal,
       );
+      if (!isActiveAbortableRequest(blameRequestState, request)) return;
       setBlameLines(result);
     } catch (err) {
+      if (!isActiveAbortableRequest(blameRequestState, request)) return;
       setBlameLines([]);
       setBlameError(err instanceof Error ? err.message : String(err));
     } finally {
-      setBlameLoading(false);
+      if (isActiveAbortableRequest(blameRequestState, request)) {
+        setBlameLoading(false);
+      }
+      finishAbortableRequest(blameRequestState, request);
     }
   };
 
@@ -132,7 +158,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
   createEffect(() => {
     // Track target changes (reactive read)
     const _target = props.target;
-    if (showBlame() && !blameFetched) {
+    if (showBlame() && !blameFetched()) {
       fetchBlame();
     }
   });
@@ -242,6 +268,8 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
   };
 
   onCleanup(() => {
+    abortActiveRequest(diffRequestState);
+    abortActiveRequest(blameRequestState);
     if (listenerRef.cleanup) listenerRef.cleanup();
   });
 
@@ -371,7 +399,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
         break;
       case "b":
         e.preventDefault();
-        if (!blameFetched) {
+        if (!blameFetched()) {
           fetchBlame();
         }
         setShowBlame(!showBlame());

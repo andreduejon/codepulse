@@ -37,6 +37,7 @@ interface AppProps {
   maxCount?: number;
   themeName?: string;
   autoRefreshInterval?: number;
+  autoFetchInterval?: number;
   configInfo?: ConfigInfo;
   startupMode: StartupMode;
   /** Initial GitHub Actions provider config from the loaded config file. */
@@ -48,7 +49,12 @@ interface AppContentProps extends AppProps {
 }
 
 function AppContent(props: Readonly<AppContentProps>) {
-  const { state, actions } = createAppState(props.maxCount ?? DEFAULT_MAX_COUNT, props.autoRefreshInterval, props.all);
+  const { state, actions } = createAppState(
+    props.maxCount ?? DEFAULT_MAX_COUNT,
+    props.autoRefreshInterval,
+    props.autoFetchInterval,
+    props.all,
+  );
   const themeState = props.themeState;
   const renderer = useRenderer();
 

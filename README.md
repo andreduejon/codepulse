@@ -1,12 +1,12 @@
 # codepulse
 
-A read-only terminal git graph visualizer. Navigate your repository history, inspect commits, view diffs with blame, and browse branches — all from the terminal.
+A terminal git graph visualizer that is read-only by default. Navigate your repository history, inspect commits, view diffs with blame, and browse branches — all from the terminal.
 
 Built with [Bun](https://bun.sh), [SolidJS](https://solidjs.com), and [@opentui/solid](https://github.com/anomalyco/opentui).
 
 ## Vision
 
-codepulse starts as a git-first terminal UI and is planned to grow into a read-only
+codepulse starts as a git-first terminal UI and is planned to grow into a read-only by default
 codebase dashboard: git history as the primary navigation surface, with CI/CD,
 security, and code quality signals layered onto the same commit and branch context.
 
@@ -33,6 +33,8 @@ codepulse [path]
 ```
 
 If no path is given, the current directory is used.
+
+Local auto-refresh only reloads repository state from disk. Remote fetching stays manual by default (`f` / `:fetch`) and can be enabled separately via repo config.
 
 ## Options
 

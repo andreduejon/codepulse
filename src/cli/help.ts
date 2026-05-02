@@ -11,7 +11,7 @@ export function printHelp() {
   }).join("\n\n");
 
   console.log(`
-codepulse - A read-only terminal git graph visualizer
+codepulse - A terminal git graph visualizer that is read-only by default
 
 USAGE:
   codepulse [path]

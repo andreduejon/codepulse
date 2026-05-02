@@ -3,8 +3,8 @@ import type { Accessor } from "solid-js";
 import { createMemo, createSignal } from "solid-js";
 import type { CodepulseConfig, ConfigInfo } from "../config";
 import { writeConfig } from "../config";
-import { AUTO_REFRESH_MS, AUTO_REFRESH_OPTIONS, MAX_COUNT_OPTIONS, MS_TO_LABEL } from "../constants";
-import { DEFAULT_AUTO_REFRESH_INTERVAL, useAppState } from "../context/state";
+import { AUTO_REFRESH_MS, INTERVAL_OPTIONS, MAX_COUNT_OPTIONS, MS_TO_LABEL } from "../constants";
+import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL, useAppState } from "../context/state";
 import { themes } from "../context/theme";
 import { getTokenSource, parseGitHubRemote } from "../providers/github-actions/api";
 
@@ -167,6 +167,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
       pageSize: state.maxCount(),
       showAllBranches: state.showAllBranches(),
       autoRefreshSeconds: state.autoRefreshInterval() / 1000,
+      autoFetchSeconds: state.autoFetchInterval() / 1000,
       ...overrides,
     };
     if (!overrides?.providers && opts.githubConfig?.()) {
@@ -247,12 +248,23 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
       {
         kind: "cycle",
         label: "Auto refresh",
-        options: AUTO_REFRESH_OPTIONS,
+        options: INTERVAL_OPTIONS,
         get: () => MS_TO_LABEL[state.autoRefreshInterval()] ?? "off",
         set: v => {
           const ms = AUTO_REFRESH_MS[v] ?? DEFAULT_AUTO_REFRESH_INTERVAL;
           actions.setAutoRefreshInterval(ms);
           persistFullConfig({ autoRefreshSeconds: ms / 1000 });
+        },
+      },
+      {
+        kind: "cycle",
+        label: "Auto fetch",
+        options: INTERVAL_OPTIONS,
+        get: () => MS_TO_LABEL[state.autoFetchInterval()] ?? "off",
+        set: v => {
+          const ms = AUTO_REFRESH_MS[v] ?? DEFAULT_AUTO_FETCH_INTERVAL;
+          actions.setAutoFetchInterval(ms);
+          persistFullConfig({ autoFetchSeconds: ms / 1000 });
         },
       },
     ];

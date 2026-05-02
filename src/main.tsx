@@ -69,6 +69,7 @@ export async function main() {
         maxCount={opts.maxCount}
         themeName={opts.themeName}
         autoRefreshInterval={opts.autoRefreshInterval}
+        autoFetchInterval={opts.autoFetchInterval}
         configInfo={configInfo}
         startupMode={startupMode}
         initialGithubConfig={config.providers?.github}
