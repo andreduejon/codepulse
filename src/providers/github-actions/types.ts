@@ -91,9 +91,12 @@ export interface GitHubProviderConfig {
   /** Name of the environment variable holding the Personal Access Token.
    *  Defaults to "GITHUB_TOKEN". */
   tokenEnvVar: string;
+  /** Trusted GitHub Enterprise host for this repo. github.com is always trusted. */
+  trustedEnterpriseHost: string | null;
 }
 
 export const DEFAULT_GITHUB_CONFIG: GitHubProviderConfig = {
   enabled: true,
   tokenEnvVar: "GITHUB_TOKEN",
+  trustedEnterpriseHost: null,
 };

@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { DEFAULT_MAX_COUNT } from "./constants";
 import { DEFAULT_AUTO_REFRESH_INTERVAL } from "./context/state";
+import { normalizeGitHubHost } from "./providers/github-actions/api";
 
 /**
  * Shape of the config file. All fields are optional —
@@ -23,6 +24,8 @@ export interface CodepulseConfig {
       /** Name of the environment variable holding the GitHub Personal Access Token.
        *  Defaults to "GITHUB_TOKEN". */
       tokenEnvVar?: string;
+      /** Trusted GitHub Enterprise host for this repo. github.com is always allowed. */
+      trustedEnterpriseHost?: string;
     };
   };
 }
@@ -38,6 +41,7 @@ export function defaultConfig(): Required<Omit<CodepulseConfig, "branch">> {
       github: {
         enabled: true,
         tokenEnvVar: "GITHUB_TOKEN",
+        trustedEnterpriseHost: undefined,
       },
     },
   };
@@ -67,12 +71,23 @@ export function backfillRepoConfig(repoPath: string, configPath?: string): void 
 
   // Deep-check providers.github fields
   const existingGh = existing.providers?.github;
-  const defaultGh = defaults.providers.github ?? { enabled: true, tokenEnvVar: "GITHUB_TOKEN" };
-  if (existingGh?.enabled === undefined || existingGh?.tokenEnvVar === undefined) {
+  const defaultGh = defaults.providers.github ?? {
+    enabled: true,
+    tokenEnvVar: "GITHUB_TOKEN",
+    trustedEnterpriseHost: undefined,
+  };
+  if (
+    existingGh?.enabled === undefined ||
+    existingGh?.tokenEnvVar === undefined ||
+    existingGh?.trustedEnterpriseHost === undefined
+  ) {
     missing.providers = {
       github: {
         ...(existingGh?.enabled === undefined ? { enabled: defaultGh.enabled } : {}),
         ...(existingGh?.tokenEnvVar === undefined ? { tokenEnvVar: defaultGh.tokenEnvVar } : {}),
+        ...(existingGh?.trustedEnterpriseHost === undefined
+          ? { trustedEnterpriseHost: defaultGh.trustedEnterpriseHost }
+          : {}),
       },
     };
   }
@@ -231,6 +246,20 @@ export function loadConfig(repoPath: string, configPath?: string): { config: Cod
 function validateConfig(raw: Record<string, unknown>, path: string, warnings: string[]): CodepulseConfig {
   const config: CodepulseConfig = {};
 
+  const parseTrustedEnterpriseHost = (value: unknown): string | undefined => {
+    if (value === undefined) return undefined;
+    if (typeof value !== "string") {
+      warnings.push(`${path}: "providers.github.trustedEnterpriseHost" must be a host string, ignoring`);
+      return undefined;
+    }
+    const host = normalizeGitHubHost(value);
+    if (!host || host === "github.com") {
+      warnings.push(`${path}: "providers.github.trustedEnterpriseHost" must be a valid non-github.com host, ignoring`);
+      return undefined;
+    }
+    return host;
+  };
+
   if (raw.theme !== undefined) {
     if (typeof raw.theme === "string" && raw.theme.length > 0) {
       config.theme = raw.theme;
@@ -291,6 +320,10 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
           } else {
             warnings.push(`${path}: "providers.github.tokenEnvVar" must be a non-empty string, ignoring`);
           }
+        }
+        const trustedEnterpriseHost = parseTrustedEnterpriseHost(gh.trustedEnterpriseHost);
+        if (trustedEnterpriseHost !== undefined) {
+          config.providers.github.trustedEnterpriseHost = trustedEnterpriseHost;
         }
       }
     } else {
@@ -462,6 +495,8 @@ function applyConfigFields(target: Record<string, unknown>, config: CodepulseCon
       if (config.providers.github.enabled !== undefined) existingGh.enabled = config.providers.github.enabled;
       if (config.providers.github.tokenEnvVar !== undefined)
         existingGh.tokenEnvVar = config.providers.github.tokenEnvVar;
+      if (config.providers.github.trustedEnterpriseHost !== undefined)
+        existingGh.trustedEnterpriseHost = config.providers.github.trustedEnterpriseHost;
       existingProviders.github = existingGh;
     }
     target.providers = existingProviders;

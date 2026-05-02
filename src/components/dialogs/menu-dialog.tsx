@@ -34,9 +34,9 @@ interface MenuDialogProps {
   /** Open the project selector to switch repos. */
   onSwitchRepo?: () => void;
   /** Current GitHub provider config (passed through to Providers tab). */
-  githubConfig?: { enabled: boolean; tokenEnvVar: string };
+  githubConfig?: { enabled: boolean; tokenEnvVar: string; trustedEnterpriseHost: string | null };
   /** Callback to update GitHub provider config. */
-  onGithubConfigChange?: (cfg: { enabled: boolean; tokenEnvVar: string }) => void;
+  onGithubConfigChange?: (cfg: { enabled: boolean; tokenEnvVar: string; trustedEnterpriseHost: string | null }) => void;
 }
 
 /** Persists the last-used tab across dialog open/close cycles. */
@@ -126,6 +126,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     const idx = editingIdx();
     if (idx == null) return;
     const item = activeItems()[idx];
+    if (item?.kind === "editable" && item.isDraftValid && !item.isDraftValid(editDraft())) return;
     if (item?.kind === "editable") item.set(editDraft());
     setEditingIdx(null);
     setEditDraft("");
@@ -366,19 +367,18 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     item: Extract<SettingItem, { kind: "toggle" | "cycle" | "dialog" | "action" }>,
     idx: number,
   ) => {
-    const isDisabledAction = () => item.kind === "action" && !!item.disabled?.();
-    const isSelected = () => !isDisabledAction() && selectedItemIndex() === idx;
+    const isDisabled = () => (item.kind === "action" || item.kind === "toggle") && !!item.disabled?.();
+    const isSelected = () => !isDisabled() && selectedItemIndex() === idx;
     const val = () => valueDisplay(item);
 
     const paddedVal = () => {
-      if (isDisabledAction()) return "";
       const v = val();
       if (!v) return " ".padStart(VALUE_COL_WIDTH);
       if (item.kind === "dialog" || item.kind === "action") return v.padStart(VALUE_COL_WIDTH);
       return `[${v}]`.padStart(VALUE_COL_WIDTH);
     };
     const paddedHotkey = () => {
-      if (isDisabledAction()) return "";
+      if (isDisabled()) return " ".repeat(HOTKEY_COL_WIDTH);
       const h =
         item.kind === "toggle" || item.kind === "cycle" || item.kind === "dialog" || item.kind === "action"
           ? (item.hotkey ?? "")
@@ -386,7 +386,8 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
       return h.padStart(HOTKEY_COL_WIDTH);
     };
 
-    const labelColor = () => (isDisabledAction() ? t().foregroundMuted : isSelected() ? t().accent : t().foreground);
+    const labelColor = () => (isDisabled() ? t().foregroundMuted : isSelected() ? t().accent : t().foreground);
+    const valueColor = () => (isDisabled() ? t().foregroundMuted : t().foreground);
 
     return (
       <box
@@ -401,7 +402,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
         <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={labelColor()}>
           {item.label}
         </text>
-        <text flexShrink={0} wrapMode="none" fg={t().foreground}>
+        <text flexShrink={0} wrapMode="none" fg={valueColor()}>
           {paddedVal()}
         </text>
         <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
@@ -417,7 +418,8 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     const valid = () => item.valid?.();
     const savedValue = () => item.get().trim();
     const displayValue = () => savedValue() || item.placeholder || "";
-    const displayColor = () => (savedValue() ? (isSel() ? t().accent : t().foregroundMuted) : t().foregroundMuted);
+    const labelColor = () => (isSel() ? t().accent : t().foreground);
+    const displayColor = () => (savedValue() ? (isSel() ? t().accent : t().foreground) : t().foregroundMuted);
     return (
       <box
         ref={(el: Renderable) => {
@@ -428,7 +430,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
         paddingX={4}
         backgroundColor={isEditing() ? t().backgroundElementActive : isSel() ? t().backgroundElement : undefined}
       >
-        <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={isSel() ? t().accent : t().foregroundMuted}>
+        <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={labelColor()}>
           {item.label}
         </text>
         {isEditing() ? (

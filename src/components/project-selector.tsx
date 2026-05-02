@@ -5,8 +5,8 @@ import { useKeyboard, useRenderer } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import packageJson from "../../package.json";
 import { removeRepoConfig } from "../config";
-import { useAppState } from "../context/state";
 import { useT } from "../hooks/use-t";
+import type { KeyboardScope } from "../keyboard/scope";
 import { KeyHint } from "./key-hint";
 import LogoBanner, { LOGO_WIDTH } from "./logo-banner";
 
@@ -22,6 +22,8 @@ interface ProjectSelectorProps {
   currentRepo?: string;
   /** Called when the user presses Esc to go back (in-app mode only). */
   onCancel?: () => void;
+  /** Optional keyboard scope hook for in-app usage only. */
+  setKeyboardScopeOverride?: (scope: KeyboardScope | null) => void;
 }
 
 /**
@@ -39,7 +41,6 @@ interface ProjectSelectorProps {
 export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
   const t = useT();
   const renderer = useRenderer();
-  const { actions } = useAppState();
 
   /** Whether we're in in-app mode (have a current repo to go back to). */
   const inApp = () => !!props.currentRepo;
@@ -70,7 +71,7 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
   };
 
   createEffect(() => {
-    actions.setKeyboardScopeOverride("repo-selector");
+    props.setKeyboardScopeOverride?.("repo-selector");
   });
 
   createEffect(() => {
@@ -78,7 +79,7 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
     setCursor(c => Math.max(0, Math.min(c, max)));
   });
 
-  onCleanup(() => actions.setKeyboardScopeOverride(null));
+  onCleanup(() => props.setKeyboardScopeOverride?.(null));
 
   /** Destroy the renderer and re-exec with the given path. */
   const selectRepo = (repoPath: string) => {
@@ -163,7 +164,7 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
           selectRepo(repos()[cursor()]);
         }
         break;
-      case "r":
+      case "f":
         e.preventDefault();
         forgetSelectedRepo();
         break;
@@ -306,7 +307,7 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
           <box flexGrow={1} />
           <KeyHint key="enter" desc=" open  " />
           <Show when={!pathFocused() && hasRepos()}>
-            <KeyHint key="r" desc=" forget  " />
+            <KeyHint key="f" desc=" forget  " />
           </Show>
           <KeyHint key="esc" desc={escapeHint()} />
           <KeyHint key="q" desc=" quit" />

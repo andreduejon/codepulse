@@ -42,7 +42,7 @@ interface AppProps {
   configInfo?: ConfigInfo;
   startupMode: StartupMode;
   /** Initial GitHub Actions provider config from the loaded config file. */
-  initialGithubConfig?: { enabled?: boolean; tokenEnvVar?: string };
+  initialGithubConfig?: { enabled?: boolean; tokenEnvVar?: string; trustedEnterpriseHost?: string };
 }
 
 interface AppContentProps extends AppProps {
@@ -58,6 +58,7 @@ function AppContent(props: Readonly<AppContentProps>) {
   const [githubConfig, setGithubConfig] = createSignal({
     enabled: props.initialGithubConfig?.enabled ?? true,
     tokenEnvVar: props.initialGithubConfig?.tokenEnvVar ?? "GITHUB_TOKEN",
+    trustedEnterpriseHost: props.initialGithubConfig?.trustedEnterpriseHost ?? null,
   });
 
   // ── GitHub CI data hook (called during setup, before Provider renders — per AGENTS.md rule 5) ──
@@ -448,6 +449,7 @@ function AppContent(props: Readonly<AppContentProps>) {
                   knownRepos={getKnownRepos()}
                   currentRepo={props.repoPath}
                   onCancel={() => setRepoSelectorVisible(false)}
+                  setKeyboardScopeOverride={actions.setKeyboardScopeOverride}
                 />
               }
             >

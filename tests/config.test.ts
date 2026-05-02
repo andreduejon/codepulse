@@ -54,6 +54,25 @@ describe("loadConfig", () => {
     expect(result.pageSize).toBe(100);
   });
 
+  test("loads trusted enterprise host from repo config", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("github-enterprise-host", repoPath, {
+      providers: { github: { trustedEnterpriseHost: "ghe.example.com" } },
+    });
+    const { config: result } = loadConfig(repoPath, configPath);
+    expect(result.providers?.github?.trustedEnterpriseHost).toBe("ghe.example.com");
+  });
+
+  test("drops invalid trusted enterprise host from repo config", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("github-enterprise-host-invalid", repoPath, {
+      providers: { github: { trustedEnterpriseHost: "https://bad.example.com" } },
+    });
+    const { config: result, warnings } = loadConfig(repoPath, configPath);
+    expect(result.providers?.github?.trustedEnterpriseHost).toBeUndefined();
+    expect(warnings.some(w => w.includes("providers.github.trustedEnterpriseHost"))).toBe(true);
+  });
+
   test("returns empty object for invalid JSON", () => {
     const configPath = makeTempConfig("bad-json", "not json!!!");
     const { config: result, warnings } = loadConfig("/tmp/repo", configPath);

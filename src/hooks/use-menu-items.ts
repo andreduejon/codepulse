@@ -6,7 +6,7 @@ import { writeConfig } from "../config";
 import { AUTO_REFRESH_MS, AUTO_REFRESH_OPTIONS, MAX_COUNT_OPTIONS, MS_TO_LABEL } from "../constants";
 import { DEFAULT_AUTO_REFRESH_INTERVAL, useAppState } from "../context/state";
 import { themes } from "../context/theme";
-import { getTokenSource } from "../providers/github-actions/api";
+import { getTokenSource, parseGitHubRemote } from "../providers/github-actions/api";
 
 type MenuTab = "repository" | "branch" | "providers";
 
@@ -20,6 +20,7 @@ export type SettingItem =
       hotkey?: string;
       get: () => boolean;
       set: (v: boolean) => void;
+      disabled?: () => boolean;
       needsReload?: boolean;
     }
   | {
@@ -43,6 +44,7 @@ export type SettingItem =
       get: () => string;
       set: (v: string) => void;
       valid?: () => boolean;
+      isDraftValid?: (v: string) => boolean;
     };
 
 /** Width of the info label column (characters). */
@@ -69,10 +71,10 @@ export interface MenuItemsOptions {
   configInfo?: ConfigInfo;
   /** Open the project selector to switch repos. */
   onSwitchRepo?: () => void;
-  /** Current GitHub provider config (tokenEnvVar, enabled). */
-  githubConfig?: Accessor<{ enabled: boolean; tokenEnvVar: string } | undefined>;
+  /** Current GitHub provider config (tokenEnvVar, enabled, trustedEnterpriseHost). */
+  githubConfig?: Accessor<{ enabled: boolean; tokenEnvVar: string; trustedEnterpriseHost: string | null } | undefined>;
   /** Callback to update GitHub provider config. */
-  onGithubConfigChange?: (cfg: { enabled: boolean; tokenEnvVar: string }) => void;
+  onGithubConfigChange?: (cfg: { enabled: boolean; tokenEnvVar: string; trustedEnterpriseHost: string | null }) => void;
 }
 
 export interface MenuItemsResult {
@@ -85,6 +87,67 @@ export interface MenuItemsResult {
   activateItem: () => void;
   valueDisplay: (item: SettingItem) => string;
   footerVerb: () => string;
+}
+
+export interface GitHubMenuConfig {
+  enabled: boolean;
+  tokenEnvVar: string;
+  trustedEnterpriseHost: string | null;
+}
+
+export function buildGitHubProviderItems(
+  ghCfg: GitHubMenuConfig,
+  remoteUrl: string,
+  tokenSource: "env" | null,
+  onChange?: (cfg: GitHubMenuConfig) => void,
+  persist?: (cfg: GitHubMenuConfig) => void,
+): SettingItem[] {
+  const remoteRepo = parseGitHubRemote(remoteUrl);
+  const remoteHost = remoteRepo?.hostname ?? null;
+  const hostAllowed = remoteHost === "github.com" || (remoteHost != null && ghCfg.trustedEnterpriseHost === remoteHost);
+
+  return [
+    { kind: "header", label: "github" },
+    {
+      kind: "toggle",
+      label: "Enabled",
+      get: () => ghCfg.enabled,
+      set: v => {
+        const newCfg = { ...ghCfg, enabled: v };
+        onChange?.(newCfg);
+        persist?.(newCfg);
+      },
+    },
+    {
+      kind: "editable",
+      label: "Token",
+      placeholder: "Enter token...",
+      get: () => ghCfg.tokenEnvVar,
+      set: (v: string) => {
+        const newCfg = { ...ghCfg, tokenEnvVar: v.trim() };
+        onChange?.(newCfg);
+        persist?.(newCfg);
+      },
+      valid: () => !!ghCfg.tokenEnvVar.trim() && tokenSource === "env",
+    },
+    {
+      kind: "info",
+      label: "Host",
+      get: () => remoteHost ?? "not detected",
+      valid: () => hostAllowed,
+    },
+    {
+      kind: "toggle",
+      label: "Allow host",
+      get: () => hostAllowed,
+      set: v => {
+        const newCfg = { ...ghCfg, trustedEnterpriseHost: v ? remoteHost : null };
+        onChange?.(newCfg);
+        persist?.(newCfg);
+      },
+      disabled: () => remoteHost == null || remoteHost === "github.com",
+    },
+  ];
 }
 
 /**
@@ -113,6 +176,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
         github: {
           enabled: ghCfg.enabled,
           tokenEnvVar: ghCfg.tokenEnvVar,
+          trustedEnterpriseHost: ghCfg.trustedEnterpriseHost ?? undefined,
         },
       };
     }
@@ -344,38 +408,13 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
 
   // ── Provider tab items ────────────────────────────────────────────
   const providerItems = createMemo<SettingItem[]>(() => {
-    const ghCfg = opts.githubConfig?.() ?? { enabled: false, tokenEnvVar: "GITHUB_TOKEN" };
+    const ghCfg = opts.githubConfig?.() ?? { enabled: false, tokenEnvVar: "GITHUB_TOKEN", trustedEnterpriseHost: null };
     const tokenSource = getTokenSource(ghCfg.tokenEnvVar);
-
-    const items: SettingItem[] = [
-      { kind: "header", label: "github" },
-      {
-        kind: "toggle",
-        label: "Enabled",
-        get: () => ghCfg.enabled,
-        set: v => {
-          opts.onGithubConfigChange?.({ ...ghCfg, enabled: v });
-          persistFullConfig({
-            providers: { github: { ...ghCfg, enabled: v } },
-          });
-        },
-      },
-      {
-        kind: "editable",
-        label: "Token",
-        placeholder: "Enter token...",
-        get: () => ghCfg.tokenEnvVar,
-        set: (v: string) => {
-          const trimmed = v.trim();
-          const newCfg = { ...ghCfg, tokenEnvVar: trimmed };
-          opts.onGithubConfigChange?.(newCfg);
-          persistFullConfig({ providers: { github: newCfg } });
-        },
-        valid: () => !!ghCfg.tokenEnvVar.trim() && tokenSource === "env",
-      },
-    ];
-
-    return items;
+    return buildGitHubProviderItems(ghCfg, state.remoteUrl(), tokenSource, opts.onGithubConfigChange, newCfg =>
+      persistFullConfig({
+        providers: { github: { ...newCfg, trustedEnterpriseHost: newCfg.trustedEnterpriseHost ?? undefined } },
+      }),
+    );
   });
 
   // ── Active items depend on tab ────────────────────────────────────
@@ -407,7 +446,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
   const selectableIndices = (): number[] =>
     activeItems()
       .map((item, i) =>
-        item.kind === "toggle" ||
+        (item.kind === "toggle" && !item.disabled?.()) ||
         item.kind === "cycle" ||
         item.kind === "dialog" ||
         item.kind === "branch" ||
@@ -442,7 +481,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
     const items = activeItems();
     const item = items[itemIdx];
     if (!item || item.kind === "header" || item.kind === "info" || item.kind === "badge") return;
-    if (item.kind === "action" && item.disabled?.()) return;
+    if ((item.kind === "action" || item.kind === "toggle") && item.disabled?.()) return;
 
     if (item.kind === "copyable") {
       opts.copyToClipboard(item.get(), item.label);

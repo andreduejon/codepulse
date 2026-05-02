@@ -8,7 +8,9 @@ import {
   GQL_BATCH_SIZE,
   getGitHubToken,
   getTokenSource,
+  isTrustedGitHubHost,
   mapRunToBadge,
+  normalizeGitHubHost,
   parseGitHubRemote,
 } from "../src/providers/github-actions/api";
 import type { GitHubApiJob } from "../src/providers/github-actions/types";
@@ -206,6 +208,38 @@ describe("parseGitHubRemote", () => {
         repo: "repo",
       });
     });
+  });
+});
+
+describe("normalizeGitHubHost", () => {
+  it("accepts hostname only", () => {
+    expect(normalizeGitHubHost("ghe.example.com")).toBe("ghe.example.com");
+  });
+
+  it("accepts hostname with port", () => {
+    expect(normalizeGitHubHost("ghe.example.com:8443")).toBe("ghe.example.com:8443");
+  });
+
+  it("rejects protocol", () => {
+    expect(normalizeGitHubHost("https://ghe.example.com")).toBeNull();
+  });
+
+  it("rejects path", () => {
+    expect(normalizeGitHubHost("ghe.example.com/foo")).toBeNull();
+  });
+});
+
+describe("isTrustedGitHubHost", () => {
+  it("always trusts github.com", () => {
+    expect(isTrustedGitHubHost("github.com", null)).toBe(true);
+  });
+
+  it("trusts configured enterprise host", () => {
+    expect(isTrustedGitHubHost("ghe.example.com", "ghe.example.com")).toBe(true);
+  });
+
+  it("rejects unconfigured hosts", () => {
+    expect(isTrustedGitHubHost("gitlab.com", "ghe.example.com")).toBe(false);
   });
 });
 

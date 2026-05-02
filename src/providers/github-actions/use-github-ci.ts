@@ -32,6 +32,7 @@ import {
   fetchRunJobs,
   GQL_BATCH_SIZE,
   getGitHubToken,
+  isTrustedGitHubHost,
   parseGitHubRemote,
 } from "./api";
 import type { GitHubCommitData, GitHubJob, GitHubProviderConfig, GitHubWorkflowRun } from "./types";
@@ -98,9 +99,14 @@ export function useGitHubCI(opts: {
   // Use a signal so effects that read cachedGitHubRepo() re-run when the
   // remote URL is parsed — this lets the graphRows eager-fetch effect retry
   // as soon as the remote becomes available.
-  const [cachedGitHubRepo, setCachedGitHubRepo] = createSignal(parseGitHubRemote(state.remoteUrl()));
+  const [parsedGitHubRepo, setParsedGitHubRepo] = createSignal(parseGitHubRemote(state.remoteUrl()));
+  const [cachedGitHubRepo, setCachedGitHubRepo] = createSignal<ReturnType<typeof parseGitHubRemote>>(null);
   createEffect(() => {
-    setCachedGitHubRepo(parseGitHubRemote(state.remoteUrl()));
+    const repo = parseGitHubRemote(state.remoteUrl());
+    setParsedGitHubRepo(repo);
+    setCachedGitHubRepo(
+      repo && isTrustedGitHubHost(repo.hostname, configAccessor().trustedEnterpriseHost ?? null) ? repo : null,
+    );
   });
 
   const isAvailable = (): boolean => {
@@ -262,8 +268,10 @@ export function useGitHubCI(opts: {
         const token = getGitHubToken(config.tokenEnvVar);
         if (!config.enabled) {
           actions.setProviderStatus("CI provider disabled");
-        } else if (!repo) {
+        } else if (!parsedGitHubRepo()) {
           actions.setProviderStatus("No GitHub remote detected");
+        } else if (!repo) {
+          actions.setProviderStatus(`Untrusted GitHub host: ${parsedGitHubRepo()?.hostname}`);
         } else if (!token) {
           actions.setProviderStatus(`Token not found: $${config.tokenEnvVar}`);
         }
