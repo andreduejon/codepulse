@@ -62,7 +62,7 @@ export function FileTreeEntry(props: FileTreeEntryProps) {
             props.row.isDir
               ? props.cursored
                 ? t().accent
-                : t().foregroundMuted
+                : t().foreground
               : props.cursored
                 ? t().accent
                 : t().foreground

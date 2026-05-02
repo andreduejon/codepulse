@@ -2,6 +2,12 @@ import { createEffect, createSignal, onCleanup, Show } from "solid-js";
 import { useAppState } from "../context/state";
 import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
 import { useT } from "../hooks/use-t";
+import {
+  getEnabledProviderViews,
+  getProvider,
+  getProviderRegistryVersion,
+  nextProviderView,
+} from "../providers/provider";
 import { KeyHint } from "./key-hint";
 
 /** Full braille rotation spinner — 8 frames, smooth circular motion. */
@@ -61,6 +67,14 @@ export default function Footer(
   const spinnerColor = () => (showProviderStatus() && providerStatus() !== "loading" ? t().error : t().accent);
 
   const enterAction = () => (state.detailFocused() ? state.detailCursorAction() : null);
+  const nextProviderLabel = () => {
+    getProviderRegistryVersion();
+    const views = getEnabledProviderViews();
+    if (views.length <= 1) return null;
+    const next = nextProviderView(state.activeProviderView());
+    if (next === state.activeProviderView()) return null;
+    return next === "git" ? "git" : (getProvider(next)?.displayName ?? next);
+  };
 
   const mode = () => props.commandBarMode();
 
@@ -86,6 +100,10 @@ export default function Footer(
 
         {/* ── Detail focused ───────────────────────────────────────────────── */}
         <Show when={state.detailFocused()}>
+          <KeyHint
+            key={nextProviderLabel() ? "tab" : ""}
+            desc={nextProviderLabel() ? ` ${nextProviderLabel()}  ` : ""}
+          />
           <KeyHint key={enterAction() ? "enter" : ""} desc={enterAction() ? ` ${enterAction()}  ` : ""} />
           <KeyHint key="esc" desc=" back  " />
           <KeyHint key="←/→" desc=" switch tab  " />
@@ -114,6 +132,10 @@ export default function Footer(
           </Show>
 
           {/* Switch tab / show details — always shown in graph idle */}
+          <KeyHint
+            key={nextProviderLabel() ? "tab" : ""}
+            desc={nextProviderLabel() ? ` ${nextProviderLabel()}  ` : ""}
+          />
           <Show when={props.compact} fallback={<KeyHint key="←/→" desc=" switch tab  " />}>
             <KeyHint key="enter" desc=" show details  " />
           </Show>

@@ -7,6 +7,8 @@
  * hook, UI components.  Only the primitives below are truly universal.
  */
 
+import { createSignal } from "solid-js";
+
 /** Provider view identifiers — Tab cycles through these. */
 export type ProviderView = "git" | "github-actions";
 // Future: | "gitlab-ci" | "jenkins"
@@ -45,12 +47,14 @@ export interface ProviderRegistration {
 
 /** Mutable provider registry — populated at runtime as providers are initialised. */
 export const providerRegistry: ProviderRegistration[] = [];
+const [providerRegistryVersion, setProviderRegistryVersion] = createSignal(0);
 
 /** Register a provider.  Called once per provider during hook setup. */
 export function registerProvider(p: ProviderRegistration): void {
   // Avoid duplicate registrations (e.g. HMR / strict-mode double-invocation)
   if (!providerRegistry.find(r => r.id === p.id)) {
     providerRegistry.push(p);
+    setProviderRegistryVersion(v => v + 1);
   }
 }
 
@@ -59,7 +63,13 @@ export function unregisterProvider(id: ProviderView): void {
   const idx = providerRegistry.findIndex(r => r.id === id);
   if (idx !== -1) {
     providerRegistry.splice(idx, 1);
+    setProviderRegistryVersion(v => v + 1);
   }
+}
+
+/** Reactive version counter for consumers that need to re-read registry-derived UI. */
+export function getProviderRegistryVersion(): number {
+  return providerRegistryVersion();
 }
 
 /**

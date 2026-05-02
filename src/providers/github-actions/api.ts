@@ -300,6 +300,7 @@ interface GqlCheckSuite {
     databaseId: number;
     runNumber: number;
     event: string;
+    createdAt: string;
     updatedAt: string;
     workflow: { name: string };
   } | null;
@@ -348,6 +349,7 @@ function mapGqlCheckSuiteToRun(suite: GqlCheckSuite, sha: string): GitHubWorkflo
     headSha: sha,
     event: wr.event,
     runNumber: wr.runNumber,
+    startedAt: wr.createdAt,
     updatedAt: wr.updatedAt,
   };
 }
@@ -382,6 +384,7 @@ const COMMIT_FRAGMENT = `
         databaseId
         runNumber
         event
+        createdAt
         updatedAt
         workflow { name }
       }

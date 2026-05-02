@@ -42,6 +42,7 @@ export interface GitHubWorkflowRun {
   headSha: string;
   event: string;
   runNumber: number;
+  startedAt?: string | null;
   updatedAt: string;
 }
 

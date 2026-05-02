@@ -79,6 +79,10 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
   const STATUS_COL_WIDTH = 2;
 
   const formatStepDuration = (step: GitHubStep) => formatDuration(step.startedAt, step.completedAt);
+  const formatRunDuration = (run: GitHubWorkflowRun) => {
+    const duration = formatDuration(run.startedAt ?? null, run.updatedAt);
+    return duration ? `~${duration}` : "";
+  };
   const statusMark = (status: string, conclusion: string | null) => {
     const cat = categorize(status, conclusion);
     switch (cat) {
@@ -132,11 +136,45 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
   const [fetchedJobs, setFetchedJobs] = createSignal<Map<number, GitHubJob[]>>(new Map());
   /** Set of run IDs with an in-flight job fetch. */
   const [loadingRuns, setLoadingRuns] = createSignal<Set<number>>(new Set());
+  /** Tracks which commit SHA already received the one-time single-run auto-expand. */
+  let autoExpandedSha: string | null = null;
+
+  const rightInfoWidth = createMemo(() => {
+    let max = 0;
+    const runs = actionsData()?.runs ?? [];
+    for (const run of runs) {
+      max = Math.max(max, formatRelativeDate(run.updatedAt).length);
+    }
+    for (const jobs of fetchedJobs().values()) {
+      for (const job of jobs) {
+        const label = job.steps.length > 0 ? `${job.steps.length} step${job.steps.length === 1 ? "" : "s"}` : "";
+        max = Math.max(max, label.length);
+      }
+    }
+    return max;
+  });
+
+  const durationWidth = createMemo(() => {
+    let max = 0;
+    const runs = actionsData()?.runs ?? [];
+    for (const run of runs) {
+      max = Math.max(max, formatRunDuration(run).length);
+    }
+    for (const jobs of fetchedJobs().values()) {
+      for (const job of jobs) {
+        max = Math.max(max, formatDuration(job.startedAt, job.completedAt).length);
+      }
+    }
+    return max;
+  });
 
   createEffect(() => {
+    const sha = props.sha;
     const runs = actionsData()?.runs ?? [];
+    if (autoExpandedSha === sha) return;
     if (runs.length !== 1) return;
     if (expandedRuns().has(runs[0].id)) return;
+    autoExpandedSha = sha;
     toggleRun(runs[0]);
   });
 
@@ -272,9 +310,10 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
               const cat = categorize(run.status, run.conclusion);
               const color = () => statusColor(t(), cat);
               const relTime = () => formatRelativeDate(run.updatedAt);
+              const runDuration = () => formatRunDuration(run);
               const runTreePrefix = () => (runIndexFn() === data().runs.length - 1 ? "└─ " : "├─ ");
               const runIndicatorColor = () => (isCursored() ? t().accent : t().foregroundMuted);
-              const runTextColor = () => (isCursored() ? t().accent : t().foregroundMuted);
+              const runTextColor = () => (isCursored() ? t().accent : t().foreground);
               const runIsLast = () => runIndexFn() === data().runs.length - 1;
 
               return (
@@ -299,10 +338,15 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
                       {`${run.name}  #${run.runNumber}`}
                     </text>
                     <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                      {relTime()}
-                      {"  "}
-                      {run.event}
+                      {relTime().padStart(rightInfoWidth())}
                     </text>
+                    <Show when={durationWidth() > 0}>
+                      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                        {runDuration()
+                          ? ` ${runDuration().padStart(durationWidth())}`
+                          : " ".repeat(durationWidth() + 1)}
+                      </text>
+                    </Show>
                     <text flexShrink={0} width={STATUS_COL_WIDTH} wrapMode="none" fg={color()}>
                       {statusMark(run.status, run.conclusion).padStart(STATUS_COL_WIDTH)}
                     </text>
@@ -331,7 +375,9 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
                         const jobCat = categorize(job.status, job.conclusion);
                         const jobColor = () => statusColor(t(), jobCat);
                         const duration = formatDuration(job.startedAt, job.completedAt);
-                        const jobTextColor = () => (isJobCursored() ? t().accent : t().foregroundMuted);
+                        const stepCountLabel = () =>
+                          job.steps.length > 0 ? `${job.steps.length} step${job.steps.length === 1 ? "" : "s"}` : "";
+                        const jobTextColor = () => (isJobCursored() ? t().accent : t().foreground);
                         const jobTreeLead = () => (runIsLast() ? "   " : "│  ");
                         const jobTreePrefix = () => (jobIndexFn() === jobs().length - 1 ? "└─ " : "├─ ");
                         const jobIsLast = () => jobIndexFn() === jobs().length - 1;
@@ -355,11 +401,15 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
                                 {job.name}
                               </text>
                               <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                                {job.steps.length > 0
-                                  ? `  ${job.steps.length} step${job.steps.length === 1 ? "" : "s"}`
-                                  : ""}
-                                {duration ? `  ${duration}` : ""}
+                                {stepCountLabel().padStart(rightInfoWidth())}
                               </text>
+                              <Show when={durationWidth() > 0}>
+                                <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                                  {duration
+                                    ? ` ${duration.padStart(durationWidth())}`
+                                    : " ".repeat(durationWidth() + 1)}
+                                </text>
+                              </Show>
                               <text flexShrink={0} width={STATUS_COL_WIDTH} wrapMode="none" fg={jobColor()}>
                                 {statusMark(job.status, job.conclusion).padStart(STATUS_COL_WIDTH)}
                               </text>
@@ -380,8 +430,14 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
                                         {stepTreePrefix()}
                                         {stepConnector()}
                                       </text>
-                                      <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foreground}>
-                                        {`${step.number}. ${step.name}`}
+                                      <text
+                                        flexGrow={1}
+                                        flexShrink={1}
+                                        wrapMode="none"
+                                        truncate
+                                        fg={t().foregroundMuted}
+                                      >
+                                        {step.name}
                                       </text>
                                       {stepDuration() ? (
                                         <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>

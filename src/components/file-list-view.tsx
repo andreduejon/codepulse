@@ -134,7 +134,7 @@ export default function FileListView(props: Readonly<FileListViewProps>) {
     if (item.type === "file-dir") {
       actions.setDetailCursorAction(collapsedDirs().has(item.dirPath) ? "expand" : "collapse");
     } else {
-      actions.setDetailCursorAction("open diff");
+      actions.setDetailCursorAction("view diff");
     }
   });
 
