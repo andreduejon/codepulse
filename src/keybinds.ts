@@ -40,6 +40,7 @@ export const KEYBINDS: Record<HelpTab, [string, string][]> = {
   ],
   commands: [
     [":ancestry", "Enter ancestry mode"],
+    [":branches", "Open menu (branches tab)"],
     [":fetch", "Fetch from remote"],
     [":help", "Open help dialog"],
     [":menu", "Open menu dialog"],
@@ -49,6 +50,7 @@ export const KEYBINDS: Record<HelpTab, [string, string][]> = {
     [":reload", "Reload data from disk"],
     [":repo", "Open menu (repository tab)"],
     [":search", "Switch to search mode"],
+    [":switch", "Open repository switcher"],
     [":theme", "Open theme dialog"],
   ],
   providers: [

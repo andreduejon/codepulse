@@ -49,6 +49,12 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
     const mode = props.commandBarMode();
     return props.searchFocused() || mode === "command" || mode === "path";
   };
+  const promptPrefix = () => {
+    const mode = props.commandBarMode();
+    if (mode === "command") return ":";
+    if (mode === "search") return "/";
+    return "";
+  };
 
   const modeBadge = () => modeBadgeLabel(props.commandBarMode(), state.highlightMode());
 
@@ -76,15 +82,23 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
     >
       {/* Input row */}
       <box flexGrow={1} flexDirection="row">
+        <Show when={promptPrefix()}>
+          <text flexShrink={0} wrapMode="none" fg={t().accent}>
+            {promptPrefix()}
+          </text>
+        </Show>
         <input
           focused={inputFocused()}
           flexGrow={1}
           placeholder={placeholder()}
           value={inputValue()}
           onInput={props.onInput}
-          fg={t().foreground}
+          textColor={t().foreground}
+          focusedTextColor={t().foreground}
           placeholderColor={t().foregroundMuted}
+          cursorColor={t().accent}
           backgroundColor={t().background}
+          focusedBackgroundColor={t().background}
         />
         <text flexShrink={0} wrapMode="none" fg={countColor()}>
           {"  "}

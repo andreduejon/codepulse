@@ -408,6 +408,37 @@ export function writeConfig(config: CodepulseConfig, repoPath: string, configPat
   }
 }
 
+/** Remove one saved repo entry from the global config file. */
+export function removeRepoConfig(repoPath: string, configPath?: string): boolean {
+  const globalPath = configPath ?? defaultConfigPath();
+
+  try {
+    if (!existsSync(globalPath)) return true;
+
+    const raw = readFileSync(globalPath, "utf-8");
+    const parsed = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return true;
+
+    const merged = { ...(parsed as Record<string, unknown>) };
+    const repos = merged.repos;
+    if (typeof repos !== "object" || repos === null || Array.isArray(repos)) return true;
+
+    const nextRepos = { ...(repos as Record<string, unknown>) };
+    delete nextRepos[resolve(repoPath)];
+    if (Object.keys(nextRepos).length === 0) {
+      delete merged.repos;
+    } else {
+      merged.repos = nextRepos;
+    }
+
+    writeFileSync(globalPath, `${JSON.stringify(merged, null, 2)}\n`, "utf-8");
+    return true;
+  } catch (err) {
+    console.error(`Error: failed to update config at ${globalPath}: ${err instanceof Error ? err.message : err}`);
+    return false;
+  }
+}
+
 /** Apply defined CodepulseConfig fields to a target object. */
 function applyConfigFields(target: Record<string, unknown>, config: CodepulseConfig): void {
   if (config.theme !== undefined) target.theme = config.theme;
