@@ -156,7 +156,11 @@ export interface AppActions {
 
 const AppStateContext = createContext<{ state: AppState; actions: AppActions }>();
 
-export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, initialAutoRefreshInterval?: number) {
+export function createAppState(
+  initialMaxCount: number = DEFAULT_MAX_COUNT,
+  initialAutoRefreshInterval?: number,
+  initialShowAllBranches: boolean = true,
+) {
   // ── Repository data ───────────────────────────────────────────────
   const [commits, setCommits] = createSignal<Commit[]>([]);
   const [graphRows, setGraphRows] = createSignal<GraphRow[]>([]);
@@ -193,7 +197,7 @@ export function createAppState(initialMaxCount: number = DEFAULT_MAX_COUNT, init
   // ── UI state & settings ───────────────────────────────────────────
   const [error, setError] = createSignal<string | null>(null);
   const [loading, setLoading] = createSignal(true);
-  const [showAllBranches, setShowAllBranches] = createSignal(true);
+  const [showAllBranches, setShowAllBranches] = createSignal(initialShowAllBranches);
   const [maxGraphColumns, setMaxGraphColumns] = createSignal(0);
   const [maxCount, setMaxCount] = createSignal(initialMaxCount);
   const [autoRefreshInterval, setAutoRefreshInterval] = createSignal(

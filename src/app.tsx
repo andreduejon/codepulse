@@ -37,8 +37,6 @@ interface AppProps {
   maxCount?: number;
   themeName?: string;
   autoRefreshInterval?: number;
-  /** Initial pathspec filter from CLI (session-scoped). */
-  path?: string;
   configInfo?: ConfigInfo;
   startupMode: StartupMode;
   /** Initial GitHub Actions provider config from the loaded config file. */
@@ -50,7 +48,7 @@ interface AppContentProps extends AppProps {
 }
 
 function AppContent(props: Readonly<AppContentProps>) {
-  const { state, actions } = createAppState(props.maxCount ?? DEFAULT_MAX_COUNT, props.autoRefreshInterval);
+  const { state, actions } = createAppState(props.maxCount ?? DEFAULT_MAX_COUNT, props.autoRefreshInterval, props.all);
   const themeState = props.themeState;
   const renderer = useRenderer();
 
@@ -87,9 +85,6 @@ function AppContent(props: Readonly<AppContentProps>) {
     const name = themeState.themeName();
     writeConfig({ theme: name }, props.repoPath);
   });
-
-  // Initialize path filter from CLI --path flag (before first loadData)
-  if (props.path) actions.setPathFilter(props.path);
 
   const [dialog, setDialog] = createSignal<"menu" | "help" | "theme" | "diff-blame" | "detail" | "job-log" | null>(
     null,

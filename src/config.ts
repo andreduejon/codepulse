@@ -113,8 +113,6 @@ export interface AppOptions {
   maxCount: number;
   themeName: string;
   autoRefreshInterval: number;
-  /** Initial pathspec filter from CLI (session-scoped, not persisted). */
-  path: string | undefined;
 }
 
 /** Information about the global config file and repo-specific overrides. */
@@ -338,45 +336,19 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
  * Merge config file values with CLI options.
  * Priority: CLI (explicit) > config file > built-in defaults.
  */
-export function mergeOptions(
-  cli: {
-    repoPath: string;
-    branch?: string;
-    all?: boolean;
-    maxCount?: number;
-    themeName?: string;
-    path?: string;
-  },
-  config: CodepulseConfig,
-): AppOptions {
-  // Determine branch — CLI wins, then config, then undefined
-  const branch = cli.branch ?? config.branch;
-
-  // Determine all — if CLI explicitly set --branch or --no-all, those win.
-  // Otherwise use config. Default: true.
-  let all: boolean;
-  if (cli.all !== undefined) {
-    all = cli.all;
-  } else if (branch !== undefined) {
-    // --branch implies not-all (same as current CLI behavior)
-    all = false;
-  } else if (config.showAllBranches !== undefined) {
-    all = config.showAllBranches;
-  } else {
-    all = true;
-  }
-
+export function mergeOptions(cli: { repoPath: string }, config: CodepulseConfig): AppOptions {
   const defaults = defaultConfig();
+  const branch = config.branch;
+  const all = branch !== undefined ? false : (config.showAllBranches ?? true);
 
   return {
     repoPath: cli.repoPath,
     branch,
     all,
-    maxCount: cli.maxCount ?? config.pageSize ?? defaults.pageSize,
-    themeName: cli.themeName ?? config.theme ?? defaults.theme,
+    maxCount: config.pageSize ?? defaults.pageSize,
+    themeName: config.theme ?? defaults.theme,
     autoRefreshInterval:
       config.autoRefreshSeconds !== undefined ? config.autoRefreshSeconds * 1000 : defaults.autoRefreshSeconds * 1000,
-    path: cli.path,
   };
 }
 

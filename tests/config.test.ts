@@ -246,22 +246,10 @@ describe("mergeOptions", () => {
       maxCount: DEFAULT_MAX_COUNT,
       themeName: "catppuccin-mocha",
       autoRefreshInterval: DEFAULT_AUTO_REFRESH_INTERVAL,
-      path: undefined,
     });
   });
 
-  test("CLI values override everything", () => {
-    const result = mergeOptions(
-      { repoPath: "/repo", branch: "feature", all: false, maxCount: 50, themeName: "nord" },
-      { theme: "gruvbox", pageSize: 300, branch: "main", showAllBranches: true, autoRefreshSeconds: 60 },
-    );
-    expect(result.branch).toBe("feature");
-    expect(result.all).toBe(false);
-    expect(result.maxCount).toBe(50);
-    expect(result.themeName).toBe("nord");
-  });
-
-  test("config values used when CLI fields are undefined", () => {
+  test("config values used when present", () => {
     const result = mergeOptions(
       { repoPath: "/repo" },
       { theme: "gruvbox", pageSize: 300, branch: "develop", showAllBranches: false, autoRefreshSeconds: 10 },
@@ -285,14 +273,9 @@ describe("mergeOptions", () => {
     expect(result.branch).toBeUndefined();
   });
 
-  test("--branch implies all=false even with config showAllBranches=true", () => {
-    const result = mergeOptions({ repoPath: "/repo", branch: "main" }, { showAllBranches: true });
+  test("config branch implies all=false even with config showAllBranches=true", () => {
+    const result = mergeOptions({ repoPath: "/repo" }, { branch: "main", showAllBranches: true });
     expect(result.branch).toBe("main");
-    expect(result.all).toBe(false);
-  });
-
-  test("CLI --no-all overrides config showAllBranches", () => {
-    const result = mergeOptions({ repoPath: "/repo", all: false }, { showAllBranches: true });
     expect(result.all).toBe(false);
   });
 
@@ -320,11 +303,6 @@ describe("mergeOptions", () => {
   test("default maxCount is DEFAULT_MAX_COUNT", () => {
     const result = mergeOptions({ repoPath: "/repo" }, {});
     expect(result.maxCount).toBe(DEFAULT_MAX_COUNT);
-  });
-
-  test("CLI path is passed through", () => {
-    const result = mergeOptions({ repoPath: "/repo", path: "src/" }, {});
-    expect(result.path).toBe("src/");
   });
 });
 

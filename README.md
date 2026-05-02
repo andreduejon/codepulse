@@ -29,7 +29,7 @@ Global installs are supported directly through the packaged `codepulse` binary.
 ## Usage
 
 ```sh
-codepulse [options] [path]
+codepulse [path]
 ```
 
 If no path is given, the current directory is used.
@@ -38,10 +38,6 @@ If no path is given, the current directory is used.
 
 | Flag | Description |
 |------|-------------|
-| `-b, --branch <name>` | Show only a specific branch |
-| `-n, --max-count <n>` | Maximum number of commits to show (default: 500) |
-| `--theme <name>` | Color theme (see [Themes](#themes) below) |
-| `--no-all` | Don't show all branches |
 | `-h, --help` | Show help |
 | `-v, --version` | Show version |
 
@@ -85,10 +81,10 @@ If no path is given, the current directory is used.
 
 ## Themes
 
-Pass the theme name via `--theme <name>` or switch live with `:theme`.
+Switch themes live with `:theme`, or persist a theme in repo config.
 
-| Name | `--theme` value |
-|------|----------------|
+| Name | Config value |
+|------|--------------|
 | Catppuccin Mocha *(default)* | `catppuccin-mocha` |
 | OpenCode Original | `open-code-original` |
 | Tokyo Night | `tokyo-night` |
