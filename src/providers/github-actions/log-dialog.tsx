@@ -125,7 +125,10 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
   const loadCurrentJob = () => {
     const job = currentJob();
     const cached = logs().get(job.id);
-    if (cached?.raw || cached?.loading) return;
+    // Cache terminal failure/empty states too. Otherwise the effect below
+    // re-enters after setting `{ loading: false, error: ... }` and refetches
+    // the same failed/empty log forever.
+    if (cached) return;
     setLoadedLog(job.id, { raw: null, loading: true, error: null });
     props
       .fetchLog(job)
