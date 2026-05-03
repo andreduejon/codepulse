@@ -118,6 +118,8 @@ export function getGitHubToken(envVarName: string): string | null {
 // ── HTTP helpers ──────────────────────────────────────────────────────────
 
 const GITHUB_REQUEST_TIMEOUT_MS = 20_000;
+const GITHUB_REQUEST_ATTEMPTS = 2;
+const GITHUB_RETRY_DELAY_MS = 500;
 
 function createHeaders(token: string): Record<string, string> {
   return {
@@ -164,6 +166,27 @@ async function fetchWithTimeout(
     clearTimeout(timer);
     externalSignal?.removeEventListener("abort", onAbort);
   }
+}
+
+function isRetryableStatus(status: number): boolean {
+  return status === 408 || status === 429 || status >= 500;
+}
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function fetchWithRetry(url: string, init: RequestInit = {}): Promise<Response> {
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= GITHUB_REQUEST_ATTEMPTS; attempt++) {
+    try {
+      const res = await fetchWithTimeout(url, init);
+      if (!isRetryableStatus(res.status) || attempt === GITHUB_REQUEST_ATTEMPTS) return res;
+    } catch (err) {
+      lastError = err;
+      if (attempt === GITHUB_REQUEST_ATTEMPTS) throw err;
+    }
+    await sleep(GITHUB_RETRY_DELAY_MS * attempt);
+  }
+  throw lastError;
 }
 
 // ── Status mapping ────────────────────────────────────────────────────────
@@ -469,7 +492,7 @@ export async function fetchCIDataForSHAs(
   if (shas.length === 0) return empty;
 
   try {
-    const res = await fetchWithTimeout(graphqlEndpoint(repo), {
+    const res = await fetchWithRetry(graphqlEndpoint(repo), {
       method: "POST",
       headers: { ...createHeaders(token), "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -535,7 +558,7 @@ export async function fetchRunJobs(
   const headers = createHeaders(token);
 
   try {
-    const res = await fetchWithTimeout(url, { headers, signal });
+    const res = await fetchWithRetry(url, { headers, signal });
     if (!res.ok) {
       console.error(`[github-actions] fetchRunJobs: HTTP ${res.status} for run ${runId}`);
       return { jobs: [], error: `Jobs HTTP ${res.status}` };
@@ -568,7 +591,7 @@ export async function fetchJobLog(
 
   try {
     // GitHub redirects to a pre-signed S3/Azure URL — follow the redirect
-    const res = await fetchWithTimeout(url, { headers, signal, redirect: "follow" });
+    const res = await fetchWithRetry(url, { headers, signal, redirect: "follow" });
     if (!res.ok) {
       console.error(`[github-actions] fetchJobLog: HTTP ${res.status} for job ${jobId}`);
       return "";
