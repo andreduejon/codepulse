@@ -10,8 +10,9 @@ codepulse starts as a git-first terminal UI and is planned to grow into a read-o
 codebase dashboard: git history as the primary navigation surface, with CI/CD,
 security, and code quality signals layered onto the same commit and branch context.
 
-The current release is focused on the git experience. Integration planning for future
-milestones lives in `.planning/` locally and is summarized in the roadmap below.
+The current release adds GitHub Actions integration on top of the git experience.
+Integration planning for future milestones lives in `.planning/` locally and is summarized
+in the roadmap below.
 
 ## Requirements
 
@@ -105,7 +106,8 @@ Planned milestones currently follow this shape:
 
 - `0.1.0`: config file support, richer search, lazy commit loading, and core UX polish
 - `0.2.0`: graph power features such as ancestry workflows and path-aware history views
-- `0.3.0+`: read-only integrations for GitHub Actions, Jenkins, Snyk, and SonarQube
+- `0.3.0`: GitHub Actions integration, provider status surfacing, and repo trust cleanup
+- `0.3.0+`: read-only integrations for Jenkins, Snyk, and SonarQube
 
 The intent is to reach `1.0.0` once the integration model and configuration surface are
 stable.
