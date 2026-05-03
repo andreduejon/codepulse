@@ -8,7 +8,7 @@ import { useTheme } from "../../context/theme";
 import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useClipboard } from "../../hooks/use-clipboard";
 import { COPYABLE_VISIBLE_WIDTH, type SettingItem, useMenuItems } from "../../hooks/use-menu-items";
-import { scrollElementIntoView } from "../../utils/scroll";
+import { scrollIndexedItemIntoView } from "../../utils/scroll";
 import Badge from "../badge";
 import { KeyHint } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
@@ -203,12 +203,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   const itemRefs: Renderable[] = [];
 
   createEffect(() => {
-    const idx = selectedItemIndex();
-    const sb = scrollboxRef;
-    if (!sb || idx == null || idx < 0) return;
-    const el = itemRefs[idx];
-    if (!el) return;
-    scrollElementIntoView(sb, el);
+    scrollIndexedItemIntoView(scrollboxRef, itemRefs, selectedItemIndex());
   });
 
   // ── Item renderers ─────────────────────────────────────────────────

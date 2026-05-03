@@ -3,7 +3,7 @@ import { useKeyboard, useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createSignal, For, onCleanup } from "solid-js";
 import { SHIFT_JUMP } from "../../constants";
 import { themeNames, themes, useTheme } from "../../context/theme";
-import { scrollElementIntoView } from "../../utils/scroll";
+import { scrollIndexedItemIntoView } from "../../utils/scroll";
 import { KeyHint } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
@@ -42,12 +42,7 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void }>) {
   });
 
   createEffect(() => {
-    const idx = cursor();
-    const sb = scrollboxRef;
-    if (!sb || idx < 0) return;
-    const el = itemRefs[idx];
-    if (!el) return;
-    scrollElementIntoView(sb, el);
+    scrollIndexedItemIntoView(scrollboxRef, itemRefs, cursor());
   });
 
   const moveCursor = (delta: number) => {
