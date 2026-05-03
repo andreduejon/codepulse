@@ -117,6 +117,8 @@ export function getGitHubToken(envVarName: string): string | null {
 
 // ── HTTP helpers ──────────────────────────────────────────────────────────
 
+const GITHUB_REQUEST_TIMEOUT_MS = 20_000;
+
 function createHeaders(token: string): Record<string, string> {
   return {
     Authorization: `Bearer ${token}`,
@@ -139,6 +141,29 @@ function graphqlEndpoint(repo: GitHubRepo): string {
   }
   // GitHub Enterprise Server uses /api/graphql
   return `https://${repo.hostname}/api/graphql`;
+}
+
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit = {},
+  timeoutMs = GITHUB_REQUEST_TIMEOUT_MS,
+): Promise<Response> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(new Error(`GitHub request timed out after ${timeoutMs}ms`)), timeoutMs);
+  const externalSignal = init.signal;
+
+  const onAbort = () => ctrl.abort(externalSignal?.reason);
+  if (externalSignal) {
+    if (externalSignal.aborted) ctrl.abort(externalSignal.reason);
+    else externalSignal.addEventListener("abort", onAbort, { once: true });
+  }
+
+  try {
+    return await fetch(url, { ...init, signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+    externalSignal?.removeEventListener("abort", onAbort);
+  }
 }
 
 // ── Status mapping ────────────────────────────────────────────────────────
@@ -444,7 +469,7 @@ export async function fetchCIDataForSHAs(
   if (shas.length === 0) return empty;
 
   try {
-    const res = await fetch(graphqlEndpoint(repo), {
+    const res = await fetchWithTimeout(graphqlEndpoint(repo), {
       method: "POST",
       headers: { ...createHeaders(token), "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -510,7 +535,7 @@ export async function fetchRunJobs(
   const headers = createHeaders(token);
 
   try {
-    const res = await fetch(url, { headers, signal });
+    const res = await fetchWithTimeout(url, { headers, signal });
     if (!res.ok) {
       console.error(`[github-actions] fetchRunJobs: HTTP ${res.status} for run ${runId}`);
       return { jobs: [], error: `Jobs HTTP ${res.status}` };
@@ -543,7 +568,7 @@ export async function fetchJobLog(
 
   try {
     // GitHub redirects to a pre-signed S3/Azure URL — follow the redirect
-    const res = await fetch(url, { headers, signal, redirect: "follow" });
+    const res = await fetchWithTimeout(url, { headers, signal, redirect: "follow" });
     if (!res.ok) {
       console.error(`[github-actions] fetchJobLog: HTTP ${res.status} for job ${jobId}`);
       return "";
