@@ -42,6 +42,7 @@ import {
   isTrustedGitHubHost,
   parseGitHubRemote,
 } from "./api";
+import { collectRunningSHAs, collectTopSHAs } from "./sha-selection";
 import type {
   GitHubCommitData,
   GitHubJob,
@@ -180,38 +181,6 @@ export function useGitHubCI(opts: {
     firstError: string | null;
   }
 
-  // ── SHA collection helpers ────────────────────────────────────────────
-
-  /**
-   * Collect up to `limit` commit SHAs from the top of graphRows.
-   *
-   * No remote-ref filter is applied: ancestor commits of a remote branch do
-   * not have an `origin/*` ref attached directly, yet GitHub does have CI data
-   * for them.  GitHub returns empty `checkSuites.nodes: []` for commits with
-   * no CI runs (not an error), so querying local-only commits is harmless.
-   */
-  function collectTopSHAs(limit: number): string[] {
-    const rows = state.graphRows();
-    const shas: string[] = [];
-    for (let i = 0; i < rows.length && shas.length < limit; i++) {
-      shas.push(rows[i].commit.hash);
-    }
-    return shas;
-  }
-
-  /**
-   * Returns SHAs that have `running` or `queued` badge status.
-   * Used for cheap auto-refresh polling — only re-query in-flight commits.
-   */
-  function collectRunningSHAs(): string[] {
-    const badges = state.graphBadges();
-    const running: string[] = [];
-    for (const [sha, badge] of badges) {
-      if (badge.badge === "running") running.push(sha);
-    }
-    return running;
-  }
-
   // ── Core fetch function ───────────────────────────────────────────────
 
   /**
@@ -301,7 +270,7 @@ export function useGitHubCI(opts: {
       return;
     }
 
-    const allSHAs = shas ?? collectTopSHAs(INITIAL_SHA_LIMIT);
+    const allSHAs = shas ?? collectTopSHAs(state.graphRows(), INITIAL_SHA_LIMIT);
     const unqueried = allSHAs.filter(sha => !queriedSHAs.has(sha));
     if (unqueried.length === 0) return;
 
@@ -342,7 +311,7 @@ export function useGitHubCI(opts: {
     if (fetchInFlight) return;
     if (!isAvailable()) return;
 
-    const runningSHAs = collectRunningSHAs();
+    const runningSHAs = collectRunningSHAs(state.graphBadges());
     if (runningSHAs.length === 0) return;
 
     fetchInFlight = true;
@@ -470,7 +439,7 @@ export function useGitHubCI(opts: {
     if (rows.length === 0) return;
     if (!repo) return; // remote not yet parsed — re-runs when cachedGitHubRepo() changes
 
-    const allSHAs = collectTopSHAs(INITIAL_SHA_LIMIT);
+    const allSHAs = collectTopSHAs(state.graphRows(), INITIAL_SHA_LIMIT);
     const newSHAs = allSHAs.filter(sha => !queriedSHAs.has(sha));
     if (newSHAs.length === 0) return;
 
