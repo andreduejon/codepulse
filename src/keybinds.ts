@@ -41,6 +41,7 @@ export const KEYBINDS: Record<HelpTab, [string, string][]> = {
   commands: [
     [":ancestry", "Enter ancestry mode"],
     [":branches", "Open menu (branches tab)"],
+    [":clear", "Dismiss status messages"],
     [":fetch", "Fetch from remote"],
     [":help", "Open help dialog"],
     [":menu", "Open menu dialog"],
