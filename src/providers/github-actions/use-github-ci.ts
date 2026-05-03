@@ -310,17 +310,21 @@ export function useGitHubCI(opts: {
     for (const sha of unqueried) queriedSHAs.add(sha);
 
     fetchInFlight = true;
-    actions.setProviderStatus({ kind: "loading" });
+    if (showStatus) actions.setProviderStatus({ kind: "loading" });
     try {
       const { firstError } = await fetchForSHAs(unqueried, signal);
-      actions.setProviderStatus(
-        firstError ? { kind: "error", message: `CI fetch error: ${firstError}` } : { kind: "idle" },
-      );
+      if (showStatus) {
+        actions.setProviderStatus(
+          firstError ? { kind: "error", message: `CI fetch error: ${firstError}` } : { kind: "idle" },
+        );
+      } else if (!firstError && state.providerStatus().kind === "error") {
+        actions.setProviderStatus({ kind: "idle" });
+      }
     } catch (err) {
       if (signal?.aborted) return;
       const msg = err instanceof Error ? err.message : String(err);
       console.error("[github-actions] initial fetch failed:", err);
-      actions.setProviderStatus({ kind: "error", message: `CI fetch error: ${msg}` });
+      if (showStatus) actions.setProviderStatus({ kind: "error", message: `CI fetch error: ${msg}` });
       // On error, un-mark so a future retry can re-query these SHAs
       for (const sha of unqueried) queriedSHAs.delete(sha);
     } finally {
@@ -342,9 +346,8 @@ export function useGitHubCI(opts: {
     fetchInFlight = true;
     try {
       const { firstError } = await fetchForSHAs(runningSHAs, signal);
-      actions.setProviderStatus(
-        firstError ? { kind: "error", message: `CI fetch error: ${firstError}` } : { kind: "idle" },
-      );
+      if (!firstError && state.providerStatus().kind === "error") actions.setProviderStatus({ kind: "idle" });
+      if (firstError) console.error("[github-actions] refresh returned error:", firstError);
     } catch (err) {
       if (signal?.aborted) return;
       console.error("[github-actions] refresh failed:", err);
