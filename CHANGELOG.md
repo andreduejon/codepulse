@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - **GitHub Actions provider** — browse workflow runs, jobs, and logs from selected commits
+- **Providers configuration** — menu + help dialog now document setup, token env var, and enterprise trust flow
+- **Provider mode switching** — `Tab` cycles git and provider views with contextual setup guidance when unavailable
+- **GitHub graph columns** — graph view can show CI status and last run details for commits
+- **GitHub detail tree** — run/job layout, inline jobs, log dialog, loading states, and keyboard navigation for CI detail views
 - **Provider status lane** — non-fatal integration errors now show above command bar
 - **`:clear` command** — dismisses current status message
 
@@ -14,12 +18,22 @@ All notable changes to this project will be documented in this file.
 - GitHub host trust is per-repo and remembers only current enterprise host
 - Startup repo switching now reuses canonical git root paths
 - Dialog layout and error surfaces unified across repo selector, dialogs, and startup
+- CLI help and branch-push CI now include explicit TypeScript checks
+- Version bumped to `0.3.0`; dependencies refreshed (`@opentui/*`, Biome, TypeScript)
 
 ### Fixed
+- Cross-branch and selected-commit CI loading now resolves data for detached/older SHAs more reliably
+- GitHub request handling now covers timeouts, transient retries, and clearer rate-limit messaging
 - GitHub job log retries no longer loop forever on empty/failing responses
+- Missing jobs and failed job fetches now surface distinct errors instead of empty-state confusion
 - Background CI errors no longer block normal navigation
-- Selected older commits now fetch CI data on demand
+- Provider view, setup, and refresh flows avoid stale loading races and preserve graph scroll better
+- Diff/blame and dialog workflows surface load failures more consistently
 - `:help` now lists `:clear` for status dismissal
+
+### Refactored
+- Provider status moved to typed helpers with shared API result shapes and SHA selection helpers
+- Repo selector and dialog UIs now reuse shared message-box and indexed scroll helpers
 
 ## [0.2.0] - 2026-04-15
 
