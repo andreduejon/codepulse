@@ -172,6 +172,20 @@ function isRetryableStatus(status: number): boolean {
   return status === 408 || status === 429 || status >= 500;
 }
 
+function describeHttpError(res: Response, fallback: string): string {
+  const remaining = res.headers.get("x-ratelimit-remaining");
+  if (res.status === 429 || (res.status === 403 && remaining === "0")) {
+    const reset = res.headers.get("x-ratelimit-reset");
+    if (reset) {
+      const resetDate = new Date(Number(reset) * 1000);
+      if (!Number.isNaN(resetDate.getTime()))
+        return `GitHub rate limit exceeded; resets ${resetDate.toLocaleTimeString()}`;
+    }
+    return "GitHub rate limit exceeded";
+  }
+  return fallback;
+}
+
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function fetchWithRetry(url: string, init: RequestInit = {}): Promise<Response> {
@@ -503,7 +517,7 @@ export async function fetchCIDataForSHAs(
     });
 
     if (!res.ok) {
-      const msg = `GraphQL HTTP ${res.status}`;
+      const msg = describeHttpError(res, `GraphQL HTTP ${res.status}`);
       console.error(`[github-actions] ${msg} for ${repo.owner}/${repo.repo}`);
       return { ...empty, error: msg };
     }
@@ -560,8 +574,9 @@ export async function fetchRunJobs(
   try {
     const res = await fetchWithRetry(url, { headers, signal });
     if (!res.ok) {
-      console.error(`[github-actions] fetchRunJobs: HTTP ${res.status} for run ${runId}`);
-      return { jobs: [], error: `Jobs HTTP ${res.status}` };
+      const error = describeHttpError(res, `Jobs HTTP ${res.status}`);
+      console.error(`[github-actions] fetchRunJobs: ${error} for run ${runId}`);
+      return { jobs: [], error };
     }
     const json = (await res.json()) as { jobs?: GitHubApiJob[] };
     return { jobs: (json.jobs ?? []).map(mapApiJob), error: null };
@@ -593,7 +608,8 @@ export async function fetchJobLog(
     // GitHub redirects to a pre-signed S3/Azure URL — follow the redirect
     const res = await fetchWithRetry(url, { headers, signal, redirect: "follow" });
     if (!res.ok) {
-      console.error(`[github-actions] fetchJobLog: HTTP ${res.status} for job ${jobId}`);
+      const error = describeHttpError(res, `Logs HTTP ${res.status}`);
+      console.error(`[github-actions] fetchJobLog: ${error} for job ${jobId}`);
       return "";
     }
     return await res.text();
