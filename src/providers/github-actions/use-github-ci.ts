@@ -241,7 +241,7 @@ export function useGitHubCI(opts: {
     // Merge all batch results (include successful batches even if others errored)
     const allRuns: GitHubWorkflowRun[] = [];
     for (const result of results) {
-      allRuns.push(...result.runs);
+      allRuns.push(...result.data);
     }
 
     // Merge new runs into commitDataCache (additive — don't discard other SHAs)

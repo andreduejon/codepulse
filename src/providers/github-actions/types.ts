@@ -62,6 +62,11 @@ export interface GitHubJobFetchResult {
   error: string | null;
 }
 
+export interface GitHubResult<T> {
+  data: T;
+  error: string | null;
+}
+
 /** Mapped step within a job. */
 export interface GitHubStep {
   name: string;

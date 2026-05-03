@@ -652,14 +652,14 @@ describe("fetchCIDataForSHAs", () => {
     mockFetch(mock(async () => new Response(JSON.stringify(response), { status: 200 })));
     const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["aaa", "bbb"]);
 
-    expect(result.runs).toHaveLength(2);
-    expect(result.runs[0].headSha).toBe("aaa");
-    expect(result.runs[0].name).toBe("CI");
-    expect(result.runs[0].status).toBe("completed");
-    expect(result.runs[0].conclusion).toBe("success");
-    expect(result.runs[1].headSha).toBe("bbb");
-    expect(result.runs[1].status).toBe("in_progress");
-    expect(result.runs[1].conclusion).toBeNull();
+    expect(result.data).toHaveLength(2);
+    expect(result.data[0].headSha).toBe("aaa");
+    expect(result.data[0].name).toBe("CI");
+    expect(result.data[0].status).toBe("completed");
+    expect(result.data[0].conclusion).toBe("success");
+    expect(result.data[1].headSha).toBe("bbb");
+    expect(result.data[1].status).toBe("in_progress");
+    expect(result.data[1].conclusion).toBeNull();
   });
 
   it("skips check suites with no workflowRun (non-Actions checks)", async () => {
@@ -674,8 +674,8 @@ describe("fetchCIDataForSHAs", () => {
     ]);
     mockFetch(mock(async () => new Response(JSON.stringify(response), { status: 200 })));
     const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["ccc"]);
-    expect(result.runs).toHaveLength(1);
-    expect(result.runs[0].id).toBe(5);
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0].id).toBe(5);
   });
 
   it("normalises UPPER_SNAKE_CASE status/conclusion to lower_snake_case", async () => {
@@ -687,14 +687,14 @@ describe("fetchCIDataForSHAs", () => {
     ]);
     mockFetch(mock(async () => new Response(JSON.stringify(response), { status: 200 })));
     const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["ddd"]);
-    expect(result.runs[0].status).toBe("completed");
-    expect(result.runs[0].conclusion).toBe("failure");
+    expect(result.data[0].status).toBe("completed");
+    expect(result.data[0].conclusion).toBe("failure");
   });
 
   it("returns empty result on HTTP error (graceful degradation)", async () => {
     mockFetch(mock(async () => new Response(null, { status: 403 })));
     const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
-    expect(result.runs).toHaveLength(0);
+    expect(result.data).toHaveLength(0);
     expect(result.error).toBeTruthy();
   });
 
@@ -702,7 +702,7 @@ describe("fetchCIDataForSHAs", () => {
     const response = { errors: [{ message: "Not Found" }] };
     mockFetch(mock(async () => new Response(JSON.stringify(response), { status: 200 })));
     const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
-    expect(result.runs).toHaveLength(0);
+    expect(result.data).toHaveLength(0);
   });
 
   it("returns empty result on network error", async () => {
@@ -712,7 +712,7 @@ describe("fetchCIDataForSHAs", () => {
       }),
     );
     const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
-    expect(result.runs).toHaveLength(0);
+    expect(result.data).toHaveLength(0);
   });
 
   it("returns empty result immediately for empty shas array", async () => {
@@ -725,7 +725,7 @@ describe("fetchCIDataForSHAs", () => {
       }),
     );
     const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, []);
-    expect(result.runs).toHaveLength(0);
+    expect(result.data).toHaveLength(0);
     expect(fetchCalled).toBe(false);
   });
 
@@ -733,7 +733,7 @@ describe("fetchCIDataForSHAs", () => {
     const response = makeBatchResponse([{ sha: "eee", suites: [] }]);
     mockFetch(mock(async () => new Response(JSON.stringify(response), { status: 200 })));
     const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["eee"]);
-    expect(result.runs).toHaveLength(0);
+    expect(result.data).toHaveLength(0);
   });
 
   it("handles a SHA not found in repository (null alias) gracefully", async () => {
@@ -741,7 +741,7 @@ describe("fetchCIDataForSHAs", () => {
     const response = { data: { repository: { c0: null } } };
     mockFetch(mock(async () => new Response(JSON.stringify(response), { status: 200 })));
     const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["unknown-sha"]);
-    expect(result.runs).toHaveLength(0);
+    expect(result.data).toHaveLength(0);
   });
 
   it("sends POST to GraphQL endpoint with correct body shape", async () => {
@@ -794,9 +794,9 @@ describe("fetchCIDataForSHAs", () => {
     ]);
     mockFetch(mock(async () => new Response(JSON.stringify(response), { status: 200 })));
     const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["ggg"]);
-    expect(result.runs).toHaveLength(3);
-    expect(result.runs.every(r => r.headSha === "ggg")).toBe(true);
-    const names = result.runs.map(r => r.name);
+    expect(result.data).toHaveLength(3);
+    expect(result.data.every(r => r.headSha === "ggg")).toBe(true);
+    const names = result.data.map(r => r.name);
     expect(names).toContain("CI");
     expect(names).toContain("Deploy");
     expect(names).toContain("Lint");

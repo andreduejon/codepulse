@@ -14,6 +14,7 @@ import type {
   GitHubJob,
   GitHubJobFetchResult,
   GitHubRepo,
+  GitHubResult,
   GitHubStep,
   GitHubWorkflowRun,
 } from "./types";
@@ -474,15 +475,7 @@ function buildBatchQuery(shas: string[]): string {
   return `query CIBatch($owner: String!, $repo: String!) {\n  repository(owner: $owner, name: $repo) {\n${aliases}\n  }\n}`;
 }
 
-export interface GraphQLFetchResult {
-  /** Runs grouped by commit SHA — branch-agnostic. */
-  runs: GitHubWorkflowRun[];
-  /**
-   * Set when the request failed (HTTP error, GraphQL errors, or network error).
-   * null means success. The hook uses this to surface errors in the UI.
-   */
-  error: string | null;
-}
+export type GraphQLFetchResult = GitHubResult<GitHubWorkflowRun[]>;
 
 /**
  * Fetch CI check-suite data for a batch of commit SHAs using the GitHub
@@ -502,7 +495,7 @@ export async function fetchCIDataForSHAs(
   opts: { signal?: AbortSignal } = {},
 ): Promise<GraphQLFetchResult> {
   const { signal } = opts;
-  const empty: GraphQLFetchResult = { runs: [], error: null };
+  const empty: GraphQLFetchResult = { data: [], error: null };
   if (shas.length === 0) return empty;
 
   try {
@@ -545,7 +538,7 @@ export async function fetchCIDataForSHAs(
       }
     }
 
-    return { runs, error: null };
+    return { data: runs, error: null };
   } catch (err) {
     if (signal?.aborted) throw err;
     const msg = err instanceof Error ? err.message : String(err);
