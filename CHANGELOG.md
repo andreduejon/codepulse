@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2026-05-03
+
+### Added
+- **GitHub Actions provider** — browse workflow runs, jobs, and logs from selected commits
+- **Provider status lane** — non-fatal integration errors now show above command bar
+- **`:clear` command** — dismisses current status message
+
+### Changed
+- Remote CI fetch stays manual by default; local repo refresh remains separate
+- GitHub host trust is per-repo and remembers only current enterprise host
+- Startup repo switching now reuses canonical git root paths
+- Dialog layout and error surfaces unified across repo selector, dialogs, and startup
+
+### Fixed
+- GitHub job log retries no longer loop forever on empty/failing responses
+- Background CI errors no longer block normal navigation
+- Selected older commits now fetch CI data on demand
+- `:help` now lists `:clear` for status dismissal
+
 ## [0.2.0] - 2026-04-15
 
 ### Added
