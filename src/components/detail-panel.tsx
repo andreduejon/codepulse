@@ -1,6 +1,7 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { For, Show } from "solid-js";
 import { isUncommittedHash } from "../constants";
+import type { ProviderStatus } from "../context/state";
 import { useAppState } from "../context/state";
 import type { DiffTarget } from "../git/types";
 import { useT } from "../hooks/use-t";
@@ -37,7 +38,7 @@ export interface DetailPanelProps {
    * (e.g. missing token / remote) — forwarded to CommitDetailView for setup
    * guidance in the Actions tab.
    */
-  githubProviderStatus?: string | null;
+  githubProviderStatus?: ProviderStatus;
   /** Open the job log dialog for a specific job. */
   onOpenJobLog?: (job: GitHubJob, run: GitHubWorkflowRun, jobs?: GitHubJob[]) => void;
 }
@@ -69,7 +70,7 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
         stashByParent: stashMap,
         activeProviderView: providerView,
         getCommitData: props.githubGetCommitData,
-        providerLoading: props.githubProviderStatus === "loading",
+        providerLoading: props.githubProviderStatus?.kind === "loading",
       }),
     );
     if (isUncommitted) {

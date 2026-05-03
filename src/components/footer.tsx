@@ -26,11 +26,11 @@ export default function Footer(
 
   const loadingLabel = () => {
     if (isLoading()) return " loading";
-    // providerStatus === "loading" means a background CI fetch is in-flight.
+    // providerStatus.kind === "loading" means a background CI fetch is in-flight.
     // Show the text regardless of which view is active — the spinner char is
     // already shown in this case, so the label should match to avoid the
     // visual inconsistency of a spinning braille with no accompanying text.
-    if (providerStatus() === "loading") return " loading";
+    if (providerStatus().kind === "loading") return " loading";
     return "";
   };
 
@@ -39,7 +39,7 @@ export default function Footer(
   let spinnerTimer: ReturnType<typeof setInterval> | null = null;
 
   createEffect(() => {
-    if (isLoading() || providerStatus() === "loading") {
+    if (isLoading() || providerStatus().kind === "loading") {
       setFrame(0);
       if (!spinnerTimer) {
         spinnerTimer = setInterval(() => {
@@ -60,7 +60,7 @@ export default function Footer(
 
   // Always render the spinner element to avoid layout shift;
   // show the braille char when loading, empty space when idle.
-  const spinnerChar = () => (isLoading() || providerStatus() === "loading" ? SPINNER_FRAMES[frame()] : " ");
+  const spinnerChar = () => (isLoading() || providerStatus().kind === "loading" ? SPINNER_FRAMES[frame()] : " ");
   const spinnerColor = () => t().accent;
 
   const enterAction = () => (state.detailFocused() ? state.detailCursorAction() : null);

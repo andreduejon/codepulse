@@ -83,11 +83,12 @@ function AppContent(props: Readonly<AppContentProps>) {
     if (err) return { kind: "error" as const, message: err };
 
     const status = state.providerStatus();
-    if (state.activeProviderView() !== "github-actions" || !status || status === "loading") return null;
+    if (state.activeProviderView() !== "github-actions" || status.kind === "idle" || status.kind === "loading")
+      return null;
 
     return {
-      kind: /^CI fetch error:/i.test(status) ? ("error" as const) : ("info" as const),
-      message: status,
+      kind: status.kind === "error" ? ("error" as const) : ("info" as const),
+      message: status.message,
     };
   });
 
@@ -227,7 +228,7 @@ function AppContent(props: Readonly<AppContentProps>) {
     getIsJumpNavigation: () => isJumpNavigation,
     detailNavRef,
     getCommitData: gitHubCI.getCommitData,
-    getProviderLoading: () => state.providerStatus() === "loading",
+    getProviderLoading: () => state.providerStatus().kind === "loading",
   });
 
   // Scroll detail panel to top when active tab changes
@@ -325,7 +326,7 @@ function AppContent(props: Readonly<AppContentProps>) {
         break;
       case "clear":
         actions.setError(null);
-        actions.setProviderStatus(null);
+        actions.setProviderStatus({ kind: "idle" });
         break;
       case "f":
       case "fetch":
@@ -416,7 +417,7 @@ function AppContent(props: Readonly<AppContentProps>) {
     onPathExecute: handlePathExecute,
     onClearAncestry: clearAnchor,
     getCommitData: gitHubCI.getCommitData,
-    getProviderLoading: () => state.providerStatus() === "loading",
+    getProviderLoading: () => state.providerStatus().kind === "loading",
   });
 
   // ── Provider-aware theme: override accent with githubActionsBg in CI mode ──

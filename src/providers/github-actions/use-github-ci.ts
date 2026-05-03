@@ -282,13 +282,16 @@ export function useGitHubCI(opts: {
         const repo = cachedGitHubRepo();
         const token = getGitHubToken(config.tokenEnvVar);
         if (!config.enabled) {
-          actions.setProviderStatus("CI provider disabled");
+          actions.setProviderStatus({ kind: "unavailable", message: "CI provider disabled" });
         } else if (!parsedGitHubRepo()) {
-          actions.setProviderStatus("No GitHub remote detected");
+          actions.setProviderStatus({ kind: "unavailable", message: "No GitHub remote detected" });
         } else if (!repo) {
-          actions.setProviderStatus(`Untrusted GitHub host: ${parsedGitHubRepo()?.hostname}`);
+          actions.setProviderStatus({
+            kind: "unavailable",
+            message: `Untrusted GitHub host: ${parsedGitHubRepo()?.hostname}`,
+          });
         } else if (!token) {
-          actions.setProviderStatus(`Token not found: $${config.tokenEnvVar}`);
+          actions.setProviderStatus({ kind: "unavailable", message: `Token not found: $${config.tokenEnvVar}` });
         }
       }
       return;
@@ -307,15 +310,17 @@ export function useGitHubCI(opts: {
     for (const sha of unqueried) queriedSHAs.add(sha);
 
     fetchInFlight = true;
-    actions.setProviderStatus("loading");
+    actions.setProviderStatus({ kind: "loading" });
     try {
       const { firstError } = await fetchForSHAs(unqueried, signal);
-      actions.setProviderStatus(firstError ? `CI fetch error: ${firstError}` : null);
+      actions.setProviderStatus(
+        firstError ? { kind: "error", message: `CI fetch error: ${firstError}` } : { kind: "idle" },
+      );
     } catch (err) {
       if (signal?.aborted) return;
       const msg = err instanceof Error ? err.message : String(err);
       console.error("[github-actions] initial fetch failed:", err);
-      actions.setProviderStatus(`CI fetch error: ${msg}`);
+      actions.setProviderStatus({ kind: "error", message: `CI fetch error: ${msg}` });
       // On error, un-mark so a future retry can re-query these SHAs
       for (const sha of unqueried) queriedSHAs.delete(sha);
     } finally {
@@ -337,7 +342,9 @@ export function useGitHubCI(opts: {
     fetchInFlight = true;
     try {
       const { firstError } = await fetchForSHAs(runningSHAs, signal);
-      actions.setProviderStatus(firstError ? `CI fetch error: ${firstError}` : null);
+      actions.setProviderStatus(
+        firstError ? { kind: "error", message: `CI fetch error: ${firstError}` } : { kind: "idle" },
+      );
     } catch (err) {
       if (signal?.aborted) return;
       console.error("[github-actions] refresh failed:", err);
@@ -356,7 +363,7 @@ export function useGitHubCI(opts: {
     jobsCache.clear();
     setCommitDataVersion(v => v + 1);
     actions.setGraphBadges(new Map());
-    actions.setProviderStatus(null);
+    actions.setProviderStatus({ kind: "idle" });
     await doInitialFetch(undefined, undefined, true);
   }
 
@@ -488,10 +495,10 @@ export function useGitHubCI(opts: {
 
     const { jobs, error } = await fetchRunJobs(repo, token, run.id);
     if (error) {
-      actions.setProviderStatus(`CI jobs error: ${error}`);
+      actions.setProviderStatus({ kind: "error", message: `CI jobs error: ${error}` });
       return { jobs, error };
     }
-    actions.setProviderStatus(null);
+    actions.setProviderStatus({ kind: "idle" });
     if (run.status === "completed") {
       jobsCache.set(run.id, jobs);
     }

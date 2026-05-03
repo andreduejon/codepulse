@@ -19,6 +19,11 @@ export type DetailTab = "files" | "detail" | "stashes" | "staged" | "unstaged" |
  * - null: no highlighting active
  */
 export type HighlightMode = "ancestry" | "path" | "search" | null;
+export type ProviderStatus =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "unavailable"; message: string }
+  | { kind: "error"; message: string };
 
 export interface AppState {
   // ── Repository data ─────────────────────────────────────────────────
@@ -101,12 +106,8 @@ export interface AppState {
    * Empty map when no CI provider is active or no data has been fetched yet.
    */
   graphBadges: Accessor<Map<string, GraphBadge>>;
-  /**
-   * Status message from the active CI provider.
-   * null = idle/ok, "loading" = fetching in progress,
-   * any other string = last error message (shown in footer).
-   */
-  providerStatus: Accessor<string | null>;
+  /** Status from the active CI provider. */
+  providerStatus: Accessor<ProviderStatus>;
   /** Optional scope override for modal sub-modes (e.g. menu token edit). */
   keyboardScopeOverride: Accessor<KeyboardScope | null>;
 }
@@ -150,8 +151,8 @@ export interface AppActions {
   // ── Provider / CI ────────────────────────────────────────────────────
   setActiveProviderView: (view: ProviderView) => void;
   setGraphBadges: (map: Map<string, GraphBadge>) => void;
-  /** Set the CI provider status message (null = ok, "loading", or error string). */
-  setProviderStatus: (status: string | null) => void;
+  /** Set the CI provider status. */
+  setProviderStatus: (status: ProviderStatus) => void;
   /** Advance to the next available provider view (Tab key cycling). */
   cycleProviderView: () => void;
   setKeyboardScopeOverride: (scope: KeyboardScope | null) => void;
@@ -217,7 +218,7 @@ export function createAppState(
   // ── Provider / CI ─────────────────────────────────────────────────
   const [activeProviderView, setActiveProviderView] = createSignal<ProviderView>("git");
   const [graphBadges, setGraphBadges] = createSignal<Map<string, GraphBadge>>(new Map());
-  const [providerStatus, setProviderStatus] = createSignal<string | null>(null);
+  const [providerStatus, setProviderStatus] = createSignal<ProviderStatus>({ kind: "idle" });
   const [keyboardScopeOverride, setKeyboardScopeOverride] = createSignal<KeyboardScope | null>(null);
 
   // ── Search memo ───────────────────────────────────────────────────

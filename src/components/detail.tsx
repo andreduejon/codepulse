@@ -872,8 +872,12 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 // biome-ignore lint/style/noNonNullAssertion: guarded by Show when condition above
                 fetchJobsForRun={props.githubFetchJobsForRun!}
                 fetchCommitData={props.githubFetchCommitData}
-                unavailableReason={props.githubProviderStatus !== "loading" ? props.githubProviderStatus : null}
-                loading={props.githubProviderStatus === "loading"}
+                unavailableReason={
+                  props.githubProviderStatus?.kind === "error" || props.githubProviderStatus?.kind === "unavailable"
+                    ? props.githubProviderStatus.message
+                    : null
+                }
+                loading={props.githubProviderStatus?.kind === "loading"}
                 navRef={props.navRef}
                 detailCursorIndex={() => state.detailCursorIndex()}
                 detailFocused={() => state.detailFocused()}

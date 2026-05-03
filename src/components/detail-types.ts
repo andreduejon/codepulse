@@ -1,4 +1,5 @@
 import type { Renderable } from "@opentui/core";
+import type { ProviderStatus } from "../context/state";
 import type { DiffTarget } from "../git/types";
 import type {
   GitHubCommitData,
@@ -45,7 +46,7 @@ export interface DetailViewProps {
    * Non-null when the provider is unavailable (e.g. missing token / remote).
    * Passed to ActionsDetailTab to show setup guidance.
    */
-  githubProviderStatus?: string | null;
+  githubProviderStatus?: ProviderStatus;
 }
 
 /** Layout constants shared between committed and uncommitted detail views */
