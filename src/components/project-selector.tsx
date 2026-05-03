@@ -9,6 +9,7 @@ import { useT } from "../hooks/use-t";
 import type { KeyboardScope } from "../keyboard/scope";
 import { KeyHint } from "./key-hint";
 import LogoBanner, { LOGO_WIDTH } from "./logo-banner";
+import MessageBox from "./message-box";
 
 interface ProjectSelectorProps {
   /** Informational message to show (e.g. "Doesn't look like a git repo"). */
@@ -186,32 +187,12 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
 
         {/* Informational message — separate section with primary border */}
         <Show when={props.message}>
-          <box
-            width={LOGO_WIDTH}
-            flexDirection="column"
-            backgroundColor={t().background}
-            paddingX={1}
-            paddingY={1}
-            border={["left"]}
-            borderStyle="single"
-            borderColor={t().primary}
-          >
-            <box paddingX={4}>
-              <text wrapMode="word">
-                <strong>
-                  <span>{props.message}</span>
-                </strong>
-              </text>
-            </box>
-            <Show when={props.messagePath}>
-              {messagePath => (
-                <box paddingX={4}>
-                  <text wrapMode="none" truncate fg={t().foregroundMuted}>
-                    {shortPath(messagePath())}
-                  </text>
-                </box>
-              )}
-            </Show>
+          <box width={LOGO_WIDTH}>
+            <MessageBox
+              kind="info"
+              message={props.message ?? ""}
+              detail={props.messagePath ? shortPath(props.messagePath) : undefined}
+            />
           </box>
 
           <box height={1} />
