@@ -11,6 +11,7 @@ import {
 } from "../../components/dialogs/dialog-chrome";
 import { middleTruncate, TITLE_SEP } from "../../components/dialogs/title-utils";
 import { KeyHint } from "../../components/key-hint";
+import MessageBox from "../../components/message-box";
 import { useTheme } from "../../context/theme";
 import { useT } from "../../hooks/use-t";
 import type { GitHubJob, GitHubWorkflowRun } from "../../providers/github-actions/types";
@@ -336,7 +337,12 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
             </Show>
             <Show when={!currentLoadedLog().loading && currentLoadedLog().error}>
               <box paddingY={2}>
-                <text fg={t().error}>{currentLoadedLog().error}</text>
+                <MessageBox
+                  kind="error"
+                  title="Failed to load log"
+                  message={currentLoadedLog().error ?? "Unknown error"}
+                  variant="dialog"
+                />
               </box>
             </Show>
             <Show when={!currentLoadedLog().loading && !currentLoadedLog().error && filteredLines().length === 0}>

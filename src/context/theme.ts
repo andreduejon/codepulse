@@ -24,6 +24,7 @@ export interface Theme {
   border: string;
   primary: string;
   accent: string;
+  info: string;
   error: string;
   success: string;
   graphColors: string[];

@@ -19,6 +19,7 @@ export const openCodeOriginal: Theme = {
 
   primary: "#e08a5c",
   accent: "#e5b567",
+  info: "#e08a5c",
   error: "#e06c75",
   success: "#98c379",
   graphColors: [
@@ -54,6 +55,7 @@ export const catppuccinMocha: Theme = {
   border: "#45475a",
   primary: "#89b4fa",
   accent: "#f5c2e7",
+  info: "#89b4fa",
   error: "#f38ba8",
   success: "#a6e3a1",
   graphColors: [
@@ -89,6 +91,7 @@ export const tokyoNight: Theme = {
   border: "#3b4261",
   primary: "#7aa2f7",
   accent: "#bb9af7",
+  info: "#7aa2f7",
   error: "#f7768e",
   success: "#9ece6a",
   graphColors: [
@@ -124,6 +127,7 @@ export const dracula: Theme = {
   border: "#44475a",
   primary: "#bd93f9",
   accent: "#ff79c6",
+  info: "#bd93f9",
   error: "#ff5555",
   success: "#50fa7b",
   graphColors: [
@@ -159,6 +163,7 @@ export const nord: Theme = {
   border: "#434c5e",
   primary: "#88c0d0",
   accent: "#b48ead",
+  info: "#88c0d0",
   error: "#bf616a",
   success: "#a3be8c",
   graphColors: [
@@ -194,6 +199,7 @@ export const oneDark: Theme = {
   border: "#3e4451",
   primary: "#61afef",
   accent: "#c678dd",
+  info: "#61afef",
   error: "#e06c75",
   success: "#98c379",
   graphColors: [
@@ -229,6 +235,7 @@ export const gruvbox: Theme = {
   border: "#504945",
   primary: "#83a598",
   accent: "#d3869b",
+  info: "#83a598",
   error: "#fb4934",
   success: "#b8bb26",
   graphColors: [
@@ -264,6 +271,7 @@ export const monokai: Theme = {
   border: "#5b595c",
   primary: "#78dce8",
   accent: "#ab9df2",
+  info: "#78dce8",
   error: "#ff6188",
   success: "#a9dc76",
   graphColors: [
@@ -299,6 +307,7 @@ export const ayuDark: Theme = {
   border: "#2d3446",
   primary: "#5ccfe6",
   accent: "#ffcc66",
+  info: "#5ccfe6",
   error: "#ff3333",
   success: "#bae67e",
   graphColors: [
@@ -334,6 +343,7 @@ export const synthwave: Theme = {
   border: "#49416a",
   primary: "#f92aad",
   accent: "#36f9f6",
+  info: "#f92aad",
   error: "#fe4450",
   success: "#72f1b8",
   graphColors: [
@@ -369,6 +379,7 @@ export const rosePine: Theme = {
   border: "#312f45",
   primary: "#c4a7e7",
   accent: "#ebbcba",
+  info: "#c4a7e7",
   error: "#eb6f92",
   success: "#9ccfd8",
   graphColors: [

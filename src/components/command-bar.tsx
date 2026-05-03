@@ -108,15 +108,8 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
 
       <box height={1} />
 
-      {/* Status row: error · git badge · mode badge · repo path · version */}
+      {/* Status row: git badge · mode badge · repo path · version */}
       <box flexDirection="row" width="100%">
-        <Show when={state.error()}>
-          <text flexShrink={0} wrapMode="none" fg={t().error}>
-            {"error: "}
-            {state.error()}
-            {"  "}
-          </text>
-        </Show>
         {/* Provider view badge */}
         {(() => {
           const view = state.activeProviderView();

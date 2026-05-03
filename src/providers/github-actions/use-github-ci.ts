@@ -161,6 +161,10 @@ export function useGitHubCI(opts: {
   /** Guard: is a fetch already in-flight? */
   let fetchInFlight = false;
 
+  interface FetchForShasResult {
+    firstError: string | null;
+  }
+
   // ── SHA collection helpers ────────────────────────────────────────────
 
   /**
@@ -201,11 +205,11 @@ export function useGitHubCI(opts: {
    * @param shas      SHAs to query — caller is responsible for dedup/filtering.
    * @param signal    Optional AbortSignal for cancellation.
    */
-  async function fetchForSHAs(shas: string[], signal?: AbortSignal): Promise<void> {
-    if (shas.length === 0) return;
+  async function fetchForSHAs(shas: string[], signal?: AbortSignal): Promise<FetchForShasResult> {
+    if (shas.length === 0) return { firstError: null };
     const repo = cachedGitHubRepo();
     const token = getGitHubToken(config.tokenEnvVar);
-    if (!repo || !token) return;
+    if (!repo || !token) return { firstError: null };
 
     // Split into batches of GQL_BATCH_SIZE and fire in parallel
     const batches: string[][] = [];
@@ -215,13 +219,9 @@ export function useGitHubCI(opts: {
 
     const results = await Promise.all(batches.map(batch => fetchCIDataForSHAs(repo, token, batch, { signal })));
 
-    if (signal?.aborted) return;
+    if (signal?.aborted) return { firstError: null };
 
-    // Surface first error encountered across batches (if any)
     const firstError = results.find(r => r.error)?.error ?? null;
-    if (firstError) {
-      actions.setProviderStatus(firstError);
-    }
 
     // Merge all batch results (include successful batches even if others errored)
     const allRuns: GitHubWorkflowRun[] = [];
@@ -245,6 +245,8 @@ export function useGitHubCI(opts: {
       currentBadges.set(sha, badge);
     }
     actions.setGraphBadges(currentBadges);
+
+    return { firstError };
   }
 
   // ── Main fetch entry points ───────────────────────────────────────────
@@ -294,8 +296,8 @@ export function useGitHubCI(opts: {
     fetchInFlight = true;
     actions.setProviderStatus("loading");
     try {
-      await fetchForSHAs(unqueried, signal);
-      actions.setProviderStatus(null);
+      const { firstError } = await fetchForSHAs(unqueried, signal);
+      actions.setProviderStatus(firstError ? `CI fetch error: ${firstError}` : null);
     } catch (err) {
       if (signal?.aborted) return;
       const msg = err instanceof Error ? err.message : String(err);
@@ -321,7 +323,8 @@ export function useGitHubCI(opts: {
 
     fetchInFlight = true;
     try {
-      await fetchForSHAs(runningSHAs, signal);
+      const { firstError } = await fetchForSHAs(runningSHAs, signal);
+      actions.setProviderStatus(firstError ? `CI fetch error: ${firstError}` : null);
     } catch (err) {
       if (signal?.aborted) return;
       console.error("[github-actions] refresh failed:", err);

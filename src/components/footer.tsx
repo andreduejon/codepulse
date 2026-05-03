@@ -23,7 +23,6 @@ export default function Footer(
   const isLoading = () => state.loading() || state.fetching() || state.detailLoading();
 
   const providerStatus = () => state.providerStatus();
-  const showProviderStatus = () => state.activeProviderView() === "github-actions" && !!providerStatus();
 
   const loadingLabel = () => {
     if (isLoading()) return " loading";
@@ -32,7 +31,6 @@ export default function Footer(
     // already shown in this case, so the label should match to avoid the
     // visual inconsistency of a spinning braille with no accompanying text.
     if (providerStatus() === "loading") return " loading";
-    if (showProviderStatus()) return ` ${providerStatus()}`;
     return "";
   };
 
@@ -63,8 +61,7 @@ export default function Footer(
   // Always render the spinner element to avoid layout shift;
   // show the braille char when loading, empty space when idle.
   const spinnerChar = () => (isLoading() || providerStatus() === "loading" ? SPINNER_FRAMES[frame()] : " ");
-  // Provider error messages use error color; normal loading uses accent
-  const spinnerColor = () => (showProviderStatus() && providerStatus() !== "loading" ? t().error : t().accent);
+  const spinnerColor = () => t().accent;
 
   const enterAction = () => (state.detailFocused() ? state.detailCursorAction() : null);
   const nextProviderLabel = () => {
@@ -87,11 +84,7 @@ export default function Footer(
         <text flexShrink={0} wrapMode="none" fg={spinnerColor()}>
           {spinnerChar()}
         </text>
-        <text
-          flexShrink={0}
-          wrapMode="none"
-          fg={showProviderStatus() && providerStatus() !== "loading" ? t().error : t().foregroundMuted}
-        >
+        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
           {loadingLabel()}
         </text>
 

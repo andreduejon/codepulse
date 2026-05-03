@@ -13,6 +13,7 @@ import {
   startAbortableRequest,
 } from "../../utils/abortable-request";
 import { KeyHint } from "../key-hint";
+import MessageBox from "../message-box";
 import { DialogFooter, DialogOverlay, DialogTitleBar, getStandardDialogFrame } from "./dialog-chrome";
 import { BLAME_COL_WIDTH, DiffLineRow } from "./diff-line-row";
 import {
@@ -551,18 +552,24 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
 
         {/* Diff load error */}
         <Show when={!loading() && !fullFileMode() && !!diffError()}>
-          <box flexGrow={1} flexDirection="column" alignItems="center" justifyContent="center">
-            <text fg={t().error}>Error loading diff</text>
-            <box height={1} />
-            <text fg={t().foregroundMuted}>{diffError()}</text>
+          <box flexGrow={1} flexDirection="column" justifyContent="center" paddingY={2}>
+            <MessageBox
+              kind="error"
+              title="Failed to load diff"
+              message={diffError() ?? "Unknown error"}
+              variant="dialog"
+            />
           </box>
         </Show>
 
         <Show when={!fileLoading() && fullFileMode() && !!fileError()}>
-          <box flexGrow={1} flexDirection="column" alignItems="center" justifyContent="center">
-            <text fg={t().error}>Error loading file</text>
-            <box height={1} />
-            <text fg={t().foregroundMuted}>{fileError()}</text>
+          <box flexGrow={1} flexDirection="column" justifyContent="center" paddingY={2}>
+            <MessageBox
+              kind="error"
+              title="Failed to load file"
+              message={fileError() ?? "Unknown error"}
+              variant="dialog"
+            />
           </box>
         </Show>
 

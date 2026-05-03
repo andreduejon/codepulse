@@ -106,10 +106,6 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
     return (
       <box flexDirection="column" flexGrow={1} paddingX={2} paddingTop={2}>
         <text fg={t().foregroundMuted} wrapMode="word">
-          {props.unavailableReason}
-        </text>
-        <box height={1} />
-        <text fg={t().foregroundMuted} wrapMode="word">
           Set a GitHub Personal Access Token via environment variable:
         </text>
         <box height={1} />

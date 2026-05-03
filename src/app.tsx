@@ -12,6 +12,7 @@ import ThemeDialog from "./components/dialogs/theme-dialog";
 import ErrorScreen from "./components/error-screen";
 import Footer from "./components/footer";
 import GraphView, { ColumnHeader } from "./components/graph";
+import MessageBox, { type UIMessage } from "./components/message-box";
 import ProjectSelector from "./components/project-selector";
 import SetupScreen from "./components/setup-screen";
 import type { ConfigInfo } from "./config";
@@ -76,6 +77,19 @@ function AppContent(props: Readonly<AppContentProps>) {
   const [setupVisible, setSetupVisible] = createSignal(props.startupMode.kind === "setup");
   // Repo selector visibility — shown when "Switch repository" is selected from menu
   const [repoSelectorVisible, setRepoSelectorVisible] = createSignal(false);
+
+  const screenMessage = createMemo<UIMessage | null>(() => {
+    const err = state.error();
+    if (err) return { kind: "error" as const, message: err };
+
+    const status = state.providerStatus();
+    if (state.activeProviderView() !== "github-actions" || !status || status === "loading") return null;
+
+    return {
+      kind: /^CI fetch error:/i.test(status) ? ("error" as const) : ("info" as const),
+      message: status,
+    };
+  });
 
   const handleSetupComplete = () => {
     // Backfill all default settings so the user can see and edit them in the config file
@@ -278,6 +292,7 @@ function AppContent(props: Readonly<AppContentProps>) {
    */
   const handleCommandExecute = (cmd: string) => {
     const normalized = cmd.toLowerCase().replace(/^:/, "");
+
     switch (normalized) {
       case "q":
       case "quit":
@@ -307,6 +322,10 @@ function AppContent(props: Readonly<AppContentProps>) {
         break;
       case "theme":
         setDialog("theme");
+        break;
+      case "clear":
+        actions.setError(null);
+        actions.setProviderStatus(null);
         break;
       case "f":
       case "fetch":
@@ -473,29 +492,45 @@ function AppContent(props: Readonly<AppContentProps>) {
                       <GraphView onLoadMore={loadMoreData} />
                     </box>
 
-                    {/* Command bar section */}
-                    <CommandBar
-                      commandBarMode={commandBarMode}
-                      commandBarValue={commandBarValue}
-                      searchInputValue={searchInputValue}
-                      searchFocused={searchFocused}
-                      onInput={val => {
-                        if (commandBarMode() === "command" || commandBarMode() === "path") {
-                          setCommandBarValue(val);
-                        } else {
-                          handleSearchInput(val);
-                        }
-                      }}
-                      detailFocused={state.detailFocused}
-                    />
+                    <box flexDirection="column" flexShrink={0} width="100%">
+                      <Show when={screenMessage()}>
+                        {msg => (
+                          <box flexDirection="column" width="100%" flexShrink={0}>
+                            <MessageBox
+                              kind={msg().kind}
+                              title={msg().title}
+                              message={msg().message}
+                              detail={msg().detail}
+                            />
+                            <box height={1} />
+                          </box>
+                        )}
+                      </Show>
 
-                    {/* Footer - hotkey hints, 1 char gap above, right-aligned */}
-                    <box height={1} />
-                    <Footer
-                      commandBarMode={commandBarMode}
-                      filterActive={!!state.highlightSet() || !!state.viewingBranch()}
-                      compact={layoutMode() === "compact"}
-                    />
+                      {/* Command bar section */}
+                      <CommandBar
+                        commandBarMode={commandBarMode}
+                        commandBarValue={commandBarValue}
+                        searchInputValue={searchInputValue}
+                        searchFocused={searchFocused}
+                        onInput={val => {
+                          if (commandBarMode() === "command" || commandBarMode() === "path") {
+                            setCommandBarValue(val);
+                          } else {
+                            handleSearchInput(val);
+                          }
+                        }}
+                        detailFocused={state.detailFocused}
+                      />
+
+                      {/* Footer - hotkey hints, 1 char gap above, right-aligned */}
+                      <box height={1} />
+                      <Footer
+                        commandBarMode={commandBarMode}
+                        filterActive={!!state.highlightSet() || !!state.viewingBranch()}
+                        compact={layoutMode() === "compact"}
+                      />
+                    </box>
                   </box>
 
                   {/* Detail panel - right, hidden in compact/too-small mode */}
