@@ -35,7 +35,13 @@ import {
   isTrustedGitHubHost,
   parseGitHubRemote,
 } from "./api";
-import type { GitHubCommitData, GitHubJob, GitHubProviderConfig, GitHubWorkflowRun } from "./types";
+import type {
+  GitHubCommitData,
+  GitHubJob,
+  GitHubJobFetchResult,
+  GitHubProviderConfig,
+  GitHubWorkflowRun,
+} from "./types";
 import { DEFAULT_GITHUB_CONFIG } from "./types";
 
 /** Number of rows taken from the top of graphRows() for the initial fetch. */
@@ -49,7 +55,7 @@ export interface UseGitHubCIResult {
    * Returns the jobs once fetched (or from cache).
    * Resolves to an empty array on error — never throws.
    */
-  fetchJobsForRun: (run: GitHubWorkflowRun) => Promise<GitHubJob[]>;
+  fetchJobsForRun: (run: GitHubWorkflowRun) => Promise<GitHubJobFetchResult>;
   /**
    * Fetch the plain-text log for a specific job ID.
    * Resolves to an empty string if token or repo is unavailable.
@@ -461,19 +467,24 @@ export function useGitHubCI(opts: {
   });
 
   // ── On-demand job fetching ────────────────────────────────────────────
-  async function fetchJobsForRun(run: GitHubWorkflowRun): Promise<GitHubJob[]> {
+  async function fetchJobsForRun(run: GitHubWorkflowRun): Promise<GitHubJobFetchResult> {
     const cached = jobsCache.get(run.id);
-    if (cached) return cached;
+    if (cached) return { jobs: cached, error: null };
 
     const repo = cachedGitHubRepo();
     const token = getGitHubToken(config.tokenEnvVar);
-    if (!repo || !token) return [];
+    if (!repo || !token) return { jobs: [], error: "GitHub provider unavailable" };
 
-    const jobs = await fetchRunJobs(repo, token, run.id);
+    const { jobs, error } = await fetchRunJobs(repo, token, run.id);
+    if (error) {
+      actions.setProviderStatus(`CI jobs error: ${error}`);
+      return { jobs, error };
+    }
+    actions.setProviderStatus(null);
     if (run.status === "completed") {
       jobsCache.set(run.id, jobs);
     }
-    return jobs;
+    return { jobs, error: null };
   }
 
   // ── Public API ────────────────────────────────────────────────────────

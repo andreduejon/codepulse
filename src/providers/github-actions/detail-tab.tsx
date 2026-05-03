@@ -21,7 +21,7 @@ import type { DetailNavRef } from "../../components/detail-types";
 import { useT } from "../../hooks/use-t";
 import { formatDuration, formatRelativeDate } from "../../utils/date";
 import { categorize, statusColor } from "./status";
-import type { GitHubCommitData, GitHubJob, GitHubStep, GitHubWorkflowRun } from "./types";
+import type { GitHubCommitData, GitHubJob, GitHubJobFetchResult, GitHubStep, GitHubWorkflowRun } from "./types";
 
 // ── Flat item list ─────────────────────────────────────────────────────────
 
@@ -40,7 +40,7 @@ export interface ActionsDetailTabProps {
    * Fetch full job details (with steps) for a run on demand.
    * Called when the user expands a run entry. Checks cache first.
    */
-  fetchJobsForRun: (run: GitHubWorkflowRun) => Promise<GitHubJob[]>;
+  fetchJobsForRun: (run: GitHubWorkflowRun) => Promise<GitHubJobFetchResult>;
   /**
    * When set, the provider is enabled but not yet available (e.g. missing
    * token or no GitHub remote).  The tab shows setup guidance instead of
@@ -130,6 +130,8 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
   const [expandedRuns, setExpandedRuns] = createSignal<Set<number>>(new Set());
   /** Map of run ID → fetched jobs. Wrapped in a signal so changes trigger re-renders. */
   const [fetchedJobs, setFetchedJobs] = createSignal<Map<number, GitHubJob[]>>(new Map());
+  /** Map of run ID → fetch error. */
+  const [jobErrors, setJobErrors] = createSignal<Map<number, string>>(new Map());
   /** Set of run IDs with an in-flight job fetch. */
   const [loadingRuns, setLoadingRuns] = createSignal<Set<number>>(new Set());
   /** Tracks which commit SHA already received the one-time single-run auto-expand. */
@@ -210,10 +212,16 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
     });
     if (nowExpanded && !fetchedJobs().has(run.id) && !loadingRuns().has(run.id)) {
       setLoadingRuns(prev => new Set([...prev, run.id]));
-      props.fetchJobsForRun(run).then(jobs => {
+      props.fetchJobsForRun(run).then(({ jobs, error }) => {
         setFetchedJobs(prev => {
           const next = new Map(prev);
           next.set(run.id, jobs);
+          return next;
+        });
+        setJobErrors(prev => {
+          const next = new Map(prev);
+          if (error) next.set(run.id, error);
+          else next.delete(run.id);
           return next;
         });
         setLoadingRuns(prev => {
@@ -302,6 +310,7 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
               const isExpanded = () => expandedRuns().has(run.id);
               const isLoading = () => loadingRuns().has(run.id);
               const jobs = () => fetchedJobs().get(run.id) ?? [];
+              const jobError = () => jobErrors().get(run.id) ?? null;
               const isCursored = () => props.detailFocused() && props.detailCursorIndex() === runFlatIndex();
               const cat = categorize(run.status, run.conclusion);
               const color = () => statusColor(t(), cat);
@@ -355,7 +364,12 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
                         <text fg={t().foregroundMuted}>Loading jobs…</text>
                       </box>
                     </Show>
-                    <Show when={!isLoading() && jobs().length === 0}>
+                    <Show when={!isLoading() && jobError()}>
+                      <box>
+                        <text fg={t().foregroundMuted}>Jobs unavailable</text>
+                      </box>
+                    </Show>
+                    <Show when={!isLoading() && !jobError() && jobs().length === 0}>
                       <box>
                         <text fg={t().foregroundMuted}>No jobs found</text>
                       </box>

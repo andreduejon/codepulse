@@ -1,6 +1,11 @@
 import type { Renderable } from "@opentui/core";
 import type { DiffTarget } from "../git/types";
-import type { GitHubCommitData, GitHubJob, GitHubWorkflowRun } from "../providers/github-actions/types";
+import type {
+  GitHubCommitData,
+  GitHubJob,
+  GitHubJobFetchResult,
+  GitHubWorkflowRun,
+} from "../providers/github-actions/types";
 
 /** Mutable ref populated by a detail view for app.tsx to call */
 export interface DetailNavRef {
@@ -28,7 +33,7 @@ export interface DetailViewProps {
   /** Get CI data for a commit SHA (from the GitHub Actions provider). Optional. */
   githubGetCommitData?: (sha: string) => GitHubCommitData | null;
   /** Fetch full job details (with steps) for a CI run on demand. Optional. */
-  githubFetchJobsForRun?: (run: GitHubWorkflowRun) => Promise<GitHubJob[]>;
+  githubFetchJobsForRun?: (run: GitHubWorkflowRun) => Promise<GitHubJobFetchResult>;
   /** Fetch the plain-text log for a specific GitHub Actions job. Optional. */
   githubFetchJobLog?: (jobId: number, signal?: AbortSignal) => Promise<string>;
   /** Open the job log dialog for a specific job. */

@@ -4,7 +4,12 @@ import { isUncommittedHash } from "../constants";
 import { useAppState } from "../context/state";
 import type { DiffTarget } from "../git/types";
 import { useT } from "../hooks/use-t";
-import type { GitHubCommitData, GitHubJob, GitHubWorkflowRun } from "../providers/github-actions/types";
+import type {
+  GitHubCommitData,
+  GitHubJob,
+  GitHubJobFetchResult,
+  GitHubWorkflowRun,
+} from "../providers/github-actions/types";
 import { getAvailableTabs } from "../utils/tab-utils";
 import CommitDetailView from "./detail";
 import type { DetailNavRef } from "./detail-types";
@@ -22,7 +27,7 @@ export interface DetailPanelProps {
   /** CI data getter from the GitHub Actions provider (optional). */
   githubGetCommitData?: (sha: string) => GitHubCommitData | null;
   /** CI job fetcher from the GitHub Actions provider (optional). */
-  githubFetchJobsForRun?: (run: GitHubWorkflowRun) => Promise<GitHubJob[]>;
+  githubFetchJobsForRun?: (run: GitHubWorkflowRun) => Promise<GitHubJobFetchResult>;
   /** CI job log fetcher from the GitHub Actions provider (optional). */
   githubFetchJobLog?: (jobId: number, signal?: AbortSignal) => Promise<string>;
   /**

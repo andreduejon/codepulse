@@ -8,7 +8,15 @@
 
 import type { GraphBadge } from "../../providers/provider";
 import { categorize } from "./status";
-import type { GitHubApiJob, GitHubCommitData, GitHubJob, GitHubRepo, GitHubStep, GitHubWorkflowRun } from "./types";
+import type {
+  GitHubApiJob,
+  GitHubCommitData,
+  GitHubJob,
+  GitHubJobFetchResult,
+  GitHubRepo,
+  GitHubStep,
+  GitHubWorkflowRun,
+} from "./types";
 
 // ── Remote URL parsing ────────────────────────────────────────────────────
 
@@ -489,14 +497,15 @@ export async function fetchCIDataForSHAs(
 /**
  * Fetch all jobs (with steps) for a single workflow run.
  *
- * Returns an empty array (no throw) on API errors.
+ * Returns an explicit error on API failures so the UI doesn't confuse a failed
+ * request with a real empty job list.
  */
 export async function fetchRunJobs(
   repo: GitHubRepo,
   token: string,
   runId: number,
   signal?: AbortSignal,
-): Promise<GitHubJob[]> {
+): Promise<GitHubJobFetchResult> {
   const url = `${apiBase(repo)}/actions/runs/${runId}/jobs?per_page=100`;
   const headers = createHeaders(token);
 
@@ -504,14 +513,14 @@ export async function fetchRunJobs(
     const res = await fetch(url, { headers, signal });
     if (!res.ok) {
       console.error(`[github-actions] fetchRunJobs: HTTP ${res.status} for run ${runId}`);
-      return [];
+      return { jobs: [], error: `Jobs HTTP ${res.status}` };
     }
     const json = (await res.json()) as { jobs?: GitHubApiJob[] };
-    return (json.jobs ?? []).map(mapApiJob);
+    return { jobs: (json.jobs ?? []).map(mapApiJob), error: null };
   } catch (err) {
     if (signal?.aborted) throw err;
     console.error("[github-actions] fetchRunJobs: network error:", err);
-    return [];
+    return { jobs: [], error: err instanceof Error ? err.message : String(err) };
   }
 }
 

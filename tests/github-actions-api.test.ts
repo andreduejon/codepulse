@@ -542,7 +542,8 @@ describe("fetchRunJobs", () => {
 
   it("returns mapped jobs with steps", async () => {
     mockFetch(mock(async () => new Response(JSON.stringify({ jobs: [makeApiJob()] }), { status: 200 })));
-    const jobs = await fetchRunJobs(TEST_REPO, TEST_TOKEN, 123);
+    const { jobs, error } = await fetchRunJobs(TEST_REPO, TEST_TOKEN, 123);
+    expect(error).toBeNull();
     expect(jobs).toHaveLength(1);
     expect(jobs[0].name).toBe("build");
     expect(jobs[0].steps).toHaveLength(2);
@@ -550,26 +551,28 @@ describe("fetchRunJobs", () => {
     expect(jobs[0].steps[1].number).toBe(2);
   });
 
-  it("returns empty array (no throw) on 404", async () => {
+  it("returns explicit error (no throw) on 404", async () => {
     mockFetch(mock(async () => new Response(null, { status: 404 })));
-    const jobs = await fetchRunJobs(TEST_REPO, TEST_TOKEN, 999);
+    const { jobs, error } = await fetchRunJobs(TEST_REPO, TEST_TOKEN, 999);
+    expect(error).toBe("Jobs HTTP 404");
     expect(jobs).toHaveLength(0);
   });
 
-  it("returns empty array (no throw) on network error", async () => {
+  it("returns explicit error (no throw) on network error", async () => {
     mockFetch(
       mock(async () => {
         throw new Error("Network failure");
       }),
     );
-    const jobs = await fetchRunJobs(TEST_REPO, TEST_TOKEN, 123);
+    const { jobs, error } = await fetchRunJobs(TEST_REPO, TEST_TOKEN, 123);
+    expect(error).toBe("Network failure");
     expect(jobs).toHaveLength(0);
   });
 
   it("handles missing steps array gracefully", async () => {
     const jobWithoutSteps = { ...makeApiJob(), steps: undefined as unknown as [] };
     mockFetch(mock(async () => new Response(JSON.stringify({ jobs: [jobWithoutSteps] }), { status: 200 })));
-    const jobs = await fetchRunJobs(TEST_REPO, TEST_TOKEN, 123);
+    const { jobs } = await fetchRunJobs(TEST_REPO, TEST_TOKEN, 123);
     expect(jobs[0].steps).toEqual([]);
   });
 });
