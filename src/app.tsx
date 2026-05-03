@@ -546,6 +546,7 @@ function AppContent(props: Readonly<AppContentProps>) {
                         onOpenDiff={handleOpenDiff}
                         githubGetCommitData={gitHubCI.getCommitData}
                         githubFetchJobsForRun={gitHubCI.fetchJobsForRun}
+                        githubFetchCommitData={gitHubCI.fetchCommitDataForSHA}
                         githubFetchJobLog={gitHubCI.fetchJobLogForJob}
                         githubProviderStatus={state.providerStatus()}
                         onOpenJobLog={handleOpenJobLog}

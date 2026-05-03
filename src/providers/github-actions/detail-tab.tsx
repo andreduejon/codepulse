@@ -41,6 +41,8 @@ export interface ActionsDetailTabProps {
    * Called when the user expands a run entry. Checks cache first.
    */
   fetchJobsForRun: (run: GitHubWorkflowRun) => Promise<GitHubJobFetchResult>;
+  /** Fetch CI data for the selected SHA when it was not in the preload window. */
+  fetchCommitData?: (sha: string) => Promise<void>;
   /**
    * When set, the provider is enabled but not yet available (e.g. missing
    * token or no GitHub remote).  The tab shows setup guidance instead of
@@ -75,6 +77,7 @@ export interface ActionsDetailTabProps {
 export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
   const t = useT();
   const actionsData = () => props.getCommitData(props.sha);
+  const [requestedSha, setRequestedSha] = createSignal<string | null>(null);
 
   const STATUS_COL_WIDTH = 2;
 
@@ -100,6 +103,15 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
         return "?";
     }
   };
+
+  createEffect(() => {
+    const sha = props.sha;
+    if (props.loading) return;
+    if (actionsData()) return;
+    if (requestedSha() === sha) return;
+    setRequestedSha(sha);
+    void props.fetchCommitData?.(sha);
+  });
 
   // When the provider is registered but unavailable, show setup guidance.
   if (props.unavailableReason) {

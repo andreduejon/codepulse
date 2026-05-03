@@ -28,6 +28,8 @@ export interface DetailPanelProps {
   githubGetCommitData?: (sha: string) => GitHubCommitData | null;
   /** CI job fetcher from the GitHub Actions provider (optional). */
   githubFetchJobsForRun?: (run: GitHubWorkflowRun) => Promise<GitHubJobFetchResult>;
+  /** CI data fetcher for one selected SHA (optional). */
+  githubFetchCommitData?: (sha: string) => Promise<void>;
   /** CI job log fetcher from the GitHub Actions provider (optional). */
   githubFetchJobLog?: (jobId: number, signal?: AbortSignal) => Promise<string>;
   /**
@@ -173,6 +175,7 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
             navRef={props.navRef}
             githubGetCommitData={props.githubGetCommitData}
             githubFetchJobsForRun={props.githubFetchJobsForRun}
+            githubFetchCommitData={props.githubFetchCommitData}
             githubFetchJobLog={props.githubFetchJobLog}
             githubProviderStatus={props.githubProviderStatus}
             onOpenJobLog={props.onOpenJobLog}

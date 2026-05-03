@@ -61,6 +61,8 @@ export interface UseGitHubCIResult {
    * Resolves to an empty string if token or repo is unavailable.
    */
   fetchJobLogForJob: (jobId: number, signal?: AbortSignal) => Promise<string>;
+  /** Fetch CI data for one selected SHA on demand. */
+  fetchCommitDataForSHA: (sha: string) => Promise<void>;
   /** Trigger an immediate (non-conditional) refresh of CI data. */
   refresh: () => Promise<void>;
   /** True when the provider is available (token + GitHub remote detected). */
@@ -237,6 +239,11 @@ export function useGitHubCI(opts: {
 
     // Merge new runs into commitDataCache (additive — don't discard other SHAs)
     const newCommitData = buildCommitDataMap(allRuns);
+    for (const sha of shas) {
+      if (!newCommitData.has(sha)) {
+        newCommitData.set(sha, { sha, runs: [] });
+      }
+    }
     for (const [sha, data] of newCommitData) {
       commitDataCache.set(sha, data);
     }
@@ -351,6 +358,10 @@ export function useGitHubCI(opts: {
     actions.setGraphBadges(new Map());
     actions.setProviderStatus(null);
     await doInitialFetch(undefined, undefined, true);
+  }
+
+  async function fetchCommitDataForSHA(sha: string): Promise<void> {
+    await doInitialFetch(undefined, [sha], true);
   }
 
   // ── Lazy initial fetch + auto-refresh while in CI view ───────────────
@@ -504,6 +515,7 @@ export function useGitHubCI(opts: {
       if (!repo || !token) return Promise.resolve("");
       return fetchJobLog(repo, token, jobId, signal);
     },
+    fetchCommitDataForSHA,
     refresh: doForceRefresh,
     isAvailable,
   };
