@@ -18,7 +18,7 @@ import SetupScreen from "./components/setup-screen";
 import type { ConfigInfo } from "./config";
 import { backfillRepoConfig, getKnownRepos, writeConfig } from "./config";
 import { COMPACT_THRESHOLD_WIDTH, DEFAULT_MAX_COUNT, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH } from "./constants";
-import { AppStateContext, createAppState } from "./context/state";
+import { AppStateContext, createAppState, providerIdle, providerStatusMessage } from "./context/state";
 import { createThemeState, ThemeContext } from "./context/theme";
 import type { DiffTarget } from "./git/types";
 import { useAncestry } from "./hooks/use-ancestry";
@@ -83,12 +83,12 @@ function AppContent(props: Readonly<AppContentProps>) {
     if (err) return { kind: "error" as const, message: err };
 
     const status = state.providerStatus();
-    if (state.activeProviderView() !== "github-actions" || status.kind === "idle" || status.kind === "loading")
-      return null;
+    const message = providerStatusMessage(status);
+    if (state.activeProviderView() !== "github-actions" || !message) return null;
 
     return {
       kind: status.kind === "error" ? ("error" as const) : ("info" as const),
-      message: status.message,
+      message,
     };
   });
 
@@ -326,7 +326,7 @@ function AppContent(props: Readonly<AppContentProps>) {
         break;
       case "clear":
         actions.setError(null);
-        actions.setProviderStatus({ kind: "idle" });
+        actions.setProviderStatus(providerIdle());
         break;
       case "f":
       case "fetch":

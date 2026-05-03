@@ -25,6 +25,15 @@ export type ProviderStatus =
   | { kind: "unavailable"; message: string }
   | { kind: "error"; message: string };
 
+export const providerIdle = (): ProviderStatus => ({ kind: "idle" });
+export const providerLoading = (): ProviderStatus => ({ kind: "loading" });
+export const providerUnavailable = (message: string): ProviderStatus => ({ kind: "unavailable", message });
+export const providerError = (message: string): ProviderStatus => ({ kind: "error", message });
+
+export function providerStatusMessage(status: ProviderStatus): string | null {
+  return status.kind === "error" || status.kind === "unavailable" ? status.message : null;
+}
+
 export interface AppState {
   // ── Repository data ─────────────────────────────────────────────────
   commits: Accessor<Commit[]>;
@@ -218,7 +227,7 @@ export function createAppState(
   // ── Provider / CI ─────────────────────────────────────────────────
   const [activeProviderView, setActiveProviderView] = createSignal<ProviderView>("git");
   const [graphBadges, setGraphBadges] = createSignal<Map<string, GraphBadge>>(new Map());
-  const [providerStatus, setProviderStatus] = createSignal<ProviderStatus>({ kind: "idle" });
+  const [providerStatus, setProviderStatus] = createSignal<ProviderStatus>(providerIdle());
   const [keyboardScopeOverride, setKeyboardScopeOverride] = createSignal<KeyboardScope | null>(null);
 
   // ── Search memo ───────────────────────────────────────────────────

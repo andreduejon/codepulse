@@ -22,7 +22,14 @@
 
 import type { Accessor } from "solid-js";
 import { createEffect, createSignal, onCleanup, untrack } from "solid-js";
-import type { AppActions, AppState } from "../../context/state";
+import {
+  type AppActions,
+  type AppState,
+  providerError,
+  providerIdle,
+  providerLoading,
+  providerUnavailable,
+} from "../../context/state";
 import { registerProvider, unregisterProvider } from "../../providers/provider";
 import {
   buildCommitDataMap,
@@ -282,16 +289,13 @@ export function useGitHubCI(opts: {
         const repo = cachedGitHubRepo();
         const token = getGitHubToken(config.tokenEnvVar);
         if (!config.enabled) {
-          actions.setProviderStatus({ kind: "unavailable", message: "CI provider disabled" });
+          actions.setProviderStatus(providerUnavailable("CI provider disabled"));
         } else if (!parsedGitHubRepo()) {
-          actions.setProviderStatus({ kind: "unavailable", message: "No GitHub remote detected" });
+          actions.setProviderStatus(providerUnavailable("No GitHub remote detected"));
         } else if (!repo) {
-          actions.setProviderStatus({
-            kind: "unavailable",
-            message: `Untrusted GitHub host: ${parsedGitHubRepo()?.hostname}`,
-          });
+          actions.setProviderStatus(providerUnavailable(`Untrusted GitHub host: ${parsedGitHubRepo()?.hostname}`));
         } else if (!token) {
-          actions.setProviderStatus({ kind: "unavailable", message: `Token not found: $${config.tokenEnvVar}` });
+          actions.setProviderStatus(providerUnavailable(`Token not found: $${config.tokenEnvVar}`));
         }
       }
       return;
@@ -310,21 +314,19 @@ export function useGitHubCI(opts: {
     for (const sha of unqueried) queriedSHAs.add(sha);
 
     fetchInFlight = true;
-    if (showStatus) actions.setProviderStatus({ kind: "loading" });
+    if (showStatus) actions.setProviderStatus(providerLoading());
     try {
       const { firstError } = await fetchForSHAs(unqueried, signal);
       if (showStatus) {
-        actions.setProviderStatus(
-          firstError ? { kind: "error", message: `CI fetch error: ${firstError}` } : { kind: "idle" },
-        );
+        actions.setProviderStatus(firstError ? providerError(`CI fetch error: ${firstError}`) : providerIdle());
       } else if (!firstError && state.providerStatus().kind === "error") {
-        actions.setProviderStatus({ kind: "idle" });
+        actions.setProviderStatus(providerIdle());
       }
     } catch (err) {
       if (signal?.aborted) return;
       const msg = err instanceof Error ? err.message : String(err);
       console.error("[github-actions] initial fetch failed:", err);
-      if (showStatus) actions.setProviderStatus({ kind: "error", message: `CI fetch error: ${msg}` });
+      if (showStatus) actions.setProviderStatus(providerError(`CI fetch error: ${msg}`));
       // On error, un-mark so a future retry can re-query these SHAs
       for (const sha of unqueried) queriedSHAs.delete(sha);
     } finally {
@@ -346,7 +348,7 @@ export function useGitHubCI(opts: {
     fetchInFlight = true;
     try {
       const { firstError } = await fetchForSHAs(runningSHAs, signal);
-      if (!firstError && state.providerStatus().kind === "error") actions.setProviderStatus({ kind: "idle" });
+      if (!firstError && state.providerStatus().kind === "error") actions.setProviderStatus(providerIdle());
       if (firstError) console.error("[github-actions] refresh returned error:", firstError);
     } catch (err) {
       if (signal?.aborted) return;
@@ -366,7 +368,7 @@ export function useGitHubCI(opts: {
     jobsCache.clear();
     setCommitDataVersion(v => v + 1);
     actions.setGraphBadges(new Map());
-    actions.setProviderStatus({ kind: "idle" });
+    actions.setProviderStatus(providerIdle());
     await doInitialFetch(undefined, undefined, true);
   }
 
@@ -498,10 +500,10 @@ export function useGitHubCI(opts: {
 
     const { jobs, error } = await fetchRunJobs(repo, token, run.id);
     if (error) {
-      actions.setProviderStatus({ kind: "error", message: `CI jobs error: ${error}` });
+      actions.setProviderStatus(providerError(`CI jobs error: ${error}`));
       return { jobs, error };
     }
-    actions.setProviderStatus({ kind: "idle" });
+    actions.setProviderStatus(providerIdle());
     if (run.status === "completed") {
       jobsCache.set(run.id, jobs);
     }
