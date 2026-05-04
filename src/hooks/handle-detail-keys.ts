@@ -111,14 +111,6 @@ export function handleDetailKey(e: KeyEvent, opts: DetailKeyOptions): boolean {
       e.preventDefault();
       detailNavRef.activateCurrentItem();
       return true;
-    case "pageup":
-      e.preventDefault();
-      scrollbox?.scrollBy(-0.5, "viewport");
-      return true;
-    case "pagedown":
-      e.preventDefault();
-      scrollbox?.scrollBy(0.5, "viewport");
-      return true;
     case "g":
       e.preventDefault();
       if (!e.shift) {

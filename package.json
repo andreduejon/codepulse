@@ -29,15 +29,13 @@
 		"README.md"
 	],
 	"scripts": {
-		"dev": "bun run src/index.tsx",
 		"start": "bun run src/index.tsx",
 		"test": "bun test",
 		"lint": "biome lint src/ tests/",
 		"format": "biome format src/ tests/",
 		"check": "biome check src/ tests/",
 		"check:types": "tsc -p tsconfig.json --noEmit && tsc -p tests/tsconfig.json --noEmit",
-		"check:fix": "biome check --write src/ tests/",
-		"prepublishOnly": "bun run check && bun test"
+		"check:fix": "biome check --write src/ tests/"
 	},
 	"dependencies": {
 		"@opentui/core": "0.2.2",
