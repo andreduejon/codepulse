@@ -1,5 +1,12 @@
 import type { Renderable } from "@opentui/core";
+import type { ProviderStatus } from "../context/state";
 import type { DiffTarget } from "../git/types";
+import type {
+  GitHubCommitData,
+  GitHubJob,
+  GitHubJobFetchResult,
+  GitHubWorkflowRun,
+} from "../providers/github-actions/types";
 
 /** Mutable ref populated by a detail view for app.tsx to call */
 export interface DetailNavRef {
@@ -24,6 +31,22 @@ export interface DetailViewProps {
   onOpenDiff?: (target: DiffTarget) => void;
   /** Mutable ref object populated by the detail view with navigation callbacks */
   navRef?: DetailNavRef;
+  /** Get CI data for a commit SHA (from the GitHub Actions provider). Optional. */
+  githubGetCommitData?: (sha: string) => GitHubCommitData | null;
+  /** Fetch full job details (with steps) for a CI run on demand. Optional. */
+  githubFetchJobsForRun?: (run: GitHubWorkflowRun) => Promise<GitHubJobFetchResult>;
+  /** Fetch CI data for one selected SHA on demand. Optional. */
+  githubFetchCommitData?: (sha: string) => Promise<void>;
+  /** Fetch the plain-text log for a specific GitHub Actions job. Optional. */
+  githubFetchJobLog?: (jobId: number, signal?: AbortSignal) => Promise<string>;
+  /** Open the job log dialog for a specific job. */
+  onOpenJobLog?: (job: GitHubJob, run: GitHubWorkflowRun, jobs?: GitHubJob[]) => void;
+  /**
+   * Current provider status string (from state.providerStatus).
+   * Non-null when the provider is unavailable (e.g. missing token / remote).
+   * Passed to ActionsDetailTab to show setup guidance.
+   */
+  githubProviderStatus?: ProviderStatus;
 }
 
 /** Layout constants shared between committed and uncommitted detail views */

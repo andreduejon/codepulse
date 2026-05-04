@@ -4,7 +4,7 @@ import { runGit } from "./repo-git";
 import { parseDiffTreeOutput } from "./repo-status";
 import type { Branch, Commit, CommitDetail, FileChange, RefInfo, TagInfo } from "./types";
 
-export { getFileBlame, getFileDiff, parseBlameOutput, parseUnifiedDiff } from "./repo-diff";
+export { getFileBlame, getFileContent, getFileDiff, parseBlameOutput, parseUnifiedDiff } from "./repo-diff";
 export { runGit } from "./repo-git";
 export type { WorkingTreeStatus } from "./repo-status";
 export {
@@ -438,6 +438,14 @@ export async function getCurrentBranch(repoPath: string, signal?: AbortSignal): 
   return stdout.trim();
 }
 
+/** Resolve any path inside a repo to its git top-level directory. */
+export async function getRepoRoot(repoPath: string, signal?: AbortSignal): Promise<string | null> {
+  const { stdout, exitCode } = await runGit(repoPath, ["rev-parse", "--show-toplevel"], signal);
+  if (exitCode !== 0) return null;
+  const root = stdout.trim();
+  return root || null;
+}
+
 export async function getRemoteUrl(repoPath: string, signal?: AbortSignal): Promise<string> {
   try {
     // Try "origin" first (most common), then fall back to the first available remote
@@ -517,7 +525,7 @@ export async function isGitRepo(path: string): Promise<boolean> {
 
 /**
  * Fetch from all remotes, pruning deleted remote branches.
- * This is the only network operation in codepulse — safe and read-only.
+ * This is the only git operation in codepulse that updates local remote refs.
  */
 export async function fetchRemote(repoPath: string): Promise<{ ok: boolean; error?: string }> {
   const { stderr, exitCode } = await runGit(repoPath, ["fetch", "--all", "--prune"]);

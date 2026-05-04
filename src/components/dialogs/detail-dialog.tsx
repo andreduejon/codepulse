@@ -26,7 +26,7 @@ export function DetailDialog(props: Readonly<DetailPanelProps & { onClose: () =>
         flexDirection="column"
         width={dialogWidth()}
         height={dialogHeight()}
-        backgroundColor={t().backgroundPanel}
+        backgroundColor={t().background}
         paddingX={1}
         paddingY={1}
       >

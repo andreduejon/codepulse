@@ -91,6 +91,14 @@ export interface FileDiff {
   truncated?: boolean;
 }
 
+/** Full file content resolved for a diff target. */
+export interface FileContent {
+  filePath: string;
+  lines: string[];
+  isBinary: boolean;
+  truncated?: boolean;
+}
+
 /** A single blame annotation line from `git blame --porcelain`. */
 export interface BlameLine {
   commitHash: string;

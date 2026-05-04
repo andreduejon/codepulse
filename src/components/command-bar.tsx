@@ -4,6 +4,7 @@ import packageJson from "../../package.json";
 import { useAppState } from "../context/state";
 import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
 import { useT } from "../hooks/use-t";
+import { getProvider } from "../providers/provider";
 import {
   commandBarInputValue,
   commandBarPlaceholder,
@@ -48,6 +49,12 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
     const mode = props.commandBarMode();
     return props.searchFocused() || mode === "command" || mode === "path";
   };
+  const promptPrefix = () => {
+    const mode = props.commandBarMode();
+    if (mode === "command") return ":";
+    if (mode === "search") return "/";
+    return "";
+  };
 
   const modeBadge = () => modeBadgeLabel(props.commandBarMode(), state.highlightMode());
 
@@ -75,15 +82,23 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
     >
       {/* Input row */}
       <box flexGrow={1} flexDirection="row">
+        <Show when={promptPrefix()}>
+          <text flexShrink={0} wrapMode="none" fg={t().accent}>
+            {promptPrefix()}
+          </text>
+        </Show>
         <input
           focused={inputFocused()}
           flexGrow={1}
           placeholder={placeholder()}
           value={inputValue()}
           onInput={props.onInput}
-          fg={t().foreground}
+          textColor={t().foreground}
+          focusedTextColor={t().foreground}
           placeholderColor={t().foregroundMuted}
+          cursorColor={t().accent}
           backgroundColor={t().background}
+          focusedBackgroundColor={t().background}
         />
         <text flexShrink={0} wrapMode="none" fg={countColor()}>
           {"  "}
@@ -93,19 +108,26 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
 
       <box height={1} />
 
-      {/* Status row: error · git badge · mode badge · repo path · version */}
+      {/* Status row: git badge · mode badge · repo path · version */}
       <box flexDirection="row" width="100%">
-        <Show when={state.error()}>
-          <text flexShrink={0} wrapMode="none" fg={t().error}>
-            {"error: "}
-            {state.error()}
-            {"  "}
-          </text>
-        </Show>
-        {/* Git view badge */}
-        <text flexShrink={0} wrapMode="none" fg={t().background} bg={t().accent}>
-          {" git "}
-        </text>
+        {/* Provider view badge */}
+        {(() => {
+          const view = state.activeProviderView();
+          if (view === "git") {
+            return (
+              <text flexShrink={0} wrapMode="none" fg={t().background} bg={t().accent}>
+                {" git "}
+              </text>
+            );
+          }
+          const reg = getProvider(view);
+          const label = reg ? reg.displayName : view;
+          return (
+            <text flexShrink={0} wrapMode="none" fg={t().githubActionsFg} bg={t().githubActionsBg}>
+              {` ${label} `}
+            </text>
+          );
+        })()}
         <text flexShrink={0} wrapMode="none">
           {" "}
         </text>

@@ -10,7 +10,7 @@ export interface DisplayLine {
 }
 
 /** Flatten all hunks of a FileDiff into a single display-line array. */
-import type { FileDiff } from "../../git/types";
+import type { FileContent, FileDiff } from "../../git/types";
 export function buildDisplayLines(diff: FileDiff): DisplayLine[] {
   const lines: DisplayLine[] = [];
   for (let i = 0; i < diff.hunks.length; i++) {
@@ -30,6 +30,62 @@ export function buildDisplayLines(diff: FileDiff): DisplayLine[] {
     lines.push({ kind: "spacer", content: "" });
   }
   return lines;
+}
+
+/**
+ * Expand full-file content with diff styling overlaid, without hunk headers.
+ * Unchanged lines outside hunks are inserted as context rows.
+ */
+export function buildFileDisplayLines(file: FileContent, diff?: FileDiff): DisplayLine[] {
+  if (!diff || diff.hunks.length === 0) {
+    const lines = file.lines.map((content, idx) => ({
+      kind: "context" as const,
+      content,
+      newLineNo: idx + 1,
+    }));
+    return lines.length > 0 ? [{ kind: "spacer", content: "" }, ...lines, { kind: "spacer", content: "" }] : lines;
+  }
+
+  const hasNewSideLines = diff.hunks.some(hunk => hunk.lines.some(line => line.newLineNo !== undefined));
+  if (!hasNewSideLines) {
+    const lines = diff.hunks.flatMap(hunk =>
+      hunk.lines.map(line => ({
+        kind: line.type,
+        content: line.content,
+        oldLineNo: line.oldLineNo,
+        newLineNo: line.newLineNo,
+      })),
+    );
+    return lines.length > 0 ? [{ kind: "spacer", content: "" }, ...lines, { kind: "spacer", content: "" }] : lines;
+  }
+
+  const lines: DisplayLine[] = [];
+  let nextNewLine = 1;
+
+  for (const hunk of diff.hunks) {
+    const hunkStart = Math.max(1, hunk.newStart);
+    while (nextNewLine < hunkStart && nextNewLine <= file.lines.length) {
+      lines.push({ kind: "context", content: file.lines[nextNewLine - 1] ?? "", newLineNo: nextNewLine });
+      nextNewLine++;
+    }
+
+    for (const line of hunk.lines) {
+      lines.push({
+        kind: line.type,
+        content: line.content,
+        oldLineNo: line.oldLineNo,
+        newLineNo: line.newLineNo,
+      });
+      if (line.newLineNo !== undefined) nextNewLine = line.newLineNo + 1;
+    }
+  }
+
+  while (nextNewLine <= file.lines.length) {
+    lines.push({ kind: "context", content: file.lines[nextNewLine - 1] ?? "", newLineNo: nextNewLine });
+    nextNewLine++;
+  }
+
+  return lines.length > 0 ? [{ kind: "spacer", content: "" }, ...lines, { kind: "spacer", content: "" }] : lines;
 }
 
 // ── Gutter helpers ────────────────────────────────────────────────────

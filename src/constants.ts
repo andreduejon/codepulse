@@ -1,4 +1,4 @@
-/** Default number of commits to load when no --max-count flag is provided. */
+/** Default number of commits to load when repo config does not override page size. */
 export const DEFAULT_MAX_COUNT = 200;
 
 /** Column widths for the graph table (character count). */
@@ -36,7 +36,7 @@ export const UNCOMMITTED_PLACEHOLDER = "\u00b7".repeat(7);
 export const MAX_COUNT_OPTIONS = [10, 20, 50, 100, 200, 500];
 
 /** Available auto-refresh interval labels. */
-export const AUTO_REFRESH_OPTIONS = ["off", "10s", "30s", "60s"];
+export const INTERVAL_OPTIONS = ["off", "10s", "30s", "60s"];
 
 /** Maps an auto-refresh label to its millisecond value. */
 export const AUTO_REFRESH_MS: Record<string, number> = {

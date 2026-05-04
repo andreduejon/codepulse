@@ -1,8 +1,10 @@
-import { useKeyboard, useTerminalDimensions } from "@opentui/solid";
+import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
+import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createSignal, For, onCleanup } from "solid-js";
 import { SHIFT_JUMP } from "../../constants";
 import { themeNames, themes, useTheme } from "../../context/theme";
-import { KeyHint } from "../key-hint";
+import { scrollIndexedItemIntoView } from "../../utils/scroll";
+import { KeyHint, KeyHintSeparator } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
 /** Pre-computed theme options — themeNames and themes are module-level constants. */
@@ -12,6 +14,7 @@ const themeOptions = themeNames.map(key => ({
 }));
 
 export default function ThemeDialog(props: Readonly<{ onClose: () => void }>) {
+  const renderer = useRenderer();
   const { theme, setTheme, themeName } = useTheme();
   const t = () => theme();
   const dimensions = useTerminalDimensions();
@@ -30,11 +33,17 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void }>) {
   // Initialize cursor to the currently selected theme
   const initialIdx = themeOptions.findIndex(o => o.key === originalTheme);
   const [cursor, setCursor] = createSignal(initialIdx >= 0 ? initialIdx : 0);
+  let scrollboxRef: ScrollBoxRenderable | undefined;
+  const itemRefs: Renderable[] = [];
 
   // Preview theme when cursor changes
   createEffect(() => {
     const opt = themeOptions[cursor()];
     if (opt) setTheme(opt.key);
+  });
+
+  createEffect(() => {
+    scrollIndexedItemIntoView(scrollboxRef, itemRefs, cursor());
   });
 
   const moveCursor = (delta: number) => {
@@ -51,6 +60,14 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void }>) {
     if (e.eventType === "release") return;
 
     switch (e.name) {
+      case "q":
+        e.preventDefault();
+        renderer.destroy();
+        break;
+      case "escape":
+        e.preventDefault();
+        props.onClose();
+        break;
       case "down":
         moveCursor(e.shift ? SHIFT_JUMP : 1);
         break;
@@ -68,7 +85,7 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void }>) {
       <box
         width={dialogWidth()}
         height={dialogHeight()}
-        backgroundColor={t().backgroundPanel}
+        backgroundColor={t().background}
         flexDirection="column"
         paddingX={1}
         paddingY={1}
@@ -76,7 +93,15 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void }>) {
         <DialogTitleBar title="Color Theme" />
 
         {/* Theme list — scrollable when terminal height is small */}
-        <scrollbox flexGrow={1} scrollY scrollX={false} verticalScrollbarOptions={{ visible: false }}>
+        <scrollbox
+          ref={scrollboxRef}
+          flexGrow={1}
+          flexShrink={1}
+          minHeight={0}
+          scrollY
+          scrollX={false}
+          verticalScrollbarOptions={{ visible: false }}
+        >
           <box flexDirection="column">
             <For each={themeOptions}>
               {(opt, optIndex) => {
@@ -84,6 +109,9 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void }>) {
 
                 return (
                   <box
+                    ref={(el: Renderable) => {
+                      itemRefs[optIndex()] = el;
+                    }}
                     flexDirection="row"
                     width="100%"
                     paddingX={4}
@@ -108,7 +136,8 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void }>) {
 
         {/* Navigation footer */}
         <DialogFooter>
-          <KeyHint key="enter" desc=" confirm  " />
+          <KeyHint key="enter" desc=" confirm" />
+          <KeyHintSeparator />
           <KeyHint key="↑/↓" desc=" navigate" />
         </DialogFooter>
       </box>

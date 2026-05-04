@@ -2,7 +2,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { DEFAULT_MAX_COUNT } from "./constants";
-import { DEFAULT_AUTO_REFRESH_INTERVAL } from "./context/state";
+import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL } from "./context/state";
+import { normalizeGitHubHost } from "./providers/github-actions/api";
 
 /**
  * Shape of the config file. All fields are optional —
@@ -15,6 +16,20 @@ export interface CodepulseConfig {
   showAllBranches?: boolean;
   /** Auto-refresh interval in seconds. 0 = off. */
   autoRefreshSeconds?: number;
+  /** Auto-fetch interval in seconds. 0 = off. */
+  autoFetchSeconds?: number;
+  /** Provider-specific configuration. */
+  providers?: {
+    github?: {
+      /** Whether the GitHub Actions provider is enabled. Defaults to true. */
+      enabled?: boolean;
+      /** Name of the environment variable holding the GitHub Personal Access Token.
+       *  Defaults to "GITHUB_TOKEN". */
+      tokenEnvVar?: string;
+      /** Trusted GitHub Enterprise host for this repo. github.com is always allowed. */
+      trustedEnterpriseHost?: string;
+    };
+  };
 }
 
 /** Return the built-in default config (all fields populated). */
@@ -24,7 +39,75 @@ export function defaultConfig(): Required<Omit<CodepulseConfig, "branch">> {
     pageSize: DEFAULT_MAX_COUNT,
     showAllBranches: true,
     autoRefreshSeconds: DEFAULT_AUTO_REFRESH_INTERVAL / 1000,
+    autoFetchSeconds: DEFAULT_AUTO_FETCH_INTERVAL / 1000,
+    providers: {
+      github: {
+        enabled: true,
+        tokenEnvVar: "GITHUB_TOKEN",
+        trustedEnterpriseHost: undefined,
+      },
+    },
   };
+}
+
+/**
+ * Backfill missing config keys for the current repo on startup.
+ *
+ * Reads the current repo entry, deep-merges with defaults writing back
+ * **only the keys that are missing** — never overwrites existing values.
+ * Other repos and other keys are left untouched.
+ *
+ * @param repoPath - The repository directory (absolute path).
+ * @param configPath - Override the global config path (used by tests).
+ */
+export function backfillRepoConfig(repoPath: string, configPath?: string): void {
+  const { config: existing } = loadConfig(repoPath, configPath);
+  const defaults = defaultConfig();
+
+  // Build a partial config containing only the fields missing from the existing entry
+  const missing: CodepulseConfig = {};
+
+  if (existing.theme === undefined) missing.theme = defaults.theme;
+  if (existing.pageSize === undefined) missing.pageSize = defaults.pageSize;
+  if (existing.showAllBranches === undefined) missing.showAllBranches = defaults.showAllBranches;
+  if (existing.autoRefreshSeconds === undefined) missing.autoRefreshSeconds = defaults.autoRefreshSeconds;
+  if (existing.autoFetchSeconds === undefined) missing.autoFetchSeconds = defaults.autoFetchSeconds;
+
+  // Deep-check providers.github fields
+  const existingGh = existing.providers?.github;
+  const defaultGh = defaults.providers.github ?? {
+    enabled: true,
+    tokenEnvVar: "GITHUB_TOKEN",
+    trustedEnterpriseHost: undefined,
+  };
+  if (
+    existingGh?.enabled === undefined ||
+    existingGh?.tokenEnvVar === undefined ||
+    existingGh?.trustedEnterpriseHost === undefined
+  ) {
+    missing.providers = {
+      github: {
+        ...(existingGh?.enabled === undefined ? { enabled: defaultGh.enabled } : {}),
+        ...(existingGh?.tokenEnvVar === undefined ? { tokenEnvVar: defaultGh.tokenEnvVar } : {}),
+        ...(existingGh?.trustedEnterpriseHost === undefined
+          ? { trustedEnterpriseHost: defaultGh.trustedEnterpriseHost }
+          : {}),
+      },
+    };
+  }
+
+  // Only write if there is anything missing
+  const hasAnyMissing =
+    missing.theme !== undefined ||
+    missing.pageSize !== undefined ||
+    missing.showAllBranches !== undefined ||
+    missing.autoRefreshSeconds !== undefined ||
+    missing.autoFetchSeconds !== undefined ||
+    missing.providers !== undefined;
+
+  if (hasAnyMissing) {
+    writeConfig(missing, repoPath, configPath);
+  }
 }
 
 /** Resolved options ready for the app (all fields required). */
@@ -35,8 +118,7 @@ export interface AppOptions {
   maxCount: number;
   themeName: string;
   autoRefreshInterval: number;
-  /** Initial pathspec filter from CLI (session-scoped, not persisted). */
-  path: string | undefined;
+  autoFetchInterval: number;
 }
 
 /** Information about the global config file and repo-specific overrides. */
@@ -168,6 +250,20 @@ export function loadConfig(repoPath: string, configPath?: string): { config: Cod
 function validateConfig(raw: Record<string, unknown>, path: string, warnings: string[]): CodepulseConfig {
   const config: CodepulseConfig = {};
 
+  const parseTrustedEnterpriseHost = (value: unknown): string | undefined => {
+    if (value === undefined) return undefined;
+    if (typeof value !== "string") {
+      warnings.push(`${path}: "providers.github.trustedEnterpriseHost" must be a host string, ignoring`);
+      return undefined;
+    }
+    const host = normalizeGitHubHost(value);
+    if (!host || host === "github.com") {
+      warnings.push(`${path}: "providers.github.trustedEnterpriseHost" must be a valid non-github.com host, ignoring`);
+      return undefined;
+    }
+    return host;
+  };
+
   if (raw.theme !== undefined) {
     if (typeof raw.theme === "string" && raw.theme.length > 0) {
       config.theme = raw.theme;
@@ -208,6 +304,45 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
     }
   }
 
+  if (raw.autoFetchSeconds !== undefined) {
+    if (typeof raw.autoFetchSeconds === "number" && raw.autoFetchSeconds >= 0) {
+      config.autoFetchSeconds = raw.autoFetchSeconds;
+    } else {
+      warnings.push(`${path}: "autoFetchSeconds" must be a non-negative number, ignoring`);
+    }
+  }
+
+  if (raw.providers !== undefined) {
+    if (typeof raw.providers === "object" && raw.providers !== null && !Array.isArray(raw.providers)) {
+      const providers = raw.providers as Record<string, unknown>;
+      config.providers = {};
+      if (typeof providers.github === "object" && providers.github !== null && !Array.isArray(providers.github)) {
+        const gh = providers.github as Record<string, unknown>;
+        config.providers.github = {};
+        if (gh.enabled !== undefined) {
+          if (typeof gh.enabled === "boolean") {
+            config.providers.github.enabled = gh.enabled;
+          } else {
+            warnings.push(`${path}: "providers.github.enabled" must be a boolean, ignoring`);
+          }
+        }
+        if (gh.tokenEnvVar !== undefined) {
+          if (typeof gh.tokenEnvVar === "string" && gh.tokenEnvVar.length > 0) {
+            config.providers.github.tokenEnvVar = gh.tokenEnvVar;
+          } else {
+            warnings.push(`${path}: "providers.github.tokenEnvVar" must be a non-empty string, ignoring`);
+          }
+        }
+        const trustedEnterpriseHost = parseTrustedEnterpriseHost(gh.trustedEnterpriseHost);
+        if (trustedEnterpriseHost !== undefined) {
+          config.providers.github.trustedEnterpriseHost = trustedEnterpriseHost;
+        }
+      }
+    } else {
+      warnings.push(`${path}: "providers" must be an object, ignoring`);
+    }
+  }
+
   return config;
 }
 
@@ -215,45 +350,21 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
  * Merge config file values with CLI options.
  * Priority: CLI (explicit) > config file > built-in defaults.
  */
-export function mergeOptions(
-  cli: {
-    repoPath: string;
-    branch?: string;
-    all?: boolean;
-    maxCount?: number;
-    themeName?: string;
-    path?: string;
-  },
-  config: CodepulseConfig,
-): AppOptions {
-  // Determine branch — CLI wins, then config, then undefined
-  const branch = cli.branch ?? config.branch;
-
-  // Determine all — if CLI explicitly set --branch or --no-all, those win.
-  // Otherwise use config. Default: true.
-  let all: boolean;
-  if (cli.all !== undefined) {
-    all = cli.all;
-  } else if (branch !== undefined) {
-    // --branch implies not-all (same as current CLI behavior)
-    all = false;
-  } else if (config.showAllBranches !== undefined) {
-    all = config.showAllBranches;
-  } else {
-    all = true;
-  }
-
+export function mergeOptions(cli: { repoPath: string }, config: CodepulseConfig): AppOptions {
   const defaults = defaultConfig();
+  const branch = config.branch;
+  const all = branch !== undefined ? false : (config.showAllBranches ?? true);
 
   return {
     repoPath: cli.repoPath,
     branch,
     all,
-    maxCount: cli.maxCount ?? config.pageSize ?? defaults.pageSize,
-    themeName: cli.themeName ?? config.theme ?? defaults.theme,
+    maxCount: config.pageSize ?? defaults.pageSize,
+    themeName: config.theme ?? defaults.theme,
     autoRefreshInterval:
       config.autoRefreshSeconds !== undefined ? config.autoRefreshSeconds * 1000 : defaults.autoRefreshSeconds * 1000,
-    path: cli.path,
+    autoFetchInterval:
+      config.autoFetchSeconds !== undefined ? config.autoFetchSeconds * 1000 : defaults.autoFetchSeconds * 1000,
   };
 }
 
@@ -318,6 +429,37 @@ export function writeConfig(config: CodepulseConfig, repoPath: string, configPat
   }
 }
 
+/** Remove one saved repo entry from the global config file. */
+export function removeRepoConfig(repoPath: string, configPath?: string): boolean {
+  const globalPath = configPath ?? defaultConfigPath();
+
+  try {
+    if (!existsSync(globalPath)) return true;
+
+    const raw = readFileSync(globalPath, "utf-8");
+    const parsed = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return true;
+
+    const merged = { ...(parsed as Record<string, unknown>) };
+    const repos = merged.repos;
+    if (typeof repos !== "object" || repos === null || Array.isArray(repos)) return true;
+
+    const nextRepos = { ...(repos as Record<string, unknown>) };
+    delete nextRepos[resolve(repoPath)];
+    if (Object.keys(nextRepos).length === 0) {
+      delete merged.repos;
+    } else {
+      merged.repos = nextRepos;
+    }
+
+    writeFileSync(globalPath, `${JSON.stringify(merged, null, 2)}\n`, "utf-8");
+    return true;
+  } catch (err) {
+    console.error(`Error: failed to update config at ${globalPath}: ${err instanceof Error ? err.message : err}`);
+    return false;
+  }
+}
+
 /** Apply defined CodepulseConfig fields to a target object. */
 function applyConfigFields(target: Record<string, unknown>, config: CodepulseConfig): void {
   if (config.theme !== undefined) target.theme = config.theme;
@@ -325,4 +467,27 @@ function applyConfigFields(target: Record<string, unknown>, config: CodepulseCon
   if (config.branch !== undefined) target.branch = config.branch;
   if (config.showAllBranches !== undefined) target.showAllBranches = config.showAllBranches;
   if (config.autoRefreshSeconds !== undefined) target.autoRefreshSeconds = config.autoRefreshSeconds;
+  if (config.autoFetchSeconds !== undefined) target.autoFetchSeconds = config.autoFetchSeconds;
+  if (config.providers !== undefined) {
+    // Deep-merge providers into existing target.providers to preserve other provider configs
+    const existingProviders =
+      typeof target.providers === "object" && target.providers !== null && !Array.isArray(target.providers)
+        ? { ...(target.providers as Record<string, unknown>) }
+        : {};
+    if (config.providers.github !== undefined) {
+      const existingGh =
+        typeof existingProviders.github === "object" &&
+        existingProviders.github !== null &&
+        !Array.isArray(existingProviders.github)
+          ? { ...(existingProviders.github as Record<string, unknown>) }
+          : {};
+      if (config.providers.github.enabled !== undefined) existingGh.enabled = config.providers.github.enabled;
+      if (config.providers.github.tokenEnvVar !== undefined)
+        existingGh.tokenEnvVar = config.providers.github.tokenEnvVar;
+      if (config.providers.github.trustedEnterpriseHost !== undefined)
+        existingGh.trustedEnterpriseHost = config.providers.github.trustedEnterpriseHost;
+      existingProviders.github = existingGh;
+    }
+    target.providers = existingProviders;
+  }
 }

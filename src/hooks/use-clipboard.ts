@@ -14,7 +14,7 @@ import { createSignal, onCleanup } from "solid-js";
  * identifier (e.g. `CopyableField`) rather than plain `string`.
  *
  * Platform support: macOS (`pbcopy`), Windows / WSL (`clip.exe`),
- * Linux X11 (`xclip -selection clipboard`).
+ * Linux Wayland (`wl-copy`), Linux X11 (`xclip -selection clipboard`).
  */
 export function useClipboard<T extends string = string>(): {
   copiedId: Accessor<T | null>;
@@ -30,6 +30,9 @@ export function useClipboard<T extends string = string>(): {
         cmd = ["pbcopy"];
       } else if (process.platform === "win32") {
         cmd = ["clip.exe"];
+      } else if (process.env.WAYLAND_DISPLAY) {
+        // Wayland session: prefer wl-copy over xclip (xclip doesn't work on Wayland)
+        cmd = ["wl-copy"];
       } else {
         cmd = ["xclip", "-selection", "clipboard"];
       }

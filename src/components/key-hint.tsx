@@ -26,3 +26,12 @@ export function KeyHint(props: Readonly<KeyHintProps>) {
     </>
   );
 }
+
+export function KeyHintSeparator() {
+  const t = useT();
+  return (
+    <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+      {" · "}
+    </text>
+  );
+}

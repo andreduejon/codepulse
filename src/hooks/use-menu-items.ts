@@ -3,15 +3,16 @@ import type { Accessor } from "solid-js";
 import { createMemo, createSignal } from "solid-js";
 import type { CodepulseConfig, ConfigInfo } from "../config";
 import { writeConfig } from "../config";
-import { AUTO_REFRESH_MS, AUTO_REFRESH_OPTIONS, DEFAULT_MAX_COUNT, MAX_COUNT_OPTIONS, MS_TO_LABEL } from "../constants";
-import { DEFAULT_AUTO_REFRESH_INTERVAL, useAppState } from "../context/state";
+import { AUTO_REFRESH_MS, INTERVAL_OPTIONS, MAX_COUNT_OPTIONS, MS_TO_LABEL } from "../constants";
+import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL, useAppState } from "../context/state";
 import { themes } from "../context/theme";
+import { getTokenSource, parseGitHubRemote } from "../providers/github-actions/api";
 
-type MenuTab = "repository" | "branch";
+type MenuTab = "repository" | "branch" | "providers";
 
 export type SettingItem =
   | { kind: "header"; label: string }
-  | { kind: "info"; label: string; get: () => string }
+  | { kind: "info"; label: string; get: () => string; valid?: () => boolean }
   | { kind: "copyable"; label: string; get: () => string }
   | {
       kind: "toggle";
@@ -19,6 +20,7 @@ export type SettingItem =
       hotkey?: string;
       get: () => boolean;
       set: (v: boolean) => void;
+      disabled?: () => boolean;
       needsReload?: boolean;
     }
   | {
@@ -34,7 +36,16 @@ export type SettingItem =
   | { kind: "action"; label: string; hotkey?: string; get?: () => string; run: () => void; disabled?: () => boolean }
   | { kind: "section"; label: string; count: number; collapsed: () => boolean; toggle: () => void }
   | { kind: "badge"; name: string; colorIndex: number; dimmed?: boolean }
-  | { kind: "branch"; name: string; run: () => void; upstream?: string; ahead?: number; behind?: number };
+  | { kind: "branch"; name: string; run: () => void; upstream?: string; ahead?: number; behind?: number }
+  | {
+      kind: "editable";
+      label: string;
+      placeholder?: string;
+      get: () => string;
+      set: (v: string) => void;
+      valid?: () => boolean;
+      isDraftValid?: (v: string) => boolean;
+    };
 
 /** Width of the info label column (characters). */
 export const INFO_LABEL_WIDTH = 12;
@@ -49,9 +60,6 @@ export interface MenuItemsOptions {
   themeName: Accessor<string>;
   /** Set the active theme by name. */
   setTheme: (name: string) => void;
-  /** Saved-feedback label signal and trigger. */
-  savedFeedback: Accessor<string | null>;
-  showSavedFeedback: (label: string) => void;
   /** Clipboard copy callback. */
   copyToClipboard: (text: string, id: string) => void;
   /** Prop callbacks forwarded from the component. */
@@ -63,6 +71,10 @@ export interface MenuItemsOptions {
   configInfo?: ConfigInfo;
   /** Open the project selector to switch repos. */
   onSwitchRepo?: () => void;
+  /** Current GitHub provider config (tokenEnvVar, enabled, trustedEnterpriseHost). */
+  githubConfig?: Accessor<{ enabled: boolean; tokenEnvVar: string; trustedEnterpriseHost: string | null } | undefined>;
+  /** Callback to update GitHub provider config. */
+  onGithubConfigChange?: (cfg: { enabled: boolean; tokenEnvVar: string; trustedEnterpriseHost: string | null }) => void;
 }
 
 export interface MenuItemsResult {
@@ -77,12 +89,100 @@ export interface MenuItemsResult {
   footerVerb: () => string;
 }
 
+export interface GitHubMenuConfig {
+  enabled: boolean;
+  tokenEnvVar: string;
+  trustedEnterpriseHost: string | null;
+}
+
+export function buildGitHubProviderItems(
+  ghCfg: GitHubMenuConfig,
+  remoteUrl: string,
+  tokenSource: "env" | null,
+  onChange?: (cfg: GitHubMenuConfig) => void,
+  persist?: (cfg: GitHubMenuConfig) => void,
+): SettingItem[] {
+  const remoteRepo = parseGitHubRemote(remoteUrl);
+  const remoteHost = remoteRepo?.hostname ?? null;
+  const hostAllowed = remoteHost === "github.com" || (remoteHost != null && ghCfg.trustedEnterpriseHost === remoteHost);
+
+  return [
+    { kind: "header", label: "github" },
+    {
+      kind: "toggle",
+      label: "Enabled",
+      get: () => ghCfg.enabled,
+      set: v => {
+        const newCfg = { ...ghCfg, enabled: v };
+        onChange?.(newCfg);
+        persist?.(newCfg);
+      },
+    },
+    {
+      kind: "editable",
+      label: "Token",
+      placeholder: "Enter token...",
+      get: () => ghCfg.tokenEnvVar,
+      set: (v: string) => {
+        const newCfg = { ...ghCfg, tokenEnvVar: v.trim() };
+        onChange?.(newCfg);
+        persist?.(newCfg);
+      },
+      valid: () => !!ghCfg.tokenEnvVar.trim() && tokenSource === "env",
+    },
+    {
+      kind: "info",
+      label: "Host",
+      get: () => remoteHost ?? "not detected",
+      valid: () => hostAllowed,
+    },
+    {
+      kind: "toggle",
+      label: "Allow host",
+      get: () => hostAllowed,
+      set: v => {
+        const newCfg = { ...ghCfg, trustedEnterpriseHost: v ? remoteHost : null };
+        onChange?.(newCfg);
+        persist?.(newCfg);
+      },
+      disabled: () => remoteHost == null || remoteHost === "github.com",
+    },
+  ];
+}
+
 /**
  * Owns all data, logic, and cursor state for the MenuDialog.
  * The component retains tab-switching state, scroll refs, and render functions.
  */
 export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
   const { state, actions } = useAppState();
+
+  /**
+   * Persist all current settings to the config file immediately.
+   * Called after every individual setting change so no manual "Save" is needed.
+   */
+  const persistFullConfig = (overrides?: Partial<CodepulseConfig>) => {
+    const cfg: CodepulseConfig = {
+      theme: opts.themeName(),
+      pageSize: state.maxCount(),
+      showAllBranches: state.showAllBranches(),
+      autoRefreshSeconds: state.autoRefreshInterval() / 1000,
+      autoFetchSeconds: state.autoFetchInterval() / 1000,
+      ...overrides,
+    };
+    if (!overrides?.providers && opts.githubConfig?.()) {
+      const ghCfg = opts.githubConfig();
+      if (!ghCfg) return;
+      cfg.providers = {
+        github: {
+          enabled: ghCfg.enabled,
+          tokenEnvVar: ghCfg.tokenEnvVar,
+          trustedEnterpriseHost: ghCfg.trustedEnterpriseHost ?? undefined,
+        },
+      };
+    }
+    writeConfig(cfg, state.repoPath());
+  };
 
   // ── Collapsed state for branch sections ───────────────────────────
   const [localCollapsed, setLocalCollapsed] = createSignal(false);
@@ -129,32 +229,42 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
         label: "Page size",
         options: MAX_COUNT_OPTIONS.map(String),
         get: () => String(state.maxCount()),
-        set: v => actions.setMaxCount(Number.parseInt(v, 10)),
+        set: v => {
+          actions.setMaxCount(Number.parseInt(v, 10));
+          persistFullConfig({ pageSize: Number.parseInt(v, 10) });
+        },
         needsReload: true,
       },
       {
         kind: "toggle",
         label: "Show all branches",
         get: () => state.showAllBranches(),
-        set: v => actions.setShowAllBranches(v),
+        set: v => {
+          actions.setShowAllBranches(v);
+          persistFullConfig({ showAllBranches: v });
+        },
         needsReload: true,
       },
       {
         kind: "cycle",
         label: "Auto refresh",
-        options: AUTO_REFRESH_OPTIONS,
+        options: INTERVAL_OPTIONS,
         get: () => MS_TO_LABEL[state.autoRefreshInterval()] ?? "off",
-        set: v => actions.setAutoRefreshInterval(AUTO_REFRESH_MS[v] ?? DEFAULT_AUTO_REFRESH_INTERVAL),
+        set: v => {
+          const ms = AUTO_REFRESH_MS[v] ?? DEFAULT_AUTO_REFRESH_INTERVAL;
+          actions.setAutoRefreshInterval(ms);
+          persistFullConfig({ autoRefreshSeconds: ms / 1000 });
+        },
       },
       {
-        kind: "action",
-        label: "Reset to defaults",
-        run: () => {
-          opts.setTheme("catppuccin-mocha");
-          actions.setMaxCount(DEFAULT_MAX_COUNT);
-          actions.setShowAllBranches(true);
-          actions.setAutoRefreshInterval(DEFAULT_AUTO_REFRESH_INTERVAL);
-          opts.onReload();
+        kind: "cycle",
+        label: "Auto fetch",
+        options: INTERVAL_OPTIONS,
+        get: () => MS_TO_LABEL[state.autoFetchInterval()] ?? "off",
+        set: v => {
+          const ms = AUTO_REFRESH_MS[v] ?? DEFAULT_AUTO_FETCH_INTERVAL;
+          actions.setAutoFetchInterval(ms);
+          persistFullConfig({ autoFetchSeconds: ms / 1000 });
         },
       },
     ];
@@ -169,27 +279,8 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
       items.push({
         kind: "info",
         label: "Config file",
-        get: () => `${shortenHome(ci.globalPath)}  ${ci.globalExists ? "(found)" : "(not found)"}`,
-      });
-      items.push({
-        kind: "action",
-        label: "Save to config",
-        get: () => (opts.savedFeedback() === "Save to config" ? "\u2713 Saved!" : ""),
-        run: () => {
-          const autoRefreshMs = state.autoRefreshInterval();
-          const cfg: CodepulseConfig = {
-            theme: opts.themeName(),
-            pageSize: state.maxCount(),
-            showAllBranches: state.showAllBranches(),
-            autoRefreshSeconds: autoRefreshMs / 1000,
-          };
-          const ok = writeConfig(cfg, state.repoPath());
-          if (ok) {
-            ci.globalExists = true;
-            ci.hasRepoOverrides = true;
-            opts.showSavedFeedback("Save to config");
-          }
-        },
+        get: () => shortenHome(ci.globalPath),
+        valid: () => ci.globalExists,
       });
     }
 
@@ -327,18 +418,39 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
     return { addColWidth: addW, delColWidth: delW };
   });
 
+  // ── Provider tab items ────────────────────────────────────────────
+  const providerItems = createMemo<SettingItem[]>(() => {
+    const ghCfg = opts.githubConfig?.() ?? { enabled: false, tokenEnvVar: "GITHUB_TOKEN", trustedEnterpriseHost: null };
+    const tokenSource = getTokenSource(ghCfg.tokenEnvVar);
+    return buildGitHubProviderItems(ghCfg, state.remoteUrl(), tokenSource, opts.onGithubConfigChange, newCfg =>
+      persistFullConfig({
+        providers: { github: { ...newCfg, trustedEnterpriseHost: newCfg.trustedEnterpriseHost ?? undefined } },
+      }),
+    );
+  });
+
   // ── Active items depend on tab ────────────────────────────────────
-  const activeItems = createMemo<SettingItem[]>(() =>
-    opts.activeTab() === "repository" ? repoItems() : branchItems(),
-  );
+  const activeItems = createMemo<SettingItem[]>(() => {
+    const tab = opts.activeTab();
+    if (tab === "repository") return repoItems();
+    if (tab === "branch") return branchItems();
+    return providerItems();
+  });
 
   // ── Cursor per tab ────────────────────────────────────────────────
   const [repoCursor, setRepoCursor] = createSignal(0);
   const [branchCursor, setBranchCursor] = createSignal(0);
+  const [providersCursor, setProvidersCursor] = createSignal(0);
 
-  const currentCursor = () => (opts.activeTab() === "repository" ? repoCursor() : branchCursor());
+  const currentCursor = () => {
+    const tab = opts.activeTab();
+    if (tab === "repository") return repoCursor();
+    if (tab === "branch") return branchCursor();
+    return providersCursor();
+  };
   const setCurrentCursor = (v: number | ((prev: number) => number)) => {
-    const setter = opts.activeTab() === "repository" ? setRepoCursor : setBranchCursor;
+    const tab = opts.activeTab();
+    const setter = tab === "repository" ? setRepoCursor : tab === "branch" ? setBranchCursor : setProvidersCursor;
     if (typeof v === "function") setter(v);
     else setter(v);
   };
@@ -346,12 +458,13 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
   const selectableIndices = (): number[] =>
     activeItems()
       .map((item, i) =>
-        item.kind === "toggle" ||
+        (item.kind === "toggle" && !item.disabled?.()) ||
         item.kind === "cycle" ||
         item.kind === "dialog" ||
         item.kind === "branch" ||
         item.kind === "section" ||
         item.kind === "copyable" ||
+        item.kind === "editable" ||
         (item.kind === "action" && !item.disabled?.())
           ? i
           : -1,
@@ -380,7 +493,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
     const items = activeItems();
     const item = items[itemIdx];
     if (!item || item.kind === "header" || item.kind === "info" || item.kind === "badge") return;
-    if (item.kind === "action" && item.disabled?.()) return;
+    if ((item.kind === "action" || item.kind === "toggle") && item.disabled?.()) return;
 
     if (item.kind === "copyable") {
       opts.copyToClipboard(item.get(), item.label);
@@ -412,6 +525,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
     if (item.kind === "action") return item.get ? item.get() : "";
     if (item.kind === "info") return item.get();
     if (item.kind === "copyable") return item.get();
+    if (item.kind === "editable") return item.get();
     if (item.kind === "toggle") return item.get() ? "on" : "off";
     return item.get();
   };
@@ -436,6 +550,8 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
         return item.collapsed() ? "expand" : "collapse";
       case "branch":
         return "view";
+      case "editable":
+        return "edit";
       default:
         return "select";
     }

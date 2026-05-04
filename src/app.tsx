@@ -12,12 +12,13 @@ import ThemeDialog from "./components/dialogs/theme-dialog";
 import ErrorScreen from "./components/error-screen";
 import Footer from "./components/footer";
 import GraphView, { ColumnHeader } from "./components/graph";
+import MessageBox, { type UIMessage } from "./components/message-box";
 import ProjectSelector from "./components/project-selector";
 import SetupScreen from "./components/setup-screen";
 import type { ConfigInfo } from "./config";
-import { defaultConfig, getKnownRepos, writeConfig } from "./config";
+import { backfillRepoConfig, getKnownRepos, writeConfig } from "./config";
 import { COMPACT_THRESHOLD_WIDTH, DEFAULT_MAX_COUNT, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH } from "./constants";
-import { AppStateContext, createAppState } from "./context/state";
+import { AppStateContext, createAppState, providerIdle, providerStatusMessage } from "./context/state";
 import { createThemeState, ThemeContext } from "./context/theme";
 import type { DiffTarget } from "./git/types";
 import { useAncestry } from "./hooks/use-ancestry";
@@ -26,6 +27,9 @@ import { useDetailLoader } from "./hooks/use-detail-loader";
 import { type CommandBarMode, useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
 import { usePathFilter } from "./hooks/use-path-filter";
 import type { StartupMode } from "./main";
+import JobLogDialog from "./providers/github-actions/log-dialog";
+import type { GitHubJob, GitHubWorkflowRun } from "./providers/github-actions/types";
+import { useGitHubCI } from "./providers/github-actions/use-github-ci";
 
 interface AppProps {
   repoPath: string;
@@ -34,10 +38,11 @@ interface AppProps {
   maxCount?: number;
   themeName?: string;
   autoRefreshInterval?: number;
-  /** Initial pathspec filter from CLI (session-scoped). */
-  path?: string;
+  autoFetchInterval?: number;
   configInfo?: ConfigInfo;
   startupMode: StartupMode;
+  /** Initial GitHub Actions provider config from the loaded config file. */
+  initialGithubConfig?: { enabled?: boolean; tokenEnvVar?: string; trustedEnterpriseHost?: string };
 }
 
 interface AppContentProps extends AppProps {
@@ -45,25 +50,66 @@ interface AppContentProps extends AppProps {
 }
 
 function AppContent(props: Readonly<AppContentProps>) {
-  const { state, actions } = createAppState(props.maxCount ?? DEFAULT_MAX_COUNT, props.autoRefreshInterval);
+  const { state, actions } = createAppState(
+    props.maxCount ?? DEFAULT_MAX_COUNT,
+    props.autoRefreshInterval,
+    props.autoFetchInterval,
+    props.all,
+  );
   const themeState = props.themeState;
   const renderer = useRenderer();
+
+  // ── GitHub Actions provider config (mutable signal for Providers menu tab) ──
+  const [githubConfig, setGithubConfig] = createSignal({
+    enabled: props.initialGithubConfig?.enabled ?? true,
+    tokenEnvVar: props.initialGithubConfig?.tokenEnvVar ?? "GITHUB_TOKEN",
+    trustedEnterpriseHost: props.initialGithubConfig?.trustedEnterpriseHost ?? null,
+  });
+
+  // ── GitHub CI data hook (called during setup, before Provider renders — per AGENTS.md rule 5) ──
+  const gitHubCI = useGitHubCI({
+    state,
+    actions,
+    config: githubConfig,
+  });
 
   // Setup screen visibility — shown when startup mode is "setup"
   const [setupVisible, setSetupVisible] = createSignal(props.startupMode.kind === "setup");
   // Repo selector visibility — shown when "Switch repository" is selected from menu
   const [repoSelectorVisible, setRepoSelectorVisible] = createSignal(false);
 
+  const screenMessage = createMemo<UIMessage | null>(() => {
+    const err = state.error();
+    if (err) return { kind: "error" as const, message: err };
+
+    const status = state.providerStatus();
+    const message = providerStatusMessage(status);
+    if (state.activeProviderView() !== "github-actions" || !message) return null;
+
+    return {
+      kind: status.kind === "error" ? ("error" as const) : ("info" as const),
+      message,
+    };
+  });
+
   const handleSetupComplete = () => {
-    // Write default settings so the user can see and edit them in the config file
-    writeConfig(defaultConfig(), props.repoPath);
+    // Backfill all default settings so the user can see and edit them in the config file
+    backfillRepoConfig(props.repoPath);
     setSetupVisible(false);
   };
 
-  // Initialize path filter from CLI --path flag (before first loadData)
-  if (props.path) actions.setPathFilter(props.path);
+  // Backfill missing config keys for this repo on every startup
+  backfillRepoConfig(props.repoPath);
 
-  const [dialog, setDialog] = createSignal<"menu" | "help" | "theme" | "diff-blame" | "detail" | null>(null);
+  // Auto-persist theme changes (confirmed selections and reverts from ThemeDialog)
+  createEffect(() => {
+    const name = themeState.themeName();
+    writeConfig({ theme: name }, props.repoPath);
+  });
+
+  const [dialog, setDialog] = createSignal<"menu" | "help" | "theme" | "diff-blame" | "detail" | "job-log" | null>(
+    null,
+  );
 
   const [searchFocused, setSearchFocused] = createSignal(false);
   /**
@@ -73,6 +119,12 @@ function AppContent(props: Readonly<AppContentProps>) {
   const [searchInputValue, setSearchInputValue] = createSignal("");
   /** Target for the diff+blame dialog (set when user activates a file). */
   const [diffTarget, setDiffTarget] = createSignal<DiffTarget | null>(null);
+  /** Target for the job log dialog (set when user opens a job log). */
+  const [jobLogTarget, setJobLogTarget] = createSignal<{
+    job: GitHubJob;
+    run: GitHubWorkflowRun;
+    jobs: GitHubJob[];
+  } | null>(null);
 
   /** Command bar mode — drives placeholder text and key routing. */
   const [commandBarMode, setCommandBarMode] = createSignal<CommandBarMode>("idle");
@@ -150,6 +202,11 @@ function AppContent(props: Readonly<AppContentProps>) {
     setDialog("diff-blame");
   };
 
+  const handleOpenJobLog = (job: GitHubJob, run: GitHubWorkflowRun, jobs: GitHubJob[] = [job]) => {
+    setJobLogTarget({ job, run, jobs: jobs.length > 0 ? jobs : [job] });
+    setDialog("job-log");
+  };
+
   // All git data loading: initial load, pagination, fetch, and auto-refresh timer.
   const { loadData, loadMoreData, handleFetch } = useDataLoader({
     repoPath: props.repoPath,
@@ -170,6 +227,8 @@ function AppContent(props: Readonly<AppContentProps>) {
     actions,
     getIsJumpNavigation: () => isJumpNavigation,
     detailNavRef,
+    getCommitData: gitHubCI.getCommitData,
+    getProviderLoading: () => state.providerStatus().kind === "loading",
   });
 
   // Scroll detail panel to top when active tab changes
@@ -234,6 +293,7 @@ function AppContent(props: Readonly<AppContentProps>) {
    */
   const handleCommandExecute = (cmd: string) => {
     const normalized = cmd.toLowerCase().replace(/^:/, "");
+
     switch (normalized) {
       case "q":
       case "quit":
@@ -247,11 +307,26 @@ function AppContent(props: Readonly<AppContentProps>) {
         setLastMenuTab("repository");
         setDialog("menu");
         break;
+      case "branches":
+        setLastMenuTab("branch");
+        setDialog("menu");
+        break;
+      case "providers":
+        setLastMenuTab("providers");
+        setDialog("menu");
+        break;
+      case "switch":
+        setRepoSelectorVisible(true);
+        break;
       case "help":
         setDialog("help");
         break;
       case "theme":
         setDialog("theme");
+        break;
+      case "clear":
+        actions.setError(null);
+        actions.setProviderStatus(providerIdle());
         break;
       case "f":
       case "fetch":
@@ -341,12 +416,30 @@ function AppContent(props: Readonly<AppContentProps>) {
     onCommandExecute: handleCommandExecute,
     onPathExecute: handlePathExecute,
     onClearAncestry: clearAnchor,
+    getCommitData: gitHubCI.getCommitData,
+    getProviderLoading: () => state.providerStatus().kind === "loading",
+  });
+
+  // ── Provider-aware theme: override accent with githubActionsBg in CI mode ──
+  // createMemo is placed here — after all const declarations above — to respect
+  // AGENTS.md rule 1 (eager memo must not reference TDZ variables).
+  // All components that call useT() read from ThemeContext, so overriding the
+  // theme value here propagates the accent change to every component automatically.
+  //
+  // githubActionsBg is the bright badge color (e.g. #89b4fa) — used as accent.
+  // githubActionsFg is the dark badge text color — NOT suitable as a global accent.
+  const providerTheme = createMemo(() => {
+    const base = themeState.theme();
+    if (state.activeProviderView() === "github-actions") {
+      return { ...base, accent: base.githubActionsBg };
+    }
+    return base;
   });
 
   return (
     <ThemeContext.Provider
       value={{
-        theme: themeState.theme,
+        theme: providerTheme,
         setTheme: themeState.setTheme,
         themeName: themeState.themeName,
       }}
@@ -377,6 +470,7 @@ function AppContent(props: Readonly<AppContentProps>) {
                   knownRepos={getKnownRepos()}
                   currentRepo={props.repoPath}
                   onCancel={() => setRepoSelectorVisible(false)}
+                  setKeyboardScopeOverride={actions.setKeyboardScopeOverride}
                 />
               }
             >
@@ -399,29 +493,45 @@ function AppContent(props: Readonly<AppContentProps>) {
                       <GraphView onLoadMore={loadMoreData} />
                     </box>
 
-                    {/* Command bar section */}
-                    <CommandBar
-                      commandBarMode={commandBarMode}
-                      commandBarValue={commandBarValue}
-                      searchInputValue={searchInputValue}
-                      searchFocused={searchFocused}
-                      onInput={val => {
-                        if (commandBarMode() === "command" || commandBarMode() === "path") {
-                          setCommandBarValue(val);
-                        } else {
-                          handleSearchInput(val);
-                        }
-                      }}
-                      detailFocused={state.detailFocused}
-                    />
+                    <box flexDirection="column" flexShrink={0} width="100%">
+                      <Show when={screenMessage()}>
+                        {msg => (
+                          <box flexDirection="column" width="100%" flexShrink={0}>
+                            <MessageBox
+                              kind={msg().kind}
+                              title={msg().title}
+                              message={msg().message}
+                              detail={msg().detail}
+                            />
+                            <box height={1} />
+                          </box>
+                        )}
+                      </Show>
 
-                    {/* Footer - hotkey hints, 1 char gap above, right-aligned */}
-                    <box height={1} />
-                    <Footer
-                      commandBarMode={commandBarMode}
-                      filterActive={!!state.highlightSet() || !!state.viewingBranch()}
-                      compact={layoutMode() === "compact"}
-                    />
+                      {/* Command bar section */}
+                      <CommandBar
+                        commandBarMode={commandBarMode}
+                        commandBarValue={commandBarValue}
+                        searchInputValue={searchInputValue}
+                        searchFocused={searchFocused}
+                        onInput={val => {
+                          if (commandBarMode() === "command" || commandBarMode() === "path") {
+                            setCommandBarValue(val);
+                          } else {
+                            handleSearchInput(val);
+                          }
+                        }}
+                        detailFocused={state.detailFocused}
+                      />
+
+                      {/* Footer - hotkey hints, 1 char gap above, right-aligned */}
+                      <box height={1} />
+                      <Footer
+                        commandBarMode={commandBarMode}
+                        filterActive={!!state.highlightSet() || !!state.viewingBranch()}
+                        compact={layoutMode() === "compact"}
+                      />
+                    </box>
                   </box>
 
                   {/* Detail panel - right, hidden in compact/too-small mode */}
@@ -435,6 +545,12 @@ function AppContent(props: Readonly<AppContentProps>) {
                         searchFocused={searchFocused()}
                         onJumpToCommit={handleJumpToCommit}
                         onOpenDiff={handleOpenDiff}
+                        githubGetCommitData={gitHubCI.getCommitData}
+                        githubFetchJobsForRun={gitHubCI.fetchJobsForRun}
+                        githubFetchCommitData={gitHubCI.fetchCommitDataForSHA}
+                        githubFetchJobLog={gitHubCI.fetchJobLogForJob}
+                        githubProviderStatus={state.providerStatus()}
+                        onOpenJobLog={handleOpenJobLog}
                       />
                     </box>
                   </Show>
@@ -453,6 +569,8 @@ function AppContent(props: Readonly<AppContentProps>) {
                       setDialog(null);
                       setRepoSelectorVisible(true);
                     }}
+                    githubConfig={githubConfig()}
+                    onGithubConfigChange={setGithubConfig}
                   />
                 </Show>
                 <Show when={dialog() === "help"}>
@@ -492,6 +610,18 @@ function AppContent(props: Readonly<AppContentProps>) {
                     onOpenDiff={handleOpenDiff}
                     onClose={() => setDialog(null)}
                   />
+                </Show>
+                {/* Job log dialog */}
+                <Show when={dialog() === "job-log" && jobLogTarget()}>
+                  {target => (
+                    <JobLogDialog
+                      job={target().job}
+                      jobs={target().jobs}
+                      run={target().run}
+                      fetchLog={job => gitHubCI.fetchJobLogForJob(job.id)}
+                      onClose={() => setDialog(null)}
+                    />
+                  )}
                 </Show>
               </box>
             </Show>

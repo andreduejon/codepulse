@@ -5,9 +5,10 @@ import { useTheme } from "../context/theme";
 /**
  * Convenience hook: returns a reactive accessor for the current theme object.
  *
- * Replaces the two-line boilerplate:
- *   const { theme } = useTheme();
- *   const t = () => theme();
+ * The theme returned here may have its `accent` field overridden when a CI
+ * provider view is active — this override is applied at the ThemeContext level
+ * in app.tsx, so all callers of `t().accent` automatically pick up the
+ * provider color without any per-component changes.
  *
  * Usage:
  *   const t = useT();
