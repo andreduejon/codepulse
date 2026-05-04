@@ -73,7 +73,8 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
       if (row.isDir) {
         items.push({ type: "file-dir", dirPath: row.dirPath, index: i });
       } else {
-        items.push({ type: "file", filePath: row.file?.path, index: i });
+        if (!row.file) continue;
+        items.push({ type: "file", filePath: row.file.path, index: i });
       }
     }
     return items;

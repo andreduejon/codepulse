@@ -3,7 +3,7 @@ import { render } from "@opentui/solid";
 import App from "./app";
 import { parseArgs } from "./cli/parse-args";
 import { getKnownRepos, loadConfig, mergeOptions, resolveConfigInfo } from "./config";
-import { isGitAvailable, isGitRepo } from "./git/repo";
+import { getRepoRoot, isGitAvailable, isGitRepo } from "./git/repo";
 
 /** Startup mode determines which screen the app shows first. */
 export type StartupMode =
@@ -14,10 +14,14 @@ export type StartupMode =
 
 export async function main() {
   const cli = parseArgs(process.argv);
+  const normalizedCli = {
+    ...cli,
+    repoPath: (await getRepoRoot(cli.repoPath)) ?? cli.repoPath,
+  };
 
-  const configInfo = resolveConfigInfo(cli.repoPath);
-  const { config } = loadConfig(cli.repoPath);
-  const opts = mergeOptions(cli, config);
+  const configInfo = resolveConfigInfo(normalizedCli.repoPath);
+  const { config } = loadConfig(normalizedCli.repoPath);
+  const opts = mergeOptions(normalizedCli, config);
 
   let startupMode: StartupMode;
 
@@ -65,14 +69,14 @@ export async function main() {
         maxCount={opts.maxCount}
         themeName={opts.themeName}
         autoRefreshInterval={opts.autoRefreshInterval}
-        path={opts.path}
+        autoFetchInterval={opts.autoFetchInterval}
         configInfo={configInfo}
         startupMode={startupMode}
+        initialGithubConfig={config.providers?.github}
       />
     ),
     {
       exitOnCtrlC: true,
-      useAlternateScreen: true,
       useMouse: false,
       targetFps: 40,
     },

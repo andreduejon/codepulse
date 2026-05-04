@@ -24,6 +24,7 @@ export interface Theme {
   border: string;
   primary: string;
   accent: string;
+  info: string;
   error: string;
   success: string;
   graphColors: string[];
@@ -31,6 +32,10 @@ export interface Theme {
   diffRemoved: string;
   diffAddedBg: string;
   diffRemovedBg: string;
+  /** GitHub Actions provider badge text color. */
+  githubActionsFg: string;
+  /** GitHub Actions provider badge background color. */
+  githubActionsBg: string;
 }
 
 export const themes: Record<string, Theme> = {

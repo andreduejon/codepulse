@@ -10,6 +10,7 @@ import { useClipboard } from "../hooks/use-clipboard";
 import { type CopyableField, useDetailCursor } from "../hooks/use-detail-cursor";
 import { useStashState } from "../hooks/use-stash-state";
 import { useT } from "../hooks/use-t";
+import { ActionsDetailTab } from "../providers/github-actions/detail-tab";
 import { formatDate } from "../utils/date";
 import { isCursored as _isCursored, itemHighlightBg as _itemHighlightBg } from "../utils/detail-cursor";
 import Badge from "./badge";
@@ -858,6 +859,32 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   <text fg={t().foregroundMuted}>No stashes on this commit</text>
                 </box>
               </Show>
+            </Show>
+
+            {/* ══════════════ Actions tab ══════════════ */}
+            <Show
+              when={activeTab() === "github-actions" && !!props.githubGetCommitData && !!props.githubFetchJobsForRun}
+            >
+              <ActionsDetailTab
+                sha={c().hash}
+                // biome-ignore lint/style/noNonNullAssertion: guarded by Show when condition above
+                getCommitData={props.githubGetCommitData!}
+                // biome-ignore lint/style/noNonNullAssertion: guarded by Show when condition above
+                fetchJobsForRun={props.githubFetchJobsForRun!}
+                fetchCommitData={props.githubFetchCommitData}
+                unavailableReason={
+                  props.githubProviderStatus?.kind === "error" || props.githubProviderStatus?.kind === "unavailable"
+                    ? props.githubProviderStatus.message
+                    : null
+                }
+                loading={props.githubProviderStatus?.kind === "loading"}
+                navRef={props.navRef}
+                detailCursorIndex={() => state.detailCursorIndex()}
+                detailFocused={() => state.detailFocused()}
+                setDetailCursorAction={actions.setDetailCursorAction}
+                setDetailCursorIndex={actions.setDetailCursorIndex}
+                onOpenJobLog={props.onOpenJobLog}
+              />
             </Show>
           </>
         )}

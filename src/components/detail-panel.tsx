@@ -1,9 +1,16 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { For, Show } from "solid-js";
 import { isUncommittedHash } from "../constants";
+import type { ProviderStatus } from "../context/state";
 import { useAppState } from "../context/state";
 import type { DiffTarget } from "../git/types";
 import { useT } from "../hooks/use-t";
+import type {
+  GitHubCommitData,
+  GitHubJob,
+  GitHubJobFetchResult,
+  GitHubWorkflowRun,
+} from "../providers/github-actions/types";
 import { getAvailableTabs } from "../utils/tab-utils";
 import CommitDetailView from "./detail";
 import type { DetailNavRef } from "./detail-types";
@@ -18,6 +25,22 @@ export interface DetailPanelProps {
   searchFocused: boolean;
   onJumpToCommit: (hash: string, from: "child" | "parent") => void;
   onOpenDiff: (target: DiffTarget) => void;
+  /** CI data getter from the GitHub Actions provider (optional). */
+  githubGetCommitData?: (sha: string) => GitHubCommitData | null;
+  /** CI job fetcher from the GitHub Actions provider (optional). */
+  githubFetchJobsForRun?: (run: GitHubWorkflowRun) => Promise<GitHubJobFetchResult>;
+  /** CI data fetcher for one selected SHA (optional). */
+  githubFetchCommitData?: (sha: string) => Promise<void>;
+  /** CI job log fetcher from the GitHub Actions provider (optional). */
+  githubFetchJobLog?: (jobId: number, signal?: AbortSignal) => Promise<string>;
+  /**
+   * Current provider status string.  Non-null when the provider is unavailable
+   * (e.g. missing token / remote) — forwarded to CommitDetailView for setup
+   * guidance in the Actions tab.
+   */
+  githubProviderStatus?: ProviderStatus;
+  /** Open the job log dialog for a specific job. */
+  onOpenJobLog?: (job: GitHubJob, run: GitHubWorkflowRun, jobs?: GitHubJob[]) => void;
 }
 
 /**
@@ -37,8 +60,18 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
     const ud = state.uncommittedDetail();
     const cd = state.commitDetail();
     const stashMap = state.stashByParent();
+    const providerView = state.activeProviderView();
+    const isProviderMode = providerView === "github-actions";
     const available = new Set(
-      getAvailableTabs({ commit, uncommittedDetail: ud, commitDetail: cd, stashByParent: stashMap }),
+      getAvailableTabs({
+        commit,
+        uncommittedDetail: ud,
+        commitDetail: cd,
+        stashByParent: stashMap,
+        activeProviderView: providerView,
+        getCommitData: props.githubGetCommitData,
+        providerLoading: props.githubProviderStatus?.kind === "loading",
+      }),
     );
     if (isUncommitted) {
       return [
@@ -60,11 +93,17 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
       ];
     }
     return [
-      {
-        id: "files",
-        label: `Files${cd?.files ? ` (${cd.files.length})` : ""}`,
-        disabled: cd ? !available.has("files") : false,
-      },
+      // In provider mode the Actions tab always takes the first position (shows "no data"
+      // for commits with no runs). Files tab is hidden in provider mode.
+      ...(isProviderMode
+        ? [{ id: "github-actions", label: "Actions", disabled: !available.has("github-actions") }]
+        : [
+            {
+              id: "files",
+              label: `Files${cd?.files ? ` (${cd.files.length})` : ""}`,
+              disabled: cd ? !available.has("files") : false,
+            },
+          ]),
       ...(stashMap.has(commitHash)
         ? [
             {
@@ -131,7 +170,17 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
             />
           }
         >
-          <CommitDetailView onJumpToCommit={props.onJumpToCommit} onOpenDiff={props.onOpenDiff} navRef={props.navRef} />
+          <CommitDetailView
+            onJumpToCommit={props.onJumpToCommit}
+            onOpenDiff={props.onOpenDiff}
+            navRef={props.navRef}
+            githubGetCommitData={props.githubGetCommitData}
+            githubFetchJobsForRun={props.githubFetchJobsForRun}
+            githubFetchCommitData={props.githubFetchCommitData}
+            githubFetchJobLog={props.githubFetchJobLog}
+            githubProviderStatus={props.githubProviderStatus}
+            onOpenJobLog={props.onOpenJobLog}
+          />
         </Show>
       </scrollbox>
     </>

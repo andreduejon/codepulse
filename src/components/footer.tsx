@@ -2,7 +2,13 @@ import { createEffect, createSignal, onCleanup, Show } from "solid-js";
 import { useAppState } from "../context/state";
 import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
 import { useT } from "../hooks/use-t";
-import { KeyHint } from "./key-hint";
+import {
+  getEnabledProviderViews,
+  getProvider,
+  getProviderRegistryVersion,
+  nextProviderView,
+} from "../providers/provider";
+import { KeyHint, KeyHintSeparator } from "./key-hint";
 
 /** Full braille rotation spinner — 8 frames, smooth circular motion. */
 const SPINNER_FRAMES = ["\u28FE", "\u28FD", "\u28FB", "\u28BF", "\u287F", "\u283F", "\u28EF", "\u28F7"];
@@ -16,14 +22,24 @@ export default function Footer(
 
   const isLoading = () => state.loading() || state.fetching() || state.detailLoading();
 
-  const loadingLabel = () => (isLoading() ? " loading" : "");
+  const providerStatus = () => state.providerStatus();
+
+  const loadingLabel = () => {
+    if (isLoading()) return " loading";
+    // providerStatus.kind === "loading" means a background CI fetch is in-flight.
+    // Show the text regardless of which view is active — the spinner char is
+    // already shown in this case, so the label should match to avoid the
+    // visual inconsistency of a spinning braille with no accompanying text.
+    if (providerStatus().kind === "loading") return " loading";
+    return "";
+  };
 
   // Animation frame counter, cycles while loading
   const [frame, setFrame] = createSignal(0);
   let spinnerTimer: ReturnType<typeof setInterval> | null = null;
 
   createEffect(() => {
-    if (isLoading()) {
+    if (isLoading() || providerStatus().kind === "loading") {
       setFrame(0);
       if (!spinnerTimer) {
         spinnerTimer = setInterval(() => {
@@ -44,9 +60,18 @@ export default function Footer(
 
   // Always render the spinner element to avoid layout shift;
   // show the braille char when loading, empty space when idle.
-  const spinnerChar = () => (isLoading() ? SPINNER_FRAMES[frame()] : " ");
+  const spinnerChar = () => (isLoading() || providerStatus().kind === "loading" ? SPINNER_FRAMES[frame()] : " ");
+  const spinnerColor = () => t().accent;
 
   const enterAction = () => (state.detailFocused() ? state.detailCursorAction() : null);
+  const nextProviderLabel = () => {
+    getProviderRegistryVersion();
+    const views = getEnabledProviderViews();
+    if (views.length <= 1) return null;
+    const next = nextProviderView(state.activeProviderView());
+    if (next === state.activeProviderView()) return null;
+    return next === "git" ? "git" : (getProvider(next)?.displayName ?? next);
+  };
 
   const mode = () => props.commandBarMode();
 
@@ -56,7 +81,7 @@ export default function Footer(
     <>
       <box flexDirection="row" width="100%" height={1}>
         {/* Loading indicator — always present to avoid layout shift, left-aligned */}
-        <text flexShrink={0} wrapMode="none" fg={t().accent}>
+        <text flexShrink={0} wrapMode="none" fg={spinnerColor()}>
           {spinnerChar()}
         </text>
         <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
@@ -68,16 +93,31 @@ export default function Footer(
 
         {/* ── Detail focused ───────────────────────────────────────────────── */}
         <Show when={state.detailFocused()}>
-          <KeyHint key={enterAction() ? "enter" : ""} desc={enterAction() ? ` ${enterAction()}  ` : ""} />
-          <KeyHint key="esc" desc=" back  " />
-          <KeyHint key="←/→" desc=" switch tab  " />
+          <Show when={nextProviderLabel()}>
+            <KeyHint key="tab" desc={` ${nextProviderLabel()}`} />
+          </Show>
+          <Show when={nextProviderLabel()}>
+            <KeyHintSeparator />
+          </Show>
+          <Show when={enterAction()}>
+            <KeyHint key="enter" desc={` ${enterAction()}`} />
+          </Show>
+          <Show when={enterAction()}>
+            <KeyHintSeparator />
+          </Show>
+          <KeyHint key="esc" desc=" back" />
+          <KeyHintSeparator />
+          <KeyHint key="←/→" desc=" switch tab" />
+          <KeyHintSeparator />
           <KeyHint key="↑/↓" desc=" navigate" />
         </Show>
 
         {/* ── Input modes (command / search / path) ────────────────────────── */}
         <Show when={!state.detailFocused() && mode() !== "idle"}>
-          <KeyHint key="enter" desc=" confirm  " />
-          <KeyHint key="esc" desc=" cancel  " />
+          <KeyHint key="enter" desc=" confirm" />
+          <KeyHintSeparator />
+          <KeyHint key="esc" desc=" cancel" />
+          <KeyHintSeparator />
           <KeyHint key="shift ←/→" desc=" switch mode" />
         </Show>
 
@@ -85,21 +125,35 @@ export default function Footer(
         <Show when={!state.detailFocused() && mode() === "idle"}>
           {/* Ancestry mode active */}
           <Show when={ancestryMode()}>
-            <KeyHint key="esc" desc=" clear  " />
+            <KeyHint key="esc" desc=" clear" />
+          </Show>
+          <Show when={ancestryMode()}>
+            <KeyHintSeparator />
           </Show>
 
           {/* No ancestry active */}
           <Show when={!ancestryMode()}>
             <Show when={props.filterActive}>
-              <KeyHint key="esc" desc=" clear  " />
+              <KeyHint key="esc" desc=" clear" />
+            </Show>
+            <Show when={props.filterActive}>
+              <KeyHintSeparator />
             </Show>
           </Show>
 
           {/* Switch tab / show details — always shown in graph idle */}
-          <Show when={props.compact} fallback={<KeyHint key="←/→" desc=" switch tab  " />}>
-            <KeyHint key="enter" desc=" show details  " />
+          <Show when={nextProviderLabel()}>
+            <KeyHint key="tab" desc={` ${nextProviderLabel()}`} />
           </Show>
-          <KeyHint key="shift ←/→" desc=" switch mode  " />
+          <Show when={nextProviderLabel()}>
+            <KeyHintSeparator />
+          </Show>
+          <Show when={props.compact} fallback={<KeyHint key="←/→" desc=" switch tab" />}>
+            <KeyHint key="enter" desc=" show details" />
+          </Show>
+          <KeyHintSeparator />
+          <KeyHint key="shift ←/→" desc=" switch mode" />
+          <KeyHintSeparator />
 
           <KeyHint key="↑/↓" desc=" navigate" />
         </Show>

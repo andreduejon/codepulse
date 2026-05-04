@@ -1,8 +1,7 @@
 /**
  * Test: verifies parseArgs — CLI argument parsing logic.
  *
- * Covers: --branch/-b, --max-count/-n, --theme, --no-all, positional repo path,
- * default values, error cases, and flag interactions.
+ * Covers: positional repo path, help/version, unknown flags.
  *
  * Note: --help, --version, and error paths call process.exit().
  * We mock process.exit to capture exit codes without terminating the test runner.
@@ -32,85 +31,9 @@ afterEach(() => {
 });
 
 describe("parseArgs", () => {
-  // ── Defaults ──────────────────────────────────────────────────────
-
-  test("no arguments yields defaults (cwd, no branch, no all, no maxCount, no theme)", () => {
+  test("no arguments yields cwd repo path", () => {
     const opts = parseArgs([...ARGV_PREFIX]);
     expect(opts.repoPath).toBe(process.cwd());
-    expect(opts.branch).toBeUndefined();
-    expect(opts.all).toBeUndefined();
-    expect(opts.maxCount).toBeUndefined();
-    expect(opts.themeName).toBeUndefined();
-  });
-
-  // ── --branch / -b ─────────────────────────────────────────────────
-
-  test("--branch sets branch and forces all=false", () => {
-    const opts = parseArgs([...ARGV_PREFIX, "--branch", "main"]);
-    expect(opts.branch).toBe("main");
-    expect(opts.all).toBe(false);
-  });
-
-  test("-b is shorthand for --branch", () => {
-    const opts = parseArgs([...ARGV_PREFIX, "-b", "feature/foo"]);
-    expect(opts.branch).toBe("feature/foo");
-    expect(opts.all).toBe(false);
-  });
-
-  test("--branch without value exits with code 1", () => {
-    expect(() => parseArgs([...ARGV_PREFIX, "--branch"])).toThrow("process.exit");
-    expect(lastExitCode).toBe(1);
-  });
-
-  // ── --max-count / -n ──────────────────────────────────────────────
-
-  test("--max-count sets maxCount", () => {
-    const opts = parseArgs([...ARGV_PREFIX, "--max-count", "500"]);
-    expect(opts.maxCount).toBe(500);
-  });
-
-  test("-n is shorthand for --max-count", () => {
-    const opts = parseArgs([...ARGV_PREFIX, "-n", "100"]);
-    expect(opts.maxCount).toBe(100);
-  });
-
-  test("--max-count without value exits with code 1", () => {
-    expect(() => parseArgs([...ARGV_PREFIX, "--max-count"])).toThrow("process.exit");
-    expect(lastExitCode).toBe(1);
-  });
-
-  test("--max-count with non-integer exits with code 1", () => {
-    expect(() => parseArgs([...ARGV_PREFIX, "--max-count", "abc"])).toThrow("process.exit");
-    expect(lastExitCode).toBe(1);
-  });
-
-  test("--max-count with 0 exits with code 1", () => {
-    expect(() => parseArgs([...ARGV_PREFIX, "--max-count", "0"])).toThrow("process.exit");
-    expect(lastExitCode).toBe(1);
-  });
-
-  test("--max-count with negative number exits with code 1", () => {
-    expect(() => parseArgs([...ARGV_PREFIX, "--max-count", "-5"])).toThrow("process.exit");
-    expect(lastExitCode).toBe(1);
-  });
-
-  // ── --theme ───────────────────────────────────────────────────────
-
-  test("--theme sets themeName", () => {
-    const opts = parseArgs([...ARGV_PREFIX, "--theme", "gruvbox"]);
-    expect(opts.themeName).toBe("gruvbox");
-  });
-
-  test("--theme without value exits with code 1", () => {
-    expect(() => parseArgs([...ARGV_PREFIX, "--theme"])).toThrow("process.exit");
-    expect(lastExitCode).toBe(1);
-  });
-
-  // ── --no-all ──────────────────────────────────────────────────────
-
-  test("--no-all sets all=false", () => {
-    const opts = parseArgs([...ARGV_PREFIX, "--no-all"]);
-    expect(opts.all).toBe(false);
   });
 
   // ── --help / --version ────────────────────────────────────────────
@@ -154,43 +77,11 @@ describe("parseArgs", () => {
     expect(lastExitCode).toBe(1);
   });
 
-  // ── Combined options ──────────────────────────────────────────────
-
-  test("multiple options together", () => {
-    const opts = parseArgs([...ARGV_PREFIX, "-b", "develop", "-n", "50", "--theme", "catppuccin", "/my/repo"]);
-    expect(opts.branch).toBe("develop");
-    expect(opts.all).toBe(false);
-    expect(opts.maxCount).toBe(50);
-    expect(opts.themeName).toBe("catppuccin");
-    expect(opts.repoPath).toBe("/my/repo");
-  });
-
-  // ── --path ────────────────────────────────────────────────────────
-
-  test("--path sets path filter", () => {
-    const opts = parseArgs([...ARGV_PREFIX, "--path", "src/git/"]);
-    expect(opts.path).toBe("src/git/");
-  });
-
-  test("--path accepts a file path", () => {
-    const opts = parseArgs([...ARGV_PREFIX, "--path", "src/app.tsx"]);
-    expect(opts.path).toBe("src/app.tsx");
-  });
-
-  test("--path without value exits with code 1", () => {
-    expect(() => parseArgs([...ARGV_PREFIX, "--path"])).toThrow("process.exit");
-    expect(lastExitCode).toBe(1);
-  });
-
-  test("--path combines with other options", () => {
-    const opts = parseArgs([...ARGV_PREFIX, "-b", "main", "--path", "src/", "/my/repo"]);
-    expect(opts.branch).toBe("main");
-    expect(opts.path).toBe("src/");
-    expect(opts.repoPath).toBe("/my/repo");
-  });
-
-  test("no --path leaves path undefined", () => {
-    const opts = parseArgs([...ARGV_PREFIX]);
-    expect(opts.path).toBeUndefined();
+  test("removed startup flags now error", () => {
+    for (const flag of ["--branch", "-b", "--max-count", "-n", "--theme", "--path", "--no-all"]) {
+      expect(() => parseArgs([...ARGV_PREFIX, flag])).toThrow("process.exit");
+      expect(lastExitCode).toBe(1);
+      lastExitCode = undefined;
+    }
   });
 });

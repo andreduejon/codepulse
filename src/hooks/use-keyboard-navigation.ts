@@ -3,6 +3,7 @@ import { useKeyboard } from "@opentui/solid";
 import type { Accessor } from "solid-js";
 import type { DetailNavRef } from "../components/detail-types";
 import type { AppActions, AppState } from "../context/state";
+import { routeGlobalKey } from "../keyboard/router";
 import { createCloseOneCascadeStep } from "./handle-cascade-close";
 import {
   createCommandBarHelpers,
@@ -13,7 +14,7 @@ import {
 import { handleDetailKey } from "./handle-detail-keys";
 import { handleGraphKey } from "./handle-graph-keys";
 
-export type DialogId = "menu" | "help" | "theme" | "diff-blame" | "detail" | null;
+export type DialogId = "menu" | "help" | "theme" | "diff-blame" | "detail" | "job-log" | null;
 type LayoutMode = "too-small" | "compact" | "normal";
 
 /** Command bar mode — drives placeholder text and key routing. */
@@ -55,6 +56,10 @@ interface KeyboardNavigationOptions {
   onPathExecute: (pathValue: string) => void;
   /** Callback to clear ancestry highlighting (called when search opens or on Esc). */
   onClearAncestry: () => void;
+  /** CI data getter — forwarded to handleDetailKey for tab availability checks. */
+  getCommitData?: (sha: string) => unknown;
+  /** Returns true while the initial CI fetch is in-flight. */
+  getProviderLoading?: () => boolean;
 }
 
 /**
@@ -103,6 +108,8 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     onCommandExecute,
     onPathExecute,
     onClearAncestry,
+    getCommitData,
+    getProviderLoading,
   } = opts;
 
   // Build command-bar helpers (clearSearch, openSearch, confirmSearch, exitCommandBar)
@@ -144,6 +151,12 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
   useKeyboard(e => {
     if (e.eventType === "release") return;
 
+    const route = routeGlobalKey({ dialog: dialog(), overrideScope: state.keyboardScopeOverride() }, e.name);
+    if (!route.runAppHandler) {
+      if (route.runCascadeClose) closeOneCascadeStep();
+      return;
+    }
+
     // ── Shift+←/→ mode cycling ────────────────────────────────────────────────
     if (handleModeCycling(e, cbOpts, helpers)) return;
 
@@ -179,10 +192,12 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     // All other keys while search bar is focused: let the input handle them.
     if (searchFocused()) return;
 
-    // If a non-detail dialog is open, only Escape acts (handled above)
-    if (dialog() && dialog() !== "detail") return;
-
     // ── Global single-key shortcuts ─────────────────────────────────────────
+    if (e.name === "tab") {
+      e.preventDefault();
+      actions.cycleProviderView();
+      return;
+    }
     if (e.name === "q") {
       e.preventDefault();
       onCommandExecute("quit");
@@ -205,7 +220,18 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     }
 
     // ── Detail panel focused (or detail dialog open in compact mode) ─────────
-    if (handleDetailKey(e, { state, actions, dialog, getDetailScrollboxRef, detailNavRef })) return;
+    if (
+      handleDetailKey(e, {
+        state,
+        actions,
+        dialog,
+        getDetailScrollboxRef,
+        detailNavRef,
+        getCommitData,
+        getProviderLoading,
+      })
+    )
+      return;
 
     // ── Graph navigation ─────────────────────────────────────────────────────
     handleGraphKey(e, {

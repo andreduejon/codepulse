@@ -1,22 +1,26 @@
 import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
-import { useKeyboard, useTerminalDimensions } from "@opentui/solid";
+import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createSignal, For, type JSX, onCleanup } from "solid-js";
 import type { ConfigInfo } from "../../config";
 import { SHIFT_JUMP } from "../../constants";
+import { useAppState } from "../../context/state";
 import { useTheme } from "../../context/theme";
 import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useClipboard } from "../../hooks/use-clipboard";
-import { COPYABLE_VISIBLE_WIDTH, INFO_LABEL_WIDTH, type SettingItem, useMenuItems } from "../../hooks/use-menu-items";
-import { scrollElementIntoView } from "../../utils/scroll";
+import { COPYABLE_VISIBLE_WIDTH, type SettingItem, useMenuItems } from "../../hooks/use-menu-items";
+import { scrollIndexedItemIntoView } from "../../utils/scroll";
 import Badge from "../badge";
-import { KeyHint } from "../key-hint";
+import { KeyHint, KeyHintSeparator } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
+import { type MenuKeyAction, routeMenuKey } from "./menu-keymap";
 
-type MenuTab = "repository" | "branch";
+type MenuTab = "repository" | "branch" | "providers";
 
 /** Column widths for the menu item value and hotkey display columns. */
-const VALUE_COL_WIDTH = 22;
+const VALUE_COL_WIDTH = 34;
 const HOTKEY_COL_WIDTH = 9;
+
+const clipLeft = (value: string, width: number) => (value.length <= width ? value : `…${value.slice(-(width - 1))}`);
 
 interface MenuDialogProps {
   onClose: () => void;
@@ -29,17 +33,29 @@ interface MenuDialogProps {
   configInfo?: ConfigInfo;
   /** Open the project selector to switch repos. */
   onSwitchRepo?: () => void;
+  /** Current GitHub provider config (passed through to Providers tab). */
+  githubConfig?: { enabled: boolean; tokenEnvVar: string; trustedEnterpriseHost: string | null };
+  /** Callback to update GitHub provider config. */
+  onGithubConfigChange?: (cfg: { enabled: boolean; tokenEnvVar: string; trustedEnterpriseHost: string | null }) => void;
 }
 
 /** Persists the last-used tab across dialog open/close cycles. */
 export const [lastMenuTab, setLastMenuTab] = createSignal<MenuTab>("repository");
 
 export default function MenuDialog(props: Readonly<MenuDialogProps>) {
+  const renderer = useRenderer();
+  const { actions } = useAppState();
   const { theme, themeName, setTheme } = useTheme();
   const t = () => theme();
   const dimensions = useTerminalDimensions();
   const dialogWidth = () => 72;
   const dialogHeight = () => Math.min(Math.floor(dimensions().height * 0.7), dimensions().height - 8);
+  const tabBarInnerWidth = () => dialogWidth() - 2 - 8;
+  const tabWidth = (idx: number) => {
+    const base = Math.floor(tabBarInnerWidth() / 3);
+    const remainder = tabBarInnerWidth() % 3;
+    return base + (idx < remainder ? 1 : 0);
+  };
 
   // ── Tab state ─────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = createSignal<MenuTab>(lastMenuTab());
@@ -49,19 +65,6 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
 
   // ── Clipboard feedback ────────────────────────────────────────────
   const { copiedId: copiedLabel, copyToClipboard } = useClipboard();
-
-  // ── Config save feedback ──────────────────────────────────────────
-  const [savedFeedback, setSavedFeedback] = createSignal<string | null>(null);
-  let savedTimer: ReturnType<typeof setTimeout> | undefined;
-
-  const showSavedFeedback = (label: string) => {
-    setSavedFeedback(label);
-    if (savedTimer) clearTimeout(savedTimer);
-    savedTimer = setTimeout(() => setSavedFeedback(null), 1500);
-  };
-  onCleanup(() => {
-    if (savedTimer) clearTimeout(savedTimer);
-  });
 
   // ── Menu items hook ───────────────────────────────────────────────
   const {
@@ -77,8 +80,6 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     activeTab,
     themeName,
     setTheme,
-    savedFeedback,
-    showSavedFeedback,
     copyToClipboard,
     onFetch: () => props.onFetch(),
     onReload: () => props.onReload(),
@@ -87,6 +88,8 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     onClose: () => props.onClose(),
     configInfo: props.configInfo,
     onSwitchRepo: props.onSwitchRepo,
+    githubConfig: () => props.githubConfig,
+    onGithubConfigChange: props.onGithubConfigChange,
   });
 
   // ── Banner scroll for selected copyable rows ──────────────────────
@@ -101,30 +104,104 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     return text.substring(off, off + COPYABLE_VISIBLE_WIDTH);
   };
 
-  // ── Keyboard ──────────────────────────────────────────────────────
-  useKeyboard(e => {
-    if (e.eventType === "release") return;
+  // ── Token edit mode (native OpenTUI input only while explicitly editing) ──
+  const [editingIdx, setEditingIdx] = createSignal<number | null>(null);
+  const [editDraft, setEditDraft] = createSignal("");
 
-    switch (e.name) {
-      case "down":
-        moveCursor(e.shift ? SHIFT_JUMP : 1);
+  createEffect(() => {
+    actions.setKeyboardScopeOverride(editingIdx() == null ? null : "menu-token-edit");
+  });
+
+  onCleanup(() => actions.setKeyboardScopeOverride(null));
+
+  const startEdit = () => {
+    const idx = selectedItemIndex();
+    if (idx == null) return;
+    const item = activeItems()[idx];
+    if (item?.kind !== "editable") return;
+    setEditingIdx(idx);
+    setEditDraft(item.get());
+  };
+
+  const saveEdit = () => {
+    const idx = editingIdx();
+    if (idx == null) return;
+    const item = activeItems()[idx];
+    if (item?.kind === "editable" && item.isDraftValid && !item.isDraftValid(editDraft())) return;
+    if (item?.kind === "editable") item.set(editDraft());
+    setEditingIdx(null);
+    setEditDraft("");
+  };
+
+  const cancelEdit = () => {
+    setEditingIdx(null);
+    setEditDraft("");
+  };
+
+  // ── Keyboard ──────────────────────────────────────────────────────
+  const TAB_ORDER: MenuTab[] = ["repository", "branch", "providers"];
+  const runMenuAction = (action: MenuKeyAction, shift?: boolean) => {
+    switch (action) {
+      case "close":
+        props.onClose();
         break;
-      case "up":
-        moveCursor(e.shift ? -SHIFT_JUMP : -1);
+      case "move-down":
+        if (editingIdx() != null) saveEdit();
+        moveCursor(shift ? SHIFT_JUMP : 1);
         break;
-      case "return":
+      case "move-up":
+        if (editingIdx() != null) saveEdit();
+        moveCursor(shift ? -SHIFT_JUMP : -1);
+        break;
+      case "activate":
         activateItem();
         break;
-      case "left":
-        if (activeTab() !== "repository") {
-          setActiveTab("repository");
-        }
+      case "start-edit":
+        startEdit();
         break;
-      case "right":
-        if (activeTab() !== "branch") {
-          setActiveTab("branch");
-        }
+      case "save-edit":
+        saveEdit();
         break;
+      case "cancel-edit":
+        cancelEdit();
+        break;
+      case "prev-tab": {
+        const idx = TAB_ORDER.indexOf(activeTab());
+        if (idx > 0) setActiveTab(TAB_ORDER[idx - 1]);
+        break;
+      }
+      case "next-tab": {
+        const idx = TAB_ORDER.indexOf(activeTab());
+        if (idx < TAB_ORDER.length - 1) setActiveTab(TAB_ORDER[idx + 1]);
+        break;
+      }
+      default:
+    }
+  };
+
+  useKeyboard(e => {
+    if (e.eventType === "release") return;
+    if (e.name === "q") {
+      e.preventDefault();
+      e.stopPropagation();
+      renderer.destroy();
+      return;
+    }
+
+    const idx = selectedItemIndex();
+    if (idx == null) return;
+    const selected = activeItems()[idx];
+    const decision = routeMenuKey({
+      mode: editingIdx() == null ? "normal" : "token-edit",
+      keyName: e.name,
+      shift: e.shift,
+      selectedKind: selected?.kind === "editable" ? "editable" : selected ? "other" : null,
+    });
+
+    if (decision.consume) {
+      e.preventDefault();
+      e.stopPropagation();
+      runMenuAction(decision.action, e.shift);
     }
   });
 
@@ -133,12 +210,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   const itemRefs: Renderable[] = [];
 
   createEffect(() => {
-    const idx = selectedItemIndex();
-    const sb = scrollboxRef;
-    if (!sb || idx == null || idx < 0) return;
-    const el = itemRefs[idx];
-    if (!el) return;
-    scrollElementIntoView(sb, el);
+    scrollIndexedItemIntoView(scrollboxRef, itemRefs, selectedItemIndex());
   });
 
   // ── Item renderers ─────────────────────────────────────────────────
@@ -157,29 +229,46 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
       {idx > 0 ? <box height={1} /> : null}
       <text wrapMode="none" fg={t().accent}>
         <strong>
-          <span fg={t().accent}>{item.label}</span>
+          <span>{item.label}</span>
         </strong>
       </text>
     </box>
   );
 
-  const renderInfo = (item: Extract<SettingItem, { kind: "info" }>, idx: number) => (
-    <box
-      ref={(el: Renderable) => {
-        itemRefs[idx] = el;
-      }}
-      flexDirection="row"
-      width="100%"
-      paddingX={4}
-    >
-      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-        {item.label.padEnd(INFO_LABEL_WIDTH)}
-      </text>
-      <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
-        {item.get()}
-      </text>
-    </box>
-  );
+  const renderInfo = (item: Extract<SettingItem, { kind: "info" }>, idx: number) => {
+    const hasStatus = () => item.valid != null;
+    const isValid = () => item.valid?.() ?? false;
+    return (
+      <box
+        ref={(el: Renderable) => {
+          itemRefs[idx] = el;
+        }}
+        flexDirection="row"
+        width="100%"
+        paddingX={4}
+      >
+        <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
+          {item.label}
+        </text>
+        {hasStatus() ? (
+          <>
+            <box width={VALUE_COL_WIDTH} flexShrink={0} flexDirection="row" justifyContent="flex-end">
+              <text wrapMode="none" truncate fg={t().foregroundMuted}>
+                {clipLeft(item.get(), VALUE_COL_WIDTH)}
+              </text>
+            </box>
+            <text flexShrink={0} width={HOTKEY_COL_WIDTH} wrapMode="none" fg={isValid() ? t().success : t().error}>
+              {(isValid() ? "✓" : "✕").padStart(HOTKEY_COL_WIDTH)}
+            </text>
+          </>
+        ) : (
+          <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
+            {item.get()}
+          </text>
+        )}
+      </box>
+    );
+  };
 
   const renderBadge = (item: Extract<SettingItem, { kind: "badge" }>, idx: number) => {
     return (
@@ -237,7 +326,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
         <box flexDirection="row" width="100%" backgroundColor={isSel() ? t().backgroundElement : undefined}>
           <text flexShrink={0} wrapMode="none" fg={t().accent}>
             <strong>
-              <span fg={t().accent}>{`${indicator()} ${item.label}`}</span>
+              <span>{`${indicator()} ${item.label}`}</span>
             </strong>
           </text>
           <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
@@ -280,19 +369,18 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     item: Extract<SettingItem, { kind: "toggle" | "cycle" | "dialog" | "action" }>,
     idx: number,
   ) => {
-    const isDisabledAction = () => item.kind === "action" && !!item.disabled?.();
-    const isSelected = () => !isDisabledAction() && selectedItemIndex() === idx;
+    const isDisabled = () => (item.kind === "action" || item.kind === "toggle") && !!item.disabled?.();
+    const isSelected = () => !isDisabled() && selectedItemIndex() === idx;
     const val = () => valueDisplay(item);
 
     const paddedVal = () => {
-      if (isDisabledAction()) return "";
       const v = val();
       if (!v) return " ".padStart(VALUE_COL_WIDTH);
       if (item.kind === "dialog" || item.kind === "action") return v.padStart(VALUE_COL_WIDTH);
       return `[${v}]`.padStart(VALUE_COL_WIDTH);
     };
     const paddedHotkey = () => {
-      if (isDisabledAction()) return "";
+      if (isDisabled()) return " ".repeat(HOTKEY_COL_WIDTH);
       const h =
         item.kind === "toggle" || item.kind === "cycle" || item.kind === "dialog" || item.kind === "action"
           ? (item.hotkey ?? "")
@@ -300,7 +388,8 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
       return h.padStart(HOTKEY_COL_WIDTH);
     };
 
-    const labelColor = () => (isDisabledAction() ? t().foregroundMuted : isSelected() ? t().accent : t().foreground);
+    const labelColor = () => (isDisabled() ? t().foregroundMuted : isSelected() ? t().accent : t().foreground);
+    const valueColor = () => (isDisabled() ? t().foregroundMuted : t().foreground);
 
     return (
       <box
@@ -315,12 +404,63 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
         <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={labelColor()}>
           {item.label}
         </text>
-        <text flexShrink={0} wrapMode="none" fg={t().foreground}>
+        <text flexShrink={0} wrapMode="none" fg={valueColor()}>
           {paddedVal()}
         </text>
         <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
           {paddedHotkey()}
         </text>
+      </box>
+    );
+  };
+
+  const renderEditable = (item: Extract<SettingItem, { kind: "editable" }>, idx: number) => {
+    const isSel = () => selectedItemIndex() === idx;
+    const isEditing = () => editingIdx() === idx;
+    const valid = () => item.valid?.();
+    const savedValue = () => item.get().trim();
+    const displayValue = () => savedValue() || item.placeholder || "";
+    const labelColor = () => (isSel() ? t().accent : t().foreground);
+    const displayColor = () => (savedValue() ? (isSel() ? t().accent : t().foreground) : t().foregroundMuted);
+    return (
+      <box
+        ref={(el: Renderable) => {
+          itemRefs[idx] = el;
+        }}
+        flexDirection="row"
+        width="100%"
+        paddingX={4}
+        backgroundColor={isEditing() ? t().backgroundElementActive : isSel() ? t().backgroundElement : undefined}
+      >
+        <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={labelColor()}>
+          {item.label}
+        </text>
+        {isEditing() ? (
+          <input
+            focused
+            width={VALUE_COL_WIDTH + HOTKEY_COL_WIDTH}
+            placeholder={item.placeholder}
+            value={editDraft()}
+            onInput={setEditDraft}
+            textColor={t().foreground}
+            focusedTextColor={t().foreground}
+            placeholderColor={t().foregroundMuted}
+            cursorColor={t().accent}
+            backgroundColor={t().backgroundElementActive}
+            focusedBackgroundColor={t().backgroundElementActive}
+          />
+        ) : (
+          <box width={VALUE_COL_WIDTH} flexShrink={0} flexDirection="row" justifyContent="flex-end">
+            <text wrapMode="none" truncate fg={displayColor()}>
+              {clipLeft(displayValue(), VALUE_COL_WIDTH)}
+            </text>
+          </box>
+        )}
+        {isEditing() ? null : (
+          <text flexShrink={0} width={HOTKEY_COL_WIDTH} wrapMode="none" fg={valid() ? t().success : t().error}>
+            {(valid() ? "✓" : "✕").padStart(HOTKEY_COL_WIDTH)}
+          </text>
+        )}
       </box>
     );
   };
@@ -333,6 +473,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     if (item.kind === "copyable") return renderCopyable(item, idx);
     if (item.kind === "section") return renderSection(item, idx);
     if (item.kind === "branch") return renderBranch(item, idx);
+    if (item.kind === "editable") return renderEditable(item, idx);
     return renderSettingRow(item, idx);
   };
 
@@ -341,7 +482,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
       <box
         width={dialogWidth()}
         height={dialogHeight()}
-        backgroundColor={t().backgroundPanel}
+        backgroundColor={t().background}
         flexDirection="column"
         paddingX={1}
         paddingY={1}
@@ -352,6 +493,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
         <box flexDirection="row" width="100%" paddingX={4} flexShrink={0}>
           {/* Repository tab */}
           <box
+            width={tabWidth(0)}
             flexGrow={1}
             justifyContent="center"
             flexDirection="row"
@@ -365,6 +507,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
           </box>
           {/* Branch tab */}
           <box
+            width={tabWidth(1)}
             flexGrow={1}
             justifyContent="center"
             flexDirection="row"
@@ -374,6 +517,20 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
           >
             <text flexShrink={0} wrapMode="none" fg={activeTab() === "branch" ? t().accent : t().foregroundMuted}>
               <strong>{"Branches"}</strong>
+            </text>
+          </box>
+          {/* Providers tab */}
+          <box
+            width={tabWidth(2)}
+            flexGrow={1}
+            justifyContent="center"
+            flexDirection="row"
+            border={["top"]}
+            borderStyle="single"
+            borderColor={activeTab() === "providers" ? t().accent : t().border}
+          >
+            <text flexShrink={0} wrapMode="none" fg={activeTab() === "providers" ? t().accent : t().foregroundMuted}>
+              <strong>{"Providers"}</strong>
             </text>
           </box>
         </box>
@@ -399,9 +556,21 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
 
         {/* Context-aware footer */}
         <DialogFooter>
-          <KeyHint key="enter" desc={` ${footerVerb()}  `} />
-          <KeyHint key="←/→" desc=" switch tab  " />
-          <KeyHint key="↑/↓" desc=" navigate" />
+          {editingIdx() == null ? (
+            <>
+              <KeyHint key="enter" desc={` ${footerVerb()}`} />
+              <KeyHintSeparator />
+              <KeyHint key="←/→" desc=" switch tab" />
+              <KeyHintSeparator />
+              <KeyHint key="↑/↓" desc=" navigate" />
+            </>
+          ) : (
+            <>
+              <KeyHint key="enter" desc=" save" />
+              <KeyHintSeparator />
+              <KeyHint key="esc" desc=" cancel" />
+            </>
+          )}
         </DialogFooter>
       </box>
     </DialogOverlay>

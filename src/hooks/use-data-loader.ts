@@ -48,7 +48,8 @@ interface UseDataLoaderResult {
  * - `loadData`: full reload (branches, commits, stashes, working tree)
  * - `loadMoreData`: pagination (next page of commits)
  * - `handleFetch`: fetch from remote then reload
- * - Auto-refresh timer (driven by `state.autoRefreshInterval()`)
+ * - Local auto-refresh timer (driven by `state.autoRefreshInterval()`)
+ * - Remote auto-fetch timer (driven by `state.autoFetchInterval()`)
  *
  * All abort controllers and timers are cleaned up via `onCleanup`.
  *
@@ -241,7 +242,10 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
         const fetchTime = await getLastFetchTime(repoPath);
         actions.setLastFetchTime(fetchTime);
         const stickyHash = state.selectedCommit()?.hash;
-        await loadData(undefined, stickyHash, false, true);
+        // silent=true: don't toggle state.loading() — that unmounts the entire
+        // graph <For> list and destroys the scrollbox position.  state.fetching()
+        // already drives the footer spinner, so there is no visual regression.
+        await loadData(undefined, stickyHash, true, true);
       } else {
         actions.setError(result.error ?? "Fetch failed");
       }
@@ -254,13 +258,12 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
 
   // ── Initial load on mount ─────────────────────────────────────────
   onMount(() => {
-    loadData(initialBranch);
+    void loadData(initialBranch);
     // Load initial fetch time
     getLastFetchTime(repoPath).then(time => actions.setLastFetchTime(time));
   });
 
-  // ── Auto-refresh timer ────────────────────────────────────────────
-  // Re-reads local git data at the configured interval.
+  // ── Local auto-refresh timer ──────────────────────────────────────
   let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
   createEffect(() => {
     const interval = state.autoRefreshInterval();
@@ -270,13 +273,30 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
     }
     if (interval > 0) {
       autoRefreshTimer = setInterval(() => {
+        if (state.fetching()) return;
         const stickyHash = state.selectedCommit()?.hash;
-        loadData(undefined, stickyHash, true);
+        void loadData(undefined, stickyHash, true, true);
+      }, interval);
+    }
+  });
+
+  // ── Remote auto-fetch timer ───────────────────────────────────────
+  let autoFetchTimer: ReturnType<typeof setInterval> | null = null;
+  createEffect(() => {
+    const interval = state.autoFetchInterval();
+    if (autoFetchTimer) {
+      clearInterval(autoFetchTimer);
+      autoFetchTimer = null;
+    }
+    if (interval > 0) {
+      autoFetchTimer = setInterval(() => {
+        void handleFetch();
       }, interval);
     }
   });
   onCleanup(() => {
     if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+    if (autoFetchTimer) clearInterval(autoFetchTimer);
   });
 
   return { loadData, loadMoreData, handleFetch };

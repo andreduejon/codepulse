@@ -56,7 +56,7 @@ export default function ErrorScreen(props: Readonly<ErrorScreenProps>) {
                 {i() === 0 ? (
                   <text wrapMode="word">
                     <strong>
-                      <span fg={t().error}>{line}</span>
+                      <span>{line}</span>
                     </strong>
                   </text>
                 ) : (

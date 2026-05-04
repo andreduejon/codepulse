@@ -1,7 +1,7 @@
 {
 	"name": "@andreduejon/codepulse",
-	"version": "0.2.0",
-	"description": "A read-only terminal git graph visualizer",
+	"version": "0.3.0",
+	"description": "A terminal git graph visualizer that is read-only by default",
 	"license": "MIT",
 	"repository": {
 		"type": "git",
@@ -29,22 +29,23 @@
 		"README.md"
 	],
 	"scripts": {
-		"dev": "bun run src/index.tsx",
 		"start": "bun run src/index.tsx",
 		"test": "bun test",
 		"lint": "biome lint src/ tests/",
 		"format": "biome format src/ tests/",
 		"check": "biome check src/ tests/",
-		"check:fix": "biome check --write src/ tests/",
-		"prepublishOnly": "bun run check && bun test"
+		"check:types": "tsc -p tsconfig.json --noEmit && tsc -p tests/tsconfig.json --noEmit",
+		"check:fix": "biome check --write src/ tests/"
 	},
 	"dependencies": {
-		"@opentui/core": "0.1.99",
-		"@opentui/solid": "0.1.99",
-		"solid-js": "1.9.11"
+		"@opentui/core": "0.2.2",
+		"@opentui/solid": "0.2.2",
+		"solid-js": "1.9.12"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.4.12",
-		"@types/bun": "1.3.12"
+		"@biomejs/biome": "2.4.14",
+		"@types/babel__core": "^7.20.5",
+		"@types/bun": "1.3.13",
+		"typescript": "6.0.3"
 	}
 }

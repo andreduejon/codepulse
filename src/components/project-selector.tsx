@@ -2,11 +2,14 @@ import { spawnSync } from "node:child_process";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { useKeyboard, useRenderer } from "@opentui/solid";
-import { createSignal, For, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import packageJson from "../../package.json";
+import { removeRepoConfig } from "../config";
 import { useT } from "../hooks/use-t";
-import { KeyHint } from "./key-hint";
+import type { KeyboardScope } from "../keyboard/scope";
+import { KeyHint, KeyHintSeparator } from "./key-hint";
 import LogoBanner, { LOGO_WIDTH } from "./logo-banner";
+import MessageBox from "./message-box";
 
 interface ProjectSelectorProps {
   /** Informational message to show (e.g. "Doesn't look like a git repo"). */
@@ -20,6 +23,8 @@ interface ProjectSelectorProps {
   currentRepo?: string;
   /** Called when the user presses Esc to go back (in-app mode only). */
   onCancel?: () => void;
+  /** Optional keyboard scope hook for in-app usage only. */
+  setKeyboardScopeOverride?: (scope: KeyboardScope | null) => void;
 }
 
 /**
@@ -40,14 +45,15 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
 
   /** Whether we're in in-app mode (have a current repo to go back to). */
   const inApp = () => !!props.currentRepo;
+  const [savedRepos, setSavedRepos] = createSignal(props.knownRepos);
 
   /** Selectable repos — excludes current repo in in-app mode. */
-  const repos = () => {
-    const all = props.knownRepos;
+  const repos = createMemo(() => {
+    const all = savedRepos();
     const current = props.currentRepo;
     if (!current) return all;
     return all.filter(r => r !== current);
-  };
+  });
   const hasRepos = () => repos().length > 0;
 
   /** Total navigable items: repos + 1 for the inline path input. */
@@ -59,6 +65,22 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
   /** Whether the path input field has focus (cursor is on the input row). */
   const pathFocused = () => cursor() === pathInputIndex();
   const [pathInputValue, setPathInputValue] = createSignal("");
+  const escapeHint = () => {
+    if (pathFocused() && hasRepos()) return " list  ";
+    if (inApp()) return " back  ";
+    return " quit  ";
+  };
+
+  createEffect(() => {
+    props.setKeyboardScopeOverride?.("repo-selector");
+  });
+
+  createEffect(() => {
+    const max = pathInputIndex();
+    setCursor(c => Math.max(0, Math.min(c, max)));
+  });
+
+  onCleanup(() => props.setKeyboardScopeOverride?.(null));
 
   /** Destroy the renderer and re-exec with the given path. */
   const selectRepo = (repoPath: string) => {
@@ -73,6 +95,14 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
     } else {
       renderer.destroy();
     }
+  };
+
+  const forgetSelectedRepo = () => {
+    const idx = cursor();
+    const selected = repos()[idx];
+    if (!selected) return;
+    if (!removeRepoConfig(selected)) return;
+    setSavedRepos(prev => prev.filter(repo => repo !== selected));
   };
 
   useKeyboard(e => {
@@ -135,6 +165,10 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
           selectRepo(repos()[cursor()]);
         }
         break;
+      case "f":
+        e.preventDefault();
+        forgetSelectedRepo();
+        break;
       case "escape":
         e.preventDefault();
         handleEscape();
@@ -153,32 +187,12 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
 
         {/* Informational message — separate section with primary border */}
         <Show when={props.message}>
-          <box
-            width={LOGO_WIDTH}
-            flexDirection="column"
-            backgroundColor={t().background}
-            paddingX={1}
-            paddingY={1}
-            border={["left"]}
-            borderStyle="single"
-            borderColor={t().primary}
-          >
-            <box paddingX={4}>
-              <text wrapMode="word">
-                <strong>
-                  <span fg={t().primary}>{props.message}</span>
-                </strong>
-              </text>
-            </box>
-            <Show when={props.messagePath}>
-              {messagePath => (
-                <box paddingX={4}>
-                  <text wrapMode="none" truncate fg={t().foregroundMuted}>
-                    {shortPath(messagePath())}
-                  </text>
-                </box>
-              )}
-            </Show>
+          <box width={LOGO_WIDTH}>
+            <MessageBox
+              kind="info"
+              message={props.message ?? ""}
+              detail={props.messagePath ? shortPath(props.messagePath) : undefined}
+            />
           </box>
 
           <box height={1} />
@@ -199,7 +213,7 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
           <box paddingX={4}>
             <text wrapMode="none">
               <strong>
-                <span fg={t().accent}>Where to?</span>
+                <span>Where to?</span>
               </strong>
             </text>
           </box>
@@ -240,16 +254,19 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
           </Show>
 
           {/* Inline path input — last navigable item in the list */}
-          <box paddingX={4} backgroundColor={pathFocused() ? t().backgroundElement : undefined}>
+          <box paddingX={4}>
             <input
               focused={pathFocused()}
               flexGrow={1}
               placeholder="Enter repository path..."
               value={pathInputValue()}
               onInput={setPathInputValue}
-              fg={pathFocused() ? t().accent : t().foreground}
+              textColor={t().foreground}
+              focusedTextColor={t().foreground}
               placeholderColor={t().foregroundMuted}
-              backgroundColor={pathFocused() ? t().backgroundElement : t().background}
+              cursorColor={t().accent}
+              backgroundColor={t().background}
+              focusedBackgroundColor={t().backgroundElement}
             />
           </box>
 
@@ -269,10 +286,16 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
         {/* Footer hints */}
         <box flexDirection="row" width={LOGO_WIDTH} height={1}>
           <box flexGrow={1} />
-          <KeyHint key="enter" desc=" open  " />
-          <Show when={inApp()}>
-            <KeyHint key="esc" desc=" back  " />
+          <KeyHint key="enter" desc=" open" />
+          <KeyHintSeparator />
+          <Show when={!pathFocused() && hasRepos()}>
+            <KeyHint key="f" desc=" forget" />
           </Show>
+          <Show when={!pathFocused() && hasRepos()}>
+            <KeyHintSeparator />
+          </Show>
+          <KeyHint key="esc" desc={escapeHint()} />
+          <KeyHintSeparator />
           <KeyHint key="q" desc=" quit" />
         </box>
       </box>
@@ -293,11 +316,16 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
 function reExecWith(repoPath: string): void {
   // Resolve ~ to home directory
   const resolved = repoPath.startsWith("~") ? repoPath.replace("~", homedir()) : repoPath;
+  const rootResult = spawnSync("git", ["-C", resolved, "rev-parse", "--show-toplevel"], {
+    encoding: "utf-8",
+    stdio: ["ignore", "pipe", "ignore"],
+  });
+  const canonical = rootResult.status === 0 && rootResult.stdout.trim() ? rootResult.stdout.trim() : resolved;
 
   // Use spawnSync with an array to avoid shell interpolation of the repo path.
   // execSync(string) passes through a shell and is vulnerable to injection via
   // special characters in the path (backticks, $(), etc.).
-  spawnSync(process.argv[0], [process.argv[1], resolved], {
+  spawnSync(process.argv[0], [process.argv[1], canonical], {
     stdio: "inherit",
     env: process.env,
   });

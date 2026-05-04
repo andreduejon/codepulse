@@ -57,6 +57,7 @@ function buildLookupMaps(commits: Commit[]): {
     if (tipHash) {
       walkFirstParentChain(tipHash, commitMap, h => {
         currentBranchHashes.add(h);
+        return undefined;
       });
     }
   }
@@ -151,6 +152,7 @@ function computeBranchOwnership(
   for (const tip of tips) {
     walkFirstParentChain(tip.hash, commitMap, h => {
       branchNameMap.set(h, tip.name);
+      return undefined;
     });
   }
 

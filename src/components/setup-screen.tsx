@@ -2,7 +2,7 @@ import { homedir } from "node:os";
 import { useKeyboard } from "@opentui/solid";
 import packageJson from "../../package.json";
 import { useT } from "../hooks/use-t";
-import { KeyHint } from "./key-hint";
+import { KeyHint, KeyHintSeparator } from "./key-hint";
 import LogoBanner, { LOGO_WIDTH } from "./logo-banner";
 
 interface SetupScreenProps {
@@ -65,7 +65,7 @@ export default function SetupScreen(props: Readonly<SetupScreenProps>) {
           <box paddingX={4}>
             <text wrapMode="word">
               <strong>
-                <span fg={t().accent}>Welcome to your git graph visualizer!</span>
+                <span>Welcome to your git graph visualizer!</span>
               </strong>
             </text>
           </box>
@@ -78,7 +78,7 @@ export default function SetupScreen(props: Readonly<SetupScreenProps>) {
           <box paddingX={4}>
             <text wrapMode="none">
               <strong>
-                <span fg={t().accent}>Handy keys to remember</span>
+                <span>Handy keys to remember</span>
               </strong>
             </text>
           </box>
@@ -107,7 +107,8 @@ export default function SetupScreen(props: Readonly<SetupScreenProps>) {
         {/* Footer hints */}
         <box flexDirection="row" width={LOGO_WIDTH} height={1}>
           <box flexGrow={1} />
-          <KeyHint key="enter" desc=" continue  " />
+          <KeyHint key="enter" desc=" continue" />
+          <KeyHintSeparator />
           <KeyHint key="q" desc=" quit" />
         </box>
       </box>

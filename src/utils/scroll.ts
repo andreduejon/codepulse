@@ -21,3 +21,15 @@ export function scrollElementIntoView(scrollbox: ScrollBoxRenderable, el: Render
     scrollbox.scrollTo(rowBottom - viewportHeight + padding);
   }
 }
+
+export function scrollIndexedItemIntoView(
+  scrollbox: ScrollBoxRenderable | undefined,
+  itemRefs: readonly (Renderable | undefined)[],
+  index: number | null | undefined,
+  padding = 1,
+): void {
+  if (!scrollbox || index == null || index < 0) return;
+  const el = itemRefs[index];
+  if (!el) return;
+  scrollElementIntoView(scrollbox, el, padding);
+}
