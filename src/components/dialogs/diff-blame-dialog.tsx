@@ -12,7 +12,7 @@ import {
   isActiveAbortableRequest,
   startAbortableRequest,
 } from "../../utils/abortable-request";
-import { KeyHint } from "../key-hint";
+import { KeyHint, KeyHintSeparator } from "../key-hint";
 import MessageBox from "../message-box";
 import { DialogFooter, DialogOverlay, DialogTitleBar, getStandardDialogFrame } from "./dialog-chrome";
 import { BLAME_COL_WIDTH, DiffLineRow } from "./diff-line-row";
@@ -374,18 +374,15 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
         scrollboxRef?.scrollBy(e.shift ? 10 : 1, "absolute");
         break;
       case "left":
+      case "h":
         e.preventDefault();
         navigateFile(-1);
         break;
       case "right":
+      case "l":
         e.preventDefault();
         navigateFile(1);
         break;
-      case "pageup":
-        e.preventDefault();
-        scrollboxRef?.scrollBy(-0.5, "viewport");
-        break;
-      case "pagedown":
       case " ":
         e.preventDefault();
         scrollboxRef?.scrollBy(0.5, "viewport");
@@ -669,12 +666,19 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
           }
         >
           <Show when={hasMultipleFiles()}>
-            <KeyHint key={"\u2190/\u2192"} desc=" file  " />
+            <KeyHint key={"\u2190/\u2192"} desc=" file" />
           </Show>
-          <KeyHint key={"\u2191/\u2193"} desc=" scroll  " />
-          <KeyHint key="b" desc={showBlame() ? " hide blame  " : " show blame  "} />
-          <KeyHint key="v" desc={fullFileMode() ? " show hunks  " : " show file  "} />
-          <KeyHint key="c" desc={` ${VIEW_MODE_NEXT_LABEL[viewMode()]}  `} />
+          <Show when={hasMultipleFiles()}>
+            <KeyHintSeparator />
+          </Show>
+          <KeyHint key={"\u2191/\u2193"} desc=" scroll" />
+          <KeyHintSeparator />
+          <KeyHint key="b" desc={showBlame() ? " hide blame" : " show blame"} />
+          <KeyHintSeparator />
+          <KeyHint key="v" desc={fullFileMode() ? " show hunks" : " show file"} />
+          <KeyHintSeparator />
+          <KeyHint key="c" desc={` ${VIEW_MODE_NEXT_LABEL[viewMode()]}`} />
+          <KeyHintSeparator />
           <KeyHint key="w" desc={wrapEnabled() ? " disable wrap" : " enable wrap"} />
         </DialogFooter>
       </box>

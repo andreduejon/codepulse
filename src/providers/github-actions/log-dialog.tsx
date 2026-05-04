@@ -10,7 +10,7 @@ import {
   getStandardDialogFrame,
 } from "../../components/dialogs/dialog-chrome";
 import { middleTruncate, TITLE_SEP } from "../../components/dialogs/title-utils";
-import { KeyHint } from "../../components/key-hint";
+import { KeyHint, KeyHintSeparator } from "../../components/key-hint";
 import MessageBox from "../../components/message-box";
 import { useTheme } from "../../context/theme";
 import { useT } from "../../hooks/use-t";
@@ -199,10 +199,12 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
         props.onClose();
         break;
       case "left":
+      case "h":
         e.preventDefault();
         navigateJob(-1);
         break;
       case "right":
+      case "l":
         e.preventDefault();
         navigateJob(1);
         break;
@@ -216,11 +218,6 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
         e.preventDefault();
         scroll(e.shift ? SCROLL_JUMP : 1);
         break;
-      case "pageup":
-        e.preventDefault();
-        scroll(-Math.floor((dialogHeight() - 6) / 2));
-        break;
-      case "pagedown":
       case " ":
         e.preventDefault();
         scroll(Math.floor((dialogHeight() - 6) / 2));
@@ -361,10 +358,15 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
 
         <DialogFooter>
           <Show when={hasMultipleJobs()}>
-            <KeyHint key={"←/→"} desc=" jobs  " />
+            <KeyHint key={"←/→"} desc=" jobs" />
           </Show>
-          <KeyHint key={"↑/↓"} desc=" scroll  " />
-          <KeyHint key="c" desc={` ${VIEW_MODE_NEXT_LABEL[viewMode()]}  `} />
+          <Show when={hasMultipleJobs()}>
+            <KeyHintSeparator />
+          </Show>
+          <KeyHint key={"↑/↓"} desc=" scroll" />
+          <KeyHintSeparator />
+          <KeyHint key="c" desc={` ${VIEW_MODE_NEXT_LABEL[viewMode()]}`} />
+          <KeyHintSeparator />
           <KeyHint key="w" desc={wrapEnabled() ? " disable wrap" : " enable wrap"} />
         </DialogFooter>
       </box>

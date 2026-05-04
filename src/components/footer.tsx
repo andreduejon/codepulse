@@ -8,7 +8,7 @@ import {
   getProviderRegistryVersion,
   nextProviderView,
 } from "../providers/provider";
-import { KeyHint } from "./key-hint";
+import { KeyHint, KeyHintSeparator } from "./key-hint";
 
 /** Full braille rotation spinner — 8 frames, smooth circular motion. */
 const SPINNER_FRAMES = ["\u28FE", "\u28FD", "\u28FB", "\u28BF", "\u287F", "\u283F", "\u28EF", "\u28F7"];
@@ -93,20 +93,31 @@ export default function Footer(
 
         {/* ── Detail focused ───────────────────────────────────────────────── */}
         <Show when={state.detailFocused()}>
-          <KeyHint
-            key={nextProviderLabel() ? "tab" : ""}
-            desc={nextProviderLabel() ? ` ${nextProviderLabel()}  ` : ""}
-          />
-          <KeyHint key={enterAction() ? "enter" : ""} desc={enterAction() ? ` ${enterAction()}  ` : ""} />
-          <KeyHint key="esc" desc=" back  " />
-          <KeyHint key="←/→" desc=" switch tab  " />
+          <Show when={nextProviderLabel()}>
+            <KeyHint key="tab" desc={` ${nextProviderLabel()}`} />
+          </Show>
+          <Show when={nextProviderLabel()}>
+            <KeyHintSeparator />
+          </Show>
+          <Show when={enterAction()}>
+            <KeyHint key="enter" desc={` ${enterAction()}`} />
+          </Show>
+          <Show when={enterAction()}>
+            <KeyHintSeparator />
+          </Show>
+          <KeyHint key="esc" desc=" back" />
+          <KeyHintSeparator />
+          <KeyHint key="←/→" desc=" switch tab" />
+          <KeyHintSeparator />
           <KeyHint key="↑/↓" desc=" navigate" />
         </Show>
 
         {/* ── Input modes (command / search / path) ────────────────────────── */}
         <Show when={!state.detailFocused() && mode() !== "idle"}>
-          <KeyHint key="enter" desc=" confirm  " />
-          <KeyHint key="esc" desc=" cancel  " />
+          <KeyHint key="enter" desc=" confirm" />
+          <KeyHintSeparator />
+          <KeyHint key="esc" desc=" cancel" />
+          <KeyHintSeparator />
           <KeyHint key="shift ←/→" desc=" switch mode" />
         </Show>
 
@@ -114,25 +125,35 @@ export default function Footer(
         <Show when={!state.detailFocused() && mode() === "idle"}>
           {/* Ancestry mode active */}
           <Show when={ancestryMode()}>
-            <KeyHint key="esc" desc=" clear  " />
+            <KeyHint key="esc" desc=" clear" />
+          </Show>
+          <Show when={ancestryMode()}>
+            <KeyHintSeparator />
           </Show>
 
           {/* No ancestry active */}
           <Show when={!ancestryMode()}>
             <Show when={props.filterActive}>
-              <KeyHint key="esc" desc=" clear  " />
+              <KeyHint key="esc" desc=" clear" />
+            </Show>
+            <Show when={props.filterActive}>
+              <KeyHintSeparator />
             </Show>
           </Show>
 
           {/* Switch tab / show details — always shown in graph idle */}
-          <KeyHint
-            key={nextProviderLabel() ? "tab" : ""}
-            desc={nextProviderLabel() ? ` ${nextProviderLabel()}  ` : ""}
-          />
-          <Show when={props.compact} fallback={<KeyHint key="←/→" desc=" switch tab  " />}>
-            <KeyHint key="enter" desc=" show details  " />
+          <Show when={nextProviderLabel()}>
+            <KeyHint key="tab" desc={` ${nextProviderLabel()}`} />
           </Show>
-          <KeyHint key="shift ←/→" desc=" switch mode  " />
+          <Show when={nextProviderLabel()}>
+            <KeyHintSeparator />
+          </Show>
+          <Show when={props.compact} fallback={<KeyHint key="←/→" desc=" switch tab" />}>
+            <KeyHint key="enter" desc=" show details" />
+          </Show>
+          <KeyHintSeparator />
+          <KeyHint key="shift ←/→" desc=" switch mode" />
+          <KeyHintSeparator />
 
           <KeyHint key="↑/↓" desc=" navigate" />
         </Show>

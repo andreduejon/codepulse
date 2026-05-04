@@ -10,7 +10,7 @@ import { useClipboard } from "../../hooks/use-clipboard";
 import { COPYABLE_VISIBLE_WIDTH, type SettingItem, useMenuItems } from "../../hooks/use-menu-items";
 import { scrollIndexedItemIntoView } from "../../utils/scroll";
 import Badge from "../badge";
-import { KeyHint } from "../key-hint";
+import { KeyHint, KeyHintSeparator } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 import { type MenuKeyAction, routeMenuKey } from "./menu-keymap";
 
@@ -551,13 +551,16 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
         <DialogFooter>
           {editingIdx() == null ? (
             <>
-              <KeyHint key="enter" desc={` ${footerVerb()}  `} />
-              <KeyHint key="←/→" desc=" switch tab  " />
+              <KeyHint key="enter" desc={` ${footerVerb()}`} />
+              <KeyHintSeparator />
+              <KeyHint key="←/→" desc=" switch tab" />
+              <KeyHintSeparator />
               <KeyHint key="↑/↓" desc=" navigate" />
             </>
           ) : (
             <>
-              <KeyHint key="enter" desc=" save  " />
+              <KeyHint key="enter" desc=" save" />
+              <KeyHintSeparator />
               <KeyHint key="esc" desc=" cancel" />
             </>
           )}

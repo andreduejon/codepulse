@@ -4,7 +4,7 @@ import { createEffect, createSignal, For, onCleanup } from "solid-js";
 import { SHIFT_JUMP } from "../../constants";
 import { themeNames, themes, useTheme } from "../../context/theme";
 import { scrollIndexedItemIntoView } from "../../utils/scroll";
-import { KeyHint } from "../key-hint";
+import { KeyHint, KeyHintSeparator } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
 /** Pre-computed theme options — themeNames and themes are module-level constants. */
@@ -127,7 +127,8 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void }>) {
 
         {/* Navigation footer */}
         <DialogFooter>
-          <KeyHint key="enter" desc=" confirm  " />
+          <KeyHint key="enter" desc=" confirm" />
+          <KeyHintSeparator />
           <KeyHint key="↑/↓" desc=" navigate" />
         </DialogFooter>
       </box>

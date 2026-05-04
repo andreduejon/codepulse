@@ -50,8 +50,10 @@ export function routeMenuKey(input: MenuKeyInput): MenuKeyDecision {
     case "up":
       return { action: "move-up", consume: true };
     case "left":
+    case "h":
       return { action: "prev-tab", consume: true };
     case "right":
+    case "l":
       return { action: "next-tab", consume: true };
     case "return":
       return { action: selectedKind === "editable" ? "start-edit" : "activate", consume: true };

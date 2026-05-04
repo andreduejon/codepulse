@@ -7,7 +7,7 @@ import packageJson from "../../package.json";
 import { removeRepoConfig } from "../config";
 import { useT } from "../hooks/use-t";
 import type { KeyboardScope } from "../keyboard/scope";
-import { KeyHint } from "./key-hint";
+import { KeyHint, KeyHintSeparator } from "./key-hint";
 import LogoBanner, { LOGO_WIDTH } from "./logo-banner";
 import MessageBox from "./message-box";
 
@@ -286,11 +286,16 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
         {/* Footer hints */}
         <box flexDirection="row" width={LOGO_WIDTH} height={1}>
           <box flexGrow={1} />
-          <KeyHint key="enter" desc=" open  " />
+          <KeyHint key="enter" desc=" open" />
+          <KeyHintSeparator />
           <Show when={!pathFocused() && hasRepos()}>
-            <KeyHint key="f" desc=" forget  " />
+            <KeyHint key="f" desc=" forget" />
+          </Show>
+          <Show when={!pathFocused() && hasRepos()}>
+            <KeyHintSeparator />
           </Show>
           <KeyHint key="esc" desc={escapeHint()} />
+          <KeyHintSeparator />
           <KeyHint key="q" desc=" quit" />
         </box>
       </box>
