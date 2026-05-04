@@ -1,28 +1,28 @@
 /** Help dialog / CLI keybind reference — single source of truth. */
 
 export type HelpTab = "general" | "commands" | "providers";
+export type HelpCliSection = "keyboard" | "commands" | "providers";
 export type HelpRow =
   | { kind: "binding"; key: string; desc: string; indent?: number }
   | { kind: "section"; label: string }
   | { kind: "spacer" };
 
-export const HELP_TABS: { id: HelpTab; label: string }[] = [
-  { id: "general", label: "General" },
-  { id: "commands", label: "Commands" },
-  { id: "providers", label: "Providers" },
+export const HELP_TABS: { id: HelpTab; label: string; cliSection: HelpCliSection }[] = [
+  { id: "general", label: "General", cliSection: "keyboard" },
+  { id: "commands", label: "Commands", cliSection: "commands" },
+  { id: "providers", label: "Providers", cliSection: "providers" },
 ];
 
 export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
   general: [
-    { kind: "section", label: "App" },
-    { kind: "binding", key: "/", desc: "Open search mode" },
-    { kind: "binding", key: ":", desc: "Open command mode" },
-    { kind: "binding", key: "?", desc: "Open help dialog" },
-    { kind: "binding", key: "esc", desc: "Back / clear current mode" },
-    { kind: "binding", key: "f", desc: "Fetch from remote" },
-    { kind: "binding", key: "m", desc: "Open menu dialog" },
-    { kind: "binding", key: "q", desc: "Quit" },
-    { kind: "binding", key: "tab", desc: "Cycle provider view (git → CI)" },
+    { kind: "binding", key: "/", desc: "Open search mode", indent: 1 },
+    { kind: "binding", key: ":", desc: "Open command mode", indent: 1 },
+    { kind: "binding", key: "?", desc: "Open help dialog", indent: 1 },
+    { kind: "binding", key: "esc", desc: "Back / clear current mode", indent: 1 },
+    { kind: "binding", key: "f", desc: "Fetch from remote", indent: 1 },
+    { kind: "binding", key: "m", desc: "Open menu dialog", indent: 1 },
+    { kind: "binding", key: "q", desc: "Quit", indent: 1 },
+    { kind: "binding", key: "tab", desc: "Cycle provider view (git → CI)", indent: 1 },
     { kind: "spacer" },
     { kind: "section", label: "Graph" },
     { kind: "binding", key: "a", desc: "Enter ancestry mode", indent: 1 },
@@ -30,8 +30,8 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     { kind: "binding", key: "g", desc: "First commit", indent: 1 },
     { kind: "binding", key: "G", desc: "Last commit", indent: 1 },
     { kind: "binding", key: "p", desc: "Enter path mode", indent: 1 },
-    { kind: "binding", key: "shift ←/→", desc: "Cycle modes", indent: 1 },
-    { kind: "binding", key: "shift ↑/↓", desc: "Jump 10 commits", indent: 1 },
+    { kind: "binding", key: "shift + ←/→", desc: "Cycle modes", indent: 1 },
+    { kind: "binding", key: "shift + ↑/↓", desc: "Jump 10 commits", indent: 1 },
     { kind: "binding", key: "↑/↓  or  j/k", desc: "Navigate commits", indent: 1 },
     { kind: "binding", key: "→  or  l", desc: "Focus detail panel", indent: 1 },
     { kind: "spacer" },
@@ -39,7 +39,7 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     { kind: "binding", key: "enter", desc: "Activate selected item", indent: 1 },
     { kind: "binding", key: "g", desc: "Top", indent: 1 },
     { kind: "binding", key: "G", desc: "Bottom", indent: 1 },
-    { kind: "binding", key: "shift ↑/↓", desc: "Jump 10 items", indent: 1 },
+    { kind: "binding", key: "shift + ↑/↓", desc: "Jump 10 items", indent: 1 },
     { kind: "binding", key: "↑/↓  or  j/k", desc: "Navigate items", indent: 1 },
     { kind: "binding", key: "←  or  h", desc: "Previous tab / exit details on first tab", indent: 1 },
     { kind: "binding", key: "→  or  l", desc: "Next tab", indent: 1 },
@@ -104,21 +104,25 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
       kind: "binding",
       key: "Enabled",
       desc: "If enabled, allows switching the provider in the graph view. This requires a valid token and allowed host",
+      indent: 1,
     },
     {
       kind: "binding",
       key: "GitHub Token",
       desc: "Use personal access token as environment variable for GitHub API authentication. Default is GITHUB_TOKEN",
+      indent: 1,
     },
     {
       kind: "binding",
       key: "Host",
       desc: "Shows the current host of the remote repository",
+      indent: 1,
     },
     {
       kind: "binding",
       key: "Allow hosts",
-      desc: "Enable for non-github.com remotes if the repository is not hosted on github.com. This allows using GitHub provider features with GitHub Enterprise or GitHub Cloud instances accessed via custom domains.",
+      desc: "Enable for non-github.com remotes if the repository is not hosted on github.com.",
+      indent: 1,
     },
   ],
 };

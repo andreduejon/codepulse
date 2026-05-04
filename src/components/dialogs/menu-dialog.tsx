@@ -1,5 +1,5 @@
 import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
-import { useKeyboard, useTerminalDimensions } from "@opentui/solid";
+import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createSignal, For, type JSX, onCleanup } from "solid-js";
 import type { ConfigInfo } from "../../config";
 import { SHIFT_JUMP } from "../../constants";
@@ -43,6 +43,7 @@ interface MenuDialogProps {
 export const [lastMenuTab, setLastMenuTab] = createSignal<MenuTab>("repository");
 
 export default function MenuDialog(props: Readonly<MenuDialogProps>) {
+  const renderer = useRenderer();
   const { actions } = useAppState();
   const { theme, themeName, setTheme } = useTheme();
   const t = () => theme();
@@ -180,6 +181,12 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
 
   useKeyboard(e => {
     if (e.eventType === "release") return;
+    if (e.name === "q") {
+      e.preventDefault();
+      e.stopPropagation();
+      renderer.destroy();
+      return;
+    }
 
     const idx = selectedItemIndex();
     if (idx == null) return;

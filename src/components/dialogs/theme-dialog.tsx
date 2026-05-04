@@ -1,5 +1,5 @@
 import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
-import { useKeyboard, useTerminalDimensions } from "@opentui/solid";
+import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createSignal, For, onCleanup } from "solid-js";
 import { SHIFT_JUMP } from "../../constants";
 import { themeNames, themes, useTheme } from "../../context/theme";
@@ -14,6 +14,7 @@ const themeOptions = themeNames.map(key => ({
 }));
 
 export default function ThemeDialog(props: Readonly<{ onClose: () => void }>) {
+  const renderer = useRenderer();
   const { theme, setTheme, themeName } = useTheme();
   const t = () => theme();
   const dimensions = useTerminalDimensions();
@@ -59,6 +60,14 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void }>) {
     if (e.eventType === "release") return;
 
     switch (e.name) {
+      case "q":
+        e.preventDefault();
+        renderer.destroy();
+        break;
+      case "escape":
+        e.preventDefault();
+        props.onClose();
+        break;
       case "down":
         moveCursor(e.shift ? SHIFT_JUMP : 1);
         break;

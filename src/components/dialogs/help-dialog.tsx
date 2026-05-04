@@ -1,5 +1,5 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
-import { useKeyboard, useTerminalDimensions } from "@opentui/solid";
+import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { createSignal, For } from "solid-js";
 import { useT } from "../../hooks/use-t";
 import { HELP_TABS, type HelpTab, KEYBINDS } from "../../keybinds";
@@ -8,6 +8,7 @@ import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
 export default function HelpDialog(_props: Readonly<{ onClose: () => void }>) {
   const t = useT();
+  const renderer = useRenderer();
   const dimensions = useTerminalDimensions();
   const dialogWidth = () => 80;
   const dialogHeight = () => Math.min(Math.floor(dimensions().height * 0.7), dimensions().height - 8);
@@ -35,7 +36,13 @@ export default function HelpDialog(_props: Readonly<{ onClose: () => void }>) {
 
   useKeyboard(e => {
     if (e.eventType === "release") return;
-    if (e.name === "left" || e.name === "h") {
+    if (e.name === "q") {
+      e.preventDefault();
+      renderer.destroy();
+    } else if (e.name === "escape") {
+      e.preventDefault();
+      _props.onClose();
+    } else if (e.name === "left" || e.name === "h") {
       e.preventDefault();
       prevTab();
     } else if (e.name === "right" || e.name === "l") {

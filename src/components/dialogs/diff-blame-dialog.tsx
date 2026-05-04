@@ -1,5 +1,5 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
-import { useKeyboard, useTerminalDimensions } from "@opentui/solid";
+import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, type JSX, onCleanup, Show } from "solid-js";
 import { useAppState } from "../../context/state";
 import { getFileBlame, getFileContent, getFileDiff } from "../../git/repo";
@@ -57,6 +57,7 @@ interface DiffBlameDialogProps {
 }
 
 export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
+  const renderer = useRenderer();
   const { state } = useAppState();
   const t = useT();
   const dimensions = useTerminalDimensions();
@@ -363,6 +364,14 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
     if (e.eventType === "release") return;
 
     switch (e.name) {
+      case "q":
+        e.preventDefault();
+        renderer.destroy();
+        break;
+      case "escape":
+        e.preventDefault();
+        props.onClose();
+        break;
       case "up":
       case "k":
         e.preventDefault();

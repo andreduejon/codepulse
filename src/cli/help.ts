@@ -4,7 +4,7 @@ import { HELP_TABS, KEYBINDS } from "../keybinds";
 export function printHelp() {
   const KEY_COL = 38;
 
-  const sections = HELP_TABS.map(tab => {
+  const renderTab = (tab: (typeof HELP_TABS)[number], includeHeader = true) => {
     const header = `  ${tab.label.toUpperCase()}`;
     const rows = KEYBINDS[tab.id]
       .map(row => {
@@ -14,8 +14,18 @@ export function printHelp() {
         return `  ${key.padEnd(KEY_COL)} ${row.desc}`;
       })
       .join("\n");
-    return `${header}\n${rows}`;
-  }).join("\n\n");
+    return includeHeader ? `${header}\n${rows}` : rows;
+  };
+
+  const keyboardSections = HELP_TABS.filter(tab => tab.cliSection === "keyboard")
+    .map(tab => renderTab(tab))
+    .join("\n\n");
+  const commandSections = HELP_TABS.filter(tab => tab.cliSection === "commands")
+    .map(tab => renderTab(tab, false))
+    .join("\n\n");
+  const providerSections = HELP_TABS.filter(tab => tab.cliSection === "providers")
+    .map(tab => renderTab(tab, false))
+    .join("\n\n");
 
   const lines = [
     "codepulse - A terminal git graph visualizer that is read-only by default",
@@ -31,7 +41,13 @@ export function printHelp() {
     "  -v, --version          Show version",
     "",
     "KEYBOARD SHORTCUTS:",
-    sections,
+    keyboardSections,
+    "",
+    "COMMANDS:",
+    commandSections,
+    "",
+    "PROVIDERS:",
+    providerSections,
   ];
 
   console.log(lines.join("\n"));

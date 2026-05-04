@@ -30,6 +30,8 @@ export function routeMenuKey(input: MenuKeyInput): MenuKeyDecision {
 
   if (mode === "token-edit") {
     switch (keyName) {
+      case "q":
+        return { action: "close", consume: true };
       case "escape":
         return { action: "cancel-edit", consume: true };
       case "return":
@@ -43,6 +45,8 @@ export function routeMenuKey(input: MenuKeyInput): MenuKeyDecision {
   }
 
   switch (keyName) {
+    case "q":
+      return { action: "close", consume: true };
     case "escape":
       return { action: "close", consume: true };
     case "down":

@@ -1,7 +1,7 @@
 /** JobLogDialog — paged GitHub Actions job logs, styled like the diff dialog. */
 
 import type { ScrollBoxRenderable } from "@opentui/core";
-import { useKeyboard, useTerminalDimensions } from "@opentui/solid";
+import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, type JSX, Show } from "solid-js";
 import {
   DialogFooter,
@@ -78,6 +78,7 @@ export function parseLogLines(raw: string): LogLine[] {
 
 export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
   const t = useT();
+  const renderer = useRenderer();
   const { theme } = useTheme();
   const dimensions = useTerminalDimensions();
 
@@ -194,6 +195,10 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
   useKeyboard(e => {
     if (e.eventType === "release") return;
     switch (e.name) {
+      case "q":
+        e.preventDefault();
+        renderer.destroy();
+        break;
       case "escape":
         e.preventDefault();
         props.onClose();
