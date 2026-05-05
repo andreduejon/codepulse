@@ -8,7 +8,7 @@ interface TabAvailabilityInput {
   uncommittedDetail: UncommittedDetail | null;
   commitDetail: CommitDetail | null;
   stashByParent: Map<string, Commit[]>;
-  /** The active provider view — when "github-actions", Actions tab replaces Files tab. */
+  /** The active provider view — when a CI provider is active, provider tab replaces Files tab. */
   activeProviderView?: ProviderView;
   /**
    * CI data getter — used to determine whether the Actions tab has data for
@@ -56,7 +56,7 @@ export function getAvailableTabs(input: TabAvailabilityInput): DetailTab[] {
     return tabs;
   }
 
-  const isProviderMode = activeProviderView === "github-actions";
+  const isProviderMode = activeProviderView === "github-actions" || activeProviderView === "jenkins";
   const tabs: DetailTab[] = [];
 
   if (isProviderMode) {
@@ -66,7 +66,7 @@ export function getAvailableTabs(input: TabAvailabilityInput): DetailTab[] {
     //  - CI data exists for this commit
     const hasData = !getCommitData || providerLoading || (commit && !!getCommitData(commit.hash));
     if (hasData) {
-      tabs.push("github-actions");
+      tabs.push(activeProviderView === "jenkins" ? "jenkins" : "github-actions");
     }
   } else {
     if (commitDetail && commitDetail.files.length > 0) {

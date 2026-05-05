@@ -30,6 +30,7 @@ import type { StartupMode } from "./main";
 import JobLogDialog from "./providers/github-actions/log-dialog";
 import type { GitHubJob, GitHubWorkflowRun } from "./providers/github-actions/types";
 import { useGitHubCI } from "./providers/github-actions/use-github-ci";
+import { useJenkinsCI } from "./providers/jenkins/use-jenkins-ci";
 
 interface AppProps {
   repoPath: string;
@@ -43,6 +44,13 @@ interface AppProps {
   startupMode: StartupMode;
   /** Initial GitHub Actions provider config from the loaded config file. */
   initialGithubConfig?: { enabled?: boolean; tokenEnvVar?: string; trustedEnterpriseHost?: string };
+  initialJenkinsConfig?: {
+    enabled?: boolean;
+    host?: string;
+    username?: string;
+    tokenEnvVar?: string;
+    jobs?: { label?: string; url: string }[];
+  };
 }
 
 interface AppContentProps extends AppProps {
@@ -65,6 +73,13 @@ function AppContent(props: Readonly<AppContentProps>) {
     tokenEnvVar: props.initialGithubConfig?.tokenEnvVar ?? "GITHUB_TOKEN",
     trustedEnterpriseHost: props.initialGithubConfig?.trustedEnterpriseHost ?? null,
   });
+  const [jenkinsConfig, setJenkinsConfig] = createSignal({
+    enabled: props.initialJenkinsConfig?.enabled ?? false,
+    host: props.initialJenkinsConfig?.host,
+    username: props.initialJenkinsConfig?.username,
+    tokenEnvVar: props.initialJenkinsConfig?.tokenEnvVar ?? "JENKINS_TOKEN",
+    jobs: props.initialJenkinsConfig?.jobs ?? [],
+  });
 
   // ── GitHub CI data hook (called during setup, before Provider renders — per AGENTS.md rule 5) ──
   const gitHubCI = useGitHubCI({
@@ -72,6 +87,7 @@ function AppContent(props: Readonly<AppContentProps>) {
     actions,
     config: githubConfig,
   });
+  const jenkinsCI = useJenkinsCI({ state, actions, config: jenkinsConfig });
 
   // Setup screen visibility — shown when startup mode is "setup"
   const [setupVisible, setSetupVisible] = createSignal(props.startupMode.kind === "setup");
@@ -84,7 +100,7 @@ function AppContent(props: Readonly<AppContentProps>) {
 
     const status = state.providerStatus();
     const message = providerStatusMessage(status);
-    if (state.activeProviderView() !== "github-actions" || !message) return null;
+    if (state.activeProviderView() === "git" || !message) return null;
 
     return {
       kind: status.kind === "error" ? ("error" as const) : ("info" as const),
@@ -227,7 +243,7 @@ function AppContent(props: Readonly<AppContentProps>) {
     actions,
     getIsJumpNavigation: () => isJumpNavigation,
     detailNavRef,
-    getCommitData: gitHubCI.getCommitData,
+    getCommitData: state.activeProviderView() === "jenkins" ? jenkinsCI.getCommitData : gitHubCI.getCommitData,
     getProviderLoading: () => state.providerStatus().kind === "loading",
   });
 
@@ -416,7 +432,7 @@ function AppContent(props: Readonly<AppContentProps>) {
     onCommandExecute: handleCommandExecute,
     onPathExecute: handlePathExecute,
     onClearAncestry: clearAnchor,
-    getCommitData: gitHubCI.getCommitData,
+    getCommitData: state.activeProviderView() === "jenkins" ? jenkinsCI.getCommitData : gitHubCI.getCommitData,
     getProviderLoading: () => state.providerStatus().kind === "loading",
   });
 
@@ -431,6 +447,9 @@ function AppContent(props: Readonly<AppContentProps>) {
   const providerTheme = createMemo(() => {
     const base = themeState.theme();
     if (state.activeProviderView() === "github-actions") {
+      return { ...base, accent: base.githubActionsBg };
+    }
+    if (state.activeProviderView() === "jenkins") {
       return { ...base, accent: base.githubActionsBg };
     }
     return base;
@@ -551,6 +570,10 @@ function AppContent(props: Readonly<AppContentProps>) {
                         githubFetchJobLog={gitHubCI.fetchJobLogForJob}
                         githubProviderStatus={state.providerStatus()}
                         onOpenJobLog={handleOpenJobLog}
+                        jenkinsGetCommitData={jenkinsCI.getCommitData}
+                        jenkinsFetchJobsForRun={jenkinsCI.fetchJobsForRun}
+                        jenkinsFetchCommitData={jenkinsCI.fetchCommitDataForSHA}
+                        jenkinsProviderStatus={state.providerStatus()}
                       />
                     </box>
                   </Show>
@@ -571,6 +594,8 @@ function AppContent(props: Readonly<AppContentProps>) {
                     }}
                     githubConfig={githubConfig()}
                     onGithubConfigChange={setGithubConfig}
+                    jenkinsConfig={jenkinsConfig()}
+                    onJenkinsConfigChange={setJenkinsConfig}
                   />
                 </Show>
                 <Show when={dialog() === "help"}>
@@ -609,6 +634,16 @@ function AppContent(props: Readonly<AppContentProps>) {
                     onJumpToCommit={handleJumpToCommit}
                     onOpenDiff={handleOpenDiff}
                     onClose={() => setDialog(null)}
+                    githubGetCommitData={gitHubCI.getCommitData}
+                    githubFetchJobsForRun={gitHubCI.fetchJobsForRun}
+                    githubFetchCommitData={gitHubCI.fetchCommitDataForSHA}
+                    githubFetchJobLog={gitHubCI.fetchJobLogForJob}
+                    githubProviderStatus={state.providerStatus()}
+                    onOpenJobLog={handleOpenJobLog}
+                    jenkinsGetCommitData={jenkinsCI.getCommitData}
+                    jenkinsFetchJobsForRun={jenkinsCI.fetchJobsForRun}
+                    jenkinsFetchCommitData={jenkinsCI.fetchCommitDataForSHA}
+                    jenkinsProviderStatus={state.providerStatus()}
                   />
                 </Show>
                 {/* Job log dialog */}

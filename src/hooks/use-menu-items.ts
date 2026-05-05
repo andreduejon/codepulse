@@ -11,9 +11,9 @@ import { getTokenSource, parseGitHubRemote } from "../providers/github-actions/a
 type MenuTab = "repository" | "branch" | "providers";
 
 export type SettingItem =
-  | { kind: "header"; label: string }
+  | { kind: "header"; label: string; tone?: "accent" | "muted" }
   | { kind: "info"; label: string; get: () => string; valid?: () => boolean }
-  | { kind: "copyable"; label: string; get: () => string }
+  | { kind: "copyable"; label: string; get: () => string; onForget?: () => void }
   | {
       kind: "toggle";
       label: string;
@@ -44,7 +44,11 @@ export type SettingItem =
       get: () => string;
       set: (v: string) => void;
       valid?: () => boolean;
+      showValidity?: boolean;
       isDraftValid?: (v: string) => boolean;
+      keepEditingOnSave?: boolean;
+      staySelectedOnSave?: boolean;
+      fullWidth?: boolean;
     };
 
 /** Width of the info label column (characters). */
@@ -52,7 +56,6 @@ export const INFO_LABEL_WIDTH = 12;
 
 /** Usable width for copyable text: dialog=70 - 2(paddingX=1) - 8(paddingX=4) = 60 */
 export const COPYABLE_VISIBLE_WIDTH = 60;
-
 export interface MenuItemsOptions {
   /** Currently active tab. */
   activeTab: Accessor<MenuTab>;
@@ -75,6 +78,15 @@ export interface MenuItemsOptions {
   githubConfig?: Accessor<{ enabled: boolean; tokenEnvVar: string; trustedEnterpriseHost: string | null } | undefined>;
   /** Callback to update GitHub provider config. */
   onGithubConfigChange?: (cfg: { enabled: boolean; tokenEnvVar: string; trustedEnterpriseHost: string | null }) => void;
+  jenkinsConfig?: Accessor<
+    { enabled: boolean; username?: string; tokenEnvVar: string; jobs: { label?: string; url: string }[] } | undefined
+  >;
+  onJenkinsConfigChange?: (cfg: {
+    enabled: boolean;
+    username?: string;
+    tokenEnvVar: string;
+    jobs: { label?: string; url: string }[];
+  }) => void;
 }
 
 export interface MenuItemsResult {
@@ -95,6 +107,13 @@ export interface GitHubMenuConfig {
   trustedEnterpriseHost: string | null;
 }
 
+export interface JenkinsMenuConfig {
+  enabled: boolean;
+  username?: string;
+  tokenEnvVar: string;
+  jobs: { label?: string; url: string }[];
+}
+
 export function buildGitHubProviderItems(
   ghCfg: GitHubMenuConfig,
   remoteUrl: string,
@@ -106,7 +125,7 @@ export function buildGitHubProviderItems(
   const remoteHost = remoteRepo?.hostname ?? null;
   const hostAllowed = remoteHost === "github.com" || (remoteHost != null && ghCfg.trustedEnterpriseHost === remoteHost);
 
-  return [
+  const items: SettingItem[] = [
     { kind: "header", label: "github" },
     {
       kind: "toggle",
@@ -118,6 +137,11 @@ export function buildGitHubProviderItems(
         persist?.(newCfg);
       },
     },
+  ];
+
+  if (!ghCfg.enabled) return items;
+
+  items.push(
     {
       kind: "editable",
       label: "Token",
@@ -147,7 +171,93 @@ export function buildGitHubProviderItems(
       },
       disabled: () => remoteHost == null || remoteHost === "github.com",
     },
+  );
+
+  return items;
+}
+
+function buildJenkinsProviderItems(
+  jenkinsCfg: JenkinsMenuConfig,
+  onChange?: (cfg: JenkinsMenuConfig) => void,
+  persist?: (cfg: JenkinsMenuConfig) => void,
+): SettingItem[] {
+  const items: SettingItem[] = [
+    { kind: "header", label: "jenkins" },
+    {
+      kind: "toggle",
+      label: "Enabled",
+      get: () => jenkinsCfg.enabled,
+      set: v => {
+        const newCfg = { ...jenkinsCfg, enabled: v };
+        onChange?.(newCfg);
+        persist?.(newCfg);
+      },
+    },
   ];
+
+  if (!jenkinsCfg.enabled) return items;
+
+  items.push(
+    {
+      kind: "editable",
+      label: "Username",
+      placeholder: "Enter username...",
+      get: () => jenkinsCfg.username ?? "",
+      set: v => {
+        const username = v.trim() || undefined;
+        const newCfg = { ...jenkinsCfg, username };
+        onChange?.(newCfg);
+        persist?.(newCfg);
+      },
+      valid: () => !!jenkinsCfg.username?.trim(),
+    },
+    {
+      kind: "editable",
+      label: "Token",
+      placeholder: "Enter token...",
+      get: () => jenkinsCfg.tokenEnvVar,
+      set: v => {
+        const newCfg = { ...jenkinsCfg, tokenEnvVar: v.trim() || "JENKINS_TOKEN" };
+        onChange?.(newCfg);
+        persist?.(newCfg);
+      },
+      valid: () => !!jenkinsCfg.tokenEnvVar.trim() && !!process.env[jenkinsCfg.tokenEnvVar],
+    },
+    {
+      kind: "editable",
+      label: "New job",
+      placeholder: "Enter job URL...",
+      get: () => "",
+      set: v => {
+        const url = v.trim();
+        if (!url) return;
+        const newCfg = { ...jenkinsCfg, jobs: [...jenkinsCfg.jobs, { url }] };
+        onChange?.(newCfg);
+        persist?.(newCfg);
+      },
+      valid: () => jenkinsCfg.jobs.length > 0,
+      showValidity: false,
+      isDraftValid: v => v.trim().length > 0,
+      staySelectedOnSave: true,
+    },
+  );
+
+  const jobsInput = items.pop();
+  if (jobsInput) items.push(jobsInput);
+  items.push(
+    ...jenkinsCfg.jobs.map((job, idx) => ({
+      kind: "copyable" as const,
+      label: `Job #${idx + 1} URL`,
+      get: () => ` · ${job.url}`,
+      onForget: () => {
+        const newCfg = { ...jenkinsCfg, jobs: jenkinsCfg.jobs.filter((_, jobIdx) => jobIdx !== idx) };
+        onChange?.(newCfg);
+        persist?.(newCfg);
+      },
+    })),
+  );
+
+  return items;
 }
 
 /**
@@ -180,6 +290,15 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
           trustedEnterpriseHost: ghCfg.trustedEnterpriseHost ?? undefined,
         },
       };
+      const jenkinsCfg = opts.jenkinsConfig?.();
+      if (jenkinsCfg) {
+        cfg.providers.jenkins = {
+          enabled: jenkinsCfg.enabled,
+          username: jenkinsCfg.username,
+          tokenEnvVar: jenkinsCfg.tokenEnvVar,
+          jobs: jenkinsCfg.jobs,
+        };
+      }
     }
     writeConfig(cfg, state.repoPath());
   };
@@ -422,11 +541,17 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
   const providerItems = createMemo<SettingItem[]>(() => {
     const ghCfg = opts.githubConfig?.() ?? { enabled: false, tokenEnvVar: "GITHUB_TOKEN", trustedEnterpriseHost: null };
     const tokenSource = getTokenSource(ghCfg.tokenEnvVar);
-    return buildGitHubProviderItems(ghCfg, state.remoteUrl(), tokenSource, opts.onGithubConfigChange, newCfg =>
-      persistFullConfig({
-        providers: { github: { ...newCfg, trustedEnterpriseHost: newCfg.trustedEnterpriseHost ?? undefined } },
-      }),
-    );
+    const jenkinsCfg = opts.jenkinsConfig?.() ?? { enabled: false, tokenEnvVar: "JENKINS_TOKEN", jobs: [] };
+    return [
+      ...buildGitHubProviderItems(ghCfg, state.remoteUrl(), tokenSource, opts.onGithubConfigChange, newCfg =>
+        persistFullConfig({
+          providers: { github: { ...newCfg, trustedEnterpriseHost: newCfg.trustedEnterpriseHost ?? undefined } },
+        }),
+      ),
+      ...buildJenkinsProviderItems(jenkinsCfg, opts.onJenkinsConfigChange, newCfg =>
+        persistFullConfig({ providers: { jenkins: newCfg } }),
+      ),
+    ];
   });
 
   // ── Active items depend on tab ────────────────────────────────────

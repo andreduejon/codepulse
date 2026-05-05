@@ -37,6 +37,13 @@ interface MenuDialogProps {
   githubConfig?: { enabled: boolean; tokenEnvVar: string; trustedEnterpriseHost: string | null };
   /** Callback to update GitHub provider config. */
   onGithubConfigChange?: (cfg: { enabled: boolean; tokenEnvVar: string; trustedEnterpriseHost: string | null }) => void;
+  jenkinsConfig?: { enabled: boolean; username?: string; tokenEnvVar: string; jobs: { label?: string; url: string }[] };
+  onJenkinsConfigChange?: (cfg: {
+    enabled: boolean;
+    username?: string;
+    tokenEnvVar: string;
+    jobs: { label?: string; url: string }[];
+  }) => void;
 }
 
 /** Persists the last-used tab across dialog open/close cycles. */
@@ -90,6 +97,8 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     onSwitchRepo: props.onSwitchRepo,
     githubConfig: () => props.githubConfig,
     onGithubConfigChange: props.onGithubConfigChange,
+    jenkinsConfig: () => props.jenkinsConfig,
+    onJenkinsConfigChange: props.onJenkinsConfigChange,
   });
 
   // ── Banner scroll for selected copyable rows ──────────────────────
@@ -104,9 +113,20 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     return text.substring(off, off + COPYABLE_VISIBLE_WIDTH);
   };
 
+  const forgetSelected = () => {
+    const idx = selectedItemIndex();
+    if (idx == null) return;
+    const item = activeItems()[idx];
+    if (item?.kind !== "copyable" || !item.onForget) return;
+    item.onForget();
+    moveCursor(0);
+  };
+
   // ── Token edit mode (native OpenTUI input only while explicitly editing) ──
   const [editingIdx, setEditingIdx] = createSignal<number | null>(null);
   const [editDraft, setEditDraft] = createSignal("");
+  const [autoEditSuppressedIdx, setAutoEditSuppressedIdx] = createSignal<number | null>(null);
+  const [pendingSelectionLabel, setPendingSelectionLabel] = createSignal<string | null>(null);
 
   createEffect(() => {
     actions.setKeyboardScopeOverride(editingIdx() == null ? null : "menu-token-edit");
@@ -119,6 +139,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     if (idx == null) return;
     const item = activeItems()[idx];
     if (item?.kind !== "editable") return;
+    setAutoEditSuppressedIdx(null);
     setEditingIdx(idx);
     setEditDraft(item.get());
   };
@@ -129,14 +150,48 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     const item = activeItems()[idx];
     if (item?.kind === "editable" && item.isDraftValid && !item.isDraftValid(editDraft())) return;
     if (item?.kind === "editable") item.set(editDraft());
+    if (item?.kind === "editable" && item.keepEditingOnSave) {
+      setEditDraft("");
+      return;
+    }
+    if (item?.kind === "editable" && item.staySelectedOnSave) {
+      setPendingSelectionLabel(item.label);
+      setEditingIdx(null);
+      setEditDraft("");
+      return;
+    }
     setEditingIdx(null);
     setEditDraft("");
   };
 
   const cancelEdit = () => {
+    const idx = editingIdx();
+    const item = idx == null ? undefined : activeItems()[idx];
+    if (item?.kind === "editable" && item.fullWidth) setAutoEditSuppressedIdx(idx);
     setEditingIdx(null);
     setEditDraft("");
   };
+
+  createEffect(() => {
+    const targetLabel = pendingSelectionLabel();
+    if (!targetLabel) return;
+    const idx = activeItems().findIndex(item => item.kind === "editable" && item.label === targetLabel);
+    if (idx < 0) return;
+    setPendingSelectionLabel(null);
+    moveCursor(idx - (selectedItemIndex() ?? 0));
+  });
+
+  createEffect(() => {
+    const idx = selectedItemIndex();
+    if (idx == null) return;
+    if (autoEditSuppressedIdx() != null && autoEditSuppressedIdx() !== idx) setAutoEditSuppressedIdx(null);
+    if (editingIdx() != null) return;
+    if (autoEditSuppressedIdx() === idx) return;
+    const item = activeItems()[idx];
+    if (item?.kind !== "editable" || !item.fullWidth) return;
+    setEditingIdx(idx);
+    setEditDraft(item.get());
+  });
 
   // ── Keyboard ──────────────────────────────────────────────────────
   const TAB_ORDER: MenuTab[] = ["repository", "branch", "providers"];
@@ -155,6 +210,9 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
         break;
       case "activate":
         activateItem();
+        break;
+      case "forget":
+        forgetSelected();
         break;
       case "start-edit":
         startEdit();
@@ -181,6 +239,27 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
 
   useKeyboard(e => {
     if (e.eventType === "release") return;
+
+    const idx = selectedItemIndex();
+    const selected = idx == null ? undefined : activeItems()[idx];
+    const editingFullWidth = editingIdx() != null && selected?.kind === "editable" && !!selected.fullWidth;
+
+    if (editingFullWidth) {
+      if (e.name === "escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        cancelEdit();
+        return;
+      }
+      if (e.name === "up" || e.name === "down") {
+        e.preventDefault();
+        e.stopPropagation();
+        saveEdit();
+        moveCursor(e.name === "up" ? -1 : 1);
+        return;
+      }
+    }
+
     if (e.name === "q") {
       e.preventDefault();
       e.stopPropagation();
@@ -188,9 +267,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
       return;
     }
 
-    const idx = selectedItemIndex();
     if (idx == null) return;
-    const selected = activeItems()[idx];
     const decision = routeMenuKey({
       mode: editingIdx() == null ? "normal" : "token-edit",
       keyName: e.name,
@@ -227,7 +304,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
       paddingX={4}
     >
       {idx > 0 ? <box height={1} /> : null}
-      <text wrapMode="none" fg={t().accent}>
+      <text wrapMode="none" fg={item.tone === "muted" ? t().foregroundMuted : t().accent}>
         <strong>
           <span>{item.label}</span>
         </strong>
@@ -418,10 +495,44 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     const isSel = () => selectedItemIndex() === idx;
     const isEditing = () => editingIdx() === idx;
     const valid = () => item.valid?.();
+    const showValidity = () => item.showValidity ?? true;
     const savedValue = () => item.get().trim();
     const displayValue = () => savedValue() || item.placeholder || "";
     const labelColor = () => (isSel() ? t().accent : t().foreground);
     const displayColor = () => (savedValue() ? (isSel() ? t().accent : t().foreground) : t().foregroundMuted);
+    if (item.fullWidth) {
+      return (
+        <box
+          ref={(el: Renderable) => {
+            itemRefs[idx] = el;
+          }}
+          flexDirection="row"
+          width="100%"
+          paddingX={4}
+          backgroundColor={isEditing() ? t().backgroundElement : isSel() ? t().backgroundElement : undefined}
+        >
+          {isEditing() ? (
+            <input
+              focused
+              flexGrow={1}
+              placeholder={item.placeholder}
+              value={editDraft()}
+              onInput={setEditDraft}
+              textColor={t().foreground}
+              focusedTextColor={t().foreground}
+              placeholderColor={t().foregroundMuted}
+              cursorColor={t().accent}
+              backgroundColor={t().background}
+              focusedBackgroundColor={t().backgroundElement}
+            />
+          ) : (
+            <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={displayColor()}>
+              {displayValue()}
+            </text>
+          )}
+        </box>
+      );
+    }
     return (
       <box
         ref={(el: Renderable) => {
@@ -456,7 +567,11 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
             </text>
           </box>
         )}
-        {isEditing() ? null : (
+        {isEditing() ? null : !showValidity() ? (
+          <text flexShrink={0} width={HOTKEY_COL_WIDTH} wrapMode="none">
+            {" ".repeat(HOTKEY_COL_WIDTH)}
+          </text>
+        ) : (
           <text flexShrink={0} width={HOTKEY_COL_WIDTH} wrapMode="none" fg={valid() ? t().success : t().error}>
             {(valid() ? "✓" : "✕").padStart(HOTKEY_COL_WIDTH)}
           </text>
@@ -559,6 +674,16 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
           {editingIdx() == null ? (
             <>
               <KeyHint key="enter" desc={` ${footerVerb()}`} />
+              {(() => {
+                const idx = selectedItemIndex();
+                const item = idx == null ? undefined : activeItems()[idx];
+                return item?.kind === "copyable" && item.onForget ? (
+                  <>
+                    <KeyHintSeparator />
+                    <KeyHint key="f" desc=" forget" />
+                  </>
+                ) : null;
+              })()}
               <KeyHintSeparator />
               <KeyHint key="←/→" desc=" switch tab" />
               <KeyHintSeparator />

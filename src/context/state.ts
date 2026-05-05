@@ -10,7 +10,15 @@ export const DEFAULT_AUTO_REFRESH_INTERVAL = 30000;
 export const DEFAULT_AUTO_FETCH_INTERVAL = 0;
 
 /** Valid tab identifiers for the detail panel. */
-export type DetailTab = "files" | "detail" | "stashes" | "staged" | "unstaged" | "untracked" | "github-actions";
+export type DetailTab =
+  | "files"
+  | "detail"
+  | "stashes"
+  | "staged"
+  | "unstaged"
+  | "untracked"
+  | "github-actions"
+  | "jenkins";
 
 /**
  * Which highlighting mode is currently active.

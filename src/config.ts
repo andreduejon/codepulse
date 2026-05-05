@@ -29,6 +29,13 @@ export interface CodepulseConfig {
       /** Trusted GitHub Enterprise host for this repo. github.com is always allowed. */
       trustedEnterpriseHost?: string;
     };
+    jenkins?: {
+      enabled?: boolean;
+      host?: string;
+      username?: string;
+      tokenEnvVar?: string;
+      jobs?: { label?: string; url: string }[];
+    };
   };
 }
 
@@ -45,6 +52,13 @@ export function defaultConfig(): Required<Omit<CodepulseConfig, "branch">> {
         enabled: true,
         tokenEnvVar: "GITHUB_TOKEN",
         trustedEnterpriseHost: undefined,
+      },
+      jenkins: {
+        enabled: false,
+        host: undefined,
+        username: undefined,
+        tokenEnvVar: "JENKINS_TOKEN",
+        jobs: [],
       },
     },
   };
@@ -92,6 +106,27 @@ export function backfillRepoConfig(repoPath: string, configPath?: string): void 
         ...(existingGh?.trustedEnterpriseHost === undefined
           ? { trustedEnterpriseHost: defaultGh.trustedEnterpriseHost }
           : {}),
+      },
+    };
+  }
+
+  const existingJenkins = existing.providers?.jenkins;
+  const defaultJenkins = defaults.providers.jenkins ?? {
+    enabled: false,
+    tokenEnvVar: "JENKINS_TOKEN",
+    jobs: [],
+  };
+  if (
+    existingJenkins?.enabled === undefined ||
+    existingJenkins?.tokenEnvVar === undefined ||
+    existingJenkins?.jobs === undefined
+  ) {
+    missing.providers = {
+      ...missing.providers,
+      jenkins: {
+        ...(existingJenkins?.enabled === undefined ? { enabled: defaultJenkins.enabled } : {}),
+        ...(existingJenkins?.tokenEnvVar === undefined ? { tokenEnvVar: defaultJenkins.tokenEnvVar } : {}),
+        ...(existingJenkins?.jobs === undefined ? { jobs: defaultJenkins.jobs } : {}),
       },
     };
   }
@@ -338,6 +373,46 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
           config.providers.github.trustedEnterpriseHost = trustedEnterpriseHost;
         }
       }
+      if (typeof providers.jenkins === "object" && providers.jenkins !== null && !Array.isArray(providers.jenkins)) {
+        const jenkins = providers.jenkins as Record<string, unknown>;
+        config.providers.jenkins = {};
+        if (jenkins.enabled !== undefined) {
+          if (typeof jenkins.enabled === "boolean") config.providers.jenkins.enabled = jenkins.enabled;
+          else warnings.push(`${path}: "providers.jenkins.enabled" must be a boolean, ignoring`);
+        }
+        if (jenkins.host !== undefined) {
+          if (typeof jenkins.host === "string" && jenkins.host.length > 0) config.providers.jenkins.host = jenkins.host;
+          else warnings.push(`${path}: "providers.jenkins.host" must be a non-empty string, ignoring`);
+        }
+        if (jenkins.username !== undefined) {
+          if (typeof jenkins.username === "string" && jenkins.username.length > 0)
+            config.providers.jenkins.username = jenkins.username;
+          else warnings.push(`${path}: "providers.jenkins.username" must be a non-empty string, ignoring`);
+        }
+        if (jenkins.tokenEnvVar !== undefined) {
+          if (typeof jenkins.tokenEnvVar === "string" && jenkins.tokenEnvVar.length > 0)
+            config.providers.jenkins.tokenEnvVar = jenkins.tokenEnvVar;
+          else warnings.push(`${path}: "providers.jenkins.tokenEnvVar" must be a non-empty string, ignoring`);
+        }
+        if (jenkins.jobs !== undefined) {
+          if (Array.isArray(jenkins.jobs)) {
+            config.providers.jenkins.jobs = jenkins.jobs.flatMap((job, idx) => {
+              if (typeof job !== "object" || job === null || Array.isArray(job)) {
+                warnings.push(`${path}: "providers.jenkins.jobs[${idx}]" must be an object, ignoring`);
+                return [];
+              }
+              const rawJob = job as Record<string, unknown>;
+              if (typeof rawJob.url !== "string" || rawJob.url.length === 0) {
+                warnings.push(`${path}: "providers.jenkins.jobs[${idx}].url" must be a non-empty string, ignoring`);
+                return [];
+              }
+              return [{ url: rawJob.url, ...(typeof rawJob.label === "string" ? { label: rawJob.label } : {}) }];
+            });
+          } else {
+            warnings.push(`${path}: "providers.jenkins.jobs" must be an array, ignoring`);
+          }
+        }
+      }
     } else {
       warnings.push(`${path}: "providers" must be an object, ignoring`);
     }
@@ -487,6 +562,21 @@ function applyConfigFields(target: Record<string, unknown>, config: CodepulseCon
       if (config.providers.github.trustedEnterpriseHost !== undefined)
         existingGh.trustedEnterpriseHost = config.providers.github.trustedEnterpriseHost;
       existingProviders.github = existingGh;
+    }
+    if (config.providers.jenkins !== undefined) {
+      const existingJenkins =
+        typeof existingProviders.jenkins === "object" &&
+        existingProviders.jenkins !== null &&
+        !Array.isArray(existingProviders.jenkins)
+          ? { ...(existingProviders.jenkins as Record<string, unknown>) }
+          : {};
+      if (config.providers.jenkins.enabled !== undefined) existingJenkins.enabled = config.providers.jenkins.enabled;
+      if (config.providers.jenkins.host !== undefined) existingJenkins.host = config.providers.jenkins.host;
+      if (config.providers.jenkins.username !== undefined) existingJenkins.username = config.providers.jenkins.username;
+      if (config.providers.jenkins.tokenEnvVar !== undefined)
+        existingJenkins.tokenEnvVar = config.providers.jenkins.tokenEnvVar;
+      if (config.providers.jenkins.jobs !== undefined) existingJenkins.jobs = config.providers.jenkins.jobs;
+      existingProviders.jenkins = existingJenkins;
     }
     target.providers = existingProviders;
   }

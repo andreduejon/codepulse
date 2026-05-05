@@ -11,6 +11,7 @@ import { type CopyableField, useDetailCursor } from "../hooks/use-detail-cursor"
 import { useStashState } from "../hooks/use-stash-state";
 import { useT } from "../hooks/use-t";
 import { ActionsDetailTab } from "../providers/github-actions/detail-tab";
+import { JenkinsDetailTab } from "../providers/jenkins/detail-tab";
 import { formatDate } from "../utils/date";
 import { isCursored as _isCursored, itemHighlightBg as _itemHighlightBg } from "../utils/detail-cursor";
 import Badge from "./badge";
@@ -884,6 +885,28 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 setDetailCursorAction={actions.setDetailCursorAction}
                 setDetailCursorIndex={actions.setDetailCursorIndex}
                 onOpenJobLog={props.onOpenJobLog}
+              />
+            </Show>
+
+            <Show when={activeTab() === "jenkins" && !!props.jenkinsGetCommitData && !!props.jenkinsFetchJobsForRun}>
+              <JenkinsDetailTab
+                sha={c().hash}
+                // biome-ignore lint/style/noNonNullAssertion: guarded by Show when condition above
+                getCommitData={props.jenkinsGetCommitData!}
+                // biome-ignore lint/style/noNonNullAssertion: guarded by Show when condition above
+                fetchJobsForRun={props.jenkinsFetchJobsForRun!}
+                fetchCommitData={props.jenkinsFetchCommitData}
+                unavailableReason={
+                  props.jenkinsProviderStatus?.kind === "error" || props.jenkinsProviderStatus?.kind === "unavailable"
+                    ? props.jenkinsProviderStatus.message
+                    : null
+                }
+                loading={props.jenkinsProviderStatus?.kind === "loading"}
+                navRef={props.navRef}
+                detailCursorIndex={() => state.detailCursorIndex()}
+                detailFocused={() => state.detailFocused()}
+                setDetailCursorAction={actions.setDetailCursorAction}
+                setDetailCursorIndex={actions.setDetailCursorIndex}
               />
             </Show>
           </>

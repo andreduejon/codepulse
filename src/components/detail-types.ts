@@ -7,6 +7,7 @@ import type {
   GitHubJobFetchResult,
   GitHubWorkflowRun,
 } from "../providers/github-actions/types";
+import type { JenkinsCommitData, JenkinsJobFetchResult, JenkinsRun } from "../providers/jenkins/types";
 
 /** Mutable ref populated by a detail view for app.tsx to call */
 export interface DetailNavRef {
@@ -47,6 +48,10 @@ export interface DetailViewProps {
    * Passed to ActionsDetailTab to show setup guidance.
    */
   githubProviderStatus?: ProviderStatus;
+  jenkinsGetCommitData?: (sha: string) => JenkinsCommitData | null;
+  jenkinsFetchJobsForRun?: (run: JenkinsRun) => Promise<JenkinsJobFetchResult>;
+  jenkinsFetchCommitData?: (sha: string) => Promise<void>;
+  jenkinsProviderStatus?: ProviderStatus;
 }
 
 /** Layout constants shared between committed and uncommitted detail views */

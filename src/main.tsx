@@ -73,6 +73,7 @@ export async function main() {
         configInfo={configInfo}
         startupMode={startupMode}
         initialGithubConfig={config.providers?.github}
+        initialJenkinsConfig={config.providers?.jenkins}
       />
     ),
     {
