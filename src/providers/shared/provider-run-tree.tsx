@@ -3,7 +3,7 @@ import { createEffect, createMemo, createSignal, For, Show, untrack } from "soli
 import type { DetailNavRef } from "../../components/detail-types";
 import { useT } from "../../hooks/use-t";
 import { formatDuration, formatRelativeDate } from "../../utils/date";
-import { categorize, statusColor } from "../github-actions/status";
+import { categorize, statusColor } from "./status";
 
 export interface ProviderTreeStep {
   id: string;

@@ -47,7 +47,6 @@ interface AppProps {
   initialGithubConfig?: { enabled?: boolean; tokenEnvVar?: string; trustedEnterpriseHost?: string };
   initialJenkinsConfig?: {
     enabled?: boolean;
-    host?: string;
     username?: string;
     tokenEnvVar?: string;
     graphBuildLimit?: 10 | 20 | 50;

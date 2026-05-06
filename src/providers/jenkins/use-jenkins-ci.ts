@@ -62,6 +62,7 @@ export function useJenkinsCI(opts: {
   const commitDataCache = new Map<string, JenkinsCommitData>();
   const [commitDataVersion, setCommitDataVersion] = createSignal(0);
   const jobsCache = new Map<string, JenkinsJobFetchResult>();
+  const logCache = new Map<string, string>();
   const runCache = new Map<string, JenkinsRun>();
   const resolvedShas = new Set<string>();
   const queriedSHAs = new Set<string>();
@@ -254,12 +255,17 @@ export function useJenkinsCI(opts: {
       const token = getJenkinsToken(config.tokenEnvVar);
       if (!token) return { jobs: [], error: `missing ${config.tokenEnvVar}` };
       const result = await fetchJenkinsRunJobs(run, config.username, token);
-      jobsCache.set(run.id, result);
+      if (run.status === "completed") jobsCache.set(run.id, result);
       return result;
     },
     fetchRunLog: async (run, signal) => {
+      const cached = logCache.get(run.id);
+      if (cached) return cached;
       const token = getJenkinsToken(config.tokenEnvVar);
-      return token ? fetchJenkinsConsoleLog(run, config.username, token, signal) : "";
+      if (!token) return "";
+      const log = await fetchJenkinsConsoleLog(run, config.username, token, signal);
+      if (run.status === "completed" && log) logCache.set(run.id, log);
+      return log;
     },
     fetchCommitDataForSHA: async sha => {
       await fetchForSHAs([sha], "full");

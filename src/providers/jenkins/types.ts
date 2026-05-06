@@ -5,7 +5,6 @@ export interface JenkinsJobConfig {
 
 export interface JenkinsProviderConfig {
   enabled: boolean;
-  host?: string;
   username?: string;
   tokenEnvVar: string;
   graphBuildLimit: 10 | 20 | 50;

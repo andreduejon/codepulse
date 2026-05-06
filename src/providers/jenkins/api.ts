@@ -1,4 +1,5 @@
 import type { GraphBadge } from "../provider";
+import { categorize } from "../shared/status";
 import type { JenkinsCommitData, JenkinsJob, JenkinsJobConfig, JenkinsRun, JenkinsStage } from "./types";
 
 interface JenkinsBuildApi {
@@ -36,6 +37,65 @@ interface JenkinsWfapiDescribe {
   endTimeMillis?: number;
   durationMillis?: number;
   stages?: JenkinsWfapiStage[];
+}
+
+const JENKINS_REQUEST_TIMEOUT_MS = 20_000;
+const JENKINS_REQUEST_ATTEMPTS = 2;
+const JENKINS_RETRY_DELAY_MS = 500;
+const JENKINS_CONCURRENCY = 6;
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+function isRetryableStatus(status: number): boolean {
+  return status === 408 || status === 429 || status >= 500;
+}
+
+async function runLimited<T>(items: T[], limit: number, worker: (item: T) => Promise<void>): Promise<void> {
+  let index = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (index < items.length) {
+      const item = items[index++];
+      await worker(item);
+    }
+  });
+  await Promise.all(workers);
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit = {}): Promise<Response> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(
+    () => ctrl.abort(new Error(`Jenkins request timed out after ${JENKINS_REQUEST_TIMEOUT_MS}ms`)),
+    JENKINS_REQUEST_TIMEOUT_MS,
+  );
+  const externalSignal = init.signal;
+  const onAbort = () => ctrl.abort(externalSignal?.reason);
+
+  if (externalSignal) {
+    if (externalSignal.aborted) ctrl.abort(externalSignal.reason);
+    else externalSignal.addEventListener("abort", onAbort, { once: true });
+  }
+
+  try {
+    return await fetch(url, { ...init, signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+    externalSignal?.removeEventListener("abort", onAbort);
+  }
+}
+
+async function fetchWithRetry(url: string, init: RequestInit = {}): Promise<Response> {
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= JENKINS_REQUEST_ATTEMPTS; attempt++) {
+    try {
+      const res = await fetchWithTimeout(url, init);
+      if (!isRetryableStatus(res.status) || attempt === JENKINS_REQUEST_ATTEMPTS) return res;
+    } catch (err) {
+      lastError = err;
+      if (attempt === JENKINS_REQUEST_ATTEMPTS) throw err;
+    }
+    await sleep(JENKINS_RETRY_DELAY_MS * attempt);
+  }
+  throw lastError;
 }
 
 function treeApiSuffix(tree: string): string {
@@ -103,7 +163,7 @@ async function fetchJson<T>(
   token: string,
   signal?: AbortSignal,
 ): Promise<T> {
-  const res = await fetch(url, { headers: authHeaders(username, token), signal, redirect: "manual" });
+  const res = await fetchWithRetry(url, { headers: authHeaders(username, token), signal, redirect: "manual" });
   if (res.status >= 300 && res.status < 400 && isJenkinsLoginRedirect(res.headers.get("location"))) {
     throw jenkinsAuthError();
   }
@@ -251,17 +311,15 @@ export async function fetchJenkinsDataForSHAs(
           opts.signal,
         );
         const builds = api.builds ?? (api.lastBuild ? [api.lastBuild] : []);
-        await Promise.all(
-          builds.slice(0, buildLimit).map(async ref => {
-            if (!ref.number && !ref.url) return;
-            const buildUrl = ref.url
-              ? jenkinsApiUrl(ref.url, treeApiSuffix(buildDetailTree()))
-              : jenkinsApiUrl(`${job.url}/${ref.number}`, treeApiSuffix(buildDetailTree()));
-            const build = await fetchJson<JenkinsBuildApi>(buildUrl, username, token, opts.signal);
-            const sha = extractSha(build);
-            if (sha && wanted.has(sha.toLowerCase())) runs.push(mapRun(job, build, sha));
-          }),
-        );
+        await runLimited(builds.slice(0, buildLimit), JENKINS_CONCURRENCY, async ref => {
+          if (!ref.number && !ref.url) return;
+          const buildUrl = ref.url
+            ? jenkinsApiUrl(ref.url, treeApiSuffix(buildDetailTree()))
+            : jenkinsApiUrl(`${job.url}/${ref.number}`, treeApiSuffix(buildDetailTree()));
+          const build = await fetchJson<JenkinsBuildApi>(buildUrl, username, token, opts.signal);
+          const sha = extractSha(build);
+          if (sha && wanted.has(sha.toLowerCase())) runs.push(mapRun(job, build, sha));
+        });
       } catch (err) {
         firstError ??= err instanceof Error ? err.message : String(err);
       }
@@ -341,13 +399,13 @@ export function buildJenkinsGraphBadges(runs: JenkinsRun[]): Map<string, GraphBa
       latestRunAt: run.updatedAt,
       latestStatus: "unknown" as const,
     };
-    if (run.status !== "completed") badge.runningCount++;
-    else if (run.conclusion === "success") badge.passCount++;
-    else if (run.conclusion === "failure" || run.conclusion === "failed" || run.conclusion === "unstable")
-      badge.failCount++;
+    const category = categorize(run.status, run.conclusion);
+    if (category === "running") badge.runningCount++;
+    else if (category === "pass") badge.passCount++;
+    else if (category === "fail") badge.failCount++;
     if (run.updatedAt >= badge.latestRunAt) {
       badge.latestRunAt = run.updatedAt;
-      badge.latestStatus = run.status !== "completed" ? "running" : run.conclusion === "success" ? "pass" : "fail";
+      badge.latestStatus = category === "pass" || category === "fail" || category === "running" ? category : "unknown";
     }
     badge.badge =
       badge.failCount > 0 ? "fail" : badge.runningCount > 0 ? "running" : badge.passCount > 0 ? "pass" : "unknown";
@@ -411,7 +469,7 @@ export async function fetchJenkinsConsoleLog(
   token: string,
   signal?: AbortSignal,
 ): Promise<string> {
-  const res = await fetch(`${normalizeJenkinsJobUrl(run.url)}/consoleText`, {
+  const res = await fetchWithRetry(`${normalizeJenkinsJobUrl(run.url)}/consoleText`, {
     headers: authHeaders(username, token),
     signal,
   });

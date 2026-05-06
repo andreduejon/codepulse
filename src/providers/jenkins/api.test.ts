@@ -5,6 +5,7 @@ import {
   deriveJenkinsJobLabel,
   extractCandidateShas,
   extractSha,
+  fetchJenkinsGraphDataForSHAs,
   jenkinsApiUrl,
   normalizeJenkinsJobUrl,
 } from "./api";
@@ -187,5 +188,75 @@ describe("buildJenkinsGraphBadges", () => {
     const badge = map.get("sha1") ?? { passCount: -1, failCount: -1 };
     expect(badge.passCount).toBe(2);
     expect(badge.failCount).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Jenkins fetch behavior
+// ---------------------------------------------------------------------------
+
+describe("fetchJenkinsGraphDataForSHAs", () => {
+  test("sends Basic auth header and maps matching build", async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: RequestInfo[] = [];
+    globalThis.fetch = (async (input, init) => {
+      calls.push(input);
+      expect((init?.headers as Record<string, string>).Authorization).toBe("Basic dXNlcjp0b2tlbg==");
+      return new Response(
+        JSON.stringify({
+          builds: [
+            {
+              number: 12,
+              url: "https://jenkins.example.com/job/foo/12/",
+              result: "SUCCESS",
+              building: false,
+              timestamp: 1_700_000_000_000,
+              duration: 12_000,
+              changeSets: [{ items: [{ commitId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }] }],
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }) as typeof fetch;
+
+    try {
+      const result = await fetchJenkinsGraphDataForSHAs(
+        [{ url: "https://jenkins.example.com/job/foo/" }],
+        "user",
+        "token",
+        ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+      );
+      expect(result.error).toBeNull();
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].runNumber).toBe(12);
+      expect(calls[0].toString()).toContain("api/json?tree=");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("reports Jenkins SSO redirect as auth failure", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response(null, {
+        status: 302,
+        headers: { location: "https://jenkins.example.com/securityRealm/commenceLogin" },
+      })) as typeof fetch;
+
+    try {
+      const result = await fetchJenkinsGraphDataForSHAs(
+        [{ url: "https://jenkins.example.com/job/foo/" }],
+        "user",
+        "token",
+        ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+      );
+      expect(result.data).toHaveLength(0);
+      expect(result.error).toBe(
+        "Jenkins authentication failed. Verify username, token, and complete browser login if required.",
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

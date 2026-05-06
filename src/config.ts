@@ -31,7 +31,6 @@ export interface CodepulseConfig {
     };
     jenkins?: {
       enabled?: boolean;
-      host?: string;
       username?: string;
       tokenEnvVar?: string;
       graphBuildLimit?: 10 | 20 | 50;
@@ -56,7 +55,6 @@ export function defaultConfig(): Required<Omit<CodepulseConfig, "branch">> {
       },
       jenkins: {
         enabled: false,
-        host: undefined,
         username: undefined,
         tokenEnvVar: "JENKINS_TOKEN",
         graphBuildLimit: 20,
@@ -385,10 +383,6 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
           if (typeof jenkins.enabled === "boolean") config.providers.jenkins.enabled = jenkins.enabled;
           else warnings.push(`${path}: "providers.jenkins.enabled" must be a boolean, ignoring`);
         }
-        if (jenkins.host !== undefined) {
-          if (typeof jenkins.host === "string" && jenkins.host.length > 0) config.providers.jenkins.host = jenkins.host;
-          else warnings.push(`${path}: "providers.jenkins.host" must be a non-empty string, ignoring`);
-        }
         if (jenkins.username !== undefined) {
           if (typeof jenkins.username === "string" && jenkins.username.length > 0)
             config.providers.jenkins.username = jenkins.username;
@@ -581,7 +575,6 @@ function applyConfigFields(target: Record<string, unknown>, config: CodepulseCon
           ? { ...(existingProviders.jenkins as Record<string, unknown>) }
           : {};
       if (config.providers.jenkins.enabled !== undefined) existingJenkins.enabled = config.providers.jenkins.enabled;
-      if (config.providers.jenkins.host !== undefined) existingJenkins.host = config.providers.jenkins.host;
       if (config.providers.jenkins.username !== undefined) existingJenkins.username = config.providers.jenkins.username;
       if (config.providers.jenkins.tokenEnvVar !== undefined)
         existingJenkins.tokenEnvVar = config.providers.jenkins.tokenEnvVar;
