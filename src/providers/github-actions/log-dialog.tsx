@@ -16,7 +16,7 @@ import { useTheme } from "../../context/theme";
 import { useT } from "../../hooks/use-t";
 
 type LogLineKind = "group" | "error" | "warning" | "normal";
-type LogViewMode = "all" | "issues" | "errors";
+type LogViewMode = "all" | "issues" | "errors" | "raw";
 
 interface LogLine {
   kind: LogLineKind;
@@ -39,16 +39,18 @@ interface JobLogDialogProps {
 }
 
 const SCROLL_JUMP = 10;
-const VIEW_MODE_CYCLE: LogViewMode[] = ["all", "issues", "errors"];
+const VIEW_MODE_CYCLE: LogViewMode[] = ["all", "issues", "errors", "raw"];
 const VIEW_MODE_NEXT_LABEL: Record<LogViewMode, string> = {
   all: "show issues only",
   issues: "show errors only",
-  errors: "show all",
+  errors: "show raw",
+  raw: "show all",
 };
 const VIEW_MODE_TITLE_LABEL: Record<LogViewMode, string> = {
   all: "",
   issues: "issues only",
   errors: "errors only",
+  raw: "raw",
 };
 
 function stripTimestamp(line: string): string {
@@ -168,6 +170,14 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
 
   const filteredLines = createMemo(() => {
     const mode = viewMode();
+    if (mode === "raw") {
+      const raw = currentLoadedLog().raw;
+      if (!raw) return [] as LogLine[];
+      return raw
+        .split("\n")
+        .map((text, i) => ({ kind: "normal" as LogLineKind, text: stripTimestamp(text), lineNo: i + 1 }))
+        .filter(line => line.text.trim() !== "");
+    }
     if (mode === "all") return parsedLines();
     if (mode === "issues") return parsedLines().filter(line => line.kind === "warning" || line.kind === "error");
     return parsedLines().filter(line => line.kind === "error");
