@@ -599,7 +599,6 @@ function AppContent(props: Readonly<AppContentProps>) {
                         githubGetCommitData={gitHubCI.getCommitData}
                         githubFetchJobsForRun={gitHubCI.fetchJobsForRun}
                         githubFetchCommitData={gitHubCI.fetchCommitDataForSHA}
-                        githubFetchJobLog={gitHubCI.fetchJobLogForJob}
                         githubProviderStatus={state.providerStatus()}
                         onOpenJobLog={handleOpenJobLog}
                         jenkinsGetCommitData={jenkinsCI.getCommitData}
@@ -670,7 +669,6 @@ function AppContent(props: Readonly<AppContentProps>) {
                     githubGetCommitData={gitHubCI.getCommitData}
                     githubFetchJobsForRun={gitHubCI.fetchJobsForRun}
                     githubFetchCommitData={gitHubCI.fetchCommitDataForSHA}
-                    githubFetchJobLog={gitHubCI.fetchJobLogForJob}
                     githubProviderStatus={state.providerStatus()}
                     onOpenJobLog={handleOpenJobLog}
                     jenkinsGetCommitData={jenkinsCI.getCommitData}

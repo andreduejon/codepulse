@@ -14,57 +14,6 @@ export type ProviderView = "git" | "github-actions" | "jenkins";
 
 export type ProviderId = Exclude<ProviderView, "git">;
 
-export interface ProviderCapabilities {
-  summary: boolean;
-  detail: boolean;
-  logs: boolean;
-  exactSha: boolean;
-  lazySteps: boolean;
-}
-
-export interface ProviderDefinition {
-  id: ProviderId;
-  displayName: string;
-  capabilities: ProviderCapabilities;
-}
-
-export interface ProviderRun {
-  id: string;
-  name: string;
-  status: string;
-  conclusion: string | null;
-  headSha: string;
-  runNumber: number;
-  startedAt?: string | null;
-  updatedAt: string;
-  url?: string;
-  provider: ProviderId;
-}
-
-export interface ProviderJob {
-  id: string;
-  name: string;
-  status: string;
-  conclusion: string | null;
-  startedAt: string | null;
-  completedAt: string | null;
-  steps: ProviderStep[];
-}
-
-export interface ProviderStep {
-  name: string;
-  status: string;
-  conclusion: string | null;
-  number: number;
-  startedAt: string | null;
-  completedAt: string | null;
-}
-
-export interface ProviderCommitData {
-  sha: string;
-  runs: ProviderRun[];
-}
-
 /**
  * Minimal badge for a single commit in the graph view.
  *

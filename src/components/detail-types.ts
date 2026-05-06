@@ -38,8 +38,6 @@ export interface DetailViewProps {
   githubFetchJobsForRun?: (run: GitHubWorkflowRun) => Promise<GitHubJobFetchResult>;
   /** Fetch CI data for one selected SHA on demand. Optional. */
   githubFetchCommitData?: (sha: string) => Promise<void>;
-  /** Fetch the plain-text log for a specific GitHub Actions job. Optional. */
-  githubFetchJobLog?: (jobId: number, signal?: AbortSignal) => Promise<string>;
   /** Open the job log dialog for a specific job. */
   onOpenJobLog?: (job: GitHubJob, run: GitHubWorkflowRun, jobs?: GitHubJob[]) => void;
   /**
