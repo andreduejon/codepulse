@@ -138,6 +138,7 @@ export function useJenkinsCI(opts: {
       const { firstError } = await fetchForSHAs(target, "shallow", signal);
       hasFetchedOnce = true;
       lastFetchedAt = Date.now();
+      if (!firstError) actions.setProviderLastSuccessfulRefresh("jenkins", new Date());
       if (firstError) actions.setProviderStatus(providerError(firstError));
       else actions.setProviderStatus(providerIdle());
     } finally {
@@ -155,6 +156,7 @@ export function useJenkinsCI(opts: {
     try {
       const { firstError } = await fetchForSHAs(target, "shallow", signal);
       lastFetchedAt = Date.now();
+      if (!firstError) actions.setProviderLastSuccessfulRefresh("jenkins", new Date());
       if (firstError) actions.setProviderStatus(providerError(firstError));
       else actions.setProviderStatus(providerIdle());
     } finally {

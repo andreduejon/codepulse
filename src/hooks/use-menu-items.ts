@@ -56,6 +56,18 @@ export const INFO_LABEL_WIDTH = 12;
 
 /** Usable width for copyable text: dialog=70 - 2(paddingX=1) - 8(paddingX=4) = 60 */
 export const COPYABLE_VISIBLE_WIDTH = 60;
+
+const relativeAgeLabel = (time: Date): string => {
+  const secs = Math.round((Date.now() - time.getTime()) / 1000);
+  if (secs < 60) return `${secs}s ago`;
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  return `${days}d ago`;
+};
+
 export interface MenuItemsOptions {
   /** Currently active tab. */
   activeTab: Accessor<MenuTab>;
@@ -326,14 +338,14 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
     if (state.fetching()) return "fetching...";
     const time = state.lastFetchTime();
     if (!time) return "never";
-    const secs = Math.round((Date.now() - time.getTime()) / 1000);
-    if (secs < 60) return `${secs}s ago`;
-    const mins = Math.round(secs / 60);
-    if (mins < 60) return `${mins}m ago`;
-    const hours = Math.round(mins / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.round(hours / 24);
-    return `${days}d ago`;
+    return relativeAgeLabel(time);
+  };
+
+  const providerRefreshLabel = (): string => {
+    const view = state.activeProviderView();
+    if (view === "git") return "never";
+    const time = state.providerLastSuccessfulRefresh().get(view);
+    return time ? relativeAgeLabel(time) : "never";
   };
 
   const repoItems = createMemo<SettingItem[]>(() => {
@@ -562,6 +574,11 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
       jobs: [],
     };
     return [
+      {
+        kind: "info",
+        label: "Last refresh",
+        get: providerRefreshLabel,
+      },
       ...buildGitHubProviderItems(ghCfg, state.remoteUrl(), tokenSource, opts.onGithubConfigChange, newCfg =>
         persistFullConfig({
           providers: { github: { ...newCfg, trustedEnterpriseHost: newCfg.trustedEnterpriseHost ?? undefined } },
