@@ -11,6 +11,7 @@ import type {
   GitHubJobFetchResult,
   GitHubWorkflowRun,
 } from "../providers/github-actions/types";
+import type { JenkinsCommitData, JenkinsJob, JenkinsJobFetchResult, JenkinsRun } from "../providers/jenkins/types";
 import { getAvailableTabs } from "../utils/tab-utils";
 import CommitDetailView from "./detail";
 import type { DetailNavRef } from "./detail-types";
@@ -31,8 +32,6 @@ export interface DetailPanelProps {
   githubFetchJobsForRun?: (run: GitHubWorkflowRun) => Promise<GitHubJobFetchResult>;
   /** CI data fetcher for one selected SHA (optional). */
   githubFetchCommitData?: (sha: string) => Promise<void>;
-  /** CI job log fetcher from the GitHub Actions provider (optional). */
-  githubFetchJobLog?: (jobId: number, signal?: AbortSignal) => Promise<string>;
   /**
    * Current provider status string.  Non-null when the provider is unavailable
    * (e.g. missing token / remote) — forwarded to CommitDetailView for setup
@@ -41,6 +40,11 @@ export interface DetailPanelProps {
   githubProviderStatus?: ProviderStatus;
   /** Open the job log dialog for a specific job. */
   onOpenJobLog?: (job: GitHubJob, run: GitHubWorkflowRun, jobs?: GitHubJob[]) => void;
+  jenkinsGetCommitData?: (sha: string) => JenkinsCommitData | null;
+  jenkinsFetchJobsForRun?: (run: JenkinsRun) => Promise<JenkinsJobFetchResult>;
+  jenkinsFetchCommitData?: (sha: string) => Promise<void>;
+  onOpenJenkinsJobLog?: (job: JenkinsJob, run: JenkinsRun, jobs?: JenkinsJob[]) => void;
+  jenkinsProviderStatus?: ProviderStatus;
 }
 
 /**
@@ -61,7 +65,7 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
     const cd = state.commitDetail();
     const stashMap = state.stashByParent();
     const providerView = state.activeProviderView();
-    const isProviderMode = providerView === "github-actions";
+    const isProviderMode = providerView === "github-actions" || providerView === "jenkins";
     const available = new Set(
       getAvailableTabs({
         commit,
@@ -69,8 +73,11 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
         commitDetail: cd,
         stashByParent: stashMap,
         activeProviderView: providerView,
-        getCommitData: props.githubGetCommitData,
-        providerLoading: props.githubProviderStatus?.kind === "loading",
+        getCommitData: providerView === "jenkins" ? props.jenkinsGetCommitData : props.githubGetCommitData,
+        providerLoading:
+          providerView === "jenkins"
+            ? props.jenkinsProviderStatus?.kind === "loading"
+            : props.githubProviderStatus?.kind === "loading",
       }),
     );
     if (isUncommitted) {
@@ -96,7 +103,13 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
       // In provider mode the Actions tab always takes the first position (shows "no data"
       // for commits with no runs). Files tab is hidden in provider mode.
       ...(isProviderMode
-        ? [{ id: "github-actions", label: "Actions", disabled: !available.has("github-actions") }]
+        ? [
+            {
+              id: providerView === "jenkins" ? "jenkins" : "github-actions",
+              label: providerView === "jenkins" ? "Jenkins" : "Actions",
+              disabled: !available.has(providerView === "jenkins" ? "jenkins" : "github-actions"),
+            },
+          ]
         : [
             {
               id: "files",
@@ -177,9 +190,13 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
             githubGetCommitData={props.githubGetCommitData}
             githubFetchJobsForRun={props.githubFetchJobsForRun}
             githubFetchCommitData={props.githubFetchCommitData}
-            githubFetchJobLog={props.githubFetchJobLog}
             githubProviderStatus={props.githubProviderStatus}
             onOpenJobLog={props.onOpenJobLog}
+            jenkinsGetCommitData={props.jenkinsGetCommitData}
+            jenkinsFetchJobsForRun={props.jenkinsFetchJobsForRun}
+            jenkinsFetchCommitData={props.jenkinsFetchCommitData}
+            onOpenJenkinsJobLog={props.onOpenJenkinsJobLog}
+            jenkinsProviderStatus={props.jenkinsProviderStatus}
           />
         </Show>
       </scrollbox>
