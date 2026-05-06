@@ -68,6 +68,7 @@ export interface ProviderRunTreeProps<TRaw, TJobRaw> {
   noJobsText?: string;
   autoExpandSingleRun?: boolean;
   childCountLabel?: (count: number) => string;
+  showRunDuration?: boolean;
 }
 
 export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreeProps<TRaw, TJobRaw>>) {
@@ -84,6 +85,10 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
 
   const formatStepDuration = (step: ProviderTreeStep) => formatDuration(step.startedAt, step.completedAt);
   const formatRunDuration = (run: ProviderTreeRun<TRaw>) => {
+    if (props.showRunDuration === false) return "";
+    const primaryJob = fetchedJobs().get(run.id)?.[0];
+    const exactDuration = primaryJob ? formatDuration(primaryJob.startedAt, primaryJob.completedAt) : "";
+    if (exactDuration) return exactDuration;
     const duration = formatDuration(run.startedAt ?? null, run.updatedAt);
     return duration ? `~${duration}` : "";
   };
@@ -303,7 +308,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                   <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
                     {relTime().padStart(rightInfoWidth())}
                   </text>
-                  <Show when={durationWidth() > 0}>
+                  <Show when={props.showRunDuration !== false && durationWidth() > 0}>
                     <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
                       {runDuration() ? ` ${runDuration().padStart(durationWidth())}` : " ".repeat(durationWidth() + 1)}
                     </text>

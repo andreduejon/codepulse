@@ -311,11 +311,18 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
       paddingX={4}
     >
       {idx > 0 ? <box height={1} /> : null}
-      <text wrapMode="none" fg={item.tone === "muted" ? t().foregroundMuted : t().accent}>
-        <strong>
-          <span>{item.label}</span>
-        </strong>
-      </text>
+      <box flexDirection="row" width="100%">
+        <text flexGrow={1} wrapMode="none" fg={item.tone === "muted" ? t().foregroundMuted : t().accent}>
+          <strong>
+            <span>{item.label}</span>
+          </strong>
+        </text>
+        {item.get ? (
+          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+            {item.get()}
+          </text>
+        ) : null}
+      </box>
     </box>
   );
 

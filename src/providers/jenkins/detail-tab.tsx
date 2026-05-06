@@ -101,6 +101,7 @@ export function JenkinsDetailTab(props: Readonly<JenkinsDetailTabProps>) {
       jobsUnavailableText="Unavailable"
       noJobsText="No items"
       autoExpandSingleRun
+      showRunDuration={false}
       childCountLabel={count => `${count} stage${count === 1 ? "" : "s"}`}
     />
   );

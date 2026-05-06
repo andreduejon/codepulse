@@ -390,12 +390,12 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
           <Show when={hasMultipleJobs()}>
             <KeyHintSeparator />
           </Show>
+          <KeyHint key={"↑/↓"} desc=" scroll" />
+          <KeyHintSeparator />
           <Show when={props.run.url}>
             <KeyHint key="o" desc=" open run" />
             <KeyHintSeparator />
           </Show>
-          <KeyHint key={"↑/↓"} desc=" scroll" />
-          <KeyHintSeparator />
           <KeyHint key="c" desc={` ${VIEW_MODE_NEXT_LABEL[viewMode()]}`} />
           <KeyHintSeparator />
           <KeyHint key="w" desc={wrapEnabled() ? " disable wrap" : " enable wrap"} />

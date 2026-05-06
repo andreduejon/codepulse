@@ -11,7 +11,7 @@ import { getTokenSource, parseGitHubRemote } from "../providers/github-actions/a
 type MenuTab = "repository" | "branch" | "providers";
 
 export type SettingItem =
-  | { kind: "header"; label: string; tone?: "accent" | "muted" }
+  | { kind: "header"; label: string; tone?: "accent" | "muted"; get?: () => string }
   | { kind: "info"; label: string; get: () => string; valid?: () => boolean }
   | { kind: "copyable"; label: string; get: () => string; onForget?: () => void }
   | {
@@ -131,6 +131,7 @@ export function buildGitHubProviderItems(
   ghCfg: GitHubMenuConfig,
   remoteUrl: string,
   tokenSource: "env" | null,
+  lastRefresh: () => string,
   onChange?: (cfg: GitHubMenuConfig) => void,
   persist?: (cfg: GitHubMenuConfig) => void,
 ): SettingItem[] {
@@ -139,7 +140,7 @@ export function buildGitHubProviderItems(
   const hostAllowed = remoteHost === "github.com" || (remoteHost != null && ghCfg.trustedEnterpriseHost === remoteHost);
 
   const items: SettingItem[] = [
-    { kind: "header", label: "GitHub" },
+    { kind: "header", label: "GitHub", get: () => `last refresh ${lastRefresh()}` },
     {
       kind: "toggle",
       label: "Enabled",
@@ -191,11 +192,12 @@ export function buildGitHubProviderItems(
 
 function buildJenkinsProviderItems(
   jenkinsCfg: JenkinsMenuConfig,
+  lastRefresh: () => string,
   onChange?: (cfg: JenkinsMenuConfig) => void,
   persist?: (cfg: JenkinsMenuConfig) => void,
 ): SettingItem[] {
   const items: SettingItem[] = [
-    { kind: "header", label: "Jenkins" },
+    { kind: "header", label: "Jenkins", get: () => `last refresh ${lastRefresh()}` },
     {
       kind: "toggle",
       label: "Enabled",
@@ -341,9 +343,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
     return relativeAgeLabel(time);
   };
 
-  const providerRefreshLabel = (): string => {
-    const view = state.activeProviderView();
-    if (view === "git") return "never";
+  const providerRefreshLabel = (view: "github-actions" | "jenkins"): string => {
     const time = state.providerLastSuccessfulRefresh().get(view);
     return time ? relativeAgeLabel(time) : "never";
   };
@@ -574,18 +574,22 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
       jobs: [],
     };
     return [
-      {
-        kind: "info",
-        label: "Last refresh",
-        get: providerRefreshLabel,
-      },
-      ...buildGitHubProviderItems(ghCfg, state.remoteUrl(), tokenSource, opts.onGithubConfigChange, newCfg =>
-        persistFullConfig({
-          providers: { github: { ...newCfg, trustedEnterpriseHost: newCfg.trustedEnterpriseHost ?? undefined } },
-        }),
+      ...buildGitHubProviderItems(
+        ghCfg,
+        state.remoteUrl(),
+        tokenSource,
+        () => providerRefreshLabel("github-actions"),
+        opts.onGithubConfigChange,
+        newCfg =>
+          persistFullConfig({
+            providers: { github: { ...newCfg, trustedEnterpriseHost: newCfg.trustedEnterpriseHost ?? undefined } },
+          }),
       ),
-      ...buildJenkinsProviderItems(jenkinsCfg, opts.onJenkinsConfigChange, newCfg =>
-        persistFullConfig({ providers: { jenkins: newCfg } }),
+      ...buildJenkinsProviderItems(
+        jenkinsCfg,
+        () => providerRefreshLabel("jenkins"),
+        opts.onJenkinsConfigChange,
+        newCfg => persistFullConfig({ providers: { jenkins: newCfg } }),
       ),
     ];
   });

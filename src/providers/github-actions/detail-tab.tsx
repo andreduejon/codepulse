@@ -156,8 +156,8 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
       }}
       onOpenJobAction={(job, run, jobs) => props.onOpenJobLog?.(job.raw, run.raw, jobs?.map(entry => entry.raw) ?? [])}
       summaryLabel="total workflow runs"
-      loadingText="Loading CI data..."
-      emptyText="No CI data for this commit"
+      loadingText="Loading GitHub Actions runs..."
+      emptyText="No GitHub Actions runs for this commit"
       jobsLoadingText="Loading..."
       jobsUnavailableText="Unavailable"
       noJobsText="No items"
