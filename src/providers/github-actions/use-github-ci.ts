@@ -144,7 +144,7 @@ export function useGitHubCI(opts: {
     if (configAccessor().enabled !== false) {
       registerProvider({
         id: "github-actions",
-        displayName: "github",
+        displayName: "GitHub",
         isAvailable,
       });
     } else {

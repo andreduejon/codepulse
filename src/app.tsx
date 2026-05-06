@@ -76,7 +76,6 @@ function AppContent(props: Readonly<AppContentProps>) {
   });
   const [jenkinsConfig, setJenkinsConfig] = createSignal({
     enabled: props.initialJenkinsConfig?.enabled ?? false,
-    host: props.initialJenkinsConfig?.host,
     username: props.initialJenkinsConfig?.username,
     tokenEnvVar: props.initialJenkinsConfig?.tokenEnvVar ?? "JENKINS_TOKEN",
     graphBuildLimit: props.initialJenkinsConfig?.graphBuildLimit ?? 20,
@@ -140,7 +139,7 @@ function AppContent(props: Readonly<AppContentProps>) {
   /** Target for the job log dialog (set when user opens a job log). */
   const [jobLogTarget, setJobLogTarget] = createSignal<{
     job: { id: string | number; name: string };
-    run: { name: string; runNumber: number };
+    run: { name: string; runNumber: number; url?: string };
     jobs: { id: string | number; name: string }[];
     fetchLog: (job: { id: string | number; name: string }) => Promise<string>;
   } | null>(null);

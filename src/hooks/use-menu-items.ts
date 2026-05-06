@@ -139,7 +139,7 @@ export function buildGitHubProviderItems(
   const hostAllowed = remoteHost === "github.com" || (remoteHost != null && ghCfg.trustedEnterpriseHost === remoteHost);
 
   const items: SettingItem[] = [
-    { kind: "header", label: "github" },
+    { kind: "header", label: "GitHub" },
     {
       kind: "toggle",
       label: "Enabled",
@@ -195,7 +195,7 @@ function buildJenkinsProviderItems(
   persist?: (cfg: JenkinsMenuConfig) => void,
 ): SettingItem[] {
   const items: SettingItem[] = [
-    { kind: "header", label: "jenkins" },
+    { kind: "header", label: "Jenkins" },
     {
       kind: "toggle",
       label: "Enabled",

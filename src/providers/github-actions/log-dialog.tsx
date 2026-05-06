@@ -14,6 +14,7 @@ import { KeyHint, KeyHintSeparator } from "../../components/key-hint";
 import MessageBox from "../../components/message-box";
 import { useTheme } from "../../context/theme";
 import { useT } from "../../hooks/use-t";
+import { openUrl } from "../../utils/open-url";
 
 type LogLineKind = "group" | "error" | "warning" | "normal";
 type LogViewMode = "all" | "issues" | "errors" | "raw";
@@ -33,7 +34,7 @@ interface LoadedLog {
 interface JobLogDialogProps {
   job: { id: string | number; name: string };
   jobs: { id: string | number; name: string }[];
-  run: { name: string; runNumber: number };
+  run: { name: string; runNumber: number; url?: string };
   fetchLog: (job: { id: string | number; name: string }) => Promise<string>;
   onClose: () => void;
 }
@@ -258,6 +259,11 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
         e.preventDefault();
         setWrapEnabled(prev => !prev);
         break;
+      case "o":
+        if (!props.run.url) break;
+        e.preventDefault();
+        openUrl(props.run.url);
+        break;
     }
   });
 
@@ -382,6 +388,10 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
             <KeyHint key={"←/→"} desc=" jobs" />
           </Show>
           <Show when={hasMultipleJobs()}>
+            <KeyHintSeparator />
+          </Show>
+          <Show when={props.run.url}>
+            <KeyHint key="o" desc=" open run" />
             <KeyHintSeparator />
           </Show>
           <KeyHint key={"↑/↓"} desc=" scroll" />

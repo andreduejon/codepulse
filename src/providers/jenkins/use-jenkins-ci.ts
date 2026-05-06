@@ -52,7 +52,7 @@ export function useJenkinsCI(opts: {
 
   createEffect(() => {
     if (configAccessor().enabled === true) {
-      registerProvider({ id: "jenkins", displayName: "jenkins", isAvailable });
+      registerProvider({ id: "jenkins", displayName: "Jenkins", isAvailable });
     } else {
       unregisterProvider("jenkins");
       if (untrack(state.activeProviderView) === "jenkins") actions.setActiveProviderView("git");
