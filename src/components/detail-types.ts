@@ -7,6 +7,7 @@ import type {
   GitHubJobFetchResult,
   GitHubWorkflowRun,
 } from "../providers/github-actions/types";
+import type { JenkinsCommitData, JenkinsJob, JenkinsJobFetchResult, JenkinsRun } from "../providers/jenkins/types";
 
 /** Mutable ref populated by a detail view for app.tsx to call */
 export interface DetailNavRef {
@@ -37,8 +38,6 @@ export interface DetailViewProps {
   githubFetchJobsForRun?: (run: GitHubWorkflowRun) => Promise<GitHubJobFetchResult>;
   /** Fetch CI data for one selected SHA on demand. Optional. */
   githubFetchCommitData?: (sha: string) => Promise<void>;
-  /** Fetch the plain-text log for a specific GitHub Actions job. Optional. */
-  githubFetchJobLog?: (jobId: number, signal?: AbortSignal) => Promise<string>;
   /** Open the job log dialog for a specific job. */
   onOpenJobLog?: (job: GitHubJob, run: GitHubWorkflowRun, jobs?: GitHubJob[]) => void;
   /**
@@ -47,6 +46,11 @@ export interface DetailViewProps {
    * Passed to ActionsDetailTab to show setup guidance.
    */
   githubProviderStatus?: ProviderStatus;
+  jenkinsGetCommitData?: (sha: string) => JenkinsCommitData | null;
+  jenkinsFetchJobsForRun?: (run: JenkinsRun) => Promise<JenkinsJobFetchResult>;
+  jenkinsFetchCommitData?: (sha: string) => Promise<void>;
+  onOpenJenkinsJobLog?: (job: JenkinsJob, run: JenkinsRun, jobs?: JenkinsJob[]) => void;
+  jenkinsProviderStatus?: ProviderStatus;
 }
 
 /** Layout constants shared between committed and uncommitted detail views */

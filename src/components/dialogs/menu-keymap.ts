@@ -7,6 +7,7 @@ export type MenuKeyAction =
   | "move-down"
   | "move-up"
   | "activate"
+  | "forget"
   | "start-edit"
   | "save-edit"
   | "cancel-edit"
@@ -61,6 +62,8 @@ export function routeMenuKey(input: MenuKeyInput): MenuKeyDecision {
       return { action: "next-tab", consume: true };
     case "return":
       return { action: selectedKind === "editable" ? "start-edit" : "activate", consume: true };
+    case "f":
+      return { action: "forget", consume: true };
     default:
       return { action: "none", consume: false };
   }

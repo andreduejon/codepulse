@@ -37,6 +37,7 @@ export interface GitHubWorkflowRun {
   id: number;
   /** Workflow name, defaulting to "(unnamed)" when the API returns null. */
   name: string;
+  url?: string;
   status: string;
   conclusion: string | null;
   headSha: string;

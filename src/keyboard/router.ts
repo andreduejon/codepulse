@@ -15,10 +15,11 @@ export interface KeyboardRouteDecision {
 export function routeGlobalKey(input: KeyboardRouteInput, keyName: string): KeyboardRouteDecision {
   const scope = input.overrideScope ?? dialogToKeyboardScope(input.dialog);
   const runAppHandler = isAppScope(scope);
+  const hasOverrideScope = input.overrideScope != null;
 
   return {
     scope,
     runAppHandler,
-    runCascadeClose: !runAppHandler && keyName === "escape",
+    runCascadeClose: !runAppHandler && !hasOverrideScope && keyName === "escape",
   };
 }

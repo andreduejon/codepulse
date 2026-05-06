@@ -55,7 +55,7 @@ describe("keyboard scope routing", () => {
     expect(routeGlobalKey({ dialog: "menu", overrideScope: "menu-token-edit" }, "escape")).toEqual({
       scope: "menu-token-edit",
       runAppHandler: false,
-      runCascadeClose: true,
+      runCascadeClose: false,
     });
   });
 });

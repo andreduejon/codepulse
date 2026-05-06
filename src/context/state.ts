@@ -10,7 +10,15 @@ export const DEFAULT_AUTO_REFRESH_INTERVAL = 30000;
 export const DEFAULT_AUTO_FETCH_INTERVAL = 0;
 
 /** Valid tab identifiers for the detail panel. */
-export type DetailTab = "files" | "detail" | "stashes" | "staged" | "unstaged" | "untracked" | "github-actions";
+export type DetailTab =
+  | "files"
+  | "detail"
+  | "stashes"
+  | "staged"
+  | "unstaged"
+  | "untracked"
+  | "github-actions"
+  | "jenkins";
 
 /**
  * Which highlighting mode is currently active.
@@ -117,6 +125,8 @@ export interface AppState {
   graphBadges: Accessor<Map<string, GraphBadge>>;
   /** Status from the active CI provider. */
   providerStatus: Accessor<ProviderStatus>;
+  /** Last successful data refresh per CI provider. */
+  providerLastSuccessfulRefresh: Accessor<Map<ProviderView, Date>>;
   /** Optional scope override for modal sub-modes (e.g. menu token edit). */
   keyboardScopeOverride: Accessor<KeyboardScope | null>;
 }
@@ -162,6 +172,8 @@ export interface AppActions {
   setGraphBadges: (map: Map<string, GraphBadge>) => void;
   /** Set the CI provider status. */
   setProviderStatus: (status: ProviderStatus) => void;
+  /** Record a successful data refresh for a CI provider. */
+  setProviderLastSuccessfulRefresh: (view: ProviderView, time: Date) => void;
   /** Advance to the next available provider view (Tab key cycling). */
   cycleProviderView: () => void;
   setKeyboardScopeOverride: (scope: KeyboardScope | null) => void;
@@ -228,6 +240,9 @@ export function createAppState(
   const [activeProviderView, setActiveProviderView] = createSignal<ProviderView>("git");
   const [graphBadges, setGraphBadges] = createSignal<Map<string, GraphBadge>>(new Map());
   const [providerStatus, setProviderStatus] = createSignal<ProviderStatus>(providerIdle());
+  const [providerLastSuccessfulRefresh, setProviderLastSuccessfulRefreshMap] = createSignal<Map<ProviderView, Date>>(
+    new Map(),
+  );
   const [keyboardScopeOverride, setKeyboardScopeOverride] = createSignal<KeyboardScope | null>(null);
 
   // ── Search memo ───────────────────────────────────────────────────
@@ -360,6 +375,7 @@ export function createAppState(
     activeProviderView,
     graphBadges,
     providerStatus,
+    providerLastSuccessfulRefresh,
     keyboardScopeOverride,
   };
 
@@ -402,6 +418,13 @@ export function createAppState(
     setActiveProviderView,
     setGraphBadges,
     setProviderStatus,
+    setProviderLastSuccessfulRefresh: (view, time) => {
+      setProviderLastSuccessfulRefreshMap(prev => {
+        const next = new Map(prev);
+        next.set(view, time);
+        return next;
+      });
+    },
     setKeyboardScopeOverride,
     cycleProviderView: () => setActiveProviderView(nextProviderView(activeProviderView())),
   };

@@ -10,8 +10,9 @@
 import { createSignal } from "solid-js";
 
 /** Provider view identifiers — Tab cycles through these. */
-export type ProviderView = "git" | "github-actions";
-// Future: | "gitlab-ci" | "jenkins"
+export type ProviderView = "git" | "github-actions" | "jenkins";
+
+export type ProviderId = Exclude<ProviderView, "git">;
 
 /**
  * Minimal badge for a single commit in the graph view.
@@ -103,4 +104,9 @@ export function nextProviderView(current: ProviderView): ProviderView {
 /** Look up a registered provider by ID.  Returns undefined if not found. */
 export function getProvider(id: ProviderView): ProviderRegistration | undefined {
   return providerRegistry.find(p => p.id === id);
+}
+
+export function providerDisplayName(view: ProviderView): string {
+  if (view === "git") return "Git";
+  return getProvider(view)?.displayName ?? view;
 }

@@ -4,9 +4,9 @@ import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
 import { useT } from "../hooks/use-t";
 import {
   getEnabledProviderViews,
-  getProvider,
   getProviderRegistryVersion,
   nextProviderView,
+  providerDisplayName,
 } from "../providers/provider";
 import { KeyHint, KeyHintSeparator } from "./key-hint";
 
@@ -70,7 +70,7 @@ export default function Footer(
     if (views.length <= 1) return null;
     const next = nextProviderView(state.activeProviderView());
     if (next === state.activeProviderView()) return null;
-    return next === "git" ? "git" : (getProvider(next)?.displayName ?? next);
+    return providerDisplayName(next);
   };
 
   const mode = () => props.commandBarMode();

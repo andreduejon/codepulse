@@ -144,7 +144,7 @@ export function useGitHubCI(opts: {
     if (configAccessor().enabled !== false) {
       registerProvider({
         id: "github-actions",
-        displayName: "github",
+        displayName: "GitHub",
         isAvailable,
       });
     } else {
@@ -286,6 +286,7 @@ export function useGitHubCI(opts: {
     if (showStatus) actions.setProviderStatus(providerLoading());
     try {
       const { firstError } = await fetchForSHAs(unqueried, signal);
+      if (!firstError) actions.setProviderLastSuccessfulRefresh("github-actions", new Date());
       if (showStatus) {
         actions.setProviderStatus(firstError ? providerError(`CI fetch error: ${firstError}`) : providerIdle());
       } else if (!firstError && state.providerStatus().kind === "error") {
@@ -317,6 +318,7 @@ export function useGitHubCI(opts: {
     fetchInFlight = true;
     try {
       const { firstError } = await fetchForSHAs(runningSHAs, signal);
+      if (!firstError) actions.setProviderLastSuccessfulRefresh("github-actions", new Date());
       if (!firstError && state.providerStatus().kind === "error") actions.setProviderStatus(providerIdle());
       if (firstError) console.error("[github-actions] refresh returned error:", firstError);
     } catch (err) {
