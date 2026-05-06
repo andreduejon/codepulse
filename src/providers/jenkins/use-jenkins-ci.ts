@@ -9,6 +9,7 @@ import {
   buildJenkinsGraphBadges,
   fetchJenkinsConsoleLog,
   fetchJenkinsDataForSHAs,
+  fetchJenkinsGraphDataForSHAs,
   fetchJenkinsRunJobs,
   getJenkinsToken,
 } from "./api";
@@ -61,23 +62,54 @@ export function useJenkinsCI(opts: {
   const commitDataCache = new Map<string, JenkinsCommitData>();
   const [commitDataVersion, setCommitDataVersion] = createSignal(0);
   const jobsCache = new Map<string, JenkinsJobFetchResult>();
+  const runCache = new Map<string, JenkinsRun>();
+  const resolvedShas = new Set<string>();
   const queriedSHAs = new Set<string>();
   let fetchInFlight = false;
+  let hasFetchedOnce = false;
+  let lastFetchedAt = 0;
+  let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
+  let fetchAbortCtrl: AbortController | null = null;
 
-  async function fetchForSHAs(shas: string[], signal?: AbortSignal) {
+  function rebuildCaches() {
+    const allRuns = [...runCache.values()];
+    const rebuilt = buildJenkinsCommitDataMap(allRuns, false);
+    commitDataCache.clear();
+    for (const sha of queriedSHAs) {
+      const existing = rebuilt.get(sha) ?? { sha, runs: [], resolved: resolvedShas.has(sha) };
+      existing.resolved = resolvedShas.has(sha);
+      commitDataCache.set(sha, existing);
+    }
+    for (const [sha, data] of rebuilt) {
+      data.resolved = resolvedShas.has(sha);
+      commitDataCache.set(sha, data);
+    }
+    actions.setGraphBadges(buildJenkinsGraphBadges(allRuns));
+    setCommitDataVersion(v => v + 1);
+  }
+
+  async function fetchForSHAs(shas: string[], mode: "shallow" | "full", signal?: AbortSignal) {
     const token = getJenkinsToken(config.tokenEnvVar);
     if (!token || shas.length === 0) return { firstError: null };
-    const result = await fetchJenkinsDataForSHAs(config.jobs, config.username, token, shas, { signal });
+    const result =
+      mode === "shallow"
+        ? await fetchJenkinsGraphDataForSHAs(config.jobs, config.username, token, shas, {
+            signal,
+            buildLimit: config.graphBuildLimit,
+          })
+        : await fetchJenkinsDataForSHAs(config.jobs, config.username, token, shas, {
+            signal,
+            buildLimit: config.graphBuildLimit,
+          });
     if (signal?.aborted) return { firstError: null };
-    const data = buildJenkinsCommitDataMap(result.data);
     for (const sha of shas) {
-      if (!data.has(sha)) data.set(sha, { sha, runs: [] });
+      queriedSHAs.add(sha);
+      if (mode === "full") resolvedShas.add(sha);
     }
-    for (const [sha, value] of data) commitDataCache.set(sha, value);
-    setCommitDataVersion(v => v + 1);
-    const current = new Map(state.graphBadges());
-    for (const [sha, badge] of buildJenkinsGraphBadges(result.data)) current.set(sha, badge);
-    actions.setGraphBadges(current);
+    for (const run of result.data) {
+      runCache.set(`${run.id}:${run.headSha}`, run);
+    }
+    rebuildCaches();
     return { firstError: result.error };
   }
 
@@ -97,8 +129,13 @@ export function useJenkinsCI(opts: {
     if (showStatus) actions.setProviderStatus(providerLoading());
     try {
       const target = shas ?? collectTopSHAs(state.graphRows(), INITIAL_SHA_LIMIT).filter(sha => !queriedSHAs.has(sha));
-      for (const sha of target) queriedSHAs.add(sha);
-      const { firstError } = await fetchForSHAs(target, signal);
+      if (target.length === 0) {
+        if (showStatus) actions.setProviderStatus(providerIdle());
+        return;
+      }
+      const { firstError } = await fetchForSHAs(target, "shallow", signal);
+      hasFetchedOnce = true;
+      lastFetchedAt = Date.now();
       if (firstError) actions.setProviderStatus(providerError(firstError));
       else actions.setProviderStatus(providerIdle());
     } finally {
@@ -106,12 +143,77 @@ export function useJenkinsCI(opts: {
     }
   }
 
+  async function doRefreshVisible(signal?: AbortSignal, showStatus = false) {
+    if (fetchInFlight) return;
+    if (!isAvailable()) return;
+    const target = collectTopSHAs(state.graphRows(), INITIAL_SHA_LIMIT);
+    if (target.length === 0) return;
+    fetchInFlight = true;
+    if (showStatus) actions.setProviderStatus(providerLoading());
+    try {
+      const { firstError } = await fetchForSHAs(target, "shallow", signal);
+      lastFetchedAt = Date.now();
+      if (firstError) actions.setProviderStatus(providerError(firstError));
+      else actions.setProviderStatus(providerIdle());
+    } finally {
+      fetchInFlight = false;
+    }
+  }
+
+  function startAutoRefresh() {
+    if (autoRefreshTimer) return;
+    const interval = state.autoRefreshInterval();
+    if (interval <= 0) return;
+    autoRefreshTimer = setInterval(() => {
+      if (state.activeProviderView() !== "jenkins") return;
+      if (fetchAbortCtrl) fetchAbortCtrl.abort();
+      const ctrl = new AbortController();
+      fetchAbortCtrl = ctrl;
+      void doRefreshVisible(ctrl.signal);
+    }, interval);
+  }
+
+  function stopAutoRefresh() {
+    if (autoRefreshTimer) {
+      clearInterval(autoRefreshTimer);
+      autoRefreshTimer = null;
+    }
+    if (fetchAbortCtrl) {
+      fetchAbortCtrl.abort();
+      fetchAbortCtrl = null;
+    }
+  }
+
   createEffect(() => {
-    if (state.activeProviderView() !== "jenkins") return;
-    state.graphRows();
-    const controller = new AbortController();
-    void doInitialFetch(controller.signal, undefined, true);
-    return () => controller.abort();
+    const view = state.activeProviderView();
+    if (view === "jenkins") {
+      state.graphRows();
+      if (!hasFetchedOnce) {
+        const controller = new AbortController();
+        fetchAbortCtrl = controller;
+        void doInitialFetch(controller.signal, undefined, true);
+        return () => controller.abort();
+      }
+      const interval = state.autoRefreshInterval();
+      const staleThreshold = interval > 0 ? interval : 30_000;
+      if (Date.now() - lastFetchedAt > staleThreshold) {
+        const controller = new AbortController();
+        fetchAbortCtrl = controller;
+        void doRefreshVisible(controller.signal, true);
+        return () => controller.abort();
+      }
+      startAutoRefresh();
+      return () => stopAutoRefresh();
+    }
+    stopAutoRefresh();
+  });
+
+  createEffect(() => {
+    const _interval = state.autoRefreshInterval();
+    if (state.activeProviderView() === "jenkins") {
+      stopAutoRefresh();
+      startAutoRefresh();
+    }
   });
 
   const getCommitData = (sha: string) => {
@@ -135,14 +237,10 @@ export function useJenkinsCI(opts: {
       return token ? fetchJenkinsConsoleLog(run, config.username, token, signal) : "";
     },
     fetchCommitDataForSHA: async sha => {
-      queriedSHAs.add(sha);
-      await fetchForSHAs([sha]);
+      await fetchForSHAs([sha], "full");
     },
     refresh: async () => {
-      queriedSHAs.clear();
-      commitDataCache.clear();
-      actions.setGraphBadges(new Map());
-      await doInitialFetch(undefined, undefined, true);
+      await doRefreshVisible(undefined, true);
     },
     isAvailable,
   };

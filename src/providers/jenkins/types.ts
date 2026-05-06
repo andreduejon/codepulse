@@ -8,12 +8,14 @@ export interface JenkinsProviderConfig {
   host?: string;
   username?: string;
   tokenEnvVar: string;
+  graphBuildLimit: 10 | 20 | 50;
   jobs: JenkinsJobConfig[];
 }
 
 export const DEFAULT_JENKINS_CONFIG: JenkinsProviderConfig = {
   enabled: false,
   tokenEnvVar: "JENKINS_TOKEN",
+  graphBuildLimit: 20,
   jobs: [],
 };
 
@@ -52,6 +54,7 @@ export interface JenkinsJob {
 export interface JenkinsCommitData {
   sha: string;
   runs: JenkinsRun[];
+  resolved: boolean;
 }
 
 export interface JenkinsJobFetchResult {

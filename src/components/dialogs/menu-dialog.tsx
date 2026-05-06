@@ -37,11 +37,18 @@ interface MenuDialogProps {
   githubConfig?: { enabled: boolean; tokenEnvVar: string; trustedEnterpriseHost: string | null };
   /** Callback to update GitHub provider config. */
   onGithubConfigChange?: (cfg: { enabled: boolean; tokenEnvVar: string; trustedEnterpriseHost: string | null }) => void;
-  jenkinsConfig?: { enabled: boolean; username?: string; tokenEnvVar: string; jobs: { label?: string; url: string }[] };
+  jenkinsConfig?: {
+    enabled: boolean;
+    username?: string;
+    tokenEnvVar: string;
+    graphBuildLimit: 10 | 20 | 50;
+    jobs: { label?: string; url: string }[];
+  };
   onJenkinsConfigChange?: (cfg: {
     enabled: boolean;
     username?: string;
     tokenEnvVar: string;
+    graphBuildLimit: 10 | 20 | 50;
     jobs: { label?: string; url: string }[];
   }) => void;
 }

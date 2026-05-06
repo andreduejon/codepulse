@@ -49,6 +49,7 @@ interface AppProps {
     host?: string;
     username?: string;
     tokenEnvVar?: string;
+    graphBuildLimit?: 10 | 20 | 50;
     jobs?: { label?: string; url: string }[];
   };
 }
@@ -78,6 +79,7 @@ function AppContent(props: Readonly<AppContentProps>) {
     host: props.initialJenkinsConfig?.host,
     username: props.initialJenkinsConfig?.username,
     tokenEnvVar: props.initialJenkinsConfig?.tokenEnvVar ?? "JENKINS_TOKEN",
+    graphBuildLimit: props.initialJenkinsConfig?.graphBuildLimit ?? 20,
     jobs: props.initialJenkinsConfig?.jobs ?? [],
   });
 
@@ -223,6 +225,21 @@ function AppContent(props: Readonly<AppContentProps>) {
     setDialog("job-log");
   };
 
+  const refreshActiveProvider = async () => {
+    if (state.activeProviderView() === "github-actions") await gitHubCI.refresh();
+    else if (state.activeProviderView() === "jenkins") await jenkinsCI.refresh();
+  };
+
+  const handleReloadAll = async () => {
+    await loadData(undefined, undefined, false, true);
+    await refreshActiveProvider();
+  };
+
+  const handleFetchAll = async () => {
+    await handleFetch();
+    await refreshActiveProvider();
+  };
+
   // All git data loading: initial load, pagination, fetch, and auto-refresh timer.
   const { loadData, loadMoreData, handleFetch } = useDataLoader({
     repoPath: props.repoPath,
@@ -347,12 +364,12 @@ function AppContent(props: Readonly<AppContentProps>) {
       case "f":
       case "fetch":
         clearAnchor();
-        handleFetch();
+        void handleFetchAll();
         break;
       case "r":
       case "reload":
         clearAnchor();
-        loadData(undefined, undefined, false, true);
+        void handleReloadAll();
         break;
       case "search":
         // Re-open search mode — mutually exclusive with ancestry and path
@@ -583,8 +600,8 @@ function AppContent(props: Readonly<AppContentProps>) {
                 <Show when={dialog() === "menu"}>
                   <MenuDialog
                     onClose={() => setDialog(null)}
-                    onReload={() => loadData(undefined, undefined, false, true)}
-                    onFetch={handleFetch}
+                    onReload={() => void handleReloadAll()}
+                    onFetch={() => void handleFetchAll()}
                     onOpenDialog={handleOpenDialog}
                     onViewBranch={handleViewBranch}
                     configInfo={props.configInfo}

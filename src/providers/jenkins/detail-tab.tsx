@@ -36,7 +36,7 @@ export function JenkinsDetailTab(props: Readonly<JenkinsDetailTabProps>) {
 
   createEffect(() => {
     const sha = props.sha;
-    if (props.loading || data() || requestedSha() === sha) return;
+    if (props.loading || data()?.resolved || requestedSha() === sha) return;
     setRequestedSha(sha);
     void props.fetchCommitData?.(sha);
   });

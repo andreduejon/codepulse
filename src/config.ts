@@ -34,6 +34,7 @@ export interface CodepulseConfig {
       host?: string;
       username?: string;
       tokenEnvVar?: string;
+      graphBuildLimit?: 10 | 20 | 50;
       jobs?: { label?: string; url: string }[];
     };
   };
@@ -58,6 +59,7 @@ export function defaultConfig(): Required<Omit<CodepulseConfig, "branch">> {
         host: undefined,
         username: undefined,
         tokenEnvVar: "JENKINS_TOKEN",
+        graphBuildLimit: 20,
         jobs: [],
       },
     },
@@ -114,11 +116,13 @@ export function backfillRepoConfig(repoPath: string, configPath?: string): void 
   const defaultJenkins = defaults.providers.jenkins ?? {
     enabled: false,
     tokenEnvVar: "JENKINS_TOKEN",
+    graphBuildLimit: 20,
     jobs: [],
   };
   if (
     existingJenkins?.enabled === undefined ||
     existingJenkins?.tokenEnvVar === undefined ||
+    existingJenkins?.graphBuildLimit === undefined ||
     existingJenkins?.jobs === undefined
   ) {
     missing.providers = {
@@ -126,6 +130,7 @@ export function backfillRepoConfig(repoPath: string, configPath?: string): void 
       jenkins: {
         ...(existingJenkins?.enabled === undefined ? { enabled: defaultJenkins.enabled } : {}),
         ...(existingJenkins?.tokenEnvVar === undefined ? { tokenEnvVar: defaultJenkins.tokenEnvVar } : {}),
+        ...(existingJenkins?.graphBuildLimit === undefined ? { graphBuildLimit: defaultJenkins.graphBuildLimit } : {}),
         ...(existingJenkins?.jobs === undefined ? { jobs: defaultJenkins.jobs } : {}),
       },
     };
@@ -394,6 +399,11 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
             config.providers.jenkins.tokenEnvVar = jenkins.tokenEnvVar;
           else warnings.push(`${path}: "providers.jenkins.tokenEnvVar" must be a non-empty string, ignoring`);
         }
+        if (jenkins.graphBuildLimit !== undefined) {
+          if (jenkins.graphBuildLimit === 10 || jenkins.graphBuildLimit === 20 || jenkins.graphBuildLimit === 50)
+            config.providers.jenkins.graphBuildLimit = jenkins.graphBuildLimit;
+          else warnings.push(`${path}: "providers.jenkins.graphBuildLimit" must be one of 10, 20, 50, ignoring`);
+        }
         if (jenkins.jobs !== undefined) {
           if (Array.isArray(jenkins.jobs)) {
             config.providers.jenkins.jobs = jenkins.jobs.flatMap((job, idx) => {
@@ -575,6 +585,8 @@ function applyConfigFields(target: Record<string, unknown>, config: CodepulseCon
       if (config.providers.jenkins.username !== undefined) existingJenkins.username = config.providers.jenkins.username;
       if (config.providers.jenkins.tokenEnvVar !== undefined)
         existingJenkins.tokenEnvVar = config.providers.jenkins.tokenEnvVar;
+      if (config.providers.jenkins.graphBuildLimit !== undefined)
+        existingJenkins.graphBuildLimit = config.providers.jenkins.graphBuildLimit;
       if (config.providers.jenkins.jobs !== undefined) existingJenkins.jobs = config.providers.jenkins.jobs;
       existingProviders.jenkins = existingJenkins;
     }

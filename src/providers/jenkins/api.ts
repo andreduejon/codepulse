@@ -11,12 +11,40 @@ interface JenkinsBuildApi {
   duration?: number;
   actions?: unknown[];
   changeSet?: { items?: unknown[] };
+  changeSets?: { items?: unknown[] }[];
 }
 
 interface JenkinsJobApi {
   displayName?: string;
   builds?: JenkinsBuildApi[];
   lastBuild?: { number?: number; url?: string } | null;
+}
+
+function treeApiSuffix(tree: string): string {
+  return `api/json?tree=${encodeURIComponent(tree)}`;
+}
+
+function shallowGraphTree(limit: number): string {
+  return `builds[number,url,result,building,timestamp,duration,actions[lastBuiltRevision[SHA1]]]{0,${limit}}`;
+}
+
+function buildRefsTree(limit: number): string {
+  return `builds[number,url]{0,${limit}}`;
+}
+
+function buildDetailTree(): string {
+  return [
+    "number",
+    "id",
+    "url",
+    "result",
+    "building",
+    "timestamp",
+    "duration",
+    "actions[lastBuiltRevision[SHA1],scmRevisionAction[revision[hash]]]",
+    "changeSets[items[commitId,id]]",
+    "changeSet[items[commitId,id]]",
+  ].join(",");
 }
 
 export function normalizeJenkinsJobUrl(url: string): string {
@@ -101,6 +129,29 @@ export function extractSha(raw: unknown): string | null {
   return visit(raw);
 }
 
+function collectShas(raw: unknown, out: Set<string>, seen = new Set<unknown>()) {
+  if (!raw || typeof raw !== "object" || seen.has(raw)) return;
+  seen.add(raw);
+  const obj = raw as Record<string, unknown>;
+  for (const key of ["GIT_COMMIT", "commitId", "SHA1", "sha", "commit", "hash"] as const) {
+    const candidate = obj[key];
+    if (typeof candidate === "string" && /^[0-9a-f]{7,40}$/i.test(candidate)) out.add(candidate);
+  }
+  for (const child of Object.values(obj)) {
+    if (Array.isArray(child)) {
+      for (const item of child) collectShas(item, out, seen);
+    } else {
+      collectShas(child, out, seen);
+    }
+  }
+}
+
+export function extractCandidateShas(raw: unknown): string[] {
+  const shas = new Set<string>();
+  collectShas(raw, shas);
+  return [...shas];
+}
+
 function mapStatus(build: JenkinsBuildApi): Pick<JenkinsRun, "status" | "conclusion"> {
   if (build.building) return { status: "running", conclusion: null };
   const result = (build.result ?? "UNKNOWN").toLowerCase();
@@ -134,20 +185,28 @@ export async function fetchJenkinsDataForSHAs(
   username: string | undefined,
   token: string,
   shas: string[],
-  opts: { signal?: AbortSignal } = {},
+  opts: { signal?: AbortSignal; buildLimit?: number } = {},
 ): Promise<{ data: JenkinsRun[]; error: string | null }> {
+  const buildLimit = opts.buildLimit ?? 20;
   const wanted = new Set(shas.map(s => s.toLowerCase()));
   const runs: JenkinsRun[] = [];
   let firstError: string | null = null;
   await Promise.all(
     jobs.map(async job => {
       try {
-        const api = await fetchJson<JenkinsJobApi>(jenkinsApiUrl(job.url), username, token, opts.signal);
+        const api = await fetchJson<JenkinsJobApi>(
+          jenkinsApiUrl(job.url, treeApiSuffix(buildRefsTree(buildLimit))),
+          username,
+          token,
+          opts.signal,
+        );
         const builds = api.builds ?? (api.lastBuild ? [api.lastBuild] : []);
         await Promise.all(
-          builds.slice(0, 20).map(async ref => {
+          builds.slice(0, buildLimit).map(async ref => {
             if (!ref.number && !ref.url) return;
-            const buildUrl = ref.url ? jenkinsApiUrl(ref.url) : jenkinsApiUrl(`${job.url}/${ref.number}`);
+            const buildUrl = ref.url
+              ? jenkinsApiUrl(ref.url, treeApiSuffix(buildDetailTree()))
+              : jenkinsApiUrl(`${job.url}/${ref.number}`, treeApiSuffix(buildDetailTree()));
             const build = await fetchJson<JenkinsBuildApi>(buildUrl, username, token, opts.signal);
             const sha = extractSha(build);
             if (sha && wanted.has(sha.toLowerCase())) runs.push(mapRun(job, build, sha));
@@ -162,11 +221,49 @@ export async function fetchJenkinsDataForSHAs(
   return { data: runs, error: firstError };
 }
 
-export function buildJenkinsCommitDataMap(runs: JenkinsRun[]): Map<string, JenkinsCommitData> {
+export async function fetchJenkinsGraphDataForSHAs(
+  jobs: JenkinsJobConfig[],
+  username: string | undefined,
+  token: string,
+  shas: string[],
+  opts: { signal?: AbortSignal; buildLimit?: number } = {},
+): Promise<{ data: JenkinsRun[]; error: string | null }> {
+  const buildLimit = opts.buildLimit ?? 20;
+  const wanted = new Set(shas.map(s => s.toLowerCase()));
+  const runs: JenkinsRun[] = [];
+  let firstError: string | null = null;
+  await Promise.all(
+    jobs.map(async job => {
+      try {
+        const api = await fetchJson<JenkinsJobApi>(
+          jenkinsApiUrl(job.url, treeApiSuffix(shallowGraphTree(buildLimit))),
+          username,
+          token,
+          opts.signal,
+        );
+        const builds = api.builds ?? [];
+        for (const build of builds) {
+          const matches = extractCandidateShas(build.actions)
+            .map(sha => ({ sha, lower: sha.toLowerCase() }))
+            .filter(({ lower }) => wanted.has(lower));
+          const uniqueMatches = new Set(matches.map(({ sha }) => sha));
+          for (const sha of uniqueMatches) runs.push(mapRun(job, build, sha));
+        }
+      } catch (err) {
+        firstError ??= err instanceof Error ? err.message : String(err);
+      }
+    }),
+  );
+  runs.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  return { data: runs, error: firstError };
+}
+
+export function buildJenkinsCommitDataMap(runs: JenkinsRun[], resolved: boolean): Map<string, JenkinsCommitData> {
   const map = new Map<string, JenkinsCommitData>();
   for (const run of runs) {
-    const existing = map.get(run.headSha) ?? { sha: run.headSha, runs: [] };
+    const existing = map.get(run.headSha) ?? { sha: run.headSha, runs: [], resolved };
     existing.runs.push(run);
+    existing.resolved = resolved;
     map.set(run.headSha, existing);
   }
   for (const data of map.values()) data.runs.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));

@@ -111,6 +111,7 @@ export interface JenkinsMenuConfig {
   enabled: boolean;
   username?: string;
   tokenEnvVar: string;
+  graphBuildLimit: 10 | 20 | 50;
   jobs: { label?: string; url: string }[];
 }
 
@@ -224,6 +225,18 @@ function buildJenkinsProviderItems(
       valid: () => !!jenkinsCfg.tokenEnvVar.trim() && !!process.env[jenkinsCfg.tokenEnvVar],
     },
     {
+      kind: "cycle",
+      label: "Fetch size per job",
+      options: ["10", "20", "50"],
+      get: () => String(jenkinsCfg.graphBuildLimit),
+      set: v => {
+        const graphBuildLimit = v === "10" ? 10 : v === "50" ? 50 : 20;
+        const newCfg = { ...jenkinsCfg, graphBuildLimit };
+        onChange?.(newCfg);
+        persist?.(newCfg);
+      },
+    },
+    {
       kind: "editable",
       label: "New job",
       placeholder: "Enter job URL...",
@@ -296,6 +309,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
           enabled: jenkinsCfg.enabled,
           username: jenkinsCfg.username,
           tokenEnvVar: jenkinsCfg.tokenEnvVar,
+          graphBuildLimit: jenkinsCfg.graphBuildLimit,
           jobs: jenkinsCfg.jobs,
         };
       }
@@ -541,7 +555,12 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
   const providerItems = createMemo<SettingItem[]>(() => {
     const ghCfg = opts.githubConfig?.() ?? { enabled: false, tokenEnvVar: "GITHUB_TOKEN", trustedEnterpriseHost: null };
     const tokenSource = getTokenSource(ghCfg.tokenEnvVar);
-    const jenkinsCfg = opts.jenkinsConfig?.() ?? { enabled: false, tokenEnvVar: "JENKINS_TOKEN", jobs: [] };
+    const jenkinsCfg = opts.jenkinsConfig?.() ?? {
+      enabled: false,
+      tokenEnvVar: "JENKINS_TOKEN",
+      graphBuildLimit: 20 as const,
+      jobs: [],
+    };
     return [
       ...buildGitHubProviderItems(ghCfg, state.remoteUrl(), tokenSource, opts.onGithubConfigChange, newCfg =>
         persistFullConfig({

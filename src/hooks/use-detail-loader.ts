@@ -65,8 +65,9 @@ export function useDetailLoader({
   createEffect(() => {
     const commit = state.selectedCommit();
     // Read activeProviderView reactively so this effect re-fires when the user
-    // switches between git and github-actions views (lazy load on view change).
-    const isProviderMode = state.activeProviderView() === "github-actions";
+    // switches between git and provider views (lazy load on view change).
+    const activeProviderView = state.activeProviderView();
+    const isProviderMode = activeProviderView === "github-actions" || activeProviderView === "jenkins";
 
     // Cancel any pending debounce and abort in-flight git subprocesses
     if (detailDebounceTimer) {
@@ -96,9 +97,15 @@ export function useDetailLoader({
       // Jump — keep current tab, don't reset cursor (detail.tsx cursor effect
       // will position it on the correct parent/child entry using pendingJumpDirection).
     } else {
-      // In CI mode default to the "github-actions" tab; otherwise default to "files" (or
-      // "unstaged" for the uncommitted node).
-      const defaultTab = isUncommitted ? "unstaged" : isProviderMode ? "github-actions" : "files";
+      // In provider mode default to that provider tab; otherwise default to
+      // "files" (or "unstaged" for the uncommitted node).
+      const defaultTab = isUncommitted
+        ? "unstaged"
+        : activeProviderView === "jenkins"
+          ? "jenkins"
+          : activeProviderView === "github-actions"
+            ? "github-actions"
+            : "files";
       actions.setDetailActiveTab(defaultTab);
       actions.setDetailCursorIndex(0);
       // Clear any stale jump direction on normal (non-jump) navigation
@@ -185,9 +192,9 @@ export function useDetailLoader({
       else if (tab === "untracked") isEmpty = ud.untracked.length === 0;
     } else if (!isUncommitted && cd) {
       if (tab === "files") isEmpty = cd.files.length === 0;
-    } else if (!isUncommitted && tab === "github-actions" && getCommitData) {
-      // Actions tab: treat as empty when the fetch is not in-flight and there
-      // is no CI data for this commit — mirrors the Files tab behaviour.
+    } else if (!isUncommitted && (tab === "github-actions" || tab === "jenkins") && getCommitData) {
+      // Provider tab: treat as empty when fetch not in-flight and there is no
+      // CI data for this commit — mirrors Files tab behaviour.
       const isLoading = getProviderLoading?.() ?? false;
       if (!isLoading) {
         isEmpty = !getCommitData(commit.hash);
