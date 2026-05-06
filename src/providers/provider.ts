@@ -156,3 +156,8 @@ export function nextProviderView(current: ProviderView): ProviderView {
 export function getProvider(id: ProviderView): ProviderRegistration | undefined {
   return providerRegistry.find(p => p.id === id);
 }
+
+export function providerDisplayName(view: ProviderView): string {
+  if (view === "git") return "Git";
+  return getProvider(view)?.displayName ?? view;
+}
