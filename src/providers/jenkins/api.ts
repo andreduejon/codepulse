@@ -1,5 +1,5 @@
 import type { GraphBadge } from "../provider";
-import type { JenkinsCommitData, JenkinsJob, JenkinsJobConfig, JenkinsRun } from "./types";
+import type { JenkinsCommitData, JenkinsJob, JenkinsJobConfig, JenkinsRun, JenkinsStage } from "./types";
 
 interface JenkinsBuildApi {
   number?: number;
@@ -20,12 +20,30 @@ interface JenkinsJobApi {
   lastBuild?: { number?: number; url?: string } | null;
 }
 
+interface JenkinsWfapiStage {
+  id?: string;
+  name?: string;
+  status?: string;
+  startTimeMillis?: number;
+  durationMillis?: number;
+}
+
+interface JenkinsWfapiDescribe {
+  id?: string;
+  name?: string;
+  status?: string;
+  startTimeMillis?: number;
+  endTimeMillis?: number;
+  durationMillis?: number;
+  stages?: JenkinsWfapiStage[];
+}
+
 function treeApiSuffix(tree: string): string {
   return `api/json?tree=${encodeURIComponent(tree)}`;
 }
 
 function shallowGraphTree(limit: number): string {
-  return `builds[number,url,result,building,timestamp,duration,actions[lastBuiltRevision[SHA1]]]{0,${limit}}`;
+  return `builds[number,url,result,building,timestamp,duration,actions[lastBuiltRevision[SHA1]],changeSets[items[commitId,id]],changeSet[items[commitId,id]]]{0,${limit}}`;
 }
 
 function buildRefsTree(limit: number): string {
@@ -71,14 +89,27 @@ function authHeaders(username: string | undefined, token: string): Record<string
   return { Authorization: `Basic ${Buffer.from(`${username}:${token}`).toString("base64")}` };
 }
 
+function isJenkinsLoginRedirect(location: string | null): boolean {
+  return !!location && /securityRealm\/commenceLogin/i.test(location);
+}
+
+function jenkinsAuthError(): Error {
+  return new Error("Jenkins authentication failed. Verify username, token, and complete browser login if required.");
+}
+
 async function fetchJson<T>(
   url: string,
   username: string | undefined,
   token: string,
   signal?: AbortSignal,
 ): Promise<T> {
-  const res = await fetch(url, { headers: authHeaders(username, token), signal });
+  const res = await fetch(url, { headers: authHeaders(username, token), signal, redirect: "manual" });
+  if (res.status >= 300 && res.status < 400 && isJenkinsLoginRedirect(res.headers.get("location"))) {
+    throw jenkinsAuthError();
+  }
+  const contentType = res.headers.get("content-type") ?? "";
   if (!res.ok) throw new Error(`Jenkins ${res.status}: ${res.statusText}`);
+  if (/text\/html/i.test(contentType)) throw jenkinsAuthError();
   return (await res.json()) as T;
 }
 
@@ -156,6 +187,25 @@ function mapStatus(build: JenkinsBuildApi): Pick<JenkinsRun, "status" | "conclus
   if (build.building) return { status: "running", conclusion: null };
   const result = (build.result ?? "UNKNOWN").toLowerCase();
   return { status: "completed", conclusion: result };
+}
+
+function mapWfapiStatus(status: string | undefined): { status: string; conclusion: string | null } {
+  switch (status) {
+    case "IN_PROGRESS":
+      return { status: "running", conclusion: null };
+    case "SUCCESS":
+      return { status: "completed", conclusion: "success" };
+    case "FAILED":
+    case "FAILURE":
+    case "ERROR":
+      return { status: "completed", conclusion: "failure" };
+    case "ABORTED":
+      return { status: "completed", conclusion: "cancelled" };
+    case "NOT_EXECUTED":
+      return { status: "completed", conclusion: "skipped" };
+    default:
+      return { status: "completed", conclusion: status ? status.toLowerCase() : null };
+  }
 }
 
 function mapRun(job: JenkinsJobConfig, build: JenkinsBuildApi, sha: string): JenkinsRun {
@@ -243,11 +293,20 @@ export async function fetchJenkinsGraphDataForSHAs(
         );
         const builds = api.builds ?? [];
         for (const build of builds) {
-          const matches = extractCandidateShas(build.actions)
+          const exactSha = extractSha(build);
+          if (exactSha && wanted.has(exactSha.toLowerCase())) {
+            runs.push(mapRun(job, build, exactSha));
+            continue;
+          }
+
+          const fallbackMatches = extractCandidateShas(build.actions)
             .map(sha => ({ sha, lower: sha.toLowerCase() }))
             .filter(({ lower }) => wanted.has(lower));
-          const uniqueMatches = new Set(matches.map(({ sha }) => sha));
-          for (const sha of uniqueMatches) runs.push(mapRun(job, build, sha));
+          const uniqueMatches = [...new Set(fallbackMatches.map(({ sha }) => sha))];
+
+          // Ambiguous multi-SCM build: better show nothing than attach same run to
+          // multiple commits in the graph.
+          if (uniqueMatches.length === 1) runs.push(mapRun(job, build, uniqueMatches[0]));
         }
       } catch (err) {
         firstError ??= err instanceof Error ? err.message : String(err);
@@ -304,15 +363,41 @@ export async function fetchJenkinsRunJobs(
   signal?: AbortSignal,
 ): Promise<{ jobs: JenkinsJob[]; error: string | null }> {
   try {
-    const build = await fetchJson<JenkinsBuildApi>(jenkinsApiUrl(run.url), username, token, signal);
+    const wfapi = await fetchJson<JenkinsWfapiDescribe>(
+      jenkinsApiUrl(run.url, "wfapi/describe"),
+      username,
+      token,
+      signal,
+    );
+    const stages: JenkinsStage[] = (wfapi.stages ?? []).map(stage => {
+      const mapped = mapWfapiStatus(stage.status);
+      const startedAt = stage.startTimeMillis ? new Date(stage.startTimeMillis).toISOString() : null;
+      const completedAt =
+        stage.startTimeMillis != null && stage.durationMillis != null
+          ? new Date(stage.startTimeMillis + stage.durationMillis).toISOString()
+          : null;
+      return {
+        id: stage.id ?? stage.name ?? "stage",
+        name: stage.name ?? "stage",
+        status: mapped.status,
+        conclusion: mapped.conclusion,
+        startedAt,
+        completedAt,
+      };
+    });
+    const wfapiStartedAt = wfapi.startTimeMillis ? new Date(wfapi.startTimeMillis).toISOString() : null;
+    const wfapiCompletedAt =
+      wfapi.startTimeMillis != null && wfapi.durationMillis != null
+        ? new Date(wfapi.startTimeMillis + wfapi.durationMillis).toISOString()
+        : null;
     const job: JenkinsJob = {
       id: run.id,
-      name: run.name,
+      name: "build",
       status: run.status,
       conclusion: run.conclusion,
-      startedAt: run.startedAt,
-      completedAt: build.timestamp && build.duration ? new Date(build.timestamp + build.duration).toISOString() : null,
-      steps: [],
+      startedAt: wfapiStartedAt ?? run.startedAt,
+      completedAt: wfapiCompletedAt,
+      steps: stages,
     };
     return { jobs: [job], error: null };
   } catch (err) {

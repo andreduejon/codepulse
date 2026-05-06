@@ -11,7 +11,7 @@ import type {
   GitHubJobFetchResult,
   GitHubWorkflowRun,
 } from "../providers/github-actions/types";
-import type { JenkinsCommitData, JenkinsJobFetchResult, JenkinsRun } from "../providers/jenkins/types";
+import type { JenkinsCommitData, JenkinsJob, JenkinsJobFetchResult, JenkinsRun } from "../providers/jenkins/types";
 import { getAvailableTabs } from "../utils/tab-utils";
 import CommitDetailView from "./detail";
 import type { DetailNavRef } from "./detail-types";
@@ -45,6 +45,7 @@ export interface DetailPanelProps {
   jenkinsGetCommitData?: (sha: string) => JenkinsCommitData | null;
   jenkinsFetchJobsForRun?: (run: JenkinsRun) => Promise<JenkinsJobFetchResult>;
   jenkinsFetchCommitData?: (sha: string) => Promise<void>;
+  onOpenJenkinsJobLog?: (job: JenkinsJob, run: JenkinsRun, jobs?: JenkinsJob[]) => void;
   jenkinsProviderStatus?: ProviderStatus;
 }
 
@@ -197,6 +198,7 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
             jenkinsGetCommitData={props.jenkinsGetCommitData}
             jenkinsFetchJobsForRun={props.jenkinsFetchJobsForRun}
             jenkinsFetchCommitData={props.jenkinsFetchCommitData}
+            onOpenJenkinsJobLog={props.onOpenJenkinsJobLog}
             jenkinsProviderStatus={props.jenkinsProviderStatus}
           />
         </Show>

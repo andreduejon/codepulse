@@ -907,6 +907,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 detailFocused={() => state.detailFocused()}
                 setDetailCursorAction={actions.setDetailCursorAction}
                 setDetailCursorIndex={actions.setDetailCursorIndex}
+                onOpenJobLog={props.onOpenJenkinsJobLog}
               />
             </Show>
           </>

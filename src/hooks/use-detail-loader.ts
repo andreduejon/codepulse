@@ -192,13 +192,9 @@ export function useDetailLoader({
       else if (tab === "untracked") isEmpty = ud.untracked.length === 0;
     } else if (!isUncommitted && cd) {
       if (tab === "files") isEmpty = cd.files.length === 0;
-    } else if (!isUncommitted && (tab === "github-actions" || tab === "jenkins") && getCommitData) {
-      // Provider tab: treat as empty when fetch not in-flight and there is no
-      // CI data for this commit — mirrors Files tab behaviour.
-      const isLoading = getProviderLoading?.() ?? false;
-      if (!isLoading) {
-        isEmpty = !getCommitData(commit.hash);
-      }
+    } else if (!isUncommitted && (tab === "github-actions" || tab === "jenkins")) {
+      // Provider tabs own their empty/loading UI. Never auto-switch away.
+      isEmpty = false;
     }
 
     if (!isEmpty) return;

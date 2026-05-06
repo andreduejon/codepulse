@@ -1,5 +1,5 @@
 import type { Accessor } from "solid-js";
-import { createEffect, createSignal, untrack } from "solid-js";
+import { createEffect, createSignal, onCleanup, untrack } from "solid-js";
 import type { AppActions, AppState } from "../../context/state";
 import { providerError, providerIdle, providerLoading, providerUnavailable } from "../../context/state";
 import { collectTopSHAs } from "../github-actions/sha-selection";
@@ -70,6 +70,7 @@ export function useJenkinsCI(opts: {
   let lastFetchedAt = 0;
   let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
   let fetchAbortCtrl: AbortController | null = null;
+  let backgroundFetchAbortCtrl: AbortController | null = null;
 
   function rebuildCaches() {
     const allRuns = [...runCache.values()];
@@ -209,10 +210,34 @@ export function useJenkinsCI(opts: {
   });
 
   createEffect(() => {
+    const rows = state.graphRows();
+    if (rows.length === 0) return;
+    if (!configAccessor().enabled) return;
+    if (!isAvailable()) return;
+
+    const allSHAs = collectTopSHAs(rows, INITIAL_SHA_LIMIT);
+    const newSHAs = allSHAs.filter(sha => !queriedSHAs.has(sha));
+    if (newSHAs.length === 0) return;
+
+    if (backgroundFetchAbortCtrl) backgroundFetchAbortCtrl.abort();
+    const ctrl = new AbortController();
+    backgroundFetchAbortCtrl = ctrl;
+    void doInitialFetch(ctrl.signal, allSHAs, false);
+  });
+
+  createEffect(() => {
     const _interval = state.autoRefreshInterval();
     if (state.activeProviderView() === "jenkins") {
       stopAutoRefresh();
       startAutoRefresh();
+    }
+  });
+
+  onCleanup(() => {
+    stopAutoRefresh();
+    if (backgroundFetchAbortCtrl) {
+      backgroundFetchAbortCtrl.abort();
+      backgroundFetchAbortCtrl = null;
     }
   });
 

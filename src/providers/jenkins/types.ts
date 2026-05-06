@@ -37,6 +37,7 @@ export interface JenkinsStage {
   id: string;
   name: string;
   status: string;
+  conclusion: string | null;
   startedAt: string | null;
   completedAt: string | null;
 }

@@ -44,8 +44,7 @@ interface TabAvailabilityInput {
  *  - detail panel tab bar (to determine which tabs are disabled)
  */
 export function getAvailableTabs(input: TabAvailabilityInput): DetailTab[] {
-  const { commit, uncommittedDetail, commitDetail, stashByParent, activeProviderView, getCommitData, providerLoading } =
-    input;
+  const { commit, uncommittedDetail, commitDetail, stashByParent, activeProviderView } = input;
 
   if (commit && isUncommittedHash(commit.hash)) {
     const ud = uncommittedDetail;
@@ -60,14 +59,9 @@ export function getAvailableTabs(input: TabAvailabilityInput): DetailTab[] {
   const tabs: DetailTab[] = [];
 
   if (isProviderMode) {
-    // Actions tab is available when:
-    //  - no getCommitData provided (backwards-compatible, always include)
-    //  - provider is still loading (don't switch away prematurely)
-    //  - CI data exists for this commit
-    const hasData = !getCommitData || providerLoading || (commit && !!getCommitData(commit.hash));
-    if (hasData) {
-      tabs.push(activeProviderView === "jenkins" ? "jenkins" : "github-actions");
-    }
+    // In provider mode keep provider tab available even when selected commit has
+    // no matching CI data yet. The tab itself renders loading / empty state.
+    tabs.push(activeProviderView === "jenkins" ? "jenkins" : "github-actions");
   } else {
     if (commitDetail && commitDetail.files.length > 0) {
       tabs.push("files");

@@ -14,7 +14,6 @@ import { KeyHint, KeyHintSeparator } from "../../components/key-hint";
 import MessageBox from "../../components/message-box";
 import { useTheme } from "../../context/theme";
 import { useT } from "../../hooks/use-t";
-import type { GitHubJob, GitHubWorkflowRun } from "../../providers/github-actions/types";
 
 type LogLineKind = "group" | "error" | "warning" | "normal";
 type LogViewMode = "all" | "issues" | "errors";
@@ -32,10 +31,10 @@ interface LoadedLog {
 }
 
 interface JobLogDialogProps {
-  job: GitHubJob;
-  jobs: GitHubJob[];
-  run: GitHubWorkflowRun;
-  fetchLog: (job: GitHubJob) => Promise<string>;
+  job: { id: string | number; name: string };
+  jobs: { id: string | number; name: string }[];
+  run: { name: string; runNumber: number };
+  fetchLog: (job: { id: string | number; name: string }) => Promise<string>;
   onClose: () => void;
 }
 
@@ -53,15 +52,21 @@ const VIEW_MODE_TITLE_LABEL: Record<LogViewMode, string> = {
 };
 
 function stripTimestamp(line: string): string {
-  return line.replace(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z\s?/, "");
+  return line
+    .replace(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z\s?/, "")
+    .replace(/^\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z\]\s?/, "");
 }
 
 function classifyLine(line: string): { kind: LogLineKind; text: string } | null {
   if (line.startsWith("##[endgroup]") || line.trim() === "") return null;
   if (line.startsWith("##[group]")) return { kind: "group", text: line.slice("##[group]".length) };
+  if (/^\[Pipeline\]\s+stage$/i.test(line)) return { kind: "group", text: line };
+  if (/^\[Pipeline\]\s+\{\s+\(.+\)\s*$/i.test(line)) return { kind: "group", text: line };
   if (line.startsWith("##[error]")) return { kind: "error", text: line.slice("##[error]".length) };
   if (line.startsWith("##[warning]")) return { kind: "warning", text: line.slice("##[warning]".length) };
-  if (/^error:/i.test(line) || /^\s+at\s/.test(line)) return { kind: "error", text: line };
+  if (/\bwarning\b[: ]/i.test(line)) return { kind: "warning", text: line };
+  if (/^error:/i.test(line) || /^\s+at\s/.test(line) || /\b(error|exception|failed|failure)\b[: ]/i.test(line))
+    return { kind: "error", text: line };
   return { kind: "normal", text: line };
 }
 
@@ -87,24 +92,25 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
   const dialogHeight = () => dialogFrame().height;
 
   const orderedJobs = createMemo(() => {
-    const seen = new Set<number>();
-    const result: GitHubJob[] = [];
+    const seen = new Set<string>();
+    const result: { id: string | number; name: string }[] = [];
     for (const job of props.jobs.length > 0 ? props.jobs : [props.job]) {
-      if (seen.has(job.id)) continue;
-      seen.add(job.id);
+      const key = String(job.id);
+      if (seen.has(key)) continue;
+      seen.add(key);
       result.push(job);
     }
-    if (!seen.has(props.job.id)) result.unshift(props.job);
+    if (!seen.has(String(props.job.id))) result.unshift(props.job);
     return result;
   });
 
   const initialIndex = () =>
     Math.max(
       0,
-      orderedJobs().findIndex(job => job.id === props.job.id),
+      orderedJobs().findIndex(job => String(job.id) === String(props.job.id)),
     );
   const [jobIndex, setJobIndex] = createSignal(initialIndex());
-  const [logs, setLogs] = createSignal<Map<number, LoadedLog>>(new Map());
+  const [logs, setLogs] = createSignal<Map<string, LoadedLog>>(new Map());
   const [scrollRow, setScrollRow] = createSignal(0);
   const [viewMode, setViewMode] = createSignal<LogViewMode>("all");
   const [wrapEnabled, setWrapEnabled] = createSignal(false);
@@ -113,19 +119,19 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
 
   const currentJob = () => orderedJobs()[jobIndex()] ?? props.job;
   const hasMultipleJobs = () => orderedJobs().length > 1;
-  const currentLoadedLog = () => logs().get(currentJob().id) ?? { raw: null, loading: true, error: null };
+  const currentLoadedLog = () => logs().get(String(currentJob().id)) ?? { raw: null, loading: true, error: null };
 
-  const setLoadedLog = (jobId: number, loaded: LoadedLog) => {
+  const setLoadedLog = (jobId: string | number, loaded: LoadedLog) => {
     setLogs(prev => {
       const next = new Map(prev);
-      next.set(jobId, loaded);
+      next.set(String(jobId), loaded);
       return next;
     });
   };
 
   const loadCurrentJob = () => {
     const job = currentJob();
-    const cached = logs().get(job.id);
+    const cached = logs().get(String(job.id));
     // Cache terminal failure/empty states too. Otherwise the effect below
     // re-enters after setting `{ loading: false, error: ... }` and refetches
     // the same failed/empty log forever.
@@ -306,7 +312,7 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
     return (
       <box flexDirection="row" width="100%">
         <text flexShrink={0} wrapMode="none" fg={th.foregroundMuted}>{`${lineNo}  `}</text>
-        <text wrapMode={contentWrapMode} fg={th.foregroundMuted}>
+        <text wrapMode={contentWrapMode} fg={th.foreground}>
           {line.text}
         </text>
       </box>

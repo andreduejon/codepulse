@@ -30,6 +30,7 @@ import type { StartupMode } from "./main";
 import JobLogDialog from "./providers/github-actions/log-dialog";
 import type { GitHubJob, GitHubWorkflowRun } from "./providers/github-actions/types";
 import { useGitHubCI } from "./providers/github-actions/use-github-ci";
+import type { JenkinsJob, JenkinsRun } from "./providers/jenkins/types";
 import { useJenkinsCI } from "./providers/jenkins/use-jenkins-ci";
 
 interface AppProps {
@@ -139,9 +140,10 @@ function AppContent(props: Readonly<AppContentProps>) {
   const [diffTarget, setDiffTarget] = createSignal<DiffTarget | null>(null);
   /** Target for the job log dialog (set when user opens a job log). */
   const [jobLogTarget, setJobLogTarget] = createSignal<{
-    job: GitHubJob;
-    run: GitHubWorkflowRun;
-    jobs: GitHubJob[];
+    job: { id: string | number; name: string };
+    run: { name: string; runNumber: number };
+    jobs: { id: string | number; name: string }[];
+    fetchLog: (job: { id: string | number; name: string }) => Promise<string>;
   } | null>(null);
 
   /** Command bar mode — drives placeholder text and key routing. */
@@ -221,7 +223,22 @@ function AppContent(props: Readonly<AppContentProps>) {
   };
 
   const handleOpenJobLog = (job: GitHubJob, run: GitHubWorkflowRun, jobs: GitHubJob[] = [job]) => {
-    setJobLogTarget({ job, run, jobs: jobs.length > 0 ? jobs : [job] });
+    setJobLogTarget({
+      job,
+      run,
+      jobs: jobs.length > 0 ? jobs : [job],
+      fetchLog: currentJob => gitHubCI.fetchJobLogForJob(Number(currentJob.id)),
+    });
+    setDialog("job-log");
+  };
+
+  const handleOpenJenkinsJobLog = (job: JenkinsJob, run: JenkinsRun, jobs: JenkinsJob[] = [job]) => {
+    setJobLogTarget({
+      job,
+      run,
+      jobs: jobs.length > 0 ? jobs : [job],
+      fetchLog: () => jenkinsCI.fetchRunLog(run),
+    });
     setDialog("job-log");
   };
 
@@ -590,6 +607,7 @@ function AppContent(props: Readonly<AppContentProps>) {
                         jenkinsGetCommitData={jenkinsCI.getCommitData}
                         jenkinsFetchJobsForRun={jenkinsCI.fetchJobsForRun}
                         jenkinsFetchCommitData={jenkinsCI.fetchCommitDataForSHA}
+                        onOpenJenkinsJobLog={handleOpenJenkinsJobLog}
                         jenkinsProviderStatus={state.providerStatus()}
                       />
                     </box>
@@ -660,6 +678,7 @@ function AppContent(props: Readonly<AppContentProps>) {
                     jenkinsGetCommitData={jenkinsCI.getCommitData}
                     jenkinsFetchJobsForRun={jenkinsCI.fetchJobsForRun}
                     jenkinsFetchCommitData={jenkinsCI.fetchCommitDataForSHA}
+                    onOpenJenkinsJobLog={handleOpenJenkinsJobLog}
                     jenkinsProviderStatus={state.providerStatus()}
                   />
                 </Show>
@@ -670,7 +689,7 @@ function AppContent(props: Readonly<AppContentProps>) {
                       job={target().job}
                       jobs={target().jobs}
                       run={target().run}
-                      fetchLog={job => gitHubCI.fetchJobLogForJob(job.id)}
+                      fetchLog={target().fetchLog}
                       onClose={() => setDialog(null)}
                     />
                   )}
