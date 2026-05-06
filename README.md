@@ -13,8 +13,10 @@ read-only by default codebase dashboard: git history as the primary navigation
 surface, with CI/CD, security, and code quality signals layered onto the same
 commit and branch context.
 
-The current release adds GitHub Actions integration on top of the git experience.
-Integration planning for future milestones lives in `.planning/` locally and is
+The current release adds GitHub Actions and Jenkins provider support on top of
+the git experience, including commit-linked run views, shared log browsing, and
+provider configuration from the TUI.
+Integration planning for future milestones lives in `planning/` locally and is
 summarized in the roadmap below.
 
 ## Requirements
@@ -137,7 +139,9 @@ Planned milestones currently follow this shape:
   history views
 - `0.3.0`: GitHub Actions integration, provider status surfacing, and repo
   trust cleanup
-- `0.3.0+`: read-only integrations for Jenkins, Snyk, and SonarQube
+- `0.4.0`: Jenkins provider MVP, shared provider run tree, shared log dialog,
+  and provider polish
+- `0.5.0+`: read-only integrations for Snyk, SonarQube, and deeper debug tooling
 
 The intent is to reach `1.0.0` once the integration model and configuration
 surface are stable.
