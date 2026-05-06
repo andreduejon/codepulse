@@ -198,7 +198,7 @@ describe("buildJenkinsGraphBadges", () => {
 describe("fetchJenkinsGraphDataForSHAs", () => {
   test("sends Basic auth header and maps matching build", async () => {
     const originalFetch = globalThis.fetch;
-    const calls: RequestInfo[] = [];
+    const calls: (RequestInfo | URL)[] = [];
     globalThis.fetch = (async (input, init) => {
       calls.push(input);
       expect((init?.headers as Record<string, string>).Authorization).toBe("Basic dXNlcjp0b2tlbg==");
@@ -242,7 +242,7 @@ describe("fetchJenkinsGraphDataForSHAs", () => {
       new Response(null, {
         status: 302,
         headers: { location: "https://jenkins.example.com/securityRealm/commenceLogin" },
-      })) as typeof fetch;
+      })) as unknown as typeof fetch;
 
     try {
       const result = await fetchJenkinsGraphDataForSHAs(

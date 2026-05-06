@@ -2,6 +2,76 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] - 2026-05-06
+
+### Added
+
+- **Jenkins provider MVP** — configure Jenkins jobs from the Providers menu and
+  switch to Jenkins from the graph view with `tab`.
+- **Jenkins graph badges** — recent Jenkins builds are matched to visible commits
+  by exact Git SHA from `changeSets`, with guarded fallback handling for
+  multi-SCM builds.
+- **Jenkins detail tab** — selected commits show matching Jenkins workflow runs
+  in the shared provider detail tree.
+- **Lazy Jenkins stage loading** — expanding a Jenkins run loads real pipeline
+  stages from `wfapi/describe` only when needed.
+- **Jenkins build logs** — pressing Enter on the build row opens the shared job
+  log dialog using Jenkins `consoleText` output.
+- **Provider run opener** — `o` in the log dialog opens the GitHub Actions run or
+  Jenkins build URL in the system browser.
+- **Raw log view** — the log dialog now cycles `all → issues → errors → raw`,
+  allowing unclassified output when tests intentionally print error text.
+- **Per-provider freshness display** — Providers menu headers show the last
+  successful refresh time for GitHub and Jenkins separately.
+- **Jenkins configuration** — Providers menu supports username, token env var,
+  fetch size per job (`10` / `20` / `50`), and editable job URLs.
+- **Jenkins tests** — API tests cover URL normalization, label derivation, SHA
+  extraction, graph badge aggregation, auth headers, and SSO redirect detection.
+
+### Changed
+
+- GitHub Actions and Jenkins detail tabs now share a single provider run tree
+  component for consistent navigation, status icons, durations, and placeholders.
+- GitHub Actions and Jenkins logs now share one log dialog with provider-neutral
+  run/job navigation and parsing.
+- Log readability improved: normal log lines use foreground text, Jenkins
+  timestamps are stripped, and Jenkins pipeline stage markers are highlighted.
+- Provider labels are harmonized as `Git`, `GitHub`, and `Jenkins` in visible UI
+  while internal provider IDs remain lowercase.
+- Jenkins run rows hide duplicate run duration; the build row shows exact
+  `wfapi` duration and stage rows show stage durations.
+- Provider refreshes now refresh the active provider as well as repository data.
+- Completed Jenkins jobs and logs are cached for the session; running Jenkins
+  runs remain refreshable.
+- GitHub and Jenkins HTTP fetches now share timeout/retry helpers.
+- OpenTUI dependencies updated from `0.2.2` to `0.2.3`.
+
+### Fixed
+
+- Jenkins authentication failures now detect SSO redirects and HTML login pages
+  instead of silently showing empty results.
+- Jenkins tab availability now stays visible in Jenkins provider mode, including
+  loading and empty states.
+- Detail cursor clamping no longer blocks Jenkins tab navigation.
+- Jenkins shallow graph preload includes `changeSets` / `changeSet` data for more
+  reliable SHA matching.
+- Ambiguous multi-SCM Jenkins builds no longer attach the same run to multiple
+  commits.
+- Jenkins `wfapi` timing now drives build/stage durations, avoiding mismatched
+  build vs stage time after expansion.
+- Failed or empty log loads are cached in the dialog to avoid repeated fetch
+  loops.
+- Type-check issues in provider menu config and Jenkins fetch mocks were fixed.
+
+### Refactored
+
+- Extracted shared provider run tree UI used by GitHub Actions and Jenkins.
+- Extracted shared provider status and HTTP retry/timeout utilities.
+- Removed unused provider foundation interfaces and unused GitHub log fetch prop
+  plumbing.
+- Kept Jenkins auth tokens as environment variable references only; raw tokens
+  are never stored in config.
+
 ## [0.3.0] - 2026-05-03
 
 ### Added

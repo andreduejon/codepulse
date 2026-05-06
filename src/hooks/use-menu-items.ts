@@ -90,13 +90,12 @@ export interface MenuItemsOptions {
   githubConfig?: Accessor<{ enabled: boolean; tokenEnvVar: string; trustedEnterpriseHost: string | null } | undefined>;
   /** Callback to update GitHub provider config. */
   onGithubConfigChange?: (cfg: { enabled: boolean; tokenEnvVar: string; trustedEnterpriseHost: string | null }) => void;
-  jenkinsConfig?: Accessor<
-    { enabled: boolean; username?: string; tokenEnvVar: string; jobs: { label?: string; url: string }[] } | undefined
-  >;
+  jenkinsConfig?: Accessor<JenkinsMenuConfig | undefined>;
   onJenkinsConfigChange?: (cfg: {
     enabled: boolean;
     username?: string;
     tokenEnvVar: string;
+    graphBuildLimit: 10 | 20 | 50;
     jobs: { label?: string; url: string }[];
   }) => void;
 }
@@ -131,9 +130,9 @@ export function buildGitHubProviderItems(
   ghCfg: GitHubMenuConfig,
   remoteUrl: string,
   tokenSource: "env" | null,
-  lastRefresh: () => string,
   onChange?: (cfg: GitHubMenuConfig) => void,
   persist?: (cfg: GitHubMenuConfig) => void,
+  lastRefresh: () => string = () => "never",
 ): SettingItem[] {
   const remoteRepo = parseGitHubRemote(remoteUrl);
   const remoteHost = remoteRepo?.hostname ?? null;
@@ -192,9 +191,9 @@ export function buildGitHubProviderItems(
 
 function buildJenkinsProviderItems(
   jenkinsCfg: JenkinsMenuConfig,
-  lastRefresh: () => string,
   onChange?: (cfg: JenkinsMenuConfig) => void,
   persist?: (cfg: JenkinsMenuConfig) => void,
+  lastRefresh: () => string = () => "never",
 ): SettingItem[] {
   const items: SettingItem[] = [
     { kind: "header", label: "Jenkins", get: () => `last refresh ${lastRefresh()}` },
@@ -244,7 +243,7 @@ function buildJenkinsProviderItems(
       options: ["10", "20", "50"],
       get: () => String(jenkinsCfg.graphBuildLimit),
       set: v => {
-        const graphBuildLimit = v === "10" ? 10 : v === "50" ? 50 : 20;
+        const graphBuildLimit: 10 | 20 | 50 = v === "10" ? 10 : v === "50" ? 50 : 20;
         const newCfg = { ...jenkinsCfg, graphBuildLimit };
         onChange?.(newCfg);
         persist?.(newCfg);
@@ -578,18 +577,18 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
         ghCfg,
         state.remoteUrl(),
         tokenSource,
-        () => providerRefreshLabel("github-actions"),
         opts.onGithubConfigChange,
         newCfg =>
           persistFullConfig({
             providers: { github: { ...newCfg, trustedEnterpriseHost: newCfg.trustedEnterpriseHost ?? undefined } },
           }),
+        () => providerRefreshLabel("github-actions"),
       ),
       ...buildJenkinsProviderItems(
         jenkinsCfg,
-        () => providerRefreshLabel("jenkins"),
         opts.onJenkinsConfigChange,
         newCfg => persistFullConfig({ providers: { jenkins: newCfg } }),
+        () => providerRefreshLabel("jenkins"),
       ),
     ];
   });
