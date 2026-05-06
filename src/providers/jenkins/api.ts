@@ -1,4 +1,5 @@
 import type { GraphBadge } from "../provider";
+import { fetchWithRetry as fetchWithRetryPolicy, runLimited } from "../shared/http";
 import { categorize } from "../shared/status";
 import type { JenkinsCommitData, JenkinsJob, JenkinsJobConfig, JenkinsRun, JenkinsStage } from "./types";
 
@@ -40,62 +41,16 @@ interface JenkinsWfapiDescribe {
 }
 
 const JENKINS_REQUEST_TIMEOUT_MS = 20_000;
-const JENKINS_REQUEST_ATTEMPTS = 2;
-const JENKINS_RETRY_DELAY_MS = 500;
 const JENKINS_CONCURRENCY = 6;
-
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-function isRetryableStatus(status: number): boolean {
-  return status === 408 || status === 429 || status >= 500;
-}
-
-async function runLimited<T>(items: T[], limit: number, worker: (item: T) => Promise<void>): Promise<void> {
-  let index = 0;
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (index < items.length) {
-      const item = items[index++];
-      await worker(item);
-    }
-  });
-  await Promise.all(workers);
-}
-
-async function fetchWithTimeout(url: string, init: RequestInit = {}): Promise<Response> {
-  const ctrl = new AbortController();
-  const timer = setTimeout(
-    () => ctrl.abort(new Error(`Jenkins request timed out after ${JENKINS_REQUEST_TIMEOUT_MS}ms`)),
-    JENKINS_REQUEST_TIMEOUT_MS,
-  );
-  const externalSignal = init.signal;
-  const onAbort = () => ctrl.abort(externalSignal?.reason);
-
-  if (externalSignal) {
-    if (externalSignal.aborted) ctrl.abort(externalSignal.reason);
-    else externalSignal.addEventListener("abort", onAbort, { once: true });
-  }
-
-  try {
-    return await fetch(url, { ...init, signal: ctrl.signal });
-  } finally {
-    clearTimeout(timer);
-    externalSignal?.removeEventListener("abort", onAbort);
-  }
-}
+const JENKINS_HTTP_POLICY = {
+  timeoutMs: JENKINS_REQUEST_TIMEOUT_MS,
+  attempts: 2,
+  retryDelayMs: 500,
+  timeoutMessage: `Jenkins request timed out after ${JENKINS_REQUEST_TIMEOUT_MS}ms`,
+};
 
 async function fetchWithRetry(url: string, init: RequestInit = {}): Promise<Response> {
-  let lastError: unknown = null;
-  for (let attempt = 1; attempt <= JENKINS_REQUEST_ATTEMPTS; attempt++) {
-    try {
-      const res = await fetchWithTimeout(url, init);
-      if (!isRetryableStatus(res.status) || attempt === JENKINS_REQUEST_ATTEMPTS) return res;
-    } catch (err) {
-      lastError = err;
-      if (attempt === JENKINS_REQUEST_ATTEMPTS) throw err;
-    }
-    await sleep(JENKINS_RETRY_DELAY_MS * attempt);
-  }
-  throw lastError;
+  return fetchWithRetryPolicy(url, init, JENKINS_HTTP_POLICY);
 }
 
 function treeApiSuffix(tree: string): string {

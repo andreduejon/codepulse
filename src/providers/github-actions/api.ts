@@ -7,6 +7,7 @@
  */
 
 import type { GraphBadge } from "../../providers/provider";
+import { fetchWithRetry as fetchWithRetryPolicy } from "../shared/http";
 import { categorize } from "./status";
 import type {
   GitHubApiJob,
@@ -119,8 +120,12 @@ export function getGitHubToken(envVarName: string): string | null {
 // ── HTTP helpers ──────────────────────────────────────────────────────────
 
 const GITHUB_REQUEST_TIMEOUT_MS = 20_000;
-const GITHUB_REQUEST_ATTEMPTS = 2;
-const GITHUB_RETRY_DELAY_MS = 500;
+const GITHUB_HTTP_POLICY = {
+  timeoutMs: GITHUB_REQUEST_TIMEOUT_MS,
+  attempts: 2,
+  retryDelayMs: 500,
+  timeoutMessage: `GitHub request timed out after ${GITHUB_REQUEST_TIMEOUT_MS}ms`,
+};
 
 function createHeaders(token: string): Record<string, string> {
   return {
@@ -146,33 +151,6 @@ function graphqlEndpoint(repo: GitHubRepo): string {
   return `https://${repo.hostname}/api/graphql`;
 }
 
-async function fetchWithTimeout(
-  url: string,
-  init: RequestInit = {},
-  timeoutMs = GITHUB_REQUEST_TIMEOUT_MS,
-): Promise<Response> {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(new Error(`GitHub request timed out after ${timeoutMs}ms`)), timeoutMs);
-  const externalSignal = init.signal;
-
-  const onAbort = () => ctrl.abort(externalSignal?.reason);
-  if (externalSignal) {
-    if (externalSignal.aborted) ctrl.abort(externalSignal.reason);
-    else externalSignal.addEventListener("abort", onAbort, { once: true });
-  }
-
-  try {
-    return await fetch(url, { ...init, signal: ctrl.signal });
-  } finally {
-    clearTimeout(timer);
-    externalSignal?.removeEventListener("abort", onAbort);
-  }
-}
-
-function isRetryableStatus(status: number): boolean {
-  return status === 408 || status === 429 || status >= 500;
-}
-
 function describeHttpError(res: Response, fallback: string): string {
   const remaining = res.headers.get("x-ratelimit-remaining");
   if (res.status === 429 || (res.status === 403 && remaining === "0")) {
@@ -187,21 +165,8 @@ function describeHttpError(res: Response, fallback: string): string {
   return fallback;
 }
 
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
 async function fetchWithRetry(url: string, init: RequestInit = {}): Promise<Response> {
-  let lastError: unknown = null;
-  for (let attempt = 1; attempt <= GITHUB_REQUEST_ATTEMPTS; attempt++) {
-    try {
-      const res = await fetchWithTimeout(url, init);
-      if (!isRetryableStatus(res.status) || attempt === GITHUB_REQUEST_ATTEMPTS) return res;
-    } catch (err) {
-      lastError = err;
-      if (attempt === GITHUB_REQUEST_ATTEMPTS) throw err;
-    }
-    await sleep(GITHUB_RETRY_DELAY_MS * attempt);
-  }
-  throw lastError;
+  return fetchWithRetryPolicy(url, init, GITHUB_HTTP_POLICY);
 }
 
 // ── Status mapping ────────────────────────────────────────────────────────

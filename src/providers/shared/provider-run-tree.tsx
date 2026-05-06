@@ -3,7 +3,7 @@ import { createEffect, createMemo, createSignal, For, Show, untrack } from "soli
 import type { DetailNavRef } from "../../components/detail-types";
 import { useT } from "../../hooks/use-t";
 import { formatDuration, formatRelativeDate } from "../../utils/date";
-import { categorize, statusColor } from "./status";
+import { categorize, statusColor, statusIcon } from "./status";
 
 export interface ProviderTreeStep {
   id: string;
@@ -87,23 +87,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     const duration = formatDuration(run.startedAt ?? null, run.updatedAt);
     return duration ? `~${duration}` : "";
   };
-  const statusMark = (status: string, conclusion: string | null) => {
-    const cat = categorize(status, conclusion);
-    switch (cat) {
-      case "pass":
-        return "✓";
-      case "fail":
-        return "✕";
-      case "running":
-        return "●";
-      case "cancelled":
-        return "○";
-      case "skipped":
-        return "–";
-      default:
-        return "?";
-    }
-  };
+  const statusMark = (status: string, conclusion: string | null) => statusIcon(categorize(status, conclusion));
 
   const rightInfoWidth = createMemo(() => {
     let max = 0;
