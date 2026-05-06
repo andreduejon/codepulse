@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- **Jenkins provider MVP** — configure Jenkins jobs from the Providers menu and
+- **Jenkins provider** — configure Jenkins jobs from the Providers menu and
   switch to Jenkins from the graph view with `tab`.
 - **Jenkins graph badges** — recent Jenkins builds are matched to visible commits
   by exact Git SHA from `changeSets`, with guarded fallback handling for
