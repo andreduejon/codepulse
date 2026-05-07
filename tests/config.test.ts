@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { type CodepulseConfig, loadConfig, mergeOptions, resolveConfigInfo, writeConfig } from "../src/config";
+import { type CodepulseConfig, getKnownRepoInfos, loadConfig, mergeOptions, resolveConfigInfo, writeConfig } from "../src/config";
 import { DEFAULT_MAX_COUNT } from "../src/constants";
 import { DEFAULT_AUTO_REFRESH_INTERVAL } from "../src/context/state";
 
@@ -379,6 +379,28 @@ describe("mergeOptions", () => {
   test("default maxCount is DEFAULT_MAX_COUNT", () => {
     const result = mergeOptions({ repoPath: "/repo" }, {});
     expect(result.maxCount).toBe(DEFAULT_MAX_COUNT);
+  });
+});
+
+describe("getKnownRepoInfos", () => {
+  test("returns repo paths with grouping metadata", () => {
+    const repoPath = "/tmp/repo-a";
+    const configPath = makeRepoConfig("known-repo-infos", repoPath, {
+      group: " platform ",
+      appName: " API Gateway ",
+    });
+    expect(getKnownRepoInfos(configPath)).toEqual([
+      { path: resolve(repoPath), group: "platform", appName: "API Gateway" },
+    ]);
+  });
+
+  test("drops invalid grouping metadata from known repo infos", () => {
+    const repoPath = "/tmp/repo-a";
+    const configPath = makeRepoConfig("known-repo-infos-invalid", repoPath, {
+      group: "g".repeat(65),
+      appName: "",
+    });
+    expect(getKnownRepoInfos(configPath)).toEqual([{ path: resolve(repoPath) }]);
   });
 });
 

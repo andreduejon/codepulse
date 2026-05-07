@@ -16,7 +16,7 @@ import MessageBox, { type UIMessage } from "./components/message-box";
 import ProjectSelector from "./components/project-selector";
 import SetupScreen from "./components/setup-screen";
 import type { ConfigInfo } from "./config";
-import { backfillRepoConfig, getKnownRepos, writeConfig } from "./config";
+import { backfillRepoConfig, getKnownRepoInfos, writeConfig } from "./config";
 import { COMPACT_THRESHOLD_WIDTH, DEFAULT_MAX_COUNT, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH } from "./constants";
 import { AppStateContext, createAppState, providerIdle, providerStatusMessage } from "./context/state";
 import { createThemeState, ThemeContext } from "./context/theme";
@@ -518,7 +518,7 @@ function AppContent(props: Readonly<AppContentProps>) {
               when={!repoSelectorVisible()}
               fallback={
                 <ProjectSelector
-                  knownRepos={getKnownRepos()}
+                  knownRepos={getKnownRepoInfos()}
                   currentRepo={props.repoPath}
                   onCancel={() => setRepoSelectorVisible(false)}
                   setKeyboardScopeOverride={actions.setKeyboardScopeOverride}

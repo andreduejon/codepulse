@@ -42,7 +42,7 @@ export interface CodepulseConfig {
 }
 
 /** Return the built-in default config (all fields populated). */
-export function defaultConfig(): Required<Omit<CodepulseConfig, "branch">> {
+export function defaultConfig(): Required<Omit<CodepulseConfig, "branch" | "group" | "appName">> {
   return {
     theme: "catppuccin-mocha",
     pageSize: DEFAULT_MAX_COUNT,
@@ -248,6 +248,28 @@ export function getKnownRepos(configPath?: string): string[] {
   if (typeof repos !== "object" || repos === null || Array.isArray(repos)) return [];
 
   return Object.keys(repos as Record<string, unknown>);
+}
+
+export interface KnownRepoInfo {
+  path: string;
+  group?: string;
+  appName?: string;
+}
+
+/** Return all known repositories with optional display metadata from config. */
+export function getKnownRepoInfos(configPath?: string): KnownRepoInfo[] {
+  const warnings: string[] = [];
+  const result = readRawConfig(configPath, warnings);
+  if (!result) return [];
+
+  const repos = result.parsed.repos;
+  if (typeof repos !== "object" || repos === null || Array.isArray(repos)) return [];
+
+  return Object.entries(repos as Record<string, unknown>).map(([path, rawEntry]) => {
+    if (typeof rawEntry !== "object" || rawEntry === null || Array.isArray(rawEntry)) return { path };
+    const config = validateConfig(rawEntry as Record<string, unknown>, `${result.globalPath} [repos]`, warnings);
+    return { path, ...(config.group !== undefined ? { group: config.group } : {}), ...(config.appName !== undefined ? { appName: config.appName } : {}) };
+  });
 }
 
 /**

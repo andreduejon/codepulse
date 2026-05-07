@@ -4,9 +4,10 @@ import { resolve } from "node:path";
 import { useKeyboard, useRenderer } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import packageJson from "../../package.json";
-import { removeRepoConfig } from "../config";
+import { type KnownRepoInfo, removeRepoConfig } from "../config";
 import { useT } from "../hooks/use-t";
 import type { KeyboardScope } from "../keyboard/scope";
+import { buildProjectSelectorRows, isRepoRow } from "../utils/project-selector-rows";
 import { KeyHint, KeyHintSeparator } from "./key-hint";
 import LogoBanner, { LOGO_WIDTH } from "./logo-banner";
 import MessageBox from "./message-box";
@@ -17,7 +18,7 @@ interface ProjectSelectorProps {
   /** Path associated with the message — shown on a separate muted line. */
   messagePath?: string;
   /** List of known repo paths from the global config. */
-  knownRepos: string[];
+  knownRepos: KnownRepoInfo[];
   /** Currently open repo path — shown as context and excluded from the list.
    *  When set, Esc goes back (calls onCancel) instead of quitting. */
   currentRepo?: string;
@@ -48,12 +49,13 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
   const [savedRepos, setSavedRepos] = createSignal(props.knownRepos);
 
   /** Selectable repos — excludes current repo in in-app mode. */
-  const repos = createMemo(() => {
+  const repos = createMemo<KnownRepoInfo[]>(() => {
     const all = savedRepos();
     const current = props.currentRepo;
     if (!current) return all;
-    return all.filter(r => r !== current);
+    return all.filter(r => r.path !== current);
   });
+  const repoRows = createMemo(() => buildProjectSelectorRows(repos()));
   const hasRepos = () => repos().length > 0;
 
   /** Total navigable items: repos + 1 for the inline path input. */
@@ -101,8 +103,8 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
     const idx = cursor();
     const selected = repos()[idx];
     if (!selected) return;
-    if (!removeRepoConfig(selected)) return;
-    setSavedRepos(prev => prev.filter(repo => repo !== selected));
+    if (!removeRepoConfig(selected.path)) return;
+    setSavedRepos(prev => prev.filter(repo => repo.path !== selected.path));
   };
 
   useKeyboard(e => {
@@ -162,7 +164,7 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
       case "return":
         e.preventDefault();
         if (repos().length > 0 && cursor() < repos().length) {
-          selectRepo(repos()[cursor()]);
+          selectRepo(repos()[cursor()].path);
         }
         break;
       case "f":
@@ -230,18 +232,31 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
           </Show>
 
           {/* Selectable repo list */}
-          <For each={repos()}>
-            {(repo, i) => (
-              <box
-                flexDirection="row"
-                width="100%"
-                paddingX={4}
-                backgroundColor={cursor() === i() ? t().backgroundElement : undefined}
+          <For each={repoRows()}>
+            {row => (
+              <Show
+                when={isRepoRow(row) ? row : undefined}
+                fallback={
+                  <box flexDirection="row" width="100%" paddingX={4}>
+                    <text wrapMode="none" truncate fg={t().foregroundMuted}>
+                      {row.kind === "group" ? row.label : ""}
+                    </text>
+                  </box>
+                }
               >
-                <text wrapMode="none" truncate fg={cursor() === i() ? t().accent : t().foreground}>
-                  {shortPath(repo)}
-                </text>
-              </box>
+                {repoRow => (
+                  <box
+                    flexDirection="row"
+                    width="100%"
+                    paddingX={4}
+                    backgroundColor={cursor() === repoRow().repoIndex ? t().backgroundElement : undefined}
+                  >
+                    <text wrapMode="none" truncate fg={cursor() === repoRow().repoIndex ? t().accent : t().foreground}>
+                      {repoRow().label}
+                    </text>
+                  </box>
+                )}
+              </Show>
             )}
           </For>
 
