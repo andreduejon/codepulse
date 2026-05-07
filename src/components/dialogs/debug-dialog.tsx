@@ -1,13 +1,14 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
-import { useKeyboard, useTerminalDimensions } from "@opentui/solid";
+import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { For } from "solid-js";
 import { getDebugEvents } from "../../debug/events";
-import { formatDebugEvent } from "../../debug/format";
+import { formatDebugDuration, formatDebugMessage, formatDebugTimestamp } from "../../debug/format";
 import { useT } from "../../hooks/use-t";
 import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
 export default function DebugDialog(props: Readonly<{ onClose: () => void }>) {
   const t = useT();
+  const renderer = useRenderer();
   const dimensions = useTerminalDimensions();
   const events = () => getDebugEvents();
   const dialogWidth = () => 90;
@@ -16,7 +17,10 @@ export default function DebugDialog(props: Readonly<{ onClose: () => void }>) {
 
   useKeyboard(e => {
     if (e.eventType === "release") return;
-    if (e.name === "escape") {
+    if (e.name === "q") {
+      e.preventDefault();
+      renderer.destroy();
+    } else if (e.name === "escape") {
       e.preventDefault();
       props.onClose();
     } else if (e.name === "up" || e.name === "k") {
@@ -39,9 +43,18 @@ export default function DebugDialog(props: Readonly<{ onClose: () => void }>) {
           <box flexDirection="column">
             <For each={events()} fallback={<text fg={t().foregroundMuted}>No debug events yet</text>}>
               {event => (
-                <box flexDirection="row" width="100%" paddingX={4}>
-                  <text wrapMode="word" fg={event.source === "error" ? t().error : t().foreground}>
-                    {formatDebugEvent(event)}
+                <box flexDirection="row" width="100%" paddingX={4} alignItems="flex-start">
+                  <text width={10} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                    {formatDebugTimestamp(event.timestamp)}
+                  </text>
+                  <text width={10} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                    {formatDebugDuration(event.durationMs)}
+                  </text>
+                  <text width={10} flexShrink={0} wrapMode="none" fg={event.source === "error" ? t().error : t().accent}>
+                    {event.source}
+                  </text>
+                  <text flexGrow={1} wrapMode="word" fg={event.source === "error" ? t().error : t().foreground}>
+                    {formatDebugMessage(event)}
                   </text>
                 </box>
               )}

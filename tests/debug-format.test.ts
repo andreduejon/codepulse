@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { formatDebugEvent, formatDebugTimestamp } from "../src/debug/format";
+import { formatDebugDuration, formatDebugEvent, formatDebugMessage, formatDebugTimestamp } from "../src/debug/format";
 
 describe("debug format", () => {
   test("formats timestamp as HH:MM:SS", () => {
@@ -9,6 +9,11 @@ describe("debug format", () => {
   test("formats event with status and duration", () => {
     expect(
       formatDebugEvent({ timestamp: 0, source: "Git", message: "git status", status: "ok", durationMs: 12 }),
-    ).toContain("git status  ok  12ms");
+    ).toContain("12ms  Git  git status  ok");
+  });
+
+  test("formats duration and message columns", () => {
+    expect(formatDebugDuration(12)).toBe("12ms");
+    expect(formatDebugMessage({ timestamp: 0, source: "Git", message: "git status", status: "ok" })).toBe("git status  ok");
   });
 });

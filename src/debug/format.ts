@@ -6,12 +6,14 @@ export function formatDebugTimestamp(timestamp: number): string {
 }
 
 export function formatDebugEvent(event: DebugEvent): string {
-  const parts = [
-    formatDebugTimestamp(event.timestamp),
-    event.source.padEnd(7),
-    event.message,
-    event.status ?? "",
-    event.durationMs !== undefined ? `${event.durationMs}ms` : "",
-  ].filter(Boolean);
+  const parts = [formatDebugTimestamp(event.timestamp), formatDebugDuration(event.durationMs), event.source, formatDebugMessage(event)].filter(Boolean);
   return parts.join("  ");
+}
+
+export function formatDebugDuration(durationMs?: number): string {
+  return durationMs !== undefined ? `${durationMs}ms` : "";
+}
+
+export function formatDebugMessage(event: DebugEvent): string {
+  return event.status ? `${event.message}  ${event.status}` : event.message;
 }
