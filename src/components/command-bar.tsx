@@ -1,6 +1,8 @@
 import { homedir } from "node:os";
 import { Show } from "solid-js";
 import packageJson from "../../package.json";
+import type { KnownRepoInfo } from "../config";
+import GroupStrip from "./group-strip";
 import { useAppState } from "../context/state";
 import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
 import { useT } from "../hooks/use-t";
@@ -20,6 +22,10 @@ interface CommandBarProps {
   onInput: (val: string) => void;
   /** Whether detail panel is focused — switches border to muted. */
   detailFocused: () => boolean;
+  knownRepos: KnownRepoInfo[];
+  currentRepo: string;
+  currentGroup?: string;
+  currentAppName?: string;
 }
 
 /**
@@ -152,6 +158,12 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
           {`v${packageJson.version}`}
         </text>
       </box>
+      <GroupStrip
+        repos={props.knownRepos}
+        currentRepo={props.currentRepo}
+        currentGroup={props.currentGroup}
+        currentAppName={props.currentAppName}
+      />
     </box>
   );
 }

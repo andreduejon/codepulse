@@ -12,7 +12,6 @@ import MenuDialog, { setLastMenuTab } from "./components/dialogs/menu-dialog";
 import ThemeDialog from "./components/dialogs/theme-dialog";
 import ErrorScreen from "./components/error-screen";
 import Footer from "./components/footer";
-import GroupStrip from "./components/group-strip";
 import GraphView, { ColumnHeader } from "./components/graph";
 import MessageBox, { type UIMessage } from "./components/message-box";
 import ProjectSelector from "./components/project-selector";
@@ -570,12 +569,6 @@ function AppContent(props: Readonly<AppContentProps>) {
                     {/* Graph area */}
                     <box flexDirection="column" flexGrow={1} paddingBottom={1}>
                       {/* Sticky column headers - above scrollbox */}
-                      <GroupStrip
-                        repos={knownRepoInfos()}
-                        currentRepo={props.repoPath}
-                        currentGroup={currentRepoDisplayConfig().group}
-                        currentAppName={currentRepoDisplayConfig().appName}
-                      />
                       <ColumnHeader />
 
                       <GraphView onLoadMore={loadMoreData} />
@@ -610,6 +603,10 @@ function AppContent(props: Readonly<AppContentProps>) {
                           }
                         }}
                         detailFocused={state.detailFocused}
+                        knownRepos={knownRepoInfos()}
+                        currentRepo={props.repoPath}
+                        currentGroup={currentRepoDisplayConfig().group}
+                        currentAppName={currentRepoDisplayConfig().appName}
                       />
 
                       {/* Footer - hotkey hints, 1 char gap above, right-aligned */}

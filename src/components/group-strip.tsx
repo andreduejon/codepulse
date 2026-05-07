@@ -2,6 +2,7 @@ import { createMemo, For, Show } from "solid-js";
 import type { KnownRepoInfo } from "../config";
 import { useT } from "../hooks/use-t";
 import { groupMembersForRepo, repoDisplayName } from "../utils/group-repos";
+import Badge from "./badge";
 
 export default function GroupStrip(
   props: Readonly<{ repos: KnownRepoInfo[]; currentRepo: string; currentGroup?: string; currentAppName?: string }>,
@@ -13,14 +14,20 @@ export default function GroupStrip(
 
   return (
     <Show when={members().length > 1}>
-      <box flexDirection="row" width="100%" paddingX={2} flexShrink={0}>
+      <box flexDirection="column" width="100%" flexShrink={0}>
+        <box width="100%" border={["top"]} borderStyle="single" borderColor={t().border} />
+        <box flexDirection="row" width="100%">
         <For each={members()}>
           {repo => (
-            <text wrapMode="none" truncate fg={repo.path === props.currentRepo ? t().accent : t().foregroundMuted}>
-              {repo.path === props.currentRepo ? ` · ${repoDisplayName(repo)} · ` : ` ${repoDisplayName(repo)} `}
-            </text>
+            <Badge
+              name={repoDisplayName(repo)}
+              color={repo.path === props.currentRepo ? t().accent : undefined}
+              dimmed={repo.path !== props.currentRepo}
+              noShrink
+            />
           )}
         </For>
+        </box>
       </box>
     </Show>
   );
