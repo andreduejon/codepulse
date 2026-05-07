@@ -55,20 +55,23 @@ export default function DebugDialog(props: Readonly<{ onClose: () => void }>) {
     <DialogOverlay>
       <box width={dialogWidth()} height={dialogHeight()} backgroundColor={t().background} flexDirection="column" paddingX={1} paddingY={1}>
         <DialogTitleBar title="Debug" />
+        <box width="100%" paddingX={4} flexShrink={0}>
+          <box flexGrow={1} border={["top"]} borderStyle="single" borderColor={t().accent} />
+        </box>
         <box flexDirection="row" width="100%" paddingX={4} flexShrink={0}>
-          <text width={10} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+          <text width={10} flexShrink={0} wrapMode="none" fg={t().accent}>
             <strong>Provider</strong>
           </text>
-          <text width={10} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+          <text width={10} flexShrink={0} wrapMode="none" fg={t().accent}>
             <strong>Status</strong>
           </text>
-          <text width={10} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+          <text width={10} flexShrink={0} wrapMode="none" fg={t().accent}>
             <strong>Duration</strong>
           </text>
-          <text width={10} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+          <text width={10} flexShrink={0} wrapMode="none" fg={t().accent}>
             <strong>Time</strong>
           </text>
-          <text flexGrow={1} wrapMode="none" fg={t().foregroundMuted}>
+          <text flexGrow={1} wrapMode="none" fg={t().accent}>
             <strong>Message</strong>
           </text>
         </box>
