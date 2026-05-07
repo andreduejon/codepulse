@@ -3,9 +3,13 @@ import type { KnownRepoInfo } from "../config";
 import { useT } from "../hooks/use-t";
 import { groupMembersForRepo, repoDisplayName } from "../utils/group-repos";
 
-export default function GroupStrip(props: Readonly<{ repos: KnownRepoInfo[]; currentRepo: string }>) {
+export default function GroupStrip(
+  props: Readonly<{ repos: KnownRepoInfo[]; currentRepo: string; currentGroup?: string; currentAppName?: string }>,
+) {
   const t = useT();
-  const members = createMemo(() => groupMembersForRepo(props.repos, props.currentRepo));
+  const members = createMemo(() =>
+    groupMembersForRepo(props.repos, props.currentRepo, { group: props.currentGroup, appName: props.currentAppName }),
+  );
 
   return (
     <Show when={members().length > 1}>

@@ -21,6 +21,15 @@ describe("group repos", () => {
     expect(nextGroupRepoPath(repos, "/repo/api", 1)).toBeNull();
   });
 
+  test("uses current repo metadata even when current repo missing from known list", () => {
+    expect(
+      groupMembersForRepo([{ path: "/repo/backend", group: "e-ant", appName: "Backend" }], "/repo/frontend", {
+        group: "e-ant",
+        appName: "Frontend",
+      }).map(repo => repo.path),
+    ).toEqual(["/repo/backend", "/repo/frontend"]);
+  });
+
   test("falls back display name to basename", () => {
     expect(repoDisplayName({ path: "/repo/plain" })).toBe("plain");
   });

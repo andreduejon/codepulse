@@ -18,7 +18,7 @@ import MessageBox, { type UIMessage } from "./components/message-box";
 import ProjectSelector from "./components/project-selector";
 import SetupScreen from "./components/setup-screen";
 import type { ConfigInfo } from "./config";
-import { backfillRepoConfig, getKnownRepoInfos, writeConfig } from "./config";
+import { backfillRepoConfig, getKnownRepoInfos, getRepoDisplayConfig, writeConfig } from "./config";
 import { COMPACT_THRESHOLD_WIDTH, DEFAULT_MAX_COUNT, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH } from "./constants";
 import { AppStateContext, createAppState, providerIdle, providerStatusMessage } from "./context/state";
 import { createThemeState, ThemeContext } from "./context/theme";
@@ -250,9 +250,10 @@ function AppContent(props: Readonly<AppContentProps>) {
   };
 
   const knownRepoInfos = () => getKnownRepoInfos();
+  const currentRepoDisplayConfig = () => getRepoDisplayConfig(props.repoPath);
 
   const switchGroupRepo = (direction: 1 | -1) => {
-    const nextPath = nextGroupRepoPath(knownRepoInfos(), props.repoPath, direction);
+    const nextPath = nextGroupRepoPath(knownRepoInfos(), props.repoPath, direction, currentRepoDisplayConfig());
     if (!nextPath) return;
     setDialog(null);
     setCommandBarMode("idle");
@@ -568,7 +569,12 @@ function AppContent(props: Readonly<AppContentProps>) {
                     {/* Graph area */}
                     <box flexDirection="column" flexGrow={1} paddingBottom={1}>
                       {/* Sticky column headers - above scrollbox */}
-                      <GroupStrip repos={knownRepoInfos()} currentRepo={props.repoPath} />
+                      <GroupStrip
+                        repos={knownRepoInfos()}
+                        currentRepo={props.repoPath}
+                        currentGroup={currentRepoDisplayConfig().group}
+                        currentAppName={currentRepoDisplayConfig().appName}
+                      />
                       <ColumnHeader />
 
                       <GraphView onLoadMore={loadMoreData} />
