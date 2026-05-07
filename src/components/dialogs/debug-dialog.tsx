@@ -6,7 +6,7 @@ import { formatDebugDuration, formatDebugMessage, formatDebugStatus, formatDebug
 import { useT } from "../../hooks/use-t";
 import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
-export default function DebugDialog(props: Readonly<{ onClose: () => void }>) {
+export default function DebugDialog(props: Readonly<{ onClose: () => void; gitColor: string }>) {
   const t = useT();
   const renderer = useRenderer();
   const dimensions = useTerminalDimensions();
@@ -18,7 +18,7 @@ export default function DebugDialog(props: Readonly<{ onClose: () => void }>) {
   const sourceColor = (source: ReturnType<typeof events>[number]["source"]) => {
     switch (source) {
       case "Git":
-        return t().accent;
+        return props.gitColor;
       case "GitHub":
         return t().githubActionsBg;
       case "Jenkins":

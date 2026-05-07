@@ -667,7 +667,7 @@ function AppContent(props: Readonly<AppContentProps>) {
                   <ThemeDialog onClose={() => setDialog(null)} />
                 </Show>
                 <Show when={dialog() === "debug"}>
-                  <DebugDialog onClose={() => setDialog(null)} />
+                  <DebugDialog onClose={() => setDialog(null)} gitColor={themeState.theme().accent} />
                 </Show>
                 <Show when={dialog() === "diff-blame" && diffTarget()}>
                   {target => (
