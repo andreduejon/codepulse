@@ -1,6 +1,6 @@
 import { homedir } from "node:os";
 import type { Accessor } from "solid-js";
-import { createMemo, createSignal } from "solid-js";
+import { createEffect, createMemo, createSignal } from "solid-js";
 import type { CodepulseConfig, ConfigInfo } from "../config";
 import { getRepoDisplayConfig, writeConfig } from "../config";
 import { AUTO_REFRESH_MS, INTERVAL_OPTIONS, MAX_COUNT_OPTIONS, MS_TO_LABEL } from "../constants";
@@ -303,6 +303,11 @@ function buildJenkinsProviderItems(
  */
 export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
   const { state, actions } = useAppState();
+  const [repoDisplayConfig, setRepoDisplayConfig] = createSignal(getRepoDisplayConfig(state.repoPath()));
+
+  createEffect(() => {
+    setRepoDisplayConfig(getRepoDisplayConfig(state.repoPath()));
+  });
 
   /**
    * Persist all current settings to the config file immediately.
@@ -339,6 +344,12 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
       }
     }
     writeConfig(cfg, state.repoPath());
+    if (overrides && (Object.hasOwn(overrides, "group") || Object.hasOwn(overrides, "appName"))) {
+      setRepoDisplayConfig(prev => ({
+        group: Object.hasOwn(overrides, "group") ? overrides.group : prev.group,
+        appName: Object.hasOwn(overrides, "appName") ? overrides.appName : prev.appName,
+      }));
+    }
   };
 
   // ── Collapsed state for branch sections ───────────────────────────
@@ -359,7 +370,6 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
   };
 
   const repoItems = createMemo<SettingItem[]>(() => {
-    const repoDisplayConfig = getRepoDisplayConfig(state.repoPath());
     const items: SettingItem[] = [
       { kind: "header", label: "Origin" },
       { kind: "copyable", label: "URL", get: () => state.remoteUrl() || "(none)" },
@@ -372,7 +382,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
         kind: "editable",
         label: "Group",
         placeholder: "Enter group...",
-        get: () => repoDisplayConfig.group ?? "",
+        get: () => repoDisplayConfig().group ?? "",
         set: v => persistFullConfig({ group: optionalRepoMetadataValue(v) }),
         isDraftValid: isOptionalRepoMetadataValid,
         staySelectedOnSave: true,
@@ -381,7 +391,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
         kind: "editable",
         label: "App name",
         placeholder: "Enter name...",
-        get: () => repoDisplayConfig.appName ?? "",
+        get: () => repoDisplayConfig().appName ?? "",
         set: v => persistFullConfig({ appName: optionalRepoMetadataValue(v) }),
         isDraftValid: isOptionalRepoMetadataValid,
         staySelectedOnSave: true,
