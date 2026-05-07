@@ -55,6 +55,26 @@ export default function DebugDialog(props: Readonly<{ onClose: () => void }>) {
     <DialogOverlay>
       <box width={dialogWidth()} height={dialogHeight()} backgroundColor={t().background} flexDirection="column" paddingX={1} paddingY={1}>
         <DialogTitleBar title="Debug" />
+        <box flexDirection="row" width="100%" paddingX={4} flexShrink={0}>
+          <text width={10} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+            <strong>Provider</strong>
+          </text>
+          <text width={10} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+            <strong>Status</strong>
+          </text>
+          <text width={10} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+            <strong>Duration</strong>
+          </text>
+          <text width={10} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+            <strong>Time</strong>
+          </text>
+          <text flexGrow={1} wrapMode="none" fg={t().foregroundMuted}>
+            <strong>Message</strong>
+          </text>
+        </box>
+        <box width="100%" paddingX={4} flexShrink={0}>
+          <box flexGrow={1} border={["top"]} borderStyle="single" borderColor={t().border} />
+        </box>
         <scrollbox ref={scrollboxRef} flexGrow={1} scrollY scrollX={false} verticalScrollbarOptions={{ visible: false }}>
           <box flexDirection="column">
             <For each={events()} fallback={<text fg={t().foregroundMuted}>No debug events yet</text>}>
