@@ -60,17 +60,17 @@ export default function DebugDialog(props: Readonly<{ onClose: () => void }>) {
             <For each={events()} fallback={<text fg={t().foregroundMuted}>No debug events yet</text>}>
               {event => (
                 <box flexDirection="row" width="100%" paddingX={4} alignItems="flex-start">
-                  <text width={10} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                    {formatDebugTimestamp(event.timestamp)}
-                  </text>
-                  <text width={10} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                    {formatDebugDuration(event.durationMs)}
-                  </text>
                   <text width={10} flexShrink={0} wrapMode="none" fg={sourceColor(event.source)}>
                     {event.source}
                   </text>
                   <text width={10} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
                     {formatDebugStatus(event.status)}
+                  </text>
+                  <text width={10} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                    {formatDebugDuration(event.durationMs)}
+                  </text>
+                  <text width={10} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                    {formatDebugTimestamp(event.timestamp)}
                   </text>
                   <text flexGrow={1} wrapMode="word" fg={messageColor(event.source)}>
                     {formatDebugMessage(event)}

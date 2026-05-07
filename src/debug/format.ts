@@ -7,10 +7,10 @@ export function formatDebugTimestamp(timestamp: number): string {
 
 export function formatDebugEvent(event: DebugEvent): string {
   const parts = [
-    formatDebugTimestamp(event.timestamp),
-    formatDebugDuration(event.durationMs),
     event.source,
     formatDebugStatus(event.status),
+    formatDebugDuration(event.durationMs),
+    formatDebugTimestamp(event.timestamp),
     formatDebugMessage(event),
   ].filter(Boolean);
   return parts.join("  ");
