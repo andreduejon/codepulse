@@ -511,7 +511,7 @@ function AppContent(props: Readonly<AppContentProps>) {
       return { ...base, accent: base.githubActionsBg };
     }
     if (state.activeProviderView() === "jenkins") {
-      return { ...base, accent: base.githubActionsBg };
+      return { ...base, accent: base.jenkinsBg };
     }
     return base;
   });

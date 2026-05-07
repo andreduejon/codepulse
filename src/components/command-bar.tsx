@@ -121,8 +121,10 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
             );
           }
           const label = providerDisplayName(view);
+          const bg = view === "jenkins" ? t().jenkinsBg : t().githubActionsBg;
+          const fg = view === "jenkins" ? t().jenkinsFg : t().githubActionsFg;
           return (
-            <text flexShrink={0} wrapMode="none" fg={t().githubActionsFg} bg={t().githubActionsBg}>
+            <text flexShrink={0} wrapMode="none" fg={fg} bg={bg}>
               {` ${label} `}
             </text>
           );

@@ -9,17 +9,16 @@ import type { Theme } from "./theme";
 
 export const openCodeOriginal: Theme = {
   name: "OpenCode Original",
-  background: "#131010",
-  backgroundPanel: "#1e1a1a",
-  backgroundElement: "#2a2424",
-  backgroundElementActive: "#3d3838",
+  background: "#0d0d0d",
+  backgroundPanel: "#161616",
+  backgroundElement: "#1d1b1b",
+  backgroundElementActive: "#2e2a2a",
   foreground: "#e8e4e1",
-  foregroundMuted: "#8b8584",
-  border: "#3d3838",
-
+  foregroundMuted: "#665f5e",
+  border: "#2e2a2a",
   primary: "#e08a5c",
   accent: "#e5b567",
-  info: "#e08a5c",
+  info: "#61afef",
   error: "#e06c75",
   success: "#98c379",
   graphColors: [
@@ -38,10 +37,16 @@ export const openCodeOriginal: Theme = {
   ],
   diffAdded: "#98c379",
   diffRemoved: "#e06c75",
-  diffAddedBg: "#23251d",
-  diffRemovedBg: "#2c1b1c",
-  githubActionsFg: "#131010",
+  diffAddedBg: "#1c2016",
+  diffRemovedBg: "#241819",
+  githubActionsFg: "#0d0d0d",
   githubActionsBg: "#61afef",
+  jenkinsFg: "#0d0d0d",
+  jenkinsBg: "#e5b567",
+  snykFg: "#ffffff",
+  snykBg: "#4c43d4",
+  openShiftFg: "#ffffff",
+  openShiftBg: "#ee0000",
 };
 
 export const catppuccinMocha: Theme = {
@@ -78,6 +83,12 @@ export const catppuccinMocha: Theme = {
   diffRemovedBg: "#382b3d",
   githubActionsFg: "#1e1e2e",
   githubActionsBg: "#89b4fa",
+  jenkinsFg: "#1e1e2e",
+  jenkinsBg: "#fabd2f",
+  snykFg: "#1e1e2e",
+  snykBg: "#cba6f7",
+  openShiftFg: "#1e1e2e",
+  openShiftBg: "#f38ba8",
 };
 
 export const tokyoNight: Theme = {
@@ -114,6 +125,12 @@ export const tokyoNight: Theme = {
   diffRemovedBg: "#352632",
   githubActionsFg: "#1a1b26",
   githubActionsBg: "#7aa2f7",
+  jenkinsFg: "#1a1b26",
+  jenkinsBg: "#e0af68",
+  snykFg: "#1a1b26",
+  snykBg: "#bb9af7",
+  openShiftFg: "#ffffff",
+  openShiftBg: "#f7768e",
 };
 
 export const dracula: Theme = {
@@ -150,6 +167,12 @@ export const dracula: Theme = {
   diffRemovedBg: "#422f3a",
   githubActionsFg: "#282a36",
   githubActionsBg: "#8be9fd",
+  jenkinsFg: "#282a36",
+  jenkinsBg: "#f1fa8c",
+  snykFg: "#f8f8f2",
+  snykBg: "#bd93f9",
+  openShiftFg: "#f8f8f2",
+  openShiftBg: "#ff5555",
 };
 
 export const nord: Theme = {
@@ -186,6 +209,12 @@ export const nord: Theme = {
   diffRemovedBg: "#3f3945",
   githubActionsFg: "#2e3440",
   githubActionsBg: "#88c0d0",
+  jenkinsFg: "#2e3440",
+  jenkinsBg: "#ebcb8b",
+  snykFg: "#eceff4",
+  snykBg: "#b48ead",
+  openShiftFg: "#eceff4",
+  openShiftBg: "#bf616a",
 };
 
 export const oneDark: Theme = {
@@ -222,6 +251,12 @@ export const oneDark: Theme = {
   diffRemovedBg: "#3e343c",
   githubActionsFg: "#282c34",
   githubActionsBg: "#61afef",
+  jenkinsFg: "#282c34",
+  jenkinsBg: "#e5c07b",
+  snykFg: "#ffffff",
+  snykBg: "#c678dd",
+  openShiftFg: "#ffffff",
+  openShiftBg: "#e06c75",
 };
 
 export const gruvbox: Theme = {
@@ -258,6 +293,12 @@ export const gruvbox: Theme = {
   diffRemovedBg: "#412c29",
   githubActionsFg: "#282828",
   githubActionsBg: "#83a598",
+  jenkinsFg: "#282828",
+  jenkinsBg: "#fabd2f",
+  snykFg: "#282828",
+  snykBg: "#d3869b",
+  openShiftFg: "#ebdbb2",
+  openShiftBg: "#fb4934",
 };
 
 export const monokai: Theme = {
@@ -294,6 +335,12 @@ export const monokai: Theme = {
   diffRemovedBg: "#463139",
   githubActionsFg: "#2d2a2e",
   githubActionsBg: "#78dce8",
+  jenkinsFg: "#2d2a2e",
+  jenkinsBg: "#ffd866",
+  snykFg: "#2d2a2e",
+  snykBg: "#ab9df2",
+  openShiftFg: "#fcfcfa",
+  openShiftBg: "#ff6188",
 };
 
 export const ayuDark: Theme = {
@@ -330,6 +377,12 @@ export const ayuDark: Theme = {
   diffRemovedBg: "#3a2630",
   githubActionsFg: "#1f2430",
   githubActionsBg: "#5ccfe6",
+  jenkinsFg: "#1f2430",
+  jenkinsBg: "#ffcc66",
+  snykFg: "#1f2430",
+  snykBg: "#d4bfff",
+  openShiftFg: "#ffffff",
+  openShiftBg: "#f28779",
 };
 
 export const synthwave: Theme = {
@@ -366,10 +419,16 @@ export const synthwave: Theme = {
   diffRemovedBg: "#402738",
   githubActionsFg: "#262335",
   githubActionsBg: "#36f9f6",
+  jenkinsFg: "#262335",
+  jenkinsBg: "#fede5d",
+  snykFg: "#ffffff",
+  snykBg: "#8b00ff",
+  openShiftFg: "#ffffff",
+  openShiftBg: "#fe4450",
 };
 
 export const rosePine: Theme = {
-  name: "Ros\u00e9 Pine",
+  name: "Rosé Pine",
   background: "#191724",
   backgroundPanel: "#14121d",
   backgroundElement: "#26233a",
@@ -402,4 +461,10 @@ export const rosePine: Theme = {
   diffRemovedBg: "#322231",
   githubActionsFg: "#191724",
   githubActionsBg: "#c4a7e7",
+  jenkinsFg: "#191724",
+  jenkinsBg: "#f6c177",
+  snykFg: "#191724",
+  snykBg: "#ebbcba",
+  openShiftFg: "#e0def4",
+  openShiftBg: "#eb6f92",
 };

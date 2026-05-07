@@ -18,11 +18,11 @@ export default function DebugDialog(props: Readonly<{ onClose: () => void }>) {
   const sourceColor = (source: ReturnType<typeof events>[number]["source"]) => {
     switch (source) {
       case "Git":
-        return t().foregroundMuted;
+        return t().accent;
       case "GitHub":
         return t().githubActionsBg;
       case "Jenkins":
-        return t().success;
+        return t().jenkinsBg;
       case "error":
         return t().error;
     }
