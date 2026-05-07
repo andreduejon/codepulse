@@ -4,6 +4,7 @@ import { createEffect, createMemo, createSignal, onCleanup, onMount, Show, untra
 import CommandBar from "./components/command-bar";
 import DetailPanel from "./components/detail-panel";
 import type { DetailNavRef } from "./components/detail-types";
+import DebugDialog from "./components/dialogs/debug-dialog";
 import { DetailDialog } from "./components/dialogs/detail-dialog";
 import DiffBlameDialog from "./components/dialogs/diff-blame-dialog";
 import HelpDialog from "./components/dialogs/help-dialog";
@@ -20,6 +21,7 @@ import { backfillRepoConfig, getKnownRepoInfos, writeConfig } from "./config";
 import { COMPACT_THRESHOLD_WIDTH, DEFAULT_MAX_COUNT, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH } from "./constants";
 import { AppStateContext, createAppState, providerIdle, providerStatusMessage } from "./context/state";
 import { createThemeState, ThemeContext } from "./context/theme";
+import { clearDebugEvents } from "./debug/events";
 import type { DiffTarget } from "./git/types";
 import { useAncestry } from "./hooks/use-ancestry";
 import { useDataLoader } from "./hooks/use-data-loader";
@@ -124,7 +126,7 @@ function AppContent(props: Readonly<AppContentProps>) {
     writeConfig({ theme: name }, props.repoPath);
   });
 
-  const [dialog, setDialog] = createSignal<"menu" | "help" | "theme" | "diff-blame" | "detail" | "job-log" | null>(
+  const [dialog, setDialog] = createSignal<"menu" | "help" | "theme" | "diff-blame" | "detail" | "job-log" | "debug" | null>(
     null,
   );
 
@@ -372,9 +374,13 @@ function AppContent(props: Readonly<AppContentProps>) {
       case "theme":
         setDialog("theme");
         break;
+      case "debug":
+        setDialog(dialog() === "debug" ? null : "debug");
+        break;
       case "clear":
         actions.setError(null);
         actions.setProviderStatus(providerIdle());
+        clearDebugEvents();
         break;
       case "f":
       case "fetch":
@@ -635,6 +641,9 @@ function AppContent(props: Readonly<AppContentProps>) {
                 </Show>
                 <Show when={dialog() === "theme"}>
                   <ThemeDialog onClose={() => setDialog(null)} />
+                </Show>
+                <Show when={dialog() === "debug"}>
+                  <DebugDialog onClose={() => setDialog(null)} />
                 </Show>
                 <Show when={dialog() === "diff-blame" && diffTarget()}>
                   {target => (

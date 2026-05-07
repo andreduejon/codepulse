@@ -87,6 +87,7 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     { kind: "binding", key: ":ancestry", desc: "Highlight first-parent ancestry" },
     { kind: "binding", key: ":branches", desc: "Open menu on Branches tab" },
     { kind: "binding", key: ":clear", desc: "Dismiss current status message" },
+    { kind: "binding", key: ":debug", desc: "Toggle debug dialog" },
     { kind: "binding", key: ":fetch", desc: "Fetch from remote" },
     { kind: "binding", key: ":help", desc: "Open help dialog" },
     { kind: "binding", key: ":menu", desc: "Open menu dialog" },

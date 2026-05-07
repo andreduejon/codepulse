@@ -9,7 +9,7 @@ import { createCommandBarHelpers, handleCommandOrPathKey, handleSearchKey } from
 import { handleDetailKey } from "./handle-detail-keys";
 import { handleGraphKey } from "./handle-graph-keys";
 
-export type DialogId = "menu" | "help" | "theme" | "diff-blame" | "detail" | "job-log" | null;
+export type DialogId = "menu" | "help" | "theme" | "diff-blame" | "detail" | "job-log" | "debug" | null;
 type LayoutMode = "too-small" | "compact" | "normal";
 
 /** Command bar mode — drives placeholder text and key routing. */
