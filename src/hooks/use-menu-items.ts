@@ -68,6 +68,17 @@ const relativeAgeLabel = (time: Date): string => {
   return `${days}d ago`;
 };
 
+export const REPO_METADATA_MAX_LENGTH = 64;
+
+export function isOptionalRepoMetadataValid(value: string): boolean {
+  return value.trim().length <= REPO_METADATA_MAX_LENGTH;
+}
+
+export function optionalRepoMetadataValue(value: string): string | undefined {
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 export interface MenuItemsOptions {
   /** Currently active tab. */
   activeTab: Accessor<MenuTab>;
@@ -354,6 +365,28 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
 
       { kind: "header", label: "Path" },
       { kind: "copyable", label: "Directory", get: () => state.repoPath() || "(unknown)" },
+
+      { kind: "header", label: "Grouping" },
+      {
+        kind: "editable",
+        label: "Group",
+        placeholder: "Repo group...",
+        get: () => "",
+        set: v => persistFullConfig({ group: optionalRepoMetadataValue(v) }),
+        isDraftValid: isOptionalRepoMetadataValid,
+        keepEditingOnSave: true,
+        staySelectedOnSave: true,
+      },
+      {
+        kind: "editable",
+        label: "App name",
+        placeholder: "App name...",
+        get: () => "",
+        set: v => persistFullConfig({ appName: optionalRepoMetadataValue(v) }),
+        isDraftValid: isOptionalRepoMetadataValid,
+        keepEditingOnSave: true,
+        staySelectedOnSave: true,
+      },
 
       { kind: "header", label: "Actions" },
       { kind: "action", label: "Fetch remote", hotkey: "f", get: lastFetchLabel, run: () => opts.onFetch() },
