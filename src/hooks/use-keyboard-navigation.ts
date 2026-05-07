@@ -5,12 +5,7 @@ import type { DetailNavRef } from "../components/detail-types";
 import type { AppActions, AppState } from "../context/state";
 import { routeGlobalKey } from "../keyboard/router";
 import { createCloseOneCascadeStep } from "./handle-cascade-close";
-import {
-  createCommandBarHelpers,
-  handleCommandOrPathKey,
-  handleModeCycling,
-  handleSearchKey,
-} from "./handle-command-bar-keys";
+import { createCommandBarHelpers, handleCommandOrPathKey, handleSearchKey } from "./handle-command-bar-keys";
 import { handleDetailKey } from "./handle-detail-keys";
 import { handleGraphKey } from "./handle-graph-keys";
 
@@ -156,9 +151,6 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
       if (route.runCascadeClose) closeOneCascadeStep();
       return;
     }
-
-    // ── Shift+←/→ mode cycling ────────────────────────────────────────────────
-    if (handleModeCycling(e, cbOpts, helpers)) return;
 
     // ── COMMAND / PATH mode ───────────────────────────────────────────────────
     if (handleCommandOrPathKey(e, cbOpts, helpers)) return;

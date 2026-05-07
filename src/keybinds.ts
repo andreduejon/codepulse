@@ -30,7 +30,7 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     { kind: "binding", key: "g", desc: "First commit", indent: 1 },
     { kind: "binding", key: "G", desc: "Last commit", indent: 1 },
     { kind: "binding", key: "p", desc: "Enter path mode", indent: 1 },
-    { kind: "binding", key: "shift + ←/→", desc: "Cycle modes", indent: 1 },
+    { kind: "binding", key: "shift + ←/→", desc: "Switch group repos", indent: 1 },
     { kind: "binding", key: "shift + ↑/↓", desc: "Jump 10 commits", indent: 1 },
     { kind: "binding", key: "↑/↓  or  j/k", desc: "Navigate commits", indent: 1 },
     { kind: "binding", key: "→  or  l", desc: "Focus detail panel", indent: 1 },
