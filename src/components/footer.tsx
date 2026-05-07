@@ -118,7 +118,7 @@ export default function Footer(
           <KeyHintSeparator />
           <KeyHint key="esc" desc=" cancel" />
           <KeyHintSeparator />
-          <KeyHint key="shift ←/→" desc=" switch mode" />
+          <KeyHint key="shift ←/→" desc=" switch project" />
         </Show>
 
         {/* ── Graph idle ───────────────────────────────────────────────────── */}
@@ -152,7 +152,7 @@ export default function Footer(
             <KeyHint key="enter" desc=" show details" />
           </Show>
           <KeyHintSeparator />
-          <KeyHint key="shift ←/→" desc=" switch mode" />
+          <KeyHint key="shift ←/→" desc=" switch project" />
           <KeyHintSeparator />
 
           <KeyHint key="↑/↓" desc=" navigate" />
