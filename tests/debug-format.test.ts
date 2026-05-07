@@ -8,7 +8,7 @@ describe("debug format", () => {
 
   test("formats event with status and duration", () => {
     expect(
-      formatDebugEvent({ timestamp: 0, source: "git", message: "git status", status: "ok", durationMs: 12 }),
+      formatDebugEvent({ timestamp: 0, source: "Git", message: "git status", status: "ok", durationMs: 12 }),
     ).toContain("git status  ok  12ms");
   });
 });

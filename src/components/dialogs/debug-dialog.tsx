@@ -4,8 +4,7 @@ import { For } from "solid-js";
 import { getDebugEvents } from "../../debug/events";
 import { formatDebugEvent } from "../../debug/format";
 import { useT } from "../../hooks/use-t";
-import { KeyHint } from "../key-hint";
-import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
+import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
 export default function DebugDialog(props: Readonly<{ onClose: () => void }>) {
   const t = useT();
@@ -41,7 +40,7 @@ export default function DebugDialog(props: Readonly<{ onClose: () => void }>) {
             <For each={events()} fallback={<text fg={t().foregroundMuted}>No debug events yet</text>}>
               {event => (
                 <box flexDirection="row" width="100%" paddingX={4}>
-                  <text wrapMode="none" truncate fg={event.source === "error" ? t().error : t().foreground}>
+                  <text wrapMode="word" fg={event.source === "error" ? t().error : t().foreground}>
                     {formatDebugEvent(event)}
                   </text>
                 </box>
@@ -49,9 +48,6 @@ export default function DebugDialog(props: Readonly<{ onClose: () => void }>) {
             </For>
           </box>
         </scrollbox>
-        <DialogFooter>
-          <KeyHint key="esc" desc=" close" />
-        </DialogFooter>
       </box>
     </DialogOverlay>
   );

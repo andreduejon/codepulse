@@ -5,7 +5,7 @@ afterEach(() => clearDebugEvents());
 
 describe("debug events", () => {
   test("keeps newest events first and caps at 100", () => {
-    for (let i = 0; i < 105; i++) addDebugEvent({ source: "git", message: `event ${i}`, timestamp: i });
+    for (let i = 0; i < 105; i++) addDebugEvent({ source: "Git", message: `event ${i}`, timestamp: i });
     const events = getDebugEvents();
     expect(events).toHaveLength(100);
     expect(events[0].message).toBe("event 104");
@@ -13,7 +13,7 @@ describe("debug events", () => {
   });
 
   test("returns a copy of the event buffer", () => {
-    addDebugEvent({ source: "git", message: "git status" });
+    addDebugEvent({ source: "Git", message: "git status" });
     getDebugEvents().length = 0;
     expect(getDebugEvents()).toHaveLength(1);
   });
