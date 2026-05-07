@@ -48,10 +48,52 @@ describe("loadConfig", () => {
 
   test("loads repo-specific config fields", () => {
     const repoPath = "/tmp/repo";
-    const configPath = makeRepoConfig("repo-fields", repoPath, { theme: "gruvbox", pageSize: 100 });
+    const configPath = makeRepoConfig("repo-fields", repoPath, {
+      group: "platform",
+      appName: "API Gateway",
+      theme: "gruvbox",
+      pageSize: 100,
+    });
     const { config: result } = loadConfig(repoPath, configPath);
+    expect(result.group).toBe("platform");
+    expect(result.appName).toBe("API Gateway");
     expect(result.theme).toBe("gruvbox");
     expect(result.pageSize).toBe(100);
+  });
+
+  test("trims optional repo grouping fields", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("repo-group-trim", repoPath, {
+      group: "  e-ant  ",
+      appName: "  e/ant Frontend  ",
+    });
+    const { config: result } = loadConfig(repoPath, configPath);
+    expect(result.group).toBe("e-ant");
+    expect(result.appName).toBe("e/ant Frontend");
+  });
+
+  test("treats blank repo grouping fields as unset", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("repo-group-blank", repoPath, {
+      group: "   ",
+      appName: "",
+    });
+    const { config: result } = loadConfig(repoPath, configPath);
+    expect(result.group).toBeUndefined();
+    expect(result.appName).toBeUndefined();
+  });
+
+  test("drops oversized repo grouping fields with warnings", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("repo-group-oversized", repoPath, {
+      group: "g".repeat(65),
+      appName: "a".repeat(65),
+    });
+    const { config: result, warnings } = loadConfig(repoPath, configPath);
+    expect(result.group).toBeUndefined();
+    expect(result.appName).toBeUndefined();
+    expect(warnings.some(w => w.includes('"group"'))).toBe(true);
+    expect(warnings.some(w => w.includes('"appName"'))).toBe(true);
   });
 
   test("loads trusted enterprise host from repo config", () => {
@@ -403,10 +445,12 @@ describe("writeConfig", () => {
     const dir = makeTempDir("write-new");
     const configPath = join(dir, "config.json");
     const repoPath = "/tmp/my-repo";
-    const result = writeConfig({ theme: "nord", pageSize: 100 }, repoPath, configPath);
+    const result = writeConfig({ group: "platform", appName: "API Gateway", theme: "nord", pageSize: 100 }, repoPath, configPath);
     expect(result).toBe(true);
     expect(existsSync(configPath)).toBe(true);
     const content = JSON.parse(readFileSync(configPath, "utf-8"));
+    expect(content.repos[resolve(repoPath)].group).toBe("platform");
+    expect(content.repos[resolve(repoPath)].appName).toBe("API Gateway");
     expect(content.repos[resolve(repoPath)].theme).toBe("nord");
     expect(content.repos[resolve(repoPath)].pageSize).toBe(100);
   });

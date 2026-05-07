@@ -10,6 +10,8 @@ import { normalizeGitHubHost } from "./providers/github-actions/api";
  * missing fields fall through to CLI args or built-in defaults.
  */
 export interface CodepulseConfig {
+  group?: string;
+  appName?: string;
   theme?: string;
   pageSize?: number;
   branch?: string;
@@ -288,6 +290,21 @@ export function loadConfig(repoPath: string, configPath?: string): { config: Cod
 function validateConfig(raw: Record<string, unknown>, path: string, warnings: string[]): CodepulseConfig {
   const config: CodepulseConfig = {};
 
+  const parseOptionalText = (field: string, value: unknown, maxLength: number): string | undefined => {
+    if (value === undefined) return undefined;
+    if (typeof value !== "string") {
+      warnings.push(`${path}: "${field}" must be a string, ignoring`);
+      return undefined;
+    }
+    const trimmed = value.trim();
+    if (trimmed.length === 0) return undefined;
+    if (trimmed.length > maxLength) {
+      warnings.push(`${path}: "${field}" must be at most ${maxLength} characters, ignoring`);
+      return undefined;
+    }
+    return trimmed;
+  };
+
   const parseTrustedEnterpriseHost = (value: unknown): string | undefined => {
     if (value === undefined) return undefined;
     if (typeof value !== "string") {
@@ -301,6 +318,12 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
     }
     return host;
   };
+
+  const group = parseOptionalText("group", raw.group, 64);
+  if (group !== undefined) config.group = group;
+
+  const appName = parseOptionalText("appName", raw.appName, 64);
+  if (appName !== undefined) config.appName = appName;
 
   if (raw.theme !== undefined) {
     if (typeof raw.theme === "string" && raw.theme.length > 0) {
@@ -541,6 +564,8 @@ export function removeRepoConfig(repoPath: string, configPath?: string): boolean
 
 /** Apply defined CodepulseConfig fields to a target object. */
 function applyConfigFields(target: Record<string, unknown>, config: CodepulseConfig): void {
+  if (config.group !== undefined) target.group = config.group;
+  if (config.appName !== undefined) target.appName = config.appName;
   if (config.theme !== undefined) target.theme = config.theme;
   if (config.pageSize !== undefined) target.pageSize = config.pageSize;
   if (config.branch !== undefined) target.branch = config.branch;
