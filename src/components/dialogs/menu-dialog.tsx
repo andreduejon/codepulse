@@ -157,10 +157,6 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     const item = activeItems()[idx];
     if (item?.kind === "editable" && item.isDraftValid && !item.isDraftValid(editDraft())) return;
     if (item?.kind === "editable") item.set(editDraft());
-    if (item?.kind === "editable" && item.keepEditingOnSave) {
-      setEditDraft("");
-      return;
-    }
     if (item?.kind === "editable" && item.staySelectedOnSave) {
       setPendingSelectionLabel(item.label);
       setEditingIdx(null);

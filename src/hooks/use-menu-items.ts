@@ -367,25 +367,23 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
       { kind: "header", label: "Path" },
       { kind: "copyable", label: "Directory", get: () => state.repoPath() || "(unknown)" },
 
-      { kind: "header", label: "Grouping" },
+      { kind: "header", label: "Labels" },
       {
         kind: "editable",
         label: "Group",
-        placeholder: "Repo group...",
+        placeholder: "Enter group...",
         get: () => repoDisplayConfig.group ?? "",
         set: v => persistFullConfig({ group: optionalRepoMetadataValue(v) }),
         isDraftValid: isOptionalRepoMetadataValid,
-        keepEditingOnSave: true,
         staySelectedOnSave: true,
       },
       {
         kind: "editable",
         label: "App name",
-        placeholder: "App name...",
+        placeholder: "Enter name...",
         get: () => repoDisplayConfig.appName ?? "",
         set: v => persistFullConfig({ appName: optionalRepoMetadataValue(v) }),
         isDraftValid: isOptionalRepoMetadataValid,
-        keepEditingOnSave: true,
         staySelectedOnSave: true,
       },
 
