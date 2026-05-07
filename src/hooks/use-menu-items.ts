@@ -2,7 +2,7 @@ import { homedir } from "node:os";
 import type { Accessor } from "solid-js";
 import { createMemo, createSignal } from "solid-js";
 import type { CodepulseConfig, ConfigInfo } from "../config";
-import { writeConfig } from "../config";
+import { getRepoDisplayConfig, writeConfig } from "../config";
 import { AUTO_REFRESH_MS, INTERVAL_OPTIONS, MAX_COUNT_OPTIONS, MS_TO_LABEL } from "../constants";
 import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL, useAppState } from "../context/state";
 import { themes } from "../context/theme";
@@ -359,6 +359,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
   };
 
   const repoItems = createMemo<SettingItem[]>(() => {
+    const repoDisplayConfig = getRepoDisplayConfig(state.repoPath());
     const items: SettingItem[] = [
       { kind: "header", label: "Origin" },
       { kind: "copyable", label: "URL", get: () => state.remoteUrl() || "(none)" },
@@ -371,7 +372,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
         kind: "editable",
         label: "Group",
         placeholder: "Repo group...",
-        get: () => "",
+        get: () => repoDisplayConfig.group ?? "",
         set: v => persistFullConfig({ group: optionalRepoMetadataValue(v) }),
         isDraftValid: isOptionalRepoMetadataValid,
         keepEditingOnSave: true,
@@ -381,7 +382,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
         kind: "editable",
         label: "App name",
         placeholder: "App name...",
-        get: () => "",
+        get: () => repoDisplayConfig.appName ?? "",
         set: v => persistFullConfig({ appName: optionalRepoMetadataValue(v) }),
         isDraftValid: isOptionalRepoMetadataValid,
         keepEditingOnSave: true,

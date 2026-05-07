@@ -12,6 +12,7 @@ import MenuDialog, { setLastMenuTab } from "./components/dialogs/menu-dialog";
 import ThemeDialog from "./components/dialogs/theme-dialog";
 import ErrorScreen from "./components/error-screen";
 import Footer from "./components/footer";
+import GroupStrip from "./components/group-strip";
 import GraphView, { ColumnHeader } from "./components/graph";
 import MessageBox, { type UIMessage } from "./components/message-box";
 import ProjectSelector from "./components/project-selector";
@@ -34,6 +35,7 @@ import type { GitHubJob, GitHubWorkflowRun } from "./providers/github-actions/ty
 import { useGitHubCI } from "./providers/github-actions/use-github-ci";
 import type { JenkinsJob, JenkinsRun } from "./providers/jenkins/types";
 import { useJenkinsCI } from "./providers/jenkins/use-jenkins-ci";
+import { nextGroupRepoPath } from "./utils/group-repos";
 
 interface AppProps {
   repoPath: string;
@@ -245,6 +247,26 @@ function AppContent(props: Readonly<AppContentProps>) {
   const refreshActiveProvider = async () => {
     if (state.activeProviderView() === "github-actions") await gitHubCI.refresh();
     else if (state.activeProviderView() === "jenkins") await jenkinsCI.refresh();
+  };
+
+  const knownRepoInfos = () => getKnownRepoInfos();
+
+  const switchGroupRepo = (direction: 1 | -1) => {
+    const nextPath = nextGroupRepoPath(knownRepoInfos(), props.repoPath, direction);
+    if (!nextPath) return;
+    setDialog(null);
+    setCommandBarMode("idle");
+    setCommandBarValue("");
+    setSearchFocused(false);
+    setSearchInputValue("");
+    clearAnchor();
+    actions.setPathFilter(null);
+    actions.setPathMatchSet(null);
+    actions.setError(null);
+    actions.setProviderStatus(providerIdle());
+    renderer.destroy();
+    Bun.spawnSync([process.argv[0], process.argv[1], nextPath], { stdio: ["inherit", "inherit", "inherit"], env: process.env });
+    process.exit(0);
   };
 
   const handleReloadAll = async () => {
@@ -472,6 +494,7 @@ function AppContent(props: Readonly<AppContentProps>) {
     onClearAncestry: clearAnchor,
     getCommitData: state.activeProviderView() === "jenkins" ? jenkinsCI.getCommitData : gitHubCI.getCommitData,
     getProviderLoading: () => state.providerStatus().kind === "loading",
+    onSwitchGroupRepo: switchGroupRepo,
   });
 
   // ── Provider-aware theme: override accent with githubActionsBg in CI mode ──
@@ -524,7 +547,7 @@ function AppContent(props: Readonly<AppContentProps>) {
               when={!repoSelectorVisible()}
               fallback={
                 <ProjectSelector
-                  knownRepos={getKnownRepoInfos()}
+                  knownRepos={knownRepoInfos()}
                   currentRepo={props.repoPath}
                   onCancel={() => setRepoSelectorVisible(false)}
                   setKeyboardScopeOverride={actions.setKeyboardScopeOverride}
@@ -545,6 +568,7 @@ function AppContent(props: Readonly<AppContentProps>) {
                     {/* Graph area */}
                     <box flexDirection="column" flexGrow={1} paddingBottom={1}>
                       {/* Sticky column headers - above scrollbox */}
+                      <GroupStrip repos={knownRepoInfos()} currentRepo={props.repoPath} />
                       <ColumnHeader />
 
                       <GraphView onLoadMore={loadMoreData} />

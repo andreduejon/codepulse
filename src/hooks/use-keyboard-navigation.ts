@@ -55,6 +55,7 @@ interface KeyboardNavigationOptions {
   getCommitData?: (sha: string) => unknown;
   /** Returns true while the initial CI fetch is in-flight. */
   getProviderLoading?: () => boolean;
+  onSwitchGroupRepo?: (direction: 1 | -1) => void;
 }
 
 /**
@@ -105,6 +106,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     onClearAncestry,
     getCommitData,
     getProviderLoading,
+    onSwitchGroupRepo,
   } = opts;
 
   // Build command-bar helpers (clearSearch, openSearch, confirmSearch, exitCommandBar)
@@ -149,6 +151,13 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     const route = routeGlobalKey({ dialog: dialog(), overrideScope: state.keyboardScopeOverride() }, e.name);
     if (!route.runAppHandler) {
       if (route.runCascadeClose) closeOneCascadeStep();
+      return;
+    }
+
+    // ── Group repo switching ─────────────────────────────────────────────────
+    if (e.shift && (e.name === "left" || e.name === "right")) {
+      e.preventDefault();
+      onSwitchGroupRepo?.(e.name === "right" ? 1 : -1);
       return;
     }
 

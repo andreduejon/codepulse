@@ -115,6 +115,30 @@ describe("loadConfig", () => {
     expect(warnings.some(w => w.includes("providers.github.trustedEnterpriseHost"))).toBe(true);
   });
 
+  test("drops oversized general text and provider config fields with warnings", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("oversized-config-fields", repoPath, {
+      theme: "t".repeat(256),
+      branch: "b".repeat(256),
+      providers: {
+        github: { tokenEnvVar: "g".repeat(256) },
+        jenkins: {
+          username: "u".repeat(256),
+          tokenEnvVar: "j".repeat(256),
+          jobs: [{ url: "h".repeat(2049), label: "l".repeat(256) }],
+        },
+      },
+    });
+    const { config: result, warnings } = loadConfig(repoPath, configPath);
+    expect(result.theme).toBeUndefined();
+    expect(result.branch).toBeUndefined();
+    expect(result.providers?.github?.tokenEnvVar).toBeUndefined();
+    expect(result.providers?.jenkins?.username).toBeUndefined();
+    expect(result.providers?.jenkins?.tokenEnvVar).toBeUndefined();
+    expect(result.providers?.jenkins?.jobs).toEqual([]);
+    expect(warnings.length).toBeGreaterThanOrEqual(5);
+  });
+
   test("returns empty object for invalid JSON", () => {
     const configPath = makeTempConfig("bad-json", "not json!!!");
     const { config: result, warnings } = loadConfig("/tmp/repo", configPath);

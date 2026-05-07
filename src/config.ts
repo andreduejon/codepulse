@@ -5,6 +5,10 @@ import { DEFAULT_MAX_COUNT } from "./constants";
 import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL } from "./context/state";
 import { normalizeGitHubHost } from "./providers/github-actions/api";
 
+const GENERAL_TEXT_MAX_LENGTH = 255;
+const URL_OR_PATH_MAX_LENGTH = 2048;
+const REPO_METADATA_MAX_LENGTH = 64;
+
 /**
  * Shape of the config file. All fields are optional —
  * missing fields fall through to CLI args or built-in defaults.
@@ -256,6 +260,11 @@ export interface KnownRepoInfo {
   appName?: string;
 }
 
+export function getRepoDisplayConfig(repoPath: string, configPath?: string): Pick<CodepulseConfig, "group" | "appName"> {
+  const { config } = loadConfig(repoPath, configPath);
+  return { group: config.group, appName: config.appName };
+}
+
 /** Return all known repositories with optional display metadata from config. */
 export function getKnownRepoInfos(configPath?: string): KnownRepoInfo[] {
   const warnings: string[] = [];
@@ -341,18 +350,15 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
     return host;
   };
 
-  const group = parseOptionalText("group", raw.group, 64);
+  const group = parseOptionalText("group", raw.group, REPO_METADATA_MAX_LENGTH);
   if (group !== undefined) config.group = group;
 
-  const appName = parseOptionalText("appName", raw.appName, 64);
+  const appName = parseOptionalText("appName", raw.appName, REPO_METADATA_MAX_LENGTH);
   if (appName !== undefined) config.appName = appName;
 
   if (raw.theme !== undefined) {
-    if (typeof raw.theme === "string" && raw.theme.length > 0) {
-      config.theme = raw.theme;
-    } else {
-      warnings.push(`${path}: "theme" must be a non-empty string, ignoring`);
-    }
+    const theme = parseOptionalText("theme", raw.theme, GENERAL_TEXT_MAX_LENGTH);
+    if (theme !== undefined) config.theme = theme;
   }
 
   if (raw.pageSize !== undefined) {
@@ -364,11 +370,8 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
   }
 
   if (raw.branch !== undefined) {
-    if (typeof raw.branch === "string" && raw.branch.length > 0) {
-      config.branch = raw.branch;
-    } else {
-      warnings.push(`${path}: "branch" must be a non-empty string, ignoring`);
-    }
+    const branch = parseOptionalText("branch", raw.branch, GENERAL_TEXT_MAX_LENGTH);
+    if (branch !== undefined) config.branch = branch;
   }
 
   if (raw.showAllBranches !== undefined) {
@@ -410,11 +413,8 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
           }
         }
         if (gh.tokenEnvVar !== undefined) {
-          if (typeof gh.tokenEnvVar === "string" && gh.tokenEnvVar.length > 0) {
-            config.providers.github.tokenEnvVar = gh.tokenEnvVar;
-          } else {
-            warnings.push(`${path}: "providers.github.tokenEnvVar" must be a non-empty string, ignoring`);
-          }
+          const tokenEnvVar = parseOptionalText("providers.github.tokenEnvVar", gh.tokenEnvVar, GENERAL_TEXT_MAX_LENGTH);
+          if (tokenEnvVar !== undefined) config.providers.github.tokenEnvVar = tokenEnvVar;
         }
         const trustedEnterpriseHost = parseTrustedEnterpriseHost(gh.trustedEnterpriseHost);
         if (trustedEnterpriseHost !== undefined) {
@@ -429,14 +429,12 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
           else warnings.push(`${path}: "providers.jenkins.enabled" must be a boolean, ignoring`);
         }
         if (jenkins.username !== undefined) {
-          if (typeof jenkins.username === "string" && jenkins.username.length > 0)
-            config.providers.jenkins.username = jenkins.username;
-          else warnings.push(`${path}: "providers.jenkins.username" must be a non-empty string, ignoring`);
+          const username = parseOptionalText("providers.jenkins.username", jenkins.username, GENERAL_TEXT_MAX_LENGTH);
+          if (username !== undefined) config.providers.jenkins.username = username;
         }
         if (jenkins.tokenEnvVar !== undefined) {
-          if (typeof jenkins.tokenEnvVar === "string" && jenkins.tokenEnvVar.length > 0)
-            config.providers.jenkins.tokenEnvVar = jenkins.tokenEnvVar;
-          else warnings.push(`${path}: "providers.jenkins.tokenEnvVar" must be a non-empty string, ignoring`);
+          const tokenEnvVar = parseOptionalText("providers.jenkins.tokenEnvVar", jenkins.tokenEnvVar, GENERAL_TEXT_MAX_LENGTH);
+          if (tokenEnvVar !== undefined) config.providers.jenkins.tokenEnvVar = tokenEnvVar;
         }
         if (jenkins.graphBuildLimit !== undefined) {
           if (jenkins.graphBuildLimit === 10 || jenkins.graphBuildLimit === 20 || jenkins.graphBuildLimit === 50)
@@ -451,11 +449,12 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
                 return [];
               }
               const rawJob = job as Record<string, unknown>;
-              if (typeof rawJob.url !== "string" || rawJob.url.length === 0) {
-                warnings.push(`${path}: "providers.jenkins.jobs[${idx}].url" must be a non-empty string, ignoring`);
+              const url = parseOptionalText(`providers.jenkins.jobs[${idx}].url`, rawJob.url, URL_OR_PATH_MAX_LENGTH);
+              if (url === undefined) {
                 return [];
               }
-              return [{ url: rawJob.url, ...(typeof rawJob.label === "string" ? { label: rawJob.label } : {}) }];
+              const label = parseOptionalText(`providers.jenkins.jobs[${idx}].label`, rawJob.label, GENERAL_TEXT_MAX_LENGTH);
+              return [{ url, ...(label !== undefined ? { label } : {}) }];
             });
           } else {
             warnings.push(`${path}: "providers.jenkins.jobs" must be an array, ignoring`);
