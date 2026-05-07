@@ -2,7 +2,7 @@ import type { ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { For } from "solid-js";
 import { getDebugEvents } from "../../debug/events";
-import { formatDebugDuration, formatDebugMessage, formatDebugTimestamp } from "../../debug/format";
+import { formatDebugDuration, formatDebugMessage, formatDebugStatus, formatDebugTimestamp } from "../../debug/format";
 import { useT } from "../../hooks/use-t";
 import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
@@ -68,6 +68,9 @@ export default function DebugDialog(props: Readonly<{ onClose: () => void }>) {
                   </text>
                   <text width={10} flexShrink={0} wrapMode="none" fg={sourceColor(event.source)}>
                     {event.source}
+                  </text>
+                  <text width={10} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                    {formatDebugStatus(event.status)}
                   </text>
                   <text flexGrow={1} wrapMode="word" fg={messageColor(event.source)}>
                     {formatDebugMessage(event)}

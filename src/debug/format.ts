@@ -6,7 +6,13 @@ export function formatDebugTimestamp(timestamp: number): string {
 }
 
 export function formatDebugEvent(event: DebugEvent): string {
-  const parts = [formatDebugTimestamp(event.timestamp), formatDebugDuration(event.durationMs), event.source, formatDebugMessage(event)].filter(Boolean);
+  const parts = [
+    formatDebugTimestamp(event.timestamp),
+    formatDebugDuration(event.durationMs),
+    event.source,
+    formatDebugStatus(event.status),
+    formatDebugMessage(event),
+  ].filter(Boolean);
   return parts.join("  ");
 }
 
@@ -14,6 +20,10 @@ export function formatDebugDuration(durationMs?: number): string {
   return durationMs !== undefined ? `${durationMs}ms` : "";
 }
 
+export function formatDebugStatus(status?: string): string {
+  return status ?? "";
+}
+
 export function formatDebugMessage(event: DebugEvent): string {
-  return event.status ? `${event.message}  ${event.status}` : event.message;
+  return event.message;
 }
