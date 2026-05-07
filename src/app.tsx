@@ -85,6 +85,7 @@ function AppContent(props: Readonly<AppContentProps>) {
     graphBuildLimit: props.initialJenkinsConfig?.graphBuildLimit ?? 20,
     jobs: props.initialJenkinsConfig?.jobs ?? [],
   });
+  const [repoDisplayConfig, setRepoDisplayConfig] = createSignal(getRepoDisplayConfig(props.repoPath));
 
   // ── GitHub CI data hook (called during setup, before Provider renders — per AGENTS.md rule 5) ──
   const gitHubCI = useGitHubCI({
@@ -250,7 +251,7 @@ function AppContent(props: Readonly<AppContentProps>) {
   };
 
   const knownRepoInfos = () => getKnownRepoInfos();
-  const currentRepoDisplayConfig = () => getRepoDisplayConfig(props.repoPath);
+  const currentRepoDisplayConfig = () => repoDisplayConfig();
 
   const switchGroupRepo = (direction: 1 | -1) => {
     const nextPath = nextGroupRepoPath(knownRepoInfos(), props.repoPath, direction, currentRepoDisplayConfig());
@@ -664,6 +665,7 @@ function AppContent(props: Readonly<AppContentProps>) {
                     onGithubConfigChange={setGithubConfig}
                     jenkinsConfig={jenkinsConfig()}
                     onJenkinsConfigChange={setJenkinsConfig}
+                    onRepoDisplayConfigChange={setRepoDisplayConfig}
                   />
                 </Show>
                 <Show when={dialog() === "help"}>

@@ -51,6 +51,7 @@ interface MenuDialogProps {
     graphBuildLimit: 10 | 20 | 50;
     jobs: { label?: string; url: string }[];
   }) => void;
+  onRepoDisplayConfigChange?: (cfg: { group?: string; appName?: string }) => void;
 }
 
 /** Persists the last-used tab across dialog open/close cycles. */
@@ -106,6 +107,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     onGithubConfigChange: props.onGithubConfigChange,
     jenkinsConfig: () => props.jenkinsConfig,
     onJenkinsConfigChange: props.onJenkinsConfigChange,
+    onRepoDisplayConfigChange: props.onRepoDisplayConfigChange,
   });
 
   // ── Banner scroll for selected copyable rows ──────────────────────

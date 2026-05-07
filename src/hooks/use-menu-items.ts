@@ -109,6 +109,7 @@ export interface MenuItemsOptions {
     graphBuildLimit: 10 | 20 | 50;
     jobs: { label?: string; url: string }[];
   }) => void;
+  onRepoDisplayConfigChange?: (cfg: { group?: string; appName?: string }) => void;
 }
 
 export interface MenuItemsResult {
@@ -345,10 +346,12 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
     }
     writeConfig(cfg, state.repoPath());
     if (overrides && (Object.hasOwn(overrides, "group") || Object.hasOwn(overrides, "appName"))) {
-      setRepoDisplayConfig(prev => ({
-        group: Object.hasOwn(overrides, "group") ? overrides.group : prev.group,
-        appName: Object.hasOwn(overrides, "appName") ? overrides.appName : prev.appName,
-      }));
+      const nextRepoDisplayConfig = {
+        group: Object.hasOwn(overrides, "group") ? overrides.group : repoDisplayConfig().group,
+        appName: Object.hasOwn(overrides, "appName") ? overrides.appName : repoDisplayConfig().appName,
+      };
+      setRepoDisplayConfig(nextRepoDisplayConfig);
+      opts.onRepoDisplayConfigChange?.(nextRepoDisplayConfig);
     }
   };
 
@@ -385,6 +388,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
         get: () => repoDisplayConfig().group ?? "",
         set: v => persistFullConfig({ group: optionalRepoMetadataValue(v) }),
         isDraftValid: isOptionalRepoMetadataValid,
+        showValidity: false,
         staySelectedOnSave: true,
       },
       {
@@ -394,6 +398,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
         get: () => repoDisplayConfig().appName ?? "",
         set: v => persistFullConfig({ appName: optionalRepoMetadataValue(v) }),
         isDraftValid: isOptionalRepoMetadataValid,
+        showValidity: false,
         staySelectedOnSave: true,
       },
 
