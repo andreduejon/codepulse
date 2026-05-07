@@ -15,6 +15,22 @@ export default function DebugDialog(props: Readonly<{ onClose: () => void }>) {
   const dialogHeight = () => Math.min(Math.floor(dimensions().height * 0.7), dimensions().height - 8);
   let scrollboxRef: ScrollBoxRenderable | undefined;
 
+  const sourceColor = (source: ReturnType<typeof events>[number]["source"]) => {
+    switch (source) {
+      case "Git":
+        return t().foregroundMuted;
+      case "GitHub":
+        return t().githubActionsBg;
+      case "Jenkins":
+        return t().success;
+      case "error":
+        return t().error;
+    }
+  };
+
+  const messageColor = (source: ReturnType<typeof events>[number]["source"]) =>
+    source === "error" ? t().error : t().foreground;
+
   useKeyboard(e => {
     if (e.eventType === "release") return;
     if (e.name === "q") {
@@ -50,10 +66,10 @@ export default function DebugDialog(props: Readonly<{ onClose: () => void }>) {
                   <text width={10} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
                     {formatDebugDuration(event.durationMs)}
                   </text>
-                  <text width={10} flexShrink={0} wrapMode="none" fg={event.source === "error" ? t().error : t().accent}>
+                  <text width={10} flexShrink={0} wrapMode="none" fg={sourceColor(event.source)}>
                     {event.source}
                   </text>
-                  <text flexGrow={1} wrapMode="word" fg={event.source === "error" ? t().error : t().foreground}>
+                  <text flexGrow={1} wrapMode="word" fg={messageColor(event.source)}>
                     {formatDebugMessage(event)}
                   </text>
                 </box>
