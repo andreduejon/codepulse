@@ -151,7 +151,7 @@ export function buildGitHubProviderItems(
   const hostAllowed = remoteHost === "github.com" || (remoteHost != null && ghCfg.trustedEnterpriseHost === remoteHost);
 
   const items: SettingItem[] = [
-    { kind: "header", label: "GitHub", get: () => `last refresh ${lastRefresh()}` },
+    { kind: "header", label: "GitHub" },
     {
       kind: "toggle",
       label: "Enabled",
@@ -162,6 +162,7 @@ export function buildGitHubProviderItems(
         persist?.(newCfg);
       },
     },
+    { kind: "info", label: "Last refresh", get: lastRefresh },
   ];
 
   if (!ghCfg.enabled) return items;
@@ -208,7 +209,7 @@ function buildJenkinsProviderItems(
   lastRefresh: () => string = () => "never",
 ): SettingItem[] {
   const items: SettingItem[] = [
-    { kind: "header", label: "Jenkins", get: () => `last refresh ${lastRefresh()}` },
+    { kind: "header", label: "Jenkins" },
     {
       kind: "toggle",
       label: "Enabled",
@@ -219,6 +220,7 @@ function buildJenkinsProviderItems(
         persist?.(newCfg);
       },
     },
+    { kind: "info", label: "Last refresh", get: lastRefresh },
   ];
 
   if (!jenkinsCfg.enabled) return items;
@@ -286,7 +288,7 @@ function buildJenkinsProviderItems(
     ...jenkinsCfg.jobs.map((job, idx) => ({
       kind: "copyable" as const,
       label: `Job #${idx + 1} URL`,
-      get: () => ` · ${job.url}`,
+      get: () => job.url,
       onForget: () => {
         const newCfg = { ...jenkinsCfg, jobs: jenkinsCfg.jobs.filter((_, jobIdx) => jobIdx !== idx) };
         onChange?.(newCfg);

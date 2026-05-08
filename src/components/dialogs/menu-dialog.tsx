@@ -316,9 +316,14 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
           </strong>
         </text>
         {item.get ? (
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {item.get()}
-          </text>
+          <>
+            <box width={VALUE_COL_WIDTH} flexShrink={0} flexDirection="row" justifyContent="flex-end">
+              <text wrapMode="none" truncate fg={t().foregroundMuted}>
+                {clipLeft(item.get(), VALUE_COL_WIDTH)}
+              </text>
+            </box>
+            <box width={HOTKEY_COL_WIDTH} flexShrink={0} />
+          </>
         ) : null}
       </box>
     </box>
@@ -339,21 +344,15 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
         <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
           {item.label}
         </text>
+        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+          {clipLeft(item.get(), VALUE_COL_WIDTH).padStart(VALUE_COL_WIDTH)}
+        </text>
         {hasStatus() ? (
-          <>
-            <box width={VALUE_COL_WIDTH} flexShrink={0} flexDirection="row" justifyContent="flex-end">
-              <text wrapMode="none" truncate fg={t().foregroundMuted}>
-                {clipLeft(item.get(), VALUE_COL_WIDTH)}
-              </text>
-            </box>
-            <text flexShrink={0} width={HOTKEY_COL_WIDTH} wrapMode="none" fg={isValid() ? t().success : t().error}>
-              {(isValid() ? "✓" : "✕").padStart(HOTKEY_COL_WIDTH)}
-            </text>
-          </>
-        ) : (
-          <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
-            {item.get()}
+          <text flexShrink={0} width={HOTKEY_COL_WIDTH} wrapMode="none" fg={isValid() ? t().success : t().error}>
+            {(isValid() ? "✓" : "✕").padStart(HOTKEY_COL_WIDTH)}
           </text>
+        ) : (
+          <box width={HOTKEY_COL_WIDTH} flexShrink={0} />
         )}
       </box>
     );

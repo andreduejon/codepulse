@@ -143,66 +143,68 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
 
       {/* Status row: git badge · mode badge · project badges · branch badges */}
       <box flexDirection="row" width="100%">
-        {/* Provider view badge */}
-        {(() => {
-          const view = state.activeProviderView();
-          if (view === "git") {
+        <box flexDirection="row" flexShrink={1}>
+          {/* Provider view badge */}
+          {(() => {
+            const view = state.activeProviderView();
+            if (view === "git") {
+              return (
+                <text flexShrink={0} wrapMode="none" fg={t().background} bg={t().accent}>
+                  {" Git "}
+                </text>
+              );
+            }
+            const label = providerDisplayName(view);
+            const bg = view === "jenkins" ? t().jenkinsBg : t().githubActionsBg;
+            const fg = view === "jenkins" ? t().jenkinsFg : t().githubActionsFg;
             return (
-              <text flexShrink={0} wrapMode="none" fg={t().background} bg={t().accent}>
-                {" Git "}
+              <text flexShrink={0} wrapMode="none" fg={fg} bg={bg}>
+                {` ${label} `}
               </text>
             );
-          }
-          const label = providerDisplayName(view);
-          const bg = view === "jenkins" ? t().jenkinsBg : t().githubActionsBg;
-          const fg = view === "jenkins" ? t().jenkinsFg : t().githubActionsFg;
-          return (
-            <text flexShrink={0} wrapMode="none" fg={fg} bg={bg}>
-              {` ${label} `}
-            </text>
-          );
-        })()}
-        <text flexShrink={0} wrapMode="none">
-          {" "}
-        </text>
-        {/* Mode badge */}
-        <text flexShrink={0} wrapMode="none" fg={t().accent} bg={t().backgroundElementActive}>
-          {modeBadge()}
-        </text>
-        <Show when={groupMembers().length > 1}>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {" · "}
+          })()}
+          <text flexShrink={0} wrapMode="none">
+            {" "}
           </text>
-          <Show when={visibleProjects().leftHidden > 0}>
-            <Badge name={`◂${visibleProjects().leftHidden}`} dimmed noShrink />
-            <text flexShrink={0} wrapMode="none">
-              {" "}
+          {/* Mode badge */}
+          <text flexShrink={0} wrapMode="none" fg={t().accent} bg={t().backgroundElementActive}>
+            {modeBadge()}
+          </text>
+          <Show when={groupMembers().length > 1}>
+            <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+              {" · "}
             </text>
+            <Show when={visibleProjects().leftHidden > 0}>
+              <Badge name={`◂${visibleProjects().leftHidden}`} dimmed noShrink />
+              <text flexShrink={0} wrapMode="none">
+                {" "}
+              </text>
+            </Show>
+            <For each={visibleProjects().repos}>
+              {(repo, idx) => (
+                <>
+                  <Show when={idx() > 0}>
+                    <text flexShrink={0} wrapMode="none">
+                      {" "}
+                    </text>
+                  </Show>
+                  <Badge
+                    name={repoDisplayName(repo)}
+                    color={repo.path === props.currentRepo ? t().accent : undefined}
+                    dimmed={repo.path !== props.currentRepo}
+                    noShrink
+                  />
+                </>
+              )}
+            </For>
+            <Show when={visibleProjects().rightHidden > 0}>
+              <text flexShrink={0} wrapMode="none">
+                {" "}
+              </text>
+              <Badge name={`${visibleProjects().rightHidden}▸`} dimmed noShrink />
+            </Show>
           </Show>
-          <For each={visibleProjects().repos}>
-            {(repo, idx) => (
-              <>
-                <Show when={idx() > 0}>
-                  <text flexShrink={0} wrapMode="none">
-                    {" "}
-                  </text>
-                </Show>
-                <Badge
-                  name={repoDisplayName(repo)}
-                  color={repo.path === props.currentRepo ? t().accent : undefined}
-                  dimmed={repo.path !== props.currentRepo}
-                  noShrink
-                />
-              </>
-            )}
-          </For>
-          <Show when={visibleProjects().rightHidden > 0}>
-            <text flexShrink={0} wrapMode="none">
-              {" "}
-            </text>
-            <Badge name={`${visibleProjects().rightHidden}▸`} dimmed noShrink />
-          </Show>
-        </Show>
+        </box>
         <box flexGrow={1} />
         <Show when={checkedOutBranch() || viewingBranch()}>
           <Show
