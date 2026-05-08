@@ -26,7 +26,10 @@ export function clearDebugEvents(): void {
 
 export function redactDebugValue(value: string): string {
   return value
-    .replace(/(authorization|token|access_token|id_token|refresh_token|api[_-]?key|signature|sig)=([^&\s]+)/gi, "$1=********")
+    .replace(
+      /(authorization|token|access_token|id_token|refresh_token|api[_-]?key|signature|sig)=([^&\s]+)/gi,
+      "$1=********",
+    )
     .replace(/(Authorization:\s*)([^\s]+)/gi, "$1********")
     .replace(/(Bearer\s+)[A-Za-z0-9._~+/=-]+/gi, "$1********")
     .replace(/(Basic\s+)[A-Za-z0-9._~+/=-]+/gi, "$1********");

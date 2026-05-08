@@ -1,4 +1,4 @@
-import { createEffect, onCleanup, type Accessor } from "solid-js";
+import { type Accessor, createEffect, onCleanup } from "solid-js";
 import type { DetailNavRef } from "../components/detail-types";
 import { isUncommittedHash } from "../constants";
 import type { AppActions, AppState } from "../context/state";

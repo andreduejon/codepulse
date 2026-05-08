@@ -35,7 +35,12 @@ export async function runGit(
     const [stdout, stderr] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
     await proc.exited;
     const exitCode = proc.exitCode ?? 1;
-    addDebugEvent({ source: "Git", message: command, status: exitCode === 0 ? "ok" : `exit ${exitCode}`, durationMs: Date.now() - started });
+    addDebugEvent({
+      source: "Git",
+      message: command,
+      status: exitCode === 0 ? "ok" : `exit ${exitCode}`,
+      durationMs: Date.now() - started,
+    });
     return { stdout, stderr, exitCode };
   } catch {
     // Process was killed — pipes may throw

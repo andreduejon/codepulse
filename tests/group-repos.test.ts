@@ -9,7 +9,10 @@ describe("group repos", () => {
   ];
 
   test("returns sorted group members", () => {
-    expect(groupMembersForRepo(repos, "/repo/frontend").map(repo => repo.path)).toEqual(["/repo/backend", "/repo/frontend"]);
+    expect(groupMembersForRepo(repos, "/repo/frontend").map(repo => repo.path)).toEqual([
+      "/repo/backend",
+      "/repo/frontend",
+    ]);
   });
 
   test("moves to adjacent group repo without wrapping", () => {

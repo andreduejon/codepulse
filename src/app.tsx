@@ -153,9 +153,9 @@ function AppContent(props: Readonly<AppContentProps>) {
     writeConfig({ theme: name }, activeRepoPath());
   });
 
-  const [dialog, setDialog] = createSignal<"menu" | "help" | "theme" | "diff-blame" | "detail" | "job-log" | "debug" | null>(
-    null,
-  );
+  const [dialog, setDialog] = createSignal<
+    "menu" | "help" | "theme" | "diff-blame" | "detail" | "job-log" | "debug" | null
+  >(null);
 
   const [searchFocused, setSearchFocused] = createSignal(false);
   /**

@@ -2,7 +2,14 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { type CodepulseConfig, getKnownRepoInfos, loadConfig, mergeOptions, resolveConfigInfo, writeConfig } from "../src/config";
+import {
+  type CodepulseConfig,
+  getKnownRepoInfos,
+  loadConfig,
+  mergeOptions,
+  resolveConfigInfo,
+  writeConfig,
+} from "../src/config";
 import { DEFAULT_MAX_COUNT } from "../src/constants";
 import { DEFAULT_AUTO_REFRESH_INTERVAL } from "../src/context/state";
 
@@ -491,7 +498,11 @@ describe("writeConfig", () => {
     const dir = makeTempDir("write-new");
     const configPath = join(dir, "config.json");
     const repoPath = "/tmp/my-repo";
-    const result = writeConfig({ group: "platform", appName: "API Gateway", theme: "nord", pageSize: 100 }, repoPath, configPath);
+    const result = writeConfig(
+      { group: "platform", appName: "API Gateway", theme: "nord", pageSize: 100 },
+      repoPath,
+      configPath,
+    );
     expect(result).toBe(true);
     expect(existsSync(configPath)).toBe(true);
     const content = JSON.parse(readFileSync(configPath, "utf-8"));

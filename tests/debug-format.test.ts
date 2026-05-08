@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { formatDebugDuration, formatDebugEvent, formatDebugMessage, formatDebugStatus, formatDebugTimestamp } from "../src/debug/format";
+import {
+  formatDebugDuration,
+  formatDebugEvent,
+  formatDebugMessage,
+  formatDebugStatus,
+  formatDebugTimestamp,
+} from "../src/debug/format";
 
 describe("debug format", () => {
   test("formats timestamp as HH:MM:SS", () => {

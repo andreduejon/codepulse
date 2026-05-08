@@ -260,7 +260,10 @@ export interface KnownRepoInfo {
   appName?: string;
 }
 
-export function getRepoDisplayConfig(repoPath: string, configPath?: string): Pick<CodepulseConfig, "group" | "appName"> {
+export function getRepoDisplayConfig(
+  repoPath: string,
+  configPath?: string,
+): Pick<CodepulseConfig, "group" | "appName"> {
   const { config } = loadConfig(repoPath, configPath);
   return { group: config.group, appName: config.appName };
 }
@@ -277,7 +280,11 @@ export function getKnownRepoInfos(configPath?: string): KnownRepoInfo[] {
   return Object.entries(repos as Record<string, unknown>).map(([path, rawEntry]) => {
     if (typeof rawEntry !== "object" || rawEntry === null || Array.isArray(rawEntry)) return { path };
     const config = validateConfig(rawEntry as Record<string, unknown>, `${result.globalPath} [repos]`, warnings);
-    return { path, ...(config.group !== undefined ? { group: config.group } : {}), ...(config.appName !== undefined ? { appName: config.appName } : {}) };
+    return {
+      path,
+      ...(config.group !== undefined ? { group: config.group } : {}),
+      ...(config.appName !== undefined ? { appName: config.appName } : {}),
+    };
   });
 }
 
@@ -413,7 +420,11 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
           }
         }
         if (gh.tokenEnvVar !== undefined) {
-          const tokenEnvVar = parseOptionalText("providers.github.tokenEnvVar", gh.tokenEnvVar, GENERAL_TEXT_MAX_LENGTH);
+          const tokenEnvVar = parseOptionalText(
+            "providers.github.tokenEnvVar",
+            gh.tokenEnvVar,
+            GENERAL_TEXT_MAX_LENGTH,
+          );
           if (tokenEnvVar !== undefined) config.providers.github.tokenEnvVar = tokenEnvVar;
         }
         const trustedEnterpriseHost = parseTrustedEnterpriseHost(gh.trustedEnterpriseHost);
@@ -433,7 +444,11 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
           if (username !== undefined) config.providers.jenkins.username = username;
         }
         if (jenkins.tokenEnvVar !== undefined) {
-          const tokenEnvVar = parseOptionalText("providers.jenkins.tokenEnvVar", jenkins.tokenEnvVar, GENERAL_TEXT_MAX_LENGTH);
+          const tokenEnvVar = parseOptionalText(
+            "providers.jenkins.tokenEnvVar",
+            jenkins.tokenEnvVar,
+            GENERAL_TEXT_MAX_LENGTH,
+          );
           if (tokenEnvVar !== undefined) config.providers.jenkins.tokenEnvVar = tokenEnvVar;
         }
         if (jenkins.graphBuildLimit !== undefined) {
@@ -453,7 +468,11 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
               if (url === undefined) {
                 return [];
               }
-              const label = parseOptionalText(`providers.jenkins.jobs[${idx}].label`, rawJob.label, GENERAL_TEXT_MAX_LENGTH);
+              const label = parseOptionalText(
+                `providers.jenkins.jobs[${idx}].label`,
+                rawJob.label,
+                GENERAL_TEXT_MAX_LENGTH,
+              );
               return [{ url, ...(label !== undefined ? { label } : {}) }];
             });
           } else {

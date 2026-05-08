@@ -53,7 +53,14 @@ export default function DebugDialog(props: Readonly<{ onClose: () => void; gitCo
 
   return (
     <DialogOverlay>
-      <box width={dialogWidth()} height={dialogHeight()} backgroundColor={t().background} flexDirection="column" paddingX={1} paddingY={1}>
+      <box
+        width={dialogWidth()}
+        height={dialogHeight()}
+        backgroundColor={t().background}
+        flexDirection="column"
+        paddingX={1}
+        paddingY={1}
+      >
         <DialogTitleBar title="Debug" />
         <box width="100%" paddingX={4} flexShrink={0}>
           <box flexGrow={1} border={["top"]} borderStyle="single" borderColor={t().accent} />
@@ -78,7 +85,13 @@ export default function DebugDialog(props: Readonly<{ onClose: () => void; gitCo
         <box width="100%" paddingX={4} flexShrink={0}>
           <box flexGrow={1} border={["top"]} borderStyle="single" borderColor={t().border} />
         </box>
-        <scrollbox ref={scrollboxRef} flexGrow={1} scrollY scrollX={false} verticalScrollbarOptions={{ visible: false }}>
+        <scrollbox
+          ref={scrollboxRef}
+          flexGrow={1}
+          scrollY
+          scrollX={false}
+          verticalScrollbarOptions={{ visible: false }}
+        >
           <box flexDirection="column">
             <For each={events()} fallback={<text fg={t().foregroundMuted}>No debug events yet</text>}>
               {event => (

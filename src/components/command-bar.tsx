@@ -1,17 +1,17 @@
 import { createMemo, For, Show } from "solid-js";
 import type { KnownRepoInfo } from "../config";
-import Badge from "./badge";
 import { useAppState } from "../context/state";
 import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
 import { useT } from "../hooks/use-t";
 import { providerDisplayName } from "../providers/provider";
-import { groupMembersForRepo, repoDisplayName } from "../utils/group-repos";
 import {
   commandBarInputValue,
   commandBarPlaceholder,
   commitCountText,
   modeBadgeLabel,
 } from "../utils/command-bar-utils";
+import { groupMembersForRepo, repoDisplayName } from "../utils/group-repos";
+import Badge from "./badge";
 
 interface CommandBarProps {
   commandBarMode: () => CommandBarMode;
@@ -80,7 +80,10 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
     return state.graphRows().find(row => row.branchName === name)?.nodeColor ?? null;
   };
   const groupMembers = createMemo(() =>
-    groupMembersForRepo(props.knownRepos, props.currentRepo, { group: props.currentGroup, appName: props.currentAppName }),
+    groupMembersForRepo(props.knownRepos, props.currentRepo, {
+      group: props.currentGroup,
+      appName: props.currentAppName,
+    }),
   );
   const visibleProjects = createMemo(() => {
     const members = groupMembers();
@@ -213,7 +216,7 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
               />
             }
           >
-            <>
+            <box flexDirection="row">
               <Badge
                 name={viewingBranch() ?? ""}
                 colorIndex={branchColorIndex(viewingBranch()) ?? undefined}
@@ -224,7 +227,7 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
                 {" "}
               </text>
               <Badge name={checkedOutBranch()} dimmed noShrink />
-            </>
+            </box>
           </Show>
         </Show>
       </box>

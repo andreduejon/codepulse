@@ -1,4 +1,4 @@
-import { batch, createEffect, onCleanup, untrack, type Accessor } from "solid-js";
+import { type Accessor, batch, createEffect, onCleanup, untrack } from "solid-js";
 import { isUncommittedHash } from "../constants";
 import type { AppActions, AppState } from "../context/state";
 import { buildGraph, getMaxGraphColumns } from "../git/graph";

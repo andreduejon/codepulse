@@ -1,4 +1,4 @@
-import { addDebugEvent, redactDebugValue, type DebugEventSource } from "../../debug/events";
+import { addDebugEvent, type DebugEventSource, redactDebugValue } from "../../debug/events";
 
 export interface FetchWithRetryOptions {
   timeoutMs: number;
@@ -85,7 +85,11 @@ export async function fetchWithRetry(
     } catch (err) {
       lastError = err;
       if (attempt === opts.attempts) {
-        addDebugEvent({ source: "error", message: redactDebugValue(err instanceof Error ? err.message : String(err)), durationMs: Date.now() - started });
+        addDebugEvent({
+          source: "error",
+          message: redactDebugValue(err instanceof Error ? err.message : String(err)),
+          durationMs: Date.now() - started,
+        });
         throw err;
       }
     }

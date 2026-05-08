@@ -16,7 +16,7 @@
  * @param setSearchInputValue Setter for the live search input value.
  * @param clearSearchDebounce Callback to cancel the pending search debounce timer.
  */
-import { createEffect, type Accessor } from "solid-js";
+import { type Accessor, createEffect } from "solid-js";
 import type { createAppState } from "../context/state";
 import { getPathMatchingHashes } from "../git/repo";
 
