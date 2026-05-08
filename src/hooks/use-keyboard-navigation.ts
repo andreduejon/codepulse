@@ -5,16 +5,11 @@ import type { DetailNavRef } from "../components/detail-types";
 import type { AppActions, AppState } from "../context/state";
 import { routeGlobalKey } from "../keyboard/router";
 import { createCloseOneCascadeStep } from "./handle-cascade-close";
-import {
-  createCommandBarHelpers,
-  handleCommandOrPathKey,
-  handleModeCycling,
-  handleSearchKey,
-} from "./handle-command-bar-keys";
+import { createCommandBarHelpers, handleCommandOrPathKey, handleSearchKey } from "./handle-command-bar-keys";
 import { handleDetailKey } from "./handle-detail-keys";
 import { handleGraphKey } from "./handle-graph-keys";
 
-export type DialogId = "menu" | "help" | "theme" | "diff-blame" | "detail" | "job-log" | null;
+export type DialogId = "menu" | "help" | "theme" | "diff-blame" | "detail" | "job-log" | "debug" | null;
 type LayoutMode = "too-small" | "compact" | "normal";
 
 /** Command bar mode — drives placeholder text and key routing. */
@@ -60,6 +55,7 @@ interface KeyboardNavigationOptions {
   getCommitData?: (sha: string) => unknown;
   /** Returns true while the initial CI fetch is in-flight. */
   getProviderLoading?: () => boolean;
+  onSwitchGroupRepo?: (direction: 1 | -1) => void;
 }
 
 /**
@@ -110,6 +106,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     onClearAncestry,
     getCommitData,
     getProviderLoading,
+    onSwitchGroupRepo,
   } = opts;
 
   // Build command-bar helpers (clearSearch, openSearch, confirmSearch, exitCommandBar)
@@ -157,8 +154,12 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
       return;
     }
 
-    // ── Shift+←/→ mode cycling ────────────────────────────────────────────────
-    if (handleModeCycling(e, cbOpts, helpers)) return;
+    // ── Group repo switching ─────────────────────────────────────────────────
+    if (e.shift && (e.name === "left" || e.name === "right")) {
+      e.preventDefault();
+      onSwitchGroupRepo?.(e.name === "right" ? 1 : -1);
+      return;
+    }
 
     // ── COMMAND / PATH mode ───────────────────────────────────────────────────
     if (handleCommandOrPathKey(e, cbOpts, helpers)) return;

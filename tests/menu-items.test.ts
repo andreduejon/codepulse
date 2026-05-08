@@ -1,5 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import { buildGitHubProviderItems, type GitHubMenuConfig } from "../src/hooks/use-menu-items";
+import {
+  buildGitHubProviderItems,
+  type GitHubMenuConfig,
+  isOptionalRepoMetadataValid,
+  optionalRepoMetadataValue,
+} from "../src/hooks/use-menu-items";
 
 describe("buildGitHubProviderItems", () => {
   const baseCfg = {
@@ -78,5 +83,23 @@ describe("buildGitHubProviderItems", () => {
     if (capture.changed == null || capture.persisted == null) throw new Error("expected callbacks");
     expect(capture.changed.trustedEnterpriseHost).toBe("ghe.example.com");
     expect(capture.persisted.trustedEnterpriseHost).toBe("ghe.example.com");
+  });
+});
+
+describe("repo metadata menu validation", () => {
+  it("allows blank or 64-char repo metadata values", () => {
+    expect(isOptionalRepoMetadataValid("")).toBe(true);
+    expect(isOptionalRepoMetadataValid(" ".repeat(10))).toBe(true);
+    expect(isOptionalRepoMetadataValid("x".repeat(64))).toBe(true);
+  });
+
+  it("rejects trimmed repo metadata values over 64 chars", () => {
+    expect(isOptionalRepoMetadataValid("x".repeat(65))).toBe(false);
+    expect(isOptionalRepoMetadataValid(`  ${"x".repeat(65)}  `)).toBe(false);
+  });
+
+  it("omits blank repo metadata values", () => {
+    expect(optionalRepoMetadataValue("  ")).toBeUndefined();
+    expect(optionalRepoMetadataValue("  platform  ")).toBe("platform");
   });
 });

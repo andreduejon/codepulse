@@ -2,7 +2,14 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { type CodepulseConfig, loadConfig, mergeOptions, resolveConfigInfo, writeConfig } from "../src/config";
+import {
+  type CodepulseConfig,
+  getKnownRepoInfos,
+  loadConfig,
+  mergeOptions,
+  resolveConfigInfo,
+  writeConfig,
+} from "../src/config";
 import { DEFAULT_MAX_COUNT } from "../src/constants";
 import { DEFAULT_AUTO_REFRESH_INTERVAL } from "../src/context/state";
 
@@ -48,10 +55,52 @@ describe("loadConfig", () => {
 
   test("loads repo-specific config fields", () => {
     const repoPath = "/tmp/repo";
-    const configPath = makeRepoConfig("repo-fields", repoPath, { theme: "gruvbox", pageSize: 100 });
+    const configPath = makeRepoConfig("repo-fields", repoPath, {
+      group: "platform",
+      appName: "API Gateway",
+      theme: "gruvbox",
+      pageSize: 100,
+    });
     const { config: result } = loadConfig(repoPath, configPath);
+    expect(result.group).toBe("platform");
+    expect(result.appName).toBe("API Gateway");
     expect(result.theme).toBe("gruvbox");
     expect(result.pageSize).toBe(100);
+  });
+
+  test("trims optional repo grouping fields", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("repo-group-trim", repoPath, {
+      group: "  e-ant  ",
+      appName: "  e/ant Frontend  ",
+    });
+    const { config: result } = loadConfig(repoPath, configPath);
+    expect(result.group).toBe("e-ant");
+    expect(result.appName).toBe("e/ant Frontend");
+  });
+
+  test("treats blank repo grouping fields as unset", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("repo-group-blank", repoPath, {
+      group: "   ",
+      appName: "",
+    });
+    const { config: result } = loadConfig(repoPath, configPath);
+    expect(result.group).toBeUndefined();
+    expect(result.appName).toBeUndefined();
+  });
+
+  test("drops oversized repo grouping fields with warnings", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("repo-group-oversized", repoPath, {
+      group: "g".repeat(65),
+      appName: "a".repeat(65),
+    });
+    const { config: result, warnings } = loadConfig(repoPath, configPath);
+    expect(result.group).toBeUndefined();
+    expect(result.appName).toBeUndefined();
+    expect(warnings.some(w => w.includes('"group"'))).toBe(true);
+    expect(warnings.some(w => w.includes('"appName"'))).toBe(true);
   });
 
   test("loads trusted enterprise host from repo config", () => {
@@ -71,6 +120,30 @@ describe("loadConfig", () => {
     const { config: result, warnings } = loadConfig(repoPath, configPath);
     expect(result.providers?.github?.trustedEnterpriseHost).toBeUndefined();
     expect(warnings.some(w => w.includes("providers.github.trustedEnterpriseHost"))).toBe(true);
+  });
+
+  test("drops oversized general text and provider config fields with warnings", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("oversized-config-fields", repoPath, {
+      theme: "t".repeat(256),
+      branch: "b".repeat(256),
+      providers: {
+        github: { tokenEnvVar: "g".repeat(256) },
+        jenkins: {
+          username: "u".repeat(256),
+          tokenEnvVar: "j".repeat(256),
+          jobs: [{ url: "h".repeat(2049), label: "l".repeat(256) }],
+        },
+      },
+    });
+    const { config: result, warnings } = loadConfig(repoPath, configPath);
+    expect(result.theme).toBeUndefined();
+    expect(result.branch).toBeUndefined();
+    expect(result.providers?.github?.tokenEnvVar).toBeUndefined();
+    expect(result.providers?.jenkins?.username).toBeUndefined();
+    expect(result.providers?.jenkins?.tokenEnvVar).toBeUndefined();
+    expect(result.providers?.jenkins?.jobs).toEqual([]);
+    expect(warnings.length).toBeGreaterThanOrEqual(5);
   });
 
   test("returns empty object for invalid JSON", () => {
@@ -340,6 +413,28 @@ describe("mergeOptions", () => {
   });
 });
 
+describe("getKnownRepoInfos", () => {
+  test("returns repo paths with grouping metadata", () => {
+    const repoPath = "/tmp/repo-a";
+    const configPath = makeRepoConfig("known-repo-infos", repoPath, {
+      group: " platform ",
+      appName: " API Gateway ",
+    });
+    expect(getKnownRepoInfos(configPath)).toEqual([
+      { path: resolve(repoPath), group: "platform", appName: "API Gateway" },
+    ]);
+  });
+
+  test("drops invalid grouping metadata from known repo infos", () => {
+    const repoPath = "/tmp/repo-a";
+    const configPath = makeRepoConfig("known-repo-infos-invalid", repoPath, {
+      group: "g".repeat(65),
+      appName: "",
+    });
+    expect(getKnownRepoInfos(configPath)).toEqual([{ path: resolve(repoPath) }]);
+  });
+});
+
 describe("resolveConfigInfo", () => {
   test("returns globalPath matching the provided configPath", () => {
     const dir = makeTempDir("resolve-info");
@@ -403,10 +498,16 @@ describe("writeConfig", () => {
     const dir = makeTempDir("write-new");
     const configPath = join(dir, "config.json");
     const repoPath = "/tmp/my-repo";
-    const result = writeConfig({ theme: "nord", pageSize: 100 }, repoPath, configPath);
+    const result = writeConfig(
+      { group: "platform", appName: "API Gateway", theme: "nord", pageSize: 100 },
+      repoPath,
+      configPath,
+    );
     expect(result).toBe(true);
     expect(existsSync(configPath)).toBe(true);
     const content = JSON.parse(readFileSync(configPath, "utf-8"));
+    expect(content.repos[resolve(repoPath)].group).toBe("platform");
+    expect(content.repos[resolve(repoPath)].appName).toBe("API Gateway");
     expect(content.repos[resolve(repoPath)].theme).toBe("nord");
     expect(content.repos[resolve(repoPath)].pageSize).toBe(100);
   });

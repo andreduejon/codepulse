@@ -1,15 +1,21 @@
 import { spawnSync } from "node:child_process";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
+import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useRenderer } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import packageJson from "../../package.json";
-import { removeRepoConfig } from "../config";
+import { type KnownRepoInfo, removeRepoConfig } from "../config";
 import { useT } from "../hooks/use-t";
 import type { KeyboardScope } from "../keyboard/scope";
+import { buildProjectSelectorRows, isRepoRow, isSelectableProjectSelectorRow } from "../utils/project-selector-rows";
+import { scrollElementIntoView } from "../utils/scroll";
 import { KeyHint, KeyHintSeparator } from "./key-hint";
 import LogoBanner, { LOGO_WIDTH } from "./logo-banner";
 import MessageBox from "./message-box";
+
+const DETAIL_COL_WIDTH = 32;
+const clipLeft = (value: string, width: number) => (value.length <= width ? value : `…${value.slice(-(width - 1))}`);
 
 interface ProjectSelectorProps {
   /** Informational message to show (e.g. "Doesn't look like a git repo"). */
@@ -17,12 +23,14 @@ interface ProjectSelectorProps {
   /** Path associated with the message — shown on a separate muted line. */
   messagePath?: string;
   /** List of known repo paths from the global config. */
-  knownRepos: string[];
+  knownRepos: KnownRepoInfo[];
   /** Currently open repo path — shown as context and excluded from the list.
    *  When set, Esc goes back (calls onCancel) instead of quitting. */
   currentRepo?: string;
   /** Called when the user presses Esc to go back (in-app mode only). */
   onCancel?: () => void;
+  /** Called for in-app repo selection. Startup mode falls back to process re-exec. */
+  onSelectRepo?: (repoPath: string) => void;
   /** Optional keyboard scope hook for in-app usage only. */
   setKeyboardScopeOverride?: (scope: KeyboardScope | null) => void;
 }
@@ -36,8 +44,8 @@ interface ProjectSelectorProps {
  *    from the menu. Esc goes back to the graph.
  *
  * Shows previously-used repos from the config file. The user can
- * pick one or type a custom path. Selection destroys the renderer
- * and re-execs the process with the new path.
+ * pick one or type a custom path. Startup selection re-execs; in-app
+ * selection can be handled by the parent without leaving the renderer.
  */
 export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
   const t = useT();
@@ -47,24 +55,20 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
   const inApp = () => !!props.currentRepo;
   const [savedRepos, setSavedRepos] = createSignal(props.knownRepos);
 
-  /** Selectable repos — excludes current repo in in-app mode. */
-  const repos = createMemo(() => {
-    const all = savedRepos();
-    const current = props.currentRepo;
-    if (!current) return all;
-    return all.filter(r => r !== current);
-  });
+  const repos = () => savedRepos();
+  const rows = createMemo(() => buildProjectSelectorRows(repos(), props.currentRepo));
+  const selectableIndexes = createMemo(() =>
+    rows().flatMap((row, idx) => (isSelectableProjectSelectorRow(row) ? [idx] : [])),
+  );
   const hasRepos = () => repos().length > 0;
-
-  /** Total navigable items: repos + 1 for the inline path input. */
-  const itemCount = () => repos().length + 1;
-  /** The cursor index that represents the path input row. */
-  const pathInputIndex = () => repos().length;
-
-  const [cursor, setCursor] = createSignal(hasRepos() ? 0 : pathInputIndex());
+  const firstSelectableIndex = () => selectableIndexes()[0] ?? 0;
+  const [cursor, setCursor] = createSignal(firstSelectableIndex());
   /** Whether the path input field has focus (cursor is on the input row). */
-  const pathFocused = () => cursor() === pathInputIndex();
+  const selectedRow = () => rows()[cursor()];
+  const pathFocused = () => selectedRow()?.kind === "path-input";
   const [pathInputValue, setPathInputValue] = createSignal("");
+  let scrollboxRef: ScrollBoxRenderable | undefined;
+  const rowRefs: Array<Renderable | undefined> = [];
   const escapeHint = () => {
     if (pathFocused() && hasRepos()) return " list  ";
     if (inApp()) return " back  ";
@@ -76,16 +80,26 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
   });
 
   createEffect(() => {
-    const max = pathInputIndex();
-    setCursor(c => Math.max(0, Math.min(c, max)));
+    const selectable = selectableIndexes();
+    setCursor(c => (selectable.includes(c) ? c : (selectable[0] ?? 0)));
+  });
+
+  createEffect(() => {
+    const row = rowRefs[cursor()];
+    if (scrollboxRef && row) scrollElementIntoView(scrollboxRef, row);
   });
 
   onCleanup(() => props.setKeyboardScopeOverride?.(null));
 
   /** Destroy the renderer and re-exec with the given path. */
   const selectRepo = (repoPath: string) => {
+    const canonical = canonicalRepoPath(repoPath);
+    if (props.onSelectRepo) {
+      props.onSelectRepo(canonical);
+      return;
+    }
     renderer.destroy();
-    reExecWith(repoPath);
+    reExecWith(canonical);
   };
 
   /** Handle Esc — go back (in-app) or quit (startup). */
@@ -98,11 +112,17 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
   };
 
   const forgetSelectedRepo = () => {
-    const idx = cursor();
-    const selected = repos()[idx];
-    if (!selected) return;
-    if (!removeRepoConfig(selected)) return;
-    setSavedRepos(prev => prev.filter(repo => repo !== selected));
+    const row = selectedRow();
+    if (!row || row.kind !== "repo" || row.current) return;
+    if (!removeRepoConfig(row.repo.path)) return;
+    setSavedRepos(prev => prev.filter(repo => repo.path !== row.repo.path));
+  };
+
+  const moveCursor = (delta: 1 | -1) => {
+    const selectable = selectableIndexes();
+    const pos = selectable.indexOf(cursor());
+    const nextPos = Math.max(0, Math.min(selectable.length - 1, pos + delta));
+    setCursor(selectable[nextPos] ?? cursor());
   };
 
   useKeyboard(e => {
@@ -120,7 +140,7 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
       if (e.name === "escape") {
         e.preventDefault();
         if (hasRepos()) {
-          setCursor(0);
+          setCursor(firstSelectableIndex());
           setPathInputValue("");
         } else {
           handleEscape();
@@ -130,7 +150,7 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
       if (e.name === "up") {
         if (hasRepos()) {
           e.preventDefault();
-          setCursor(repos().length - 1);
+          moveCursor(-1);
         }
         return;
       }
@@ -152,19 +172,27 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
       case "up":
       case "k":
         e.preventDefault();
-        setCursor(c => Math.max(0, c - 1));
+        moveCursor(-1);
         break;
       case "down":
       case "j":
         e.preventDefault();
-        setCursor(c => Math.min(itemCount() - 1, c + 1));
+        moveCursor(1);
         break;
-      case "return":
+      case "return": {
         e.preventDefault();
-        if (repos().length > 0 && cursor() < repos().length) {
-          selectRepo(repos()[cursor()]);
+        const row = selectedRow();
+        if (row?.kind === "repo" && !row.current) {
+          selectRepo(row.repo.path);
+        } else if (row?.kind === "path-input") {
+          const value = pathInputValue().trim();
+          if (value) {
+            const expanded = value.startsWith("~") ? value.replace("~", homedir()) : value;
+            selectRepo(resolve(expanded));
+          }
         }
         break;
+      }
       case "f":
         e.preventDefault();
         forgetSelectedRepo();
@@ -209,41 +237,83 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
           borderStyle="single"
           borderColor={t().accent}
         >
-          {/* Header */}
-          <box paddingX={4}>
-            <text wrapMode="none">
-              <strong>
-                <span>Where to?</span>
-              </strong>
-            </text>
-          </box>
-
-          {/* Current repo — shown muted, not selectable (in-app only) */}
-          <Show when={props.currentRepo}>
-            {currentRepo => (
-              <box flexDirection="row" width="100%" paddingX={4}>
-                <text wrapMode="none" truncate fg={t().foregroundMuted}>
-                  {`${shortPath(currentRepo())} (current)`}
-                </text>
-              </box>
-            )}
-          </Show>
-
-          {/* Selectable repo list */}
-          <For each={repos()}>
-            {(repo, i) => (
-              <box
-                flexDirection="row"
-                width="100%"
-                paddingX={4}
-                backgroundColor={cursor() === i() ? t().backgroundElement : undefined}
-              >
-                <text wrapMode="none" truncate fg={cursor() === i() ? t().accent : t().foreground}>
-                  {shortPath(repo)}
-                </text>
-              </box>
-            )}
-          </For>
+          <scrollbox
+            ref={scrollboxRef}
+            height={Math.min(16, rows().length)}
+            scrollY
+            scrollX={false}
+            verticalScrollbarOptions={{ visible: false }}
+          >
+            <box flexDirection="column">
+              <For each={rows()}>
+                {(row, idx) => (
+                  <box
+                    ref={(el: Renderable) => {
+                      rowRefs[idx()] = el;
+                    }}
+                    flexDirection="row"
+                    width="100%"
+                    paddingX={4}
+                    backgroundColor={
+                      cursor() === idx() && isSelectableProjectSelectorRow(row) ? t().backgroundElement : undefined
+                    }
+                  >
+                    <Show
+                      when={isRepoRow(row) ? row : undefined}
+                      fallback={
+                        <Show
+                          when={row.kind === "path-input"}
+                          fallback={
+                            <text wrapMode="none" truncate fg={t().foregroundMuted}>
+                              {row.kind === "group" ? <strong>{row.label}</strong> : ""}
+                            </text>
+                          }
+                        >
+                          <input
+                            focused={pathFocused()}
+                            flexGrow={1}
+                            placeholder="Enter custom path..."
+                            value={pathInputValue()}
+                            onInput={setPathInputValue}
+                            textColor={t().foreground}
+                            focusedTextColor={t().foreground}
+                            placeholderColor={t().foregroundMuted}
+                            cursorColor={t().accent}
+                            backgroundColor={t().background}
+                            focusedBackgroundColor={t().backgroundElement}
+                          />
+                        </Show>
+                      }
+                    >
+                      {repoRow => (
+                        <>
+                          <text
+                            wrapMode="none"
+                            truncate
+                            fg={
+                              cursor() === idx() ? t().accent : repoRow().current ? t().foregroundMuted : t().foreground
+                            }
+                          >
+                            {repoRow().current ? `${repoRow().label} (current)` : repoRow().label}
+                          </text>
+                          <Show when={repoRow().detail}>
+                            {detail => (
+                              <>
+                                <box flexGrow={1} />
+                                <text flexShrink={0} width={DETAIL_COL_WIDTH} wrapMode="none" fg={t().foregroundMuted}>
+                                  {clipLeft(detail(), DETAIL_COL_WIDTH).padStart(DETAIL_COL_WIDTH)}
+                                </text>
+                              </>
+                            )}
+                          </Show>
+                        </>
+                      )}
+                    </Show>
+                  </box>
+                )}
+              </For>
+            </box>
+          </scrollbox>
 
           <Show when={!hasRepos() && !props.currentRepo}>
             <box paddingX={4}>
@@ -252,23 +322,6 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
               </text>
             </box>
           </Show>
-
-          {/* Inline path input — last navigable item in the list */}
-          <box paddingX={4}>
-            <input
-              focused={pathFocused()}
-              flexGrow={1}
-              placeholder="Enter repository path..."
-              value={pathInputValue()}
-              onInput={setPathInputValue}
-              textColor={t().foreground}
-              focusedTextColor={t().foreground}
-              placeholderColor={t().foregroundMuted}
-              cursorColor={t().accent}
-              backgroundColor={t().background}
-              focusedBackgroundColor={t().backgroundElement}
-            />
-          </box>
 
           <box height={1} />
 
@@ -313,19 +366,21 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
  * NOTE: the caller must call `renderer.destroy()` first to cleanly
  * restore the terminal before spawning the child process.
  */
-function reExecWith(repoPath: string): void {
+function canonicalRepoPath(repoPath: string): string {
   // Resolve ~ to home directory
   const resolved = repoPath.startsWith("~") ? repoPath.replace("~", homedir()) : repoPath;
   const rootResult = spawnSync("git", ["-C", resolved, "rev-parse", "--show-toplevel"], {
     encoding: "utf-8",
     stdio: ["ignore", "pipe", "ignore"],
   });
-  const canonical = rootResult.status === 0 && rootResult.stdout.trim() ? rootResult.stdout.trim() : resolved;
+  return rootResult.status === 0 && rootResult.stdout.trim() ? rootResult.stdout.trim() : resolved;
+}
 
+function reExecWith(repoPath: string): void {
   // Use spawnSync with an array to avoid shell interpolation of the repo path.
   // execSync(string) passes through a shell and is vulnerable to injection via
   // special characters in the path (backticks, $(), etc.).
-  spawnSync(process.argv[0], [process.argv[1], canonical], {
+  spawnSync(process.argv[0], [process.argv[1], repoPath], {
     stdio: "inherit",
     env: process.env,
   });

@@ -2,6 +2,54 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.0] - 2026-05-08
+
+### Added
+
+- **Grouped project switching** — repos can define `group` and `appName` metadata
+  and switch related projects with `shift + ←/→`.
+- **Warm repo session cache** — in-process project switches preserve graph data,
+  cursor, scroll position, branch state, provider view, and graph badges when
+  returning to a repo.
+- **Grouped project selector** — `:switch` shows repos by group, includes the
+  current repo in context, supports scrolling, and disambiguates duplicate repo
+  names with right-aligned path details.
+- **Debug dialog** — `:debug` shows recent git commands, provider HTTP requests,
+  statuses, durations, and redacted errors.
+- **Repo label editing** — Repository menu exposes editable `Group` and `App name`
+  fields with config-load hardening for oversized values.
+
+### Changed
+
+- Command row now shows provider, mode, compact project badges, and right-aligned
+  branch badges instead of noisy repo path/version text.
+- Help dialog title now includes the app version.
+- `shift + ←/→` no longer cycles modes; mode entry is explicit via `:`, `/`, `a`,
+  and `p`.
+- Project switching no longer wraps at group ends, matching visible carousel
+  affordances.
+- Providers menu shows `Last refresh` as a muted info row rather than overloading
+  section headers.
+- OpenCode Original theme colors were refreshed for stronger badge/readability
+  contrast.
+
+### Fixed
+
+- Jenkins job URL copy no longer includes a leading bullet marker.
+- Jenkins builds attach to the built head SHA instead of every commit in the
+  `changeSet`, avoiding misleading badges on included-but-not-built commits.
+- Project switcher navigation no longer jumps between visual groups because rows
+  now use one linear row model.
+- Group strip/project badge refreshes immediately after label edits.
+
+### Refactored
+
+- Replaced re-exec based project switches with in-process active-repo state.
+- Converted data/detail/path loaders to active repo accessors with stale-result
+  guards.
+- Removed unused group strip component after integrating project badges into the
+  command row.
+
 ## [0.4.0] - 2026-05-06
 
 ### Added

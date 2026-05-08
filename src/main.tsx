@@ -2,14 +2,14 @@ import { existsSync, statSync } from "node:fs";
 import { render } from "@opentui/solid";
 import App from "./app";
 import { parseArgs } from "./cli/parse-args";
-import { getKnownRepos, loadConfig, mergeOptions, resolveConfigInfo } from "./config";
+import { getKnownRepoInfos, type KnownRepoInfo, loadConfig, mergeOptions, resolveConfigInfo } from "./config";
 import { getRepoRoot, isGitAvailable, isGitRepo } from "./git/repo";
 
 /** Startup mode determines which screen the app shows first. */
 export type StartupMode =
   | { kind: "graph" }
   | { kind: "setup" }
-  | { kind: "selector"; message?: string; messagePath?: string; knownRepos: string[] }
+  | { kind: "selector"; message?: string; messagePath?: string; knownRepos: KnownRepoInfo[] }
   | { kind: "error"; message: string };
 
 export async function main() {
@@ -34,7 +34,7 @@ export async function main() {
       kind: "selector",
       message: "Hmm, that directory doesn't exist",
       messagePath: opts.repoPath,
-      knownRepos: getKnownRepos(),
+      knownRepos: getKnownRepoInfos(),
     };
   } else if (!statSync(opts.repoPath).isDirectory()) {
     // Path is a file, not a directory — show project selector with message
@@ -42,7 +42,7 @@ export async function main() {
       kind: "selector",
       message: "That path is a file, not a directory",
       messagePath: opts.repoPath,
-      knownRepos: getKnownRepos(),
+      knownRepos: getKnownRepoInfos(),
     };
   } else if (!(await isGitRepo(opts.repoPath))) {
     // Not a git repo — show project selector with message
@@ -50,7 +50,7 @@ export async function main() {
       kind: "selector",
       message: "Doesn't look like a git repo",
       messagePath: opts.repoPath,
-      knownRepos: getKnownRepos(),
+      knownRepos: getKnownRepoInfos(),
     };
   } else if (!configInfo.hasRepoOverrides) {
     // Git repo but not yet known — show welcome screen

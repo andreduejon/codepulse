@@ -587,7 +587,13 @@ function buildFanOutDisplay(
   };
 }
 
-export default function GraphView(props: Readonly<{ onLoadMore?: () => void }>) {
+export default function GraphView(
+  props: Readonly<{
+    onLoadMore?: () => void;
+    scrollboxRef?: (el: ScrollBoxRenderable) => void;
+    suppressAutoScroll?: () => boolean;
+  }>,
+) {
   const { state, actions } = useAppState();
 
   // For each row, compute which columns stay bright when ancestry highlighting
@@ -631,6 +637,7 @@ export default function GraphView(props: Readonly<{ onLoadMore?: () => void }>) 
 
   // Scroll the target row into view (triggered by keyboard nav / selection).
   createEffect(() => {
+    if (props.suppressAutoScroll?.()) return;
     const idx = state.scrollTargetIndex();
     if (idx < 0) return;
     scrollRowIntoView(idx);
@@ -695,7 +702,16 @@ export default function GraphView(props: Readonly<{ onLoadMore?: () => void }>) 
   const isActive = createSelector(() => state.cursorIndex());
 
   return (
-    <scrollbox ref={scrollboxRef} flexGrow={1} scrollY scrollX={false} verticalScrollbarOptions={{ visible: false }}>
+    <scrollbox
+      ref={el => {
+        scrollboxRef = el;
+        props.scrollboxRef?.(el);
+      }}
+      flexGrow={1}
+      scrollY
+      scrollX={false}
+      verticalScrollbarOptions={{ visible: false }}
+    >
       <box flexDirection="column" flexGrow={1}>
         <Show when={!state.loading()}>
           <For each={state.graphRows()}>

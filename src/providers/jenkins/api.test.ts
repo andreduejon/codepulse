@@ -4,6 +4,7 @@ import {
   buildJenkinsGraphBadges,
   deriveJenkinsJobLabel,
   extractCandidateShas,
+  extractHeadShas,
   extractSha,
   fetchJenkinsGraphDataForSHAs,
   jenkinsApiUrl,
@@ -121,6 +122,16 @@ describe("extractCandidateShas", () => {
   });
 });
 
+describe("extractHeadShas", () => {
+  test("collects head SHAs but ignores change sets", () => {
+    const raw = {
+      actions: [{ lastBuiltRevision: { SHA1: "aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111" } }],
+      changeSets: [{ items: [{ commitId: "bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222" }] }],
+    };
+    expect(extractHeadShas(raw)).toEqual(["aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111"]);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // buildJenkinsCommitDataMap
 // ---------------------------------------------------------------------------
@@ -212,7 +223,7 @@ describe("fetchJenkinsGraphDataForSHAs", () => {
               building: false,
               timestamp: 1_700_000_000_000,
               duration: 12_000,
-              changeSets: [{ items: [{ commitId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }] }],
+              actions: [{ lastBuiltRevision: { SHA1: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } }],
             },
           ],
         }),
@@ -231,6 +242,45 @@ describe("fetchJenkinsGraphDataForSHAs", () => {
       expect(result.data).toHaveLength(1);
       expect(result.data[0].runNumber).toBe(12);
       expect(calls[0].toString()).toContain("api/json?tree=");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("maps one build to head commit only", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          builds: [
+            {
+              number: 12,
+              url: "https://jenkins.example.com/job/foo/12/",
+              result: "SUCCESS",
+              building: false,
+              timestamp: 1_700_000_000_000,
+              duration: 12_000,
+              actions: [{ lastBuiltRevision: { SHA1: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } }],
+              changeSets: [
+                {
+                  items: [{ commitId: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" }],
+                },
+              ],
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      )) as unknown as typeof fetch;
+
+    try {
+      const result = await fetchJenkinsGraphDataForSHAs(
+        [{ url: "https://jenkins.example.com/job/foo/" }],
+        "user",
+        "token",
+        ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"],
+      );
+      expect(result.error).toBeNull();
+      expect(result.data.map(run => run.headSha)).toEqual(["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]);
     } finally {
       globalThis.fetch = originalFetch;
     }
