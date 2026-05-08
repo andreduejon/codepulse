@@ -12,9 +12,11 @@ describe("group repos", () => {
     expect(groupMembersForRepo(repos, "/repo/frontend").map(repo => repo.path)).toEqual(["/repo/backend", "/repo/frontend"]);
   });
 
-  test("wraps next and previous group repo", () => {
-    expect(nextGroupRepoPath(repos, "/repo/frontend", 1)).toBe("/repo/backend");
-    expect(nextGroupRepoPath(repos, "/repo/backend", -1)).toBe("/repo/frontend");
+  test("moves to adjacent group repo without wrapping", () => {
+    expect(nextGroupRepoPath(repos, "/repo/backend", 1)).toBe("/repo/frontend");
+    expect(nextGroupRepoPath(repos, "/repo/frontend", -1)).toBe("/repo/backend");
+    expect(nextGroupRepoPath(repos, "/repo/frontend", 1)).toBeNull();
+    expect(nextGroupRepoPath(repos, "/repo/backend", -1)).toBeNull();
   });
 
   test("returns null when repo has no sibling", () => {

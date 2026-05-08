@@ -29,5 +29,7 @@ export function nextGroupRepoPath(
   if (members.length < 2) return null;
   const idx = members.findIndex(repo => repo.path === currentPath);
   if (idx < 0) return null;
-  return members[(idx + direction + members.length) % members.length].path;
+  const nextIdx = idx + direction;
+  if (nextIdx < 0 || nextIdx >= members.length) return null;
+  return members[nextIdx].path;
 }

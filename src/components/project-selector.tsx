@@ -24,6 +24,8 @@ interface ProjectSelectorProps {
   currentRepo?: string;
   /** Called when the user presses Esc to go back (in-app mode only). */
   onCancel?: () => void;
+  /** Called for in-app repo selection. Startup mode falls back to process re-exec. */
+  onSelectRepo?: (repoPath: string) => void;
   /** Optional keyboard scope hook for in-app usage only. */
   setKeyboardScopeOverride?: (scope: KeyboardScope | null) => void;
 }
@@ -37,8 +39,8 @@ interface ProjectSelectorProps {
  *    from the menu. Esc goes back to the graph.
  *
  * Shows previously-used repos from the config file. The user can
- * pick one or type a custom path. Selection destroys the renderer
- * and re-execs the process with the new path.
+ * pick one or type a custom path. Startup selection re-execs; in-app
+ * selection can be handled by the parent without leaving the renderer.
  */
 export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
   const t = useT();
@@ -86,8 +88,13 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
 
   /** Destroy the renderer and re-exec with the given path. */
   const selectRepo = (repoPath: string) => {
+    const canonical = canonicalRepoPath(repoPath);
+    if (props.onSelectRepo) {
+      props.onSelectRepo(canonical);
+      return;
+    }
     renderer.destroy();
-    reExecWith(repoPath);
+    reExecWith(canonical);
   };
 
   /** Handle Esc — go back (in-app) or quit (startup). */
@@ -328,19 +335,21 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
  * NOTE: the caller must call `renderer.destroy()` first to cleanly
  * restore the terminal before spawning the child process.
  */
-function reExecWith(repoPath: string): void {
+function canonicalRepoPath(repoPath: string): string {
   // Resolve ~ to home directory
   const resolved = repoPath.startsWith("~") ? repoPath.replace("~", homedir()) : repoPath;
   const rootResult = spawnSync("git", ["-C", resolved, "rev-parse", "--show-toplevel"], {
     encoding: "utf-8",
     stdio: ["ignore", "pipe", "ignore"],
   });
-  const canonical = rootResult.status === 0 && rootResult.stdout.trim() ? rootResult.stdout.trim() : resolved;
+  return rootResult.status === 0 && rootResult.stdout.trim() ? rootResult.stdout.trim() : resolved;
+}
 
+function reExecWith(repoPath: string): void {
   // Use spawnSync with an array to avoid shell interpolation of the repo path.
   // execSync(string) passes through a shell and is vulnerable to injection via
   // special characters in the path (backticks, $(), etc.).
-  spawnSync(process.argv[0], [process.argv[1], canonical], {
+  spawnSync(process.argv[0], [process.argv[1], repoPath], {
     stdio: "inherit",
     env: process.env,
   });

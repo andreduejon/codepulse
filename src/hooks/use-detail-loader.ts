@@ -1,4 +1,4 @@
-import { createEffect, onCleanup } from "solid-js";
+import { createEffect, onCleanup, type Accessor } from "solid-js";
 import type { DetailNavRef } from "../components/detail-types";
 import { isUncommittedHash } from "../constants";
 import type { AppActions, AppState } from "../context/state";
@@ -9,7 +9,7 @@ const DETAIL_DEBOUNCE_MS = 150;
 
 interface UseDetailLoaderOptions {
   /** Absolute path to the git repository. */
-  repoPath: string;
+  repoPath: Accessor<string>;
   /** Reactive app state — passed directly to avoid reading from context before the Provider renders. */
   state: AppState;
   /** App actions — passed directly to avoid reading from context before the Provider renders. */
@@ -63,6 +63,7 @@ export function useDetailLoader({
   let detailDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   createEffect(() => {
+    const path = repoPath();
     const commit = state.selectedCommit();
     // Read activeProviderView reactively so this effect re-fires when the user
     // switches between git and provider views (lazy load on view change).
@@ -137,16 +138,16 @@ export function useDetailLoader({
       try {
         if (isUncommitted) {
           // Uncommitted node: load staged/unstaged/untracked file lists in parallel
-          const ud = await getUncommittedDetail(repoPath, ctrl.signal);
-          if (!ctrl.signal.aborted) {
+          const ud = await getUncommittedDetail(path, ctrl.signal);
+          if (!ctrl.signal.aborted && repoPath() === path) {
             actions.setUncommittedDetail(ud);
             // Also set a basic CommitDetail so any fallback code still has commit info
             actions.setCommitDetail({ ...commit, files: [...ud.staged, ...ud.unstaged, ...ud.untracked] });
             actions.setDetailLoading(false);
           }
         } else {
-          const detail = await getCommitDetail(repoPath, commit.hash, commit, ctrl.signal);
-          if (!ctrl.signal.aborted) {
+          const detail = await getCommitDetail(path, commit.hash, commit, ctrl.signal);
+          if (!ctrl.signal.aborted && repoPath() === path) {
             actions.setCommitDetail(detail);
             actions.setDetailLoading(false);
           }
