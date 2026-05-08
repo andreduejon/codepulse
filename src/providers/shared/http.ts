@@ -1,8 +1,29 @@
+import { addDebugEvent, type DebugEventSource, redactDebugValue } from "../../debug/events";
+
 export interface FetchWithRetryOptions {
   timeoutMs: number;
   attempts: number;
   retryDelayMs: number;
   timeoutMessage: string;
+}
+
+function sourceForUrl(url: string): DebugEventSource {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    if (host.includes("github")) return "GitHub";
+    if (host.includes("jenkins")) return "Jenkins";
+  } catch {}
+  return "error";
+}
+
+function requestMessage(url: string, init: RequestInit): string {
+  const method = init.method ?? "GET";
+  try {
+    const parsed = new URL(url);
+    return redactDebugValue(`${method} ${parsed.pathname}${parsed.search}`);
+  } catch {
+    return redactDebugValue(`${method} ${url}`);
+  }
 }
 
 export const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -51,13 +72,26 @@ export async function fetchWithRetry(
   opts: FetchWithRetryOptions,
 ): Promise<Response> {
   let lastError: unknown = null;
+  const started = Date.now();
+  const source = sourceForUrl(url);
+  const message = requestMessage(url, init);
   for (let attempt = 1; attempt <= opts.attempts; attempt++) {
     try {
       const res = await fetchWithTimeout(url, init, opts);
-      if (!isRetryableStatus(res.status) || attempt === opts.attempts) return res;
+      if (!isRetryableStatus(res.status) || attempt === opts.attempts) {
+        addDebugEvent({ source, message, status: String(res.status), durationMs: Date.now() - started });
+        return res;
+      }
     } catch (err) {
       lastError = err;
-      if (attempt === opts.attempts) throw err;
+      if (attempt === opts.attempts) {
+        addDebugEvent({
+          source: "error",
+          message: redactDebugValue(err instanceof Error ? err.message : String(err)),
+          durationMs: Date.now() - started,
+        });
+        throw err;
+      }
     }
     await sleep(opts.retryDelayMs * attempt);
   }

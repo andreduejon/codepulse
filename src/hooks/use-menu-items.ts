@@ -1,8 +1,8 @@
 import { homedir } from "node:os";
 import type { Accessor } from "solid-js";
-import { createMemo, createSignal } from "solid-js";
+import { createEffect, createMemo, createSignal } from "solid-js";
 import type { CodepulseConfig, ConfigInfo } from "../config";
-import { writeConfig } from "../config";
+import { getRepoDisplayConfig, writeConfig } from "../config";
 import { AUTO_REFRESH_MS, INTERVAL_OPTIONS, MAX_COUNT_OPTIONS, MS_TO_LABEL } from "../constants";
 import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL, useAppState } from "../context/state";
 import { themes } from "../context/theme";
@@ -68,6 +68,17 @@ const relativeAgeLabel = (time: Date): string => {
   return `${days}d ago`;
 };
 
+export const REPO_METADATA_MAX_LENGTH = 64;
+
+export function isOptionalRepoMetadataValid(value: string): boolean {
+  return value.trim().length <= REPO_METADATA_MAX_LENGTH;
+}
+
+export function optionalRepoMetadataValue(value: string): string | undefined {
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 export interface MenuItemsOptions {
   /** Currently active tab. */
   activeTab: Accessor<MenuTab>;
@@ -98,6 +109,7 @@ export interface MenuItemsOptions {
     graphBuildLimit: 10 | 20 | 50;
     jobs: { label?: string; url: string }[];
   }) => void;
+  onRepoDisplayConfigChange?: (cfg: { group?: string; appName?: string }) => void;
 }
 
 export interface MenuItemsResult {
@@ -139,7 +151,7 @@ export function buildGitHubProviderItems(
   const hostAllowed = remoteHost === "github.com" || (remoteHost != null && ghCfg.trustedEnterpriseHost === remoteHost);
 
   const items: SettingItem[] = [
-    { kind: "header", label: "GitHub", get: () => `last refresh ${lastRefresh()}` },
+    { kind: "header", label: "GitHub" },
     {
       kind: "toggle",
       label: "Enabled",
@@ -150,6 +162,7 @@ export function buildGitHubProviderItems(
         persist?.(newCfg);
       },
     },
+    { kind: "info", label: "Last refresh", get: lastRefresh },
   ];
 
   if (!ghCfg.enabled) return items;
@@ -196,7 +209,7 @@ function buildJenkinsProviderItems(
   lastRefresh: () => string = () => "never",
 ): SettingItem[] {
   const items: SettingItem[] = [
-    { kind: "header", label: "Jenkins", get: () => `last refresh ${lastRefresh()}` },
+    { kind: "header", label: "Jenkins" },
     {
       kind: "toggle",
       label: "Enabled",
@@ -207,6 +220,7 @@ function buildJenkinsProviderItems(
         persist?.(newCfg);
       },
     },
+    { kind: "info", label: "Last refresh", get: lastRefresh },
   ];
 
   if (!jenkinsCfg.enabled) return items;
@@ -274,7 +288,7 @@ function buildJenkinsProviderItems(
     ...jenkinsCfg.jobs.map((job, idx) => ({
       kind: "copyable" as const,
       label: `Job #${idx + 1} URL`,
-      get: () => ` · ${job.url}`,
+      get: () => job.url,
       onForget: () => {
         const newCfg = { ...jenkinsCfg, jobs: jenkinsCfg.jobs.filter((_, jobIdx) => jobIdx !== idx) };
         onChange?.(newCfg);
@@ -292,6 +306,11 @@ function buildJenkinsProviderItems(
  */
 export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
   const { state, actions } = useAppState();
+  const [repoDisplayConfig, setRepoDisplayConfig] = createSignal(getRepoDisplayConfig(state.repoPath()));
+
+  createEffect(() => {
+    setRepoDisplayConfig(getRepoDisplayConfig(state.repoPath()));
+  });
 
   /**
    * Persist all current settings to the config file immediately.
@@ -328,6 +347,14 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
       }
     }
     writeConfig(cfg, state.repoPath());
+    if (overrides && (Object.hasOwn(overrides, "group") || Object.hasOwn(overrides, "appName"))) {
+      const nextRepoDisplayConfig = {
+        group: Object.hasOwn(overrides, "group") ? overrides.group : repoDisplayConfig().group,
+        appName: Object.hasOwn(overrides, "appName") ? overrides.appName : repoDisplayConfig().appName,
+      };
+      setRepoDisplayConfig(nextRepoDisplayConfig);
+      opts.onRepoDisplayConfigChange?.(nextRepoDisplayConfig);
+    }
   };
 
   // ── Collapsed state for branch sections ───────────────────────────
@@ -354,6 +381,28 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
 
       { kind: "header", label: "Path" },
       { kind: "copyable", label: "Directory", get: () => state.repoPath() || "(unknown)" },
+
+      { kind: "header", label: "Labels" },
+      {
+        kind: "editable",
+        label: "Group",
+        placeholder: "Enter group...",
+        get: () => repoDisplayConfig().group ?? "",
+        set: v => persistFullConfig({ group: optionalRepoMetadataValue(v) }),
+        isDraftValid: isOptionalRepoMetadataValid,
+        showValidity: false,
+        staySelectedOnSave: true,
+      },
+      {
+        kind: "editable",
+        label: "App name",
+        placeholder: "Enter name...",
+        get: () => repoDisplayConfig().appName ?? "",
+        set: v => persistFullConfig({ appName: optionalRepoMetadataValue(v) }),
+        isDraftValid: isOptionalRepoMetadataValid,
+        showValidity: false,
+        staySelectedOnSave: true,
+      },
 
       { kind: "header", label: "Actions" },
       { kind: "action", label: "Fetch remote", hotkey: "f", get: lastFetchLabel, run: () => opts.onFetch() },

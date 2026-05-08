@@ -192,10 +192,42 @@ function collectShas(raw: unknown, out: Set<string>, seen = new Set<unknown>()) 
   }
 }
 
+function collectHeadShas(raw: unknown, out: Set<string>, seen = new Set<unknown>()) {
+  if (!raw || typeof raw !== "object" || seen.has(raw)) return;
+  seen.add(raw);
+  const obj = raw as Record<string, unknown>;
+  for (const key of ["GIT_COMMIT", "SHA1", "sha", "commit", "hash"] as const) {
+    const candidate = obj[key];
+    if (typeof candidate === "string" && /^[0-9a-f]{7,40}$/i.test(candidate)) out.add(candidate);
+  }
+  for (const [key, child] of Object.entries(obj)) {
+    if (key === "changeSet" || key === "changeSets") continue;
+    if (Array.isArray(child)) {
+      for (const item of child) collectHeadShas(item, out, seen);
+    } else {
+      collectHeadShas(child, out, seen);
+    }
+  }
+}
+
+export function extractHeadShas(raw: unknown): string[] {
+  const shas = new Set<string>();
+  collectHeadShas(raw, shas);
+  return [...shas];
+}
+
 export function extractCandidateShas(raw: unknown): string[] {
   const shas = new Set<string>();
   collectShas(raw, shas);
   return [...shas];
+}
+
+function matchingHeadShas(raw: unknown, wanted: Set<string>): string[] {
+  const matches = extractHeadShas(raw)
+    .map(sha => ({ sha, lower: sha.toLowerCase() }))
+    .filter(({ lower }) => wanted.has(lower))
+    .map(({ sha }) => sha);
+  return [...new Set(matches)];
 }
 
 function mapStatus(build: JenkinsBuildApi): Pick<JenkinsRun, "status" | "conclusion"> {
@@ -272,8 +304,7 @@ export async function fetchJenkinsDataForSHAs(
             ? jenkinsApiUrl(ref.url, treeApiSuffix(buildDetailTree()))
             : jenkinsApiUrl(`${job.url}/${ref.number}`, treeApiSuffix(buildDetailTree()));
           const build = await fetchJson<JenkinsBuildApi>(buildUrl, username, token, opts.signal);
-          const sha = extractSha(build);
-          if (sha && wanted.has(sha.toLowerCase())) runs.push(mapRun(job, build, sha));
+          for (const sha of matchingHeadShas(build, wanted)) runs.push(mapRun(job, build, sha));
         });
       } catch (err) {
         firstError ??= err instanceof Error ? err.message : String(err);
@@ -306,20 +337,7 @@ export async function fetchJenkinsGraphDataForSHAs(
         );
         const builds = api.builds ?? [];
         for (const build of builds) {
-          const exactSha = extractSha(build);
-          if (exactSha && wanted.has(exactSha.toLowerCase())) {
-            runs.push(mapRun(job, build, exactSha));
-            continue;
-          }
-
-          const fallbackMatches = extractCandidateShas(build.actions)
-            .map(sha => ({ sha, lower: sha.toLowerCase() }))
-            .filter(({ lower }) => wanted.has(lower));
-          const uniqueMatches = [...new Set(fallbackMatches.map(({ sha }) => sha))];
-
-          // Ambiguous multi-SCM build: better show nothing than attach same run to
-          // multiple commits in the graph.
-          if (uniqueMatches.length === 1) runs.push(mapRun(job, build, uniqueMatches[0]));
+          for (const sha of matchingHeadShas(build, wanted)) runs.push(mapRun(job, build, sha));
         }
       } catch (err) {
         firstError ??= err instanceof Error ? err.message : String(err);

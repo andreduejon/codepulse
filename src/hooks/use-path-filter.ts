@@ -16,7 +16,7 @@
  * @param setSearchInputValue Setter for the live search input value.
  * @param clearSearchDebounce Callback to cancel the pending search debounce timer.
  */
-import { createEffect } from "solid-js";
+import { type Accessor, createEffect } from "solid-js";
 import type { createAppState } from "../context/state";
 import { getPathMatchingHashes } from "../git/repo";
 
@@ -24,7 +24,7 @@ type AppState = ReturnType<typeof createAppState>["state"];
 type AppActions = ReturnType<typeof createAppState>["actions"];
 
 interface UsePathFilterOptions {
-  repoPath: string;
+  repoPath: Accessor<string>;
   state: AppState;
   actions: AppActions;
   clearAnchor: () => void;
@@ -52,15 +52,16 @@ export function usePathFilter({
     prevPathGraphRows = rows;
     const pf = state.pathFilter();
     if (!pf) return;
+    const path = repoPath();
     // Re-run the hash query asynchronously
     const viewBranch = state.viewingBranch();
     const effectiveAll = viewBranch ? false : state.showAllBranches();
-    getPathMatchingHashes(repoPath, pf, {
+    getPathMatchingHashes(path, pf, {
       branch: viewBranch ?? undefined,
       all: effectiveAll,
     }).then(hashes => {
       // Only update if path filter is still the same (guard against race)
-      if (state.pathFilter() === pf) {
+      if (state.pathFilter() === pf && repoPath() === path) {
         actions.setPathMatchSet(hashes.size > 0 ? hashes : new Set());
         // If cursor is on a non-matching row, jump to the nearest match
         const matchSet = hashes;
@@ -119,10 +120,12 @@ export function usePathFilter({
     // Compute matching hashes using the same branch/all settings as the current view
     const viewBranch = state.viewingBranch();
     const effectiveAll = viewBranch ? false : state.showAllBranches();
-    const hashes = await getPathMatchingHashes(repoPath, newPath, {
+    const path = repoPath();
+    const hashes = await getPathMatchingHashes(path, newPath, {
       branch: viewBranch ?? undefined,
       all: effectiveAll,
     });
+    if (repoPath() !== path) return;
     actions.setPathMatchSet(hashes.size > 0 ? hashes : new Set());
   };
 

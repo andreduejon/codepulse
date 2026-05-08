@@ -1,6 +1,7 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { createSignal, For } from "solid-js";
+import packageJson from "../../../package.json";
 import { useT } from "../../hooks/use-t";
 import { HELP_TABS, type HelpTab, KEYBINDS } from "../../keybinds";
 import { KeyHint, KeyHintSeparator } from "../key-hint";
@@ -10,6 +11,7 @@ export default function HelpDialog(_props: Readonly<{ onClose: () => void }>) {
   const t = useT();
   const renderer = useRenderer();
   const dimensions = useTerminalDimensions();
+  const title = `Help · codepulse v${packageJson.version}`;
   const dialogWidth = () => 80;
   const dialogHeight = () => Math.min(Math.floor(dimensions().height * 0.7), dimensions().height - 8);
   const tabBarInnerWidth = () => dialogWidth() - 2 - 8;
@@ -70,7 +72,7 @@ export default function HelpDialog(_props: Readonly<{ onClose: () => void }>) {
         paddingX={1}
         paddingY={1}
       >
-        <DialogTitleBar title="Help" />
+        <DialogTitleBar title={title} />
 
         {/* Tab bar — paddingX={4} matches menu-dialog convention (outer=1, inner=4) */}
         <box flexDirection="row" width="100%" paddingX={4} flexShrink={0}>

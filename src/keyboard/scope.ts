@@ -9,7 +9,8 @@ export type KeyboardScope =
   | "theme"
   | "diff-blame"
   | "detail-dialog"
-  | "job-log";
+  | "job-log"
+  | "debug";
 
 export function dialogToKeyboardScope(dialog: DialogId): KeyboardScope {
   switch (dialog) {
@@ -25,6 +26,8 @@ export function dialogToKeyboardScope(dialog: DialogId): KeyboardScope {
       return "detail-dialog";
     case "job-log":
       return "job-log";
+    case "debug":
+      return "debug";
     default:
       return "app";
   }

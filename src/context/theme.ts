@@ -32,10 +32,14 @@ export interface Theme {
   diffRemoved: string;
   diffAddedBg: string;
   diffRemovedBg: string;
-  /** GitHub Actions provider badge text color. */
   githubActionsFg: string;
-  /** GitHub Actions provider badge background color. */
   githubActionsBg: string;
+  jenkinsFg: string;
+  jenkinsBg: string;
+  snykFg: string;
+  snykBg: string;
+  openShiftFg: string;
+  openShiftBg: string;
 }
 
 export const themes: Record<string, Theme> = {

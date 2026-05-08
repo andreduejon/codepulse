@@ -13,9 +13,9 @@ read-only by default codebase dashboard: git history as the primary navigation
 surface, with CI/CD, security, and code quality signals layered onto the same
 commit and branch context.
 
-The current release adds GitHub Actions and Jenkins provider support on top of
-the git experience, including commit-linked run views, shared log browsing, and
-provider configuration from the TUI.
+The current release adds grouped project switching and a debug dialog on top of
+the GitHub Actions and Jenkins provider experience, including warm in-memory
+repo switching, grouped selector navigation, and request/command observability.
 Integration planning for future milestones lives in `planning/` locally and is
 summarized in the roadmap below.
 
@@ -79,7 +79,7 @@ Use `codepulse -h` for complete shortcuts, commands, and provider setup.
 | `enter`                   | Open detail dialog in compact layout |
 | `a`                       | Enter ancestry mode                  |
 | `p`                       | Enter path mode                      |
-| `shift + ←` / `shift + →` | Cycle modes                          |
+| `shift + ←` / `shift + →` | Switch project within current group  |
 
 ### Details
 
@@ -99,6 +99,7 @@ Use `codepulse -h` for complete shortcuts, commands, and provider setup.
 | `:ancestry`   | Highlight ancestry for selected commit  |
 | `:branches`   | Open menu dialog on Branches tab        |
 | `:clear`      | Dismiss current status message          |
+| `:debug`      | Toggle debug dialog                     |
 | `:fetch`      | Fetch from remote                       |
 | `:help`       | Open help dialog                        |
 | `:menu`       | Open menu dialog                        |
@@ -141,7 +142,9 @@ Planned milestones currently follow this shape:
   trust cleanup
 - `0.4.0`: Jenkins provider MVP, shared provider run tree, shared log dialog,
   and provider polish
-- `0.5.0+`: read-only integrations for Snyk, SonarQube, and deeper debug tooling
+- `0.5.0`: grouped project switching, in-memory repo session cache, grouped
+  switcher, and debug dialog
+- `0.6.0+`: read-only integrations for Snyk, SonarQube, and deeper observability
 
 The intent is to reach `1.0.0` once the integration model and configuration
 surface are stable.

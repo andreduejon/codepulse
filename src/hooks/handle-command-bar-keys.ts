@@ -99,54 +99,6 @@ export function createCommandBarHelpers(opts: CommandBarKeyOptions) {
 export type CommandBarHelpers = ReturnType<typeof createCommandBarHelpers>;
 
 /**
- * Handle Shift+←/→ mode cycling.
- * Returns true if the key was consumed.
- */
-export function handleModeCycling(e: KeyEvent, opts: CommandBarKeyOptions, helpers: CommandBarHelpers): boolean {
-  const {
-    state,
-    commandBarMode,
-    setCommandBarMode,
-    setCommandBarValue,
-    searchFocused,
-    onClearAncestry,
-    onCommandExecute,
-  } = opts;
-  const { clearSearch, openSearch, exitCommandBar } = helpers;
-
-  if (!e.shift || (e.name !== "left" && e.name !== "right")) return false;
-  if (state.detailFocused()) return false;
-
-  e.preventDefault();
-  type CycleMode = CommandBarMode | "ancestry";
-  const modes: CycleMode[] = ["idle", "command", "search", "path", "ancestry"];
-  // Determine the effective current position
-  const isAncestry = commandBarMode() === "idle" && state.ancestrySet() !== null;
-  const cur = isAncestry ? modes.indexOf("ancestry") : modes.indexOf(commandBarMode());
-  const delta = e.name === "right" ? 1 : -1;
-  const nextMode = modes[(cur + delta + modes.length) % modes.length];
-
-  // Clear previous mode state
-  if (isAncestry) onClearAncestry();
-  if (searchFocused()) {
-    opts.setSearchFocused(false);
-    clearSearch();
-  }
-  if (commandBarMode() !== "idle") exitCommandBar();
-
-  // Enter the new mode
-  if (nextMode === "search") {
-    openSearch();
-  } else if (nextMode === "ancestry") {
-    onCommandExecute("ancestry");
-  } else if (nextMode !== "idle") {
-    setCommandBarMode(nextMode);
-    setCommandBarValue("");
-  }
-  return true;
-}
-
-/**
  * Handle key events while in "command" or "path" mode.
  * Returns true if the key was consumed.
  */

@@ -1,9 +1,10 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
-import { createEffect, createMemo, createSignal, onCleanup, onMount, Show, untrack } from "solid-js";
+import { batch, createEffect, createMemo, createSignal, onCleanup, onMount, Show, untrack } from "solid-js";
 import CommandBar from "./components/command-bar";
 import DetailPanel from "./components/detail-panel";
 import type { DetailNavRef } from "./components/detail-types";
+import DebugDialog from "./components/dialogs/debug-dialog";
 import { DetailDialog } from "./components/dialogs/detail-dialog";
 import DiffBlameDialog from "./components/dialogs/diff-blame-dialog";
 import HelpDialog from "./components/dialogs/help-dialog";
@@ -16,11 +17,12 @@ import MessageBox, { type UIMessage } from "./components/message-box";
 import ProjectSelector from "./components/project-selector";
 import SetupScreen from "./components/setup-screen";
 import type { ConfigInfo } from "./config";
-import { backfillRepoConfig, getKnownRepos, writeConfig } from "./config";
+import { backfillRepoConfig, getKnownRepoInfos, getRepoDisplayConfig, writeConfig } from "./config";
 import { COMPACT_THRESHOLD_WIDTH, DEFAULT_MAX_COUNT, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH } from "./constants";
 import { AppStateContext, createAppState, providerIdle, providerStatusMessage } from "./context/state";
 import { createThemeState, ThemeContext } from "./context/theme";
-import type { DiffTarget } from "./git/types";
+import { clearDebugEvents } from "./debug/events";
+import type { Branch, Commit, DiffTarget, GraphRow, TagInfo } from "./git/types";
 import { useAncestry } from "./hooks/use-ancestry";
 import { useDataLoader } from "./hooks/use-data-loader";
 import { useDetailLoader } from "./hooks/use-detail-loader";
@@ -32,6 +34,8 @@ import type { GitHubJob, GitHubWorkflowRun } from "./providers/github-actions/ty
 import { useGitHubCI } from "./providers/github-actions/use-github-ci";
 import type { JenkinsJob, JenkinsRun } from "./providers/jenkins/types";
 import { useJenkinsCI } from "./providers/jenkins/use-jenkins-ci";
+import type { GraphBadge, ProviderView } from "./providers/provider";
+import { nextGroupRepoPath } from "./utils/group-repos";
 
 interface AppProps {
   repoPath: string;
@@ -58,6 +62,25 @@ interface AppContentProps extends AppProps {
   themeState: ReturnType<typeof createThemeState>;
 }
 
+interface RepoSessionSnapshot {
+  commits: Commit[];
+  graphRows: GraphRow[];
+  branches: Branch[];
+  currentBranch: string;
+  repoPath: string;
+  remoteUrl: string;
+  tagDetails: Map<string, TagInfo>;
+  stashByParent: Map<string, Commit[]>;
+  cursorIndex: number;
+  scrollTargetIndex: number;
+  maxGraphColumns: number;
+  hasMore: boolean;
+  lastFetchTime: Date | null;
+  activeProviderView: ProviderView;
+  graphBadges: Map<string, GraphBadge>;
+  graphScrollTop: number;
+}
+
 function AppContent(props: Readonly<AppContentProps>) {
   const { state, actions } = createAppState(
     props.maxCount ?? DEFAULT_MAX_COUNT,
@@ -67,6 +90,7 @@ function AppContent(props: Readonly<AppContentProps>) {
   );
   const themeState = props.themeState;
   const renderer = useRenderer();
+  const [activeRepoPath, setActiveRepoPath] = createSignal(props.repoPath);
 
   // ── GitHub Actions provider config (mutable signal for Providers menu tab) ──
   const [githubConfig, setGithubConfig] = createSignal({
@@ -81,6 +105,7 @@ function AppContent(props: Readonly<AppContentProps>) {
     graphBuildLimit: props.initialJenkinsConfig?.graphBuildLimit ?? 20,
     jobs: props.initialJenkinsConfig?.jobs ?? [],
   });
+  const [repoDisplayConfig, setRepoDisplayConfig] = createSignal(getRepoDisplayConfig(activeRepoPath()));
 
   // ── GitHub CI data hook (called during setup, before Provider renders — per AGENTS.md rule 5) ──
   const gitHubCI = useGitHubCI({
@@ -111,22 +136,26 @@ function AppContent(props: Readonly<AppContentProps>) {
 
   const handleSetupComplete = () => {
     // Backfill all default settings so the user can see and edit them in the config file
-    backfillRepoConfig(props.repoPath);
+    backfillRepoConfig(activeRepoPath());
     setSetupVisible(false);
   };
 
-  // Backfill missing config keys for this repo on every startup
-  backfillRepoConfig(props.repoPath);
+  // Backfill missing config keys for the active repo and refresh display labels on repo switches.
+  createEffect(() => {
+    const path = activeRepoPath();
+    backfillRepoConfig(path);
+    setRepoDisplayConfig(getRepoDisplayConfig(path));
+  });
 
   // Auto-persist theme changes (confirmed selections and reverts from ThemeDialog)
   createEffect(() => {
     const name = themeState.themeName();
-    writeConfig({ theme: name }, props.repoPath);
+    writeConfig({ theme: name }, activeRepoPath());
   });
 
-  const [dialog, setDialog] = createSignal<"menu" | "help" | "theme" | "diff-blame" | "detail" | "job-log" | null>(
-    null,
-  );
+  const [dialog, setDialog] = createSignal<
+    "menu" | "help" | "theme" | "diff-blame" | "detail" | "job-log" | "debug" | null
+  >(null);
 
   const [searchFocused, setSearchFocused] = createSignal(false);
   /**
@@ -178,7 +207,9 @@ function AppContent(props: Readonly<AppContentProps>) {
   });
 
   // Ref for programmatic scrolling of the detail panel
+  let graphScrollboxRef: ScrollBoxRenderable | undefined;
   let detailScrollboxRef: ScrollBoxRenderable | undefined;
+  const [pendingGraphScrollTop, setPendingGraphScrollTop] = createSignal<number | null>(null);
 
   // Navigation ref for interactive detail panel items
   const detailNavRef: DetailNavRef = {
@@ -245,6 +276,102 @@ function AppContent(props: Readonly<AppContentProps>) {
     else if (state.activeProviderView() === "jenkins") await jenkinsCI.refresh();
   };
 
+  const knownRepoInfos = () => getKnownRepoInfos();
+  const currentRepoDisplayConfig = () => repoDisplayConfig();
+  const repoSessionCache = new Map<string, RepoSessionSnapshot>();
+
+  const saveRepoSessionSnapshot = (path: string) => {
+    if (!path || state.repoPath() !== path || state.graphRows().length === 0) return;
+    repoSessionCache.set(path, {
+      commits: state.commits(),
+      graphRows: state.graphRows(),
+      branches: state.branches(),
+      currentBranch: state.currentBranch(),
+      repoPath: state.repoPath(),
+      remoteUrl: state.remoteUrl(),
+      tagDetails: new Map(state.tagDetails()),
+      stashByParent: new Map(state.stashByParent()),
+      cursorIndex: state.cursorIndex(),
+      scrollTargetIndex: state.scrollTargetIndex(),
+      maxGraphColumns: state.maxGraphColumns(),
+      hasMore: state.hasMore(),
+      lastFetchTime: state.lastFetchTime(),
+      activeProviderView: state.activeProviderView(),
+      graphBadges: new Map(state.graphBadges()),
+      graphScrollTop: graphScrollboxRef?.scrollTop ?? 0,
+    });
+  };
+
+  const restoreRepoSessionSnapshot = (snapshot: RepoSessionSnapshot) => {
+    batch(() => {
+      actions.setCommits(snapshot.commits);
+      actions.setGraphRows(snapshot.graphRows);
+      actions.setBranches(snapshot.branches);
+      actions.setCurrentBranch(snapshot.currentBranch);
+      actions.setRepoPath(snapshot.repoPath);
+      actions.setRemoteUrl(snapshot.remoteUrl);
+      actions.setTagDetails(new Map(snapshot.tagDetails));
+      actions.setStashByParent(new Map(snapshot.stashByParent));
+      actions.setCursorIndex(snapshot.cursorIndex);
+      actions.setScrollTargetIndex(snapshot.scrollTargetIndex);
+      actions.setMaxGraphColumns(snapshot.maxGraphColumns);
+      actions.setHasMore(snapshot.hasMore);
+      actions.setLastFetchTime(snapshot.lastFetchTime);
+      actions.setActiveProviderView(snapshot.activeProviderView);
+      actions.setGraphBadges(new Map(snapshot.graphBadges));
+      actions.setLoading(false);
+      actions.setFetching(false);
+      actions.setDetailLoading(false);
+    });
+    setPendingGraphScrollTop(snapshot.graphScrollTop);
+  };
+
+  createEffect(() => {
+    const top = pendingGraphScrollTop();
+    if (top == null || state.loading()) return;
+    setTimeout(() => graphScrollboxRef?.scrollTo(top), 0);
+    setTimeout(() => graphScrollboxRef?.scrollTo(top), 16);
+    setTimeout(() => {
+      graphScrollboxRef?.scrollTo(top);
+      setPendingGraphScrollTop(null);
+    }, 50);
+  });
+
+  const resetTransientRepoState = () => {
+    setDialog(null);
+    setCommandBarMode("idle");
+    setCommandBarValue("");
+    setSearchFocused(false);
+    setSearchInputValue("");
+    clearAnchor();
+    actions.setSearchQuery("");
+    actions.setViewingBranch(null);
+    actions.setPathFilter(null);
+    actions.setPathMatchSet(null);
+    actions.setError(null);
+    actions.setProviderStatus(providerIdle());
+    actions.setCommitDetail(null);
+    actions.setUncommittedDetail(null);
+    actions.setDetailCursorIndex(0);
+  };
+
+  const switchRepoPath = (nextPath: string) => {
+    const currentPath = activeRepoPath();
+    if (!nextPath || nextPath === currentPath) return;
+    saveRepoSessionSnapshot(currentPath);
+    resetTransientRepoState();
+    setRepoSelectorVisible(false);
+    const snapshot = repoSessionCache.get(nextPath);
+    if (snapshot) restoreRepoSessionSnapshot(snapshot);
+    setActiveRepoPath(nextPath);
+  };
+
+  const switchGroupRepo = (direction: 1 | -1) => {
+    const nextPath = nextGroupRepoPath(knownRepoInfos(), activeRepoPath(), direction, currentRepoDisplayConfig());
+    if (!nextPath) return;
+    switchRepoPath(nextPath);
+  };
+
   const handleReloadAll = async () => {
     await loadData(undefined, undefined, false, true);
     await refreshActiveProvider();
@@ -257,7 +384,7 @@ function AppContent(props: Readonly<AppContentProps>) {
 
   // All git data loading: initial load, pagination, fetch, and auto-refresh timer.
   const { loadData, loadMoreData, handleFetch } = useDataLoader({
-    repoPath: props.repoPath,
+    repoPath: activeRepoPath,
     initialBranch: props.branch,
     state,
     actions,
@@ -270,7 +397,7 @@ function AppContent(props: Readonly<AppContentProps>) {
   // Load commit detail when cursor changes (with debounce + abort of stale loads),
   // and auto-switch away from empty tabs after detail data arrives.
   useDetailLoader({
-    repoPath: props.repoPath,
+    repoPath: activeRepoPath,
     state,
     actions,
     getIsJumpNavigation: () => isJumpNavigation,
@@ -372,9 +499,13 @@ function AppContent(props: Readonly<AppContentProps>) {
       case "theme":
         setDialog("theme");
         break;
+      case "debug":
+        setDialog(dialog() === "debug" ? null : "debug");
+        break;
       case "clear":
         actions.setError(null);
         actions.setProviderStatus(providerIdle());
+        clearDebugEvents();
         break;
       case "f":
       case "fetch":
@@ -432,7 +563,7 @@ function AppContent(props: Readonly<AppContentProps>) {
    * Mutually exclusive with search and ancestry.
    */
   const { handlePathExecute } = usePathFilter({
-    repoPath: props.repoPath,
+    repoPath: activeRepoPath,
     state,
     actions,
     clearAnchor,
@@ -466,6 +597,7 @@ function AppContent(props: Readonly<AppContentProps>) {
     onClearAncestry: clearAnchor,
     getCommitData: state.activeProviderView() === "jenkins" ? jenkinsCI.getCommitData : gitHubCI.getCommitData,
     getProviderLoading: () => state.providerStatus().kind === "loading",
+    onSwitchGroupRepo: switchGroupRepo,
   });
 
   // ── Provider-aware theme: override accent with githubActionsBg in CI mode ──
@@ -482,7 +614,7 @@ function AppContent(props: Readonly<AppContentProps>) {
       return { ...base, accent: base.githubActionsBg };
     }
     if (state.activeProviderView() === "jenkins") {
-      return { ...base, accent: base.githubActionsBg };
+      return { ...base, accent: base.jenkinsBg };
     }
     return base;
   });
@@ -508,7 +640,7 @@ function AppContent(props: Readonly<AppContentProps>) {
             when={!setupVisible()}
             fallback={
               <SetupScreen
-                repoPath={props.repoPath}
+                repoPath={activeRepoPath()}
                 onComplete={handleSetupComplete}
                 onQuit={() => renderer.destroy()}
               />
@@ -518,8 +650,9 @@ function AppContent(props: Readonly<AppContentProps>) {
               when={!repoSelectorVisible()}
               fallback={
                 <ProjectSelector
-                  knownRepos={getKnownRepos()}
-                  currentRepo={props.repoPath}
+                  knownRepos={knownRepoInfos()}
+                  currentRepo={activeRepoPath()}
+                  onSelectRepo={switchRepoPath}
                   onCancel={() => setRepoSelectorVisible(false)}
                   setKeyboardScopeOverride={actions.setKeyboardScopeOverride}
                 />
@@ -541,7 +674,11 @@ function AppContent(props: Readonly<AppContentProps>) {
                       {/* Sticky column headers - above scrollbox */}
                       <ColumnHeader />
 
-                      <GraphView onLoadMore={loadMoreData} />
+                      <GraphView
+                        onLoadMore={loadMoreData}
+                        scrollboxRef={el => (graphScrollboxRef = el)}
+                        suppressAutoScroll={() => pendingGraphScrollTop() != null}
+                      />
                     </box>
 
                     <box flexDirection="column" flexShrink={0} width="100%">
@@ -573,6 +710,10 @@ function AppContent(props: Readonly<AppContentProps>) {
                           }
                         }}
                         detailFocused={state.detailFocused}
+                        knownRepos={knownRepoInfos()}
+                        currentRepo={activeRepoPath()}
+                        currentGroup={currentRepoDisplayConfig().group}
+                        currentAppName={currentRepoDisplayConfig().appName}
                       />
 
                       {/* Footer - hotkey hints, 1 char gap above, right-aligned */}
@@ -628,6 +769,7 @@ function AppContent(props: Readonly<AppContentProps>) {
                     onGithubConfigChange={setGithubConfig}
                     jenkinsConfig={jenkinsConfig()}
                     onJenkinsConfigChange={setJenkinsConfig}
+                    onRepoDisplayConfigChange={setRepoDisplayConfig}
                   />
                 </Show>
                 <Show when={dialog() === "help"}>
@@ -635,6 +777,9 @@ function AppContent(props: Readonly<AppContentProps>) {
                 </Show>
                 <Show when={dialog() === "theme"}>
                   <ThemeDialog onClose={() => setDialog(null)} />
+                </Show>
+                <Show when={dialog() === "debug"}>
+                  <DebugDialog onClose={() => setDialog(null)} gitColor={themeState.theme().accent} />
                 </Show>
                 <Show when={dialog() === "diff-blame" && diffTarget()}>
                   {target => (

@@ -1,4 +1,4 @@
-import { batch, createEffect, onCleanup, onMount } from "solid-js";
+import { type Accessor, batch, createEffect, onCleanup, untrack } from "solid-js";
 import { isUncommittedHash } from "../constants";
 import type { AppActions, AppState } from "../context/state";
 import { buildGraph, getMaxGraphColumns } from "../git/graph";
@@ -24,7 +24,7 @@ import {
 
 interface UseDataLoaderOptions {
   /** Absolute path to the git repository. */
-  repoPath: string;
+  repoPath: Accessor<string>;
   /** Initial branch to scope the log to on mount. */
   initialBranch?: string;
   /** Reactive app state — passed directly to avoid reading from context before the Provider renders. */
@@ -58,10 +58,12 @@ interface UseDataLoaderResult {
  * is rendered in the JSX return. Reading from context at that point would return undefined.
  */
 export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDataLoaderOptions): UseDataLoaderResult {
+  const initialRepoPath = repoPath();
   // ── loadData ──────────────────────────────────────────────────────
   let loadAbortCtrl: AbortController | null = null;
 
   async function loadData(branch?: string, stickyHash?: string, silent = false, preserveLoaded = false) {
+    const path = repoPath();
     // Cancel any in-flight load — user-initiated actions take priority
     if (loadAbortCtrl) loadAbortCtrl.abort();
     const ctrl = new AbortController();
@@ -71,7 +73,7 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
     // Reset pagination on every fresh load
     actions.setHasMore(true);
     try {
-      actions.setRepoPath(repoPath);
+      actions.setRepoPath(path);
 
       // When viewing a specific branch perspective, scope the log to that branch
       const viewBranch = state.viewingBranch();
@@ -86,7 +88,7 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
 
       const [commits, branches, currentBranch, remoteUrl, tagDetails, stashes, wtStatus] = await Promise.all([
         getCommits(
-          repoPath,
+          path,
           {
             maxCount: silentMaxCount,
             branch: effectiveBranch,
@@ -94,16 +96,16 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
           },
           ctrl.signal,
         ),
-        getBranches(repoPath, ctrl.signal),
-        getCurrentBranch(repoPath, ctrl.signal),
-        getRemoteUrl(repoPath, ctrl.signal),
-        getTagDetails(repoPath, ctrl.signal),
-        getStashList(repoPath, ctrl.signal),
-        getWorkingTreeStatus(repoPath, ctrl.signal),
+        getBranches(path, ctrl.signal),
+        getCurrentBranch(path, ctrl.signal),
+        getRemoteUrl(path, ctrl.signal),
+        getTagDetails(path, ctrl.signal),
+        getStashList(path, ctrl.signal),
+        getWorkingTreeStatus(path, ctrl.signal),
       ]);
 
       // If we were superseded by a newer loadData call, discard results
-      if (ctrl.signal.aborted) return;
+      if (ctrl.signal.aborted || repoPath() !== path) return;
 
       // Detect whether more commits exist beyond this page.
       // Compare raw git result count against the requested page size (not silentMaxCount,
@@ -162,6 +164,7 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
   let loadMoreAbortCtrl: AbortController | null = null;
 
   async function loadMoreData() {
+    const path = repoPath();
     // Guards: don't load if there's nothing more, or if any fetch/load is already running
     if (!state.hasMore()) return;
     if (state.fetching()) return; // handleFetch in-flight
@@ -183,7 +186,7 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
       const effectiveAll = viewBranch ? false : state.showAllBranches();
 
       const newCommits = await getCommits(
-        repoPath,
+        path,
         {
           maxCount: pageSize,
           skip,
@@ -193,7 +196,7 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
         ctrl.signal,
       );
 
-      if (ctrl.signal.aborted) return;
+      if (ctrl.signal.aborted || repoPath() !== path) return;
 
       // If we got fewer commits than a full page, we've reached the end
       actions.setHasMore(newCommits.length >= pageSize);
@@ -234,13 +237,14 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
 
   // ── handleFetch ───────────────────────────────────────────────────
   async function handleFetch() {
+    const path = repoPath();
     if (state.fetching()) return; // guard against double-fetch
     actions.setFetching(true);
     try {
-      const result = await fetchRemote(repoPath);
+      const result = await fetchRemote(path);
       if (result.ok) {
-        const fetchTime = await getLastFetchTime(repoPath);
-        actions.setLastFetchTime(fetchTime);
+        const fetchTime = await getLastFetchTime(path);
+        if (repoPath() === path) actions.setLastFetchTime(fetchTime);
         const stickyHash = state.selectedCommit()?.hash;
         // silent=true: don't toggle state.loading() — that unmounts the entire
         // graph <For> list and destroys the scrollbox position.  state.fetching()
@@ -257,10 +261,16 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
   }
 
   // ── Initial load on mount ─────────────────────────────────────────
-  onMount(() => {
-    void loadData(initialBranch);
+  createEffect(() => {
+    const path = repoPath();
+    untrack(() => {
+      const stickyHash = state.selectedCommit()?.hash;
+      void loadData(path === initialRepoPath ? initialBranch : undefined, stickyHash);
+    });
     // Load initial fetch time
-    getLastFetchTime(repoPath).then(time => actions.setLastFetchTime(time));
+    getLastFetchTime(path).then(time => {
+      if (repoPath() === path) actions.setLastFetchTime(time);
+    });
   });
 
   // ── Local auto-refresh timer ──────────────────────────────────────
