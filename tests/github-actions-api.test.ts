@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, describe, expect, it, mock, spyOn } from "bun:test";
 import {
   aggregateRunsToGraphBadge,
   buildCommitDataMap,
@@ -503,6 +503,16 @@ function mockFetch(fn: (...args: any[]) => Promise<Response>): void {
   globalThis.fetch = fn as any;
 }
 
+async function withSuppressedConsoleError<T>(fn: () => Promise<T>): Promise<{ result: T; calls: unknown[][] }> {
+  const errorSpy = spyOn(console, "error").mockImplementation(() => {});
+  try {
+    const result = await fn();
+    return { result, calls: errorSpy.mock.calls };
+  } finally {
+    errorSpy.mockRestore();
+  }
+}
+
 // ── fetchRunJobs (mocked fetch) ───────────────────────────────────────────
 
 function makeApiJob(overrides: Partial<GitHubApiJob> = {}): GitHubApiJob {
@@ -553,9 +563,11 @@ describe("fetchRunJobs", () => {
 
   it("returns explicit error (no throw) on 404", async () => {
     mockFetch(mock(async () => new Response(null, { status: 404 })));
-    const { jobs, error } = await fetchRunJobs(TEST_REPO, TEST_TOKEN, 999);
+    const { result, calls } = await withSuppressedConsoleError(() => fetchRunJobs(TEST_REPO, TEST_TOKEN, 999));
+    const { jobs, error } = result;
     expect(error).toBe("Jobs HTTP 404");
     expect(jobs).toHaveLength(0);
+    expect(calls).toHaveLength(1);
   });
 
   it("returns explicit error (no throw) on network error", async () => {
@@ -564,9 +576,11 @@ describe("fetchRunJobs", () => {
         throw new Error("Network failure");
       }),
     );
-    const { jobs, error } = await fetchRunJobs(TEST_REPO, TEST_TOKEN, 123);
+    const { result, calls } = await withSuppressedConsoleError(() => fetchRunJobs(TEST_REPO, TEST_TOKEN, 123));
+    const { jobs, error } = result;
     expect(error).toBe("Network failure");
     expect(jobs).toHaveLength(0);
+    expect(calls).toHaveLength(1);
   });
 
   it("handles missing steps array gracefully", async () => {
@@ -693,16 +707,22 @@ describe("fetchCIDataForSHAs", () => {
 
   it("returns empty result on HTTP error (graceful degradation)", async () => {
     mockFetch(mock(async () => new Response(null, { status: 403 })));
-    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
+    const { result, calls } = await withSuppressedConsoleError(() =>
+      fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]),
+    );
     expect(result.data).toHaveLength(0);
     expect(result.error).toBeTruthy();
+    expect(calls).toHaveLength(1);
   });
 
   it("returns empty result on GraphQL errors field", async () => {
     const response = { errors: [{ message: "Not Found" }] };
     mockFetch(mock(async () => new Response(JSON.stringify(response), { status: 200 })));
-    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
+    const { result, calls } = await withSuppressedConsoleError(() =>
+      fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]),
+    );
     expect(result.data).toHaveLength(0);
+    expect(calls).toHaveLength(1);
   });
 
   it("returns empty result on network error", async () => {
@@ -711,8 +731,11 @@ describe("fetchCIDataForSHAs", () => {
         throw new Error("Network failure");
       }),
     );
-    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
+    const { result, calls } = await withSuppressedConsoleError(() =>
+      fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]),
+    );
     expect(result.data).toHaveLength(0);
+    expect(calls).toHaveLength(1);
   });
 
   it("returns empty result immediately for empty shas array", async () => {

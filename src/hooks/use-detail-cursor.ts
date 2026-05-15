@@ -18,9 +18,9 @@ import type { DetailNavRef, DetailViewProps } from "../components/detail-types";
 import { isUncommittedHash } from "../constants";
 import type { createAppState } from "../context/state";
 import type { Commit, CommitDetail, FileChange, GraphRow } from "../git/types";
-import type { StashState } from "../hooks/use-stash-state";
 import { buildDiffTarget } from "../utils/diff-target";
 import type { FileTreeRow } from "../utils/file-tree";
+import type { StashState } from "./use-stash-state";
 
 export type CopyableField = "hash" | "author" | "date" | "committer" | "commitDate" | "subject" | "body";
 
@@ -102,7 +102,7 @@ export function useDetailCursor({
     const tab = activeTab();
     const items: InteractiveItem[] = [];
 
-    if (tab === "detail") {
+    if (tab === "info") {
       // Copyable metadata fields (skip for uncommitted node — values are all "·······")
       if (!isUncommittedHash(c.hash)) {
         items.push({ type: "copyable", field: "hash" });

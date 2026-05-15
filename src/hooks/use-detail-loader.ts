@@ -1,11 +1,17 @@
 import { type Accessor, createEffect, onCleanup } from "solid-js";
 import type { DetailNavRef } from "../components/detail-types";
 import { isUncommittedHash } from "../constants";
-import type { AppActions, AppState } from "../context/state";
+import type { AppActions, AppState, DetailTab } from "../context/state";
 import { getCommitDetail, getUncommittedDetail } from "../git/repo";
 import { getAvailableTabs } from "../utils/tab-utils";
 
 const DETAIL_DEBOUNCE_MS = 150;
+const PROVIDER_VIEWS = new Set(["github-actions", "jenkins", "openshift"]);
+
+function cancelPending(timer: ReturnType<typeof setTimeout> | null, ctrl: AbortController | null): void {
+  if (timer) clearTimeout(timer);
+  if (ctrl) ctrl.abort();
+}
 
 interface UseDetailLoaderOptions {
   /** Absolute path to the git repository. */
@@ -58,27 +64,21 @@ export function useDetailLoader({
   getCommitData,
   getProviderLoading,
 }: UseDetailLoaderOptions): void {
-  // ── Detail load on commit change ──────────────────────────────────
   let detailAbortCtrl: AbortController | null = null;
   let detailDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
+  // Load commit detail whenever the selected commit changes.
   createEffect(() => {
     const path = repoPath();
     const commit = state.selectedCommit();
     // Read activeProviderView reactively so this effect re-fires when the user
     // switches between git and provider views (lazy load on view change).
-    const activeProviderView = state.activeProviderView();
-    const isProviderMode = activeProviderView === "github-actions" || activeProviderView === "jenkins";
+    const activeProvider = state.activeProviderView();
+    const isProviderMode = PROVIDER_VIEWS.has(activeProvider);
 
     // Cancel any pending debounce and abort in-flight git subprocesses
-    if (detailDebounceTimer) {
-      clearTimeout(detailDebounceTimer);
-      detailDebounceTimer = null;
-    }
-    if (detailAbortCtrl) {
-      detailAbortCtrl.abort();
-      detailAbortCtrl = null;
-    }
+    cancelPending(detailDebounceTimer, detailAbortCtrl);
+    detailDebounceTimer = detailAbortCtrl = null;
 
     if (!commit) {
       actions.setCommitDetail(null);
@@ -89,40 +89,37 @@ export function useDetailLoader({
 
     const isUncommitted = isUncommittedHash(commit.hash);
 
-    // Reset active tab — but preserve it on child/parent jump navigation
-    // so the user stays on the Details tab when walking the commit graph.
-    // getIsJumpNavigation() is a plain JS flag set synchronously by handleJumpToCommit
-    // around the setCursorIndex call. Since SolidJS effects run synchronously when
-    // a signal updates, this flag is still true when this effect fires.
-    if (getIsJumpNavigation()) {
-      // Jump — keep current tab, don't reset cursor (detail.tsx cursor effect
-      // will position it on the correct parent/child entry using pendingJumpDirection).
-    } else {
-      // In provider mode default to that provider tab; otherwise default to
-      // "files" (or "unstaged" for the uncommitted node).
-      const defaultTab = isUncommitted
-        ? "unstaged"
-        : activeProviderView === "jenkins"
-          ? "jenkins"
-          : activeProviderView === "github-actions"
-            ? "github-actions"
-            : "files";
+    /*
+     * Reset active tab — but preserve it on child/parent jump navigation
+     * so the user stays on the Details tab when walking the commit graph.
+     * getIsJumpNavigation() is a plain JS flag set synchronously by
+     * handleJumpToCommit around the setCursorIndex call. Since SolidJS
+     * effects run synchronously when a signal updates, this flag is still
+     * true when this effect fires.
+     */
+    if (!getIsJumpNavigation()) {
+      let defaultTab: DetailTab = "files";
+
+      if (isUncommitted) {
+        defaultTab = "unstaged";
+      }
+
+      if (isProviderMode) {
+        defaultTab = activeProvider as DetailTab;
+      }
+
       actions.setDetailActiveTab(defaultTab);
       actions.setDetailCursorIndex(0);
       // Clear any stale jump direction on normal (non-jump) navigation
       detailNavRef.pendingJumpDirection = null;
     }
 
-    // Clear stale detail immediately so the old file tree nodes are removed
-    // from the render tree during scroll (a 334-file commit's tree = ~3K nodes).
+    // Clear stale detail immediately so the old file tree nodes are removed.
     actions.setCommitDetail(null);
     actions.setUncommittedDetail(null);
 
-    // In provider mode there is no Files tab — skip the git subprocess entirely.
-    // The loading spinner should only reflect CI data fetching (providerStatus),
-    // not file-diff loading that will never be displayed.
-    // When the user later tabs back to "git" view, activeProviderView changes,
-    // this effect re-fires, and the detail is loaded at that point.
+    // In provider mode there is no files tab. In this case skip the git subprocess entirely.
+
     if (isProviderMode && !isUncommitted) {
       actions.setDetailLoading(false);
       return;
@@ -135,11 +132,14 @@ export function useDetailLoader({
       detailDebounceTimer = null;
       const ctrl = new AbortController();
       detailAbortCtrl = ctrl;
+
+      const notSuperseded = () => !ctrl.signal.aborted && repoPath() === path;
+
       try {
         if (isUncommitted) {
           // Uncommitted node: load staged/unstaged/untracked file lists in parallel
           const ud = await getUncommittedDetail(path, ctrl.signal);
-          if (!ctrl.signal.aborted && repoPath() === path) {
+          if (notSuperseded()) {
             actions.setUncommittedDetail(ud);
             // Also set a basic CommitDetail so any fallback code still has commit info
             actions.setCommitDetail({ ...commit, files: [...ud.staged, ...ud.unstaged, ...ud.untracked] });
@@ -147,7 +147,7 @@ export function useDetailLoader({
           }
         } else {
           const detail = await getCommitDetail(path, commit.hash, commit, ctrl.signal);
-          if (!ctrl.signal.aborted && repoPath() === path) {
+          if (notSuperseded()) {
             actions.setCommitDetail(detail);
             actions.setDetailLoading(false);
           }
@@ -163,19 +163,7 @@ export function useDetailLoader({
     }, DETAIL_DEBOUNCE_MS);
   });
 
-  onCleanup(() => {
-    if (detailDebounceTimer) {
-      clearTimeout(detailDebounceTimer);
-      detailDebounceTimer = null;
-    }
-    if (detailAbortCtrl) {
-      detailAbortCtrl.abort();
-      detailAbortCtrl = null;
-    }
-  });
-
-  // ── Auto-switch away from empty tabs after detail data loads ──────
-  // Finds the first non-disabled tab if the current tab has 0 items.
+  // Auto-switch away from empty tabs after detail loads.
   createEffect(() => {
     const commit = state.selectedCommit();
     const cd = state.commitDetail();
@@ -188,14 +176,21 @@ export function useDetailLoader({
     // Check if current tab is empty
     let isEmpty = false;
     if (isUncommitted && ud) {
-      if (tab === "unstaged") isEmpty = ud.unstaged.length === 0;
-      else if (tab === "staged") isEmpty = ud.staged.length === 0;
-      else if (tab === "untracked") isEmpty = ud.untracked.length === 0;
+      switch (tab) {
+        case "unstaged":
+          isEmpty = ud.unstaged.length === 0;
+          break;
+        case "staged":
+          isEmpty = ud.staged.length === 0;
+          break;
+        case "untracked":
+          isEmpty = ud.untracked.length === 0;
+          break;
+      }
     } else if (!isUncommitted && cd) {
-      if (tab === "files") isEmpty = cd.files.length === 0;
-    } else if (!isUncommitted && (tab === "github-actions" || tab === "jenkins")) {
+      isEmpty = tab === "files" && cd.files.length === 0;
+    } else if (!isUncommitted && PROVIDER_VIEWS.has(tab)) {
       // Provider tabs own their empty/loading UI. Never auto-switch away.
-      isEmpty = false;
     }
 
     if (!isEmpty) return;
@@ -213,5 +208,11 @@ export function useDetailLoader({
     if (available.length > 0) {
       actions.setDetailActiveTab(available[0]);
     }
+  });
+
+  // Cancel any pending debounce timers and abort in-flight git subprocesses.
+  onCleanup(() => {
+    cancelPending(detailDebounceTimer, detailAbortCtrl);
+    detailDebounceTimer = detailAbortCtrl = null;
   });
 }

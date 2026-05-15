@@ -95,7 +95,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
       .filter(c => !isUncommittedHash(c.hash));
   });
 
-  // Active tab for committed commits: "detail" | "files" | "stashes"
+  // Active tab for committed commits: "info" | "files" | "stashes"
   const activeTab = () => state.detailActiveTab();
 
   // Split refs into branches (branch/remote/head) and tags
@@ -459,8 +459,8 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
       >
         {c => (
           <>
-            {/* ══════════════ Detail tab ══════════════ */}
-            <Show when={activeTab() === "detail"}>
+            {/* ══════════════ Info tab ══════════════ */}
+            <Show when={activeTab() === "info"}>
               {/* ── Branch ── */}
               <text fg={t().accent} wrapMode="none">
                 <strong>Branch</strong>

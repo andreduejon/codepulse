@@ -12,6 +12,7 @@ import type {
   GitHubWorkflowRun,
 } from "../providers/github-actions/types";
 import type { JenkinsCommitData, JenkinsJob, JenkinsJobFetchResult, JenkinsRun } from "../providers/jenkins/types";
+import type { ProviderView } from "../providers/provider";
 import { getAvailableTabs } from "../utils/tab-utils";
 import CommitDetailView from "./detail";
 import type { DetailNavRef } from "./detail-types";
@@ -47,6 +48,12 @@ export interface DetailPanelProps {
   jenkinsProviderStatus?: ProviderStatus;
 }
 
+const providerTabs: Partial<Record<ProviderView, { id: "github-actions" | "jenkins" | "openshift"; label: string }>> = {
+  "github-actions": { id: "github-actions", label: "Actions" },
+  jenkins: { id: "jenkins", label: "Jenkins" },
+  openshift: { id: "openshift", label: "OpenShift" },
+};
+
 /**
  * The detail panel content: tab bar + scrollable detail view + version badge.
  * Used in both:
@@ -65,7 +72,8 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
     const cd = state.commitDetail();
     const stashMap = state.stashByParent();
     const providerView = state.activeProviderView();
-    const isProviderMode = providerView === "github-actions" || providerView === "jenkins";
+    const providerTab = providerTabs[providerView];
+    const isProviderMode = providerTab !== undefined;
     const available = new Set(
       getAvailableTabs({
         commit,
@@ -100,14 +108,13 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
       ];
     }
     return [
-      // In provider mode the Actions tab always takes the first position (shows "no data"
-      // for commits with no runs). Files tab is hidden in provider mode.
+      // In provider mode the provider tab always takes the first position. Files tab is hidden.
       ...(isProviderMode
         ? [
             {
-              id: providerView === "jenkins" ? "jenkins" : "github-actions",
-              label: providerView === "jenkins" ? "Jenkins" : "Actions",
-              disabled: !available.has(providerView === "jenkins" ? "jenkins" : "github-actions"),
+              id: providerTab.id,
+              label: providerTab.label,
+              disabled: !available.has(providerTab.id),
             },
           ]
         : [
@@ -126,7 +133,7 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
             },
           ]
         : []),
-      { id: "detail", label: "Info", disabled: false },
+      { id: "info", label: "Info", disabled: false },
     ];
   };
 

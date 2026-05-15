@@ -9,24 +9,33 @@ import { matchCommit, parseSearchQuery } from "../search";
 export const DEFAULT_AUTO_REFRESH_INTERVAL = 30000;
 export const DEFAULT_AUTO_FETCH_INTERVAL = 0;
 
-/** Valid tab identifiers for the detail panel. */
+/**
+ * Valid tab identifiers for the detail panel.
+ */
 export type DetailTab =
   | "files"
-  | "detail"
+  | "info"
   | "stashes"
   | "staged"
   | "unstaged"
   | "untracked"
   | "github-actions"
-  | "jenkins";
+  | "jenkins"
+  | "openshift";
 
 /**
  * Which highlighting mode is currently active.
- * - "ancestry": per-column graph lane brightness (computeBrightColumns)
- * - "path" | "search": per-row dimming, only commit node stays bright on matching rows
- * - null: no highlighting active
+ * - "ancestry": per-column graph lane brightness
+ * - "path": per-row dimming, only commit node stays bright on matching rows
+ * - "search": per-row dimming, only commit node stays bright on matching rows
+ * - null: no highlighting active (normal)
  */
 export type HighlightMode = "ancestry" | "path" | "search" | null;
+
+/**
+ * Status of the active provider, used to show a status message
+ * in the provider tab when applicable.
+ */
 export type ProviderStatus =
   | { kind: "idle" }
   | { kind: "loading" }
@@ -35,7 +44,10 @@ export type ProviderStatus =
 
 export const providerIdle = (): ProviderStatus => ({ kind: "idle" });
 export const providerLoading = (): ProviderStatus => ({ kind: "loading" });
-export const providerUnavailable = (message: string): ProviderStatus => ({ kind: "unavailable", message });
+export const providerUnavailable = (message: string): ProviderStatus => ({
+  kind: "unavailable",
+  message,
+});
 export const providerError = (message: string): ProviderStatus => ({ kind: "error", message });
 
 export function providerStatusMessage(status: ProviderStatus): string | null {
@@ -97,7 +109,7 @@ export interface AppState {
   detailLoading: Accessor<boolean>;
   /** Contextual enter-key action label for the detail cursor item (null = no action) */
   detailCursorAction: Accessor<string | null>;
-  /** Active tab in the detail panel (e.g. "detail", "files", "stashes" or "staged", "unstaged", "untracked") */
+  /** Active tab in the detail panel (e.g. "info", "files", "stashes" or "staged", "unstaged", "untracked") */
   detailActiveTab: Accessor<DetailTab>;
   /** Separate file lists for the uncommitted-changes node (null when a normal commit is selected) */
   uncommittedDetail: Accessor<UncommittedDetail | null>;

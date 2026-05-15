@@ -10,9 +10,7 @@
 import { createSignal } from "solid-js";
 
 /** Provider view identifiers — Tab cycles through these. */
-export type ProviderView = "git" | "github-actions" | "jenkins";
-
-export type ProviderId = Exclude<ProviderView, "git">;
+export type ProviderView = "git" | "github-actions" | "jenkins" | "openshift";
 
 /**
  * Minimal badge for a single commit in the graph view.
@@ -50,7 +48,7 @@ export interface ProviderRegistration {
 export const providerRegistry: ProviderRegistration[] = [];
 const [providerRegistryVersion, setProviderRegistryVersion] = createSignal(0);
 
-/** Register a provider.  Called once per provider during hook setup. */
+/** Register a provider. Called once per provider during hook setup. */
 export function registerProvider(p: ProviderRegistration): void {
   // Avoid duplicate registrations (e.g. HMR / strict-mode double-invocation)
   if (!providerRegistry.find(r => r.id === p.id)) {
@@ -59,7 +57,7 @@ export function registerProvider(p: ProviderRegistration): void {
   }
 }
 
-/** Unregister a provider by ID.  Called when the provider is disabled at runtime. */
+/** Unregister a provider by ID. Called when the provider is disabled at runtime. */
 export function unregisterProvider(id: ProviderView): void {
   const idx = providerRegistry.findIndex(r => r.id === id);
   if (idx !== -1) {
@@ -76,7 +74,7 @@ export function getProviderRegistryVersion(): number {
 /**
  * Returns the ordered list of ProviderView values available for Tab cycling:
  * always starts with "git", then all registered providers (regardless of
- * availability).  Registration is the gating mechanism — a disabled provider
+ * availability). Registration is the gating mechanism — a disabled provider
  * is never registered, so it never appears here.
  *
  * An unavailable-but-registered provider shows a setup guidance screen when
@@ -91,8 +89,7 @@ export function getEnabledProviderViews(): ProviderView[] {
 }
 
 /**
- * Cycle to the next provider view.
- * If no providers are available beyond "git", returns "git".
+ * Cycle to the next provider view. If no furthe providers are available, returns "git".
  */
 export function nextProviderView(current: ProviderView): ProviderView {
   const views = getEnabledProviderViews();
@@ -101,11 +98,12 @@ export function nextProviderView(current: ProviderView): ProviderView {
   return views[(idx + 1) % views.length];
 }
 
-/** Look up a registered provider by ID.  Returns undefined if not found. */
+/** Look up a registered provider by ID. Returns undefined if not found. */
 export function getProvider(id: ProviderView): ProviderRegistration | undefined {
   return providerRegistry.find(p => p.id === id);
 }
 
+/** Returns the display name of the provider. */
 export function providerDisplayName(view: ProviderView): string {
   if (view === "git") return "Git";
   return getProvider(view)?.displayName ?? view;
