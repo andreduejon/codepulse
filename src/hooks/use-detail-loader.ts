@@ -3,10 +3,10 @@ import type { DetailNavRef } from "../components/detail-types";
 import { isUncommittedHash } from "../constants";
 import type { AppActions, AppState, DetailTab } from "../context/state";
 import { getCommitDetail, getUncommittedDetail } from "../git/repo";
+import { isProviderDetailView } from "../providers/provider";
 import { getAvailableTabs } from "../utils/tab-utils";
 
 const DETAIL_DEBOUNCE_MS = 150;
-const PROVIDER_VIEWS = new Set(["github-actions", "jenkins", "openshift"]);
 
 function cancelPending(timer: ReturnType<typeof setTimeout> | null, ctrl: AbortController | null): void {
   if (timer) clearTimeout(timer);
@@ -74,7 +74,7 @@ export function useDetailLoader({
     // Read activeProviderView reactively so this effect re-fires when the user
     // switches between git and provider views (lazy load on view change).
     const activeProvider = state.activeProviderView();
-    const isProviderMode = PROVIDER_VIEWS.has(activeProvider);
+    const isProviderMode = isProviderDetailView(activeProvider);
 
     // Cancel any pending debounce and abort in-flight git subprocesses
     cancelPending(detailDebounceTimer, detailAbortCtrl);
@@ -189,7 +189,7 @@ export function useDetailLoader({
       }
     } else if (!isUncommitted && cd) {
       isEmpty = tab === "files" && cd.files.length === 0;
-    } else if (!isUncommitted && PROVIDER_VIEWS.has(tab)) {
+    } else if (!isUncommitted && isProviderDetailView(tab)) {
       // Provider tabs own their empty/loading UI. Never auto-switch away.
     }
 

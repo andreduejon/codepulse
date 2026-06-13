@@ -12,7 +12,12 @@ import type {
   GitHubWorkflowRun,
 } from "../providers/github-actions/types";
 import type { JenkinsCommitData, JenkinsJob, JenkinsJobFetchResult, JenkinsRun } from "../providers/jenkins/types";
-import type { ProviderView } from "../providers/provider";
+import type {
+  OpenShiftCommitData,
+  OpenShiftResource,
+  OpenShiftResourceDetailResult,
+} from "../providers/openshift/types";
+import { providerDetailTab } from "../providers/provider";
 import { getAvailableTabs } from "../utils/tab-utils";
 import CommitDetailView from "./detail";
 import type { DetailNavRef } from "./detail-types";
@@ -46,13 +51,11 @@ export interface DetailPanelProps {
   jenkinsFetchCommitData?: (sha: string) => Promise<void>;
   onOpenJenkinsJobLog?: (job: JenkinsJob, run: JenkinsRun, jobs?: JenkinsJob[]) => void;
   jenkinsProviderStatus?: ProviderStatus;
+  openshiftGetCommitData?: (sha: string) => OpenShiftCommitData | null;
+  openshiftFetchCommitData?: (sha: string) => Promise<void>;
+  openshiftFetchResourceDetails?: (resource: OpenShiftResource) => Promise<OpenShiftResourceDetailResult>;
+  openshiftProviderStatus?: ProviderStatus;
 }
-
-const providerTabs: Partial<Record<ProviderView, { id: "github-actions" | "jenkins" | "openshift"; label: string }>> = {
-  "github-actions": { id: "github-actions", label: "Actions" },
-  jenkins: { id: "jenkins", label: "Jenkins" },
-  openshift: { id: "openshift", label: "OpenShift" },
-};
 
 /**
  * The detail panel content: tab bar + scrollable detail view + version badge.
@@ -72,8 +75,8 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
     const cd = state.commitDetail();
     const stashMap = state.stashByParent();
     const providerView = state.activeProviderView();
-    const providerTab = providerTabs[providerView];
-    const isProviderMode = providerTab !== undefined;
+    const providerTab = providerDetailTab(providerView);
+    const isProviderMode = providerTab != null;
     const available = new Set(
       getAvailableTabs({
         commit,
@@ -81,11 +84,18 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
         commitDetail: cd,
         stashByParent: stashMap,
         activeProviderView: providerView,
-        getCommitData: providerView === "jenkins" ? props.jenkinsGetCommitData : props.githubGetCommitData,
+        getCommitData:
+          providerView === "jenkins"
+            ? props.jenkinsGetCommitData
+            : providerView === "openshift"
+              ? props.openshiftGetCommitData
+              : props.githubGetCommitData,
         providerLoading:
           providerView === "jenkins"
             ? props.jenkinsProviderStatus?.kind === "loading"
-            : props.githubProviderStatus?.kind === "loading",
+            : providerView === "openshift"
+              ? props.openshiftProviderStatus?.kind === "loading"
+              : props.githubProviderStatus?.kind === "loading",
       }),
     );
     if (isUncommitted) {
@@ -107,16 +117,19 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
         },
       ];
     }
+    const providerTabEntry = providerTab
+      ? [
+          {
+            id: providerTab.id,
+            label: providerTab.label,
+            disabled: !available.has(providerTab.id),
+          },
+        ]
+      : [];
     return [
       // In provider mode the provider tab always takes the first position. Files tab is hidden.
       ...(isProviderMode
-        ? [
-            {
-              id: providerTab.id,
-              label: providerTab.label,
-              disabled: !available.has(providerTab.id),
-            },
-          ]
+        ? providerTabEntry
         : [
             {
               id: "files",
@@ -204,6 +217,10 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
             jenkinsFetchCommitData={props.jenkinsFetchCommitData}
             onOpenJenkinsJobLog={props.onOpenJenkinsJobLog}
             jenkinsProviderStatus={props.jenkinsProviderStatus}
+            openshiftGetCommitData={props.openshiftGetCommitData}
+            openshiftFetchCommitData={props.openshiftFetchCommitData}
+            openshiftFetchResourceDetails={props.openshiftFetchResourceDetails}
+            openshiftProviderStatus={props.openshiftProviderStatus}
           />
         </Show>
       </scrollbox>

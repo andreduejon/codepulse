@@ -17,7 +17,7 @@ import MessageBox, { type UIMessage } from "./components/message-box";
 import ProjectSelector from "./components/project-selector";
 import SetupScreen from "./components/setup-screen";
 import type { ConfigInfo } from "./config";
-import { backfillRepoConfig, getKnownRepoInfos, getRepoDisplayConfig, writeConfig } from "./config";
+import { backfillRepoConfig, getKnownRepoInfos, getRepoDisplayConfig, loadConfig, writeConfig } from "./config";
 import { COMPACT_THRESHOLD_WIDTH, DEFAULT_MAX_COUNT, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH } from "./constants";
 import { AppStateContext, createAppState, providerIdle, providerStatusMessage } from "./context/state";
 import { createThemeState, ThemeContext } from "./context/theme";
@@ -29,11 +29,13 @@ import { useDetailLoader } from "./hooks/use-detail-loader";
 import { type CommandBarMode, useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
 import { usePathFilter } from "./hooks/use-path-filter";
 import type { StartupMode } from "./main";
+import { providerAccent } from "./providers/colors";
 import JobLogDialog from "./providers/github-actions/log-dialog";
 import type { GitHubJob, GitHubWorkflowRun } from "./providers/github-actions/types";
 import { useGitHubCI } from "./providers/github-actions/use-github-ci";
 import type { JenkinsJob, JenkinsRun } from "./providers/jenkins/types";
 import { useJenkinsCI } from "./providers/jenkins/use-jenkins-ci";
+import { useOpenShift } from "./providers/openshift/use-openshift";
 import type { GraphBadge, ProviderView } from "./providers/provider";
 import { nextGroupRepoPath } from "./utils/group-repos";
 
@@ -47,14 +49,24 @@ interface AppProps {
   autoFetchInterval?: number;
   configInfo?: ConfigInfo;
   startupMode: StartupMode;
-  /** Initial GitHub Actions provider config from the loaded config file. */
-  initialGithubConfig?: { enabled?: boolean; tokenEnvVar?: string; trustedEnterpriseHost?: string };
+  initialGithubConfig?: {
+    enabled?: boolean;
+    tokenEnvVar?: string;
+    trustedEnterpriseHost?: string;
+  };
   initialJenkinsConfig?: {
     enabled?: boolean;
     username?: string;
     tokenEnvVar?: string;
     graphBuildLimit?: 10 | 20 | 50;
     jobs?: { label?: string; url: string }[];
+  };
+  initialOpenShiftConfig?: {
+    enabled?: boolean;
+    serverUrl?: string;
+    tokenEnvVar?: string;
+    namespaces?: string[];
+    commitShaAnnotation?: string;
   };
 }
 
@@ -77,7 +89,7 @@ interface RepoSessionSnapshot {
   hasMore: boolean;
   lastFetchTime: Date | null;
   activeProviderView: ProviderView;
-  graphBadges: Map<string, GraphBadge>;
+  graphBadges: Map<ProviderView, Map<string, GraphBadge>>;
   graphScrollTop: number;
 }
 
@@ -92,12 +104,14 @@ function AppContent(props: Readonly<AppContentProps>) {
   const renderer = useRenderer();
   const [activeRepoPath, setActiveRepoPath] = createSignal(props.repoPath);
 
-  // ── GitHub Actions provider config (mutable signal for Providers menu tab) ──
+  // GitHub Actions provider config.
   const [githubConfig, setGithubConfig] = createSignal({
     enabled: props.initialGithubConfig?.enabled ?? true,
     tokenEnvVar: props.initialGithubConfig?.tokenEnvVar ?? "GITHUB_TOKEN",
     trustedEnterpriseHost: props.initialGithubConfig?.trustedEnterpriseHost ?? null,
   });
+
+  // Jenkins provider config
   const [jenkinsConfig, setJenkinsConfig] = createSignal({
     enabled: props.initialJenkinsConfig?.enabled ?? false,
     username: props.initialJenkinsConfig?.username,
@@ -105,7 +119,43 @@ function AppContent(props: Readonly<AppContentProps>) {
     graphBuildLimit: props.initialJenkinsConfig?.graphBuildLimit ?? 20,
     jobs: props.initialJenkinsConfig?.jobs ?? [],
   });
+
+  // OpenShift provider config
+  const [openShiftConfig, setOpenShiftConfig] = createSignal({
+    enabled: props.initialOpenShiftConfig?.enabled ?? false,
+    serverUrl: props.initialOpenShiftConfig?.serverUrl ?? "",
+    tokenEnvVar: props.initialOpenShiftConfig?.tokenEnvVar ?? "OPENSHIFT_TOKEN",
+    namespaces: props.initialOpenShiftConfig?.namespaces ?? [],
+    commitShaAnnotation: props.initialOpenShiftConfig?.commitShaAnnotation ?? "dev/commit-sha",
+  });
+
   const [repoDisplayConfig, setRepoDisplayConfig] = createSignal(getRepoDisplayConfig(activeRepoPath()));
+
+  const reloadRuntimeConfig = () => {
+    const path = activeRepoPath();
+    backfillRepoConfig(path);
+    const { config } = loadConfig(path);
+    setGithubConfig({
+      enabled: config.providers?.github?.enabled ?? false,
+      tokenEnvVar: config.providers?.github?.tokenEnvVar ?? "GITHUB_TOKEN",
+      trustedEnterpriseHost: config.providers?.github?.trustedEnterpriseHost ?? null,
+    });
+    setJenkinsConfig({
+      enabled: config.providers?.jenkins?.enabled ?? false,
+      username: config.providers?.jenkins?.username,
+      tokenEnvVar: config.providers?.jenkins?.tokenEnvVar ?? "JENKINS_TOKEN",
+      graphBuildLimit: config.providers?.jenkins?.graphBuildLimit ?? 20,
+      jobs: config.providers?.jenkins?.jobs ?? [],
+    });
+    setOpenShiftConfig({
+      enabled: config.providers?.openshift?.enabled ?? false,
+      serverUrl: config.providers?.openshift?.serverUrl ?? "",
+      tokenEnvVar: config.providers?.openshift?.tokenEnvVar ?? "OPENSHIFT_TOKEN",
+      namespaces: config.providers?.openshift?.namespaces ?? [],
+      commitShaAnnotation: config.providers?.openshift?.commitShaAnnotation ?? "dev/commit-sha",
+    });
+    setRepoDisplayConfig(getRepoDisplayConfig(path));
+  };
 
   // ── GitHub CI data hook (called during setup, before Provider renders — per AGENTS.md rule 5) ──
   const gitHubCI = useGitHubCI({
@@ -114,6 +164,7 @@ function AppContent(props: Readonly<AppContentProps>) {
     config: githubConfig,
   });
   const jenkinsCI = useJenkinsCI({ state, actions, config: jenkinsConfig });
+  const openShift = useOpenShift({ state, actions, config: openShiftConfig });
 
   // Setup screen visibility — shown when startup mode is "setup"
   const [setupVisible, setSetupVisible] = createSignal(props.startupMode.kind === "setup");
@@ -142,9 +193,8 @@ function AppContent(props: Readonly<AppContentProps>) {
 
   // Backfill missing config keys for the active repo and refresh display labels on repo switches.
   createEffect(() => {
-    const path = activeRepoPath();
-    backfillRepoConfig(path);
-    setRepoDisplayConfig(getRepoDisplayConfig(path));
+    activeRepoPath();
+    reloadRuntimeConfig();
   });
 
   // Auto-persist theme changes (confirmed selections and reverts from ThemeDialog)
@@ -274,6 +324,7 @@ function AppContent(props: Readonly<AppContentProps>) {
   const refreshActiveProvider = async () => {
     if (state.activeProviderView() === "github-actions") await gitHubCI.refresh();
     else if (state.activeProviderView() === "jenkins") await jenkinsCI.refresh();
+    else if (state.activeProviderView() === "openshift") await openShift.refresh();
   };
 
   const knownRepoInfos = () => getKnownRepoInfos();
@@ -297,7 +348,7 @@ function AppContent(props: Readonly<AppContentProps>) {
       hasMore: state.hasMore(),
       lastFetchTime: state.lastFetchTime(),
       activeProviderView: state.activeProviderView(),
-      graphBadges: new Map(state.graphBadges()),
+      graphBadges: new Map([[state.activeProviderView(), new Map(state.graphBadges())]]),
       graphScrollTop: graphScrollboxRef?.scrollTop ?? 0,
     });
   };
@@ -318,7 +369,7 @@ function AppContent(props: Readonly<AppContentProps>) {
       actions.setHasMore(snapshot.hasMore);
       actions.setLastFetchTime(snapshot.lastFetchTime);
       actions.setActiveProviderView(snapshot.activeProviderView);
-      actions.setGraphBadges(new Map(snapshot.graphBadges));
+      for (const [view, badges] of snapshot.graphBadges) actions.setGraphBadges(view, new Map(badges));
       actions.setLoading(false);
       actions.setFetching(false);
       actions.setDetailLoading(false);
@@ -349,7 +400,7 @@ function AppContent(props: Readonly<AppContentProps>) {
     actions.setPathFilter(null);
     actions.setPathMatchSet(null);
     actions.setError(null);
-    actions.setProviderStatus(providerIdle());
+    actions.setProviderStatus(state.activeProviderView(), providerIdle());
     actions.setCommitDetail(null);
     actions.setUncommittedDetail(null);
     actions.setDetailCursorIndex(0);
@@ -373,6 +424,7 @@ function AppContent(props: Readonly<AppContentProps>) {
   };
 
   const handleReloadAll = async () => {
+    reloadRuntimeConfig();
     await loadData(undefined, undefined, false, true);
     await refreshActiveProvider();
   };
@@ -402,7 +454,12 @@ function AppContent(props: Readonly<AppContentProps>) {
     actions,
     getIsJumpNavigation: () => isJumpNavigation,
     detailNavRef,
-    getCommitData: state.activeProviderView() === "jenkins" ? jenkinsCI.getCommitData : gitHubCI.getCommitData,
+    getCommitData:
+      state.activeProviderView() === "jenkins"
+        ? jenkinsCI.getCommitData
+        : state.activeProviderView() === "openshift"
+          ? openShift.getCommitData
+          : gitHubCI.getCommitData,
     getProviderLoading: () => state.providerStatus().kind === "loading",
   });
 
@@ -504,7 +561,7 @@ function AppContent(props: Readonly<AppContentProps>) {
         break;
       case "clear":
         actions.setError(null);
-        actions.setProviderStatus(providerIdle());
+        actions.setProviderStatus(state.activeProviderView(), providerIdle());
         clearDebugEvents();
         break;
       case "f":
@@ -610,13 +667,8 @@ function AppContent(props: Readonly<AppContentProps>) {
   // githubActionsFg is the dark badge text color — NOT suitable as a global accent.
   const providerTheme = createMemo(() => {
     const base = themeState.theme();
-    if (state.activeProviderView() === "github-actions") {
-      return { ...base, accent: base.githubActionsBg };
-    }
-    if (state.activeProviderView() === "jenkins") {
-      return { ...base, accent: base.jenkinsBg };
-    }
-    return base;
+    const view = state.activeProviderView();
+    return view === "git" ? base : { ...base, accent: providerAccent(base, view) };
   });
 
   return (
@@ -747,6 +799,10 @@ function AppContent(props: Readonly<AppContentProps>) {
                         jenkinsFetchCommitData={jenkinsCI.fetchCommitDataForSHA}
                         onOpenJenkinsJobLog={handleOpenJenkinsJobLog}
                         jenkinsProviderStatus={state.providerStatus()}
+                        openshiftGetCommitData={openShift.getCommitData}
+                        openshiftFetchCommitData={openShift.fetchCommitDataForSHA}
+                        openshiftFetchResourceDetails={openShift.fetchResourceDetails}
+                        openshiftProviderStatus={state.providerStatus()}
                       />
                     </box>
                   </Show>
@@ -769,6 +825,8 @@ function AppContent(props: Readonly<AppContentProps>) {
                     onGithubConfigChange={setGithubConfig}
                     jenkinsConfig={jenkinsConfig()}
                     onJenkinsConfigChange={setJenkinsConfig}
+                    openshiftConfig={openShiftConfig()}
+                    onOpenShiftConfigChange={setOpenShiftConfig}
                     onRepoDisplayConfigChange={setRepoDisplayConfig}
                   />
                 </Show>
@@ -821,6 +879,10 @@ function AppContent(props: Readonly<AppContentProps>) {
                     jenkinsFetchCommitData={jenkinsCI.fetchCommitDataForSHA}
                     onOpenJenkinsJobLog={handleOpenJenkinsJobLog}
                     jenkinsProviderStatus={state.providerStatus()}
+                    openshiftGetCommitData={openShift.getCommitData}
+                    openshiftFetchCommitData={openShift.fetchCommitDataForSHA}
+                    openshiftFetchResourceDetails={openShift.fetchResourceDetails}
+                    openshiftProviderStatus={state.providerStatus()}
                   />
                 </Show>
                 {/* Job log dialog */}

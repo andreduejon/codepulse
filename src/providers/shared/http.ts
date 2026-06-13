@@ -7,15 +7,6 @@ export interface FetchWithRetryOptions {
   timeoutMessage: string;
 }
 
-function sourceForUrl(url: string): DebugEventSource {
-  try {
-    const host = new URL(url).hostname.toLowerCase();
-    if (host.includes("github")) return "GitHub";
-    if (host.includes("jenkins")) return "Jenkins";
-  } catch {}
-  return "error";
-}
-
 function requestMessage(url: string, init: RequestInit): string {
   const method = init.method ?? "GET";
   try {
@@ -70,10 +61,10 @@ export async function fetchWithRetry(
   url: string,
   init: RequestInit = {},
   opts: FetchWithRetryOptions,
+  source: DebugEventSource = "error",
 ): Promise<Response> {
   let lastError: unknown = null;
   const started = Date.now();
-  const source = sourceForUrl(url);
   const message = requestMessage(url, init);
   for (let attempt = 1; attempt <= opts.attempts; attempt++) {
     try {

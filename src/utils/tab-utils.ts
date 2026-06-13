@@ -1,7 +1,7 @@
 import { isUncommittedHash } from "../constants";
 import type { DetailTab } from "../context/state";
 import type { Commit, CommitDetail, UncommittedDetail } from "../git/types";
-import type { ProviderView } from "../providers/provider";
+import { isProviderDetailView, type ProviderView } from "../providers/provider";
 
 interface TabAvailabilityInput {
   commit: Commit | null;
@@ -44,16 +44,10 @@ export function getAvailableTabs(input: TabAvailabilityInput): DetailTab[] {
     ];
   }
 
-  const providerTabs: Record<string, DetailTab> = {
-    "github-actions": "github-actions",
-    jenkins: "jenkins",
-    openshift: "openshift",
-  };
-
   const tabs: DetailTab[] = [];
 
-  if (activeProviderView && providerTabs[activeProviderView]) {
-    tabs.push(providerTabs[activeProviderView]);
+  if (activeProviderView && isProviderDetailView(activeProviderView)) {
+    tabs.push(activeProviderView);
   } else if (commitDetail?.files.length) {
     tabs.push("files");
   }

@@ -50,7 +50,7 @@ const JENKINS_HTTP_POLICY = {
 };
 
 async function fetchWithRetry(url: string, init: RequestInit = {}): Promise<Response> {
-  return fetchWithRetryPolicy(url, init, JENKINS_HTTP_POLICY);
+  return fetchWithRetryPolicy(url, init, JENKINS_HTTP_POLICY, "Jenkins");
 }
 
 function treeApiSuffix(tree: string): string {

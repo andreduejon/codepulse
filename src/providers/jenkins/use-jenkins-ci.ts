@@ -86,7 +86,7 @@ export function useJenkinsCI(opts: {
       data.resolved = resolvedShas.has(sha);
       commitDataCache.set(sha, data);
     }
-    actions.setGraphBadges(buildJenkinsGraphBadges(allRuns));
+    actions.setGraphBadges("jenkins", buildJenkinsGraphBadges(allRuns));
     setCommitDataVersion(v => v + 1);
   }
 
@@ -120,27 +120,31 @@ export function useJenkinsCI(opts: {
     if (!isAvailable()) {
       if (showStatus) {
         if (config.jobs.length === 0)
-          actions.setProviderStatus(providerUnavailable("Jenkins unavailable: no jobs configured"));
+          actions.setProviderStatus("jenkins", providerUnavailable("Jenkins unavailable: no jobs configured"));
         else if (!config.username?.trim())
-          actions.setProviderStatus(providerUnavailable("Jenkins unavailable: username not configured"));
-        else actions.setProviderStatus(providerUnavailable(`Jenkins unavailable: missing ${config.tokenEnvVar}`));
+          actions.setProviderStatus("jenkins", providerUnavailable("Jenkins unavailable: username not configured"));
+        else
+          actions.setProviderStatus(
+            "jenkins",
+            providerUnavailable(`Jenkins unavailable: missing ${config.tokenEnvVar}`),
+          );
       }
       return;
     }
     fetchInFlight = true;
-    if (showStatus) actions.setProviderStatus(providerLoading());
+    if (showStatus) actions.setProviderStatus("jenkins", providerLoading());
     try {
       const target = shas ?? collectTopSHAs(state.graphRows(), INITIAL_SHA_LIMIT).filter(sha => !queriedSHAs.has(sha));
       if (target.length === 0) {
-        if (showStatus) actions.setProviderStatus(providerIdle());
+        if (showStatus) actions.setProviderStatus("jenkins", providerIdle());
         return;
       }
       const { firstError } = await fetchForSHAs(target, "shallow", signal);
       hasFetchedOnce = true;
       lastFetchedAt = Date.now();
       if (!firstError) actions.setProviderLastSuccessfulRefresh("jenkins", new Date());
-      if (firstError) actions.setProviderStatus(providerError(firstError));
-      else actions.setProviderStatus(providerIdle());
+      if (firstError) actions.setProviderStatus("jenkins", providerError(firstError));
+      else actions.setProviderStatus("jenkins", providerIdle());
     } finally {
       fetchInFlight = false;
     }
@@ -152,13 +156,13 @@ export function useJenkinsCI(opts: {
     const target = collectTopSHAs(state.graphRows(), INITIAL_SHA_LIMIT);
     if (target.length === 0) return;
     fetchInFlight = true;
-    if (showStatus) actions.setProviderStatus(providerLoading());
+    if (showStatus) actions.setProviderStatus("jenkins", providerLoading());
     try {
       const { firstError } = await fetchForSHAs(target, "shallow", signal);
       lastFetchedAt = Date.now();
       if (!firstError) actions.setProviderLastSuccessfulRefresh("jenkins", new Date());
-      if (firstError) actions.setProviderStatus(providerError(firstError));
-      else actions.setProviderStatus(providerIdle());
+      if (firstError) actions.setProviderStatus("jenkins", providerError(firstError));
+      else actions.setProviderStatus("jenkins", providerIdle());
     } finally {
       fetchInFlight = false;
     }

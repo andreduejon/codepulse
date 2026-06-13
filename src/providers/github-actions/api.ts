@@ -166,7 +166,7 @@ function describeHttpError(res: Response, fallback: string): string {
 }
 
 async function fetchWithRetry(url: string, init: RequestInit = {}): Promise<Response> {
-  return fetchWithRetryPolicy(url, init, GITHUB_HTTP_POLICY);
+  return fetchWithRetryPolicy(url, init, GITHUB_HTTP_POLICY, "GitHub");
 }
 
 // ── Status mapping ────────────────────────────────────────────────────────

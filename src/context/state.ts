@@ -181,9 +181,9 @@ export interface AppActions {
   setAncestrySet: (set: Set<string> | null) => void;
   // ── Provider / CI ────────────────────────────────────────────────────
   setActiveProviderView: (view: ProviderView) => void;
-  setGraphBadges: (map: Map<string, GraphBadge>) => void;
+  setGraphBadges: (view: ProviderView, map: Map<string, GraphBadge>) => void;
   /** Set the CI provider status. */
-  setProviderStatus: (status: ProviderStatus) => void;
+  setProviderStatus: (view: ProviderView, status: ProviderStatus) => void;
   /** Record a successful data refresh for a CI provider. */
   setProviderLastSuccessfulRefresh: (view: ProviderView, time: Date) => void;
   /** Advance to the next available provider view (Tab key cycling). */
@@ -250,8 +250,12 @@ export function createAppState(
 
   // ── Provider / CI ─────────────────────────────────────────────────
   const [activeProviderView, setActiveProviderView] = createSignal<ProviderView>("git");
-  const [graphBadges, setGraphBadges] = createSignal<Map<string, GraphBadge>>(new Map());
-  const [providerStatus, setProviderStatus] = createSignal<ProviderStatus>(providerIdle());
+  const [providerGraphBadges, setProviderGraphBadges] = createSignal<Map<ProviderView, Map<string, GraphBadge>>>(
+    new Map(),
+  );
+  const [providerStatusMap, setProviderStatusMap] = createSignal<Map<ProviderView, ProviderStatus>>(new Map());
+  const graphBadges = createMemo(() => providerGraphBadges().get(activeProviderView()) ?? new Map());
+  const providerStatus = createMemo(() => providerStatusMap().get(activeProviderView()) ?? providerIdle());
   const [providerLastSuccessfulRefresh, setProviderLastSuccessfulRefreshMap] = createSignal<Map<ProviderView, Date>>(
     new Map(),
   );
@@ -428,8 +432,20 @@ export function createAppState(
     setPathFilter,
     setPathMatchSet,
     setActiveProviderView,
-    setGraphBadges,
-    setProviderStatus,
+    setGraphBadges: (view, map) => {
+      setProviderGraphBadges(prev => {
+        const next = new Map(prev);
+        next.set(view, map);
+        return next;
+      });
+    },
+    setProviderStatus: (view, status) => {
+      setProviderStatusMap(prev => {
+        const next = new Map(prev);
+        next.set(view, status);
+        return next;
+      });
+    },
     setProviderLastSuccessfulRefresh: (view, time) => {
       setProviderLastSuccessfulRefreshMap(prev => {
         const next = new Map(prev);

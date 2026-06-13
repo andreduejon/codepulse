@@ -12,6 +12,7 @@ import { useStashState } from "../hooks/use-stash-state";
 import { useT } from "../hooks/use-t";
 import { ActionsDetailTab } from "../providers/github-actions/detail-tab";
 import { JenkinsDetailTab } from "../providers/jenkins/detail-tab";
+import { OpenShiftDetailTab } from "../providers/openshift/detail-tab";
 import { formatDate } from "../utils/date";
 import { isCursored as _isCursored, itemHighlightBg as _itemHighlightBg } from "../utils/detail-cursor";
 import Badge from "./badge";
@@ -909,6 +910,28 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 setDetailCursorIndex={actions.setDetailCursorIndex}
                 onOpenJobLog={props.onOpenJenkinsJobLog}
               />
+            </Show>
+            <Show when={activeTab() === "openshift" && props.openshiftGetCommitData}>
+              {getCommitData => (
+                <OpenShiftDetailTab
+                  sha={c().hash}
+                  getCommitData={getCommitData()}
+                  fetchCommitData={props.openshiftFetchCommitData}
+                  fetchResourceDetails={props.openshiftFetchResourceDetails}
+                  unavailableReason={
+                    props.openshiftProviderStatus?.kind === "error" ||
+                    props.openshiftProviderStatus?.kind === "unavailable"
+                      ? props.openshiftProviderStatus.message
+                      : null
+                  }
+                  loading={props.openshiftProviderStatus?.kind === "loading"}
+                  navRef={props.navRef}
+                  detailCursorIndex={() => state.detailCursorIndex()}
+                  detailFocused={() => state.detailFocused()}
+                  setDetailCursorAction={actions.setDetailCursorAction}
+                  setDetailCursorIndex={actions.setDetailCursorIndex}
+                />
+              )}
             </Show>
           </>
         )}

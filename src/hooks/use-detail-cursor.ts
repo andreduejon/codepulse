@@ -18,6 +18,7 @@ import type { DetailNavRef, DetailViewProps } from "../components/detail-types";
 import { isUncommittedHash } from "../constants";
 import type { createAppState } from "../context/state";
 import type { Commit, CommitDetail, FileChange, GraphRow } from "../git/types";
+import { isProviderDetailView } from "../providers/provider";
 import { buildDiffTarget } from "../utils/diff-target";
 import type { FileTreeRow } from "../utils/file-tree";
 import type { StashState } from "./use-stash-state";
@@ -185,7 +186,7 @@ export function useDetailCursor({
   // Skip this effect on the files tab to avoid resetting the cursor to 0 based
   // on detail.tsx's empty interactiveItems() (which has no "files" branch).
   createEffect(() => {
-    if (activeTab() === "files" || activeTab() === "github-actions" || activeTab() === "jenkins") return;
+    if (activeTab() === "files" || isProviderDetailView(activeTab())) return;
     const items = interactiveItems();
     const count = items.length;
 

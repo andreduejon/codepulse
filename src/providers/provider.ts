@@ -9,8 +9,31 @@
 
 import { createSignal } from "solid-js";
 
+/**
+ * Canonical provider order used everywhere providers are cycled or displayed.
+ * Mental model: source → CI → runtime → scan/quality.
+ * Future providers should extend this order as:
+ * Git → GitHub Actions → Jenkins → OpenShift → Snyk → SonarQube.
+ */
+export const PROVIDER_ORDER = ["git", "github-actions", "jenkins", "openshift"] as const;
+
 /** Provider view identifiers — Tab cycles through these. */
-export type ProviderView = "git" | "github-actions" | "jenkins" | "openshift";
+export type ProviderView = (typeof PROVIDER_ORDER)[number];
+export type ProviderDetailView = Exclude<ProviderView, "git">;
+
+export interface ProviderMetadata {
+  displayName: string;
+  /** Short label for detail panel tab. Defaults to displayName. */
+  detailLabel?: string;
+  category: "source" | "ci" | "runtime" | "scan-quality";
+}
+
+export const PROVIDER_METADATA: Record<ProviderView, ProviderMetadata> = {
+  git: { displayName: "Git", category: "source" },
+  "github-actions": { displayName: "GitHub Actions", detailLabel: "Actions", category: "ci" },
+  jenkins: { displayName: "Jenkins", category: "ci" },
+  openshift: { displayName: "OpenShift", category: "runtime" },
+};
 
 /**
  * Minimal badge for a single commit in the graph view.
@@ -81,11 +104,8 @@ export function getProviderRegistryVersion(): number {
  * the user tabs to it, instead of being silently excluded from Tab cycling.
  */
 export function getEnabledProviderViews(): ProviderView[] {
-  const views: ProviderView[] = ["git"];
-  for (const p of providerRegistry) {
-    views.push(p.id);
-  }
-  return views;
+  const registered = new Set(providerRegistry.map(p => p.id));
+  return PROVIDER_ORDER.filter(view => view === "git" || registered.has(view));
 }
 
 /**
@@ -105,6 +125,19 @@ export function getProvider(id: ProviderView): ProviderRegistration | undefined 
 
 /** Returns the display name of the provider. */
 export function providerDisplayName(view: ProviderView): string {
-  if (view === "git") return "Git";
-  return getProvider(view)?.displayName ?? view;
+  return PROVIDER_METADATA[view]?.displayName ?? getProvider(view)?.displayName ?? view;
+}
+
+export function isProviderView(view: string): view is ProviderView {
+  return PROVIDER_ORDER.includes(view as ProviderView);
+}
+
+export function isProviderDetailView(view: string): view is ProviderDetailView {
+  return isProviderView(view) && view !== "git";
+}
+
+export function providerDetailTab(view: ProviderView): { id: ProviderDetailView; label: string } | null {
+  if (!isProviderDetailView(view)) return null;
+  const metadata = PROVIDER_METADATA[view];
+  return { id: view, label: metadata.detailLabel ?? metadata.displayName };
 }

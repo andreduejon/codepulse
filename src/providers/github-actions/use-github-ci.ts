@@ -233,7 +233,7 @@ export function useGitHubCI(opts: {
     for (const [sha, badge] of newBadges) {
       currentBadges.set(sha, badge);
     }
-    actions.setGraphBadges(currentBadges);
+    actions.setGraphBadges("github-actions", currentBadges);
 
     return { firstError };
   }
@@ -258,13 +258,16 @@ export function useGitHubCI(opts: {
         const repo = cachedGitHubRepo();
         const token = getGitHubToken(config.tokenEnvVar);
         if (!config.enabled) {
-          actions.setProviderStatus(providerUnavailable("CI provider disabled"));
+          actions.setProviderStatus("github-actions", providerUnavailable("CI provider disabled"));
         } else if (!parsedGitHubRepo()) {
-          actions.setProviderStatus(providerUnavailable("No GitHub remote detected"));
+          actions.setProviderStatus("github-actions", providerUnavailable("No GitHub remote detected"));
         } else if (!repo) {
-          actions.setProviderStatus(providerUnavailable(`Untrusted GitHub host: ${parsedGitHubRepo()?.hostname}`));
+          actions.setProviderStatus(
+            "github-actions",
+            providerUnavailable(`Untrusted GitHub host: ${parsedGitHubRepo()?.hostname}`),
+          );
         } else if (!token) {
-          actions.setProviderStatus(providerUnavailable(`Token not found: $${config.tokenEnvVar}`));
+          actions.setProviderStatus("github-actions", providerUnavailable(`Token not found: $${config.tokenEnvVar}`));
         }
       }
       return;
@@ -283,20 +286,23 @@ export function useGitHubCI(opts: {
     for (const sha of unqueried) queriedSHAs.add(sha);
 
     fetchInFlight = true;
-    if (showStatus) actions.setProviderStatus(providerLoading());
+    if (showStatus) actions.setProviderStatus("github-actions", providerLoading());
     try {
       const { firstError } = await fetchForSHAs(unqueried, signal);
       if (!firstError) actions.setProviderLastSuccessfulRefresh("github-actions", new Date());
       if (showStatus) {
-        actions.setProviderStatus(firstError ? providerError(`CI fetch error: ${firstError}`) : providerIdle());
+        actions.setProviderStatus(
+          "github-actions",
+          firstError ? providerError(`CI fetch error: ${firstError}`) : providerIdle(),
+        );
       } else if (!firstError && state.providerStatus().kind === "error") {
-        actions.setProviderStatus(providerIdle());
+        actions.setProviderStatus("github-actions", providerIdle());
       }
     } catch (err) {
       if (signal?.aborted) return;
       const msg = err instanceof Error ? err.message : String(err);
       console.error("[github-actions] initial fetch failed:", err);
-      if (showStatus) actions.setProviderStatus(providerError(`CI fetch error: ${msg}`));
+      if (showStatus) actions.setProviderStatus("github-actions", providerError(`CI fetch error: ${msg}`));
       // On error, un-mark so a future retry can re-query these SHAs
       for (const sha of unqueried) queriedSHAs.delete(sha);
     } finally {
@@ -319,7 +325,8 @@ export function useGitHubCI(opts: {
     try {
       const { firstError } = await fetchForSHAs(runningSHAs, signal);
       if (!firstError) actions.setProviderLastSuccessfulRefresh("github-actions", new Date());
-      if (!firstError && state.providerStatus().kind === "error") actions.setProviderStatus(providerIdle());
+      if (!firstError && state.providerStatus().kind === "error")
+        actions.setProviderStatus("github-actions", providerIdle());
       if (firstError) console.error("[github-actions] refresh returned error:", firstError);
     } catch (err) {
       if (signal?.aborted) return;
@@ -338,8 +345,8 @@ export function useGitHubCI(opts: {
     commitDataCache = new Map();
     jobsCache.clear();
     setCommitDataVersion(v => v + 1);
-    actions.setGraphBadges(new Map());
-    actions.setProviderStatus(providerIdle());
+    actions.setGraphBadges("github-actions", new Map());
+    actions.setProviderStatus("github-actions", providerIdle());
     await doInitialFetch(undefined, undefined, true);
   }
 
@@ -471,10 +478,10 @@ export function useGitHubCI(opts: {
 
     const { jobs, error } = await fetchRunJobs(repo, token, run.id);
     if (error) {
-      actions.setProviderStatus(providerError(`CI jobs error: ${error}`));
+      actions.setProviderStatus("github-actions", providerError(`CI jobs error: ${error}`));
       return { jobs, error };
     }
-    actions.setProviderStatus(providerIdle());
+    actions.setProviderStatus("github-actions", providerIdle());
     if (run.status === "completed") {
       jobsCache.set(run.id, jobs);
     }

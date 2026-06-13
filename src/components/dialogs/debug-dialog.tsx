@@ -4,6 +4,7 @@ import { For } from "solid-js";
 import { getDebugEvents } from "../../debug/events";
 import { formatDebugDuration, formatDebugMessage, formatDebugStatus, formatDebugTimestamp } from "../../debug/format";
 import { useT } from "../../hooks/use-t";
+import { debugSourceColor } from "../../providers/colors";
 import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
 export default function DebugDialog(props: Readonly<{ onClose: () => void; gitColor: string }>) {
@@ -15,18 +16,8 @@ export default function DebugDialog(props: Readonly<{ onClose: () => void; gitCo
   const dialogHeight = () => Math.min(Math.floor(dimensions().height * 0.7), dimensions().height - 8);
   let scrollboxRef: ScrollBoxRenderable | undefined;
 
-  const sourceColor = (source: ReturnType<typeof events>[number]["source"]) => {
-    switch (source) {
-      case "Git":
-        return props.gitColor;
-      case "GitHub":
-        return t().githubActionsBg;
-      case "Jenkins":
-        return t().jenkinsBg;
-      case "error":
-        return t().error;
-    }
-  };
+  const sourceColor = (source: ReturnType<typeof events>[number]["source"]) =>
+    debugSourceColor(t(), source, props.gitColor);
 
   const messageColor = (source: ReturnType<typeof events>[number]["source"]) =>
     source === "error" ? t().error : t().foreground;

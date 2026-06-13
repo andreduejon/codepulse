@@ -51,6 +51,20 @@ interface MenuDialogProps {
     graphBuildLimit: 10 | 20 | 50;
     jobs: { label?: string; url: string }[];
   }) => void;
+  openshiftConfig?: {
+    enabled: boolean;
+    serverUrl: string;
+    tokenEnvVar: string;
+    namespaces: string[];
+    commitShaAnnotation: string;
+  };
+  onOpenShiftConfigChange?: (cfg: {
+    enabled: boolean;
+    serverUrl: string;
+    tokenEnvVar: string;
+    namespaces: string[];
+    commitShaAnnotation: string;
+  }) => void;
   onRepoDisplayConfigChange?: (cfg: { group?: string; appName?: string }) => void;
 }
 
@@ -107,6 +121,8 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     onGithubConfigChange: props.onGithubConfigChange,
     jenkinsConfig: () => props.jenkinsConfig,
     onJenkinsConfigChange: props.onJenkinsConfigChange,
+    openshiftConfig: () => props.openshiftConfig,
+    onOpenShiftConfigChange: props.onOpenShiftConfigChange,
     onRepoDisplayConfigChange: props.onRepoDisplayConfigChange,
   });
 
@@ -115,11 +131,11 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   const bannerOffset = useBannerScroll(bannerOverflow);
 
   /** Returns the visible slice of a copyable value, applying banner offset when selected. */
-  const copyableBannerText = (text: string, isSelected: boolean): string => {
-    if (text.length <= COPYABLE_VISIBLE_WIDTH) return text;
+  const copyableBannerText = (text: string, isSelected: boolean, width = COPYABLE_VISIBLE_WIDTH): string => {
+    if (text.length <= width) return text;
     if (!isSelected) return text; // let the TUI truncate when not selected
     const off = bannerOffset();
-    return text.substring(off, off + COPYABLE_VISIBLE_WIDTH);
+    return text.substring(off, off + width);
   };
 
   const forgetSelected = () => {
@@ -376,6 +392,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   const renderCopyable = (item: Extract<SettingItem, { kind: "copyable" }>, idx: number) => {
     const isSel = () => selectedItemIndex() === idx;
     const isCopied = () => copiedLabel() === item.label;
+    const textWidth = () => Math.max(1, COPYABLE_VISIBLE_WIDTH - (item.visualPrefix?.length ?? 0));
     return (
       <box
         ref={(el: Renderable) => {
@@ -386,8 +403,13 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
         paddingX={4}
         backgroundColor={isSel() ? t().backgroundElement : undefined}
       >
+        {item.visualPrefix ? (
+          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+            {item.visualPrefix}
+          </text>
+        ) : null}
         <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={isSel() ? t().accent : t().foreground}>
-          {copyableBannerText(item.get(), isSel())}
+          {copyableBannerText(item.get(), isSel(), textWidth())}
         </text>
         {isCopied() ? (
           <text flexShrink={0} wrapMode="none" bg={t().primary} fg={t().background}>
