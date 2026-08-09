@@ -1,5 +1,5 @@
 import type { Renderable } from "@opentui/core";
-import { createEffect, createMemo, createSignal, For, Show, untrack } from "solid-js";
+import { createEffect, createMemo, createSignal, For, onCleanup, Show, untrack } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
 import { useT } from "../../hooks/use-t";
 import { type StatusCategory, statusColor, statusIcon } from "../shared/status";
@@ -15,7 +15,7 @@ export interface OpenShiftDetailTabProps {
   sha: string;
   getCommitData: (sha: string) => OpenShiftCommitData | null;
   fetchCommitData?: (sha: string) => Promise<void>;
-  fetchResourceDetails?: (resource: OpenShiftResource) => Promise<OpenShiftResourceDetailResult>;
+  fetchResourceDetails?: (resource: OpenShiftResource, signal?: AbortSignal) => Promise<OpenShiftResourceDetailResult>;
   unavailableReason?: string | null;
   loading?: boolean;
   navRef?: DetailNavRef;
@@ -25,20 +25,15 @@ export interface OpenShiftDetailTabProps {
   setDetailCursorIndex: (idx: number) => void;
 }
 
-type FlatItem = { resource: OpenShiftResource; flatIndex: number };
+type NamespaceData = OpenShiftCommitData["namespaces"][number];
+type FlatItem = { kind: "namespace"; namespace: string } | { kind: "resource"; resource: OpenShiftResource };
+type ResourceListKey = keyof Pick<NamespaceData, "deployments" | "deploymentConfigs" | "pods" | "builds">;
 
-const RESOURCE_GROUPS: {
-  label: string;
-  key: keyof Pick<
-    OpenShiftCommitData["namespaces"][number],
-    "builds" | "imageStreamTags" | "deployments" | "deploymentConfigs" | "pods"
-  >;
-}[] = [
-  { label: "Builds", key: "builds" },
-  { label: "ImageStreamTags", key: "imageStreamTags" },
+const RESOURCE_GROUPS: { label: string; key: ResourceListKey }[] = [
   { label: "Deployments", key: "deployments" },
   { label: "DeploymentConfigs", key: "deploymentConfigs" },
   { label: "Pods", key: "pods" },
+  { label: "Builds", key: "builds" },
 ];
 
 function statusCategory(status: OpenShiftStatus): StatusCategory {
@@ -52,64 +47,101 @@ function statusMark(status: OpenShiftStatus) {
   return statusIcon(statusCategory(status));
 }
 
-function resourceLabel(resource: OpenShiftResource) {
-  return `${resource.kind} ${resource.name}`;
+function namespaceResources(ns: NamespaceData): OpenShiftResource[] {
+  return [...ns.imageStreamTags, ...ns.deployments, ...ns.deploymentConfigs, ...ns.pods, ...ns.builds];
+}
+
+function imageStreamParts(resource: OpenShiftResource): { stream: string; tag: string } {
+  const [stream, tag] = resource.name.split(":");
+  return { stream: stream || resource.name, tag: tag || "latest" };
+}
+
+function groupedImageStreams(resources: OpenShiftResource[]): { stream: string; tags: OpenShiftResource[] }[] {
+  const groups = new Map<string, OpenShiftResource[]>();
+  for (const resource of resources) {
+    const { stream } = imageStreamParts(resource);
+    groups.set(stream, [...(groups.get(stream) ?? []), resource]);
+  }
+  return [...groups.entries()]
+    .map(([stream, tags]) => ({
+      stream,
+      tags: tags.sort((a, b) => imageStreamParts(a).tag.localeCompare(imageStreamParts(b).tag)),
+    }))
+    .sort((a, b) => a.stream.localeCompare(b.stream));
+}
+
+function compactResourceName(resource: OpenShiftResource): string {
+  if (resource.kind === "ImageStreamTag") return imageStreamParts(resource).tag;
+  return resource.name;
+}
+
+function resourcesForFlatItems(ns: NamespaceData): OpenShiftResource[] {
+  return [
+    ...RESOURCE_GROUPS.flatMap(group => ns[group.key]),
+    ...groupedImageStreams(ns.imageStreamTags).flatMap(group => group.tags),
+  ];
 }
 
 export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
   const t = useT();
   const data = () => props.getCommitData(props.sha);
   const [requestedSha, setRequestedSha] = createSignal<string | null>(null);
-  const [expandedResources, setExpandedResources] = createSignal<Set<string>>(new Set());
-  const [loadingResources, setLoadingResources] = createSignal<Set<string>>(new Set());
-  const [loadedResources, setLoadedResources] = createSignal<Set<string>>(new Set());
-  const [detailGroups, setDetailGroups] = createSignal<Map<string, OpenShiftDetailGroup[]>>(new Map());
-  const [detailUnavailable, setDetailUnavailable] = createSignal<Set<string>>(new Set());
+  const [expandedNamespaces, setExpandedNamespaces] = createSignal<Set<string>>(new Set());
+  const [selectedResource, setSelectedResource] = createSignal<OpenShiftResource | null>(null);
+  const [detailGroups, setDetailGroups] = createSignal<OpenShiftDetailGroup[]>([]);
+  const [detailLoading, setDetailLoading] = createSignal(false);
+  const [detailError, setDetailError] = createSignal<string | null>(null);
+  let detailRequest: AbortController | null = null;
   const itemRefs: Renderable[] = [];
 
-  const resources = createMemo(
-    () => data()?.namespaces.flatMap(ns => RESOURCE_GROUPS.flatMap(group => ns[group.key])) ?? [],
+  const namespaces = createMemo(() => data()?.namespaces ?? []);
+  const resources = createMemo(() => namespaces().flatMap(namespaceResources));
+
+  const flatItems = createMemo<FlatItem[]>(() =>
+    namespaces().flatMap(ns => [
+      { kind: "namespace" as const, namespace: ns.namespace },
+      ...(expandedNamespaces().has(ns.namespace)
+        ? resourcesForFlatItems(ns).map(resource => ({ kind: "resource" as const, resource }))
+        : []),
+    ]),
   );
 
-  const flatItems = createMemo<FlatItem[]>(() => resources().map((resource, idx) => ({ resource, flatIndex: idx })));
+  const flatIndexForNamespace = (namespace: string) =>
+    flatItems().findIndex(item => item.kind === "namespace" && item.namespace === namespace);
 
-  const resourceIndex = (resource: OpenShiftResource) =>
-    flatItems().findIndex(item => item.resource.id === resource.id);
+  const flatIndexForResource = (resource: OpenShiftResource) =>
+    flatItems().findIndex(item => item.kind === "resource" && item.resource.id === resource.id);
 
-  const toggleResource = (resource: OpenShiftResource) => {
-    const opening = !expandedResources().has(resource.id);
-    setExpandedResources(prev => {
+  const openResource = (resource: OpenShiftResource) => {
+    detailRequest?.abort();
+    setSelectedResource(resource);
+    setDetailGroups([]);
+    setDetailError(null);
+    if (!props.fetchResourceDetails) return;
+    const request = new AbortController();
+    detailRequest = request;
+    setDetailLoading(true);
+    void props.fetchResourceDetails(resource, request.signal).then(
+      result => {
+        if (request.signal.aborted || detailRequest !== request) return;
+        setDetailGroups(result.groups);
+        setDetailError(result.error);
+        setDetailLoading(false);
+      },
+      error => {
+        if (request.signal.aborted || detailRequest !== request) return;
+        setDetailError(error instanceof Error ? error.message : String(error));
+        setDetailLoading(false);
+      },
+    );
+  };
+
+  const toggleNamespace = (namespace: string) => {
+    setExpandedNamespaces(prev => {
       const next = new Set(prev);
-      if (opening) next.add(resource.id);
-      else next.delete(resource.id);
+      if (next.has(namespace)) next.delete(namespace);
+      else next.add(namespace);
       return next;
-    });
-    if (
-      !opening ||
-      loadedResources().has(resource.id) ||
-      loadingResources().has(resource.id) ||
-      !props.fetchResourceDetails
-    )
-      return;
-    setLoadingResources(prev => new Set([...prev, resource.id]));
-    props.fetchResourceDetails(resource).then(({ groups, error }) => {
-      setDetailGroups(prev => {
-        const next = new Map(prev);
-        next.set(resource.id, groups);
-        return next;
-      });
-      setDetailUnavailable(prev => {
-        const next = new Set(prev);
-        if (error && groups.length === 0) next.add(resource.id);
-        else next.delete(resource.id);
-        return next;
-      });
-      setLoadingResources(prev => {
-        const next = new Set(prev);
-        next.delete(resource.id);
-        return next;
-      });
-      setLoadedResources(prev => new Set([...prev, resource.id]));
     });
   };
 
@@ -120,13 +152,18 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
     void props.fetchCommitData?.(sha);
   });
 
+  onCleanup(() => detailRequest?.abort());
+
   createEffect(() => {
     props.sha;
-    setExpandedResources(new Set<string>());
-    setLoadingResources(new Set<string>());
-    setLoadedResources(new Set<string>());
-    setDetailGroups(new Map<string, OpenShiftDetailGroup[]>());
-    setDetailUnavailable(new Set<string>());
+    detailRequest?.abort();
+    detailRequest = null;
+    setSelectedResource(null);
+    setDetailGroups([]);
+    setDetailError(null);
+    setDetailLoading(false);
+    const names = namespaces().map(ns => ns.namespace);
+    setExpandedNamespaces(new Set(names));
     props.setDetailCursorIndex(0);
   });
 
@@ -144,20 +181,21 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
     props.navRef.activateCurrentItem = () => {
       const item = flatItems()[props.detailCursorIndex()];
       if (!item) return false;
-      toggleResource(item.resource);
+      if (item.kind === "namespace") toggleNamespace(item.namespace);
+      else openResource(item.resource);
       return false;
     };
   });
 
   createEffect(() => {
-    const idx = props.detailCursorIndex();
-    const item = flatItems()[idx];
+    const item = flatItems()[props.detailCursorIndex()];
     if (!props.detailFocused() || !item) {
       props.setDetailCursorAction(null);
       return;
     }
-    if (loadingResources().has(item.resource.id)) props.setDetailCursorAction("loading");
-    else props.setDetailCursorAction(expandedResources().has(item.resource.id) ? "collapse" : "expand");
+    if (item.kind === "namespace")
+      props.setDetailCursorAction(expandedNamespaces().has(item.namespace) ? "collapse" : "expand");
+    else props.setDetailCursorAction("open");
   });
 
   const renderFallback = (text: string) => (
@@ -165,6 +203,35 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
       <text fg={t().foregroundMuted}>{text}</text>
     </box>
   );
+
+  const renderResourceRow = (resource: OpenShiftResource, lead: string, connector: string) => {
+    const idx = () => flatIndexForResource(resource);
+    const isCursored = () => props.detailFocused() && props.detailCursorIndex() === idx();
+    const color = () => statusColor(t(), statusCategory(resource.status));
+    const textColor = () => (isCursored() ? t().accent : t().foreground);
+    return (
+      <box
+        ref={(el: Renderable) => {
+          const itemIdx = idx();
+          if (itemIdx >= 0) itemRefs[itemIdx] = el;
+        }}
+        flexDirection="row"
+        width="100%"
+        backgroundColor={isCursored() ? t().backgroundElementActive : undefined}
+      >
+        <text flexShrink={0} wrapMode="none" fg={t().border}>
+          {lead}
+          {connector}
+        </text>
+        <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={textColor()}>
+          {compactResourceName(resource)}
+        </text>
+        <text flexShrink={0} width={2} wrapMode="none" fg={color()}>
+          {statusMark(resource.status).padStart(2)}
+        </text>
+      </box>
+    );
+  };
 
   return (
     <Show when={!props.unavailableReason} fallback={renderFallback("Unavailable")}>
@@ -183,142 +250,149 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
               </text>
             </box>
 
-            <For each={data()?.namespaces ?? []}>
-              {ns => (
-                <box flexDirection="column" width="100%">
-                  <text fg={t().foregroundMuted} wrapMode="none">
-                    {ns.namespace}
-                  </text>
-                  <For each={RESOURCE_GROUPS}>
-                    {group => (
-                      <For each={ns[group.key]}>
-                        {(resource, resourceIdx) => {
-                          const idx = () => resourceIndex(resource);
-                          const isCursored = () => props.detailFocused() && props.detailCursorIndex() === idx();
-                          const isExpanded = () => expandedResources().has(resource.id);
-                          const isLoading = () => loadingResources().has(resource.id);
-                          const groups = () => detailGroups().get(resource.id) ?? [];
-                          const unavailable = () => detailUnavailable().has(resource.id);
-                          const resourceTreePrefix = () => (resourceIdx() === ns[group.key].length - 1 ? "└─ " : "├─ ");
-                          const childLead = () => (resourceIdx() === ns[group.key].length - 1 ? "   " : "│  ");
-                          const color = () => statusColor(t(), statusCategory(resource.status));
-                          const textColor = () => (isCursored() ? t().accent : t().foreground);
+            <For each={namespaces()}>
+              {(ns, nsIdx) => {
+                const nsResources = () => namespaceResources(ns);
+                const namespaceIdx = () => flatIndexForNamespace(ns.namespace);
+                const isNamespaceCursored = () => props.detailFocused() && props.detailCursorIndex() === namespaceIdx();
+                const namespaceIsExpanded = () => expandedNamespaces().has(ns.namespace);
+                const namespaceIsLast = () => nsIdx() === namespaces().length - 1;
+                const namespaceConnector = () => (namespaceIsLast() ? "└─ " : "├─ ");
+                const childLead = () => (namespaceIsLast() ? "   " : "│  ");
 
-                          return (
-                            <box flexDirection="column" width="100%">
-                              <box
-                                ref={(el: Renderable) => {
-                                  const itemIdx = idx();
-                                  if (itemIdx >= 0) itemRefs[itemIdx] = el;
-                                }}
-                                flexDirection="row"
-                                width="100%"
-                                backgroundColor={isCursored() ? t().backgroundElementActive : undefined}
-                              >
-                                <text flexShrink={0} wrapMode="none" fg={t().border}>
-                                  {resourceTreePrefix()}
-                                </text>
-                                <text
-                                  flexShrink={0}
-                                  wrapMode="none"
-                                  fg={isCursored() ? t().accent : t().foregroundMuted}
-                                >
-                                  {isExpanded() ? "▾ " : "▸ "}
-                                </text>
-                                <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={textColor()}>
-                                  {resourceLabel(resource)}
-                                </text>
-                                <text flexShrink={0} width={2} wrapMode="none" fg={color()}>
-                                  {statusMark(resource.status).padStart(2)}
-                                </text>
-                              </box>
-                              <Show when={isExpanded()}>
-                                <Show when={isLoading()}>
-                                  <box flexDirection="row" width="100%">
-                                    <text flexShrink={0} wrapMode="none" fg={t().border}>
-                                      {childLead()}└─{" "}
-                                    </text>
-                                    <text fg={t().foregroundMuted}>Loading...</text>
-                                  </box>
-                                </Show>
-                                <Show when={!isLoading() && unavailable()}>
-                                  <box flexDirection="row" width="100%">
-                                    <text flexShrink={0} wrapMode="none" fg={t().border}>
-                                      {childLead()}└─{" "}
-                                    </text>
-                                    <text fg={t().foregroundMuted}>Unavailable</text>
-                                  </box>
-                                </Show>
-                                <For each={groups()}>
-                                  {(detailGroup, groupIdx) => {
-                                    const groupIsLast = () => groupIdx() === groups().length - 1;
-                                    const groupLead = () => childLead() + (groupIsLast() ? "└─ " : "├─ ");
-                                    const lineLead = () => childLead() + (groupIsLast() ? "   " : "│  ");
-                                    return (
-                                      <box flexDirection="column" width="100%">
-                                        <box flexDirection="row" width="100%">
-                                          <text flexShrink={0} wrapMode="none" fg={t().border}>
-                                            {groupLead()}
-                                          </text>
-                                          <text
-                                            flexGrow={1}
-                                            flexShrink={1}
-                                            wrapMode="none"
-                                            truncate
-                                            fg={t().foregroundMuted}
-                                          >
-                                            {detailGroup.name}
-                                          </text>
-                                          <text
-                                            flexShrink={0}
-                                            width={2}
-                                            wrapMode="none"
-                                            fg={statusColor(t(), statusCategory(detailGroup.status))}
-                                          >
-                                            {statusMark(detailGroup.status).padStart(2)}
-                                          </text>
-                                        </box>
-                                        <For each={detailGroup.lines}>
-                                          {(line, lineIdx) => (
-                                            <box flexDirection="row" width="100%">
-                                              <text flexShrink={0} wrapMode="none" fg={t().border}>
-                                                {lineLead()}
-                                                {lineIdx() === detailGroup.lines.length - 1 ? "└─ " : "├─ "}
-                                              </text>
-                                              <text
-                                                flexGrow={1}
-                                                flexShrink={1}
-                                                wrapMode="none"
-                                                truncate
-                                                fg={t().foregroundMuted}
-                                              >
-                                                {line.text}
-                                              </text>
-                                              <text
-                                                flexShrink={0}
-                                                width={2}
-                                                wrapMode="none"
-                                                fg={statusColor(t(), statusCategory(line.status))}
-                                              >
-                                                {statusMark(line.status).padStart(2)}
-                                              </text>
-                                            </box>
-                                          )}
-                                        </For>
-                                      </box>
-                                    );
-                                  }}
-                                </For>
-                              </Show>
+                return (
+                  <box flexDirection="column" width="100%">
+                    <box
+                      ref={(el: Renderable) => {
+                        const itemIdx = namespaceIdx();
+                        if (itemIdx >= 0) itemRefs[itemIdx] = el;
+                      }}
+                      flexDirection="row"
+                      width="100%"
+                      backgroundColor={isNamespaceCursored() ? t().backgroundElementActive : undefined}
+                    >
+                      <text flexShrink={0} wrapMode="none" fg={t().border}>
+                        {namespaceConnector()}
+                      </text>
+                      <text
+                        flexShrink={0}
+                        wrapMode="none"
+                        fg={isNamespaceCursored() ? t().accent : t().foregroundMuted}
+                      >
+                        {namespaceIsExpanded() ? "▾ " : "▸ "}
+                      </text>
+                      <text
+                        flexGrow={1}
+                        flexShrink={1}
+                        wrapMode="none"
+                        truncate
+                        fg={isNamespaceCursored() ? t().accent : t().foreground}
+                      >
+                        {ns.namespace}
+                      </text>
+                      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                        {String(nsResources().length).padStart(3)}
+                      </text>
+                    </box>
+
+                    <Show when={namespaceIsExpanded()}>
+                      <For each={RESOURCE_GROUPS}>
+                        {group => (
+                          <Show when={ns[group.key].length > 0}>
+                            <box flexDirection="row" width="100%">
+                              <text flexShrink={0} wrapMode="none" fg={t().border}>
+                                {childLead()}├─{" "}
+                              </text>
+                              <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
+                                {group.label}
+                              </text>
                             </box>
-                          );
-                        }}
+                            <For each={ns[group.key]}>
+                              {(resource, resourceIdx) =>
+                                renderResourceRow(
+                                  resource,
+                                  `${childLead()}│  `,
+                                  resourceIdx() === ns[group.key].length - 1 ? "└─ " : "├─ ",
+                                )
+                              }
+                            </For>
+                          </Show>
+                        )}
                       </For>
+
+                      <Show when={ns.imageStreamTags.length > 0}>
+                        <box flexDirection="row" width="100%">
+                          <text flexShrink={0} wrapMode="none" fg={t().border}>
+                            {childLead()}├─{" "}
+                          </text>
+                          <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
+                            ImageStreams
+                          </text>
+                        </box>
+                        <For each={groupedImageStreams(ns.imageStreamTags)}>
+                          {(stream, streamIdx) => {
+                            const streamLead = () =>
+                              childLead() +
+                              (streamIdx() === groupedImageStreams(ns.imageStreamTags).length - 1 ? "   " : "│  ");
+                            return (
+                              <box flexDirection="column" width="100%">
+                                <box flexDirection="row" width="100%">
+                                  <text flexShrink={0} wrapMode="none" fg={t().border}>
+                                    {streamLead()}├─{" "}
+                                  </text>
+                                  <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
+                                    {stream.stream}
+                                  </text>
+                                </box>
+                                <For each={stream.tags}>
+                                  {(tag, tagIdx) =>
+                                    renderResourceRow(
+                                      tag,
+                                      `${streamLead()}│  `,
+                                      tagIdx() === stream.tags.length - 1 ? "└─ " : "├─ ",
+                                    )
+                                  }
+                                </For>
+                              </box>
+                            );
+                          }}
+                        </For>
+                      </Show>
+                    </Show>
+                  </box>
+                );
+              }}
+            </For>
+            <Show when={selectedResource()}>
+              {resource => (
+                <box flexDirection="column" width="100%">
+                  <text fg={t().accent}>
+                    {resource().kind} {resource().name}
+                  </text>
+                  <Show when={detailLoading()}>
+                    <text fg={t().foregroundMuted}>Loading...</text>
+                  </Show>
+                  <Show when={!detailLoading() && detailError()}>
+                    {error => <text fg={t().foregroundMuted}>{error()}</text>}
+                  </Show>
+                  <For each={detailGroups()}>
+                    {group => (
+                      <box flexDirection="column" width="100%">
+                        <text fg={statusColor(t(), statusCategory(group.status))}>{group.name}</text>
+                        <For each={group.lines}>
+                          {line => (
+                            <text fg={statusColor(t(), statusCategory(line.status))}>
+                              {" "}
+                              {statusMark(line.status)} {line.text}
+                            </text>
+                          )}
+                        </For>
+                      </box>
                     )}
                   </For>
                 </box>
               )}
-            </For>
+            </Show>
           </box>
         </Show>
       </Show>

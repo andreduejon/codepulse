@@ -65,4 +65,12 @@ export interface OpenShiftCommitData {
 export interface OpenShiftInventoryResult {
   data: Map<string, OpenShiftCommitData>;
   error: string | null;
+  failures: OpenShiftInventoryFailure[];
+}
+
+export interface OpenShiftInventoryFailure {
+  namespace: string;
+  kind: OpenShiftResourceKind;
+  path: string;
+  error: string;
 }

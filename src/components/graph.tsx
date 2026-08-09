@@ -32,6 +32,11 @@ import {
   ActionsCountsColumn,
   ActionsDateColumn,
 } from "../providers/github-actions/graph-columns";
+import {
+  OpenShiftColumnHeaders,
+  OpenShiftHealthColumn,
+  OpenShiftResourcesColumn,
+} from "../providers/openshift/graph-columns";
 import { formatRelativeDate } from "../utils/date";
 import { scrollElementIntoView } from "../utils/scroll";
 import { truncateName } from "../utils/truncate";
@@ -95,7 +100,11 @@ export function ColumnHeader() {
 
         {/* Author / Date columns — swapped for provider headers when in provider view */}
         {isProviderView() ? (
-          <ActionsColumnHeaders />
+          state.activeProviderView() === "openshift" ? (
+            <OpenShiftColumnHeaders />
+          ) : (
+            <ActionsColumnHeaders />
+          )
         ) : (
           <>
             {/* Author */}
@@ -464,7 +473,12 @@ function GraphLine(
         </box>
 
         {/* Author / Date — replaced by CI columns when in CI view */}
-        {state.activeProviderView() !== "git" ? (
+        {state.activeProviderView() === "openshift" ? (
+          <>
+            <OpenShiftResourcesColumn badge={state.graphBadges().get(commit().hash)} active={props.active} />
+            <OpenShiftHealthColumn badge={state.graphBadges().get(commit().hash)} active={props.active} />
+          </>
+        ) : state.activeProviderView() !== "git" ? (
           <>
             <ActionsCountsColumn badge={state.graphBadges().get(commit().hash)} active={props.active} />
             <ActionsDateColumn badge={state.graphBadges().get(commit().hash)} active={props.active} />

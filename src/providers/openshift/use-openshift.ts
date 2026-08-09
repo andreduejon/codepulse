@@ -21,7 +21,7 @@ export interface UseOpenShiftResult {
   getCommitData: (sha: string) => OpenShiftCommitData | null;
   refresh: () => Promise<void>;
   fetchCommitDataForSHA: (sha: string) => Promise<void>;
-  fetchResourceDetails: (resource: OpenShiftResource) => Promise<OpenShiftResourceDetailResult>;
+  fetchResourceDetails: (resource: OpenShiftResource, signal?: AbortSignal) => Promise<OpenShiftResourceDetailResult>;
   isAvailable: () => boolean;
 }
 
@@ -37,9 +37,6 @@ export function useOpenShift(opts: {
       : ((() => opts.config ?? {}) as Accessor<Partial<OpenShiftProviderConfig>>);
 
   let config: OpenShiftProviderConfig = { ...DEFAULT_OPENSHIFT_CONFIG, ...configAccessor() };
-  createEffect(() => {
-    config = { ...DEFAULT_OPENSHIFT_CONFIG, ...configAccessor(), namespaces: configAccessor().namespaces ?? [] };
-  });
 
   const isAvailable = () =>
     config.enabled &&
@@ -58,8 +55,9 @@ export function useOpenShift(opts: {
   const cache = new Map<string, OpenShiftCommitData>();
   const [version, setVersion] = createSignal(0);
   let hasFetchedOnce = false;
-  let fetchInFlight = false;
+  let activeRequest = 0;
   let fetchAbortCtrl: AbortController | null = null;
+  let backgroundFetchAbortCtrl: AbortController | null = null;
   let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
 
   function unavailableMessage(): string {
@@ -70,35 +68,58 @@ export function useOpenShift(opts: {
   }
 
   async function doFetch(signal?: AbortSignal, showStatus = false) {
-    if (fetchInFlight) return;
     if (!isAvailable()) {
       if (showStatus) actions.setProviderStatus("openshift", providerUnavailable(unavailableMessage()));
       return;
     }
     const token = getOpenShiftToken(config.tokenEnvVar);
     if (!token) return;
-    fetchInFlight = true;
+    const request = ++activeRequest;
+    const requestConfig = config;
     if (showStatus) actions.setProviderStatus("openshift", providerLoading());
     try {
-      const result = await fetchOpenShiftInventory(config, token, signal);
-      if (signal?.aborted) return;
+      const result = await fetchOpenShiftInventory(requestConfig, token, signal);
+      if (signal?.aborted || request !== activeRequest) return;
       cache.clear();
       for (const [sha, data] of result.data) cache.set(sha, data);
       actions.setGraphBadges("openshift", buildOpenShiftGraphBadges(cache));
       setVersion(v => v + 1);
       hasFetchedOnce = true;
-      if (result.error) actions.setProviderStatus("openshift", providerError(result.error));
-      else {
+      if (result.error) {
+        for (const failure of result.failures) console.debug("OpenShift inventory request failed", failure);
+        actions.setProviderStatus("openshift", providerError(result.error));
+      } else {
         actions.setProviderStatus("openshift", providerIdle());
         actions.setProviderLastSuccessfulRefresh("openshift", new Date());
       }
     } catch (err) {
-      if (!signal?.aborted)
+      if (!signal?.aborted && request === activeRequest)
         actions.setProviderStatus("openshift", providerError(err instanceof Error ? err.message : String(err)));
-    } finally {
-      fetchInFlight = false;
     }
   }
+
+  createEffect(() => {
+    const partial = configAccessor();
+    config = { ...DEFAULT_OPENSHIFT_CONFIG, ...partial, namespaces: partial.namespaces ?? [] };
+    activeRequest++;
+    fetchAbortCtrl?.abort();
+    backgroundFetchAbortCtrl?.abort();
+    fetchAbortCtrl = null;
+    backgroundFetchAbortCtrl = null;
+    hasFetchedOnce = false;
+    cache.clear();
+    setVersion(version => version + 1);
+    actions.setGraphBadges("openshift", new Map());
+
+    if (!isAvailable()) {
+      if (untrack(state.activeProviderView) === "openshift")
+        actions.setProviderStatus("openshift", providerUnavailable(unavailableMessage()));
+      return;
+    }
+    if (untrack(state.graphRows).length === 0) return;
+    backgroundFetchAbortCtrl = new AbortController();
+    void doFetch(backgroundFetchAbortCtrl.signal, untrack(state.activeProviderView) === "openshift");
+  });
 
   function stopAutoRefresh() {
     if (autoRefreshTimer) clearInterval(autoRefreshTimer);
@@ -131,6 +152,16 @@ export function useOpenShift(opts: {
   });
 
   createEffect(() => {
+    const rows = state.graphRows();
+    if (rows.length === 0) return;
+    if (hasFetchedOnce || backgroundFetchAbortCtrl) return;
+    if (!isAvailable()) return;
+
+    backgroundFetchAbortCtrl = new AbortController();
+    void doFetch(backgroundFetchAbortCtrl.signal, false);
+  });
+
+  createEffect(() => {
     state.autoRefreshInterval();
     if (state.activeProviderView() === "openshift") {
       stopAutoRefresh();
@@ -138,7 +169,11 @@ export function useOpenShift(opts: {
     }
   });
 
-  onCleanup(stopAutoRefresh);
+  onCleanup(() => {
+    stopAutoRefresh();
+    backgroundFetchAbortCtrl?.abort();
+    backgroundFetchAbortCtrl = null;
+  });
 
   return {
     getCommitData: sha => {
@@ -149,10 +184,10 @@ export function useOpenShift(opts: {
     fetchCommitDataForSHA: async () => {
       if (!hasFetchedOnce) await doFetch(undefined, true);
     },
-    fetchResourceDetails: async resource => {
+    fetchResourceDetails: async (resource, signal) => {
       const token = getOpenShiftToken(config.tokenEnvVar);
       if (!token || !isAvailable()) return { groups: [], error: unavailableMessage() };
-      return fetchOpenShiftResourceDetails(config, token, resource);
+      return fetchOpenShiftResourceDetails(config, token, resource, signal);
     },
     isAvailable,
   };

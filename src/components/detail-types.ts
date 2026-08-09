@@ -58,7 +58,10 @@ export interface DetailViewProps {
   jenkinsProviderStatus?: ProviderStatus;
   openshiftGetCommitData?: (sha: string) => OpenShiftCommitData | null;
   openshiftFetchCommitData?: (sha: string) => Promise<void>;
-  openshiftFetchResourceDetails?: (resource: OpenShiftResource) => Promise<OpenShiftResourceDetailResult>;
+  openshiftFetchResourceDetails?: (
+    resource: OpenShiftResource,
+    signal?: AbortSignal,
+  ) => Promise<OpenShiftResourceDetailResult>;
   openshiftProviderStatus?: ProviderStatus;
 }
 

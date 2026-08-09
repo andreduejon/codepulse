@@ -52,6 +52,10 @@ export interface GraphBadge {
   failCount: number;
   /** Total in-progress / queued count across all runs. */
   runningCount: number;
+  /** Total unknown resources/statuses. Used by runtime providers. */
+  unknownCount?: number;
+  /** Total matched resources. Used by runtime providers. */
+  resourceCount?: number;
   /** Relative time string for the most recently updated run (e.g. "2h ago"). */
   latestRunAt: string;
   /** Status of the most recently updated run — used to colour latestRunAt. */
