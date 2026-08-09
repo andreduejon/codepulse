@@ -212,7 +212,7 @@ describe("fetchJenkinsGraphDataForSHAs", () => {
     const calls: (RequestInfo | URL)[] = [];
     globalThis.fetch = (async (input, init) => {
       calls.push(input);
-      expect((init?.headers as Record<string, string>).Authorization).toBe("Basic dXNlcjp0b2tlbg==");
+      expect((init?.headers as Record<string, string> | undefined)?.Authorization).toBe("Basic dXNlcjp0b2tlbg==");
       return new Response(
         JSON.stringify({
           builds: [
