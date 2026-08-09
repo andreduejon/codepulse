@@ -23,6 +23,12 @@ export function isRetryableStatus(status: number): boolean {
   return status === 408 || status === 429 || status >= 500;
 }
 
+export function isAbortError(err: unknown, signal?: AbortSignal | null): boolean {
+  if (signal?.aborted) return true;
+  if (!(err instanceof Error)) return false;
+  return err.name === "AbortError" || err.message === "The operation was aborted.";
+}
+
 export async function runLimited<T>(items: T[], limit: number, worker: (item: T) => Promise<void>): Promise<void> {
   let index = 0;
   const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
@@ -74,6 +80,7 @@ export async function fetchWithRetry(
         return res;
       }
     } catch (err) {
+      if (isAbortError(err, init.signal)) throw err;
       lastError = err;
       if (attempt === opts.attempts) {
         addDebugEvent({
