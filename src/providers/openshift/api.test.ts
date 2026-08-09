@@ -53,6 +53,7 @@ describe("fetchOpenShiftInventory", () => {
       const url = input.toString();
       urls.push(url);
       if (url.includes("/builds")) return new Response("forbidden", { status: 403 });
+      if (url.includes("/deploymentconfigs")) return new Response("unavailable", { status: 503 });
       if (url.includes("/imagestreamtags")) {
         return Response.json({
           items: [{ metadata: { name: "app:latest", annotations: { "dev/commit-sha": SHA } }, image: {} }],
@@ -66,13 +67,19 @@ describe("fetchOpenShiftInventory", () => {
         { serverUrl: "https://openshift.example.com", namespaces: ["team-one"], commitShaAnnotation: "dev/commit-sha" },
         "token",
       );
-      expect(urls).toHaveLength(5);
+      expect(new Set(urls)).toHaveLength(5);
       expect(urls.every(url => url.includes("/namespaces/team-one/"))).toBe(true);
       expect(result.data.get(SHA)?.namespaces[0].imageStreamTags).toHaveLength(1);
       expect(result.failures).toEqual([
         expect.objectContaining({ namespace: "team-one", kind: "Build", error: expect.stringContaining("403") }),
+        expect.objectContaining({
+          namespace: "team-one",
+          kind: "DeploymentConfig",
+          error: expect.stringContaining("503"),
+        }),
       ]);
       expect(result.error).toContain("Build");
+      expect(result.error).toContain("DeploymentConfig");
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -112,7 +119,7 @@ describe("fetchOpenShiftInventory", () => {
     expect(map.get(SHA)?.namespaces[0].pods.map(p => p.name)).toEqual(["digest"]);
   });
 
-  test("maps degradation and transitional pod states with correct precedence", async () => {
+  test("maps workload and pod health states with correct precedence", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async (input: RequestInfo | URL) => {
       const url = input.toString();
@@ -130,7 +137,7 @@ describe("fetchOpenShiftInventory", () => {
         return Response.json({
           items: [
             {
-              metadata: { name: "app" },
+              metadata: { name: "degraded" },
               spec: { template: { spec: { containers: [{ image: "app@sha256:abc" }] } } },
               status: {
                 conditions: [
@@ -138,6 +145,16 @@ describe("fetchOpenShiftInventory", () => {
                   { type: "Degraded", status: "True" },
                 ],
               },
+            },
+            {
+              metadata: { name: "progressing" },
+              spec: { template: { spec: { containers: [{ image: "app@sha256:abc" }] } } },
+              status: { conditions: [{ type: "Progressing", status: "True" }] },
+            },
+            {
+              metadata: { name: "unknown" },
+              spec: { template: { spec: { containers: [{ image: "app@sha256:abc" }] } } },
+              status: {},
             },
           ],
         });
@@ -153,11 +170,15 @@ describe("fetchOpenShiftInventory", () => {
               },
             },
             {
-              metadata: { name: "completed" },
+              metadata: { name: "crashing" },
               status: {
-                phase: "Succeeded",
-                containerStatuses: [{ imageID: "app@sha256:abc", state: { terminated: { reason: "Completed" } } }],
+                phase: "Running",
+                containerStatuses: [{ imageID: "app@sha256:abc", state: { waiting: { reason: "CrashLoopBackOff" } } }],
               },
+            },
+            {
+              metadata: { name: "unknown" },
+              status: { phase: "Unexpected", containerStatuses: [{ imageID: "app@sha256:abc" }] },
             },
           ],
         });
@@ -170,8 +191,16 @@ describe("fetchOpenShiftInventory", () => {
         "token",
       );
       const ns = result.data.get(SHA)?.namespaces[0];
-      expect(ns?.deployments[0].status).toBe("fail");
-      expect(ns?.pods.map(p => p.status)).toEqual(["running", "pass"]);
+      expect(ns?.deployments.map(resource => [resource.name, resource.status])).toEqual([
+        ["degraded", "fail"],
+        ["progressing", "running"],
+        ["unknown", "unknown"],
+      ]);
+      expect(ns?.pods.map(resource => [resource.name, resource.status])).toEqual([
+        ["starting", "running"],
+        ["crashing", "fail"],
+        ["unknown", "unknown"],
+      ]);
     } finally {
       globalThis.fetch = originalFetch;
     }
