@@ -106,7 +106,7 @@ function AppContent(props: Readonly<AppContentProps>) {
 
   // GitHub Actions provider config.
   const [githubConfig, setGithubConfig] = createSignal({
-    enabled: props.initialGithubConfig?.enabled ?? true,
+    enabled: props.initialGithubConfig?.enabled ?? false,
     tokenEnvVar: props.initialGithubConfig?.tokenEnvVar ?? "GITHUB_TOKEN",
     trustedEnterpriseHost: props.initialGithubConfig?.trustedEnterpriseHost ?? null,
   });

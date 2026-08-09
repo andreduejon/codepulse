@@ -27,7 +27,7 @@ export interface CodepulseConfig {
   /** Provider-specific configuration. */
   providers?: {
     github?: {
-      /** Whether the GitHub Actions provider is enabled. Defaults to true. */
+      /** Whether the GitHub Actions provider is enabled. Defaults to false. */
       enabled?: boolean;
       /** Name of the environment variable holding the GitHub Personal Access Token.
        *  Defaults to "GITHUB_TOKEN". */
@@ -109,7 +109,7 @@ export function backfillRepoConfig(repoPath: string, configPath?: string): void 
 
   const existingGitHub = existing.providers?.github;
   const defaultGh = defaults.providers.github ?? {
-    enabled: true,
+    enabled: false,
     tokenEnvVar: "GITHUB_TOKEN",
     trustedEnterpriseHost: undefined,
   };

@@ -3,7 +3,9 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
+  backfillRepoConfig,
   type CodepulseConfig,
+  defaultConfig,
   getKnownRepoInfos,
   loadConfig,
   mergeOptions,
@@ -37,6 +39,33 @@ function makeRepoConfig(name: string, repoPath: string, repoConfig: Record<strin
 
 afterEach(() => {
   rmSync(TEST_ROOT, { recursive: true, force: true });
+});
+
+describe("provider defaults", () => {
+  test("disables all remote providers for new configs", () => {
+    const providers = defaultConfig().providers;
+    expect(providers.github?.enabled).toBe(false);
+    expect(providers.jenkins?.enabled).toBe(false);
+    expect(providers.openshift?.enabled).toBe(false);
+  });
+
+  test("backfill preserves explicit provider enabled values", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("provider-enabled-preserved", repoPath, {
+      providers: {
+        github: { enabled: true },
+        jenkins: { enabled: true },
+        openshift: { enabled: true },
+      },
+    });
+
+    backfillRepoConfig(repoPath, configPath);
+
+    const providers = loadConfig(repoPath, configPath).config.providers;
+    expect(providers?.github?.enabled).toBe(true);
+    expect(providers?.jenkins?.enabled).toBe(true);
+    expect(providers?.openshift?.enabled).toBe(true);
+  });
 });
 
 describe("loadConfig", () => {
