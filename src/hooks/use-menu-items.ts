@@ -781,7 +781,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
     const idx = selectedItemIndex();
     const items = activeItems();
     const item = items[idx];
-    if (!item || item.kind !== "copyable") return 0;
+    if (item?.kind !== "copyable") return 0;
     return Math.max(0, item.get().length - COPYABLE_VISIBLE_WIDTH);
   });
 

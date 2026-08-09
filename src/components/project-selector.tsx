@@ -113,7 +113,7 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
 
   const forgetSelectedRepo = () => {
     const row = selectedRow();
-    if (!row || row.kind !== "repo" || row.current) return;
+    if (row?.kind !== "repo" || row.current) return;
     if (!removeRepoConfig(row.repo.path)) return;
     setSavedRepos(prev => prev.filter(repo => repo.path !== row.repo.path));
   };
