@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.0] - 2026-08-09
+
+### Added
+
+- **OpenShift provider** — match runtime resources to commits and inspect
+  health, conditions, related pods, container state, and recent logs.
+- **OpenShift graph columns** — show resource totals and health counts for each
+  matching commit.
+
+### Changed
+
+- Provider detail tabs and status handling now support source, CI, and runtime
+  providers consistently.
+- Remote providers are disabled by default for new repository configurations.
+- Updated OpenTUI, SolidJS, Biome, Bun types, and TypeScript dependencies.
+
+### Fixed
+
+- Partial OpenShift API failures preserve successful data and report failed
+  requests through provider status and debug events.
+- OpenShift workload matching uses immutable image digests to avoid stale tag
+  associations.
+- OpenShift health mapping distinguishes progressing, failed, completed, and
+  unknown resource states.
+- OpenShift configuration changes cancel stale requests and reload current
+  cluster data.
+- Jenkins commit matching supports SCM revision actions and refreshes cached
+  commit data correctly.
+- Aborted provider requests no longer appear as request failures.
+
 ## [0.5.0] - 2026-05-08
 
 ### Added
