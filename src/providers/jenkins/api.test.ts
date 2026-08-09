@@ -286,6 +286,41 @@ describe("fetchJenkinsGraphDataForSHAs", () => {
     }
   });
 
+  test("maps shallow scmRevisionAction hash", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          builds: [
+            {
+              number: 12,
+              url: "https://jenkins.example.com/job/foo/12/",
+              result: "SUCCESS",
+              building: false,
+              timestamp: 1_700_000_000_000,
+              duration: 12_000,
+              actions: [{ scmRevisionAction: { revision: { hash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } } }],
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      )) as unknown as typeof fetch;
+
+    try {
+      const result = await fetchJenkinsGraphDataForSHAs(
+        [{ url: "https://jenkins.example.com/job/foo/" }],
+        "user",
+        "token",
+        ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+      );
+      expect(result.error).toBeNull();
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].headSha).toBe("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   test("reports Jenkins SSO redirect as auth failure", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () =>

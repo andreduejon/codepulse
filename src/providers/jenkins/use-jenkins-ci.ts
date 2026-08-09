@@ -274,6 +274,11 @@ export function useJenkinsCI(opts: {
       return log;
     },
     fetchCommitDataForSHA: async sha => {
+      const existing = commitDataCache.get(sha);
+      if (existing && existing.runs.length > 0) {
+        await fetchForSHAs([sha], "shallow");
+        return;
+      }
       await fetchForSHAs([sha], "full");
     },
     refresh: async () => {

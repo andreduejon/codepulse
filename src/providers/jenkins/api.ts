@@ -58,7 +58,7 @@ function treeApiSuffix(tree: string): string {
 }
 
 function shallowGraphTree(limit: number): string {
-  return `builds[number,url,result,building,timestamp,duration,actions[lastBuiltRevision[SHA1]],changeSets[items[commitId,id]],changeSet[items[commitId,id]]]{0,${limit}}`;
+  return `builds[number,url,result,building,timestamp,duration,actions[lastBuiltRevision[SHA1],scmRevisionAction[revision[hash]]],changeSets[items[commitId,id]],changeSet[items[commitId,id]]]{0,${limit}}`;
 }
 
 function buildRefsTree(limit: number): string {
