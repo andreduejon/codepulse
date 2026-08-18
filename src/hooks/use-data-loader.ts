@@ -18,6 +18,7 @@ import {
   buildStashByParent,
   computeSilentMaxCount,
   computeTargetIndex,
+  findCurrentHeadHash,
   injectUncommittedNode,
   isStaleResult,
 } from "../utils/data-loader-utils";
@@ -114,7 +115,7 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
       actions.setHasMore(rawCount >= pageSize);
 
       // Capture the HEAD commit hash before any synthetic commits are injected.
-      const headHash = commits[0]?.hash;
+      const headHash = findCurrentHeadHash(commits);
 
       // Build stash-by-parent map and inject stash badges onto parent commits.
       const stashByParent = buildStashByParent(stashes, commits);
