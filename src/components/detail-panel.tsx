@@ -12,11 +12,7 @@ import type {
   GitHubWorkflowRun,
 } from "../providers/github-actions/types";
 import type { JenkinsCommitData, JenkinsJob, JenkinsJobFetchResult, JenkinsRun } from "../providers/jenkins/types";
-import type {
-  OpenShiftCommitData,
-  OpenShiftResource,
-  OpenShiftResourceDetailResult,
-} from "../providers/openshift/types";
+import type { OpenShiftCommitData, OpenShiftResource } from "../providers/openshift/types";
 import { providerDetailTab } from "../providers/provider";
 import { getAvailableTabs } from "../utils/tab-utils";
 import CommitDetailView from "./detail";
@@ -53,10 +49,7 @@ export interface DetailPanelProps {
   jenkinsProviderStatus?: ProviderStatus;
   openshiftGetCommitData?: (sha: string) => OpenShiftCommitData | null;
   openshiftFetchCommitData?: (sha: string) => Promise<void>;
-  openshiftFetchResourceDetails?: (
-    resource: OpenShiftResource,
-    signal?: AbortSignal,
-  ) => Promise<OpenShiftResourceDetailResult>;
+  onOpenOpenShiftResource?: (resource: OpenShiftResource) => void;
   openshiftProviderStatus?: ProviderStatus;
 }
 
@@ -222,7 +215,7 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
             jenkinsProviderStatus={props.jenkinsProviderStatus}
             openshiftGetCommitData={props.openshiftGetCommitData}
             openshiftFetchCommitData={props.openshiftFetchCommitData}
-            openshiftFetchResourceDetails={props.openshiftFetchResourceDetails}
+            onOpenOpenShiftResource={props.onOpenOpenShiftResource}
             openshiftProviderStatus={props.openshiftProviderStatus}
           />
         </Show>

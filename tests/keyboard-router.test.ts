@@ -44,6 +44,11 @@ describe("keyboard scope routing", () => {
       runAppHandler: false,
       runCascadeClose: true,
     });
+    expect(routeGlobalKey({ dialog: "openshift-resource" }, "escape")).toEqual({
+      scope: "openshift-resource",
+      runAppHandler: false,
+      runCascadeClose: true,
+    });
   });
 
   it("supports explicit modal sub-mode overrides", () => {

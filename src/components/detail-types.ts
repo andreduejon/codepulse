@@ -8,11 +8,7 @@ import type {
   GitHubWorkflowRun,
 } from "../providers/github-actions/types";
 import type { JenkinsCommitData, JenkinsJob, JenkinsJobFetchResult, JenkinsRun } from "../providers/jenkins/types";
-import type {
-  OpenShiftCommitData,
-  OpenShiftResource,
-  OpenShiftResourceDetailResult,
-} from "../providers/openshift/types";
+import type { OpenShiftCommitData, OpenShiftResource } from "../providers/openshift/types";
 
 /** Mutable ref populated by a detail view for app.tsx to call */
 export interface DetailNavRef {
@@ -58,10 +54,7 @@ export interface DetailViewProps {
   jenkinsProviderStatus?: ProviderStatus;
   openshiftGetCommitData?: (sha: string) => OpenShiftCommitData | null;
   openshiftFetchCommitData?: (sha: string) => Promise<void>;
-  openshiftFetchResourceDetails?: (
-    resource: OpenShiftResource,
-    signal?: AbortSignal,
-  ) => Promise<OpenShiftResourceDetailResult>;
+  onOpenOpenShiftResource?: (resource: OpenShiftResource) => void;
   openshiftProviderStatus?: ProviderStatus;
 }
 

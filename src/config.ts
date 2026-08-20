@@ -4,6 +4,13 @@ import { dirname, join, resolve } from "node:path";
 import { DEFAULT_MAX_COUNT } from "./constants";
 import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL } from "./context/state";
 import { normalizeGitHubHost } from "./providers/github-actions/api";
+import {
+  isValidOpenShiftNamespace,
+  isValidOpenShiftServerUrl,
+  OPENSHIFT_NAMESPACE_MAX_LENGTH,
+  OPENSHIFT_SERVER_URL_MAX_LENGTH,
+  OPENSHIFT_TEXT_MAX_LENGTH,
+} from "./providers/openshift/validation";
 
 const GENERAL_TEXT_MAX_LENGTH = 255;
 const URL_OR_PATH_MAX_LENGTH = 2048;
@@ -514,17 +521,33 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
           if (typeof openshift.enabled === "boolean") config.providers.openshift.enabled = openshift.enabled;
           else warnings.push(`${path}: "providers.openshift.enabled" must be a boolean, ignoring`);
         }
-        for (const field of ["serverUrl", "tokenEnvVar", "commitShaAnnotation"] as const) {
-          if (openshift[field] !== undefined) {
-            const value = parseOptionalText(`providers.openshift.${field}`, openshift[field], URL_OR_PATH_MAX_LENGTH);
-            if (value !== undefined) config.providers.openshift[field] = value;
+        if (openshift.serverUrl !== undefined) {
+          const value = parseOptionalText(
+            "providers.openshift.serverUrl",
+            openshift.serverUrl,
+            OPENSHIFT_SERVER_URL_MAX_LENGTH,
+          );
+          if (value !== undefined) {
+            if (isValidOpenShiftServerUrl(value)) config.providers.openshift.serverUrl = value;
+            else warnings.push(`${path}: "providers.openshift.serverUrl" must be a valid HTTPS URL, ignoring`);
           }
+        }
+        for (const field of ["tokenEnvVar", "commitShaAnnotation"] as const) {
+          if (openshift[field] === undefined) continue;
+          const value = parseOptionalText(`providers.openshift.${field}`, openshift[field], OPENSHIFT_TEXT_MAX_LENGTH);
+          if (value !== undefined) config.providers.openshift[field] = value;
         }
         if (openshift.namespaces !== undefined) {
           if (Array.isArray(openshift.namespaces)) {
             config.providers.openshift.namespaces = openshift.namespaces.flatMap((ns, idx) => {
-              const value = parseOptionalText(`providers.openshift.namespaces[${idx}]`, ns, GENERAL_TEXT_MAX_LENGTH);
-              return value === undefined ? [] : [value];
+              const field = `providers.openshift.namespaces[${idx}]`;
+              const value = parseOptionalText(field, ns, OPENSHIFT_NAMESPACE_MAX_LENGTH);
+              if (value === undefined) return [];
+              if (!isValidOpenShiftNamespace(value)) {
+                warnings.push(`${path}: "${field}" must be a DNS-1123 label, ignoring`);
+                return [];
+              }
+              return [value];
             });
           } else {
             warnings.push(`${path}: "providers.openshift.namespaces" must be an array, ignoring`);

@@ -1,22 +1,17 @@
 import type { Renderable } from "@opentui/core";
-import { createEffect, createMemo, createSignal, For, onCleanup, Show, untrack } from "solid-js";
+import { createEffect, createMemo, createSignal, For, Show, untrack } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
 import { useT } from "../../hooks/use-t";
 import { type StatusCategory, statusColor, statusIcon } from "../shared/status";
-import type {
-  OpenShiftCommitData,
-  OpenShiftDetailGroup,
-  OpenShiftResource,
-  OpenShiftResourceDetailResult,
-  OpenShiftStatus,
-} from "./types";
+import type { OpenShiftCommitData, OpenShiftResource, OpenShiftStatus } from "./types";
 
 export interface OpenShiftDetailTabProps {
   sha: string;
   getCommitData: (sha: string) => OpenShiftCommitData | null;
   fetchCommitData?: (sha: string) => Promise<void>;
-  fetchResourceDetails?: (resource: OpenShiftResource, signal?: AbortSignal) => Promise<OpenShiftResourceDetailResult>;
+  onOpenResource?: (resource: OpenShiftResource) => void;
   unavailableReason?: string | null;
+  warningReason?: string | null;
   loading?: boolean;
   navRef?: DetailNavRef;
   detailCursorIndex: () => number;
@@ -87,12 +82,20 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
   const data = () => props.getCommitData(props.sha);
   const [requestedSha, setRequestedSha] = createSignal<string | null>(null);
   const [expandedNamespaces, setExpandedNamespaces] = createSignal<Set<string>>(new Set());
-  const [selectedResource, setSelectedResource] = createSignal<OpenShiftResource | null>(null);
-  const [detailGroups, setDetailGroups] = createSignal<OpenShiftDetailGroup[]>([]);
-  const [detailLoading, setDetailLoading] = createSignal(false);
-  const [detailError, setDetailError] = createSignal<string | null>(null);
-  let detailRequest: AbortController | null = null;
   const itemRefs: Renderable[] = [];
+  const refsByKey = new Map<string, Renderable>();
+
+  const flatItemKey = (item: FlatItem) =>
+    item.kind === "namespace" ? `namespace:${item.namespace}` : `resource:${item.resource.id}`;
+
+  const syncItemRefs = () => {
+    const items = flatItems();
+    itemRefs.length = items.length;
+    items.forEach((item, index) => {
+      itemRefs[index] = refsByKey.get(flatItemKey(item)) as Renderable;
+    });
+    if (props.navRef) props.navRef.itemRefs = itemRefs;
+  };
 
   const namespaces = createMemo(() => data()?.namespaces ?? []);
   const resources = createMemo(() => namespaces().flatMap(namespaceResources));
@@ -112,30 +115,6 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
   const flatIndexForResource = (resource: OpenShiftResource) =>
     flatItems().findIndex(item => item.kind === "resource" && item.resource.id === resource.id);
 
-  const openResource = (resource: OpenShiftResource) => {
-    detailRequest?.abort();
-    setSelectedResource(resource);
-    setDetailGroups([]);
-    setDetailError(null);
-    if (!props.fetchResourceDetails) return;
-    const request = new AbortController();
-    detailRequest = request;
-    setDetailLoading(true);
-    void props.fetchResourceDetails(resource, request.signal).then(
-      result => {
-        if (request.signal.aborted || detailRequest !== request) return;
-        setDetailGroups(result.groups);
-        setDetailError(result.error);
-        setDetailLoading(false);
-      },
-      error => {
-        if (request.signal.aborted || detailRequest !== request) return;
-        setDetailError(error instanceof Error ? error.message : String(error));
-        setDetailLoading(false);
-      },
-    );
-  };
-
   const toggleNamespace = (namespace: string) => {
     setExpandedNamespaces(prev => {
       const next = new Set(prev);
@@ -152,16 +131,8 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
     void props.fetchCommitData?.(sha);
   });
 
-  onCleanup(() => detailRequest?.abort());
-
   createEffect(() => {
     props.sha;
-    detailRequest?.abort();
-    detailRequest = null;
-    setSelectedResource(null);
-    setDetailGroups([]);
-    setDetailError(null);
-    setDetailLoading(false);
     const names = namespaces().map(ns => ns.namespace);
     setExpandedNamespaces(new Set(names));
     props.setDetailCursorIndex(0);
@@ -176,13 +147,14 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
 
   createEffect(() => {
     if (!props.navRef) return;
-    props.navRef.itemCount = flatItems().length;
-    props.navRef.itemRefs = itemRefs;
+    const items = flatItems();
+    props.navRef.itemCount = items.length;
+    syncItemRefs();
     props.navRef.activateCurrentItem = () => {
       const item = flatItems()[props.detailCursorIndex()];
       if (!item) return false;
       if (item.kind === "namespace") toggleNamespace(item.namespace);
-      else openResource(item.resource);
+      else props.onOpenResource?.(item.resource);
       return false;
     };
   });
@@ -212,8 +184,8 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
     return (
       <box
         ref={(el: Renderable) => {
-          const itemIdx = idx();
-          if (itemIdx >= 0) itemRefs[itemIdx] = el;
+          refsByKey.set(`resource:${resource.id}`, el);
+          syncItemRefs();
         }}
         flexDirection="row"
         width="100%"
@@ -238,6 +210,15 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
       <Show when={!props.loading} fallback={renderFallback("Loading OpenShift inventory…")}>
         <Show when={resources().length > 0} fallback={renderFallback("No OpenShift resources for this commit")}>
           <box flexDirection="column" width="100%">
+            <Show when={props.warningReason}>
+              {warning => (
+                <box paddingBottom={1}>
+                  <text fg={t().accent} wrapMode="word">
+                    {warning()}
+                  </text>
+                </box>
+              )}
+            </Show>
             <box flexDirection="row" width="100%">
               <box flexGrow={1}>
                 <text fg={t().foregroundMuted} wrapMode="none">
@@ -264,8 +245,8 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
                   <box flexDirection="column" width="100%">
                     <box
                       ref={(el: Renderable) => {
-                        const itemIdx = namespaceIdx();
-                        if (itemIdx >= 0) itemRefs[itemIdx] = el;
+                        refsByKey.set(`namespace:${ns.namespace}`, el);
+                        syncItemRefs();
                       }}
                       flexDirection="row"
                       width="100%"
@@ -363,36 +344,6 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
                 );
               }}
             </For>
-            <Show when={selectedResource()}>
-              {resource => (
-                <box flexDirection="column" width="100%">
-                  <text fg={t().accent}>
-                    {resource().kind} {resource().name}
-                  </text>
-                  <Show when={detailLoading()}>
-                    <text fg={t().foregroundMuted}>Loading...</text>
-                  </Show>
-                  <Show when={!detailLoading() && detailError()}>
-                    {error => <text fg={t().foregroundMuted}>{error()}</text>}
-                  </Show>
-                  <For each={detailGroups()}>
-                    {group => (
-                      <box flexDirection="column" width="100%">
-                        <text fg={statusColor(t(), statusCategory(group.status))}>{group.name}</text>
-                        <For each={group.lines}>
-                          {line => (
-                            <text fg={statusColor(t(), statusCategory(line.status))}>
-                              {" "}
-                              {statusMark(line.status)} {line.text}
-                            </text>
-                          )}
-                        </For>
-                      </box>
-                    )}
-                  </For>
-                </box>
-              )}
-            </Show>
           </box>
         </Show>
       </Show>

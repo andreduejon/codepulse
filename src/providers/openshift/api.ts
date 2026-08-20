@@ -2,14 +2,14 @@ import type { GraphBadge } from "../provider";
 import { fetchWithRetry } from "../shared/http";
 import type {
   OpenShiftCommitData,
-  OpenShiftDetailGroup,
-  OpenShiftDetailLine,
+  OpenShiftControllerReference,
   OpenShiftInventoryFailure,
   OpenShiftInventoryResult,
+  OpenShiftOwnerReference,
   OpenShiftResource,
-  OpenShiftResourceDetailResult,
   OpenShiftStatus,
 } from "./types";
+import { isValidOpenShiftNamespace } from "./validation";
 
 const FETCH_OPTS = { timeoutMs: 15000, attempts: 2, retryDelayMs: 500, timeoutMessage: "OpenShift request timed out" };
 
@@ -44,6 +44,15 @@ function metadata(item: unknown): AnyObj {
   return obj(obj(item)?.metadata) ?? {};
 }
 
+function ownerReferences(item: unknown): OpenShiftOwnerReference[] {
+  return arr(metadata(item).ownerReferences).flatMap(value => {
+    const reference = obj(value);
+    const kind = str(reference?.kind);
+    const uid = str(reference?.uid);
+    return kind && uid ? [{ kind, uid }] : [];
+  });
+}
+
 function annotations(item: unknown): AnyObj {
   return obj(metadata(item).annotations) ?? {};
 }
@@ -62,41 +71,82 @@ export function imageTokens(ref: string | undefined): string[] {
   return [...out];
 }
 
-function statusFromConditions(item: unknown): OpenShiftStatus {
-  const conditions = arr(obj(item)?.status && obj(obj(item)?.status)?.conditions);
-  if (conditions.some(c => ["Failed", "Degraded"].includes(String(obj(c)?.type)) && obj(c)?.status === "True"))
+function workloadStatus(item: unknown): OpenShiftStatus {
+  const md = metadata(item);
+  const spec = obj(obj(item)?.spec) ?? {};
+  const status = obj(obj(item)?.status) ?? {};
+  const conditions = arr(status.conditions).map(condition => obj(condition) ?? {});
+  const generation = typeof md.generation === "number" ? md.generation : null;
+  const observedGeneration = typeof status.observedGeneration === "number" ? status.observedGeneration : null;
+  const paused = spec.paused === true;
+  if (generation !== null && observedGeneration !== null && observedGeneration < generation)
+    return paused ? "unknown" : "running";
+
+  const hasCondition = (types: string[], expectedStatus: string, reasons?: string[]) =>
+    conditions.some(condition => {
+      if (!types.includes(String(condition.type)) || condition.status !== expectedStatus) return false;
+      return !reasons || reasons.includes(String(condition.reason));
+    });
+  if (hasCondition(["Failed", "Degraded", "ReplicaFailure"], "True") || hasCondition(["Progressing"], "False"))
     return "fail";
-  if (conditions.some(c => ["Progressing", "Pending"].includes(String(obj(c)?.type)) && obj(c)?.status === "True"))
-    return "running";
-  if (
-    conditions.some(
-      c => ["Available", "Complete", "Completed"].includes(String(obj(c)?.type)) && obj(c)?.status === "True",
-    )
-  )
-    return "pass";
-  const specReplicas = obj(obj(item)?.spec)?.replicas;
-  const availableReplicas = obj(obj(item)?.status)?.availableReplicas;
-  if (typeof specReplicas === "number" && typeof availableReplicas === "number" && availableReplicas >= specReplicas)
-    return "pass";
+
+  const replicaFields = ["replicas", "updatedReplicas", "availableReplicas", "unavailableReplicas"] as const;
+  const hasReplicaStatus = replicaFields.some(field => typeof status[field] === "number");
+  const desired = spec.test === true ? 0 : typeof spec.replicas === "number" ? spec.replicas : 1;
+  if (desired === 0) {
+    const replicas = typeof status.replicas === "number" ? status.replicas : 0;
+    const updated = typeof status.updatedReplicas === "number" ? status.updatedReplicas : 0;
+    const available = typeof status.availableReplicas === "number" ? status.availableReplicas : 0;
+    const unavailable = typeof status.unavailableReplicas === "number" ? status.unavailableReplicas : 0;
+    return replicas === 0 && updated === 0 && available === 0 && unavailable === 0 ? "pass" : "running";
+  }
+  if (hasReplicaStatus) {
+    const replicas = typeof status.replicas === "number" ? status.replicas : 0;
+    const updated = typeof status.updatedReplicas === "number" ? status.updatedReplicas : 0;
+    const available = typeof status.availableReplicas === "number" ? status.availableReplicas : 0;
+    const unavailable =
+      typeof status.unavailableReplicas === "number" ? status.unavailableReplicas : Math.max(desired - available, 0);
+    return replicas === desired && updated === desired && available === desired && unavailable === 0
+      ? "pass"
+      : "running";
+  }
+
+  if (hasCondition(["Available", "Complete", "Completed"], "True")) return "pass";
+  if (hasCondition(["Progressing", "Pending"], "True") || hasCondition(["Available"], "False")) return "running";
   return "unknown";
 }
 
 function podStatus(pod: unknown): OpenShiftStatus {
   const phase = str(obj(pod)?.status && obj(obj(pod)?.status)?.phase);
-  const statuses = arr(obj(obj(pod)?.status)?.containerStatuses);
-  const waitingReasons = statuses.flatMap(s => str(obj(obj(obj(s)?.state)?.waiting)?.reason) ?? []);
-  if (
-    waitingReasons.some(reason =>
-      ["CrashLoopBackOff", "ImagePullBackOff", "ErrImagePull", "CreateContainerError"].includes(reason),
-    )
-  )
-    return "fail";
-  if (waitingReasons.some(reason => ["ContainerCreating", "PodInitializing", "Pending"].includes(reason)))
-    return "running";
+  if (str(metadata(pod).deletionTimestamp)) return "unknown";
+  const status = obj(obj(pod)?.status) ?? {};
+  const statuses = [...arr(status.initContainerStatuses), ...arr(status.containerStatuses)];
+  const fatalReasons = new Set([
+    "CrashLoopBackOff",
+    "ImagePullBackOff",
+    "ErrImagePull",
+    "CreateContainerError",
+    "CreateContainerConfigError",
+    "InvalidImageName",
+    "RunContainerError",
+  ]);
+  const hasFatalContainer = statuses.some(container => {
+    const state = obj(obj(container)?.state) ?? {};
+    const waitingReason = str(obj(state.waiting)?.reason);
+    const terminated = obj(state.terminated);
+    return (
+      (waitingReason !== undefined && fatalReasons.has(waitingReason)) ||
+      (terminated?.reason !== "Completed" && typeof terminated?.exitCode === "number" && terminated.exitCode !== 0)
+    );
+  });
+  if (hasFatalContainer) return "fail";
   if (phase === "Failed") return "fail";
   if (phase === "Succeeded") return "pass";
-  if (phase === "Running") return "pass";
   if (phase === "Pending") return "running";
+  if (phase === "Running") {
+    const ready = arr(status.conditions).find(condition => obj(condition)?.type === "Ready");
+    return obj(ready)?.status === "True" ? "pass" : "running";
+  }
   return "unknown";
 }
 
@@ -114,7 +164,7 @@ function buildStatus(build: unknown): OpenShiftStatus {
     case "Cancelled":
       return "fail";
     default:
-      return statusFromConditions(build);
+      return "unknown";
   }
 }
 
@@ -130,6 +180,9 @@ function baseResource(
     kind,
     namespace,
     name,
+    uid: str(md.uid),
+    ownerReferences: ownerReferences(item),
+    terminating: str(md.deletionTimestamp) !== undefined,
     updatedAt: str(md.creationTimestamp) ?? null,
     raw: item,
   };
@@ -154,7 +207,13 @@ function extractImageStreamTag(namespace: string, item: unknown, annotationKey: 
   if (!commitSha) return null;
   const image = obj(item)?.image;
   const ref = str(obj(image)?.dockerImageReference);
-  return { ...baseResource("ImageStreamTag", namespace, item), status: "pass", imageRefs: imageTokens(ref), commitSha };
+  const digest = str(obj(image)?.metadata && obj(obj(image)?.metadata)?.name) ?? str(obj(image)?.dockerImageReference);
+  return {
+    ...baseResource("ImageStreamTag", namespace, item),
+    status: digest?.includes("sha256:") ? "pass" : "unknown",
+    imageRefs: imageTokens(ref),
+    commitSha,
+  };
 }
 
 function containerImages(spec: unknown): string[] {
@@ -166,7 +225,7 @@ function containerImages(spec: unknown): string[] {
 function extractWorkload(kind: "Deployment" | "DeploymentConfig", namespace: string, item: unknown): OpenShiftResource {
   return {
     ...baseResource(kind, namespace, item),
-    status: statusFromConditions(item),
+    status: workloadStatus(item),
     imageRefs: containerImages(obj(item)?.spec),
     raw: item,
   };
@@ -178,6 +237,16 @@ function extractPod(namespace: string, item: unknown): OpenShiftResource {
   return { ...baseResource("Pod", namespace, item), status: podStatus(item), imageRefs, raw: item };
 }
 
+function extractController(
+  kind: OpenShiftControllerReference["kind"],
+  namespace: string,
+  item: unknown,
+): OpenShiftControllerReference | null {
+  const uid = str(metadata(item).uid);
+  if (!uid) return null;
+  return { kind, namespace, uid, ownerReferences: ownerReferences(item) };
+}
+
 async function fetchItems(serverUrl: string, token: string, path: string, signal?: AbortSignal): Promise<unknown[]> {
   const res = await fetchWithRetry(
     openShiftApiUrl(serverUrl, path),
@@ -187,196 +256,6 @@ async function fetchItems(serverUrl: string, token: string, path: string, signal
   );
   if (!res.ok) throw new Error(`OpenShift ${path} failed: ${res.status}`);
   return arr(obj(await res.json())?.items);
-}
-
-async function fetchItem(serverUrl: string, token: string, path: string, signal?: AbortSignal): Promise<unknown> {
-  const res = await fetchWithRetry(
-    openShiftApiUrl(serverUrl, path),
-    { signal, headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } },
-    FETCH_OPTS,
-    "OpenShift",
-  );
-  if (!res.ok) throw new Error(`OpenShift ${path} failed: ${res.status}`);
-  return res.json();
-}
-
-async function fetchText(serverUrl: string, token: string, path: string, signal?: AbortSignal): Promise<string> {
-  const res = await fetchWithRetry(
-    openShiftApiUrl(serverUrl, path),
-    { signal, headers: { Authorization: `Bearer ${token}`, Accept: "text/plain" } },
-    FETCH_OPTS,
-    "OpenShift",
-  );
-  if (!res.ok) throw new Error(`OpenShift ${path} failed: ${res.status}`);
-  return res.text();
-}
-
-function resourcePath(resource: Pick<OpenShiftResource, "kind" | "namespace" | "name">): string {
-  const ns = encodeURIComponent(resource.namespace);
-  const name = encodeURIComponent(resource.name);
-  switch (resource.kind) {
-    case "Build":
-      return `/apis/build.openshift.io/v1/namespaces/${ns}/builds/${name}`;
-    case "ImageStreamTag":
-      return `/apis/image.openshift.io/v1/namespaces/${ns}/imagestreamtags/${name}`;
-    case "Deployment":
-      return `/apis/apps/v1/namespaces/${ns}/deployments/${name}`;
-    case "DeploymentConfig":
-      return `/apis/apps.openshift.io/v1/namespaces/${ns}/deploymentconfigs/${name}`;
-    case "Pod":
-      return `/api/v1/namespaces/${ns}/pods/${name}`;
-  }
-}
-
-function logPath(resource: Pick<OpenShiftResource, "kind" | "namespace" | "name">, container?: string): string | null {
-  const ns = encodeURIComponent(resource.namespace);
-  const name = encodeURIComponent(resource.name);
-  const params = new URLSearchParams({ tailLines: "40" });
-  if (container) params.set("container", container);
-  if (resource.kind === "Build") return `/apis/build.openshift.io/v1/namespaces/${ns}/builds/${name}/log?${params}`;
-  if (resource.kind === "Pod") return `/api/v1/namespaces/${ns}/pods/${name}/log?${params}`;
-  return null;
-}
-
-function conditionStatus(condition: unknown): OpenShiftStatus {
-  const c = obj(condition);
-  const type = str(c?.type);
-  const status = str(c?.status);
-  if (["Failed", "Degraded"].includes(type ?? "") && status === "True") return "fail";
-  if (["Progressing", "Pending"].includes(type ?? "") && status === "True") return "running";
-  if (["Available", "Complete", "Completed"].includes(type ?? "") && status === "True") return "pass";
-  return "unknown";
-}
-
-function conditionsGroup(detail: unknown): OpenShiftDetailGroup | null {
-  const conditions = arr(obj(obj(detail)?.status)?.conditions);
-  if (conditions.length === 0) return null;
-  const lines = conditions.map((condition, idx): OpenShiftDetailLine => {
-    const c = obj(condition);
-    const type = str(c?.type) ?? "condition";
-    const status = str(c?.status) ?? "unknown";
-    const reason = str(c?.reason);
-    return {
-      id: `condition:${type}:${idx}`,
-      text: `${type}: ${status}${reason ? ` (${reason})` : ""}`,
-      status: conditionStatus(condition),
-    };
-  });
-  const fail = lines.some(line => line.status === "fail");
-  const running = lines.some(line => line.status === "running");
-  const pass = lines.some(line => line.status === "pass");
-  return {
-    id: "conditions",
-    name: "Conditions",
-    status: fail ? "fail" : running ? "running" : pass ? "pass" : "unknown",
-    lines,
-  };
-}
-
-function imagesGroup(resource: OpenShiftResource): OpenShiftDetailGroup | null {
-  const refs = [...new Set(resource.imageRefs)].filter(Boolean);
-  if (refs.length === 0) return null;
-  return {
-    id: "images",
-    name: "Images",
-    status: "unknown",
-    lines: refs.slice(0, 20).map((ref, idx) => ({ id: `image:${idx}`, text: ref, status: "unknown" })),
-  };
-}
-
-function containerLines(pod: unknown): OpenShiftDetailLine[] {
-  return arr(obj(obj(pod)?.status)?.containerStatuses).map((status, idx) => {
-    const s = obj(status);
-    const name = str(s?.name) ?? `container-${idx + 1}`;
-    const restarts = typeof s?.restartCount === "number" ? s.restartCount : 0;
-    const state = obj(s?.state);
-    const waiting = obj(state?.waiting);
-    const terminated = obj(state?.terminated);
-    const ready = s?.ready === true;
-    const reason = str(waiting?.reason) ?? str(terminated?.reason) ?? (ready ? "ready" : "not ready");
-    const waitingReason = str(waiting?.reason);
-    const statusValue: OpenShiftStatus = waitingReason
-      ? ["ContainerCreating", "PodInitializing", "Pending"].includes(waitingReason)
-        ? "running"
-        : "fail"
-      : terminated
-        ? str(terminated.reason) === "Completed"
-          ? "pass"
-          : "fail"
-        : ready
-          ? "pass"
-          : "unknown";
-    return { id: `container:${name}:${idx}`, text: `${name}: ${reason} (restarts ${restarts})`, status: statusValue };
-  });
-}
-
-function containersGroup(pod: unknown): OpenShiftDetailGroup | null {
-  const lines = containerLines(pod);
-  if (lines.length === 0) return null;
-  const fail = lines.some(line => line.status === "fail");
-  const pass = lines.some(line => line.status === "pass");
-  return { id: "containers", name: "Containers", status: fail ? "fail" : pass ? "pass" : "unknown", lines };
-}
-
-function selectorParams(detail: unknown): string | null {
-  const spec = obj(obj(detail)?.spec);
-  const selector = obj(spec?.selector);
-  const labels = obj(selector?.matchLabels) ?? selector;
-  if (!labels) return null;
-  const pairs = Object.entries(labels).flatMap(([key, value]) =>
-    typeof value === "string" && value.trim() ? [`${key}=${value}`] : [],
-  );
-  if (pairs.length === 0) return null;
-  return new URLSearchParams({ labelSelector: pairs.join(",") }).toString();
-}
-
-async function podsGroupForWorkload(
-  serverUrl: string,
-  token: string,
-  detail: unknown,
-  namespace: string,
-  signal?: AbortSignal,
-): Promise<OpenShiftDetailGroup | null> {
-  const params = selectorParams(detail);
-  if (!params) return null;
-  const pods = await fetchItems(
-    serverUrl,
-    token,
-    `/api/v1/namespaces/${encodeURIComponent(namespace)}/pods?${params}`,
-    signal,
-  );
-  if (pods.length === 0) return null;
-  const lines = pods.slice(0, 20).map((pod, idx): OpenShiftDetailLine => {
-    const name = str(metadata(pod).name) ?? `pod-${idx + 1}`;
-    const phase = str(obj(obj(pod)?.status)?.phase) ?? "unknown";
-    return { id: `pod:${name}:${idx}`, text: `${name}: ${phase}`, status: podStatus(pod) };
-  });
-  const fail = lines.some(line => line.status === "fail");
-  const running = lines.some(line => line.status === "running");
-  const pass = lines.some(line => line.status === "pass");
-  return { id: "pods", name: "Pods", status: fail ? "fail" : running ? "running" : pass ? "pass" : "unknown", lines };
-}
-
-async function logsGroup(
-  serverUrl: string,
-  token: string,
-  resource: OpenShiftResource,
-  detail: unknown,
-  signal?: AbortSignal,
-): Promise<OpenShiftDetailGroup | null> {
-  const container =
-    resource.kind === "Pod" ? str(obj(arr(obj(obj(detail)?.status)?.containerStatuses)[0])?.name) : undefined;
-  const path = logPath(resource, container);
-  if (!path) return null;
-  const log = await fetchText(serverUrl, token, path, signal);
-  const lines = log.split("\n").filter(Boolean).slice(-40);
-  if (lines.length === 0) return null;
-  return {
-    id: "logs",
-    name: "Logs",
-    status: "unknown",
-    lines: lines.map((line, idx) => ({ id: `log:${idx}`, text: line, status: "unknown" })),
-  };
 }
 
 function add(nsMap: Map<string, OpenShiftCommitData>, sha: string, resource: OpenShiftResource) {
@@ -393,17 +272,42 @@ function add(nsMap: Map<string, OpenShiftCommitData>, sha: string, resource: Ope
     };
     data.namespaces.push(ns);
   }
-  if (resource.kind === "Build") ns.builds.push(resource);
-  else if (resource.kind === "ImageStreamTag") ns.imageStreamTags.push(resource);
-  else if (resource.kind === "Deployment") ns.deployments.push(resource);
-  else if (resource.kind === "DeploymentConfig") ns.deploymentConfigs.push(resource);
-  else ns.pods.push(resource);
+  const target =
+    resource.kind === "Build"
+      ? ns.builds
+      : resource.kind === "ImageStreamTag"
+        ? ns.imageStreamTags
+        : resource.kind === "Deployment"
+          ? ns.deployments
+          : resource.kind === "DeploymentConfig"
+            ? ns.deploymentConfigs
+            : ns.pods;
+  const identity = resource.uid ?? resource.id;
+  if (!target.some(existing => (existing.uid ?? existing.id) === identity)) target.push(resource);
   nsMap.set(sha, data);
 }
 
-export function buildOpenShiftCommitMap(resources: OpenShiftResource[]): Map<string, OpenShiftCommitData> {
+function inventoryKey(namespace: string, kind: string, uid: string): string {
+  return `${namespace}:${kind}:${uid}`;
+}
+
+export function buildOpenShiftCommitMap(
+  resources: OpenShiftResource[],
+  controllers: OpenShiftControllerReference[] = [],
+): Map<string, OpenShiftCommitData> {
   const map = new Map<string, OpenShiftCommitData>();
   const tokensBySha = new Map<string, Set<string>>();
+  const matchedPods: { sha: string; pod: OpenShiftResource }[] = [];
+  const controllerByUid = new Map(
+    controllers.map(controller => [inventoryKey(controller.namespace, controller.kind, controller.uid), controller]),
+  );
+  const workloadByUid = new Map(
+    resources.flatMap(resource =>
+      resource.uid && (resource.kind === "Deployment" || resource.kind === "DeploymentConfig")
+        ? [[inventoryKey(resource.namespace, resource.kind, resource.uid), resource] as const]
+        : [],
+    ),
+  );
   for (const r of resources.filter(r => r.commitSha)) {
     const sha = r.commitSha;
     if (!sha) continue;
@@ -413,8 +317,29 @@ export function buildOpenShiftCommitMap(resources: OpenShiftResource[]): Map<str
     tokensBySha.set(sha, set);
   }
   for (const r of resources.filter(r => !r.commitSha)) {
+    if (r.kind === "Pod" && r.terminating) continue;
     for (const [sha, tokens] of tokensBySha) {
-      if (r.imageRefs.flatMap(imageDigests).some(ref => tokens.has(ref))) add(map, sha, r);
+      if (!r.imageRefs.flatMap(imageDigests).some(ref => tokens.has(ref))) continue;
+      add(map, sha, r);
+      if (r.kind === "Pod") matchedPods.push({ sha, pod: r });
+    }
+  }
+  for (const { sha, pod } of matchedPods) {
+    for (const podOwner of pod.ownerReferences ?? []) {
+      const expected =
+        podOwner.kind === "ReplicaSet"
+          ? { controllerKind: "ReplicaSet" as const, workloadKind: "Deployment" as const }
+          : podOwner.kind === "ReplicationController"
+            ? { controllerKind: "ReplicationController" as const, workloadKind: "DeploymentConfig" as const }
+            : null;
+      if (!expected) continue;
+      const controller = controllerByUid.get(inventoryKey(pod.namespace, expected.controllerKind, podOwner.uid));
+      if (!controller) continue;
+      for (const workloadOwner of controller.ownerReferences) {
+        if (workloadOwner.kind !== expected.workloadKind) continue;
+        const workload = workloadByUid.get(inventoryKey(pod.namespace, expected.workloadKind, workloadOwner.uid));
+        if (workload) add(map, sha, workload);
+      }
     }
   }
   return map;
@@ -424,15 +349,15 @@ function imageDigests(ref: string): string[] {
   return ref.match(/(?:sha256:)[a-fA-F0-9]+/g) ?? [];
 }
 
-const OPENSHIFT_NAMESPACE = /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/;
-
 export async function fetchOpenShiftInventory(
   config: { serverUrl: string; namespaces: string[]; commitShaAnnotation: string },
   token: string,
   signal?: AbortSignal,
 ): Promise<OpenShiftInventoryResult> {
   const resources: OpenShiftResource[] = [];
+  const controllers: OpenShiftControllerReference[] = [];
   const failures: OpenShiftInventoryFailure[] = [];
+  let successfulRequests = 0;
   for (const ns of config.namespaces) {
     const encodedNamespace = encodeURIComponent(ns);
     const requests = [
@@ -453,9 +378,20 @@ export async function fetchOpenShiftInventory(
         extract: (items: unknown[]) => items.map(item => extractWorkload("Deployment", ns, item)),
       },
       {
+        kind: "ReplicaSet" as const,
+        path: `/apis/apps/v1/namespaces/${encodedNamespace}/replicasets`,
+        extract: (items: unknown[]) => items.flatMap(item => extractController("ReplicaSet", ns, item) ?? []),
+      },
+      {
         kind: "DeploymentConfig" as const,
         path: `/apis/apps.openshift.io/v1/namespaces/${encodedNamespace}/deploymentconfigs`,
         extract: (items: unknown[]) => items.map(item => extractWorkload("DeploymentConfig", ns, item)),
+      },
+      {
+        kind: "ReplicationController" as const,
+        path: `/api/v1/namespaces/${encodedNamespace}/replicationcontrollers`,
+        extract: (items: unknown[]) =>
+          items.flatMap(item => extractController("ReplicationController", ns, item) ?? []),
       },
       {
         kind: "Pod" as const,
@@ -463,7 +399,7 @@ export async function fetchOpenShiftInventory(
         extract: (items: unknown[]) => items.map(item => extractPod(ns, item)),
       },
     ];
-    if (!OPENSHIFT_NAMESPACE.test(ns)) {
+    if (!isValidOpenShiftNamespace(ns)) {
       for (const request of requests)
         failures.push({
           namespace: ns,
@@ -478,8 +414,13 @@ export async function fetchOpenShiftInventory(
     );
     results.forEach((result, index) => {
       const request = requests[index];
-      if (result.status === "fulfilled") resources.push(...request.extract(result.value));
-      else
+      if (result.status === "fulfilled") {
+        successfulRequests++;
+        const extracted = request.extract(result.value);
+        if (request.kind === "ReplicaSet" || request.kind === "ReplicationController")
+          controllers.push(...(extracted as OpenShiftControllerReference[]));
+        else resources.push(...(extracted as OpenShiftResource[]));
+      } else
         failures.push({
           namespace: ns,
           kind: request.kind,
@@ -491,7 +432,7 @@ export async function fetchOpenShiftInventory(
   const error = failures.length
     ? `OpenShift inventory partially failed: ${failures.map(f => `${f.namespace}/${f.kind}: ${f.error}`).join("; ")}`
     : null;
-  return { data: buildOpenShiftCommitMap(resources), error, failures };
+  return { data: buildOpenShiftCommitMap(resources, controllers), error, failures, successfulRequests };
 }
 
 export function buildOpenShiftGraphBadges(data: Map<string, OpenShiftCommitData>): Map<string, GraphBadge> {
@@ -508,7 +449,7 @@ export function buildOpenShiftGraphBadges(data: Map<string, OpenShiftCommitData>
     const runningCount = resources.filter(r => r.status === "running").length;
     const passCount = resources.filter(r => r.status === "pass").length;
     const unknownCount = resources.filter(r => r.status === "unknown").length;
-    const badge = failCount ? "fail" : runningCount ? "running" : passCount ? "pass" : "unknown";
+    const badge = failCount ? "fail" : runningCount ? "running" : unknownCount ? "unknown" : "pass";
     badges.set(sha, {
       sha,
       badge,
@@ -522,42 +463,4 @@ export function buildOpenShiftGraphBadges(data: Map<string, OpenShiftCommitData>
     });
   }
   return badges;
-}
-
-export async function fetchOpenShiftResourceDetails(
-  config: { serverUrl: string },
-  token: string,
-  resource: OpenShiftResource,
-  signal?: AbortSignal,
-): Promise<OpenShiftResourceDetailResult> {
-  const groups: OpenShiftDetailGroup[] = [];
-  let firstError: string | null = null;
-  try {
-    const detail = await fetchItem(config.serverUrl, token, resourcePath(resource), signal);
-    const conditions = conditionsGroup(detail);
-    if (conditions) groups.push(conditions);
-    const containers = resource.kind === "Pod" ? containersGroup(detail) : null;
-    if (containers) groups.push(containers);
-    const images = imagesGroup(resource);
-    if (images) groups.push(images);
-    if (resource.kind === "Deployment" || resource.kind === "DeploymentConfig") {
-      try {
-        const pods = await podsGroupForWorkload(config.serverUrl, token, detail, resource.namespace, signal);
-        if (pods) groups.push(pods);
-      } catch (err) {
-        firstError ??= err instanceof Error ? err.message : String(err);
-      }
-    }
-    if (resource.kind === "Pod" || resource.kind === "Build") {
-      try {
-        const logs = await logsGroup(config.serverUrl, token, resource, detail, signal);
-        if (logs) groups.push(logs);
-      } catch (err) {
-        firstError ??= err instanceof Error ? err.message : String(err);
-      }
-    }
-  } catch (err) {
-    firstError ??= err instanceof Error ? err.message : String(err);
-  }
-  return { groups, error: firstError };
 }

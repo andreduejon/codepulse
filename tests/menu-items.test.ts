@@ -2,9 +2,11 @@ import { describe, expect, it } from "bun:test";
 import {
   buildGitHubProviderItems,
   buildJenkinsProviderItems,
+  buildOpenShiftProviderItems,
   type GitHubMenuConfig,
   isOptionalRepoMetadataValid,
   type JenkinsMenuConfig,
+  type OpenShiftMenuConfig,
   optionalRepoMetadataValue,
 } from "../src/hooks/use-menu-items";
 
@@ -85,6 +87,38 @@ describe("buildGitHubProviderItems", () => {
     if (capture.changed == null || capture.persisted == null) throw new Error("expected callbacks");
     expect(capture.changed.trustedEnterpriseHost).toBe("ghe.example.com");
     expect(capture.persisted.trustedEnterpriseHost).toBe("ghe.example.com");
+  });
+});
+
+describe("buildOpenShiftProviderItems", () => {
+  it("validates HTTPS server and DNS namespaces", () => {
+    const cfg: OpenShiftMenuConfig = {
+      enabled: true,
+      serverUrl: "https://api.example.com:6443",
+      tokenEnvVar: "OPENSHIFT_TOKEN",
+      namespaces: [],
+      commitShaAnnotation: "dev/commit-sha",
+    };
+    let changed = cfg;
+    const items = buildOpenShiftProviderItems(cfg, next => {
+      changed = next;
+    });
+    const server = items.find(item => item.kind === "editable" && item.label === "Server");
+    const namespace = items.find(item => item.kind === "editable" && item.label === "New namespace");
+    expect(server?.kind).toBe("editable");
+    expect(namespace?.kind).toBe("editable");
+    if (server?.kind === "editable") {
+      expect(server.isDraftValid?.("https://api.example.com")).toBe(true);
+      expect(server.isDraftValid?.("http://api.example.com")).toBe(false);
+    }
+    if (namespace?.kind === "editable") {
+      expect(namespace.isDraftValid?.("team-one")).toBe(true);
+      expect(namespace.isDraftValid?.("Bad_Name")).toBe(false);
+      namespace.set("Bad_Name");
+      expect(changed.namespaces).toEqual([]);
+      namespace.set("team-one");
+      expect(changed.namespaces).toEqual(["team-one"]);
+    }
   });
 });
 

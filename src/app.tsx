@@ -35,6 +35,8 @@ import type { GitHubJob, GitHubWorkflowRun } from "./providers/github-actions/ty
 import { useGitHubCI } from "./providers/github-actions/use-github-ci";
 import type { JenkinsJob, JenkinsRun } from "./providers/jenkins/types";
 import { useJenkinsCI } from "./providers/jenkins/use-jenkins-ci";
+import OpenShiftResourceDialog from "./providers/openshift/resource-dialog";
+import type { OpenShiftResource } from "./providers/openshift/types";
 import { useOpenShift } from "./providers/openshift/use-openshift";
 import type { GraphBadge, ProviderView } from "./providers/provider";
 import { nextGroupRepoPath } from "./utils/group-repos";
@@ -204,7 +206,7 @@ function AppContent(props: Readonly<AppContentProps>) {
   });
 
   const [dialog, setDialog] = createSignal<
-    "menu" | "help" | "theme" | "diff-blame" | "detail" | "job-log" | "debug" | null
+    "menu" | "help" | "theme" | "diff-blame" | "detail" | "job-log" | "openshift-resource" | "debug" | null
   >(null);
 
   const [searchFocused, setSearchFocused] = createSignal(false);
@@ -217,11 +219,13 @@ function AppContent(props: Readonly<AppContentProps>) {
   const [diffTarget, setDiffTarget] = createSignal<DiffTarget | null>(null);
   /** Target for the job log dialog (set when user opens a job log). */
   const [jobLogTarget, setJobLogTarget] = createSignal<{
+    provider: "github-actions" | "jenkins";
     job: { id: string | number; name: string };
     run: { name: string; runNumber: number; url?: string };
     jobs: { id: string | number; name: string }[];
     fetchLog: (job: { id: string | number; name: string }) => Promise<string>;
   } | null>(null);
+  const [openShiftResourceTarget, setOpenShiftResourceTarget] = createSignal<OpenShiftResource | null>(null);
 
   /** Command bar mode — drives placeholder text and key routing. */
   const [commandBarMode, setCommandBarMode] = createSignal<CommandBarMode>("idle");
@@ -260,6 +264,14 @@ function AppContent(props: Readonly<AppContentProps>) {
   let graphScrollboxRef: ScrollBoxRenderable | undefined;
   let detailScrollboxRef: ScrollBoxRenderable | undefined;
   const [pendingGraphScrollTop, setPendingGraphScrollTop] = createSignal<number | null>(null);
+  let scrollRestoreVersion = 0;
+  let scrollRestoreTimers: ReturnType<typeof setTimeout>[] = [];
+
+  const cancelScrollRestore = () => {
+    scrollRestoreVersion++;
+    for (const timer of scrollRestoreTimers) clearTimeout(timer);
+    scrollRestoreTimers = [];
+  };
 
   // Navigation ref for interactive detail panel items
   const detailNavRef: DetailNavRef = {
@@ -303,6 +315,7 @@ function AppContent(props: Readonly<AppContentProps>) {
 
   const handleOpenJobLog = (job: GitHubJob, run: GitHubWorkflowRun, jobs: GitHubJob[] = [job]) => {
     setJobLogTarget({
+      provider: "github-actions",
       job,
       run,
       jobs: jobs.length > 0 ? jobs : [job],
@@ -313,12 +326,18 @@ function AppContent(props: Readonly<AppContentProps>) {
 
   const handleOpenJenkinsJobLog = (job: JenkinsJob, run: JenkinsRun, jobs: JenkinsJob[] = [job]) => {
     setJobLogTarget({
+      provider: "jenkins",
       job,
       run,
       jobs: jobs.length > 0 ? jobs : [job],
       fetchLog: () => jenkinsCI.fetchRunLog(run),
     });
     setDialog("job-log");
+  };
+
+  const handleOpenOpenShiftResource = (resource: OpenShiftResource) => {
+    setOpenShiftResourceTarget(resource);
+    setDialog("openshift-resource");
   };
 
   const refreshActiveProvider = async () => {
@@ -380,12 +399,24 @@ function AppContent(props: Readonly<AppContentProps>) {
   createEffect(() => {
     const top = pendingGraphScrollTop();
     if (top == null || state.loading()) return;
-    setTimeout(() => graphScrollboxRef?.scrollTo(top), 0);
-    setTimeout(() => graphScrollboxRef?.scrollTo(top), 16);
-    setTimeout(() => {
+    cancelScrollRestore();
+    const version = scrollRestoreVersion;
+    const path = activeRepoPath();
+    const restore = () => {
+      if (version !== scrollRestoreVersion || activeRepoPath() !== path || state.loading()) return;
       graphScrollboxRef?.scrollTo(top);
-      setPendingGraphScrollTop(null);
-    }, 50);
+    };
+    scrollRestoreTimers = [
+      setTimeout(restore, 0),
+      setTimeout(restore, 16),
+      setTimeout(() => {
+        restore();
+        if (version !== scrollRestoreVersion || activeRepoPath() !== path || state.loading()) return;
+        setPendingGraphScrollTop(null);
+        scrollRestoreTimers = [];
+      }, 50),
+    ];
+    onCleanup(cancelScrollRestore);
   });
 
   const resetTransientRepoState = () => {
@@ -409,6 +440,8 @@ function AppContent(props: Readonly<AppContentProps>) {
   const switchRepoPath = (nextPath: string) => {
     const currentPath = activeRepoPath();
     if (!nextPath || nextPath === currentPath) return;
+    cancelScrollRestore();
+    setPendingGraphScrollTop(null);
     saveRepoSessionSnapshot(currentPath);
     resetTransientRepoState();
     setRepoSelectorVisible(false);
@@ -430,7 +463,9 @@ function AppContent(props: Readonly<AppContentProps>) {
   };
 
   const handleFetchAll = async () => {
+    const path = activeRepoPath();
     await handleFetch();
+    if (activeRepoPath() !== path) return;
     await refreshActiveProvider();
   };
 
@@ -801,7 +836,7 @@ function AppContent(props: Readonly<AppContentProps>) {
                         jenkinsProviderStatus={state.providerStatus()}
                         openshiftGetCommitData={openShift.getCommitData}
                         openshiftFetchCommitData={openShift.fetchCommitDataForSHA}
-                        openshiftFetchResourceDetails={openShift.fetchResourceDetails}
+                        onOpenOpenShiftResource={handleOpenOpenShiftResource}
                         openshiftProviderStatus={state.providerStatus()}
                       />
                     </box>
@@ -881,7 +916,7 @@ function AppContent(props: Readonly<AppContentProps>) {
                     jenkinsProviderStatus={state.providerStatus()}
                     openshiftGetCommitData={openShift.getCommitData}
                     openshiftFetchCommitData={openShift.fetchCommitDataForSHA}
-                    openshiftFetchResourceDetails={openShift.fetchResourceDetails}
+                    onOpenOpenShiftResource={handleOpenOpenShiftResource}
                     openshiftProviderStatus={state.providerStatus()}
                   />
                 </Show>
@@ -889,11 +924,23 @@ function AppContent(props: Readonly<AppContentProps>) {
                 <Show when={dialog() === "job-log" && jobLogTarget()}>
                   {target => (
                     <JobLogDialog
+                      provider={target().provider}
                       job={target().job}
                       jobs={target().jobs}
                       run={target().run}
                       fetchLog={target().fetchLog}
                       onClose={() => setDialog(null)}
+                    />
+                  )}
+                </Show>
+                <Show when={dialog() === "openshift-resource" && openShiftResourceTarget()}>
+                  {resource => (
+                    <OpenShiftResourceDialog
+                      resource={resource()}
+                      onClose={() => {
+                        if (layoutMode() === "compact" && state.detailFocused()) setDialog("detail");
+                        else setDialog(null);
+                      }}
                     />
                   )}
                 </Show>

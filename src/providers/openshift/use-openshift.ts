@@ -1,27 +1,22 @@
 import type { Accessor } from "solid-js";
 import { createEffect, createSignal, onCleanup, untrack } from "solid-js";
 import type { AppActions, AppState } from "../../context/state";
-import { providerError, providerIdle, providerLoading, providerUnavailable } from "../../context/state";
-import { registerProvider, unregisterProvider } from "../provider";
 import {
-  buildOpenShiftGraphBadges,
-  fetchOpenShiftInventory,
-  fetchOpenShiftResourceDetails,
-  getOpenShiftToken,
-} from "./api";
-import type {
-  OpenShiftCommitData,
-  OpenShiftProviderConfig,
-  OpenShiftResource,
-  OpenShiftResourceDetailResult,
-} from "./types";
+  providerError,
+  providerIdle,
+  providerLoading,
+  providerUnavailable,
+  providerWarning,
+} from "../../context/state";
+import { registerProvider, unregisterProvider } from "../provider";
+import { buildOpenShiftGraphBadges, fetchOpenShiftInventory, getOpenShiftToken } from "./api";
+import type { OpenShiftCommitData, OpenShiftProviderConfig } from "./types";
 import { DEFAULT_OPENSHIFT_CONFIG } from "./types";
 
 export interface UseOpenShiftResult {
   getCommitData: (sha: string) => OpenShiftCommitData | null;
   refresh: () => Promise<void>;
   fetchCommitDataForSHA: (sha: string) => Promise<void>;
-  fetchResourceDetails: (resource: OpenShiftResource, signal?: AbortSignal) => Promise<OpenShiftResourceDetailResult>;
   isAvailable: () => boolean;
 }
 
@@ -80,6 +75,10 @@ export function useOpenShift(opts: {
     try {
       const result = await fetchOpenShiftInventory(requestConfig, token, signal);
       if (signal?.aborted || request !== activeRequest) return;
+      if (result.successfulRequests === 0 && result.error) {
+        actions.setProviderStatus("openshift", providerError(result.error));
+        return;
+      }
       cache.clear();
       for (const [sha, data] of result.data) cache.set(sha, data);
       actions.setGraphBadges("openshift", buildOpenShiftGraphBadges(cache));
@@ -87,7 +86,7 @@ export function useOpenShift(opts: {
       hasFetchedOnce = true;
       if (result.error) {
         for (const failure of result.failures) console.debug("OpenShift inventory request failed", failure);
-        actions.setProviderStatus("openshift", providerError(result.error));
+        actions.setProviderStatus("openshift", providerWarning(result.error));
       } else {
         actions.setProviderStatus("openshift", providerIdle());
         actions.setProviderLastSuccessfulRefresh("openshift", new Date());
@@ -116,9 +115,9 @@ export function useOpenShift(opts: {
         actions.setProviderStatus("openshift", providerUnavailable(unavailableMessage()));
       return;
     }
-    if (untrack(state.graphRows).length === 0) return;
-    backgroundFetchAbortCtrl = new AbortController();
-    void doFetch(backgroundFetchAbortCtrl.signal, untrack(state.activeProviderView) === "openshift");
+    if (untrack(state.activeProviderView) !== "openshift" || untrack(state.graphRows).length === 0) return;
+    fetchAbortCtrl = new AbortController();
+    void doFetch(fetchAbortCtrl.signal, true);
   });
 
   function stopAutoRefresh() {
@@ -152,16 +151,6 @@ export function useOpenShift(opts: {
   });
 
   createEffect(() => {
-    const rows = state.graphRows();
-    if (rows.length === 0) return;
-    if (hasFetchedOnce || backgroundFetchAbortCtrl) return;
-    if (!isAvailable()) return;
-
-    backgroundFetchAbortCtrl = new AbortController();
-    void doFetch(backgroundFetchAbortCtrl.signal, false);
-  });
-
-  createEffect(() => {
     state.autoRefreshInterval();
     if (state.activeProviderView() === "openshift") {
       stopAutoRefresh();
@@ -183,11 +172,6 @@ export function useOpenShift(opts: {
     refresh: async () => doFetch(undefined, true),
     fetchCommitDataForSHA: async () => {
       if (!hasFetchedOnce) await doFetch(undefined, true);
-    },
-    fetchResourceDetails: async (resource, signal) => {
-      const token = getOpenShiftToken(config.tokenEnvVar);
-      if (!token || !isAvailable()) return { groups: [], error: unavailableMessage() };
-      return fetchOpenShiftResourceDetails(config, token, resource, signal);
     },
     isAvailable,
   };

@@ -34,8 +34,8 @@ import {
 } from "../providers/github-actions/graph-columns";
 import {
   OpenShiftColumnHeaders,
-  OpenShiftHealthColumn,
   OpenShiftResourcesColumn,
+  OpenShiftStatusColumn,
 } from "../providers/openshift/graph-columns";
 import { formatRelativeDate } from "../utils/date";
 import { scrollElementIntoView } from "../utils/scroll";
@@ -476,7 +476,7 @@ function GraphLine(
         {state.activeProviderView() === "openshift" ? (
           <>
             <OpenShiftResourcesColumn badge={state.graphBadges().get(commit().hash)} active={props.active} />
-            <OpenShiftHealthColumn badge={state.graphBadges().get(commit().hash)} active={props.active} />
+            <OpenShiftStatusColumn badge={state.graphBadges().get(commit().hash)} active={props.active} />
           </>
         ) : state.activeProviderView() !== "git" ? (
           <>

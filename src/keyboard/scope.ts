@@ -10,6 +10,7 @@ export type KeyboardScope =
   | "diff-blame"
   | "detail-dialog"
   | "job-log"
+  | "openshift-resource"
   | "debug";
 
 export function dialogToKeyboardScope(dialog: DialogId): KeyboardScope {
@@ -26,6 +27,8 @@ export function dialogToKeyboardScope(dialog: DialogId): KeyboardScope {
       return "detail-dialog";
     case "job-log":
       return "job-log";
+    case "openshift-resource":
+      return "openshift-resource";
     case "debug":
       return "debug";
     default:

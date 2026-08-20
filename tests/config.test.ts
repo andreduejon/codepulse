@@ -160,6 +160,44 @@ describe("loadConfig", () => {
     ]);
   });
 
+  test("validates OpenShift URL, namespaces, and text limits", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("openshift-validation", repoPath, {
+      providers: {
+        openshift: {
+          serverUrl: " https://api.example.com:6443 ",
+          tokenEnvVar: "T".repeat(255),
+          commitShaAnnotation: "A".repeat(255),
+          namespaces: ["team-one", "Bad_Name", "x".repeat(64)],
+        },
+      },
+    });
+    const { config: result, warnings } = loadConfig(repoPath, configPath);
+    expect(result.providers?.openshift).toEqual({
+      serverUrl: "https://api.example.com:6443",
+      tokenEnvVar: "T".repeat(255),
+      commitShaAnnotation: "A".repeat(255),
+      namespaces: ["team-one"],
+    });
+    expect(warnings.filter(warning => warning.includes("providers.openshift.namespaces"))).toHaveLength(2);
+  });
+
+  test("rejects insecure OpenShift URL and oversized text", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("openshift-invalid", repoPath, {
+      providers: {
+        openshift: {
+          serverUrl: "http://api.example.com",
+          tokenEnvVar: "T".repeat(256),
+          commitShaAnnotation: "A".repeat(256),
+        },
+      },
+    });
+    const { config: result, warnings } = loadConfig(repoPath, configPath);
+    expect(result.providers?.openshift).toEqual({});
+    expect(warnings.filter(warning => warning.includes("providers.openshift"))).toHaveLength(3);
+  });
+
   test("drops invalid trusted enterprise host from repo config", () => {
     const repoPath = "/tmp/repo";
     const configPath = makeRepoConfig("github-enterprise-host-invalid", repoPath, {

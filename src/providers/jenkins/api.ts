@@ -545,7 +545,7 @@ export async function fetchJenkinsRunJobs(
         : null;
     const job: JenkinsJob = {
       id: run.id,
-      name: "build",
+      name: "Pipeline",
       status: run.status,
       conclusion: run.conclusion,
       startedAt: wfapiStartedAt ?? run.startedAt,

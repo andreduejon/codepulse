@@ -8,6 +8,11 @@ import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL, useAppState
 import { themes } from "../context/theme";
 import { getTokenSource, parseGitHubRemote } from "../providers/github-actions/api";
 import type { JenkinsJobConfig } from "../providers/jenkins/types";
+import {
+  isValidOpenShiftNamespace,
+  isValidOpenShiftServerUrl,
+  isValidOpenShiftText,
+} from "../providers/openshift/validation";
 import type { ProviderDetailView } from "../providers/provider";
 
 type MenuTab = "repository" | "branch" | "providers";
@@ -150,7 +155,7 @@ export interface OpenShiftMenuConfig {
   commitShaAnnotation: string;
 }
 
-function buildOpenShiftProviderItems(
+export function buildOpenShiftProviderItems(
   cfg: OpenShiftMenuConfig,
   onChange?: (cfg: OpenShiftMenuConfig) => void,
   persist?: (cfg: OpenShiftMenuConfig) => void,
@@ -172,21 +177,24 @@ function buildOpenShiftProviderItems(
       label: "Server",
       get: () => cfg.serverUrl,
       set: v => update({ ...cfg, serverUrl: v.trim() }),
-      valid: () => !!cfg.serverUrl.trim(),
+      valid: () => isValidOpenShiftServerUrl(cfg.serverUrl),
+      isDraftValid: isValidOpenShiftServerUrl,
     },
     {
       kind: "editable",
       label: "Token",
       get: () => cfg.tokenEnvVar,
       set: v => update({ ...cfg, tokenEnvVar: v.trim() || "OPENSHIFT_TOKEN" }),
-      valid: () => !!process.env[cfg.tokenEnvVar],
+      valid: () => isValidOpenShiftText(cfg.tokenEnvVar) && !!process.env[cfg.tokenEnvVar],
+      isDraftValid: v => isValidOpenShiftText(v.trim() || "OPENSHIFT_TOKEN"),
     },
     {
       kind: "editable",
       label: "Annotation",
       get: () => cfg.commitShaAnnotation,
       set: v => update({ ...cfg, commitShaAnnotation: v.trim() || "dev/commit-sha" }),
-      valid: () => !!cfg.commitShaAnnotation.trim(),
+      valid: () => isValidOpenShiftText(cfg.commitShaAnnotation),
+      isDraftValid: v => isValidOpenShiftText(v.trim() || "dev/commit-sha"),
     },
     {
       kind: "editable",
@@ -195,12 +203,12 @@ function buildOpenShiftProviderItems(
       get: () => "",
       set: v => {
         const namespace = v.trim();
-        if (!namespace || cfg.namespaces.includes(namespace)) return;
+        if (!isValidOpenShiftNamespace(namespace) || cfg.namespaces.includes(namespace)) return;
         update({ ...cfg, namespaces: [...cfg.namespaces, namespace] });
       },
       valid: () => cfg.namespaces.length > 0,
       showValidity: false,
-      isDraftValid: v => v.trim().length > 0,
+      isDraftValid: isValidOpenShiftNamespace,
       staySelectedOnSave: true,
     },
     ...cfg.namespaces.map((namespace, idx) => ({

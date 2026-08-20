@@ -39,6 +39,7 @@ export type HighlightMode = "ancestry" | "path" | "search" | null;
 export type ProviderStatus =
   | { kind: "idle" }
   | { kind: "loading" }
+  | { kind: "warning"; message: string }
   | { kind: "unavailable"; message: string }
   | { kind: "error"; message: string };
 
@@ -49,9 +50,10 @@ export const providerUnavailable = (message: string): ProviderStatus => ({
   message,
 });
 export const providerError = (message: string): ProviderStatus => ({ kind: "error", message });
+export const providerWarning = (message: string): ProviderStatus => ({ kind: "warning", message });
 
 export function providerStatusMessage(status: ProviderStatus): string | null {
-  return status.kind === "error" || status.kind === "unavailable" ? status.message : null;
+  return status.kind === "error" || status.kind === "warning" || status.kind === "unavailable" ? status.message : null;
 }
 
 export interface AppState {
