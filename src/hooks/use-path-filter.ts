@@ -45,23 +45,33 @@ export function usePathFilter({
   // Uses the same prevGraphRows guard pattern as the ancestry effect — the
   // initial path execution already sets the match set; this only fires on
   // subsequent graphRows changes.
-  let prevPathGraphRows: readonly object[] | null = null;
+  let previousIdentity = "";
+  let queryVersion = 0;
   createEffect(() => {
     const rows = state.graphRows();
-    if (rows === prevPathGraphRows) return;
-    prevPathGraphRows = rows;
     const pf = state.pathFilter();
-    if (!pf) return;
     const path = repoPath();
-    // Re-run the hash query asynchronously
     const viewBranch = state.viewingBranch();
     const effectiveAll = viewBranch ? false : state.showAllBranches();
+    const identity = JSON.stringify({ rows: rows.map(row => row.commit.hash), pf, path, viewBranch, effectiveAll });
+    if (identity === previousIdentity) return;
+    previousIdentity = identity;
+    const version = ++queryVersion;
+    if (!pf) return;
     getPathMatchingHashes(path, pf, {
       branch: viewBranch ?? undefined,
       all: effectiveAll,
     }).then(hashes => {
       // Only update if path filter is still the same (guard against race)
-      if (state.pathFilter() === pf && repoPath() === path) {
+      const currentBranch = state.viewingBranch();
+      const currentAll = currentBranch ? false : state.showAllBranches();
+      if (
+        version === queryVersion &&
+        state.pathFilter() === pf &&
+        repoPath() === path &&
+        currentBranch === viewBranch &&
+        currentAll === effectiveAll
+      ) {
         actions.setPathMatchSet(hashes.size > 0 ? hashes : new Set());
         // If cursor is on a non-matching row, jump to the nearest match
         const matchSet = hashes;
@@ -106,6 +116,7 @@ export function usePathFilter({
    * Mutually exclusive with search and ancestry.
    */
   const handlePathExecute = async (pathValue: string) => {
+    const version = ++queryVersion;
     const newPath = pathValue || null;
     actions.setPathFilter(newPath);
     if (!newPath) {
@@ -125,7 +136,16 @@ export function usePathFilter({
       branch: viewBranch ?? undefined,
       all: effectiveAll,
     });
-    if (repoPath() !== path) return;
+    const currentBranch = state.viewingBranch();
+    const currentAll = currentBranch ? false : state.showAllBranches();
+    if (
+      version !== queryVersion ||
+      repoPath() !== path ||
+      state.pathFilter() !== newPath ||
+      currentBranch !== viewBranch ||
+      currentAll !== effectiveAll
+    )
+      return;
     actions.setPathMatchSet(hashes.size > 0 ? hashes : new Set());
   };
 

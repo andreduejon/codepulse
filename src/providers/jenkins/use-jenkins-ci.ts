@@ -61,6 +61,7 @@ export function useJenkinsCI(opts: {
 
   const commitDataCache = new Map<string, JenkinsCommitData>();
   const [commitDataVersion, setCommitDataVersion] = createSignal(0);
+  const [identityVersion, setIdentityVersion] = createSignal(0);
   const jobsCache = new Map<string, JenkinsJobFetchResult>();
   const logCache = new Map<string, string>();
   const runCache = new Map<string, JenkinsRun>();
@@ -72,6 +73,7 @@ export function useJenkinsCI(opts: {
   let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
   let fetchAbortCtrl: AbortController | null = null;
   let backgroundFetchAbortCtrl: AbortController | null = null;
+  let cacheEpoch = 0;
 
   function rebuildCaches() {
     const allRuns = [...runCache.values()];
@@ -91,6 +93,7 @@ export function useJenkinsCI(opts: {
   }
 
   async function fetchForSHAs(shas: string[], mode: "shallow" | "full", signal?: AbortSignal) {
+    const epoch = cacheEpoch;
     const token = getJenkinsToken(config.tokenEnvVar);
     if (!token || shas.length === 0) return { firstError: null };
     const result =
@@ -103,7 +106,7 @@ export function useJenkinsCI(opts: {
             signal,
             buildLimit: config.graphBuildLimit,
           });
-    if (signal?.aborted) return { firstError: null };
+    if (signal?.aborted || epoch !== cacheEpoch) return { firstError: null, stale: true };
     for (const sha of shas) {
       queriedSHAs.add(sha);
       if (mode === "full") resolvedShas.add(sha);
@@ -118,10 +121,11 @@ export function useJenkinsCI(opts: {
       runCache.set(`${run.id}:${run.headSha}`, run);
     }
     rebuildCaches();
-    return { firstError: result.error };
+    return { firstError: result.error, stale: false };
   }
 
   async function doInitialFetch(signal?: AbortSignal, shas?: string[], showStatus = false) {
+    const epoch = cacheEpoch;
     if (fetchInFlight) return;
     if (!isAvailable()) {
       if (showStatus) {
@@ -145,18 +149,20 @@ export function useJenkinsCI(opts: {
         if (showStatus) actions.setProviderStatus("jenkins", providerIdle());
         return;
       }
-      const { firstError } = await fetchForSHAs(target, "shallow", signal);
+      const { firstError, stale } = await fetchForSHAs(target, "shallow", signal);
+      if (stale || epoch !== cacheEpoch) return;
       hasFetchedOnce = true;
       lastFetchedAt = Date.now();
       if (!firstError) actions.setProviderLastSuccessfulRefresh("jenkins", new Date());
       if (firstError) actions.setProviderStatus("jenkins", providerError(firstError));
       else actions.setProviderStatus("jenkins", providerIdle());
     } finally {
-      fetchInFlight = false;
+      if (epoch === cacheEpoch) fetchInFlight = false;
     }
   }
 
   async function doRefreshVisible(signal?: AbortSignal, showStatus = false) {
+    const epoch = cacheEpoch;
     if (fetchInFlight) return;
     if (!isAvailable()) return;
     const target = collectTopSHAs(state.graphRows(), INITIAL_SHA_LIMIT);
@@ -164,13 +170,14 @@ export function useJenkinsCI(opts: {
     fetchInFlight = true;
     if (showStatus) actions.setProviderStatus("jenkins", providerLoading());
     try {
-      const { firstError } = await fetchForSHAs(target, "shallow", signal);
+      const { firstError, stale } = await fetchForSHAs(target, "shallow", signal);
+      if (stale || epoch !== cacheEpoch) return;
       lastFetchedAt = Date.now();
       if (!firstError) actions.setProviderLastSuccessfulRefresh("jenkins", new Date());
       if (firstError) actions.setProviderStatus("jenkins", providerError(firstError));
       else actions.setProviderStatus("jenkins", providerIdle());
     } finally {
-      fetchInFlight = false;
+      if (epoch === cacheEpoch) fetchInFlight = false;
     }
   }
 
@@ -198,15 +205,59 @@ export function useJenkinsCI(opts: {
     }
   }
 
+  function resetCaches() {
+    cacheEpoch++;
+    stopAutoRefresh();
+    backgroundFetchAbortCtrl?.abort();
+    backgroundFetchAbortCtrl = null;
+    commitDataCache.clear();
+    jobsCache.clear();
+    logCache.clear();
+    runCache.clear();
+    resolvedShas.clear();
+    queriedSHAs.clear();
+    fetchInFlight = false;
+    hasFetchedOnce = false;
+    lastFetchedAt = 0;
+    setCommitDataVersion(v => v + 1);
+    actions.setGraphBadges("jenkins", new Map());
+    actions.setProviderStatus("jenkins", providerIdle());
+    setIdentityVersion(v => v + 1);
+  }
+
+  let previousIdentity = "";
   createEffect(() => {
+    const partial = configAccessor();
+    const identity = JSON.stringify({
+      repoPath: state.repoPath(),
+      enabled: partial.enabled ?? DEFAULT_JENKINS_CONFIG.enabled,
+      username: partial.username ?? "",
+      tokenEnvVar: partial.tokenEnvVar ?? DEFAULT_JENKINS_CONFIG.tokenEnvVar,
+      graphBuildLimit: partial.graphBuildLimit ?? DEFAULT_JENKINS_CONFIG.graphBuildLimit,
+      jobs: partial.jobs ?? [],
+    });
+    if (!previousIdentity) {
+      previousIdentity = identity;
+      return;
+    }
+    if (identity === previousIdentity) return;
+    previousIdentity = identity;
+    resetCaches();
+  });
+
+  createEffect(() => {
+    identityVersion();
     const view = state.activeProviderView();
     if (view === "jenkins") {
-      state.graphRows();
       if (!hasFetchedOnce) {
         const controller = new AbortController();
         fetchAbortCtrl = controller;
         void doInitialFetch(controller.signal, undefined, true);
-        return () => controller.abort();
+        onCleanup(() => {
+          controller.abort();
+          if (fetchAbortCtrl === controller) fetchAbortCtrl = null;
+        });
+        return;
       }
       const interval = state.autoRefreshInterval();
       const staleThreshold = interval > 0 ? interval : 30_000;
@@ -214,15 +265,21 @@ export function useJenkinsCI(opts: {
         const controller = new AbortController();
         fetchAbortCtrl = controller;
         void doRefreshVisible(controller.signal, true);
-        return () => controller.abort();
+        onCleanup(() => {
+          controller.abort();
+          if (fetchAbortCtrl === controller) fetchAbortCtrl = null;
+        });
+        return;
       }
       startAutoRefresh();
-      return () => stopAutoRefresh();
+      onCleanup(stopAutoRefresh);
+      return;
     }
     stopAutoRefresh();
   });
 
   createEffect(() => {
+    identityVersion();
     const rows = state.graphRows();
     if (rows.length === 0) return;
     if (!configAccessor().enabled) return;
@@ -262,20 +319,24 @@ export function useJenkinsCI(opts: {
   return {
     getCommitData,
     fetchJobsForRun: async run => {
+      const epoch = cacheEpoch;
       const cached = jobsCache.get(run.id);
       if (cached) return cached;
       const token = getJenkinsToken(config.tokenEnvVar);
       if (!token) return { jobs: [], error: `missing ${config.tokenEnvVar}` };
       const result = await fetchJenkinsRunJobs(run, config.username, token);
+      if (epoch !== cacheEpoch) return { jobs: [], error: null };
       if (run.status === "completed") jobsCache.set(run.id, result);
       return result;
     },
     fetchRunLog: async (run, signal) => {
+      const epoch = cacheEpoch;
       const cached = logCache.get(run.id);
       if (cached) return cached;
       const token = getJenkinsToken(config.tokenEnvVar);
       if (!token) return "";
       const log = await fetchJenkinsConsoleLog(run, config.username, token, signal);
+      if (epoch !== cacheEpoch) return "";
       if (run.status === "completed" && log) logCache.set(run.id, log);
       return log;
     },

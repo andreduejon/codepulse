@@ -237,33 +237,41 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
   }
 
   // ── handleFetch ───────────────────────────────────────────────────
+  let fetchOperation = 0;
   async function handleFetch() {
     const path = repoPath();
     if (state.fetching()) return; // guard against double-fetch
+    const operation = ++fetchOperation;
+    const isCurrent = () => operation === fetchOperation && repoPath() === path;
     actions.setFetching(true);
     try {
       const result = await fetchRemote(path);
+      if (!isCurrent()) return;
       if (result.ok) {
         const fetchTime = await getLastFetchTime(path);
-        if (repoPath() === path) actions.setLastFetchTime(fetchTime);
+        if (!isCurrent()) return;
+        actions.setLastFetchTime(fetchTime);
         const stickyHash = state.selectedCommit()?.hash;
         // silent=true: don't toggle state.loading() — that unmounts the entire
         // graph <For> list and destroys the scrollbox position.  state.fetching()
         // already drives the footer spinner, so there is no visual regression.
         await loadData(undefined, stickyHash, true, true);
+        if (!isCurrent()) return;
       } else {
         actions.setError(result.error ?? "Fetch failed");
       }
     } catch (err) {
-      actions.setError(err instanceof Error ? err.message : String(err));
+      if (isCurrent()) actions.setError(err instanceof Error ? err.message : String(err));
     } finally {
-      actions.setFetching(false);
+      if (isCurrent()) actions.setFetching(false);
     }
   }
 
   // ── Initial load on mount ─────────────────────────────────────────
   createEffect(() => {
     const path = repoPath();
+    fetchOperation++;
+    actions.setFetching(false);
     untrack(() => {
       const stickyHash = state.selectedCommit()?.hash;
       void loadData(path === initialRepoPath ? initialBranch : undefined, stickyHash);

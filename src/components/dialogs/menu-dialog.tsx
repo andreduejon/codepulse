@@ -306,10 +306,14 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
 
   // ── Scrollbox ref and auto-scroll into view ──────────────────────
   let scrollboxRef: ScrollBoxRenderable | undefined;
-  const itemRefs: Renderable[] = [];
+  const itemRefs = new Map<SettingItem, Renderable>();
 
   createEffect(() => {
-    scrollIndexedItemIntoView(scrollboxRef, itemRefs, selectedItemIndex());
+    const items = activeItems();
+    const index = selectedItemIndex();
+    const item = index == null ? undefined : items[index];
+    const ref = item ? itemRefs.get(item) : undefined;
+    if (scrollboxRef && ref) scrollIndexedItemIntoView(scrollboxRef, [ref], 0);
   });
 
   // ── Item renderers ─────────────────────────────────────────────────
@@ -319,7 +323,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   const renderHeader = (item: Extract<SettingItem, { kind: "header" }>, idx: number) => (
     <box
       ref={(el: Renderable) => {
-        itemRefs[idx] = el;
+        itemRefs.set(item, el);
       }}
       flexDirection="column"
       width="100%"
@@ -346,13 +350,13 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     </box>
   );
 
-  const renderInfo = (item: Extract<SettingItem, { kind: "info" }>, idx: number) => {
+  const renderInfo = (item: Extract<SettingItem, { kind: "info" }>) => {
     const hasStatus = () => item.valid != null;
     const isValid = () => item.valid?.() ?? false;
     return (
       <box
         ref={(el: Renderable) => {
-          itemRefs[idx] = el;
+          itemRefs.set(item, el);
         }}
         flexDirection="row"
         width="100%"
@@ -375,11 +379,11 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     );
   };
 
-  const renderBadge = (item: Extract<SettingItem, { kind: "badge" }>, idx: number) => {
+  const renderBadge = (item: Extract<SettingItem, { kind: "badge" }>) => {
     return (
       <box
         ref={(el: Renderable) => {
-          itemRefs[idx] = el;
+          itemRefs.set(item, el);
         }}
         flexDirection="row"
         width="100%"
@@ -397,7 +401,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     return (
       <box
         ref={(el: Renderable) => {
-          itemRefs[idx] = el;
+          itemRefs.set(item, el);
         }}
         flexDirection="row"
         width="100%"
@@ -427,7 +431,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     return (
       <box
         ref={(el: Renderable) => {
-          itemRefs[idx] = el;
+          itemRefs.set(item, el);
         }}
         flexDirection="column"
         width="100%"
@@ -454,7 +458,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     return (
       <box
         ref={(el: Renderable) => {
-          itemRefs[idx] = el;
+          itemRefs.set(item, el);
         }}
         flexDirection="row"
         width="100%"
@@ -505,7 +509,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     return (
       <box
         ref={(el: Renderable) => {
-          itemRefs[idx] = el;
+          itemRefs.set(item, el);
         }}
         flexDirection="row"
         width="100%"
@@ -538,7 +542,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
       return (
         <box
           ref={(el: Renderable) => {
-            itemRefs[idx] = el;
+            itemRefs.set(item, el);
           }}
           flexDirection="row"
           width="100%"
@@ -570,7 +574,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     return (
       <box
         ref={(el: Renderable) => {
-          itemRefs[idx] = el;
+          itemRefs.set(item, el);
         }}
         flexDirection="row"
         width="100%"
@@ -617,8 +621,8 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   const renderItem = (item: SettingItem, itemIndex: () => number): JSX.Element => {
     const idx = itemIndex();
     if (item.kind === "header") return renderHeader(item, idx);
-    if (item.kind === "info") return renderInfo(item, idx);
-    if (item.kind === "badge") return renderBadge(item, idx);
+    if (item.kind === "info") return renderInfo(item);
+    if (item.kind === "badge") return renderBadge(item);
     if (item.kind === "copyable") return renderCopyable(item, idx);
     if (item.kind === "section") return renderSection(item, idx);
     if (item.kind === "branch") return renderBranch(item, idx);
