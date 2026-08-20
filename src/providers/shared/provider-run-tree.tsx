@@ -305,6 +305,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                   <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={runTextColor()}>
                     {`${run.label}  #${run.runNumber}`}
                   </text>
+                  <box flexShrink={0} width={1} />
                   <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
                     {relTime().padStart(rightInfoWidth())}
                   </text>

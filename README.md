@@ -119,6 +119,8 @@ variables and are never stored in configuration.
 
 - **GitHub Actions** — shows workflow runs, jobs, and logs for matching commits.
 - **Jenkins** — shows configured job builds, pipeline stages, and console logs.
+  Job URLs are auto-detected; multibranch pipelines discover up to 25 enabled
+  branch jobs.
 - **OpenShift** — shows commit-related runtime resources, health, details, and
   logs. Configure server, token environment variable, namespaces, and commit
   annotation from the Providers menu.

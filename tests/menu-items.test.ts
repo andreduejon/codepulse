@@ -1,8 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import {
   buildGitHubProviderItems,
+  buildJenkinsProviderItems,
   type GitHubMenuConfig,
   isOptionalRepoMetadataValid,
+  type JenkinsMenuConfig,
   optionalRepoMetadataValue,
 } from "../src/hooks/use-menu-items";
 
@@ -83,6 +85,26 @@ describe("buildGitHubProviderItems", () => {
     if (capture.changed == null || capture.persisted == null) throw new Error("expected callbacks");
     expect(capture.changed.trustedEnterpriseHost).toBe("ghe.example.com");
     expect(capture.persisted.trustedEnterpriseHost).toBe("ghe.example.com");
+  });
+});
+
+describe("buildJenkinsProviderItems", () => {
+  it("adds a job URL for API auto-detection", () => {
+    const baseCfg: JenkinsMenuConfig = {
+      enabled: true,
+      username: "user",
+      tokenEnvVar: "JENKINS_TOKEN",
+      graphBuildLimit: 20,
+      jobs: [],
+    };
+    const capture: { changed: JenkinsMenuConfig | null } = { changed: null };
+    const items = buildJenkinsProviderItems(baseCfg, cfg => {
+      capture.changed = cfg;
+    });
+    const input = items.find(item => item.kind === "editable" && item.label === "New job");
+    expect(input?.kind).toBe("editable");
+    if (input?.kind === "editable") input.set(" https://jenkins.example.com/job/service ");
+    expect(capture.changed?.jobs).toEqual([{ url: "https://jenkins.example.com/job/service" }]);
   });
 });
 

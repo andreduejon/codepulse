@@ -1,7 +1,14 @@
 import type { GraphBadge } from "../provider";
 import { fetchWithRetry as fetchWithRetryPolicy, runLimited } from "../shared/http";
 import { categorize } from "../shared/status";
-import type { JenkinsCommitData, JenkinsJob, JenkinsJobConfig, JenkinsRun, JenkinsStage } from "./types";
+import {
+  JENKINS_MULTIBRANCH_JOB_LIMIT,
+  type JenkinsCommitData,
+  type JenkinsJob,
+  type JenkinsJobConfig,
+  type JenkinsRun,
+  type JenkinsStage,
+} from "./types";
 
 interface JenkinsBuildApi {
   number?: number;
@@ -17,9 +24,20 @@ interface JenkinsBuildApi {
 }
 
 interface JenkinsJobApi {
+  _class?: string;
   displayName?: string;
   builds?: JenkinsBuildApi[];
   lastBuild?: { number?: number; url?: string } | null;
+  jobs?: JenkinsMultibranchChildApi[];
+}
+
+interface JenkinsMultibranchChildApi {
+  _class?: string;
+  name?: string;
+  displayName?: string;
+  url?: string;
+  buildable?: boolean;
+  disabled?: boolean;
 }
 
 interface JenkinsWfapiStage {
@@ -80,6 +98,14 @@ function buildDetailTree(): string {
   ].join(",");
 }
 
+function multibranchJobsTree(): string {
+  return "_class,jobs[_class,name,displayName,url,buildable,disabled]";
+}
+
+function autoDetectTree(jobTree?: string): string {
+  return jobTree ? `${jobTree},${multibranchJobsTree()}` : multibranchJobsTree();
+}
+
 export function normalizeJenkinsJobUrl(url: string): string {
   return url.trim().replace(/\/+$/, "");
 }
@@ -97,6 +123,16 @@ export function deriveJenkinsJobLabel(job: JenkinsJobConfig): string {
   if (job.label?.trim()) return job.label.trim();
   const parts = normalizeJenkinsJobUrl(job.url).split("/").filter(Boolean);
   return decodeURIComponent(parts.at(-1) ?? "jenkins");
+}
+
+function isEnabledMultibranchJob(job: JenkinsMultibranchChildApi): boolean {
+  return (
+    job._class === "org.jenkinsci.plugins.workflow.job.WorkflowJob" &&
+    job.buildable === true &&
+    job.disabled !== true &&
+    typeof job.url === "string" &&
+    job.url.trim().length > 0
+  );
 }
 
 function authHeaders(username: string | undefined, token: string): Record<string, string> {
@@ -126,6 +162,80 @@ async function fetchJson<T>(
   if (!res.ok) throw new Error(`Jenkins ${res.status}: ${res.statusText}`);
   if (/text\/html/i.test(contentType)) throw jenkinsAuthError();
   return (await res.json()) as T;
+}
+
+export async function resolveJenkinsJobs(
+  jobs: JenkinsJobConfig[],
+  username: string | undefined,
+  token: string,
+  signal?: AbortSignal,
+  jobTree?: string,
+): Promise<{
+  jobs: JenkinsJobConfig[];
+  rootData: Map<string, JenkinsJobApi>;
+  error: string | null;
+  complete: boolean;
+}> {
+  const resolved = new Map<string, JenkinsJobConfig>();
+  const rootData = new Map<string, JenkinsJobApi>();
+  let firstError: string | null = null;
+  let discoveredCount = 0;
+  const discoveries: ({ job: JenkinsJobConfig; api: JenkinsJobApi } | null)[] = jobs.map(() => null);
+  await runLimited(
+    jobs.map((job, index) => ({ job, index })),
+    JENKINS_CONCURRENCY,
+    async ({ job, index }) => {
+      try {
+        const api = await fetchJson<JenkinsJobApi>(
+          jenkinsApiUrl(job.url, treeApiSuffix(autoDetectTree(jobTree))),
+          username,
+          token,
+          signal,
+        );
+        discoveries[index] = { job, api };
+      } catch (err) {
+        firstError ??= err instanceof Error ? err.message : String(err);
+      }
+    },
+  );
+
+  for (const discovery of discoveries) {
+    if (!discovery) continue;
+    if (discovery.api._class !== "org.jenkinsci.plugins.workflow.multibranch.WorkflowMultiBranchProject") {
+      const url = normalizeJenkinsJobUrl(discovery.job.url);
+      resolved.set(url, discovery.job);
+      rootData.set(url, discovery.api);
+      continue;
+    }
+    let parentOrigin: string;
+    try {
+      parentOrigin = new URL(discovery.job.url).origin;
+    } catch {
+      firstError ??= `Invalid Jenkins job URL: ${discovery.job.url}`;
+      continue;
+    }
+    for (const child of (discovery.api.jobs ?? []).filter(isEnabledMultibranchJob)) {
+      if (discoveredCount >= JENKINS_MULTIBRANCH_JOB_LIMIT) break;
+      let childUrl: URL;
+      try {
+        childUrl = new URL(child.url ?? "");
+      } catch {
+        firstError ??= `Ignored invalid Jenkins multibranch child URL: ${child.url ?? ""}`;
+        continue;
+      }
+      const url = normalizeJenkinsJobUrl(
+        childUrl.origin === parentOrigin
+          ? childUrl.toString()
+          : new URL(`${childUrl.pathname}${childUrl.search}`, parentOrigin).toString(),
+      );
+      if (!url || resolved.has(url)) continue;
+      const childLabel = child.displayName?.trim() || child.name?.trim() || deriveJenkinsJobLabel({ url });
+      resolved.set(url, { url, label: childLabel });
+      discoveredCount++;
+    }
+  }
+
+  return { jobs: [...resolved.values()], rootData, error: firstError, complete: discoveries.every(Boolean) };
 }
 
 export function extractSha(raw: unknown): string | null {
@@ -283,36 +393,42 @@ export async function fetchJenkinsDataForSHAs(
   token: string,
   shas: string[],
   opts: { signal?: AbortSignal; buildLimit?: number } = {},
-): Promise<{ data: JenkinsRun[]; error: string | null }> {
+): Promise<{ data: JenkinsRun[]; error: string | null; jobUrls: string[]; discoveryComplete: boolean }> {
   const buildLimit = opts.buildLimit ?? 20;
   const wanted = new Set(shas.map(s => s.toLowerCase()));
   const runs: JenkinsRun[] = [];
-  let firstError: string | null = null;
-  await Promise.all(
-    jobs.map(async job => {
-      try {
-        const api = await fetchJson<JenkinsJobApi>(
+  const resolved = await resolveJenkinsJobs(jobs, username, token, opts.signal, buildRefsTree(buildLimit));
+  let firstError = resolved.error;
+  await runLimited(resolved.jobs, JENKINS_CONCURRENCY, async job => {
+    try {
+      const api =
+        resolved.rootData.get(normalizeJenkinsJobUrl(job.url)) ??
+        (await fetchJson<JenkinsJobApi>(
           jenkinsApiUrl(job.url, treeApiSuffix(buildRefsTree(buildLimit))),
           username,
           token,
           opts.signal,
-        );
-        const builds = api.builds ?? (api.lastBuild ? [api.lastBuild] : []);
-        await runLimited(builds.slice(0, buildLimit), JENKINS_CONCURRENCY, async ref => {
-          if (!ref.number && !ref.url) return;
-          const buildUrl = ref.url
-            ? jenkinsApiUrl(ref.url, treeApiSuffix(buildDetailTree()))
-            : jenkinsApiUrl(`${job.url}/${ref.number}`, treeApiSuffix(buildDetailTree()));
-          const build = await fetchJson<JenkinsBuildApi>(buildUrl, username, token, opts.signal);
-          for (const sha of matchingHeadShas(build, wanted)) runs.push(mapRun(job, build, sha));
-        });
-      } catch (err) {
-        firstError ??= err instanceof Error ? err.message : String(err);
-      }
-    }),
-  );
+        ));
+      const builds = api.builds ?? (api.lastBuild ? [api.lastBuild] : []);
+      await runLimited(builds.slice(0, buildLimit), JENKINS_CONCURRENCY, async ref => {
+        if (!ref.number && !ref.url) return;
+        const buildUrl = ref.url
+          ? jenkinsApiUrl(ref.url, treeApiSuffix(buildDetailTree()))
+          : jenkinsApiUrl(`${job.url}/${ref.number}`, treeApiSuffix(buildDetailTree()));
+        const build = await fetchJson<JenkinsBuildApi>(buildUrl, username, token, opts.signal);
+        for (const sha of matchingHeadShas(build, wanted)) runs.push(mapRun(job, build, sha));
+      });
+    } catch (err) {
+      firstError ??= err instanceof Error ? err.message : String(err);
+    }
+  });
   runs.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  return { data: runs, error: firstError };
+  return {
+    data: runs,
+    error: firstError,
+    jobUrls: resolved.jobs.map(job => normalizeJenkinsJobUrl(job.url)),
+    discoveryComplete: resolved.complete,
+  };
 }
 
 export async function fetchJenkinsGraphDataForSHAs(
@@ -321,31 +437,37 @@ export async function fetchJenkinsGraphDataForSHAs(
   token: string,
   shas: string[],
   opts: { signal?: AbortSignal; buildLimit?: number } = {},
-): Promise<{ data: JenkinsRun[]; error: string | null }> {
+): Promise<{ data: JenkinsRun[]; error: string | null; jobUrls: string[]; discoveryComplete: boolean }> {
   const buildLimit = opts.buildLimit ?? 20;
   const wanted = new Set(shas.map(s => s.toLowerCase()));
   const runs: JenkinsRun[] = [];
-  let firstError: string | null = null;
-  await Promise.all(
-    jobs.map(async job => {
-      try {
-        const api = await fetchJson<JenkinsJobApi>(
+  const resolved = await resolveJenkinsJobs(jobs, username, token, opts.signal, shallowGraphTree(buildLimit));
+  let firstError = resolved.error;
+  await runLimited(resolved.jobs, JENKINS_CONCURRENCY, async job => {
+    try {
+      const api =
+        resolved.rootData.get(normalizeJenkinsJobUrl(job.url)) ??
+        (await fetchJson<JenkinsJobApi>(
           jenkinsApiUrl(job.url, treeApiSuffix(shallowGraphTree(buildLimit))),
           username,
           token,
           opts.signal,
-        );
-        const builds = api.builds ?? [];
-        for (const build of builds) {
-          for (const sha of matchingHeadShas(build, wanted)) runs.push(mapRun(job, build, sha));
-        }
-      } catch (err) {
-        firstError ??= err instanceof Error ? err.message : String(err);
+        ));
+      const builds = api.builds ?? [];
+      for (const build of builds) {
+        for (const sha of matchingHeadShas(build, wanted)) runs.push(mapRun(job, build, sha));
       }
-    }),
-  );
+    } catch (err) {
+      firstError ??= err instanceof Error ? err.message : String(err);
+    }
+  });
   runs.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  return { data: runs, error: firstError };
+  return {
+    data: runs,
+    error: firstError,
+    jobUrls: resolved.jobs.map(job => normalizeJenkinsJobUrl(job.url)),
+    discoveryComplete: resolved.complete,
+  };
 }
 
 export function buildJenkinsCommitDataMap(runs: JenkinsRun[], resolved: boolean): Map<string, JenkinsCommitData> {

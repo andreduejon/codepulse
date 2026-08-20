@@ -155,7 +155,7 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     {
       kind: "binding",
       key: "New job",
-      desc: "Add a full Jenkins job URL. Builds are matched to commits by SHA.",
+      desc: "Add a job or multibranch pipeline URL. Type is detected automatically; up to 25 enabled branches load.",
       indent: 1,
     },
   ],

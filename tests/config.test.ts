@@ -141,6 +141,25 @@ describe("loadConfig", () => {
     expect(result.providers?.github?.trustedEnterpriseHost).toBe("ghe.example.com");
   });
 
+  test("loads Jenkins job URLs", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("jenkins-job-kinds", repoPath, {
+      providers: {
+        jenkins: {
+          jobs: [
+            { url: "https://jenkins.example.com/job/direct" },
+            { url: "https://jenkins.example.com/job/service", label: "Service" },
+          ],
+        },
+      },
+    });
+    const { config: result } = loadConfig(repoPath, configPath);
+    expect(result.providers?.jenkins?.jobs).toEqual([
+      { url: "https://jenkins.example.com/job/direct" },
+      { url: "https://jenkins.example.com/job/service", label: "Service" },
+    ]);
+  });
+
   test("drops invalid trusted enterprise host from repo config", () => {
     const repoPath = "/tmp/repo";
     const configPath = makeRepoConfig("github-enterprise-host-invalid", repoPath, {
@@ -695,6 +714,21 @@ describe("writeConfig", () => {
     writeConfig(original, repoPath, configPath);
     const { config: loaded } = loadConfig(repoPath, configPath);
     expect(loaded).toEqual(original);
+  });
+
+  test("round-trip: Jenkins job", () => {
+    const dir = makeTempDir("write-jenkins-multibranch");
+    const configPath = join(dir, "config.json");
+    const repoPath = "/tmp/repo";
+    const original: CodepulseConfig = {
+      providers: {
+        jenkins: {
+          jobs: [{ url: "https://jenkins.example.com/job/service", label: "Service" }],
+        },
+      },
+    };
+    writeConfig(original, repoPath, configPath);
+    expect(loadConfig(repoPath, configPath).config).toEqual(original);
   });
 
   test("round-trip: multiple repos with independent settings", () => {

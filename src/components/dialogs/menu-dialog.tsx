@@ -8,6 +8,7 @@ import { useTheme } from "../../context/theme";
 import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useClipboard } from "../../hooks/use-clipboard";
 import { COPYABLE_VISIBLE_WIDTH, type SettingItem, useMenuItems } from "../../hooks/use-menu-items";
+import type { JenkinsJobConfig } from "../../providers/jenkins/types";
 import { scrollIndexedItemIntoView } from "../../utils/scroll";
 import Badge from "../badge";
 import { KeyHint, KeyHintSeparator } from "../key-hint";
@@ -42,14 +43,14 @@ interface MenuDialogProps {
     username?: string;
     tokenEnvVar: string;
     graphBuildLimit: 10 | 20 | 50;
-    jobs: { label?: string; url: string }[];
+    jobs: JenkinsJobConfig[];
   };
   onJenkinsConfigChange?: (cfg: {
     enabled: boolean;
     username?: string;
     tokenEnvVar: string;
     graphBuildLimit: 10 | 20 | 50;
-    jobs: { label?: string; url: string }[];
+    jobs: JenkinsJobConfig[];
   }) => void;
   openshiftConfig?: {
     enabled: boolean;

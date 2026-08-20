@@ -108,6 +108,12 @@ export function useJenkinsCI(opts: {
       queriedSHAs.add(sha);
       if (mode === "full") resolvedShas.add(sha);
     }
+    if (result.discoveryComplete) {
+      const activeJobUrls = new Set(result.jobUrls);
+      for (const [key, run] of runCache) {
+        if (!activeJobUrls.has(run.jobUrl)) runCache.delete(key);
+      }
+    }
     for (const run of result.data) {
       runCache.set(`${run.id}:${run.headSha}`, run);
     }

@@ -10,6 +10,8 @@ All notable changes to this project will be documented in this file.
   health, conditions, related pods, container state, and recent logs.
 - **OpenShift graph columns** — show resource totals and health counts for each
   matching commit.
+- **Jenkins multibranch discovery** — configured job URLs are auto-detected;
+  multibranch pipelines load up to 25 enabled branch jobs.
 
 ### Changed
 

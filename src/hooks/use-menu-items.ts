@@ -7,6 +7,7 @@ import { AUTO_REFRESH_MS, INTERVAL_OPTIONS, MAX_COUNT_OPTIONS, MS_TO_LABEL } fro
 import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL, useAppState } from "../context/state";
 import { themes } from "../context/theme";
 import { getTokenSource, parseGitHubRemote } from "../providers/github-actions/api";
+import type { JenkinsJobConfig } from "../providers/jenkins/types";
 import type { ProviderDetailView } from "../providers/provider";
 
 type MenuTab = "repository" | "branch" | "providers";
@@ -108,7 +109,7 @@ export interface MenuItemsOptions {
     username?: string;
     tokenEnvVar: string;
     graphBuildLimit: 10 | 20 | 50;
-    jobs: { label?: string; url: string }[];
+    jobs: JenkinsJobConfig[];
   }) => void;
   openshiftConfig?: Accessor<OpenShiftMenuConfig | undefined>;
   onOpenShiftConfigChange?: (cfg: OpenShiftMenuConfig) => void;
@@ -138,7 +139,7 @@ export interface JenkinsMenuConfig {
   username?: string;
   tokenEnvVar: string;
   graphBuildLimit: 10 | 20 | 50;
-  jobs: { label?: string; url: string }[];
+  jobs: JenkinsJobConfig[];
 }
 
 export interface OpenShiftMenuConfig {
@@ -277,7 +278,7 @@ export function buildGitHubProviderItems(
   return items;
 }
 
-function buildJenkinsProviderItems(
+export function buildJenkinsProviderItems(
   jenkinsCfg: JenkinsMenuConfig,
   onChange?: (cfg: JenkinsMenuConfig) => void,
   persist?: (cfg: JenkinsMenuConfig) => void,
@@ -357,8 +358,6 @@ function buildJenkinsProviderItems(
     },
   );
 
-  const jobsInput = items.pop();
-  if (jobsInput) items.push(jobsInput);
   items.push(
     ...jenkinsCfg.jobs.map((job, idx) => ({
       kind: "copyable" as const,
