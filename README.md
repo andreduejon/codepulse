@@ -14,9 +14,8 @@ surface, with CI/CD, security, and code quality signals layered onto the same
 commit and branch context.
 
 The current release adds OpenShift runtime visibility alongside GitHub Actions
-and Jenkins. Commits can show matching OpenShift resources and health, with
-resource details, related pods, conditions, and recent logs available from the
-detail panel.
+and Jenkins. Commits show matched resources and conservative health status;
+resource API objects can be inspected as formatted JSON from the detail panel.
 
 ## Requirements
 
@@ -118,12 +117,13 @@ the Providers menu (`:providers`). Credentials are read from environment
 variables and are never stored in configuration.
 
 - **GitHub Actions** — shows workflow runs, jobs, and logs for matching commits.
+  See [GitHub Actions provider](docs/providers/github-actions.md).
 - **Jenkins** — shows configured job builds, pipeline stages, and console logs.
   Job URLs are auto-detected; multibranch pipelines discover up to 25 enabled
-  branch jobs.
-- **OpenShift** — shows commit-related runtime resources, health, details, and
-  logs. Configure server, token environment variable, namespaces, and commit
-  annotation from the Providers menu.
+  branch jobs across configured parents. See [Jenkins provider](docs/providers/jenkins.md).
+- **OpenShift** — shows annotated Builds and ImageStreamTags, digest-matched
+  Pods, and owner-resolved workloads. Enter opens cached resource JSON. See
+  [OpenShift provider](docs/providers/openshift.md).
 
 ## Themes
 
@@ -157,7 +157,7 @@ Planned milestones currently follow this shape:
   and provider polish
 - `0.5.0`: grouped project switching, in-memory repo session cache, grouped
   switcher, and debug dialog
-- `0.6.0`: OpenShift runtime visibility, resource health, details, and logs
+- `0.6.0`: OpenShift runtime inventory, resource health, and JSON inspection
 - `0.7.0+`: read-only integrations for Snyk, SonarQube, and deeper observability
 
 The intent is to reach `1.0.0` once the integration model and configuration

@@ -2,14 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.6.0] - 2026-08-09
+## [0.6.0] - Unreleased
 
 ### Added
 
-- **OpenShift provider** — match runtime resources to commits and inspect
-  health, conditions, related pods, container state, and recent logs.
-- **OpenShift graph columns** — show resource totals and health counts for each
-  matching commit.
+- **OpenShift provider** — match annotated Builds and ImageStreamTags, immutable
+  image digests, Pods, and owner-resolved workloads to commits; inspect cached
+  resource API objects as formatted JSON.
+- **OpenShift graph columns** — show resource totals and conservative aggregate
+  status for each matching commit.
 - **Jenkins multibranch discovery** — configured job URLs are auto-detected;
   multibranch pipelines load up to 25 enabled branch jobs.
 
@@ -25,9 +26,10 @@ All notable changes to this project will be documented in this file.
 - Partial OpenShift API failures preserve successful data and report failed
   requests through provider status and debug events.
 - OpenShift workload matching uses immutable image digests to avoid stale tag
-  associations.
+  associations and UID owner chains to resolve Deployments and
+  DeploymentConfigs.
 - OpenShift health mapping distinguishes progressing, failed, completed, and
-  unknown resource states.
+  unknown resource states; terminating Pods are excluded.
 - OpenShift configuration changes cancel stale requests and reload current
   cluster data.
 - Jenkins commit matching supports SCM revision actions and refreshes cached
