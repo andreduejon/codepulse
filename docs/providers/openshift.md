@@ -57,5 +57,5 @@ Configured token needs `list` access for:
 - `pods`
 
 Partial permission failures preserve successful inventory and show a warning.
-Logs, live refetch-on-open, Routes, Services, and console links are not included
-in this release.
+Logs, live refetch-on-open, Routes, Services, Helm releases, and console links
+are not included in this release (planned for 0.7.0).

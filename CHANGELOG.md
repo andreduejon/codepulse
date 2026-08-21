@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.6.0] - Unreleased
+## [0.6.0] - 2026-08-21
 
 ### Added
 
@@ -35,6 +35,11 @@ All notable changes to this project will be documented in this file.
 - Jenkins commit matching supports SCM revision actions and refreshes cached
   commit data correctly.
 - Aborted provider requests no longer appear as request failures.
+- Jenkins job URLs must be HTTPS without embedded credentials.
+- GitHub Actions fetches extra check-suite and job pages instead of truncating.
+- Background CI fetches queue new graph commits instead of dropping them when a
+  request is already in flight.
+- Cancelled Jenkins job/build batches stop starting further HTTP calls.
 
 ## [0.5.0] - 2026-05-08
 
