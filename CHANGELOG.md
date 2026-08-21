@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.1] - 2026-08-21
+
+### Fixed
+
+- Include `tsconfig.json` and `bunfig.toml` in the npm package so a global
+  `bun` install uses Solid/OpenTUI JSX instead of looking for React.
+
 ## [0.6.0] - 2026-08-21
 
 ### Added

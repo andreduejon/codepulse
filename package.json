@@ -1,6 +1,6 @@
 {
 	"name": "@andreduejon/codepulse",
-	"version": "0.6.0",
+	"version": "0.6.1",
 	"description": "A terminal git graph visualizer that is read-only by default",
 	"license": "MIT",
 	"repository": {
@@ -26,6 +26,8 @@
 	"files": [
 		"src/",
 		"docs/",
+		"tsconfig.json",
+		"bunfig.toml",
 		"LICENSE",
 		"README.md"
 	],
