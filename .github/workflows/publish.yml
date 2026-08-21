@@ -50,32 +50,18 @@ jobs:
             os: darwin
             arch: arm64
             runner: macos-14
-            smoke: native
           - target: darwin-x64
             os: darwin
             arch: x64
             runner: macos-15-intel
-            smoke: native
           - target: linux-arm64
             os: linux
             arch: arm64
             runner: ubuntu-24.04-arm
-            smoke: native
-          - target: linux-arm64-musl
-            os: linux
-            arch: arm64
-            runner: ubuntu-24.04-arm
-            smoke: docker
           - target: linux-x64
             os: linux
             arch: x64
             runner: ubuntu-24.04
-            smoke: native
-          - target: linux-x64-musl
-            os: linux
-            arch: x64
-            runner: ubuntu-24.04
-            smoke: docker
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -111,14 +97,9 @@ jobs:
         run: |
           binary="$GITHUB_WORKSPACE/dist/${{ matrix.target }}/codepulse"
           asset_smoke="$GITHUB_WORKSPACE/dist/${{ matrix.target }}/smoke-opentui-assets"
-          if [[ "${{ matrix.smoke }}" == "docker" ]]; then
-            test "$(docker run --rm -v "$binary:/codepulse:ro" alpine:3.22 sh -c 'apk add --no-cache libstdc++ libgcc >/dev/null && /codepulse --version')" = "codepulse v$(bun -p "require('./package.json').version")"
-            docker run --rm -v "$asset_smoke:/smoke:ro" alpine:3.22 sh -c 'apk add --no-cache libstdc++ libgcc >/dev/null && /smoke'
-          else
-            test "$("$binary" --version)" = "codepulse v$(bun -p "require('./package.json').version")"
-            "$asset_smoke"
-          fi
-          expect scripts/smoke-binary.exp "${{ matrix.smoke }}" "$binary" "$GITHUB_WORKSPACE"
+          test "$("$binary" --version)" = "codepulse v$(bun -p "require('./package.json').version")"
+          "$asset_smoke"
+          expect scripts/smoke-binary.exp "$binary" "$GITHUB_WORKSPACE"
 
       - name: Create release archive
         run: tar -C "dist/${{ matrix.target }}" -czf "codepulse-${{ matrix.target }}.tar.gz" codepulse

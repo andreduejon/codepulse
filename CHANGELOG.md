@@ -9,7 +9,7 @@ All notable changes to this project will be documented in this file.
 - Distribute Codepulse as standalone macOS and Linux executables through GitHub
   Releases. Bun, Node.js, and npm are no longer required at runtime.
 - Replace npm publishing with native arm64/x64 release builds for macOS and
-  Linux, including glibc and musl Linux variants.
+  glibc Linux.
 - Add a checksum-verifying installer that installs the `codepulse` command to a
   configurable directory on `PATH`.
 
