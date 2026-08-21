@@ -147,6 +147,29 @@ describe("buildJenkinsProviderItems", () => {
     }
     expect(capture.changed?.jobs).toEqual([{ url: "https://jenkins.example.com/job/service" }]);
   });
+
+  it("cycles fetch size per job through 10/20/50", () => {
+    const baseCfg: JenkinsMenuConfig = {
+      enabled: true,
+      username: "user",
+      tokenEnvVar: "JENKINS_TOKEN",
+      graphBuildLimit: 20,
+      jobs: [],
+    };
+    let changed = baseCfg;
+    const items = buildJenkinsProviderItems(baseCfg, cfg => {
+      changed = cfg;
+    });
+    const cycle = items.find(item => item.kind === "cycle" && item.label === "Fetch size per job");
+    expect(cycle?.kind).toBe("cycle");
+    if (cycle?.kind !== "cycle") return;
+    expect(cycle.get()).toBe("20");
+    expect(cycle.options).toEqual(["10", "20", "50"]);
+    cycle.set("10");
+    expect(changed.graphBuildLimit).toBe(10);
+    cycle.set("50");
+    expect(changed.graphBuildLimit).toBe(50);
+  });
 });
 
 describe("repo metadata menu validation", () => {

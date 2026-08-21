@@ -19,6 +19,8 @@ export function useProviderFetchLifecycle(opts: {
   isAvailable: () => boolean;
   isBackgroundReady: () => boolean;
   queriedSHAs: Set<string>;
+  /** Skip graph-SHA background catch-up (inventory providers). */
+  skipShaBackground?: boolean;
   reportUnavailable: (showStatus: boolean) => void;
   runInitialFetch: (args: ProviderFetchArgs) => Promise<void>;
   runRefresh: (args: ProviderFetchArgs) => Promise<void>;
@@ -176,6 +178,7 @@ export function useProviderFetchLifecycle(opts: {
 
   createEffect(() => {
     identityVersion();
+    if (opts.skipShaBackground) return;
     const rows = state.graphRows();
     if (rows.length === 0) return;
     if (!opts.isBackgroundReady()) return;
