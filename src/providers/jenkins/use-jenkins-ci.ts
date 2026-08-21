@@ -68,6 +68,7 @@ export function useJenkinsCI(opts: {
   const resolvedShas = new Set<string>();
   const queriedSHAs = new Set<string>();
   let fetchInFlight = false;
+  let pendingBackgroundFetch = false;
   let hasFetchedOnce = false;
   let lastFetchedAt = 0;
   let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
@@ -126,9 +127,22 @@ export function useJenkinsCI(opts: {
     return { firstError: result.error, stale: false };
   }
 
+  function finishFetch(epoch: number) {
+    if (epoch !== cacheEpoch) return;
+    fetchInFlight = false;
+    if (!pendingBackgroundFetch) return;
+    pendingBackgroundFetch = false;
+    const ctrl = new AbortController();
+    backgroundFetchAbortCtrl = ctrl;
+    void doInitialFetch(ctrl.signal, undefined, false);
+  }
+
   async function doInitialFetch(signal?: AbortSignal, shas?: string[], showStatus = false) {
     const epoch = cacheEpoch;
-    if (fetchInFlight) return;
+    if (fetchInFlight) {
+      pendingBackgroundFetch = true;
+      return;
+    }
     if (!isAvailable()) {
       if (showStatus) {
         if (config.jobs.length === 0)
@@ -159,13 +173,16 @@ export function useJenkinsCI(opts: {
       if (firstError) actions.setProviderStatus("jenkins", providerError(firstError));
       else actions.setProviderStatus("jenkins", providerIdle());
     } finally {
-      if (epoch === cacheEpoch) fetchInFlight = false;
+      finishFetch(epoch);
     }
   }
 
   async function doRefreshVisible(signal?: AbortSignal, showStatus = false) {
     const epoch = cacheEpoch;
-    if (fetchInFlight) return;
+    if (fetchInFlight) {
+      pendingBackgroundFetch = true;
+      return;
+    }
     if (!isAvailable()) return;
     const target = collectTopSHAs(state.graphRows(), INITIAL_SHA_LIMIT);
     if (target.length === 0) return;
@@ -179,7 +196,7 @@ export function useJenkinsCI(opts: {
       if (firstError) actions.setProviderStatus("jenkins", providerError(firstError));
       else actions.setProviderStatus("jenkins", providerIdle());
     } finally {
-      if (epoch === cacheEpoch) fetchInFlight = false;
+      finishFetch(epoch);
     }
   }
 
@@ -219,6 +236,7 @@ export function useJenkinsCI(opts: {
     resolvedShas.clear();
     queriedSHAs.clear();
     fetchInFlight = false;
+    pendingBackgroundFetch = false;
     hasFetchedOnce = false;
     lastFetchedAt = 0;
     setCommitDataVersion(v => v + 1);
@@ -291,7 +309,10 @@ export function useJenkinsCI(opts: {
     const newSHAs = allSHAs.filter(sha => !queriedSHAs.has(sha));
     if (newSHAs.length === 0) return;
 
-    if (backgroundFetchAbortCtrl) backgroundFetchAbortCtrl.abort();
+    if (fetchInFlight) {
+      pendingBackgroundFetch = true;
+      return;
+    }
     const ctrl = new AbortController();
     backgroundFetchAbortCtrl = ctrl;
     void doInitialFetch(ctrl.signal, allSHAs, false);

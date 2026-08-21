@@ -177,6 +177,8 @@ export function useGitHubCI(opts: {
   const queriedSHAs = new Set<string>();
   /** Guard: is a fetch already in-flight? */
   let fetchInFlight = false;
+  /** Graph grew while a fetch was running — drain after it settles. */
+  let pendingBackgroundFetch = false;
 
   interface FetchForShasResult {
     firstError: string | null;
@@ -255,9 +257,22 @@ export function useGitHubCI(opts: {
    * view — background fetches (e.g. on startup) should silently skip rather
    * than surfacing "No GitHub remote detected" before the remote URL loads.
    */
+  function finishFetch(epoch: number) {
+    if (epoch !== cacheEpoch) return;
+    fetchInFlight = false;
+    if (!pendingBackgroundFetch) return;
+    pendingBackgroundFetch = false;
+    const ctrl = new AbortController();
+    backgroundFetchAbortCtrl = ctrl;
+    void doInitialFetch(ctrl.signal, undefined, false);
+  }
+
   async function doInitialFetch(signal?: AbortSignal, shas?: string[], showStatus = false): Promise<void> {
     const epoch = cacheEpoch;
-    if (fetchInFlight) return;
+    if (fetchInFlight) {
+      pendingBackgroundFetch = true;
+      return;
+    }
     if (!isAvailable()) {
       if (showStatus) {
         const repo = cachedGitHubRepo();
@@ -313,7 +328,7 @@ export function useGitHubCI(opts: {
       // On error, un-mark so a future retry can re-query these SHAs
       for (const sha of unqueried) queriedSHAs.delete(sha);
     } finally {
-      if (epoch === cacheEpoch) fetchInFlight = false;
+      finishFetch(epoch);
     }
   }
 
@@ -323,7 +338,10 @@ export function useGitHubCI(opts: {
    */
   async function doRefreshRunning(signal?: AbortSignal): Promise<void> {
     const epoch = cacheEpoch;
-    if (fetchInFlight) return;
+    if (fetchInFlight) {
+      pendingBackgroundFetch = true;
+      return;
+    }
     if (!isAvailable()) return;
 
     const runningSHAs = collectRunningSHAs(state.graphBadges());
@@ -341,7 +359,7 @@ export function useGitHubCI(opts: {
       if (signal?.aborted) return;
       console.error("[github-actions] refresh failed:", err);
     } finally {
-      if (epoch === cacheEpoch) fetchInFlight = false;
+      finishFetch(epoch);
     }
   }
 
@@ -410,6 +428,7 @@ export function useGitHubCI(opts: {
     jobsCache.clear();
     queriedSHAs.clear();
     fetchInFlight = false;
+    pendingBackgroundFetch = false;
     hasFetchedOnce = false;
     lastFetchedAt = 0;
     setCommitDataVersion(v => v + 1);
@@ -496,11 +515,13 @@ export function useGitHubCI(opts: {
     const newSHAs = allSHAs.filter(sha => !queriedSHAs.has(sha));
     if (newSHAs.length === 0) return;
 
-    // Cancel any previous background fetch before starting a new one
-    if (backgroundFetchAbortCtrl) backgroundFetchAbortCtrl.abort();
+    if (fetchInFlight) {
+      pendingBackgroundFetch = true;
+      return;
+    }
     const ctrl = new AbortController();
     backgroundFetchAbortCtrl = ctrl;
-    doInitialFetch(ctrl.signal, allSHAs);
+    void doInitialFetch(ctrl.signal, allSHAs);
   });
 
   onCleanup(() => {
