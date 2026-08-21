@@ -48,10 +48,16 @@ export function isAbortError(err: unknown, signal?: AbortSignal | null): boolean
   return err.name === "AbortError" || err.message === "The operation was aborted.";
 }
 
-export async function runLimited<T>(items: T[], limit: number, worker: (item: T) => Promise<void>): Promise<void> {
+export async function runLimited<T>(
+  items: T[],
+  limit: number,
+  worker: (item: T) => Promise<void>,
+  signal?: AbortSignal,
+): Promise<void> {
   let index = 0;
   const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
     while (index < items.length) {
+      if (signal?.aborted) throw abortError(signal);
       const item = items[index++];
       await worker(item);
     }

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import { clearDebugEvents, getDebugEvents } from "../src/debug/events";
-import { fetchWithRetry, isAbortError } from "../src/providers/shared/http";
+import { fetchWithRetry, isAbortError, runLimited, sleep } from "../src/providers/shared/http";
 
 const originalFetch = globalThis.fetch;
 
@@ -62,5 +62,23 @@ describe("shared HTTP", () => {
     ctrl.abort();
     await expect(pending).rejects.toThrow();
     expect(calls).toBe(1);
+  });
+
+  test("runLimited does not start remaining items after abort", async () => {
+    const ctrl = new AbortController();
+    let started = 0;
+    const pending = runLimited(
+      [1, 2, 3, 4, 5, 6, 7, 8],
+      2,
+      async () => {
+        started++;
+        await sleep(40);
+      },
+      ctrl.signal,
+    );
+    await sleep(5);
+    ctrl.abort();
+    await expect(pending).rejects.toThrow();
+    expect(started).toBe(2);
   });
 });

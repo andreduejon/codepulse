@@ -199,6 +199,7 @@ export async function resolveJenkinsJobs(
         firstError ??= err instanceof Error ? err.message : String(err);
       }
     },
+    signal,
   );
 
   for (const discovery of discoveries) {
@@ -405,33 +406,43 @@ export async function fetchJenkinsDataForSHAs(
   const runs: JenkinsRun[] = [];
   const resolved = await resolveJenkinsJobs(jobs, username, token, opts.signal, buildRefsTree(buildLimit));
   let firstError = resolved.error;
-  await runLimited(resolved.jobs, JENKINS_CONCURRENCY, async job => {
-    try {
-      const api =
-        resolved.rootData.get(normalizeJenkinsJobUrl(job.url)) ??
-        (await fetchJson<JenkinsJobApi>(
-          jenkinsApiUrl(job.url, treeApiSuffix(buildRefsTree(buildLimit))),
-          username,
-          token,
+  await runLimited(
+    resolved.jobs,
+    JENKINS_CONCURRENCY,
+    async job => {
+      try {
+        const api =
+          resolved.rootData.get(normalizeJenkinsJobUrl(job.url)) ??
+          (await fetchJson<JenkinsJobApi>(
+            jenkinsApiUrl(job.url, treeApiSuffix(buildRefsTree(buildLimit))),
+            username,
+            token,
+            opts.signal,
+          ));
+        const builds = api.builds ?? (api.lastBuild ? [api.lastBuild] : []);
+        await runLimited(
+          builds.slice(0, buildLimit),
+          JENKINS_CONCURRENCY,
+          async ref => {
+            try {
+              if (!ref.number && !ref.url) return;
+              const buildUrl = ref.url
+                ? jenkinsApiUrl(ref.url, treeApiSuffix(buildDetailTree()))
+                : jenkinsApiUrl(`${job.url}/${ref.number}`, treeApiSuffix(buildDetailTree()));
+              const build = await fetchJson<JenkinsBuildApi>(buildUrl, username, token, opts.signal);
+              for (const sha of matchingHeadShas(build, wanted)) runs.push(mapRun(job, build, sha));
+            } catch (err) {
+              firstError ??= err instanceof Error ? err.message : String(err);
+            }
+          },
           opts.signal,
-        ));
-      const builds = api.builds ?? (api.lastBuild ? [api.lastBuild] : []);
-      await runLimited(builds.slice(0, buildLimit), JENKINS_CONCURRENCY, async ref => {
-        try {
-          if (!ref.number && !ref.url) return;
-          const buildUrl = ref.url
-            ? jenkinsApiUrl(ref.url, treeApiSuffix(buildDetailTree()))
-            : jenkinsApiUrl(`${job.url}/${ref.number}`, treeApiSuffix(buildDetailTree()));
-          const build = await fetchJson<JenkinsBuildApi>(buildUrl, username, token, opts.signal);
-          for (const sha of matchingHeadShas(build, wanted)) runs.push(mapRun(job, build, sha));
-        } catch (err) {
-          firstError ??= err instanceof Error ? err.message : String(err);
-        }
-      });
-    } catch (err) {
-      firstError ??= err instanceof Error ? err.message : String(err);
-    }
-  });
+        );
+      } catch (err) {
+        firstError ??= err instanceof Error ? err.message : String(err);
+      }
+    },
+    opts.signal,
+  );
   runs.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   return {
     data: runs,
@@ -453,24 +464,29 @@ export async function fetchJenkinsGraphDataForSHAs(
   const runs: JenkinsRun[] = [];
   const resolved = await resolveJenkinsJobs(jobs, username, token, opts.signal, shallowGraphTree(buildLimit));
   let firstError = resolved.error;
-  await runLimited(resolved.jobs, JENKINS_CONCURRENCY, async job => {
-    try {
-      const api =
-        resolved.rootData.get(normalizeJenkinsJobUrl(job.url)) ??
-        (await fetchJson<JenkinsJobApi>(
-          jenkinsApiUrl(job.url, treeApiSuffix(shallowGraphTree(buildLimit))),
-          username,
-          token,
-          opts.signal,
-        ));
-      const builds = api.builds ?? [];
-      for (const build of builds) {
-        for (const sha of matchingHeadShas(build, wanted)) runs.push(mapRun(job, build, sha));
+  await runLimited(
+    resolved.jobs,
+    JENKINS_CONCURRENCY,
+    async job => {
+      try {
+        const api =
+          resolved.rootData.get(normalizeJenkinsJobUrl(job.url)) ??
+          (await fetchJson<JenkinsJobApi>(
+            jenkinsApiUrl(job.url, treeApiSuffix(shallowGraphTree(buildLimit))),
+            username,
+            token,
+            opts.signal,
+          ));
+        const builds = api.builds ?? [];
+        for (const build of builds) {
+          for (const sha of matchingHeadShas(build, wanted)) runs.push(mapRun(job, build, sha));
+        }
+      } catch (err) {
+        firstError ??= err instanceof Error ? err.message : String(err);
       }
-    } catch (err) {
-      firstError ??= err instanceof Error ? err.message : String(err);
-    }
-  });
+    },
+    opts.signal,
+  );
   runs.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   return {
     data: runs,
