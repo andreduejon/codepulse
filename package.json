@@ -1,6 +1,6 @@
 {
 	"name": "@andreduejon/codepulse",
-	"version": "0.6.3",
+	"version": "0.6.4",
 	"description": "A terminal git graph visualizer that is read-only by default",
 	"license": "MIT",
 	"repository": {
@@ -21,7 +21,7 @@
 	},
 	"type": "module",
 	"bin": {
-		"codepulse": "./dist/index.js"
+		"codepulse": "./dist/cli.js"
 	},
 	"files": [
 		"dist/",

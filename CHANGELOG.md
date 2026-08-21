@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.4] - 2026-08-21
+
+### Fixed
+
+- Run `@opentui/solid/preload` from `dist/cli.js` before loading the bundle.
+  Bun.build had moved that import to the end of `dist/index.js`, so a global
+  install (no repo `bunfig.toml`) called `render()` without the plugin.
+
 ## [0.6.3] - 2026-08-21
 
 ### Fixed
