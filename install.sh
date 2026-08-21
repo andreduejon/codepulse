@@ -27,6 +27,10 @@ esac
 target="$platform-$arch"
 if [ "$platform" = "linux" ] && ! getconf GNU_LIBC_VERSION >/dev/null 2>&1; then
   target="$target-musl"
+  if command -v apk >/dev/null 2>&1 && (! apk info -e libstdc++ >/dev/null 2>&1 || ! apk info -e libgcc >/dev/null 2>&1); then
+    printf 'codepulse: Alpine requires libstdc++ and libgcc. Install them with: apk add libstdc++ libgcc\n' >&2
+    exit 1
+  fi
 fi
 
 archive="codepulse-$target.tar.gz"

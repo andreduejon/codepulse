@@ -36,11 +36,8 @@ required. Set `CODEPULSE_INSTALL_DIR` to install into another directory on your
 Release archives are also available for manual installation from
 [GitHub Releases](https://github.com/andreduejon/codepulse/releases). Supported
 targets are macOS arm64/x64 and Linux arm64/x64 using glibc or musl. Windows is
-not currently supported.
-
-Releases are created by pushing a version tag matching `package.json`, for
-example `v0.7.0`. CI verifies, builds, signs, and smoke-tests every target before
-publishing the GitHub Release.
+not currently supported. Alpine Linux requires the `libstdc++` and `libgcc`
+runtime packages.
 
 ## Usage
 
@@ -60,6 +57,10 @@ repo configuration.
 |-----------------|--------------|
 | `-h, --help`    | Show help    |
 | `-v, --version` | Show version |
+
+## Releasing
+
+See the [release process](docs/RELEASING.md).
 
 ## Keyboard Shortcuts
 
