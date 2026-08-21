@@ -160,6 +160,24 @@ describe("loadConfig", () => {
     ]);
   });
 
+  test("rejects insecure Jenkins job URLs", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("jenkins-job-insecure", repoPath, {
+      providers: {
+        jenkins: {
+          jobs: [
+            { url: "http://jenkins.example.com/job/foo" },
+            { url: "https://user:token@jenkins.example.com/job/foo" },
+            { url: "https://jenkins.example.com/job/ok" },
+          ],
+        },
+      },
+    });
+    const { config: result, warnings } = loadConfig(repoPath, configPath);
+    expect(result.providers?.jenkins?.jobs).toEqual([{ url: "https://jenkins.example.com/job/ok" }]);
+    expect(warnings.filter(warning => warning.includes("providers.jenkins.jobs"))).toHaveLength(2);
+  });
+
   test("validates OpenShift URL, namespaces, and text limits", () => {
     const repoPath = "/tmp/repo";
     const configPath = makeRepoConfig("openshift-validation", repoPath, {

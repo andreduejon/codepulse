@@ -13,6 +13,7 @@ import {
   resolveJenkinsJobs,
 } from "./api";
 import type { JenkinsRun } from "./types";
+import { isSafeJenkinsRequestUrl, isValidJenkinsJobUrl } from "./validation";
 
 // ---------------------------------------------------------------------------
 // URL helpers
@@ -31,6 +32,26 @@ describe("normalizeJenkinsJobUrl", () => {
     expect(normalizeJenkinsJobUrl("  https://jenkins.example.com/job/foo  ")).toBe(
       "https://jenkins.example.com/job/foo",
     );
+  });
+});
+
+describe("isValidJenkinsJobUrl", () => {
+  test("accepts HTTPS job URLs", () => {
+    expect(isValidJenkinsJobUrl("https://jenkins.example.com/job/foo")).toBe(true);
+  });
+  test("rejects HTTP, credentials, query, and hash", () => {
+    expect(isValidJenkinsJobUrl("http://jenkins.example.com/job/foo")).toBe(false);
+    expect(isValidJenkinsJobUrl("https://user:token@jenkins.example.com/job/foo")).toBe(false);
+    expect(isValidJenkinsJobUrl("https://jenkins.example.com/job/foo?tree=builds")).toBe(false);
+    expect(isValidJenkinsJobUrl("https://jenkins.example.com/job/foo#console")).toBe(false);
+  });
+});
+
+describe("isSafeJenkinsRequestUrl", () => {
+  test("allows HTTPS tree query without credentials", () => {
+    expect(isSafeJenkinsRequestUrl("https://jenkins.example.com/job/foo/api/json?tree=builds")).toBe(true);
+    expect(isSafeJenkinsRequestUrl("http://jenkins.example.com/job/foo/api/json")).toBe(false);
+    expect(isSafeJenkinsRequestUrl("https://user:token@jenkins.example.com/job/foo/api/json")).toBe(false);
   });
 });
 

@@ -137,7 +137,14 @@ describe("buildJenkinsProviderItems", () => {
     });
     const input = items.find(item => item.kind === "editable" && item.label === "New job");
     expect(input?.kind).toBe("editable");
-    if (input?.kind === "editable") input.set(" https://jenkins.example.com/job/service ");
+    if (input?.kind === "editable") {
+      expect(input.isDraftValid?.("http://jenkins.example.com/job/foo")).toBe(false);
+      expect(input.isDraftValid?.("https://user:token@jenkins.example.com/job/foo")).toBe(false);
+      expect(input.isDraftValid?.("https://jenkins.example.com/job/service")).toBe(true);
+      input.set("http://jenkins.example.com/job/foo");
+      expect(capture.changed).toBeNull();
+      input.set(" https://jenkins.example.com/job/service ");
+    }
     expect(capture.changed?.jobs).toEqual([{ url: "https://jenkins.example.com/job/service" }]);
   });
 });

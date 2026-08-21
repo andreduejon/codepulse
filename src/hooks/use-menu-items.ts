@@ -8,6 +8,7 @@ import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL, useAppState
 import { themes } from "../context/theme";
 import { getTokenSource, parseGitHubRemote } from "../providers/github-actions/api";
 import type { JenkinsJobConfig } from "../providers/jenkins/types";
+import { isValidJenkinsJobUrl } from "../providers/jenkins/validation";
 import {
   isValidOpenShiftNamespace,
   isValidOpenShiftServerUrl,
@@ -354,14 +355,14 @@ export function buildJenkinsProviderItems(
       get: () => "",
       set: v => {
         const url = v.trim();
-        if (!url) return;
+        if (!isValidJenkinsJobUrl(url)) return;
         const newCfg = { ...jenkinsCfg, jobs: [...jenkinsCfg.jobs, { url }] };
         onChange?.(newCfg);
         persist?.(newCfg);
       },
       valid: () => jenkinsCfg.jobs.length > 0,
       showValidity: false,
-      isDraftValid: v => v.trim().length > 0,
+      isDraftValid: isValidJenkinsJobUrl,
       staySelectedOnSave: true,
     },
   );

@@ -9,6 +9,7 @@ import {
   type JenkinsRun,
   type JenkinsStage,
 } from "./types";
+import { isSafeJenkinsRequestUrl } from "./validation";
 
 interface JenkinsBuildApi {
   number?: number;
@@ -154,6 +155,7 @@ async function fetchJson<T>(
   token: string,
   signal?: AbortSignal,
 ): Promise<T> {
+  if (!isSafeJenkinsRequestUrl(url)) throw new Error(`Invalid Jenkins job URL: ${url}`);
   const res = await fetchWithRetry(url, { headers: authHeaders(username, token), signal, redirect: "manual" });
   if (res.status >= 300 && res.status < 400 && isJenkinsLoginRedirect(res.headers.get("location"))) {
     throw jenkinsAuthError();
@@ -229,6 +231,10 @@ export async function resolveJenkinsJobs(
           : new URL(`${childUrl.pathname}${childUrl.search}`, parentOrigin).toString(),
       );
       if (!url || resolved.has(url)) continue;
+      if (!isSafeJenkinsRequestUrl(url)) {
+        firstError ??= `Ignored invalid Jenkins multibranch child URL: ${url}`;
+        continue;
+      }
       const childLabel = child.displayName?.trim() || child.name?.trim() || deriveJenkinsJobLabel({ url });
       resolved.set(url, { url, label: childLabel });
       discoveredCount++;
@@ -568,7 +574,9 @@ export async function fetchJenkinsConsoleLog(
   token: string,
   signal?: AbortSignal,
 ): Promise<string> {
-  const res = await fetchWithRetry(`${normalizeJenkinsJobUrl(run.url)}/consoleText`, {
+  const url = `${normalizeJenkinsJobUrl(run.url)}/consoleText`;
+  if (!isSafeJenkinsRequestUrl(url)) return "";
+  const res = await fetchWithRetry(url, {
     headers: authHeaders(username, token),
     signal,
   });

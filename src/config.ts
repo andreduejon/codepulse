@@ -4,6 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { DEFAULT_MAX_COUNT } from "./constants";
 import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL } from "./context/state";
 import { normalizeGitHubHost } from "./providers/github-actions/api";
+import { isValidJenkinsJobUrl, JENKINS_JOB_URL_MAX_LENGTH } from "./providers/jenkins/validation";
 import {
   isValidOpenShiftNamespace,
   isValidOpenShiftServerUrl,
@@ -13,7 +14,6 @@ import {
 } from "./providers/openshift/validation";
 
 const GENERAL_TEXT_MAX_LENGTH = 255;
-const URL_OR_PATH_MAX_LENGTH = 2048;
 const REPO_METADATA_MAX_LENGTH = 64;
 
 /**
@@ -494,8 +494,16 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
                 return [];
               }
               const rawJob = job as Record<string, unknown>;
-              const url = parseOptionalText(`providers.jenkins.jobs[${idx}].url`, rawJob.url, URL_OR_PATH_MAX_LENGTH);
+              const url = parseOptionalText(
+                `providers.jenkins.jobs[${idx}].url`,
+                rawJob.url,
+                JENKINS_JOB_URL_MAX_LENGTH,
+              );
               if (url === undefined) {
+                return [];
+              }
+              if (!isValidJenkinsJobUrl(url)) {
+                warnings.push(`${path}: "providers.jenkins.jobs[${idx}].url" must be a valid HTTPS URL, ignoring`);
                 return [];
               }
               const label = parseOptionalText(
