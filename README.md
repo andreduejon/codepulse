@@ -158,8 +158,7 @@ Planned milestones currently follow this shape:
 - `0.5.0`: grouped project switching, in-memory repo session cache, grouped
   switcher, and debug dialog
 - `0.6.0`: OpenShift runtime inventory, resource health, and JSON inspection
-- `0.7.0`: OpenShift logs plus Service/Route views; Snyk Open Source on the
-  latest commit of each feature branch (cap 10), cached until local storage
+- `0.7.0`: Snyk provider and further OpenShift features and polish
 
 The intent is to reach `1.0.0` once the integration model and configuration
 surface are stable.
