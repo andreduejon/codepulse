@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, describe, expect, it, mock, spyOn } from "bun:test";
 import {
   aggregateRunsToGraphBadge,
   buildCommitDataMap,
@@ -10,6 +10,7 @@ import {
   getTokenSource,
   isTrustedGitHubHost,
   mapRunToBadge,
+  nextGithubLink,
   normalizeGitHubHost,
   parseGitHubRemote,
 } from "../src/providers/github-actions/api";
@@ -503,6 +504,16 @@ function mockFetch(fn: (...args: any[]) => Promise<Response>): void {
   globalThis.fetch = fn as any;
 }
 
+async function withSuppressedConsoleError<T>(fn: () => Promise<T>): Promise<{ result: T; calls: unknown[][] }> {
+  const errorSpy = spyOn(console, "error").mockImplementation(() => {});
+  try {
+    const result = await fn();
+    return { result, calls: errorSpy.mock.calls };
+  } finally {
+    errorSpy.mockRestore();
+  }
+}
+
 // ── fetchRunJobs (mocked fetch) ───────────────────────────────────────────
 
 function makeApiJob(overrides: Partial<GitHubApiJob> = {}): GitHubApiJob {
@@ -553,9 +564,11 @@ describe("fetchRunJobs", () => {
 
   it("returns explicit error (no throw) on 404", async () => {
     mockFetch(mock(async () => new Response(null, { status: 404 })));
-    const { jobs, error } = await fetchRunJobs(TEST_REPO, TEST_TOKEN, 999);
+    const { result, calls } = await withSuppressedConsoleError(() => fetchRunJobs(TEST_REPO, TEST_TOKEN, 999));
+    const { jobs, error } = result;
     expect(error).toBe("Jobs HTTP 404");
     expect(jobs).toHaveLength(0);
+    expect(calls).toHaveLength(1);
   });
 
   it("returns explicit error (no throw) on network error", async () => {
@@ -564,9 +577,11 @@ describe("fetchRunJobs", () => {
         throw new Error("Network failure");
       }),
     );
-    const { jobs, error } = await fetchRunJobs(TEST_REPO, TEST_TOKEN, 123);
+    const { result, calls } = await withSuppressedConsoleError(() => fetchRunJobs(TEST_REPO, TEST_TOKEN, 123));
+    const { jobs, error } = result;
     expect(error).toBe("Network failure");
     expect(jobs).toHaveLength(0);
+    expect(calls).toHaveLength(1);
   });
 
   it("handles missing steps array gracefully", async () => {
@@ -574,6 +589,37 @@ describe("fetchRunJobs", () => {
     mockFetch(mock(async () => new Response(JSON.stringify({ jobs: [jobWithoutSteps] }), { status: 200 })));
     const { jobs } = await fetchRunJobs(TEST_REPO, TEST_TOKEN, 123);
     expect(jobs[0].steps).toEqual([]);
+  });
+
+  it("follows Link rel=next and concatenates job pages", async () => {
+    const page1 = new Response(JSON.stringify({ jobs: [makeApiJob({ id: 1, name: "a" })] }), {
+      status: 200,
+      headers: { Link: '<https://api.github.com/repos/o/r/actions/runs/123/jobs?page=2>; rel="next"' },
+    });
+    const page2 = new Response(JSON.stringify({ jobs: [makeApiJob({ id: 2, name: "b" })] }), { status: 200 });
+    let n = 0;
+    mockFetch(
+      mock(async () => {
+        n++;
+        return n === 1 ? page1 : page2;
+      }),
+    );
+    const { jobs, error } = await fetchRunJobs(TEST_REPO, TEST_TOKEN, 123);
+    expect(error).toBeNull();
+    expect(jobs.map(j => j.name)).toEqual(["a", "b"]);
+    expect(n).toBe(2);
+  });
+});
+
+describe("nextGithubLink", () => {
+  it("returns next URL when origin matches", () => {
+    expect(nextGithubLink('<https://api.github.com/repos/o/r/jobs?page=2>; rel="next"', "https://api.github.com")).toBe(
+      "https://api.github.com/repos/o/r/jobs?page=2",
+    );
+  });
+
+  it("rejects next URL on a different origin", () => {
+    expect(nextGithubLink('<https://evil.example/jobs>; rel="next"', "https://api.github.com")).toBeNull();
   });
 });
 
@@ -606,6 +652,7 @@ function makeBatchResponse(
     repository[`c${i}`] = {
       oid: c.sha,
       checkSuites: {
+        pageInfo: { hasNextPage: false, endCursor: null },
         nodes: c.suites.map(s => ({
           status: s.status ?? "COMPLETED",
           conclusion: s.conclusion !== undefined ? s.conclusion : "SUCCESS",
@@ -693,16 +740,22 @@ describe("fetchCIDataForSHAs", () => {
 
   it("returns empty result on HTTP error (graceful degradation)", async () => {
     mockFetch(mock(async () => new Response(null, { status: 403 })));
-    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
+    const { result, calls } = await withSuppressedConsoleError(() =>
+      fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]),
+    );
     expect(result.data).toHaveLength(0);
     expect(result.error).toBeTruthy();
+    expect(calls).toHaveLength(1);
   });
 
   it("returns empty result on GraphQL errors field", async () => {
     const response = { errors: [{ message: "Not Found" }] };
     mockFetch(mock(async () => new Response(JSON.stringify(response), { status: 200 })));
-    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
+    const { result, calls } = await withSuppressedConsoleError(() =>
+      fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]),
+    );
     expect(result.data).toHaveLength(0);
+    expect(calls).toHaveLength(1);
   });
 
   it("returns empty result on network error", async () => {
@@ -711,8 +764,11 @@ describe("fetchCIDataForSHAs", () => {
         throw new Error("Network failure");
       }),
     );
-    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
+    const { result, calls } = await withSuppressedConsoleError(() =>
+      fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]),
+    );
     expect(result.data).toHaveLength(0);
+    expect(calls).toHaveLength(1);
   });
 
   it("returns empty result immediately for empty shas array", async () => {
@@ -800,6 +856,70 @@ describe("fetchCIDataForSHAs", () => {
     expect(names).toContain("CI");
     expect(names).toContain("Deploy");
     expect(names).toContain("Lint");
+  });
+
+  it("paginates check suites when hasNextPage is true", async () => {
+    const page1 = {
+      data: {
+        repository: {
+          c0: {
+            oid: "sha",
+            checkSuites: {
+              pageInfo: { hasNextPage: true, endCursor: "CURSOR" },
+              nodes: [
+                {
+                  status: "COMPLETED",
+                  conclusion: "SUCCESS",
+                  workflowRun: {
+                    databaseId: 1,
+                    runNumber: 1,
+                    event: "push",
+                    updatedAt: "2024-01-02T00:00:00Z",
+                    workflow: { name: "CI" },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
+    };
+    const page2 = {
+      data: {
+        repository: {
+          c0: {
+            oid: "sha",
+            checkSuites: {
+              pageInfo: { hasNextPage: false, endCursor: null },
+              nodes: [
+                {
+                  status: "COMPLETED",
+                  conclusion: "FAILURE",
+                  workflowRun: {
+                    databaseId: 2,
+                    runNumber: 2,
+                    event: "push",
+                    updatedAt: "2024-01-02T00:00:00Z",
+                    workflow: { name: "Deploy" },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
+    };
+    let n = 0;
+    mockFetch(
+      mock(async () => {
+        n++;
+        return new Response(JSON.stringify(n === 1 ? page1 : page2), { status: 200 });
+      }),
+    );
+    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["sha"]);
+    expect(n).toBe(2);
+    expect(result.data.map(r => r.name)).toEqual(["CI", "Deploy"]);
+    expect(result.error).toBeNull();
   });
 
   it("exports GQL_BATCH_SIZE as a positive integer", () => {

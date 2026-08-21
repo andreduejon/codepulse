@@ -1,4 +1,4 @@
-export type DebugEventSource = "Git" | "GitHub" | "Jenkins" | "error";
+export type DebugEventSource = "Git" | "GitHub" | "Jenkins" | "OpenShift" | "error";
 
 export interface DebugEvent {
   timestamp: number;

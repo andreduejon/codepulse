@@ -35,6 +35,10 @@ const ESC_CLOSE_WIDTH = 10;
 /** Title bar has paddingX={4}, so 4 chars on each side. */
 const TITLE_PADDING = 8;
 
+export function getDialogTitleContentWidth(dialogWidth: number): number {
+  return Math.max(0, dialogWidth - TITLE_PADDING - ESC_CLOSE_WIDTH);
+}
+
 /** Minimum width we'll shrink the basename to before giving up. */
 const MIN_BASENAME_LEN = 8;
 
@@ -88,11 +92,12 @@ export function buildDiffTitleParts(
   counter: string,
   modeLabel: string,
   dialogWidth: number,
+  leadingWidth = 0,
 ): DiffTitleParts {
   const { dirPrefix: rawDir, basename: rawBasename } = splitPath(filePath);
 
   // Total usable width for title content
-  const usableWidth = dialogWidth - TITLE_PADDING - ESC_CLOSE_WIDTH;
+  const usableWidth = getDialogTitleContentWidth(dialogWidth) - leadingWidth;
 
   // Measure each segment at full size
   const counterLen = counter.length;

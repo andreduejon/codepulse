@@ -1,8 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import {
   buildGitHubProviderItems,
+  buildJenkinsProviderItems,
+  buildOpenShiftProviderItems,
   type GitHubMenuConfig,
   isOptionalRepoMetadataValid,
+  type JenkinsMenuConfig,
+  type OpenShiftMenuConfig,
   optionalRepoMetadataValue,
 } from "../src/hooks/use-menu-items";
 
@@ -83,6 +87,88 @@ describe("buildGitHubProviderItems", () => {
     if (capture.changed == null || capture.persisted == null) throw new Error("expected callbacks");
     expect(capture.changed.trustedEnterpriseHost).toBe("ghe.example.com");
     expect(capture.persisted.trustedEnterpriseHost).toBe("ghe.example.com");
+  });
+});
+
+describe("buildOpenShiftProviderItems", () => {
+  it("validates HTTPS server and DNS namespaces", () => {
+    const cfg: OpenShiftMenuConfig = {
+      enabled: true,
+      serverUrl: "https://api.example.com:6443",
+      tokenEnvVar: "OPENSHIFT_TOKEN",
+      namespaces: [],
+      commitShaAnnotation: "dev/commit-sha",
+    };
+    let changed = cfg;
+    const items = buildOpenShiftProviderItems(cfg, next => {
+      changed = next;
+    });
+    const server = items.find(item => item.kind === "editable" && item.label === "Server");
+    const namespace = items.find(item => item.kind === "editable" && item.label === "New namespace");
+    expect(server?.kind).toBe("editable");
+    expect(namespace?.kind).toBe("editable");
+    if (server?.kind === "editable") {
+      expect(server.isDraftValid?.("https://api.example.com")).toBe(true);
+      expect(server.isDraftValid?.("http://api.example.com")).toBe(false);
+    }
+    if (namespace?.kind === "editable") {
+      expect(namespace.isDraftValid?.("team-one")).toBe(true);
+      expect(namespace.isDraftValid?.("Bad_Name")).toBe(false);
+      namespace.set("Bad_Name");
+      expect(changed.namespaces).toEqual([]);
+      namespace.set("team-one");
+      expect(changed.namespaces).toEqual(["team-one"]);
+    }
+  });
+});
+
+describe("buildJenkinsProviderItems", () => {
+  it("adds a job URL for API auto-detection", () => {
+    const baseCfg: JenkinsMenuConfig = {
+      enabled: true,
+      username: "user",
+      tokenEnvVar: "JENKINS_TOKEN",
+      graphBuildLimit: 20,
+      jobs: [],
+    };
+    const capture: { changed: JenkinsMenuConfig | null } = { changed: null };
+    const items = buildJenkinsProviderItems(baseCfg, cfg => {
+      capture.changed = cfg;
+    });
+    const input = items.find(item => item.kind === "editable" && item.label === "New job");
+    expect(input?.kind).toBe("editable");
+    if (input?.kind === "editable") {
+      expect(input.isDraftValid?.("http://jenkins.example.com/job/foo")).toBe(false);
+      expect(input.isDraftValid?.("https://user:token@jenkins.example.com/job/foo")).toBe(false);
+      expect(input.isDraftValid?.("https://jenkins.example.com/job/service")).toBe(true);
+      input.set("http://jenkins.example.com/job/foo");
+      expect(capture.changed).toBeNull();
+      input.set(" https://jenkins.example.com/job/service ");
+    }
+    expect(capture.changed?.jobs).toEqual([{ url: "https://jenkins.example.com/job/service" }]);
+  });
+
+  it("cycles fetch size per job through 10/20/50", () => {
+    const baseCfg: JenkinsMenuConfig = {
+      enabled: true,
+      username: "user",
+      tokenEnvVar: "JENKINS_TOKEN",
+      graphBuildLimit: 20,
+      jobs: [],
+    };
+    let changed = baseCfg;
+    const items = buildJenkinsProviderItems(baseCfg, cfg => {
+      changed = cfg;
+    });
+    const cycle = items.find(item => item.kind === "cycle" && item.label === "Fetch size per job");
+    expect(cycle?.kind).toBe("cycle");
+    if (cycle?.kind !== "cycle") return;
+    expect(cycle.get()).toBe("20");
+    expect(cycle.options).toEqual(["10", "20", "50"]);
+    cycle.set("10");
+    expect(changed.graphBuildLimit).toBe(10);
+    cycle.set("50");
+    expect(changed.graphBuildLimit).toBe(50);
   });
 });
 

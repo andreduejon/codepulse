@@ -5,6 +5,7 @@ import {
   buildStashByParent,
   computeSilentMaxCount,
   computeTargetIndex,
+  findCurrentHeadHash,
   injectUncommittedNode,
   isStaleResult,
 } from "../src/utils/data-loader-utils";
@@ -106,6 +107,26 @@ describe("isStaleResult", () => {
 
   test("returns true for empty lists", () => {
     expect(isStaleResult([], [])).toBe(true);
+  });
+});
+
+describe("findCurrentHeadHash", () => {
+  test("uses the current ref when another branch commit appears first", () => {
+    const commits = [
+      makeCommit("newer-other-branch", [], [{ name: "other", type: "branch", isCurrent: false }]),
+      makeCommit("current-head", [], [{ name: "main", type: "branch", isCurrent: true }]),
+    ];
+
+    expect(findCurrentHeadHash(commits)).toBe("current-head");
+  });
+
+  test("supports detached HEAD", () => {
+    const commits = [makeCommit("detached", [], [{ name: "HEAD", type: "head", isCurrent: true }])];
+    expect(findCurrentHeadHash(commits)).toBe("detached");
+  });
+
+  test("returns undefined when HEAD is not loaded", () => {
+    expect(findCurrentHeadHash([makeCommit("other", [])])).toBeUndefined();
   });
 });
 

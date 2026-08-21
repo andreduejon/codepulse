@@ -9,10 +9,31 @@
 
 import { createSignal } from "solid-js";
 
-/** Provider view identifiers — Tab cycles through these. */
-export type ProviderView = "git" | "github-actions" | "jenkins";
+/**
+ * Canonical provider order used everywhere providers are cycled or displayed.
+ * Mental model: source → CI → runtime → scan/quality.
+ * Future providers should extend this order as:
+ * Git → GitHub Actions → Jenkins → OpenShift → Snyk → SonarQube.
+ */
+export const PROVIDER_ORDER = ["git", "github-actions", "jenkins", "openshift"] as const;
 
-export type ProviderId = Exclude<ProviderView, "git">;
+/** Provider view identifiers — Tab cycles through these. */
+export type ProviderView = (typeof PROVIDER_ORDER)[number];
+export type ProviderDetailView = Exclude<ProviderView, "git">;
+
+export interface ProviderMetadata {
+  displayName: string;
+  /** Short label for detail panel tab. Defaults to displayName. */
+  detailLabel?: string;
+  category: "source" | "ci" | "runtime" | "scan-quality";
+}
+
+export const PROVIDER_METADATA: Record<ProviderView, ProviderMetadata> = {
+  git: { displayName: "Git", category: "source" },
+  "github-actions": { displayName: "GitHub Actions", detailLabel: "Actions", category: "ci" },
+  jenkins: { displayName: "Jenkins", category: "ci" },
+  openshift: { displayName: "OpenShift", category: "runtime" },
+};
 
 /**
  * Minimal badge for a single commit in the graph view.
@@ -31,6 +52,10 @@ export interface GraphBadge {
   failCount: number;
   /** Total in-progress / queued count across all runs. */
   runningCount: number;
+  /** Total unknown resources/statuses. Used by runtime providers. */
+  unknownCount?: number;
+  /** Total matched resources. Used by runtime providers. */
+  resourceCount?: number;
   /** Relative time string for the most recently updated run (e.g. "2h ago"). */
   latestRunAt: string;
   /** Status of the most recently updated run — used to colour latestRunAt. */
@@ -46,67 +71,65 @@ export interface ProviderRegistration {
   isAvailable: () => boolean;
 }
 
-/** Mutable provider registry — populated at runtime as providers are initialised. */
-export const providerRegistry: ProviderRegistration[] = [];
-const [providerRegistryVersion, setProviderRegistryVersion] = createSignal(0);
-
-/** Register a provider.  Called once per provider during hook setup. */
-export function registerProvider(p: ProviderRegistration): void {
-  // Avoid duplicate registrations (e.g. HMR / strict-mode double-invocation)
-  if (!providerRegistry.find(r => r.id === p.id)) {
-    providerRegistry.push(p);
-    setProviderRegistryVersion(v => v + 1);
-  }
+export interface ProviderRegistry {
+  register: (p: ProviderRegistration) => void;
+  unregister: (id: ProviderView) => void;
+  getVersion: () => number;
+  getEnabledViews: () => ProviderView[];
+  nextView: (current: ProviderView) => ProviderView;
+  get: (id: ProviderView) => ProviderRegistration | undefined;
 }
 
-/** Unregister a provider by ID.  Called when the provider is disabled at runtime. */
-export function unregisterProvider(id: ProviderView): void {
-  const idx = providerRegistry.findIndex(r => r.id === id);
-  if (idx !== -1) {
-    providerRegistry.splice(idx, 1);
-    setProviderRegistryVersion(v => v + 1);
-  }
-}
+/** Per-app registry. Do not share across AppState instances. */
+export function createProviderRegistry(): ProviderRegistry {
+  const entries: ProviderRegistration[] = [];
+  const [version, setVersion] = createSignal(0);
 
-/** Reactive version counter for consumers that need to re-read registry-derived UI. */
-export function getProviderRegistryVersion(): number {
-  return providerRegistryVersion();
-}
+  const getEnabledViews = (): ProviderView[] => {
+    const registered = new Set(entries.map(p => p.id));
+    return PROVIDER_ORDER.filter(view => view === "git" || registered.has(view));
+  };
 
-/**
- * Returns the ordered list of ProviderView values available for Tab cycling:
- * always starts with "git", then all registered providers (regardless of
- * availability).  Registration is the gating mechanism — a disabled provider
- * is never registered, so it never appears here.
- *
- * An unavailable-but-registered provider shows a setup guidance screen when
- * the user tabs to it, instead of being silently excluded from Tab cycling.
- */
-export function getEnabledProviderViews(): ProviderView[] {
-  const views: ProviderView[] = ["git"];
-  for (const p of providerRegistry) {
-    views.push(p.id);
-  }
-  return views;
-}
-
-/**
- * Cycle to the next provider view.
- * If no providers are available beyond "git", returns "git".
- */
-export function nextProviderView(current: ProviderView): ProviderView {
-  const views = getEnabledProviderViews();
-  if (views.length <= 1) return "git";
-  const idx = views.indexOf(current);
-  return views[(idx + 1) % views.length];
-}
-
-/** Look up a registered provider by ID.  Returns undefined if not found. */
-export function getProvider(id: ProviderView): ProviderRegistration | undefined {
-  return providerRegistry.find(p => p.id === id);
+  return {
+    register(p) {
+      if (!entries.find(r => r.id === p.id)) {
+        entries.push(p);
+        setVersion(v => v + 1);
+      }
+    },
+    unregister(id) {
+      const idx = entries.findIndex(r => r.id === id);
+      if (idx !== -1) {
+        entries.splice(idx, 1);
+        setVersion(v => v + 1);
+      }
+    },
+    getVersion: () => version(),
+    getEnabledViews,
+    nextView(current) {
+      const views = getEnabledViews();
+      if (views.length <= 1) return "git";
+      const idx = views.indexOf(current);
+      return views[(idx + 1) % views.length];
+    },
+    get: id => entries.find(p => p.id === id),
+  };
 }
 
 export function providerDisplayName(view: ProviderView): string {
-  if (view === "git") return "Git";
-  return getProvider(view)?.displayName ?? view;
+  return PROVIDER_METADATA[view]?.displayName ?? view;
+}
+
+export function isProviderView(view: string): view is ProviderView {
+  return PROVIDER_ORDER.includes(view as ProviderView);
+}
+
+export function isProviderDetailView(view: string): view is ProviderDetailView {
+  return isProviderView(view) && view !== "git";
+}
+
+export function providerDetailTab(view: ProviderView): { id: ProviderDetailView; label: string } | null {
+  if (!isProviderDetailView(view)) return null;
+  const metadata = PROVIDER_METADATA[view];
+  return { id: view, label: metadata.detailLabel ?? metadata.displayName };
 }

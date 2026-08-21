@@ -3,6 +3,7 @@ import type { KnownRepoInfo } from "../config";
 import { useAppState } from "../context/state";
 import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
 import { useT } from "../hooks/use-t";
+import { providerColors } from "../providers/colors";
 import { providerDisplayName } from "../providers/provider";
 import {
   commandBarInputValue,
@@ -85,8 +86,13 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
       appName: props.currentAppName,
     }),
   );
-  const visibleProjects = createMemo(() => {
+  const projectBadges = createMemo(() => {
     const members = groupMembers();
+    if (members.length > 0) return members;
+    return [{ path: props.currentRepo, group: props.currentGroup, appName: props.currentAppName }];
+  });
+  const visibleProjects = createMemo(() => {
+    const members = projectBadges();
     if (members.length <= 3) return { leftHidden: 0, repos: members, rightHidden: 0 };
 
     const currentIdx = Math.max(
@@ -155,8 +161,7 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
               );
             }
             const label = providerDisplayName(view);
-            const bg = view === "jenkins" ? t().jenkinsBg : t().githubActionsBg;
-            const fg = view === "jenkins" ? t().jenkinsFg : t().githubActionsFg;
+            const { bg, fg } = providerColors(t(), view);
             return (
               <text flexShrink={0} wrapMode="none" fg={fg} bg={bg}>
                 {` ${label} `}
@@ -170,7 +175,7 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
           <text flexShrink={0} wrapMode="none" fg={t().accent} bg={t().backgroundElementActive}>
             {modeBadge()}
           </text>
-          <Show when={groupMembers().length > 1}>
+          <Show when={projectBadges().length > 0}>
             <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
               {" · "}
             </text>

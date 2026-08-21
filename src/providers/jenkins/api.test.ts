@@ -6,11 +6,14 @@ import {
   extractCandidateShas,
   extractHeadShas,
   extractSha,
+  fetchJenkinsDataForSHAs,
   fetchJenkinsGraphDataForSHAs,
   jenkinsApiUrl,
   normalizeJenkinsJobUrl,
+  resolveJenkinsJobs,
 } from "./api";
 import type { JenkinsRun } from "./types";
+import { isSafeJenkinsRequestUrl, isValidJenkinsJobUrl } from "./validation";
 
 // ---------------------------------------------------------------------------
 // URL helpers
@@ -29,6 +32,26 @@ describe("normalizeJenkinsJobUrl", () => {
     expect(normalizeJenkinsJobUrl("  https://jenkins.example.com/job/foo  ")).toBe(
       "https://jenkins.example.com/job/foo",
     );
+  });
+});
+
+describe("isValidJenkinsJobUrl", () => {
+  test("accepts HTTPS job URLs", () => {
+    expect(isValidJenkinsJobUrl("https://jenkins.example.com/job/foo")).toBe(true);
+  });
+  test("rejects HTTP, credentials, query, and hash", () => {
+    expect(isValidJenkinsJobUrl("http://jenkins.example.com/job/foo")).toBe(false);
+    expect(isValidJenkinsJobUrl("https://user:token@jenkins.example.com/job/foo")).toBe(false);
+    expect(isValidJenkinsJobUrl("https://jenkins.example.com/job/foo?tree=builds")).toBe(false);
+    expect(isValidJenkinsJobUrl("https://jenkins.example.com/job/foo#console")).toBe(false);
+  });
+});
+
+describe("isSafeJenkinsRequestUrl", () => {
+  test("allows HTTPS tree query without credentials", () => {
+    expect(isSafeJenkinsRequestUrl("https://jenkins.example.com/job/foo/api/json?tree=builds")).toBe(true);
+    expect(isSafeJenkinsRequestUrl("http://jenkins.example.com/job/foo/api/json")).toBe(false);
+    expect(isSafeJenkinsRequestUrl("https://user:token@jenkins.example.com/job/foo/api/json")).toBe(false);
   });
 });
 
@@ -212,7 +235,7 @@ describe("fetchJenkinsGraphDataForSHAs", () => {
     const calls: (RequestInfo | URL)[] = [];
     globalThis.fetch = (async (input, init) => {
       calls.push(input);
-      expect((init?.headers as Record<string, string>).Authorization).toBe("Basic dXNlcjp0b2tlbg==");
+      expect((init?.headers as Record<string, string> | undefined)?.Authorization).toBe("Basic dXNlcjp0b2tlbg==");
       return new Response(
         JSON.stringify({
           builds: [
@@ -286,6 +309,41 @@ describe("fetchJenkinsGraphDataForSHAs", () => {
     }
   });
 
+  test("maps shallow scmRevisionAction hash", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          builds: [
+            {
+              number: 12,
+              url: "https://jenkins.example.com/job/foo/12/",
+              result: "SUCCESS",
+              building: false,
+              timestamp: 1_700_000_000_000,
+              duration: 12_000,
+              actions: [{ scmRevisionAction: { revision: { hash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } } }],
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      )) as unknown as typeof fetch;
+
+    try {
+      const result = await fetchJenkinsGraphDataForSHAs(
+        [{ url: "https://jenkins.example.com/job/foo/" }],
+        "user",
+        "token",
+        ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+      );
+      expect(result.error).toBeNull();
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].headSha).toBe("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   test("reports Jenkins SSO redirect as auth failure", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () =>
@@ -305,6 +363,211 @@ describe("fetchJenkinsGraphDataForSHAs", () => {
       expect(result.error).toBe(
         "Jenkins authentication failed. Verify username, token, and complete browser login if required.",
       );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe("fetchJenkinsDataForSHAs", () => {
+  test("preserves successful builds when one build detail request fails", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async input => {
+      const url = decodeURIComponent(input.toString());
+      if (url.includes("builds[number,url]")) {
+        return Response.json({
+          _class: "org.jenkinsci.plugins.workflow.job.WorkflowJob",
+          builds: [
+            { number: 2, url: "https://jenkins.example.com/job/foo/2/" },
+            { number: 1, url: "https://jenkins.example.com/job/foo/1/" },
+          ],
+        });
+      }
+      if (url.includes("/2/api/json")) return new Response("failed", { status: 500, statusText: "Failed" });
+      return Response.json({
+        number: 1,
+        url: "https://jenkins.example.com/job/foo/1/",
+        result: "SUCCESS",
+        timestamp: 1_700_000_000_000,
+        duration: 1_000,
+        actions: [{ lastBuiltRevision: { SHA1: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } }],
+      });
+    }) as typeof fetch;
+
+    try {
+      const result = await fetchJenkinsDataForSHAs([{ url: "https://jenkins.example.com/job/foo" }], "user", "token", [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      ]);
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].runNumber).toBe(1);
+      expect(result.error).toBe("Jenkins 500: Failed");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe("resolveJenkinsJobs", () => {
+  test("discovers enabled pipeline branches from a multibranch parent", async () => {
+    const originalFetch = globalThis.fetch;
+    let requestedUrl = "";
+    globalThis.fetch = (async input => {
+      requestedUrl = input.toString();
+      return new Response(
+        JSON.stringify({
+          _class: "org.jenkinsci.plugins.workflow.multibranch.WorkflowMultiBranchProject",
+          jobs: [
+            {
+              _class: "org.jenkinsci.plugins.workflow.job.WorkflowJob",
+              name: "main",
+              displayName: "main",
+              url: "https://jenkins.example.com/job/service/job/main/",
+              buildable: true,
+              disabled: false,
+            },
+            {
+              _class: "org.jenkinsci.plugins.workflow.job.WorkflowJob",
+              name: "disabled",
+              url: "https://jenkins.example.com/job/service/job/disabled/",
+              buildable: false,
+              disabled: true,
+            },
+            {
+              _class: "com.cloudbees.hudson.plugins.folder.Folder",
+              name: "folder",
+              url: "https://jenkins.example.com/job/service/job/folder/",
+              buildable: true,
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }) as typeof fetch;
+
+    try {
+      const result = await resolveJenkinsJobs(
+        [{ url: "https://jenkins.example.com/job/service", label: "Service" }],
+        "user",
+        "token",
+      );
+      expect(result.error).toBeNull();
+      expect(result.jobs).toEqual([
+        {
+          url: "https://jenkins.example.com/job/service/job/main",
+          label: "main",
+        },
+      ]);
+      expect(decodeURIComponent(requestedUrl)).toContain("jobs[_class,name,displayName,url,buildable,disabled]");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("caps discovered enabled branches at 25 after filtering", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          _class: "org.jenkinsci.plugins.workflow.multibranch.WorkflowMultiBranchProject",
+          jobs: [
+            ...Array.from({ length: 30 }, (_, idx) => ({
+              _class: "org.jenkinsci.plugins.workflow.job.WorkflowJob",
+              name: `disabled-${idx}`,
+              url: `https://jenkins.example.com/job/service/job/disabled-${idx}/`,
+              buildable: false,
+              disabled: true,
+            })),
+            ...Array.from({ length: 30 }, (_, idx) => ({
+              _class: "org.jenkinsci.plugins.workflow.job.WorkflowJob",
+              name: `branch-${idx}`,
+              url: `https://jenkins.example.com/job/service/job/branch-${idx}/`,
+              buildable: true,
+              disabled: false,
+            })),
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      )) as unknown as typeof fetch;
+
+    try {
+      const result = await resolveJenkinsJobs([{ url: "https://jenkins.example.com/job/service" }], "user", "token");
+      expect(result.jobs).toHaveLength(25);
+      expect(result.jobs[0].url).toContain("branch-0");
+      expect(result.jobs[24].url).toContain("branch-24");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("keeps successful direct jobs when another configured URL fails", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async input => {
+      if (input.toString().includes("/job/direct/")) {
+        return new Response(JSON.stringify({ _class: "org.jenkinsci.plugins.workflow.job.WorkflowJob" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response("failed", { status: 404, statusText: "Not Found" });
+    }) as typeof fetch;
+
+    try {
+      const direct = { url: "https://jenkins.example.com/job/direct" };
+      const result = await resolveJenkinsJobs(
+        [direct, { url: "https://jenkins.example.com/job/service" }],
+        "user",
+        "token",
+      );
+      expect(result.jobs).toEqual([direct]);
+      expect(result.error).toBe("Jenkins 404: Not Found");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("rewrites discovered child URLs to the configured parent origin", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          _class: "org.jenkinsci.plugins.workflow.multibranch.WorkflowMultiBranchProject",
+          jobs: [
+            {
+              _class: "org.jenkinsci.plugins.workflow.job.WorkflowJob",
+              name: "main",
+              url: "http://jenkins-internal:8080/jenkins/job/service/job/main/",
+              buildable: true,
+              disabled: false,
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      )) as unknown as typeof fetch;
+
+    try {
+      const result = await resolveJenkinsJobs(
+        [{ url: "https://jenkins.example.com/jenkins/job/service" }],
+        "user",
+        "token",
+      );
+      expect(result.jobs[0].url).toBe("https://jenkins.example.com/jenkins/job/service/job/main");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("treats a missing root class as a direct job", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ builds: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })) as unknown as typeof fetch;
+
+    try {
+      const direct = { url: "https://jenkins.example.com/job/direct" };
+      const result = await resolveJenkinsJobs([direct], "user", "token");
+      expect(result.jobs).toEqual([direct]);
     } finally {
       globalThis.fetch = originalFetch;
     }

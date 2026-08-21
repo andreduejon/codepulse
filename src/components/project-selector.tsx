@@ -8,7 +8,12 @@ import packageJson from "../../package.json";
 import { type KnownRepoInfo, removeRepoConfig } from "../config";
 import { useT } from "../hooks/use-t";
 import type { KeyboardScope } from "../keyboard/scope";
-import { buildProjectSelectorRows, isRepoRow, isSelectableProjectSelectorRow } from "../utils/project-selector-rows";
+import {
+  buildProjectSelectorRows,
+  isRepoRow,
+  isSelectableProjectSelectorRow,
+  type ProjectSelectorRow,
+} from "../utils/project-selector-rows";
 import { scrollElementIntoView } from "../utils/scroll";
 import { KeyHint, KeyHintSeparator } from "./key-hint";
 import LogoBanner, { LOGO_WIDTH } from "./logo-banner";
@@ -68,7 +73,7 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
   const pathFocused = () => selectedRow()?.kind === "path-input";
   const [pathInputValue, setPathInputValue] = createSignal("");
   let scrollboxRef: ScrollBoxRenderable | undefined;
-  const rowRefs: Array<Renderable | undefined> = [];
+  const rowRefs = new Map<ProjectSelectorRow, Renderable>();
   const escapeHint = () => {
     if (pathFocused() && hasRepos()) return " list  ";
     if (inApp()) return " back  ";
@@ -85,7 +90,8 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
   });
 
   createEffect(() => {
-    const row = rowRefs[cursor()];
+    const selected = rows()[cursor()];
+    const row = selected ? rowRefs.get(selected) : undefined;
     if (scrollboxRef && row) scrollElementIntoView(scrollboxRef, row);
   });
 
@@ -113,7 +119,7 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
 
   const forgetSelectedRepo = () => {
     const row = selectedRow();
-    if (!row || row.kind !== "repo" || row.current) return;
+    if (row?.kind !== "repo" || row.current) return;
     if (!removeRepoConfig(row.repo.path)) return;
     setSavedRepos(prev => prev.filter(repo => repo.path !== row.repo.path));
   };
@@ -249,7 +255,7 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
                 {(row, idx) => (
                   <box
                     ref={(el: Renderable) => {
-                      rowRefs[idx()] = el;
+                      rowRefs.set(row, el);
                     }}
                     flexDirection="row"
                     width="100%"

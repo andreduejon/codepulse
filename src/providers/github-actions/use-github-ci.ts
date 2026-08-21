@@ -21,7 +21,7 @@
  */
 
 import type { Accessor } from "solid-js";
-import { createEffect, createSignal, onCleanup, untrack } from "solid-js";
+import { createEffect, createSignal, untrack } from "solid-js";
 import {
   type AppActions,
   type AppState,
@@ -30,7 +30,8 @@ import {
   providerLoading,
   providerUnavailable,
 } from "../../context/state";
-import { registerProvider, unregisterProvider } from "../../providers/provider";
+
+import { DEFAULT_INITIAL_SHA_LIMIT, useProviderFetchLifecycle } from "../shared/use-provider-fetch-lifecycle";
 import {
   buildCommitDataMap,
   buildGraphBadges,
@@ -52,8 +53,7 @@ import type {
 } from "./types";
 import { DEFAULT_GITHUB_CONFIG } from "./types";
 
-/** Number of rows taken from the top of graphRows() for the initial fetch. */
-const INITIAL_SHA_LIMIT = 100;
+const INITIAL_SHA_LIMIT = DEFAULT_INITIAL_SHA_LIMIT;
 
 export interface UseGitHubCIResult {
   /** Retrieve all runs for a given commit SHA (null if not fetched yet). */
@@ -141,14 +141,14 @@ export function useGitHubCI(opts: {
   // changes — the rest of the hook reads the plain `config` variable which
   // does NOT track as a reactive dependency.
   createEffect(() => {
-    if (configAccessor().enabled !== false) {
-      registerProvider({
+    if (configAccessor().enabled === true) {
+      state.providers.register({
         id: "github-actions",
         displayName: "GitHub",
         isAvailable,
       });
     } else {
-      unregisterProvider("github-actions");
+      state.providers.unregister("github-actions");
       // If the user is currently in the CI view and disables the provider,
       // switch back to the git view immediately.
       if (untrack(state.activeProviderView) === "github-actions") {
@@ -174,11 +174,10 @@ export function useGitHubCI(opts: {
    * a git fetch.  Cleared on manual refresh to force a full re-query.
    */
   const queriedSHAs = new Set<string>();
-  /** Guard: is a fetch already in-flight? */
-  let fetchInFlight = false;
 
   interface FetchForShasResult {
     firstError: string | null;
+    failedSHAs: string[];
   }
 
   // ── Core fetch function ───────────────────────────────────────────────
@@ -190,10 +189,11 @@ export function useGitHubCI(opts: {
    * @param signal    Optional AbortSignal for cancellation.
    */
   async function fetchForSHAs(shas: string[], signal?: AbortSignal): Promise<FetchForShasResult> {
-    if (shas.length === 0) return { firstError: null };
+    const epoch = lifecycle.getEpoch();
+    if (shas.length === 0) return { firstError: null, failedSHAs: [] };
     const repo = cachedGitHubRepo();
     const token = getGitHubToken(config.tokenEnvVar);
-    if (!repo || !token) return { firstError: null };
+    if (!repo || !token) return { firstError: null, failedSHAs: [] };
 
     // Split into batches of GQL_BATCH_SIZE and fire in parallel
     const batches: string[][] = [];
@@ -203,9 +203,14 @@ export function useGitHubCI(opts: {
 
     const results = await Promise.all(batches.map(batch => fetchCIDataForSHAs(repo, token, batch, { signal })));
 
-    if (signal?.aborted) return { firstError: null };
+    if (signal?.aborted || epoch !== lifecycle.getEpoch()) return { firstError: null, failedSHAs: [] };
 
     const firstError = results.find(r => r.error)?.error ?? null;
+    const failedSHAs: string[] = [];
+    for (let i = 0; i < results.length; i++) {
+      if (results[i].error) failedSHAs.push(...batches[i]);
+    }
+    const failedShaSet = new Set(failedSHAs);
 
     // Merge all batch results (include successful batches even if others errored)
     const allRuns: GitHubWorkflowRun[] = [];
@@ -216,7 +221,7 @@ export function useGitHubCI(opts: {
     // Merge new runs into commitDataCache (additive — don't discard other SHAs)
     const newCommitData = buildCommitDataMap(allRuns);
     for (const sha of shas) {
-      if (!newCommitData.has(sha)) {
+      if (!newCommitData.has(sha) && !failedShaSet.has(sha)) {
         newCommitData.set(sha, { sha, runs: [] });
       }
     }
@@ -227,241 +232,116 @@ export function useGitHubCI(opts: {
     // (e.g. detail tab open while background fetch completes).
     setCommitDataVersion(v => v + 1);
 
-    // Merge new badges into graphBadges (additive)
-    const newBadges = buildGraphBadges(allRuns);
-    const currentBadges = new Map(state.graphBadges());
-    for (const [sha, badge] of newBadges) {
-      currentBadges.set(sha, badge);
-    }
-    actions.setGraphBadges(currentBadges);
+    // Rebuild from GitHub-owned cache; active view may belong to another provider.
+    const cachedRuns = [...commitDataCache.values()].flatMap(data => data.runs);
+    actions.setGraphBadges("github-actions", buildGraphBadges(cachedRuns));
 
-    return { firstError };
+    return { firstError, failedSHAs };
   }
 
   // ── Main fetch entry points ───────────────────────────────────────────
 
-  /**
-   * Initial / catch-up fetch: query the top INITIAL_SHA_LIMIT SHAs from
-   * graphRows that haven't been queried yet.
-   *
-   * Pass `shas` when the caller has already computed the unqueried list to
-   * avoid a redundant collectTopSHAs() call.
-   *
-   * Pass `showStatus` = true only when the user is actively in the provider
-   * view — background fetches (e.g. on startup) should silently skip rather
-   * than surfacing "No GitHub remote detected" before the remote URL loads.
-   */
-  async function doInitialFetch(signal?: AbortSignal, shas?: string[], showStatus = false): Promise<void> {
-    if (fetchInFlight) return;
-    if (!isAvailable()) {
-      if (showStatus) {
-        const repo = cachedGitHubRepo();
-        const token = getGitHubToken(config.tokenEnvVar);
-        if (!config.enabled) {
-          actions.setProviderStatus(providerUnavailable("CI provider disabled"));
-        } else if (!parsedGitHubRepo()) {
-          actions.setProviderStatus(providerUnavailable("No GitHub remote detected"));
-        } else if (!repo) {
-          actions.setProviderStatus(providerUnavailable(`Untrusted GitHub host: ${parsedGitHubRepo()?.hostname}`));
-        } else if (!token) {
-          actions.setProviderStatus(providerUnavailable(`Token not found: $${config.tokenEnvVar}`));
+  const lifecycle = useProviderFetchLifecycle({
+    state,
+    providerId: "github-actions",
+    shaLimit: INITIAL_SHA_LIMIT,
+    identity: () => {
+      const partial = configAccessor();
+      return JSON.stringify({
+        repoPath: state.repoPath(),
+        remoteUrl: state.remoteUrl(),
+        enabled: partial.enabled ?? DEFAULT_GITHUB_CONFIG.enabled,
+        tokenEnvVar: partial.tokenEnvVar ?? DEFAULT_GITHUB_CONFIG.tokenEnvVar,
+        trustedEnterpriseHost: partial.trustedEnterpriseHost ?? null,
+      });
+    },
+    isAvailable,
+    isBackgroundReady: () => cachedGitHubRepo() !== null,
+    queriedSHAs,
+    reportUnavailable: showStatus => {
+      if (!showStatus) return;
+      const repo = cachedGitHubRepo();
+      const token = getGitHubToken(config.tokenEnvVar);
+      if (!config.enabled) {
+        actions.setProviderStatus("github-actions", providerUnavailable("CI provider disabled"));
+      } else if (!parsedGitHubRepo()) {
+        actions.setProviderStatus("github-actions", providerUnavailable("No GitHub remote detected"));
+      } else if (!repo) {
+        actions.setProviderStatus(
+          "github-actions",
+          providerUnavailable(`Untrusted GitHub host: ${parsedGitHubRepo()?.hostname}`),
+        );
+      } else if (!token) {
+        actions.setProviderStatus("github-actions", providerUnavailable(`Token not found: $${config.tokenEnvVar}`));
+      }
+    },
+    runInitialFetch: async ({ signal, shas, showStatus, epoch }) => {
+      const allSHAs = shas ?? collectTopSHAs(state.graphRows(), INITIAL_SHA_LIMIT);
+      const unqueried = allSHAs.filter(sha => !queriedSHAs.has(sha));
+      if (unqueried.length === 0) return;
+      lifecycle.noteFetchStarted();
+      for (const sha of unqueried) queriedSHAs.add(sha);
+      if (showStatus) actions.setProviderStatus("github-actions", providerLoading());
+      try {
+        const { firstError, failedSHAs } = await fetchForSHAs(unqueried, signal);
+        if (signal?.aborted || epoch !== lifecycle.getEpoch()) return;
+        for (const sha of failedSHAs) queriedSHAs.delete(sha);
+        if (!firstError) actions.setProviderLastSuccessfulRefresh("github-actions", new Date());
+        if (showStatus) {
+          actions.setProviderStatus(
+            "github-actions",
+            firstError ? providerError(`CI fetch error: ${firstError}`) : providerIdle(),
+          );
+        } else if (!firstError && state.providerStatusFor("github-actions").kind === "error") {
+          actions.setProviderStatus("github-actions", providerIdle());
         }
+      } catch (err) {
+        if (signal?.aborted) return;
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error("[github-actions] initial fetch failed:", err);
+        if (showStatus) actions.setProviderStatus("github-actions", providerError(`CI fetch error: ${msg}`));
+        for (const sha of unqueried) queriedSHAs.delete(sha);
       }
-      return;
-    }
-
-    const allSHAs = shas ?? collectTopSHAs(state.graphRows(), INITIAL_SHA_LIMIT);
-    const unqueried = allSHAs.filter(sha => !queriedSHAs.has(sha));
-    if (unqueried.length === 0) return;
-
-    // Record that a real fetch has been initiated — only after passing all guards.
-    hasFetchedOnce = true;
-    lastFetchedAt = Date.now();
-
-    // Mark as queried before the async call so concurrent triggers don't
-    // duplicate the request.
-    for (const sha of unqueried) queriedSHAs.add(sha);
-
-    fetchInFlight = true;
-    if (showStatus) actions.setProviderStatus(providerLoading());
-    try {
-      const { firstError } = await fetchForSHAs(unqueried, signal);
-      if (!firstError) actions.setProviderLastSuccessfulRefresh("github-actions", new Date());
-      if (showStatus) {
-        actions.setProviderStatus(firstError ? providerError(`CI fetch error: ${firstError}`) : providerIdle());
-      } else if (!firstError && state.providerStatus().kind === "error") {
-        actions.setProviderStatus(providerIdle());
+    },
+    runRefresh: async ({ signal, epoch }) => {
+      lifecycle.noteRefreshSettled();
+      const runningSHAs = collectRunningSHAs(state.graphBadges());
+      if (runningSHAs.length === 0) return;
+      try {
+        const { firstError } = await fetchForSHAs(runningSHAs, signal);
+        if (signal?.aborted || epoch !== lifecycle.getEpoch()) return;
+        if (!firstError) actions.setProviderLastSuccessfulRefresh("github-actions", new Date());
+        if (!firstError && state.providerStatusFor("github-actions").kind === "error")
+          actions.setProviderStatus("github-actions", providerIdle());
+        if (firstError) console.error("[github-actions] refresh returned error:", firstError);
+      } catch (err) {
+        if (signal?.aborted) return;
+        console.error("[github-actions] refresh failed:", err);
       }
-    } catch (err) {
-      if (signal?.aborted) return;
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error("[github-actions] initial fetch failed:", err);
-      if (showStatus) actions.setProviderStatus(providerError(`CI fetch error: ${msg}`));
-      // On error, un-mark so a future retry can re-query these SHAs
-      for (const sha of unqueried) queriedSHAs.delete(sha);
-    } finally {
-      fetchInFlight = false;
-    }
-  }
+    },
+    onResetCaches: () => {
+      commitDataCache = new Map();
+      jobsCache.clear();
+      queriedSHAs.clear();
+      setCommitDataVersion(v => v + 1);
+      actions.setGraphBadges("github-actions", new Map());
+      actions.setProviderStatus("github-actions", providerIdle());
+    },
+  });
 
-  /**
-   * Auto-refresh: only re-query SHAs with running/queued badge status.
-   * Cheap — typically 0-5 SHAs, one small GraphQL request.
-   */
-  async function doRefreshRunning(signal?: AbortSignal): Promise<void> {
-    if (fetchInFlight) return;
-    if (!isAvailable()) return;
-
-    const runningSHAs = collectRunningSHAs(state.graphBadges());
-    if (runningSHAs.length === 0) return;
-
-    fetchInFlight = true;
-    try {
-      const { firstError } = await fetchForSHAs(runningSHAs, signal);
-      if (!firstError) actions.setProviderLastSuccessfulRefresh("github-actions", new Date());
-      if (!firstError && state.providerStatus().kind === "error") actions.setProviderStatus(providerIdle());
-      if (firstError) console.error("[github-actions] refresh returned error:", firstError);
-    } catch (err) {
-      if (signal?.aborted) return;
-      console.error("[github-actions] refresh failed:", err);
-    } finally {
-      fetchInFlight = false;
-    }
-  }
-
-  /**
-   * Manual / forced full refresh: clears queriedSHAs and re-queries the top
-   * INITIAL_SHA_LIMIT rows.  Called when the user presses `f` or `:reload`.
-   */
   async function doForceRefresh(): Promise<void> {
-    queriedSHAs.clear();
-    commitDataCache = new Map();
-    jobsCache.clear();
-    setCommitDataVersion(v => v + 1);
-    actions.setGraphBadges(new Map());
-    actions.setProviderStatus(providerIdle());
-    await doInitialFetch(undefined, undefined, true);
+    lifecycle.resetCaches();
+    await lifecycle.fetchInitial(undefined, undefined, true);
+    if (state.activeProviderView() === "github-actions") lifecycle.startAutoRefresh();
   }
 
   async function fetchCommitDataForSHA(sha: string): Promise<void> {
-    await doInitialFetch(undefined, [sha], true);
+    await lifecycle.fetchInitial(undefined, [sha], true);
   }
-
-  // ── Lazy initial fetch + auto-refresh while in CI view ───────────────
-  let hasFetchedOnce = false;
-  let lastFetchedAt = 0;
-  let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
-  /** AbortController for view-switch fetches and auto-refresh ticks. */
-  let fetchAbortCtrl: AbortController | null = null;
-  /**
-   * AbortController for the eager background fetch fired on startup by the
-   * graphRows effect.  Kept separate from fetchAbortCtrl so that
-   * stopAutoRefresh() (called when tabbing away from the CI view) does NOT
-   * cancel an in-flight background fetch — which would leave hasFetchedOnce=true
-   * but the cache empty, preventing any future fetch.
-   */
-  let backgroundFetchAbortCtrl: AbortController | null = null;
-
-  function startAutoRefresh(): void {
-    if (autoRefreshTimer) return;
-    const interval = state.autoRefreshInterval();
-    if (interval <= 0) return;
-
-    autoRefreshTimer = setInterval(() => {
-      if (state.activeProviderView() !== "github-actions") return;
-      if (fetchAbortCtrl) fetchAbortCtrl.abort();
-      const ctrl = new AbortController();
-      fetchAbortCtrl = ctrl;
-      doRefreshRunning(ctrl.signal);
-      lastFetchedAt = Date.now();
-    }, interval);
-  }
-
-  function stopAutoRefresh(): void {
-    if (autoRefreshTimer) {
-      clearInterval(autoRefreshTimer);
-      autoRefreshTimer = null;
-    }
-    if (fetchAbortCtrl) {
-      fetchAbortCtrl.abort();
-      fetchAbortCtrl = null;
-    }
-  }
-
-  // React to provider view changes:
-  //  - Switch TO github-actions → do initial fetch; start refresh timer
-  //  - Switch AWAY from github-actions → stop refresh timer
-  createEffect(() => {
-    const view = state.activeProviderView();
-    if (view === "github-actions") {
-      if (!hasFetchedOnce) {
-        const ctrl = new AbortController();
-        fetchAbortCtrl = ctrl;
-        doInitialFetch(ctrl.signal, undefined, true);
-      } else {
-        // Re-check for new unqueried SHAs (e.g. after a git fetch loaded more commits)
-        // and catch-up if data is stale
-        const interval = state.autoRefreshInterval();
-        const staleThreshold = interval > 0 ? interval : 30_000;
-        if (Date.now() - lastFetchedAt > staleThreshold) {
-          const ctrl = new AbortController();
-          fetchAbortCtrl = ctrl;
-          doInitialFetch(ctrl.signal, undefined, true);
-        }
-      }
-      startAutoRefresh();
-    } else {
-      stopAutoRefresh();
-    }
-  });
-
-  // Restart the auto-refresh timer if the interval setting changes
-  createEffect(() => {
-    const _interval = state.autoRefreshInterval();
-    if (state.activeProviderView() === "github-actions") {
-      stopAutoRefresh();
-      startAutoRefresh();
-    }
-  });
-
-  // When graphRows or the remote URL changes, eagerly queue a background fetch
-  // for any new SHAs.  Reading cachedGitHubRepo() here means this effect also
-  // re-runs when the remote URL is parsed — so if the initial graphRows fire
-  // happened before the remote was available, a second attempt fires as soon
-  // as cachedGitHubRepo becomes non-null.
-  // hasFetchedOnce / lastFetchedAt are managed inside doInitialFetch so that
-  // they are only set when a fetch actually starts (i.e. isAvailable() passes).
-  // Uses backgroundFetchAbortCtrl (not fetchAbortCtrl) so stopAutoRefresh()
-  // — called when the user tabs away from the CI view — does not abort this
-  // in-flight request.
-  createEffect(() => {
-    const rows = state.graphRows();
-    // Track the remote signal so this re-runs when the remote URL loads
-    const repo = cachedGitHubRepo();
-    if (rows.length === 0) return;
-    if (!repo) return; // remote not yet parsed — re-runs when cachedGitHubRepo() changes
-
-    const allSHAs = collectTopSHAs(state.graphRows(), INITIAL_SHA_LIMIT);
-    const newSHAs = allSHAs.filter(sha => !queriedSHAs.has(sha));
-    if (newSHAs.length === 0) return;
-
-    // Cancel any previous background fetch before starting a new one
-    if (backgroundFetchAbortCtrl) backgroundFetchAbortCtrl.abort();
-    const ctrl = new AbortController();
-    backgroundFetchAbortCtrl = ctrl;
-    doInitialFetch(ctrl.signal, allSHAs);
-  });
-
-  onCleanup(() => {
-    stopAutoRefresh();
-    if (backgroundFetchAbortCtrl) {
-      backgroundFetchAbortCtrl.abort();
-      backgroundFetchAbortCtrl = null;
-    }
-  });
 
   // ── On-demand job fetching ────────────────────────────────────────────
   async function fetchJobsForRun(run: GitHubWorkflowRun): Promise<GitHubJobFetchResult> {
+    const epoch = lifecycle.getEpoch();
     const cached = jobsCache.get(run.id);
     if (cached) return { jobs: cached, error: null };
 
@@ -470,11 +350,12 @@ export function useGitHubCI(opts: {
     if (!repo || !token) return { jobs: [], error: "GitHub provider unavailable" };
 
     const { jobs, error } = await fetchRunJobs(repo, token, run.id);
+    if (epoch !== lifecycle.getEpoch()) return { jobs: [], error: null };
     if (error) {
-      actions.setProviderStatus(providerError(`CI jobs error: ${error}`));
+      actions.setProviderStatus("github-actions", providerError(`CI jobs error: ${error}`));
       return { jobs, error };
     }
-    actions.setProviderStatus(providerIdle());
+    actions.setProviderStatus("github-actions", providerIdle());
     if (run.status === "completed") {
       jobsCache.set(run.id, jobs);
     }
@@ -493,10 +374,11 @@ export function useGitHubCI(opts: {
     },
     fetchJobsForRun,
     fetchJobLogForJob: (jobId: number, signal?: AbortSignal): Promise<string> => {
+      const epoch = lifecycle.getEpoch();
       const repo = cachedGitHubRepo();
       const token = getGitHubToken(config.tokenEnvVar);
       if (!repo || !token) return Promise.resolve("");
-      return fetchJobLog(repo, token, jobId, signal);
+      return fetchJobLog(repo, token, jobId, signal).then(log => (epoch === lifecycle.getEpoch() ? log : ""));
     },
     fetchCommitDataForSHA,
     refresh: doForceRefresh,

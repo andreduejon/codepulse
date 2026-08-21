@@ -8,6 +8,7 @@ import { useTheme } from "../../context/theme";
 import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useClipboard } from "../../hooks/use-clipboard";
 import { COPYABLE_VISIBLE_WIDTH, type SettingItem, useMenuItems } from "../../hooks/use-menu-items";
+import type { JenkinsJobConfig } from "../../providers/jenkins/types";
 import { scrollIndexedItemIntoView } from "../../utils/scroll";
 import Badge from "../badge";
 import { KeyHint, KeyHintSeparator } from "../key-hint";
@@ -42,14 +43,28 @@ interface MenuDialogProps {
     username?: string;
     tokenEnvVar: string;
     graphBuildLimit: 10 | 20 | 50;
-    jobs: { label?: string; url: string }[];
+    jobs: JenkinsJobConfig[];
   };
   onJenkinsConfigChange?: (cfg: {
     enabled: boolean;
     username?: string;
     tokenEnvVar: string;
     graphBuildLimit: 10 | 20 | 50;
-    jobs: { label?: string; url: string }[];
+    jobs: JenkinsJobConfig[];
+  }) => void;
+  openshiftConfig?: {
+    enabled: boolean;
+    serverUrl: string;
+    tokenEnvVar: string;
+    namespaces: string[];
+    commitShaAnnotation: string;
+  };
+  onOpenShiftConfigChange?: (cfg: {
+    enabled: boolean;
+    serverUrl: string;
+    tokenEnvVar: string;
+    namespaces: string[];
+    commitShaAnnotation: string;
   }) => void;
   onRepoDisplayConfigChange?: (cfg: { group?: string; appName?: string }) => void;
 }
@@ -107,6 +122,8 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     onGithubConfigChange: props.onGithubConfigChange,
     jenkinsConfig: () => props.jenkinsConfig,
     onJenkinsConfigChange: props.onJenkinsConfigChange,
+    openshiftConfig: () => props.openshiftConfig,
+    onOpenShiftConfigChange: props.onOpenShiftConfigChange,
     onRepoDisplayConfigChange: props.onRepoDisplayConfigChange,
   });
 
@@ -115,11 +132,11 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   const bannerOffset = useBannerScroll(bannerOverflow);
 
   /** Returns the visible slice of a copyable value, applying banner offset when selected. */
-  const copyableBannerText = (text: string, isSelected: boolean): string => {
-    if (text.length <= COPYABLE_VISIBLE_WIDTH) return text;
+  const copyableBannerText = (text: string, isSelected: boolean, width = COPYABLE_VISIBLE_WIDTH): string => {
+    if (text.length <= width) return text;
     if (!isSelected) return text; // let the TUI truncate when not selected
     const off = bannerOffset();
-    return text.substring(off, off + COPYABLE_VISIBLE_WIDTH);
+    return text.substring(off, off + width);
   };
 
   const forgetSelected = () => {
@@ -289,10 +306,14 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
 
   // ── Scrollbox ref and auto-scroll into view ──────────────────────
   let scrollboxRef: ScrollBoxRenderable | undefined;
-  const itemRefs: Renderable[] = [];
+  const itemRefs = new Map<SettingItem, Renderable>();
 
   createEffect(() => {
-    scrollIndexedItemIntoView(scrollboxRef, itemRefs, selectedItemIndex());
+    const items = activeItems();
+    const index = selectedItemIndex();
+    const item = index == null ? undefined : items[index];
+    const ref = item ? itemRefs.get(item) : undefined;
+    if (scrollboxRef && ref) scrollIndexedItemIntoView(scrollboxRef, [ref], 0);
   });
 
   // ── Item renderers ─────────────────────────────────────────────────
@@ -302,7 +323,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   const renderHeader = (item: Extract<SettingItem, { kind: "header" }>, idx: number) => (
     <box
       ref={(el: Renderable) => {
-        itemRefs[idx] = el;
+        itemRefs.set(item, el);
       }}
       flexDirection="column"
       width="100%"
@@ -329,13 +350,13 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     </box>
   );
 
-  const renderInfo = (item: Extract<SettingItem, { kind: "info" }>, idx: number) => {
+  const renderInfo = (item: Extract<SettingItem, { kind: "info" }>) => {
     const hasStatus = () => item.valid != null;
     const isValid = () => item.valid?.() ?? false;
     return (
       <box
         ref={(el: Renderable) => {
-          itemRefs[idx] = el;
+          itemRefs.set(item, el);
         }}
         flexDirection="row"
         width="100%"
@@ -358,11 +379,11 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     );
   };
 
-  const renderBadge = (item: Extract<SettingItem, { kind: "badge" }>, idx: number) => {
+  const renderBadge = (item: Extract<SettingItem, { kind: "badge" }>) => {
     return (
       <box
         ref={(el: Renderable) => {
-          itemRefs[idx] = el;
+          itemRefs.set(item, el);
         }}
         flexDirection="row"
         width="100%"
@@ -376,18 +397,24 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   const renderCopyable = (item: Extract<SettingItem, { kind: "copyable" }>, idx: number) => {
     const isSel = () => selectedItemIndex() === idx;
     const isCopied = () => copiedLabel() === item.label;
+    const textWidth = () => Math.max(1, COPYABLE_VISIBLE_WIDTH - (item.visualPrefix?.length ?? 0));
     return (
       <box
         ref={(el: Renderable) => {
-          itemRefs[idx] = el;
+          itemRefs.set(item, el);
         }}
         flexDirection="row"
         width="100%"
         paddingX={4}
         backgroundColor={isSel() ? t().backgroundElement : undefined}
       >
+        {item.visualPrefix ? (
+          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+            {item.visualPrefix}
+          </text>
+        ) : null}
         <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={isSel() ? t().accent : t().foreground}>
-          {copyableBannerText(item.get(), isSel())}
+          {copyableBannerText(item.get(), isSel(), textWidth())}
         </text>
         {isCopied() ? (
           <text flexShrink={0} wrapMode="none" bg={t().primary} fg={t().background}>
@@ -404,7 +431,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     return (
       <box
         ref={(el: Renderable) => {
-          itemRefs[idx] = el;
+          itemRefs.set(item, el);
         }}
         flexDirection="column"
         width="100%"
@@ -431,7 +458,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     return (
       <box
         ref={(el: Renderable) => {
-          itemRefs[idx] = el;
+          itemRefs.set(item, el);
         }}
         flexDirection="row"
         width="100%"
@@ -482,7 +509,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     return (
       <box
         ref={(el: Renderable) => {
-          itemRefs[idx] = el;
+          itemRefs.set(item, el);
         }}
         flexDirection="row"
         width="100%"
@@ -515,7 +542,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
       return (
         <box
           ref={(el: Renderable) => {
-            itemRefs[idx] = el;
+            itemRefs.set(item, el);
           }}
           flexDirection="row"
           width="100%"
@@ -547,7 +574,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     return (
       <box
         ref={(el: Renderable) => {
-          itemRefs[idx] = el;
+          itemRefs.set(item, el);
         }}
         flexDirection="row"
         width="100%"
@@ -594,8 +621,8 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   const renderItem = (item: SettingItem, itemIndex: () => number): JSX.Element => {
     const idx = itemIndex();
     if (item.kind === "header") return renderHeader(item, idx);
-    if (item.kind === "info") return renderInfo(item, idx);
-    if (item.kind === "badge") return renderBadge(item, idx);
+    if (item.kind === "info") return renderInfo(item);
+    if (item.kind === "badge") return renderBadge(item);
     if (item.kind === "copyable") return renderCopyable(item, idx);
     if (item.kind === "section") return renderSection(item, idx);
     if (item.kind === "branch") return renderBranch(item, idx);
