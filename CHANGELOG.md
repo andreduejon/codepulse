@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.3] - 2026-08-21
+
+### Fixed
+
+- Remove a duplicate `#!/usr/bin/env bun` in the published `dist/index.js`
+  (Bun already preserves the source shebang; the extra banner was a syntax error).
+
 ## [0.6.2] - 2026-08-21
 
 ### Fixed

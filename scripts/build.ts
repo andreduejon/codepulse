@@ -6,7 +6,6 @@ const result = await Bun.build({
   outdir: "./dist",
   plugins: [solidPlugin],
   packages: "external",
-  banner: "#!/usr/bin/env bun",
 });
 
 if (!result.success) {
