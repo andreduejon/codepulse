@@ -344,9 +344,15 @@ interface GqlCheckSuite {
 }
 
 /** A single commit object returned by the aliased object(oid:) query. */
+interface GqlPageInfo {
+  hasNextPage: boolean;
+  endCursor: string | null;
+}
+
 interface GqlCommitObject {
   oid: string;
   checkSuites: {
+    pageInfo?: GqlPageInfo;
     nodes: GqlCheckSuite[];
   } | null;
 }
@@ -396,26 +402,14 @@ function mapGqlCheckSuiteToRun(suite: GqlCheckSuite, sha: string): GitHubWorkflo
 
 /**
  * Maximum number of SHAs per GraphQL batch request.
- * Node budget: 100 SHAs × 10 check-suites × 20 check-runs = 20,000 nodes,
- * well under GitHub's 500K limit.  Steps are not included in the batch query
- * (fetched on demand via fetchRunJobs) to keep the node count low.
+ * Node budget: 100 SHAs × 100 check-suites (scalars only) = 10,000 nodes.
  */
 export const GQL_BATCH_SIZE = 100;
+export const GQL_CHECK_SUITE_PAGE_SIZE = 100;
+export const MAX_CHECK_SUITE_PAGES = 5;
+export const MAX_JOB_PAGES = 10;
 
-/**
- * Inline fragment shared by every aliased commit object.
- *
- * Node budget per SHA: 10 check-suites (scalars only, no checkRuns connection).
- * At GQL_BATCH_SIZE=100: 100 × 10 = 1,000 nodes — ~1-2 rate-limit points.
- *
- * checkRuns intentionally omitted — jobs are fetched on demand via fetchRunJobs
- * (REST) when the user expands a run in the Actions tab.
- */
-const COMMIT_FRAGMENT = `
-... on Commit {
-  oid
-  checkSuites(first: 10) {
-    nodes {
+const CHECK_SUITE_NODE_FIELDS = `
       status
       conclusion
       workflowRun {
@@ -426,10 +420,22 @@ const COMMIT_FRAGMENT = `
         updatedAt
         url
         workflow { name }
-      }
+      }`;
+
+function commitFragment(afterVar?: string): string {
+  const args = afterVar
+    ? `first: ${GQL_CHECK_SUITE_PAGE_SIZE}, after: ${afterVar}`
+    : `first: ${GQL_CHECK_SUITE_PAGE_SIZE}`;
+  return `
+... on Commit {
+  oid
+  checkSuites(${args}) {
+    pageInfo { hasNextPage endCursor }
+    nodes {${CHECK_SUITE_NODE_FIELDS}
     }
   }
 }`.trim();
+}
 
 /**
  * Build a GraphQL query string that fetches check suites for up to
@@ -439,8 +445,39 @@ const COMMIT_FRAGMENT = `
  * Works for any commit on any branch — no branch restriction.
  */
 function buildBatchQuery(shas: string[]): string {
-  const aliases = shas.map((sha, i) => `  c${i}: object(oid: "${sha}") { ${COMMIT_FRAGMENT} }`).join("\n");
+  const fragment = commitFragment();
+  const aliases = shas.map((sha, i) => `  c${i}: object(oid: "${sha}") { ${fragment} }`).join("\n");
   return `query CIBatch($owner: String!, $repo: String!) {\n  repository(owner: $owner, name: $repo) {\n${aliases}\n  }\n}`;
+}
+
+function buildCheckSuitePageQuery(count: number): string {
+  const varDecls = ["$owner: String!", "$repo: String!"];
+  const aliases: string[] = [];
+  for (let i = 0; i < count; i++) {
+    varDecls.push(`$oid${i}: GitObjectID!`, `$after${i}: String`);
+    aliases.push(`  c${i}: object(oid: $oid${i}) { ${commitFragment(`$after${i}`)} }`);
+  }
+  return `query CISuitePage(${varDecls.join(", ")}) {\n  repository(owner: $owner, name: $repo) {\n${aliases.join("\n")}\n  }\n}`;
+}
+
+function collectRunsFromRepoData(
+  repoData: Record<string, GqlCommitObject | null>,
+  shas: string[],
+  runs: GitHubWorkflowRun[],
+): Array<{ sha: string; cursor: string }> {
+  const next: Array<{ sha: string; cursor: string }> = [];
+  for (let i = 0; i < shas.length; i++) {
+    const commitObj = repoData[`c${i}`];
+    if (!commitObj) continue;
+    const sha = commitObj.oid;
+    for (const suite of commitObj.checkSuites?.nodes ?? []) {
+      const run = mapGqlCheckSuiteToRun(suite, sha);
+      if (run) runs.push(run);
+    }
+    const pageInfo = commitObj.checkSuites?.pageInfo;
+    if (pageInfo?.hasNextPage && pageInfo.endCursor) next.push({ sha, cursor: pageInfo.endCursor });
+  }
+  return next;
 }
 
 export type GraphQLFetchResult = GitHubResult<GitHubWorkflowRun[]>;
@@ -465,6 +502,7 @@ export async function fetchCIDataForSHAs(
   const { signal } = opts;
   const empty: GraphQLFetchResult = { data: [], error: null };
   if (shas.length === 0) return empty;
+  const runs: GitHubWorkflowRun[] = [];
 
   try {
     const res = await fetchWithRetry(graphqlEndpoint(repo), {
@@ -492,18 +530,36 @@ export async function fetchCIDataForSHAs(
     }
 
     const repoData = json.data?.repository ?? {};
-    const runs: GitHubWorkflowRun[] = [];
+    let pending = collectRunsFromRepoData(repoData, shas, runs);
 
-    // Iterate alias keys c0, c1, … in the same order as the input shas array
-    for (let i = 0; i < shas.length; i++) {
-      const commitObj = repoData[`c${i}`];
-      if (!commitObj) continue; // SHA not found or not a Commit object
-      const sha = commitObj.oid;
-      for (const suite of commitObj.checkSuites?.nodes ?? []) {
-        const run = mapGqlCheckSuiteToRun(suite, sha);
-        if (!run) continue;
-        runs.push(run);
+    for (let page = 1; page < MAX_CHECK_SUITE_PAGES && pending.length > 0; page++) {
+      const variables: Record<string, string> = { owner: repo.owner, repo: repo.repo };
+      for (let i = 0; i < pending.length; i++) {
+        variables[`oid${i}`] = pending[i].sha;
+        variables[`after${i}`] = pending[i].cursor;
       }
+      const pageRes = await fetchWithRetry(graphqlEndpoint(repo), {
+        method: "POST",
+        headers: { ...createHeaders(token), "Content-Type": "application/json" },
+        body: JSON.stringify({ query: buildCheckSuitePageQuery(pending.length), variables }),
+        signal,
+      });
+      if (!pageRes.ok) {
+        const msg = describeHttpError(pageRes, `GraphQL HTTP ${pageRes.status}`);
+        console.error(`[github-actions] ${msg} for ${repo.owner}/${repo.repo}`);
+        return { data: runs, error: msg };
+      }
+      const pageJson = (await pageRes.json()) as GqlBatchQueryResult;
+      if (pageJson.errors?.length) {
+        const msg = pageJson.errors.map(e => e.message).join("; ");
+        console.error("[github-actions] GraphQL errors:", msg);
+        return { data: runs, error: msg };
+      }
+      pending = collectRunsFromRepoData(
+        pageJson.data?.repository ?? {},
+        pending.map(p => p.sha),
+        runs,
+      );
     }
 
     return { data: runs, error: null };
@@ -511,17 +567,31 @@ export async function fetchCIDataForSHAs(
     if (signal?.aborted) throw err;
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[github-actions] GraphQL fetch error:", err);
-    return { ...empty, error: msg };
+    return { data: runs, error: msg };
   }
 }
 
 // ── REST API calls ────────────────────────────────────────────────────────
 
+/** Follow GitHub `Link: rel="next"` only when origin matches the REST API base. */
+export function nextGithubLink(linkHeader: string | null, apiOrigin: string): string | null {
+  if (!linkHeader) return null;
+  const match = /<([^>]+)>\s*;\s*rel="next"/i.exec(linkHeader);
+  if (!match) return null;
+  try {
+    const next = new URL(match[1]);
+    const allowed = new URL(apiOrigin);
+    if (next.origin !== allowed.origin) return null;
+    return next.href;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Fetch all jobs (with steps) for a single workflow run.
  *
- * Returns an explicit error on API failures so the UI doesn't confuse a failed
- * request with a real empty job list.
+ * Follows `Link: rel="next"` up to MAX_JOB_PAGES.
  */
 export async function fetchRunJobs(
   repo: GitHubRepo,
@@ -529,18 +599,24 @@ export async function fetchRunJobs(
   runId: number,
   signal?: AbortSignal,
 ): Promise<GitHubJobFetchResult> {
-  const url = `${apiBase(repo)}/actions/runs/${runId}/jobs?per_page=100`;
   const headers = createHeaders(token);
+  const origin = apiBase(repo);
+  let url: string | null = `${origin}/actions/runs/${runId}/jobs?per_page=100`;
+  const jobs: GitHubJob[] = [];
 
   try {
-    const res = await fetchWithRetry(url, { headers, signal });
-    if (!res.ok) {
-      const error = describeHttpError(res, `Jobs HTTP ${res.status}`);
-      console.error(`[github-actions] fetchRunJobs: ${error} for run ${runId}`);
-      return { jobs: [], error };
+    for (let page = 0; page < MAX_JOB_PAGES && url; page++) {
+      const res = await fetchWithRetry(url, { headers, signal });
+      if (!res.ok) {
+        const error = describeHttpError(res, `Jobs HTTP ${res.status}`);
+        console.error(`[github-actions] fetchRunJobs: ${error} for run ${runId}`);
+        return { jobs, error };
+      }
+      const json = (await res.json()) as { jobs?: GitHubApiJob[] };
+      jobs.push(...(json.jobs ?? []).map(mapApiJob));
+      url = nextGithubLink(res.headers.get("link"), origin);
     }
-    const json = (await res.json()) as { jobs?: GitHubApiJob[] };
-    return { jobs: (json.jobs ?? []).map(mapApiJob), error: null };
+    return { jobs, error: null };
   } catch (err) {
     if (signal?.aborted) throw err;
     console.error("[github-actions] fetchRunJobs: network error:", err);

@@ -10,6 +10,7 @@ import {
   getTokenSource,
   isTrustedGitHubHost,
   mapRunToBadge,
+  nextGithubLink,
   normalizeGitHubHost,
   parseGitHubRemote,
 } from "../src/providers/github-actions/api";
@@ -589,6 +590,37 @@ describe("fetchRunJobs", () => {
     const { jobs } = await fetchRunJobs(TEST_REPO, TEST_TOKEN, 123);
     expect(jobs[0].steps).toEqual([]);
   });
+
+  it("follows Link rel=next and concatenates job pages", async () => {
+    const page1 = new Response(JSON.stringify({ jobs: [makeApiJob({ id: 1, name: "a" })] }), {
+      status: 200,
+      headers: { Link: '<https://api.github.com/repos/o/r/actions/runs/123/jobs?page=2>; rel="next"' },
+    });
+    const page2 = new Response(JSON.stringify({ jobs: [makeApiJob({ id: 2, name: "b" })] }), { status: 200 });
+    let n = 0;
+    mockFetch(
+      mock(async () => {
+        n++;
+        return n === 1 ? page1 : page2;
+      }),
+    );
+    const { jobs, error } = await fetchRunJobs(TEST_REPO, TEST_TOKEN, 123);
+    expect(error).toBeNull();
+    expect(jobs.map(j => j.name)).toEqual(["a", "b"]);
+    expect(n).toBe(2);
+  });
+});
+
+describe("nextGithubLink", () => {
+  it("returns next URL when origin matches", () => {
+    expect(nextGithubLink('<https://api.github.com/repos/o/r/jobs?page=2>; rel="next"', "https://api.github.com")).toBe(
+      "https://api.github.com/repos/o/r/jobs?page=2",
+    );
+  });
+
+  it("rejects next URL on a different origin", () => {
+    expect(nextGithubLink('<https://evil.example/jobs>; rel="next"', "https://api.github.com")).toBeNull();
+  });
 });
 
 // ── fetchCIDataForSHAs ────────────────────────────────────────────────────
@@ -620,6 +652,7 @@ function makeBatchResponse(
     repository[`c${i}`] = {
       oid: c.sha,
       checkSuites: {
+        pageInfo: { hasNextPage: false, endCursor: null },
         nodes: c.suites.map(s => ({
           status: s.status ?? "COMPLETED",
           conclusion: s.conclusion !== undefined ? s.conclusion : "SUCCESS",
@@ -823,6 +856,70 @@ describe("fetchCIDataForSHAs", () => {
     expect(names).toContain("CI");
     expect(names).toContain("Deploy");
     expect(names).toContain("Lint");
+  });
+
+  it("paginates check suites when hasNextPage is true", async () => {
+    const page1 = {
+      data: {
+        repository: {
+          c0: {
+            oid: "sha",
+            checkSuites: {
+              pageInfo: { hasNextPage: true, endCursor: "CURSOR" },
+              nodes: [
+                {
+                  status: "COMPLETED",
+                  conclusion: "SUCCESS",
+                  workflowRun: {
+                    databaseId: 1,
+                    runNumber: 1,
+                    event: "push",
+                    updatedAt: "2024-01-02T00:00:00Z",
+                    workflow: { name: "CI" },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
+    };
+    const page2 = {
+      data: {
+        repository: {
+          c0: {
+            oid: "sha",
+            checkSuites: {
+              pageInfo: { hasNextPage: false, endCursor: null },
+              nodes: [
+                {
+                  status: "COMPLETED",
+                  conclusion: "FAILURE",
+                  workflowRun: {
+                    databaseId: 2,
+                    runNumber: 2,
+                    event: "push",
+                    updatedAt: "2024-01-02T00:00:00Z",
+                    workflow: { name: "Deploy" },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
+    };
+    let n = 0;
+    mockFetch(
+      mock(async () => {
+        n++;
+        return new Response(JSON.stringify(n === 1 ? page1 : page2), { status: 200 });
+      }),
+    );
+    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["sha"]);
+    expect(n).toBe(2);
+    expect(result.data.map(r => r.name)).toEqual(["CI", "Deploy"]);
+    expect(result.error).toBeNull();
   });
 
   it("exports GQL_BATCH_SIZE as a positive integer", () => {
