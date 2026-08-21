@@ -48,6 +48,11 @@ export function isStaleResult(oldCommits: Commit[], newCommits: Commit[]): boole
   );
 }
 
+/** Find the loaded commit decorated as the checked-out branch or detached HEAD. */
+export function findCurrentHeadHash(commits: Commit[]): string | undefined {
+  return commits.find(commit => commit.refs.some(ref => ref.isCurrent))?.hash;
+}
+
 /**
  * Inject a synthetic "uncommitted changes" node at the front of the commit list
  * when the working tree is dirty.
@@ -56,7 +61,7 @@ export function isStaleResult(oldCommits: Commit[], newCommits: Commit[]): boole
  * off the tip.
  *
  * @param commits   The commit list to prepend to (mutated in-place).
- * @param headHash  Hash of the HEAD commit (first commit in the list before injection).
+ * @param headHash  Hash of the current HEAD commit.
  */
 export function injectUncommittedNode(commits: Commit[], headHash: string): void {
   const uncommitted: Commit = {

@@ -4,9 +4,16 @@ import { dirname, join, resolve } from "node:path";
 import { DEFAULT_MAX_COUNT } from "./constants";
 import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL } from "./context/state";
 import { normalizeGitHubHost } from "./providers/github-actions/api";
+import { isValidJenkinsJobUrl, JENKINS_JOB_URL_MAX_LENGTH } from "./providers/jenkins/validation";
+import {
+  isValidOpenShiftNamespace,
+  isValidOpenShiftServerUrl,
+  OPENSHIFT_NAMESPACE_MAX_LENGTH,
+  OPENSHIFT_SERVER_URL_MAX_LENGTH,
+  OPENSHIFT_TEXT_MAX_LENGTH,
+} from "./providers/openshift/validation";
 
 const GENERAL_TEXT_MAX_LENGTH = 255;
-const URL_OR_PATH_MAX_LENGTH = 2048;
 const REPO_METADATA_MAX_LENGTH = 64;
 
 /**
@@ -27,7 +34,7 @@ export interface CodepulseConfig {
   /** Provider-specific configuration. */
   providers?: {
     github?: {
-      /** Whether the GitHub Actions provider is enabled. Defaults to true. */
+      /** Whether the GitHub Actions provider is enabled. Defaults to false. */
       enabled?: boolean;
       /** Name of the environment variable holding the GitHub Personal Access Token.
        *  Defaults to "GITHUB_TOKEN". */
@@ -42,6 +49,13 @@ export interface CodepulseConfig {
       graphBuildLimit?: 10 | 20 | 50;
       jobs?: { label?: string; url: string }[];
     };
+    openshift?: {
+      enabled?: boolean;
+      serverUrl?: string;
+      tokenEnvVar?: string;
+      namespaces?: string[];
+      commitShaAnnotation?: string;
+    };
   };
 }
 
@@ -55,7 +69,7 @@ export function defaultConfig(): Required<Omit<CodepulseConfig, "branch" | "grou
     autoFetchSeconds: DEFAULT_AUTO_FETCH_INTERVAL / 1000,
     providers: {
       github: {
-        enabled: true,
+        enabled: false,
         tokenEnvVar: "GITHUB_TOKEN",
         trustedEnterpriseHost: undefined,
       },
@@ -65,6 +79,13 @@ export function defaultConfig(): Required<Omit<CodepulseConfig, "branch" | "grou
         tokenEnvVar: "JENKINS_TOKEN",
         graphBuildLimit: 20,
         jobs: [],
+      },
+      openshift: {
+        enabled: false,
+        serverUrl: "",
+        tokenEnvVar: "OPENSHIFT_TOKEN",
+        namespaces: [],
+        commitShaAnnotation: "dev/commit-sha",
       },
     },
   };
@@ -93,23 +114,22 @@ export function backfillRepoConfig(repoPath: string, configPath?: string): void 
   if (existing.autoRefreshSeconds === undefined) missing.autoRefreshSeconds = defaults.autoRefreshSeconds;
   if (existing.autoFetchSeconds === undefined) missing.autoFetchSeconds = defaults.autoFetchSeconds;
 
-  // Deep-check providers.github fields
-  const existingGh = existing.providers?.github;
+  const existingGitHub = existing.providers?.github;
   const defaultGh = defaults.providers.github ?? {
-    enabled: true,
+    enabled: false,
     tokenEnvVar: "GITHUB_TOKEN",
     trustedEnterpriseHost: undefined,
   };
   if (
-    existingGh?.enabled === undefined ||
-    existingGh?.tokenEnvVar === undefined ||
-    existingGh?.trustedEnterpriseHost === undefined
+    existingGitHub?.enabled === undefined ||
+    existingGitHub?.tokenEnvVar === undefined ||
+    existingGitHub?.trustedEnterpriseHost === undefined
   ) {
     missing.providers = {
       github: {
-        ...(existingGh?.enabled === undefined ? { enabled: defaultGh.enabled } : {}),
-        ...(existingGh?.tokenEnvVar === undefined ? { tokenEnvVar: defaultGh.tokenEnvVar } : {}),
-        ...(existingGh?.trustedEnterpriseHost === undefined
+        ...(existingGitHub?.enabled === undefined ? { enabled: defaultGh.enabled } : {}),
+        ...(existingGitHub?.tokenEnvVar === undefined ? { tokenEnvVar: defaultGh.tokenEnvVar } : {}),
+        ...(existingGitHub?.trustedEnterpriseHost === undefined
           ? { trustedEnterpriseHost: defaultGh.trustedEnterpriseHost }
           : {}),
       },
@@ -136,6 +156,35 @@ export function backfillRepoConfig(repoPath: string, configPath?: string): void 
         ...(existingJenkins?.tokenEnvVar === undefined ? { tokenEnvVar: defaultJenkins.tokenEnvVar } : {}),
         ...(existingJenkins?.graphBuildLimit === undefined ? { graphBuildLimit: defaultJenkins.graphBuildLimit } : {}),
         ...(existingJenkins?.jobs === undefined ? { jobs: defaultJenkins.jobs } : {}),
+      },
+    };
+  }
+
+  const existingOpenShift = existing.providers?.openshift;
+  const defaultOpenShift = defaults.providers.openshift ?? {
+    enabled: false,
+    serverUrl: undefined,
+    tokenEnvVar: "OPENSHIFT_TOKEN",
+    namespaces: [],
+    commitShaAnnotation: undefined,
+  };
+  if (
+    existingOpenShift?.enabled === undefined ||
+    existingOpenShift?.serverUrl === undefined ||
+    existingOpenShift?.tokenEnvVar === undefined ||
+    existingOpenShift?.namespaces === undefined ||
+    existingOpenShift?.commitShaAnnotation === undefined
+  ) {
+    missing.providers = {
+      ...missing.providers,
+      openshift: {
+        ...(existingOpenShift?.enabled === undefined ? { enabled: defaultOpenShift.enabled } : {}),
+        ...(existingOpenShift?.serverUrl === undefined ? { serverUrl: defaultOpenShift.serverUrl } : {}),
+        ...(existingOpenShift?.tokenEnvVar === undefined ? { tokenEnvVar: defaultOpenShift.tokenEnvVar } : {}),
+        ...(existingOpenShift?.namespaces === undefined ? { namespaces: defaultOpenShift.namespaces } : {}),
+        ...(existingOpenShift?.commitShaAnnotation === undefined
+          ? { commitShaAnnotation: defaultOpenShift.commitShaAnnotation }
+          : {}),
       },
     };
   }
@@ -235,25 +284,6 @@ export function resolveConfigInfo(repoPath: string, configPath?: string): Config
   return { globalPath, globalExists, hasRepoOverrides, warnings };
 }
 
-/**
- * Return all known repository paths from the global config file.
- *
- * Reads the `repos` map from `~/.config/codepulse/config.json` and returns
- * the keys (absolute paths). Used by the project selector to show previously-
- * opened repos. Returns an empty array if the config file doesn't exist or
- * has no repos.
- */
-export function getKnownRepos(configPath?: string): string[] {
-  const warnings: string[] = [];
-  const result = readRawConfig(configPath, warnings);
-  if (!result) return [];
-
-  const repos = result.parsed.repos;
-  if (typeof repos !== "object" || repos === null || Array.isArray(repos)) return [];
-
-  return Object.keys(repos as Record<string, unknown>);
-}
-
 export interface KnownRepoInfo {
   path: string;
   group?: string;
@@ -282,8 +312,8 @@ export function getKnownRepoInfos(configPath?: string): KnownRepoInfo[] {
     const config = validateConfig(rawEntry as Record<string, unknown>, `${result.globalPath} [repos]`, warnings);
     return {
       path,
-      ...(config.group !== undefined ? { group: config.group } : {}),
-      ...(config.appName !== undefined ? { appName: config.appName } : {}),
+      ...(config.group === undefined ? {} : { group: config.group }),
+      ...(config.appName === undefined ? {} : { appName: config.appName }),
     };
   });
 }
@@ -464,8 +494,16 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
                 return [];
               }
               const rawJob = job as Record<string, unknown>;
-              const url = parseOptionalText(`providers.jenkins.jobs[${idx}].url`, rawJob.url, URL_OR_PATH_MAX_LENGTH);
+              const url = parseOptionalText(
+                `providers.jenkins.jobs[${idx}].url`,
+                rawJob.url,
+                JENKINS_JOB_URL_MAX_LENGTH,
+              );
               if (url === undefined) {
+                return [];
+              }
+              if (!isValidJenkinsJobUrl(url)) {
+                warnings.push(`${path}: "providers.jenkins.jobs[${idx}].url" must be a valid HTTPS URL, ignoring`);
                 return [];
               }
               const label = parseOptionalText(
@@ -473,10 +511,54 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
                 rawJob.label,
                 GENERAL_TEXT_MAX_LENGTH,
               );
-              return [{ url, ...(label !== undefined ? { label } : {}) }];
+              return [{ url, ...(label === undefined ? {} : { label }) }];
             });
           } else {
             warnings.push(`${path}: "providers.jenkins.jobs" must be an array, ignoring`);
+          }
+        }
+      }
+      if (
+        typeof providers.openshift === "object" &&
+        providers.openshift !== null &&
+        !Array.isArray(providers.openshift)
+      ) {
+        const openshift = providers.openshift as Record<string, unknown>;
+        config.providers.openshift = {};
+        if (openshift.enabled !== undefined) {
+          if (typeof openshift.enabled === "boolean") config.providers.openshift.enabled = openshift.enabled;
+          else warnings.push(`${path}: "providers.openshift.enabled" must be a boolean, ignoring`);
+        }
+        if (openshift.serverUrl !== undefined) {
+          const value = parseOptionalText(
+            "providers.openshift.serverUrl",
+            openshift.serverUrl,
+            OPENSHIFT_SERVER_URL_MAX_LENGTH,
+          );
+          if (value !== undefined) {
+            if (isValidOpenShiftServerUrl(value)) config.providers.openshift.serverUrl = value;
+            else warnings.push(`${path}: "providers.openshift.serverUrl" must be a valid HTTPS URL, ignoring`);
+          }
+        }
+        for (const field of ["tokenEnvVar", "commitShaAnnotation"] as const) {
+          if (openshift[field] === undefined) continue;
+          const value = parseOptionalText(`providers.openshift.${field}`, openshift[field], OPENSHIFT_TEXT_MAX_LENGTH);
+          if (value !== undefined) config.providers.openshift[field] = value;
+        }
+        if (openshift.namespaces !== undefined) {
+          if (Array.isArray(openshift.namespaces)) {
+            config.providers.openshift.namespaces = openshift.namespaces.flatMap((ns, idx) => {
+              const field = `providers.openshift.namespaces[${idx}]`;
+              const value = parseOptionalText(field, ns, OPENSHIFT_NAMESPACE_MAX_LENGTH);
+              if (value === undefined) return [];
+              if (!isValidOpenShiftNamespace(value)) {
+                warnings.push(`${path}: "${field}" must be a DNS-1123 label, ignoring`);
+                return [];
+              }
+              return [value];
+            });
+          } else {
+            warnings.push(`${path}: "providers.openshift.namespaces" must be an array, ignoring`);
           }
         }
       }
@@ -495,7 +577,7 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
 export function mergeOptions(cli: { repoPath: string }, config: CodepulseConfig): AppOptions {
   const defaults = defaultConfig();
   const branch = config.branch;
-  const all = branch !== undefined ? false : (config.showAllBranches ?? true);
+  const all = branch === undefined ? (config.showAllBranches ?? true) : false;
 
   return {
     repoPath: cli.repoPath,
@@ -504,9 +586,9 @@ export function mergeOptions(cli: { repoPath: string }, config: CodepulseConfig)
     maxCount: config.pageSize ?? defaults.pageSize,
     themeName: config.theme ?? defaults.theme,
     autoRefreshInterval:
-      config.autoRefreshSeconds !== undefined ? config.autoRefreshSeconds * 1000 : defaults.autoRefreshSeconds * 1000,
+      config.autoRefreshSeconds === undefined ? defaults.autoRefreshSeconds * 1000 : config.autoRefreshSeconds * 1000,
     autoFetchInterval:
-      config.autoFetchSeconds !== undefined ? config.autoFetchSeconds * 1000 : defaults.autoFetchSeconds * 1000,
+      config.autoFetchSeconds === undefined ? defaults.autoFetchSeconds * 1000 : config.autoFetchSeconds * 1000,
   };
 }
 
@@ -619,18 +701,18 @@ function applyConfigFields(target: Record<string, unknown>, config: CodepulseCon
         ? { ...(target.providers as Record<string, unknown>) }
         : {};
     if (config.providers.github !== undefined) {
-      const existingGh =
+      const existingGitHub =
         typeof existingProviders.github === "object" &&
         existingProviders.github !== null &&
         !Array.isArray(existingProviders.github)
           ? { ...(existingProviders.github as Record<string, unknown>) }
           : {};
-      if (config.providers.github.enabled !== undefined) existingGh.enabled = config.providers.github.enabled;
+      if (config.providers.github.enabled !== undefined) existingGitHub.enabled = config.providers.github.enabled;
       if (config.providers.github.tokenEnvVar !== undefined)
-        existingGh.tokenEnvVar = config.providers.github.tokenEnvVar;
+        existingGitHub.tokenEnvVar = config.providers.github.tokenEnvVar;
       if (config.providers.github.trustedEnterpriseHost !== undefined)
-        existingGh.trustedEnterpriseHost = config.providers.github.trustedEnterpriseHost;
-      existingProviders.github = existingGh;
+        existingGitHub.trustedEnterpriseHost = config.providers.github.trustedEnterpriseHost;
+      existingProviders.github = existingGitHub;
     }
     if (config.providers.jenkins !== undefined) {
       const existingJenkins =
@@ -647,6 +729,25 @@ function applyConfigFields(target: Record<string, unknown>, config: CodepulseCon
         existingJenkins.graphBuildLimit = config.providers.jenkins.graphBuildLimit;
       if (config.providers.jenkins.jobs !== undefined) existingJenkins.jobs = config.providers.jenkins.jobs;
       existingProviders.jenkins = existingJenkins;
+    }
+    if (config.providers.openshift !== undefined) {
+      const existingOpenShift =
+        typeof existingProviders.openshift === "object" &&
+        existingProviders.openshift !== null &&
+        !Array.isArray(existingProviders.openshift)
+          ? { ...(existingProviders.openshift as Record<string, unknown>) }
+          : {};
+      if (config.providers.openshift.enabled !== undefined)
+        existingOpenShift.enabled = config.providers.openshift.enabled;
+      if (config.providers.openshift.serverUrl !== undefined)
+        existingOpenShift.serverUrl = config.providers.openshift.serverUrl;
+      if (config.providers.openshift.tokenEnvVar !== undefined)
+        existingOpenShift.tokenEnvVar = config.providers.openshift.tokenEnvVar;
+      if (config.providers.openshift.namespaces !== undefined)
+        existingOpenShift.namespaces = config.providers.openshift.namespaces;
+      if (config.providers.openshift.commitShaAnnotation !== undefined)
+        existingOpenShift.commitShaAnnotation = config.providers.openshift.commitShaAnnotation;
+      existingProviders.openshift = existingOpenShift;
     }
     target.providers = existingProviders;
   }

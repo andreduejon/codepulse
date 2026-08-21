@@ -1,77 +1,62 @@
 import { isUncommittedHash } from "../constants";
 import type { DetailTab } from "../context/state";
 import type { Commit, CommitDetail, UncommittedDetail } from "../git/types";
-import type { ProviderView } from "../providers/provider";
+import { isProviderDetailView, type ProviderView } from "../providers/provider";
 
 interface TabAvailabilityInput {
   commit: Commit | null;
   uncommittedDetail: UncommittedDetail | null;
   commitDetail: CommitDetail | null;
   stashByParent: Map<string, Commit[]>;
-  /** The active provider view — when a CI provider is active, provider tab replaces Files tab. */
+  /**
+   * The active provider view.
+   */
   activeProviderView?: ProviderView;
   /**
-   * CI data getter — used to determine whether the Actions tab has data for
-   * the current commit.  When omitted the Actions tab is always included
+   * Provider data getter — used to determine whether the provider tab has
+   * data for the current commit. When omitted the Actions tab is always included
    * (backwards-compatible default for callers that don't have access to CI state).
    */
   getCommitData?: (sha: string) => unknown;
   /**
-   * True while the initial CI fetch is in-flight.  When loading, the Actions
-   * tab is kept in the available set so the user isn't switched to Info
-   * before the request completes.
+   * True while the initial provider fetch is in-flight. When loading, the
+   * tab is kept in the available set so the user is not switched to the
+   * info tab before the request completes.
    */
   providerLoading?: boolean;
 }
 
 /**
- * Returns the list of non-empty (navigable) tabs for the current commit.
- *
- * When `activeProviderView` is `"github-actions"`, the "github-actions" (Actions) tab
- * takes the first position and the "files" tab is hidden — CI status is more
- * relevant when the user has explicitly switched to the GitHub Actions view.
- *
- * The Actions tab is only included when:
- *   - CI data is present for the commit (`getCommitData(sha)` returns non-null), OR
- *   - The CI fetch is still in-flight (`providerLoading === true`), OR
- *   - `getCommitData` was not provided (backwards-compatible: always include).
- *
- * The CI tab is never shown outside of github-actions provider mode.
- *
- * This is the single source of truth shared by:
- *  - keyboard navigation (left/right tab switching)
- *  - auto-switch-away-from-empty-tab effect
- *  - detail panel tab bar (to determine which tabs are disabled)
+ * Returns the list of available tabs for the current commit.
+ * Each provider takes the first position and no files tab is shown. The
+ * info tab is always shown. If there are stashes on the commit, they are
+ * also presented in the details section in an additional tab.
  */
 export function getAvailableTabs(input: TabAvailabilityInput): DetailTab[] {
   const { commit, uncommittedDetail, commitDetail, stashByParent, activeProviderView } = input;
 
   if (commit && isUncommittedHash(commit.hash)) {
     const ud = uncommittedDetail;
-    const tabs: DetailTab[] = [];
-    if (ud && ud.unstaged.length > 0) tabs.push("unstaged");
-    if (ud && ud.staged.length > 0) tabs.push("staged");
-    if (ud && ud.untracked.length > 0) tabs.push("untracked");
-    return tabs;
+    return [
+      ...(ud?.unstaged.length ? ["unstaged" as const] : []),
+      ...(ud?.staged.length ? ["staged" as const] : []),
+      ...(ud?.untracked.length ? ["untracked" as const] : []),
+    ];
   }
 
-  const isProviderMode = activeProviderView === "github-actions" || activeProviderView === "jenkins";
   const tabs: DetailTab[] = [];
 
-  if (isProviderMode) {
-    // In provider mode keep provider tab available even when selected commit has
-    // no matching CI data yet. The tab itself renders loading / empty state.
-    tabs.push(activeProviderView === "jenkins" ? "jenkins" : "github-actions");
-  } else {
-    if (commitDetail && commitDetail.files.length > 0) {
-      tabs.push("files");
-    }
+  if (activeProviderView && isProviderDetailView(activeProviderView)) {
+    tabs.push(activeProviderView);
+  } else if (commitDetail?.files.length) {
+    tabs.push("files");
   }
 
   if (stashByParent.has(commit?.hash ?? "")) {
     tabs.push("stashes");
   }
-  tabs.push("detail");
+
+  tabs.push("info");
 
   return tabs;
 }

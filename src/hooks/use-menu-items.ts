@@ -7,13 +7,21 @@ import { AUTO_REFRESH_MS, INTERVAL_OPTIONS, MAX_COUNT_OPTIONS, MS_TO_LABEL } fro
 import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL, useAppState } from "../context/state";
 import { themes } from "../context/theme";
 import { getTokenSource, parseGitHubRemote } from "../providers/github-actions/api";
+import type { JenkinsJobConfig } from "../providers/jenkins/types";
+import { isValidJenkinsJobUrl } from "../providers/jenkins/validation";
+import {
+  isValidOpenShiftNamespace,
+  isValidOpenShiftServerUrl,
+  isValidOpenShiftText,
+} from "../providers/openshift/validation";
+import type { ProviderDetailView } from "../providers/provider";
 
 type MenuTab = "repository" | "branch" | "providers";
 
 export type SettingItem =
   | { kind: "header"; label: string; tone?: "accent" | "muted"; get?: () => string }
   | { kind: "info"; label: string; get: () => string; valid?: () => boolean }
-  | { kind: "copyable"; label: string; get: () => string; onForget?: () => void }
+  | { kind: "copyable"; label: string; get: () => string; onForget?: () => void; visualPrefix?: string }
   | {
       kind: "toggle";
       label: string;
@@ -107,8 +115,10 @@ export interface MenuItemsOptions {
     username?: string;
     tokenEnvVar: string;
     graphBuildLimit: 10 | 20 | 50;
-    jobs: { label?: string; url: string }[];
+    jobs: JenkinsJobConfig[];
   }) => void;
+  openshiftConfig?: Accessor<OpenShiftMenuConfig | undefined>;
+  onOpenShiftConfigChange?: (cfg: OpenShiftMenuConfig) => void;
   onRepoDisplayConfigChange?: (cfg: { group?: string; appName?: string }) => void;
 }
 
@@ -135,7 +145,82 @@ export interface JenkinsMenuConfig {
   username?: string;
   tokenEnvVar: string;
   graphBuildLimit: 10 | 20 | 50;
-  jobs: { label?: string; url: string }[];
+  jobs: JenkinsJobConfig[];
+}
+
+export interface OpenShiftMenuConfig {
+  enabled: boolean;
+  serverUrl: string;
+  tokenEnvVar: string;
+  namespaces: string[];
+  commitShaAnnotation: string;
+}
+
+export function buildOpenShiftProviderItems(
+  cfg: OpenShiftMenuConfig,
+  onChange?: (cfg: OpenShiftMenuConfig) => void,
+  persist?: (cfg: OpenShiftMenuConfig) => void,
+  lastRefresh: () => string = () => "never",
+): SettingItem[] {
+  const update = (next: OpenShiftMenuConfig) => {
+    onChange?.(next);
+    persist?.(next);
+  };
+  const items: SettingItem[] = [
+    { kind: "header", label: "OpenShift" },
+    { kind: "toggle", label: "Enabled", get: () => cfg.enabled, set: v => update({ ...cfg, enabled: v }) },
+    { kind: "info", label: "Last refresh", get: lastRefresh },
+  ];
+  if (!cfg.enabled) return items;
+  items.push(
+    {
+      kind: "editable",
+      label: "Server",
+      get: () => cfg.serverUrl,
+      set: v => update({ ...cfg, serverUrl: v.trim() }),
+      valid: () => isValidOpenShiftServerUrl(cfg.serverUrl),
+      isDraftValid: isValidOpenShiftServerUrl,
+    },
+    {
+      kind: "editable",
+      label: "Token",
+      get: () => cfg.tokenEnvVar,
+      set: v => update({ ...cfg, tokenEnvVar: v.trim() || "OPENSHIFT_TOKEN" }),
+      valid: () => isValidOpenShiftText(cfg.tokenEnvVar) && !!process.env[cfg.tokenEnvVar],
+      isDraftValid: v => isValidOpenShiftText(v.trim() || "OPENSHIFT_TOKEN"),
+    },
+    {
+      kind: "editable",
+      label: "Annotation",
+      get: () => cfg.commitShaAnnotation,
+      set: v => update({ ...cfg, commitShaAnnotation: v.trim() || "dev/commit-sha" }),
+      valid: () => isValidOpenShiftText(cfg.commitShaAnnotation),
+      isDraftValid: v => isValidOpenShiftText(v.trim() || "dev/commit-sha"),
+    },
+    {
+      kind: "editable",
+      label: "New namespace",
+      placeholder: "Enter namespace...",
+      get: () => "",
+      set: v => {
+        const namespace = v.trim();
+        if (!isValidOpenShiftNamespace(namespace) || cfg.namespaces.includes(namespace)) return;
+        update({ ...cfg, namespaces: [...cfg.namespaces, namespace] });
+      },
+      valid: () => cfg.namespaces.length > 0,
+      showValidity: false,
+      isDraftValid: isValidOpenShiftNamespace,
+      staySelectedOnSave: true,
+    },
+    ...cfg.namespaces.map((namespace, idx) => ({
+      kind: "copyable" as const,
+      label: `Namespace #${idx + 1}`,
+      get: () => namespace,
+      visualPrefix: "· ",
+      onForget: () => update({ ...cfg, namespaces: cfg.namespaces.filter((_, nsIdx) => nsIdx !== idx) }),
+    })),
+  );
+  return items;
 }
 
 export function buildGitHubProviderItems(
@@ -202,7 +287,7 @@ export function buildGitHubProviderItems(
   return items;
 }
 
-function buildJenkinsProviderItems(
+export function buildJenkinsProviderItems(
   jenkinsCfg: JenkinsMenuConfig,
   onChange?: (cfg: JenkinsMenuConfig) => void,
   persist?: (cfg: JenkinsMenuConfig) => void,
@@ -270,25 +355,24 @@ function buildJenkinsProviderItems(
       get: () => "",
       set: v => {
         const url = v.trim();
-        if (!url) return;
+        if (!isValidJenkinsJobUrl(url)) return;
         const newCfg = { ...jenkinsCfg, jobs: [...jenkinsCfg.jobs, { url }] };
         onChange?.(newCfg);
         persist?.(newCfg);
       },
       valid: () => jenkinsCfg.jobs.length > 0,
       showValidity: false,
-      isDraftValid: v => v.trim().length > 0,
+      isDraftValid: isValidJenkinsJobUrl,
       staySelectedOnSave: true,
     },
   );
 
-  const jobsInput = items.pop();
-  if (jobsInput) items.push(jobsInput);
   items.push(
     ...jenkinsCfg.jobs.map((job, idx) => ({
       kind: "copyable" as const,
       label: `Job #${idx + 1} URL`,
       get: () => job.url,
+      visualPrefix: "· ",
       onForget: () => {
         const newCfg = { ...jenkinsCfg, jobs: jenkinsCfg.jobs.filter((_, jobIdx) => jobIdx !== idx) };
         onChange?.(newCfg);
@@ -369,7 +453,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
     return relativeAgeLabel(time);
   };
 
-  const providerRefreshLabel = (view: "github-actions" | "jenkins"): string => {
+  const providerRefreshLabel = (view: ProviderDetailView): string => {
     const time = state.providerLastSuccessfulRefresh().get(view);
     return time ? relativeAgeLabel(time) : "never";
   };
@@ -621,6 +705,13 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
       graphBuildLimit: 20 as const,
       jobs: [],
     };
+    const openshiftCfg = opts.openshiftConfig?.() ?? {
+      enabled: false,
+      serverUrl: "",
+      tokenEnvVar: "OPENSHIFT_TOKEN",
+      namespaces: [],
+      commitShaAnnotation: "dev/commit-sha",
+    };
     return [
       ...buildGitHubProviderItems(
         ghCfg,
@@ -638,6 +729,12 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
         opts.onJenkinsConfigChange,
         newCfg => persistFullConfig({ providers: { jenkins: newCfg } }),
         () => providerRefreshLabel("jenkins"),
+      ),
+      ...buildOpenShiftProviderItems(
+        openshiftCfg,
+        opts.onOpenShiftConfigChange,
+        newCfg => persistFullConfig({ providers: { openshift: newCfg } }),
+        () => providerRefreshLabel("openshift"),
       ),
     ];
   });
@@ -692,7 +789,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
     const idx = selectedItemIndex();
     const items = activeItems();
     const item = items[idx];
-    if (!item || item.kind !== "copyable") return 0;
+    if (item?.kind !== "copyable") return 0;
     return Math.max(0, item.get().length - COPYABLE_VISIBLE_WIDTH);
   });
 

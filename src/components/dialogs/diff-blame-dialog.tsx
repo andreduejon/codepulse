@@ -14,7 +14,7 @@ import {
 } from "../../utils/abortable-request";
 import { KeyHint, KeyHintSeparator } from "../key-hint";
 import MessageBox from "../message-box";
-import { DialogFooter, DialogOverlay, DialogTitleBar, getStandardDialogFrame } from "./dialog-chrome";
+import { DialogFooter, DialogOverlay, DialogTitle, DialogTitleBar, getStandardDialogFrame } from "./dialog-chrome";
 import { BLAME_COL_WIDTH, DiffLineRow } from "./diff-line-row";
 import {
   buildDisplayLines,
@@ -457,45 +457,30 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
       ? VIEW_MODE_TITLE_LABEL[viewMode()]
         ? `file · ${VIEW_MODE_TITLE_LABEL[viewMode()]}`
         : "file"
-      : VIEW_MODE_TITLE_LABEL[viewMode()];
-    return buildDiffTitleParts(props.target.filePath, sourceLabel, counter, modeLabel, dialogWidth());
+      : VIEW_MODE_TITLE_LABEL[viewMode()] || "unified";
+    return buildDiffTitleParts(
+      props.target.filePath,
+      sourceLabel,
+      counter,
+      modeLabel,
+      dialogWidth(),
+      `Diff${TITLE_SEP}`.length,
+    );
   });
 
-  /** Render the structured title as JSX with per-segment styling. */
+  /** Keep Diff-specific counter, source, path, and current view mode. */
   const titleElement = createMemo((): JSX.Element => {
     const p = titleParts();
-    const segments: (() => JSX.Element)[] = [];
-
-    if (p.counter) {
-      // Counter is muted — navigational metadata, not the primary content
-      segments.push(() => <span>{p.counter}</span>);
-    }
-    if (p.source) {
-      segments.push(() => <span>{p.source}</span>);
-    }
-    // Dir prefix + basename are one visual group; basename is bold foreground
-    // (matches the bold-foreground pattern used by Help/Theme/Menu dialog titles)
-    segments.push(() => (
-      <>
-        {p.dirPrefix ? <span>{p.dirPrefix}</span> : null}
-        <strong>
-          <span>{p.basename}</span>
-        </strong>
-      </>
-    ));
-    if (p.mode) {
-      segments.push(() => <span>{p.mode}</span>);
-    }
-
     return (
-      <>
-        {segments.map((render, i) => (
-          <>
-            {i > 0 ? <span>{TITLE_SEP}</span> : null}
-            {render()}
-          </>
-        ))}
-      </>
+      <DialogTitle
+        segments={[
+          { text: "Diff" },
+          { text: p.counter },
+          { text: p.source },
+          { text: `${p.dirPrefix}${p.basename}`, emphasis: true },
+          { text: p.mode },
+        ]}
+      />
     );
   });
 

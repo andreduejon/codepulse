@@ -2,6 +2,45 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.0] - 2026-08-21
+
+### Added
+
+- **OpenShift provider** — match annotated Builds and ImageStreamTags, immutable
+  image digests, Pods, and owner-resolved workloads to commits; inspect cached
+  resource API objects as formatted JSON.
+- **OpenShift graph columns** — show resource totals and conservative aggregate
+  status for each matching commit.
+- **Jenkins multibranch discovery** — configured job URLs are auto-detected;
+  multibranch pipelines load up to 25 enabled branch jobs.
+
+### Changed
+
+- Provider detail tabs and status handling now support source, CI, and runtime
+  providers consistently.
+- Remote providers are disabled by default for new repository configurations.
+- Updated OpenTUI, SolidJS, Biome, Bun types, and TypeScript dependencies.
+
+### Fixed
+
+- Partial OpenShift API failures preserve successful data and report failed
+  requests through provider status and debug events.
+- OpenShift workload matching uses immutable image digests to avoid stale tag
+  associations and UID owner chains to resolve Deployments and
+  DeploymentConfigs.
+- OpenShift health mapping distinguishes progressing, failed, completed, and
+  unknown resource states; terminating Pods are excluded.
+- OpenShift configuration changes cancel stale requests and reload current
+  cluster data.
+- Jenkins commit matching supports SCM revision actions and refreshes cached
+  commit data correctly.
+- Aborted provider requests no longer appear as request failures.
+- Jenkins job URLs must be HTTPS without embedded credentials.
+- GitHub Actions fetches extra check-suite and job pages instead of truncating.
+- Background CI fetches queue new graph commits instead of dropping them when a
+  request is already in flight.
+- Cancelled Jenkins job/build batches stop starting further HTTP calls.
+
 ## [0.5.0] - 2026-05-08
 
 ### Added

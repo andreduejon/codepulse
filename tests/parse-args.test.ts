@@ -6,7 +6,7 @@
  * Note: --help, --version, and error paths call process.exit().
  * We mock process.exit to capture exit codes without terminating the test runner.
  */
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { parseArgs } from "../src/cli/parse-args";
 
 /** Fake argv prefix: parseArgs slices from index 2. */
@@ -16,6 +16,18 @@ const ARGV_PREFIX = ["node", "codepulse"];
 const originalExit = process.exit;
 
 let lastExitCode: number | undefined;
+
+function expectParseArgsExit(argv: string[], code: number): void {
+  const errorSpy = spyOn(console, "error").mockImplementation(() => {});
+  const logSpy = spyOn(console, "log").mockImplementation(() => {});
+  try {
+    expect(() => parseArgs(argv)).toThrow("process.exit");
+    expect(lastExitCode).toBe(code);
+  } finally {
+    errorSpy.mockRestore();
+    logSpy.mockRestore();
+  }
+}
 
 beforeEach(() => {
   lastExitCode = undefined;
@@ -39,23 +51,19 @@ describe("parseArgs", () => {
   // ── --help / --version ────────────────────────────────────────────
 
   test("--help exits with code 0", () => {
-    expect(() => parseArgs([...ARGV_PREFIX, "--help"])).toThrow("process.exit");
-    expect(lastExitCode).toBe(0);
+    expectParseArgsExit([...ARGV_PREFIX, "--help"], 0);
   });
 
   test("-h exits with code 0", () => {
-    expect(() => parseArgs([...ARGV_PREFIX, "-h"])).toThrow("process.exit");
-    expect(lastExitCode).toBe(0);
+    expectParseArgsExit([...ARGV_PREFIX, "-h"], 0);
   });
 
   test("--version exits with code 0", () => {
-    expect(() => parseArgs([...ARGV_PREFIX, "--version"])).toThrow("process.exit");
-    expect(lastExitCode).toBe(0);
+    expectParseArgsExit([...ARGV_PREFIX, "--version"], 0);
   });
 
   test("-v exits with code 0", () => {
-    expect(() => parseArgs([...ARGV_PREFIX, "-v"])).toThrow("process.exit");
-    expect(lastExitCode).toBe(0);
+    expectParseArgsExit([...ARGV_PREFIX, "-v"], 0);
   });
 
   // ── Positional repo path ──────────────────────────────────────────
@@ -73,14 +81,12 @@ describe("parseArgs", () => {
   // ── Unknown flags ─────────────────────────────────────────────────
 
   test("unknown flag exits with code 1", () => {
-    expect(() => parseArgs([...ARGV_PREFIX, "--unknown"])).toThrow("process.exit");
-    expect(lastExitCode).toBe(1);
+    expectParseArgsExit([...ARGV_PREFIX, "--unknown"], 1);
   });
 
   test("removed startup flags now error", () => {
     for (const flag of ["--branch", "-b", "--max-count", "-n", "--theme", "--path", "--no-all"]) {
-      expect(() => parseArgs([...ARGV_PREFIX, flag])).toThrow("process.exit");
-      expect(lastExitCode).toBe(1);
+      expectParseArgsExit([...ARGV_PREFIX, flag], 1);
       lastExitCode = undefined;
     }
   });

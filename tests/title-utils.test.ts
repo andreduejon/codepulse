@@ -2,10 +2,17 @@ import { describe, expect, test } from "bun:test";
 import {
   buildDiffTitleParts,
   type DiffTitleParts,
+  getDialogTitleContentWidth,
   middleTruncate,
   splitPath,
   TITLE_SEP,
 } from "../src/components/dialogs/title-utils";
+
+describe("getDialogTitleContentWidth", () => {
+  test("reserves title padding and close hint", () => {
+    expect(getDialogTitleContentWidth(120)).toBe(102);
+  });
+});
 
 // ── splitPath ────────────────────────────────────────────────────────
 
@@ -223,5 +230,10 @@ describe("buildDiffTitleParts", () => {
     expect(result.basename).toBe("app.ts");
     expect(result.mode).toBe("new only");
     expect(partsWidth(result)).toBe(39);
+  });
+
+  test("reserves width for a shared leading segment", () => {
+    const result = buildDiffTitleParts("src/app.ts", "abc1234", "[1/2]", "unified", 57, 7);
+    expect(partsWidth(result)).toBeLessThanOrEqual(32);
   });
 });

@@ -98,7 +98,7 @@ export interface GitHubRepo {
 
 /** Config for the GitHub Actions provider (subset of CodepulseConfig). */
 export interface GitHubProviderConfig {
-  /** Whether the provider is enabled. Defaults to true. */
+  /** Whether the provider is enabled. Defaults to false. */
   enabled: boolean;
   /** Name of the environment variable holding the Personal Access Token.
    *  Defaults to "GITHUB_TOKEN". */
@@ -108,7 +108,7 @@ export interface GitHubProviderConfig {
 }
 
 export const DEFAULT_GITHUB_CONFIG: GitHubProviderConfig = {
-  enabled: true,
+  enabled: false,
   tokenEnvVar: "GITHUB_TOKEN",
   trustedEnterpriseHost: null,
 };

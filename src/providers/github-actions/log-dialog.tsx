@@ -6,10 +6,11 @@ import { createEffect, createMemo, createSignal, For, type JSX, Show } from "sol
 import {
   DialogFooter,
   DialogOverlay,
+  DialogTitle,
   DialogTitleBar,
   getStandardDialogFrame,
 } from "../../components/dialogs/dialog-chrome";
-import { middleTruncate, TITLE_SEP } from "../../components/dialogs/title-utils";
+import { getDialogTitleContentWidth, middleTruncate, TITLE_SEP } from "../../components/dialogs/title-utils";
 import { KeyHint, KeyHintSeparator } from "../../components/key-hint";
 import MessageBox from "../../components/message-box";
 import { useTheme } from "../../context/theme";
@@ -32,6 +33,7 @@ interface LoadedLog {
 }
 
 interface JobLogDialogProps {
+  provider: "github-actions" | "jenkins";
   job: { id: string | number; name: string };
   jobs: { id: string | number; name: string }[];
   run: { name: string; runNumber: number; url?: string };
@@ -268,26 +270,26 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
   });
 
   const titleElement = createMemo((): JSX.Element => {
-    const counter = orderedJobs().length > 1 ? `[${jobIndex() + 1}/${orderedJobs().length}]` : "[1/1]";
+    const providerLabel = props.provider === "jenkins" ? "Jenkins" : "GitHub Actions";
     const runLabel = `${props.run.name} #${props.run.runNumber}`;
-    const jobLabel = middleTruncate(currentJob().name, Math.max(8, dialogWidth() - 40));
+    const showJob = props.provider !== "jenkins";
     const modeLabel = VIEW_MODE_TITLE_LABEL[viewMode()];
-    const segments = [counter, runLabel, jobLabel, modeLabel].filter(Boolean);
+    const fixedWidth = [providerLabel, runLabel, modeLabel].filter(Boolean).join(TITLE_SEP).length;
+    const jobLabel = showJob
+      ? middleTruncate(
+          currentJob().name,
+          Math.max(8, getDialogTitleContentWidth(dialogWidth()) - fixedWidth - TITLE_SEP.length),
+        )
+      : "";
     return (
-      <>
-        {segments.map((segment, i) => (
-          <>
-            {i > 0 ? <span>{TITLE_SEP}</span> : null}
-            {i === 2 ? (
-              <strong>
-                <span>{segment}</span>
-              </strong>
-            ) : (
-              <span>{segment}</span>
-            )}
-          </>
-        ))}
-      </>
+      <DialogTitle
+        segments={[
+          { text: providerLabel },
+          { text: runLabel, emphasis: props.provider === "jenkins" },
+          { text: jobLabel, emphasis: true },
+          { text: modeLabel },
+        ]}
+      />
     );
   });
 

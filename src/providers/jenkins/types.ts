@@ -3,6 +3,8 @@ export interface JenkinsJobConfig {
   url: string;
 }
 
+export const JENKINS_MULTIBRANCH_JOB_LIMIT = 25;
+
 export interface JenkinsProviderConfig {
   enabled: boolean;
   username?: string;

@@ -74,6 +74,7 @@ export async function main() {
         startupMode={startupMode}
         initialGithubConfig={config.providers?.github}
         initialJenkinsConfig={config.providers?.jenkins}
+        initialOpenShiftConfig={config.providers?.openshift}
       />
     ),
     {

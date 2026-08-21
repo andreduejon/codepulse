@@ -13,11 +13,9 @@ read-only by default codebase dashboard: git history as the primary navigation
 surface, with CI/CD, security, and code quality signals layered onto the same
 commit and branch context.
 
-The current release adds grouped project switching and a debug dialog on top of
-the GitHub Actions and Jenkins provider experience, including warm in-memory
-repo switching, grouped selector navigation, and request/command observability.
-Integration planning for future milestones lives in `planning/` locally and is
-summarized in the roadmap below.
+The current release adds OpenShift runtime visibility alongside GitHub Actions
+and Jenkins. Commits show matched resources and conservative health status;
+resource API objects can be inspected as formatted JSON from the detail panel.
 
 ## Requirements
 
@@ -112,6 +110,21 @@ Use `codepulse -h` for complete shortcuts, commands, and provider setup.
 | `:switch`     | Open repository switcher                |
 | `:theme`      | Open theme dialog                       |
 
+## Providers
+
+Remote providers are disabled by default and configured per repository from
+the Providers menu (`:providers`). Credentials are read from environment
+variables and are never stored in configuration.
+
+- **GitHub Actions** — shows workflow runs, jobs, and logs for matching commits.
+  See [GitHub Actions provider](docs/providers/github-actions.md).
+- **Jenkins** — shows configured job builds, pipeline stages, and console logs.
+  Job URLs are auto-detected; multibranch pipelines discover up to 25 enabled
+  branch jobs across configured parents. See [Jenkins provider](docs/providers/jenkins.md).
+- **OpenShift** — shows annotated Builds and ImageStreamTags, digest-matched
+  Pods, and owner-resolved workloads. Enter opens cached resource JSON. See
+  [OpenShift provider](docs/providers/openshift.md).
+
 ## Themes
 
 Switch themes live with `:theme`, or persist a theme in repo configuration.
@@ -144,7 +157,8 @@ Planned milestones currently follow this shape:
   and provider polish
 - `0.5.0`: grouped project switching, in-memory repo session cache, grouped
   switcher, and debug dialog
-- `0.6.0+`: read-only integrations for Snyk, SonarQube, and deeper observability
+- `0.6.0`: OpenShift runtime inventory, resource health, and JSON inspection
+- `0.7.0`: Snyk provider and further OpenShift features and polish
 
 The intent is to reach `1.0.0` once the integration model and configuration
 surface are stable.

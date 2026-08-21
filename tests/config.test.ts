@@ -3,7 +3,9 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
+  backfillRepoConfig,
   type CodepulseConfig,
+  defaultConfig,
   getKnownRepoInfos,
   loadConfig,
   mergeOptions,
@@ -37,6 +39,33 @@ function makeRepoConfig(name: string, repoPath: string, repoConfig: Record<strin
 
 afterEach(() => {
   rmSync(TEST_ROOT, { recursive: true, force: true });
+});
+
+describe("provider defaults", () => {
+  test("disables all remote providers for new configs", () => {
+    const providers = defaultConfig().providers;
+    expect(providers.github?.enabled).toBe(false);
+    expect(providers.jenkins?.enabled).toBe(false);
+    expect(providers.openshift?.enabled).toBe(false);
+  });
+
+  test("backfill preserves explicit provider enabled values", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("provider-enabled-preserved", repoPath, {
+      providers: {
+        github: { enabled: true },
+        jenkins: { enabled: true },
+        openshift: { enabled: true },
+      },
+    });
+
+    backfillRepoConfig(repoPath, configPath);
+
+    const providers = loadConfig(repoPath, configPath).config.providers;
+    expect(providers?.github?.enabled).toBe(true);
+    expect(providers?.jenkins?.enabled).toBe(true);
+    expect(providers?.openshift?.enabled).toBe(true);
+  });
 });
 
 describe("loadConfig", () => {
@@ -110,6 +139,81 @@ describe("loadConfig", () => {
     });
     const { config: result } = loadConfig(repoPath, configPath);
     expect(result.providers?.github?.trustedEnterpriseHost).toBe("ghe.example.com");
+  });
+
+  test("loads Jenkins job URLs", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("jenkins-job-kinds", repoPath, {
+      providers: {
+        jenkins: {
+          jobs: [
+            { url: "https://jenkins.example.com/job/direct" },
+            { url: "https://jenkins.example.com/job/service", label: "Service" },
+          ],
+        },
+      },
+    });
+    const { config: result } = loadConfig(repoPath, configPath);
+    expect(result.providers?.jenkins?.jobs).toEqual([
+      { url: "https://jenkins.example.com/job/direct" },
+      { url: "https://jenkins.example.com/job/service", label: "Service" },
+    ]);
+  });
+
+  test("rejects insecure Jenkins job URLs", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("jenkins-job-insecure", repoPath, {
+      providers: {
+        jenkins: {
+          jobs: [
+            { url: "http://jenkins.example.com/job/foo" },
+            { url: "https://user:token@jenkins.example.com/job/foo" },
+            { url: "https://jenkins.example.com/job/ok" },
+          ],
+        },
+      },
+    });
+    const { config: result, warnings } = loadConfig(repoPath, configPath);
+    expect(result.providers?.jenkins?.jobs).toEqual([{ url: "https://jenkins.example.com/job/ok" }]);
+    expect(warnings.filter(warning => warning.includes("providers.jenkins.jobs"))).toHaveLength(2);
+  });
+
+  test("validates OpenShift URL, namespaces, and text limits", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("openshift-validation", repoPath, {
+      providers: {
+        openshift: {
+          serverUrl: " https://api.example.com:6443 ",
+          tokenEnvVar: "T".repeat(255),
+          commitShaAnnotation: "A".repeat(255),
+          namespaces: ["team-one", "Bad_Name", "x".repeat(64)],
+        },
+      },
+    });
+    const { config: result, warnings } = loadConfig(repoPath, configPath);
+    expect(result.providers?.openshift).toEqual({
+      serverUrl: "https://api.example.com:6443",
+      tokenEnvVar: "T".repeat(255),
+      commitShaAnnotation: "A".repeat(255),
+      namespaces: ["team-one"],
+    });
+    expect(warnings.filter(warning => warning.includes("providers.openshift.namespaces"))).toHaveLength(2);
+  });
+
+  test("rejects insecure OpenShift URL and oversized text", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("openshift-invalid", repoPath, {
+      providers: {
+        openshift: {
+          serverUrl: "http://api.example.com",
+          tokenEnvVar: "T".repeat(256),
+          commitShaAnnotation: "A".repeat(256),
+        },
+      },
+    });
+    const { config: result, warnings } = loadConfig(repoPath, configPath);
+    expect(result.providers?.openshift).toEqual({});
+    expect(warnings.filter(warning => warning.includes("providers.openshift"))).toHaveLength(3);
   });
 
   test("drops invalid trusted enterprise host from repo config", () => {
@@ -666,6 +770,21 @@ describe("writeConfig", () => {
     writeConfig(original, repoPath, configPath);
     const { config: loaded } = loadConfig(repoPath, configPath);
     expect(loaded).toEqual(original);
+  });
+
+  test("round-trip: Jenkins job", () => {
+    const dir = makeTempDir("write-jenkins-multibranch");
+    const configPath = join(dir, "config.json");
+    const repoPath = "/tmp/repo";
+    const original: CodepulseConfig = {
+      providers: {
+        jenkins: {
+          jobs: [{ url: "https://jenkins.example.com/job/service", label: "Service" }],
+        },
+      },
+    };
+    writeConfig(original, repoPath, configPath);
+    expect(loadConfig(repoPath, configPath).config).toEqual(original);
   });
 
   test("round-trip: multiple repos with independent settings", () => {

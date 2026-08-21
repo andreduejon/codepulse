@@ -18,9 +18,10 @@ import type { DetailNavRef, DetailViewProps } from "../components/detail-types";
 import { isUncommittedHash } from "../constants";
 import type { createAppState } from "../context/state";
 import type { Commit, CommitDetail, FileChange, GraphRow } from "../git/types";
-import type { StashState } from "../hooks/use-stash-state";
+import { isProviderDetailView } from "../providers/provider";
 import { buildDiffTarget } from "../utils/diff-target";
 import type { FileTreeRow } from "../utils/file-tree";
+import type { StashState } from "./use-stash-state";
 
 export type CopyableField = "hash" | "author" | "date" | "committer" | "commitDate" | "subject" | "body";
 
@@ -102,7 +103,7 @@ export function useDetailCursor({
     const tab = activeTab();
     const items: InteractiveItem[] = [];
 
-    if (tab === "detail") {
+    if (tab === "info") {
       // Copyable metadata fields (skip for uncommitted node — values are all "·······")
       if (!isUncommittedHash(c.hash)) {
         items.push({ type: "copyable", field: "hash" });
@@ -185,7 +186,7 @@ export function useDetailCursor({
   // Skip this effect on the files tab to avoid resetting the cursor to 0 based
   // on detail.tsx's empty interactiveItems() (which has no "files" branch).
   createEffect(() => {
-    if (activeTab() === "files" || activeTab() === "github-actions" || activeTab() === "jenkins") return;
+    if (activeTab() === "files" || isProviderDetailView(activeTab())) return;
     const items = interactiveItems();
     const count = items.length;
 

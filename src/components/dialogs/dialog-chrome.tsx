@@ -1,5 +1,6 @@
 import type { JSX } from "solid-js";
 import { KeyHint } from "../key-hint";
+import { TITLE_SEP } from "./title-utils";
 
 const STANDARD_DIALOG_MIN_WIDTH = 72;
 const STANDARD_DIALOG_MAX_WIDTH = 160;
@@ -70,6 +71,32 @@ export function DialogTitleBar(props: Readonly<{ title: string | JSX.Element }>)
         <KeyHint key="esc" desc=" close" />
       </box>
       <box height={1} flexShrink={0} />
+    </>
+  );
+}
+
+export interface DialogTitleSegment {
+  text: string;
+  emphasis?: boolean;
+}
+
+/** Shared segmented title: context first, primary identity bold. */
+export function DialogTitle(props: Readonly<{ segments: DialogTitleSegment[] }>) {
+  const segments = () => props.segments.filter(segment => segment.text.length > 0);
+  return (
+    <>
+      {segments().map((segment, index) => (
+        <>
+          {index > 0 ? <span>{TITLE_SEP}</span> : null}
+          {segment.emphasis ? (
+            <strong>
+              <span>{segment.text}</span>
+            </strong>
+          ) : (
+            <span>{segment.text}</span>
+          )}
+        </>
+      ))}
     </>
   );
 }
