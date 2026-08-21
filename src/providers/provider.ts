@@ -71,65 +71,53 @@ export interface ProviderRegistration {
   isAvailable: () => boolean;
 }
 
-/** Mutable provider registry — populated at runtime as providers are initialised. */
-export const providerRegistry: ProviderRegistration[] = [];
-const [providerRegistryVersion, setProviderRegistryVersion] = createSignal(0);
-
-/** Register a provider. Called once per provider during hook setup. */
-export function registerProvider(p: ProviderRegistration): void {
-  // Avoid duplicate registrations (e.g. HMR / strict-mode double-invocation)
-  if (!providerRegistry.find(r => r.id === p.id)) {
-    providerRegistry.push(p);
-    setProviderRegistryVersion(v => v + 1);
-  }
+export interface ProviderRegistry {
+  register: (p: ProviderRegistration) => void;
+  unregister: (id: ProviderView) => void;
+  getVersion: () => number;
+  getEnabledViews: () => ProviderView[];
+  nextView: (current: ProviderView) => ProviderView;
+  get: (id: ProviderView) => ProviderRegistration | undefined;
 }
 
-/** Unregister a provider by ID. Called when the provider is disabled at runtime. */
-export function unregisterProvider(id: ProviderView): void {
-  const idx = providerRegistry.findIndex(r => r.id === id);
-  if (idx !== -1) {
-    providerRegistry.splice(idx, 1);
-    setProviderRegistryVersion(v => v + 1);
-  }
+/** Per-app registry. Do not share across AppState instances. */
+export function createProviderRegistry(): ProviderRegistry {
+  const entries: ProviderRegistration[] = [];
+  const [version, setVersion] = createSignal(0);
+
+  const getEnabledViews = (): ProviderView[] => {
+    const registered = new Set(entries.map(p => p.id));
+    return PROVIDER_ORDER.filter(view => view === "git" || registered.has(view));
+  };
+
+  return {
+    register(p) {
+      if (!entries.find(r => r.id === p.id)) {
+        entries.push(p);
+        setVersion(v => v + 1);
+      }
+    },
+    unregister(id) {
+      const idx = entries.findIndex(r => r.id === id);
+      if (idx !== -1) {
+        entries.splice(idx, 1);
+        setVersion(v => v + 1);
+      }
+    },
+    getVersion: () => version(),
+    getEnabledViews,
+    nextView(current) {
+      const views = getEnabledViews();
+      if (views.length <= 1) return "git";
+      const idx = views.indexOf(current);
+      return views[(idx + 1) % views.length];
+    },
+    get: id => entries.find(p => p.id === id),
+  };
 }
 
-/** Reactive version counter for consumers that need to re-read registry-derived UI. */
-export function getProviderRegistryVersion(): number {
-  return providerRegistryVersion();
-}
-
-/**
- * Returns the ordered list of ProviderView values available for Tab cycling:
- * always starts with "git", then all registered providers (regardless of
- * availability). Registration is the gating mechanism — a disabled provider
- * is never registered, so it never appears here.
- *
- * An unavailable-but-registered provider shows a setup guidance screen when
- * the user tabs to it, instead of being silently excluded from Tab cycling.
- */
-export function getEnabledProviderViews(): ProviderView[] {
-  const registered = new Set(providerRegistry.map(p => p.id));
-  return PROVIDER_ORDER.filter(view => view === "git" || registered.has(view));
-}
-
-/**
- * Cycle to the next provider view. If no furthe providers are available, returns "git".
- */
-export function nextProviderView(current: ProviderView): ProviderView {
-  const views = getEnabledProviderViews();
-  if (views.length <= 1) return "git";
-  const idx = views.indexOf(current);
-  return views[(idx + 1) % views.length];
-}
-
-/** Look up a registered provider by ID. Returns undefined if not found. */
-export function getProvider(id: ProviderView): ProviderRegistration | undefined {
-  return providerRegistry.find(p => p.id === id);
-}
-
-/** Returns the display name of the provider. */
 export function providerDisplayName(view: ProviderView): string {
-  return PROVIDER_METADATA[view]?.displayName ?? getProvider(view)?.displayName ?? view;
+  return PROVIDER_METADATA[view]?.displayName ?? view;
 }
 
 export function isProviderView(view: string): view is ProviderView {

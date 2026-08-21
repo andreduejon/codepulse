@@ -2,8 +2,12 @@ import { type Accessor, createContext, createMemo, createSignal, useContext } fr
 import { DEFAULT_MAX_COUNT } from "../constants";
 import type { Branch, Commit, CommitDetail, GraphRow, TagInfo, UncommittedDetail } from "../git/types";
 import type { KeyboardScope } from "../keyboard/scope";
-import type { GraphBadge, ProviderView } from "../providers/provider";
-import { nextProviderView } from "../providers/provider";
+import {
+  createProviderRegistry,
+  type GraphBadge,
+  type ProviderRegistry,
+  type ProviderView,
+} from "../providers/provider";
 import { matchCommit, parseSearchQuery } from "../search";
 
 export const DEFAULT_AUTO_REFRESH_INTERVAL = 30000;
@@ -145,6 +149,8 @@ export interface AppState {
   providerLastSuccessfulRefresh: Accessor<Map<ProviderView, Date>>;
   /** Optional scope override for modal sub-modes (e.g. menu token edit). */
   keyboardScopeOverride: Accessor<KeyboardScope | null>;
+  /** App-scoped CI provider registry (not module-global). */
+  providers: ProviderRegistry;
 }
 
 export interface AppActions {
@@ -212,6 +218,7 @@ export function createAppState(
   const [remoteUrl, setRemoteUrl] = createSignal("");
   const [tagDetails, setTagDetails] = createSignal<Map<string, TagInfo>>(new Map());
   const [stashByParent, setStashByParent] = createSignal<Map<string, Commit[]>>(new Map());
+  const providers = createProviderRegistry();
 
   // ── Navigation & selection ────────────────────────────────────────
   const [cursorIndex, setCursorIndex] = createSignal(0);
@@ -398,6 +405,7 @@ export function createAppState(
     providerStatusFor: view => providerStatusMap().get(view) ?? providerIdle(),
     providerLastSuccessfulRefresh,
     keyboardScopeOverride,
+    providers,
   };
 
   const actions: AppActions = {
@@ -459,7 +467,7 @@ export function createAppState(
       });
     },
     setKeyboardScopeOverride,
-    cycleProviderView: () => setActiveProviderView(nextProviderView(activeProviderView())),
+    cycleProviderView: () => setActiveProviderView(providers.nextView(activeProviderView())),
   };
 
   return { state, actions };

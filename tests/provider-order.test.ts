@@ -1,29 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import {
-  getEnabledProviderViews,
-  nextProviderView,
-  type ProviderView,
-  registerProvider,
-  unregisterProvider,
-} from "../src/providers/provider";
-
-const PROVIDERS: ProviderView[] = ["github-actions", "jenkins", "openshift"];
-
-function resetProviders() {
-  for (const provider of PROVIDERS) unregisterProvider(provider);
-}
+import { createProviderRegistry } from "../src/providers/provider";
 
 describe("provider order", () => {
   test("uses canonical order, not registration order", () => {
-    resetProviders();
-    registerProvider({ id: "openshift", displayName: "OpenShift", isAvailable: () => true });
-    registerProvider({ id: "jenkins", displayName: "Jenkins", isAvailable: () => true });
-    registerProvider({ id: "github-actions", displayName: "GitHub Actions", isAvailable: () => true });
+    const registry = createProviderRegistry();
+    registry.register({ id: "openshift", displayName: "OpenShift", isAvailable: () => true });
+    registry.register({ id: "jenkins", displayName: "Jenkins", isAvailable: () => true });
+    registry.register({ id: "github-actions", displayName: "GitHub Actions", isAvailable: () => true });
 
-    expect(getEnabledProviderViews()).toEqual(["git", "github-actions", "jenkins", "openshift"]);
-    expect(nextProviderView("git")).toBe("github-actions");
-    expect(nextProviderView("openshift")).toBe("git");
-
-    resetProviders();
+    expect(registry.getEnabledViews()).toEqual(["git", "github-actions", "jenkins", "openshift"]);
+    expect(registry.nextView("git")).toBe("github-actions");
+    expect(registry.nextView("openshift")).toBe("git");
   });
 });

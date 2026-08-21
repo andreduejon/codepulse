@@ -8,7 +8,7 @@ import {
   providerUnavailable,
   providerWarning,
 } from "../../context/state";
-import { registerProvider, unregisterProvider } from "../provider";
+
 import { buildOpenShiftGraphBadges, fetchOpenShiftInventory, getOpenShiftToken } from "./api";
 import type { OpenShiftCommitData, OpenShiftProviderConfig } from "./types";
 import { DEFAULT_OPENSHIFT_CONFIG } from "./types";
@@ -40,9 +40,10 @@ export function useOpenShift(opts: {
     getOpenShiftToken(config.tokenEnvVar) !== null;
 
   createEffect(() => {
-    if (configAccessor().enabled === true) registerProvider({ id: "openshift", displayName: "OpenShift", isAvailable });
+    if (configAccessor().enabled === true)
+      state.providers.register({ id: "openshift", displayName: "OpenShift", isAvailable });
     else {
-      unregisterProvider("openshift");
+      state.providers.unregister("openshift");
       if (untrack(state.activeProviderView) === "openshift") actions.setActiveProviderView("git");
     }
   });

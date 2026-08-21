@@ -2,12 +2,7 @@ import { createEffect, createSignal, onCleanup, Show } from "solid-js";
 import { useAppState } from "../context/state";
 import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
 import { useT } from "../hooks/use-t";
-import {
-  getEnabledProviderViews,
-  getProviderRegistryVersion,
-  nextProviderView,
-  providerDisplayName,
-} from "../providers/provider";
+import { providerDisplayName } from "../providers/provider";
 import { KeyHint, KeyHintSeparator } from "./key-hint";
 
 /** Full braille rotation spinner — 8 frames, smooth circular motion. */
@@ -65,10 +60,10 @@ export default function Footer(
 
   const enterAction = () => (state.detailFocused() ? state.detailCursorAction() : null);
   const nextProviderLabel = () => {
-    getProviderRegistryVersion();
-    const views = getEnabledProviderViews();
+    state.providers.getVersion();
+    const views = state.providers.getEnabledViews();
     if (views.length <= 1) return null;
-    const next = nextProviderView(state.activeProviderView());
+    const next = state.providers.nextView(state.activeProviderView());
     if (next === state.activeProviderView()) return null;
     return providerDisplayName(next);
   };

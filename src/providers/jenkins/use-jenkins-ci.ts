@@ -3,7 +3,7 @@ import { createEffect, createSignal, untrack } from "solid-js";
 import type { AppActions, AppState } from "../../context/state";
 import { providerError, providerIdle, providerLoading, providerUnavailable } from "../../context/state";
 import { collectTopSHAs } from "../github-actions/sha-selection";
-import { registerProvider, unregisterProvider } from "../provider";
+
 import { DEFAULT_INITIAL_SHA_LIMIT, useProviderFetchLifecycle } from "../shared/use-provider-fetch-lifecycle";
 import {
   buildJenkinsCommitDataMap,
@@ -53,9 +53,9 @@ export function useJenkinsCI(opts: {
 
   createEffect(() => {
     if (configAccessor().enabled === true) {
-      registerProvider({ id: "jenkins", displayName: "Jenkins", isAvailable });
+      state.providers.register({ id: "jenkins", displayName: "Jenkins", isAvailable });
     } else {
-      unregisterProvider("jenkins");
+      state.providers.unregister("jenkins");
       if (untrack(state.activeProviderView) === "jenkins") actions.setActiveProviderView("git");
     }
   });

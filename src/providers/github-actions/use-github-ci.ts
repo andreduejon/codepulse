@@ -30,7 +30,7 @@ import {
   providerLoading,
   providerUnavailable,
 } from "../../context/state";
-import { registerProvider, unregisterProvider } from "../../providers/provider";
+
 import { DEFAULT_INITIAL_SHA_LIMIT, useProviderFetchLifecycle } from "../shared/use-provider-fetch-lifecycle";
 import {
   buildCommitDataMap,
@@ -142,13 +142,13 @@ export function useGitHubCI(opts: {
   // does NOT track as a reactive dependency.
   createEffect(() => {
     if (configAccessor().enabled === true) {
-      registerProvider({
+      state.providers.register({
         id: "github-actions",
         displayName: "GitHub",
         isAvailable,
       });
     } else {
-      unregisterProvider("github-actions");
+      state.providers.unregister("github-actions");
       // If the user is currently in the CI view and disables the provider,
       // switch back to the git view immediately.
       if (untrack(state.activeProviderView) === "github-actions") {
