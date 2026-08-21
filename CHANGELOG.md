@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.2] - 2026-08-21
+
+### Fixed
+
+- Publish a Bun-built `dist/` instead of raw TSX. OpenTUI 0.5.6 skips Solid
+  JSX transform for files under `node_modules`, so a global install still
+  resolved `react/jsx-dev-runtime` even with `tsconfig.json` in the tarball.
+
 ## [0.6.1] - 2026-08-21
 
 ### Fixed
