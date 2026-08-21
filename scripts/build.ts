@@ -5,9 +5,7 @@ const supportedTargets = [
   "bun-darwin-arm64",
   "bun-darwin-x64",
   "bun-linux-arm64",
-  "bun-linux-arm64-musl",
   "bun-linux-x64",
-  "bun-linux-x64-musl",
 ] as const;
 
 type BuildTarget = (typeof supportedTargets)[number];
@@ -26,7 +24,7 @@ if (!supportedTargets.includes(target as BuildTarget)) {
 const artifact = target.slice("bun-".length);
 const outdir = `./dist/${artifact}`;
 const define = target.startsWith("bun-linux-")
-  ? { "process.env.OPENTUI_LIBC": JSON.stringify(target.endsWith("-musl") ? "musl" : "glibc") }
+  ? { "process.env.OPENTUI_LIBC": JSON.stringify("glibc") }
   : undefined;
 
 rmSync("./dist", { recursive: true, force: true });

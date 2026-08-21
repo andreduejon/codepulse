@@ -33,7 +33,7 @@ run_id="$(gh run list --workflow Release --limit 1 --json databaseId --jq '.[0].
 gh run watch "$run_id" --exit-status
 ```
 
-The workflow verifies the source, builds six platform executables, signs the
+The workflow verifies the source, builds four platform executables, signs the
 macOS binaries, tests the OpenTUI native/worker/WASM assets, creates checksums,
 and publishes the GitHub Release only after all matrix jobs succeed.
 
@@ -43,8 +43,10 @@ Verify the published assets and test installation in a temporary directory:
 
 ```sh
 gh release view "v$version"
-install_dir="$(mktemp -d)/bin"
+test_root="$(mktemp -d)"
+install_dir="$test_root/bin"
 curl -fsSL https://github.com/andreduejon/codepulse/releases/latest/download/install.sh |
   CODEPULSE_INSTALL_DIR="$install_dir" sh
 "$install_dir/codepulse" --version
+rm -rf "$test_root"
 ```

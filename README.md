@@ -35,9 +35,8 @@ required. Set `CODEPULSE_INSTALL_DIR` to install into another directory on your
 
 Release archives are also available for manual installation from
 [GitHub Releases](https://github.com/andreduejon/codepulse/releases). Supported
-targets are macOS arm64/x64 and Linux arm64/x64 using glibc or musl. Windows is
-not currently supported. Alpine Linux requires the `libstdc++` and `libgcc`
-runtime packages.
+targets are macOS arm64/x64 and glibc Linux arm64/x64. Windows and musl-based
+Linux distributions such as Alpine are not currently supported.
 
 ## Usage
 
