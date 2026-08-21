@@ -19,16 +19,28 @@ resource API objects can be inspected as formatted JSON from the detail panel.
 
 ## Requirements
 
-- [Bun](https://bun.sh) ≥ 1.0
 - Git
+- macOS or Linux on arm64 or x64
 
 ## Install
 
 ```sh
-bun install -g @andreduejon/codepulse
+curl -fsSL https://github.com/andreduejon/codepulse/releases/latest/download/install.sh | sh
 ```
 
-Global installs are supported directly through the packaged `codepulse` binary.
+The installer downloads the binary for your platform, verifies its SHA-256
+checksum, and installs `codepulse` to `~/.local/bin`. Bun and Node.js are not
+required. Set `CODEPULSE_INSTALL_DIR` to install into another directory on your
+`PATH`.
+
+Release archives are also available for manual installation from
+[GitHub Releases](https://github.com/andreduejon/codepulse/releases). Supported
+targets are macOS arm64/x64 and Linux arm64/x64 using glibc or musl. Windows is
+not currently supported.
+
+Releases are created by pushing a version tag matching `package.json`, for
+example `v0.7.0`. CI verifies, builds, signs, and smoke-tests every target before
+publishing the GitHub Release.
 
 ## Usage
 
@@ -158,7 +170,8 @@ Planned milestones currently follow this shape:
 - `0.5.0`: grouped project switching, in-memory repo session cache, grouped
   switcher, and debug dialog
 - `0.6.0`: OpenShift runtime inventory, resource health, and JSON inspection
-- `0.7.0`: Snyk provider and further OpenShift features and polish
+- `0.7.0`: standalone macOS and Linux distributions with no Bun or Node.js runtime requirement
+- Future: Snyk provider and further OpenShift features and polish
 
 The intent is to reach `1.0.0` once the integration model and configuration
 surface are stable.

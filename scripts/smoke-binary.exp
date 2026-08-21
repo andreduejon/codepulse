@@ -1,0 +1,36 @@
+#!/usr/bin/expect -f
+
+set timeout 20
+set mode [lindex $argv 0]
+set binary [lindex $argv 1]
+set repository [lindex $argv 2]
+
+if {$mode eq "docker"} {
+  set selected_repository "/repo"
+  spawn -noecho docker run --rm -it -e TERM=xterm-256color -e HOME=/tmp/codepulse-home -v "$binary:/codepulse:ro" -v "$repository:/repo:ro" alpine:3.22 sh -c {apk add --no-cache git >/dev/null && mkdir -p /tmp/codepulse-home /tmp/not-a-repository && /codepulse /tmp/not-a-repository}
+} else {
+  set smoke_root "/tmp/codepulse-smoke-[pid]"
+  file mkdir "$smoke_root/home" "$smoke_root/not-a-repository"
+  set env(HOME) "$smoke_root/home"
+  set selected_repository $repository
+  spawn -noecho $binary "$smoke_root/not-a-repository"
+}
+
+after 3000
+send -- "$selected_repository\r"
+after 5000
+send -- "q"
+
+expect {
+  eof {}
+  timeout {
+    catch {close}
+    catch {wait}
+    if {[info exists smoke_root]} { file delete -force $smoke_root }
+    exit 1
+  }
+}
+
+set result [wait]
+if {[info exists smoke_root]} { file delete -force $smoke_root }
+exit [lindex $result 3]

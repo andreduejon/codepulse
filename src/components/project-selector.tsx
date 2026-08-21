@@ -386,7 +386,10 @@ function reExecWith(repoPath: string): void {
   // Use spawnSync with an array to avoid shell interpolation of the repo path.
   // execSync(string) passes through a shell and is vulnerable to injection via
   // special characters in the path (backticks, $(), etc.).
-  spawnSync(process.argv[0], [process.argv[1], repoPath], {
+  const standalone = Bun.isStandaloneExecutable || Bun.main.startsWith("/$bunfs/");
+  const executable = standalone ? process.execPath : process.argv[0];
+  const args = standalone ? [repoPath] : [process.argv[1], repoPath];
+  spawnSync(executable, args, {
     stdio: "inherit",
     env: process.env,
   });

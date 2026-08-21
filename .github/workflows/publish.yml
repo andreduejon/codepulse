@@ -1,36 +1,31 @@
-name: Publish
+name: Release
 
 on:
-  release:
-    types: [published]
+  push:
+    tags: ["v*"]
 
 env:
-  NODE_VERSION: "24"
+  BUN_VERSION: "1.3.14"
 
 jobs:
-  publish:
-    runs-on: ubuntu-latest
+  verify:
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
-      id-token: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          registry-url: "https://registry.npmjs.org"
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
       - name: Verify release version
-        run: test "v$(node -p "require('./package.json').version")" = "${{ github.event.release.tag_name }}"
+        run: test "v$(bun -p "require('./package.json').version")" = "${GITHUB_REF_NAME}"
 
       - name: Check types
         run: bun run check:types
@@ -41,8 +36,129 @@ jobs:
       - name: Run tests
         run: bun test
 
-      - name: Build
+  build:
+    needs: verify
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: darwin-arm64
+            os: darwin
+            arch: arm64
+            runner: macos-14
+            smoke: native
+          - target: darwin-x64
+            os: darwin
+            arch: x64
+            runner: macos-15-intel
+            smoke: native
+          - target: linux-arm64
+            os: linux
+            arch: arm64
+            runner: ubuntu-24.04-arm
+            smoke: native
+          - target: linux-arm64-musl
+            os: linux
+            arch: arm64
+            runner: ubuntu-24.04-arm
+            smoke: docker
+          - target: linux-x64
+            os: linux
+            arch: x64
+            runner: ubuntu-24.04
+            smoke: native
+          - target: linux-x64-musl
+            os: linux
+            arch: x64
+            runner: ubuntu-24.04
+            smoke: docker
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --os=${{ matrix.os }} --cpu=${{ matrix.arch }}
+
+      - name: Install smoke-test tools
+        if: ${{ matrix.os == 'linux' }}
+        run: sudo apt-get update && sudo apt-get install -y expect
+
+      - name: Build standalone executable
+        env:
+          CODEPULSE_BUILD_TARGET: bun-${{ matrix.target }}
+          CODEPULSE_BUILD_ASSET_SMOKE: "1"
         run: bun run build
 
-      - name: Publish to npm
-        run: npm publish --provenance --access public
+      - name: Sign macOS executables
+        if: ${{ matrix.os == 'darwin' }}
+        run: |
+          codesign --force --sign - --entitlements scripts/macos-entitlements.plist "dist/${{ matrix.target }}/codepulse"
+          codesign --force --sign - --entitlements scripts/macos-entitlements.plist "dist/${{ matrix.target }}/smoke-opentui-assets"
+          codesign --verify --verbose=4 "dist/${{ matrix.target }}/codepulse"
+          codesign --verify --verbose=4 "dist/${{ matrix.target }}/smoke-opentui-assets"
+
+      - name: Smoke-test executable and embedded assets
+        shell: bash
+        run: |
+          binary="$GITHUB_WORKSPACE/dist/${{ matrix.target }}/codepulse"
+          asset_smoke="$GITHUB_WORKSPACE/dist/${{ matrix.target }}/smoke-opentui-assets"
+          test "$("$binary" --version)" = "codepulse v$(bun -p "require('./package.json').version")"
+          if [[ "${{ matrix.smoke }}" == "docker" ]]; then
+            docker run --rm -v "$asset_smoke:/smoke:ro" alpine:3.22 /smoke
+          else
+            "$asset_smoke"
+          fi
+          expect scripts/smoke-binary.exp "${{ matrix.smoke }}" "$binary" "$GITHUB_WORKSPACE"
+
+      - name: Create release archive
+        run: tar -C "dist/${{ matrix.target }}" -czf "codepulse-${{ matrix.target }}.tar.gz" codepulse
+
+      - name: Upload release archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: codepulse-${{ matrix.target }}
+          path: codepulse-${{ matrix.target }}.tar.gz
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Download release archives
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Generate checksums
+        working-directory: release-assets
+        run: sha256sum codepulse-*.tar.gz > SHA256SUMS
+
+      - name: Upload GitHub Release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" release-assets/* install.sh --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" release-assets/* install.sh \
+              --draft \
+              --generate-notes \
+              --title "$GITHUB_REF_NAME" \
+              --verify-tag
+          fi
+          gh release edit "$GITHUB_REF_NAME" --draft=false --latest
