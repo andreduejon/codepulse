@@ -1,9 +1,10 @@
 #!/usr/bin/expect -f
 
-set timeout 20
+set timeout 30
 set mode [lindex $argv 0]
 set binary [lindex $argv 1]
 set repository [lindex $argv 2]
+stty rows 24 columns 80
 
 if {$mode eq "docker"} {
   set selected_repository "/repo"
@@ -16,10 +17,29 @@ if {$mode eq "docker"} {
   spawn -noecho $binary "$smoke_root/not-a-repository"
 }
 
-after 3000
-send -- "$selected_repository\r"
-after 5000
-send -- "q"
+expect {
+  -re {Enter custom path} {
+    send -- "$selected_repository\r"
+  }
+  timeout {
+    catch {close}
+    catch {wait}
+    if {[info exists smoke_root]} { file delete -force $smoke_root }
+    exit 1
+  }
+}
+
+expect {
+  -re {Terminal too small} {
+    send -- "q"
+  }
+  timeout {
+    catch {close}
+    catch {wait}
+    if {[info exists smoke_root]} { file delete -force $smoke_root }
+    exit 1
+  }
+}
 
 expect {
   eof {}
