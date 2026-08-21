@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.0] - 2026-08-21
+
+### Changed
+
+- Distribute Codepulse as standalone macOS and Linux executables through GitHub
+  Releases. Bun, Node.js, and npm are no longer required at runtime.
+- Replace npm publishing with native arm64/x64 release builds for macOS and
+  Linux, including glibc and musl Linux variants.
+- Add a checksum-verifying installer that installs the `codepulse` command to a
+  configurable directory on `PATH`.
+
+### Fixed
+
+- Embed OpenTUI native libraries, parser worker, tree-sitter WASM, and query
+  assets in each executable and smoke-test them on their target platform.
+- Re-execute the standalone binary correctly when switching repositories.
+
+## [0.6.4] - 2026-08-21
+
+### Fixed
+
+- Run `@opentui/solid/preload` from `dist/cli.js` before loading the bundle.
+  Bun.build had moved that import to the end of `dist/index.js`, so a global
+  install (no repo `bunfig.toml`) called `render()` without the plugin.
+
 ## [0.6.3] - 2026-08-21
 
 ### Fixed

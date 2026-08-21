@@ -58,4 +58,4 @@ Configured token needs `list` access for:
 
 Partial permission failures preserve successful inventory and show a warning.
 Logs, live refetch-on-open, Routes, Services, Helm releases, and console links
-are not included in this release (planned for 0.7.0).
+are not included in this release (planned for a future release).
