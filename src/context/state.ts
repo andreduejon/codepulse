@@ -1,51 +1,33 @@
-import { type Accessor, createContext, createMemo, createSignal, useContext } from "solid-js";
+import { createContext, createMemo, createSignal, useContext } from "solid-js";
 import { DEFAULT_MAX_COUNT } from "../constants";
 import type { Branch, Commit, CommitDetail, GraphRow, TagInfo, UncommittedDetail } from "../git/types";
 import type { KeyboardScope } from "../keyboard/scope";
-import {
-  createProviderRegistry,
-  type GraphBadge,
-  type ProviderRegistry,
-  type ProviderView,
-} from "../providers/provider";
+import { createProviderRegistry, type GraphBadge, type ProviderView } from "../providers/provider";
 import { matchCommit, parseSearchQuery } from "../search";
+import type { AppActions, AppState, DetailTab, HighlightMode, ProviderStatus } from "./app-state-types";
+
+export type {
+  AppActions,
+  AppState,
+  DetailActions,
+  DetailState,
+  DetailTab,
+  FilterActions,
+  FilterState,
+  HighlightMode,
+  NavActions,
+  NavState,
+  ProviderActions,
+  ProviderAppState,
+  ProviderStatus,
+  RepoActions,
+  RepoState,
+  SettingsActions,
+  SettingsState,
+} from "./app-state-types";
 
 export const DEFAULT_AUTO_REFRESH_INTERVAL = 30000;
 export const DEFAULT_AUTO_FETCH_INTERVAL = 0;
-
-/**
- * Valid tab identifiers for the detail panel.
- */
-export type DetailTab =
-  | "files"
-  | "info"
-  | "stashes"
-  | "staged"
-  | "unstaged"
-  | "untracked"
-  | "github-actions"
-  | "jenkins"
-  | "openshift";
-
-/**
- * Which highlighting mode is currently active.
- * - "ancestry": per-column graph lane brightness
- * - "path": per-row dimming, only commit node stays bright on matching rows
- * - "search": per-row dimming, only commit node stays bright on matching rows
- * - null: no highlighting active (normal)
- */
-export type HighlightMode = "ancestry" | "path" | "search" | null;
-
-/**
- * Status of the active provider, used to show a status message
- * in the provider tab when applicable.
- */
-export type ProviderStatus =
-  | { kind: "idle" }
-  | { kind: "loading" }
-  | { kind: "warning"; message: string }
-  | { kind: "unavailable"; message: string }
-  | { kind: "error"; message: string };
 
 export const providerIdle = (): ProviderStatus => ({ kind: "idle" });
 export const providerLoading = (): ProviderStatus => ({ kind: "loading" });
@@ -58,147 +40,6 @@ export const providerWarning = (message: string): ProviderStatus => ({ kind: "wa
 
 export function providerStatusMessage(status: ProviderStatus): string | null {
   return status.kind === "error" || status.kind === "warning" || status.kind === "unavailable" ? status.message : null;
-}
-
-export interface AppState {
-  // ── Repository data ─────────────────────────────────────────────────
-  commits: Accessor<Commit[]>;
-  graphRows: Accessor<GraphRow[]>;
-  branches: Accessor<Branch[]>;
-  currentBranch: Accessor<string>;
-  repoPath: Accessor<string>;
-  remoteUrl: Accessor<string>;
-  /** Tag details keyed by tag name — annotated tags include tagger/message. */
-  tagDetails: Accessor<Map<string, TagInfo>>;
-  /** Stash commits grouped by parent hash — used for detail panel stash section. */
-  stashByParent: Accessor<Map<string, Commit[]>>;
-
-  // ── Navigation & selection ──────────────────────────────────────────
-  cursorIndex: Accessor<number>;
-  selectedCommit: Accessor<Commit | null>;
-  selectedRow: Accessor<GraphRow | null>;
-  commitDetail: Accessor<CommitDetail | null>;
-  searchQuery: Accessor<string>;
-  scrollTargetIndex: Accessor<number>;
-  /** Commit hash to scroll into view after layout settles (e.g. after filter clear). */
-  pendingScrollHash: Accessor<string | null>;
-  /** Branch being viewed (filtered perspective). null = show all / default. */
-  viewingBranch: Accessor<string | null>;
-
-  // ── Path filtering ──────────────────────────────────────────────────
-  /** Active pathspec filter string for display. null = no filter. */
-  pathFilter: Accessor<string | null>;
-  /** Set of commit hashes touching the active pathspec. null = inactive. */
-  pathMatchSet: Accessor<Set<string> | null>;
-
-  // ── Ancestry highlighting ────────────────────────────────────────────
-  /**
-   * Set of commit hashes that are ancestors of the selected anchor commit
-   * (including the anchor itself). null = ancestry highlighting inactive.
-   */
-  ancestrySet: Accessor<Set<string> | null>;
-
-  // ── Unified highlighting ────────────────────────────────────────────
-  /**
-   * Derived set of commit hashes that should be highlighted (bright).
-   * Picks from whichever mode is active: ancestry > path > search.
-   * null = no highlighting active (all rows normal).
-   */
-  highlightSet: Accessor<Set<string> | null>;
-  /** Which highlighting mode is currently active. */
-  highlightMode: Accessor<HighlightMode>;
-
-  // ── Detail panel ────────────────────────────────────────────────────
-  detailFocused: Accessor<boolean>;
-  detailCursorIndex: Accessor<number>;
-  /** True while commit detail (message, files, diff) is being loaded */
-  detailLoading: Accessor<boolean>;
-  /** Contextual enter-key action label for the detail cursor item (null = no action) */
-  detailCursorAction: Accessor<string | null>;
-  /** Active tab in the detail panel (e.g. "info", "files", "stashes" or "staged", "unstaged", "untracked") */
-  detailActiveTab: Accessor<DetailTab>;
-  /** Separate file lists for the uncommitted-changes node (null when a normal commit is selected) */
-  uncommittedDetail: Accessor<UncommittedDetail | null>;
-
-  // ── UI state & settings ─────────────────────────────────────────────
-  error: Accessor<string | null>;
-  loading: Accessor<boolean>;
-  showAllBranches: Accessor<boolean>;
-  maxGraphColumns: Accessor<number>;
-  maxCount: Accessor<number>;
-  autoRefreshInterval: Accessor<number>;
-  autoFetchInterval: Accessor<number>;
-  lastFetchTime: Accessor<Date | null>;
-  fetching: Accessor<boolean>;
-  /** True if there are likely more commits to load beyond the current page. */
-  hasMore: Accessor<boolean>;
-
-  // ── Provider / CI ────────────────────────────────────────────────────
-  /** Which provider view is active — "git" (default) or a CI provider. */
-  activeProviderView: Accessor<ProviderView>;
-  /**
-   * SHA → GraphBadge map populated by the active CI provider.
-   * Empty map when no CI provider is active or no data has been fetched yet.
-   */
-  graphBadges: Accessor<Map<string, GraphBadge>>;
-  /** Status from the active CI provider. */
-  providerStatus: Accessor<ProviderStatus>;
-  /** Status for a specific CI provider, independent of the active view. */
-  providerStatusFor: (view: ProviderView) => ProviderStatus;
-  /** Last successful data refresh per CI provider. */
-  providerLastSuccessfulRefresh: Accessor<Map<ProviderView, Date>>;
-  /** Optional scope override for modal sub-modes (e.g. menu token edit). */
-  keyboardScopeOverride: Accessor<KeyboardScope | null>;
-  /** App-scoped CI provider registry (not module-global). */
-  providers: ProviderRegistry;
-}
-
-export interface AppActions {
-  setCursorIndex: (index: number) => void;
-  moveCursor: (delta: number) => void;
-  setScrollTargetIndex: (index: number) => void;
-  setPendingScrollHash: (hash: string | null) => void;
-  setCommitDetail: (detail: CommitDetail | null) => void;
-  setLoading: (loading: boolean) => void;
-  setShowAllBranches: (show: boolean) => void;
-  setSearchQuery: (query: string) => void;
-  setDetailFocused: (focused: boolean) => void;
-  setDetailCursorIndex: (index: number) => void;
-  moveDetailCursor: (delta: number, itemCount: number) => void;
-  setCommits: (commits: Commit[]) => void;
-  setGraphRows: (rows: GraphRow[]) => void;
-  setBranches: (branches: Branch[]) => void;
-  setCurrentBranch: (branch: string) => void;
-  setRepoPath: (path: string) => void;
-  setRemoteUrl: (url: string) => void;
-  setTagDetails: (tags: Map<string, TagInfo>) => void;
-  setStashByParent: (map: Map<string, Commit[]>) => void;
-  setError: (err: string | null) => void;
-  setMaxGraphColumns: (cols: number) => void;
-  setMaxCount: (n: number) => void;
-  setAutoRefreshInterval: (ms: number) => void;
-  setAutoFetchInterval: (ms: number) => void;
-  setLastFetchTime: (time: Date | null) => void;
-  setFetching: (fetching: boolean) => void;
-  setDetailLoading: (loading: boolean) => void;
-  setDetailCursorAction: (action: string | null) => void;
-  setDetailActiveTab: (tab: DetailTab) => void;
-  setUncommittedDetail: (detail: UncommittedDetail | null) => void;
-  setViewingBranch: (branch: string | null) => void;
-  setPathFilter: (path: string | null) => void;
-  setPathMatchSet: (set: Set<string> | null) => void;
-  setHasMore: (hasMore: boolean) => void;
-  setAncestrySet: (set: Set<string> | null) => void;
-  // ── Provider / CI ────────────────────────────────────────────────────
-  setActiveProviderView: (view: ProviderView) => void;
-  setGraphBadges: (view: ProviderView, map: Map<string, GraphBadge>) => void;
-  /** Set the CI provider status. */
-  setProviderStatus: (view: ProviderView, status: ProviderStatus) => void;
-  /** Record a successful data refresh for a CI provider. */
-  setProviderLastSuccessfulRefresh: (view: ProviderView, time: Date) => void;
-  /** Advance to the next available provider view (Tab key cycling). */
-  cycleProviderView: () => void;
-  setKeyboardScopeOverride: (scope: KeyboardScope | null) => void;
 }
 
 const AppStateContext = createContext<{ state: AppState; actions: AppActions }>();
