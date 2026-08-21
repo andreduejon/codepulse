@@ -60,48 +60,7 @@ repo configuration.
 
 ## Releasing
 
-Releases are created from tags on `main`. Do not create or publish the GitHub
-Release manually in the GitHub UI: the Release workflow creates it only after
-every binary passes validation.
-
-1. Update `package.json`, `bun.lock`, and `CHANGELOG.md` to the same version.
-2. Merge the release changes through `develop` and then `main`.
-3. Confirm CI passes on the exact `main` commit:
-
-```sh
-git switch main
-git pull --ff-only origin main
-gh run list --branch main --workflow CI --limit 1
-```
-
-4. Create and push an annotated version tag matching `package.json`:
-
-```sh
-version="$(bun -p "require('./package.json').version")"
-git tag -a "v$version" -m "Release v$version"
-git push origin "v$version"
-```
-
-5. Monitor the Release workflow:
-
-```sh
-run_id="$(gh run list --workflow Release --limit 1 --json databaseId --jq '.[0].databaseId')"
-gh run watch "$run_id" --exit-status
-```
-
-The workflow verifies the source, builds six platform executables, signs the
-macOS binaries, tests the OpenTUI native/worker/WASM assets, creates checksums,
-and publishes the GitHub Release only after all matrix jobs succeed.
-
-6. Verify the published assets and test installation in a temporary directory:
-
-```sh
-gh release view "v$version"
-install_dir="$(mktemp -d)/bin"
-curl -fsSL https://github.com/andreduejon/codepulse/releases/latest/download/install.sh |
-  CODEPULSE_INSTALL_DIR="$install_dir" sh
-"$install_dir/codepulse" --version
-```
+See the [release process](docs/RELEASING.md).
 
 ## Keyboard Shortcuts
 
