@@ -111,10 +111,11 @@ jobs:
         run: |
           binary="$GITHUB_WORKSPACE/dist/${{ matrix.target }}/codepulse"
           asset_smoke="$GITHUB_WORKSPACE/dist/${{ matrix.target }}/smoke-opentui-assets"
-          test "$("$binary" --version)" = "codepulse v$(bun -p "require('./package.json').version")"
           if [[ "${{ matrix.smoke }}" == "docker" ]]; then
+            test "$(docker run --rm -v "$binary:/codepulse:ro" alpine:3.22 /codepulse --version)" = "codepulse v$(bun -p "require('./package.json').version")"
             docker run --rm -v "$asset_smoke:/smoke:ro" alpine:3.22 /smoke
           else
+            test "$("$binary" --version)" = "codepulse v$(bun -p "require('./package.json').version")"
             "$asset_smoke"
           fi
           expect scripts/smoke-binary.exp "${{ matrix.smoke }}" "$binary" "$GITHUB_WORKSPACE"
