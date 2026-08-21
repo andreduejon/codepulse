@@ -411,12 +411,16 @@ export async function fetchJenkinsDataForSHAs(
         ));
       const builds = api.builds ?? (api.lastBuild ? [api.lastBuild] : []);
       await runLimited(builds.slice(0, buildLimit), JENKINS_CONCURRENCY, async ref => {
-        if (!ref.number && !ref.url) return;
-        const buildUrl = ref.url
-          ? jenkinsApiUrl(ref.url, treeApiSuffix(buildDetailTree()))
-          : jenkinsApiUrl(`${job.url}/${ref.number}`, treeApiSuffix(buildDetailTree()));
-        const build = await fetchJson<JenkinsBuildApi>(buildUrl, username, token, opts.signal);
-        for (const sha of matchingHeadShas(build, wanted)) runs.push(mapRun(job, build, sha));
+        try {
+          if (!ref.number && !ref.url) return;
+          const buildUrl = ref.url
+            ? jenkinsApiUrl(ref.url, treeApiSuffix(buildDetailTree()))
+            : jenkinsApiUrl(`${job.url}/${ref.number}`, treeApiSuffix(buildDetailTree()));
+          const build = await fetchJson<JenkinsBuildApi>(buildUrl, username, token, opts.signal);
+          for (const sha of matchingHeadShas(build, wanted)) runs.push(mapRun(job, build, sha));
+        } catch (err) {
+          firstError ??= err instanceof Error ? err.message : String(err);
+        }
       });
     } catch (err) {
       firstError ??= err instanceof Error ? err.message : String(err);

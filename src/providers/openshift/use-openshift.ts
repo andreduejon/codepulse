@@ -79,6 +79,11 @@ export function useOpenShift(opts: {
         actions.setProviderStatus("openshift", providerError(result.error));
         return;
       }
+      if (result.error && cache.size > 0) {
+        for (const failure of result.failures) console.debug("OpenShift inventory request failed", failure);
+        actions.setProviderStatus("openshift", providerWarning(result.error));
+        return;
+      }
       cache.clear();
       for (const [sha, data] of result.data) cache.set(sha, data);
       actions.setGraphBadges("openshift", buildOpenShiftGraphBadges(cache));
@@ -138,6 +143,7 @@ export function useOpenShift(opts: {
   }
 
   createEffect(() => {
+    state.autoRefreshInterval();
     if (state.activeProviderView() !== "openshift") {
       stopAutoRefresh();
       return;
@@ -145,17 +151,9 @@ export function useOpenShift(opts: {
     if (!hasFetchedOnce) {
       fetchAbortCtrl = new AbortController();
       void doFetch(fetchAbortCtrl.signal, true);
-      return;
     }
     startAutoRefresh();
-  });
-
-  createEffect(() => {
-    state.autoRefreshInterval();
-    if (state.activeProviderView() === "openshift") {
-      stopAutoRefresh();
-      startAutoRefresh();
-    }
+    onCleanup(stopAutoRefresh);
   });
 
   onCleanup(() => {

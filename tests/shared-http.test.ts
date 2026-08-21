@@ -42,4 +42,25 @@ describe("shared HTTP", () => {
 
     expect(getDebugEvents()).toHaveLength(0);
   });
+
+  test("aborts during retry backoff without a second fetch", async () => {
+    const ctrl = new AbortController();
+    let calls = 0;
+    mockFetch(
+      mock(async () => {
+        calls++;
+        return new Response("retry", { status: 500, statusText: "Failed" });
+      }),
+    );
+
+    const pending = fetchWithRetry(
+      "https://example.com/api",
+      { signal: ctrl.signal },
+      { timeoutMs: 1000, attempts: 3, retryDelayMs: 50, timeoutMessage: "timed out" },
+    );
+    await new Promise(resolve => setTimeout(resolve, 5));
+    ctrl.abort();
+    await expect(pending).rejects.toThrow();
+    expect(calls).toBe(1);
+  });
 });

@@ -483,6 +483,36 @@ describe("fetchOpenShiftInventory", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  test("stops remaining namespaces after abort", async () => {
+    const originalFetch = globalThis.fetch;
+    const ctrl = new AbortController();
+    const seen: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = input.toString();
+      seen.push(url);
+      if (url.includes("/namespaces/first/")) ctrl.abort();
+      if (ctrl.signal.aborted) throw new DOMException("The operation was aborted.", "AbortError");
+      return Response.json({ items: [] });
+    }) as unknown as typeof fetch;
+
+    try {
+      await expect(
+        fetchOpenShiftInventory(
+          {
+            serverUrl: "https://openshift.example.com",
+            namespaces: ["first", "second"],
+            commitShaAnnotation: "dev/commit-sha",
+          },
+          "token",
+          ctrl.signal,
+        ),
+      ).rejects.toThrow();
+      expect(seen.some(url => url.includes("/namespaces/second/"))).toBe(false);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
 
 describe("buildOpenShiftGraphBadges", () => {

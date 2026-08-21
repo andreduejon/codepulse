@@ -141,7 +141,7 @@ export function useGitHubCI(opts: {
   // changes — the rest of the hook reads the plain `config` variable which
   // does NOT track as a reactive dependency.
   createEffect(() => {
-    if (configAccessor().enabled !== false) {
+    if (configAccessor().enabled === true) {
       registerProvider({
         id: "github-actions",
         displayName: "GitHub",
@@ -180,6 +180,7 @@ export function useGitHubCI(opts: {
 
   interface FetchForShasResult {
     firstError: string | null;
+    failedSHAs: string[];
   }
 
   // ── Core fetch function ───────────────────────────────────────────────
@@ -192,10 +193,10 @@ export function useGitHubCI(opts: {
    */
   async function fetchForSHAs(shas: string[], signal?: AbortSignal): Promise<FetchForShasResult> {
     const epoch = cacheEpoch;
-    if (shas.length === 0) return { firstError: null };
+    if (shas.length === 0) return { firstError: null, failedSHAs: [] };
     const repo = cachedGitHubRepo();
     const token = getGitHubToken(config.tokenEnvVar);
-    if (!repo || !token) return { firstError: null };
+    if (!repo || !token) return { firstError: null, failedSHAs: [] };
 
     // Split into batches of GQL_BATCH_SIZE and fire in parallel
     const batches: string[][] = [];
@@ -205,9 +206,14 @@ export function useGitHubCI(opts: {
 
     const results = await Promise.all(batches.map(batch => fetchCIDataForSHAs(repo, token, batch, { signal })));
 
-    if (signal?.aborted || epoch !== cacheEpoch) return { firstError: null };
+    if (signal?.aborted || epoch !== cacheEpoch) return { firstError: null, failedSHAs: [] };
 
     const firstError = results.find(r => r.error)?.error ?? null;
+    const failedSHAs: string[] = [];
+    for (let i = 0; i < results.length; i++) {
+      if (results[i].error) failedSHAs.push(...batches[i]);
+    }
+    const failedShaSet = new Set(failedSHAs);
 
     // Merge all batch results (include successful batches even if others errored)
     const allRuns: GitHubWorkflowRun[] = [];
@@ -218,7 +224,7 @@ export function useGitHubCI(opts: {
     // Merge new runs into commitDataCache (additive — don't discard other SHAs)
     const newCommitData = buildCommitDataMap(allRuns);
     for (const sha of shas) {
-      if (!newCommitData.has(sha)) {
+      if (!newCommitData.has(sha) && !failedShaSet.has(sha)) {
         newCommitData.set(sha, { sha, runs: [] });
       }
     }
@@ -229,15 +235,11 @@ export function useGitHubCI(opts: {
     // (e.g. detail tab open while background fetch completes).
     setCommitDataVersion(v => v + 1);
 
-    // Merge new badges into graphBadges (additive)
-    const newBadges = buildGraphBadges(allRuns);
-    const currentBadges = new Map(state.graphBadges());
-    for (const [sha, badge] of newBadges) {
-      currentBadges.set(sha, badge);
-    }
-    actions.setGraphBadges("github-actions", currentBadges);
+    // Rebuild from GitHub-owned cache; active view may belong to another provider.
+    const cachedRuns = [...commitDataCache.values()].flatMap(data => data.runs);
+    actions.setGraphBadges("github-actions", buildGraphBadges(cachedRuns));
 
-    return { firstError };
+    return { firstError, failedSHAs };
   }
 
   // ── Main fetch entry points ───────────────────────────────────────────
@@ -291,15 +293,16 @@ export function useGitHubCI(opts: {
     fetchInFlight = true;
     if (showStatus) actions.setProviderStatus("github-actions", providerLoading());
     try {
-      const { firstError } = await fetchForSHAs(unqueried, signal);
+      const { firstError, failedSHAs } = await fetchForSHAs(unqueried, signal);
       if (signal?.aborted || epoch !== cacheEpoch) return;
+      for (const sha of failedSHAs) queriedSHAs.delete(sha);
       if (!firstError) actions.setProviderLastSuccessfulRefresh("github-actions", new Date());
       if (showStatus) {
         actions.setProviderStatus(
           "github-actions",
           firstError ? providerError(`CI fetch error: ${firstError}`) : providerIdle(),
         );
-      } else if (!firstError && state.providerStatus().kind === "error") {
+      } else if (!firstError && state.providerStatusFor("github-actions").kind === "error") {
         actions.setProviderStatus("github-actions", providerIdle());
       }
     } catch (err) {
@@ -331,7 +334,7 @@ export function useGitHubCI(opts: {
       const { firstError } = await fetchForSHAs(runningSHAs, signal);
       if (signal?.aborted || epoch !== cacheEpoch) return;
       if (!firstError) actions.setProviderLastSuccessfulRefresh("github-actions", new Date());
-      if (!firstError && state.providerStatus().kind === "error")
+      if (!firstError && state.providerStatusFor("github-actions").kind === "error")
         actions.setProviderStatus("github-actions", providerIdle());
       if (firstError) console.error("[github-actions] refresh returned error:", firstError);
     } catch (err) {

@@ -359,6 +359,7 @@ export async function fetchOpenShiftInventory(
   const failures: OpenShiftInventoryFailure[] = [];
   let successfulRequests = 0;
   for (const ns of config.namespaces) {
+    signal?.throwIfAborted();
     const encodedNamespace = encodeURIComponent(ns);
     const requests = [
       {
@@ -412,6 +413,7 @@ export async function fetchOpenShiftInventory(
     const results = await Promise.allSettled(
       requests.map(request => fetchItems(config.serverUrl, token, request.path, signal)),
     );
+    signal?.throwIfAborted();
     results.forEach((result, index) => {
       const request = requests[index];
       if (result.status === "fulfilled") {

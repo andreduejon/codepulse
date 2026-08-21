@@ -6,6 +6,7 @@ import {
   extractCandidateShas,
   extractHeadShas,
   extractSha,
+  fetchJenkinsDataForSHAs,
   fetchJenkinsGraphDataForSHAs,
   jenkinsApiUrl,
   normalizeJenkinsJobUrl,
@@ -341,6 +342,44 @@ describe("fetchJenkinsGraphDataForSHAs", () => {
       expect(result.error).toBe(
         "Jenkins authentication failed. Verify username, token, and complete browser login if required.",
       );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe("fetchJenkinsDataForSHAs", () => {
+  test("preserves successful builds when one build detail request fails", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async input => {
+      const url = decodeURIComponent(input.toString());
+      if (url.includes("builds[number,url]")) {
+        return Response.json({
+          _class: "org.jenkinsci.plugins.workflow.job.WorkflowJob",
+          builds: [
+            { number: 2, url: "https://jenkins.example.com/job/foo/2/" },
+            { number: 1, url: "https://jenkins.example.com/job/foo/1/" },
+          ],
+        });
+      }
+      if (url.includes("/2/api/json")) return new Response("failed", { status: 500, statusText: "Failed" });
+      return Response.json({
+        number: 1,
+        url: "https://jenkins.example.com/job/foo/1/",
+        result: "SUCCESS",
+        timestamp: 1_700_000_000_000,
+        duration: 1_000,
+        actions: [{ lastBuiltRevision: { SHA1: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } }],
+      });
+    }) as typeof fetch;
+
+    try {
+      const result = await fetchJenkinsDataForSHAs([{ url: "https://jenkins.example.com/job/foo" }], "user", "token", [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      ]);
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].runNumber).toBe(1);
+      expect(result.error).toBe("Jenkins 500: Failed");
     } finally {
       globalThis.fetch = originalFetch;
     }

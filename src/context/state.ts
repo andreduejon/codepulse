@@ -139,6 +139,8 @@ export interface AppState {
   graphBadges: Accessor<Map<string, GraphBadge>>;
   /** Status from the active CI provider. */
   providerStatus: Accessor<ProviderStatus>;
+  /** Status for a specific CI provider, independent of the active view. */
+  providerStatusFor: (view: ProviderView) => ProviderStatus;
   /** Last successful data refresh per CI provider. */
   providerLastSuccessfulRefresh: Accessor<Map<ProviderView, Date>>;
   /** Optional scope override for modal sub-modes (e.g. menu token edit). */
@@ -393,6 +395,7 @@ export function createAppState(
     activeProviderView,
     graphBadges,
     providerStatus,
+    providerStatusFor: view => providerStatusMap().get(view) ?? providerIdle(),
     providerLastSuccessfulRefresh,
     keyboardScopeOverride,
   };

@@ -107,9 +107,11 @@ export function useJenkinsCI(opts: {
             buildLimit: config.graphBuildLimit,
           });
     if (signal?.aborted || epoch !== cacheEpoch) return { firstError: null, stale: true };
-    for (const sha of shas) {
-      queriedSHAs.add(sha);
-      if (mode === "full") resolvedShas.add(sha);
+    if (result.error === null) {
+      for (const sha of shas) {
+        queriedSHAs.add(sha);
+        if (mode === "full") resolvedShas.add(sha);
+      }
     }
     if (result.discoveryComplete) {
       const activeJobUrls = new Set(result.jobUrls);
@@ -326,7 +328,7 @@ export function useJenkinsCI(opts: {
       if (!token) return { jobs: [], error: `missing ${config.tokenEnvVar}` };
       const result = await fetchJenkinsRunJobs(run, config.username, token);
       if (epoch !== cacheEpoch) return { jobs: [], error: null };
-      if (run.status === "completed") jobsCache.set(run.id, result);
+      if (run.status === "completed" && result.error === null) jobsCache.set(run.id, result);
       return result;
     },
     fetchRunLog: async (run, signal) => {
