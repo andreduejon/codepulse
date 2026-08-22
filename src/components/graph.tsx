@@ -37,6 +37,8 @@ import {
   OpenShiftResourcesColumn,
   OpenShiftStatusColumn,
 } from "../providers/openshift/graph-columns";
+import { SnykColumnHeaders, SnykCountsColumn, SnykScanColumn } from "../providers/snyk/graph-columns";
+import type { SnykScanResult } from "../providers/snyk/types";
 import { formatRelativeDate } from "../utils/date";
 import { scrollElementIntoView } from "../utils/scroll";
 import { truncateName } from "../utils/truncate";
@@ -102,6 +104,8 @@ export function ColumnHeader() {
         {isProviderView() ? (
           state.activeProviderView() === "openshift" ? (
             <OpenShiftColumnHeaders />
+          ) : state.activeProviderView() === "snyk" ? (
+            <SnykColumnHeaders />
           ) : (
             <ActionsColumnHeaders />
           )
@@ -178,6 +182,8 @@ function GraphLine(
     /** Set of column indices where horizontal glyphs on the commit row itself should
      *  stay bright (ancestry connection via commit-row merge arms, not fan-out rows). */
     brightCommitHorizontals: () => Set<number> | undefined;
+    snykGetCommitData?: (sha: string) => SnykScanResult | null;
+    snykIsScanning?: (sha: string) => boolean;
   }>,
 ) {
   const t = useT();
@@ -478,6 +484,15 @@ function GraphLine(
             <OpenShiftResourcesColumn badge={state.graphBadges().get(commit().hash)} active={props.active} />
             <OpenShiftStatusColumn badge={state.graphBadges().get(commit().hash)} active={props.active} />
           </>
+        ) : state.activeProviderView() === "snyk" ? (
+          <>
+            <SnykCountsColumn scan={props.snykGetCommitData?.(commit().hash) ?? null} active={props.active} />
+            <SnykScanColumn
+              scan={props.snykGetCommitData?.(commit().hash) ?? null}
+              active={props.active}
+              status={props.snykIsScanning?.(commit().hash) ? "scanning" : null}
+            />
+          </>
         ) : state.activeProviderView() !== "git" ? (
           <>
             <ActionsCountsColumn badge={state.graphBadges().get(commit().hash)} active={props.active} />
@@ -606,6 +621,8 @@ export default function GraphView(
     onLoadMore?: () => void;
     scrollboxRef?: (el: ScrollBoxRenderable) => void;
     suppressAutoScroll?: () => boolean;
+    snykGetCommitData?: (sha: string) => SnykScanResult | null;
+    snykIsScanning?: (sha: string) => boolean;
   }>,
 ) {
   const { state, actions } = useAppState();
@@ -760,6 +777,8 @@ export default function GraphView(
                   brightFanOutVerticals={() => brightColumnsByHash()?.fanOutVertical.get(row.commit.hash)}
                   brightFanOutHorizontals={() => brightColumnsByHash()?.fanOutHorizontal.get(row.commit.hash)}
                   brightCommitHorizontals={() => brightColumnsByHash()?.commitHorizontal.get(row.commit.hash)}
+                  snykGetCommitData={props.snykGetCommitData}
+                  snykIsScanning={props.snykIsScanning}
                   rowRef={el => {
                     elRef = el;
                     rowRefs[index()] = el;

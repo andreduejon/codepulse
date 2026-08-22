@@ -56,6 +56,12 @@ export interface CodepulseConfig {
       namespaces?: string[];
       commitShaAnnotation?: string;
     };
+    snyk?: {
+      enabled?: boolean;
+      tokenEnvVar?: string;
+      autoScanBranches?: string[];
+      maxCachedScans?: 10 | 20 | 50;
+    };
   };
 }
 
@@ -86,6 +92,12 @@ export function defaultConfig(): Required<Omit<CodepulseConfig, "branch" | "grou
         tokenEnvVar: "OPENSHIFT_TOKEN",
         namespaces: [],
         commitShaAnnotation: "dev/commit-sha",
+      },
+      snyk: {
+        enabled: false,
+        tokenEnvVar: "SNYK_TOKEN",
+        autoScanBranches: [],
+        maxCachedScans: 20,
       },
     },
   };
@@ -185,6 +197,30 @@ export function backfillRepoConfig(repoPath: string, configPath?: string): void 
         ...(existingOpenShift?.commitShaAnnotation === undefined
           ? { commitShaAnnotation: defaultOpenShift.commitShaAnnotation }
           : {}),
+      },
+    };
+  }
+
+  const existingSnyk = existing.providers?.snyk;
+  const defaultSnyk = defaults.providers.snyk ?? {
+    enabled: false,
+    tokenEnvVar: "SNYK_TOKEN",
+    autoScanBranches: [],
+    maxCachedScans: 20,
+  };
+  if (
+    existingSnyk?.enabled === undefined ||
+    existingSnyk?.tokenEnvVar === undefined ||
+    existingSnyk?.autoScanBranches === undefined ||
+    existingSnyk?.maxCachedScans === undefined
+  ) {
+    missing.providers = {
+      ...missing.providers,
+      snyk: {
+        ...(existingSnyk?.enabled === undefined ? { enabled: defaultSnyk.enabled } : {}),
+        ...(existingSnyk?.tokenEnvVar === undefined ? { tokenEnvVar: defaultSnyk.tokenEnvVar } : {}),
+        ...(existingSnyk?.autoScanBranches === undefined ? { autoScanBranches: defaultSnyk.autoScanBranches } : {}),
+        ...(existingSnyk?.maxCachedScans === undefined ? { maxCachedScans: defaultSnyk.maxCachedScans } : {}),
       },
     };
   }
@@ -562,6 +598,47 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
           }
         }
       }
+      if (typeof providers.snyk === "object" && providers.snyk !== null && !Array.isArray(providers.snyk)) {
+        const snyk = providers.snyk as Record<string, unknown>;
+        config.providers.snyk = {};
+        if (snyk.enabled !== undefined) {
+          if (typeof snyk.enabled === "boolean") config.providers.snyk.enabled = snyk.enabled;
+          else warnings.push(`${path}: "providers.snyk.enabled" must be a boolean, ignoring`);
+        }
+        if (snyk.tokenEnvVar !== undefined) {
+          const tokenEnvVar = parseOptionalText(
+            "providers.snyk.tokenEnvVar",
+            snyk.tokenEnvVar,
+            GENERAL_TEXT_MAX_LENGTH,
+          );
+          if (tokenEnvVar !== undefined) config.providers.snyk.tokenEnvVar = tokenEnvVar;
+        }
+        if (snyk.autoScanBranches !== undefined) {
+          if (Array.isArray(snyk.autoScanBranches)) {
+            config.providers.snyk.autoScanBranches = [
+              ...new Set(
+                snyk.autoScanBranches.flatMap((branch, idx) => {
+                  const value = parseOptionalText(
+                    `providers.snyk.autoScanBranches[${idx}]`,
+                    branch,
+                    GENERAL_TEXT_MAX_LENGTH,
+                  );
+                  return value === undefined ? [] : [value];
+                }),
+              ),
+            ];
+          } else {
+            warnings.push(`${path}: "providers.snyk.autoScanBranches" must be an array, ignoring`);
+          }
+        }
+        if (snyk.maxCachedScans !== undefined) {
+          if (snyk.maxCachedScans === 10 || snyk.maxCachedScans === 20 || snyk.maxCachedScans === 50) {
+            config.providers.snyk.maxCachedScans = snyk.maxCachedScans;
+          } else {
+            warnings.push(`${path}: "providers.snyk.maxCachedScans" must be one of 10, 20, 50, ignoring`);
+          }
+        }
+      }
     } else {
       warnings.push(`${path}: "providers" must be an object, ignoring`);
     }
@@ -748,6 +825,21 @@ function applyConfigFields(target: Record<string, unknown>, config: CodepulseCon
       if (config.providers.openshift.commitShaAnnotation !== undefined)
         existingOpenShift.commitShaAnnotation = config.providers.openshift.commitShaAnnotation;
       existingProviders.openshift = existingOpenShift;
+    }
+    if (config.providers.snyk !== undefined) {
+      const existingSnyk =
+        typeof existingProviders.snyk === "object" &&
+        existingProviders.snyk !== null &&
+        !Array.isArray(existingProviders.snyk)
+          ? { ...(existingProviders.snyk as Record<string, unknown>) }
+          : {};
+      if (config.providers.snyk.enabled !== undefined) existingSnyk.enabled = config.providers.snyk.enabled;
+      if (config.providers.snyk.tokenEnvVar !== undefined) existingSnyk.tokenEnvVar = config.providers.snyk.tokenEnvVar;
+      if (config.providers.snyk.autoScanBranches !== undefined)
+        existingSnyk.autoScanBranches = config.providers.snyk.autoScanBranches;
+      if (config.providers.snyk.maxCachedScans !== undefined)
+        existingSnyk.maxCachedScans = config.providers.snyk.maxCachedScans;
+      existingProviders.snyk = existingSnyk;
     }
     target.providers = existingProviders;
   }

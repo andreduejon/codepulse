@@ -15,6 +15,7 @@ import {
   isValidOpenShiftText,
 } from "../providers/openshift/validation";
 import type { ProviderDetailView } from "../providers/provider";
+import type { SnykCacheLimit } from "../providers/snyk/types";
 
 type MenuTab = "repository" | "branch" | "providers";
 
@@ -119,6 +120,8 @@ export interface MenuItemsOptions {
   }) => void;
   openshiftConfig?: Accessor<OpenShiftMenuConfig | undefined>;
   onOpenShiftConfigChange?: (cfg: OpenShiftMenuConfig) => void;
+  snykConfig?: Accessor<SnykMenuConfig | undefined>;
+  onSnykConfigChange?: (cfg: SnykMenuConfig) => void;
   onRepoDisplayConfigChange?: (cfg: { group?: string; appName?: string }) => void;
 }
 
@@ -154,6 +157,87 @@ export interface OpenShiftMenuConfig {
   tokenEnvVar: string;
   namespaces: string[];
   commitShaAnnotation: string;
+}
+
+export interface SnykMenuConfig {
+  enabled: boolean;
+  tokenEnvVar: string;
+  autoScanBranches: string[];
+  maxCachedScans: SnykCacheLimit;
+}
+
+const isValidEnvVarName = (value: string): boolean => /^[A-Za-z_][A-Za-z0-9_]*$/.test(value);
+
+export function buildSnykProviderItems(
+  cfg: SnykMenuConfig,
+  branches: Accessor<{ name: string; isRemote: boolean }[]>,
+  onChange?: (cfg: SnykMenuConfig) => void,
+  persist?: (cfg: SnykMenuConfig) => void,
+): SettingItem[] {
+  const update = (next: SnykMenuConfig) => {
+    onChange?.(next);
+    persist?.(next);
+  };
+  const isValidBranch = (value: string) => {
+    const branch = value.trim();
+    return (
+      !!branch &&
+      !cfg.autoScanBranches.includes(branch) &&
+      branches().some(candidate => !candidate.isRemote && candidate.name === branch)
+    );
+  };
+  const items: SettingItem[] = [
+    { kind: "header", label: "Snyk" },
+    { kind: "toggle", label: "Enabled", get: () => cfg.enabled, set: enabled => update({ ...cfg, enabled }) },
+  ];
+
+  if (!cfg.enabled) return items;
+
+  items.push(
+    {
+      kind: "editable",
+      label: "Token",
+      get: () => cfg.tokenEnvVar,
+      set: value => update({ ...cfg, tokenEnvVar: value.trim() || "SNYK_TOKEN" }),
+      valid: () => isValidEnvVarName(cfg.tokenEnvVar) && !!process.env[cfg.tokenEnvVar]?.trim(),
+      isDraftValid: value => isValidEnvVarName(value.trim() || "SNYK_TOKEN"),
+    },
+    {
+      kind: "cycle",
+      label: "Cache count",
+      options: ["10", "20", "50"],
+      get: () => String(cfg.maxCachedScans),
+      set: value => {
+        const maxCachedScans: SnykCacheLimit = value === "10" ? 10 : value === "50" ? 50 : 20;
+        update({ ...cfg, maxCachedScans });
+      },
+    },
+    {
+      kind: "editable",
+      label: "New branch",
+      placeholder: "Enter new branch...",
+      get: () => "",
+      set: value => {
+        const branch = value.trim();
+        if (!isValidBranch(branch)) return;
+        update({ ...cfg, autoScanBranches: [...cfg.autoScanBranches, branch] });
+      },
+      valid: () => cfg.autoScanBranches.length > 0,
+      showValidity: false,
+      isDraftValid: isValidBranch,
+      staySelectedOnSave: true,
+    },
+    ...cfg.autoScanBranches.map((branch, idx) => ({
+      kind: "copyable" as const,
+      label: `Branch #${idx + 1}`,
+      get: () => branch,
+      visualPrefix: "· ",
+      onForget: () =>
+        update({ ...cfg, autoScanBranches: cfg.autoScanBranches.filter((_, branchIdx) => branchIdx !== idx) }),
+    })),
+  );
+
+  return items;
 }
 
 export function buildOpenShiftProviderItems(
@@ -712,6 +796,12 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
       namespaces: [],
       commitShaAnnotation: "dev/commit-sha",
     };
+    const snykCfg = opts.snykConfig?.() ?? {
+      enabled: false,
+      tokenEnvVar: "SNYK_TOKEN",
+      autoScanBranches: [],
+      maxCachedScans: 20 as const,
+    };
     return [
       ...buildGitHubProviderItems(
         ghCfg,
@@ -735,6 +825,9 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
         opts.onOpenShiftConfigChange,
         newCfg => persistFullConfig({ providers: { openshift: newCfg } }),
         () => providerRefreshLabel("openshift"),
+      ),
+      ...buildSnykProviderItems(snykCfg, state.branches, opts.onSnykConfigChange, newCfg =>
+        persistFullConfig({ providers: { snyk: newCfg } }),
       ),
     ];
   });

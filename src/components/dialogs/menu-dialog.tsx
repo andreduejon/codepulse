@@ -66,6 +66,18 @@ interface MenuDialogProps {
     namespaces: string[];
     commitShaAnnotation: string;
   }) => void;
+  snykConfig?: {
+    enabled: boolean;
+    tokenEnvVar: string;
+    autoScanBranches: string[];
+    maxCachedScans: 10 | 20 | 50;
+  };
+  onSnykConfigChange?: (cfg: {
+    enabled: boolean;
+    tokenEnvVar: string;
+    autoScanBranches: string[];
+    maxCachedScans: 10 | 20 | 50;
+  }) => void;
   onRepoDisplayConfigChange?: (cfg: { group?: string; appName?: string }) => void;
 }
 
@@ -124,6 +136,8 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     onJenkinsConfigChange: props.onJenkinsConfigChange,
     openshiftConfig: () => props.openshiftConfig,
     onOpenShiftConfigChange: props.onOpenShiftConfigChange,
+    snykConfig: () => props.snykConfig,
+    onSnykConfigChange: props.onSnykConfigChange,
     onRepoDisplayConfigChange: props.onRepoDisplayConfigChange,
   });
 

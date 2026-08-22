@@ -17,6 +17,8 @@ export function providerColors(theme: Theme, view: ProviderView): ProviderColors
       return { bg: theme.jenkinsBg, fg: theme.jenkinsFg };
     case "openshift":
       return { bg: theme.openShiftBg, fg: theme.openShiftFg };
+    case "snyk":
+      return { bg: theme.snykBg, fg: theme.snykFg };
   }
 }
 
@@ -34,6 +36,8 @@ export function debugSourceColor(theme: Theme, source: DebugEventSource, gitColo
       return theme.jenkinsBg;
     case "OpenShift":
       return theme.openShiftBg;
+    case "Snyk":
+      return theme.snykBg;
     case "error":
       return theme.error;
   }

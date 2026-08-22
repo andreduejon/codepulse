@@ -1,4 +1,5 @@
 import { createEffect, createSignal, onCleanup, Show } from "solid-js";
+import { isUncommittedHash } from "../constants";
 import { useAppState } from "../context/state";
 import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
 import { useT } from "../hooks/use-t";
@@ -58,7 +59,13 @@ export default function Footer(
   const spinnerChar = () => (isLoading() || providerStatus().kind === "loading" ? SPINNER_FRAMES[frame()] : " ");
   const spinnerColor = () => t().accent;
 
-  const enterAction = () => (state.detailFocused() ? state.detailCursorAction() : null);
+  const enterAction = () => {
+    if (state.detailFocused()) return state.detailCursorAction();
+    if (state.activeProviderView() !== "snyk" || props.compact) return null;
+    const sha = state.selectedCommit()?.hash;
+    if (!sha || isUncommittedHash(sha)) return null;
+    return state.graphBadges().has(sha) ? "scan again" : "scan";
+  };
   const nextProviderLabel = () => {
     state.providers.getVersion();
     const views = state.providers.getEnabledViews();
@@ -118,6 +125,10 @@ export default function Footer(
 
         {/* ── Graph idle ───────────────────────────────────────────────────── */}
         <Show when={!state.detailFocused() && mode() === "idle"}>
+          <Show when={enterAction()}>
+            <KeyHint key="enter" desc={` ${enterAction()}`} />
+            <KeyHintSeparator />
+          </Show>
           {/* Ancestry mode active */}
           <Show when={ancestryMode()}>
             <KeyHint key="esc" desc=" clear" />

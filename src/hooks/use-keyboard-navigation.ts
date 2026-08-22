@@ -65,6 +65,7 @@ interface KeyboardNavigationOptions {
   /** Returns true while the initial CI fetch is in-flight. */
   getProviderLoading?: () => boolean;
   onSwitchGroupRepo?: (direction: 1 | -1) => void;
+  onSnykScan?: (sha: string, force: boolean) => void;
 }
 
 /**
@@ -116,6 +117,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     getCommitData,
     getProviderLoading,
     onSwitchGroupRepo,
+    onSnykScan,
   } = opts;
 
   // Build command-bar helpers (clearSearch, openSearch, confirmSearch, exitCommandBar)
@@ -255,6 +257,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
       onCommandExecute,
       setCommandBarMode,
       setCommandBarValue,
+      onSnykScan,
     });
   });
 }

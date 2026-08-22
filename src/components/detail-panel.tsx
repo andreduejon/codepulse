@@ -14,6 +14,7 @@ import type {
 import type { JenkinsCommitData, JenkinsJob, JenkinsJobFetchResult, JenkinsRun } from "../providers/jenkins/types";
 import type { OpenShiftCommitData, OpenShiftResource } from "../providers/openshift/types";
 import { providerDetailTab } from "../providers/provider";
+import type { SnykScanResult } from "../providers/snyk/types";
 import { getAvailableTabs } from "../utils/tab-utils";
 import CommitDetailView from "./detail";
 import type { DetailNavRef } from "./detail-types";
@@ -51,6 +52,10 @@ export interface DetailPanelProps {
   openshiftFetchCommitData?: (sha: string) => Promise<void>;
   onOpenOpenShiftResource?: (resource: OpenShiftResource) => void;
   openshiftProviderStatus?: ProviderStatus;
+  snykGetCommitData?: (sha: string) => SnykScanResult | null;
+  snykIsScanning?: (sha: string) => boolean;
+  snykScanCommit?: (sha: string, force?: boolean) => Promise<SnykScanResult | null>;
+  snykProviderStatus?: ProviderStatus;
 }
 
 /**
@@ -80,18 +85,34 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
         commitDetail: cd,
         stashByParent: stashMap,
         activeProviderView: providerView,
-        getCommitData:
-          providerView === "jenkins"
-            ? props.jenkinsGetCommitData
-            : providerView === "openshift"
-              ? props.openshiftGetCommitData
-              : props.githubGetCommitData,
-        providerLoading:
-          providerView === "jenkins"
-            ? props.jenkinsProviderStatus?.kind === "loading"
-            : providerView === "openshift"
-              ? props.openshiftProviderStatus?.kind === "loading"
-              : props.githubProviderStatus?.kind === "loading",
+        getCommitData: (() => {
+          switch (providerView) {
+            case "github-actions":
+              return props.githubGetCommitData;
+            case "jenkins":
+              return props.jenkinsGetCommitData;
+            case "openshift":
+              return props.openshiftGetCommitData;
+            case "snyk":
+              return props.snykGetCommitData;
+            case "git":
+              return undefined;
+          }
+        })(),
+        providerLoading: (() => {
+          switch (providerView) {
+            case "github-actions":
+              return props.githubProviderStatus?.kind === "loading";
+            case "jenkins":
+              return props.jenkinsProviderStatus?.kind === "loading";
+            case "openshift":
+              return props.openshiftProviderStatus?.kind === "loading";
+            case "snyk":
+              return props.snykProviderStatus?.kind === "loading";
+            case "git":
+              return false;
+          }
+        })(),
       }),
     );
     if (isUncommitted) {
@@ -217,6 +238,10 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
             openshiftFetchCommitData={props.openshiftFetchCommitData}
             onOpenOpenShiftResource={props.onOpenOpenShiftResource}
             openshiftProviderStatus={props.openshiftProviderStatus}
+            snykGetCommitData={props.snykGetCommitData}
+            snykIsScanning={props.snykIsScanning}
+            snykScanCommit={props.snykScanCommit}
+            snykProviderStatus={props.snykProviderStatus}
           />
         </Show>
       </scrollbox>

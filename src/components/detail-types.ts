@@ -9,6 +9,7 @@ import type {
 } from "../providers/github-actions/types";
 import type { JenkinsCommitData, JenkinsJob, JenkinsJobFetchResult, JenkinsRun } from "../providers/jenkins/types";
 import type { OpenShiftCommitData, OpenShiftResource } from "../providers/openshift/types";
+import type { SnykScanResult } from "../providers/snyk/types";
 
 /** Mutable ref populated by a detail view for app.tsx to call */
 export interface DetailNavRef {
@@ -56,6 +57,10 @@ export interface DetailViewProps {
   openshiftFetchCommitData?: (sha: string) => Promise<void>;
   onOpenOpenShiftResource?: (resource: OpenShiftResource) => void;
   openshiftProviderStatus?: ProviderStatus;
+  snykGetCommitData?: (sha: string) => SnykScanResult | null;
+  snykIsScanning?: (sha: string) => boolean;
+  snykScanCommit?: (sha: string, force?: boolean) => Promise<SnykScanResult | null>;
+  snykProviderStatus?: ProviderStatus;
 }
 
 /** Layout constants shared between committed and uncommitted detail views */
