@@ -76,6 +76,11 @@ tar -xzf "$tmp_dir/$archive" -C "$tmp_dir"
 mkdir -p "$install_dir"
 cp "$tmp_dir/codepulse" "$install_dir/codepulse"
 chmod 755 "$install_dir/codepulse"
+# macOS 26+ kills ad-hoc GitHub downloads (Taskgated Invalid Signature).
+# Re-sign locally so Gatekeeper accepts the installed copy.
+if [ "$platform" = "darwin" ] && command -v codesign >/dev/null 2>&1; then
+  codesign --force --sign - --preserve-metadata=entitlements "$install_dir/codepulse"
+fi
 
 printf 'Installed codepulse to %s/codepulse\n' "$install_dir"
 case ":$PATH:" in
