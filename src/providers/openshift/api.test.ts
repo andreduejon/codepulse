@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { BANNER } from "../../debug/banner";
 import { buildOpenShiftCommitMap, buildOpenShiftGraphBadges, fetchOpenShiftInventory } from "./api";
 import type { OpenShiftResource } from "./types";
 
@@ -135,8 +136,7 @@ describe("fetchOpenShiftInventory", () => {
           error: expect.stringContaining("503"),
         }),
       ]);
-      expect(result.error).toContain("Build");
-      expect(result.error).toContain("DeploymentConfig");
+      expect(result.error).toBe(BANNER.openshift.inventoryPartial);
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -156,7 +156,7 @@ describe("fetchOpenShiftInventory", () => {
       );
       expect(requests).toBe(0);
       expect(result.failures).toHaveLength(7);
-      expect(result.error).toContain("Invalid OpenShift namespace");
+      expect(result.error).toBe(BANNER.openshift.invalidNamespace);
     } finally {
       globalThis.fetch = originalFetch;
     }

@@ -20,6 +20,9 @@ All notable changes to this project will be documented in this file.
 - Preserve successful project findings from partial multi-project scans and
   visibly report failed project counts without presenting partial zero results
   as clean scans.
+- Keep the graph and detail cursor in view during fast keyboard repeat.
+- Show short Git, GitHub, Jenkins, and OpenShift banners; keep request dumps in
+  the debug log.
 
 ## [0.7.0] - 2026-08-21
 

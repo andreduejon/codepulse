@@ -30,6 +30,7 @@ import {
   providerLoading,
   providerUnavailable,
 } from "../../context/state";
+import { BANNER, bannerOrFallback, debugError } from "../../debug/banner";
 
 import { DEFAULT_INITIAL_SHA_LIMIT, useProviderFetchLifecycle } from "../shared/use-provider-fetch-lifecycle";
 import {
@@ -263,16 +264,18 @@ export function useGitHubCI(opts: {
       const repo = cachedGitHubRepo();
       const token = getGitHubToken(config.tokenEnvVar);
       if (!config.enabled) {
-        actions.setProviderStatus("github-actions", providerUnavailable("CI provider disabled"));
+        actions.setProviderStatus("github-actions", providerUnavailable(BANNER.github.disabled));
       } else if (!parsedGitHubRepo()) {
-        actions.setProviderStatus("github-actions", providerUnavailable("No GitHub remote detected"));
+        actions.setProviderStatus("github-actions", providerUnavailable(BANNER.github.noRemote));
       } else if (!repo) {
+        const host = parsedGitHubRepo()?.hostname;
+        if (host) debugError("GitHub", `Untrusted host: ${host}`);
+        actions.setProviderStatus("github-actions", providerUnavailable(BANNER.github.untrustedHost));
+      } else if (!token) {
         actions.setProviderStatus(
           "github-actions",
-          providerUnavailable(`Untrusted GitHub host: ${parsedGitHubRepo()?.hostname}`),
+          providerUnavailable(BANNER.github.missingToken(config.tokenEnvVar)),
         );
-      } else if (!token) {
-        actions.setProviderStatus("github-actions", providerUnavailable(`Token not found: $${config.tokenEnvVar}`));
       }
     },
     runInitialFetch: async ({ signal, shas, showStatus, epoch }) => {
@@ -288,18 +291,14 @@ export function useGitHubCI(opts: {
         for (const sha of failedSHAs) queriedSHAs.delete(sha);
         if (!firstError) actions.setProviderLastSuccessfulRefresh("github-actions", new Date());
         if (showStatus) {
-          actions.setProviderStatus(
-            "github-actions",
-            firstError ? providerError(`CI fetch error: ${firstError}`) : providerIdle(),
-          );
+          actions.setProviderStatus("github-actions", firstError ? providerError(firstError) : providerIdle());
         } else if (!firstError && state.providerStatusFor("github-actions").kind === "error") {
           actions.setProviderStatus("github-actions", providerIdle());
         }
       } catch (err) {
         if (signal?.aborted) return;
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error("[github-actions] initial fetch failed:", err);
-        if (showStatus) actions.setProviderStatus("github-actions", providerError(`CI fetch error: ${msg}`));
+        const message = bannerOrFallback(err, BANNER.github.fetchFailed, "GitHub");
+        if (showStatus) actions.setProviderStatus("github-actions", providerError(message));
         for (const sha of unqueried) queriedSHAs.delete(sha);
       }
     },
@@ -313,10 +312,10 @@ export function useGitHubCI(opts: {
         if (!firstError) actions.setProviderLastSuccessfulRefresh("github-actions", new Date());
         if (!firstError && state.providerStatusFor("github-actions").kind === "error")
           actions.setProviderStatus("github-actions", providerIdle());
-        if (firstError) console.error("[github-actions] refresh returned error:", firstError);
+        if (firstError) debugError("GitHub", firstError);
       } catch (err) {
         if (signal?.aborted) return;
-        console.error("[github-actions] refresh failed:", err);
+        debugError("GitHub", err);
       }
     },
     onResetCaches: () => {
@@ -347,12 +346,12 @@ export function useGitHubCI(opts: {
 
     const repo = cachedGitHubRepo();
     const token = getGitHubToken(config.tokenEnvVar);
-    if (!repo || !token) return { jobs: [], error: "GitHub provider unavailable" };
+    if (!repo || !token) return { jobs: [], error: BANNER.github.unavailable };
 
     const { jobs, error } = await fetchRunJobs(repo, token, run.id);
     if (epoch !== lifecycle.getEpoch()) return { jobs: [], error: null };
     if (error) {
-      actions.setProviderStatus("github-actions", providerError(`CI jobs error: ${error}`));
+      actions.setProviderStatus("github-actions", providerError(error));
       return { jobs, error };
     }
     actions.setProviderStatus("github-actions", providerIdle());

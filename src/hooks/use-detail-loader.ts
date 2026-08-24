@@ -2,6 +2,7 @@ import { type Accessor, createEffect, onCleanup } from "solid-js";
 import type { DetailNavRef } from "../components/detail-types";
 import { isUncommittedHash } from "../constants";
 import type { AppActions, AppState, DetailTab } from "../context/state";
+import { BANNER, bannerOrFallback } from "../debug/banner";
 import { getCommitDetail, getUncommittedDetail } from "../git/repo";
 import { isProviderDetailView } from "../providers/provider";
 import { getAvailableTabs } from "../utils/tab-utils";
@@ -157,7 +158,7 @@ export function useDetailLoader({
           actions.setCommitDetail(null);
           actions.setUncommittedDetail(null);
           actions.setDetailLoading(false);
-          actions.setError(err instanceof Error ? err.message : String(err));
+          actions.setError(bannerOrFallback(err, BANNER.git.detailFailed, "Git"));
         }
       }
     }, DETAIL_DEBOUNCE_MS);

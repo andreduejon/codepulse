@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { DEFAULT_MAX_COUNT } from "../constants";
+import { BANNER, debugError } from "../debug/banner";
 import { runGit } from "./repo-git";
 import { parseDiffTreeOutput } from "./repo-status";
 import type { Branch, Commit, CommitDetail, FileChange, RefInfo, TagInfo } from "./types";
@@ -172,7 +173,8 @@ export async function getCommits(
   const { stdout, stderr, exitCode } = logResult;
 
   if (exitCode !== 0) {
-    throw new Error(`git log failed: ${stderr}`);
+    if (stderr.trim()) debugError("Git", stderr.trim());
+    throw new Error(BANNER.git.logFailed);
   }
 
   const commits: Commit[] = [];
@@ -531,7 +533,8 @@ export async function fetchRemote(repoPath: string): Promise<{ ok: boolean; erro
   const { stderr, exitCode } = await runGit(repoPath, ["fetch", "--all", "--prune"]);
 
   if (exitCode !== 0) {
-    return { ok: false, error: stderr.trim() };
+    if (stderr.trim()) debugError("Git", stderr.trim());
+    return { ok: false, error: BANNER.git.fetchFailed };
   }
   return { ok: true };
 }

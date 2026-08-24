@@ -2,6 +2,7 @@ import type { Accessor } from "solid-js";
 import { createEffect, createSignal, untrack } from "solid-js";
 import type { AppActions, AppState } from "../../context/state";
 import { providerError, providerIdle, providerLoading, providerUnavailable } from "../../context/state";
+import { BANNER } from "../../debug/banner";
 import { collectTopSHAs } from "../github-actions/sha-selection";
 
 import { DEFAULT_INITIAL_SHA_LIMIT, useProviderFetchLifecycle } from "../shared/use-provider-fetch-lifecycle";
@@ -139,12 +140,10 @@ export function useJenkinsCI(opts: {
     queriedSHAs,
     reportUnavailable: showStatus => {
       if (!showStatus) return;
-      if (config.jobs.length === 0)
-        actions.setProviderStatus("jenkins", providerUnavailable("Jenkins unavailable: no jobs configured"));
+      if (config.jobs.length === 0) actions.setProviderStatus("jenkins", providerUnavailable(BANNER.jenkins.noJobs));
       else if (!config.username?.trim())
-        actions.setProviderStatus("jenkins", providerUnavailable("Jenkins unavailable: username not configured"));
-      else
-        actions.setProviderStatus("jenkins", providerUnavailable(`Jenkins unavailable: missing ${config.tokenEnvVar}`));
+        actions.setProviderStatus("jenkins", providerUnavailable(BANNER.jenkins.noUsername));
+      else actions.setProviderStatus("jenkins", providerUnavailable(BANNER.jenkins.missingToken(config.tokenEnvVar)));
     },
     runInitialFetch: async ({ signal, shas, showStatus, epoch }) => {
       if (showStatus) actions.setProviderStatus("jenkins", providerLoading());
@@ -196,7 +195,7 @@ export function useJenkinsCI(opts: {
       const cached = jobsCache.get(run.id);
       if (cached) return cached;
       const token = getJenkinsToken(config.tokenEnvVar);
-      if (!token) return { jobs: [], error: `missing ${config.tokenEnvVar}` };
+      if (!token) return { jobs: [], error: BANNER.jenkins.missingToken(config.tokenEnvVar) };
       const result = await fetchJenkinsRunJobs(run, config.username, token);
       if (epoch !== lifecycle.getEpoch()) return { jobs: [], error: null };
       if (run.status === "completed" && result.error === null) jobsCache.set(run.id, result);
