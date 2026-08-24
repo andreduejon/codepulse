@@ -58,7 +58,9 @@ export default function Footer(
   const spinnerChar = () => (isLoading() || providerStatus().kind === "loading" ? SPINNER_FRAMES[frame()] : " ");
   const spinnerColor = () => t().accent;
 
-  const enterAction = () => (state.detailFocused() ? state.detailCursorAction() : null);
+  const enterAction = () => {
+    return state.detailFocused() ? state.detailCursorAction() : null;
+  };
   const nextProviderLabel = () => {
     state.providers.getVersion();
     const views = state.providers.getEnabledViews();
@@ -118,6 +120,10 @@ export default function Footer(
 
         {/* ── Graph idle ───────────────────────────────────────────────────── */}
         <Show when={!state.detailFocused() && mode() === "idle"}>
+          <Show when={enterAction()}>
+            <KeyHint key="enter" desc={` ${enterAction()}`} />
+            <KeyHintSeparator />
+          </Show>
           {/* Ancestry mode active */}
           <Show when={ancestryMode()}>
             <KeyHint key="esc" desc=" clear" />
@@ -143,7 +149,7 @@ export default function Footer(
           <Show when={nextProviderLabel()}>
             <KeyHintSeparator />
           </Show>
-          <Show when={props.compact} fallback={<KeyHint key="←/→" desc=" switch tab" />}>
+          <Show when={props.compact} fallback={<KeyHint key="enter/→" desc=" show details" />}>
             <KeyHint key="enter" desc=" show details" />
           </Show>
           <KeyHintSeparator />

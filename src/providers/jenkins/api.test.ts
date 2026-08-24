@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { BANNER } from "../../debug/banner";
 import {
   buildJenkinsCommitDataMap,
   buildJenkinsGraphBadges,
@@ -360,9 +361,7 @@ describe("fetchJenkinsGraphDataForSHAs", () => {
         ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
       );
       expect(result.data).toHaveLength(0);
-      expect(result.error).toBe(
-        "Jenkins authentication failed. Verify username, token, and complete browser login if required.",
-      );
+      expect(result.error).toBe(BANNER.jenkins.authFailed);
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -400,7 +399,7 @@ describe("fetchJenkinsDataForSHAs", () => {
       ]);
       expect(result.data).toHaveLength(1);
       expect(result.data[0].runNumber).toBe(1);
-      expect(result.error).toBe("Jenkins 500: Failed");
+      expect(result.error).toBe(BANNER.jenkins.fetchFailed);
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -519,7 +518,7 @@ describe("resolveJenkinsJobs", () => {
         "token",
       );
       expect(result.jobs).toEqual([direct]);
-      expect(result.error).toBe("Jenkins 404: Not Found");
+      expect(result.error).toBe(BANNER.jenkins.fetchFailed);
     } finally {
       globalThis.fetch = originalFetch;
     }

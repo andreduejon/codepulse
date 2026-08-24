@@ -8,6 +8,7 @@ import {
   providerUnavailable,
   providerWarning,
 } from "../../context/state";
+import { BANNER, debugError } from "../../debug/banner";
 import { useProviderFetchLifecycle } from "../shared/use-provider-fetch-lifecycle";
 import { buildOpenShiftGraphBadges, fetchOpenShiftInventory, getOpenShiftToken } from "./api";
 import type { OpenShiftCommitData, OpenShiftProviderConfig } from "./types";
@@ -57,10 +58,10 @@ export function useOpenShift(opts: {
   const queriedSHAs = new Set<string>();
 
   function unavailableMessage(): string {
-    if (!config.serverUrl.trim()) return "OpenShift unavailable: server URL not configured";
-    if (config.namespaces.length === 0) return "OpenShift unavailable: no namespaces configured";
-    if (!getOpenShiftToken(config.tokenEnvVar)) return `OpenShift unavailable: missing ${config.tokenEnvVar}`;
-    return "OpenShift unavailable";
+    if (!config.serverUrl.trim()) return BANNER.openshift.noServer;
+    if (config.namespaces.length === 0) return BANNER.openshift.noNamespaces;
+    if (!getOpenShiftToken(config.tokenEnvVar)) return BANNER.openshift.missingToken(config.tokenEnvVar);
+    return BANNER.openshift.unavailable;
   }
 
   const lifecycle = useProviderFetchLifecycle({
@@ -112,7 +113,6 @@ export function useOpenShift(opts: {
         return;
       }
       if (result.error && cache.size > 0) {
-        for (const failure of result.failures) console.debug("OpenShift inventory request failed", failure);
         actions.setProviderStatus("openshift", providerWarning(result.error));
         return;
       }
@@ -122,15 +122,14 @@ export function useOpenShift(opts: {
       setVersion(v => v + 1);
       lifecycle.noteFetchStarted();
       if (result.error) {
-        for (const failure of result.failures) console.debug("OpenShift inventory request failed", failure);
         actions.setProviderStatus("openshift", providerWarning(result.error));
       } else {
         actions.setProviderStatus("openshift", providerIdle());
         actions.setProviderLastSuccessfulRefresh("openshift", new Date());
       }
     } catch (err) {
-      if (!args.signal?.aborted && args.epoch === lifecycle.getEpoch())
-        actions.setProviderStatus("openshift", providerError(err instanceof Error ? err.message : String(err)));
+      if (!args.signal?.aborted && args.epoch === lifecycle.getEpoch()) debugError("OpenShift", err);
+      actions.setProviderStatus("openshift", providerError(BANNER.openshift.inventoryFailed));
     }
   }
 

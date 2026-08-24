@@ -12,7 +12,8 @@ export type DetailTab =
   | "untracked"
   | "github-actions"
   | "jenkins"
-  | "openshift";
+  | "openshift"
+  | "snyk";
 
 export type HighlightMode = "ancestry" | "path" | "search" | null;
 

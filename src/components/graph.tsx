@@ -37,8 +37,10 @@ import {
   OpenShiftResourcesColumn,
   OpenShiftStatusColumn,
 } from "../providers/openshift/graph-columns";
+import { SnykColumnHeaders, SnykCountsColumn, SnykScanColumn } from "../providers/snyk/graph-columns";
+import type { SnykScanResult } from "../providers/snyk/types";
 import { formatRelativeDate } from "../utils/date";
-import { scrollElementIntoView } from "../utils/scroll";
+import { scheduleScrollIntoView, scrollElementIntoView } from "../utils/scroll";
 import { truncateName } from "../utils/truncate";
 import Badge from "./badge";
 
@@ -102,6 +104,8 @@ export function ColumnHeader() {
         {isProviderView() ? (
           state.activeProviderView() === "openshift" ? (
             <OpenShiftColumnHeaders />
+          ) : state.activeProviderView() === "snyk" ? (
+            <SnykColumnHeaders />
           ) : (
             <ActionsColumnHeaders />
           )
@@ -178,6 +182,8 @@ function GraphLine(
     /** Set of column indices where horizontal glyphs on the commit row itself should
      *  stay bright (ancestry connection via commit-row merge arms, not fan-out rows). */
     brightCommitHorizontals: () => Set<number> | undefined;
+    snykGetCommitData?: (sha: string) => SnykScanResult | null;
+    snykIsScanning?: (sha: string) => boolean;
   }>,
 ) {
   const t = useT();
@@ -478,6 +484,11 @@ function GraphLine(
             <OpenShiftResourcesColumn badge={state.graphBadges().get(commit().hash)} active={props.active} />
             <OpenShiftStatusColumn badge={state.graphBadges().get(commit().hash)} active={props.active} />
           </>
+        ) : state.activeProviderView() === "snyk" ? (
+          <>
+            <SnykCountsColumn scan={props.snykGetCommitData?.(commit().hash) ?? null} active={props.active} />
+            <SnykScanColumn scan={props.snykGetCommitData?.(commit().hash) ?? null} active={props.active} />
+          </>
         ) : state.activeProviderView() !== "git" ? (
           <>
             <ActionsCountsColumn badge={state.graphBadges().get(commit().hash)} active={props.active} />
@@ -606,6 +617,8 @@ export default function GraphView(
     onLoadMore?: () => void;
     scrollboxRef?: (el: ScrollBoxRenderable) => void;
     suppressAutoScroll?: () => boolean;
+    snykGetCommitData?: (sha: string) => SnykScanResult | null;
+    snykIsScanning?: (sha: string) => boolean;
   }>,
 ) {
   const { state, actions } = useAppState();
@@ -625,6 +638,8 @@ export default function GraphView(
   // Refs for programmatic scroll-into-view
   let scrollboxRef: ScrollBoxRenderable | undefined;
   const rowRefs: Renderable[] = [];
+  const scrollSchedule: { scrollTimer?: ReturnType<typeof setTimeout> } = {};
+  let lastScrollIndex = -1;
 
   createEffect(() => {
     const rows = state.graphRows();
@@ -642,11 +657,14 @@ export default function GraphView(
 
   /** Scroll a row at `idx` into view within the scrollbox. */
   const scrollRowIntoView = (idx: number) => {
-    const sb = scrollboxRef;
-    if (!sb) return;
-    const rowEl = rowRefs[idx];
-    if (!rowEl) return;
-    scrollElementIntoView(sb, rowEl);
+    const direction: -1 | 0 | 1 = idx > lastScrollIndex ? 1 : idx < lastScrollIndex ? -1 : 0;
+    lastScrollIndex = idx;
+    scheduleScrollIntoView(scrollSchedule, () => {
+      const sb = scrollboxRef;
+      const rowEl = rowRefs[idx];
+      if (!sb || !rowEl) return false;
+      return scrollElementIntoView(sb, rowEl, 1, direction);
+    });
   };
 
   // Scroll the target row into view (triggered by keyboard nav / selection).
@@ -655,6 +673,9 @@ export default function GraphView(
     const idx = state.scrollTargetIndex();
     if (idx < 0) return;
     scrollRowIntoView(idx);
+  });
+  onCleanup(() => {
+    if (scrollSchedule.scrollTimer) clearTimeout(scrollSchedule.scrollTimer);
   });
 
   // Deferred scroll-into-view after filter clear: polls until Yoga layout is ready.
@@ -760,6 +781,8 @@ export default function GraphView(
                   brightFanOutVerticals={() => brightColumnsByHash()?.fanOutVertical.get(row.commit.hash)}
                   brightFanOutHorizontals={() => brightColumnsByHash()?.fanOutHorizontal.get(row.commit.hash)}
                   brightCommitHorizontals={() => brightColumnsByHash()?.commitHorizontal.get(row.commit.hash)}
+                  snykGetCommitData={props.snykGetCommitData}
+                  snykIsScanning={props.snykIsScanning}
                   rowRef={el => {
                     elRef = el;
                     rowRefs[index()] = el;

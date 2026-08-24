@@ -47,6 +47,12 @@ describe("provider defaults", () => {
     expect(providers.github?.enabled).toBe(false);
     expect(providers.jenkins?.enabled).toBe(false);
     expect(providers.openshift?.enabled).toBe(false);
+    expect(providers.snyk).toEqual({
+      enabled: false,
+      tokenEnvVar: "SNYK_TOKEN",
+      autoScanBranches: [],
+      maxCachedScans: 20,
+    });
   });
 
   test("backfill preserves explicit provider enabled values", () => {
@@ -56,6 +62,7 @@ describe("provider defaults", () => {
         github: { enabled: true },
         jenkins: { enabled: true },
         openshift: { enabled: true },
+        snyk: { enabled: true },
       },
     });
 
@@ -65,6 +72,12 @@ describe("provider defaults", () => {
     expect(providers?.github?.enabled).toBe(true);
     expect(providers?.jenkins?.enabled).toBe(true);
     expect(providers?.openshift?.enabled).toBe(true);
+    expect(providers?.snyk).toEqual({
+      enabled: true,
+      tokenEnvVar: "SNYK_TOKEN",
+      autoScanBranches: [],
+      maxCachedScans: 20,
+    });
   });
 });
 
@@ -214,6 +227,45 @@ describe("loadConfig", () => {
     const { config: result, warnings } = loadConfig(repoPath, configPath);
     expect(result.providers?.openshift).toEqual({});
     expect(warnings.filter(warning => warning.includes("providers.openshift"))).toHaveLength(3);
+  });
+
+  test("loads and normalizes Snyk config", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("snyk-config", repoPath, {
+      providers: {
+        snyk: {
+          enabled: true,
+          tokenEnvVar: " CUSTOM_SNYK_TOKEN ",
+          autoScanBranches: [" main ", "release/1", "main", " ", 42, "x".repeat(256)],
+          maxCachedScans: 50,
+        },
+      },
+    });
+    const { config: result, warnings } = loadConfig(repoPath, configPath);
+    expect(result.providers?.snyk).toEqual({
+      enabled: true,
+      tokenEnvVar: "CUSTOM_SNYK_TOKEN",
+      autoScanBranches: ["main", "release/1"],
+      maxCachedScans: 50,
+    });
+    expect(warnings.filter(warning => warning.includes("providers.snyk.autoScanBranches"))).toHaveLength(2);
+  });
+
+  test("drops invalid Snyk fields", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("snyk-invalid", repoPath, {
+      providers: {
+        snyk: {
+          enabled: "yes",
+          tokenEnvVar: "T".repeat(256),
+          autoScanBranches: "main",
+          maxCachedScans: 30,
+        },
+      },
+    });
+    const { config: result, warnings } = loadConfig(repoPath, configPath);
+    expect(result.providers?.snyk).toEqual({});
+    expect(warnings.filter(warning => warning.includes("providers.snyk"))).toHaveLength(4);
   });
 
   test("drops invalid trusted enterprise host from repo config", () => {
@@ -785,6 +837,27 @@ describe("writeConfig", () => {
     };
     writeConfig(original, repoPath, configPath);
     expect(loadConfig(repoPath, configPath).config).toEqual(original);
+  });
+
+  test("round-trip: Snyk config preserves unknown provider keys", () => {
+    const configPath = makeRepoConfig("write-snyk", "/tmp/repo", {
+      providers: { snyk: { customKey: "preserve-me" } },
+    });
+    const repoPath = "/tmp/repo";
+    const original: CodepulseConfig = {
+      providers: {
+        snyk: {
+          enabled: true,
+          tokenEnvVar: "SNYK_API_TOKEN",
+          autoScanBranches: ["main", "develop"],
+          maxCachedScans: 10,
+        },
+      },
+    };
+    writeConfig(original, repoPath, configPath);
+    expect(loadConfig(repoPath, configPath).config).toEqual(original);
+    const content = JSON.parse(readFileSync(configPath, "utf-8"));
+    expect(content.repos[resolve(repoPath)].providers.snyk.customKey).toBe("preserve-me");
   });
 
   test("round-trip: multiple repos with independent settings", () => {

@@ -1,3 +1,4 @@
+import { BANNER, bannerOrFallback, debugError } from "../../debug/banner";
 import type { GraphBadge } from "../provider";
 import { fetchWithRetry as fetchWithRetryPolicy, runLimited } from "../shared/http";
 import { categorize } from "../shared/status";
@@ -65,7 +66,7 @@ const JENKINS_HTTP_POLICY = {
   timeoutMs: JENKINS_REQUEST_TIMEOUT_MS,
   attempts: 2,
   retryDelayMs: 500,
-  timeoutMessage: `Jenkins request timed out after ${JENKINS_REQUEST_TIMEOUT_MS}ms`,
+  timeoutMessage: BANNER.jenkins.timeout,
 };
 
 async function fetchWithRetry(url: string, init: RequestInit = {}): Promise<Response> {
@@ -137,7 +138,7 @@ function isEnabledMultibranchJob(job: JenkinsMultibranchChildApi): boolean {
 }
 
 function authHeaders(username: string | undefined, token: string): Record<string, string> {
-  if (!username) throw new Error("Jenkins username is required for token authentication");
+  if (!username) throw new Error(BANNER.jenkins.noUsername);
   return { Authorization: `Basic ${Buffer.from(`${username}:${token}`).toString("base64")}` };
 }
 
@@ -145,8 +146,9 @@ function isJenkinsLoginRedirect(location: string | null): boolean {
   return !!location && /securityRealm\/commenceLogin/i.test(location);
 }
 
-function jenkinsAuthError(): Error {
-  return new Error("Jenkins authentication failed. Verify username, token, and complete browser login if required.");
+function jenkinsAuthError(detail: string): Error {
+  debugError("Jenkins", detail);
+  return new Error(BANNER.jenkins.authFailed);
 }
 
 async function fetchJson<T>(
@@ -155,14 +157,20 @@ async function fetchJson<T>(
   token: string,
   signal?: AbortSignal,
 ): Promise<T> {
-  if (!isSafeJenkinsRequestUrl(url)) throw new Error(`Invalid Jenkins job URL: ${url}`);
+  if (!isSafeJenkinsRequestUrl(url)) {
+    debugError("Jenkins", url);
+    throw new Error(BANNER.jenkins.invalidJobUrl);
+  }
   const res = await fetchWithRetry(url, { headers: authHeaders(username, token), signal, redirect: "manual" });
   if (res.status >= 300 && res.status < 400 && isJenkinsLoginRedirect(res.headers.get("location"))) {
-    throw jenkinsAuthError();
+    throw jenkinsAuthError(`login redirect ${url}`);
   }
   const contentType = res.headers.get("content-type") ?? "";
-  if (!res.ok) throw new Error(`Jenkins ${res.status}: ${res.statusText}`);
-  if (/text\/html/i.test(contentType)) throw jenkinsAuthError();
+  if (!res.ok) {
+    debugError("Jenkins", `${res.status} ${res.statusText} ${url}`);
+    throw new Error(BANNER.jenkins.fetchFailed);
+  }
+  if (/text\/html/i.test(contentType)) throw jenkinsAuthError(`html response ${url}`);
   return (await res.json()) as T;
 }
 
@@ -196,7 +204,7 @@ export async function resolveJenkinsJobs(
         );
         discoveries[index] = { job, api };
       } catch (err) {
-        firstError ??= err instanceof Error ? err.message : String(err);
+        firstError ??= bannerOrFallback(err, BANNER.jenkins.fetchFailed, "Jenkins");
       }
     },
     signal,
@@ -214,7 +222,8 @@ export async function resolveJenkinsJobs(
     try {
       parentOrigin = new URL(discovery.job.url).origin;
     } catch {
-      firstError ??= `Invalid Jenkins job URL: ${discovery.job.url}`;
+      debugError("Jenkins", discovery.job.url);
+      firstError ??= BANNER.jenkins.invalidJobUrl;
       continue;
     }
     for (const child of (discovery.api.jobs ?? []).filter(isEnabledMultibranchJob)) {
@@ -223,7 +232,8 @@ export async function resolveJenkinsJobs(
       try {
         childUrl = new URL(child.url ?? "");
       } catch {
-        firstError ??= `Ignored invalid Jenkins multibranch child URL: ${child.url ?? ""}`;
+        debugError("Jenkins", child.url ?? "");
+        firstError ??= BANNER.jenkins.invalidJobUrl;
         continue;
       }
       const url = normalizeJenkinsJobUrl(
@@ -233,7 +243,8 @@ export async function resolveJenkinsJobs(
       );
       if (!url || resolved.has(url)) continue;
       if (!isSafeJenkinsRequestUrl(url)) {
-        firstError ??= `Ignored invalid Jenkins multibranch child URL: ${url}`;
+        debugError("Jenkins", url);
+        firstError ??= BANNER.jenkins.invalidJobUrl;
         continue;
       }
       const childLabel = child.displayName?.trim() || child.name?.trim() || deriveJenkinsJobLabel({ url });
@@ -432,13 +443,13 @@ export async function fetchJenkinsDataForSHAs(
               const build = await fetchJson<JenkinsBuildApi>(buildUrl, username, token, opts.signal);
               for (const sha of matchingHeadShas(build, wanted)) runs.push(mapRun(job, build, sha));
             } catch (err) {
-              firstError ??= err instanceof Error ? err.message : String(err);
+              firstError ??= bannerOrFallback(err, BANNER.jenkins.fetchFailed, "Jenkins");
             }
           },
           opts.signal,
         );
       } catch (err) {
-        firstError ??= err instanceof Error ? err.message : String(err);
+        firstError ??= bannerOrFallback(err, BANNER.jenkins.fetchFailed, "Jenkins");
       }
     },
     opts.signal,
@@ -482,7 +493,7 @@ export async function fetchJenkinsGraphDataForSHAs(
           for (const sha of matchingHeadShas(build, wanted)) runs.push(mapRun(job, build, sha));
         }
       } catch (err) {
-        firstError ??= err instanceof Error ? err.message : String(err);
+        firstError ??= bannerOrFallback(err, BANNER.jenkins.fetchFailed, "Jenkins");
       }
     },
     opts.signal,
@@ -580,7 +591,7 @@ export async function fetchJenkinsRunJobs(
     };
     return { jobs: [job], error: null };
   } catch (err) {
-    return { jobs: [], error: err instanceof Error ? err.message : String(err) };
+    return { jobs: [], error: bannerOrFallback(err, BANNER.jenkins.fetchFailed, "Jenkins") };
   }
 }
 
@@ -596,6 +607,9 @@ export async function fetchJenkinsConsoleLog(
     headers: authHeaders(username, token),
     signal,
   });
-  if (!res.ok) return "";
+  if (!res.ok) {
+    debugError("Jenkins", `${res.status} ${res.statusText} ${url}`);
+    return "";
+  }
   return res.text();
 }

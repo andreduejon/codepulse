@@ -75,6 +75,7 @@ export async function main() {
         initialGithubConfig={config.providers?.github}
         initialJenkinsConfig={config.providers?.jenkins}
         initialOpenShiftConfig={config.providers?.openshift}
+        initialSnykConfig={config.providers?.snyk}
       />
     ),
     {

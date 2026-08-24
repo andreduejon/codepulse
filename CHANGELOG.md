@@ -2,6 +2,78 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.0] - 2026-08-24
+
+### Added
+
+- **Snyk provider** — run Snyk Open Source scans for exact commits in detached
+  Git worktrees and display cached vulnerability snapshots in the graph.
+- **Snyk graph and details** — show severity counts, scan time, CVEs, dependency
+  type, installed versions, and available remediation for each finding.
+- **Automatic branch-tip scans** — scan configured local branch tips when no
+  cached result exists for their exact commit.
+- **Snyk scan cache** — retain normalized commit results with configurable
+  limits of 10, 20, or 50 entries per repository.
+
+### Fixed
+
+- Preserve successful project findings from partial multi-project scans and
+  visibly report failed project counts without presenting partial zero results
+  as clean scans.
+- Keep the graph and detail cursor in view during fast keyboard repeat.
+- Show short Git, GitHub, Jenkins, and OpenShift banners; keep request dumps in
+  the debug log.
+- Count unique Snyk IDs in the graph and details; keep duplicate dependency
+  paths in finding metadata.
+- Map git fetch connection timeouts to a short banner.
+
+## [0.7.0] - 2026-08-21
+
+### Changed
+
+- Distribute Codepulse as standalone macOS and Linux executables through GitHub
+  Releases. Bun, Node.js, and npm are no longer required at runtime.
+- Replace npm publishing with native arm64/x64 release builds for macOS and
+  glibc Linux.
+- Add a checksum-verifying installer that installs the `codepulse` command to a
+  configurable directory on `PATH`.
+
+### Fixed
+
+- Embed OpenTUI native libraries, parser worker, tree-sitter WASM, and query
+  assets in each executable and smoke-test them on their target platform.
+- Re-execute the standalone binary correctly when switching repositories.
+
+## [0.6.4] - 2026-08-21
+
+### Fixed
+
+- Run `@opentui/solid/preload` from `dist/cli.js` before loading the bundle.
+  Bun.build had moved that import to the end of `dist/index.js`, so a global
+  install (no repo `bunfig.toml`) called `render()` without the plugin.
+
+## [0.6.3] - 2026-08-21
+
+### Fixed
+
+- Remove a duplicate `#!/usr/bin/env bun` in the published `dist/index.js`
+  (Bun already preserves the source shebang; the extra banner was a syntax error).
+
+## [0.6.2] - 2026-08-21
+
+### Fixed
+
+- Publish a Bun-built `dist/` instead of raw TSX. OpenTUI 0.5.6 skips Solid
+  JSX transform for files under `node_modules`, so a global install still
+  resolved `react/jsx-dev-runtime` even with `tsconfig.json` in the tarball.
+
+## [0.6.1] - 2026-08-21
+
+### Fixed
+
+- Include `tsconfig.json` and `bunfig.toml` in the npm package so a global
+  `bun` install uses Solid/OpenTUI JSX instead of looking for React.
+
 ## [0.6.0] - 2026-08-21
 
 ### Added

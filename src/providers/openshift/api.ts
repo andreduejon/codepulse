@@ -1,3 +1,4 @@
+import { BANNER, debugError } from "../../debug/banner";
 import type { GraphBadge } from "../provider";
 import { fetchWithRetry } from "../shared/http";
 import type {
@@ -11,7 +12,7 @@ import type {
 } from "./types";
 import { isValidOpenShiftNamespace } from "./validation";
 
-const FETCH_OPTS = { timeoutMs: 15000, attempts: 2, retryDelayMs: 500, timeoutMessage: "OpenShift request timed out" };
+const FETCH_OPTS = { timeoutMs: 15000, attempts: 2, retryDelayMs: 500, timeoutMessage: BANNER.openshift.timeout };
 
 type AnyObj = Record<string, unknown>;
 
@@ -247,6 +248,14 @@ function extractController(
   return { kind, namespace, uid, ownerReferences: ownerReferences(item) };
 }
 
+function openshiftInventoryBanner(failures: OpenShiftInventoryFailure[], successfulRequests: number): string | null {
+  if (failures.length === 0) return null;
+  if (failures.every(failure => failure.error.startsWith("Invalid OpenShift namespace"))) {
+    return BANNER.openshift.invalidNamespace;
+  }
+  return successfulRequests === 0 ? BANNER.openshift.inventoryFailed : BANNER.openshift.inventoryPartial;
+}
+
 async function fetchItems(serverUrl: string, token: string, path: string, signal?: AbortSignal): Promise<unknown[]> {
   const res = await fetchWithRetry(
     openShiftApiUrl(serverUrl, path),
@@ -431,9 +440,10 @@ export async function fetchOpenShiftInventory(
         });
     });
   }
-  const error = failures.length
-    ? `OpenShift inventory partially failed: ${failures.map(f => `${f.namespace}/${f.kind}: ${f.error}`).join("; ")}`
-    : null;
+  for (const failure of failures) {
+    debugError("OpenShift", `${failure.namespace}/${failure.kind} ${failure.path} ${failure.error}`);
+  }
+  const error = openshiftInventoryBanner(failures, successfulRequests);
   return { data: buildOpenShiftCommitMap(resources, controllers), error, failures, successfulRequests };
 }
 

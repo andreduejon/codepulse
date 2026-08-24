@@ -4,7 +4,7 @@
  * Handles:
  *   - ↑/↓ / j/k  — cursor movement (highlight-aware)
  *   - ←/→ / h/l  — enter detail panel / no-op
- *   - Enter       — open detail dialog in compact mode
+ *   - Enter       — focus details in normal mode or open detail dialog in compact mode
  *   - a           — toggle ancestry highlighting
  *   - p           — open path mode
  *   - g/G         — jump to first/last (or first/last highlighted)
@@ -15,7 +15,7 @@ import type { KeyEvent, ScrollBoxRenderable } from "@opentui/core";
 import type { DetailNavRef } from "../components/detail-types";
 import { ANCESTRY_PRELOAD_ROWS, SHIFT_JUMP } from "../constants";
 import type { AppActions, AppState } from "../context/state";
-import { countHighlightedBelow, findHighlightedIndex } from "../utils/keyboard-nav-utils";
+import { allowRepeatNav, countHighlightedBelow, findHighlightedIndex } from "../utils/keyboard-nav-utils";
 import type { CommandBarMode, DialogId } from "./use-keyboard-navigation";
 
 export interface GraphKeyOptions {
@@ -69,6 +69,7 @@ export function handleGraphKey(e: KeyEvent, opts: GraphKeyOptions): boolean {
     case "down":
     case "j": {
       e.preventDefault();
+      if (!allowRepeatNav()) return true;
       const hSet = state.highlightSet();
       if (hSet) {
         const count = e.shift ? SHIFT_JUMP : 1;
@@ -95,6 +96,7 @@ export function handleGraphKey(e: KeyEvent, opts: GraphKeyOptions): boolean {
     case "up":
     case "k": {
       e.preventDefault();
+      if (!allowRepeatNav()) return true;
       const hSet = state.highlightSet();
       if (hSet) {
         const count = e.shift ? SHIFT_JUMP : 1;
@@ -131,6 +133,13 @@ export function handleGraphKey(e: KeyEvent, opts: GraphKeyOptions): boolean {
         actions.setDetailCursorIndex(0);
         actions.setDetailFocused(true);
         setDialog("detail");
+        return true;
+      }
+      if (layoutMode() === "normal" && state.selectedCommit()) {
+        e.preventDefault();
+        detailNavRef.pendingJumpDirection = null;
+        actions.setDetailCursorIndex(0);
+        actions.setDetailFocused(true);
         return true;
       }
       return false;
