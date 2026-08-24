@@ -10,7 +10,8 @@ import type { KeyEvent, ScrollBoxRenderable } from "@opentui/core";
 import type { DetailNavRef } from "../components/detail-types";
 import { SHIFT_JUMP } from "../constants";
 import type { AppActions, AppState } from "../context/state";
-import { scrollElementIntoView } from "../utils/scroll";
+import { allowRepeatNav } from "../utils/keyboard-nav-utils";
+import { scheduleScrollIntoView, scrollElementIntoView } from "../utils/scroll";
 import { getAvailableTabs } from "../utils/tab-utils";
 import type { DialogId } from "./use-keyboard-navigation";
 
@@ -38,15 +39,13 @@ export function handleDetailKey(e: KeyEvent, opts: DetailKeyOptions): boolean {
 
   const scrollbox = getDetailScrollboxRef();
 
-  const scrollCursorIntoView = () => {
-    const apply = () => {
+  const scrollCursorIntoView = (direction: -1 | 0 | 1 = 0) => {
+    scheduleScrollIntoView(detailNavRef, () => {
       const currentScrollbox = getDetailScrollboxRef();
       const el = detailNavRef.itemRefs[state.detailCursorIndex()];
-      if (currentScrollbox && el) scrollElementIntoView(currentScrollbox, el);
-    };
-    apply();
-    setTimeout(apply, 0);
-    setTimeout(apply, 16);
+      if (!currentScrollbox || !el) return false;
+      return scrollElementIntoView(currentScrollbox, el, 1, direction);
+    });
   };
 
   switch (e.name) {
@@ -101,17 +100,19 @@ export function handleDetailKey(e: KeyEvent, opts: DetailKeyOptions): boolean {
     case "up":
     case "k": {
       e.preventDefault();
+      if (!allowRepeatNav()) return true;
       const delta = e.shift ? -SHIFT_JUMP : -1;
       actions.moveDetailCursor(delta, detailNavRef.itemCount);
-      scrollCursorIntoView();
+      scrollCursorIntoView(-1);
       return true;
     }
     case "down":
     case "j": {
       e.preventDefault();
+      if (!allowRepeatNav()) return true;
       const delta = e.shift ? SHIFT_JUMP : 1;
       actions.moveDetailCursor(delta, detailNavRef.itemCount);
-      scrollCursorIntoView();
+      scrollCursorIntoView(1);
       return true;
     }
     case "return":

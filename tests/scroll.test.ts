@@ -39,4 +39,16 @@ describe("scrollElementIntoView", () => {
     scrollElementIntoView(box, element(20, 1));
     expect(positions).toEqual([7]);
   });
+
+  test("ignores items without layout", () => {
+    const { box, positions } = scrollbox(0, 10);
+    expect(scrollElementIntoView(box, element(0, 0))).toBe(false);
+    expect(positions).toEqual([]);
+  });
+
+  test("ignores a stale upward yank while moving down", () => {
+    const { box, positions } = scrollbox(10, 10);
+    expect(scrollElementIntoView(box, element(0, 1), 1, 1)).toBe(true);
+    expect(positions).toEqual([]);
+  });
 });

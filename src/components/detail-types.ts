@@ -26,6 +26,8 @@ export interface DetailNavRef {
   scrollToFile: (filePath: string) => void;
   /** Element refs for all interactive items, indexed by item position in the flat list. */
   itemRefs: Renderable[];
+  /** Coalesced scroll-into-view timer for fast cursor movement. */
+  scrollTimer?: ReturnType<typeof setTimeout>;
 }
 
 export interface DetailViewProps {

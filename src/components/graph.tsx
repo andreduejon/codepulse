@@ -40,7 +40,7 @@ import {
 import { SnykColumnHeaders, SnykCountsColumn, SnykScanColumn } from "../providers/snyk/graph-columns";
 import type { SnykScanResult } from "../providers/snyk/types";
 import { formatRelativeDate } from "../utils/date";
-import { scrollElementIntoView } from "../utils/scroll";
+import { scheduleScrollIntoView, scrollElementIntoView } from "../utils/scroll";
 import { truncateName } from "../utils/truncate";
 import Badge from "./badge";
 
@@ -642,6 +642,8 @@ export default function GraphView(
   // Refs for programmatic scroll-into-view
   let scrollboxRef: ScrollBoxRenderable | undefined;
   const rowRefs: Renderable[] = [];
+  const scrollSchedule: { scrollTimer?: ReturnType<typeof setTimeout> } = {};
+  let lastScrollIndex = -1;
 
   createEffect(() => {
     const rows = state.graphRows();
@@ -659,11 +661,14 @@ export default function GraphView(
 
   /** Scroll a row at `idx` into view within the scrollbox. */
   const scrollRowIntoView = (idx: number) => {
-    const sb = scrollboxRef;
-    if (!sb) return;
-    const rowEl = rowRefs[idx];
-    if (!rowEl) return;
-    scrollElementIntoView(sb, rowEl);
+    const direction: -1 | 0 | 1 = idx > lastScrollIndex ? 1 : idx < lastScrollIndex ? -1 : 0;
+    lastScrollIndex = idx;
+    scheduleScrollIntoView(scrollSchedule, () => {
+      const sb = scrollboxRef;
+      const rowEl = rowRefs[idx];
+      if (!sb || !rowEl) return false;
+      return scrollElementIntoView(sb, rowEl, 1, direction);
+    });
   };
 
   // Scroll the target row into view (triggered by keyboard nav / selection).
@@ -672,6 +677,9 @@ export default function GraphView(
     const idx = state.scrollTargetIndex();
     if (idx < 0) return;
     scrollRowIntoView(idx);
+  });
+  onCleanup(() => {
+    if (scrollSchedule.scrollTimer) clearTimeout(scrollSchedule.scrollTimer);
   });
 
   // Deferred scroll-into-view after filter clear: polls until Yoga layout is ready.
