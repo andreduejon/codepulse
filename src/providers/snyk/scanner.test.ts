@@ -3,7 +3,7 @@ import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { SnykCache } from "./cache";
-import { type SnykCommandRunner, scanSnykCommit } from "./scanner";
+import { killSnykProcessGroup, type SnykCommandRunner, scanSnykCommit } from "./scanner";
 import type { SnykScanResult } from "./types";
 
 const SHA = "a".repeat(40);
@@ -176,9 +176,47 @@ printf '%s\\n' '{"vulnerabilities":[{"id":"SNYK-INTEGRATION","severity":"high","
 
     await expect(
       scanSnykCommit({ repoPath: "/repo", sha: SHA, force: true }, { cacheRoot, runCommand: runner }),
-    ).rejects.toThrow("exit code 2");
+    ).rejects.toThrow("Snyk scan failed.");
     expect(commands.some(command => command.slice(0, 4).join(" ") === "git worktree remove --force")).toBe(true);
     expect(await cache.read("/repo", SHA)).toEqual(old);
+  });
+
+  test("does not replace a complete cache entry with a partial rescan", async () => {
+    const cacheRoot = await root();
+    const cache = new SnykCache({ root: cacheRoot });
+    const complete: SnykScanResult = {
+      sha: SHA,
+      scannedAt: "2026-08-20T10:00:00.000Z",
+      counts: { critical: 0, high: 1, medium: 0, low: 0 },
+      findings: [
+        {
+          id: "SNYK-OLD",
+          title: "Old",
+          severity: "high",
+          dependency: "dep",
+          installedVersion: "1.0.0",
+          fixedVersion: null,
+          project: "working",
+          targetFile: null,
+        },
+      ],
+    };
+    await cache.write("/repo", complete);
+    const runner: SnykCommandRunner = async command => {
+      if (command[1] === "rev-parse") return { stdout: SHA, exitCode: 0 };
+      if (command[0] === "snyk") {
+        return {
+          stdout: JSON.stringify([{ error: "unsupported project" }, { projectName: "working", vulnerabilities: [] }]),
+          exitCode: 2,
+        };
+      }
+      return { stdout: "", exitCode: 0 };
+    };
+
+    await expect(
+      scanSnykCommit({ repoPath: "/repo", sha: SHA, force: true }, { cacheRoot, runCommand: runner }),
+    ).rejects.toThrow("Partial scan. Kept last complete snapshot.");
+    expect(await cache.read("/repo", SHA)).toEqual(complete);
   });
 
   test("caches successful projects from partial exit 2 output", async () => {
@@ -204,6 +242,12 @@ printf '%s\\n' '{"vulnerabilities":[{"id":"SNYK-INTEGRATION","severity":"high","
 
     expect(result).toMatchObject({ partial: true, failedProjects: 1, counts: { high: 1 } });
     expect(await new SnykCache({ root: cacheRoot }).read("/repo", SHA)).toEqual(result);
+  });
+
+  test("kills a detached process group", async () => {
+    const child = Bun.spawn(["sleep", "30"], { detached: true, stdout: "ignore", stderr: "ignore" });
+    killSnykProcessGroup(child.pid, "SIGTERM");
+    expect(await child.exited).not.toBe(0);
   });
 
   test("aborts an active scan and still removes the worktree", async () => {

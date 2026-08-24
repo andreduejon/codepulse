@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isSnykScanResult, parseSnykOutput } from "./parser";
+import { isSnykScanResult, parseSnykOutput, shouldReplaceSnykResult } from "./parser";
 
 const SHA = "a".repeat(40);
 
@@ -75,8 +75,29 @@ describe("parseSnykOutput", () => {
   });
 
   test("rejects output without project results", () => {
-    expect(() => parseSnykOutput({}, { sha: SHA })).toThrow("Snyk output contains no project results");
-    expect(() => parseSnykOutput({ error: "project failed" }, { sha: SHA })).toThrow("project failed");
+    expect(() => parseSnykOutput({}, { sha: SHA })).toThrow("Snyk output contains no project results.");
+    expect(() => parseSnykOutput({ error: "project failed" }, { sha: SHA })).toThrow(
+      "Snyk output contains no project results.",
+    );
+  });
+
+  test("treats a project error as failed even when vulnerabilities is present", () => {
+    const result = parseSnykOutput(
+      [
+        {
+          error: "maven failed",
+          projectName: "broken",
+          vulnerabilities: [{ id: "A", severity: "high", name: "a", version: "1" }],
+        },
+        { projectName: "working", vulnerabilities: [{ id: "B", severity: "low", name: "b", version: "2" }] },
+      ],
+      { sha: SHA },
+    );
+
+    expect(result.findings.map(finding => finding.project)).toEqual(["working"]);
+    expect(result.counts).toEqual({ critical: 0, high: 0, medium: 0, low: 1 });
+    expect(result.partial).toBe(true);
+    expect(result.failedProjects).toBe(1);
   });
 
   test("keeps successful projects when another project fails", () => {
@@ -105,6 +126,20 @@ describe("parseSnykOutput", () => {
     );
 
     expect(result.findings[0].cves).toEqual(["CVE-2025-12345", "CVE-2024-9999"]);
+  });
+
+  test("does not replace a complete result with a later partial", () => {
+    const complete = parseSnykOutput({ vulnerabilities: [] }, { sha: SHA, scannedAt: "2026-08-21T10:00:00.000Z" });
+    const partial = parseSnykOutput([{ error: "broken project" }, { projectName: "working", vulnerabilities: [] }], {
+      sha: SHA,
+      scannedAt: "2026-08-24T10:00:00.000Z",
+    });
+
+    expect(shouldReplaceSnykResult(undefined, partial)).toBe(true);
+    expect(shouldReplaceSnykResult(partial, complete)).toBe(false);
+    expect(shouldReplaceSnykResult(complete, partial)).toBe(false);
+    expect(shouldReplaceSnykResult(partial, { ...complete, scannedAt: "2026-08-25T10:00:00.000Z" })).toBe(true);
+    expect(shouldReplaceSnykResult(complete, { ...complete, scannedAt: "2026-08-25T10:00:00.000Z" })).toBe(true);
   });
 
   test("rejects failed project counts without partial status", () => {

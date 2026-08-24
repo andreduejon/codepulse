@@ -1,9 +1,9 @@
-import { access, mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { addDebugEvent, redactDebugValue } from "../../debug/events";
 import { SnykCache } from "./cache";
-import { parseSnykOutput } from "./parser";
+import { parseSnykOutput, shouldReplaceSnykResult } from "./parser";
 import type { SnykCacheLimit, SnykScanOptions, SnykScanResult } from "./types";
 
 export interface SnykCommandResult {
@@ -24,7 +24,7 @@ export interface SnykScannerDependencies {
 }
 
 function abortError(): Error {
-  const error = new Error("Snyk scan aborted");
+  const error = new Error("Snyk scan aborted.");
   error.name = "AbortError";
   return error;
 }
@@ -33,28 +33,17 @@ function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) throw abortError();
 }
 
-async function fileExists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
-}
+const SNYK_GROUP_KILL_GRACE_MS = 500;
 
-async function isBunOnlyProject(path: string): Promise<boolean> {
-  const [hasPackage, bunLock, bunBinaryLock, packageLock, shrinkwrap, yarnLock, pnpmLock] = await Promise.all([
-    fileExists(join(path, "package.json")),
-    fileExists(join(path, "bun.lock")),
-    fileExists(join(path, "bun.lockb")),
-    fileExists(join(path, "package-lock.json")),
-    fileExists(join(path, "npm-shrinkwrap.json")),
-    fileExists(join(path, "yarn.lock")),
-    fileExists(join(path, "pnpm-lock.yaml")),
-  ]);
-  const hasBunLock = bunLock || bunBinaryLock;
-  const hasSupportedLock = packageLock || shrinkwrap || yarnLock || pnpmLock;
-  return hasPackage && hasBunLock && !hasSupportedLock;
+export function killSnykProcessGroup(pid: number | undefined, signal: NodeJS.Signals): void {
+  if (!pid) return;
+  try {
+    process.kill(-pid, signal);
+  } catch {
+    try {
+      process.kill(pid, signal);
+    } catch {}
+  }
 }
 
 function outputError(stdout: string, stderr: string | undefined): string {
@@ -74,21 +63,39 @@ function outputError(stdout: string, stderr: string | undefined): string {
   return "";
 }
 
+function throwScanFailure(stdout: string, stderr: string | undefined, exitCode: number): never {
+  const detail = outputError(stdout, stderr);
+  if (detail) addDebugEvent({ source: "Snyk", message: detail, status: "error" });
+  if (exitCode === 3) throw new Error("Snyk found no supported dependency project.");
+  throw new Error("Snyk scan failed.");
+}
+
 export const runSnykCommand: SnykCommandRunner = async (command, options) => {
   throwIfAborted(options.signal);
   const started = Date.now();
   const source = command[0] === "snyk" ? "Snyk" : "Git";
   const message = command.map(redactDebugValue).join(" ");
-  const process = Bun.spawn(command, {
+  const isolateGroup = command[0] === "snyk";
+  const child = Bun.spawn(command, {
     cwd: options.cwd,
     env: options.env,
     stdout: "pipe",
     stderr: "pipe",
+    detached: isolateGroup,
   });
+  let killTimer: ReturnType<typeof setTimeout> | undefined;
+  const stopChild = (signal: NodeJS.Signals = "SIGTERM") => {
+    if (child.exitCode != null) return;
+    if (isolateGroup) killSnykProcessGroup(child.pid, signal);
+    else {
+      try {
+        child.kill();
+      } catch {}
+    }
+  };
   const onAbort = () => {
-    try {
-      process.kill();
-    } catch {}
+    stopChild("SIGTERM");
+    killTimer = setTimeout(() => stopChild("SIGKILL"), SNYK_GROUP_KILL_GRACE_MS);
   };
   options.signal?.addEventListener("abort", onAbort, { once: true });
   try {
@@ -96,22 +103,23 @@ export const runSnykCommand: SnykCommandRunner = async (command, options) => {
     let stderr: string;
     try {
       [stdout, stderr] = await Promise.all([
-        new Response(process.stdout).text(),
-        new Response(process.stderr).text(),
-        process.exited,
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+        child.exited,
       ]);
     } catch (error) {
       if (options.signal?.aborted) throw abortError();
       throw error;
     }
     throwIfAborted(options.signal);
-    const exitCode = process.exitCode ?? 1;
+    const exitCode = child.exitCode ?? 1;
     addDebugEvent({ source, message, status: String(exitCode), durationMs: Date.now() - started });
     if (exitCode > 1 && stderr.trim()) {
       addDebugEvent({ source, message: redactDebugValue(stderr.trim()), status: "error" });
     }
     return { stdout, stderr, exitCode };
   } finally {
+    if (killTimer) clearTimeout(killTimer);
     options.signal?.removeEventListener("abort", onAbort);
   }
 };
@@ -122,12 +130,11 @@ async function resolveCommitSha(
   runCommand: SnykCommandRunner,
   signal?: AbortSignal,
 ): Promise<string> {
-  if (!/^[0-9a-f]{7,64}$/i.test(revision)) throw new Error("Snyk scan requires a commit SHA");
+  if (!/^[0-9a-f]{7,64}$/i.test(revision)) throw new Error("Snyk scan requires a commit SHA.");
   const result = await runCommand(["git", "rev-parse", "--verify", `${revision}^{commit}`], { cwd: repoPath, signal });
   throwIfAborted(signal);
   const sha = result.stdout.trim().toLowerCase();
-  if (result.exitCode !== 0 || !/^[0-9a-f]{40,64}$/.test(sha))
-    throw new Error("Unable to resolve Snyk scan commit SHA");
+  if (result.exitCode !== 0 || !/^[0-9a-f]{40,64}$/.test(sha)) throw new Error("Unable to resolve commit SHA.");
   return sha;
 }
 
@@ -153,7 +160,7 @@ export async function scanSnykCommit(
       signal: options.signal,
     });
     throwIfAborted(options.signal);
-    if (added.exitCode !== 0) throw new Error("Unable to create Snyk scan worktree");
+    if (added.exitCode !== 0) throw new Error("Unable to create scan worktree.");
 
     const tokenEnvVar = options.tokenEnvVar ?? "SNYK_TOKEN";
     const scan = await runCommand(["snyk", "test", "--json", "--all-projects"], {
@@ -174,14 +181,7 @@ export async function scanSnykCommit(
     }
 
     if (scan.exitCode !== 0 && scan.exitCode !== 1 && !result) {
-      if (await isBunOnlyProject(worktreePath)) {
-        throw new Error(
-          "Snyk Open Source cannot scan Bun lockfiles. Add package-lock.json, yarn.lock, or pnpm-lock.yaml.",
-        );
-      }
-      const detail = outputError(scan.stdout, scan.stderr);
-      const fallback = scan.exitCode === 3 ? "no supported dependency project detected" : "operational failure";
-      throw new Error(detail || `exit code ${scan.exitCode}: ${fallback}`);
+      throwScanFailure(scan.stdout, scan.stderr, scan.exitCode);
     }
 
     if (!result) {
@@ -192,8 +192,14 @@ export async function scanSnykCommit(
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : "invalid JSON";
-        throw new Error(`Snyk returned unusable results: ${message}`);
+        addDebugEvent({ source: "Snyk", message: redactDebugValue(message), status: "error" });
+        throw new Error("Snyk returned unusable results.");
       }
+    }
+    const existing = await cache.read(options.repoPath, sha);
+    throwIfAborted(options.signal);
+    if (!shouldReplaceSnykResult(existing ?? undefined, result)) {
+      throw new Error("Partial scan. Kept last complete snapshot.");
     }
     await cache.write(options.repoPath, result);
     return result;

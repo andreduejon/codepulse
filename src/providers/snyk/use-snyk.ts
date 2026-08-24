@@ -5,6 +5,7 @@ import { providerError, providerIdle, providerLoading, providerUnavailable } fro
 import type { ProviderView } from "../provider";
 import { buildSnykGraphBadges } from "./badges";
 import { DEFAULT_SNYK_CACHE_LIMIT } from "./cache";
+import { shouldReplaceSnykResult } from "./parser";
 import { getCachedSnykScan, scanSnykCommit } from "./scanner";
 import type { SnykCacheLimit, SnykScanResult } from "./types";
 
@@ -25,6 +26,14 @@ export function collectSnykAutoScanTips(
         .filter(sha => EXACT_SHA.test(sha)),
     ),
   ];
+}
+
+export function selectSnykCacheProbes(
+  visibleSHAs: readonly string[],
+  loadedSHAs: ReadonlySet<string>,
+  probedSHAs: ReadonlySet<string>,
+): string[] {
+  return visibleSHAs.filter(sha => !loadedSHAs.has(sha) && !probedSHAs.has(sha));
 }
 
 export interface SnykProviderConfig {
@@ -85,6 +94,7 @@ export function useSnyk(opts: {
   const scanningSHAs = new Set<string>();
   const [scanningVersion, setScanningVersion] = createSignal(0);
   const autoScanAttempted = new Set<string>();
+  const cacheProbeAttempted = new Set<string>();
   const queue: ScanQueueEntry[] = [];
   const queuedBySHA = new Map<string, ScanQueueEntry>();
   let activeEntry: ScanQueueEntry | null = null;
@@ -101,7 +111,7 @@ export function useSnyk(opts: {
     if (disposed || expectedEpoch !== epoch) return;
     const sha = result.sha.toLowerCase();
     const existing = results.get(sha);
-    if (existing && existing.scannedAt > result.scannedAt) return;
+    if (!shouldReplaceSnykResult(existing, result)) return;
     results.set(sha, result);
     publishResults();
   }
@@ -119,13 +129,14 @@ export function useSnyk(opts: {
     activeController = null;
     clearQueuedScans();
     autoScanAttempted.clear();
+    cacheProbeAttempted.clear();
     results = new Map();
     publishResults();
     const current = config();
     actions.setProviderStatus(
       SNYK_PROVIDER_ID,
       current.enabled && !hasToken(current.tokenEnvVar)
-        ? providerUnavailable(`Snyk unavailable: missing ${current.tokenEnvVar}`)
+        ? providerUnavailable(`Snyk unavailable. Missing ${current.tokenEnvVar}.`)
         : providerIdle(),
     );
   }
@@ -167,7 +178,7 @@ export function useSnyk(opts: {
     } catch (error) {
       if (!controller.signal.aborted && entry.epoch === epoch) {
         const message = error instanceof Error ? error.message : String(error);
-        actions.setProviderStatus(SNYK_PROVIDER_ID, providerError(`Snyk scan failed: ${message}`));
+        actions.setProviderStatus(SNYK_PROVIDER_ID, providerError(message));
       }
     } finally {
       entry.resolve(scanResult);
@@ -185,7 +196,7 @@ export function useSnyk(opts: {
     if (disposed) return Promise.resolve(null);
     const normalizedSHA = sha.trim().toLowerCase();
     if (!EXACT_SHA.test(normalizedSHA)) {
-      actions.setProviderStatus(SNYK_PROVIDER_ID, providerError("Snyk scan requires an exact commit SHA"));
+      actions.setProviderStatus(SNYK_PROVIDER_ID, providerError("Snyk scan requires an exact commit SHA."));
       return Promise.resolve(null);
     }
     if (!isAvailable()) {
@@ -193,7 +204,7 @@ export function useSnyk(opts: {
       actions.setProviderStatus(
         SNYK_PROVIDER_ID,
         providerUnavailable(
-          current.enabled ? `Snyk unavailable: missing ${current.tokenEnvVar}` : "Snyk provider disabled",
+          current.enabled ? `Snyk unavailable. Missing ${current.tokenEnvVar}.` : "Snyk is disabled.",
         ),
       );
       return Promise.resolve(null);
@@ -227,7 +238,7 @@ export function useSnyk(opts: {
         SNYK_PROVIDER_ID,
         hasToken(current.tokenEnvVar)
           ? providerIdle()
-          : providerUnavailable(`Snyk unavailable: missing ${current.tokenEnvVar}`),
+          : providerUnavailable(`Snyk unavailable. Missing ${current.tokenEnvVar}.`),
       );
     } else {
       state.providers.unregister(SNYK_PROVIDER_ID);
@@ -265,17 +276,18 @@ export function useSnyk(opts: {
       ),
     ];
     if (!current.enabled || !repoPath || visibleSHAs.length === 0) return;
+    const toRead = selectSnykCacheProbes(visibleSHAs, new Set(results.keys()), cacheProbeAttempted);
+    if (toRead.length === 0) return;
+    for (const sha of toRead) cacheProbeAttempted.add(sha);
     const expectedEpoch = epoch;
-    const controller = new AbortController();
-    void Promise.all(visibleSHAs.map(sha => readCache(repoPath, sha, { maxCachedScans: current.maxCachedScans }))).then(
+    void Promise.all(toRead.map(sha => readCache(repoPath, sha, { maxCachedScans: current.maxCachedScans }))).then(
       cached => {
-        if (controller.signal.aborted || expectedEpoch !== epoch) return;
+        if (expectedEpoch !== epoch || disposed) return;
         for (const result of cached) {
           if (result) mergeResult(result, expectedEpoch);
         }
       },
     );
-    onCleanup(() => controller.abort());
   });
 
   createEffect(() => {

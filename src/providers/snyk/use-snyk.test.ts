@@ -3,7 +3,13 @@ import { createRoot, createSignal } from "solid-js";
 import type { AppActions, AppState } from "../../context/state";
 import { createAppState } from "../../context/state";
 import type { SnykScanOptions, SnykScanResult } from "./types";
-import { collectSnykAutoScanTips, type SnykProviderConfig, type UseSnykResult, useSnyk } from "./use-snyk";
+import {
+  collectSnykAutoScanTips,
+  type SnykProviderConfig,
+  selectSnykCacheProbes,
+  type UseSnykResult,
+  useSnyk,
+} from "./use-snyk";
 
 const TOKEN_ENV_VAR = "CODEPULSE_TEST_SNYK_TOKEN";
 const SHA_A = "a".repeat(40);
@@ -162,6 +168,10 @@ describe("useSnyk", () => {
     expect(await queued).toEqual(result(SHA_B));
   });
 
+  test("probes only unseen cache SHAs", () => {
+    expect(selectSnykCacheProbes([SHA_A, SHA_B, SHA_C], new Set([SHA_A]), new Set([SHA_C]))).toEqual([SHA_B]);
+  });
+
   test("selects unique configured local branch tips", () => {
     expect(
       collectSnykAutoScanTips(
@@ -190,7 +200,7 @@ describe("useSnyk", () => {
     expect(calls).toHaveLength(0);
     expect(state.providerStatusFor("snyk")).toEqual({
       kind: "unavailable",
-      message: `Snyk unavailable: missing ${TOKEN_ENV_VAR}`,
+      message: `Snyk unavailable. Missing ${TOKEN_ENV_VAR}.`,
     });
   });
 

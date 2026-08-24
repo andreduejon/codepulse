@@ -224,8 +224,8 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     },
     {
       kind: "binding",
-      key: "Scan commit",
-      desc: "Open commit details, select Scan commit, and press Enter. Existing results remain historical snapshots until rescanned.",
+      key: "Scan / Rescan commit",
+      desc: "Open commit details, select Scan commit or Rescan commit, and press Enter. Existing results remain historical snapshots until rescanned.",
       indent: 1,
     },
   ],

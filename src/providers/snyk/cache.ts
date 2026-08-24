@@ -22,7 +22,7 @@ async function repositoryHash(repoPath: string): Promise<string> {
 }
 
 function assertExactSha(sha: string): string {
-  if (!/^[0-9a-f]{40,64}$/i.test(sha)) throw new Error("Snyk cache requires an exact commit SHA");
+  if (!/^[0-9a-f]{40,64}$/i.test(sha)) throw new Error("Snyk cache requires an exact commit SHA.");
   return sha.toLowerCase();
 }
 
@@ -58,7 +58,7 @@ export class SnykCache {
   }
 
   async write(repoPath: string, result: SnykScanResult): Promise<void> {
-    if (!isSnykScanResult(result)) throw new Error("Cannot cache an invalid Snyk scan result");
+    if (!isSnykScanResult(result)) throw new Error("Cannot cache an invalid Snyk scan result.");
     const path = await this.pathFor(repoPath, result.sha);
     const directory = dirname(path);
     const temporaryPath = join(directory, `.${result.sha}.${randomUUID()}.tmp`);

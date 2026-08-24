@@ -105,23 +105,27 @@ function emptyCounts(): SnykSeverityCounts {
   return { critical: 0, high: 0, medium: 0, low: 0 };
 }
 
+export function shouldReplaceSnykResult(existing: SnykScanResult | undefined, incoming: SnykScanResult): boolean {
+  if (!existing) return true;
+  if (incoming.partial && !existing.partial) return false;
+  return existing.scannedAt <= incoming.scannedAt;
+}
+
 export function parseSnykOutput(raw: string | unknown, options: SnykParseOptions): SnykScanResult {
   const parsed: unknown = typeof raw === "string" ? JSON.parse(raw) : raw;
   const projects = Array.isArray(parsed) ? parsed : [parsed];
   const findings: SnykFinding[] = [];
   let validProjects = 0;
   let failedProjects = 0;
-  let firstProjectError: string | null = null;
 
   for (const value of projects) {
     if (!isObject(value)) continue;
-    if (!Array.isArray(value.vulnerabilities)) {
-      if (typeof value.error === "string") {
-        failedProjects++;
-        if (!firstProjectError) firstProjectError = value.error;
-      }
+    const error = typeof value.error === "string" ? value.error.trim() : "";
+    if (error) {
+      failedProjects++;
       continue;
     }
+    if (!Array.isArray(value.vulnerabilities)) continue;
     validProjects++;
     const project = stringValue(value.projectName) ?? stringValue(value.displayTargetFile) ?? null;
     const targetFile = stringValue(value.targetFile) ?? null;
@@ -132,7 +136,7 @@ export function parseSnykOutput(raw: string | unknown, options: SnykParseOptions
     }
   }
 
-  if (validProjects === 0) throw new Error(firstProjectError ?? "Snyk output contains no project results");
+  if (validProjects === 0) throw new Error("Snyk output contains no project results.");
 
   const counts = emptyCounts();
   for (const finding of findings) counts[finding.severity]++;
