@@ -11,8 +11,7 @@ export interface SnykGraphColumnProps {
   /** Exact scan for the row's commit, or null when that commit has not been scanned. */
   scan: SnykScanResult | null;
   active: boolean;
-  /** Transient state such as "scanning" or "failed"; shown instead of the scan date. */
-  status?: string | null;
+  loading?: boolean;
 }
 
 const SEVERITIES: { severity: SnykSeverity; label: string }[] = [
@@ -89,17 +88,12 @@ export function SnykCountsColumn(props: Readonly<SnykGraphColumnProps>) {
 /** Relative scan time, or a transient scan status, in the existing date column. */
 export function SnykScanColumn(props: Readonly<SnykGraphColumnProps>) {
   const t = useT();
-  const label = () => props.status || (props.scan ? formatRelativeDate(props.scan.scannedAt) : UNCOMMITTED_PLACEHOLDER);
-  const color = () => {
-    const status = props.status?.toLowerCase();
-    if (status?.includes("fail") || status?.includes("error")) return t().error;
-    if (status) return t().accent;
-    return t().foregroundMuted;
-  };
+  const label = () =>
+    props.loading ? "scanning..." : props.scan ? formatRelativeDate(props.scan.scannedAt) : UNCOMMITTED_PLACEHOLDER;
 
   return (
     <box flexShrink={0} width={LAST_SCAN_COL_WIDTH} overflow="hidden">
-      <text fg={color()} wrapMode="none" truncate>
+      <text fg={t().foregroundMuted} wrapMode="none" truncate>
         {props.active ? <strong>{label()}</strong> : label()}
       </text>
     </box>

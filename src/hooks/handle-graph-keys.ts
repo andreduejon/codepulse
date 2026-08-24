@@ -4,7 +4,7 @@
  * Handles:
  *   - ↑/↓ / j/k  — cursor movement (highlight-aware)
  *   - ←/→ / h/l  — enter detail panel / no-op
- *   - Enter       — open detail dialog in compact mode
+ *   - Enter       — focus details in normal mode or open detail dialog in compact mode
  *   - a           — toggle ancestry highlighting
  *   - p           — open path mode
  *   - g/G         — jump to first/last (or first/last highlighted)
@@ -13,7 +13,7 @@
  */
 import type { KeyEvent, ScrollBoxRenderable } from "@opentui/core";
 import type { DetailNavRef } from "../components/detail-types";
-import { ANCESTRY_PRELOAD_ROWS, isUncommittedHash, SHIFT_JUMP } from "../constants";
+import { ANCESTRY_PRELOAD_ROWS, SHIFT_JUMP } from "../constants";
 import type { AppActions, AppState } from "../context/state";
 import { countHighlightedBelow, findHighlightedIndex } from "../utils/keyboard-nav-utils";
 import type { CommandBarMode, DialogId } from "./use-keyboard-navigation";
@@ -29,7 +29,6 @@ export interface GraphKeyOptions {
   onCommandExecute: (cmd: string) => void;
   setCommandBarMode: (m: CommandBarMode) => void;
   setCommandBarValue: (v: string) => void;
-  onSnykScan?: (sha: string, force: boolean) => void;
 }
 
 /**
@@ -48,7 +47,6 @@ export function handleGraphKey(e: KeyEvent, opts: GraphKeyOptions): boolean {
     onCommandExecute,
     setCommandBarMode,
     setCommandBarValue,
-    onSnykScan,
   } = opts;
 
   const scrollbox = getDetailScrollboxRef();
@@ -127,20 +125,19 @@ export function handleGraphKey(e: KeyEvent, opts: GraphKeyOptions): boolean {
       // bare ←/h on graph: no-op (Shift+← handled at top level)
       return false;
     case "return":
-      if (state.activeProviderView() === "snyk" && layoutMode() === "normal") {
-        const commit = state.selectedCommit();
-        if (commit && !isUncommittedHash(commit.hash)) {
-          e.preventDefault();
-          onSnykScan?.(commit.hash, state.graphBadges().has(commit.hash));
-          return true;
-        }
-      }
       // In compact mode, Enter opens the detail dialog
       if (layoutMode() === "compact" && state.selectedCommit()) {
         e.preventDefault();
         actions.setDetailCursorIndex(0);
         actions.setDetailFocused(true);
         setDialog("detail");
+        return true;
+      }
+      if (layoutMode() === "normal" && state.selectedCommit()) {
+        e.preventDefault();
+        detailNavRef.pendingJumpDirection = null;
+        actions.setDetailCursorIndex(0);
+        actions.setDetailFocused(true);
         return true;
       }
       return false;

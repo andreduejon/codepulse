@@ -14,6 +14,11 @@ export interface SnykFinding {
   dependency: string;
   installedVersion: string;
   fixedVersion: string | null;
+  dependencyType?: "direct" | "transitive" | "unknown";
+  dependencyPath?: string[];
+  upgradeDependency?: string | null;
+  upgradeVersion?: string | null;
+  cves?: string[];
   project: string | null;
   targetFile: string | null;
 }
@@ -23,6 +28,8 @@ export interface SnykScanResult {
   scannedAt: string;
   counts: SnykSeverityCounts;
   findings: SnykFinding[];
+  partial?: boolean;
+  failedProjects?: number;
 }
 
 export type SnykCacheLimit = 10 | 20 | 50;

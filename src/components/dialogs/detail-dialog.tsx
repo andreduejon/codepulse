@@ -33,7 +33,7 @@ export function DetailDialog(props: Readonly<DetailPanelProps & { onClose: () =>
         <DialogTitleBar title="Details" />
         {/* paddingX=4 matches other dialogs' inner content padding (outer box already has paddingX=1) */}
         <box flexDirection="column" flexGrow={1} paddingX={4}>
-          <DetailPanel {...props} />
+          <DetailPanel {...props} contentWidth={dialogWidth() - 10} />
         </box>
         <DialogFooter>
           <text flexShrink={0} wrapMode="none" fg={t().foreground}>

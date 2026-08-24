@@ -7,18 +7,26 @@ import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
  * No-op if either reference is undefined.
  */
 export function scrollElementIntoView(scrollbox: ScrollBoxRenderable, el: Renderable, padding = 1): void {
-  const layout = el.getLayoutNode().getComputedLayout();
-  const rowTop = layout.top;
-  const rowBottom = rowTop + layout.height;
-
+  const rowTop = el.screenY;
+  const rowBottom = rowTop + el.height;
+  const viewportTop = scrollbox.viewport.screenY;
   const viewportHeight = scrollbox.viewport.height;
-  const currentScroll = scrollbox.scrollTop;
-  const visibleBottom = currentScroll + viewportHeight;
+  const viewportBottom = viewportTop + viewportHeight;
+  const usableHeight = Math.max(1, viewportHeight - padding * 2);
 
-  if (rowTop < currentScroll + padding) {
-    scrollbox.scrollTo(Math.max(0, rowTop - padding));
-  } else if (rowBottom > visibleBottom - padding) {
-    scrollbox.scrollTo(rowBottom - viewportHeight + padding);
+  // An item taller than the viewport cannot fit entirely. Keep its selectable
+  // top edge visible instead of aligning its bottom and losing the cursor row.
+  if (el.height > usableHeight) {
+    if (rowTop < viewportTop + padding || rowTop >= viewportBottom - padding) {
+      scrollbox.scrollBy({ x: 0, y: rowTop - viewportTop - padding });
+    }
+    return;
+  }
+
+  if (rowTop < viewportTop + padding) {
+    scrollbox.scrollBy({ x: 0, y: rowTop - viewportTop - padding });
+  } else if (rowBottom > viewportBottom - padding) {
+    scrollbox.scrollBy({ x: 0, y: rowBottom - viewportBottom + padding });
   }
 }
 

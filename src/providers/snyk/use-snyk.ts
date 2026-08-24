@@ -12,6 +12,21 @@ import type { SnykCacheLimit, SnykScanResult } from "./types";
 const SNYK_PROVIDER_ID = "snyk" as ProviderView;
 const EXACT_SHA = /^[0-9a-f]{40,64}$/i;
 
+export function collectSnykAutoScanTips(
+  branches: readonly { name: string; isRemote: boolean; lastCommitHash: string }[],
+  configuredBranchNames: readonly string[],
+): string[] {
+  const configured = new Set(configuredBranchNames);
+  return [
+    ...new Set(
+      branches
+        .filter(branch => !branch.isRemote && configured.has(branch.name))
+        .map(branch => branch.lastCommitHash.toLowerCase())
+        .filter(sha => EXACT_SHA.test(sha)),
+    ),
+  ];
+}
+
 export interface SnykProviderConfig {
   enabled: boolean;
   tokenEnvVar: string;
@@ -45,8 +60,12 @@ export function useSnyk(opts: {
   state: AppState;
   actions: AppActions;
   config: Accessor<Partial<SnykProviderConfig>>;
+  scan?: typeof scanSnykCommit;
+  readCache?: typeof getCachedSnykScan;
 }): UseSnykResult {
   const { state, actions } = opts;
+  const runScan = opts.scan ?? scanSnykCommit;
+  const readCache = opts.readCache ?? getCachedSnykScan;
   const config = (): SnykProviderConfig => {
     const partial = opts.config();
     return {
@@ -132,7 +151,7 @@ export function useSnyk(opts: {
     if (entry.epoch === epoch) actions.setProviderStatus(SNYK_PROVIDER_ID, providerLoading());
     try {
       const currentConfig = config();
-      scanResult = await scanSnykCommit({
+      scanResult = await runScan({
         repoPath: untrack(state.repoPath),
         sha: entry.sha,
         tokenEnvVar: currentConfig.tokenEnvVar,
@@ -248,14 +267,14 @@ export function useSnyk(opts: {
     if (!current.enabled || !repoPath || visibleSHAs.length === 0) return;
     const expectedEpoch = epoch;
     const controller = new AbortController();
-    void Promise.all(
-      visibleSHAs.map(sha => getCachedSnykScan(repoPath, sha, { maxCachedScans: current.maxCachedScans })),
-    ).then(cached => {
-      if (controller.signal.aborted || expectedEpoch !== epoch) return;
-      for (const result of cached) {
-        if (result) mergeResult(result, expectedEpoch);
-      }
-    });
+    void Promise.all(visibleSHAs.map(sha => readCache(repoPath, sha, { maxCachedScans: current.maxCachedScans }))).then(
+      cached => {
+        if (controller.signal.aborted || expectedEpoch !== epoch) return;
+        for (const result of cached) {
+          if (result) mergeResult(result, expectedEpoch);
+        }
+      },
+    );
     onCleanup(() => controller.abort());
   });
 
@@ -265,20 +284,12 @@ export function useSnyk(opts: {
     const branches = state.branches();
     if (!repoPath || !isAvailable() || current.autoScanBranches.length === 0) return;
 
-    const configuredBranches = new Set(current.autoScanBranches);
-    const branchTipSHAs = [
-      ...new Set(
-        branches
-          .filter(branch => !branch.isRemote && configuredBranches.has(branch.name))
-          .map(branch => branch.lastCommitHash.toLowerCase())
-          .filter(sha => EXACT_SHA.test(sha)),
-      ),
-    ];
+    const branchTipSHAs = collectSnykAutoScanTips(branches, current.autoScanBranches);
     const expectedEpoch = epoch;
     for (const sha of branchTipSHAs) {
       if (autoScanAttempted.has(sha)) continue;
       autoScanAttempted.add(sha);
-      void getCachedSnykScan(repoPath, sha, { maxCachedScans: current.maxCachedScans }).then(cached => {
+      void readCache(repoPath, sha, { maxCachedScans: current.maxCachedScans }).then(cached => {
         if (expectedEpoch !== epoch || disposed) return;
         if (cached) {
           mergeResult(cached, expectedEpoch);

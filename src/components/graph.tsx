@@ -490,7 +490,7 @@ function GraphLine(
             <SnykScanColumn
               scan={props.snykGetCommitData?.(commit().hash) ?? null}
               active={props.active}
-              status={props.snykIsScanning?.(commit().hash) ? "scanning" : null}
+              loading={props.snykIsScanning?.(commit().hash) ?? false}
             />
           </>
         ) : state.activeProviderView() !== "git" ? (

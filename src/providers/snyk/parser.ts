@@ -31,6 +31,33 @@ function dependencyFromPath(value: unknown): { name: string; version: string } |
   return null;
 }
 
+function dependencyPath(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const entries = value.filter((entry): entry is string => typeof entry === "string" && entry.length > 0);
+  return entries.length > 1 ? entries.slice(1) : entries;
+}
+
+function upgradeTarget(value: unknown): { name: string; version: string } | null {
+  if (!Array.isArray(value)) return null;
+  return packageAndVersion(value[1]);
+}
+
+function cveIdentifiers(vulnerability: Record<string, unknown>): string[] {
+  const values: unknown[] = [];
+  const identifiers = isObject(vulnerability.identifiers) ? vulnerability.identifiers : null;
+  if (Array.isArray(identifiers?.CVE)) values.push(...identifiers.CVE);
+  if (Array.isArray(vulnerability.cves)) values.push(...vulnerability.cves);
+  if (typeof vulnerability.id === "string") values.push(vulnerability.id);
+  if (typeof vulnerability.title === "string") values.push(...vulnerability.title.split(/\s+/));
+  return [
+    ...new Set(
+      values.flatMap(value =>
+        typeof value === "string" ? (value.match(/CVE-\d{4}-\d{4,}/gi) ?? []).map(entry => entry.toUpperCase()) : [],
+      ),
+    ),
+  ];
+}
+
 function fixedVersion(vulnerability: Record<string, unknown>, dependency: string): string | null {
   if (Array.isArray(vulnerability.fixedIn)) {
     const fixed = vulnerability.fixedIn.find(value => typeof value === "string" && value.length > 0);
@@ -54,6 +81,8 @@ function normalizeFinding(value: unknown, project: string | null, targetFile: st
   const fromPath = dependencyFromPath(value.from);
   const dependency = stringValue(value.packageName) ?? stringValue(value.name) ?? fromPath?.name ?? "(unknown)";
   const installedVersion = stringValue(value.version) ?? fromPath?.version ?? "(unknown)";
+  const path = dependencyPath(value.from);
+  const upgrade = upgradeTarget(value.upgradePath);
 
   return {
     id: stringValue(value.id) ?? "unknown",
@@ -62,6 +91,11 @@ function normalizeFinding(value: unknown, project: string | null, targetFile: st
     dependency,
     installedVersion,
     fixedVersion: fixedVersion(value, dependency),
+    dependencyType: path.length === 0 ? "unknown" : path.length === 1 ? "direct" : "transitive",
+    dependencyPath: path,
+    upgradeDependency: upgrade?.name ?? null,
+    upgradeVersion: upgrade?.version ?? null,
+    cves: cveIdentifiers(value),
     project,
     targetFile,
   };
@@ -76,11 +110,16 @@ export function parseSnykOutput(raw: string | unknown, options: SnykParseOptions
   const projects = Array.isArray(parsed) ? parsed : [parsed];
   const findings: SnykFinding[] = [];
   let validProjects = 0;
+  let failedProjects = 0;
+  let firstProjectError: string | null = null;
 
   for (const value of projects) {
     if (!isObject(value)) continue;
     if (!Array.isArray(value.vulnerabilities)) {
-      if (typeof value.error === "string") throw new Error(value.error);
+      if (typeof value.error === "string") {
+        failedProjects++;
+        if (!firstProjectError) firstProjectError = value.error;
+      }
       continue;
     }
     validProjects++;
@@ -93,7 +132,7 @@ export function parseSnykOutput(raw: string | unknown, options: SnykParseOptions
     }
   }
 
-  if (validProjects === 0) throw new Error("Snyk output contains no project results");
+  if (validProjects === 0) throw new Error(firstProjectError ?? "Snyk output contains no project results");
 
   const counts = emptyCounts();
   for (const finding of findings) counts[finding.severity]++;
@@ -103,6 +142,7 @@ export function parseSnykOutput(raw: string | unknown, options: SnykParseOptions
     scannedAt: options.scannedAt ?? new Date().toISOString(),
     counts,
     findings,
+    ...(failedProjects > 0 ? { partial: true, failedProjects } : {}),
   };
 }
 
@@ -110,6 +150,21 @@ export function isSnykScanResult(value: unknown): value is SnykScanResult {
   if (!isObject(value) || typeof value.sha !== "string" || !/^[0-9a-f]{40,64}$/i.test(value.sha)) return false;
   if (typeof value.scannedAt !== "string" || Number.isNaN(Date.parse(value.scannedAt))) return false;
   if (!isObject(value.counts) || !Array.isArray(value.findings)) return false;
+  if (value.partial !== undefined && typeof value.partial !== "boolean") return false;
+  const failedProjects = value.failedProjects;
+  if (
+    failedProjects !== undefined &&
+    (typeof failedProjects !== "number" || !Number.isInteger(failedProjects) || failedProjects < 0)
+  ) {
+    return false;
+  }
+  if (
+    value.partial === true &&
+    (typeof failedProjects !== "number" || !Number.isInteger(failedProjects) || failedProjects < 1)
+  ) {
+    return false;
+  }
+  if (value.partial !== true && failedProjects !== undefined) return false;
 
   for (const severity of SEVERITIES) {
     const count = value.counts[severity];
@@ -125,6 +180,20 @@ export function isSnykScanResult(value: unknown): value is SnykScanResult {
       typeof finding.dependency === "string" &&
       typeof finding.installedVersion === "string" &&
       (typeof finding.fixedVersion === "string" || finding.fixedVersion === null) &&
+      (finding.dependencyType === undefined ||
+        finding.dependencyType === "direct" ||
+        finding.dependencyType === "transitive" ||
+        finding.dependencyType === "unknown") &&
+      (finding.dependencyPath === undefined ||
+        (Array.isArray(finding.dependencyPath) && finding.dependencyPath.every(entry => typeof entry === "string"))) &&
+      (finding.upgradeDependency === undefined ||
+        typeof finding.upgradeDependency === "string" ||
+        finding.upgradeDependency === null) &&
+      (finding.upgradeVersion === undefined ||
+        typeof finding.upgradeVersion === "string" ||
+        finding.upgradeVersion === null) &&
+      (finding.cves === undefined ||
+        (Array.isArray(finding.cves) && finding.cves.every(entry => typeof entry === "string"))) &&
       (typeof finding.project === "string" || finding.project === null) &&
       (typeof finding.targetFile === "string" || finding.targetFile === null)
     );

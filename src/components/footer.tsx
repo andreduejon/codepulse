@@ -1,5 +1,4 @@
 import { createEffect, createSignal, onCleanup, Show } from "solid-js";
-import { isUncommittedHash } from "../constants";
 import { useAppState } from "../context/state";
 import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
 import { useT } from "../hooks/use-t";
@@ -60,11 +59,7 @@ export default function Footer(
   const spinnerColor = () => t().accent;
 
   const enterAction = () => {
-    if (state.detailFocused()) return state.detailCursorAction();
-    if (state.activeProviderView() !== "snyk" || props.compact) return null;
-    const sha = state.selectedCommit()?.hash;
-    if (!sha || isUncommittedHash(sha)) return null;
-    return state.graphBadges().has(sha) ? "scan again" : "scan";
+    return state.detailFocused() ? state.detailCursorAction() : null;
   };
   const nextProviderLabel = () => {
     state.providers.getVersion();
@@ -154,7 +149,7 @@ export default function Footer(
           <Show when={nextProviderLabel()}>
             <KeyHintSeparator />
           </Show>
-          <Show when={props.compact} fallback={<KeyHint key="←/→" desc=" switch tab" />}>
+          <Show when={props.compact} fallback={<KeyHint key="enter/→" desc=" show details" />}>
             <KeyHint key="enter" desc=" show details" />
           </Show>
           <KeyHintSeparator />

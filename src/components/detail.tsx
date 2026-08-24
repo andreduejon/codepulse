@@ -940,6 +940,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
             <Show when={activeTab() === "snyk" && props.snykGetCommitData && props.snykScanCommit}>
               <SnykDetailTab
                 scan={props.snykGetCommitData?.(c().hash) ?? null}
+                contentWidth={props.contentWidth}
                 onScan={async () => {
                   await props.snykScanCommit?.(c().hash, !!props.snykGetCommitData?.(c().hash));
                 }}

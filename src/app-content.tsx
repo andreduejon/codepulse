@@ -671,9 +671,6 @@ export function AppContent(props: Readonly<AppContentProps>) {
     },
     getProviderLoading: () => state.providerStatus().kind === "loading",
     onSwitchGroupRepo: switchGroupRepo,
-    onSnykScan: (sha, force) => {
-      void snyk.scanCommit(sha, force);
-    },
   });
 
   // ── Provider-aware theme: override accent with githubActionsBg in CI mode ──

@@ -27,6 +27,14 @@ describe("snykSeverityCountsToGraphBadge", () => {
     expect(badge.passCount).toBe(1);
     expect(badge.failCount).toBe(0);
   });
+
+  test("uses an unknown badge when a partial scan has no findings", () => {
+    const badge = snykSeverityCountsToGraphBadge(SHA, { critical: 0, high: 0, medium: 0, low: 0 }, SCANNED_AT, true);
+
+    expect(badge.badge).toBe("unknown");
+    expect(badge.passCount).toBe(0);
+    expect(badge.failCount).toBe(0);
+  });
 });
 
 test("buildSnykGraphBadges keys badges by exact scan SHA", () => {

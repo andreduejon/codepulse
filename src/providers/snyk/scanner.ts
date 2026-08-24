@@ -140,6 +140,7 @@ export async function scanSnykCommit(
   const sha = await resolveCommitSha(options.repoPath, options.sha, runCommand, options.signal);
   if (!options.force) {
     const cached = await cache.read(options.repoPath, sha);
+    throwIfAborted(options.signal);
     if (cached) return cached;
   }
 
@@ -161,7 +162,18 @@ export async function scanSnykCommit(
       env: { ...process.env, SNYK_TOKEN: process.env[tokenEnvVar] },
     });
     throwIfAborted(options.signal);
-    if (scan.exitCode !== 0 && scan.exitCode !== 1) {
+    let result: SnykScanResult | null = null;
+    if (scan.exitCode === 2) {
+      try {
+        const parsed = parseSnykOutput(scan.stdout, {
+          sha,
+          scannedAt: (dependencies.now?.() ?? new Date()).toISOString(),
+        });
+        if (parsed.partial) result = parsed;
+      } catch {}
+    }
+
+    if (scan.exitCode !== 0 && scan.exitCode !== 1 && !result) {
       if (await isBunOnlyProject(worktreePath)) {
         throw new Error(
           "Snyk Open Source cannot scan Bun lockfiles. Add package-lock.json, yarn.lock, or pnpm-lock.yaml.",
@@ -172,15 +184,16 @@ export async function scanSnykCommit(
       throw new Error(detail || `exit code ${scan.exitCode}: ${fallback}`);
     }
 
-    let result: SnykScanResult;
-    try {
-      result = parseSnykOutput(scan.stdout, {
-        sha,
-        scannedAt: (dependencies.now?.() ?? new Date()).toISOString(),
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "invalid JSON";
-      throw new Error(`Snyk returned unusable results: ${message}`);
+    if (!result) {
+      try {
+        result = parseSnykOutput(scan.stdout, {
+          sha,
+          scannedAt: (dependencies.now?.() ?? new Date()).toISOString(),
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "invalid JSON";
+        throw new Error(`Snyk returned unusable results: ${message}`);
+      }
     }
     await cache.write(options.repoPath, result);
     return result;

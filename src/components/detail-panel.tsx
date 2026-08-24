@@ -21,6 +21,7 @@ import type { DetailNavRef } from "./detail-types";
 import UncommittedDetailView from "./uncommitted-detail";
 
 export interface DetailPanelProps {
+  contentWidth?: number;
   /** Ref callback for programmatic scrollbox control */
   scrollboxRef?: (el: ScrollBoxRenderable) => void;
   /** Navigation ref for interactive items */
@@ -221,6 +222,7 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
           }
         >
           <CommitDetailView
+            contentWidth={props.contentWidth}
             onJumpToCommit={props.onJumpToCommit}
             onOpenDiff={props.onOpenDiff}
             navRef={props.navRef}

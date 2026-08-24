@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseSnykOutput } from "./parser";
+import { isSnykScanResult, parseSnykOutput } from "./parser";
 
 const SHA = "a".repeat(40);
 
@@ -16,7 +16,9 @@ describe("parseSnykOutput", () => {
             severity: "critical",
             packageName: "alpha",
             version: "1.0.0",
+            from: ["service@1.0.0", "alpha@1.0.0"],
             fixedIn: ["1.1.0"],
+            identifiers: { CVE: ["CVE-2026-1234", "CVE-2026-1234"], CWE: ["CWE-287"] },
           },
           {
             id: "H",
@@ -24,7 +26,8 @@ describe("parseSnykOutput", () => {
             severity: "high",
             name: "beta",
             version: "2.0.0",
-            upgradePath: [false, "beta@2.1.0"],
+            from: ["service@1.0.0", "parent@3.0.0", "beta@2.0.0"],
+            upgradePath: [false, "parent@3.1.0", "beta@2.1.0"],
           },
           { id: "M", severity: "medium", from: ["root@1.0.0", "gamma@3.0.0"] },
           { id: "L", severity: "low", packageName: "delta", version: "4.0.0" },
@@ -38,11 +41,24 @@ describe("parseSnykOutput", () => {
       dependency: "alpha",
       installedVersion: "1.0.0",
       fixedVersion: "1.1.0",
+      dependencyType: "direct",
+      dependencyPath: ["alpha@1.0.0"],
+      cves: ["CVE-2026-1234"],
       project: "service",
       targetFile: "package.json",
     });
-    expect(result.findings[1].fixedVersion).toBe("2.1.0");
-    expect(result.findings[2]).toMatchObject({ dependency: "gamma", installedVersion: "3.0.0" });
+    expect(result.findings[1]).toMatchObject({
+      fixedVersion: "2.1.0",
+      dependencyType: "transitive",
+      dependencyPath: ["parent@3.0.0", "beta@2.0.0"],
+      upgradeDependency: "parent",
+      upgradeVersion: "3.1.0",
+    });
+    expect(result.findings[2]).toMatchObject({
+      dependency: "gamma",
+      installedVersion: "3.0.0",
+      dependencyType: "direct",
+    });
   });
 
   test("normalizes all-projects array output", () => {
@@ -61,5 +77,45 @@ describe("parseSnykOutput", () => {
   test("rejects output without project results", () => {
     expect(() => parseSnykOutput({}, { sha: SHA })).toThrow("Snyk output contains no project results");
     expect(() => parseSnykOutput({ error: "project failed" }, { sha: SHA })).toThrow("project failed");
+  });
+
+  test("keeps successful projects when another project fails", () => {
+    const result = parseSnykOutput(
+      [
+        { error: "broken project" },
+        { projectName: "working", vulnerabilities: [{ id: "A", severity: "high", name: "a", version: "1" }] },
+      ],
+      { sha: SHA },
+    );
+
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0].project).toBe("working");
+    expect(result.partial).toBe(true);
+    expect(result.failedProjects).toBe(1);
+  });
+
+  test("extracts CVEs from fallback fields", () => {
+    const result = parseSnykOutput(
+      {
+        vulnerabilities: [
+          { id: "SNYK-CVE-2025-12345", title: "Related to CVE-2024-9999", severity: "high", name: "a", version: "1" },
+        ],
+      },
+      { sha: SHA },
+    );
+
+    expect(result.findings[0].cves).toEqual(["CVE-2025-12345", "CVE-2024-9999"]);
+  });
+
+  test("rejects failed project counts without partial status", () => {
+    expect(
+      isSnykScanResult({
+        sha: SHA,
+        scannedAt: "2026-08-21T10:00:00.000Z",
+        counts: { critical: 0, high: 0, medium: 0, low: 0 },
+        findings: [],
+        failedProjects: 1,
+      }),
+    ).toBe(false);
   });
 });

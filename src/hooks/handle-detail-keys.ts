@@ -38,6 +38,17 @@ export function handleDetailKey(e: KeyEvent, opts: DetailKeyOptions): boolean {
 
   const scrollbox = getDetailScrollboxRef();
 
+  const scrollCursorIntoView = () => {
+    const apply = () => {
+      const currentScrollbox = getDetailScrollboxRef();
+      const el = detailNavRef.itemRefs[state.detailCursorIndex()];
+      if (currentScrollbox && el) scrollElementIntoView(currentScrollbox, el);
+    };
+    apply();
+    setTimeout(apply, 0);
+    setTimeout(apply, 16);
+  };
+
   switch (e.name) {
     case "left":
     case "h": {
@@ -92,9 +103,7 @@ export function handleDetailKey(e: KeyEvent, opts: DetailKeyOptions): boolean {
       e.preventDefault();
       const delta = e.shift ? -SHIFT_JUMP : -1;
       actions.moveDetailCursor(delta, detailNavRef.itemCount);
-      const newIdx = state.detailCursorIndex();
-      const el = detailNavRef.itemRefs[newIdx];
-      if (scrollbox && el) scrollElementIntoView(scrollbox, el);
+      scrollCursorIntoView();
       return true;
     }
     case "down":
@@ -102,14 +111,13 @@ export function handleDetailKey(e: KeyEvent, opts: DetailKeyOptions): boolean {
       e.preventDefault();
       const delta = e.shift ? SHIFT_JUMP : 1;
       actions.moveDetailCursor(delta, detailNavRef.itemCount);
-      const newIdx = state.detailCursorIndex();
-      const el = detailNavRef.itemRefs[newIdx];
-      if (scrollbox && el) scrollElementIntoView(scrollbox, el);
+      scrollCursorIntoView();
       return true;
     }
     case "return":
       e.preventDefault();
       detailNavRef.activateCurrentItem();
+      scrollCursorIntoView();
       return true;
     case "g":
       e.preventDefault();

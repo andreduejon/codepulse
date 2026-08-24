@@ -29,6 +29,7 @@ export interface DetailNavRef {
 }
 
 export interface DetailViewProps {
+  contentWidth?: number;
   onJumpToCommit?: (hash: string, from: "child" | "parent") => void;
   /** Open the diff+blame dialog for a file. */
   onOpenDiff?: (target: DiffTarget) => void;

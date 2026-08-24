@@ -12,8 +12,8 @@ Enable Snyk in **Menu → Providers**. Configure concrete local branch names for
 
 ## Scanning
 
-- Select a commit in the Snyk graph view and press **Enter** to scan it.
-- Press **Enter** again to replace an existing result with a fresh scan.
+- Select a commit, press **Enter** to open details, select **Scan commit**, then press **Enter**.
+- Run **Rescan commit** to replace an existing result with a fresh scan.
 - Configured local branch tips scan automatically when their exact commit has no cached result.
 - Scans run sequentially in detached temporary Git worktrees. Current checkout remains unchanged.
 
@@ -28,6 +28,10 @@ C0 H2 M0 L4
 ```
 
 Zero counts remain visible in muted color. Unscanned commits show placeholders. Details list findings by severity, dependency, installed version, and fixed version when available.
+
+For multi-project repositories, Codepulse keeps successful project results when another project fails and labels the result as a **partial scan** with the failed project count. Partial results may under-report vulnerabilities; fix the project error and scan again for a complete snapshot.
+
+`bun.lock` and `bun.lockb` are not currently supported by Snyk Open Source. Bun-only repositories need a supported lockfile such as `package-lock.json`, `yarn.lock`, or `pnpm-lock.yaml`.
 
 ## Cache
 
