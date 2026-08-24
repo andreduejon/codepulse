@@ -21,6 +21,7 @@ import { backfillRepoConfig, getKnownRepoInfos, getRepoDisplayConfig, loadConfig
 import { COMPACT_THRESHOLD_WIDTH, DEFAULT_MAX_COUNT, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH } from "./constants";
 import { AppStateContext, createAppState, providerIdle, providerStatusMessage } from "./context/state";
 import { ThemeContext } from "./context/theme";
+import { BANNER, displayBanner } from "./debug/banner";
 import { clearDebugEvents } from "./debug/events";
 import type { DiffTarget } from "./git/types";
 import { useAncestry } from "./hooks/use-ancestry";
@@ -37,6 +38,7 @@ import { useJenkinsCI } from "./providers/jenkins/use-jenkins-ci";
 import OpenShiftResourceDialog from "./providers/openshift/resource-dialog";
 import type { OpenShiftResource } from "./providers/openshift/types";
 import { useOpenShift } from "./providers/openshift/use-openshift";
+import { type SnykProviderConfig, useSnyk } from "./providers/snyk/use-snyk";
 import { nextGroupRepoPath } from "./utils/group-repos";
 
 export function AppContent(props: Readonly<AppContentProps>) {
@@ -75,6 +77,13 @@ export function AppContent(props: Readonly<AppContentProps>) {
     commitShaAnnotation: props.initialOpenShiftConfig?.commitShaAnnotation ?? "dev/commit-sha",
   });
 
+  const [snykConfig, setSnykConfig] = createSignal<SnykProviderConfig>({
+    enabled: props.initialSnykConfig?.enabled ?? false,
+    tokenEnvVar: props.initialSnykConfig?.tokenEnvVar ?? "SNYK_TOKEN",
+    autoScanBranches: props.initialSnykConfig?.autoScanBranches ?? [],
+    maxCachedScans: props.initialSnykConfig?.maxCachedScans ?? 20,
+  });
+
   const [repoDisplayConfig, setRepoDisplayConfig] = createSignal(getRepoDisplayConfig(activeRepoPath()));
 
   const reloadRuntimeConfig = () => {
@@ -100,6 +109,12 @@ export function AppContent(props: Readonly<AppContentProps>) {
       namespaces: config.providers?.openshift?.namespaces ?? [],
       commitShaAnnotation: config.providers?.openshift?.commitShaAnnotation ?? "dev/commit-sha",
     });
+    setSnykConfig({
+      enabled: config.providers?.snyk?.enabled ?? false,
+      tokenEnvVar: config.providers?.snyk?.tokenEnvVar ?? "SNYK_TOKEN",
+      autoScanBranches: config.providers?.snyk?.autoScanBranches ?? [],
+      maxCachedScans: config.providers?.snyk?.maxCachedScans ?? 20,
+    });
     setRepoDisplayConfig(getRepoDisplayConfig(path));
   };
 
@@ -111,6 +126,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
   });
   const jenkinsCI = useJenkinsCI({ state, actions, config: jenkinsConfig });
   const openShift = useOpenShift({ state, actions, config: openShiftConfig });
+  const snyk = useSnyk({ state, actions, config: snykConfig });
 
   // Setup screen visibility — shown when startup mode is "setup"
   const [setupVisible, setSetupVisible] = createSignal(props.startupMode.kind === "setup");
@@ -119,7 +135,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
 
   const screenMessage = createMemo<UIMessage | null>(() => {
     const err = state.error();
-    if (err) return { kind: "error" as const, message: err };
+    if (err) return { kind: "error" as const, message: displayBanner(err, BANNER.git.fetchFailed) };
 
     const status = state.providerStatus();
     const message = providerStatusMessage(status);
@@ -127,7 +143,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
 
     return {
       kind: status.kind === "error" ? ("error" as const) : ("info" as const),
-      message,
+      message: displayBanner(message, message),
     };
   });
 
@@ -288,6 +304,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     if (state.activeProviderView() === "github-actions") await gitHubCI.refresh();
     else if (state.activeProviderView() === "jenkins") await jenkinsCI.refresh();
     else if (state.activeProviderView() === "openshift") await openShift.refresh();
+    else if (state.activeProviderView() === "snyk") return;
   };
 
   const knownRepoInfos = () => getKnownRepoInfos();
@@ -433,12 +450,20 @@ export function AppContent(props: Readonly<AppContentProps>) {
     actions,
     getIsJumpNavigation: () => isJumpNavigation,
     detailNavRef,
-    getCommitData:
-      state.activeProviderView() === "jenkins"
-        ? jenkinsCI.getCommitData
-        : state.activeProviderView() === "openshift"
-          ? openShift.getCommitData
-          : gitHubCI.getCommitData,
+    getCommitData: sha => {
+      switch (state.activeProviderView()) {
+        case "github-actions":
+          return gitHubCI.getCommitData(sha);
+        case "jenkins":
+          return jenkinsCI.getCommitData(sha);
+        case "openshift":
+          return openShift.getCommitData(sha);
+        case "snyk":
+          return snyk.getCommitData(sha);
+        case "git":
+          return null;
+      }
+    },
     getProviderLoading: () => state.providerStatus().kind === "loading",
   });
 
@@ -631,7 +656,20 @@ export function AppContent(props: Readonly<AppContentProps>) {
     onCommandExecute: handleCommandExecute,
     onPathExecute: handlePathExecute,
     onClearAncestry: clearAnchor,
-    getCommitData: state.activeProviderView() === "jenkins" ? jenkinsCI.getCommitData : gitHubCI.getCommitData,
+    getCommitData: sha => {
+      switch (state.activeProviderView()) {
+        case "github-actions":
+          return gitHubCI.getCommitData(sha);
+        case "jenkins":
+          return jenkinsCI.getCommitData(sha);
+        case "openshift":
+          return openShift.getCommitData(sha);
+        case "snyk":
+          return snyk.getCommitData(sha);
+        case "git":
+          return null;
+      }
+    },
     getProviderLoading: () => state.providerStatus().kind === "loading",
     onSwitchGroupRepo: switchGroupRepo,
   });
@@ -707,6 +745,8 @@ export function AppContent(props: Readonly<AppContentProps>) {
 
                       <GraphView
                         onLoadMore={loadMoreData}
+                        snykGetCommitData={snyk.getCommitData}
+                        snykIsScanning={snyk.isScanning}
                         scrollboxRef={el => (graphScrollboxRef = el)}
                         suppressAutoScroll={() => pendingGraphScrollTop() != null}
                       />
@@ -782,6 +822,10 @@ export function AppContent(props: Readonly<AppContentProps>) {
                         openshiftFetchCommitData={openShift.fetchCommitDataForSHA}
                         onOpenOpenShiftResource={handleOpenOpenShiftResource}
                         openshiftProviderStatus={state.providerStatus()}
+                        snykGetCommitData={snyk.getCommitData}
+                        snykIsScanning={snyk.isScanning}
+                        snykScanCommit={snyk.scanCommit}
+                        snykProviderStatus={state.providerStatusFor("snyk")}
                       />
                     </box>
                   </Show>
@@ -806,6 +850,10 @@ export function AppContent(props: Readonly<AppContentProps>) {
                     onJenkinsConfigChange={setJenkinsConfig}
                     openshiftConfig={openShiftConfig()}
                     onOpenShiftConfigChange={setOpenShiftConfig}
+                    {...{
+                      snykConfig: snykConfig(),
+                      onSnykConfigChange: (config: SnykProviderConfig) => setSnykConfig(config),
+                    }}
                     onRepoDisplayConfigChange={setRepoDisplayConfig}
                   />
                 </Show>
@@ -862,6 +910,10 @@ export function AppContent(props: Readonly<AppContentProps>) {
                     openshiftFetchCommitData={openShift.fetchCommitDataForSHA}
                     onOpenOpenShiftResource={handleOpenOpenShiftResource}
                     openshiftProviderStatus={state.providerStatus()}
+                    snykGetCommitData={snyk.getCommitData}
+                    snykIsScanning={snyk.isScanning}
+                    snykScanCommit={snyk.scanCommit}
+                    snykProviderStatus={state.providerStatusFor("snyk")}
                   />
                 </Show>
                 {/* Job log dialog */}

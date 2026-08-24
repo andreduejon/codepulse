@@ -1,4 +1,6 @@
-import { afterEach, describe, expect, it, mock, spyOn } from "bun:test";
+import { afterEach, describe, expect, it, mock } from "bun:test";
+import { BANNER } from "../src/debug/banner";
+import { clearDebugEvents, getDebugEvents } from "../src/debug/events";
 import {
   aggregateRunsToGraphBadge,
   buildCommitDataMap,
@@ -504,15 +506,7 @@ function mockFetch(fn: (...args: any[]) => Promise<Response>): void {
   globalThis.fetch = fn as any;
 }
 
-async function withSuppressedConsoleError<T>(fn: () => Promise<T>): Promise<{ result: T; calls: unknown[][] }> {
-  const errorSpy = spyOn(console, "error").mockImplementation(() => {});
-  try {
-    const result = await fn();
-    return { result, calls: errorSpy.mock.calls };
-  } finally {
-    errorSpy.mockRestore();
-  }
-}
+afterEach(() => clearDebugEvents());
 
 // ── fetchRunJobs (mocked fetch) ───────────────────────────────────────────
 
@@ -564,11 +558,10 @@ describe("fetchRunJobs", () => {
 
   it("returns explicit error (no throw) on 404", async () => {
     mockFetch(mock(async () => new Response(null, { status: 404 })));
-    const { result, calls } = await withSuppressedConsoleError(() => fetchRunJobs(TEST_REPO, TEST_TOKEN, 999));
-    const { jobs, error } = result;
-    expect(error).toBe("Jobs HTTP 404");
+    const { jobs, error } = await fetchRunJobs(TEST_REPO, TEST_TOKEN, 999);
+    expect(error).toBe(BANNER.github.jobsFailed);
     expect(jobs).toHaveLength(0);
-    expect(calls).toHaveLength(1);
+    expect(getDebugEvents().some(event => event.source === "GitHub" && event.message.includes("404"))).toBe(true);
   });
 
   it("returns explicit error (no throw) on network error", async () => {
@@ -577,11 +570,10 @@ describe("fetchRunJobs", () => {
         throw new Error("Network failure");
       }),
     );
-    const { result, calls } = await withSuppressedConsoleError(() => fetchRunJobs(TEST_REPO, TEST_TOKEN, 123));
-    const { jobs, error } = result;
-    expect(error).toBe("Network failure");
+    const { jobs, error } = await fetchRunJobs(TEST_REPO, TEST_TOKEN, 123);
+    expect(error).toBe(BANNER.github.jobsFailed);
     expect(jobs).toHaveLength(0);
-    expect(calls).toHaveLength(1);
+    expect(getDebugEvents().some(event => event.message.includes("Network failure"))).toBe(true);
   });
 
   it("handles missing steps array gracefully", async () => {
@@ -740,22 +732,19 @@ describe("fetchCIDataForSHAs", () => {
 
   it("returns empty result on HTTP error (graceful degradation)", async () => {
     mockFetch(mock(async () => new Response(null, { status: 403 })));
-    const { result, calls } = await withSuppressedConsoleError(() =>
-      fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]),
-    );
+    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
     expect(result.data).toHaveLength(0);
-    expect(result.error).toBeTruthy();
-    expect(calls).toHaveLength(1);
+    expect(result.error).toBe(BANNER.github.fetchFailed);
+    expect(getDebugEvents().some(event => event.source === "GitHub" && event.message.includes("403"))).toBe(true);
   });
 
   it("returns empty result on GraphQL errors field", async () => {
     const response = { errors: [{ message: "Not Found" }] };
     mockFetch(mock(async () => new Response(JSON.stringify(response), { status: 200 })));
-    const { result, calls } = await withSuppressedConsoleError(() =>
-      fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]),
-    );
+    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
     expect(result.data).toHaveLength(0);
-    expect(calls).toHaveLength(1);
+    expect(result.error).toBe(BANNER.github.fetchFailed);
+    expect(getDebugEvents().some(event => event.message.includes("Not Found"))).toBe(true);
   });
 
   it("returns empty result on network error", async () => {
@@ -764,11 +753,10 @@ describe("fetchCIDataForSHAs", () => {
         throw new Error("Network failure");
       }),
     );
-    const { result, calls } = await withSuppressedConsoleError(() =>
-      fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]),
-    );
+    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
     expect(result.data).toHaveLength(0);
-    expect(calls).toHaveLength(1);
+    expect(result.error).toBe(BANNER.github.fetchFailed);
+    expect(getDebugEvents().some(event => event.message.includes("Network failure"))).toBe(true);
   });
 
   it("returns empty result immediately for empty shas array", async () => {

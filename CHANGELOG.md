@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.0] - 2026-08-24
+
+### Added
+
+- **Snyk provider** — run Snyk Open Source scans for exact commits in detached
+  Git worktrees and display cached vulnerability snapshots in the graph.
+- **Snyk graph and details** — show severity counts, scan time, CVEs, dependency
+  type, installed versions, and available remediation for each finding.
+- **Automatic branch-tip scans** — scan configured local branch tips when no
+  cached result exists for their exact commit.
+- **Snyk scan cache** — retain normalized commit results with configurable
+  limits of 10, 20, or 50 entries per repository.
+
+### Fixed
+
+- Preserve successful project findings from partial multi-project scans and
+  visibly report failed project counts without presenting partial zero results
+  as clean scans.
+- Keep the graph and detail cursor in view during fast keyboard repeat.
+- Show short Git, GitHub, Jenkins, and OpenShift banners; keep request dumps in
+  the debug log.
+- Count unique Snyk IDs in the graph and details; keep duplicate dependency
+  paths in finding metadata.
+- Map git fetch connection timeouts to a short banner.
+
 ## [0.7.0] - 2026-08-21
 
 ### Changed

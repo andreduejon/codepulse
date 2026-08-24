@@ -6,6 +6,7 @@
  * calls these functions and manages caching/signals.
  */
 
+import { BANNER, bannerOrFallback, debugError } from "../../debug/banner";
 import type { GraphBadge } from "../../providers/provider";
 import { fetchWithRetry as fetchWithRetryPolicy } from "../shared/http";
 import { categorize } from "./status";
@@ -124,7 +125,7 @@ const GITHUB_HTTP_POLICY = {
   timeoutMs: GITHUB_REQUEST_TIMEOUT_MS,
   attempts: 2,
   retryDelayMs: 500,
-  timeoutMessage: `GitHub request timed out after ${GITHUB_REQUEST_TIMEOUT_MS}ms`,
+  timeoutMessage: BANNER.github.timeout,
 };
 
 function createHeaders(token: string): Record<string, string> {
@@ -151,18 +152,31 @@ function graphqlEndpoint(repo: GitHubRepo): string {
   return `https://${repo.hostname}/api/graphql`;
 }
 
-function describeHttpError(res: Response, fallback: string): string {
+function isGitHubRateLimit(res: Response): boolean {
   const remaining = res.headers.get("x-ratelimit-remaining");
-  if (res.status === 429 || (res.status === 403 && remaining === "0")) {
-    const reset = res.headers.get("x-ratelimit-reset");
-    if (reset) {
-      const resetDate = new Date(Number(reset) * 1000);
-      if (!Number.isNaN(resetDate.getTime()))
-        return `GitHub rate limit exceeded; resets ${resetDate.toLocaleTimeString()}`;
-    }
-    return "GitHub rate limit exceeded";
+  return res.status === 429 || (res.status === 403 && remaining === "0");
+}
+
+function githubHttpBanner(res: Response, kind: "fetch" | "jobs" | "logs"): string {
+  if (isGitHubRateLimit(res)) return BANNER.github.rateLimit;
+  if (kind === "jobs") return BANNER.github.jobsFailed;
+  if (kind === "logs") return BANNER.github.logFailed;
+  return BANNER.github.fetchFailed;
+}
+
+function debugGitHubHttp(res: Response, kind: "fetch" | "jobs" | "logs", detail: string): string {
+  const remaining = res.headers.get("x-ratelimit-remaining");
+  const reset = res.headers.get("x-ratelimit-reset");
+  let extra = detail;
+  if (isGitHubRateLimit(res)) {
+    const resetDate = reset ? new Date(Number(reset) * 1000) : null;
+    extra =
+      resetDate && !Number.isNaN(resetDate.getTime())
+        ? `${detail}; rate limit remaining=${remaining ?? "0"} resets ${resetDate.toISOString()}`
+        : `${detail}; rate limit remaining=${remaining ?? "0"}`;
   }
-  return fallback;
+  debugError("GitHub", extra);
+  return githubHttpBanner(res, kind);
 }
 
 async function fetchWithRetry(url: string, init: RequestInit = {}): Promise<Response> {
@@ -516,17 +530,17 @@ export async function fetchCIDataForSHAs(
     });
 
     if (!res.ok) {
-      const msg = describeHttpError(res, `GraphQL HTTP ${res.status}`);
-      console.error(`[github-actions] ${msg} for ${repo.owner}/${repo.repo}`);
-      return { ...empty, error: msg };
+      return {
+        ...empty,
+        error: debugGitHubHttp(res, "fetch", `GraphQL HTTP ${res.status} for ${repo.owner}/${repo.repo}`),
+      };
     }
 
     const json = (await res.json()) as GqlBatchQueryResult;
 
     if (json.errors?.length) {
-      const msg = json.errors.map(e => e.message).join("; ");
-      console.error("[github-actions] GraphQL errors:", msg);
-      return { ...empty, error: msg };
+      debugError("GitHub", json.errors.map(e => e.message).join("; "));
+      return { ...empty, error: BANNER.github.fetchFailed };
     }
 
     const repoData = json.data?.repository ?? {};
@@ -545,15 +559,15 @@ export async function fetchCIDataForSHAs(
         signal,
       });
       if (!pageRes.ok) {
-        const msg = describeHttpError(pageRes, `GraphQL HTTP ${pageRes.status}`);
-        console.error(`[github-actions] ${msg} for ${repo.owner}/${repo.repo}`);
-        return { data: runs, error: msg };
+        return {
+          data: runs,
+          error: debugGitHubHttp(pageRes, "fetch", `GraphQL HTTP ${pageRes.status} for ${repo.owner}/${repo.repo}`),
+        };
       }
       const pageJson = (await pageRes.json()) as GqlBatchQueryResult;
       if (pageJson.errors?.length) {
-        const msg = pageJson.errors.map(e => e.message).join("; ");
-        console.error("[github-actions] GraphQL errors:", msg);
-        return { data: runs, error: msg };
+        debugError("GitHub", pageJson.errors.map(e => e.message).join("; "));
+        return { data: runs, error: BANNER.github.fetchFailed };
       }
       pending = collectRunsFromRepoData(
         pageJson.data?.repository ?? {},
@@ -565,9 +579,7 @@ export async function fetchCIDataForSHAs(
     return { data: runs, error: null };
   } catch (err) {
     if (signal?.aborted) throw err;
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[github-actions] GraphQL fetch error:", err);
-    return { data: runs, error: msg };
+    return { data: runs, error: bannerOrFallback(err, BANNER.github.fetchFailed, "GitHub") };
   }
 }
 
@@ -608,9 +620,7 @@ export async function fetchRunJobs(
     for (let page = 0; page < MAX_JOB_PAGES && url; page++) {
       const res = await fetchWithRetry(url, { headers, signal });
       if (!res.ok) {
-        const error = describeHttpError(res, `Jobs HTTP ${res.status}`);
-        console.error(`[github-actions] fetchRunJobs: ${error} for run ${runId}`);
-        return { jobs, error };
+        return { jobs, error: debugGitHubHttp(res, "jobs", `Jobs HTTP ${res.status} for run ${runId}`) };
       }
       const json = (await res.json()) as { jobs?: GitHubApiJob[] };
       jobs.push(...(json.jobs ?? []).map(mapApiJob));
@@ -619,8 +629,7 @@ export async function fetchRunJobs(
     return { jobs, error: null };
   } catch (err) {
     if (signal?.aborted) throw err;
-    console.error("[github-actions] fetchRunJobs: network error:", err);
-    return { jobs: [], error: err instanceof Error ? err.message : String(err) };
+    return { jobs: [], error: bannerOrFallback(err, BANNER.github.jobsFailed, "GitHub") };
   }
 }
 
@@ -645,14 +654,13 @@ export async function fetchJobLog(
     // GitHub redirects to a pre-signed S3/Azure URL — follow the redirect
     const res = await fetchWithRetry(url, { headers, signal, redirect: "follow" });
     if (!res.ok) {
-      const error = describeHttpError(res, `Logs HTTP ${res.status}`);
-      console.error(`[github-actions] fetchJobLog: ${error} for job ${jobId}`);
+      debugGitHubHttp(res, "logs", `Logs HTTP ${res.status} for job ${jobId}`);
       return "";
     }
     return await res.text();
   } catch (err) {
     if (signal?.aborted) throw err;
-    console.error("[github-actions] fetchJobLog: network error:", err);
+    debugError("GitHub", err);
     return "";
   }
 }

@@ -15,7 +15,7 @@ import { createSignal } from "solid-js";
  * Future providers should extend this order as:
  * Git → GitHub Actions → Jenkins → OpenShift → Snyk → SonarQube.
  */
-export const PROVIDER_ORDER = ["git", "github-actions", "jenkins", "openshift"] as const;
+export const PROVIDER_ORDER = ["git", "github-actions", "jenkins", "openshift", "snyk"] as const;
 
 /** Provider view identifiers — Tab cycles through these. */
 export type ProviderView = (typeof PROVIDER_ORDER)[number];
@@ -33,6 +33,7 @@ export const PROVIDER_METADATA: Record<ProviderView, ProviderMetadata> = {
   "github-actions": { displayName: "GitHub Actions", detailLabel: "Actions", category: "ci" },
   jenkins: { displayName: "Jenkins", category: "ci" },
   openshift: { displayName: "OpenShift", category: "runtime" },
+  snyk: { displayName: "Snyk", category: "scan-quality" },
 };
 
 /**
@@ -56,6 +57,8 @@ export interface GraphBadge {
   unknownCount?: number;
   /** Total matched resources. Used by runtime providers. */
   resourceCount?: number;
+  /** Severity counts used by scan/quality providers. */
+  severityCounts?: { critical: number; high: number; medium: number; low: number };
   /** Relative time string for the most recently updated run (e.g. "2h ago"). */
   latestRunAt: string;
   /** Status of the most recently updated run — used to colour latestRunAt. */

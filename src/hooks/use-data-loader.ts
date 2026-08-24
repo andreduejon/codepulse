@@ -1,6 +1,7 @@
 import { type Accessor, batch, createEffect, onCleanup, untrack } from "solid-js";
 import { isUncommittedHash } from "../constants";
 import type { AppActions, AppState } from "../context/state";
+import { BANNER, bannerOrFallback, debugError } from "../debug/banner";
 import { buildGraph, getMaxGraphColumns } from "../git/graph";
 import { mergeCommitPages } from "../git/merge-pages";
 import {
@@ -151,7 +152,7 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
       });
     } catch (err) {
       if (ctrl.signal.aborted) return; // superseded — ignore
-      actions.setError(err instanceof Error ? err.message : String(err));
+      actions.setError(bannerOrFallback(err, BANNER.git.logFailed, "Git"));
     } finally {
       // Only clear loading/controller if we're still the active load
       if (loadAbortCtrl === ctrl) {
@@ -226,8 +227,8 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
       });
     } catch (err) {
       if (ctrl.signal.aborted) return;
-      // Non-fatal: log but don't surface to user (partial data is still valid)
-      console.error("loadMoreData failed:", err);
+      // Non-fatal: debug only. Partial data stays valid.
+      debugError("Git", err);
     } finally {
       if (loadMoreAbortCtrl === ctrl) {
         loadMoreAbortCtrl = null;
@@ -258,10 +259,11 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
         await loadData(undefined, stickyHash, true, true);
         if (!isCurrent()) return;
       } else {
-        actions.setError(result.error ?? "Fetch failed");
+        actions.setError(result.error ?? BANNER.git.fetchFailed);
       }
     } catch (err) {
-      if (isCurrent()) actions.setError(err instanceof Error ? err.message : String(err));
+      if (!isCurrent()) return;
+      actions.setError(bannerOrFallback(err, BANNER.git.fetchFailed, "Git"));
     } finally {
       if (isCurrent()) actions.setFetching(false);
     }

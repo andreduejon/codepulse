@@ -33,6 +33,12 @@ export interface AppProps {
     namespaces?: string[];
     commitShaAnnotation?: string;
   };
+  initialSnykConfig?: {
+    enabled?: boolean;
+    tokenEnvVar?: string;
+    autoScanBranches?: string[];
+    maxCachedScans?: 10 | 20 | 50;
+  };
 }
 
 export interface AppContentProps extends AppProps {

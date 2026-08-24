@@ -13,9 +13,9 @@ read-only by default codebase dashboard: git history as the primary navigation
 surface, with CI/CD, security, and code quality signals layered onto the same
 commit and branch context.
 
-The current release adds OpenShift runtime visibility alongside GitHub Actions
-and Jenkins. Commits show matched resources and conservative health status;
-resource API objects can be inspected as formatted JSON from the detail panel.
+The current release adds Snyk Open Source commit scans alongside OpenShift,
+GitHub Actions, and Jenkins. Commits combine source history with cached
+vulnerability, CI/CD, and runtime signals.
 
 ## Requirements
 
@@ -86,7 +86,7 @@ Use `codepulse -h` for complete shortcuts, commands, and provider setup.
 | `shift + ↑` / `shift + ↓` | Jump 10 commits                      |
 | `g` / `G`                 | First / last commit                  |
 | `→` / `l`                 | Focus detail panel                   |
-| `enter`                   | Open detail dialog in compact layout |
+| `enter`                   | Focus details / open compact dialog  |
 | `a`                       | Enter ancestry mode                  |
 | `p`                       | Enter path mode                      |
 | `shift + ←` / `shift + →` | Switch project within current group  |
@@ -136,6 +136,9 @@ variables and are never stored in configuration.
 - **OpenShift** — shows annotated Builds and ImageStreamTags, digest-matched
   Pods, and owner-resolved workloads. Enter opens cached resource JSON. See
   [OpenShift provider](docs/providers/openshift.md).
+- **Snyk** — scans exact commits in detached worktrees, shows severity counts,
+  and lists vulnerability and remediation details. See
+  [Snyk provider](docs/providers/snyk.md).
 
 ## Themes
 
@@ -171,7 +174,9 @@ Planned milestones currently follow this shape:
   switcher, and debug dialog
 - `0.6.0`: OpenShift runtime inventory, resource health, and JSON inspection
 - `0.7.0`: standalone macOS and Linux distributions with no Bun or Node.js runtime requirement
-- Future: Snyk provider and further OpenShift features and polish
+- `0.8.0`: Snyk Open Source scans, commit severity counts, finding details, and
+  a local scan cache
+- Future: further providers and OpenShift features and polish
 
 The intent is to reach `1.0.0` once the integration model and configuration
 surface are stable.

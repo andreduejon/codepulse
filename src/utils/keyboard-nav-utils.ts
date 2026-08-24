@@ -1,3 +1,5 @@
+import { NAV_REPEAT_MIN_MS } from "../constants";
+
 /**
  * Pure helper functions extracted from use-keyboard-navigation.ts.
  *
@@ -145,4 +147,17 @@ export function computeCascadeTarget(s: CascadeState): CascadeTarget {
   }
   if (s.viewingBranch) return "branch-view";
   return null;
+}
+
+let lastRepeatNavAt = 0;
+
+/** Accept at most one held j/k move per frame. Single taps always pass. */
+export function allowRepeatNav(now = Date.now()): boolean {
+  if (now - lastRepeatNavAt < NAV_REPEAT_MIN_MS) return false;
+  lastRepeatNavAt = now;
+  return true;
+}
+
+export function resetRepeatNav(): void {
+  lastRepeatNavAt = 0;
 }

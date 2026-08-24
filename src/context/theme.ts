@@ -26,7 +26,12 @@ export interface Theme {
   accent: string;
   info: string;
   error: string;
+  warning: string;
   success: string;
+  severityCritical: string;
+  severityHigh: string;
+  severityMedium: string;
+  severityLow: string;
   graphColors: string[];
   diffAdded: string;
   diffRemoved: string;
