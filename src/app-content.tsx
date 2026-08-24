@@ -21,6 +21,7 @@ import { backfillRepoConfig, getKnownRepoInfos, getRepoDisplayConfig, loadConfig
 import { COMPACT_THRESHOLD_WIDTH, DEFAULT_MAX_COUNT, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH } from "./constants";
 import { AppStateContext, createAppState, providerIdle, providerStatusMessage } from "./context/state";
 import { ThemeContext } from "./context/theme";
+import { BANNER, displayBanner } from "./debug/banner";
 import { clearDebugEvents } from "./debug/events";
 import type { DiffTarget } from "./git/types";
 import { useAncestry } from "./hooks/use-ancestry";
@@ -134,7 +135,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
 
   const screenMessage = createMemo<UIMessage | null>(() => {
     const err = state.error();
-    if (err) return { kind: "error" as const, message: err };
+    if (err) return { kind: "error" as const, message: displayBanner(err, BANNER.git.fetchFailed) };
 
     const status = state.providerStatus();
     const message = providerStatusMessage(status);
@@ -142,7 +143,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
 
     return {
       kind: status.kind === "error" ? ("error" as const) : ("info" as const),
-      message,
+      message: displayBanner(message, message),
     };
   });
 

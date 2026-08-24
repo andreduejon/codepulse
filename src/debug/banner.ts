@@ -4,6 +4,9 @@ export const BANNER = {
   git: {
     logFailed: "Git log failed.",
     fetchFailed: "Git fetch failed.",
+    fetchTimedOut: "Git fetch timed out.",
+    unreachable: "Git remote unreachable.",
+    authFailed: "Git authentication failed.",
     detailFailed: "Git detail failed.",
   },
   github: {
@@ -59,5 +62,30 @@ export function bannerOrFallback(err: unknown, fallback: string, source: DebugEv
   const message = err instanceof Error ? err.message : String(err);
   if (isBanner(message)) return message;
   debugError(source, message);
-  return fallback;
+  return looksLikeGitDump(message) ? classifyGitFailure(message) : fallback;
+}
+
+export function classifyGitFailure(detail: string): string {
+  const text = detail.toLowerCase();
+  if (/\btimeout\b|timed out|time out/.test(text)) return BANNER.git.fetchTimedOut;
+  if (/authentication failed|permission denied|could not read username|invalid user/.test(text)) {
+    return BANNER.git.authFailed;
+  }
+  if (
+    /unable to access|could not resolve host|failed to connect|connection refused|network is unreachable/.test(text)
+  ) {
+    return BANNER.git.unreachable;
+  }
+  return BANNER.git.fetchFailed;
+}
+
+export function displayBanner(message: string, fallback: string): string {
+  if (isBanner(message)) return message;
+  if (looksLikeGitDump(message)) return classifyGitFailure(message);
+  if (message.includes("\n") || message.length > 72) return fallback;
+  return message;
+}
+
+function looksLikeGitDump(message: string): boolean {
+  return /fatal:|unable to access|failed to connect|could not resolve host/i.test(message);
 }

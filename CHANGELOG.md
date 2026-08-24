@@ -23,6 +23,9 @@ All notable changes to this project will be documented in this file.
 - Keep the graph and detail cursor in view during fast keyboard repeat.
 - Show short Git, GitHub, Jenkins, and OpenShift banners; keep request dumps in
   the debug log.
+- Count unique Snyk IDs in the graph and details; keep duplicate dependency
+  paths in finding metadata.
+- Map git fetch connection timeouts to a short banner.
 
 ## [0.7.0] - 2026-08-21
 

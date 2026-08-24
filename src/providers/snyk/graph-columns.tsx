@@ -11,7 +11,6 @@ export interface SnykGraphColumnProps {
   /** Exact scan for the row's commit, or null when that commit has not been scanned. */
   scan: SnykScanResult | null;
   active: boolean;
-  loading?: boolean;
 }
 
 const SEVERITIES: { severity: SnykSeverity; label: string }[] = [
@@ -22,19 +21,21 @@ const SEVERITIES: { severity: SnykSeverity; label: string }[] = [
 ];
 
 const LAST_SCAN_COL_WIDTH = 11;
+/** Four ` C0 ` chips (16) + three `gap={1}` (3) + padding before the date (2). */
+const SEVERITY_CHIPS_WIDTH = 21;
 
-function severityColumnWidth(badges: Iterable<GraphBadge>): number {
-  let width = 20;
+export function severityColumnWidth(badges: Iterable<GraphBadge>): number {
+  let width = SEVERITY_CHIPS_WIDTH;
   for (const badge of badges) {
     const counts = badge.severityCounts;
     if (!counts) continue;
-    const contentWidth =
-      16 +
+    const extraDigits =
       String(counts.critical).length +
       String(counts.high).length +
       String(counts.medium).length +
-      String(counts.low).length;
-    width = Math.max(width, contentWidth);
+      String(counts.low).length -
+      4;
+    width = Math.max(width, SEVERITY_CHIPS_WIDTH + extraDigits);
   }
   return width;
 }
@@ -59,7 +60,7 @@ export function SnykCountsColumn(props: Readonly<SnykGraphColumnProps>) {
   const columnWidth = () => severityColumnWidth(state.graphBadges().values());
 
   return (
-    <box flexShrink={0} width={columnWidth()} overflow="hidden" flexDirection="row" gap={1}>
+    <box flexShrink={0} width={columnWidth()} paddingRight={2} overflow="hidden" flexDirection="row" gap={1}>
       {props.scan ? (
         <For each={SEVERITIES}>
           {item => {
@@ -85,11 +86,15 @@ export function SnykCountsColumn(props: Readonly<SnykGraphColumnProps>) {
   );
 }
 
-/** Relative scan time, or a transient scan status, in the existing date column. */
+export function snykScanLabel(scan: SnykScanResult | null): string {
+  if (!scan) return UNCOMMITTED_PLACEHOLDER;
+  return formatRelativeDate(scan.scannedAt);
+}
+
+/** Relative scan time in the existing date column. */
 export function SnykScanColumn(props: Readonly<SnykGraphColumnProps>) {
   const t = useT();
-  const label = () =>
-    props.loading ? "scanning..." : props.scan ? formatRelativeDate(props.scan.scannedAt) : UNCOMMITTED_PLACEHOLDER;
+  const label = () => snykScanLabel(props.scan);
 
   return (
     <box flexShrink={0} width={LAST_SCAN_COL_WIDTH} overflow="hidden">
@@ -108,7 +113,7 @@ export function SnykColumnHeaders() {
 
   return (
     <>
-      <box flexShrink={0} width={columnWidth()}>
+      <box flexShrink={0} width={columnWidth()} paddingRight={2}>
         <text wrapMode="none" truncate fg={color()}>
           <strong>Severity</strong>
         </text>

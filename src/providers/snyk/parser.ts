@@ -105,6 +105,42 @@ function emptyCounts(): SnykSeverityCounts {
   return { critical: 0, high: 0, medium: 0, low: 0 };
 }
 
+export function findingIdentity(finding: SnykFinding): string {
+  return finding.id === "unknown"
+    ? `${finding.id}:${finding.dependency}:${finding.title}:${finding.severity}`
+    : finding.id;
+}
+
+export interface GroupedSnykFinding {
+  finding: SnykFinding;
+  occurrences: number;
+}
+
+function preferFinding(current: SnykFinding, incoming: SnykFinding): SnykFinding {
+  return current.dependencyType !== "direct" && incoming.dependencyType === "direct" ? incoming : current;
+}
+
+export function groupFindingsById(findings: SnykFinding[]): GroupedSnykFinding[] {
+  const groups = new Map<string, GroupedSnykFinding>();
+  for (const finding of findings) {
+    const identity = findingIdentity(finding);
+    const existing = groups.get(identity);
+    if (!existing) {
+      groups.set(identity, { finding, occurrences: 1 });
+      continue;
+    }
+    existing.occurrences++;
+    existing.finding = preferFinding(existing.finding, finding);
+  }
+  return [...groups.values()];
+}
+
+export function countUniqueFindings(findings: SnykFinding[]): SnykSeverityCounts {
+  const counts = emptyCounts();
+  for (const group of groupFindingsById(findings)) counts[group.finding.severity]++;
+  return counts;
+}
+
 export function shouldReplaceSnykResult(existing: SnykScanResult | undefined, incoming: SnykScanResult): boolean {
   if (!existing) return true;
   if (incoming.partial && !existing.partial) return false;
@@ -138,8 +174,7 @@ export function parseSnykOutput(raw: string | unknown, options: SnykParseOptions
 
   if (validProjects === 0) throw new Error("Snyk output contains no project results.");
 
-  const counts = emptyCounts();
-  for (const finding of findings) counts[finding.severity]++;
+  const counts = countUniqueFindings(findings);
 
   return {
     sha: options.sha.toLowerCase(),
@@ -204,8 +239,7 @@ export function isSnykScanResult(value: unknown): value is SnykScanResult {
   });
   if (!validFindings) return false;
 
-  const actualCounts = emptyCounts();
-  for (const finding of value.findings as SnykFinding[]) actualCounts[finding.severity]++;
+  const actualCounts = countUniqueFindings(value.findings as SnykFinding[]);
   const counts = value.counts as Record<string, unknown>;
   return [...SEVERITIES].every(severity => counts[severity] === actualCounts[severity]);
 }

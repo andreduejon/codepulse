@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isSnykScanResult, parseSnykOutput, shouldReplaceSnykResult } from "./parser";
+import { groupFindingsById, isSnykScanResult, parseSnykOutput, shouldReplaceSnykResult } from "./parser";
 
 const SHA = "a".repeat(40);
 
@@ -113,6 +113,45 @@ describe("parseSnykOutput", () => {
     expect(result.findings[0].project).toBe("working");
     expect(result.partial).toBe(true);
     expect(result.failedProjects).toBe(1);
+  });
+
+  test("counts unique Snyk IDs not path occurrences", () => {
+    const result = parseSnykOutput(
+      {
+        vulnerabilities: [
+          { id: "SNYK-JS-FOO-1", severity: "critical", name: "foo", version: "1.0.0", from: ["app@1", "foo@1.0.0"] },
+          {
+            id: "SNYK-JS-FOO-1",
+            severity: "critical",
+            name: "foo",
+            version: "1.0.0",
+            from: ["app@1", "a@1", "foo@1.0.0"],
+          },
+          {
+            id: "SNYK-JS-FOO-1",
+            severity: "critical",
+            name: "foo",
+            version: "1.0.0",
+            from: ["app@1", "b@1", "foo@1.0.0"],
+          },
+          { id: "SNYK-JS-BAR-2", severity: "critical", name: "bar", version: "2.0.0" },
+        ],
+      },
+      { sha: SHA },
+    );
+
+    expect(result.findings).toHaveLength(4);
+    expect(result.counts).toEqual({ critical: 2, high: 0, medium: 0, low: 0 });
+    expect(groupFindingsById(result.findings).map(group => [group.finding.id, group.occurrences])).toEqual([
+      ["SNYK-JS-FOO-1", 3],
+      ["SNYK-JS-BAR-2", 1],
+    ]);
+    expect(
+      isSnykScanResult({
+        ...result,
+        counts: { critical: 4, high: 0, medium: 0, low: 0 },
+      }),
+    ).toBe(false);
   });
 
   test("extracts CVEs from fallback fields", () => {

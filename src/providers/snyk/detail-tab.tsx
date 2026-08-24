@@ -6,7 +6,7 @@ import { DETAIL_PANEL_WIDTH_FRACTION } from "../../constants";
 import type { Theme } from "../../context/theme";
 import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useT } from "../../hooks/use-t";
-import { formatRelativeDate } from "../../utils/date";
+import { countUniqueFindings, findingIdentity, groupFindingsById } from "./parser";
 import type { SnykFinding, SnykScanResult, SnykSeverity } from "./types";
 
 export interface SnykDetailTabProps {
@@ -26,11 +26,11 @@ const MIN_PANEL_WIDTH = 60;
 const PANEL_PADDING_X = 4;
 const FINDING_PREFIX_WIDTH = 8;
 const METADATA_PREFIX_WIDTH = 9;
-type SeverityGroup = { severity: SnykSeverity; findings: SnykFinding[] };
+type SeverityGroup = { severity: SnykSeverity; findings: ReturnType<typeof groupFindingsById> };
 type FlatItem =
   | { kind: "scan" }
   | { kind: "severity"; severity: SnykSeverity }
-  | { kind: "finding"; severity: SnykSeverity; finding: SnykFinding; occurrence: number };
+  | { kind: "finding"; severity: SnykSeverity; finding: SnykFinding; identity: string };
 
 function severityColor(theme: Theme, severity: SnykSeverity): string {
   switch (severity) {
@@ -51,7 +51,7 @@ function compareFindings(left: SnykFinding, right: SnykFinding): number {
 
 function itemKey(item: FlatItem): string {
   if (item.kind === "scan") return "scan";
-  return item.kind === "severity" ? `severity:${item.severity}` : `finding:${item.severity}:${item.occurrence}`;
+  return item.kind === "severity" ? `severity:${item.severity}` : `finding:${item.severity}:${item.identity}`;
 }
 
 function wrapWords(value: string, width: number): string[] {
@@ -100,13 +100,18 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
   const groups = createMemo<SeverityGroup[]>(() =>
     props.scan
       ? SEVERITIES.map(severity => {
-          const findings = (props.scan?.findings ?? [])
-            .filter(finding => finding.severity === severity)
-            .sort(compareFindings);
+          const findings = groupFindingsById(
+            (props.scan?.findings ?? []).filter(finding => finding.severity === severity),
+          ).sort((left, right) => compareFindings(left.finding, right.finding));
           return { severity, findings };
         })
       : [],
   );
+  const uniqueCounts = createMemo(() => countUniqueFindings(props.scan?.findings ?? []));
+  const uniqueTotal = createMemo(() => {
+    const counts = uniqueCounts();
+    return counts.critical + counts.high + counts.medium + counts.low;
+  });
 
   const flatItems = createMemo<FlatItem[]>(() => [
     { kind: "scan" as const },
@@ -116,11 +121,11 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
         : [
             { kind: "severity" as const, severity: group.severity },
             ...(expandedSeverities().has(group.severity)
-              ? group.findings.map(finding => ({
+              ? group.findings.map(entry => ({
                   kind: "finding" as const,
                   severity: group.severity,
-                  finding,
-                  occurrence: props.scan?.findings.indexOf(finding) ?? -1,
+                  finding: entry.finding,
+                  identity: findingIdentity(entry.finding),
                 }))
               : []),
           ],
@@ -171,7 +176,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
       kind: "finding",
       severity: finding.severity,
       finding,
-      occurrence: props.scan?.findings.indexOf(finding) ?? -1,
+      identity: findingIdentity(finding),
     });
     setExpandedFindings(previous => {
       const next = new Set(previous);
@@ -265,15 +270,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
             total vulnerabilities
           </text>
           <text flexShrink={0} fg={t().foregroundMuted} wrapMode="none">
-            {props.scan?.findings.length ?? 0}
-          </text>
-        </box>
-        <box flexDirection="row" width="100%">
-          <text flexGrow={1} fg={t().foregroundMuted} wrapMode="none">
-            scanned
-          </text>
-          <text flexShrink={0} fg={t().foregroundMuted} wrapMode="none">
-            {props.scan ? formatRelativeDate(props.scan.scannedAt) : ""}
+            {uniqueTotal()}
           </text>
         </box>
         <Show when={props.scan?.partial}>
@@ -324,12 +321,13 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
 
                 <Show when={severityExpanded()}>
                   <For each={group.findings}>
-                    {(finding, findingIndex) => {
+                    {(entry, findingIndex) => {
+                      const finding = entry.finding;
                       const findingItem = (): FlatItem => ({
                         kind: "finding",
                         severity: group.severity,
                         finding,
-                        occurrence: props.scan?.findings.indexOf(finding) ?? -1,
+                        identity: findingIdentity(finding),
                       });
                       const key = () => itemKey(findingItem());
                       const index = () => flatItems().findIndex(item => itemKey(item) === key());
@@ -379,6 +377,13 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
                                 { text: finding.title, wrap: true, success: false },
                                 (finding.cves?.length ?? 0) > 0
                                   ? { text: finding.cves?.join(", ") ?? "", wrap: true, success: false }
+                                  : null,
+                                entry.occurrences > 1
+                                  ? {
+                                      text: `${entry.occurrences} paths`,
+                                      wrap: false,
+                                      success: false,
+                                    }
                                   : null,
                                 finding.dependencyType === "direct"
                                   ? { text: "Direct dependency", wrap: false, success: false }

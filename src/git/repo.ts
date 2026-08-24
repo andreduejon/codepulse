@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { DEFAULT_MAX_COUNT } from "../constants";
-import { BANNER, debugError } from "../debug/banner";
+import { BANNER, classifyGitFailure, debugError } from "../debug/banner";
 import { runGit } from "./repo-git";
 import { parseDiffTreeOutput } from "./repo-status";
 import type { Branch, Commit, CommitDetail, FileChange, RefInfo, TagInfo } from "./types";
@@ -534,7 +534,7 @@ export async function fetchRemote(repoPath: string): Promise<{ ok: boolean; erro
 
   if (exitCode !== 0) {
     if (stderr.trim()) debugError("Git", stderr.trim());
-    return { ok: false, error: BANNER.git.fetchFailed };
+    return { ok: false, error: classifyGitFailure(stderr) };
   }
   return { ok: true };
 }
