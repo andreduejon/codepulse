@@ -1,5 +1,5 @@
 import type { Accessor } from "solid-js";
-import { createEffect, createSignal, untrack } from "solid-js";
+import { createEffect, createSignal, onCleanup, untrack } from "solid-js";
 import type { AppActions, AppState } from "../../context/state";
 import {
   providerError,
@@ -19,8 +19,14 @@ import {
   fetchOpenShiftObject,
   fetchOpenShiftPodLog,
   fetchOpenShiftResources,
+  followOpenShiftLog,
   getOpenShiftToken,
   isTerminalBuildStatus,
+  openShiftBuildLogUrl,
+  openShiftKindPath,
+  openShiftPodLogUrl,
+  applyOpenShiftWatchEvent,
+  watchOpenShiftStream,
   type OpenShiftListedInventory,
 } from "./api";
 import {
@@ -29,17 +35,30 @@ import {
   toCachedBuild,
   type OpenShiftCacheEntry,
 } from "./cache";
+import { sleep } from "../shared/http";
 import type { OpenShiftCommitData, OpenShiftNamespaceData, OpenShiftProviderConfig, OpenShiftResource } from "./types";
-import { DEFAULT_OPENSHIFT_CONFIG } from "./types";
+import {
+  DEFAULT_OPENSHIFT_AUTO_REFRESH_SECONDS,
+  DEFAULT_OPENSHIFT_CONFIG,
+  OPENSHIFT_WATCH_KINDS,
+} from "./types";
+import { appendOpenShiftLogFollow } from "./watch";
 
 export interface UseOpenShiftResult {
   getCommitData: (sha: string) => OpenShiftCommitData | null;
   refresh: () => Promise<void>;
   fetchCommitDataForSHA: (sha: string, force?: boolean) => Promise<void>;
   isLoading: (sha: string) => boolean;
+  lastLiveAt: () => number | null;
+  liveAge: () => string;
   isAvailable: () => boolean;
   loadBuildLog: (resource: OpenShiftResource, force?: boolean) => Promise<string>;
   loadPodLog: (resource: OpenShiftResource, container?: string) => Promise<string>;
+  followLog: (
+    resource: OpenShiftResource,
+    signal: AbortSignal,
+    onText: (text: string) => void,
+  ) => Promise<void>;
   loadResourceObject: (resource: OpenShiftResource) => Promise<unknown>;
 }
 
@@ -167,10 +186,13 @@ export function useOpenShift(opts: {
   const queriedSHAs = new Set<string>();
   const [version, setVersion] = createSignal(0);
   const [loadingVersion, setLoadingVersion] = createSignal(0);
+  const [lastLiveAt, setLastLiveAt] = createSignal<number | null>(null);
+  const [watchEpoch, setWatchEpoch] = createSignal(0);
   const live = {
     listed: null as OpenShiftListedInventory | null,
     inflight: null as Promise<void> | null,
     inflightShas: new Set<string>(),
+    showLoading: false,
   };
 
   function publish(): void {
@@ -204,6 +226,8 @@ export function useOpenShift(opts: {
     },
     isAvailable,
     isBackgroundReady: () => false,
+    refreshInterval: () =>
+      (configAccessor().autoRefreshSeconds ?? DEFAULT_OPENSHIFT_AUTO_REFRESH_SECONDS) * 1000,
     queriedSHAs,
     reportUnavailable: showStatus => {
       if (showStatus) actions.setProviderStatus("openshift", providerUnavailable(unavailableMessage()));
@@ -214,7 +238,7 @@ export function useOpenShift(opts: {
     },
     runRefresh: async ({ signal, showStatus, epoch }) => {
       await runBuildInventory({ signal, showStatus, epoch });
-      if (!signal?.aborted && epoch === lifecycle.getEpoch()) await ensureLive(true, signal, epoch);
+      if (showStatus) setWatchEpoch(value => value + 1);
     },
     onResetCaches: () => {
       commits.clear();
@@ -222,6 +246,9 @@ export function useOpenShift(opts: {
       live.listed = null;
       live.inflight = null;
       live.inflightShas.clear();
+      live.showLoading = false;
+      setLastLiveAt(null);
+      setWatchEpoch(value => value + 1);
       queriedSHAs.clear();
       setLoadingVersion(v => v + 1);
       setVersion(v => v + 1);
@@ -278,7 +305,10 @@ export function useOpenShift(opts: {
     if (!token) return;
     const requestConfig = config;
     const repoPath = state.repoPath();
-    if (args.showStatus) actions.setProviderStatus("openshift", providerLoading());
+    if (args.showStatus) {
+      setLastLiveAt(null);
+      actions.setProviderStatus("openshift", providerLoading());
+    }
     try {
       await hydrateCachedCandidates(repoPath);
       if (args.signal?.aborted || args.epoch !== lifecycle.getEpoch()) return;
@@ -361,6 +391,7 @@ export function useOpenShift(opts: {
     signal?: AbortSignal,
     epoch = lifecycle.getEpoch(),
     sha?: string,
+    opts?: { silent?: boolean },
   ): Promise<void> {
     const targets = sha ? [sha.toLowerCase()] : [...commits.keys()];
     if (targets.length === 0) return;
@@ -379,6 +410,8 @@ export function useOpenShift(opts: {
     const token = getOpenShiftToken(config.tokenEnvVar);
     if (!token) return;
     live.inflightShas = new Set(targets);
+    live.showLoading = opts?.silent !== true;
+    if (live.showLoading) setLastLiveAt(null);
     setLoadingVersion(v => v + 1);
     const run = (async () => {
       const listed = await fetchOpenShiftResources(config, token, signal, "live", {
@@ -391,6 +424,7 @@ export function useOpenShift(opts: {
       }
       live.listed = listed;
       applyLive(listed, new Set(targets));
+      setLastLiveAt(Date.now());
     })();
     live.inflight = run.then(
       () => {},
@@ -402,10 +436,87 @@ export function useOpenShift(opts: {
       if (epoch === lifecycle.getEpoch()) {
         live.inflight = null;
         live.inflightShas.clear();
+        live.showLoading = false;
         setLoadingVersion(v => v + 1);
       }
     }
   }
+
+  async function runWatchSession(signal: AbortSignal, epoch: number): Promise<void> {
+    const token = getOpenShiftToken(config.tokenEnvVar);
+    if (!token) return;
+    while (!signal.aborted && epoch === lifecycle.getEpoch()) {
+      try {
+        const listed = await fetchOpenShiftResources(config, token, signal, "live", { commitShas: [] });
+        if (signal.aborted || epoch !== lifecycle.getEpoch()) return;
+        if (listed.error === BANNER.openshift.tokenExpired) {
+          actions.setProviderStatus("openshift", providerError(BANNER.openshift.tokenExpired));
+          return;
+        }
+        live.listed = listed;
+        applyLive(listed);
+        setLastLiveAt(Date.now());
+        const child = new AbortController();
+        const onAbort = () => child.abort();
+        signal.addEventListener("abort", onAbort, { once: true });
+        const onEvent = (event: Parameters<typeof applyOpenShiftWatchEvent>[1]) => {
+          if (!live.listed) return;
+          const result = applyOpenShiftWatchEvent(live.listed, event, config.commitShaAnnotation);
+          if (result === "gone") {
+            child.abort();
+            return;
+          }
+          if (result === "applied") {
+            applyLive(live.listed);
+            setLastLiveAt(Date.now());
+          }
+        };
+        const watches = config.namespaces.flatMap(ns =>
+          OPENSHIFT_WATCH_KINDS.map(kind => {
+            const resourceVersion = listed.resourceVersions.get(`${ns}:${kind}`);
+            if (!resourceVersion || resourceVersion === "0") return null;
+            return watchOpenShiftStream(
+              config.serverUrl,
+              token,
+              openShiftKindPath(ns, kind),
+              resourceVersion,
+              child.signal,
+              onEvent,
+            );
+          }),
+        );
+        const running = watches.filter((job): job is NonNullable<typeof job> => job !== null);
+        const results = running.length > 0 ? await Promise.all(running) : [];
+        signal.removeEventListener("abort", onAbort);
+        if (signal.aborted || epoch !== lifecycle.getEpoch()) return;
+        if (results.includes("auth")) {
+          actions.setProviderStatus("openshift", providerError(BANNER.openshift.tokenExpired));
+          return;
+        }
+        if (results.length > 0 && results.every(result => result === "forbidden")) return;
+        if (results.every(result => result === "end" || result === "forbidden")) await sleep(1000, signal);
+      } catch (err) {
+        if (signal.aborted || epoch !== lifecycle.getEpoch()) return;
+        debugError("OpenShift", err);
+        try {
+          await sleep(1000, signal);
+        } catch {
+          return;
+        }
+      }
+    }
+  }
+
+  createEffect(() => {
+    configAccessor();
+    state.repoPath();
+    watchEpoch();
+    if (state.activeProviderView() !== "openshift" || !isAvailable()) return;
+    const epoch = lifecycle.getEpoch();
+    const ctrl = new AbortController();
+    void runWatchSession(ctrl.signal, epoch);
+    onCleanup(() => ctrl.abort());
+  });
 
   return {
     getCommitData: sha => {
@@ -424,8 +535,10 @@ export function useOpenShift(opts: {
     isLoading: sha => {
       loadingVersion();
       version();
-      return live.inflight !== null && live.inflightShas.has(sha.toLowerCase());
+      return live.showLoading && live.inflight !== null && live.inflightShas.has(sha.toLowerCase());
     },
+    lastLiveAt,
+    liveAge: () => (lastLiveAt() == null ? "" : "live"),
     isAvailable,
     loadBuildLog: async (resource, force = false) => {
       const sha = resource.commitSha;
@@ -445,6 +558,19 @@ export function useOpenShift(opts: {
       const token = getOpenShiftToken(config.tokenEnvVar);
       if (!token) throw new Error(unavailableMessage());
       return fetchOpenShiftPodLog(config.serverUrl, token, resource.namespace, resource.name, container);
+    },
+    followLog: async (resource, signal, onText) => {
+      const token = getOpenShiftToken(config.tokenEnvVar);
+      if (!token) throw new Error(unavailableMessage());
+      let acc = "";
+      const url =
+        resource.kind === "Pod"
+          ? openShiftPodLogUrl(config.serverUrl, resource.namespace, resource.name, undefined, true)
+          : openShiftBuildLogUrl(config.serverUrl, resource.namespace, resource.name, true);
+      await followOpenShiftLog(url, token, signal, chunk => {
+        acc = appendOpenShiftLogFollow(acc, chunk);
+        onText(acc);
+      });
     },
     loadResourceObject: async resource => {
       const token = getOpenShiftToken(config.tokenEnvVar);

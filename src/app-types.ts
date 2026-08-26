@@ -34,6 +34,7 @@ export interface AppProps {
     commitShaAnnotation?: string;
     cacheLimit?: 10 | 20 | 50;
     fetchDepth?: 10 | 20 | 50;
+    autoRefreshSeconds?: 0 | 120 | 300 | 600;
   };
   initialSnykConfig?: {
     enabled?: boolean;

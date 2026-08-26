@@ -36,12 +36,6 @@ const SPINNER_FRAME_MS = 120;
 type DiffViewMode = "mixed" | "new" | "old";
 
 const VIEW_MODE_CYCLE: DiffViewMode[] = ["mixed", "new", "old"];
-/** Label describes what pressing `c` will switch TO (the next mode in the cycle). */
-const VIEW_MODE_NEXT_LABEL: Record<DiffViewMode, string> = {
-  mixed: "show new only",
-  new: "show old only",
-  old: "show unified",
-};
 /** Label shown in the title bar for the current mode (empty for default unified view). */
 const VIEW_MODE_TITLE_LABEL: Record<DiffViewMode, string> = {
   mixed: "",
@@ -671,7 +665,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
           <KeyHintSeparator />
           <KeyHint key="v" desc={fullFileMode() ? " show hunks" : " show file"} />
           <KeyHintSeparator />
-          <KeyHint key="c" desc={` ${VIEW_MODE_NEXT_LABEL[viewMode()]}`} />
+          <KeyHint key="c" desc=" cycle view mode" />
           <KeyHintSeparator />
           <KeyHint key="w" desc={wrapEnabled() ? " disable wrap" : " enable wrap"} />
         </DialogFooter>

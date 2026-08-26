@@ -1,6 +1,6 @@
 import { BANNER, debugError } from "../../debug/banner";
 import type { GraphBadge, GraphStatusCounts } from "../provider";
-import { fetchWithRetry } from "../shared/http";
+import { fetchWithRetry, isAbortError } from "../shared/http";
 import type {
   OpenShiftCommitData,
   OpenShiftControllerReference,
@@ -11,8 +11,9 @@ import type {
   OpenShiftResource,
   OpenShiftStatus,
 } from "./types";
-import { isCachedOpenShiftResource, OPENSHIFT_TERMINAL_PHASES } from "./types";
+import { isCachedOpenShiftResource, OPENSHIFT_TERMINAL_PHASES, OPENSHIFT_WATCH_KINDS } from "./types";
 import { isValidOpenShiftNamespace } from "./validation";
+import { isOpenShiftWatchGone, parseOpenShiftWatchBuffer, type OpenShiftWatchEvent } from "./watch";
 
 export type OpenShiftInventoryMode = "full" | "builds" | "seeds" | "live";
 
@@ -245,7 +246,26 @@ function baseResource(
     ownerReferences: ownerReferences(item),
     terminating: str(md.deletionTimestamp) !== undefined,
     updatedAt: str(md.creationTimestamp) ?? null,
+    labels: stringLabels(item),
   };
+}
+
+function stringLabels(item: unknown): Record<string, string> | undefined {
+  const raw = labels(item);
+  const out: Record<string, string> = {};
+  for (const [name, value] of Object.entries(raw)) {
+    if (typeof value === "string" && value) out[name] = value;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+export function matchesPodSelector(
+  podLabels: Record<string, string> | undefined,
+  selector: Record<string, string> | undefined,
+): boolean {
+  if (!selector || Object.keys(selector).length === 0) return false;
+  const present = podLabels ?? {};
+  return Object.entries(selector).every(([name, value]) => present[name] === value);
 }
 
 function extractBuild(namespace: string, item: unknown, annotationKey: string): OpenShiftResource | null {
@@ -303,6 +323,39 @@ function extractPod(namespace: string, item: unknown): OpenShiftResource {
   return { ...baseResource("Pod", namespace, item), status: podStatus(item), imageRefs };
 }
 
+export function resourceFromWatchObject(object: unknown, annotationKey: string): OpenShiftResource | null {
+  const kind = str(obj(object)?.kind);
+  const namespace = str(metadata(object).namespace);
+  if (!kind || !namespace) return null;
+  if (kind === "Deployment" || kind === "DeploymentConfig") return extractWorkload(kind, namespace, object, annotationKey);
+  if (kind === "Pod") return extractPod(namespace, object);
+  return null;
+}
+
+export function applyOpenShiftWatchEvent(
+  listed: OpenShiftListedInventory,
+  event: OpenShiftWatchEvent,
+  annotationKey: string,
+): "gone" | "applied" | "ignored" {
+  if (isOpenShiftWatchGone(event)) return "gone";
+  if (event.type === "BOOKMARK" || event.type === "ERROR") return "ignored";
+  const resource = resourceFromWatchObject(event.object, annotationKey);
+  if (!resource || !(OPENSHIFT_WATCH_KINDS as readonly string[]).includes(resource.kind)) return "ignored";
+  if (event.type === "DELETED") {
+    listed.resources = listed.resources.filter(item => item.id !== resource.id);
+    return "applied";
+  }
+  if (event.type !== "ADDED" && event.type !== "MODIFIED") return "ignored";
+  const index = listed.resources.findIndex(item => item.id === resource.id);
+  if (index >= 0) listed.resources[index] = resource;
+  else listed.resources.push(resource);
+  return "applied";
+}
+
+export function openShiftKindPath(namespace: string, kind: OpenShiftInventoryKind): string {
+  return buildPath(encodeURIComponent(namespace), kind);
+}
+
 function extractController(
   kind: OpenShiftControllerReference["kind"],
   namespace: string,
@@ -325,13 +378,13 @@ export function isOpenShiftAuthStatus(status: number): boolean {
   return status === 401;
 }
 
-async function fetchItems(
+async function fetchList(
   serverUrl: string,
   token: string,
   path: string,
   signal?: AbortSignal,
   query?: string | null,
-): Promise<unknown[]> {
+): Promise<{ items: unknown[]; resourceVersion: string }> {
   const suffix = query ? (path.includes("?") ? `&${query}` : `?${query}`) : "";
   const res = await fetchWithRetry(
     openShiftApiUrl(serverUrl, `${path}${suffix}`),
@@ -341,7 +394,18 @@ async function fetchItems(
   );
   if (isOpenShiftAuthStatus(res.status)) throw new Error(BANNER.openshift.tokenExpired);
   if (!res.ok) throw new Error(`OpenShift ${path} failed: ${res.status}`);
-  return arr(obj(await res.json())?.items);
+  const body = obj(await res.json());
+  return { items: arr(body?.items), resourceVersion: str(obj(body?.metadata)?.resourceVersion) ?? "0" };
+}
+
+async function fetchItems(
+  serverUrl: string,
+  token: string,
+  path: string,
+  signal?: AbortSignal,
+  query?: string | null,
+): Promise<unknown[]> {
+  return (await fetchList(serverUrl, token, path, signal, query)).items;
 }
 
 export async function fetchOpenShiftBuildLog(
@@ -382,6 +446,108 @@ export async function fetchOpenShiftPodLog(
   if (isOpenShiftAuthStatus(res.status)) throw new Error(BANNER.openshift.tokenExpired);
   if (!res.ok) throw new Error(`OpenShift ${path} failed: ${res.status}`);
   return await res.text();
+}
+
+export function openShiftBuildLogUrl(serverUrl: string, namespace: string, buildName: string, follow = false): string {
+  const path = `/apis/build.openshift.io/v1/namespaces/${encodeURIComponent(namespace)}/builds/${encodeURIComponent(buildName)}/log`;
+  return openShiftApiUrl(serverUrl, follow ? `${path}?follow=true` : path);
+}
+
+export function openShiftPodLogUrl(
+  serverUrl: string,
+  namespace: string,
+  podName: string,
+  container?: string,
+  follow = false,
+): string {
+  const params = new URLSearchParams();
+  if (container) params.set("container", container);
+  if (follow) params.set("follow", "true");
+  const query = params.toString();
+  const path = `/api/v1/namespaces/${encodeURIComponent(namespace)}/pods/${encodeURIComponent(podName)}/log`;
+  return openShiftApiUrl(serverUrl, query ? `${path}?${query}` : path);
+}
+
+export type OpenShiftWatchResult = "gone" | "end" | "forbidden" | "auth";
+
+export async function watchOpenShiftStream(
+  serverUrl: string,
+  token: string,
+  path: string,
+  resourceVersion: string,
+  signal: AbortSignal,
+  onEvent: (event: OpenShiftWatchEvent) => void,
+): Promise<OpenShiftWatchResult> {
+  const query = `watch=true&allowWatchBookmarks=true&resourceVersion=${encodeURIComponent(resourceVersion)}`;
+  const url = openShiftApiUrl(serverUrl, `${path}?${query}`);
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      signal,
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+    });
+  } catch (err) {
+    if (isAbortError(err, signal)) return "end";
+    throw err;
+  }
+  if (res.status === 410) return "gone";
+  if (isOpenShiftAuthStatus(res.status)) return "auth";
+  if (res.status === 403) return "forbidden";
+  if (!res.ok) throw new Error(`OpenShift ${path} watch failed: ${res.status}`);
+  const reader = res.body?.getReader();
+  if (!reader) return "end";
+  const decoder = new TextDecoder();
+  let buffer = "";
+  try {
+    while (!signal.aborted) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const parsed = parseOpenShiftWatchBuffer(buffer);
+      buffer = parsed.rest;
+      for (const event of parsed.events) {
+        if (isOpenShiftWatchGone(event)) return "gone";
+        onEvent(event);
+      }
+    }
+  } catch (err) {
+    if (isAbortError(err, signal)) return "end";
+    throw err;
+  } finally {
+    reader.releaseLock();
+  }
+  return "end";
+}
+
+export async function followOpenShiftLog(
+  url: string,
+  token: string,
+  signal: AbortSignal,
+  onChunk: (text: string) => void,
+): Promise<void> {
+  const res = await fetch(url, {
+    signal,
+    headers: { Authorization: `Bearer ${token}`, Accept: "text/plain, */*" },
+  });
+  if (isOpenShiftAuthStatus(res.status)) throw new Error(BANNER.openshift.tokenExpired);
+  if (!res.ok) throw new Error(`OpenShift log follow failed: ${res.status}`);
+  onChunk("");
+  const reader = res.body?.getReader();
+  if (!reader) return;
+  const decoder = new TextDecoder();
+  try {
+    while (!signal.aborted) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const text = decoder.decode(value, { stream: true });
+      if (text) onChunk(text);
+    }
+  } catch (err) {
+    if (isAbortError(err, signal)) return;
+    throw err;
+  } finally {
+    reader.releaseLock();
+  }
 }
 
 function add(nsMap: Map<string, OpenShiftCommitData>, sha: string, resource: OpenShiftResource) {
@@ -444,6 +610,15 @@ export function buildOpenShiftCommitMap(
   }
   for (const r of resources.filter(r => !r.commitSha)) {
     if (r.kind === "Pod" && r.terminating) continue;
+    if (r.kind === "Pod") {
+      for (const deploy of resources) {
+        if (deploy.kind !== "Deployment" && deploy.kind !== "DeploymentConfig") continue;
+        if (!deploy.commitSha || deploy.namespace !== r.namespace) continue;
+        if (!matchesPodSelector(r.labels, deploy.podSelector)) continue;
+        add(map, deploy.commitSha, { ...r, commitSha: deploy.commitSha });
+        matchedPods.push({ sha: deploy.commitSha, pod: r });
+      }
+    }
     for (const [sha, tokens] of tokensBySha) {
       if (!r.imageRefs.flatMap(imageDigests).some(ref => tokens.has(ref))) continue;
       add(map, sha, r);
@@ -481,6 +656,7 @@ export interface OpenShiftListedInventory {
   failures: OpenShiftInventoryFailure[];
   successfulRequests: number;
   error: string | null;
+  resourceVersions: Map<string, string>;
 }
 
 export interface OpenShiftFetchOptions {
@@ -502,6 +678,7 @@ type ListAcc = {
   failures: OpenShiftInventoryFailure[];
   successfulRequests: number;
   authFailed: boolean;
+  resourceVersions: Map<string, string>;
 };
 
 type NsCtx = {
@@ -514,7 +691,14 @@ type NsCtx = {
 };
 
 function emptyAcc(): ListAcc {
-  return { resources: [], controllers: [], failures: [], successfulRequests: 0, authFailed: false };
+  return {
+    resources: [],
+    controllers: [],
+    failures: [],
+    successfulRequests: 0,
+    authFailed: false,
+    resourceVersions: new Map(),
+  };
 }
 
 function buildPath(encoded: string, kind: OpenShiftInventoryKind): string {
@@ -588,13 +772,14 @@ function absorb(acc: ListAcc, kind: OpenShiftInventoryKind, extracted: Inventory
 
 async function runRequests(ctx: NsCtx, requests: InventoryRequest[], acc: ListAcc): Promise<void> {
   const results = await Promise.allSettled(
-    requests.map(request => fetchItems(ctx.config.serverUrl, ctx.token, request.path, ctx.signal, request.query)),
+    requests.map(request => fetchList(ctx.config.serverUrl, ctx.token, request.path, ctx.signal, request.query)),
   );
   ctx.signal?.throwIfAborted();
   results.forEach((result, index) => {
     const request = requests[index];
     if (result.status === "fulfilled") {
-      absorb(acc, request.kind, request.extract(result.value));
+      if (result.value.resourceVersion) acc.resourceVersions.set(`${ctx.ns}:${request.kind}`, result.value.resourceVersion);
+      absorb(acc, request.kind, request.extract(result.value.items));
       return;
     }
     const error = result.reason instanceof Error ? result.reason.message : String(result.reason);
@@ -781,6 +966,7 @@ export async function fetchOpenShiftResources(
     error,
     failures: acc.failures,
     successfulRequests: acc.successfulRequests,
+    resourceVersions: acc.resourceVersions,
   };
 }
 

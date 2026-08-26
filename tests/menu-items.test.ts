@@ -100,6 +100,7 @@ describe("buildOpenShiftProviderItems", () => {
       commitShaAnnotation: "dev/commit-sha",
       cacheLimit: 20,
       fetchDepth: 20,
+      autoRefreshSeconds: 120,
     };
     let changed = cfg;
     const items = buildOpenShiftProviderItems(cfg, next => {
@@ -121,6 +122,32 @@ describe("buildOpenShiftProviderItems", () => {
       namespace.set("team-one");
       expect(changed.namespaces).toEqual(["team-one"]);
     }
+  });
+
+  it("cycles Auto refresh through off/2m/5m/10m", () => {
+    const cfg: OpenShiftMenuConfig = {
+      enabled: true,
+      serverUrl: "https://api.example.com:6443",
+      tokenEnvVar: "OPENSHIFT_TOKEN",
+      namespaces: ["ns"],
+      commitShaAnnotation: "dev/commit-sha",
+      cacheLimit: 20,
+      fetchDepth: 20,
+      autoRefreshSeconds: 120,
+    };
+    let changed = cfg;
+    const items = buildOpenShiftProviderItems(cfg, next => {
+      changed = next;
+    });
+    const cycle = items.find(item => item.kind === "cycle" && item.label === "Auto refresh");
+    expect(cycle?.kind).toBe("cycle");
+    if (cycle?.kind !== "cycle") return;
+    expect(cycle.options).toEqual(["off", "2m", "5m", "10m"]);
+    expect(cycle.get()).toBe("2m");
+    cycle.set("off");
+    expect(changed.autoRefreshSeconds).toBe(0);
+    cycle.set("10m");
+    expect(changed.autoRefreshSeconds).toBe(600);
   });
 });
 

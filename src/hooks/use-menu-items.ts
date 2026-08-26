@@ -15,6 +15,13 @@ import {
   isValidOpenShiftText,
 } from "../providers/openshift/validation";
 import type { ProviderDetailView } from "../providers/provider";
+import {
+  DEFAULT_OPENSHIFT_AUTO_REFRESH_SECONDS,
+  OPENSHIFT_AUTO_REFRESH_MS,
+  OPENSHIFT_AUTO_REFRESH_OPTIONS,
+  OPENSHIFT_MS_TO_LABEL,
+  type OpenShiftAutoRefreshSeconds,
+} from "../providers/openshift/types";
 import type { SnykCacheLimit } from "../providers/snyk/types";
 
 type MenuTab = "repository" | "branch" | "providers";
@@ -159,6 +166,7 @@ export interface OpenShiftMenuConfig {
   commitShaAnnotation: string;
   cacheLimit: 10 | 20 | 50;
   fetchDepth: 10 | 20 | 50;
+  autoRefreshSeconds: OpenShiftAutoRefreshSeconds;
 }
 
 export interface SnykMenuConfig {
@@ -288,6 +296,18 @@ export function buildOpenShiftProviderItems(
       options: ["10", "20", "50"],
       get: () => String(cfg.fetchDepth),
       set: v => update({ ...cfg, fetchDepth: v === "10" ? 10 : v === "50" ? 50 : 20 }),
+    },
+    {
+      kind: "cycle",
+      label: "Auto refresh",
+      options: [...OPENSHIFT_AUTO_REFRESH_OPTIONS],
+      get: () => OPENSHIFT_MS_TO_LABEL[cfg.autoRefreshSeconds * 1000] ?? "2m",
+      set: v => {
+        const ms = OPENSHIFT_AUTO_REFRESH_MS[v as keyof typeof OPENSHIFT_AUTO_REFRESH_MS] ?? 120_000;
+        const autoRefreshSeconds: OpenShiftAutoRefreshSeconds =
+          ms === 0 ? 0 : ms === 300_000 ? 300 : ms === 600_000 ? 600 : 120;
+        update({ ...cfg, autoRefreshSeconds });
+      },
     },
     {
       kind: "editable",
@@ -813,6 +833,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
       commitShaAnnotation: "dev/commit-sha",
       cacheLimit: 20,
       fetchDepth: 20,
+      autoRefreshSeconds: DEFAULT_OPENSHIFT_AUTO_REFRESH_SECONDS,
     };
     const snykCfg = opts.snykConfig?.() ?? {
       enabled: false,

@@ -1,5 +1,25 @@
 export type OpenShiftCacheLimit = 10 | 20 | 50;
 
+export const OPENSHIFT_AUTO_REFRESH_OPTIONS = ["off", "2m", "5m", "10m"] as const;
+export const OPENSHIFT_AUTO_REFRESH_SECONDS = [0, 120, 300, 600] as const;
+export type OpenShiftAutoRefreshSeconds = (typeof OPENSHIFT_AUTO_REFRESH_SECONDS)[number];
+export const DEFAULT_OPENSHIFT_AUTO_REFRESH_SECONDS: OpenShiftAutoRefreshSeconds = 120;
+export const OPENSHIFT_AUTO_REFRESH_MS: Record<(typeof OPENSHIFT_AUTO_REFRESH_OPTIONS)[number], number> = {
+  off: 0,
+  "2m": 120_000,
+  "5m": 300_000,
+  "10m": 600_000,
+};
+export const OPENSHIFT_MS_TO_LABEL: Record<number, string> = {
+  0: "off",
+  120000: "2m",
+  300000: "5m",
+  600000: "10m",
+};
+export const OPENSHIFT_LOG_FOLLOW_MAX_LINES = 1000;
+export const OPENSHIFT_WATCH_KINDS = ["Deployment", "DeploymentConfig", "Pod"] as const;
+export type OpenShiftWatchKind = (typeof OPENSHIFT_WATCH_KINDS)[number];
+
 export interface OpenShiftProviderConfig {
   enabled: boolean;
   serverUrl: string;
@@ -8,6 +28,8 @@ export interface OpenShiftProviderConfig {
   commitShaAnnotation: string;
   cacheLimit: OpenShiftCacheLimit;
   fetchDepth: OpenShiftCacheLimit;
+  /** Builds + IST poll while OpenShift view is focused. 0 = off. */
+  autoRefreshSeconds: OpenShiftAutoRefreshSeconds;
 }
 
 export const DEFAULT_OPENSHIFT_CONFIG: OpenShiftProviderConfig = {
@@ -18,6 +40,7 @@ export const DEFAULT_OPENSHIFT_CONFIG: OpenShiftProviderConfig = {
   commitShaAnnotation: "dev/commit-sha",
   cacheLimit: 20,
   fetchDepth: 20,
+  autoRefreshSeconds: DEFAULT_OPENSHIFT_AUTO_REFRESH_SECONDS,
 };
 
 export const OPENSHIFT_TERMINAL_PHASES = new Set(["Complete", "Failed", "Error", "Cancelled"]);
@@ -51,6 +74,7 @@ export interface OpenShiftResource {
   terminating?: boolean;
   updatedAt?: string | null;
   podSelector?: Record<string, string>;
+  labels?: Record<string, string>;
 }
 
 export interface OpenShiftNamespaceData {

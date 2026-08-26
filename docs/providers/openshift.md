@@ -5,10 +5,12 @@ status. The graph uses two 15-character columns: **Live** and **Cache**.
 Both use red / green / running count chips. Cache is terminal Builds
 (persisted). Live is Deployments, Pods, ImageStreamTags, and running
 Builds. Empty lane shows `·······`. Details mark each terminal Build
-`(cached)` after its name. Background refresh lists Builds and
-ImageStreamTags. Live Pods and workloads load once when a seed has a digest.
-Select a Build or Pod and press Enter to view its log, or the API object for
-other kinds. JSON is fetched on open, not kept in memory.
+`(cached)` after its name. Builds and ImageStreamTags poll while the OpenShift view is focused, using the
+provider **Auto refresh** cycle (`off`, `2m`, `5m`, `10m`; default `2m`).
+Deployments, DeploymentConfigs, and Pods are listed then watched in the
+configured namespaces until you leave the view. Git Auto refresh / Auto fetch
+stay git-only. Select a Build or Pod and press Enter to view its log, or the
+API object for other kinds. JSON is fetched on open, not kept in memory.
 
 ## Configuration
 
@@ -19,13 +21,17 @@ Configure the provider per repository from `:providers`:
 - Set the environment variable containing an API token. Default:
   `OPENSHIFT_TOKEN`. Prefer a long-lived service-account token over
   `oc whoami -t` (env is fixed until Codepulse restarts).
-- Set the commit annotation key. Default: `dev/commit-sha`.
-- Add one or more namespaces.
 - Cache count (`10`, `20`, `50`): maximum commit files kept on disk.
 - Fetch size (`10`, `20`, `50`): how many graph commits are candidates. Only
   those commits that also have a Build or ImageStreamTag seed are matched.
   Same options as Jenkins fetch size per job; the unit here is commits on the
   graph, not builds per job.
+- Auto refresh (`off`, `2m`, `5m`, `10m`): poll Builds and ImageStreamTags
+  while the OpenShift view is focused. `off` skips that poll. Reload still
+  lists seeds. Live Deploy/DC/Pod freshness is watch, not this timer.
+- Set the commit SHA key. Default: `dev/commit-sha`. Labels first, then
+  annotations, on Builds, Deployments, and ImageStreamTags.
+- Add one or more namespaces.
 
 Stamp `dev/commit-sha` (or your annotation key) as a **label** on Builds and
 Deployments when the API allows it. ImageStreamTags accept annotations only.
@@ -50,14 +56,17 @@ A commit SHA is taken from `metadata.labels` first, then annotations on
 metadata, ImageStreamTag `tag`, and the nested image (same key, default
 `dev/commit-sha`). `oc annotate istag` writes `tag.annotations`.
 
-Background refresh lists Builds and ImageStreamTags. Builds for the graph
-window are requested with `labelSelector=dev/commit-sha in (…)`. If that
-returns nothing, the full Build list is scanned by annotation (old objects).
-ImageStreamTags are always listed in full; they cannot be labeled.
+While the OpenShift view is focused, Builds and ImageStreamTags poll on Auto
+refresh. Builds for the graph window are requested with
+`labelSelector=dev/commit-sha in (…)`. If that returns nothing, the full Build
+list is scanned by annotation (old objects). ImageStreamTags are always listed
+in full; they cannot be labeled.
 
-Live inventory prefers labeled Deployments for those SHAs, then lists Pods
-with each Deployment’s `spec.selector`. If no labeled Deployment exists, the
-previous full live list and digest / owner-chain match is used:
+Live inventory lists Deployments, DeploymentConfigs, and Pods in the configured
+namespaces, then watches those kinds (`watch=true` from the list
+`resourceVersion`). A 410 Gone or dropped stream lists again. Leave the
+OpenShift view to stop watches. Matching still prefers labels, then
+annotations, then digest / owner-chain:
 
 ```text
 Pod → ReplicaSet → Deployment
@@ -70,10 +79,12 @@ not written to disk.
 ## Logs
 
 - Terminal Build logs load from disk when present, otherwise from the Build log
-  API, then cache.
-- Running Build logs and Pod logs are fetched once from the API. Press `r` to
-  refresh. They are not stored.
-- `l` toggles log and JSON for Builds and Pods.
+  API, then cache. They are not streamed.
+- Running Build logs and Pod logs use `?follow=true`. History then tail. Last
+  1000 lines. Open at the bottom; stay pinned only if you are already at the
+  bottom. Press `r` to restart the stream. They are not stored.
+- `c` cycles view mode (log / JSON) for Builds and Pods. JSON stays a snapshot. Leave
+  the log view or close the dialog to abort follow.
 
 ## Status
 
@@ -97,7 +108,37 @@ Configured token needs `list` access for:
 - `replicationcontrollers`
 - `pods`
 
-Build and Pod log views also need `get` on those log subresources.
+Live freshness also needs `watch` on Deployments, DeploymentConfigs, and Pods
+in each configured namespace. OpenShift/`kubernetes` `view` already has
+`get`/`list`/`watch`. A custom ServiceAccount needs the extra `watch` verb on
+those three kinds; Builds and ImageStreamTags stay `list` only. Without watch,
+the last list stays until Reload.
+
+Build and Pod log views need `get` on those log subresources (`?follow=true`
+uses the same get). Example Role:
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: codepulse
+rules:
+  - apiGroups: ["build.openshift.io"]
+    resources: ["builds", "builds/log"]
+    verbs: ["get", "list"]
+  - apiGroups: ["image.openshift.io"]
+    resources: ["imagestreamtags"]
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps.openshift.io"]
+    resources: ["deploymentconfigs"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "replicationcontrollers"]
+    verbs: ["get", "list", "watch"]
+```
 
 Partial permission failures preserve successful inventory and show a warning.
 Routes, Services, Helm releases, and console links are not included in this

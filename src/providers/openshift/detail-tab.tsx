@@ -10,6 +10,7 @@ export interface OpenShiftDetailTabProps {
   getCommitData: (sha: string) => OpenShiftCommitData | null;
   fetchCommitData?: (sha: string, force?: boolean) => Promise<void>;
   isLoading?: (sha: string) => boolean;
+  liveAge?: () => string;
   onOpenResource?: (resource: OpenShiftResource) => void;
   unavailableReason?: string | null;
   warningReason?: string | null;
@@ -86,6 +87,7 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
   const data = () => props.getCommitData(props.sha);
   const commitLoading = () => props.isLoading?.(props.sha) ?? false;
   const reloadBusy = () => commitLoading() || !!props.loading;
+  const liveAge = () => props.liveAge?.() ?? "";
   const [expandedNamespaces, setExpandedNamespaces] = createSignal<Set<string>>(new Set());
   const itemRefs: Renderable[] = [];
   const refsByKey = new Map<string, Renderable>();
@@ -245,6 +247,11 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
           <Show when={reloadBusy()}>
             <text flexShrink={0} fg={t().foregroundMuted} wrapMode="none">
               loading...
+            </text>
+          </Show>
+          <Show when={!reloadBusy() && liveAge()}>
+            <text flexShrink={0} fg={t().foregroundMuted} wrapMode="none">
+              {liveAge()}
             </text>
           </Show>
         </box>

@@ -170,7 +170,7 @@ describe("fetchOpenShiftInventory", () => {
 
   test("correlates unannotated resources only through immutable image digests", () => {
     const resource = (kind: OpenShiftResource["kind"], name: string, imageRefs: string[], commitSha?: string) =>
-      ({ id: name, kind, name, namespace: "ns", status: "pass", imageRefs, commitSha, raw: {} }) as OpenShiftResource;
+      ({ id: name, kind, name, namespace: "ns", status: "pass", imageRefs, commitSha }) as OpenShiftResource;
     const map = buildOpenShiftCommitMap([
       resource("ImageStreamTag", "app:latest", ["registry/ns/app:latest", "sha256:abc123"], SHA),
       resource("Deployment", "tag-only", ["registry/ns/app:latest"]),
@@ -180,6 +180,31 @@ describe("fetchOpenShiftInventory", () => {
     expect(map.get(SHA)?.namespaces[0].imageStreamTags).toHaveLength(1);
     expect(map.get(SHA)?.namespaces[0].deployments).toHaveLength(0);
     expect(map.get(SHA)?.namespaces[0].pods.map(p => p.name)).toEqual(["digest"]);
+  });
+
+  test("associates unlabeled pods through a labeled Deployment selector", () => {
+    const map = buildOpenShiftCommitMap([
+      {
+        id: "Deployment:ns:app",
+        kind: "Deployment",
+        name: "app",
+        namespace: "ns",
+        status: "running",
+        imageRefs: [],
+        commitSha: SHA,
+        podSelector: { app: "svc" },
+      },
+      {
+        id: "Pod:ns:app-1",
+        kind: "Pod",
+        name: "app-1",
+        namespace: "ns",
+        status: "running",
+        imageRefs: [],
+        labels: { app: "svc" },
+      },
+    ]);
+    expect(map.get(SHA)?.namespaces[0].pods.map(item => item.name)).toEqual(["app-1"]);
   });
 
   test("keeps every ImageStreamTag when they share an ImageStream uid", () => {
@@ -210,7 +235,6 @@ describe("fetchOpenShiftInventory", () => {
         status: "pass",
         imageRefs: ["app@sha256:abc123"],
         commitSha: SHA,
-        raw: {},
       },
       {
         id: "deployment",
@@ -220,7 +244,6 @@ describe("fetchOpenShiftInventory", () => {
         namespace: "ns",
         status: "pass",
         imageRefs: ["app:latest"],
-        raw: {},
       },
       {
         id: "pod",
@@ -231,7 +254,6 @@ describe("fetchOpenShiftInventory", () => {
         status: "pass",
         imageRefs: ["app@sha256:abc123"],
         ownerReferences: [{ kind: "ReplicaSet", uid: "replicaset-uid" }],
-        raw: {},
       },
     ];
     const map = buildOpenShiftCommitMap(resources, [
@@ -257,7 +279,6 @@ describe("fetchOpenShiftInventory", () => {
         status: "pass",
         imageRefs: ["app@sha256:def456"],
         commitSha: SHA,
-        raw: {},
       },
       {
         id: "dc",
@@ -267,7 +288,6 @@ describe("fetchOpenShiftInventory", () => {
         namespace: "ns",
         status: "pass",
         imageRefs: ["app:latest"],
-        raw: {},
       },
       {
         id: "pod",
@@ -277,7 +297,6 @@ describe("fetchOpenShiftInventory", () => {
         status: "pass",
         imageRefs: ["app@sha256:def456"],
         ownerReferences: [{ kind: "ReplicationController", uid: "rc-uid" }],
-        raw: {},
       },
     ];
     const map = buildOpenShiftCommitMap(resources, [
@@ -302,7 +321,6 @@ describe("fetchOpenShiftInventory", () => {
         status: "pass",
         imageRefs: ["app@sha256:abc123"],
         commitSha: SHA,
-        raw: {},
       },
       {
         id: "deployment",
@@ -312,7 +330,6 @@ describe("fetchOpenShiftInventory", () => {
         namespace: "ns",
         status: "pass",
         imageRefs: ["app:latest"],
-        raw: {},
       },
       {
         id: "pod",
@@ -323,7 +340,6 @@ describe("fetchOpenShiftInventory", () => {
         imageRefs: ["app@sha256:abc123"],
         terminating: true,
         ownerReferences: [{ kind: "ReplicaSet", uid: "missing" }],
-        raw: {},
       },
     ];
     const map = buildOpenShiftCommitMap(resources);
@@ -547,7 +563,6 @@ describe("buildOpenShiftGraphBadges", () => {
     name,
     status,
     imageRefs: [],
-    raw: {},
   });
 
   const badgeFor = (...statuses: OpenShiftResource["status"][]) => {

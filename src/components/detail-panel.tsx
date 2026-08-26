@@ -52,6 +52,7 @@ export interface DetailPanelProps {
   openshiftGetCommitData?: (sha: string) => OpenShiftCommitData | null;
   openshiftFetchCommitData?: (sha: string, force?: boolean) => Promise<void>;
   openshiftIsLoading?: (sha: string) => boolean;
+  openshiftLiveAge?: () => string;
   onOpenOpenShiftResource?: (resource: OpenShiftResource) => void;
   openshiftProviderStatus?: ProviderStatus;
   snykGetCommitData?: (sha: string) => SnykScanResult | null;
@@ -240,6 +241,7 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
             openshiftGetCommitData={props.openshiftGetCommitData}
             openshiftFetchCommitData={props.openshiftFetchCommitData}
             openshiftIsLoading={props.openshiftIsLoading}
+            openshiftLiveAge={props.openshiftLiveAge}
             onOpenOpenShiftResource={props.onOpenOpenShiftResource}
             openshiftProviderStatus={props.openshiftProviderStatus}
             snykGetCommitData={props.snykGetCommitData}

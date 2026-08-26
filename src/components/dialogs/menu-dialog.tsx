@@ -60,6 +60,7 @@ interface MenuDialogProps {
     commitShaAnnotation: string;
     cacheLimit: 10 | 20 | 50;
     fetchDepth: 10 | 20 | 50;
+    autoRefreshSeconds: 0 | 120 | 300 | 600;
   };
   onOpenShiftConfigChange?: (cfg: {
     enabled: boolean;
@@ -69,6 +70,7 @@ interface MenuDialogProps {
     commitShaAnnotation: string;
     cacheLimit: 10 | 20 | 50;
     fetchDepth: 10 | 20 | 50;
+    autoRefreshSeconds: 0 | 120 | 300 | 600;
   }) => void;
   snykConfig?: {
     enabled: boolean;

@@ -1,6 +1,6 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
-import { createEffect, createMemo, createSignal, For } from "solid-js";
+import { createEffect, createMemo, createSignal, For, onCleanup } from "solid-js";
 import {
   DialogFooter,
   DialogOverlay,
@@ -12,11 +12,17 @@ import { getDialogTitleContentWidth, middleTruncate, TITLE_SEP } from "../../com
 import { KeyHint, KeyHintSeparator } from "../../components/key-hint";
 import { useT } from "../../hooks/use-t";
 import type { OpenShiftResource } from "./types";
+import { shouldFollowOpenShiftLog } from "./watch";
 
 interface OpenShiftResourceDialogProps {
   resource: OpenShiftResource;
   onClose: () => void;
   loadLog?: (resource: OpenShiftResource, force?: boolean) => Promise<string>;
+  followLog?: (
+    resource: OpenShiftResource,
+    signal: AbortSignal,
+    onText: (text: string) => void,
+  ) => Promise<void>;
   loadObject?: (resource: OpenShiftResource) => Promise<unknown>;
 }
 
@@ -36,6 +42,7 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
   const [logText, setLogText] = createSignal<string | null>(null);
   const [logError, setLogError] = createSignal<string | null>(null);
   const [logLoading, setLogLoading] = createSignal(false);
+  const [followNonce, setFollowNonce] = createSignal(0);
   const [objectText, setObjectText] = createSignal<string | null>(null);
   const [objectError, setObjectError] = createSignal<string | null>(null);
   const [objectLoading, setObjectLoading] = createSignal(false);
@@ -71,9 +78,39 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
   };
 
   createEffect(() => {
+    const resource = props.resource;
+    const mode = viewMode();
+    followNonce();
+    if (mode === "json") {
+      void loadObject();
+      return;
+    }
+    if (!canLog()) return;
+    if (shouldFollowOpenShiftLog(resource) && props.followLog) {
+      const ctrl = new AbortController();
+      setLogLoading(true);
+      setLogError(null);
+      setLogText("");
+      void props
+        .followLog(resource, ctrl.signal, text => {
+          setLogLoading(false);
+          setLogText(text);
+        })
+        .catch(error => {
+          if (ctrl.signal.aborted) return;
+          setLogLoading(false);
+          setLogError(error instanceof Error ? error.message : String(error));
+        });
+      onCleanup(() => ctrl.abort());
+      return;
+    }
+    void loadLog(false);
+  });
+
+  createEffect(() => {
     props.resource.id;
-    if (canLog() && viewMode() === "log") void loadLog(false);
-    if (viewMode() === "json") void loadObject();
+    if (viewMode() !== "log") return;
+    queueMicrotask(() => scrollboxRef?.scrollTo(Infinity));
   });
 
   const lines = createMemo(() => {
@@ -126,8 +163,9 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
       setWrapEnabled(value => !value);
     } else if (e.name === "r" && canLog()) {
       e.preventDefault();
-      void loadLog(true);
-    } else if ((e.name === "l" || e.name === "i") && canLog()) {
+      if (shouldFollowOpenShiftLog(props.resource) && props.followLog) setFollowNonce(value => value + 1);
+      else void loadLog(true);
+    } else if (e.name === "c" && canLog()) {
       e.preventDefault();
       setViewMode(current => (current === "log" ? "json" : "log"));
     }
@@ -151,6 +189,8 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
           minHeight={0}
           scrollY
           scrollX={false}
+          stickyScroll={viewMode() === "log"}
+          stickyStart={viewMode() === "log" ? "bottom" : undefined}
           verticalScrollbarOptions={{ visible: false }}
         >
           <box flexDirection="column" width="100%" paddingX={4}>
@@ -178,7 +218,7 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
           {canLog() ? (
             <>
               <KeyHintSeparator />
-              <KeyHint key="l" desc={viewMode() === "log" ? " object" : " log"} />
+              <KeyHint key="c" desc=" cycle view mode" />
               <KeyHintSeparator />
               <KeyHint key="r" desc=" refresh log" />
             </>

@@ -294,6 +294,7 @@ export function useSnyk(opts: {
     const current = config();
     const repoPath = state.repoPath();
     const branches = state.branches();
+    if (state.activeProviderView() !== SNYK_PROVIDER_ID) return;
     if (!repoPath || !isAvailable() || current.autoScanBranches.length === 0) return;
 
     const branchTipSHAs = collectSnykAutoScanTips(branches, current.autoScanBranches);

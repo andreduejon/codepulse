@@ -57,6 +57,7 @@ export interface CodepulseConfig {
       commitShaAnnotation?: string;
       cacheLimit?: 10 | 20 | 50;
       fetchDepth?: 10 | 20 | 50;
+      autoRefreshSeconds?: 0 | 120 | 300 | 600;
     };
     snyk?: {
       enabled?: boolean;
@@ -96,6 +97,7 @@ export function defaultConfig(): Required<Omit<CodepulseConfig, "branch" | "grou
         commitShaAnnotation: "dev/commit-sha",
         cacheLimit: 20,
         fetchDepth: 20,
+        autoRefreshSeconds: 120,
       },
       snyk: {
         enabled: false,
@@ -185,6 +187,7 @@ export function backfillRepoConfig(repoPath: string, configPath?: string): void 
     commitShaAnnotation: undefined,
     cacheLimit: 20,
     fetchDepth: 20,
+    autoRefreshSeconds: 120,
   };
   if (
     existingOpenShift?.enabled === undefined ||
@@ -193,7 +196,8 @@ export function backfillRepoConfig(repoPath: string, configPath?: string): void 
     existingOpenShift?.namespaces === undefined ||
     existingOpenShift?.commitShaAnnotation === undefined ||
     existingOpenShift?.cacheLimit === undefined ||
-    existingOpenShift?.fetchDepth === undefined
+    existingOpenShift?.fetchDepth === undefined ||
+    existingOpenShift?.autoRefreshSeconds === undefined
   ) {
     missing.providers = {
       ...missing.providers,
@@ -207,6 +211,9 @@ export function backfillRepoConfig(repoPath: string, configPath?: string): void 
           : {}),
         ...(existingOpenShift?.cacheLimit === undefined ? { cacheLimit: defaultOpenShift.cacheLimit } : {}),
         ...(existingOpenShift?.fetchDepth === undefined ? { fetchDepth: defaultOpenShift.fetchDepth } : {}),
+        ...(existingOpenShift?.autoRefreshSeconds === undefined
+          ? { autoRefreshSeconds: defaultOpenShift.autoRefreshSeconds }
+          : {}),
       },
     };
   }
@@ -597,6 +604,19 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
             config.providers.openshift[field] = openshift[field];
           else warnings.push(`${path}: "providers.openshift.${field}" must be one of 10, 20, 50, ignoring`);
         }
+        if (openshift.autoRefreshSeconds !== undefined) {
+          if (
+            openshift.autoRefreshSeconds === 0 ||
+            openshift.autoRefreshSeconds === 120 ||
+            openshift.autoRefreshSeconds === 300 ||
+            openshift.autoRefreshSeconds === 600
+          )
+            config.providers.openshift.autoRefreshSeconds = openshift.autoRefreshSeconds;
+          else
+            warnings.push(
+              `${path}: "providers.openshift.autoRefreshSeconds" must be one of 0, 120, 300, 600, ignoring`,
+            );
+        }
         if (openshift.namespaces !== undefined) {
           if (Array.isArray(openshift.namespaces)) {
             config.providers.openshift.namespaces = openshift.namespaces.flatMap((ns, idx) => {
@@ -844,6 +864,8 @@ function applyConfigFields(target: Record<string, unknown>, config: CodepulseCon
         existingOpenShift.cacheLimit = config.providers.openshift.cacheLimit;
       if (config.providers.openshift.fetchDepth !== undefined)
         existingOpenShift.fetchDepth = config.providers.openshift.fetchDepth;
+      if (config.providers.openshift.autoRefreshSeconds !== undefined)
+        existingOpenShift.autoRefreshSeconds = config.providers.openshift.autoRefreshSeconds;
       existingProviders.openshift = existingOpenShift;
     }
     if (config.providers.snyk !== undefined) {

@@ -172,6 +172,24 @@ describe("useSnyk", () => {
     expect(selectSnykCacheProbes([SHA_A, SHA_B, SHA_C], new Set([SHA_A]), new Set([SHA_C]))).toEqual([SHA_B]);
   });
 
+  test("does not auto-scan configured branch tips on the Git view", async () => {
+    const calls: SnykScanOptions[] = [];
+    const scan: Scan = options => {
+      calls.push(options);
+      return Promise.resolve(result(options.sha));
+    };
+    mountSnyk({
+      scan,
+      config: { autoScanBranches: ["main"] },
+      setup: next => {
+        next.setBranches([{ name: "main", isCurrent: true, isRemote: false, lastCommitHash: SHA_A }]);
+      },
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(calls).toHaveLength(0);
+  });
+
   test("selects unique configured local branch tips", () => {
     expect(
       collectSnykAutoScanTips(

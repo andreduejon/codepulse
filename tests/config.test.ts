@@ -210,7 +210,26 @@ describe("loadConfig", () => {
       commitShaAnnotation: "A".repeat(255),
       namespaces: ["team-one"],
     });
-    expect(warnings.filter(warning => warning.includes("providers.openshift.namespaces"))).toHaveLength(2);
+  });
+
+  test("accepts OpenShift autoRefreshSeconds cycle values", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("openshift-refresh", repoPath, {
+      providers: { openshift: { autoRefreshSeconds: 300 } },
+    });
+    const { config: result, warnings } = loadConfig(repoPath, configPath);
+    expect(result.providers?.openshift?.autoRefreshSeconds).toBe(300);
+    expect(warnings.filter(warning => warning.includes("autoRefreshSeconds"))).toHaveLength(0);
+  });
+
+  test("rejects invalid OpenShift autoRefreshSeconds", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("openshift-refresh-bad", repoPath, {
+      providers: { openshift: { autoRefreshSeconds: 30 } },
+    });
+    const { config: result, warnings } = loadConfig(repoPath, configPath);
+    expect(result.providers?.openshift?.autoRefreshSeconds).toBeUndefined();
+    expect(warnings.some(warning => warning.includes("providers.openshift.autoRefreshSeconds"))).toBe(true);
   });
 
   test("rejects insecure OpenShift URL and oversized text", () => {

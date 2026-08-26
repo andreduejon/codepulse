@@ -133,12 +133,13 @@ variables and are never stored in configuration.
 - **Jenkins** — shows configured job builds, pipeline stages, and console logs.
   Job URLs are auto-detected; multibranch pipelines discover up to 25 enabled
   branch jobs across configured parents. See [Jenkins provider](docs/providers/jenkins.md).
-- **OpenShift** — shows annotated Builds and ImageStreamTags, digest-matched
-  Pods, and owner-resolved workloads. Enter opens cached resource JSON. See
+- **OpenShift** — Live/Cache chips for Builds, ImageStreamTags, Deployments,
+  and Pods. Watch while the OpenShift view is focused; Builds/IST poll on
+  provider Auto refresh. Enter opens log follow or JSON. See
   [OpenShift provider](docs/providers/openshift.md).
 - **Snyk** — scans exact commits in detached worktrees, shows severity counts,
-  and lists vulnerability and remediation details. See
-  [Snyk provider](docs/providers/snyk.md).
+  and lists vulnerability and remediation details. Branch-tip auto-scan runs
+  only on the Snyk view. See [Snyk provider](docs/providers/snyk.md).
 
 ## Themes
 
