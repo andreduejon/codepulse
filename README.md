@@ -176,7 +176,9 @@ Planned milestones currently follow this shape:
 - `0.7.0`: standalone macOS and Linux distributions with no Bun or Node.js runtime requirement
 - `0.8.0`: Snyk Open Source scans, commit severity counts, finding details, and
   a local scan cache
-- Future: further providers and OpenShift features and polish
+- `0.9.0` (unreleased): OpenShift build cache, cheaper Build-only refresh, and
+  Build/Pod logs
+- Future: Helm, Routes, Services, and further providers
 
 The intent is to reach `1.0.0` once the integration model and configuration
 surface are stable.

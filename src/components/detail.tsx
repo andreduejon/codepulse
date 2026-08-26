@@ -918,6 +918,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   sha={c().hash}
                   getCommitData={getCommitData()}
                   fetchCommitData={props.openshiftFetchCommitData}
+                  isLoading={props.openshiftIsLoading}
                   onOpenResource={props.onOpenOpenShiftResource}
                   unavailableReason={
                     props.openshiftProviderStatus?.kind === "error" ||

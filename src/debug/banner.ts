@@ -34,6 +34,7 @@ export const BANNER = {
     noServer: "OpenShift unavailable. Server URL not configured.",
     noNamespaces: "OpenShift unavailable. No namespaces configured.",
     missingToken: (envVar: string) => `OpenShift unavailable. Missing ${envVar}.`,
+    tokenExpired: "OpenShift token expired.",
     unavailable: "OpenShift unavailable.",
     inventoryFailed: "OpenShift inventory failed.",
     inventoryPartial: "OpenShift inventory partially failed.",

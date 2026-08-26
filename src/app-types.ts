@@ -32,6 +32,8 @@ export interface AppProps {
     tokenEnvVar?: string;
     namespaces?: string[];
     commitShaAnnotation?: string;
+    cacheLimit?: 10 | 20 | 50;
+    fetchDepth?: 10 | 20 | 50;
   };
   initialSnykConfig?: {
     enabled?: boolean;

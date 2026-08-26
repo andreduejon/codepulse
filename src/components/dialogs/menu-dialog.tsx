@@ -58,6 +58,8 @@ interface MenuDialogProps {
     tokenEnvVar: string;
     namespaces: string[];
     commitShaAnnotation: string;
+    cacheLimit: 10 | 20 | 50;
+    fetchDepth: 10 | 20 | 50;
   };
   onOpenShiftConfigChange?: (cfg: {
     enabled: boolean;
@@ -65,6 +67,8 @@ interface MenuDialogProps {
     tokenEnvVar: string;
     namespaces: string[];
     commitShaAnnotation: string;
+    cacheLimit: 10 | 20 | 50;
+    fetchDepth: 10 | 20 | 50;
   }) => void;
   snykConfig?: {
     enabled: boolean;

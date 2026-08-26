@@ -1,76 +1,65 @@
-import { Show } from "solid-js";
+import { For } from "solid-js";
 import { AUTHOR_COL_WIDTH, DATE_COL_WIDTH, UNCOMMITTED_PLACEHOLDER } from "../../constants";
 import { useAppState } from "../../context/state";
+import type { Theme } from "../../context/theme";
 import { useT } from "../../hooks/use-t";
-import type { GraphBadge } from "../provider";
+import type { GraphBadge, GraphStatusCounts } from "../provider";
 
-interface OpenShiftGraphColumnProps {
+interface OpenShiftCountsColumnProps {
   badge: GraphBadge | undefined;
+  lane: "live" | "cache";
   active: boolean;
 }
 
-export function OpenShiftResourcesColumn(props: Readonly<OpenShiftGraphColumnProps>) {
-  const count = () => {
-    const badge = props.badge;
-    if (!badge) return 0;
-    return badge.resourceCount ?? badge.passCount + badge.failCount + badge.runningCount + (badge.unknownCount ?? 0);
-  };
-  return (
-    <box flexShrink={0} width={AUTHOR_COL_WIDTH} paddingRight={2} overflow="hidden" flexDirection="row">
-      <ShowResource count={count()} active={props.active} />
-    </box>
-  );
+export function lookupOpenShiftBadge(
+  badges: ReadonlyMap<string, GraphBadge>,
+  sha: string,
+): GraphBadge | undefined {
+  return badges.get(sha) ?? badges.get(sha.toLowerCase());
 }
 
-function ShowResource(props: Readonly<{ count: number; active: boolean }>) {
-  const t = useT();
-  if (props.count <= 0) {
-    return (
-      <text fg={t().foregroundMuted} wrapMode="none">
-        {UNCOMMITTED_PLACEHOLDER}
-      </text>
-    );
-  }
-  return (
-    <text fg={props.active ? t().accent : t().foregroundMuted} wrapMode="none">
-      {props.count}
-    </text>
-  );
+function countsForLane(badge: GraphBadge | undefined, lane: "live" | "cache"): GraphStatusCounts | undefined {
+  if (!badge) return undefined;
+  return badge.lanes?.[lane];
 }
 
-export function OpenShiftStatusColumn(props: Readonly<OpenShiftGraphColumnProps>) {
+function countBlocks(counts: GraphStatusCounts | undefined, t: Theme): { count: number; fg: string; bg: string }[] {
+  if (!counts) return [];
+  const next: { count: number; fg: string; bg: string }[] = [];
+  if (counts.failCount > 0) next.push({ count: counts.failCount, fg: t.background, bg: t.error });
+  if (counts.runningCount > 0) next.push({ count: counts.runningCount, fg: t.background, bg: t.accent });
+  if (counts.unknownCount > 0) next.push({ count: counts.unknownCount, fg: t.foreground, bg: t.backgroundElementActive });
+  if (counts.passCount > 0) next.push({ count: counts.passCount, fg: t.background, bg: t.success });
+  return next;
+}
+
+export function OpenShiftCountsColumn(props: Readonly<OpenShiftCountsColumnProps>) {
   const t = useT();
-  const status = () => {
-    switch (props.badge?.badge) {
-      case "pass":
-        return { label: "PASS", fg: t().background, bg: t().success };
-      case "fail":
-        return { label: "FAIL", fg: t().background, bg: t().error };
-      case "running":
-        return { label: "RUN", fg: t().background, bg: t().accent };
-      case "unknown":
-        return { label: "?", fg: t().foreground, bg: t().backgroundElementActive };
-      default:
-        return null;
-    }
-  };
+  const width = () => (props.lane === "live" ? AUTHOR_COL_WIDTH : DATE_COL_WIDTH);
+  const blocks = () => countBlocks(countsForLane(props.badge, props.lane), t());
 
   return (
-    <box flexShrink={0} width={DATE_COL_WIDTH} overflow="hidden" flexDirection="row">
-      <Show
-        when={status()}
-        fallback={
-          <text fg={t().foregroundMuted} wrapMode="none" truncate>
-            {UNCOMMITTED_PLACEHOLDER}
-          </text>
-        }
-      >
-        {value => (
-          <text flexShrink={0} wrapMode="none" fg={value().fg} bg={value().bg}>
-            {` ${value().label} `}
-          </text>
-        )}
-      </Show>
+    <box
+      flexShrink={0}
+      width={width()}
+      paddingRight={props.lane === "live" ? 2 : 0}
+      overflow="hidden"
+      flexDirection="row"
+      gap={1}
+    >
+      {blocks().length === 0 ? (
+        <text fg={t().foregroundMuted} wrapMode="none">
+          {UNCOMMITTED_PLACEHOLDER}
+        </text>
+      ) : (
+        <For each={blocks()}>
+          {block => (
+            <text flexShrink={0} wrapMode="none" fg={block.fg} bg={block.bg}>
+              {` ${block.count} `}
+            </text>
+          )}
+        </For>
+      )}
     </box>
   );
 }
@@ -78,19 +67,18 @@ export function OpenShiftStatusColumn(props: Readonly<OpenShiftGraphColumnProps>
 export function OpenShiftColumnHeaders() {
   const { state } = useAppState();
   const t = useT();
-  const leftPanelFocused = () => !state.detailFocused();
-  const color = () => (leftPanelFocused() ? t().accent : t().foregroundMuted);
+  const color = () => (!state.detailFocused() ? t().accent : t().foregroundMuted);
 
   return (
     <>
       <box flexShrink={0} width={AUTHOR_COL_WIDTH} paddingRight={2}>
         <text wrapMode="none" truncate fg={color()}>
-          <strong>Resources</strong>
+          <strong>Live</strong>
         </text>
       </box>
       <box flexShrink={0} width={DATE_COL_WIDTH}>
         <text wrapMode="none" truncate fg={color()}>
-          <strong>Status</strong>
+          <strong>Cache</strong>
         </text>
       </box>
     </>

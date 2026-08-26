@@ -1,9 +1,13 @@
+export type OpenShiftCacheLimit = 10 | 20 | 50;
+
 export interface OpenShiftProviderConfig {
   enabled: boolean;
   serverUrl: string;
   tokenEnvVar: string;
   namespaces: string[];
   commitShaAnnotation: string;
+  cacheLimit: OpenShiftCacheLimit;
+  fetchDepth: OpenShiftCacheLimit;
 }
 
 export const DEFAULT_OPENSHIFT_CONFIG: OpenShiftProviderConfig = {
@@ -12,7 +16,11 @@ export const DEFAULT_OPENSHIFT_CONFIG: OpenShiftProviderConfig = {
   tokenEnvVar: "OPENSHIFT_TOKEN",
   namespaces: [],
   commitShaAnnotation: "dev/commit-sha",
+  cacheLimit: 20,
+  fetchDepth: 20,
 };
+
+export const OPENSHIFT_TERMINAL_PHASES = new Set(["Complete", "Failed", "Error", "Cancelled"]);
 
 export type OpenShiftResourceKind = "Build" | "ImageStreamTag" | "Deployment" | "DeploymentConfig" | "Pod";
 export type OpenShiftInventoryKind = OpenShiftResourceKind | "ReplicaSet" | "ReplicationController";
@@ -42,7 +50,7 @@ export interface OpenShiftResource {
   ownerReferences?: OpenShiftOwnerReference[];
   terminating?: boolean;
   updatedAt?: string | null;
-  raw: unknown;
+  podSelector?: Record<string, string>;
 }
 
 export interface OpenShiftNamespaceData {
@@ -57,7 +65,13 @@ export interface OpenShiftNamespaceData {
 export interface OpenShiftCommitData {
   sha: string;
   namespaces: OpenShiftNamespaceData[];
-  resolved: boolean;
+  /** Live inventory was applied or skipped (no digest seed). Not a cache/UI flag. */
+  liveFetched: boolean;
+}
+
+/** Terminal Builds are persisted. Everything else stays in the live lane. */
+export function isCachedOpenShiftResource(resource: OpenShiftResource): boolean {
+  return resource.kind === "Build" && (resource.status === "pass" || resource.status === "fail");
 }
 
 export interface OpenShiftInventoryResult {

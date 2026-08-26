@@ -157,6 +157,8 @@ export interface OpenShiftMenuConfig {
   tokenEnvVar: string;
   namespaces: string[];
   commitShaAnnotation: string;
+  cacheLimit: 10 | 20 | 50;
+  fetchDepth: 10 | 20 | 50;
 }
 
 export interface SnykMenuConfig {
@@ -272,6 +274,20 @@ export function buildOpenShiftProviderItems(
       set: v => update({ ...cfg, tokenEnvVar: v.trim() || "OPENSHIFT_TOKEN" }),
       valid: () => isValidOpenShiftText(cfg.tokenEnvVar) && !!process.env[cfg.tokenEnvVar],
       isDraftValid: v => isValidOpenShiftText(v.trim() || "OPENSHIFT_TOKEN"),
+    },
+    {
+      kind: "cycle",
+      label: "Cache count",
+      options: ["10", "20", "50"],
+      get: () => String(cfg.cacheLimit),
+      set: v => update({ ...cfg, cacheLimit: v === "10" ? 10 : v === "50" ? 50 : 20 }),
+    },
+    {
+      kind: "cycle",
+      label: "Fetch size",
+      options: ["10", "20", "50"],
+      get: () => String(cfg.fetchDepth),
+      set: v => update({ ...cfg, fetchDepth: v === "10" ? 10 : v === "50" ? 50 : 20 }),
     },
     {
       kind: "editable",
@@ -795,6 +811,8 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
       tokenEnvVar: "OPENSHIFT_TOKEN",
       namespaces: [],
       commitShaAnnotation: "dev/commit-sha",
+      cacheLimit: 20,
+      fetchDepth: 20,
     };
     const snykCfg = opts.snykConfig?.() ?? {
       enabled: false,

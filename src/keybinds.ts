@@ -193,7 +193,19 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     {
       kind: "binding",
       key: "New namespace",
-      desc: "Add a namespace. Enter on a matched resource opens its cached JSON object.",
+      desc: "Add a namespace. Enter on a Build or Pod opens its log; other kinds open JSON.",
+      indent: 1,
+    },
+    {
+      kind: "binding",
+      key: "Cache count",
+      desc: "Maximum cached commit Build snapshots per repository. Options: 10, 20, 50.",
+      indent: 1,
+    },
+    {
+      kind: "binding",
+      key: "Fetch size",
+      desc: "How many graph commits are eligible for background Build matching. Options: 10, 20, 50. Same scale as Jenkins fetch size, but counted in commits not builds per job.",
       indent: 1,
     },
     { kind: "spacer" },

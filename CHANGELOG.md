@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- **OpenShift build cache** — keep terminal Builds and their logs per commit
+  (`10` / `20` / `50` SHAs) under `~/.cache/codepulse/openshift/`.
+- **OpenShift fetch size** — background refresh lists Builds only and matches
+  the nearest graph commits (`10` / `20` / `50`, same scale as Jenkins).
+- **OpenShift logs** — one-shot Build and Pod logs with `r` to refresh. Finished
+  Build logs persist; live logs do not.
+- Expired OpenShift tokens (401) stop further lists and leave the disk cache in
+  place.
+- **OpenShift labels** — read `dev/commit-sha` from labels first, then
+  annotations. Query Builds and Deployments with `labelSelector`; list Pods
+  via the Deployment selector. Fall back to a full list and digest matching
+  when nothing is labeled.
+- **OpenShift Live / Cache columns** — graph splits resources: Cache =
+  terminal Builds; Live = workloads, ImageStreamTags, and running Builds.
+  Details append `(cached)` to terminal Build names.
+- OpenShift reads ImageStreamTag commit SHAs from `tag.annotations`
+  (`oc annotate istag`). JSON objects load on demand. Reload live-fetches
+  the selected commit only.
+
 ## [0.8.0] - 2026-08-24
 
 ### Added

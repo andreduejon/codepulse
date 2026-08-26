@@ -33,9 +33,9 @@ import {
   ActionsDateColumn,
 } from "../providers/github-actions/graph-columns";
 import {
+  lookupOpenShiftBadge,
   OpenShiftColumnHeaders,
-  OpenShiftResourcesColumn,
-  OpenShiftStatusColumn,
+  OpenShiftCountsColumn,
 } from "../providers/openshift/graph-columns";
 import { SnykColumnHeaders, SnykCountsColumn, SnykScanColumn } from "../providers/snyk/graph-columns";
 import type { SnykScanResult } from "../providers/snyk/types";
@@ -184,6 +184,7 @@ function GraphLine(
     brightCommitHorizontals: () => Set<number> | undefined;
     snykGetCommitData?: (sha: string) => SnykScanResult | null;
     snykIsScanning?: (sha: string) => boolean;
+    openshiftIsLoading?: (sha: string) => boolean;
   }>,
 ) {
   const t = useT();
@@ -481,8 +482,16 @@ function GraphLine(
         {/* Author / Date — replaced by CI columns when in CI view */}
         {state.activeProviderView() === "openshift" ? (
           <>
-            <OpenShiftResourcesColumn badge={state.graphBadges().get(commit().hash)} active={props.active} />
-            <OpenShiftStatusColumn badge={state.graphBadges().get(commit().hash)} active={props.active} />
+            <OpenShiftCountsColumn
+              badge={lookupOpenShiftBadge(state.graphBadges(), commit().hash)}
+              lane="live"
+              active={props.active}
+            />
+            <OpenShiftCountsColumn
+              badge={lookupOpenShiftBadge(state.graphBadges(), commit().hash)}
+              lane="cache"
+              active={props.active}
+            />
           </>
         ) : state.activeProviderView() === "snyk" ? (
           <>
@@ -619,6 +628,7 @@ export default function GraphView(
     suppressAutoScroll?: () => boolean;
     snykGetCommitData?: (sha: string) => SnykScanResult | null;
     snykIsScanning?: (sha: string) => boolean;
+    openshiftIsLoading?: (sha: string) => boolean;
   }>,
 ) {
   const { state, actions } = useAppState();
@@ -783,6 +793,7 @@ export default function GraphView(
                   brightCommitHorizontals={() => brightColumnsByHash()?.commitHorizontal.get(row.commit.hash)}
                   snykGetCommitData={props.snykGetCommitData}
                   snykIsScanning={props.snykIsScanning}
+                  openshiftIsLoading={props.openshiftIsLoading}
                   rowRef={el => {
                     elRef = el;
                     rowRefs[index()] = el;

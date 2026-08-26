@@ -50,7 +50,8 @@ export interface DetailPanelProps {
   onOpenJenkinsJobLog?: (job: JenkinsJob, run: JenkinsRun, jobs?: JenkinsJob[]) => void;
   jenkinsProviderStatus?: ProviderStatus;
   openshiftGetCommitData?: (sha: string) => OpenShiftCommitData | null;
-  openshiftFetchCommitData?: (sha: string) => Promise<void>;
+  openshiftFetchCommitData?: (sha: string, force?: boolean) => Promise<void>;
+  openshiftIsLoading?: (sha: string) => boolean;
   onOpenOpenShiftResource?: (resource: OpenShiftResource) => void;
   openshiftProviderStatus?: ProviderStatus;
   snykGetCommitData?: (sha: string) => SnykScanResult | null;
@@ -238,6 +239,7 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
             jenkinsProviderStatus={props.jenkinsProviderStatus}
             openshiftGetCommitData={props.openshiftGetCommitData}
             openshiftFetchCommitData={props.openshiftFetchCommitData}
+            openshiftIsLoading={props.openshiftIsLoading}
             onOpenOpenShiftResource={props.onOpenOpenShiftResource}
             openshiftProviderStatus={props.openshiftProviderStatus}
             snykGetCommitData={props.snykGetCommitData}

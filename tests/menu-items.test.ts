@@ -98,6 +98,8 @@ describe("buildOpenShiftProviderItems", () => {
       tokenEnvVar: "OPENSHIFT_TOKEN",
       namespaces: [],
       commitShaAnnotation: "dev/commit-sha",
+      cacheLimit: 20,
+      fetchDepth: 20,
     };
     let changed = cfg;
     const items = buildOpenShiftProviderItems(cfg, next => {
