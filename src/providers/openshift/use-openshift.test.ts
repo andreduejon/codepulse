@@ -172,6 +172,27 @@ describe("OpenShift commit merge", () => {
     expect(mergeLiveIntoCommit(cached, live, SHA, true).namespaces[0].imageStreamTags).toEqual([ist]);
   });
 
+  test("clears live pods and deploys when a later live overlay omits that SHA", () => {
+    const cached: OpenShiftCommitData = {
+      sha: SHA,
+      liveFetched: true,
+      namespaces: [
+        {
+          namespace: "ns",
+          builds: [build],
+          imageStreamTags: [],
+          deployments: [],
+          deploymentConfigs: [],
+          pods: [pod],
+        },
+      ],
+    };
+    const merged = mergeLiveIntoCommit(cached, undefined, SHA, true);
+    expect(merged.namespaces[0].builds).toEqual([build]);
+    expect(merged.namespaces[0].pods).toEqual([]);
+    expect(merged.namespaces[0].deployments).toEqual([]);
+  });
+
   test("build snapshot stays not liveFetched until live merge", () => {
     const cached = commitDataFromCacheEntry({
       sha: SHA,

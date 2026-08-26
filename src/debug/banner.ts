@@ -40,6 +40,7 @@ export const BANNER = {
     inventoryPartial: "OpenShift inventory partially failed.",
     invalidNamespace: "OpenShift namespace invalid.",
     timeout: "OpenShift request timed out.",
+    watchDenied: "OpenShift watch denied. Resource data might be stale. Reload to refresh.",
   },
 } as const;
 

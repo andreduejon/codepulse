@@ -43,6 +43,7 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
   const [logError, setLogError] = createSignal<string | null>(null);
   const [logLoading, setLogLoading] = createSignal(false);
   const [followNonce, setFollowNonce] = createSignal(0);
+  const [followEnded, setFollowEnded] = createSignal(false);
   const [objectText, setObjectText] = createSignal<string | null>(null);
   const [objectError, setObjectError] = createSignal<string | null>(null);
   const [objectLoading, setObjectLoading] = createSignal(false);
@@ -88,6 +89,7 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
     if (!canLog()) return;
     if (shouldFollowOpenShiftLog(resource) && props.followLog) {
       const ctrl = new AbortController();
+      setFollowEnded(false);
       setLogLoading(true);
       setLogError(null);
       setLogText("");
@@ -95,6 +97,12 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
         .followLog(resource, ctrl.signal, text => {
           setLogLoading(false);
           setLogText(text);
+        })
+        .then(() => {
+          if (ctrl.signal.aborted) return;
+          setLogLoading(false);
+          setFollowEnded(true);
+          if (resource.kind === "Build") void loadLog(false);
         })
         .catch(error => {
           if (ctrl.signal.aborted) return;
@@ -125,7 +133,7 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
   });
   const lineNoWidth = createMemo(() => lines().length.toString().length);
   const title = createMemo(() => {
-    const mode = viewMode() === "log" ? "log" : "object";
+    const mode = viewMode() === "log" ? (followEnded() ? "log ended" : "log") : "object";
     const fixed = ["OpenShift", props.resource.kind, props.resource.namespace, mode].join(TITLE_SEP);
     const available = Math.max(8, getDialogTitleContentWidth(dialogFrame().width) - fixed.length - TITLE_SEP.length);
     return (

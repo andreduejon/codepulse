@@ -112,7 +112,8 @@ Live freshness also needs `watch` on Deployments, DeploymentConfigs, and Pods
 in each configured namespace. OpenShift/`kubernetes` `view` already has
 `get`/`list`/`watch`. A custom ServiceAccount needs the extra `watch` verb on
 those three kinds; Builds and ImageStreamTags stay `list` only. Without watch,
-the last list stays until Reload.
+the last list stays until Reload and a warning is shown. `live` only appears
+while a watch socket is connected.
 
 Build and Pod log views need `get` on those log subresources (`?follow=true`
 uses the same get). Example Role:
