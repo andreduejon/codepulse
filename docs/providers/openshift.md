@@ -2,7 +2,7 @@
 
 OpenShift shows resources associated with graph commits and conservative health
 status. The graph uses two 15-character columns: **Live** and **Cache**.
-Both use red / green / running count chips. Cache is terminal Builds
+Both use fail (red) / running (info) / pass (green) count chips. Cache is terminal Builds
 (persisted). Live is Deployments, Pods, ImageStreamTags, and running
 Builds. Empty lane shows `·······`. Details mark each terminal Build
 `(cached)` after its name. Builds and ImageStreamTags poll while the OpenShift view is focused, using the
@@ -74,7 +74,9 @@ Pod → ReplicationController → DeploymentConfig
 ```
 
 Terminating Pods are excluded. ImageStreamTags are a match seed only and are
-not written to disk.
+not written to disk. An overwritten IST annotation moves the tag to the new
+commit; it does not stay on the old SHA. Terminal Builds remain on the commit
+that produced them.
 
 ## Logs
 
@@ -82,9 +84,10 @@ not written to disk.
   API, then cache. They are not streamed.
 - Running Build logs and Pod logs use `?follow=true`. History then tail. Last
   1000 lines. Open at the bottom; stay pinned only if you are already at the
-  bottom. Press `r` to restart the stream. They are not stored.
-- `c` cycles view mode (log / JSON) for Builds and Pods. JSON stays a snapshot. Leave
-  the log view or close the dialog to abort follow.
+  bottom. When the stream closes the title shows `log ended`. Press `r` to
+  restart. They are not stored.
+- `c` cycles view mode (log / JSON) for Builds and Pods. JSON stays a snapshot.
+  Leave the log view or close the dialog to abort follow.
 
 ## Status
 
@@ -112,7 +115,8 @@ Live freshness also needs `watch` on Deployments, DeploymentConfigs, and Pods
 in each configured namespace. OpenShift/`kubernetes` `view` already has
 `get`/`list`/`watch`. A custom ServiceAccount needs the extra `watch` verb on
 those three kinds; Builds and ImageStreamTags stay `list` only. Without watch,
-the last list stays until Reload and a warning is shown. `live` only appears
+the last list stays until Reload. The graph banner reads `OpenShift watch
+denied. Resource data might be stale. Reload to refresh.` `live` only appears
 while a watch socket is connected.
 
 Build and Pod log views need `get` on those log subresources (`?follow=true`

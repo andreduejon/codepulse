@@ -8,10 +8,16 @@ All notable changes to this project will be documented in this file.
 
 - **OpenShift build cache** — keep terminal Builds and their logs per commit
   (`10` / `20` / `50` SHAs) under `~/.cache/codepulse/openshift/`.
-- **OpenShift fetch size** — background refresh lists Builds only and matches
-  the nearest graph commits (`10` / `20` / `50`, same scale as Jenkins).
-- **OpenShift logs** — one-shot Build and Pod logs with `r` to refresh. Finished
-  Build logs persist; live logs do not.
+- **OpenShift fetch size** — match the nearest graph commits (`10` / `20` /
+  `50`, same scale as Jenkins).
+- **OpenShift Auto refresh** — poll Builds and ImageStreamTags while the
+  OpenShift view is focused (`off` / `2m` / `5m` / `10m`, default `2m`).
+- **OpenShift live watch** — list then watch Deployments, DeploymentConfigs,
+  and Pods in configured namespaces. `live` only while a watch is connected.
+  403 watch shows `OpenShift watch denied. Resource data might be stale. Reload to refresh.`
+- **OpenShift logs** — follow running Build and Pod logs (`?follow=true`, last
+  1000 lines). Title shows `log ended` when the stream closes. Terminal Build
+  logs persist; `c` cycles log / JSON.
 - Expired OpenShift tokens (401) stop further lists and leave the disk cache in
   place.
 - **OpenShift labels** — read `dev/commit-sha` from labels first, then
@@ -20,10 +26,21 @@ All notable changes to this project will be documented in this file.
   when nothing is labeled.
 - **OpenShift Live / Cache columns** — graph splits resources: Cache =
   terminal Builds; Live = workloads, ImageStreamTags, and running Builds.
-  Details append `(cached)` to terminal Build names.
+  Details append `(cached)` to terminal Build names. Running chips use the
+  info color.
 - OpenShift reads ImageStreamTag commit SHAs from `tag.annotations`
-  (`oc annotate istag`). JSON objects load on demand. Reload live-fetches
-  the selected commit only.
+  (`oc annotate istag`). JSON objects load on demand.
+
+### Changed
+
+- Git Auto refresh / Auto fetch no longer refresh OpenShift.
+- Snyk branch-tip auto-scan runs only while the Snyk view is focused.
+- `c` cycles view mode in Diff, CI log, and OpenShift resource dialogs.
+
+### Fixed
+
+- Clear OpenShift Deploy/Pod chips when a SHA leaves live inventory.
+- Drop overwritten ImageStreamTags from older commits; terminal Builds stay.
 
 ## [0.8.0] - 2026-08-24
 

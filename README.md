@@ -13,9 +13,9 @@ read-only by default codebase dashboard: git history as the primary navigation
 surface, with CI/CD, security, and code quality signals layered onto the same
 commit and branch context.
 
-The current release adds Snyk Open Source commit scans alongside OpenShift,
-GitHub Actions, and Jenkins. Commits combine source history with cached
-vulnerability, CI/CD, and runtime signals.
+The current line of work polishes OpenShift live inventory (watch, log follow,
+provider Auto refresh) alongside Snyk, GitHub Actions, and Jenkins. Commits
+combine source history with cached vulnerability, CI/CD, and runtime signals.
 
 ## Requirements
 
@@ -177,9 +177,9 @@ Planned milestones currently follow this shape:
 - `0.7.0`: standalone macOS and Linux distributions with no Bun or Node.js runtime requirement
 - `0.8.0`: Snyk Open Source scans, commit severity counts, finding details, and
   a local scan cache
-- `0.9.0` (unreleased): OpenShift build cache, cheaper Build-only refresh, and
-  Build/Pod logs
-- Future: Helm, Routes, Services, and further providers
+- `0.9.0` (unreleased): OpenShift Live/Cache watch, Build/IST Auto refresh,
+  log follow, and Snyk auto-scan only on the Snyk view
+- Future: GitHub Actions and Jenkins polish; further providers
 
 The intent is to reach `1.0.0` once the integration model and configuration
 surface are stable.
