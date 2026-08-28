@@ -139,7 +139,7 @@ describe("OpenShift commit merge", () => {
     expect(merged.namespaces[0].pods).toEqual([pod]);
   });
 
-  test("keeps seed ImageStreamTags when live overlay has none", () => {
+  test("drops ImageStreamTags when a live overlay has none", () => {
     const ist: OpenShiftResource = { ...build, kind: "ImageStreamTag", id: "ImageStreamTag:ns:app:latest", name: "app:latest" };
     const cached: OpenShiftCommitData = {
       sha: SHA,
@@ -169,7 +169,43 @@ describe("OpenShift commit merge", () => {
         },
       ],
     };
-    expect(mergeLiveIntoCommit(cached, live, SHA, true).namespaces[0].imageStreamTags).toEqual([ist]);
+    const merged = mergeLiveIntoCommit(cached, live, SHA, true);
+    expect(merged.namespaces[0].imageStreamTags).toEqual([]);
+    expect(merged.namespaces[0].builds).toEqual([build]);
+    expect(merged.namespaces[0].pods).toEqual([pod]);
+  });
+
+  test("keeps seed ImageStreamTags when overlay is not a live fetch", () => {
+    const ist: OpenShiftResource = { ...build, kind: "ImageStreamTag", id: "ImageStreamTag:ns:app:latest", name: "app:latest" };
+    const seeds: OpenShiftCommitData = {
+      sha: SHA,
+      liveFetched: false,
+      namespaces: [
+        {
+          namespace: "ns",
+          builds: [build],
+          imageStreamTags: [ist],
+          deployments: [],
+          deploymentConfigs: [],
+          pods: [],
+        },
+      ],
+    };
+    const previous: OpenShiftCommitData = {
+      sha: SHA,
+      liveFetched: true,
+      namespaces: [
+        {
+          namespace: "ns",
+          builds: [build],
+          imageStreamTags: [],
+          deployments: [],
+          deploymentConfigs: [],
+          pods: [pod],
+        },
+      ],
+    };
+    expect(mergeLiveIntoCommit(seeds, previous, SHA).namespaces[0].imageStreamTags).toEqual([ist]);
   });
 
   test("clears live pods and deploys when a later live overlay omits that SHA", () => {

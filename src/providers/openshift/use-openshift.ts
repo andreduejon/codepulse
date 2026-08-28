@@ -109,7 +109,7 @@ export function selectOpenShiftCandidateSHAs(
 }
 
 function clearLiveLane(ns: OpenShiftNamespaceData): OpenShiftNamespaceData {
-  return { ...ns, deployments: [], deploymentConfigs: [], pods: [] };
+  return { ...ns, deployments: [], deploymentConfigs: [], pods: [], imageStreamTags: [] };
 }
 
 export function mergeLiveIntoCommit(
@@ -124,20 +124,24 @@ export function mergeLiveIntoCommit(
     return { sha, liveFetched: true, namespaces: base.namespaces.map(clearLiveLane) };
   }
   if (!base) return { ...live, sha, liveFetched: liveFetched || live.liveFetched };
+  const fetched = liveFetched || base.liveFetched || live.liveFetched;
   const namespaces = new Map(base.namespaces.map(ns => [ns.namespace, { ...ns }]));
   const liveNamespaces = new Set(live.namespaces.map(ns => ns.namespace));
   for (const ns of live.namespaces) {
     const current = namespaces.get(ns.namespace) ?? emptyNamespace(ns.namespace);
     namespaces.set(ns.namespace, {
       ...current,
-      imageStreamTags: ns.imageStreamTags.length > 0 ? ns.imageStreamTags : current.imageStreamTags,
+      imageStreamTags: liveFetched
+        ? ns.imageStreamTags
+        : current.imageStreamTags.length > 0
+          ? current.imageStreamTags
+          : ns.imageStreamTags,
       deployments: ns.deployments,
       deploymentConfigs: ns.deploymentConfigs,
       pods: ns.pods,
       builds: current.builds.length > 0 ? current.builds : ns.builds,
     });
   }
-  const fetched = liveFetched || base.liveFetched || live.liveFetched;
   if (fetched) {
     for (const [name, current] of namespaces) {
       if (!liveNamespaces.has(name)) namespaces.set(name, clearLiveLane(current));
@@ -353,7 +357,7 @@ export function useOpenShift(opts: {
   }
 
   function applyLive(listed: OpenShiftListedInventory, targets?: Set<string>): void {
-    const seedResources = [...commits.values()].flatMap(commit =>
+    const seedResources = [...seeds.values()].flatMap(commit =>
       commit.namespaces.flatMap(ns => [...ns.builds, ...ns.imageStreamTags]),
     );
     const mapped = buildOpenShiftCommitMap([...seedResources, ...listed.resources], listed.controllers);
