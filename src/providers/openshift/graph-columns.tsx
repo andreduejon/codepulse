@@ -4,6 +4,21 @@ import { useAppState } from "../../context/state";
 import type { Theme } from "../../context/theme";
 import { useT } from "../../hooks/use-t";
 import type { GraphBadge, GraphStatusCounts } from "../provider";
+import type { OpenShiftStatus } from "./types";
+
+/** Status colors are semantic tokens, not provider accent (OpenShift brand is red). */
+export function openShiftStatusColor(t: Theme, status: OpenShiftStatus): string {
+  switch (status) {
+    case "fail":
+      return t.error;
+    case "running":
+      return t.info;
+    case "pass":
+      return t.success;
+    default:
+      return t.foregroundMuted;
+  }
+}
 
 interface OpenShiftCountsColumnProps {
   badge: GraphBadge | undefined;
@@ -26,10 +41,11 @@ function countsForLane(badge: GraphBadge | undefined, lane: "live" | "cache"): G
 function countBlocks(counts: GraphStatusCounts | undefined, t: Theme): { count: number; fg: string; bg: string }[] {
   if (!counts) return [];
   const next: { count: number; fg: string; bg: string }[] = [];
-  if (counts.failCount > 0) next.push({ count: counts.failCount, fg: t.background, bg: t.error });
-  if (counts.runningCount > 0) next.push({ count: counts.runningCount, fg: t.background, bg: t.accent });
+  if (counts.failCount > 0) next.push({ count: counts.failCount, fg: t.background, bg: openShiftStatusColor(t, "fail") });
+  if (counts.runningCount > 0)
+    next.push({ count: counts.runningCount, fg: t.background, bg: openShiftStatusColor(t, "running") });
   if (counts.unknownCount > 0) next.push({ count: counts.unknownCount, fg: t.foreground, bg: t.backgroundElementActive });
-  if (counts.passCount > 0) next.push({ count: counts.passCount, fg: t.background, bg: t.success });
+  if (counts.passCount > 0) next.push({ count: counts.passCount, fg: t.background, bg: openShiftStatusColor(t, "pass") });
   return next;
 }
 

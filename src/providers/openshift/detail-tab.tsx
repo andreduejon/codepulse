@@ -2,7 +2,8 @@ import type { Renderable } from "@opentui/core";
 import { createEffect, createMemo, createSignal, For, Show, untrack } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
 import { useT } from "../../hooks/use-t";
-import { type StatusCategory, statusColor, statusIcon } from "../shared/status";
+import { type StatusCategory, statusIcon } from "../shared/status";
+import { openShiftStatusColor } from "./graph-columns";
 import { isCachedOpenShiftResource, type OpenShiftCommitData, type OpenShiftResource, type OpenShiftStatus } from "./types";
 
 export interface OpenShiftDetailTabProps {
@@ -191,7 +192,7 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
   const renderResourceRow = (resource: OpenShiftResource, lead: string, connector: string) => {
     const idx = () => flatIndexForResource(resource);
     const isCursored = () => props.detailFocused() && props.detailCursorIndex() === idx();
-    const color = () => statusColor(t(), statusCategory(resource.status));
+    const color = () => openShiftStatusColor(t(), resource.status);
     const textColor = () => (isCursored() ? t().accent : t().foreground);
     return (
       <box
