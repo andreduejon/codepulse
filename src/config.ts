@@ -12,6 +12,7 @@ import {
   OPENSHIFT_SERVER_URL_MAX_LENGTH,
   OPENSHIFT_TEXT_MAX_LENGTH,
 } from "./providers/openshift/validation";
+import { isProviderAutoRefreshSeconds, isProviderLimit } from "./providers/shared/auto-refresh";
 
 const GENERAL_TEXT_MAX_LENGTH = 255;
 const REPO_METADATA_MAX_LENGTH = 64;
@@ -41,12 +42,19 @@ export interface CodepulseConfig {
       tokenEnvVar?: string;
       /** Trusted GitHub Enterprise host for this repo. github.com is always allowed. */
       trustedEnterpriseHost?: string;
+      fetchDepth?: 10 | 20 | 50;
+      cacheLimit?: 10 | 20 | 50;
+      autoRefreshSeconds?: 0 | 120 | 300 | 600;
     };
     jenkins?: {
       enabled?: boolean;
       username?: string;
       tokenEnvVar?: string;
+      /** @deprecated Prefer fetchDepth. Still read as fetch-size fallback. */
       graphBuildLimit?: 10 | 20 | 50;
+      fetchDepth?: 10 | 20 | 50;
+      cacheLimit?: 10 | 20 | 50;
+      autoRefreshSeconds?: 0 | 120 | 300 | 600;
       jobs?: { label?: string; url: string }[];
     };
     openshift?: {
@@ -81,12 +89,18 @@ export function defaultConfig(): Required<Omit<CodepulseConfig, "branch" | "grou
         enabled: false,
         tokenEnvVar: "GITHUB_TOKEN",
         trustedEnterpriseHost: undefined,
+        fetchDepth: 20,
+        cacheLimit: 20,
+        autoRefreshSeconds: 120,
       },
       jenkins: {
         enabled: false,
         username: undefined,
         tokenEnvVar: "JENKINS_TOKEN",
         graphBuildLimit: 20,
+        fetchDepth: 20,
+        cacheLimit: 20,
+        autoRefreshSeconds: 120,
         jobs: [],
       },
       openshift: {
@@ -137,11 +151,17 @@ export function backfillRepoConfig(repoPath: string, configPath?: string): void 
     enabled: false,
     tokenEnvVar: "GITHUB_TOKEN",
     trustedEnterpriseHost: undefined,
+    fetchDepth: 20,
+    cacheLimit: 20,
+    autoRefreshSeconds: 120,
   };
   if (
     existingGitHub?.enabled === undefined ||
     existingGitHub?.tokenEnvVar === undefined ||
-    existingGitHub?.trustedEnterpriseHost === undefined
+    existingGitHub?.trustedEnterpriseHost === undefined ||
+    existingGitHub?.fetchDepth === undefined ||
+    existingGitHub?.cacheLimit === undefined ||
+    existingGitHub?.autoRefreshSeconds === undefined
   ) {
     missing.providers = {
       github: {
@@ -149,6 +169,11 @@ export function backfillRepoConfig(repoPath: string, configPath?: string): void 
         ...(existingGitHub?.tokenEnvVar === undefined ? { tokenEnvVar: defaultGh.tokenEnvVar } : {}),
         ...(existingGitHub?.trustedEnterpriseHost === undefined
           ? { trustedEnterpriseHost: defaultGh.trustedEnterpriseHost }
+          : {}),
+        ...(existingGitHub?.fetchDepth === undefined ? { fetchDepth: defaultGh.fetchDepth } : {}),
+        ...(existingGitHub?.cacheLimit === undefined ? { cacheLimit: defaultGh.cacheLimit } : {}),
+        ...(existingGitHub?.autoRefreshSeconds === undefined
+          ? { autoRefreshSeconds: defaultGh.autoRefreshSeconds }
           : {}),
       },
     };
@@ -158,13 +183,18 @@ export function backfillRepoConfig(repoPath: string, configPath?: string): void 
   const defaultJenkins = defaults.providers.jenkins ?? {
     enabled: false,
     tokenEnvVar: "JENKINS_TOKEN",
-    graphBuildLimit: 20,
+    fetchDepth: 20,
+    cacheLimit: 20,
+    autoRefreshSeconds: 120,
     jobs: [],
   };
+  const jenkinsFetchDepth = existingJenkins?.fetchDepth ?? existingJenkins?.graphBuildLimit;
   if (
     existingJenkins?.enabled === undefined ||
     existingJenkins?.tokenEnvVar === undefined ||
-    existingJenkins?.graphBuildLimit === undefined ||
+    jenkinsFetchDepth === undefined ||
+    existingJenkins?.cacheLimit === undefined ||
+    existingJenkins?.autoRefreshSeconds === undefined ||
     existingJenkins?.jobs === undefined
   ) {
     missing.providers = {
@@ -172,7 +202,13 @@ export function backfillRepoConfig(repoPath: string, configPath?: string): void 
       jenkins: {
         ...(existingJenkins?.enabled === undefined ? { enabled: defaultJenkins.enabled } : {}),
         ...(existingJenkins?.tokenEnvVar === undefined ? { tokenEnvVar: defaultJenkins.tokenEnvVar } : {}),
-        ...(existingJenkins?.graphBuildLimit === undefined ? { graphBuildLimit: defaultJenkins.graphBuildLimit } : {}),
+        ...(existingJenkins?.fetchDepth === undefined
+          ? { fetchDepth: jenkinsFetchDepth ?? defaultJenkins.fetchDepth }
+          : {}),
+        ...(existingJenkins?.cacheLimit === undefined ? { cacheLimit: defaultJenkins.cacheLimit } : {}),
+        ...(existingJenkins?.autoRefreshSeconds === undefined
+          ? { autoRefreshSeconds: defaultJenkins.autoRefreshSeconds }
+          : {}),
         ...(existingJenkins?.jobs === undefined ? { jobs: defaultJenkins.jobs } : {}),
       },
     };
@@ -514,6 +550,17 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
         if (trustedEnterpriseHost !== undefined) {
           config.providers.github.trustedEnterpriseHost = trustedEnterpriseHost;
         }
+        for (const field of ["cacheLimit", "fetchDepth"] as const) {
+          if (gh[field] === undefined) continue;
+          if (isProviderLimit(gh[field])) config.providers.github[field] = gh[field];
+          else warnings.push(`${path}: "providers.github.${field}" must be one of 10, 20, 50, ignoring`);
+        }
+        if (gh.autoRefreshSeconds !== undefined) {
+          if (isProviderAutoRefreshSeconds(gh.autoRefreshSeconds))
+            config.providers.github.autoRefreshSeconds = gh.autoRefreshSeconds;
+          else
+            warnings.push(`${path}: "providers.github.autoRefreshSeconds" must be one of 0, 120, 300, 600, ignoring`);
+        }
       }
       if (typeof providers.jenkins === "object" && providers.jenkins !== null && !Array.isArray(providers.jenkins)) {
         const jenkins = providers.jenkins as Record<string, unknown>;
@@ -535,9 +582,22 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
           if (tokenEnvVar !== undefined) config.providers.jenkins.tokenEnvVar = tokenEnvVar;
         }
         if (jenkins.graphBuildLimit !== undefined) {
-          if (jenkins.graphBuildLimit === 10 || jenkins.graphBuildLimit === 20 || jenkins.graphBuildLimit === 50)
+          if (isProviderLimit(jenkins.graphBuildLimit))
             config.providers.jenkins.graphBuildLimit = jenkins.graphBuildLimit;
           else warnings.push(`${path}: "providers.jenkins.graphBuildLimit" must be one of 10, 20, 50, ignoring`);
+        }
+        for (const field of ["cacheLimit", "fetchDepth"] as const) {
+          if (jenkins[field] === undefined) continue;
+          if (isProviderLimit(jenkins[field])) config.providers.jenkins[field] = jenkins[field];
+          else warnings.push(`${path}: "providers.jenkins.${field}" must be one of 10, 20, 50, ignoring`);
+        }
+        if (config.providers.jenkins.fetchDepth === undefined && config.providers.jenkins.graphBuildLimit !== undefined)
+          config.providers.jenkins.fetchDepth = config.providers.jenkins.graphBuildLimit;
+        if (jenkins.autoRefreshSeconds !== undefined) {
+          if (isProviderAutoRefreshSeconds(jenkins.autoRefreshSeconds))
+            config.providers.jenkins.autoRefreshSeconds = jenkins.autoRefreshSeconds;
+          else
+            warnings.push(`${path}: "providers.jenkins.autoRefreshSeconds" must be one of 0, 120, 300, 600, ignoring`);
         }
         if (jenkins.jobs !== undefined) {
           if (Array.isArray(jenkins.jobs)) {
@@ -600,17 +660,11 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
         }
         for (const field of ["cacheLimit", "fetchDepth"] as const) {
           if (openshift[field] === undefined) continue;
-          if (openshift[field] === 10 || openshift[field] === 20 || openshift[field] === 50)
-            config.providers.openshift[field] = openshift[field];
+          if (isProviderLimit(openshift[field])) config.providers.openshift[field] = openshift[field];
           else warnings.push(`${path}: "providers.openshift.${field}" must be one of 10, 20, 50, ignoring`);
         }
         if (openshift.autoRefreshSeconds !== undefined) {
-          if (
-            openshift.autoRefreshSeconds === 0 ||
-            openshift.autoRefreshSeconds === 120 ||
-            openshift.autoRefreshSeconds === 300 ||
-            openshift.autoRefreshSeconds === 600
-          )
+          if (isProviderAutoRefreshSeconds(openshift.autoRefreshSeconds))
             config.providers.openshift.autoRefreshSeconds = openshift.autoRefreshSeconds;
           else
             warnings.push(
@@ -825,6 +879,12 @@ function applyConfigFields(target: Record<string, unknown>, config: CodepulseCon
         existingGitHub.tokenEnvVar = config.providers.github.tokenEnvVar;
       if (config.providers.github.trustedEnterpriseHost !== undefined)
         existingGitHub.trustedEnterpriseHost = config.providers.github.trustedEnterpriseHost;
+      if (config.providers.github.fetchDepth !== undefined)
+        existingGitHub.fetchDepth = config.providers.github.fetchDepth;
+      if (config.providers.github.cacheLimit !== undefined)
+        existingGitHub.cacheLimit = config.providers.github.cacheLimit;
+      if (config.providers.github.autoRefreshSeconds !== undefined)
+        existingGitHub.autoRefreshSeconds = config.providers.github.autoRefreshSeconds;
       existingProviders.github = existingGitHub;
     }
     if (config.providers.jenkins !== undefined) {
@@ -840,6 +900,12 @@ function applyConfigFields(target: Record<string, unknown>, config: CodepulseCon
         existingJenkins.tokenEnvVar = config.providers.jenkins.tokenEnvVar;
       if (config.providers.jenkins.graphBuildLimit !== undefined)
         existingJenkins.graphBuildLimit = config.providers.jenkins.graphBuildLimit;
+      if (config.providers.jenkins.fetchDepth !== undefined)
+        existingJenkins.fetchDepth = config.providers.jenkins.fetchDepth;
+      if (config.providers.jenkins.cacheLimit !== undefined)
+        existingJenkins.cacheLimit = config.providers.jenkins.cacheLimit;
+      if (config.providers.jenkins.autoRefreshSeconds !== undefined)
+        existingJenkins.autoRefreshSeconds = config.providers.jenkins.autoRefreshSeconds;
       if (config.providers.jenkins.jobs !== undefined) existingJenkins.jobs = config.providers.jenkins.jobs;
       existingProviders.jenkins = existingJenkins;
     }

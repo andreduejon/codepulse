@@ -14,7 +14,7 @@ export interface ProviderFetchArgs {
 export function useProviderFetchLifecycle(opts: {
   state: AppState;
   providerId: string;
-  shaLimit?: number;
+  shaLimit?: number | (() => number);
   identity: () => string;
   isAvailable: () => boolean;
   isBackgroundReady: () => boolean;
@@ -29,7 +29,12 @@ export function useProviderFetchLifecycle(opts: {
   refreshInterval?: () => number;
 }) {
   const { state, providerId } = opts;
-  const shaLimit = opts.shaLimit ?? DEFAULT_INITIAL_SHA_LIMIT;
+
+  function currentShaLimit(): number {
+    const value = opts.shaLimit;
+    if (typeof value === "function") return value();
+    return value ?? DEFAULT_INITIAL_SHA_LIMIT;
+  }
 
   let fetchInFlight = false;
   let pendingBackgroundFetch = false;
@@ -193,7 +198,7 @@ export function useProviderFetchLifecycle(opts: {
     if (rows.length === 0) return;
     if (!opts.isBackgroundReady()) return;
 
-    const allSHAs = collectTopSHAs(rows, shaLimit);
+    const allSHAs = collectTopSHAs(rows, currentShaLimit());
     const newSHAs = allSHAs.filter(sha => !opts.queriedSHAs.has(sha));
     if (newSHAs.length === 0) return;
 

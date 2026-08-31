@@ -25,8 +25,7 @@ Configure the provider per repository from `:providers`:
 - Cache count (`10`, `20`, `50`): maximum commit files kept on disk.
 - Fetch size (`10`, `20`, `50`): how many graph commits are candidates. Only
   those commits that also have a Build or ImageStreamTag seed are matched.
-  Same options as Jenkins fetch size per job; the unit here is commits on the
-  graph, not builds per job.
+  Same 10 / 20 / 50 scale as Jenkins and GitHub Actions fetch size.
 - Auto refresh (`off`, `2m`, `5m`, `10m`): poll Builds and ImageStreamTags
   while the OpenShift view is focused. `off` skips that poll. Reload still
   lists seeds. Live Deploy/DC/Pod freshness is watch, not this timer.

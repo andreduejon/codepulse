@@ -57,6 +57,9 @@ export function AppContent(props: Readonly<AppContentProps>) {
     enabled: props.initialGithubConfig?.enabled ?? false,
     tokenEnvVar: props.initialGithubConfig?.tokenEnvVar ?? "GITHUB_TOKEN",
     trustedEnterpriseHost: props.initialGithubConfig?.trustedEnterpriseHost ?? null,
+    fetchDepth: props.initialGithubConfig?.fetchDepth ?? 20,
+    cacheLimit: props.initialGithubConfig?.cacheLimit ?? 20,
+    autoRefreshSeconds: props.initialGithubConfig?.autoRefreshSeconds ?? 120,
   });
 
   // Jenkins provider config
@@ -64,7 +67,9 @@ export function AppContent(props: Readonly<AppContentProps>) {
     enabled: props.initialJenkinsConfig?.enabled ?? false,
     username: props.initialJenkinsConfig?.username,
     tokenEnvVar: props.initialJenkinsConfig?.tokenEnvVar ?? "JENKINS_TOKEN",
-    graphBuildLimit: props.initialJenkinsConfig?.graphBuildLimit ?? 20,
+    fetchDepth: props.initialJenkinsConfig?.fetchDepth ?? props.initialJenkinsConfig?.graphBuildLimit ?? 20,
+    cacheLimit: props.initialJenkinsConfig?.cacheLimit ?? 20,
+    autoRefreshSeconds: props.initialJenkinsConfig?.autoRefreshSeconds ?? 120,
     jobs: props.initialJenkinsConfig?.jobs ?? [],
   });
 
@@ -97,12 +102,17 @@ export function AppContent(props: Readonly<AppContentProps>) {
       enabled: config.providers?.github?.enabled ?? false,
       tokenEnvVar: config.providers?.github?.tokenEnvVar ?? "GITHUB_TOKEN",
       trustedEnterpriseHost: config.providers?.github?.trustedEnterpriseHost ?? null,
+      fetchDepth: config.providers?.github?.fetchDepth ?? 20,
+      cacheLimit: config.providers?.github?.cacheLimit ?? 20,
+      autoRefreshSeconds: config.providers?.github?.autoRefreshSeconds ?? 120,
     });
     setJenkinsConfig({
       enabled: config.providers?.jenkins?.enabled ?? false,
       username: config.providers?.jenkins?.username,
       tokenEnvVar: config.providers?.jenkins?.tokenEnvVar ?? "JENKINS_TOKEN",
-      graphBuildLimit: config.providers?.jenkins?.graphBuildLimit ?? 20,
+      fetchDepth: config.providers?.jenkins?.fetchDepth ?? config.providers?.jenkins?.graphBuildLimit ?? 20,
+      cacheLimit: config.providers?.jenkins?.cacheLimit ?? 20,
+      autoRefreshSeconds: config.providers?.jenkins?.autoRefreshSeconds ?? 120,
       jobs: config.providers?.jenkins?.jobs ?? [],
     });
     setOpenShiftConfig({
@@ -285,7 +295,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
       job,
       run,
       jobs: jobs.length > 0 ? jobs : [job],
-      fetchLog: currentJob => gitHubCI.fetchJobLogForJob(Number(currentJob.id)),
+      fetchLog: currentJob => gitHubCI.fetchJobLogForJob(Number(currentJob.id), run),
     });
     setDialog("job-log");
   };

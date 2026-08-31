@@ -12,7 +12,11 @@ Configure the provider per repository from `:providers`:
 - Set the environment variable containing an API token. Default:
   `JENKINS_TOKEN`.
 - Add full job or multibranch pipeline URLs.
-- Choose how many recent builds to inspect per job: 10, 20, or 50.
+- Cache count (`10`, `20`, `50`): maximum commit files kept on disk.
+- Fetch size (`10`, `20`, `50`): how many graph commits are queried, and how
+  many recent builds to inspect per job.
+- Auto refresh (`off`, `2m`, `5m`, `10m`): re-query running builds while the
+  Jenkins view is focused. Default `2m`. Git Auto refresh stays git-only.
 
 Credentials remain in environment variables and are not written to config.
 
@@ -24,5 +28,10 @@ all configured multibranch parents.
 
 ## Matching and refresh
 
-Builds are matched through immutable SCM revision SHAs. Completed stages and
-non-empty console logs are cached for the current session.
+Builds are matched through immutable SCM revision SHAs. Completed runs, jobs,
+and stages are stored under
+`~/.cache/codepulse/jenkins/<repository-hash>/<commit-sha>.json`. Console logs
+are fetched on first open and kept next to that file under `logs/`. Cache
+count (`10` / `20` / `50`) caps commit files; logs leave with the SHA.
+A build deleted in Jenkins stays in the local cache.
+Auto refresh only re-queries SHAs that still show as running.

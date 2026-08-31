@@ -10,18 +10,20 @@ import { getTokenSource, parseGitHubRemote } from "../providers/github-actions/a
 import type { JenkinsJobConfig } from "../providers/jenkins/types";
 import { isValidJenkinsJobUrl } from "../providers/jenkins/validation";
 import {
-  DEFAULT_OPENSHIFT_AUTO_REFRESH_SECONDS,
-  OPENSHIFT_AUTO_REFRESH_MS,
-  OPENSHIFT_AUTO_REFRESH_OPTIONS,
-  OPENSHIFT_MS_TO_LABEL,
-  type OpenShiftAutoRefreshSeconds,
-} from "../providers/openshift/types";
-import {
   isValidOpenShiftNamespace,
   isValidOpenShiftServerUrl,
   isValidOpenShiftText,
 } from "../providers/openshift/validation";
 import type { ProviderDetailView } from "../providers/provider";
+import {
+  cycleAutoRefreshSeconds,
+  cycleProviderLimit,
+  DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS,
+  PROVIDER_AUTO_REFRESH_OPTIONS,
+  PROVIDER_MS_TO_LABEL,
+  type ProviderAutoRefreshSeconds,
+  type ProviderLimit,
+} from "../providers/shared/auto-refresh";
 import type { SnykCacheLimit } from "../providers/snyk/types";
 
 type MenuTab = "repository" | "branch" | "providers";
@@ -114,17 +116,11 @@ export interface MenuItemsOptions {
   /** Open the project selector to switch repos. */
   onSwitchRepo?: () => void;
   /** Current GitHub provider config (tokenEnvVar, enabled, trustedEnterpriseHost). */
-  githubConfig?: Accessor<{ enabled: boolean; tokenEnvVar: string; trustedEnterpriseHost: string | null } | undefined>;
+  githubConfig?: Accessor<GitHubMenuConfig | undefined>;
   /** Callback to update GitHub provider config. */
-  onGithubConfigChange?: (cfg: { enabled: boolean; tokenEnvVar: string; trustedEnterpriseHost: string | null }) => void;
+  onGithubConfigChange?: (cfg: GitHubMenuConfig) => void;
   jenkinsConfig?: Accessor<JenkinsMenuConfig | undefined>;
-  onJenkinsConfigChange?: (cfg: {
-    enabled: boolean;
-    username?: string;
-    tokenEnvVar: string;
-    graphBuildLimit: 10 | 20 | 50;
-    jobs: JenkinsJobConfig[];
-  }) => void;
+  onJenkinsConfigChange?: (cfg: JenkinsMenuConfig) => void;
   openshiftConfig?: Accessor<OpenShiftMenuConfig | undefined>;
   onOpenShiftConfigChange?: (cfg: OpenShiftMenuConfig) => void;
   snykConfig?: Accessor<SnykMenuConfig | undefined>;
@@ -148,13 +144,18 @@ export interface GitHubMenuConfig {
   enabled: boolean;
   tokenEnvVar: string;
   trustedEnterpriseHost: string | null;
+  fetchDepth: ProviderLimit;
+  cacheLimit: ProviderLimit;
+  autoRefreshSeconds: ProviderAutoRefreshSeconds;
 }
 
 export interface JenkinsMenuConfig {
   enabled: boolean;
   username?: string;
   tokenEnvVar: string;
-  graphBuildLimit: 10 | 20 | 50;
+  fetchDepth: ProviderLimit;
+  cacheLimit: ProviderLimit;
+  autoRefreshSeconds: ProviderAutoRefreshSeconds;
   jobs: JenkinsJobConfig[];
 }
 
@@ -164,9 +165,9 @@ export interface OpenShiftMenuConfig {
   tokenEnvVar: string;
   namespaces: string[];
   commitShaAnnotation: string;
-  cacheLimit: 10 | 20 | 50;
-  fetchDepth: 10 | 20 | 50;
-  autoRefreshSeconds: OpenShiftAutoRefreshSeconds;
+  cacheLimit: ProviderLimit;
+  fetchDepth: ProviderLimit;
+  autoRefreshSeconds: ProviderAutoRefreshSeconds;
 }
 
 export interface SnykMenuConfig {
@@ -288,26 +289,21 @@ export function buildOpenShiftProviderItems(
       label: "Cache count",
       options: ["10", "20", "50"],
       get: () => String(cfg.cacheLimit),
-      set: v => update({ ...cfg, cacheLimit: v === "10" ? 10 : v === "50" ? 50 : 20 }),
+      set: v => update({ ...cfg, cacheLimit: cycleProviderLimit(v) }),
     },
     {
       kind: "cycle",
       label: "Fetch size",
       options: ["10", "20", "50"],
       get: () => String(cfg.fetchDepth),
-      set: v => update({ ...cfg, fetchDepth: v === "10" ? 10 : v === "50" ? 50 : 20 }),
+      set: v => update({ ...cfg, fetchDepth: cycleProviderLimit(v) }),
     },
     {
       kind: "cycle",
       label: "Auto refresh",
-      options: [...OPENSHIFT_AUTO_REFRESH_OPTIONS],
-      get: () => OPENSHIFT_MS_TO_LABEL[cfg.autoRefreshSeconds * 1000] ?? "2m",
-      set: v => {
-        const ms = OPENSHIFT_AUTO_REFRESH_MS[v as keyof typeof OPENSHIFT_AUTO_REFRESH_MS] ?? 120_000;
-        const autoRefreshSeconds: OpenShiftAutoRefreshSeconds =
-          ms === 0 ? 0 : ms === 300_000 ? 300 : ms === 600_000 ? 600 : 120;
-        update({ ...cfg, autoRefreshSeconds });
-      },
+      options: [...PROVIDER_AUTO_REFRESH_OPTIONS],
+      get: () => PROVIDER_MS_TO_LABEL[cfg.autoRefreshSeconds * 1000] ?? "2m",
+      set: v => update({ ...cfg, autoRefreshSeconds: cycleAutoRefreshSeconds(v) }),
     },
     {
       kind: "editable",
@@ -402,6 +398,39 @@ export function buildGitHubProviderItems(
       },
       disabled: () => remoteHost == null || remoteHost === "github.com",
     },
+    {
+      kind: "cycle",
+      label: "Cache count",
+      options: ["10", "20", "50"],
+      get: () => String(ghCfg.cacheLimit),
+      set: v => {
+        const newCfg = { ...ghCfg, cacheLimit: cycleProviderLimit(v) };
+        onChange?.(newCfg);
+        persist?.(newCfg);
+      },
+    },
+    {
+      kind: "cycle",
+      label: "Fetch size",
+      options: ["10", "20", "50"],
+      get: () => String(ghCfg.fetchDepth),
+      set: v => {
+        const newCfg = { ...ghCfg, fetchDepth: cycleProviderLimit(v) };
+        onChange?.(newCfg);
+        persist?.(newCfg);
+      },
+    },
+    {
+      kind: "cycle",
+      label: "Auto refresh",
+      options: [...PROVIDER_AUTO_REFRESH_OPTIONS],
+      get: () => PROVIDER_MS_TO_LABEL[ghCfg.autoRefreshSeconds * 1000] ?? "2m",
+      set: v => {
+        const newCfg = { ...ghCfg, autoRefreshSeconds: cycleAutoRefreshSeconds(v) };
+        onChange?.(newCfg);
+        persist?.(newCfg);
+      },
+    },
   );
 
   return items;
@@ -458,12 +487,33 @@ export function buildJenkinsProviderItems(
     },
     {
       kind: "cycle",
-      label: "Fetch size per job",
+      label: "Cache count",
       options: ["10", "20", "50"],
-      get: () => String(jenkinsCfg.graphBuildLimit),
+      get: () => String(jenkinsCfg.cacheLimit),
       set: v => {
-        const graphBuildLimit: 10 | 20 | 50 = v === "10" ? 10 : v === "50" ? 50 : 20;
-        const newCfg = { ...jenkinsCfg, graphBuildLimit };
+        const newCfg = { ...jenkinsCfg, cacheLimit: cycleProviderLimit(v) };
+        onChange?.(newCfg);
+        persist?.(newCfg);
+      },
+    },
+    {
+      kind: "cycle",
+      label: "Fetch size",
+      options: ["10", "20", "50"],
+      get: () => String(jenkinsCfg.fetchDepth),
+      set: v => {
+        const newCfg = { ...jenkinsCfg, fetchDepth: cycleProviderLimit(v) };
+        onChange?.(newCfg);
+        persist?.(newCfg);
+      },
+    },
+    {
+      kind: "cycle",
+      label: "Auto refresh",
+      options: [...PROVIDER_AUTO_REFRESH_OPTIONS],
+      get: () => PROVIDER_MS_TO_LABEL[jenkinsCfg.autoRefreshSeconds * 1000] ?? "2m",
+      set: v => {
+        const newCfg = { ...jenkinsCfg, autoRefreshSeconds: cycleAutoRefreshSeconds(v) };
         onChange?.(newCfg);
         persist?.(newCfg);
       },
@@ -537,6 +587,9 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
           enabled: ghCfg.enabled,
           tokenEnvVar: ghCfg.tokenEnvVar,
           trustedEnterpriseHost: ghCfg.trustedEnterpriseHost ?? undefined,
+          fetchDepth: ghCfg.fetchDepth,
+          cacheLimit: ghCfg.cacheLimit,
+          autoRefreshSeconds: ghCfg.autoRefreshSeconds,
         },
       };
       const jenkinsCfg = opts.jenkinsConfig?.();
@@ -545,7 +598,9 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
           enabled: jenkinsCfg.enabled,
           username: jenkinsCfg.username,
           tokenEnvVar: jenkinsCfg.tokenEnvVar,
-          graphBuildLimit: jenkinsCfg.graphBuildLimit,
+          fetchDepth: jenkinsCfg.fetchDepth,
+          cacheLimit: jenkinsCfg.cacheLimit,
+          autoRefreshSeconds: jenkinsCfg.autoRefreshSeconds,
           jobs: jenkinsCfg.jobs,
         };
       }
@@ -817,12 +872,21 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
 
   // ── Provider tab items ────────────────────────────────────────────
   const providerItems = createMemo<SettingItem[]>(() => {
-    const ghCfg = opts.githubConfig?.() ?? { enabled: false, tokenEnvVar: "GITHUB_TOKEN", trustedEnterpriseHost: null };
+    const ghCfg = opts.githubConfig?.() ?? {
+      enabled: false,
+      tokenEnvVar: "GITHUB_TOKEN",
+      trustedEnterpriseHost: null,
+      fetchDepth: 20,
+      cacheLimit: 20,
+      autoRefreshSeconds: DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS,
+    };
     const tokenSource = getTokenSource(ghCfg.tokenEnvVar);
     const jenkinsCfg = opts.jenkinsConfig?.() ?? {
       enabled: false,
       tokenEnvVar: "JENKINS_TOKEN",
-      graphBuildLimit: 20 as const,
+      fetchDepth: 20,
+      cacheLimit: 20,
+      autoRefreshSeconds: DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS,
       jobs: [],
     };
     const openshiftCfg = opts.openshiftConfig?.() ?? {
@@ -833,7 +897,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
       commitShaAnnotation: "dev/commit-sha",
       cacheLimit: 20,
       fetchDepth: 20,
-      autoRefreshSeconds: DEFAULT_OPENSHIFT_AUTO_REFRESH_SECONDS,
+      autoRefreshSeconds: DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS,
     };
     const snykCfg = opts.snykConfig?.() ?? {
       enabled: false,

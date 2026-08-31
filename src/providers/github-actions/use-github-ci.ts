@@ -4,9 +4,9 @@
  * Manages the full lifecycle of CI data for the GitHub Actions provider:
  *   - Registers the provider in the shared registry
  *   - Lazy initial fetch (triggered on first Tab switch to CI view)
- *   - Viewport-driven SHA batching: queries the top ~100 commits from
- *     state.graphRows() — covering all branches — rather than walking a
- *     single branch's history.  Works for any commit on any branch,
+ *   - Viewport-driven SHA batching: queries the top fetchDepth commits
+ *     from state.graphRows() — covering all branches — rather than walking
+ *     a single branch's history.  Works for any commit on any branch,
  *     including ancestors of remote branches that have no origin/* ref
  *     attached directly.
  *   - Auto-refresh only re-queries SHAs with non-terminal (running/queued)
@@ -32,7 +32,9 @@ import {
 } from "../../context/state";
 import { BANNER, bannerOrFallback, debugError } from "../../debug/banner";
 
-import { DEFAULT_INITIAL_SHA_LIMIT, useProviderFetchLifecycle } from "../shared/use-provider-fetch-lifecycle";
+import { DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS } from "../shared/auto-refresh";
+import { runLimited } from "../shared/http";
+import { useProviderFetchLifecycle } from "../shared/use-provider-fetch-lifecycle";
 import {
   buildCommitDataMap,
   buildGraphBadges,
@@ -44,6 +46,7 @@ import {
   isTrustedGitHubHost,
   parseGitHubRemote,
 } from "./api";
+import { GitHubCache, isTerminalGitHubRun, jobsMapFromGitHubCache, mergeGitHubJobs, mergeGitHubRuns } from "./cache";
 import { collectRunningSHAs, collectTopSHAs } from "./sha-selection";
 import type {
   GitHubCommitData,
@@ -53,8 +56,6 @@ import type {
   GitHubWorkflowRun,
 } from "./types";
 import { DEFAULT_GITHUB_CONFIG } from "./types";
-
-const INITIAL_SHA_LIMIT = DEFAULT_INITIAL_SHA_LIMIT;
 
 export interface UseGitHubCIResult {
   /** Retrieve all runs for a given commit SHA (null if not fetched yet). */
@@ -69,7 +70,7 @@ export interface UseGitHubCIResult {
    * Fetch the plain-text log for a specific job ID.
    * Resolves to an empty string if token or repo is unavailable.
    */
-  fetchJobLogForJob: (jobId: number, signal?: AbortSignal) => Promise<string>;
+  fetchJobLogForJob: (jobId: number, run: { headSha: string; status: string }, signal?: AbortSignal) => Promise<string>;
   /** Fetch CI data for one selected SHA on demand. */
   fetchCommitDataForSHA: (sha: string) => Promise<void>;
   /** Trigger an immediate (non-conditional) refresh of CI data. */
@@ -88,6 +89,7 @@ export function useGitHubCI(opts: {
    * reflected immediately without a restart.
    */
   config?: Partial<GitHubProviderConfig> | Accessor<Partial<GitHubProviderConfig>>;
+  cacheRoot?: string;
 }): UseGitHubCIResult {
   const { state, actions } = opts;
 
@@ -108,8 +110,10 @@ export function useGitHubCI(opts: {
   // situation where every effect that calls isAvailable() (which reads config)
   // would re-fire when config changes, causing infinite fetch loops.
   let config: GitHubProviderConfig = { ...DEFAULT_GITHUB_CONFIG, ...configAccessor() };
+  let disk = new GitHubCache({ root: opts.cacheRoot, maxEntries: config.cacheLimit });
   createEffect(() => {
     config = { ...DEFAULT_GITHUB_CONFIG, ...configAccessor() };
+    disk = new GitHubCache({ root: opts.cacheRoot, maxEntries: config.cacheLimit });
   });
 
   // ── Availability (reactive) ───────────────────────────────────────────
@@ -219,25 +223,83 @@ export function useGitHubCI(opts: {
       allRuns.push(...result.data);
     }
 
-    // Merge new runs into commitDataCache (additive — don't discard other SHAs)
     const newCommitData = buildCommitDataMap(allRuns);
     for (const sha of shas) {
-      if (!newCommitData.has(sha) && !failedShaSet.has(sha)) {
-        newCommitData.set(sha, { sha, runs: [] });
-      }
+      if (failedShaSet.has(sha)) continue;
+      const incoming = newCommitData.get(sha)?.runs ?? [];
+      const existing = commitDataCache.get(sha)?.runs ?? [];
+      commitDataCache.set(sha, { sha, runs: mergeGitHubRuns(existing, incoming) });
     }
-    for (const [sha, data] of newCommitData) {
-      commitDataCache.set(sha, data);
-    }
-    // Bump version so getCommitData() re-runs in any reactive context
-    // (e.g. detail tab open while background fetch completes).
     setCommitDataVersion(v => v + 1);
 
-    // Rebuild from GitHub-owned cache; active view may belong to another provider.
     const cachedRuns = [...commitDataCache.values()].flatMap(data => data.runs);
     actions.setGraphBadges("github-actions", buildGraphBadges(cachedRuns));
+    await persistTerminalRuns(state.repoPath(), shas);
+    const wanted = new Set(shas.map(sha => sha.toLowerCase()));
+    const terminal = [...commitDataCache.values()]
+      .flatMap(data => data.runs)
+      .filter(run => wanted.has(run.headSha.toLowerCase()) && isTerminalGitHubRun(run));
+    void fillTerminalJobs(terminal, epoch, state.repoPath(), shas);
 
     return { firstError, failedSHAs };
+  }
+
+  async function hydrateCachedCandidates(repoPath: string, shas: readonly string[]): Promise<void> {
+    let changed = false;
+    for (const sha of shas) {
+      if (commitDataCache.has(sha)) continue;
+      const entry = await disk.read(repoPath, sha);
+      if (!entry) continue;
+      commitDataCache.set(sha, { sha, runs: entry.runs });
+      for (const [id, jobs] of Object.entries(entry.jobs ?? {})) {
+        const runId = Number(id);
+        if (!Number.isNaN(runId) && !jobsCache.has(runId)) jobsCache.set(runId, jobs);
+      }
+      changed = true;
+    }
+    if (!changed) return;
+    setCommitDataVersion(v => v + 1);
+    const cachedRuns = [...commitDataCache.values()].flatMap(data => data.runs);
+    actions.setGraphBadges("github-actions", buildGraphBadges(cachedRuns));
+  }
+
+  async function persistTerminalRuns(repoPath: string, shas: readonly string[]): Promise<void> {
+    for (const sha of shas) {
+      const incoming = (commitDataCache.get(sha)?.runs ?? []).filter(isTerminalGitHubRun);
+      if (incoming.length === 0) continue;
+      const existing = await disk.read(repoPath, sha);
+      await disk.write(repoPath, {
+        sha,
+        runs: mergeGitHubRuns(existing?.runs ?? [], incoming),
+        jobs: mergeGitHubJobs(
+          existing?.jobs,
+          jobsMapFromGitHubCache(
+            jobsCache,
+            incoming.map(run => run.id),
+          ),
+        ),
+      });
+    }
+  }
+
+  async function fillTerminalJobs(
+    runs: GitHubWorkflowRun[],
+    epoch: number,
+    repoPath: string,
+    shas: readonly string[],
+  ): Promise<void> {
+    const repo = cachedGitHubRepo();
+    const token = getGitHubToken(config.tokenEnvVar);
+    const pending = runs.filter(run => !jobsCache.has(run.id));
+    if (!repo || !token || pending.length === 0) return;
+    await runLimited(pending, 6, async run => {
+      if (epoch !== lifecycle.getEpoch()) return;
+      const { jobs, error } = await fetchRunJobs(repo, token, run.id);
+      if (epoch !== lifecycle.getEpoch() || error || jobs.length === 0) return;
+      jobsCache.set(run.id, jobs);
+    });
+    if (epoch !== lifecycle.getEpoch()) return;
+    await persistTerminalRuns(repoPath, shas);
   }
 
   // ── Main fetch entry points ───────────────────────────────────────────
@@ -245,7 +307,8 @@ export function useGitHubCI(opts: {
   const lifecycle = useProviderFetchLifecycle({
     state,
     providerId: "github-actions",
-    shaLimit: INITIAL_SHA_LIMIT,
+    shaLimit: () => configAccessor().fetchDepth ?? DEFAULT_GITHUB_CONFIG.fetchDepth,
+    refreshInterval: () => (configAccessor().autoRefreshSeconds ?? DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS) * 1000,
     identity: () => {
       const partial = configAccessor();
       return JSON.stringify({
@@ -254,6 +317,8 @@ export function useGitHubCI(opts: {
         enabled: partial.enabled ?? DEFAULT_GITHUB_CONFIG.enabled,
         tokenEnvVar: partial.tokenEnvVar ?? DEFAULT_GITHUB_CONFIG.tokenEnvVar,
         trustedEnterpriseHost: partial.trustedEnterpriseHost ?? null,
+        fetchDepth: partial.fetchDepth ?? DEFAULT_GITHUB_CONFIG.fetchDepth,
+        cacheLimit: partial.cacheLimit ?? DEFAULT_GITHUB_CONFIG.cacheLimit,
       });
     },
     isAvailable,
@@ -279,9 +344,14 @@ export function useGitHubCI(opts: {
       }
     },
     runInitialFetch: async ({ signal, shas, showStatus, epoch }) => {
-      const allSHAs = shas ?? collectTopSHAs(state.graphRows(), INITIAL_SHA_LIMIT);
+      const allSHAs = shas ?? collectTopSHAs(state.graphRows(), config.fetchDepth);
+      await hydrateCachedCandidates(state.repoPath(), allSHAs);
+      if (signal?.aborted || epoch !== lifecycle.getEpoch()) return;
       const unqueried = allSHAs.filter(sha => !queriedSHAs.has(sha));
-      if (unqueried.length === 0) return;
+      if (unqueried.length === 0) {
+        lifecycle.noteFetchStarted();
+        return;
+      }
       lifecycle.noteFetchStarted();
       for (const sha of unqueried) queriedSHAs.add(sha);
       if (showStatus) actions.setProviderStatus("github-actions", providerLoading());
@@ -357,6 +427,7 @@ export function useGitHubCI(opts: {
     actions.setProviderStatus("github-actions", providerIdle());
     if (run.status === "completed") {
       jobsCache.set(run.id, jobs);
+      await persistTerminalRuns(state.repoPath(), [run.headSha]);
     }
     return { jobs, error: null };
   }
@@ -372,12 +443,21 @@ export function useGitHubCI(opts: {
       return commitDataCache.get(sha) ?? null;
     },
     fetchJobsForRun,
-    fetchJobLogForJob: (jobId: number, signal?: AbortSignal): Promise<string> => {
+    fetchJobLogForJob: async (jobId, run, signal) => {
       const epoch = lifecycle.getEpoch();
+      const repoPath = state.repoPath();
+      const key = String(jobId);
+      if (isTerminalGitHubRun(run)) {
+        const diskLog = await disk.readLog(repoPath, run.headSha, key).catch(() => null);
+        if (diskLog) return diskLog;
+      }
       const repo = cachedGitHubRepo();
       const token = getGitHubToken(config.tokenEnvVar);
-      if (!repo || !token) return Promise.resolve("");
-      return fetchJobLog(repo, token, jobId, signal).then(log => (epoch === lifecycle.getEpoch() ? log : ""));
+      if (!repo || !token) return "";
+      const log = await fetchJobLog(repo, token, jobId, signal);
+      if (epoch !== lifecycle.getEpoch()) return "";
+      if (isTerminalGitHubRun(run) && log) await disk.writeLog(repoPath, run.headSha, key, log).catch(() => {});
+      return log;
     },
     fetchCommitDataForSHA,
     refresh: doForceRefresh,

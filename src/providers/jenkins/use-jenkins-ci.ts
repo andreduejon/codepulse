@@ -3,9 +3,10 @@ import { createEffect, createSignal, untrack } from "solid-js";
 import type { AppActions, AppState } from "../../context/state";
 import { providerError, providerIdle, providerLoading, providerUnavailable } from "../../context/state";
 import { BANNER } from "../../debug/banner";
-import { collectTopSHAs } from "../github-actions/sha-selection";
-
-import { DEFAULT_INITIAL_SHA_LIMIT, useProviderFetchLifecycle } from "../shared/use-provider-fetch-lifecycle";
+import { collectRunningSHAs, collectTopSHAs } from "../github-actions/sha-selection";
+import { DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS } from "../shared/auto-refresh";
+import { runLimited } from "../shared/http";
+import { useProviderFetchLifecycle } from "../shared/use-provider-fetch-lifecycle";
 import {
   buildJenkinsCommitDataMap,
   buildJenkinsGraphBadges,
@@ -15,10 +16,9 @@ import {
   fetchJenkinsRunJobs,
   getJenkinsToken,
 } from "./api";
+import { isTerminalJenkinsRun, JenkinsCache, jobsMapFromCache, mergeJenkinsJobs, mergeJenkinsRuns } from "./cache";
 import type { JenkinsCommitData, JenkinsJobFetchResult, JenkinsProviderConfig, JenkinsRun } from "./types";
 import { DEFAULT_JENKINS_CONFIG } from "./types";
-
-const INITIAL_SHA_LIMIT = DEFAULT_INITIAL_SHA_LIMIT;
 
 export interface UseJenkinsCIResult {
   getCommitData: (sha: string) => JenkinsCommitData | null;
@@ -33,6 +33,7 @@ export function useJenkinsCI(opts: {
   state: AppState;
   actions: AppActions;
   config?: Partial<JenkinsProviderConfig> | Accessor<Partial<JenkinsProviderConfig>>;
+  cacheRoot?: string;
 }): UseJenkinsCIResult {
   const { state, actions } = opts;
   const configAccessor: Accessor<Partial<JenkinsProviderConfig>> =
@@ -41,8 +42,11 @@ export function useJenkinsCI(opts: {
       : ((() => opts.config ?? {}) as Accessor<Partial<JenkinsProviderConfig>>);
 
   let config: JenkinsProviderConfig = { ...DEFAULT_JENKINS_CONFIG, ...configAccessor() };
+  let disk = new JenkinsCache({ root: opts.cacheRoot, maxEntries: config.cacheLimit });
   createEffect(() => {
-    config = { ...DEFAULT_JENKINS_CONFIG, ...configAccessor(), jobs: configAccessor().jobs ?? [] };
+    const partial = configAccessor();
+    config = { ...DEFAULT_JENKINS_CONFIG, ...partial, jobs: partial.jobs ?? [] };
+    disk = new JenkinsCache({ root: opts.cacheRoot, maxEntries: config.cacheLimit });
   });
 
   const isAvailable = () => {
@@ -94,11 +98,11 @@ export function useJenkinsCI(opts: {
       mode === "shallow"
         ? await fetchJenkinsGraphDataForSHAs(config.jobs, config.username, token, shas, {
             signal,
-            buildLimit: config.graphBuildLimit,
+            buildLimit: config.fetchDepth,
           })
         : await fetchJenkinsDataForSHAs(config.jobs, config.username, token, shas, {
             signal,
-            buildLimit: config.graphBuildLimit,
+            buildLimit: config.fetchDepth,
           });
     if (signal?.aborted || epoch !== lifecycle.getEpoch()) return { firstError: null, stale: true };
     if (result.error === null) {
@@ -117,13 +121,70 @@ export function useJenkinsCI(opts: {
       runCache.set(`${run.id}:${run.headSha}`, run);
     }
     rebuildCaches();
+    await persistTerminalRuns(state.repoPath(), shas);
+    void fillTerminalJobs(result.data.filter(isTerminalJenkinsRun), epoch, state.repoPath(), shas);
     return { firstError: result.error, stale: false };
+  }
+
+  async function hydrateCachedCandidates(repoPath: string, shas: readonly string[]): Promise<void> {
+    let changed = false;
+    for (const sha of shas) {
+      const entry = await disk.read(repoPath, sha);
+      if (!entry) continue;
+      for (const run of entry.runs) runCache.set(`${run.id}:${run.headSha}`, run);
+      for (const [id, jobs] of Object.entries(entry.jobs ?? {})) {
+        if (!jobsCache.has(id)) jobsCache.set(id, { jobs, error: null });
+      }
+      changed = true;
+    }
+    if (changed) rebuildCaches();
+  }
+
+  async function persistTerminalRuns(repoPath: string, shas: readonly string[]): Promise<void> {
+    for (const sha of shas) {
+      const incoming = [...runCache.values()].filter(
+        run => isTerminalJenkinsRun(run) && run.headSha.toLowerCase() === sha.toLowerCase(),
+      );
+      if (incoming.length === 0) continue;
+      const existing = await disk.read(repoPath, sha);
+      await disk.write(repoPath, {
+        sha,
+        runs: mergeJenkinsRuns(existing?.runs ?? [], incoming),
+        jobs: mergeJenkinsJobs(
+          existing?.jobs,
+          jobsMapFromCache(
+            jobsCache,
+            incoming.map(run => run.id),
+          ),
+        ),
+      });
+    }
+  }
+
+  async function fillTerminalJobs(
+    runs: JenkinsRun[],
+    epoch: number,
+    repoPath: string,
+    shas: readonly string[],
+  ): Promise<void> {
+    const token = getJenkinsToken(config.tokenEnvVar);
+    const pending = runs.filter(run => !jobsCache.has(run.id));
+    if (!token || pending.length === 0) return;
+    await runLimited(pending, 6, async run => {
+      if (epoch !== lifecycle.getEpoch()) return;
+      const result = await fetchJenkinsRunJobs(run, config.username, token);
+      if (epoch !== lifecycle.getEpoch() || result.error !== null) return;
+      jobsCache.set(run.id, result);
+    });
+    if (epoch !== lifecycle.getEpoch()) return;
+    await persistTerminalRuns(repoPath, shas);
   }
 
   const lifecycle = useProviderFetchLifecycle({
     state,
     providerId: "jenkins",
-    shaLimit: INITIAL_SHA_LIMIT,
+    shaLimit: () => configAccessor().fetchDepth ?? DEFAULT_JENKINS_CONFIG.fetchDepth,
+    refreshInterval: () => (configAccessor().autoRefreshSeconds ?? DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS) * 1000,
     identity: () => {
       const partial = configAccessor();
       return JSON.stringify({
@@ -131,7 +192,8 @@ export function useJenkinsCI(opts: {
         enabled: partial.enabled ?? DEFAULT_JENKINS_CONFIG.enabled,
         username: partial.username ?? "",
         tokenEnvVar: partial.tokenEnvVar ?? DEFAULT_JENKINS_CONFIG.tokenEnvVar,
-        graphBuildLimit: partial.graphBuildLimit ?? DEFAULT_JENKINS_CONFIG.graphBuildLimit,
+        fetchDepth: partial.fetchDepth ?? DEFAULT_JENKINS_CONFIG.fetchDepth,
+        cacheLimit: partial.cacheLimit ?? DEFAULT_JENKINS_CONFIG.cacheLimit,
         jobs: partial.jobs ?? [],
       });
     },
@@ -147,9 +209,13 @@ export function useJenkinsCI(opts: {
     },
     runInitialFetch: async ({ signal, shas, showStatus, epoch }) => {
       if (showStatus) actions.setProviderStatus("jenkins", providerLoading());
-      const target = shas ?? collectTopSHAs(state.graphRows(), INITIAL_SHA_LIMIT).filter(sha => !queriedSHAs.has(sha));
+      const window = shas ?? collectTopSHAs(state.graphRows(), config.fetchDepth);
+      await hydrateCachedCandidates(state.repoPath(), window);
+      if (signal?.aborted || epoch !== lifecycle.getEpoch()) return;
+      const target = window.filter(sha => !queriedSHAs.has(sha));
       if (target.length === 0) {
         if (showStatus) actions.setProviderStatus("jenkins", providerIdle());
+        lifecycle.noteFetchStarted();
         return;
       }
       const { firstError, stale } = await fetchForSHAs(target, "shallow", signal);
@@ -160,8 +226,11 @@ export function useJenkinsCI(opts: {
       else actions.setProviderStatus("jenkins", providerIdle());
     },
     runRefresh: async ({ signal, showStatus, epoch }) => {
-      const target = collectTopSHAs(state.graphRows(), INITIAL_SHA_LIMIT);
-      if (target.length === 0) return;
+      const target = collectRunningSHAs(state.graphBadges());
+      if (target.length === 0) {
+        lifecycle.noteRefreshSettled();
+        return;
+      }
       if (showStatus) actions.setProviderStatus("jenkins", providerLoading());
       const { firstError, stale } = await fetchForSHAs(target, "shallow", signal);
       if (stale || epoch !== lifecycle.getEpoch()) return;
@@ -198,18 +267,32 @@ export function useJenkinsCI(opts: {
       if (!token) return { jobs: [], error: BANNER.jenkins.missingToken(config.tokenEnvVar) };
       const result = await fetchJenkinsRunJobs(run, config.username, token);
       if (epoch !== lifecycle.getEpoch()) return { jobs: [], error: null };
-      if (run.status === "completed" && result.error === null) jobsCache.set(run.id, result);
+      if (run.status === "completed" && result.error === null) {
+        jobsCache.set(run.id, result);
+        await persistTerminalRuns(state.repoPath(), [run.headSha]);
+      }
       return result;
     },
     fetchRunLog: async (run, signal) => {
       const epoch = lifecycle.getEpoch();
       const cached = logCache.get(run.id);
       if (cached) return cached;
+      const repoPath = state.repoPath();
+      if (isTerminalJenkinsRun(run)) {
+        const diskLog = await disk.readLog(repoPath, run.headSha, run.id).catch(() => null);
+        if (diskLog) {
+          logCache.set(run.id, diskLog);
+          return diskLog;
+        }
+      }
       const token = getJenkinsToken(config.tokenEnvVar);
       if (!token) return "";
       const log = await fetchJenkinsConsoleLog(run, config.username, token, signal);
       if (epoch !== lifecycle.getEpoch()) return "";
-      if (run.status === "completed" && log) logCache.set(run.id, log);
+      if (run.status === "completed" && log) {
+        logCache.set(run.id, log);
+        await disk.writeLog(repoPath, run.headSha, run.id, log).catch(() => {});
+      }
       return log;
     },
     fetchCommitDataForSHA: async sha => {

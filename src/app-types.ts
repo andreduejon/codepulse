@@ -18,12 +18,18 @@ export interface AppProps {
     enabled?: boolean;
     tokenEnvVar?: string;
     trustedEnterpriseHost?: string;
+    fetchDepth?: 10 | 20 | 50;
+    cacheLimit?: 10 | 20 | 50;
+    autoRefreshSeconds?: 0 | 120 | 300 | 600;
   };
   initialJenkinsConfig?: {
     enabled?: boolean;
     username?: string;
     tokenEnvVar?: string;
     graphBuildLimit?: 10 | 20 | 50;
+    fetchDepth?: 10 | 20 | 50;
+    cacheLimit?: 10 | 20 | 50;
+    autoRefreshSeconds?: 0 | 120 | 300 | 600;
     jobs?: { label?: string; url: string }[];
   };
   initialOpenShiftConfig?: {
