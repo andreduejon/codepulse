@@ -4,7 +4,12 @@ import type { DetailNavRef } from "../../components/detail-types";
 import { useT } from "../../hooks/use-t";
 import { type StatusCategory, statusIcon } from "../shared/status";
 import { openShiftStatusColor } from "./graph-columns";
-import { isCachedOpenShiftResource, type OpenShiftCommitData, type OpenShiftResource, type OpenShiftStatus } from "./types";
+import {
+  isCachedOpenShiftResource,
+  type OpenShiftCommitData,
+  type OpenShiftResource,
+  type OpenShiftStatus,
+} from "./types";
 
 export interface OpenShiftDetailTabProps {
   sha: string;
@@ -229,8 +234,7 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
 
   const reloadLabel = () => "Reload commit";
   const reloadIdx = () => flatItems().findIndex(item => item.kind === "reload");
-  const isReloadCursored = () =>
-    reloadIdx() >= 0 && props.detailFocused() && props.detailCursorIndex() === reloadIdx();
+  const isReloadCursored = () => reloadIdx() >= 0 && props.detailFocused() && props.detailCursorIndex() === reloadIdx();
   const reloadStatus = () => {
     if (reloadBusy()) return "loading...";
     if (liveUnavailable()) return "unavailable";
@@ -251,13 +255,7 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
         >
           <text
             flexGrow={1}
-            fg={
-              !reloadEnabled()
-                ? t().foregroundMuted
-                : isReloadCursored()
-                  ? t().accent
-                  : t().foreground
-            }
+            fg={!reloadEnabled() ? t().foregroundMuted : isReloadCursored() ? t().accent : t().foreground}
             wrapMode="none"
           >
             {reloadLabel()}

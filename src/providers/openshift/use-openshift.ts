@@ -10,8 +10,10 @@ import {
 } from "../../context/state";
 import { BANNER, debugError } from "../../debug/banner";
 import { collectTopSHAs } from "../github-actions/sha-selection";
+import { sleep } from "../shared/http";
 import { useProviderFetchLifecycle } from "../shared/use-provider-fetch-lifecycle";
 import {
+  applyOpenShiftWatchEvent,
   buildOpenShiftCommitMap,
   buildOpenShiftGraphBadges,
   fetchOpenShiftBuildLog,
@@ -22,27 +24,15 @@ import {
   followOpenShiftLog,
   getOpenShiftToken,
   isTerminalBuildStatus,
+  type OpenShiftListedInventory,
   openShiftBuildLogUrl,
   openShiftKindPath,
   openShiftPodLogUrl,
-  applyOpenShiftWatchEvent,
   watchOpenShiftStream,
-  type OpenShiftListedInventory,
 } from "./api";
-import {
-  cachedBuildToResource,
-  mergeById,
-  OpenShiftCache,
-  toCachedBuild,
-  type OpenShiftCacheEntry,
-} from "./cache";
-import { sleep } from "../shared/http";
+import { cachedBuildToResource, mergeById, OpenShiftCache, type OpenShiftCacheEntry, toCachedBuild } from "./cache";
 import type { OpenShiftCommitData, OpenShiftNamespaceData, OpenShiftProviderConfig, OpenShiftResource } from "./types";
-import {
-  DEFAULT_OPENSHIFT_AUTO_REFRESH_SECONDS,
-  DEFAULT_OPENSHIFT_CONFIG,
-  OPENSHIFT_WATCH_KINDS,
-} from "./types";
+import { DEFAULT_OPENSHIFT_AUTO_REFRESH_SECONDS, DEFAULT_OPENSHIFT_CONFIG, OPENSHIFT_WATCH_KINDS } from "./types";
 import { appendOpenShiftLogFollow } from "./watch";
 
 export interface UseOpenShiftResult {
@@ -54,11 +44,7 @@ export interface UseOpenShiftResult {
   isAvailable: () => boolean;
   loadBuildLog: (resource: OpenShiftResource, force?: boolean) => Promise<string>;
   loadPodLog: (resource: OpenShiftResource, container?: string) => Promise<string>;
-  followLog: (
-    resource: OpenShiftResource,
-    signal: AbortSignal,
-    onText: (text: string) => void,
-  ) => Promise<void>;
+  followLog: (resource: OpenShiftResource, signal: AbortSignal, onText: (text: string) => void) => Promise<void>;
   loadResourceObject: (resource: OpenShiftResource) => Promise<unknown>;
 }
 
@@ -238,8 +224,7 @@ export function useOpenShift(opts: {
     },
     isAvailable,
     isBackgroundReady: () => false,
-    refreshInterval: () =>
-      (configAccessor().autoRefreshSeconds ?? DEFAULT_OPENSHIFT_AUTO_REFRESH_SECONDS) * 1000,
+    refreshInterval: () => (configAccessor().autoRefreshSeconds ?? DEFAULT_OPENSHIFT_AUTO_REFRESH_SECONDS) * 1000,
     queriedSHAs,
     reportUnavailable: showStatus => {
       if (showStatus) actions.setProviderStatus("openshift", providerUnavailable(unavailableMessage()));
@@ -331,7 +316,10 @@ export function useOpenShift(opts: {
       }
       seeds.clear();
       for (const [sha, commit] of result.data) seeds.set(sha.toLowerCase(), commit);
-      const candidates = selectOpenShiftCandidateSHAs(collectTopSHAs(state.graphRows(), config.fetchDepth), seeds.keys());
+      const candidates = selectOpenShiftCandidateSHAs(
+        collectTopSHAs(state.graphRows(), config.fetchDepth),
+        seeds.keys(),
+      );
       const forDisk = filterToEligible(result.data);
       await persistTerminalBuilds(repoPath, forDisk);
       const allowed = eligibleSHAs();

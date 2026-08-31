@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { applyOpenShiftWatchEvent } from "./api";
 import type { OpenShiftListedInventory } from "./api";
+import { applyOpenShiftWatchEvent } from "./api";
+import type { OpenShiftResource } from "./types";
 import {
   appendOpenShiftLogFollow,
   isOpenShiftWatchGone,
   parseOpenShiftWatchBuffer,
   shouldFollowOpenShiftLog,
 } from "./watch";
-import type { OpenShiftResource } from "./types";
 
 function listed(resources: OpenShiftResource[] = []): OpenShiftListedInventory {
   return {
@@ -39,7 +39,7 @@ describe("parseOpenShiftWatchBuffer", () => {
   });
 
   test("skips malformed lines", () => {
-    const { events } = parseOpenShiftWatchBuffer("not-json\n{\"type\":\"DELETED\",\"object\":{}}\n");
+    const { events } = parseOpenShiftWatchBuffer('not-json\n{"type":"DELETED","object":{}}\n');
     expect(events).toEqual([{ type: "DELETED", object: {} }]);
   });
 });
@@ -102,7 +102,9 @@ describe("appendOpenShiftLogFollow", () => {
 describe("shouldFollowOpenShiftLog", () => {
   test("follows pods and running builds only", () => {
     expect(shouldFollowOpenShiftLog(pod("app"))).toBe(true);
-    expect(shouldFollowOpenShiftLog({ ...pod("app"), kind: "Build", id: "Build:ns:app", status: "running" })).toBe(true);
+    expect(shouldFollowOpenShiftLog({ ...pod("app"), kind: "Build", id: "Build:ns:app", status: "running" })).toBe(
+      true,
+    );
     expect(shouldFollowOpenShiftLog({ ...pod("app"), kind: "Build", id: "Build:ns:app", status: "pass" })).toBe(false);
   });
 });

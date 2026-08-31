@@ -115,7 +115,9 @@ export class OpenShiftCache {
   async list(repoPath: string): Promise<string[]> {
     try {
       const names = await readdir(await this.repoDir(repoPath));
-      return names.filter(name => /^[0-9a-f]{40,64}\.json$/i.test(name)).map(name => name.replace(/\.json$/i, "").toLowerCase());
+      return names
+        .filter(name => /^[0-9a-f]{40,64}\.json$/i.test(name))
+        .map(name => name.replace(/\.json$/i, "").toLowerCase());
     } catch {
       return [];
     }

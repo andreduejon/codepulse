@@ -626,9 +626,7 @@ describe("commit identity", () => {
   });
 
   test("falls back to annotation when the label is missing", () => {
-    expect(
-      commitShaFromItem({ metadata: { annotations: { "dev/commit-sha": SHA } } }, "dev/commit-sha"),
-    ).toBe(SHA);
+    expect(commitShaFromItem({ metadata: { annotations: { "dev/commit-sha": SHA } } }, "dev/commit-sha")).toBe(SHA);
   });
 
   test("reads oc annotate istag from tag.annotations", () => {

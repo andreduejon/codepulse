@@ -10,18 +10,18 @@ import { getTokenSource, parseGitHubRemote } from "../providers/github-actions/a
 import type { JenkinsJobConfig } from "../providers/jenkins/types";
 import { isValidJenkinsJobUrl } from "../providers/jenkins/validation";
 import {
-  isValidOpenShiftNamespace,
-  isValidOpenShiftServerUrl,
-  isValidOpenShiftText,
-} from "../providers/openshift/validation";
-import type { ProviderDetailView } from "../providers/provider";
-import {
   DEFAULT_OPENSHIFT_AUTO_REFRESH_SECONDS,
   OPENSHIFT_AUTO_REFRESH_MS,
   OPENSHIFT_AUTO_REFRESH_OPTIONS,
   OPENSHIFT_MS_TO_LABEL,
   type OpenShiftAutoRefreshSeconds,
 } from "../providers/openshift/types";
+import {
+  isValidOpenShiftNamespace,
+  isValidOpenShiftServerUrl,
+  isValidOpenShiftText,
+} from "../providers/openshift/validation";
+import type { ProviderDetailView } from "../providers/provider";
 import type { SnykCacheLimit } from "../providers/snyk/types";
 
 type MenuTab = "repository" | "branch" | "providers";

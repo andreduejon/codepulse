@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import type { OpenShiftCommitData, OpenShiftResource } from "./types";
 import {
   commitDataFromCacheEntry,
   commitHasDigestSeed,
   mergeLiveIntoCommit,
   selectOpenShiftCandidateSHAs,
 } from "./use-openshift";
-import type { OpenShiftCommitData, OpenShiftResource } from "./types";
 
 const SHA = "a".repeat(40);
 
@@ -75,7 +75,9 @@ describe("commitHasDigestSeed", () => {
           {
             namespace: "ns",
             builds: [build],
-            imageStreamTags: [{ ...build, kind: "ImageStreamTag", id: "ImageStreamTag:ns:app:latest", name: "app:latest" }],
+            imageStreamTags: [
+              { ...build, kind: "ImageStreamTag", id: "ImageStreamTag:ns:app:latest", name: "app:latest" },
+            ],
             deployments: [],
             deploymentConfigs: [],
             pods: [],
@@ -177,7 +179,12 @@ describe("OpenShift commit merge", () => {
   });
 
   test("drops ImageStreamTags when a live overlay has none", () => {
-    const ist: OpenShiftResource = { ...build, kind: "ImageStreamTag", id: "ImageStreamTag:ns:app:latest", name: "app:latest" };
+    const ist: OpenShiftResource = {
+      ...build,
+      kind: "ImageStreamTag",
+      id: "ImageStreamTag:ns:app:latest",
+      name: "app:latest",
+    };
     const cached: OpenShiftCommitData = {
       sha: SHA,
       liveFetched: false,
@@ -213,7 +220,12 @@ describe("OpenShift commit merge", () => {
   });
 
   test("keeps seed ImageStreamTags when overlay is not a live fetch", () => {
-    const ist: OpenShiftResource = { ...build, kind: "ImageStreamTag", id: "ImageStreamTag:ns:app:latest", name: "app:latest" };
+    const ist: OpenShiftResource = {
+      ...build,
+      kind: "ImageStreamTag",
+      id: "ImageStreamTag:ns:app:latest",
+      name: "app:latest",
+    };
     const seeds: OpenShiftCommitData = {
       sha: SHA,
       liveFetched: false,

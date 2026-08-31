@@ -13,7 +13,7 @@ import type {
 } from "./types";
 import { isCachedOpenShiftResource, OPENSHIFT_TERMINAL_PHASES, OPENSHIFT_WATCH_KINDS } from "./types";
 import { isValidOpenShiftNamespace } from "./validation";
-import { isOpenShiftWatchGone, parseOpenShiftWatchBuffer, type OpenShiftWatchEvent } from "./watch";
+import { isOpenShiftWatchGone, type OpenShiftWatchEvent, parseOpenShiftWatchBuffer } from "./watch";
 
 export type OpenShiftInventoryMode = "full" | "builds" | "seeds" | "live";
 
@@ -99,9 +99,7 @@ export function commitShaFromItem(item: unknown, key: string): string | undefine
 }
 
 export function commitLabelSelector(key: string, shas: readonly string[]): string | null {
-  const values = [
-    ...new Set(shas.map(sha => sha.toLowerCase()).filter(sha => /^[0-9a-f]{40,64}$/i.test(sha))),
-  ];
+  const values = [...new Set(shas.map(sha => sha.toLowerCase()).filter(sha => /^[0-9a-f]{40,64}$/i.test(sha)))];
   if (values.length === 0) return null;
   return `labelSelector=${encodeURIComponent(`${key} in (${values.join(",")})`)}`;
 }
@@ -328,7 +326,8 @@ export function resourceFromWatchObject(object: unknown, annotationKey: string):
   const kind = str(obj(object)?.kind);
   const namespace = str(metadata(object).namespace);
   if (!kind || !namespace) return null;
-  if (kind === "Deployment" || kind === "DeploymentConfig") return extractWorkload(kind, namespace, object, annotationKey);
+  if (kind === "Deployment" || kind === "DeploymentConfig")
+    return extractWorkload(kind, namespace, object, annotationKey);
   if (kind === "Pod") return extractPod(namespace, object);
   return null;
 }
@@ -764,7 +763,11 @@ function recordFailure(acc: ListAcc, ns: string, kind: OpenShiftInventoryKind, p
   if (error === BANNER.openshift.tokenExpired) acc.authFailed = true;
 }
 
-function absorb(acc: ListAcc, kind: OpenShiftInventoryKind, extracted: InventoryRequest["extract"] extends (i: unknown[]) => infer R ? R : never): void {
+function absorb(
+  acc: ListAcc,
+  kind: OpenShiftInventoryKind,
+  extracted: InventoryRequest["extract"] extends (i: unknown[]) => infer R ? R : never,
+): void {
   acc.successfulRequests++;
   if (kind === "ReplicaSet" || kind === "ReplicationController")
     acc.controllers.push(...(extracted as OpenShiftControllerReference[]));
@@ -779,7 +782,8 @@ async function runRequests(ctx: NsCtx, requests: InventoryRequest[], acc: ListAc
   results.forEach((result, index) => {
     const request = requests[index];
     if (result.status === "fulfilled") {
-      if (result.value.resourceVersion) acc.resourceVersions.set(`${ctx.ns}:${request.kind}`, result.value.resourceVersion);
+      if (result.value.resourceVersion)
+        acc.resourceVersions.set(`${ctx.ns}:${request.kind}`, result.value.resourceVersion);
       absorb(acc, request.kind, request.extract(result.value.items));
       return;
     }
@@ -792,7 +796,11 @@ async function fetchUnlabeledBuilds(ctx: NsCtx, acc: ListAcc): Promise<void> {
   const path = buildPath(ctx.encoded, "Build");
   try {
     const items = await fetchItems(ctx.config.serverUrl, ctx.token, path, ctx.signal);
-    absorb(acc, "Build", items.flatMap(item => extractBuild(ctx.ns, item, ctx.key) ?? []));
+    absorb(
+      acc,
+      "Build",
+      items.flatMap(item => extractBuild(ctx.ns, item, ctx.key) ?? []),
+    );
   } catch (reason) {
     const error = reason instanceof Error ? reason.message : String(reason);
     recordFailure(acc, ctx.ns, "Build", path, error);
@@ -938,9 +946,15 @@ export async function fetchOpenShiftResources(
               ? ["Deployment", "ReplicaSet", "DeploymentConfig", "ReplicationController", "Pod"].map(kind =>
                   kindRequest(ctx, kind as OpenShiftInventoryKind),
                 )
-              : ["Build", "ImageStreamTag", "Deployment", "ReplicaSet", "DeploymentConfig", "ReplicationController", "Pod"].map(
-                  kind => kindRequest(ctx, kind as OpenShiftInventoryKind),
-                );
+              : [
+                  "Build",
+                  "ImageStreamTag",
+                  "Deployment",
+                  "ReplicaSet",
+                  "DeploymentConfig",
+                  "ReplicationController",
+                  "Pod",
+                ].map(kind => kindRequest(ctx, kind as OpenShiftInventoryKind));
     if (!isValidOpenShiftNamespace(ns)) {
       for (const request of planned)
         recordFailure(acc, ns, request.kind, request.path, `Invalid OpenShift namespace: ${ns}`);
@@ -960,7 +974,9 @@ export async function fetchOpenShiftResources(
     debugError("OpenShift", `${failure.namespace}/${failure.kind} ${failure.path} ${failure.error}`);
   }
   const authError = acc.failures.some(failure => failure.error === BANNER.openshift.tokenExpired);
-  const error = authError ? BANNER.openshift.tokenExpired : openshiftInventoryBanner(acc.failures, acc.successfulRequests);
+  const error = authError
+    ? BANNER.openshift.tokenExpired
+    : openshiftInventoryBanner(acc.failures, acc.successfulRequests);
   return {
     resources: acc.resources,
     controllers: acc.controllers,

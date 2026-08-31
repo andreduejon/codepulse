@@ -26,10 +26,7 @@ interface OpenShiftCountsColumnProps {
   active: boolean;
 }
 
-export function lookupOpenShiftBadge(
-  badges: ReadonlyMap<string, GraphBadge>,
-  sha: string,
-): GraphBadge | undefined {
+export function lookupOpenShiftBadge(badges: ReadonlyMap<string, GraphBadge>, sha: string): GraphBadge | undefined {
   return badges.get(sha) ?? badges.get(sha.toLowerCase());
 }
 
@@ -41,11 +38,14 @@ function countsForLane(badge: GraphBadge | undefined, lane: "live" | "cache"): G
 function countBlocks(counts: GraphStatusCounts | undefined, t: Theme): { count: number; fg: string; bg: string }[] {
   if (!counts) return [];
   const next: { count: number; fg: string; bg: string }[] = [];
-  if (counts.failCount > 0) next.push({ count: counts.failCount, fg: t.background, bg: openShiftStatusColor(t, "fail") });
+  if (counts.failCount > 0)
+    next.push({ count: counts.failCount, fg: t.background, bg: openShiftStatusColor(t, "fail") });
   if (counts.runningCount > 0)
     next.push({ count: counts.runningCount, fg: t.background, bg: openShiftStatusColor(t, "running") });
-  if (counts.unknownCount > 0) next.push({ count: counts.unknownCount, fg: t.foreground, bg: t.backgroundElementActive });
-  if (counts.passCount > 0) next.push({ count: counts.passCount, fg: t.background, bg: openShiftStatusColor(t, "pass") });
+  if (counts.unknownCount > 0)
+    next.push({ count: counts.unknownCount, fg: t.foreground, bg: t.backgroundElementActive });
+  if (counts.passCount > 0)
+    next.push({ count: counts.passCount, fg: t.background, bg: openShiftStatusColor(t, "pass") });
   return next;
 }
 

@@ -18,11 +18,7 @@ interface OpenShiftResourceDialogProps {
   resource: OpenShiftResource;
   onClose: () => void;
   loadLog?: (resource: OpenShiftResource, force?: boolean) => Promise<string>;
-  followLog?: (
-    resource: OpenShiftResource,
-    signal: AbortSignal,
-    onText: (text: string) => void,
-  ) => Promise<void>;
+  followLog?: (resource: OpenShiftResource, signal: AbortSignal, onText: (text: string) => void) => Promise<void>;
   loadObject?: (resource: OpenShiftResource) => Promise<unknown>;
 }
 
