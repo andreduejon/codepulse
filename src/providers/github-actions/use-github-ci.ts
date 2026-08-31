@@ -33,7 +33,6 @@ import {
 import { BANNER, bannerOrFallback, debugError } from "../../debug/banner";
 
 import { DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS } from "../shared/auto-refresh";
-import { runLimited } from "../shared/http";
 import { useProviderFetchLifecycle } from "../shared/use-provider-fetch-lifecycle";
 import {
   buildCommitDataMap,
@@ -235,11 +234,6 @@ export function useGitHubCI(opts: {
     const cachedRuns = [...commitDataCache.values()].flatMap(data => data.runs);
     actions.setGraphBadges("github-actions", buildGraphBadges(cachedRuns));
     await persistTerminalRuns(state.repoPath(), shas);
-    const wanted = new Set(shas.map(sha => sha.toLowerCase()));
-    const terminal = [...commitDataCache.values()]
-      .flatMap(data => data.runs)
-      .filter(run => wanted.has(run.headSha.toLowerCase()) && isTerminalGitHubRun(run));
-    void fillTerminalJobs(terminal, epoch, state.repoPath(), shas);
 
     return { firstError, failedSHAs };
   }
@@ -288,26 +282,6 @@ export function useGitHubCI(opts: {
       }),
     );
     if (writes.some(Boolean)) await disk.evictForRepo(repoPath);
-  }
-
-  async function fillTerminalJobs(
-    runs: GitHubWorkflowRun[],
-    epoch: number,
-    repoPath: string,
-    shas: readonly string[],
-  ): Promise<void> {
-    const repo = cachedGitHubRepo();
-    const token = getGitHubToken(config.tokenEnvVar);
-    const pending = runs.filter(run => !jobsCache.has(run.id));
-    if (!repo || !token || pending.length === 0) return;
-    await runLimited(pending, 6, async run => {
-      if (epoch !== lifecycle.getEpoch()) return;
-      const { jobs, error } = await fetchRunJobs(repo, token, run.id);
-      if (epoch !== lifecycle.getEpoch() || error || jobs.length === 0) return;
-      jobsCache.set(run.id, jobs);
-    });
-    if (epoch !== lifecycle.getEpoch()) return;
-    await persistTerminalRuns(repoPath, shas);
   }
 
   // ── Main fetch entry points ───────────────────────────────────────────

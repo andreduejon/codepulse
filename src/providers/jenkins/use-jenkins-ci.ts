@@ -5,7 +5,6 @@ import { providerError, providerIdle, providerLoading, providerUnavailable } fro
 import { BANNER } from "../../debug/banner";
 import { collectRunningSHAs, collectTopSHAs } from "../github-actions/sha-selection";
 import { DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS } from "../shared/auto-refresh";
-import { runLimited } from "../shared/http";
 import { useProviderFetchLifecycle } from "../shared/use-provider-fetch-lifecycle";
 import {
   buildJenkinsCommitDataMap,
@@ -131,7 +130,6 @@ export function useJenkinsCI(opts: {
     }
     rebuildCaches();
     await persistTerminalRuns(state.repoPath(), shas);
-    void fillTerminalJobs(result.data.filter(isTerminalJenkinsRun), epoch, state.repoPath(), shas);
     return { firstError: result.error, stale: false };
   }
 
@@ -176,25 +174,6 @@ export function useJenkinsCI(opts: {
       }),
     );
     if (writes.some(Boolean)) await disk.evictForRepo(repoPath);
-  }
-
-  async function fillTerminalJobs(
-    runs: JenkinsRun[],
-    epoch: number,
-    repoPath: string,
-    shas: readonly string[],
-  ): Promise<void> {
-    const token = getJenkinsToken(config.tokenEnvVar);
-    const pending = runs.filter(run => !jobsCache.has(run.id));
-    if (!token || pending.length === 0) return;
-    await runLimited(pending, 6, async run => {
-      if (epoch !== lifecycle.getEpoch()) return;
-      const result = await fetchJenkinsRunJobs(run, config.username, token);
-      if (epoch !== lifecycle.getEpoch() || result.error !== null) return;
-      jobsCache.set(run.id, result);
-    });
-    if (epoch !== lifecycle.getEpoch()) return;
-    await persistTerminalRuns(repoPath, shas);
   }
 
   const lifecycle = useProviderFetchLifecycle({
