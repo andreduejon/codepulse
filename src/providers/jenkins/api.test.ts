@@ -272,6 +272,36 @@ describe("fetchJenkinsGraphDataForSHAs", () => {
     }
   });
 
+  test("skips jobs whose lastBuild number is unchanged", async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      calls.push(String(input));
+      return new Response(JSON.stringify({ lastBuild: { number: 12 } }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+
+    try {
+      const result = await fetchJenkinsGraphDataForSHAs(
+        [{ url: "https://jenkins.example.com/job/foo/" }],
+        "user",
+        "token",
+        ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+        { knownLastBuilds: new Map([["https://jenkins.example.com/job/foo", 12]]) },
+      );
+      expect(result.error).toBeNull();
+      expect(result.data).toEqual([]);
+      expect(result.lastBuilds.get("https://jenkins.example.com/job/foo")).toBe(12);
+      expect(calls).toHaveLength(1);
+      expect(calls[0]).toContain("lastBuild");
+      expect(calls[0]).not.toContain("builds[");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   test("maps one build to head commit only", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () =>

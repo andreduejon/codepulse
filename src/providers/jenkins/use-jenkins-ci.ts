@@ -74,6 +74,7 @@ export function useJenkinsCI(opts: {
   const resolvedShas = new Set<string>();
   const queriedSHAs = new Set<string>();
   let discoveredJobs: { url: string }[] | null = null;
+  const lastBuildByJob = new Map<string, number>();
 
   function rebuildCaches() {
     const allRuns = [...runCache.values()];
@@ -102,6 +103,7 @@ export function useJenkinsCI(opts: {
         ? await fetchJenkinsGraphDataForSHAs(jobs, config.username, token, shas, {
             signal,
             buildLimit: config.fetchDepth,
+            knownLastBuilds: lastBuildByJob,
           })
         : await fetchJenkinsDataForSHAs(jobs, config.username, token, shas, {
             signal,
@@ -120,6 +122,9 @@ export function useJenkinsCI(opts: {
       for (const [key, run] of runCache) {
         if (!activeJobUrls.has(run.jobUrl)) runCache.delete(key);
       }
+    }
+    if ("lastBuilds" in result) {
+      for (const [url, number] of result.lastBuilds) lastBuildByJob.set(url, number);
     }
     for (const run of result.data) {
       runCache.set(`${run.id}:${run.headSha}`, run);
@@ -277,6 +282,7 @@ export function useJenkinsCI(opts: {
       resolvedShas.clear();
       queriedSHAs.clear();
       discoveredJobs = null;
+      lastBuildByJob.clear();
       setCommitDataVersion(v => v + 1);
       actions.setGraphBadges("jenkins", new Map());
       actions.setProviderStatus("jenkins", providerIdle());

@@ -77,8 +77,12 @@ function treeApiSuffix(tree: string): string {
   return `api/json?tree=${encodeURIComponent(tree)}`;
 }
 
+function lastBuildTree(): string {
+  return "lastBuild[number]";
+}
+
 function shallowGraphTree(limit: number): string {
-  return `builds[number,url,result,building,timestamp,duration,actions[lastBuiltRevision[SHA1],scmRevisionAction[revision[hash]]],changeSets[items[commitId,id]],changeSet[items[commitId,id]]]{0,${limit}}`;
+  return `lastBuild[number],builds[number,url,result,building,timestamp,duration,actions[lastBuiltRevision[SHA1],scmRevisionAction[revision[hash]]],changeSets[items[commitId,id]],changeSet[items[commitId,id]]]{0,${limit}}`;
 }
 
 function buildRefsTree(limit: number): string {
@@ -497,26 +501,51 @@ export async function fetchJenkinsGraphDataForSHAs(
   username: string | undefined,
   token: string,
   shas: string[],
-  opts: { signal?: AbortSignal; buildLimit?: number } = {},
-): Promise<{ data: JenkinsRun[]; error: string | null; jobUrls: string[]; discoveryComplete: boolean }> {
+  opts: {
+    signal?: AbortSignal;
+    buildLimit?: number;
+    knownLastBuilds?: ReadonlyMap<string, number>;
+  } = {},
+): Promise<{
+  data: JenkinsRun[];
+  error: string | null;
+  jobUrls: string[];
+  discoveryComplete: boolean;
+  lastBuilds: Map<string, number>;
+}> {
   const buildLimit = opts.buildLimit ?? 20;
   const wanted = new Set(shas.map(s => s.toLowerCase()));
   const runs: JenkinsRun[] = [];
-  const resolved = await resolveJenkinsJobs(jobs, username, token, opts.signal, shallowGraphTree(buildLimit));
+  const lastBuilds = new Map<string, number>();
+  const probeOnly = !!opts.knownLastBuilds && opts.knownLastBuilds.size > 0;
+  const resolved = await resolveJenkinsJobs(
+    jobs,
+    username,
+    token,
+    opts.signal,
+    probeOnly ? lastBuildTree() : shallowGraphTree(buildLimit),
+  );
   let firstError = resolved.error;
   await runLimited(
     resolved.jobs,
     JENKINS_CONCURRENCY,
     async job => {
       try {
+        const url = normalizeJenkinsJobUrl(job.url);
+        const probed = resolved.rootData.get(url);
+        const lastNumber = probed?.lastBuild?.number;
+        if (typeof lastNumber === "number") lastBuilds.set(url, lastNumber);
+        if (typeof lastNumber === "number" && opts.knownLastBuilds?.get(url) === lastNumber) return;
         const api =
-          resolved.rootData.get(normalizeJenkinsJobUrl(job.url)) ??
-          (await fetchJson<JenkinsJobApi>(
-            jenkinsApiUrl(job.url, treeApiSuffix(shallowGraphTree(buildLimit))),
-            username,
-            token,
-            opts.signal,
-          ));
+          !probeOnly && probed
+            ? probed
+            : await fetchJson<JenkinsJobApi>(
+                jenkinsApiUrl(job.url, treeApiSuffix(shallowGraphTree(buildLimit))),
+                username,
+                token,
+                opts.signal,
+              );
+        if (typeof api.lastBuild?.number === "number") lastBuilds.set(url, api.lastBuild.number);
         const builds = api.builds ?? [];
         for (const build of builds) {
           for (const sha of matchingHeadShas(build, wanted)) runs.push(mapRun(job, build, sha));
@@ -533,6 +562,7 @@ export async function fetchJenkinsGraphDataForSHAs(
     error: firstError,
     jobUrls: resolved.jobs.map(job => normalizeJenkinsJobUrl(job.url)),
     discoveryComplete: resolved.complete,
+    lastBuilds,
   };
 }
 
