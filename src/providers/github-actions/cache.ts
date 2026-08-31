@@ -13,7 +13,7 @@ export interface GitHubCacheEntry {
   jobs?: Record<string, GitHubJob[]>;
 }
 
-export function isTerminalGitHubRun(run: GitHubWorkflowRun): boolean {
+export function isTerminalGitHubRun(run: { status: string }): boolean {
   return run.status === "completed";
 }
 

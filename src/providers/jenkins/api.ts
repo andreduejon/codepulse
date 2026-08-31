@@ -445,7 +445,13 @@ export async function fetchJenkinsDataForSHAs(
   token: string,
   shas: string[],
   opts: { signal?: AbortSignal; buildLimit?: number } = {},
-): Promise<{ data: JenkinsRun[]; error: string | null; jobUrls: string[]; discoveryComplete: boolean }> {
+): Promise<{
+  data: JenkinsRun[];
+  error: string | null;
+  jobUrls: string[];
+  discoveryComplete: boolean;
+  lastBuilds: Map<string, number>;
+}> {
   const buildLimit = opts.buildLimit ?? 20;
   const wanted = new Set(shas.map(s => s.toLowerCase()));
   const runs: JenkinsRun[] = [];
@@ -494,6 +500,7 @@ export async function fetchJenkinsDataForSHAs(
     error: firstError,
     jobUrls: resolved.jobs.map(job => normalizeJenkinsJobUrl(job.url)),
     discoveryComplete: resolved.complete,
+    lastBuilds: new Map<string, number>(),
   };
 }
 

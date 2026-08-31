@@ -663,9 +663,7 @@ function makeBatchResponse(
                   event: s.event ?? "push",
                   updatedAt: "2024-01-02T00:00:00Z",
                   workflow: { name: s.wfName ?? "CI" },
-                  jobs: s.jobs
-                    ? { nodes: s.jobs }
-                    : undefined,
+                  jobs: s.jobs ? { nodes: s.jobs } : undefined,
                 }
               : null,
         })),

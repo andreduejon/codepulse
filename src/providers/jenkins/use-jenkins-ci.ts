@@ -127,9 +127,7 @@ export function useJenkinsCI(opts: {
         if (!activeJobUrls.has(run.jobUrl)) runCache.delete(key);
       }
     }
-    if ("lastBuilds" in result) {
-      for (const [url, number] of result.lastBuilds) lastBuildByJob.set(url, number);
-    }
+    for (const [url, number] of result.lastBuilds) lastBuildByJob.set(url, number);
     for (const run of result.data) {
       runCache.set(`${run.id}:${run.headSha}`, run);
     }
