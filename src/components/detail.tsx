@@ -4,6 +4,7 @@ import type { JSXElement } from "solid-js";
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
 import { DETAIL_PANEL_WIDTH_FRACTION, isUncommittedHash, UNCOMMITTED_PLACEHOLDER } from "../constants";
 import { useAppState } from "../context/state";
+import { BANNER } from "../debug/banner";
 import type { Commit, GraphRow } from "../git/types";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
 import { useClipboard } from "../hooks/use-clipboard";
@@ -918,15 +919,21 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   sha={c().hash}
                   getCommitData={getCommitData()}
                   fetchCommitData={props.openshiftFetchCommitData}
+                  isLoading={props.openshiftIsLoading}
+                  liveAge={props.openshiftLiveAge}
                   onOpenResource={props.onOpenOpenShiftResource}
                   unavailableReason={
-                    props.openshiftProviderStatus?.kind === "error" ||
-                    props.openshiftProviderStatus?.kind === "unavailable"
-                      ? props.openshiftProviderStatus.message
-                      : null
+                    props.openshiftProviderStatus?.kind === "unavailable" ? props.openshiftProviderStatus.message : null
+                  }
+                  liveUnavailable={
+                    props.openshiftProviderStatus?.kind === "error" &&
+                    props.openshiftProviderStatus.message === BANNER.openshift.tokenExpired
                   }
                   warningReason={
-                    props.openshiftProviderStatus?.kind === "warning" ? props.openshiftProviderStatus.message : null
+                    props.openshiftProviderStatus?.kind === "warning" &&
+                    props.openshiftProviderStatus.message !== BANNER.openshift.watchDenied
+                      ? props.openshiftProviderStatus.message
+                      : null
                   }
                   loading={props.openshiftProviderStatus?.kind === "loading"}
                   navRef={props.navRef}

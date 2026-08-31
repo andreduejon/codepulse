@@ -1,6 +1,6 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
-import { createMemo, createSignal, For } from "solid-js";
+import { createEffect, createMemo, createSignal, For, onCleanup } from "solid-js";
 import {
   DialogFooter,
   DialogOverlay,
@@ -12,28 +12,125 @@ import { getDialogTitleContentWidth, middleTruncate, TITLE_SEP } from "../../com
 import { KeyHint, KeyHintSeparator } from "../../components/key-hint";
 import { useT } from "../../hooks/use-t";
 import type { OpenShiftResource } from "./types";
+import { shouldFollowOpenShiftLog } from "./watch";
 
 interface OpenShiftResourceDialogProps {
   resource: OpenShiftResource;
   onClose: () => void;
+  loadLog?: (resource: OpenShiftResource, force?: boolean) => Promise<string>;
+  followLog?: (resource: OpenShiftResource, signal: AbortSignal, onText: (text: string) => void) => Promise<void>;
+  loadObject?: (resource: OpenShiftResource) => Promise<unknown>;
 }
 
 const SCROLL_JUMP = 10;
+type ViewMode = "log" | "json";
+
+function resourceHasLog(resource: OpenShiftResource): boolean {
+  return resource.kind === "Build" || resource.kind === "Pod";
+}
 
 export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourceDialogProps>) {
   const t = useT();
   const renderer = useRenderer();
   const dimensions = useTerminalDimensions();
   const [wrapEnabled, setWrapEnabled] = createSignal(false);
+  const [viewMode, setViewMode] = createSignal<ViewMode>(resourceHasLog(props.resource) ? "log" : "json");
+  const [logText, setLogText] = createSignal<string | null>(null);
+  const [logError, setLogError] = createSignal<string | null>(null);
+  const [logLoading, setLogLoading] = createSignal(false);
+  const [followNonce, setFollowNonce] = createSignal(0);
+  const [followEnded, setFollowEnded] = createSignal(false);
+  const [objectText, setObjectText] = createSignal<string | null>(null);
+  const [objectError, setObjectError] = createSignal<string | null>(null);
+  const [objectLoading, setObjectLoading] = createSignal(false);
   let scrollboxRef: ScrollBoxRenderable | undefined;
 
   const dialogFrame = createMemo(() => getStandardDialogFrame(dimensions()));
-  const lines = createMemo(() =>
-    (JSON.stringify(props.resource.raw, null, 2) ?? String(props.resource.raw)).split("\n"),
-  );
+  const canLog = () => resourceHasLog(props.resource) && !!props.loadLog;
+
+  const loadLog = async (force = false) => {
+    if (!props.loadLog || !resourceHasLog(props.resource)) return;
+    setLogLoading(true);
+    setLogError(null);
+    try {
+      setLogText(await props.loadLog(props.resource, force));
+    } catch (error) {
+      setLogError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setLogLoading(false);
+    }
+  };
+
+  const loadObject = async () => {
+    if (!props.loadObject) return;
+    setObjectLoading(true);
+    setObjectError(null);
+    try {
+      setObjectText(JSON.stringify(await props.loadObject(props.resource), null, 2));
+    } catch (error) {
+      setObjectError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setObjectLoading(false);
+    }
+  };
+
+  createEffect(() => {
+    const resource = props.resource;
+    const mode = viewMode();
+    followNonce();
+    if (mode === "json") {
+      void loadObject();
+      return;
+    }
+    if (!canLog()) return;
+    if (shouldFollowOpenShiftLog(resource) && props.followLog) {
+      const ctrl = new AbortController();
+      setFollowEnded(false);
+      setLogLoading(true);
+      setLogError(null);
+      setLogText("");
+      void props
+        .followLog(resource, ctrl.signal, text => {
+          setLogLoading(false);
+          setLogText(text);
+        })
+        .then(() => {
+          if (ctrl.signal.aborted) return;
+          setLogLoading(false);
+          setFollowEnded(true);
+          if (resource.kind === "Build") void loadLog(false);
+        })
+        .catch(error => {
+          if (ctrl.signal.aborted) return;
+          setLogLoading(false);
+          setLogError(error instanceof Error ? error.message : String(error));
+        });
+      onCleanup(() => ctrl.abort());
+      return;
+    }
+    void loadLog(false);
+  });
+
+  createEffect(() => {
+    props.resource.id;
+    if (viewMode() !== "log") return;
+    queueMicrotask(() => scrollboxRef?.scrollTo(Infinity));
+  });
+
+  const lines = createMemo(() => {
+    if (viewMode() === "log") {
+      if (logLoading()) return ["Loading log…"];
+      if (logError()) return [logError() ?? ""];
+      return (logText() ?? "").split("\n");
+    }
+    if (objectLoading()) return ["Loading object…"];
+    if (objectError()) return [objectError() ?? ""];
+    return (objectText() ?? "").split("\n");
+  });
   const lineNoWidth = createMemo(() => lines().length.toString().length);
   const title = createMemo(() => {
-    const fixed = ["OpenShift", props.resource.kind, props.resource.namespace].join(TITLE_SEP);
+    const mode = viewMode() === "log" ? (followEnded() ? "log ended" : "log") : "object";
+    const fixed = ["OpenShift", props.resource.kind, props.resource.namespace, mode].join(TITLE_SEP);
     const available = Math.max(8, getDialogTitleContentWidth(dialogFrame().width) - fixed.length - TITLE_SEP.length);
     return (
       <DialogTitle
@@ -42,6 +139,7 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
           { text: props.resource.kind },
           { text: props.resource.namespace },
           { text: middleTruncate(props.resource.name, available), emphasis: true },
+          { text: mode },
         ]}
       />
     );
@@ -67,6 +165,13 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
     } else if (e.name === "w") {
       e.preventDefault();
       setWrapEnabled(value => !value);
+    } else if (e.name === "r" && canLog()) {
+      e.preventDefault();
+      if (shouldFollowOpenShiftLog(props.resource) && props.followLog) setFollowNonce(value => value + 1);
+      else void loadLog(true);
+    } else if (e.name === "c" && canLog()) {
+      e.preventDefault();
+      setViewMode(current => (current === "log" ? "json" : "log"));
     }
   });
 
@@ -88,6 +193,8 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
           minHeight={0}
           scrollY
           scrollX={false}
+          stickyScroll={viewMode() === "log"}
+          stickyStart={viewMode() === "log" ? "bottom" : undefined}
           verticalScrollbarOptions={{ visible: false }}
         >
           <box flexDirection="column" width="100%" paddingX={4}>
@@ -97,7 +204,10 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
                   <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
                     {`${String(index() + 1).padStart(lineNoWidth())}  `}
                   </text>
-                  <text wrapMode={wrapEnabled() ? "word" : "none"} fg={t().foreground}>
+                  <text
+                    wrapMode={wrapEnabled() ? "word" : "none"}
+                    fg={(viewMode() === "log" ? logError() : objectError()) ? t().error : t().foreground}
+                  >
                     {line}
                   </text>
                 </box>
@@ -109,6 +219,14 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
           <KeyHint key="↑/↓" desc=" scroll" />
           <KeyHintSeparator />
           <KeyHint key="w" desc={wrapEnabled() ? " disable wrap" : " enable wrap"} />
+          {canLog() ? (
+            <>
+              <KeyHintSeparator />
+              <KeyHint key="c" desc=" cycle view mode" />
+              <KeyHintSeparator />
+              <KeyHint key="r" desc=" refresh log" />
+            </>
+          ) : null}
         </DialogFooter>
       </box>
     </DialogOverlay>

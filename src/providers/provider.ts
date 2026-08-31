@@ -36,6 +36,13 @@ export const PROVIDER_METADATA: Record<ProviderView, ProviderMetadata> = {
   snyk: { displayName: "Snyk", category: "scan-quality" },
 };
 
+export interface GraphStatusCounts {
+  passCount: number;
+  failCount: number;
+  runningCount: number;
+  unknownCount: number;
+}
+
 /**
  * Minimal badge for a single commit in the graph view.
  *
@@ -57,6 +64,8 @@ export interface GraphBadge {
   unknownCount?: number;
   /** Total matched resources. Used by runtime providers. */
   resourceCount?: number;
+  /** Named status-count lanes (e.g. OpenShift `live` / `cache`). */
+  lanes?: Record<string, GraphStatusCounts>;
   /** Severity counts used by scan/quality providers. */
   severityCounts?: { critical: number; high: number; medium: number; low: number };
   /** Relative time string for the most recently updated run (e.g. "2h ago"). */

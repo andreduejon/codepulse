@@ -43,12 +43,6 @@ interface JobLogDialogProps {
 
 const SCROLL_JUMP = 10;
 const VIEW_MODE_CYCLE: LogViewMode[] = ["all", "issues", "errors", "raw"];
-const VIEW_MODE_NEXT_LABEL: Record<LogViewMode, string> = {
-  all: "show issues only",
-  issues: "show errors only",
-  errors: "show raw",
-  raw: "show all",
-};
 const VIEW_MODE_TITLE_LABEL: Record<LogViewMode, string> = {
   all: "",
   issues: "issues only",
@@ -398,7 +392,7 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
             <KeyHint key="o" desc=" open run" />
             <KeyHintSeparator />
           </Show>
-          <KeyHint key="c" desc={` ${VIEW_MODE_NEXT_LABEL[viewMode()]}`} />
+          <KeyHint key="c" desc=" cycle view mode" />
           <KeyHintSeparator />
           <KeyHint key="w" desc={wrapEnabled() ? " disable wrap" : " enable wrap"} />
         </DialogFooter>

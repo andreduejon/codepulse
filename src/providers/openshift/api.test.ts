@@ -1,7 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { BANNER } from "../../debug/banner";
-import { buildOpenShiftCommitMap, buildOpenShiftGraphBadges, fetchOpenShiftInventory } from "./api";
-import type { OpenShiftResource } from "./types";
+import {
+  buildOpenShiftCommitMap,
+  buildOpenShiftGraphBadges,
+  commitLabelSelector,
+  commitShaFromItem,
+  fetchOpenShiftInventory,
+} from "./api";
+import type { OpenShiftCommitData, OpenShiftResource } from "./types";
 
 const SHA = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
@@ -164,7 +170,7 @@ describe("fetchOpenShiftInventory", () => {
 
   test("correlates unannotated resources only through immutable image digests", () => {
     const resource = (kind: OpenShiftResource["kind"], name: string, imageRefs: string[], commitSha?: string) =>
-      ({ id: name, kind, name, namespace: "ns", status: "pass", imageRefs, commitSha, raw: {} }) as OpenShiftResource;
+      ({ id: name, kind, name, namespace: "ns", status: "pass", imageRefs, commitSha }) as OpenShiftResource;
     const map = buildOpenShiftCommitMap([
       resource("ImageStreamTag", "app:latest", ["registry/ns/app:latest", "sha256:abc123"], SHA),
       resource("Deployment", "tag-only", ["registry/ns/app:latest"]),
@@ -174,6 +180,49 @@ describe("fetchOpenShiftInventory", () => {
     expect(map.get(SHA)?.namespaces[0].imageStreamTags).toHaveLength(1);
     expect(map.get(SHA)?.namespaces[0].deployments).toHaveLength(0);
     expect(map.get(SHA)?.namespaces[0].pods.map(p => p.name)).toEqual(["digest"]);
+  });
+
+  test("associates unlabeled pods through a labeled Deployment selector", () => {
+    const map = buildOpenShiftCommitMap([
+      {
+        id: "Deployment:ns:app",
+        kind: "Deployment",
+        name: "app",
+        namespace: "ns",
+        status: "running",
+        imageRefs: [],
+        commitSha: SHA,
+        podSelector: { app: "svc" },
+      },
+      {
+        id: "Pod:ns:app-1",
+        kind: "Pod",
+        name: "app-1",
+        namespace: "ns",
+        status: "running",
+        imageRefs: [],
+        labels: { app: "svc" },
+      },
+    ]);
+    expect(map.get(SHA)?.namespaces[0].pods.map(item => item.name)).toEqual(["app-1"]);
+  });
+
+  test("keeps every ImageStreamTag when they share an ImageStream uid", () => {
+    const tag = (name: string): OpenShiftResource => ({
+      id: `ImageStreamTag:ns:${name}`,
+      kind: "ImageStreamTag",
+      name,
+      namespace: "ns",
+      status: "pass",
+      imageRefs: ["sha256:abc"],
+      commitSha: SHA,
+      uid: "shared-imagestream-uid",
+    });
+    const map = buildOpenShiftCommitMap([tag("app:develop-internal"), tag("app:develop-external")]);
+    expect(map.get(SHA)?.namespaces[0].imageStreamTags.map(item => item.name)).toEqual([
+      "app:develop-internal",
+      "app:develop-external",
+    ]);
   });
 
   test("associates digest-matched Pods to owning Deployments through ReplicaSets", () => {
@@ -186,7 +235,6 @@ describe("fetchOpenShiftInventory", () => {
         status: "pass",
         imageRefs: ["app@sha256:abc123"],
         commitSha: SHA,
-        raw: {},
       },
       {
         id: "deployment",
@@ -196,7 +244,6 @@ describe("fetchOpenShiftInventory", () => {
         namespace: "ns",
         status: "pass",
         imageRefs: ["app:latest"],
-        raw: {},
       },
       {
         id: "pod",
@@ -207,7 +254,6 @@ describe("fetchOpenShiftInventory", () => {
         status: "pass",
         imageRefs: ["app@sha256:abc123"],
         ownerReferences: [{ kind: "ReplicaSet", uid: "replicaset-uid" }],
-        raw: {},
       },
     ];
     const map = buildOpenShiftCommitMap(resources, [
@@ -233,7 +279,6 @@ describe("fetchOpenShiftInventory", () => {
         status: "pass",
         imageRefs: ["app@sha256:def456"],
         commitSha: SHA,
-        raw: {},
       },
       {
         id: "dc",
@@ -243,7 +288,6 @@ describe("fetchOpenShiftInventory", () => {
         namespace: "ns",
         status: "pass",
         imageRefs: ["app:latest"],
-        raw: {},
       },
       {
         id: "pod",
@@ -253,7 +297,6 @@ describe("fetchOpenShiftInventory", () => {
         status: "pass",
         imageRefs: ["app@sha256:def456"],
         ownerReferences: [{ kind: "ReplicationController", uid: "rc-uid" }],
-        raw: {},
       },
     ];
     const map = buildOpenShiftCommitMap(resources, [
@@ -278,7 +321,6 @@ describe("fetchOpenShiftInventory", () => {
         status: "pass",
         imageRefs: ["app@sha256:abc123"],
         commitSha: SHA,
-        raw: {},
       },
       {
         id: "deployment",
@@ -288,7 +330,6 @@ describe("fetchOpenShiftInventory", () => {
         namespace: "ns",
         status: "pass",
         imageRefs: ["app:latest"],
-        raw: {},
       },
       {
         id: "pod",
@@ -299,7 +340,6 @@ describe("fetchOpenShiftInventory", () => {
         imageRefs: ["app@sha256:abc123"],
         terminating: true,
         ownerReferences: [{ kind: "ReplicaSet", uid: "missing" }],
-        raw: {},
       },
     ];
     const map = buildOpenShiftCommitMap(resources);
@@ -523,7 +563,6 @@ describe("buildOpenShiftGraphBadges", () => {
     name,
     status,
     imageRefs: [],
-    raw: {},
   });
 
   const badgeFor = (...statuses: OpenShiftResource["status"][]) => {
@@ -552,5 +591,211 @@ describe("buildOpenShiftGraphBadges", () => {
     const badge = badgeFor("pass", "pass");
     expect(badge?.badge).toBe("pass");
     expect(badge?.resourceCount).toBe(2);
+  });
+
+  test("does not treat an empty commit as pass", () => {
+    const data = new Map<string, OpenShiftCommitData>([[SHA, { sha: SHA, namespaces: [], liveFetched: true }]]);
+    expect(buildOpenShiftGraphBadges(data).has(SHA)).toBe(false);
+  });
+
+  test("puts terminal Builds in cacheCounts and Pods in liveCounts", () => {
+    const data = buildOpenShiftCommitMap([
+      { ...resource("pod-1", "pass"), kind: "Pod", commitSha: SHA },
+      { ...resource("build-1", "fail"), kind: "Build", commitSha: SHA },
+      { ...resource("build-2", "running"), kind: "Build", commitSha: SHA },
+    ]);
+    const badge = buildOpenShiftGraphBadges(data).get(SHA);
+    expect(badge?.lanes?.live).toEqual({ passCount: 1, failCount: 0, runningCount: 1, unknownCount: 0 });
+    expect(badge?.lanes?.cache).toEqual({ passCount: 0, failCount: 1, runningCount: 0, unknownCount: 0 });
+  });
+});
+
+describe("commit identity", () => {
+  test("prefers label over annotation", () => {
+    expect(
+      commitShaFromItem(
+        {
+          metadata: {
+            labels: { "dev/commit-sha": "b".repeat(40) },
+            annotations: { "dev/commit-sha": "a".repeat(40) },
+          },
+        },
+        "dev/commit-sha",
+      ),
+    ).toBe("b".repeat(40));
+  });
+
+  test("falls back to annotation when the label is missing", () => {
+    expect(commitShaFromItem({ metadata: { annotations: { "dev/commit-sha": SHA } } }, "dev/commit-sha")).toBe(SHA);
+  });
+
+  test("reads oc annotate istag from tag.annotations", () => {
+    expect(
+      commitShaFromItem(
+        {
+          metadata: { name: "app:stage-internal" },
+          tag: { annotations: { "dev/commit-sha": SHA } },
+          image: { dockerImageReference: "app@sha256:abc" },
+        },
+        "dev/commit-sha",
+      ),
+    ).toBe(SHA);
+  });
+
+  test("builds an in-set label selector", () => {
+    expect(commitLabelSelector("dev/commit-sha", [SHA, SHA.toUpperCase()])).toBe(
+      `labelSelector=${encodeURIComponent(`dev/commit-sha in (${SHA})`)}`,
+    );
+    expect(commitLabelSelector("dev/commit-sha", [])).toBeNull();
+  });
+});
+
+describe("fetchOpenShiftInventory modes", () => {
+  test("builds mode lists only builds", async () => {
+    const requested: string[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      requested.push(input.toString());
+      return Response.json({ items: [] });
+    }) as unknown as typeof fetch;
+    try {
+      await fetchOpenShiftInventory(
+        { serverUrl: "https://openshift.example.com", namespaces: ["ns"], commitShaAnnotation: "dev/commit-sha" },
+        "token",
+        undefined,
+        "builds",
+      );
+      expect(requested.every(url => url.includes("/builds"))).toBe(true);
+      expect(requested.some(url => url.includes("/pods"))).toBe(false);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("seeds mode lists Builds and ImageStreamTags only", async () => {
+    const requested: string[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      requested.push(input.toString());
+      return Response.json({ items: [] });
+    }) as unknown as typeof fetch;
+    try {
+      await fetchOpenShiftInventory(
+        { serverUrl: "https://openshift.example.com", namespaces: ["ns"], commitShaAnnotation: "dev/commit-sha" },
+        "token",
+        undefined,
+        "seeds",
+      );
+      expect(requested.some(url => url.includes("/builds"))).toBe(true);
+      expect(requested.some(url => url.includes("/imagestreamtags"))).toBe(true);
+      expect(requested.some(url => url.includes("/pods"))).toBe(false);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("live mode lists workloads but not Builds or ImageStreamTags", async () => {
+    const requested: string[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      requested.push(input.toString());
+      return Response.json({ items: [] });
+    }) as unknown as typeof fetch;
+    try {
+      await fetchOpenShiftInventory(
+        { serverUrl: "https://openshift.example.com", namespaces: ["ns"], commitShaAnnotation: "dev/commit-sha" },
+        "token",
+        undefined,
+        "live",
+      );
+      expect(requested.some(url => url.includes("/pods"))).toBe(true);
+      expect(requested.some(url => url.includes("/builds"))).toBe(false);
+      expect(requested.some(url => url.includes("/imagestreamtags"))).toBe(false);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("seeds with commit SHAs query Builds by label and fall back when empty", async () => {
+    const requested: string[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      requested.push(input.toString());
+      return Response.json({ items: [] });
+    }) as unknown as typeof fetch;
+    try {
+      await fetchOpenShiftInventory(
+        { serverUrl: "https://openshift.example.com", namespaces: ["ns"], commitShaAnnotation: "dev/commit-sha" },
+        "token",
+        undefined,
+        "seeds",
+        { commitShas: [SHA] },
+      );
+      const buildUrls = requested.filter(url => url.includes("/builds"));
+      expect(buildUrls.some(url => url.includes("labelSelector="))).toBe(true);
+      expect(buildUrls.some(url => !url.includes("labelSelector="))).toBe(true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("live with labeled Deployments lists only matching Pods", async () => {
+    const requested: string[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = input.toString();
+      requested.push(url);
+      if (url.includes("/deployments") && url.includes("labelSelector=")) {
+        return Response.json({
+          items: [
+            {
+              metadata: {
+                name: "app",
+                labels: { "dev/commit-sha": SHA },
+              },
+              spec: {
+                selector: { matchLabels: { app: "e-scrap" } },
+                template: { spec: { containers: [{ image: "app@sha256:abc" }] } },
+              },
+              status: { replicas: 1, updatedReplicas: 1, availableReplicas: 1, unavailableReplicas: 0 },
+            },
+          ],
+        });
+      }
+      return Response.json({ items: [] });
+    }) as unknown as typeof fetch;
+    try {
+      await fetchOpenShiftInventory(
+        { serverUrl: "https://openshift.example.com", namespaces: ["ns"], commitShaAnnotation: "dev/commit-sha" },
+        "token",
+        undefined,
+        "live",
+        { commitShas: [SHA] },
+      );
+      expect(requested.some(url => url.includes("/deployments") && url.includes("labelSelector="))).toBe(true);
+      expect(requested.some(url => url.includes("/pods") && url.includes("labelSelector="))).toBe(true);
+      expect(requested.some(url => url.includes("/replicasets"))).toBe(false);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("stops after an expired token and keeps the auth banner", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => new Response("nope", { status: 401 })) as unknown as typeof fetch;
+    try {
+      const result = await fetchOpenShiftInventory(
+        {
+          serverUrl: "https://openshift.example.com",
+          namespaces: ["one", "two"],
+          commitShaAnnotation: "dev/commit-sha",
+        },
+        "token",
+      );
+      expect(result.error).toBe(BANNER.openshift.tokenExpired);
+      expect(result.successfulRequests).toBe(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

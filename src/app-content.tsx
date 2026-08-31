@@ -75,6 +75,9 @@ export function AppContent(props: Readonly<AppContentProps>) {
     tokenEnvVar: props.initialOpenShiftConfig?.tokenEnvVar ?? "OPENSHIFT_TOKEN",
     namespaces: props.initialOpenShiftConfig?.namespaces ?? [],
     commitShaAnnotation: props.initialOpenShiftConfig?.commitShaAnnotation ?? "dev/commit-sha",
+    cacheLimit: props.initialOpenShiftConfig?.cacheLimit ?? 20,
+    fetchDepth: props.initialOpenShiftConfig?.fetchDepth ?? 20,
+    autoRefreshSeconds: props.initialOpenShiftConfig?.autoRefreshSeconds ?? 120,
   });
 
   const [snykConfig, setSnykConfig] = createSignal<SnykProviderConfig>({
@@ -108,6 +111,9 @@ export function AppContent(props: Readonly<AppContentProps>) {
       tokenEnvVar: config.providers?.openshift?.tokenEnvVar ?? "OPENSHIFT_TOKEN",
       namespaces: config.providers?.openshift?.namespaces ?? [],
       commitShaAnnotation: config.providers?.openshift?.commitShaAnnotation ?? "dev/commit-sha",
+      cacheLimit: config.providers?.openshift?.cacheLimit ?? 20,
+      fetchDepth: config.providers?.openshift?.fetchDepth ?? 20,
+      autoRefreshSeconds: config.providers?.openshift?.autoRefreshSeconds ?? 120,
     });
     setSnykConfig({
       enabled: config.providers?.snyk?.enabled ?? false,
@@ -747,6 +753,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                         onLoadMore={loadMoreData}
                         snykGetCommitData={snyk.getCommitData}
                         snykIsScanning={snyk.isScanning}
+                        openshiftIsLoading={openShift.isLoading}
                         scrollboxRef={el => (graphScrollboxRef = el)}
                         suppressAutoScroll={() => pendingGraphScrollTop() != null}
                       />
@@ -820,6 +827,8 @@ export function AppContent(props: Readonly<AppContentProps>) {
                         jenkinsProviderStatus={state.providerStatus()}
                         openshiftGetCommitData={openShift.getCommitData}
                         openshiftFetchCommitData={openShift.fetchCommitDataForSHA}
+                        openshiftIsLoading={openShift.isLoading}
+                        openshiftLiveAge={openShift.liveAge}
                         onOpenOpenShiftResource={handleOpenOpenShiftResource}
                         openshiftProviderStatus={state.providerStatus()}
                         snykGetCommitData={snyk.getCommitData}
@@ -908,6 +917,8 @@ export function AppContent(props: Readonly<AppContentProps>) {
                     jenkinsProviderStatus={state.providerStatus()}
                     openshiftGetCommitData={openShift.getCommitData}
                     openshiftFetchCommitData={openShift.fetchCommitDataForSHA}
+                    openshiftIsLoading={openShift.isLoading}
+                    openshiftLiveAge={openShift.liveAge}
                     onOpenOpenShiftResource={handleOpenOpenShiftResource}
                     openshiftProviderStatus={state.providerStatus()}
                     snykGetCommitData={snyk.getCommitData}
@@ -933,6 +944,11 @@ export function AppContent(props: Readonly<AppContentProps>) {
                   {resource => (
                     <OpenShiftResourceDialog
                       resource={resource()}
+                      loadLog={async (item, force) =>
+                        item.kind === "Pod" ? openShift.loadPodLog(item) : openShift.loadBuildLog(item, force)
+                      }
+                      followLog={openShift.followLog}
+                      loadObject={item => openShift.loadResourceObject(item)}
                       onClose={() => {
                         if (layoutMode() === "compact" && state.detailFocused()) setDialog("detail");
                         else setDialog(null);

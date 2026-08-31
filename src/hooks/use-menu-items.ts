@@ -10,6 +10,13 @@ import { getTokenSource, parseGitHubRemote } from "../providers/github-actions/a
 import type { JenkinsJobConfig } from "../providers/jenkins/types";
 import { isValidJenkinsJobUrl } from "../providers/jenkins/validation";
 import {
+  DEFAULT_OPENSHIFT_AUTO_REFRESH_SECONDS,
+  OPENSHIFT_AUTO_REFRESH_MS,
+  OPENSHIFT_AUTO_REFRESH_OPTIONS,
+  OPENSHIFT_MS_TO_LABEL,
+  type OpenShiftAutoRefreshSeconds,
+} from "../providers/openshift/types";
+import {
   isValidOpenShiftNamespace,
   isValidOpenShiftServerUrl,
   isValidOpenShiftText,
@@ -157,6 +164,9 @@ export interface OpenShiftMenuConfig {
   tokenEnvVar: string;
   namespaces: string[];
   commitShaAnnotation: string;
+  cacheLimit: 10 | 20 | 50;
+  fetchDepth: 10 | 20 | 50;
+  autoRefreshSeconds: OpenShiftAutoRefreshSeconds;
 }
 
 export interface SnykMenuConfig {
@@ -272,6 +282,32 @@ export function buildOpenShiftProviderItems(
       set: v => update({ ...cfg, tokenEnvVar: v.trim() || "OPENSHIFT_TOKEN" }),
       valid: () => isValidOpenShiftText(cfg.tokenEnvVar) && !!process.env[cfg.tokenEnvVar],
       isDraftValid: v => isValidOpenShiftText(v.trim() || "OPENSHIFT_TOKEN"),
+    },
+    {
+      kind: "cycle",
+      label: "Cache count",
+      options: ["10", "20", "50"],
+      get: () => String(cfg.cacheLimit),
+      set: v => update({ ...cfg, cacheLimit: v === "10" ? 10 : v === "50" ? 50 : 20 }),
+    },
+    {
+      kind: "cycle",
+      label: "Fetch size",
+      options: ["10", "20", "50"],
+      get: () => String(cfg.fetchDepth),
+      set: v => update({ ...cfg, fetchDepth: v === "10" ? 10 : v === "50" ? 50 : 20 }),
+    },
+    {
+      kind: "cycle",
+      label: "Auto refresh",
+      options: [...OPENSHIFT_AUTO_REFRESH_OPTIONS],
+      get: () => OPENSHIFT_MS_TO_LABEL[cfg.autoRefreshSeconds * 1000] ?? "2m",
+      set: v => {
+        const ms = OPENSHIFT_AUTO_REFRESH_MS[v as keyof typeof OPENSHIFT_AUTO_REFRESH_MS] ?? 120_000;
+        const autoRefreshSeconds: OpenShiftAutoRefreshSeconds =
+          ms === 0 ? 0 : ms === 300_000 ? 300 : ms === 600_000 ? 600 : 120;
+        update({ ...cfg, autoRefreshSeconds });
+      },
     },
     {
       kind: "editable",
@@ -795,6 +831,9 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
       tokenEnvVar: "OPENSHIFT_TOKEN",
       namespaces: [],
       commitShaAnnotation: "dev/commit-sha",
+      cacheLimit: 20,
+      fetchDepth: 20,
+      autoRefreshSeconds: DEFAULT_OPENSHIFT_AUTO_REFRESH_SECONDS,
     };
     const snykCfg = opts.snykConfig?.() ?? {
       enabled: false,

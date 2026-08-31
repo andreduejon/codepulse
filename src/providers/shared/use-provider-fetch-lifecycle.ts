@@ -25,6 +25,8 @@ export function useProviderFetchLifecycle(opts: {
   runInitialFetch: (args: ProviderFetchArgs) => Promise<void>;
   runRefresh: (args: ProviderFetchArgs) => Promise<void>;
   onResetCaches: () => void;
+  /** Override auto-refresh period. 0 or omit uses `state.autoRefreshInterval()`. */
+  refreshInterval?: () => number;
 }) {
   const { state, providerId } = opts;
   const shaLimit = opts.shaLimit ?? DEFAULT_INITIAL_SHA_LIMIT;
@@ -95,24 +97,32 @@ export function useProviderFetchLifecycle(opts: {
     }
   }
 
+  function currentInterval(): number {
+    return opts.refreshInterval?.() ?? state.autoRefreshInterval();
+  }
+
   function startAutoRefresh() {
     if (autoRefreshTimer) return;
-    const interval = state.autoRefreshInterval();
+    const interval = currentInterval();
     if (interval <= 0) return;
     autoRefreshTimer = setInterval(() => {
       if (state.activeProviderView() !== providerId) return;
-      if (fetchAbortCtrl) fetchAbortCtrl.abort();
+      if (fetchInFlight) return;
       const ctrl = new AbortController();
       fetchAbortCtrl = ctrl;
       void fetchRefresh(ctrl.signal);
     }, interval);
   }
 
-  function stopAutoRefresh() {
+  function clearRefreshTimer() {
     if (autoRefreshTimer) {
       clearInterval(autoRefreshTimer);
       autoRefreshTimer = null;
     }
+  }
+
+  function stopAutoRefresh() {
+    clearRefreshTimer();
     if (fetchAbortCtrl) {
       fetchAbortCtrl.abort();
       fetchAbortCtrl = null;
@@ -160,7 +170,7 @@ export function useProviderFetchLifecycle(opts: {
         if (fetchAbortCtrl === controller) fetchAbortCtrl = null;
       });
     } else {
-      const interval = state.autoRefreshInterval();
+      const interval = currentInterval();
       const staleThreshold = interval > 0 ? interval : 30_000;
       if (Date.now() - lastFetchedAt > staleThreshold) {
         const controller = new AbortController();
@@ -197,9 +207,10 @@ export function useProviderFetchLifecycle(opts: {
   });
 
   createEffect(() => {
-    const _interval = state.autoRefreshInterval();
+    opts.refreshInterval?.();
+    state.autoRefreshInterval();
     if (state.activeProviderView() === providerId) {
-      stopAutoRefresh();
+      clearRefreshTimer();
       startAutoRefresh();
     }
   });

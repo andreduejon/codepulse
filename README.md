@@ -13,9 +13,9 @@ read-only by default codebase dashboard: git history as the primary navigation
 surface, with CI/CD, security, and code quality signals layered onto the same
 commit and branch context.
 
-The current release adds Snyk Open Source commit scans alongside OpenShift,
-GitHub Actions, and Jenkins. Commits combine source history with cached
-vulnerability, CI/CD, and runtime signals.
+The current line of work polishes OpenShift live inventory (watch, log follow,
+provider Auto refresh) alongside Snyk, GitHub Actions, and Jenkins. Commits
+combine source history with cached vulnerability, CI/CD, and runtime signals.
 
 ## Requirements
 
@@ -133,12 +133,13 @@ variables and are never stored in configuration.
 - **Jenkins** — shows configured job builds, pipeline stages, and console logs.
   Job URLs are auto-detected; multibranch pipelines discover up to 25 enabled
   branch jobs across configured parents. See [Jenkins provider](docs/providers/jenkins.md).
-- **OpenShift** — shows annotated Builds and ImageStreamTags, digest-matched
-  Pods, and owner-resolved workloads. Enter opens cached resource JSON. See
+- **OpenShift** — Live/Cache chips for Builds, ImageStreamTags, Deployments,
+  and Pods. Watch while the OpenShift view is focused; Builds/IST poll on
+  provider Auto refresh. Enter opens log follow or JSON. See
   [OpenShift provider](docs/providers/openshift.md).
 - **Snyk** — scans exact commits in detached worktrees, shows severity counts,
-  and lists vulnerability and remediation details. See
-  [Snyk provider](docs/providers/snyk.md).
+  and lists vulnerability and remediation details. Branch-tip auto-scan runs
+  only on the Snyk view. See [Snyk provider](docs/providers/snyk.md).
 
 ## Themes
 
@@ -176,7 +177,9 @@ Planned milestones currently follow this shape:
 - `0.7.0`: standalone macOS and Linux distributions with no Bun or Node.js runtime requirement
 - `0.8.0`: Snyk Open Source scans, commit severity counts, finding details, and
   a local scan cache
-- Future: further providers and OpenShift features and polish
+- `0.9.0` (unreleased): OpenShift Live/Cache watch, Build/IST Auto refresh,
+  log follow, and Snyk auto-scan only on the Snyk view
+- Future: GitHub Actions and Jenkins polish; further providers
 
 The intent is to reach `1.0.0` once the integration model and configuration
 surface are stable.
