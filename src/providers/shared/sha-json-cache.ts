@@ -106,7 +106,7 @@ export class ShaJsonCache<T extends { sha: string }> {
     }
   }
 
-  async write(repoPath: string, entry: T): Promise<void> {
+  async write(repoPath: string, entry: T, options?: { evict?: boolean }): Promise<void> {
     if (!this.isEntry(entry)) throw new Error(this.invalidMessage);
     const sha = assertExactSha(entry.sha);
     const path = await this.pathFor(repoPath, sha);
@@ -119,7 +119,15 @@ export class ShaJsonCache<T extends { sha: string }> {
     } finally {
       await rm(temporaryPath, { force: true }).catch(() => {});
     }
-    await this.evict(directory);
+    if (options?.evict !== false) await this.evict(directory);
+  }
+
+  async evictForRepo(repoPath: string): Promise<void> {
+    try {
+      await this.evict(await this.repoDir(repoPath));
+    } catch {
+      return;
+    }
   }
 
   private async evict(directory: string): Promise<void> {

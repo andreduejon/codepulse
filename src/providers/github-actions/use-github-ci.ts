@@ -245,10 +245,10 @@ export function useGitHubCI(opts: {
   }
 
   async function hydrateCachedCandidates(repoPath: string, shas: readonly string[]): Promise<void> {
+    const pending = shas.filter(sha => !commitDataCache.has(sha));
+    const entries = await Promise.all(pending.map(async sha => ({ sha, entry: await disk.read(repoPath, sha) })));
     let changed = false;
-    for (const sha of shas) {
-      if (commitDataCache.has(sha)) continue;
-      const entry = await disk.read(repoPath, sha);
+    for (const { sha, entry } of entries) {
       if (!entry) continue;
       commitDataCache.set(sha, { sha, runs: entry.runs });
       for (const [id, jobs] of Object.entries(entry.jobs ?? {})) {
@@ -264,22 +264,30 @@ export function useGitHubCI(opts: {
   }
 
   async function persistTerminalRuns(repoPath: string, shas: readonly string[]): Promise<void> {
-    for (const sha of shas) {
-      const incoming = (commitDataCache.get(sha)?.runs ?? []).filter(isTerminalGitHubRun);
-      if (incoming.length === 0) continue;
-      const existing = await disk.read(repoPath, sha);
-      await disk.write(repoPath, {
-        sha,
-        runs: mergeGitHubRuns(existing?.runs ?? [], incoming),
-        jobs: mergeGitHubJobs(
-          existing?.jobs,
-          jobsMapFromGitHubCache(
-            jobsCache,
-            incoming.map(run => run.id),
-          ),
-        ),
-      });
-    }
+    const writes = await Promise.all(
+      shas.map(async sha => {
+        const incoming = (commitDataCache.get(sha)?.runs ?? []).filter(isTerminalGitHubRun);
+        if (incoming.length === 0) return false;
+        const existing = await disk.read(repoPath, sha);
+        await disk.write(
+          repoPath,
+          {
+            sha,
+            runs: mergeGitHubRuns(existing?.runs ?? [], incoming),
+            jobs: mergeGitHubJobs(
+              existing?.jobs,
+              jobsMapFromGitHubCache(
+                jobsCache,
+                incoming.map(run => run.id),
+              ),
+            ),
+          },
+          { evict: false },
+        );
+        return true;
+      }),
+    );
+    if (writes.some(Boolean)) await disk.evictForRepo(repoPath);
   }
 
   async function fillTerminalJobs(

@@ -127,9 +127,9 @@ export function useJenkinsCI(opts: {
   }
 
   async function hydrateCachedCandidates(repoPath: string, shas: readonly string[]): Promise<void> {
+    const entries = await Promise.all(shas.map(sha => disk.read(repoPath, sha)));
     let changed = false;
-    for (const sha of shas) {
-      const entry = await disk.read(repoPath, sha);
+    for (const entry of entries) {
       if (!entry) continue;
       for (const run of entry.runs) runCache.set(`${run.id}:${run.headSha}`, run);
       for (const [id, jobs] of Object.entries(entry.jobs ?? {})) {
@@ -141,24 +141,32 @@ export function useJenkinsCI(opts: {
   }
 
   async function persistTerminalRuns(repoPath: string, shas: readonly string[]): Promise<void> {
-    for (const sha of shas) {
-      const incoming = [...runCache.values()].filter(
-        run => isTerminalJenkinsRun(run) && run.headSha.toLowerCase() === sha.toLowerCase(),
-      );
-      if (incoming.length === 0) continue;
-      const existing = await disk.read(repoPath, sha);
-      await disk.write(repoPath, {
-        sha,
-        runs: mergeJenkinsRuns(existing?.runs ?? [], incoming),
-        jobs: mergeJenkinsJobs(
-          existing?.jobs,
-          jobsMapFromCache(
-            jobsCache,
-            incoming.map(run => run.id),
-          ),
-        ),
-      });
-    }
+    const writes = await Promise.all(
+      shas.map(async sha => {
+        const incoming = [...runCache.values()].filter(
+          run => isTerminalJenkinsRun(run) && run.headSha.toLowerCase() === sha.toLowerCase(),
+        );
+        if (incoming.length === 0) return false;
+        const existing = await disk.read(repoPath, sha);
+        await disk.write(
+          repoPath,
+          {
+            sha,
+            runs: mergeJenkinsRuns(existing?.runs ?? [], incoming),
+            jobs: mergeJenkinsJobs(
+              existing?.jobs,
+              jobsMapFromCache(
+                jobsCache,
+                incoming.map(run => run.id),
+              ),
+            ),
+          },
+          { evict: false },
+        );
+        return true;
+      }),
+    );
+    if (writes.some(Boolean)) await disk.evictForRepo(repoPath);
   }
 
   async function fillTerminalJobs(

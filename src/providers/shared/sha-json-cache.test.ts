@@ -98,6 +98,20 @@ describe("ShaJsonCache", () => {
     expect(await cache.readLog("/repo", shas[1], "job-1")).toBeNull();
     expect(await cache.read("/repo", shas[1])).toBeNull();
   });
+
+  test("write can skip eviction until evictForRepo", async () => {
+    const cache = new ShaJsonCache<Entry>({
+      root: await cacheRoot(),
+      maxEntries: 10,
+      isEntry,
+      invalidMessage: "bad",
+    });
+    const shas = Array.from({ length: 11 }, (_, index) => index.toString(16).padStart(40, "0"));
+    await Promise.all(shas.map(sha => cache.write("/repo", { sha, value: "n" }, { evict: false })));
+    expect(await cache.list("/repo")).toHaveLength(11);
+    await cache.evictForRepo("/repo");
+    expect(await cache.list("/repo")).toHaveLength(10);
+  });
 });
 
 describe("mergeById", () => {
