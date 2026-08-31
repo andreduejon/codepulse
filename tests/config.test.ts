@@ -210,6 +210,7 @@ describe("loadConfig", () => {
       commitShaAnnotation: "A".repeat(255),
       namespaces: ["team-one"],
     });
+    expect(warnings.filter(warning => warning.includes("providers.openshift.namespaces"))).toHaveLength(2);
   });
 
   test("accepts OpenShift autoRefreshSeconds cycle values", () => {
