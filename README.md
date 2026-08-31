@@ -177,7 +177,7 @@ Planned milestones currently follow this shape:
 - `0.7.0`: standalone macOS and Linux distributions with no Bun or Node.js runtime requirement
 - `0.8.0`: Snyk Open Source scans, commit severity counts, finding details, and
   a local scan cache
-- `0.9.0` (unreleased): OpenShift Live/Cache watch, Build/IST Auto refresh,
+- `0.9.0`: OpenShift Live/Cache watch, Build/IST Auto refresh,
   log follow, and Snyk auto-scan only on the Snyk view
 - Future: GitHub Actions and Jenkins polish; further providers
 
