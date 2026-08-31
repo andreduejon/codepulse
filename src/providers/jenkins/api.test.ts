@@ -9,6 +9,7 @@ import {
   extractSha,
   fetchJenkinsDataForSHAs,
   fetchJenkinsGraphDataForSHAs,
+  fetchJenkinsRunsForBuilds,
   jenkinsApiUrl,
   normalizeJenkinsJobUrl,
   resolveJenkinsJobs,
@@ -567,6 +568,57 @@ describe("resolveJenkinsJobs", () => {
       const direct = { url: "https://jenkins.example.com/job/direct" };
       const result = await resolveJenkinsJobs([direct], "user", "token");
       expect(result.jobs).toEqual([direct]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe("fetchJenkinsRunsForBuilds", () => {
+  test("refreshes a known running build without job discovery", async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      calls.push(String(input));
+      return new Response(
+        JSON.stringify({
+          number: 12,
+          url: "https://jenkins.example.com/job/foo/12/",
+          result: "SUCCESS",
+          building: false,
+          timestamp: 1_700_000_000_000,
+          duration: 12_000,
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }) as typeof fetch;
+
+    try {
+      const result = await fetchJenkinsRunsForBuilds(
+        [
+          {
+            id: "https://jenkins.example.com/job/foo#12",
+            name: "foo",
+            status: "running",
+            conclusion: null,
+            headSha: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            runNumber: 12,
+            startedAt: null,
+            updatedAt: "2026-01-01T00:00:00.000Z",
+            url: "https://jenkins.example.com/job/foo/12/",
+            jobLabel: "foo",
+            jobUrl: "https://jenkins.example.com/job/foo",
+          },
+        ],
+        "user",
+        "token",
+      );
+      expect(result.error).toBeNull();
+      expect(result.data[0]?.status).toBe("completed");
+      expect(result.data[0]?.conclusion).toBe("success");
+      expect(calls).toHaveLength(1);
+      expect(calls[0]).toContain("/job/foo/12/");
+      expect(calls[0]).not.toContain("/job/foo/api/json");
     } finally {
       globalThis.fetch = originalFetch;
     }

@@ -14,6 +14,7 @@ import {
   fetchJenkinsDataForSHAs,
   fetchJenkinsGraphDataForSHAs,
   fetchJenkinsRunJobs,
+  fetchJenkinsRunsForBuilds,
   getJenkinsToken,
 } from "./api";
 import { isTerminalJenkinsRun, JenkinsCache, jobsMapFromCache, mergeJenkinsJobs, mergeJenkinsRuns } from "./cache";
@@ -243,6 +244,24 @@ export function useJenkinsCI(opts: {
         return;
       }
       if (showStatus) actions.setProviderStatus("jenkins", providerLoading());
+      const wanted = new Set(target.map(sha => sha.toLowerCase()));
+      const runningRuns = [...runCache.values()].filter(
+        run => wanted.has(run.headSha.toLowerCase()) && run.status === "running",
+      );
+      if (runningRuns.length > 0) {
+        const token = getJenkinsToken(config.tokenEnvVar);
+        if (!token) return;
+        const { data, error } = await fetchJenkinsRunsForBuilds(runningRuns, config.username, token, signal);
+        if (signal?.aborted || epoch !== lifecycle.getEpoch()) return;
+        for (const run of data) runCache.set(`${run.id}:${run.headSha}`, run);
+        rebuildCaches();
+        await persistTerminalRuns(state.repoPath(), target);
+        lifecycle.noteRefreshSettled();
+        if (!error) actions.setProviderLastSuccessfulRefresh("jenkins", new Date());
+        if (error) actions.setProviderStatus("jenkins", providerError(error));
+        else actions.setProviderStatus("jenkins", providerIdle());
+        return;
+      }
       const { firstError, stale } = await fetchForSHAs(target, "shallow", signal);
       if (stale || epoch !== lifecycle.getEpoch()) return;
       lifecycle.noteRefreshSettled();

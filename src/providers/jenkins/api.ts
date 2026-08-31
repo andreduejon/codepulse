@@ -405,6 +405,35 @@ function mapRun(job: JenkinsJobConfig, build: JenkinsBuildApi, sha: string): Jen
   };
 }
 
+export async function fetchJenkinsRunsForBuilds(
+  runs: JenkinsRun[],
+  username: string | undefined,
+  token: string,
+  signal?: AbortSignal,
+): Promise<{ data: JenkinsRun[]; error: string | null }> {
+  const out: JenkinsRun[] = [];
+  let firstError: string | null = null;
+  await runLimited(
+    runs,
+    JENKINS_CONCURRENCY,
+    async run => {
+      try {
+        const build = await fetchJson<JenkinsBuildApi>(
+          jenkinsApiUrl(run.url, treeApiSuffix(buildDetailTree())),
+          username,
+          token,
+          signal,
+        );
+        out.push(mapRun({ url: run.jobUrl, label: run.jobLabel }, build, run.headSha));
+      } catch (err) {
+        firstError ??= bannerOrFallback(err, BANNER.jenkins.fetchFailed, "Jenkins");
+      }
+    },
+    signal,
+  );
+  return { data: out, error: firstError };
+}
+
 export async function fetchJenkinsDataForSHAs(
   jobs: JenkinsJobConfig[],
   username: string | undefined,
