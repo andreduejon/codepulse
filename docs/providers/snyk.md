@@ -14,7 +14,9 @@ Enable Snyk in **Menu → Providers**. Configure concrete local branch names for
 
 - Select a commit, press **Enter** to open details, select **Scan commit**, then press **Enter**.
 - Run **Rescan commit** to replace an existing result with a fresh scan.
-- Configured local branch tips scan automatically when their exact commit has no cached result.
+- Configured local branch tips scan automatically when the Snyk view is focused
+  and their exact commit has no cached result. Other views read cache only.
+  Manual **Scan commit** / **Rescan commit** still run from details.
 - Scans run sequentially in detached temporary Git worktrees. Current checkout remains unchanged.
 
 Each result is a snapshot of that commit against Snyk vulnerability data at displayed scan time. Cached results do not expire automatically.

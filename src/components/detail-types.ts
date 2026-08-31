@@ -57,7 +57,9 @@ export interface DetailViewProps {
   onOpenJenkinsJobLog?: (job: JenkinsJob, run: JenkinsRun, jobs?: JenkinsJob[]) => void;
   jenkinsProviderStatus?: ProviderStatus;
   openshiftGetCommitData?: (sha: string) => OpenShiftCommitData | null;
-  openshiftFetchCommitData?: (sha: string) => Promise<void>;
+  openshiftFetchCommitData?: (sha: string, force?: boolean) => Promise<void>;
+  openshiftIsLoading?: (sha: string) => boolean;
+  openshiftLiveAge?: () => string;
   onOpenOpenShiftResource?: (resource: OpenShiftResource) => void;
   openshiftProviderStatus?: ProviderStatus;
   snykGetCommitData?: (sha: string) => SnykScanResult | null;

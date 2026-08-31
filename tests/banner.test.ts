@@ -11,6 +11,11 @@ describe("banner catalog", () => {
     expect(isBanner("raw stderr dump")).toBe(false);
   });
 
+  test("OpenShift token expiry keeps cause and live-data effect", () => {
+    expect(BANNER.openshift.tokenExpired).toBe("OpenShift token expired. Live data unavailable.");
+    expect(isBanner(BANNER.openshift.tokenExpired)).toBe(true);
+  });
+
   test("keeps known banners and dumps unknown detail to debug", () => {
     expect(bannerOrFallback(new Error(BANNER.jenkins.timeout), BANNER.jenkins.fetchFailed, "Jenkins")).toBe(
       BANNER.jenkins.timeout,

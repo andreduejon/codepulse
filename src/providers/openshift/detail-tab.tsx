@@ -2,15 +2,24 @@ import type { Renderable } from "@opentui/core";
 import { createEffect, createMemo, createSignal, For, Show, untrack } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
 import { useT } from "../../hooks/use-t";
-import { type StatusCategory, statusColor, statusIcon } from "../shared/status";
-import type { OpenShiftCommitData, OpenShiftResource, OpenShiftStatus } from "./types";
+import { type StatusCategory, statusIcon } from "../shared/status";
+import { openShiftStatusColor } from "./graph-columns";
+import {
+  isCachedOpenShiftResource,
+  type OpenShiftCommitData,
+  type OpenShiftResource,
+  type OpenShiftStatus,
+} from "./types";
 
 export interface OpenShiftDetailTabProps {
   sha: string;
   getCommitData: (sha: string) => OpenShiftCommitData | null;
-  fetchCommitData?: (sha: string) => Promise<void>;
+  fetchCommitData?: (sha: string, force?: boolean) => Promise<void>;
+  isLoading?: (sha: string) => boolean;
+  liveAge?: () => string;
   onOpenResource?: (resource: OpenShiftResource) => void;
   unavailableReason?: string | null;
+  liveUnavailable?: boolean;
   warningReason?: string | null;
   loading?: boolean;
   navRef?: DetailNavRef;
@@ -21,7 +30,10 @@ export interface OpenShiftDetailTabProps {
 }
 
 type NamespaceData = OpenShiftCommitData["namespaces"][number];
-type FlatItem = { kind: "namespace"; namespace: string } | { kind: "resource"; resource: OpenShiftResource };
+type FlatItem =
+  | { kind: "reload" }
+  | { kind: "namespace"; namespace: string }
+  | { kind: "resource"; resource: OpenShiftResource };
 type ResourceListKey = keyof Pick<NamespaceData, "deployments" | "deploymentConfigs" | "pods" | "builds">;
 
 const RESOURCE_GROUPS: { label: string; key: ResourceListKey }[] = [
@@ -80,13 +92,19 @@ function resourcesForFlatItems(ns: NamespaceData): OpenShiftResource[] {
 export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
   const t = useT();
   const data = () => props.getCommitData(props.sha);
-  const [requestedSha, setRequestedSha] = createSignal<string | null>(null);
+  const commitLoading = () => props.isLoading?.(props.sha) ?? false;
+  const reloadBusy = () => commitLoading() || !!props.loading;
+  const liveUnavailable = () => !!props.liveUnavailable;
+  const reloadEnabled = () => !liveUnavailable();
+  const liveAge = () => props.liveAge?.() ?? "";
   const [expandedNamespaces, setExpandedNamespaces] = createSignal<Set<string>>(new Set());
   const itemRefs: Renderable[] = [];
   const refsByKey = new Map<string, Renderable>();
 
-  const flatItemKey = (item: FlatItem) =>
-    item.kind === "namespace" ? `namespace:${item.namespace}` : `resource:${item.resource.id}`;
+  const flatItemKey = (item: FlatItem) => {
+    if (item.kind === "reload") return "reload";
+    return item.kind === "namespace" ? `namespace:${item.namespace}` : `resource:${item.resource.id}`;
+  };
 
   const syncItemRefs = () => {
     const items = flatItems();
@@ -100,14 +118,15 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
   const namespaces = createMemo(() => data()?.namespaces ?? []);
   const resources = createMemo(() => namespaces().flatMap(namespaceResources));
 
-  const flatItems = createMemo<FlatItem[]>(() =>
-    namespaces().flatMap(ns => [
+  const flatItems = createMemo<FlatItem[]>(() => [
+    ...(reloadEnabled() ? [{ kind: "reload" as const }] : []),
+    ...namespaces().flatMap(ns => [
       { kind: "namespace" as const, namespace: ns.namespace },
       ...(expandedNamespaces().has(ns.namespace)
         ? resourcesForFlatItems(ns).map(resource => ({ kind: "resource" as const, resource }))
         : []),
     ]),
-  );
+  ]);
 
   const flatIndexForNamespace = (namespace: string) =>
     flatItems().findIndex(item => item.kind === "namespace" && item.namespace === namespace);
@@ -126,8 +145,7 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
 
   createEffect(() => {
     const sha = props.sha;
-    if (props.loading || data()?.resolved || requestedSha() === sha) return;
-    setRequestedSha(sha);
+    if (props.unavailableReason || liveUnavailable() || commitLoading() || data()?.liveFetched) return;
     void props.fetchCommitData?.(sha);
   });
 
@@ -153,7 +171,9 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
     props.navRef.activateCurrentItem = () => {
       const item = flatItems()[props.detailCursorIndex()];
       if (!item) return false;
-      if (item.kind === "namespace") toggleNamespace(item.namespace);
+      if (item.kind === "reload") {
+        if (reloadEnabled() && !reloadBusy()) void props.fetchCommitData?.(props.sha, true);
+      } else if (item.kind === "namespace") toggleNamespace(item.namespace);
       else props.onOpenResource?.(item.resource);
       return false;
     };
@@ -165,7 +185,8 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
       props.setDetailCursorAction(null);
       return;
     }
-    if (item.kind === "namespace")
+    if (item.kind === "reload") props.setDetailCursorAction(reloadEnabled() && !reloadBusy() ? "scan" : null);
+    else if (item.kind === "namespace")
       props.setDetailCursorAction(expandedNamespaces().has(item.namespace) ? "collapse" : "expand");
     else props.setDetailCursorAction("open");
   });
@@ -179,7 +200,7 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
   const renderResourceRow = (resource: OpenShiftResource, lead: string, connector: string) => {
     const idx = () => flatIndexForResource(resource);
     const isCursored = () => props.detailFocused() && props.detailCursorIndex() === idx();
-    const color = () => statusColor(t(), statusCategory(resource.status));
+    const color = () => openShiftStatusColor(t(), resource.status);
     const textColor = () => (isCursored() ? t().accent : t().foreground);
     return (
       <box
@@ -195,9 +216,15 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
           {lead}
           {connector}
         </text>
-        <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={textColor()}>
+        <text flexShrink={1} wrapMode="none" truncate fg={textColor()}>
           {compactResourceName(resource)}
         </text>
+        <Show when={isCachedOpenShiftResource(resource)}>
+          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+            {" (cached)"}
+          </text>
+        </Show>
+        <box flexGrow={1} />
         <text flexShrink={0} width={2} wrapMode="none" fg={color()}>
           {statusMark(resource.status).padStart(2)}
         </text>
@@ -205,20 +232,51 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
     );
   };
 
+  const reloadLabel = () => "Reload commit";
+  const reloadIdx = () => flatItems().findIndex(item => item.kind === "reload");
+  const isReloadCursored = () => reloadIdx() >= 0 && props.detailFocused() && props.detailCursorIndex() === reloadIdx();
+  const reloadStatus = () => {
+    if (reloadBusy()) return "loading...";
+    if (liveUnavailable()) return "unavailable";
+    return liveAge();
+  };
+
   return (
     <Show when={!props.unavailableReason} fallback={renderFallback("Unavailable")}>
-      <Show when={!props.loading} fallback={renderFallback("Loading OpenShift inventory…")}>
-        <Show when={resources().length > 0} fallback={renderFallback("No OpenShift resources for this commit")}>
+      <box flexDirection="column" width="100%">
+        <box
+          ref={(el: Renderable) => {
+            refsByKey.set("reload", el);
+            syncItemRefs();
+          }}
+          flexDirection="row"
+          width="100%"
+          backgroundColor={isReloadCursored() ? t().backgroundElementActive : undefined}
+        >
+          <text
+            flexGrow={1}
+            fg={!reloadEnabled() ? t().foregroundMuted : isReloadCursored() ? t().accent : t().foreground}
+            wrapMode="none"
+          >
+            {reloadLabel()}
+          </text>
+          <Show when={reloadStatus()}>
+            <text flexShrink={0} fg={t().foregroundMuted} wrapMode="none">
+              {reloadStatus()}
+            </text>
+          </Show>
+        </box>
+        <Show when={props.warningReason}>
+          {warning => (
+            <box paddingBottom={1}>
+              <text fg={t().accent} wrapMode="word">
+                {warning()}
+              </text>
+            </box>
+          )}
+        </Show>
+        <Show when={resources().length > 0}>
           <box flexDirection="column" width="100%">
-            <Show when={props.warningReason}>
-              {warning => (
-                <box paddingBottom={1}>
-                  <text fg={t().accent} wrapMode="word">
-                    {warning()}
-                  </text>
-                </box>
-              )}
-            </Show>
             <box flexDirection="row" width="100%">
               <box flexGrow={1}>
                 <text fg={t().foregroundMuted} wrapMode="none">
@@ -346,7 +404,7 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
             </For>
           </box>
         </Show>
-      </Show>
+      </box>
     </Show>
   );
 }
