@@ -178,6 +178,11 @@ export function useGitHubCI(opts: {
    * a git fetch.  Cleared on manual refresh to force a full re-query.
    */
   const queriedSHAs = new Set<string>();
+  let authFrozen = false;
+
+  function rememberAuthError(error: string | null): void {
+    if (error === BANNER.github.tokenExpired) authFrozen = true;
+  }
 
   interface FetchForShasResult {
     firstError: string | null;
@@ -329,6 +334,8 @@ export function useGitHubCI(opts: {
       }
     },
     runInitialFetch: async ({ signal, shas, showStatus, epoch }) => {
+      if (authFrozen && !showStatus) return;
+      if (showStatus) authFrozen = false;
       const allSHAs = shas ?? collectTopSHAs(state.graphRows(), config.fetchDepth);
       await hydrateCachedCandidates(state.repoPath(), allSHAs);
       if (signal?.aborted || epoch !== lifecycle.getEpoch()) return;
@@ -344,8 +351,9 @@ export function useGitHubCI(opts: {
         const { firstError, failedSHAs } = await fetchForSHAs(unqueried, signal);
         if (signal?.aborted || epoch !== lifecycle.getEpoch()) return;
         for (const sha of failedSHAs) queriedSHAs.delete(sha);
+        rememberAuthError(firstError);
         if (!firstError) actions.setProviderLastSuccessfulRefresh("github-actions", new Date());
-        if (showStatus) {
+        if (firstError === BANNER.github.tokenExpired || showStatus) {
           actions.setProviderStatus("github-actions", firstError ? providerError(firstError) : providerIdle());
         } else if (!firstError && state.providerStatusFor("github-actions").kind === "error") {
           actions.setProviderStatus("github-actions", providerIdle());
@@ -353,19 +361,26 @@ export function useGitHubCI(opts: {
       } catch (err) {
         if (signal?.aborted) return;
         const message = bannerOrFallback(err, BANNER.github.fetchFailed, "GitHub");
-        if (showStatus) actions.setProviderStatus("github-actions", providerError(message));
+        rememberAuthError(message);
+        if (showStatus || message === BANNER.github.tokenExpired)
+          actions.setProviderStatus("github-actions", providerError(message));
         for (const sha of unqueried) queriedSHAs.delete(sha);
       }
     },
-    runRefresh: async ({ signal, epoch }) => {
+    runRefresh: async ({ signal, epoch, showStatus }) => {
+      if (authFrozen && !showStatus) return;
+      if (showStatus) authFrozen = false;
       lifecycle.noteRefreshSettled();
       const runningSHAs = collectRunningSHAs(state.graphBadges());
       if (runningSHAs.length === 0) return;
       try {
         const { firstError } = await fetchForSHAs(runningSHAs, signal);
         if (signal?.aborted || epoch !== lifecycle.getEpoch()) return;
+        rememberAuthError(firstError);
         if (!firstError) actions.setProviderLastSuccessfulRefresh("github-actions", new Date());
-        if (!firstError && state.providerStatusFor("github-actions").kind === "error")
+        if (firstError === BANNER.github.tokenExpired)
+          actions.setProviderStatus("github-actions", providerError(firstError));
+        else if (!firstError && state.providerStatusFor("github-actions").kind === "error")
           actions.setProviderStatus("github-actions", providerIdle());
         if (firstError) debugError("GitHub", firstError);
       } catch (err) {
@@ -377,6 +392,7 @@ export function useGitHubCI(opts: {
       commitDataCache = new Map();
       jobsCache.clear();
       queriedSHAs.clear();
+      authFrozen = false;
       setCommitDataVersion(v => v + 1);
       actions.setGraphBadges("github-actions", new Map());
       actions.setProviderStatus("github-actions", providerIdle());

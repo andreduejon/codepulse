@@ -74,6 +74,11 @@ export function useJenkinsCI(opts: {
   const queriedSHAs = new Set<string>();
   let discoveredJobs: { url: string }[] | null = null;
   const lastBuildByJob = new Map<string, number>();
+  let authFrozen = false;
+
+  function rememberAuthError(error: string | null): void {
+    if (error === BANNER.jenkins.tokenExpired || error === BANNER.jenkins.authFailed) authFrozen = true;
+  }
 
   function rebuildCaches() {
     const allRuns = [...runCache.values()];
@@ -204,6 +209,8 @@ export function useJenkinsCI(opts: {
       else actions.setProviderStatus("jenkins", providerUnavailable(BANNER.jenkins.missingToken(config.tokenEnvVar)));
     },
     runInitialFetch: async ({ signal, shas, showStatus, epoch }) => {
+      if (authFrozen && !showStatus) return;
+      if (showStatus) authFrozen = false;
       if (showStatus) actions.setProviderStatus("jenkins", providerLoading());
       const window = shas ?? collectTopSHAs(state.graphRows(), config.fetchDepth);
       await hydrateCachedCandidates(state.repoPath(), window);
@@ -217,11 +224,14 @@ export function useJenkinsCI(opts: {
       const { firstError, stale } = await fetchForSHAs(target, "shallow", signal);
       if (stale || epoch !== lifecycle.getEpoch()) return;
       lifecycle.noteFetchStarted();
+      rememberAuthError(firstError ?? null);
       if (!firstError) actions.setProviderLastSuccessfulRefresh("jenkins", new Date());
       if (firstError) actions.setProviderStatus("jenkins", providerError(firstError));
       else actions.setProviderStatus("jenkins", providerIdle());
     },
     runRefresh: async ({ signal, showStatus, epoch }) => {
+      if (authFrozen && !showStatus) return;
+      if (showStatus) authFrozen = false;
       const target = collectRunningSHAs(state.graphBadges());
       if (target.length === 0) {
         lifecycle.noteRefreshSettled();
@@ -241,6 +251,7 @@ export function useJenkinsCI(opts: {
         rebuildCaches();
         await persistTerminalRuns(state.repoPath(), target);
         lifecycle.noteRefreshSettled();
+        rememberAuthError(error);
         if (!error) actions.setProviderLastSuccessfulRefresh("jenkins", new Date());
         if (error) actions.setProviderStatus("jenkins", providerError(error));
         else actions.setProviderStatus("jenkins", providerIdle());
@@ -249,6 +260,7 @@ export function useJenkinsCI(opts: {
       const { firstError, stale } = await fetchForSHAs(target, "shallow", signal);
       if (stale || epoch !== lifecycle.getEpoch()) return;
       lifecycle.noteRefreshSettled();
+      rememberAuthError(firstError ?? null);
       if (!firstError) actions.setProviderLastSuccessfulRefresh("jenkins", new Date());
       if (firstError) actions.setProviderStatus("jenkins", providerError(firstError));
       else actions.setProviderStatus("jenkins", providerIdle());
@@ -262,6 +274,7 @@ export function useJenkinsCI(opts: {
       queriedSHAs.clear();
       discoveredJobs = null;
       lastBuildByJob.clear();
+      authFrozen = false;
       setCommitDataVersion(v => v + 1);
       actions.setGraphBadges("jenkins", new Map());
       actions.setProviderStatus("jenkins", providerIdle());

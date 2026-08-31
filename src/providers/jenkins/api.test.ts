@@ -604,6 +604,25 @@ describe("resolveJenkinsJobs", () => {
   });
 });
 
+describe("fetchJenkinsGraphDataForSHAs auth", () => {
+  test("maps HTTP 401 to token expired", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => new Response("nope", { status: 401 })) as unknown as typeof fetch;
+    try {
+      const result = await fetchJenkinsGraphDataForSHAs(
+        [{ url: "https://jenkins.example.com/job/foo/" }],
+        "user",
+        "token",
+        ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+      );
+      expect(result.error).toBe(BANNER.jenkins.tokenExpired);
+      expect(result.data).toEqual([]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
 describe("fetchJenkinsRunsForBuilds", () => {
   test("refreshes a known running build without job discovery", async () => {
     const originalFetch = globalThis.fetch;

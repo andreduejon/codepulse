@@ -16,6 +16,11 @@ describe("banner catalog", () => {
     expect(isBanner(BANNER.openshift.tokenExpired)).toBe(true);
   });
 
+  test("GitHub and Jenkins token expiry banners are catalogued", () => {
+    expect(isBanner(BANNER.github.tokenExpired)).toBe(true);
+    expect(isBanner(BANNER.jenkins.tokenExpired)).toBe(true);
+  });
+
   test("keeps known banners and dumps unknown detail to debug", () => {
     expect(bannerOrFallback(new Error(BANNER.jenkins.timeout), BANNER.jenkins.fetchFailed, "Jenkins")).toBe(
       BANNER.jenkins.timeout,

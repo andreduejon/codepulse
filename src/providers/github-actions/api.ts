@@ -158,6 +158,7 @@ function isGitHubRateLimit(res: Response): boolean {
 }
 
 function githubHttpBanner(res: Response, kind: "fetch" | "jobs" | "logs"): string {
+  if (res.status === 401) return BANNER.github.tokenExpired;
   if (isGitHubRateLimit(res)) return BANNER.github.rateLimit;
   if (kind === "jobs") return BANNER.github.jobsFailed;
   if (kind === "logs") return BANNER.github.logFailed;

@@ -170,6 +170,7 @@ async function fetchJson<T>(
     throw jenkinsAuthError(`login redirect ${url}`);
   }
   const contentType = res.headers.get("content-type") ?? "";
+  if (res.status === 401) throw new Error(BANNER.jenkins.tokenExpired);
   if (!res.ok) {
     debugError("Jenkins", `${res.status} ${res.statusText} ${url}`);
     throw new Error(BANNER.jenkins.fetchFailed);

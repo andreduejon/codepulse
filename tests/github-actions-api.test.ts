@@ -785,6 +785,13 @@ describe("fetchCIDataForSHAs", () => {
     expect(result.data[0].conclusion).toBe("failure");
   });
 
+  it("maps HTTP 401 to a token-expired banner", async () => {
+    mockFetch(mock(async () => new Response(null, { status: 401 })));
+    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
+    expect(result.data).toHaveLength(0);
+    expect(result.error).toBe(BANNER.github.tokenExpired);
+  });
+
   it("returns empty result on HTTP error (graceful degradation)", async () => {
     mockFetch(mock(async () => new Response(null, { status: 403 })));
     const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
