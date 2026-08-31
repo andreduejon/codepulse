@@ -225,6 +225,7 @@ export function useJenkinsCI(opts: {
       if (stale || epoch !== lifecycle.getEpoch()) return;
       lifecycle.noteFetchStarted();
       rememberAuthError(firstError ?? null);
+      lifecycle.noteFetchResult(!firstError);
       if (!firstError) actions.setProviderLastSuccessfulRefresh("jenkins", new Date());
       if (firstError) actions.setProviderStatus("jenkins", providerError(firstError));
       else actions.setProviderStatus("jenkins", providerIdle());
@@ -252,6 +253,7 @@ export function useJenkinsCI(opts: {
         await persistTerminalRuns(state.repoPath(), target);
         lifecycle.noteRefreshSettled();
         rememberAuthError(error);
+        lifecycle.noteFetchResult(!error);
         if (!error) actions.setProviderLastSuccessfulRefresh("jenkins", new Date());
         if (error) actions.setProviderStatus("jenkins", providerError(error));
         else actions.setProviderStatus("jenkins", providerIdle());
@@ -261,6 +263,7 @@ export function useJenkinsCI(opts: {
       if (stale || epoch !== lifecycle.getEpoch()) return;
       lifecycle.noteRefreshSettled();
       rememberAuthError(firstError ?? null);
+      lifecycle.noteFetchResult(!firstError);
       if (!firstError) actions.setProviderLastSuccessfulRefresh("jenkins", new Date());
       if (firstError) actions.setProviderStatus("jenkins", providerError(firstError));
       else actions.setProviderStatus("jenkins", providerIdle());

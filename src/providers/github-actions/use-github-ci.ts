@@ -352,6 +352,7 @@ export function useGitHubCI(opts: {
         if (signal?.aborted || epoch !== lifecycle.getEpoch()) return;
         for (const sha of failedSHAs) queriedSHAs.delete(sha);
         rememberAuthError(firstError);
+        lifecycle.noteFetchResult(!firstError);
         if (!firstError) actions.setProviderLastSuccessfulRefresh("github-actions", new Date());
         if (firstError === BANNER.github.tokenExpired || showStatus) {
           actions.setProviderStatus("github-actions", firstError ? providerError(firstError) : providerIdle());
@@ -362,6 +363,7 @@ export function useGitHubCI(opts: {
         if (signal?.aborted) return;
         const message = bannerOrFallback(err, BANNER.github.fetchFailed, "GitHub");
         rememberAuthError(message);
+        lifecycle.noteFetchResult(false);
         if (showStatus || message === BANNER.github.tokenExpired)
           actions.setProviderStatus("github-actions", providerError(message));
         for (const sha of unqueried) queriedSHAs.delete(sha);
@@ -377,6 +379,7 @@ export function useGitHubCI(opts: {
         const { firstError } = await fetchForSHAs(runningSHAs, signal);
         if (signal?.aborted || epoch !== lifecycle.getEpoch()) return;
         rememberAuthError(firstError);
+        lifecycle.noteFetchResult(!firstError);
         if (!firstError) actions.setProviderLastSuccessfulRefresh("github-actions", new Date());
         if (firstError === BANNER.github.tokenExpired)
           actions.setProviderStatus("github-actions", providerError(firstError));
@@ -385,6 +388,7 @@ export function useGitHubCI(opts: {
         if (firstError) debugError("GitHub", firstError);
       } catch (err) {
         if (signal?.aborted) return;
+        lifecycle.noteFetchResult(false);
         debugError("GitHub", err);
       }
     },

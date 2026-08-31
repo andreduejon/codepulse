@@ -44,6 +44,8 @@ export function useProviderFetchLifecycle(opts: {
   let fetchAbortCtrl: AbortController | null = null;
   let backgroundFetchAbortCtrl: AbortController | null = null;
   let cacheEpoch = 0;
+  let consecutiveErrors = 0;
+  let backoffUntil = 0;
   const [identityVersion, setIdentityVersion] = createSignal(0);
 
   function getEpoch() {
@@ -59,6 +61,21 @@ export function useProviderFetchLifecycle(opts: {
     lastFetchedAt = Date.now();
   }
 
+  function noteFetchResult(ok: boolean) {
+    if (ok) {
+      consecutiveErrors = 0;
+      backoffUntil = 0;
+      return;
+    }
+    consecutiveErrors++;
+    const delayMs = Math.min(30_000 * 2 ** (consecutiveErrors - 1), 300_000);
+    backoffUntil = Date.now() + delayMs;
+  }
+
+  function inBackoff() {
+    return Date.now() < backoffUntil;
+  }
+
   function finishFetch(epoch: number) {
     if (epoch !== cacheEpoch) return;
     fetchInFlight = false;
@@ -71,6 +88,7 @@ export function useProviderFetchLifecycle(opts: {
 
   async function fetchInitial(signal?: AbortSignal, shas?: string[], showStatus = false) {
     const epoch = cacheEpoch;
+    if (!showStatus && inBackoff()) return;
     if (fetchInFlight) {
       pendingBackgroundFetch = true;
       return;
@@ -89,6 +107,7 @@ export function useProviderFetchLifecycle(opts: {
 
   async function fetchRefresh(signal?: AbortSignal, showStatus = false) {
     const epoch = cacheEpoch;
+    if (!showStatus && inBackoff()) return;
     if (fetchInFlight) {
       pendingBackgroundFetch = true;
       return;
@@ -143,6 +162,8 @@ export function useProviderFetchLifecycle(opts: {
     pendingBackgroundFetch = false;
     hasFetchedOnce = false;
     lastFetchedAt = 0;
+    consecutiveErrors = 0;
+    backoffUntil = 0;
     opts.onResetCaches();
     setIdentityVersion(v => v + 1);
   }
@@ -232,6 +253,7 @@ export function useProviderFetchLifecycle(opts: {
     getEpoch,
     noteFetchStarted,
     noteRefreshSettled,
+    noteFetchResult,
     resetCaches,
     startAutoRefresh,
     fetchInitial,

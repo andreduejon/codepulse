@@ -103,4 +103,33 @@ describe("useProviderFetchLifecycle", () => {
     expect(reported).toBe(true);
     expect(fetched).toBe(false);
   });
+
+  test("skips auto refresh during backoff and allows a manual refresh", async () => {
+    let refreshes = 0;
+    await new Promise<void>(resolve => {
+      createRoot(dispose => {
+        disposers.push(dispose);
+        const { state, actions } = createAppState(100, 0, 0);
+        actions.setAutoRefreshInterval(0);
+        const lifecycle = useProviderFetchLifecycle({
+          state,
+          providerId: "jenkins",
+          identity: () => "id",
+          isAvailable: () => true,
+          isBackgroundReady: () => false,
+          skipShaBackground: true,
+          queriedSHAs: new Set(),
+          reportUnavailable: () => {},
+          runInitialFetch: async () => {},
+          runRefresh: async () => {
+            refreshes++;
+          },
+          onResetCaches: () => {},
+        });
+        lifecycle.noteFetchResult(false);
+        void lifecycle.fetchRefresh(undefined, false).then(() => lifecycle.fetchRefresh(undefined, true).then(resolve));
+      });
+    });
+    expect(refreshes).toBe(1);
+  });
 });
