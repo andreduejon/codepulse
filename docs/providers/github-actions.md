@@ -24,10 +24,17 @@ Credentials remain in environment variables and are not written to config.
 
 Workflow runs are matched to commit SHAs. Completed runs, jobs, and steps are
 stored under `~/.cache/codepulse/github-actions/<repository-hash>/<commit-sha>.json`.
-Job logs are fetched on first open and kept next to that file under `logs/`.
+Job lists come from GraphQL when the host schema includes `WorkflowRun.jobs`.
+Older GitHub Enterprise servers omit that field; runs still load, and jobs are
+fetched on expand via REST. Job logs are fetched on first open and kept next to
+that file under `logs/`.
 Cache count (`10` / `20` / `50`) caps commit files; logs leave with the SHA.
 A run deleted on GitHub stays in the local cache. Running runs are refreshed
-while the provider view is active.
+while the provider view is active. Fetch size is the GraphQL window only;
+commits loaded on demand stay in memory. Scrolling outside that window reads
+disk cache only — it does not query GitHub. Reload / Auto refresh re-query the
+window without dropping other SHAs. Details include **Reload commit** (Enter
+hint: `reload`) to query the selected SHA.
 
 ## Permissions
 

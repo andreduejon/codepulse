@@ -95,7 +95,7 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
   const commitLoading = () => props.isLoading?.(props.sha) ?? false;
   const reloadBusy = () => commitLoading() || !!props.loading;
   const liveUnavailable = () => !!props.liveUnavailable;
-  const reloadEnabled = () => !liveUnavailable();
+  const reloadEnabled = () => !liveUnavailable() && !props.unavailableReason;
   const liveAge = () => props.liveAge?.() ?? "";
   const [expandedNamespaces, setExpandedNamespaces] = createSignal<Set<string>>(new Set());
   const itemRefs: Renderable[] = [];
@@ -117,6 +117,8 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
 
   const namespaces = createMemo(() => data()?.namespaces ?? []);
   const resources = createMemo(() => namespaces().flatMap(namespaceResources));
+  const reloadLabel = () => (data() ? "Reload resources" : "Load resources");
+  const reloadHint = () => (reloadLabel() === "Load resources" ? "load" : "reload");
 
   const flatItems = createMemo<FlatItem[]>(() => [
     ...(reloadEnabled() ? [{ kind: "reload" as const }] : []),
@@ -185,17 +187,11 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
       props.setDetailCursorAction(null);
       return;
     }
-    if (item.kind === "reload") props.setDetailCursorAction(reloadEnabled() && !reloadBusy() ? "scan" : null);
+    if (item.kind === "reload") props.setDetailCursorAction(reloadEnabled() && !reloadBusy() ? reloadHint() : null);
     else if (item.kind === "namespace")
       props.setDetailCursorAction(expandedNamespaces().has(item.namespace) ? "collapse" : "expand");
     else props.setDetailCursorAction("open");
   });
-
-  const renderFallback = (text: string) => (
-    <box flexGrow={1} alignItems="center" justifyContent="center">
-      <text fg={t().foregroundMuted}>{text}</text>
-    </box>
-  );
 
   const renderResourceRow = (resource: OpenShiftResource, lead: string, connector: string) => {
     const idx = () => flatIndexForResource(resource);
@@ -232,179 +228,173 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
     );
   };
 
-  const reloadLabel = () => "Reload commit";
   const reloadIdx = () => flatItems().findIndex(item => item.kind === "reload");
   const isReloadCursored = () => reloadIdx() >= 0 && props.detailFocused() && props.detailCursorIndex() === reloadIdx();
   const reloadStatus = () => {
+    if (liveUnavailable()) return "";
     if (reloadBusy()) return "loading...";
-    if (liveUnavailable()) return "unavailable";
     return liveAge();
   };
 
   return (
-    <Show when={!props.unavailableReason} fallback={renderFallback("Unavailable")}>
-      <box flexDirection="column" width="100%">
-        <box
-          ref={(el: Renderable) => {
-            refsByKey.set("reload", el);
-            syncItemRefs();
-          }}
-          flexDirection="row"
-          width="100%"
-          backgroundColor={isReloadCursored() ? t().backgroundElementActive : undefined}
+    <box flexDirection="column" width="100%">
+      <box
+        ref={(el: Renderable) => {
+          refsByKey.set("reload", el);
+          syncItemRefs();
+        }}
+        flexDirection="row"
+        width="100%"
+        backgroundColor={isReloadCursored() ? t().backgroundElementActive : undefined}
+      >
+        <text
+          flexGrow={1}
+          fg={!reloadEnabled() ? t().foregroundMuted : isReloadCursored() ? t().accent : t().foreground}
+          wrapMode="none"
         >
-          <text
-            flexGrow={1}
-            fg={!reloadEnabled() ? t().foregroundMuted : isReloadCursored() ? t().accent : t().foreground}
-            wrapMode="none"
-          >
-            {reloadLabel()}
+          {reloadLabel()}
+        </text>
+        <Show when={reloadStatus()}>
+          <text flexShrink={0} fg={t().foregroundMuted} wrapMode="none">
+            {reloadStatus()}
           </text>
-          <Show when={reloadStatus()}>
-            <text flexShrink={0} fg={t().foregroundMuted} wrapMode="none">
-              {reloadStatus()}
-            </text>
-          </Show>
-        </box>
-        <Show when={props.warningReason}>
-          {warning => (
-            <box paddingBottom={1}>
-              <text fg={t().accent} wrapMode="word">
-                {warning()}
-              </text>
-            </box>
-          )}
-        </Show>
-        <Show when={resources().length > 0}>
-          <box flexDirection="column" width="100%">
-            <box flexDirection="row" width="100%">
-              <box flexGrow={1}>
-                <text fg={t().foregroundMuted} wrapMode="none">
-                  total resources
-                </text>
-              </box>
-              <box flexShrink={0} width={2} />
-              <text fg={t().foregroundMuted} wrapMode="none">
-                {resources().length}
-              </text>
-            </box>
-
-            <For each={namespaces()}>
-              {(ns, nsIdx) => {
-                const nsResources = () => namespaceResources(ns);
-                const namespaceIdx = () => flatIndexForNamespace(ns.namespace);
-                const isNamespaceCursored = () => props.detailFocused() && props.detailCursorIndex() === namespaceIdx();
-                const namespaceIsExpanded = () => expandedNamespaces().has(ns.namespace);
-                const namespaceIsLast = () => nsIdx() === namespaces().length - 1;
-                const namespaceConnector = () => (namespaceIsLast() ? "└─ " : "├─ ");
-                const childLead = () => (namespaceIsLast() ? "   " : "│  ");
-
-                return (
-                  <box flexDirection="column" width="100%">
-                    <box
-                      ref={(el: Renderable) => {
-                        refsByKey.set(`namespace:${ns.namespace}`, el);
-                        syncItemRefs();
-                      }}
-                      flexDirection="row"
-                      width="100%"
-                      backgroundColor={isNamespaceCursored() ? t().backgroundElementActive : undefined}
-                    >
-                      <text flexShrink={0} wrapMode="none" fg={t().border}>
-                        {namespaceConnector()}
-                      </text>
-                      <text
-                        flexShrink={0}
-                        wrapMode="none"
-                        fg={isNamespaceCursored() ? t().accent : t().foregroundMuted}
-                      >
-                        {namespaceIsExpanded() ? "▾ " : "▸ "}
-                      </text>
-                      <text
-                        flexGrow={1}
-                        flexShrink={1}
-                        wrapMode="none"
-                        truncate
-                        fg={isNamespaceCursored() ? t().accent : t().foreground}
-                      >
-                        {ns.namespace}
-                      </text>
-                      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                        {String(nsResources().length).padStart(3)}
-                      </text>
-                    </box>
-
-                    <Show when={namespaceIsExpanded()}>
-                      <For each={RESOURCE_GROUPS}>
-                        {group => (
-                          <Show when={ns[group.key].length > 0}>
-                            <box flexDirection="row" width="100%">
-                              <text flexShrink={0} wrapMode="none" fg={t().border}>
-                                {childLead()}├─{" "}
-                              </text>
-                              <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
-                                {group.label}
-                              </text>
-                            </box>
-                            <For each={ns[group.key]}>
-                              {(resource, resourceIdx) =>
-                                renderResourceRow(
-                                  resource,
-                                  `${childLead()}│  `,
-                                  resourceIdx() === ns[group.key].length - 1 ? "└─ " : "├─ ",
-                                )
-                              }
-                            </For>
-                          </Show>
-                        )}
-                      </For>
-
-                      <Show when={ns.imageStreamTags.length > 0}>
-                        <box flexDirection="row" width="100%">
-                          <text flexShrink={0} wrapMode="none" fg={t().border}>
-                            {childLead()}├─{" "}
-                          </text>
-                          <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
-                            ImageStreams
-                          </text>
-                        </box>
-                        <For each={groupedImageStreams(ns.imageStreamTags)}>
-                          {(stream, streamIdx) => {
-                            const streamLead = () =>
-                              childLead() +
-                              (streamIdx() === groupedImageStreams(ns.imageStreamTags).length - 1 ? "   " : "│  ");
-                            return (
-                              <box flexDirection="column" width="100%">
-                                <box flexDirection="row" width="100%">
-                                  <text flexShrink={0} wrapMode="none" fg={t().border}>
-                                    {streamLead()}├─{" "}
-                                  </text>
-                                  <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
-                                    {stream.stream}
-                                  </text>
-                                </box>
-                                <For each={stream.tags}>
-                                  {(tag, tagIdx) =>
-                                    renderResourceRow(
-                                      tag,
-                                      `${streamLead()}│  `,
-                                      tagIdx() === stream.tags.length - 1 ? "└─ " : "├─ ",
-                                    )
-                                  }
-                                </For>
-                              </box>
-                            );
-                          }}
-                        </For>
-                      </Show>
-                    </Show>
-                  </box>
-                );
-              }}
-            </For>
-          </box>
         </Show>
       </box>
-    </Show>
+      <Show when={!!data()}>
+        <box flexDirection="row" width="100%">
+          <box flexGrow={1}>
+            <text fg={t().foregroundMuted} wrapMode="none">
+              total resources
+            </text>
+          </box>
+          <box flexShrink={0} width={2} />
+          <text fg={t().foregroundMuted} wrapMode="none">
+            {resources().length}
+          </text>
+        </box>
+      </Show>
+      <Show when={props.warningReason}>
+        {warning => (
+          <box paddingBottom={1}>
+            <text fg={t().accent} wrapMode="word">
+              {warning()}
+            </text>
+          </box>
+        )}
+      </Show>
+      <Show when={resources().length > 0}>
+        <box flexDirection="column" width="100%">
+          <For each={namespaces()}>
+            {(ns, nsIdx) => {
+              const nsResources = () => namespaceResources(ns);
+              const namespaceIdx = () => flatIndexForNamespace(ns.namespace);
+              const isNamespaceCursored = () => props.detailFocused() && props.detailCursorIndex() === namespaceIdx();
+              const namespaceIsExpanded = () => expandedNamespaces().has(ns.namespace);
+              const namespaceIsLast = () => nsIdx() === namespaces().length - 1;
+              const namespaceConnector = () => (namespaceIsLast() ? "└─ " : "├─ ");
+              const childLead = () => (namespaceIsLast() ? "   " : "│  ");
+
+              return (
+                <box flexDirection="column" width="100%">
+                  <box
+                    ref={(el: Renderable) => {
+                      refsByKey.set(`namespace:${ns.namespace}`, el);
+                      syncItemRefs();
+                    }}
+                    flexDirection="row"
+                    width="100%"
+                    backgroundColor={isNamespaceCursored() ? t().backgroundElementActive : undefined}
+                  >
+                    <text flexShrink={0} wrapMode="none" fg={t().border}>
+                      {namespaceConnector()}
+                    </text>
+                    <text flexShrink={0} wrapMode="none" fg={isNamespaceCursored() ? t().accent : t().foregroundMuted}>
+                      {namespaceIsExpanded() ? "▾ " : "▸ "}
+                    </text>
+                    <text
+                      flexGrow={1}
+                      flexShrink={1}
+                      wrapMode="none"
+                      truncate
+                      fg={isNamespaceCursored() ? t().accent : t().foreground}
+                    >
+                      {ns.namespace}
+                    </text>
+                    <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                      {String(nsResources().length).padStart(3)}
+                    </text>
+                  </box>
+
+                  <Show when={namespaceIsExpanded()}>
+                    <For each={RESOURCE_GROUPS}>
+                      {group => (
+                        <Show when={ns[group.key].length > 0}>
+                          <box flexDirection="row" width="100%">
+                            <text flexShrink={0} wrapMode="none" fg={t().border}>
+                              {childLead()}├─{" "}
+                            </text>
+                            <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
+                              {group.label}
+                            </text>
+                          </box>
+                          <For each={ns[group.key]}>
+                            {(resource, resourceIdx) =>
+                              renderResourceRow(
+                                resource,
+                                `${childLead()}│  `,
+                                resourceIdx() === ns[group.key].length - 1 ? "└─ " : "├─ ",
+                              )
+                            }
+                          </For>
+                        </Show>
+                      )}
+                    </For>
+
+                    <Show when={ns.imageStreamTags.length > 0}>
+                      <box flexDirection="row" width="100%">
+                        <text flexShrink={0} wrapMode="none" fg={t().border}>
+                          {childLead()}├─{" "}
+                        </text>
+                        <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
+                          ImageStreams
+                        </text>
+                      </box>
+                      <For each={groupedImageStreams(ns.imageStreamTags)}>
+                        {(stream, streamIdx) => {
+                          const streamLead = () =>
+                            childLead() +
+                            (streamIdx() === groupedImageStreams(ns.imageStreamTags).length - 1 ? "   " : "│  ");
+                          return (
+                            <box flexDirection="column" width="100%">
+                              <box flexDirection="row" width="100%">
+                                <text flexShrink={0} wrapMode="none" fg={t().border}>
+                                  {streamLead()}├─{" "}
+                                </text>
+                                <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
+                                  {stream.stream}
+                                </text>
+                              </box>
+                              <For each={stream.tags}>
+                                {(tag, tagIdx) =>
+                                  renderResourceRow(
+                                    tag,
+                                    `${streamLead()}│  `,
+                                    tagIdx() === stream.tags.length - 1 ? "└─ " : "├─ ",
+                                  )
+                                }
+                              </For>
+                            </box>
+                          );
+                        }}
+                      </For>
+                    </Show>
+                  </Show>
+                </box>
+              );
+            }}
+          </For>
+        </box>
+      </Show>
+    </box>
   );
 }

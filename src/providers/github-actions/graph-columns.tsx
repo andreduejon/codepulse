@@ -9,7 +9,7 @@
  *     Zero counts are skipped.
  *
  *   Column 2 (DATE_COL_WIDTH = 15 chars): Latest run relative time / status
- *     Coloured by latestStatus (error / info / success / muted).
+ *     Relative time is muted. The "running" label uses info.
  */
 
 import { For } from "solid-js";
@@ -89,8 +89,9 @@ export function ActionsDateColumn(props: Readonly<ActionsDateProps>) {
             </text>
           );
         }
-        const label = b.latestStatus === "running" ? "running" : formatRelativeDate(b.latestRunAt);
-        const fg = statusColor(t(), b.latestStatus);
+        const running = b.latestStatus === "running";
+        const label = running ? "running" : formatRelativeDate(b.latestRunAt);
+        const fg = running ? statusColor(t(), "running") : t().foregroundMuted;
         if (props.active) {
           return (
             <text fg={fg} wrapMode="none" truncate>

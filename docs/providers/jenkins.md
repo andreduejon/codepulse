@@ -35,3 +35,6 @@ are fetched on first open and kept next to that file under `logs/`. Cache
 count (`10` / `20` / `50`) caps commit files; logs leave with the SHA.
 A build deleted in Jenkins stays in the local cache.
 Auto refresh only re-queries SHAs that still show as running.
+Scrolling outside fetch size reads disk cache only — it does not query Jenkins.
+Details include **Reload commit** (Enter hint: `reload`) to query the selected
+SHA.

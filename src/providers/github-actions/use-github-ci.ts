@@ -70,8 +70,8 @@ export interface UseGitHubCIResult {
    * Resolves to an empty string if token or repo is unavailable.
    */
   fetchJobLogForJob: (jobId: number, run: { headSha: string; status: string }, signal?: AbortSignal) => Promise<string>;
-  /** Fetch CI data for one selected SHA on demand. */
-  fetchCommitDataForSHA: (sha: string) => Promise<void>;
+  /** Fetch CI data for one selected SHA on demand. `force` re-queries even if already loaded. */
+  fetchCommitDataForSHA: (sha: string, force?: boolean) => Promise<void>;
   /** Trigger an immediate (non-conditional) refresh of CI data. */
   refresh: () => Promise<void>;
   /** True when the provider is available (token + GitHub remote detected). */
@@ -179,6 +179,8 @@ export function useGitHubCI(opts: {
    */
   const queriedSHAs = new Set<string>();
   let authFrozen = false;
+  /** Sticky: GHE GraphQL without WorkflowRun.jobs. Skip that field after the first retry. */
+  let jobsUnsupported = false;
 
   function rememberAuthError(error: string | null): void {
     if (error === BANNER.github.tokenExpired) authFrozen = true;
@@ -210,10 +212,13 @@ export function useGitHubCI(opts: {
       batches.push(shas.slice(i, i + GQL_BATCH_SIZE));
     }
 
-    const results = await Promise.all(batches.map(batch => fetchCIDataForSHAs(repo, token, batch, { signal })));
+    const results = await Promise.all(
+      batches.map(batch => fetchCIDataForSHAs(repo, token, batch, { signal, includeJobs: !jobsUnsupported })),
+    );
 
     if (signal?.aborted || epoch !== lifecycle.getEpoch()) return { firstError: null, failedSHAs: [] };
 
+    if (results.some(result => result.jobsUnsupported)) jobsUnsupported = true;
     const firstError = results.find(r => r.error)?.error ?? null;
     const failedSHAs: string[] = [];
     for (let i = 0; i < results.length; i++) {
@@ -397,19 +402,24 @@ export function useGitHubCI(opts: {
       jobsCache.clear();
       queriedSHAs.clear();
       authFrozen = false;
+      jobsUnsupported = false;
       setCommitDataVersion(v => v + 1);
       actions.setGraphBadges("github-actions", new Map());
       actions.setProviderStatus("github-actions", providerIdle());
     },
   });
 
-  async function doForceRefresh(): Promise<void> {
-    lifecycle.resetCaches();
-    await lifecycle.fetchInitial(undefined, undefined, true);
+  async function refreshWindow(): Promise<void> {
+    const window = collectTopSHAs(state.graphRows(), config.fetchDepth);
+    for (const sha of window) queriedSHAs.delete(sha);
+    await lifecycle.fetchInitial(undefined, window, true);
     if (state.activeProviderView() === "github-actions") lifecycle.startAutoRefresh();
   }
 
-  async function fetchCommitDataForSHA(sha: string): Promise<void> {
+  async function fetchCommitDataForSHA(sha: string, force = false): Promise<void> {
+    await hydrateCachedCandidates(state.repoPath(), [sha]);
+    if (!force) return;
+    queriedSHAs.delete(sha);
     await lifecycle.fetchInitial(undefined, [sha], true);
   }
 
@@ -465,7 +475,7 @@ export function useGitHubCI(opts: {
       return log;
     },
     fetchCommitDataForSHA,
-    refresh: doForceRefresh,
+    refresh: refreshWindow,
     isAvailable,
   };
 }

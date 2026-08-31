@@ -24,7 +24,7 @@ export interface UseJenkinsCIResult {
   getCommitData: (sha: string) => JenkinsCommitData | null;
   fetchJobsForRun: (run: JenkinsRun) => Promise<JenkinsJobFetchResult>;
   fetchRunLog: (run: JenkinsRun, signal?: AbortSignal) => Promise<string>;
-  fetchCommitDataForSHA: (sha: string) => Promise<void>;
+  fetchCommitDataForSHA: (sha: string, force?: boolean) => Promise<void>;
   refresh: () => Promise<void>;
   isAvailable: () => boolean;
 }
@@ -325,12 +325,10 @@ export function useJenkinsCI(opts: {
       }
       return log;
     },
-    fetchCommitDataForSHA: async sha => {
-      const existing = commitDataCache.get(sha);
-      if (existing && existing.runs.length > 0) {
-        await fetchForSHAs([sha], "shallow");
-        return;
-      }
+    fetchCommitDataForSHA: async (sha, force = false) => {
+      await hydrateCachedCandidates(state.repoPath(), [sha]);
+      if (!force) return;
+      queriedSHAs.delete(sha);
       await fetchForSHAs([sha], "full");
     },
     refresh: async () => {
