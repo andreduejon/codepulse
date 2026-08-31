@@ -72,6 +72,7 @@ export function useJenkinsCI(opts: {
   const runCache = new Map<string, JenkinsRun>();
   const resolvedShas = new Set<string>();
   const queriedSHAs = new Set<string>();
+  let discoveredJobs: { url: string }[] | null = null;
 
   function rebuildCaches() {
     const allRuns = [...runCache.values()];
@@ -94,13 +95,14 @@ export function useJenkinsCI(opts: {
     const epoch = lifecycle.getEpoch();
     const token = getJenkinsToken(config.tokenEnvVar);
     if (!token || shas.length === 0) return { firstError: null };
+    const jobs = discoveredJobs ?? config.jobs;
     const result =
       mode === "shallow"
-        ? await fetchJenkinsGraphDataForSHAs(config.jobs, config.username, token, shas, {
+        ? await fetchJenkinsGraphDataForSHAs(jobs, config.username, token, shas, {
             signal,
             buildLimit: config.fetchDepth,
           })
-        : await fetchJenkinsDataForSHAs(config.jobs, config.username, token, shas, {
+        : await fetchJenkinsDataForSHAs(jobs, config.username, token, shas, {
             signal,
             buildLimit: config.fetchDepth,
           });
@@ -112,6 +114,7 @@ export function useJenkinsCI(opts: {
       }
     }
     if (result.discoveryComplete) {
+      discoveredJobs = result.jobUrls.map(url => ({ url }));
       const activeJobUrls = new Set(result.jobUrls);
       for (const [key, run] of runCache) {
         if (!activeJobUrls.has(run.jobUrl)) runCache.delete(key);
@@ -254,6 +257,7 @@ export function useJenkinsCI(opts: {
       runCache.clear();
       resolvedShas.clear();
       queriedSHAs.clear();
+      discoveredJobs = null;
       setCommitDataVersion(v => v + 1);
       actions.setGraphBadges("jenkins", new Map());
       actions.setProviderStatus("jenkins", providerIdle());
