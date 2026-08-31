@@ -636,6 +636,13 @@ function makeBatchResponse(
       wfRunNumber?: number;
       wfName?: string;
       event?: string;
+      jobs?: Array<{
+        databaseId: number;
+        name: string;
+        status?: string;
+        conclusion?: string | null;
+        steps?: Array<{ name: string; number: number; status?: string; conclusion?: string | null }>;
+      }>;
     }>;
   }>,
 ) {
@@ -656,6 +663,9 @@ function makeBatchResponse(
                   event: s.event ?? "push",
                   updatedAt: "2024-01-02T00:00:00Z",
                   workflow: { name: s.wfName ?? "CI" },
+                  jobs: s.jobs
+                    ? { nodes: s.jobs }
+                    : undefined,
                 }
               : null,
         })),
@@ -699,6 +709,51 @@ describe("fetchCIDataForSHAs", () => {
     expect(result.data[1].headSha).toBe("bbb");
     expect(result.data[1].status).toBe("in_progress");
     expect(result.data[1].conclusion).toBeNull();
+  });
+
+  it("maps workflow jobs and steps from the GraphQL batch", async () => {
+    const sha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const response = makeBatchResponse([
+      {
+        sha,
+        suites: [
+          {
+            wfRunId: 9,
+            jobs: [
+              {
+                databaseId: 91,
+                name: "test",
+                status: "COMPLETED",
+                conclusion: "SUCCESS",
+                steps: [{ name: "Checkout", number: 1, status: "COMPLETED", conclusion: "SUCCESS" }],
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+    mockFetch(mock(async () => new Response(JSON.stringify(response), { status: 200 })));
+    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, [sha]);
+    expect(result.jobs.get(9)).toEqual([
+      {
+        id: 91,
+        name: "test",
+        status: "completed",
+        conclusion: "success",
+        startedAt: null,
+        completedAt: null,
+        steps: [
+          {
+            name: "Checkout",
+            status: "completed",
+            conclusion: "success",
+            number: 1,
+            startedAt: null,
+            completedAt: null,
+          },
+        ],
+      },
+    ]);
   });
 
   it("skips check suites with no workflowRun (non-Actions checks)", async () => {

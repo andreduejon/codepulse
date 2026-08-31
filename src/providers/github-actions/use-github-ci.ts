@@ -220,6 +220,9 @@ export function useGitHubCI(opts: {
     const allRuns: GitHubWorkflowRun[] = [];
     for (const result of results) {
       allRuns.push(...result.data);
+      for (const [runId, jobs] of result.jobs) {
+        if (jobs.length > 0) jobsCache.set(runId, jobs);
+      }
     }
 
     const newCommitData = buildCommitDataMap(allRuns);

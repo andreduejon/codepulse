@@ -343,6 +343,25 @@ export function buildCommitDataMap(runs: GitHubWorkflowRun[]): Map<string, GitHu
 // ── GraphQL types ─────────────────────────────────────────────────────────
 
 /** Raw GraphQL CheckSuite node (maps to a single workflow run). */
+interface GqlWorkflowJobStep {
+  name?: string;
+  number?: number;
+  status?: string;
+  conclusion?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+}
+
+interface GqlWorkflowJob {
+  databaseId?: number;
+  name?: string;
+  status?: string;
+  conclusion?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  steps?: GqlWorkflowJobStep[];
+}
+
 interface GqlCheckSuite {
   status: string;
   conclusion: string | null;
@@ -354,6 +373,7 @@ interface GqlCheckSuite {
     createdAt: string;
     updatedAt: string;
     workflow: { name: string };
+    jobs?: { nodes?: GqlWorkflowJob[] };
   } | null;
 }
 
@@ -391,6 +411,27 @@ interface GqlBatchQueryResult {
  */
 function gqlNormalise(status: string, conclusion: string | null): { status: string; conclusion: string | null } {
   return { status: status.toLowerCase(), conclusion: conclusion ? conclusion.toLowerCase() : null };
+}
+
+function mapGqlJob(job: GqlWorkflowJob): GitHubJob | null {
+  if (typeof job.databaseId !== "number" || !job.name) return null;
+  const { status, conclusion } = gqlNormalise(job.status ?? "COMPLETED", job.conclusion ?? null);
+  return {
+    id: job.databaseId,
+    name: job.name,
+    status,
+    conclusion,
+    startedAt: job.startedAt ?? null,
+    completedAt: job.completedAt ?? null,
+    steps: (job.steps ?? []).map((step, index) => ({
+      name: step.name ?? "step",
+      status: (step.status ?? "COMPLETED").toLowerCase(),
+      conclusion: step.conclusion ? step.conclusion.toLowerCase() : null,
+      number: step.number ?? index + 1,
+      startedAt: step.startedAt ?? null,
+      completedAt: step.completedAt ?? null,
+    })),
+  };
 }
 
 function mapGqlCheckSuiteToRun(suite: GqlCheckSuite, sha: string): GitHubWorkflowRun | null {
@@ -434,6 +475,24 @@ const CHECK_SUITE_NODE_FIELDS = `
         updatedAt
         url
         workflow { name }
+        jobs(first: 30) {
+          nodes {
+            databaseId
+            name
+            status
+            conclusion
+            startedAt
+            completedAt
+            steps {
+              name
+              number
+              status
+              conclusion
+              startedAt
+              completedAt
+            }
+          }
+        }
       }`;
 
 function commitFragment(afterVar?: string): string {
@@ -478,6 +537,7 @@ function collectRunsFromRepoData(
   repoData: Record<string, GqlCommitObject | null>,
   shas: string[],
   runs: GitHubWorkflowRun[],
+  jobs: Map<number, GitHubJob[]>,
 ): Array<{ sha: string; cursor: string }> {
   const next: Array<{ sha: string; cursor: string }> = [];
   for (let i = 0; i < shas.length; i++) {
@@ -486,7 +546,13 @@ function collectRunsFromRepoData(
     const sha = commitObj.oid;
     for (const suite of commitObj.checkSuites?.nodes ?? []) {
       const run = mapGqlCheckSuiteToRun(suite, sha);
-      if (run) runs.push(run);
+      if (run) {
+        runs.push(run);
+        const mappedJobs = (suite.workflowRun?.jobs?.nodes ?? [])
+          .map(mapGqlJob)
+          .filter((job): job is GitHubJob => job !== null);
+        if (mappedJobs.length > 0) jobs.set(run.id, mappedJobs);
+      }
     }
     const pageInfo = commitObj.checkSuites?.pageInfo;
     if (pageInfo?.hasNextPage && pageInfo.endCursor) next.push({ sha, cursor: pageInfo.endCursor });
@@ -494,7 +560,7 @@ function collectRunsFromRepoData(
   return next;
 }
 
-export type GraphQLFetchResult = GitHubResult<GitHubWorkflowRun[]>;
+export type GraphQLFetchResult = GitHubResult<GitHubWorkflowRun[]> & { jobs: Map<number, GitHubJob[]> };
 
 /**
  * Fetch CI check-suite data for a batch of commit SHAs using the GitHub
@@ -514,9 +580,10 @@ export async function fetchCIDataForSHAs(
   opts: { signal?: AbortSignal } = {},
 ): Promise<GraphQLFetchResult> {
   const { signal } = opts;
-  const empty: GraphQLFetchResult = { data: [], error: null };
+  const empty: GraphQLFetchResult = { data: [], jobs: new Map(), error: null };
   if (shas.length === 0) return empty;
   const runs: GitHubWorkflowRun[] = [];
+  const jobs = new Map<number, GitHubJob[]>();
 
   try {
     const res = await fetchWithRetry(graphqlEndpoint(repo), {
@@ -544,7 +611,7 @@ export async function fetchCIDataForSHAs(
     }
 
     const repoData = json.data?.repository ?? {};
-    let pending = collectRunsFromRepoData(repoData, shas, runs);
+    let pending = collectRunsFromRepoData(repoData, shas, runs, jobs);
 
     for (let page = 1; page < MAX_CHECK_SUITE_PAGES && pending.length > 0; page++) {
       const variables: Record<string, string> = { owner: repo.owner, repo: repo.repo };
@@ -561,25 +628,27 @@ export async function fetchCIDataForSHAs(
       if (!pageRes.ok) {
         return {
           data: runs,
+          jobs,
           error: debugGitHubHttp(pageRes, "fetch", `GraphQL HTTP ${pageRes.status} for ${repo.owner}/${repo.repo}`),
         };
       }
       const pageJson = (await pageRes.json()) as GqlBatchQueryResult;
       if (pageJson.errors?.length) {
         debugError("GitHub", pageJson.errors.map(e => e.message).join("; "));
-        return { data: runs, error: BANNER.github.fetchFailed };
+        return { data: runs, jobs, error: BANNER.github.fetchFailed };
       }
       pending = collectRunsFromRepoData(
         pageJson.data?.repository ?? {},
         pending.map(p => p.sha),
         runs,
+        jobs,
       );
     }
 
-    return { data: runs, error: null };
+    return { data: runs, jobs, error: null };
   } catch (err) {
     if (signal?.aborted) throw err;
-    return { data: runs, error: bannerOrFallback(err, BANNER.github.fetchFailed, "GitHub") };
+    return { data: runs, jobs, error: bannerOrFallback(err, BANNER.github.fetchFailed, "GitHub") };
   }
 }
 
