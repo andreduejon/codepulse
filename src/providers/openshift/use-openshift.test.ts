@@ -87,7 +87,8 @@ describe("commitHasDigestSeed", () => {
 });
 
 describe("OpenShift commit merge", () => {
-  test("hydrates cached builds without raw payloads", () => {
+  test("hydrates cached builds and keeps the API object", () => {
+    const object = { kind: "Build", metadata: { name: build.name } };
     const data = commitDataFromCacheEntry({
       sha: SHA,
       builds: [
@@ -98,10 +99,12 @@ describe("OpenShift commit merge", () => {
           status: "pass",
           imageRefs: build.imageRefs,
           commitSha: SHA,
+          object,
         },
       ],
     });
     expect(data.namespaces[0].builds[0].kind).toBe("Build");
+    expect(data.namespaces[0].builds[0].object).toEqual(object);
     expect(data.namespaces[0].pods).toEqual([]);
   });
 
@@ -137,6 +140,40 @@ describe("OpenShift commit merge", () => {
     const merged = mergeLiveIntoCommit(cached, live, SHA);
     expect(merged.namespaces[0].builds).toEqual([build]);
     expect(merged.namespaces[0].pods).toEqual([pod]);
+  });
+
+  test("unions cache-only builds with live builds", () => {
+    const older: OpenShiftResource = { ...build, id: "Build:ns:app-0", name: "app-0" };
+    const cached: OpenShiftCommitData = {
+      sha: SHA,
+      liveFetched: false,
+      namespaces: [
+        {
+          namespace: "ns",
+          builds: [older],
+          imageStreamTags: [],
+          deployments: [],
+          deploymentConfigs: [],
+          pods: [],
+        },
+      ],
+    };
+    const live: OpenShiftCommitData = {
+      sha: SHA,
+      liveFetched: false,
+      namespaces: [
+        {
+          namespace: "ns",
+          builds: [build],
+          imageStreamTags: [],
+          deployments: [],
+          deploymentConfigs: [],
+          pods: [],
+        },
+      ],
+    };
+    const merged = mergeLiveIntoCommit(live, cached, SHA);
+    expect(merged.namespaces[0].builds.map(item => item.id).sort()).toEqual([older.id, build.id].sort());
   });
 
   test("drops ImageStreamTags when a live overlay has none", () => {

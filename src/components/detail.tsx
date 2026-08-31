@@ -923,10 +923,13 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   liveAge={props.openshiftLiveAge}
                   onOpenResource={props.onOpenOpenShiftResource}
                   unavailableReason={
-                    props.openshiftProviderStatus?.kind === "error" ||
                     props.openshiftProviderStatus?.kind === "unavailable"
                       ? props.openshiftProviderStatus.message
                       : null
+                  }
+                  liveUnavailable={
+                    props.openshiftProviderStatus?.kind === "error" &&
+                    props.openshiftProviderStatus.message === BANNER.openshift.tokenExpired
                   }
                   warningReason={
                     props.openshiftProviderStatus?.kind === "warning" &&

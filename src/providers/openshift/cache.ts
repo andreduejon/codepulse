@@ -16,6 +16,7 @@ export interface OpenShiftCachedBuild {
   imageRefs: string[];
   commitSha: string;
   updatedAt?: string | null;
+  object?: unknown;
 }
 
 export interface OpenShiftCacheEntry {
@@ -61,6 +62,13 @@ export function isOpenShiftCacheEntry(value: unknown): value is OpenShiftCacheEn
   );
 }
 
+export function mergeById<T extends { id: string }>(existing: readonly T[], incoming: readonly T[]): T[] {
+  const byId = new Map<string, T>();
+  for (const item of existing) byId.set(item.id, item);
+  for (const item of incoming) byId.set(item.id, item);
+  return [...byId.values()];
+}
+
 export function toCachedBuild(resource: OpenShiftResource): OpenShiftCachedBuild | null {
   if (resource.kind !== "Build" || !resource.commitSha) return null;
   return {
@@ -72,6 +80,7 @@ export function toCachedBuild(resource: OpenShiftResource): OpenShiftCachedBuild
     imageRefs: resource.imageRefs,
     commitSha: resource.commitSha,
     updatedAt: resource.updatedAt ?? null,
+    object: resource.object,
   };
 }
 
@@ -86,6 +95,7 @@ export function cachedBuildToResource(build: OpenShiftCachedBuild): OpenShiftRes
     commitSha: build.commitSha,
     uid: build.uid,
     updatedAt: build.updatedAt ?? null,
+    object: build.object,
   };
 }
 

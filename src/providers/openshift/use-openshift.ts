@@ -31,6 +31,7 @@ import {
 } from "./api";
 import {
   cachedBuildToResource,
+  mergeById,
   OpenShiftCache,
   toCachedBuild,
   type OpenShiftCacheEntry,
@@ -139,7 +140,7 @@ export function mergeLiveIntoCommit(
       deployments: ns.deployments,
       deploymentConfigs: ns.deploymentConfigs,
       pods: ns.pods,
-      builds: current.builds.length > 0 ? current.builds : ns.builds,
+      builds: mergeById(ns.builds, current.builds),
     });
   }
   if (fetched) {
@@ -280,12 +281,13 @@ export function useOpenShift(opts: {
 
   async function persistTerminalBuilds(repoPath: string, data: Map<string, OpenShiftCommitData>): Promise<void> {
     for (const [sha, commit] of data) {
-      const builds = commit.namespaces
+      const incoming = commit.namespaces
         .flatMap(ns => ns.builds)
         .map(toCachedBuild)
         .filter((build): build is NonNullable<typeof build> => build !== null && isTerminalBuildStatus(build.status));
-      if (builds.length === 0) continue;
-      await disk.write(repoPath, { sha, builds });
+      if (incoming.length === 0) continue;
+      const existing = await disk.read(repoPath, sha);
+      await disk.write(repoPath, { sha, builds: mergeById(existing?.builds ?? [], incoming) });
     }
   }
 
@@ -318,10 +320,12 @@ export function useOpenShift(opts: {
       });
       if (args.signal?.aborted || args.epoch !== lifecycle.getEpoch()) return;
       if (result.error === BANNER.openshift.tokenExpired) {
+        publish();
         actions.setProviderStatus("openshift", providerError(BANNER.openshift.tokenExpired));
         return;
       }
       if (result.successfulRequests === 0 && result.error) {
+        publish();
         actions.setProviderStatus("openshift", providerError(result.error));
         return;
       }
@@ -330,8 +334,10 @@ export function useOpenShift(opts: {
       const candidates = selectOpenShiftCandidateSHAs(collectTopSHAs(state.graphRows(), config.fetchDepth), seeds.keys());
       const forDisk = filterToEligible(result.data);
       await persistTerminalBuilds(repoPath, forDisk);
+      const allowed = eligibleSHAs();
       for (const sha of [...commits.keys()]) {
-        if (!candidates.has(sha) && !seeds.has(sha)) commits.delete(sha);
+        if (allowed.has(sha.toLowerCase()) || candidates.has(sha) || seeds.has(sha)) continue;
+        commits.delete(sha);
       }
       for (const sha of candidates) {
         const commit = seeds.get(sha);
@@ -352,6 +358,7 @@ export function useOpenShift(opts: {
         err instanceof Error && err.message === BANNER.openshift.tokenExpired
           ? BANNER.openshift.tokenExpired
           : BANNER.openshift.inventoryFailed;
+      publish();
       actions.setProviderStatus("openshift", providerError(message));
     }
   }
@@ -522,6 +529,14 @@ export function useOpenShift(opts: {
       });
     },
     loadResourceObject: async resource => {
+      if (resource.object !== undefined) return resource.object;
+      if (resource.kind === "Build" && resource.commitSha && isTerminalBuildStatus(resource.status)) {
+        const entry = await disk.read(state.repoPath(), resource.commitSha);
+        const cached = entry?.builds.find(
+          build => build.id === resource.id || (build.namespace === resource.namespace && build.name === resource.name),
+        );
+        if (cached?.object !== undefined) return cached.object;
+      }
       const token = getOpenShiftToken(config.tokenEnvVar);
       if (!token) throw new Error(unavailableMessage());
       return fetchOpenShiftObject(config.serverUrl, token, resource);

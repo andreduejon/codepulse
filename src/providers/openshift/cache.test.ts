@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { OpenShiftCache, type OpenShiftCacheEntry } from "./cache";
+import { mergeById, OpenShiftCache, type OpenShiftCacheEntry } from "./cache";
 
 const roots: string[] = [];
 
@@ -32,16 +32,35 @@ async function cacheRoot(): Promise<string> {
   return root;
 }
 
+describe("mergeById", () => {
+  test("keeps existing ids and lets incoming win on conflict", () => {
+    const existing = [
+      { id: "a", name: "old-a" },
+      { id: "b", name: "keep-b" },
+    ];
+    const incoming = [
+      { id: "a", name: "new-a" },
+      { id: "c", name: "new-c" },
+    ];
+    expect(mergeById(existing, incoming)).toEqual([
+      { id: "a", name: "new-a" },
+      { id: "b", name: "keep-b" },
+      { id: "c", name: "new-c" },
+    ]);
+  });
+});
+
 describe("OpenShiftCache", () => {
-  test("stores slim builds and reads them back", async () => {
+  test("stores builds and roundtrips the API object", async () => {
     const cache = new OpenShiftCache({ root: await cacheRoot() });
     const snapshot = entry("a".repeat(40));
+    snapshot.builds[0].object = { kind: "Build", metadata: { name: "build-1" } };
     await cache.write("/repo", snapshot);
 
     expect(await cache.read("/repo", snapshot.sha)).toEqual({ ...snapshot, sha: snapshot.sha.toLowerCase() });
     const stored = JSON.parse(await readFile(await cache.pathFor("/repo", snapshot.sha), "utf8"));
     expect(Object.keys(stored)).toEqual(["sha", "builds"]);
-    expect(stored.builds[0].raw).toBeUndefined();
+    expect(stored.builds[0].object).toEqual({ kind: "Build", metadata: { name: "build-1" } });
   });
 
   test("ignores and deletes corrupt entries", async () => {

@@ -75,6 +75,8 @@ export interface OpenShiftResource {
   updatedAt?: string | null;
   podSelector?: Record<string, string>;
   labels?: Record<string, string>;
+  /** Full API object. Kept for Build JSON dialog / disk cache. */
+  object?: unknown;
 }
 
 export interface OpenShiftNamespaceData {

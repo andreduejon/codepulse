@@ -10,7 +10,8 @@ provider **Auto refresh** cycle (`off`, `2m`, `5m`, `10m`; default `2m`).
 Deployments, DeploymentConfigs, and Pods are listed then watched in the
 configured namespaces until you leave the view. Git Auto refresh / Auto fetch
 stay git-only. Select a Build or Pod and press Enter to view its log, or the
-API object for other kinds. JSON is fetched on open, not kept in memory.
+API object for other kinds. Terminal Build JSON is kept with the list and on
+disk. Other kinds fetch JSON on open.
 
 ## Configuration
 
@@ -39,16 +40,22 @@ Credentials stay in environment variables and are not written to config.
 
 ## Cache
 
-Terminal Builds (`Complete`, `Failed`, `Error`, `Cancelled`) and their logs are
-stored under:
+Terminal Builds (`Complete`, `Failed`, `Error`, `Cancelled`), their API objects,
+and their logs are stored under:
 
 ```text
 ~/.cache/codepulse/openshift/<repository-hash>/<commit-sha>.json
 ~/.cache/codepulse/openshift/<repository-hash>/logs/<sha>_<namespace>_<build>.txt
 ```
 
-Raw API objects, Pods, and workloads are not written to disk. An expired token
-stops further requests and leaves the cache in place.
+Each file is one commit SHA. Limit `10` / `20` / `50` is SHA files, not Builds.
+Live terminal Builds merge into the existing file by Build id. OpenShift
+history prune does not drop Builds already cached. Oldest SHA files evict at
+the limit. Pods, workloads, and ImageStreamTags are not written to disk.
+
+An expired token (401) stops further requests. The banner reads `OpenShift
+token expired. Live data unavailable.` Graph and details keep the last Live
+and Cache data. Reload is disabled. Cached Build JSON and logs still open.
 
 ## Matching
 
@@ -86,7 +93,8 @@ that produced them.
   1000 lines. Open at the bottom; stay pinned only if you are already at the
   bottom. When the stream closes the title shows `log ended`. Press `r` to
   restart. They are not stored.
-- `c` cycles view mode (log / JSON) for Builds and Pods. JSON stays a snapshot.
+- `c` cycles view mode (log / JSON) for Builds and Pods. Terminal Build JSON
+  uses the cached object when present; otherwise JSON is a live snapshot.
   Leave the log view or close the dialog to abort follow.
 
 ## Status

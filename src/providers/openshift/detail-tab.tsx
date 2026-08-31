@@ -14,6 +14,7 @@ export interface OpenShiftDetailTabProps {
   liveAge?: () => string;
   onOpenResource?: (resource: OpenShiftResource) => void;
   unavailableReason?: string | null;
+  liveUnavailable?: boolean;
   warningReason?: string | null;
   loading?: boolean;
   navRef?: DetailNavRef;
@@ -88,6 +89,8 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
   const data = () => props.getCommitData(props.sha);
   const commitLoading = () => props.isLoading?.(props.sha) ?? false;
   const reloadBusy = () => commitLoading() || !!props.loading;
+  const liveUnavailable = () => !!props.liveUnavailable;
+  const reloadEnabled = () => !liveUnavailable();
   const liveAge = () => props.liveAge?.() ?? "";
   const [expandedNamespaces, setExpandedNamespaces] = createSignal<Set<string>>(new Set());
   const itemRefs: Renderable[] = [];
@@ -111,7 +114,7 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
   const resources = createMemo(() => namespaces().flatMap(namespaceResources));
 
   const flatItems = createMemo<FlatItem[]>(() => [
-    { kind: "reload" as const },
+    ...(reloadEnabled() ? [{ kind: "reload" as const }] : []),
     ...namespaces().flatMap(ns => [
       { kind: "namespace" as const, namespace: ns.namespace },
       ...(expandedNamespaces().has(ns.namespace)
@@ -137,7 +140,7 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
 
   createEffect(() => {
     const sha = props.sha;
-    if (props.unavailableReason || commitLoading() || data()?.liveFetched) return;
+    if (props.unavailableReason || liveUnavailable() || commitLoading() || data()?.liveFetched) return;
     void props.fetchCommitData?.(sha);
   });
 
@@ -164,7 +167,7 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
       const item = flatItems()[props.detailCursorIndex()];
       if (!item) return false;
       if (item.kind === "reload") {
-        if (!reloadBusy()) void props.fetchCommitData?.(props.sha, true);
+        if (reloadEnabled() && !reloadBusy()) void props.fetchCommitData?.(props.sha, true);
       } else if (item.kind === "namespace") toggleNamespace(item.namespace);
       else props.onOpenResource?.(item.resource);
       return false;
@@ -177,7 +180,7 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
       props.setDetailCursorAction(null);
       return;
     }
-    if (item.kind === "reload") props.setDetailCursorAction(reloadBusy() ? null : "scan");
+    if (item.kind === "reload") props.setDetailCursorAction(reloadEnabled() && !reloadBusy() ? "scan" : null);
     else if (item.kind === "namespace")
       props.setDetailCursorAction(expandedNamespaces().has(item.namespace) ? "collapse" : "expand");
     else props.setDetailCursorAction("open");
@@ -225,6 +228,14 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
   };
 
   const reloadLabel = () => "Reload commit";
+  const reloadIdx = () => flatItems().findIndex(item => item.kind === "reload");
+  const isReloadCursored = () =>
+    reloadIdx() >= 0 && props.detailFocused() && props.detailCursorIndex() === reloadIdx();
+  const reloadStatus = () => {
+    if (reloadBusy()) return "loading...";
+    if (liveUnavailable()) return "unavailable";
+    return liveAge();
+  };
 
   return (
     <Show when={!props.unavailableReason} fallback={renderFallback("Unavailable")}>
@@ -236,23 +247,24 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
           }}
           flexDirection="row"
           width="100%"
-          backgroundColor={props.detailFocused() && props.detailCursorIndex() === 0 ? t().backgroundElementActive : undefined}
+          backgroundColor={isReloadCursored() ? t().backgroundElementActive : undefined}
         >
           <text
             flexGrow={1}
-            fg={props.detailFocused() && props.detailCursorIndex() === 0 ? t().accent : t().foreground}
+            fg={
+              !reloadEnabled()
+                ? t().foregroundMuted
+                : isReloadCursored()
+                  ? t().accent
+                  : t().foreground
+            }
             wrapMode="none"
           >
             {reloadLabel()}
           </text>
-          <Show when={reloadBusy()}>
+          <Show when={reloadStatus()}>
             <text flexShrink={0} fg={t().foregroundMuted} wrapMode="none">
-              loading...
-            </text>
-          </Show>
-          <Show when={!reloadBusy() && liveAge()}>
-            <text flexShrink={0} fg={t().foregroundMuted} wrapMode="none">
-              {liveAge()}
+              {reloadStatus()}
             </text>
           </Show>
         </box>

@@ -279,6 +279,7 @@ function extractBuild(namespace: string, item: unknown, annotationKey: string): 
     status: buildStatus(item),
     imageRefs: imageTokens(ref),
     commitSha,
+    object: item,
   };
 }
 
