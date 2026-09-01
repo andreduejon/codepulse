@@ -307,6 +307,11 @@ export function createAppState(
         return next;
       });
     },
+    clearProviderState: () => {
+      setProviderGraphBadges(new Map());
+      setProviderStatusMap(new Map());
+      setProviderLastSuccessfulRefreshMap(new Map());
+    },
     setKeyboardScopeOverride,
     cycleProviderView: () => setActiveProviderView(providers.nextView(activeProviderView())),
   };

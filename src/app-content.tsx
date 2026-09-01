@@ -344,7 +344,6 @@ export function AppContent(props: Readonly<AppContentProps>) {
       hasMore: state.hasMore(),
       lastFetchTime: state.lastFetchTime(),
       activeProviderView: state.activeProviderView(),
-      graphBadges: new Map([[state.activeProviderView(), new Map(state.graphBadges())]]),
       graphScrollTop: graphScrollboxRef?.scrollTop ?? 0,
     });
   };
@@ -365,7 +364,6 @@ export function AppContent(props: Readonly<AppContentProps>) {
       actions.setHasMore(snapshot.hasMore);
       actions.setLastFetchTime(snapshot.lastFetchTime);
       actions.setActiveProviderView(snapshot.activeProviderView);
-      for (const [view, badges] of snapshot.graphBadges) actions.setGraphBadges(view, new Map(badges));
       actions.setLoading(false);
       actions.setFetching(false);
       actions.setDetailLoading(false);
@@ -408,7 +406,6 @@ export function AppContent(props: Readonly<AppContentProps>) {
     actions.setPathFilter(null);
     actions.setPathMatchSet(null);
     actions.setError(null);
-    actions.setProviderStatus(state.activeProviderView(), providerIdle());
     actions.setCommitDetail(null);
     actions.setUncommittedDetail(null);
     actions.setDetailCursorIndex(0);
@@ -420,11 +417,29 @@ export function AppContent(props: Readonly<AppContentProps>) {
     cancelScrollRestore();
     setPendingGraphScrollTop(null);
     saveRepoSessionSnapshot(currentPath);
+    actions.setActiveProviderView("git");
+    gitHubCI.invalidate();
+    jenkinsCI.invalidate();
+    openShift.invalidate();
+    snyk.invalidate();
+    actions.clearProviderState();
     resetTransientRepoState();
     setRepoSelectorVisible(false);
-    const snapshot = repoSessionCache.get(nextPath);
-    if (snapshot) restoreRepoSessionSnapshot(snapshot);
     setActiveRepoPath(nextPath);
+    const snapshot = repoSessionCache.get(nextPath);
+    if (snapshot) {
+      restoreRepoSessionSnapshot(snapshot);
+    } else {
+      actions.setCommits([]);
+      actions.setGraphRows([]);
+      actions.setBranches([]);
+      actions.setCurrentBranch("");
+      actions.setRepoPath(nextPath);
+      actions.setRemoteUrl("");
+      actions.setTagDetails(new Map());
+      actions.setStashByParent(new Map());
+      actions.setLoading(true);
+    }
   };
 
   const switchGroupRepo = (direction: 1 | -1) => {

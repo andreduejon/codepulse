@@ -27,6 +27,7 @@ export interface UseJenkinsCIResult {
   fetchCommitDataForSHA: (sha: string, force?: boolean) => Promise<void>;
   refresh: () => Promise<void>;
   isAvailable: () => boolean;
+  invalidate: () => void;
 }
 
 export function useJenkinsCI(opts: {
@@ -99,6 +100,7 @@ export function useJenkinsCI(opts: {
 
   async function fetchForSHAs(shas: string[], mode: "shallow" | "full", signal?: AbortSignal) {
     const epoch = lifecycle.getEpoch();
+    const repoPath = state.repoPath();
     const token = getJenkinsToken(config.tokenEnvVar);
     if (!token || shas.length === 0) return { firstError: null };
     const jobs = discoveredJobs ?? config.jobs;
@@ -113,7 +115,7 @@ export function useJenkinsCI(opts: {
             signal,
             buildLimit: config.fetchDepth,
           });
-    if (signal?.aborted || epoch !== lifecycle.getEpoch()) return { firstError: null, stale: true };
+    if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { firstError: null, stale: true };
     if (result.error === null) {
       for (const sha of shas) {
         queriedSHAs.add(sha);
@@ -132,12 +134,13 @@ export function useJenkinsCI(opts: {
       runCache.set(`${run.id}:${run.headSha}`, run);
     }
     rebuildCaches();
-    await persistTerminalRuns(state.repoPath(), shas);
+    await persistTerminalRuns(repoPath, shas, epoch);
     return { firstError: result.error, stale: false };
   }
 
-  async function hydrateCachedCandidates(repoPath: string, shas: readonly string[]): Promise<void> {
+  async function hydrateCachedCandidates(repoPath: string, shas: readonly string[], epoch: number): Promise<void> {
     const entries = await Promise.all(shas.map(sha => disk.read(repoPath, sha)));
+    if (!lifecycle.isCurrent(epoch, repoPath)) return;
     let changed = false;
     for (const entry of entries) {
       if (!entry) continue;
@@ -150,7 +153,7 @@ export function useJenkinsCI(opts: {
     if (changed) rebuildCaches();
   }
 
-  async function persistTerminalRuns(repoPath: string, shas: readonly string[]): Promise<void> {
+  async function persistTerminalRuns(repoPath: string, shas: readonly string[], epoch: number): Promise<void> {
     const writes = await Promise.all(
       shas.map(async sha => {
         const incoming = [...runCache.values()].filter(
@@ -158,6 +161,7 @@ export function useJenkinsCI(opts: {
         );
         if (incoming.length === 0) return false;
         const existing = await disk.read(repoPath, sha);
+        if (!lifecycle.isCurrent(epoch, repoPath)) return false;
         await disk.write(
           repoPath,
           {
@@ -176,7 +180,7 @@ export function useJenkinsCI(opts: {
         return true;
       }),
     );
-    if (writes.some(Boolean)) await disk.evictForRepo(repoPath);
+    if (writes.some(Boolean) && lifecycle.isCurrent(epoch, repoPath)) await disk.evictForRepo(repoPath);
   }
 
   const lifecycle = useProviderFetchLifecycle({
@@ -211,8 +215,9 @@ export function useJenkinsCI(opts: {
       if (showStatus) authFrozen = false;
       if (showStatus) actions.setProviderStatus("jenkins", providerLoading());
       const window = shas ?? collectTopSHAs(state.graphRows(), config.fetchDepth);
-      await hydrateCachedCandidates(state.repoPath(), window);
-      if (signal?.aborted || epoch !== lifecycle.getEpoch()) return;
+      const repoPath = state.repoPath();
+      await hydrateCachedCandidates(repoPath, window, epoch);
+      if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return;
       const target = window.filter(sha => !queriedSHAs.has(sha));
       if (target.length === 0) {
         if (showStatus) actions.setProviderStatus("jenkins", providerIdle());
@@ -220,7 +225,7 @@ export function useJenkinsCI(opts: {
         return;
       }
       const { firstError, stale } = await fetchForSHAs(target, "shallow", signal);
-      if (stale || epoch !== lifecycle.getEpoch()) return;
+      if (stale || !lifecycle.isCurrent(epoch, repoPath)) return;
       lifecycle.noteFetchStarted();
       rememberAuthError(firstError ?? null);
       lifecycle.noteFetchResult(!firstError);
@@ -229,6 +234,7 @@ export function useJenkinsCI(opts: {
       else actions.setProviderStatus("jenkins", providerIdle());
     },
     runRefresh: async ({ signal, showStatus, epoch }) => {
+      const repoPath = state.repoPath();
       if (authFrozen && !showStatus) return;
       if (showStatus) authFrozen = false;
       const target = collectRunningSHAs(state.graphBadges());
@@ -245,10 +251,11 @@ export function useJenkinsCI(opts: {
         const token = getJenkinsToken(config.tokenEnvVar);
         if (!token) return;
         const { data, error } = await fetchJenkinsRunsForBuilds(runningRuns, config.username, token, signal);
-        if (signal?.aborted || epoch !== lifecycle.getEpoch()) return;
+        if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return;
         for (const run of data) runCache.set(`${run.id}:${run.headSha}`, run);
         rebuildCaches();
-        await persistTerminalRuns(state.repoPath(), target);
+        await persistTerminalRuns(repoPath, target, epoch);
+        if (!lifecycle.isCurrent(epoch, repoPath)) return;
         lifecycle.noteRefreshSettled();
         rememberAuthError(error);
         lifecycle.noteFetchResult(!error);
@@ -258,7 +265,7 @@ export function useJenkinsCI(opts: {
         return;
       }
       const { firstError, stale } = await fetchForSHAs(target, "shallow", signal);
-      if (stale || epoch !== lifecycle.getEpoch()) return;
+      if (stale || !lifecycle.isCurrent(epoch, repoPath)) return;
       lifecycle.noteRefreshSettled();
       rememberAuthError(firstError ?? null);
       lifecycle.noteFetchResult(!firstError);
@@ -291,16 +298,17 @@ export function useJenkinsCI(opts: {
     getCommitData,
     fetchJobsForRun: async (run, signal) => {
       const epoch = lifecycle.getEpoch();
+      const repoPath = state.repoPath();
       const cached = jobsCache.get(run.id);
       if (cached) return cached;
       const token = getJenkinsToken(config.tokenEnvVar);
       if (!token) return { jobs: [], error: BANNER.jenkins.missingToken(config.tokenEnvVar) };
       const result = await fetchJenkinsRunJobs(run, config.username, token, signal);
-      if (signal?.aborted || epoch !== lifecycle.getEpoch()) return { jobs: [], error: null };
+      if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
       if (run.status === "completed" && result.error === null) {
-        if (signal?.aborted || epoch !== lifecycle.getEpoch()) return { jobs: [], error: null };
+        if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
         jobsCache.set(run.id, result);
-        await persistTerminalRuns(state.repoPath(), [run.headSha]);
+        await persistTerminalRuns(repoPath, [run.headSha], epoch);
       }
       return result;
     },
@@ -311,6 +319,7 @@ export function useJenkinsCI(opts: {
       const repoPath = state.repoPath();
       if (isTerminalJenkinsRun(run)) {
         const diskLog = await disk.readLog(repoPath, run.headSha, run.id).catch(() => null);
+        if (!lifecycle.isCurrent(epoch, repoPath)) return "";
         if (diskLog) {
           logCache.set(run.id, diskLog);
           return diskLog;
@@ -319,15 +328,19 @@ export function useJenkinsCI(opts: {
       const token = getJenkinsToken(config.tokenEnvVar);
       if (!token) return "";
       const log = await fetchJenkinsConsoleLog(run, config.username, token, signal);
-      if (epoch !== lifecycle.getEpoch()) return "";
+      if (!lifecycle.isCurrent(epoch, repoPath)) return "";
       if (run.status === "completed" && log) {
         logCache.set(run.id, log);
-        await disk.writeLog(repoPath, run.headSha, run.id, log).catch(() => {});
+        if (lifecycle.isCurrent(epoch, repoPath))
+          await disk.writeLog(repoPath, run.headSha, run.id, log).catch(() => {});
       }
       return log;
     },
     fetchCommitDataForSHA: async (sha, force = false) => {
-      await hydrateCachedCandidates(state.repoPath(), [sha]);
+      const epoch = lifecycle.getEpoch();
+      const repoPath = state.repoPath();
+      await hydrateCachedCandidates(repoPath, [sha], epoch);
+      if (!lifecycle.isCurrent(epoch, repoPath)) return;
       if (!force) return;
       queriedSHAs.delete(sha);
       await fetchForSHAs([sha], "full");
@@ -336,5 +349,6 @@ export function useJenkinsCI(opts: {
       await lifecycle.fetchRefresh(undefined, true);
     },
     isAvailable,
+    invalidate: lifecycle.resetCaches,
   };
 }

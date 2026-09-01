@@ -76,6 +76,8 @@ export interface UseGitHubCIResult {
   refresh: () => Promise<void>;
   /** True when the provider is available (token + GitHub remote detected). */
   isAvailable: () => boolean;
+  /** Abort active work and clear repository-scoped provider state. */
+  invalidate: () => void;
 }
 
 export function useGitHubCI(opts: {
@@ -201,6 +203,7 @@ export function useGitHubCI(opts: {
    */
   async function fetchForSHAs(shas: string[], signal?: AbortSignal): Promise<FetchForShasResult> {
     const epoch = lifecycle.getEpoch();
+    const repoPath = state.repoPath();
     if (shas.length === 0) return { firstError: null, failedSHAs: [] };
     const repo = cachedGitHubRepo();
     const token = getGitHubToken(config.tokenEnvVar);
@@ -216,7 +219,7 @@ export function useGitHubCI(opts: {
       batches.map(batch => fetchCIDataForSHAs(repo, token, batch, { signal, includeJobs: !jobsUnsupported })),
     );
 
-    if (signal?.aborted || epoch !== lifecycle.getEpoch()) return { firstError: null, failedSHAs: [] };
+    if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { firstError: null, failedSHAs: [] };
 
     if (results.some(result => result.jobsUnsupported)) jobsUnsupported = true;
     const firstError = results.find(r => r.error)?.error ?? null;
@@ -246,14 +249,15 @@ export function useGitHubCI(opts: {
 
     const cachedRuns = [...commitDataCache.values()].flatMap(data => data.runs);
     actions.setGraphBadges("github-actions", buildGraphBadges(cachedRuns));
-    await persistTerminalRuns(state.repoPath(), shas);
+    await persistTerminalRuns(repoPath, shas, epoch);
 
     return { firstError, failedSHAs };
   }
 
-  async function hydrateCachedCandidates(repoPath: string, shas: readonly string[]): Promise<void> {
+  async function hydrateCachedCandidates(repoPath: string, shas: readonly string[], epoch: number): Promise<void> {
     const pending = shas.filter(sha => !commitDataCache.has(sha));
     const entries = await Promise.all(pending.map(async sha => ({ sha, entry: await disk.read(repoPath, sha) })));
+    if (!lifecycle.isCurrent(epoch, repoPath)) return;
     let changed = false;
     for (const { sha, entry } of entries) {
       if (!entry) continue;
@@ -270,12 +274,13 @@ export function useGitHubCI(opts: {
     actions.setGraphBadges("github-actions", buildGraphBadges(cachedRuns));
   }
 
-  async function persistTerminalRuns(repoPath: string, shas: readonly string[]): Promise<void> {
+  async function persistTerminalRuns(repoPath: string, shas: readonly string[], epoch: number): Promise<void> {
     const writes = await Promise.all(
       shas.map(async sha => {
         const incoming = (commitDataCache.get(sha)?.runs ?? []).filter(isTerminalGitHubRun);
         if (incoming.length === 0) return false;
         const existing = await disk.read(repoPath, sha);
+        if (!lifecycle.isCurrent(epoch, repoPath)) return false;
         await disk.write(
           repoPath,
           {
@@ -294,7 +299,7 @@ export function useGitHubCI(opts: {
         return true;
       }),
     );
-    if (writes.some(Boolean)) await disk.evictForRepo(repoPath);
+    if (writes.some(Boolean) && lifecycle.isCurrent(epoch, repoPath)) await disk.evictForRepo(repoPath);
   }
 
   // ── Main fetch entry points ───────────────────────────────────────────
@@ -342,8 +347,9 @@ export function useGitHubCI(opts: {
       if (authFrozen && !showStatus) return;
       if (showStatus) authFrozen = false;
       const allSHAs = shas ?? collectTopSHAs(state.graphRows(), config.fetchDepth);
-      await hydrateCachedCandidates(state.repoPath(), allSHAs);
-      if (signal?.aborted || epoch !== lifecycle.getEpoch()) return;
+      const repoPath = state.repoPath();
+      await hydrateCachedCandidates(repoPath, allSHAs, epoch);
+      if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return;
       const unqueried = allSHAs.filter(sha => !queriedSHAs.has(sha));
       if (unqueried.length === 0) {
         lifecycle.noteFetchStarted();
@@ -354,7 +360,7 @@ export function useGitHubCI(opts: {
       if (showStatus) actions.setProviderStatus("github-actions", providerLoading());
       try {
         const { firstError, failedSHAs } = await fetchForSHAs(unqueried, signal);
-        if (signal?.aborted || epoch !== lifecycle.getEpoch()) return;
+        if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return;
         for (const sha of failedSHAs) queriedSHAs.delete(sha);
         rememberAuthError(firstError);
         lifecycle.noteFetchResult(!firstError);
@@ -375,6 +381,7 @@ export function useGitHubCI(opts: {
       }
     },
     runRefresh: async ({ signal, epoch, showStatus }) => {
+      const repoPath = state.repoPath();
       if (authFrozen && !showStatus) return;
       if (showStatus) authFrozen = false;
       lifecycle.noteRefreshSettled();
@@ -382,7 +389,7 @@ export function useGitHubCI(opts: {
       if (runningSHAs.length === 0) return;
       try {
         const { firstError } = await fetchForSHAs(runningSHAs, signal);
-        if (signal?.aborted || epoch !== lifecycle.getEpoch()) return;
+        if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return;
         rememberAuthError(firstError);
         lifecycle.noteFetchResult(!firstError);
         if (!firstError) actions.setProviderLastSuccessfulRefresh("github-actions", new Date());
@@ -417,7 +424,10 @@ export function useGitHubCI(opts: {
   }
 
   async function fetchCommitDataForSHA(sha: string, force = false): Promise<void> {
-    await hydrateCachedCandidates(state.repoPath(), [sha]);
+    const epoch = lifecycle.getEpoch();
+    const repoPath = state.repoPath();
+    await hydrateCachedCandidates(repoPath, [sha], epoch);
+    if (!lifecycle.isCurrent(epoch, repoPath)) return;
     if (!force) return;
     queriedSHAs.delete(sha);
     await lifecycle.fetchInitial(undefined, [sha], true);
@@ -426,6 +436,7 @@ export function useGitHubCI(opts: {
   // ── On-demand job fetching ────────────────────────────────────────────
   async function fetchJobsForRun(run: GitHubWorkflowRun, signal?: AbortSignal): Promise<GitHubJobFetchResult> {
     const epoch = lifecycle.getEpoch();
+    const repoPath = state.repoPath();
     const cached = jobsCache.get(run.id);
     if (cached) return { jobs: cached, error: null };
 
@@ -434,12 +445,12 @@ export function useGitHubCI(opts: {
     if (!repo || !token) return { jobs: [], error: BANNER.github.unavailable };
 
     const { jobs, error } = await fetchRunJobs(repo, token, run.id, signal);
-    if (signal?.aborted || epoch !== lifecycle.getEpoch()) return { jobs: [], error: null };
+    if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
     if (error) return { jobs, error };
     if (run.status === "completed") {
-      if (signal?.aborted || epoch !== lifecycle.getEpoch()) return { jobs: [], error: null };
+      if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
       jobsCache.set(run.id, jobs);
-      await persistTerminalRuns(state.repoPath(), [run.headSha]);
+      await persistTerminalRuns(repoPath, [run.headSha], epoch);
     }
     return { jobs, error: null };
   }
@@ -461,18 +472,21 @@ export function useGitHubCI(opts: {
       const key = String(jobId);
       if (isTerminalGitHubRun(run)) {
         const diskLog = await disk.readLog(repoPath, run.headSha, key).catch(() => null);
+        if (!lifecycle.isCurrent(epoch, repoPath)) return "";
         if (diskLog) return diskLog;
       }
       const repo = cachedGitHubRepo();
       const token = getGitHubToken(config.tokenEnvVar);
       if (!repo || !token) return "";
       const log = await fetchJobLog(repo, token, jobId, signal);
-      if (epoch !== lifecycle.getEpoch()) return "";
-      if (isTerminalGitHubRun(run) && log) await disk.writeLog(repoPath, run.headSha, key, log).catch(() => {});
+      if (!lifecycle.isCurrent(epoch, repoPath)) return "";
+      if (isTerminalGitHubRun(run) && log && lifecycle.isCurrent(epoch, repoPath))
+        await disk.writeLog(repoPath, run.headSha, key, log).catch(() => {});
       return log;
     },
     fetchCommitDataForSHA,
     refresh: refreshWindow,
     isAvailable,
+    invalidate: lifecycle.resetCaches,
   };
 }

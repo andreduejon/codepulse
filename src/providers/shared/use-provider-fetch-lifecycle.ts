@@ -43,6 +43,7 @@ export function useProviderFetchLifecycle(opts: {
   let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
   let fetchAbortCtrl: AbortController | null = null;
   let backgroundFetchAbortCtrl: AbortController | null = null;
+  const activeRequestControllers = new Set<AbortController>();
   let cacheEpoch = 0;
   let consecutiveErrors = 0;
   let backoffUntil = 0;
@@ -50,6 +51,10 @@ export function useProviderFetchLifecycle(opts: {
 
   function getEpoch() {
     return cacheEpoch;
+  }
+
+  function isCurrent(epoch: number, repoPath: string): boolean {
+    return epoch === cacheEpoch && repoPath === state.repoPath();
   }
 
   function noteFetchStarted() {
@@ -98,9 +103,16 @@ export function useProviderFetchLifecycle(opts: {
       return;
     }
     fetchInFlight = true;
+    const ctrl = new AbortController();
+    const onAbort = () => ctrl.abort(signal?.reason);
+    if (signal?.aborted) onAbort();
+    else signal?.addEventListener("abort", onAbort, { once: true });
+    activeRequestControllers.add(ctrl);
     try {
-      await opts.runInitialFetch({ signal, shas, showStatus, epoch });
+      await opts.runInitialFetch({ signal: ctrl.signal, shas, showStatus, epoch });
     } finally {
+      signal?.removeEventListener("abort", onAbort);
+      activeRequestControllers.delete(ctrl);
       finishFetch(epoch);
     }
   }
@@ -114,9 +126,16 @@ export function useProviderFetchLifecycle(opts: {
     }
     if (!opts.isAvailable()) return;
     fetchInFlight = true;
+    const ctrl = new AbortController();
+    const onAbort = () => ctrl.abort(signal?.reason);
+    if (signal?.aborted) onAbort();
+    else signal?.addEventListener("abort", onAbort, { once: true });
+    activeRequestControllers.add(ctrl);
     try {
-      await opts.runRefresh({ signal, showStatus, epoch });
+      await opts.runRefresh({ signal: ctrl.signal, showStatus, epoch });
     } finally {
+      signal?.removeEventListener("abort", onAbort);
+      activeRequestControllers.delete(ctrl);
       finishFetch(epoch);
     }
   }
@@ -156,8 +175,12 @@ export function useProviderFetchLifecycle(opts: {
   function resetCaches() {
     cacheEpoch++;
     stopAutoRefresh();
+    fetchAbortCtrl?.abort();
+    fetchAbortCtrl = null;
     backgroundFetchAbortCtrl?.abort();
     backgroundFetchAbortCtrl = null;
+    for (const ctrl of activeRequestControllers) ctrl.abort();
+    activeRequestControllers.clear();
     fetchInFlight = false;
     pendingBackgroundFetch = false;
     hasFetchedOnce = false;
@@ -251,6 +274,7 @@ export function useProviderFetchLifecycle(opts: {
 
   return {
     getEpoch,
+    isCurrent,
     noteFetchStarted,
     noteRefreshSettled,
     noteFetchResult,

@@ -144,6 +144,7 @@ export interface ProviderActions {
   setGraphBadges: (view: ProviderView, map: Map<string, GraphBadge>) => void;
   setProviderStatus: (view: ProviderView, status: ProviderStatus) => void;
   setProviderLastSuccessfulRefresh: (view: ProviderView, time: Date) => void;
+  clearProviderState: () => void;
   cycleProviderView: () => void;
 }
 

@@ -74,6 +74,96 @@ describe("useProviderFetchLifecycle", () => {
     expect(resets).toBe(1);
   });
 
+  test("resetCaches aborts active work and invalidates captured repository context", async () => {
+    let signal: AbortSignal | undefined;
+    let lifecycle!: ReturnType<typeof useProviderFetchLifecycle>;
+    createRoot(dispose => {
+      disposers.push(dispose);
+      const { state, actions } = createAppState(100, 0, 0);
+      actions.setRepoPath("/repo-a");
+      actions.setAutoRefreshInterval(0);
+      lifecycle = useProviderFetchLifecycle({
+        state,
+        providerId: "jenkins",
+        identity: () => state.repoPath(),
+        isAvailable: () => true,
+        isBackgroundReady: () => false,
+        skipShaBackground: true,
+        queriedSHAs: new Set(),
+        reportUnavailable: () => {},
+        runInitialFetch: async args => {
+          signal = args.signal;
+          await new Promise<void>(() => {});
+        },
+        runRefresh: async () => {},
+        onResetCaches: () => {},
+      });
+      void lifecycle.fetchInitial(new AbortController().signal);
+      const epoch = lifecycle.getEpoch();
+      expect(lifecycle.isCurrent(epoch, "/repo-a")).toBe(true);
+      lifecycle.resetCaches();
+      expect(lifecycle.isCurrent(epoch, "/repo-a")).toBe(false);
+    });
+    expect(signal?.aborted).toBe(true);
+  });
+
+  test("repository path mismatch invalidates captured work before reactive reset", () => {
+    createRoot(dispose => {
+      disposers.push(dispose);
+      const { state, actions } = createAppState(100, 0, 0);
+      actions.setRepoPath("/repo-a");
+      const lifecycle = useProviderFetchLifecycle({
+        state,
+        providerId: "jenkins",
+        identity: () => state.repoPath(),
+        isAvailable: () => true,
+        isBackgroundReady: () => false,
+        skipShaBackground: true,
+        queriedSHAs: new Set(),
+        reportUnavailable: () => {},
+        runInitialFetch: async () => {},
+        runRefresh: async () => {},
+        onResetCaches: () => {},
+      });
+      const epoch = lifecycle.getEpoch();
+      actions.setRepoPath("/repo-b");
+      expect(lifecycle.isCurrent(epoch, "/repo-a")).toBe(false);
+    });
+  });
+
+  test("clearProviderState removes badges, statuses, and refresh timestamps", () => {
+    createRoot(dispose => {
+      disposers.push(dispose);
+      const { state, actions } = createAppState();
+      actions.setActiveProviderView("jenkins");
+      actions.setGraphBadges(
+        "jenkins",
+        new Map([
+          [
+            "sha",
+            {
+              sha: "sha",
+              badge: "pass",
+              passCount: 1,
+              failCount: 0,
+              runningCount: 0,
+              latestRunAt: "now",
+              latestStatus: "pass",
+            },
+          ],
+        ]),
+      );
+      actions.setProviderStatus("jenkins", { kind: "error", message: "old repo" });
+      actions.setProviderLastSuccessfulRefresh("jenkins", new Date());
+
+      actions.clearProviderState();
+
+      expect(state.graphBadges()).toEqual(new Map());
+      expect(state.providerStatusFor("jenkins")).toEqual({ kind: "idle" });
+      expect(state.providerLastSuccessfulRefresh()).toEqual(new Map());
+    });
+  });
+
   test("reports unavailable instead of fetching", () => {
     let reported = false;
     let fetched = false;
