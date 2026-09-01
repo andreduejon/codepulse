@@ -355,7 +355,7 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
           <box flexDirection="column" width="100%" paddingX={4}>
             <Show when={currentLoadedLog().loading}>
               <box flexGrow={1} alignItems="center" justifyContent="center" paddingY={2}>
-                <text fg={t().foregroundMuted}>Loading log…</text>
+                <text fg={t().foregroundMuted}>loading...</text>
               </box>
             </Show>
             <Show when={!currentLoadedLog().loading && currentLoadedLog().error}>

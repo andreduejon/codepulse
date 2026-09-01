@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { BANNER } from "../../debug/banner";
+import { clearDebugEvents, getDebugEvents } from "../../debug/events";
 import {
   buildJenkinsCommitDataMap,
   buildJenkinsGraphBadges,
@@ -9,6 +10,7 @@ import {
   extractSha,
   fetchJenkinsDataForSHAs,
   fetchJenkinsGraphDataForSHAs,
+  fetchJenkinsRunsForBuilds,
   jenkinsApiUrl,
   normalizeJenkinsJobUrl,
   resolveJenkinsJobs,
@@ -271,6 +273,36 @@ describe("fetchJenkinsGraphDataForSHAs", () => {
     }
   });
 
+  test("skips jobs whose lastBuild number is unchanged", async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      calls.push(String(input));
+      return new Response(JSON.stringify({ lastBuild: { number: 12 } }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+
+    try {
+      const result = await fetchJenkinsGraphDataForSHAs(
+        [{ url: "https://jenkins.example.com/job/foo/" }],
+        "user",
+        "token",
+        ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+        { knownLastBuilds: new Map([["https://jenkins.example.com/job/foo", 12]]) },
+      );
+      expect(result.error).toBeNull();
+      expect(result.data).toEqual([]);
+      expect(result.lastBuilds.get("https://jenkins.example.com/job/foo")).toBe(12);
+      expect(calls).toHaveLength(1);
+      expect(calls[0]).toContain("lastBuild");
+      expect(calls[0]).not.toContain("builds[");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   test("maps one build to head commit only", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () =>
@@ -493,6 +525,39 @@ describe("resolveJenkinsJobs", () => {
       expect(result.jobs).toHaveLength(25);
       expect(result.jobs[0].url).toContain("branch-0");
       expect(result.jobs[24].url).toContain("branch-24");
+      expect(result.complete).toBe(false);
+      expect(result.truncated).toBe(true);
+      expect(getDebugEvents()).toContainEqual(
+        expect.objectContaining({
+          source: "Jenkins",
+          message: expect.stringContaining("Multibranch discovery limited to 25 jobs"),
+        }),
+      );
+    } finally {
+      clearDebugEvents();
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("keeps discovery complete when enabled branches fit the limit", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      Response.json({
+        _class: "org.jenkinsci.plugins.workflow.multibranch.WorkflowMultiBranchProject",
+        jobs: Array.from({ length: 25 }, (_, idx) => ({
+          _class: "org.jenkinsci.plugins.workflow.job.WorkflowJob",
+          name: `branch-${idx}`,
+          url: `https://jenkins.example.com/job/service/job/branch-${idx}/`,
+          buildable: true,
+          disabled: false,
+        })),
+      })) as unknown as typeof fetch;
+
+    try {
+      const result = await resolveJenkinsJobs([{ url: "https://jenkins.example.com/job/service" }], "user", "token");
+      expect(result.jobs).toHaveLength(25);
+      expect(result.complete).toBe(true);
+      expect(result.truncated).toBe(false);
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -567,6 +632,76 @@ describe("resolveJenkinsJobs", () => {
       const direct = { url: "https://jenkins.example.com/job/direct" };
       const result = await resolveJenkinsJobs([direct], "user", "token");
       expect(result.jobs).toEqual([direct]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe("fetchJenkinsGraphDataForSHAs auth", () => {
+  test("maps HTTP 401 to token expired", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => new Response("nope", { status: 401 })) as unknown as typeof fetch;
+    try {
+      const result = await fetchJenkinsGraphDataForSHAs(
+        [{ url: "https://jenkins.example.com/job/foo/" }],
+        "user",
+        "token",
+        ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+      );
+      expect(result.error).toBe(BANNER.jenkins.tokenExpired);
+      expect(result.data).toEqual([]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe("fetchJenkinsRunsForBuilds", () => {
+  test("refreshes a known running build without job discovery", async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      calls.push(String(input));
+      return new Response(
+        JSON.stringify({
+          number: 12,
+          url: "https://jenkins.example.com/job/foo/12/",
+          result: "SUCCESS",
+          building: false,
+          timestamp: 1_700_000_000_000,
+          duration: 12_000,
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }) as typeof fetch;
+
+    try {
+      const result = await fetchJenkinsRunsForBuilds(
+        [
+          {
+            id: "https://jenkins.example.com/job/foo#12",
+            name: "foo",
+            status: "running",
+            conclusion: null,
+            headSha: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            runNumber: 12,
+            startedAt: null,
+            updatedAt: "2026-01-01T00:00:00.000Z",
+            url: "https://jenkins.example.com/job/foo/12/",
+            jobLabel: "foo",
+            jobUrl: "https://jenkins.example.com/job/foo",
+          },
+        ],
+        "user",
+        "token",
+      );
+      expect(result.error).toBeNull();
+      expect(result.data[0]?.status).toBe("completed");
+      expect(result.data[0]?.conclusion).toBe("success");
+      expect(calls).toHaveLength(1);
+      expect(calls[0]).toContain("/job/foo/12/");
+      expect(calls[0]).not.toContain("/job/foo/api/json");
     } finally {
       globalThis.fetch = originalFetch;
     }

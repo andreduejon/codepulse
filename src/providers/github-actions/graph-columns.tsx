@@ -5,11 +5,11 @@
  * the Author and Date columns in the graph row / column header:
  *
  *   Column 1 (AUTHOR_COL_WIDTH = 15 chars): CI run count blocks
- *     Fail count with red bg, running with accent bg, pass with green bg.
- *     Zero counts are skipped. E.g. " 2 " red bg · " 1 " accent bg · " 3 " green bg.
+ *     Fail count with error bg, running with info bg, pass with success bg.
+ *     Zero counts are skipped.
  *
  *   Column 2 (DATE_COL_WIDTH = 15 chars): Latest run relative time / status
- *     Coloured by the latest run status (error/accent/success/muted).
+ *     Relative time is muted. The "running" label uses info.
  */
 
 import { For } from "solid-js";
@@ -18,6 +18,7 @@ import { useAppState } from "../../context/state";
 import { useT } from "../../hooks/use-t";
 import { formatRelativeDate } from "../../utils/date";
 import type { GraphBadge } from "../provider";
+import { statusColor } from "../shared/status";
 
 interface ActionsCountsProps {
   badge: GraphBadge | undefined;
@@ -41,9 +42,10 @@ export function ActionsCountsColumn(props: Readonly<ActionsCountsProps>) {
         }
 
         const blocks: { count: number; fg: string; bg: string }[] = [];
-        if (b.failCount > 0) blocks.push({ count: b.failCount, fg: t().background, bg: t().error });
-        if (b.runningCount > 0) blocks.push({ count: b.runningCount, fg: t().background, bg: t().accent });
-        if (b.passCount > 0) blocks.push({ count: b.passCount, fg: t().background, bg: t().success });
+        if (b.failCount > 0) blocks.push({ count: b.failCount, fg: t().background, bg: statusColor(t(), "fail") });
+        if (b.runningCount > 0)
+          blocks.push({ count: b.runningCount, fg: t().background, bg: statusColor(t(), "running") });
+        if (b.passCount > 0) blocks.push({ count: b.passCount, fg: t().background, bg: statusColor(t(), "pass") });
 
         if (blocks.length === 0) {
           return (
@@ -87,16 +89,18 @@ export function ActionsDateColumn(props: Readonly<ActionsDateProps>) {
             </text>
           );
         }
-        const label = b.latestStatus === "running" ? "running" : formatRelativeDate(b.latestRunAt);
+        const running = b.latestStatus === "running";
+        const label = running ? "running" : formatRelativeDate(b.latestRunAt);
+        const fg = running ? statusColor(t(), "running") : t().foregroundMuted;
         if (props.active) {
           return (
-            <text fg={t().foregroundMuted} wrapMode="none" truncate>
+            <text fg={fg} wrapMode="none" truncate>
               <strong>{label}</strong>
             </text>
           );
         }
         return (
-          <text fg={t().foregroundMuted} wrapMode="none" truncate>
+          <text fg={fg} wrapMode="none" truncate>
             {label}
           </text>
         );

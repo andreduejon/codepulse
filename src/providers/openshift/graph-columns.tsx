@@ -4,20 +4,12 @@ import { useAppState } from "../../context/state";
 import type { Theme } from "../../context/theme";
 import { useT } from "../../hooks/use-t";
 import type { GraphBadge, GraphStatusCounts } from "../provider";
+import { statusColor } from "../shared/status";
 import type { OpenShiftStatus } from "./types";
 
 /** Status colors are semantic tokens, not provider accent (OpenShift brand is red). */
 export function openShiftStatusColor(t: Theme, status: OpenShiftStatus): string {
-  switch (status) {
-    case "fail":
-      return t.error;
-    case "running":
-      return t.info;
-    case "pass":
-      return t.success;
-    default:
-      return t.foregroundMuted;
-  }
+  return statusColor(t, status);
 }
 
 interface OpenShiftCountsColumnProps {

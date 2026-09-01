@@ -1,6 +1,6 @@
 import { BANNER, bannerOrFallback, debugError } from "../../debug/banner";
 import type { GraphBadge } from "../provider";
-import { fetchWithRetry as fetchWithRetryPolicy, runLimited } from "../shared/http";
+import { fetchWithRetry as fetchWithRetryPolicy, isAbortError, runLimited } from "../shared/http";
 import { categorize } from "../shared/status";
 import {
   JENKINS_MULTIBRANCH_JOB_LIMIT,
@@ -77,8 +77,12 @@ function treeApiSuffix(tree: string): string {
   return `api/json?tree=${encodeURIComponent(tree)}`;
 }
 
+function lastBuildTree(): string {
+  return "lastBuild[number]";
+}
+
 function shallowGraphTree(limit: number): string {
-  return `builds[number,url,result,building,timestamp,duration,actions[lastBuiltRevision[SHA1],scmRevisionAction[revision[hash]]],changeSets[items[commitId,id]],changeSet[items[commitId,id]]]{0,${limit}}`;
+  return `lastBuild[number],builds[number,url,result,building,timestamp,duration,actions[lastBuiltRevision[SHA1],scmRevisionAction[revision[hash]]],changeSets[items[commitId,id]],changeSet[items[commitId,id]]]{0,${limit}}`;
 }
 
 function buildRefsTree(limit: number): string {
@@ -166,6 +170,7 @@ async function fetchJson<T>(
     throw jenkinsAuthError(`login redirect ${url}`);
   }
   const contentType = res.headers.get("content-type") ?? "";
+  if (res.status === 401) throw new Error(BANNER.jenkins.tokenExpired);
   if (!res.ok) {
     debugError("Jenkins", `${res.status} ${res.statusText} ${url}`);
     throw new Error(BANNER.jenkins.fetchFailed);
@@ -185,11 +190,13 @@ export async function resolveJenkinsJobs(
   rootData: Map<string, JenkinsJobApi>;
   error: string | null;
   complete: boolean;
+  truncated: boolean;
 }> {
   const resolved = new Map<string, JenkinsJobConfig>();
   const rootData = new Map<string, JenkinsJobApi>();
   let firstError: string | null = null;
   let discoveredCount = 0;
+  let truncated = false;
   const discoveries: ({ job: JenkinsJobConfig; api: JenkinsJobApi } | null)[] = jobs.map(() => null);
   await runLimited(
     jobs.map((job, index) => ({ job, index })),
@@ -227,7 +234,6 @@ export async function resolveJenkinsJobs(
       continue;
     }
     for (const child of (discovery.api.jobs ?? []).filter(isEnabledMultibranchJob)) {
-      if (discoveredCount >= JENKINS_MULTIBRANCH_JOB_LIMIT) break;
       let childUrl: URL;
       try {
         childUrl = new URL(child.url ?? "");
@@ -247,13 +253,27 @@ export async function resolveJenkinsJobs(
         firstError ??= BANNER.jenkins.invalidJobUrl;
         continue;
       }
+      if (discoveredCount >= JENKINS_MULTIBRANCH_JOB_LIMIT) {
+        truncated = true;
+        debugError(
+          "Jenkins",
+          `Multibranch discovery limited to ${JENKINS_MULTIBRANCH_JOB_LIMIT} jobs for ${discovery.job.url}`,
+        );
+        break;
+      }
       const childLabel = child.displayName?.trim() || child.name?.trim() || deriveJenkinsJobLabel({ url });
       resolved.set(url, { url, label: childLabel });
       discoveredCount++;
     }
   }
 
-  return { jobs: [...resolved.values()], rootData, error: firstError, complete: discoveries.every(Boolean) };
+  return {
+    jobs: [...resolved.values()],
+    rootData,
+    error: firstError,
+    complete: discoveries.every(Boolean) && !truncated,
+    truncated,
+  };
 }
 
 export function extractSha(raw: unknown): string | null {
@@ -405,13 +425,49 @@ function mapRun(job: JenkinsJobConfig, build: JenkinsBuildApi, sha: string): Jen
   };
 }
 
+export async function fetchJenkinsRunsForBuilds(
+  runs: JenkinsRun[],
+  username: string | undefined,
+  token: string,
+  signal?: AbortSignal,
+): Promise<{ data: JenkinsRun[]; error: string | null }> {
+  const out: JenkinsRun[] = [];
+  let firstError: string | null = null;
+  await runLimited(
+    runs,
+    JENKINS_CONCURRENCY,
+    async run => {
+      try {
+        const build = await fetchJson<JenkinsBuildApi>(
+          jenkinsApiUrl(run.url, treeApiSuffix(buildDetailTree())),
+          username,
+          token,
+          signal,
+        );
+        out.push(mapRun({ url: run.jobUrl, label: run.jobLabel }, build, run.headSha));
+      } catch (err) {
+        firstError ??= bannerOrFallback(err, BANNER.jenkins.fetchFailed, "Jenkins");
+      }
+    },
+    signal,
+  );
+  return { data: out, error: firstError };
+}
+
 export async function fetchJenkinsDataForSHAs(
   jobs: JenkinsJobConfig[],
   username: string | undefined,
   token: string,
   shas: string[],
   opts: { signal?: AbortSignal; buildLimit?: number } = {},
-): Promise<{ data: JenkinsRun[]; error: string | null; jobUrls: string[]; discoveryComplete: boolean }> {
+): Promise<{
+  data: JenkinsRun[];
+  error: string | null;
+  jobUrls: string[];
+  discoveryComplete: boolean;
+  discoveryTruncated: boolean;
+  lastBuilds: Map<string, number>;
+}> {
   const buildLimit = opts.buildLimit ?? 20;
   const wanted = new Set(shas.map(s => s.toLowerCase()));
   const runs: JenkinsRun[] = [];
@@ -460,6 +516,8 @@ export async function fetchJenkinsDataForSHAs(
     error: firstError,
     jobUrls: resolved.jobs.map(job => normalizeJenkinsJobUrl(job.url)),
     discoveryComplete: resolved.complete,
+    discoveryTruncated: resolved.truncated,
+    lastBuilds: new Map<string, number>(),
   };
 }
 
@@ -468,26 +526,52 @@ export async function fetchJenkinsGraphDataForSHAs(
   username: string | undefined,
   token: string,
   shas: string[],
-  opts: { signal?: AbortSignal; buildLimit?: number } = {},
-): Promise<{ data: JenkinsRun[]; error: string | null; jobUrls: string[]; discoveryComplete: boolean }> {
+  opts: {
+    signal?: AbortSignal;
+    buildLimit?: number;
+    knownLastBuilds?: ReadonlyMap<string, number>;
+  } = {},
+): Promise<{
+  data: JenkinsRun[];
+  error: string | null;
+  jobUrls: string[];
+  discoveryComplete: boolean;
+  discoveryTruncated: boolean;
+  lastBuilds: Map<string, number>;
+}> {
   const buildLimit = opts.buildLimit ?? 20;
   const wanted = new Set(shas.map(s => s.toLowerCase()));
   const runs: JenkinsRun[] = [];
-  const resolved = await resolveJenkinsJobs(jobs, username, token, opts.signal, shallowGraphTree(buildLimit));
+  const lastBuilds = new Map<string, number>();
+  const probeOnly = !!opts.knownLastBuilds && opts.knownLastBuilds.size > 0;
+  const resolved = await resolveJenkinsJobs(
+    jobs,
+    username,
+    token,
+    opts.signal,
+    probeOnly ? lastBuildTree() : shallowGraphTree(buildLimit),
+  );
   let firstError = resolved.error;
   await runLimited(
     resolved.jobs,
     JENKINS_CONCURRENCY,
     async job => {
       try {
+        const url = normalizeJenkinsJobUrl(job.url);
+        const probed = resolved.rootData.get(url);
+        const lastNumber = probed?.lastBuild?.number;
+        if (typeof lastNumber === "number") lastBuilds.set(url, lastNumber);
+        if (typeof lastNumber === "number" && opts.knownLastBuilds?.get(url) === lastNumber) return;
         const api =
-          resolved.rootData.get(normalizeJenkinsJobUrl(job.url)) ??
-          (await fetchJson<JenkinsJobApi>(
-            jenkinsApiUrl(job.url, treeApiSuffix(shallowGraphTree(buildLimit))),
-            username,
-            token,
-            opts.signal,
-          ));
+          !probeOnly && probed
+            ? probed
+            : await fetchJson<JenkinsJobApi>(
+                jenkinsApiUrl(job.url, treeApiSuffix(shallowGraphTree(buildLimit))),
+                username,
+                token,
+                opts.signal,
+              );
+        if (typeof api.lastBuild?.number === "number") lastBuilds.set(url, api.lastBuild.number);
         const builds = api.builds ?? [];
         for (const build of builds) {
           for (const sha of matchingHeadShas(build, wanted)) runs.push(mapRun(job, build, sha));
@@ -504,6 +588,8 @@ export async function fetchJenkinsGraphDataForSHAs(
     error: firstError,
     jobUrls: resolved.jobs.map(job => normalizeJenkinsJobUrl(job.url)),
     discoveryComplete: resolved.complete,
+    discoveryTruncated: resolved.truncated,
+    lastBuilds,
   };
 }
 
@@ -591,6 +677,7 @@ export async function fetchJenkinsRunJobs(
     };
     return { jobs: [job], error: null };
   } catch (err) {
+    if (isAbortError(err, signal)) throw err;
     return { jobs: [], error: bannerOrFallback(err, BANNER.jenkins.fetchFailed, "Jenkins") };
   }
 }

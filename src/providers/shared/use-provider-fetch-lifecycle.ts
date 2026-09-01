@@ -14,7 +14,7 @@ export interface ProviderFetchArgs {
 export function useProviderFetchLifecycle(opts: {
   state: AppState;
   providerId: string;
-  shaLimit?: number;
+  shaLimit?: number | (() => number);
   identity: () => string;
   isAvailable: () => boolean;
   isBackgroundReady: () => boolean;
@@ -29,7 +29,12 @@ export function useProviderFetchLifecycle(opts: {
   refreshInterval?: () => number;
 }) {
   const { state, providerId } = opts;
-  const shaLimit = opts.shaLimit ?? DEFAULT_INITIAL_SHA_LIMIT;
+
+  function currentShaLimit(): number {
+    const value = opts.shaLimit;
+    if (typeof value === "function") return value();
+    return value ?? DEFAULT_INITIAL_SHA_LIMIT;
+  }
 
   let fetchInFlight = false;
   let pendingBackgroundFetch = false;
@@ -38,11 +43,18 @@ export function useProviderFetchLifecycle(opts: {
   let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
   let fetchAbortCtrl: AbortController | null = null;
   let backgroundFetchAbortCtrl: AbortController | null = null;
+  const activeRequestControllers = new Set<AbortController>();
   let cacheEpoch = 0;
+  let consecutiveErrors = 0;
+  let backoffUntil = 0;
   const [identityVersion, setIdentityVersion] = createSignal(0);
 
   function getEpoch() {
     return cacheEpoch;
+  }
+
+  function isCurrent(epoch: number, repoPath: string): boolean {
+    return epoch === cacheEpoch && repoPath === state.repoPath();
   }
 
   function noteFetchStarted() {
@@ -52,6 +64,21 @@ export function useProviderFetchLifecycle(opts: {
 
   function noteRefreshSettled() {
     lastFetchedAt = Date.now();
+  }
+
+  function noteFetchResult(ok: boolean) {
+    if (ok) {
+      consecutiveErrors = 0;
+      backoffUntil = 0;
+      return;
+    }
+    consecutiveErrors++;
+    const delayMs = Math.min(30_000 * 2 ** (consecutiveErrors - 1), 300_000);
+    backoffUntil = Date.now() + delayMs;
+  }
+
+  function inBackoff() {
+    return Date.now() < backoffUntil;
   }
 
   function finishFetch(epoch: number) {
@@ -66,6 +93,7 @@ export function useProviderFetchLifecycle(opts: {
 
   async function fetchInitial(signal?: AbortSignal, shas?: string[], showStatus = false) {
     const epoch = cacheEpoch;
+    if (!showStatus && inBackoff()) return;
     if (fetchInFlight) {
       pendingBackgroundFetch = true;
       return;
@@ -75,24 +103,39 @@ export function useProviderFetchLifecycle(opts: {
       return;
     }
     fetchInFlight = true;
+    const ctrl = new AbortController();
+    const onAbort = () => ctrl.abort(signal?.reason);
+    if (signal?.aborted) onAbort();
+    else signal?.addEventListener("abort", onAbort, { once: true });
+    activeRequestControllers.add(ctrl);
     try {
-      await opts.runInitialFetch({ signal, shas, showStatus, epoch });
+      await opts.runInitialFetch({ signal: ctrl.signal, shas, showStatus, epoch });
     } finally {
+      signal?.removeEventListener("abort", onAbort);
+      activeRequestControllers.delete(ctrl);
       finishFetch(epoch);
     }
   }
 
   async function fetchRefresh(signal?: AbortSignal, showStatus = false) {
     const epoch = cacheEpoch;
+    if (!showStatus && inBackoff()) return;
     if (fetchInFlight) {
       pendingBackgroundFetch = true;
       return;
     }
     if (!opts.isAvailable()) return;
     fetchInFlight = true;
+    const ctrl = new AbortController();
+    const onAbort = () => ctrl.abort(signal?.reason);
+    if (signal?.aborted) onAbort();
+    else signal?.addEventListener("abort", onAbort, { once: true });
+    activeRequestControllers.add(ctrl);
     try {
-      await opts.runRefresh({ signal, showStatus, epoch });
+      await opts.runRefresh({ signal: ctrl.signal, showStatus, epoch });
     } finally {
+      signal?.removeEventListener("abort", onAbort);
+      activeRequestControllers.delete(ctrl);
       finishFetch(epoch);
     }
   }
@@ -132,12 +175,18 @@ export function useProviderFetchLifecycle(opts: {
   function resetCaches() {
     cacheEpoch++;
     stopAutoRefresh();
+    fetchAbortCtrl?.abort();
+    fetchAbortCtrl = null;
     backgroundFetchAbortCtrl?.abort();
     backgroundFetchAbortCtrl = null;
+    for (const ctrl of activeRequestControllers) ctrl.abort();
+    activeRequestControllers.clear();
     fetchInFlight = false;
     pendingBackgroundFetch = false;
     hasFetchedOnce = false;
     lastFetchedAt = 0;
+    consecutiveErrors = 0;
+    backoffUntil = 0;
     opts.onResetCaches();
     setIdentityVersion(v => v + 1);
   }
@@ -193,7 +242,7 @@ export function useProviderFetchLifecycle(opts: {
     if (rows.length === 0) return;
     if (!opts.isBackgroundReady()) return;
 
-    const allSHAs = collectTopSHAs(rows, shaLimit);
+    const allSHAs = collectTopSHAs(rows, currentShaLimit());
     const newSHAs = allSHAs.filter(sha => !opts.queriedSHAs.has(sha));
     if (newSHAs.length === 0) return;
 
@@ -225,8 +274,10 @@ export function useProviderFetchLifecycle(opts: {
 
   return {
     getEpoch,
+    isCurrent,
     noteFetchStarted,
     noteRefreshSettled,
+    noteFetchResult,
     resetCaches,
     startAutoRefresh,
     fetchInitial,

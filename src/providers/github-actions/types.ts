@@ -6,6 +6,13 @@
  * other providers; each provider owns its own type hierarchy.
  */
 
+import {
+  DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS,
+  DEFAULT_PROVIDER_LIMIT,
+  type ProviderAutoRefreshSeconds,
+  type ProviderLimit,
+} from "../shared/auto-refresh";
+
 // ── GitHub API response shapes ────────────────────────────────────────────/** Raw job as returned by GET /repos/{owner}/{repo}/actions/runs/{run_id}/jobs */
 export interface GitHubApiJob {
   id: number;
@@ -105,10 +112,17 @@ export interface GitHubProviderConfig {
   tokenEnvVar: string;
   /** Trusted GitHub Enterprise host for this repo. github.com is always trusted. */
   trustedEnterpriseHost: string | null;
+  /** Graph SHA window queried from Actions. */
+  fetchDepth: ProviderLimit;
+  cacheLimit: ProviderLimit;
+  autoRefreshSeconds: ProviderAutoRefreshSeconds;
 }
 
 export const DEFAULT_GITHUB_CONFIG: GitHubProviderConfig = {
   enabled: false,
   tokenEnvVar: "GITHUB_TOKEN",
   trustedEnterpriseHost: null,
+  fetchDepth: DEFAULT_PROVIDER_LIMIT,
+  cacheLimit: DEFAULT_PROVIDER_LIMIT,
+  autoRefreshSeconds: DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS,
 };

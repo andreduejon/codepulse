@@ -1,3 +1,10 @@
+import {
+  DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS,
+  DEFAULT_PROVIDER_LIMIT,
+  type ProviderAutoRefreshSeconds,
+  type ProviderLimit,
+} from "../shared/auto-refresh";
+
 export interface JenkinsJobConfig {
   label?: string;
   url: string;
@@ -9,14 +16,19 @@ export interface JenkinsProviderConfig {
   enabled: boolean;
   username?: string;
   tokenEnvVar: string;
-  graphBuildLimit: 10 | 20 | 50;
+  /** Graph SHA window and builds inspected per job. */
+  fetchDepth: ProviderLimit;
+  cacheLimit: ProviderLimit;
+  autoRefreshSeconds: ProviderAutoRefreshSeconds;
   jobs: JenkinsJobConfig[];
 }
 
 export const DEFAULT_JENKINS_CONFIG: JenkinsProviderConfig = {
   enabled: false,
   tokenEnvVar: "JENKINS_TOKEN",
-  graphBuildLimit: 20,
+  fetchDepth: DEFAULT_PROVIDER_LIMIT,
+  cacheLimit: DEFAULT_PROVIDER_LIMIT,
+  autoRefreshSeconds: DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS,
   jobs: [],
 };
 

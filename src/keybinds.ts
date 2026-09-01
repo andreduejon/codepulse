@@ -134,6 +134,24 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
       desc: "Enable for non-github.com remotes if the repository is not hosted on github.com.",
       indent: 1,
     },
+    {
+      kind: "binding",
+      key: "Cache count",
+      desc: "Maximum cached commit run snapshots per repository. Options: 10, 20, 50.",
+      indent: 1,
+    },
+    {
+      kind: "binding",
+      key: "Fetch size",
+      desc: "How many graph commits are queried for workflow runs. Options: 10, 20, 50.",
+      indent: 1,
+    },
+    {
+      kind: "binding",
+      key: "Auto refresh",
+      desc: "Re-query running workflow SHAs while the GitHub view is focused. Options: off, 2m, 5m, 10m. Default 2m. Git Auto refresh stays git-only.",
+      indent: 1,
+    },
     { kind: "spacer" },
     { kind: "section", label: "Jenkins" },
     {
@@ -156,8 +174,20 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     },
     {
       kind: "binding",
-      key: "Fetch size per job",
-      desc: "Number of recent builds to inspect per configured Jenkins job. Options: 10, 20, 50.",
+      key: "Cache count",
+      desc: "Maximum cached commit build snapshots per repository. Options: 10, 20, 50.",
+      indent: 1,
+    },
+    {
+      kind: "binding",
+      key: "Fetch size",
+      desc: "How many graph commits are queried, and how many recent builds to inspect per job. Options: 10, 20, 50.",
+      indent: 1,
+    },
+    {
+      kind: "binding",
+      key: "Auto refresh",
+      desc: "Re-query running Jenkins builds while the Jenkins view is focused. Options: off, 2m, 5m, 10m. Default 2m. Git Auto refresh stays git-only.",
       indent: 1,
     },
     {
@@ -195,7 +225,7 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     {
       kind: "binding",
       key: "Fetch size",
-      desc: "How many graph commits are eligible for background Build matching. Options: 10, 20, 50. Same scale as Jenkins fetch size, but counted in commits not builds per job.",
+      desc: "How many graph commits are eligible for background Build matching. Options: 10, 20, 50.",
       indent: 1,
     },
     {

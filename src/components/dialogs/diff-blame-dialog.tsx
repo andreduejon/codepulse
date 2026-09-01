@@ -531,7 +531,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
         </Show>
         <Show when={loading() || (fullFileMode() && fileLoading())}>
           <box flexGrow={1} alignItems="center" justifyContent="center">
-            <text fg={t().foregroundMuted}>{fullFileMode() ? "Loading file..." : "Loading diff..."}</text>
+            <text fg={t().foregroundMuted}>loading...</text>
           </box>
         </Show>
 

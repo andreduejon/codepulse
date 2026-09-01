@@ -1,6 +1,11 @@
 # Snyk
 
-Codepulse can run Snyk Open Source scans for exact commits and display cached vulnerability snapshots in the graph.
+Codepulse runs Snyk Open Source against exact commits and displays normalized
+vulnerability snapshots in the graph. Raw Snyk output is not stored in the
+Codepulse cache.
+
+See [common provider behavior](README.md) for shared cache and diagnostic
+conventions.
 
 ## Requirements
 
@@ -21,6 +26,19 @@ Enable Snyk in **Menu → Providers**. Configure concrete local branch names for
 
 Each result is a snapshot of that commit against Snyk vulnerability data at displayed scan time. Cached results do not expire automatically.
 
+## Scan outcomes
+
+- **Complete scan** — all supported discovered projects produced a result.
+- **Partial scan** — some projects produced results while others failed. The
+  result can under-report vulnerabilities.
+- **No supported project** — Snyk found no supported dependency project. This
+  is not a clean result.
+- **Failed scan** — authentication, dependency resolution, repository setup, or
+  Snyk execution failed.
+
+A partial scan does not replace an existing complete snapshot. Fix the project
+or environment problem, then scan again. Technical details appear in Debug.
+
 ## Display
 
 Graph shows four severity counts for exact scanned commits:
@@ -31,7 +49,8 @@ C0 H2 M0 L4
 
 Zero counts remain visible in muted color. Unscanned commits show placeholders. Details list findings by severity, dependency, installed version, and fixed version when available.
 
-For multi-project repositories, Codepulse keeps successful project results when another project fails and labels the result as a **partial scan** with the failed project count. Partial results may under-report vulnerabilities; fix the project error and scan again for a complete snapshot. A later partial scan does not replace a complete cached snapshot.
+For multi-project repositories, Codepulse keeps successful project results when
+another project fails and labels the result with the failed project count.
 
 Snyk Open Source only scans supported manifests and lockfiles. Unsupported ecosystems or lockfiles produce no usable project result. Add a lockfile Snyk supports, then scan again.
 
@@ -43,8 +62,15 @@ Normalized results are stored under:
 ~/.cache/codepulse/snyk/<repository-hash>/<commit-sha>.json
 ```
 
-Cache count can be `10`, `20`, or `50`; default is `20`. Oldest accessed result is removed after limit is exceeded. Tokens and raw Snyk output are not stored.
+Cache limit can be `10`, `20`, or `50`; default is `20`. It limits commit scan
+snapshots per repository. Least-recently-accessed snapshots are removed when the
+limit is exceeded. Cached results do not expire by age. Tokens and raw Snyk
+output are not stored.
 
 ## Security
 
-Snyk may invoke package managers or build tooling while resolving dependencies. Scanning untrusted repository content can execute repository-controlled code with current user permissions and environment access. Configure automatic branches only for trusted repositories.
+Scans use detached temporary worktrees, so the active checkout remains
+unchanged. This is not a security sandbox. Snyk may invoke package managers or
+build tooling that execute repository-controlled code with current user
+permissions and environment access. Enable automatic scans only for repositories
+whose dependency files, build configuration, and scripts you trust.

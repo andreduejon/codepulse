@@ -42,7 +42,7 @@ export interface DetailViewProps {
   /** Fetch full job details (with steps) for a CI run on demand. Optional. */
   githubFetchJobsForRun?: (run: GitHubWorkflowRun) => Promise<GitHubJobFetchResult>;
   /** Fetch CI data for one selected SHA on demand. Optional. */
-  githubFetchCommitData?: (sha: string) => Promise<void>;
+  githubFetchCommitData?: (sha: string, force?: boolean) => Promise<void>;
   /** Open the job log dialog for a specific job. */
   onOpenJobLog?: (job: GitHubJob, run: GitHubWorkflowRun, jobs?: GitHubJob[]) => void;
   /**
@@ -53,7 +53,7 @@ export interface DetailViewProps {
   githubProviderStatus?: ProviderStatus;
   jenkinsGetCommitData?: (sha: string) => JenkinsCommitData | null;
   jenkinsFetchJobsForRun?: (run: JenkinsRun) => Promise<JenkinsJobFetchResult>;
-  jenkinsFetchCommitData?: (sha: string) => Promise<void>;
+  jenkinsFetchCommitData?: (sha: string, force?: boolean) => Promise<void>;
   onOpenJenkinsJobLog?: (job: JenkinsJob, run: JenkinsRun, jobs?: JenkinsJob[]) => void;
   jenkinsProviderStatus?: ProviderStatus;
   openshiftGetCommitData?: (sha: string) => OpenShiftCommitData | null;
