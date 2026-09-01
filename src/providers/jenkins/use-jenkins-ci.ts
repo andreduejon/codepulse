@@ -1,7 +1,13 @@
 import type { Accessor } from "solid-js";
 import { createEffect, createSignal, untrack } from "solid-js";
 import type { AppActions, AppState } from "../../context/state";
-import { providerError, providerIdle, providerLoading, providerUnavailable } from "../../context/state";
+import {
+  providerError,
+  providerIdle,
+  providerLoading,
+  providerUnavailable,
+  providerWarning,
+} from "../../context/state";
 import { BANNER } from "../../debug/banner";
 import { collectRunningSHAs, collectTopSHAs } from "../github-actions/sha-selection";
 import { DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS } from "../shared/auto-refresh";
@@ -76,6 +82,9 @@ export function useJenkinsCI(opts: {
   let discoveredJobs: { url: string }[] | null = null;
   const lastBuildByJob = new Map<string, number>();
   let authFrozen = false;
+  let discoveryTruncated = false;
+
+  const settledStatus = () => (discoveryTruncated ? providerWarning(BANNER.jenkins.incomplete) : providerIdle());
 
   function rememberAuthError(error: string | null): void {
     if (error === BANNER.jenkins.tokenExpired || error === BANNER.jenkins.authFailed) authFrozen = true;
@@ -129,12 +138,13 @@ export function useJenkinsCI(opts: {
         if (!activeJobUrls.has(run.jobUrl)) runCache.delete(key);
       }
     }
+    discoveryTruncated = result.discoveryTruncated;
     for (const [url, number] of result.lastBuilds) lastBuildByJob.set(url, number);
     for (const run of result.data) {
       runCache.set(`${run.id}:${run.headSha}`, run);
     }
     rebuildCaches();
-    await persistTerminalRuns(repoPath, shas, epoch);
+    if (!result.discoveryTruncated) await persistTerminalRuns(repoPath, shas, epoch);
     return { firstError: result.error, stale: false };
   }
 
@@ -220,7 +230,7 @@ export function useJenkinsCI(opts: {
       if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return;
       const target = window.filter(sha => !queriedSHAs.has(sha));
       if (target.length === 0) {
-        if (showStatus) actions.setProviderStatus("jenkins", providerIdle());
+        if (showStatus) actions.setProviderStatus("jenkins", settledStatus());
         lifecycle.noteFetchStarted();
         return;
       }
@@ -228,10 +238,10 @@ export function useJenkinsCI(opts: {
       if (stale || !lifecycle.isCurrent(epoch, repoPath)) return;
       lifecycle.noteFetchStarted();
       rememberAuthError(firstError ?? null);
-      lifecycle.noteFetchResult(!firstError);
-      if (!firstError) actions.setProviderLastSuccessfulRefresh("jenkins", new Date());
+      lifecycle.noteFetchResult(!firstError && !discoveryTruncated);
+      if (!firstError && !discoveryTruncated) actions.setProviderLastSuccessfulRefresh("jenkins", new Date());
       if (firstError) actions.setProviderStatus("jenkins", providerError(firstError));
-      else actions.setProviderStatus("jenkins", providerIdle());
+      else actions.setProviderStatus("jenkins", settledStatus());
     },
     runRefresh: async ({ signal, showStatus, epoch }) => {
       const repoPath = state.repoPath();
@@ -254,24 +264,24 @@ export function useJenkinsCI(opts: {
         if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return;
         for (const run of data) runCache.set(`${run.id}:${run.headSha}`, run);
         rebuildCaches();
-        await persistTerminalRuns(repoPath, target, epoch);
+        if (!discoveryTruncated) await persistTerminalRuns(repoPath, target, epoch);
         if (!lifecycle.isCurrent(epoch, repoPath)) return;
         lifecycle.noteRefreshSettled();
         rememberAuthError(error);
-        lifecycle.noteFetchResult(!error);
-        if (!error) actions.setProviderLastSuccessfulRefresh("jenkins", new Date());
+        lifecycle.noteFetchResult(!error && !discoveryTruncated);
+        if (!error && !discoveryTruncated) actions.setProviderLastSuccessfulRefresh("jenkins", new Date());
         if (error) actions.setProviderStatus("jenkins", providerError(error));
-        else actions.setProviderStatus("jenkins", providerIdle());
+        else actions.setProviderStatus("jenkins", settledStatus());
         return;
       }
       const { firstError, stale } = await fetchForSHAs(target, "shallow", signal);
       if (stale || !lifecycle.isCurrent(epoch, repoPath)) return;
       lifecycle.noteRefreshSettled();
       rememberAuthError(firstError ?? null);
-      lifecycle.noteFetchResult(!firstError);
-      if (!firstError) actions.setProviderLastSuccessfulRefresh("jenkins", new Date());
+      lifecycle.noteFetchResult(!firstError && !discoveryTruncated);
+      if (!firstError && !discoveryTruncated) actions.setProviderLastSuccessfulRefresh("jenkins", new Date());
       if (firstError) actions.setProviderStatus("jenkins", providerError(firstError));
-      else actions.setProviderStatus("jenkins", providerIdle());
+      else actions.setProviderStatus("jenkins", settledStatus());
     },
     onResetCaches: () => {
       commitDataCache.clear();
@@ -283,6 +293,7 @@ export function useJenkinsCI(opts: {
       discoveredJobs = null;
       lastBuildByJob.clear();
       authFrozen = false;
+      discoveryTruncated = false;
       setCommitDataVersion(v => v + 1);
       actions.setGraphBadges("jenkins", new Map());
       actions.setProviderStatus("jenkins", providerIdle());

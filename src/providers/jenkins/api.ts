@@ -190,11 +190,13 @@ export async function resolveJenkinsJobs(
   rootData: Map<string, JenkinsJobApi>;
   error: string | null;
   complete: boolean;
+  truncated: boolean;
 }> {
   const resolved = new Map<string, JenkinsJobConfig>();
   const rootData = new Map<string, JenkinsJobApi>();
   let firstError: string | null = null;
   let discoveredCount = 0;
+  let truncated = false;
   const discoveries: ({ job: JenkinsJobConfig; api: JenkinsJobApi } | null)[] = jobs.map(() => null);
   await runLimited(
     jobs.map((job, index) => ({ job, index })),
@@ -232,7 +234,6 @@ export async function resolveJenkinsJobs(
       continue;
     }
     for (const child of (discovery.api.jobs ?? []).filter(isEnabledMultibranchJob)) {
-      if (discoveredCount >= JENKINS_MULTIBRANCH_JOB_LIMIT) break;
       let childUrl: URL;
       try {
         childUrl = new URL(child.url ?? "");
@@ -252,13 +253,27 @@ export async function resolveJenkinsJobs(
         firstError ??= BANNER.jenkins.invalidJobUrl;
         continue;
       }
+      if (discoveredCount >= JENKINS_MULTIBRANCH_JOB_LIMIT) {
+        truncated = true;
+        debugError(
+          "Jenkins",
+          `Multibranch discovery limited to ${JENKINS_MULTIBRANCH_JOB_LIMIT} jobs for ${discovery.job.url}`,
+        );
+        break;
+      }
       const childLabel = child.displayName?.trim() || child.name?.trim() || deriveJenkinsJobLabel({ url });
       resolved.set(url, { url, label: childLabel });
       discoveredCount++;
     }
   }
 
-  return { jobs: [...resolved.values()], rootData, error: firstError, complete: discoveries.every(Boolean) };
+  return {
+    jobs: [...resolved.values()],
+    rootData,
+    error: firstError,
+    complete: discoveries.every(Boolean) && !truncated,
+    truncated,
+  };
 }
 
 export function extractSha(raw: unknown): string | null {
@@ -450,6 +465,7 @@ export async function fetchJenkinsDataForSHAs(
   error: string | null;
   jobUrls: string[];
   discoveryComplete: boolean;
+  discoveryTruncated: boolean;
   lastBuilds: Map<string, number>;
 }> {
   const buildLimit = opts.buildLimit ?? 20;
@@ -500,6 +516,7 @@ export async function fetchJenkinsDataForSHAs(
     error: firstError,
     jobUrls: resolved.jobs.map(job => normalizeJenkinsJobUrl(job.url)),
     discoveryComplete: resolved.complete,
+    discoveryTruncated: resolved.truncated,
     lastBuilds: new Map<string, number>(),
   };
 }
@@ -519,6 +536,7 @@ export async function fetchJenkinsGraphDataForSHAs(
   error: string | null;
   jobUrls: string[];
   discoveryComplete: boolean;
+  discoveryTruncated: boolean;
   lastBuilds: Map<string, number>;
 }> {
   const buildLimit = opts.buildLimit ?? 20;
@@ -570,6 +588,7 @@ export async function fetchJenkinsGraphDataForSHAs(
     error: firstError,
     jobUrls: resolved.jobs.map(job => normalizeJenkinsJobUrl(job.url)),
     discoveryComplete: resolved.complete,
+    discoveryTruncated: resolved.truncated,
     lastBuilds,
   };
 }

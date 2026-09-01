@@ -21,6 +21,11 @@ describe("banner catalog", () => {
     expect(isBanner(BANNER.jenkins.tokenExpired)).toBe(true);
   });
 
+  test("Jenkins incomplete-data warning is catalogued", () => {
+    expect(BANNER.jenkins.incomplete).toBe("Jenkins data incomplete. Result limit reached.");
+    expect(isBanner(BANNER.jenkins.incomplete)).toBe(true);
+  });
+
   test("keeps known banners and dumps unknown detail to debug", () => {
     expect(bannerOrFallback(new Error(BANNER.jenkins.timeout), BANNER.jenkins.fetchFailed, "Jenkins")).toBe(
       BANNER.jenkins.timeout,

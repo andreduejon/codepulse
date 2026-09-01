@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { BANNER } from "../../debug/banner";
+import { clearDebugEvents, getDebugEvents } from "../../debug/events";
 import {
   buildJenkinsCommitDataMap,
   buildJenkinsGraphBadges,
@@ -524,6 +525,39 @@ describe("resolveJenkinsJobs", () => {
       expect(result.jobs).toHaveLength(25);
       expect(result.jobs[0].url).toContain("branch-0");
       expect(result.jobs[24].url).toContain("branch-24");
+      expect(result.complete).toBe(false);
+      expect(result.truncated).toBe(true);
+      expect(getDebugEvents()).toContainEqual(
+        expect.objectContaining({
+          source: "Jenkins",
+          message: expect.stringContaining("Multibranch discovery limited to 25 jobs"),
+        }),
+      );
+    } finally {
+      clearDebugEvents();
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("keeps discovery complete when enabled branches fit the limit", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      Response.json({
+        _class: "org.jenkinsci.plugins.workflow.multibranch.WorkflowMultiBranchProject",
+        jobs: Array.from({ length: 25 }, (_, idx) => ({
+          _class: "org.jenkinsci.plugins.workflow.job.WorkflowJob",
+          name: `branch-${idx}`,
+          url: `https://jenkins.example.com/job/service/job/branch-${idx}/`,
+          buildable: true,
+          disabled: false,
+        })),
+      })) as unknown as typeof fetch;
+
+    try {
+      const result = await resolveJenkinsJobs([{ url: "https://jenkins.example.com/job/service" }], "user", "token");
+      expect(result.jobs).toHaveLength(25);
+      expect(result.complete).toBe(true);
+      expect(result.truncated).toBe(false);
     } finally {
       globalThis.fetch = originalFetch;
     }
