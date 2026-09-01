@@ -22,7 +22,7 @@ describe("banner catalog", () => {
   });
 
   test("Jenkins incomplete-data warning is catalogued", () => {
-    expect(BANNER.jenkins.incomplete).toBe("Jenkins data incomplete. Result limit reached.");
+    expect(BANNER.jenkins.incomplete).toBe("Jenkins data incomplete. Branch-job limit reached.");
     expect(isBanner(BANNER.jenkins.incomplete)).toBe(true);
   });
 

@@ -1,17 +1,24 @@
 # OpenShift provider
 
-OpenShift shows resources associated with graph commits and conservative health
-status. The graph uses two 15-character columns: **Live** and **Cache**.
-Both use fail (red) / running (info) / pass (green) count chips. Cache is terminal Builds
-(persisted). Live is Deployments, Pods, ImageStreamTags, and running
-Builds. Empty lane shows `·······`. Details mark each terminal Build
-`(cached)` after its name. Builds and ImageStreamTags poll while the OpenShift view is focused, using the
-provider **Auto refresh** cycle (`off`, `2m`, `5m`, `10m`; default `2m`).
-Deployments, DeploymentConfigs, and Pods are listed then watched in the
-configured namespaces until you leave the view. Git Auto refresh / Auto fetch
-stay git-only. Select a Build or Pod and press Enter to view its log, or the
-API object for other kinds. Terminal Build JSON is kept with the list and on
-disk. Other kinds fetch JSON on open.
+OpenShift matches cluster resources to graph commits using the configured commit
+label or annotation. It shows conservative health summaries for configured
+namespaces and lets you inspect resource JSON or supported logs.
+
+See [common provider behavior](README.md) for shared refresh, cache, and
+diagnostic conventions.
+
+## Graph status
+
+The graph has two lanes:
+
+- **Live** — Deployments, DeploymentConfigs, Pods, ImageStreamTags, and running
+  Builds currently observed from OpenShift.
+- **Cache** — terminal Builds persisted locally by commit.
+
+Both lanes show fail, running, pass, and unknown counts. Empty lanes show
+`·······`; details append `(cached)` to terminal Build names. Builds and
+ImageStreamTags poll while the OpenShift view is focused. Deployments,
+DeploymentConfigs, and Pods are listed and watched until you leave the view.
 
 ## Configuration
 
@@ -22,20 +29,28 @@ Configure the provider per repository from `:providers`:
 - Set the environment variable containing an API token. Default:
   `OPENSHIFT_TOKEN`. Prefer a long-lived service-account token over
   `oc whoami -t` (env is fixed until Codepulse restarts).
-- Cache count (`10`, `20`, `50`): maximum commit files kept on disk.
+- Cache limit (`10`, `20`, `50`): maximum commit snapshots kept on disk.
 - Fetch size (`10`, `20`, `50`): how many graph commits are candidates. Only
   those commits that also have a Build or ImageStreamTag seed are matched.
-  Same 10 / 20 / 50 scale as Jenkins and GitHub Actions fetch size.
 - Auto refresh (`off`, `2m`, `5m`, `10m`): poll Builds and ImageStreamTags
   while the OpenShift view is focused. `off` skips that poll. Reload still
   lists seeds. Live Deploy/DC/Pod freshness is watch, not this timer.
-- Set the commit SHA key. Default: `dev/commit-sha`. Labels first, then
+- Set the commit SHA label/annotation key. Default: `dev/commit-sha`. Labels first, then
   annotations, on Builds, Deployments, and ImageStreamTags.
 - Add one or more namespaces.
 
 Stamp `dev/commit-sha` (or your annotation key) as a **label** on Builds and
 Deployments when the API allows it. ImageStreamTags accept annotations only.
 Credentials stay in environment variables and are not written to config.
+
+Fetch size limits graph commit candidates, not OpenShift API list pages or the
+number of resources returned.
+Resource lists follow Kubernetes `metadata.continue` tokens until complete and
+retain the final `metadata.resourceVersion` for watches. Each list is bounded to
+100 pages and 50,000 items, and repeated continuation tokens stop that resource
+request. Resources fetched before a later-page failure remain visible. Codepulse
+reports partial inventory through the provider message and records namespace,
+resource kind, and technical details in the Debug dialog.
 
 ## Cache
 
@@ -54,7 +69,8 @@ the limit. Pods, workloads, and ImageStreamTags are not written to disk.
 
 An expired token (401) stops further requests. The banner reads `OpenShift
 token expired. Live data unavailable.` Graph and details keep the last Live
-and Cache data. Reload is disabled. Cached Build JSON and logs still open.
+and Cache data. Provider reload and live requests are disabled. Cached Build
+JSON and logs remain viewable.
 
 ## Matching
 
@@ -153,5 +169,5 @@ rules:
 ```
 
 Partial permission failures preserve successful inventory and show a warning.
-Routes, Services, Helm releases, and console links are not included in this
-release.
+Routes, Services, Helm releases, and console links are outside the provider's
+current scope.

@@ -219,7 +219,7 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
             keyed
             fallback={
               <box flexGrow={1} alignItems="center" justifyContent="center">
-                <text fg={t().foregroundMuted}>{state.detailLoading() ? "Loading..." : `No ${activeTab()} files`}</text>
+                <text fg={t().foregroundMuted}>{state.detailLoading() ? "loading..." : `No ${activeTab()} files`}</text>
               </box>
             }
           >

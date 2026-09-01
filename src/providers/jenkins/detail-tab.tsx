@@ -56,7 +56,6 @@ export function JenkinsDetailTab(props: Readonly<JenkinsDetailTabProps>) {
   return (
     <ProviderRunTree
       runs={runs()}
-      loading={props.loading}
       navRef={props.navRef}
       detailCursorIndex={props.detailCursorIndex}
       detailFocused={props.detailFocused}
@@ -69,10 +68,8 @@ export function JenkinsDetailTab(props: Readonly<JenkinsDetailTabProps>) {
       debugSource="Jenkins"
       dataKey={props.sha}
       onOpenJobAction={(job, run, jobs) => props.onOpenJobLog?.(job.raw, run.raw, jobs?.map(entry => entry.raw) ?? [])}
-      summaryLabel="total workflow runs"
-      loadingText=""
-      emptyText=""
-      jobsLoadingText="Loading..."
+      summaryLabel="total builds"
+      jobsLoadingText="loading jobs..."
       noJobsText=""
       showRunDuration={false}
       childCountLabel={count => `${count} stage${count === 1 ? "" : "s"}`}

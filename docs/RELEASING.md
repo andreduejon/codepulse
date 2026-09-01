@@ -8,12 +8,13 @@ every binary passes validation.
 
 1. Update `package.json`, `bun.lock`, and `CHANGELOG.md` to the same version.
 2. Merge the release changes through `develop` and then `main`.
-3. Confirm CI passes on the exact `main` commit:
+3. Confirm CI passes for the exact `main` commit being released. Verify the
+   commit shown by the workflow run, not only the branch name:
 
 ```sh
 git switch main
 git pull --ff-only origin main
-gh run list --branch main --workflow CI --limit 1
+gh run list --branch main --workflow CI --limit 5
 ```
 
 ## Tag
@@ -33,15 +34,16 @@ run_id="$(gh run list --workflow Release --limit 1 --json databaseId --jq '.[0].
 gh run watch "$run_id" --exit-status
 ```
 
-The workflow verifies the source, builds four platform executables, signs the
-macOS binaries, tests the OpenTUI native/worker/WASM assets, creates checksums,
-and publishes the GitHub Release only after all matrix jobs succeed.
+The workflow validates the tagged source, builds and tests all supported
+platform artifacts, creates checksums, and publishes the GitHub Release only
+after every matrix job succeeds.
 
 ## Verify
 
 Verify the published assets and test installation in a temporary directory:
 
 ```sh
+version="$(bun -p "require('./package.json').version")"
 gh release view "v$version"
 test_root="$(mktemp -d)"
 install_dir="$test_root/bin"

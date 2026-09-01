@@ -29,7 +29,7 @@ export const BANNER = {
     authFailed: "Jenkins authentication failed.",
     tokenExpired: "Jenkins token expired. Live data unavailable.",
     fetchFailed: "Jenkins fetch failed.",
-    incomplete: "Jenkins data incomplete. Result limit reached.",
+    incomplete: "Jenkins data incomplete. Branch-job limit reached.",
     invalidJobUrl: "Jenkins job URL invalid.",
     timeout: "Jenkins request timed out.",
   },

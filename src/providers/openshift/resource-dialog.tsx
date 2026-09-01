@@ -119,11 +119,11 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
 
   const lines = createMemo(() => {
     if (viewMode() === "log") {
-      if (logLoading()) return ["Loading log…"];
+      if (logLoading()) return ["loading..."];
       if (logError()) return [logError() ?? ""];
       return (logText() ?? "").split("\n");
     }
-    if (objectLoading()) return ["Loading object…"];
+    if (objectLoading()) return ["loading..."];
     if (objectError()) return [objectError() ?? ""];
     return (objectText() ?? "").split("\n");
   });

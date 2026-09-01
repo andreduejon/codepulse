@@ -8,14 +8,10 @@ Built with [Bun](https://bun.sh), [SolidJS](https://solidjs.com), and [@opentui/
 
 ## Vision
 
-`codepulse` starts as a git-first terminal UI and is planned to grow into a
-read-only by default codebase dashboard: git history as the primary navigation
-surface, with CI/CD, security, and code quality signals layered onto the same
+`codepulse` is a git-first, read-only-by-default codebase dashboard. Git history
+is the primary navigation surface, with optional CI/CD, runtime, and vulnerability
+signals from GitHub Actions, Jenkins, OpenShift, and Snyk layered onto the same
 commit and branch context.
-
-The current line of work polishes OpenShift live inventory (watch, log follow,
-provider Auto refresh) alongside Snyk, GitHub Actions, and Jenkins. Commits
-combine source history with cached vulnerability, CI/CD, and runtime signals.
 
 ## Requirements
 
@@ -124,22 +120,21 @@ Use `codepulse -h` for complete shortcuts, commands, and provider setup.
 
 ## Providers
 
-Remote providers are disabled by default and configured per repository from
+Provider integrations are disabled by default and configured per repository from
 the Providers menu (`:providers`). Credentials are read from environment
-variables and are never stored in configuration.
+variables and are never stored in configuration. See
+[common provider behavior](docs/providers/README.md) for refresh, cache, and
+diagnostic conventions.
 
-- **GitHub Actions** — shows workflow runs, jobs, and logs for matching commits.
+- **GitHub Actions** — workflow runs, jobs, and logs matched to graph commits.
   See [GitHub Actions provider](docs/providers/github-actions.md).
-- **Jenkins** — shows configured job builds, pipeline stages, and console logs.
-  Job URLs are auto-detected; multibranch pipelines discover up to 25 enabled
-  branch jobs across configured parents. See [Jenkins provider](docs/providers/jenkins.md).
-- **OpenShift** — Live/Cache chips for Builds, ImageStreamTags, Deployments,
-  and Pods. Watch while the OpenShift view is focused; Builds/IST poll on
-  provider Auto refresh. Enter opens log follow or JSON. See
-  [OpenShift provider](docs/providers/openshift.md).
-- **Snyk** — scans exact commits in detached worktrees, shows severity counts,
-  and lists vulnerability and remediation details. Branch-tip auto-scan runs
-  only on the Snyk view. See [Snyk provider](docs/providers/snyk.md).
+- **Jenkins** — configured job builds, pipeline stages, and console logs,
+  including limited multibranch discovery. See
+  [Jenkins provider](docs/providers/jenkins.md).
+- **OpenShift** — commit-matched Builds and live workload health for configured
+  namespaces. See [OpenShift provider](docs/providers/openshift.md).
+- **Snyk** — exact-commit vulnerability snapshots with severity counts and
+  finding details. See [Snyk provider](docs/providers/snyk.md).
 
 ## Themes
 
@@ -161,28 +156,9 @@ Switch themes live with `:theme`, or persist a theme in repo configuration.
 
 ## Roadmap
 
-Planned milestones currently follow this shape:
-
-- `0.1.0`: configuration file support, richer search, lazy commit loading, and
-  core UX polish
-- `0.2.0`: graph power features such as ancestry workflows and path-aware
-  history views
-- `0.3.0`: GitHub Actions integration, provider status surfacing, and repo
-  trust cleanup
-- `0.4.0`: Jenkins provider MVP, shared provider run tree, shared log dialog,
-  and provider polish
-- `0.5.0`: grouped project switching, in-memory repo session cache, grouped
-  switcher, and debug dialog
-- `0.6.0`: OpenShift runtime inventory, resource health, and JSON inspection
-- `0.7.0`: standalone macOS and Linux distributions with no Bun or Node.js runtime requirement
-- `0.8.0`: Snyk Open Source scans, commit severity counts, finding details, and
-  a local scan cache
-- `0.9.0`: OpenShift Live/Cache watch, Build/IST Auto refresh,
-  log follow, and Snyk auto-scan only on the Snyk view
-- Future: GitHub Actions and Jenkins polish; further providers
-
-The intent is to reach `1.0.0` once the integration model and configuration
-surface are stable.
+Codepulse is working toward `1.0.0` by stabilizing provider behavior,
+configuration, cache semantics, and cross-platform distribution. See the
+[changelog](CHANGELOG.md) for completed releases.
 
 ## License
 

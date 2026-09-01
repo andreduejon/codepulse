@@ -110,7 +110,6 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
   return (
     <ProviderRunTree
       runs={runs()}
-      loading={props.loading}
       navRef={props.navRef}
       detailCursorIndex={props.detailCursorIndex}
       detailFocused={props.detailFocused}
@@ -124,9 +123,7 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
       dataKey={props.sha}
       onOpenJobAction={(job, run, jobs) => props.onOpenJobLog?.(job.raw, run.raw, jobs?.map(entry => entry.raw) ?? [])}
       summaryLabel="total workflow runs"
-      loadingText=""
-      emptyText=""
-      jobsLoadingText="Loading..."
+      jobsLoadingText="loading jobs..."
       noJobsText=""
       onReloadCommit={async () => {
         if (reloadBusy() || props.unavailableReason) return;

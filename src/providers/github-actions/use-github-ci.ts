@@ -150,7 +150,7 @@ export function useGitHubCI(opts: {
     if (configAccessor().enabled === true) {
       state.providers.register({
         id: "github-actions",
-        displayName: "GitHub",
+        displayName: "GitHub Actions",
         isAvailable,
       });
     } else {

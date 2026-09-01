@@ -50,7 +50,6 @@ type FlatItem<TRaw, TJobRaw> =
 
 export interface ProviderRunTreeProps<TRaw, TJobRaw> {
   runs: ProviderTreeRun<TRaw>[];
-  loading?: boolean;
   navRef?: DetailNavRef;
   detailCursorIndex: () => number;
   detailFocused: () => boolean;
@@ -66,8 +65,6 @@ export interface ProviderRunTreeProps<TRaw, TJobRaw> {
     jobs?: ProviderTreeJob<TJobRaw>[],
   ) => void;
   summaryLabel: string;
-  loadingText: string;
-  emptyText: string;
   jobsLoadingText?: string;
   noJobsText?: string;
   autoExpandSingleRun?: boolean;
@@ -77,7 +74,6 @@ export interface ProviderRunTreeProps<TRaw, TJobRaw> {
   reloadLabel?: string;
   reloadBusy?: boolean;
   reloadEnabled?: boolean;
-  reloadStatus?: string;
   /** When false, hide the count row. Unknown must not look like zero. */
   showSummary?: boolean;
 }
@@ -346,7 +342,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
   const isReloadCursored = () => reloadIdx() >= 0 && props.detailFocused() && props.detailCursorIndex() === reloadIdx();
   const reloadStatus = () => {
     if (reloadBusy()) return "loading...";
-    return props.reloadStatus ?? "";
+    return "";
   };
 
   return (
@@ -447,7 +443,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                       {placeholderTreeLead()}└─
                     </text>
                     <text> </text>
-                    <text fg={t().foregroundMuted}>{props.jobsLoadingText ?? "Loading jobs…"}</text>
+                    <text fg={t().foregroundMuted}>{props.jobsLoadingText ?? "loading jobs..."}</text>
                   </box>
                 </Show>
                 <Show when={!isLoading() && jobError()}>
@@ -486,7 +482,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                         ? (props.childCountLabel?.(job.steps.length) ??
                           `${job.steps.length} step${job.steps.length === 1 ? "" : "s"}`)
                         : isLoading()
-                          ? (props.jobsLoadingText ?? "Loading...")
+                          ? (props.jobsLoadingText ?? "loading jobs...")
                           : "";
                     const jobTextColor = () => (isJobCursored() ? t().accent : t().foreground);
                     const jobTreeLead = () => (runIsLast() ? "   " : "│  ");
