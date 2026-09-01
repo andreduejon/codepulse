@@ -1,11 +1,11 @@
 import { type Accessor, createEffect, onCleanup } from "solid-js";
 import type { DetailNavRef } from "../components/detail-types";
 import { isUncommittedHash } from "../constants";
-import type { AppActions, AppState, DetailTab } from "../context/state";
+import type { AppActions, AppState } from "../context/state";
 import { BANNER, bannerOrFallback } from "../debug/banner";
 import { getCommitDetail, getUncommittedDetail } from "../git/repo";
 import { isProviderDetailView } from "../providers/provider";
-import { getAvailableTabs } from "../utils/tab-utils";
+import { getAvailableTabs, getDefaultDetailTab } from "../utils/tab-utils";
 
 const DETAIL_DEBOUNCE_MS = 150;
 
@@ -99,17 +99,7 @@ export function useDetailLoader({
      * true when this effect fires.
      */
     if (!getIsJumpNavigation()) {
-      let defaultTab: DetailTab = "files";
-
-      if (isUncommitted) {
-        defaultTab = "unstaged";
-      }
-
-      if (isProviderMode) {
-        defaultTab = activeProvider as DetailTab;
-      }
-
-      actions.setDetailActiveTab(defaultTab);
+      actions.setDetailActiveTab(getDefaultDetailTab(commit, activeProvider));
       actions.setDetailCursorIndex(0);
       // Clear any stale jump direction on normal (non-jump) navigation
       detailNavRef.pendingJumpDirection = null;

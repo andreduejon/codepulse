@@ -9,6 +9,7 @@ import { useFileTree } from "../hooks/use-file-tree";
 import { useT } from "../hooks/use-t";
 import { isCursored as _isCursored, itemHighlightBg as _itemHighlightBg } from "../utils/detail-cursor";
 import { buildDiffTarget } from "../utils/diff-target";
+import { getUncommittedProviderNotice } from "../utils/tab-utils";
 import type { DetailViewProps } from "./detail-types";
 import {
   computeFileWidths,
@@ -39,9 +40,11 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
 
   // Active tab for uncommitted node: "staged" | "unstaged" | "untracked"
   const activeTab = () => state.detailActiveTab();
+  const providerNotice = () => getUncommittedProviderNotice(state.activeProviderView());
 
   // Get files for the active tab from uncommittedDetail
   const activeFiles = createMemo(() => {
+    if (providerNotice()) return [];
     const ud = state.uncommittedDetail();
     if (!ud) return [];
     const tab = activeTab();
@@ -209,11 +212,23 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
   return (
     <box flexDirection="column" flexGrow={1}>
       <Show
-        when={activeFiles().length > 0}
+        when={!providerNotice() && activeFiles().length > 0}
         fallback={
-          <box flexGrow={1} alignItems="center" justifyContent="center">
-            <text fg={t().foregroundMuted}>{state.detailLoading() ? "Loading..." : `No ${activeTab()} files`}</text>
-          </box>
+          <Show
+            when={providerNotice()}
+            keyed
+            fallback={
+              <box flexGrow={1} alignItems="center" justifyContent="center">
+                <text fg={t().foregroundMuted}>{state.detailLoading() ? "Loading..." : `No ${activeTab()} files`}</text>
+              </box>
+            }
+          >
+            {notice => (
+              <box flexGrow={1} alignItems="flex-start" justifyContent="flex-start">
+                <text fg={t().foregroundMuted}>{notice}</text>
+              </box>
+            )}
+          </Show>
         }
       >
         {/* Total lines changed (skip for untracked which have 0/0 stats) */}
