@@ -1,6 +1,6 @@
 import { BANNER, bannerOrFallback, debugError } from "../../debug/banner";
 import type { GraphBadge } from "../provider";
-import { fetchWithRetry as fetchWithRetryPolicy, runLimited } from "../shared/http";
+import { fetchWithRetry as fetchWithRetryPolicy, isAbortError, runLimited } from "../shared/http";
 import { categorize } from "../shared/status";
 import {
   JENKINS_MULTIBRANCH_JOB_LIMIT,
@@ -658,6 +658,7 @@ export async function fetchJenkinsRunJobs(
     };
     return { jobs: [job], error: null };
   } catch (err) {
+    if (isAbortError(err, signal)) throw err;
     return { jobs: [], error: bannerOrFallback(err, BANNER.jenkins.fetchFailed, "Jenkins") };
   }
 }

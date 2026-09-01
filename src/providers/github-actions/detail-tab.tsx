@@ -36,7 +36,7 @@ export interface ActionsDetailTabProps {
    * Fetch full job details (with steps) for a run on demand.
    * Called when the user expands a run entry. Checks cache first.
    */
-  fetchJobsForRun: (run: GitHubWorkflowRun) => Promise<GitHubJobFetchResult>;
+  fetchJobsForRun: (run: GitHubWorkflowRun, signal?: AbortSignal) => Promise<GitHubJobFetchResult>;
   /** Fetch CI data for the selected SHA. `force` re-queries even if already loaded. */
   fetchCommitData?: (sha: string, force?: boolean) => Promise<void>;
   /**
@@ -116,10 +116,12 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
       detailFocused={props.detailFocused}
       setDetailCursorAction={props.setDetailCursorAction}
       setDetailCursorIndex={props.setDetailCursorIndex}
-      fetchJobsForRun={async run => {
-        const { jobs, error } = await props.fetchJobsForRun(run.raw);
+      fetchJobsForRun={async (run, signal) => {
+        const { jobs, error } = await props.fetchJobsForRun(run.raw, signal);
         return { jobs: jobs.map(mapJob), error };
       }}
+      debugSource="GitHub"
+      dataKey={props.sha}
       onOpenJobAction={(job, run, jobs) => props.onOpenJobLog?.(job.raw, run.raw, jobs?.map(entry => entry.raw) ?? [])}
       summaryLabel="total workflow runs"
       loadingText=""

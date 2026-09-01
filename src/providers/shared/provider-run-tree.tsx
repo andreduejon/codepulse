@@ -1,8 +1,10 @@
 import type { Renderable } from "@opentui/core";
-import { createEffect, createMemo, createSignal, For, Show, untrack } from "solid-js";
+import { createEffect, createMemo, createSignal, For, onCleanup, Show, untrack } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
+import type { DebugEventSource } from "../../debug/events";
 import { useT } from "../../hooks/use-t";
 import { formatDuration, formatRelativeDate } from "../../utils/date";
+import { fetchProviderJobs } from "./provider-job-fetch";
 import { categorize, statusColor, statusIcon } from "./status";
 
 export interface ProviderTreeStep {
@@ -54,7 +56,9 @@ export interface ProviderRunTreeProps<TRaw, TJobRaw> {
   detailFocused: () => boolean;
   setDetailCursorAction: (action: string | null) => void;
   setDetailCursorIndex: (idx: number) => void;
-  fetchJobsForRun: (run: ProviderTreeRun<TRaw>) => Promise<ProviderTreeJobFetchResult<TJobRaw>>;
+  fetchJobsForRun: (run: ProviderTreeRun<TRaw>, signal?: AbortSignal) => Promise<ProviderTreeJobFetchResult<TJobRaw>>;
+  debugSource: DebugEventSource;
+  dataKey: string;
   getInitialJobsForRun?: (run: ProviderTreeRun<TRaw>) => ProviderTreeJob<TJobRaw>[];
   onOpenJobAction?: (
     job: ProviderTreeJob<TJobRaw>,
@@ -65,7 +69,6 @@ export interface ProviderRunTreeProps<TRaw, TJobRaw> {
   loadingText: string;
   emptyText: string;
   jobsLoadingText?: string;
-  jobsUnavailableText?: string;
   noJobsText?: string;
   autoExpandSingleRun?: boolean;
   childCountLabel?: (count: number) => string;
@@ -88,7 +91,9 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
   const [loadingRuns, setLoadingRuns] = createSignal<Set<string>>(new Set());
   const [loadedRuns, setLoadedRuns] = createSignal<Set<string>>(new Set());
   const [pendingFocusRunId, setPendingFocusRunId] = createSignal<string | null>(null);
+  const fetchControllers = new Map<string, AbortController>();
   let autoExpandedSignature: string | null = null;
+  let previousDataKey = props.dataKey;
   const itemRefs: Renderable[] = [];
 
   const formatStepDuration = (step: ProviderTreeStep) => formatDuration(step.startedAt, step.completedAt);
@@ -153,10 +158,72 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     return items;
   });
 
+  const clearLoadingRun = (runId: string) => {
+    setLoadingRuns(prev => {
+      const next = new Set(prev);
+      next.delete(runId);
+      return next;
+    });
+  };
+
+  const abortRunFetch = (runId: string) => {
+    fetchControllers.get(runId)?.abort();
+    fetchControllers.delete(runId);
+    clearLoadingRun(runId);
+    if (pendingFocusRunId() === runId) setPendingFocusRunId(null);
+  };
+
+  const loadJobsForRun = async (run: ProviderTreeRun<TRaw>) => {
+    if (loadingRuns().has(run.id)) return;
+
+    const ctrl = new AbortController();
+    fetchControllers.set(run.id, ctrl);
+    setLoadingRuns(prev => new Set([...prev, run.id]));
+    setJobErrors(prev => {
+      const next = new Map(prev);
+      next.delete(run.id);
+      return next;
+    });
+
+    try {
+      const outcome = await fetchProviderJobs(
+        () => props.fetchJobsForRun(run, ctrl.signal),
+        ctrl.signal,
+        props.debugSource,
+      );
+      if (fetchControllers.get(run.id) !== ctrl || outcome.kind === "cancelled") return;
+
+      setFetchedJobs(prev => {
+        const next = new Map(prev);
+        next.set(run.id, outcome.jobs);
+        return next;
+      });
+      setJobErrors(prev => {
+        const next = new Map(prev);
+        if (outcome.error) next.set(run.id, outcome.error);
+        else next.delete(run.id);
+        return next;
+      });
+      setLoadedRuns(prev => {
+        const next = new Set(prev);
+        if (outcome.error) next.delete(run.id);
+        else next.add(run.id);
+        return next;
+      });
+      if (outcome.error || outcome.jobs.length === 0) setPendingFocusRunId(null);
+    } finally {
+      if (fetchControllers.get(run.id) === ctrl) {
+        fetchControllers.delete(run.id);
+        clearLoadingRun(run.id);
+      }
+    }
+  };
+
   const toggleRun = (run: ProviderTreeRun<TRaw>) => {
     const opening = !expandedRuns().has(run.id);
     const wasFocusedRun =
       props.detailCursorIndex() === flatItems().findIndex(item => item.kind === "run" && item.run.id === run.id);
+    if (!opening) abortRunFetch(run.id);
     setExpandedRuns(prev => {
       const next = new Set(prev);
       if (opening) next.add(run.id);
@@ -179,29 +246,39 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
           });
         }
       }
-      setLoadingRuns(prev => new Set([...prev, run.id]));
-      props.fetchJobsForRun(run).then(({ jobs, error }) => {
-        setFetchedJobs(prev => {
-          const next = new Map(prev);
-          next.set(run.id, jobs);
-          return next;
-        });
-        setJobErrors(prev => {
-          const next = new Map(prev);
-          if (error) next.set(run.id, error);
-          else next.delete(run.id);
-          return next;
-        });
-        setLoadingRuns(prev => {
-          const next = new Set(prev);
-          next.delete(run.id);
-          return next;
-        });
-        setLoadedRuns(prev => new Set([...prev, run.id]));
-        if (error || jobs.length === 0) setPendingFocusRunId(null);
-      });
+      void loadJobsForRun(run);
     }
   };
+
+  const reloadCommit = async () => {
+    const failedRunIds = new Set(jobErrors().keys());
+    await props.onReloadCommit?.();
+    await Promise.all(
+      props.runs.filter(run => failedRunIds.has(run.id) && expandedRuns().has(run.id)).map(run => loadJobsForRun(run)),
+    );
+  };
+
+  const resetRunState = () => {
+    for (const ctrl of fetchControllers.values()) ctrl.abort();
+    fetchControllers.clear();
+    setExpandedRuns(new Set<string>());
+    setFetchedJobs(new Map<string, ProviderTreeJob<TJobRaw>[]>());
+    setJobErrors(new Map<string, string>());
+    setLoadingRuns(new Set<string>());
+    setLoadedRuns(new Set<string>());
+    setPendingFocusRunId(null);
+    autoExpandedSignature = null;
+    itemRefs.length = 0;
+  };
+
+  createEffect(() => {
+    const dataKey = props.dataKey;
+    if (dataKey === previousDataKey) return;
+    previousDataKey = dataKey;
+    resetRunState();
+  });
+
+  onCleanup(resetRunState);
 
   createEffect(() => {
     const runId = pendingFocusRunId();
@@ -240,7 +317,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
       const item = items[props.detailCursorIndex()];
       if (!item) return false;
       if (item.kind === "reload") {
-        if (reloadEnabled() && !reloadBusy()) void props.onReloadCommit?.();
+        if (reloadEnabled() && !reloadBusy()) void reloadCommit();
         return false;
       }
       if (item.kind === "run") {
@@ -373,13 +450,18 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                     <text fg={t().foregroundMuted}>{props.jobsLoadingText ?? "Loading jobs…"}</text>
                   </box>
                 </Show>
-                <Show when={!isLoading() && jobError() && (props.jobsUnavailableText ?? "")}>
+                <Show when={!isLoading() && jobError()}>
                   <box flexDirection="row" width="100%">
-                    <text flexShrink={0} wrapMode="none" fg={t().border}>
+                    <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
                       {placeholderTreeLead()}└─
                     </text>
-                    <text> </text>
-                    <text fg={t().foregroundMuted}>{props.jobsUnavailableText}</text>
+                    <text fg={t().foregroundMuted}> </text>
+                    <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
+                      Unavailable
+                    </text>
+                    <text flexShrink={0} width={STATUS_COL_WIDTH} wrapMode="none" fg={t().foregroundMuted}>
+                      {"!".padStart(STATUS_COL_WIDTH)}
+                    </text>
                   </box>
                 </Show>
                 <Show when={!isLoading() && !jobError() && jobs().length === 0 && (props.noJobsText ?? "")}>

@@ -6,7 +6,7 @@ import type { JenkinsCommitData, JenkinsJob, JenkinsJobFetchResult, JenkinsRun }
 export interface JenkinsDetailTabProps {
   sha: string;
   getCommitData: (sha: string) => JenkinsCommitData | null;
-  fetchJobsForRun: (run: JenkinsRun) => Promise<JenkinsJobFetchResult>;
+  fetchJobsForRun: (run: JenkinsRun, signal?: AbortSignal) => Promise<JenkinsJobFetchResult>;
   fetchCommitData?: (sha: string, force?: boolean) => Promise<void>;
   unavailableReason?: string | null;
   loading?: boolean;
@@ -62,10 +62,12 @@ export function JenkinsDetailTab(props: Readonly<JenkinsDetailTabProps>) {
       detailFocused={props.detailFocused}
       setDetailCursorAction={props.setDetailCursorAction}
       setDetailCursorIndex={props.setDetailCursorIndex}
-      fetchJobsForRun={async run => {
-        const { jobs, error } = await props.fetchJobsForRun(run.raw);
+      fetchJobsForRun={async (run, signal) => {
+        const { jobs, error } = await props.fetchJobsForRun(run.raw, signal);
         return { jobs: jobs.map(mapJob), error };
       }}
+      debugSource="Jenkins"
+      dataKey={props.sha}
       onOpenJobAction={(job, run, jobs) => props.onOpenJobLog?.(job.raw, run.raw, jobs?.map(entry => entry.raw) ?? [])}
       summaryLabel="total workflow runs"
       loadingText=""

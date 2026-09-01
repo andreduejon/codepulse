@@ -22,7 +22,7 @@ import { DEFAULT_JENKINS_CONFIG } from "./types";
 
 export interface UseJenkinsCIResult {
   getCommitData: (sha: string) => JenkinsCommitData | null;
-  fetchJobsForRun: (run: JenkinsRun) => Promise<JenkinsJobFetchResult>;
+  fetchJobsForRun: (run: JenkinsRun, signal?: AbortSignal) => Promise<JenkinsJobFetchResult>;
   fetchRunLog: (run: JenkinsRun, signal?: AbortSignal) => Promise<string>;
   fetchCommitDataForSHA: (sha: string, force?: boolean) => Promise<void>;
   refresh: () => Promise<void>;
@@ -289,15 +289,16 @@ export function useJenkinsCI(opts: {
 
   return {
     getCommitData,
-    fetchJobsForRun: async run => {
+    fetchJobsForRun: async (run, signal) => {
       const epoch = lifecycle.getEpoch();
       const cached = jobsCache.get(run.id);
       if (cached) return cached;
       const token = getJenkinsToken(config.tokenEnvVar);
       if (!token) return { jobs: [], error: BANNER.jenkins.missingToken(config.tokenEnvVar) };
-      const result = await fetchJenkinsRunJobs(run, config.username, token);
-      if (epoch !== lifecycle.getEpoch()) return { jobs: [], error: null };
+      const result = await fetchJenkinsRunJobs(run, config.username, token, signal);
+      if (signal?.aborted || epoch !== lifecycle.getEpoch()) return { jobs: [], error: null };
       if (run.status === "completed" && result.error === null) {
+        if (signal?.aborted || epoch !== lifecycle.getEpoch()) return { jobs: [], error: null };
         jobsCache.set(run.id, result);
         await persistTerminalRuns(state.repoPath(), [run.headSha]);
       }

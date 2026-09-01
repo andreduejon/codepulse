@@ -62,9 +62,9 @@ export interface UseGitHubCIResult {
   /**
    * Fetch jobs for a run on demand and cache them.
    * Returns the jobs once fetched (or from cache).
-   * Resolves to an empty array on error — never throws.
+   * Resolves to an empty array on provider errors; cancellation rejects with AbortError.
    */
-  fetchJobsForRun: (run: GitHubWorkflowRun) => Promise<GitHubJobFetchResult>;
+  fetchJobsForRun: (run: GitHubWorkflowRun, signal?: AbortSignal) => Promise<GitHubJobFetchResult>;
   /**
    * Fetch the plain-text log for a specific job ID.
    * Resolves to an empty string if token or repo is unavailable.
@@ -424,7 +424,7 @@ export function useGitHubCI(opts: {
   }
 
   // ── On-demand job fetching ────────────────────────────────────────────
-  async function fetchJobsForRun(run: GitHubWorkflowRun): Promise<GitHubJobFetchResult> {
+  async function fetchJobsForRun(run: GitHubWorkflowRun, signal?: AbortSignal): Promise<GitHubJobFetchResult> {
     const epoch = lifecycle.getEpoch();
     const cached = jobsCache.get(run.id);
     if (cached) return { jobs: cached, error: null };
@@ -433,14 +433,11 @@ export function useGitHubCI(opts: {
     const token = getGitHubToken(config.tokenEnvVar);
     if (!repo || !token) return { jobs: [], error: BANNER.github.unavailable };
 
-    const { jobs, error } = await fetchRunJobs(repo, token, run.id);
-    if (epoch !== lifecycle.getEpoch()) return { jobs: [], error: null };
-    if (error) {
-      actions.setProviderStatus("github-actions", providerError(error));
-      return { jobs, error };
-    }
-    actions.setProviderStatus("github-actions", providerIdle());
+    const { jobs, error } = await fetchRunJobs(repo, token, run.id, signal);
+    if (signal?.aborted || epoch !== lifecycle.getEpoch()) return { jobs: [], error: null };
+    if (error) return { jobs, error };
     if (run.status === "completed") {
+      if (signal?.aborted || epoch !== lifecycle.getEpoch()) return { jobs: [], error: null };
       jobsCache.set(run.id, jobs);
       await persistTerminalRuns(state.repoPath(), [run.headSha]);
     }
