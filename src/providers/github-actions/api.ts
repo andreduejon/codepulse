@@ -158,6 +158,7 @@ function isGitHubRateLimit(res: Response): boolean {
 }
 
 function githubHttpBanner(res: Response, kind: "fetch" | "jobs" | "logs"): string {
+  if (res.status === 401) return BANNER.github.tokenExpired;
   if (isGitHubRateLimit(res)) return BANNER.github.rateLimit;
   if (kind === "jobs") return BANNER.github.jobsFailed;
   if (kind === "logs") return BANNER.github.logFailed;
@@ -343,6 +344,25 @@ export function buildCommitDataMap(runs: GitHubWorkflowRun[]): Map<string, GitHu
 // ── GraphQL types ─────────────────────────────────────────────────────────
 
 /** Raw GraphQL CheckSuite node (maps to a single workflow run). */
+interface GqlWorkflowJobStep {
+  name?: string;
+  number?: number;
+  status?: string;
+  conclusion?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+}
+
+interface GqlWorkflowJob {
+  databaseId?: number;
+  name?: string;
+  status?: string;
+  conclusion?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  steps?: GqlWorkflowJobStep[];
+}
+
 interface GqlCheckSuite {
   status: string;
   conclusion: string | null;
@@ -354,6 +374,7 @@ interface GqlCheckSuite {
     createdAt: string;
     updatedAt: string;
     workflow: { name: string };
+    jobs?: { nodes?: GqlWorkflowJob[] };
   } | null;
 }
 
@@ -393,6 +414,27 @@ function gqlNormalise(status: string, conclusion: string | null): { status: stri
   return { status: status.toLowerCase(), conclusion: conclusion ? conclusion.toLowerCase() : null };
 }
 
+function mapGqlJob(job: GqlWorkflowJob): GitHubJob | null {
+  if (typeof job.databaseId !== "number" || !job.name) return null;
+  const { status, conclusion } = gqlNormalise(job.status ?? "COMPLETED", job.conclusion ?? null);
+  return {
+    id: job.databaseId,
+    name: job.name,
+    status,
+    conclusion,
+    startedAt: job.startedAt ?? null,
+    completedAt: job.completedAt ?? null,
+    steps: (job.steps ?? []).map((step, index) => ({
+      name: step.name ?? "step",
+      status: (step.status ?? "COMPLETED").toLowerCase(),
+      conclusion: step.conclusion ? step.conclusion.toLowerCase() : null,
+      number: step.number ?? index + 1,
+      startedAt: step.startedAt ?? null,
+      completedAt: step.completedAt ?? null,
+    })),
+  };
+}
+
 function mapGqlCheckSuiteToRun(suite: GqlCheckSuite, sha: string): GitHubWorkflowRun | null {
   // Suites without a workflowRun are non-Actions checks (e.g. Dependabot) — skip.
   if (!suite.workflowRun) return null;
@@ -423,7 +465,28 @@ export const GQL_CHECK_SUITE_PAGE_SIZE = 100;
 export const MAX_CHECK_SUITE_PAGES = 5;
 export const MAX_JOB_PAGES = 10;
 
-const CHECK_SUITE_NODE_FIELDS = `
+const WORKFLOW_RUN_JOBS_FIELD = `
+        jobs(first: 30) {
+          nodes {
+            databaseId
+            name
+            status
+            conclusion
+            startedAt
+            completedAt
+            steps {
+              name
+              number
+              status
+              conclusion
+              startedAt
+              completedAt
+            }
+          }
+        }`;
+
+function checkSuiteNodeFields(includeJobs: boolean): string {
+  return `
       status
       conclusion
       workflowRun {
@@ -433,10 +496,23 @@ const CHECK_SUITE_NODE_FIELDS = `
         createdAt
         updatedAt
         url
-        workflow { name }
+        workflow { name }${includeJobs ? WORKFLOW_RUN_JOBS_FIELD : ""}
       }`;
+}
 
-function commitFragment(afterVar?: string): string {
+export function isGitHubJobsFieldSchemaError(message: string): boolean {
+  return (
+    /field ['"]jobs['"] does(?:n't| not) exist/i.test(message) ||
+    /unknown field ['"]jobs['"]/i.test(message) ||
+    /['"]jobs['"] is not defined/i.test(message)
+  );
+}
+
+function graphqlJobsFieldUnsupported(errors: Array<{ message: string }> | undefined): boolean {
+  return !!errors?.length && errors.every(error => isGitHubJobsFieldSchemaError(error.message));
+}
+
+function commitFragment(includeJobs: boolean, afterVar?: string): string {
   const args = afterVar
     ? `first: ${GQL_CHECK_SUITE_PAGE_SIZE}, after: ${afterVar}`
     : `first: ${GQL_CHECK_SUITE_PAGE_SIZE}`;
@@ -445,7 +521,7 @@ function commitFragment(afterVar?: string): string {
   oid
   checkSuites(${args}) {
     pageInfo { hasNextPage endCursor }
-    nodes {${CHECK_SUITE_NODE_FIELDS}
+    nodes {${checkSuiteNodeFields(includeJobs)}
     }
   }
 }`.trim();
@@ -458,18 +534,18 @@ function commitFragment(afterVar?: string): string {
  * Each alias is `c<index>` so the response keys are predictable.
  * Works for any commit on any branch — no branch restriction.
  */
-function buildBatchQuery(shas: string[]): string {
-  const fragment = commitFragment();
+function buildBatchQuery(shas: string[], includeJobs: boolean): string {
+  const fragment = commitFragment(includeJobs);
   const aliases = shas.map((sha, i) => `  c${i}: object(oid: "${sha}") { ${fragment} }`).join("\n");
   return `query CIBatch($owner: String!, $repo: String!) {\n  repository(owner: $owner, name: $repo) {\n${aliases}\n  }\n}`;
 }
 
-function buildCheckSuitePageQuery(count: number): string {
+function buildCheckSuitePageQuery(count: number, includeJobs: boolean): string {
   const varDecls = ["$owner: String!", "$repo: String!"];
   const aliases: string[] = [];
   for (let i = 0; i < count; i++) {
     varDecls.push(`$oid${i}: GitObjectID!`, `$after${i}: String`);
-    aliases.push(`  c${i}: object(oid: $oid${i}) { ${commitFragment(`$after${i}`)} }`);
+    aliases.push(`  c${i}: object(oid: $oid${i}) { ${commitFragment(includeJobs, `$after${i}`)} }`);
   }
   return `query CISuitePage(${varDecls.join(", ")}) {\n  repository(owner: $owner, name: $repo) {\n${aliases.join("\n")}\n  }\n}`;
 }
@@ -478,6 +554,7 @@ function collectRunsFromRepoData(
   repoData: Record<string, GqlCommitObject | null>,
   shas: string[],
   runs: GitHubWorkflowRun[],
+  jobs: Map<number, GitHubJob[]>,
 ): Array<{ sha: string; cursor: string }> {
   const next: Array<{ sha: string; cursor: string }> = [];
   for (let i = 0; i < shas.length; i++) {
@@ -486,7 +563,13 @@ function collectRunsFromRepoData(
     const sha = commitObj.oid;
     for (const suite of commitObj.checkSuites?.nodes ?? []) {
       const run = mapGqlCheckSuiteToRun(suite, sha);
-      if (run) runs.push(run);
+      if (run) {
+        runs.push(run);
+        const mappedJobs = (suite.workflowRun?.jobs?.nodes ?? [])
+          .map(mapGqlJob)
+          .filter((job): job is GitHubJob => job !== null);
+        if (mappedJobs.length > 0) jobs.set(run.id, mappedJobs);
+      }
     }
     const pageInfo = commitObj.checkSuites?.pageInfo;
     if (pageInfo?.hasNextPage && pageInfo.endCursor) next.push({ sha, cursor: pageInfo.endCursor });
@@ -494,36 +577,29 @@ function collectRunsFromRepoData(
   return next;
 }
 
-export type GraphQLFetchResult = GitHubResult<GitHubWorkflowRun[]>;
+export type GraphQLFetchResult = GitHubResult<GitHubWorkflowRun[]> & {
+  jobs: Map<number, GitHubJob[]>;
+  /** True when the host GraphQL schema has no WorkflowRun.jobs. REST fills jobs on expand. */
+  jobsUnsupported?: boolean;
+};
 
-/**
- * Fetch CI check-suite data for a batch of commit SHAs using the GitHub
- * GraphQL API.  Works for commits on ANY branch — not limited to a single
- * branch's history.
- *
- * Callers should split large SHA arrays into chunks of ≤ GQL_BATCH_SIZE
- * before calling this function.
- *
- * Returns runs + pre-populated jobs map in a single HTTP request.
- * Falls back gracefully on errors (returns empty result, never throws).
- */
-export async function fetchCIDataForSHAs(
+async function fetchCIDataForSHAsOnce(
   repo: GitHubRepo,
   token: string,
   shas: string[],
-  opts: { signal?: AbortSignal } = {},
-): Promise<GraphQLFetchResult> {
-  const { signal } = opts;
-  const empty: GraphQLFetchResult = { data: [], error: null };
-  if (shas.length === 0) return empty;
+  opts: { signal?: AbortSignal; includeJobs: boolean },
+): Promise<GraphQLFetchResult & { jobsSchemaRejected?: boolean }> {
+  const { signal, includeJobs } = opts;
+  const empty: GraphQLFetchResult = { data: [], jobs: new Map(), error: null };
   const runs: GitHubWorkflowRun[] = [];
+  const jobs = new Map<number, GitHubJob[]>();
 
   try {
     const res = await fetchWithRetry(graphqlEndpoint(repo), {
       method: "POST",
       headers: { ...createHeaders(token), "Content-Type": "application/json" },
       body: JSON.stringify({
-        query: buildBatchQuery(shas),
+        query: buildBatchQuery(shas, includeJobs),
         variables: { owner: repo.owner, repo: repo.repo },
       }),
       signal,
@@ -537,14 +613,19 @@ export async function fetchCIDataForSHAs(
     }
 
     const json = (await res.json()) as GqlBatchQueryResult;
-
+    let jobsUnsupported = false;
     if (json.errors?.length) {
       debugError("GitHub", json.errors.map(e => e.message).join("; "));
-      return { ...empty, error: BANNER.github.fetchFailed };
+      if (graphqlJobsFieldUnsupported(json.errors)) {
+        jobsUnsupported = true;
+        if (!json.data?.repository) return { ...empty, jobsSchemaRejected: true, jobsUnsupported: true };
+      } else {
+        return { ...empty, error: BANNER.github.fetchFailed };
+      }
     }
 
     const repoData = json.data?.repository ?? {};
-    let pending = collectRunsFromRepoData(repoData, shas, runs);
+    let pending = collectRunsFromRepoData(repoData, shas, runs, jobs);
 
     for (let page = 1; page < MAX_CHECK_SUITE_PAGES && pending.length > 0; page++) {
       const variables: Record<string, string> = { owner: repo.owner, repo: repo.repo };
@@ -555,31 +636,72 @@ export async function fetchCIDataForSHAs(
       const pageRes = await fetchWithRetry(graphqlEndpoint(repo), {
         method: "POST",
         headers: { ...createHeaders(token), "Content-Type": "application/json" },
-        body: JSON.stringify({ query: buildCheckSuitePageQuery(pending.length), variables }),
+        body: JSON.stringify({ query: buildCheckSuitePageQuery(pending.length, includeJobs), variables }),
         signal,
       });
       if (!pageRes.ok) {
         return {
           data: runs,
+          jobs,
           error: debugGitHubHttp(pageRes, "fetch", `GraphQL HTTP ${pageRes.status} for ${repo.owner}/${repo.repo}`),
         };
       }
       const pageJson = (await pageRes.json()) as GqlBatchQueryResult;
       if (pageJson.errors?.length) {
         debugError("GitHub", pageJson.errors.map(e => e.message).join("; "));
-        return { data: runs, error: BANNER.github.fetchFailed };
+        if (graphqlJobsFieldUnsupported(pageJson.errors) && !pageJson.data?.repository) {
+          return { data: runs, jobs, error: null, jobsSchemaRejected: true, jobsUnsupported: true };
+        }
+        return { data: runs, jobs, error: BANNER.github.fetchFailed };
       }
       pending = collectRunsFromRepoData(
         pageJson.data?.repository ?? {},
         pending.map(p => p.sha),
         runs,
+        jobs,
       );
     }
 
-    return { data: runs, error: null };
+    return { data: runs, jobs, error: null, jobsUnsupported: jobsUnsupported || undefined };
   } catch (err) {
     if (signal?.aborted) throw err;
-    return { data: runs, error: bannerOrFallback(err, BANNER.github.fetchFailed, "GitHub") };
+    return { data: runs, jobs, error: bannerOrFallback(err, BANNER.github.fetchFailed, "GitHub") };
+  }
+}
+
+/**
+ * Fetch CI check-suite data for a batch of commit SHAs using the GitHub
+ * GraphQL API.  Works for commits on ANY branch — not limited to a single
+ * branch's history.
+ *
+ * Callers should split large SHA arrays into chunks of ≤ GQL_BATCH_SIZE
+ * before calling this function.
+ *
+ * Returns runs + pre-populated jobs map in a single HTTP request.
+ * Older GitHub Enterprise schemas without WorkflowRun.jobs retry once
+ * without that field; expand still loads jobs via REST.
+ * Falls back gracefully on errors (returns empty result, never throws).
+ */
+export async function fetchCIDataForSHAs(
+  repo: GitHubRepo,
+  token: string,
+  shas: string[],
+  opts: { signal?: AbortSignal; includeJobs?: boolean } = {},
+): Promise<GraphQLFetchResult> {
+  const empty: GraphQLFetchResult = { data: [], jobs: new Map(), error: null };
+  if (shas.length === 0) return empty;
+  const includeJobs = opts.includeJobs !== false;
+  try {
+    const result = await fetchCIDataForSHAsOnce(repo, token, shas, { signal: opts.signal, includeJobs });
+    if (result.jobsSchemaRejected && includeJobs) {
+      const retry = await fetchCIDataForSHAsOnce(repo, token, shas, { signal: opts.signal, includeJobs: false });
+      return { ...retry, jobsUnsupported: true };
+    }
+    if (result.jobsSchemaRejected) return { ...result, jobsUnsupported: true };
+    return result;
+  } catch (err) {
+    if (opts.signal?.aborted) throw err;
+    return { ...empty, error: bannerOrFallback(err, BANNER.github.fetchFailed, "GitHub") };
   }
 }
 

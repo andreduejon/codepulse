@@ -2,7 +2,7 @@ import type { ConfigInfo } from "./config";
 import type { createThemeState } from "./context/theme";
 import type { Branch, Commit, GraphRow, TagInfo } from "./git/types";
 import type { StartupMode } from "./main";
-import type { GraphBadge, ProviderView } from "./providers/provider";
+import type { ProviderView } from "./providers/provider";
 
 export interface AppProps {
   repoPath: string;
@@ -18,12 +18,18 @@ export interface AppProps {
     enabled?: boolean;
     tokenEnvVar?: string;
     trustedEnterpriseHost?: string;
+    fetchDepth?: 10 | 20 | 50;
+    cacheLimit?: 10 | 20 | 50;
+    autoRefreshSeconds?: 0 | 120 | 300 | 600;
   };
   initialJenkinsConfig?: {
     enabled?: boolean;
     username?: string;
     tokenEnvVar?: string;
     graphBuildLimit?: 10 | 20 | 50;
+    fetchDepth?: 10 | 20 | 50;
+    cacheLimit?: 10 | 20 | 50;
+    autoRefreshSeconds?: 0 | 120 | 300 | 600;
     jobs?: { label?: string; url: string }[];
   };
   initialOpenShiftConfig?: {
@@ -63,6 +69,5 @@ export interface RepoSessionSnapshot {
   hasMore: boolean;
   lastFetchTime: Date | null;
   activeProviderView: ProviderView;
-  graphBadges: Map<ProviderView, Map<string, GraphBadge>>;
   graphScrollTop: number;
 }

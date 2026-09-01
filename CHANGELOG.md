@@ -2,6 +2,50 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.10.0] - 2026-09-01
+
+### Added
+
+- **GitHub Actions and Jenkins disk caches** — persist completed runs, jobs,
+  stages, and logs per repository and commit, with configurable limits of 10,
+  20, or 50 SHA snapshots.
+- **Provider fetch size** — configure the graph commit window queried by GitHub
+  Actions and Jenkins independently from cache retention.
+- **OpenShift list pagination** — follow Kubernetes continuation tokens across
+  inventory pages while preserving selectors and the final resource version
+  used to start watches.
+
+### Changed
+
+- Load GitHub Actions jobs and Jenkins stages on run expansion instead of graph
+  scrolling. GitHub GraphQL responses pre-populate jobs when supported and fall
+  back to REST for older GitHub Enterprise schemas.
+- Hydrate and persist provider caches in parallel. Scrolling outside the fetch
+  window reads disk cache without starting remote requests.
+- Reduce Jenkins traffic by reusing discovered job URLs, polling known running
+  builds directly, and skipping jobs whose `lastBuild` number is unchanged.
+- Stop repeated requests after GitHub Actions or Jenkins credentials expire and
+  apply bounded backoff after provider errors.
+- Isolate provider state by repository. Switching repositories aborts active
+  provider work and clears badges, status, details, and refresh timestamps before
+  loading the next repository.
+
+### Fixed
+
+- Failed GitHub Actions job and Jenkins stage requests no longer remain stuck
+  loading. Details show a muted `Unavailable` row; technical errors remain in
+  the Debug dialog, cancellation stays silent, and Reload retries failed runs.
+- Provider views no longer treat Snyk, Jenkins, or OpenShift as working-tree file
+  tabs on the synthetic uncommitted-changes node. The view now explains that
+  provider data is unavailable until changes are committed.
+- OpenShift keeps successfully fetched pages when a later page fails and reports
+  partial inventory for repeated continuation tokens or safety limits of 100
+  pages and 50,000 items per list.
+- Jenkins reports when multibranch discovery exceeds 25 enabled, valid, unique
+  branch jobs. Partial badges and runs remain visible, while truncated discovery
+  is not recorded as an authoritative cache refresh.
+- Improve GitHub terminal-run detection and Jenkins `lastBuild` typing.
+
 ## [0.9.0] - 2026-08-31
 
 ### Added

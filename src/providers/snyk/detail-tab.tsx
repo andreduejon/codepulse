@@ -229,7 +229,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
       return;
     }
     if (item.kind === "scan") {
-      props.setDetailCursorAction(props.loading ? null : "scan");
+      props.setDetailCursorAction(props.loading ? null : props.scan ? "rescan" : "scan");
       return;
     }
     const expanded =

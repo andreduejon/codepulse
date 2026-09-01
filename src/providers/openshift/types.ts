@@ -1,21 +1,21 @@
-export type OpenShiftCacheLimit = 10 | 20 | 50;
+import {
+  DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS,
+  PROVIDER_AUTO_REFRESH_MS,
+  PROVIDER_AUTO_REFRESH_OPTIONS,
+  PROVIDER_AUTO_REFRESH_SECONDS,
+  PROVIDER_MS_TO_LABEL,
+  type ProviderAutoRefreshSeconds,
+  type ProviderLimit,
+} from "../shared/auto-refresh";
 
-export const OPENSHIFT_AUTO_REFRESH_OPTIONS = ["off", "2m", "5m", "10m"] as const;
-export const OPENSHIFT_AUTO_REFRESH_SECONDS = [0, 120, 300, 600] as const;
-export type OpenShiftAutoRefreshSeconds = (typeof OPENSHIFT_AUTO_REFRESH_SECONDS)[number];
-export const DEFAULT_OPENSHIFT_AUTO_REFRESH_SECONDS: OpenShiftAutoRefreshSeconds = 120;
-export const OPENSHIFT_AUTO_REFRESH_MS: Record<(typeof OPENSHIFT_AUTO_REFRESH_OPTIONS)[number], number> = {
-  off: 0,
-  "2m": 120_000,
-  "5m": 300_000,
-  "10m": 600_000,
-};
-export const OPENSHIFT_MS_TO_LABEL: Record<number, string> = {
-  0: "off",
-  120000: "2m",
-  300000: "5m",
-  600000: "10m",
-};
+export type OpenShiftCacheLimit = ProviderLimit;
+
+export const OPENSHIFT_AUTO_REFRESH_OPTIONS = PROVIDER_AUTO_REFRESH_OPTIONS;
+export const OPENSHIFT_AUTO_REFRESH_SECONDS = PROVIDER_AUTO_REFRESH_SECONDS;
+export type OpenShiftAutoRefreshSeconds = ProviderAutoRefreshSeconds;
+export const DEFAULT_OPENSHIFT_AUTO_REFRESH_SECONDS = DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS;
+export const OPENSHIFT_AUTO_REFRESH_MS = PROVIDER_AUTO_REFRESH_MS;
+export const OPENSHIFT_MS_TO_LABEL = PROVIDER_MS_TO_LABEL;
 export const OPENSHIFT_LOG_FOLLOW_MAX_LINES = 1000;
 export const OPENSHIFT_WATCH_KINDS = ["Deployment", "DeploymentConfig", "Pod"] as const;
 export type OpenShiftWatchKind = (typeof OPENSHIFT_WATCH_KINDS)[number];

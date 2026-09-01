@@ -1,7 +1,7 @@
 import { isUncommittedHash } from "../constants";
 import type { DetailTab } from "../context/state";
 import type { Commit, CommitDetail, UncommittedDetail } from "../git/types";
-import { isProviderDetailView, type ProviderView } from "../providers/provider";
+import { isProviderDetailView, type ProviderView, providerDisplayName } from "../providers/provider";
 
 interface TabAvailabilityInput {
   commit: Commit | null;
@@ -24,6 +24,18 @@ interface TabAvailabilityInput {
    * info tab before the request completes.
    */
   providerLoading?: boolean;
+}
+
+/** Returns the initial detail tab for normal (non-jump) navigation. */
+export function getDefaultDetailTab(commit: Commit, activeProviderView: ProviderView): DetailTab {
+  if (isUncommittedHash(commit.hash)) return "unstaged";
+  if (isProviderDetailView(activeProviderView)) return activeProviderView;
+  return "files";
+}
+
+export function getUncommittedProviderNotice(activeProviderView: ProviderView): string | null {
+  if (!isProviderDetailView(activeProviderView)) return null;
+  return `${providerDisplayName(activeProviderView)} data unavailable for uncommitted changes.`;
 }
 
 /**

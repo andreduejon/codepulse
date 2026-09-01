@@ -55,12 +55,14 @@ export interface UseSnykResult {
   isScanning: (sha: string) => boolean;
   scanCommit: (sha: string, force?: boolean) => Promise<SnykScanResult | null>;
   isAvailable: () => boolean;
+  invalidate: () => void;
 }
 
 interface ScanQueueEntry {
   sha: string;
   force: boolean;
   epoch: number;
+  repoPath: string;
   promise: Promise<SnykScanResult | null>;
   resolve: (result: SnykScanResult | null) => void;
 }
@@ -146,7 +148,7 @@ export function useSnyk(opts: {
     const promise = new Promise<SnykScanResult | null>(settle => {
       resolve = settle;
     });
-    return { sha, force, epoch, promise, resolve };
+    return { sha, force, epoch, repoPath: untrack(state.repoPath), promise, resolve };
   }
 
   async function drainQueue(): Promise<void> {
@@ -163,20 +165,20 @@ export function useSnyk(opts: {
     try {
       const currentConfig = config();
       scanResult = await runScan({
-        repoPath: untrack(state.repoPath),
+        repoPath: entry.repoPath,
         sha: entry.sha,
         tokenEnvVar: currentConfig.tokenEnvVar,
         signal: controller.signal,
         force: entry.force,
         maxCachedScans: currentConfig.maxCachedScans,
       });
-      if (!controller.signal.aborted && entry.epoch === epoch) {
+      if (!controller.signal.aborted && entry.epoch === epoch && entry.repoPath === state.repoPath()) {
         mergeResult(scanResult, entry.epoch);
         actions.setProviderLastSuccessfulRefresh(SNYK_PROVIDER_ID, new Date());
         if (queue.length === 0) actions.setProviderStatus(SNYK_PROVIDER_ID, providerIdle());
       }
     } catch (error) {
-      if (!controller.signal.aborted && entry.epoch === epoch) {
+      if (!controller.signal.aborted && entry.epoch === epoch && entry.repoPath === state.repoPath()) {
         const message = error instanceof Error ? error.message : String(error);
         actions.setProviderStatus(SNYK_PROVIDER_ID, providerError(message));
       }
@@ -282,7 +284,7 @@ export function useSnyk(opts: {
     const expectedEpoch = epoch;
     void Promise.all(toRead.map(sha => readCache(repoPath, sha, { maxCachedScans: current.maxCachedScans }))).then(
       cached => {
-        if (expectedEpoch !== epoch || disposed) return;
+        if (expectedEpoch !== epoch || repoPath !== state.repoPath() || disposed) return;
         for (const result of cached) {
           if (result) mergeResult(result, expectedEpoch);
         }
@@ -303,13 +305,14 @@ export function useSnyk(opts: {
       if (autoScanAttempted.has(sha)) continue;
       autoScanAttempted.add(sha);
       void readCache(repoPath, sha, { maxCachedScans: current.maxCachedScans }).then(cached => {
-        if (expectedEpoch !== epoch || disposed) return;
+        if (expectedEpoch !== epoch || repoPath !== state.repoPath() || disposed) return;
         if (cached) {
           mergeResult(cached, expectedEpoch);
           return;
         }
         void enqueueScan(sha, false).then(result => {
-          if (!result && expectedEpoch === epoch) autoScanAttempted.delete(sha);
+          if (!result && expectedEpoch === epoch && repoPath === state.repoPath() && !disposed)
+            autoScanAttempted.delete(sha);
         });
       });
     }
@@ -335,5 +338,6 @@ export function useSnyk(opts: {
     },
     scanCommit: (sha, force = false) => enqueueScan(sha, force),
     isAvailable,
+    invalidate: resetForIdentityChange,
   };
 }

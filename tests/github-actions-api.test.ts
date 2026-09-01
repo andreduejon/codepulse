@@ -10,6 +10,7 @@ import {
   GQL_BATCH_SIZE,
   getGitHubToken,
   getTokenSource,
+  isGitHubJobsFieldSchemaError,
   isTrustedGitHubHost,
   mapRunToBadge,
   nextGithubLink,
@@ -603,6 +604,14 @@ describe("fetchRunJobs", () => {
   });
 });
 
+describe("isGitHubJobsFieldSchemaError", () => {
+  it("matches GHE WorkflowRun.jobs schema errors", () => {
+    expect(isGitHubJobsFieldSchemaError("Field 'jobs' doesn't exist on type 'WorkflowRun'")).toBe(true);
+    expect(isGitHubJobsFieldSchemaError('Field "jobs" does not exist on type WorkflowRun')).toBe(true);
+    expect(isGitHubJobsFieldSchemaError("Not Found")).toBe(false);
+  });
+});
+
 describe("nextGithubLink", () => {
   it("returns next URL when origin matches", () => {
     expect(nextGithubLink('<https://api.github.com/repos/o/r/jobs?page=2>; rel="next"', "https://api.github.com")).toBe(
@@ -636,6 +645,13 @@ function makeBatchResponse(
       wfRunNumber?: number;
       wfName?: string;
       event?: string;
+      jobs?: Array<{
+        databaseId: number;
+        name: string;
+        status?: string;
+        conclusion?: string | null;
+        steps?: Array<{ name: string; number: number; status?: string; conclusion?: string | null }>;
+      }>;
     }>;
   }>,
 ) {
@@ -656,6 +672,7 @@ function makeBatchResponse(
                   event: s.event ?? "push",
                   updatedAt: "2024-01-02T00:00:00Z",
                   workflow: { name: s.wfName ?? "CI" },
+                  jobs: s.jobs ? { nodes: s.jobs } : undefined,
                 }
               : null,
         })),
@@ -701,6 +718,51 @@ describe("fetchCIDataForSHAs", () => {
     expect(result.data[1].conclusion).toBeNull();
   });
 
+  it("maps workflow jobs and steps from the GraphQL batch", async () => {
+    const sha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const response = makeBatchResponse([
+      {
+        sha,
+        suites: [
+          {
+            wfRunId: 9,
+            jobs: [
+              {
+                databaseId: 91,
+                name: "test",
+                status: "COMPLETED",
+                conclusion: "SUCCESS",
+                steps: [{ name: "Checkout", number: 1, status: "COMPLETED", conclusion: "SUCCESS" }],
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+    mockFetch(mock(async () => new Response(JSON.stringify(response), { status: 200 })));
+    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, [sha]);
+    expect(result.jobs.get(9)).toEqual([
+      {
+        id: 91,
+        name: "test",
+        status: "completed",
+        conclusion: "success",
+        startedAt: null,
+        completedAt: null,
+        steps: [
+          {
+            name: "Checkout",
+            status: "completed",
+            conclusion: "success",
+            number: 1,
+            startedAt: null,
+            completedAt: null,
+          },
+        ],
+      },
+    ]);
+  });
+
   it("skips check suites with no workflowRun (non-Actions checks)", async () => {
     const response = makeBatchResponse([
       {
@@ -730,6 +792,13 @@ describe("fetchCIDataForSHAs", () => {
     expect(result.data[0].conclusion).toBe("failure");
   });
 
+  it("maps HTTP 401 to a token-expired banner", async () => {
+    mockFetch(mock(async () => new Response(null, { status: 401 })));
+    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
+    expect(result.data).toHaveLength(0);
+    expect(result.error).toBe(BANNER.github.tokenExpired);
+  });
+
   it("returns empty result on HTTP error (graceful degradation)", async () => {
     mockFetch(mock(async () => new Response(null, { status: 403 })));
     const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
@@ -745,6 +814,74 @@ describe("fetchCIDataForSHAs", () => {
     expect(result.data).toHaveLength(0);
     expect(result.error).toBe(BANNER.github.fetchFailed);
     expect(getDebugEvents().some(event => event.message.includes("Not Found"))).toBe(true);
+  });
+
+  it("retries without jobs when WorkflowRun.jobs is missing from the schema", async () => {
+    const queries: string[] = [];
+    const retryResponse = makeBatchResponse([{ sha: "abc", suites: [{ wfRunId: 1, wfName: "CI" }] }]);
+    mockFetch(
+      mock(async (_url: string, init: RequestInit) => {
+        queries.push(JSON.parse(init.body as string).query as string);
+        if (queries.length === 1) {
+          return new Response(
+            JSON.stringify({
+              errors: [
+                { message: "Field 'jobs' doesn't exist on type 'WorkflowRun'" },
+                { message: "Field 'jobs' doesn't exist on type 'WorkflowRun'" },
+              ],
+            }),
+            { status: 200 },
+          );
+        }
+        return new Response(JSON.stringify(retryResponse), { status: 200 });
+      }),
+    );
+    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
+    expect(result.error).toBeNull();
+    expect(result.jobsUnsupported).toBe(true);
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0].name).toBe("CI");
+    expect(result.jobs.size).toBe(0);
+    expect(queries).toHaveLength(2);
+    expect(queries[0]).toContain("jobs(first: 30)");
+    expect(queries[1]).not.toContain("jobs(");
+  });
+
+  it("omits WorkflowRun.jobs when includeJobs is false", async () => {
+    let query = "";
+    mockFetch(
+      mock(async (_url: string, init: RequestInit) => {
+        query = JSON.parse(init.body as string).query as string;
+        return new Response(
+          JSON.stringify(makeBatchResponse([{ sha: "abc", suites: [{ wfRunId: 1, wfName: "CI" }] }])),
+          { status: 200 },
+        );
+      }),
+    );
+    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"], { includeJobs: false });
+    expect(result.error).toBeNull();
+    expect(result.data).toHaveLength(1);
+    expect(query).not.toContain("jobs(");
+  });
+
+  it("keeps runs when jobs schema errors arrive with data", async () => {
+    const response = {
+      ...makeBatchResponse([{ sha: "abc", suites: [{ wfRunId: 3, wfName: "CI" }] }]),
+      errors: [{ message: "Field 'jobs' doesn't exist on type 'WorkflowRun'" }],
+    };
+    let calls = 0;
+    mockFetch(
+      mock(async () => {
+        calls++;
+        return new Response(JSON.stringify(response), { status: 200 });
+      }),
+    );
+    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
+    expect(calls).toBe(1);
+    expect(result.error).toBeNull();
+    expect(result.jobsUnsupported).toBe(true);
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0].id).toBe(3);
   });
 
   it("returns empty result on network error", async () => {

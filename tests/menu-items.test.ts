@@ -11,10 +11,13 @@ import {
 } from "../src/hooks/use-menu-items";
 
 describe("buildGitHubProviderItems", () => {
-  const baseCfg = {
+  const baseCfg: GitHubMenuConfig = {
     enabled: true,
     tokenEnvVar: "GITHUB_TOKEN",
     trustedEnterpriseHost: null,
+    fetchDepth: 20,
+    cacheLimit: 20,
+    autoRefreshSeconds: 120,
   };
 
   it("shows host info and disabled allow-host toggle for github.com", () => {
@@ -88,6 +91,26 @@ describe("buildGitHubProviderItems", () => {
     expect(capture.changed.trustedEnterpriseHost).toBe("ghe.example.com");
     expect(capture.persisted.trustedEnterpriseHost).toBe("ghe.example.com");
   });
+
+  it("cycles fetch size, cache count, and auto refresh", () => {
+    let changed = baseCfg;
+    const items = buildGitHubProviderItems(baseCfg, "https://github.com/owner/repo.git", "env", cfg => {
+      changed = cfg;
+    });
+    const fetchSize = items.find(item => item.kind === "cycle" && item.label === "Fetch size");
+    const cacheCount = items.find(item => item.kind === "cycle" && item.label === "Cache count");
+    const autoRefresh = items.find(item => item.kind === "cycle" && item.label === "Auto refresh");
+    expect(fetchSize?.kind).toBe("cycle");
+    expect(cacheCount?.kind).toBe("cycle");
+    expect(autoRefresh?.kind).toBe("cycle");
+    if (fetchSize?.kind !== "cycle" || cacheCount?.kind !== "cycle" || autoRefresh?.kind !== "cycle") return;
+    fetchSize.set("10");
+    expect(changed.fetchDepth).toBe(10);
+    cacheCount.set("50");
+    expect(changed.cacheLimit).toBe(50);
+    autoRefresh.set("5m");
+    expect(changed.autoRefreshSeconds).toBe(300);
+  });
 });
 
 describe("buildOpenShiftProviderItems", () => {
@@ -157,7 +180,9 @@ describe("buildJenkinsProviderItems", () => {
       enabled: true,
       username: "user",
       tokenEnvVar: "JENKINS_TOKEN",
-      graphBuildLimit: 20,
+      fetchDepth: 20,
+      cacheLimit: 20,
+      autoRefreshSeconds: 120,
       jobs: [],
     };
     const capture: { changed: JenkinsMenuConfig | null } = { changed: null };
@@ -177,27 +202,40 @@ describe("buildJenkinsProviderItems", () => {
     expect(capture.changed?.jobs).toEqual([{ url: "https://jenkins.example.com/job/service" }]);
   });
 
-  it("cycles fetch size per job through 10/20/50", () => {
+  it("cycles fetch size, cache count, and auto refresh", () => {
     const baseCfg: JenkinsMenuConfig = {
       enabled: true,
       username: "user",
       tokenEnvVar: "JENKINS_TOKEN",
-      graphBuildLimit: 20,
+      fetchDepth: 20,
+      cacheLimit: 20,
+      autoRefreshSeconds: 120,
       jobs: [],
     };
     let changed = baseCfg;
     const items = buildJenkinsProviderItems(baseCfg, cfg => {
       changed = cfg;
     });
-    const cycle = items.find(item => item.kind === "cycle" && item.label === "Fetch size per job");
-    expect(cycle?.kind).toBe("cycle");
-    if (cycle?.kind !== "cycle") return;
-    expect(cycle.get()).toBe("20");
-    expect(cycle.options).toEqual(["10", "20", "50"]);
-    cycle.set("10");
-    expect(changed.graphBuildLimit).toBe(10);
-    cycle.set("50");
-    expect(changed.graphBuildLimit).toBe(50);
+    const fetchSize = items.find(item => item.kind === "cycle" && item.label === "Fetch size");
+    const cacheCount = items.find(item => item.kind === "cycle" && item.label === "Cache count");
+    const autoRefresh = items.find(item => item.kind === "cycle" && item.label === "Auto refresh");
+    expect(fetchSize?.kind).toBe("cycle");
+    expect(cacheCount?.kind).toBe("cycle");
+    expect(autoRefresh?.kind).toBe("cycle");
+    if (fetchSize?.kind !== "cycle" || cacheCount?.kind !== "cycle" || autoRefresh?.kind !== "cycle") return;
+    expect(fetchSize.get()).toBe("20");
+    expect(fetchSize.options).toEqual(["10", "20", "50"]);
+    fetchSize.set("10");
+    expect(changed.fetchDepth).toBe(10);
+    fetchSize.set("50");
+    expect(changed.fetchDepth).toBe(50);
+    cacheCount.set("10");
+    expect(changed.cacheLimit).toBe(10);
+    expect(autoRefresh.options).toEqual(["off", "2m", "5m", "10m"]);
+    autoRefresh.set("off");
+    expect(changed.autoRefreshSeconds).toBe(0);
+    autoRefresh.set("10m");
+    expect(changed.autoRefreshSeconds).toBe(600);
   });
 });
 

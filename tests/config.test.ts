@@ -233,6 +233,45 @@ describe("loadConfig", () => {
     expect(warnings.some(warning => warning.includes("providers.openshift.autoRefreshSeconds"))).toBe(true);
   });
 
+  test("maps Jenkins graphBuildLimit to fetchDepth", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("jenkins-graph-limit", repoPath, {
+      providers: { jenkins: { graphBuildLimit: 50 } },
+    });
+    const { config: result } = loadConfig(repoPath, configPath);
+    expect(result.providers?.jenkins?.graphBuildLimit).toBe(50);
+    expect(result.providers?.jenkins?.fetchDepth).toBe(50);
+  });
+
+  test("Jenkins fetchDepth wins over graphBuildLimit", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("jenkins-fetch-wins", repoPath, {
+      providers: { jenkins: { graphBuildLimit: 50, fetchDepth: 10 } },
+    });
+    const { config: result } = loadConfig(repoPath, configPath);
+    expect(result.providers?.jenkins?.fetchDepth).toBe(10);
+  });
+
+  test("accepts GitHub and Jenkins cache/fetch/auto-refresh knobs", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("ci-knobs", repoPath, {
+      providers: {
+        github: { fetchDepth: 10, cacheLimit: 50, autoRefreshSeconds: 600 },
+        jenkins: { fetchDepth: 10, cacheLimit: 50, autoRefreshSeconds: 0 },
+      },
+    });
+    const { config: result, warnings } = loadConfig(repoPath, configPath);
+    expect(result.providers?.github).toEqual({
+      fetchDepth: 10,
+      cacheLimit: 50,
+      autoRefreshSeconds: 600,
+    });
+    expect(result.providers?.jenkins?.fetchDepth).toBe(10);
+    expect(result.providers?.jenkins?.cacheLimit).toBe(50);
+    expect(result.providers?.jenkins?.autoRefreshSeconds).toBe(0);
+    expect(warnings).toEqual([]);
+  });
+
   test("rejects insecure OpenShift URL and oversized text", () => {
     const repoPath = "/tmp/repo";
     const configPath = makeRepoConfig("openshift-invalid", repoPath, {

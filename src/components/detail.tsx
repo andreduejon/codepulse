@@ -877,9 +877,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 fetchJobsForRun={props.githubFetchJobsForRun!}
                 fetchCommitData={props.githubFetchCommitData}
                 unavailableReason={
-                  props.githubProviderStatus?.kind === "error" || props.githubProviderStatus?.kind === "unavailable"
-                    ? props.githubProviderStatus.message
-                    : null
+                  props.githubProviderStatus?.kind === "unavailable" ? props.githubProviderStatus.message : null
                 }
                 loading={props.githubProviderStatus?.kind === "loading"}
                 navRef={props.navRef}
@@ -900,9 +898,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 fetchJobsForRun={props.jenkinsFetchJobsForRun!}
                 fetchCommitData={props.jenkinsFetchCommitData}
                 unavailableReason={
-                  props.jenkinsProviderStatus?.kind === "error" || props.jenkinsProviderStatus?.kind === "unavailable"
-                    ? props.jenkinsProviderStatus.message
-                    : null
+                  props.jenkinsProviderStatus?.kind === "unavailable" ? props.jenkinsProviderStatus.message : null
                 }
                 loading={props.jenkinsProviderStatus?.kind === "loading"}
                 navRef={props.navRef}

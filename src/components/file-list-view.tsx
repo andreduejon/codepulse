@@ -14,7 +14,7 @@ import { TotalLinesChangedRow } from "./total-lines-changed-row";
 export interface FileListViewProps {
   /** Reactive accessor returning the file list to display. */
   files: () => FileChange[];
-  /** When true, show "Loading..." instead of "No modified files". */
+  /** When true, show "loading..." instead of "No modified files". */
   loading?: () => boolean;
   /** Commit hash (newer side) for building diff targets. */
   commitHash: () => string;
@@ -155,7 +155,7 @@ export default function FileListView(props: Readonly<FileListViewProps>) {
       when={props.files().length > 0}
       fallback={
         <box flexGrow={1} alignItems="center" justifyContent="center">
-          <text fg={t().foregroundMuted}>{props.loading?.() ? "Loading..." : "No modified files"}</text>
+          <text fg={t().foregroundMuted}>{props.loading?.() ? "loading..." : "No modified files"}</text>
         </box>
       }
     >

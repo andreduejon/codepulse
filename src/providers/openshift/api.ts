@@ -18,8 +18,20 @@ import { isOpenShiftWatchGone, type OpenShiftWatchEvent, parseOpenShiftWatchBuff
 export type OpenShiftInventoryMode = "full" | "builds" | "seeds" | "live";
 
 const FETCH_OPTS = { timeoutMs: 15000, attempts: 2, retryDelayMs: 500, timeoutMessage: BANNER.openshift.timeout };
+export const MAX_LIST_PAGES = 100;
+export const MAX_LIST_ITEMS = 50_000;
 
 type AnyObj = Record<string, unknown>;
+
+class OpenShiftListError extends Error {
+  readonly items: unknown[];
+
+  constructor(message: string, items: unknown[]) {
+    super(message);
+    this.name = "OpenShiftListError";
+    this.items = items;
+  }
+}
 
 export function getOpenShiftToken(envVar: string): string | null {
   const token = process.env[envVar];
@@ -385,27 +397,58 @@ async function fetchList(
   signal?: AbortSignal,
   query?: string | null,
 ): Promise<{ items: unknown[]; resourceVersion: string }> {
-  const suffix = query ? (path.includes("?") ? `&${query}` : `?${query}`) : "";
-  const res = await fetchWithRetry(
-    openShiftApiUrl(serverUrl, `${path}${suffix}`),
-    { signal, headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } },
-    FETCH_OPTS,
-    "OpenShift",
-  );
-  if (isOpenShiftAuthStatus(res.status)) throw new Error(BANNER.openshift.tokenExpired);
-  if (!res.ok) throw new Error(`OpenShift ${path} failed: ${res.status}`);
-  const body = obj(await res.json());
-  return { items: arr(body?.items), resourceVersion: str(obj(body?.metadata)?.resourceVersion) ?? "0" };
-}
+  const items: unknown[] = [];
+  const seenTokens = new Set<string>();
+  let continueToken: string | null = null;
+  let resourceVersion = "0";
 
-async function fetchItems(
-  serverUrl: string,
-  token: string,
-  path: string,
-  signal?: AbortSignal,
-  query?: string | null,
-): Promise<unknown[]> {
-  return (await fetchList(serverUrl, token, path, signal, query)).items;
+  for (let page = 1; page <= MAX_LIST_PAGES; page++) {
+    try {
+      signal?.throwIfAborted();
+      const params = new URLSearchParams(query ?? "");
+      if (continueToken) params.set("continue", continueToken);
+      const pageQuery = params.toString();
+      const suffix = pageQuery ? (path.includes("?") ? `&${pageQuery}` : `?${pageQuery}`) : "";
+      const res = await fetchWithRetry(
+        openShiftApiUrl(serverUrl, `${path}${suffix}`),
+        { signal, headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } },
+        FETCH_OPTS,
+        "OpenShift",
+      );
+      if (isOpenShiftAuthStatus(res.status)) throw new Error(BANNER.openshift.tokenExpired);
+      if (!res.ok) throw new Error(`OpenShift ${path} failed: ${res.status}`);
+      const body = obj(await res.json());
+      const pageItems = arr(body?.items);
+      const remaining = MAX_LIST_ITEMS - items.length;
+      items.push(...pageItems.slice(0, Math.max(0, remaining)));
+      const metadata = obj(body?.metadata);
+      resourceVersion = str(metadata?.resourceVersion) ?? resourceVersion;
+      const nextToken = str(metadata?.continue)?.trim() || null;
+
+      if (pageItems.length > remaining) {
+        throw new OpenShiftListError(`OpenShift ${path} inventory truncated after ${MAX_LIST_ITEMS} items`, items);
+      }
+      if (!nextToken) return { items, resourceVersion };
+      if (items.length >= MAX_LIST_ITEMS) {
+        throw new OpenShiftListError(`OpenShift ${path} inventory truncated after ${MAX_LIST_ITEMS} items`, items);
+      }
+      if (seenTokens.has(nextToken)) {
+        throw new OpenShiftListError(`OpenShift ${path} pagination token repeated after ${page} pages`, items);
+      }
+      if (page === MAX_LIST_PAGES) {
+        throw new OpenShiftListError(`OpenShift ${path} inventory truncated after ${MAX_LIST_PAGES} pages`, items);
+      }
+      seenTokens.add(nextToken);
+      continueToken = nextToken;
+    } catch (err) {
+      if (isAbortError(err, signal)) throw err;
+      if (err instanceof OpenShiftListError) throw err;
+      const message = err instanceof Error ? err.message : String(err);
+      throw new OpenShiftListError(message, items);
+    }
+  }
+
+  throw new OpenShiftListError(`OpenShift ${path} inventory truncated after ${MAX_LIST_PAGES} pages`, items);
 }
 
 export async function fetchOpenShiftBuildLog(
@@ -767,11 +810,17 @@ function absorb(
   acc: ListAcc,
   kind: OpenShiftInventoryKind,
   extracted: InventoryRequest["extract"] extends (i: unknown[]) => infer R ? R : never,
+  countSuccess = true,
 ): void {
-  acc.successfulRequests++;
+  if (countSuccess) acc.successfulRequests++;
   if (kind === "ReplicaSet" || kind === "ReplicationController")
     acc.controllers.push(...(extracted as OpenShiftControllerReference[]));
   else acc.resources.push(...(extracted as OpenShiftResource[]));
+}
+
+function absorbPartialList(acc: ListAcc, request: InventoryRequest, reason: unknown): void {
+  if (!(reason instanceof OpenShiftListError) || reason.items.length === 0) return;
+  absorb(acc, request.kind, request.extract(reason.items), false);
 }
 
 async function runRequests(ctx: NsCtx, requests: InventoryRequest[], acc: ListAcc): Promise<void> {
@@ -787,6 +836,7 @@ async function runRequests(ctx: NsCtx, requests: InventoryRequest[], acc: ListAc
       absorb(acc, request.kind, request.extract(result.value.items));
       return;
     }
+    absorbPartialList(acc, request, result.reason);
     const error = result.reason instanceof Error ? result.reason.message : String(result.reason);
     recordFailure(acc, ctx.ns, request.kind, request.path, error);
   });
@@ -795,13 +845,23 @@ async function runRequests(ctx: NsCtx, requests: InventoryRequest[], acc: ListAc
 async function fetchUnlabeledBuilds(ctx: NsCtx, acc: ListAcc): Promise<void> {
   const path = buildPath(ctx.encoded, "Build");
   try {
-    const items = await fetchItems(ctx.config.serverUrl, ctx.token, path, ctx.signal);
+    const { items, resourceVersion } = await fetchList(ctx.config.serverUrl, ctx.token, path, ctx.signal);
+    if (resourceVersion) acc.resourceVersions.set(`${ctx.ns}:Build`, resourceVersion);
     absorb(
       acc,
       "Build",
       items.flatMap(item => extractBuild(ctx.ns, item, ctx.key) ?? []),
     );
   } catch (reason) {
+    if (isAbortError(reason, ctx.signal)) throw reason;
+    if (reason instanceof OpenShiftListError && reason.items.length > 0) {
+      absorb(
+        acc,
+        "Build",
+        reason.items.flatMap(item => extractBuild(ctx.ns, item, ctx.key) ?? []),
+        false,
+      );
+    }
     const error = reason instanceof Error ? reason.message : String(reason);
     recordFailure(acc, ctx.ns, "Build", path, error);
   }
@@ -815,13 +875,23 @@ async function fetchPodsForDeploys(ctx: NsCtx, deploys: OpenShiftResource[], acc
     if (!query || seen.has(query)) continue;
     seen.add(query);
     try {
-      const items = await fetchItems(ctx.config.serverUrl, ctx.token, path, ctx.signal, query);
+      const { items, resourceVersion } = await fetchList(ctx.config.serverUrl, ctx.token, path, ctx.signal, query);
+      if (resourceVersion) acc.resourceVersions.set(`${ctx.ns}:Pod`, resourceVersion);
       absorb(
         acc,
         "Pod",
         items.map(item => ({ ...extractPod(ctx.ns, item), commitSha: deploy.commitSha })),
       );
     } catch (reason) {
+      if (isAbortError(reason, ctx.signal)) throw reason;
+      if (reason instanceof OpenShiftListError && reason.items.length > 0) {
+        absorb(
+          acc,
+          "Pod",
+          reason.items.map(item => ({ ...extractPod(ctx.ns, item), commitSha: deploy.commitSha })),
+          false,
+        );
+      }
       const error = reason instanceof Error ? reason.message : String(reason);
       recordFailure(acc, ctx.ns, "Pod", path, error);
       if (acc.authFailed) return;

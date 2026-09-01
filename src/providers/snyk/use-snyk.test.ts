@@ -242,4 +242,23 @@ describe("useSnyk", () => {
     await active;
     expect(snyk.getCommitData(SHA_A)).toBeNull();
   });
+
+  test("uses captured repository path and ignores result after invalidation", async () => {
+    const pending = deferred<SnykScanResult>();
+    const calls: SnykScanOptions[] = [];
+    const scan: Scan = options => {
+      calls.push(options);
+      return pending.promise;
+    };
+    const { actions, snyk } = mountSnyk({ scan, repoPath: "/repo-a" });
+
+    const active = snyk.scanCommit(SHA_A);
+    actions.setRepoPath("/repo-b");
+    snyk.invalidate();
+    pending.resolve(result(SHA_A));
+    await active;
+
+    expect(calls[0].repoPath).toBe("/repo-a");
+    expect(snyk.getCommitData(SHA_A)).toBeNull();
+  });
 });

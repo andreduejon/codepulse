@@ -47,7 +47,7 @@ export function statusColor(t: Theme, category: StatusCategory): string {
     case "fail":
       return t.error;
     case "running":
-      return t.accent;
+      return t.info;
     default:
       return t.foregroundMuted;
   }

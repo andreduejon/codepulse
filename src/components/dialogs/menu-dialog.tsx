@@ -35,21 +35,39 @@ interface MenuDialogProps {
   /** Open the project selector to switch repos. */
   onSwitchRepo?: () => void;
   /** Current GitHub provider config (passed through to Providers tab). */
-  githubConfig?: { enabled: boolean; tokenEnvVar: string; trustedEnterpriseHost: string | null };
+  githubConfig?: {
+    enabled: boolean;
+    tokenEnvVar: string;
+    trustedEnterpriseHost: string | null;
+    fetchDepth: 10 | 20 | 50;
+    cacheLimit: 10 | 20 | 50;
+    autoRefreshSeconds: 0 | 120 | 300 | 600;
+  };
   /** Callback to update GitHub provider config. */
-  onGithubConfigChange?: (cfg: { enabled: boolean; tokenEnvVar: string; trustedEnterpriseHost: string | null }) => void;
+  onGithubConfigChange?: (cfg: {
+    enabled: boolean;
+    tokenEnvVar: string;
+    trustedEnterpriseHost: string | null;
+    fetchDepth: 10 | 20 | 50;
+    cacheLimit: 10 | 20 | 50;
+    autoRefreshSeconds: 0 | 120 | 300 | 600;
+  }) => void;
   jenkinsConfig?: {
     enabled: boolean;
     username?: string;
     tokenEnvVar: string;
-    graphBuildLimit: 10 | 20 | 50;
+    fetchDepth: 10 | 20 | 50;
+    cacheLimit: 10 | 20 | 50;
+    autoRefreshSeconds: 0 | 120 | 300 | 600;
     jobs: JenkinsJobConfig[];
   };
   onJenkinsConfigChange?: (cfg: {
     enabled: boolean;
     username?: string;
     tokenEnvVar: string;
-    graphBuildLimit: 10 | 20 | 50;
+    fetchDepth: 10 | 20 | 50;
+    cacheLimit: 10 | 20 | 50;
+    autoRefreshSeconds: 0 | 120 | 300 | 600;
     jobs: JenkinsJobConfig[];
   }) => void;
   openshiftConfig?: {

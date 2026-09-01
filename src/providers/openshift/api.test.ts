@@ -1,15 +1,22 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { BANNER } from "../../debug/banner";
+import { clearDebugEvents, getDebugEvents } from "../../debug/events";
 import {
   buildOpenShiftCommitMap,
   buildOpenShiftGraphBadges,
   commitLabelSelector,
   commitShaFromItem,
   fetchOpenShiftInventory,
+  fetchOpenShiftResources,
+  MAX_LIST_ITEMS,
+  MAX_LIST_PAGES,
 } from "./api";
 import type { OpenShiftCommitData, OpenShiftResource } from "./types";
 
 const SHA = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+beforeEach(clearDebugEvents);
+afterEach(clearDebugEvents);
 
 describe("fetchOpenShiftInventory", () => {
   test("maps OpenShift Build phase Complete to pass", async () => {
@@ -143,6 +150,202 @@ describe("fetchOpenShiftInventory", () => {
         }),
       ]);
       expect(result.error).toBe(BANNER.openshift.inventoryPartial);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("fetches every list page and keeps final resource version", async () => {
+    const originalFetch = globalThis.fetch;
+    const urls: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = input.toString();
+      urls.push(url);
+      if (!url.includes("/pods")) return Response.json({ items: [], metadata: { resourceVersion: "1" } });
+      const token = new URL(url).searchParams.get("continue");
+      if (!token) {
+        return Response.json({
+          items: [{ metadata: { name: "pod-1" }, status: {} }],
+          metadata: { continue: "token/one+two=", resourceVersion: "10" },
+        });
+      }
+      return Response.json({
+        items: [{ metadata: { name: "pod-2" }, status: {} }],
+        metadata: { resourceVersion: "11" },
+      });
+    }) as unknown as typeof fetch;
+
+    try {
+      const result = await fetchOpenShiftResources(
+        { serverUrl: "https://openshift.example.com", namespaces: ["team-one"], commitShaAnnotation: "dev/commit-sha" },
+        "token",
+        undefined,
+        "full",
+      );
+      const podUrls = urls.filter(url => url.includes("/pods"));
+      expect(podUrls).toHaveLength(2);
+      expect(podUrls[1]).toContain("continue=token%2Fone%2Btwo%3D");
+      expect(result.resources.filter(resource => resource.kind === "Pod").map(resource => resource.name)).toEqual([
+        "pod-1",
+        "pod-2",
+      ]);
+      expect(result.resourceVersions.get("team-one:Pod")).toBe("11");
+      expect(result.error).toBeNull();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("retains pages and warns when continuation token repeats", async () => {
+    const originalFetch = globalThis.fetch;
+    let podRequests = 0;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = input.toString();
+      if (!url.includes("/pods")) return Response.json({ items: [] });
+      podRequests++;
+      return Response.json({
+        items: [{ metadata: { name: `pod-${podRequests}` }, status: {} }],
+        metadata: { continue: "same-token", resourceVersion: String(podRequests) },
+      });
+    }) as unknown as typeof fetch;
+
+    try {
+      const result = await fetchOpenShiftResources(
+        { serverUrl: "https://openshift.example.com", namespaces: ["team-one"], commitShaAnnotation: "dev/commit-sha" },
+        "token",
+      );
+      expect(podRequests).toBe(2);
+      expect(result.resources.filter(resource => resource.kind === "Pod")).toHaveLength(2);
+      expect(result.error).toBe(BANNER.openshift.inventoryPartial);
+      expect(result.failures).toContainEqual(
+        expect.objectContaining({ kind: "Pod", error: expect.stringContaining("pagination token repeated") }),
+      );
+      expect(getDebugEvents()).toContainEqual(
+        expect.objectContaining({ source: "OpenShift", message: expect.stringContaining("pagination token repeated") }),
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("stops at page safety limit and preserves fetched pages", async () => {
+    const originalFetch = globalThis.fetch;
+    let podRequests = 0;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = input.toString();
+      if (!url.includes("/pods")) return Response.json({ items: [] });
+      podRequests++;
+      return Response.json({
+        items: [{ metadata: { name: `pod-${podRequests}` }, status: {} }],
+        metadata: { continue: `token-${podRequests}`, resourceVersion: String(podRequests) },
+      });
+    }) as unknown as typeof fetch;
+
+    try {
+      const result = await fetchOpenShiftResources(
+        { serverUrl: "https://openshift.example.com", namespaces: ["team-one"], commitShaAnnotation: "dev/commit-sha" },
+        "token",
+      );
+      expect(podRequests).toBe(MAX_LIST_PAGES);
+      expect(result.resources.filter(resource => resource.kind === "Pod")).toHaveLength(MAX_LIST_PAGES);
+      expect(result.error).toBe(BANNER.openshift.inventoryPartial);
+      expect(result.failures).toContainEqual(
+        expect.objectContaining({ kind: "Pod", error: expect.stringContaining(`${MAX_LIST_PAGES} pages`) }),
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("stops at item safety limit and preserves capped items", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = input.toString();
+      if (!url.includes("/pods")) return Response.json({ items: [] });
+      return Response.json({
+        items: Array.from({ length: MAX_LIST_ITEMS + 1 }, (_, index) => ({
+          metadata: { name: `pod-${index}` },
+          status: {},
+        })),
+        metadata: { continue: "more", resourceVersion: "1" },
+      });
+    }) as unknown as typeof fetch;
+
+    try {
+      const result = await fetchOpenShiftResources(
+        { serverUrl: "https://openshift.example.com", namespaces: ["team-one"], commitShaAnnotation: "dev/commit-sha" },
+        "token",
+      );
+      expect(result.resources.filter(resource => resource.kind === "Pod")).toHaveLength(MAX_LIST_ITEMS);
+      expect(result.error).toBe(BANNER.openshift.inventoryPartial);
+      expect(result.failures).toContainEqual(
+        expect.objectContaining({ kind: "Pod", error: expect.stringContaining(`${MAX_LIST_ITEMS} items`) }),
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("preserves prior pages when a later page fails", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = input.toString();
+      if (!url.includes("/pods")) return Response.json({ items: [] });
+      if (new URL(url).searchParams.has("continue")) return new Response("unavailable", { status: 400 });
+      return Response.json({
+        items: [{ metadata: { name: "pod-1" }, status: {} }],
+        metadata: { continue: "next", resourceVersion: "1" },
+      });
+    }) as unknown as typeof fetch;
+
+    try {
+      const result = await fetchOpenShiftResources(
+        { serverUrl: "https://openshift.example.com", namespaces: ["team-one"], commitShaAnnotation: "dev/commit-sha" },
+        "token",
+      );
+      expect(result.resources.filter(resource => resource.kind === "Pod").map(resource => resource.name)).toEqual([
+        "pod-1",
+      ]);
+      expect(result.error).toBe(BANNER.openshift.inventoryPartial);
+      expect(result.failures).toContainEqual(
+        expect.objectContaining({ kind: "Pod", error: expect.stringContaining("400") }),
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("aborts pagination without reporting a partial inventory", async () => {
+    const originalFetch = globalThis.fetch;
+    const ctrl = new AbortController();
+    let podRequests = 0;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = input.toString();
+      if (!url.includes("/pods")) return Response.json({ items: [] });
+      podRequests++;
+      if (podRequests === 1) {
+        return Response.json({
+          items: [{ metadata: { name: "pod-1" }, status: {} }],
+          metadata: { continue: "next", resourceVersion: "1" },
+        });
+      }
+      ctrl.abort();
+      throw new DOMException("The operation was aborted.", "AbortError");
+    }) as unknown as typeof fetch;
+
+    try {
+      await expect(
+        fetchOpenShiftResources(
+          {
+            serverUrl: "https://openshift.example.com",
+            namespaces: ["team-one"],
+            commitShaAnnotation: "dev/commit-sha",
+          },
+          "token",
+          ctrl.signal,
+        ),
+      ).rejects.toMatchObject({ name: "AbortError" });
+      expect(getDebugEvents().every(event => event.status !== "error")).toBe(true);
     } finally {
       globalThis.fetch = originalFetch;
     }

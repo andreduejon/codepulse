@@ -1,14 +1,13 @@
-import { createEffect, createMemo, createSignal } from "solid-js";
+import { createMemo, createSignal } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
-import { useT } from "../../hooks/use-t";
 import { ProviderRunTree, type ProviderTreeJob, type ProviderTreeRun } from "../shared/provider-run-tree";
 import type { JenkinsCommitData, JenkinsJob, JenkinsJobFetchResult, JenkinsRun } from "./types";
 
 export interface JenkinsDetailTabProps {
   sha: string;
   getCommitData: (sha: string) => JenkinsCommitData | null;
-  fetchJobsForRun: (run: JenkinsRun) => Promise<JenkinsJobFetchResult>;
-  fetchCommitData?: (sha: string) => Promise<void>;
+  fetchJobsForRun: (run: JenkinsRun, signal?: AbortSignal) => Promise<JenkinsJobFetchResult>;
+  fetchCommitData?: (sha: string, force?: boolean) => Promise<void>;
   unavailableReason?: string | null;
   loading?: boolean;
   navRef?: DetailNavRef;
@@ -20,34 +19,8 @@ export interface JenkinsDetailTabProps {
 }
 
 export function JenkinsDetailTab(props: Readonly<JenkinsDetailTabProps>) {
-  const t = useT();
   const data = () => props.getCommitData(props.sha);
-  const [requestedSha, setRequestedSha] = createSignal<string | null>(null);
-
-  createEffect(() => {
-    const sha = props.sha;
-    if (props.loading || data()?.resolved || requestedSha() === sha) return;
-    setRequestedSha(sha);
-    void props.fetchCommitData?.(sha);
-  });
-
-  if (props.unavailableReason) {
-    return (
-      <box flexDirection="column" flexGrow={1} paddingX={2} paddingTop={2}>
-        <text fg={t().foregroundMuted} wrapMode="word">
-          Jenkins provider unavailable.
-        </text>
-        <box height={1} />
-        <text fg={t().accent} wrapMode="word">
-          {props.unavailableReason}
-        </text>
-        <box height={1} />
-        <text fg={t().foregroundMuted} wrapMode="word">
-          Configure jobs and token env in Menu → Providers.
-        </text>
-      </box>
-    );
-  }
+  const [reloadBusy, setReloadBusy] = createSignal(false);
 
   const runs = createMemo<ProviderTreeRun<JenkinsRun>[]>(() =>
     (data()?.runs ?? []).map(run => ({
@@ -83,26 +56,36 @@ export function JenkinsDetailTab(props: Readonly<JenkinsDetailTabProps>) {
   return (
     <ProviderRunTree
       runs={runs()}
-      loading={props.loading}
       navRef={props.navRef}
       detailCursorIndex={props.detailCursorIndex}
       detailFocused={props.detailFocused}
       setDetailCursorAction={props.setDetailCursorAction}
       setDetailCursorIndex={props.setDetailCursorIndex}
-      fetchJobsForRun={async run => {
-        const { jobs, error } = await props.fetchJobsForRun(run.raw);
+      fetchJobsForRun={async (run, signal) => {
+        const { jobs, error } = await props.fetchJobsForRun(run.raw, signal);
         return { jobs: jobs.map(mapJob), error };
       }}
+      debugSource="Jenkins"
+      dataKey={props.sha}
       onOpenJobAction={(job, run, jobs) => props.onOpenJobLog?.(job.raw, run.raw, jobs?.map(entry => entry.raw) ?? [])}
-      summaryLabel="total workflow runs"
-      loadingText="Loading Jenkins runs…"
-      emptyText="......"
-      jobsLoadingText="Loading..."
-      jobsUnavailableText="Unavailable"
-      noJobsText="No items"
-      autoExpandSingleRun
+      summaryLabel="total builds"
+      jobsLoadingText="loading jobs..."
+      noJobsText=""
       showRunDuration={false}
       childCountLabel={count => `${count} stage${count === 1 ? "" : "s"}`}
+      onReloadCommit={async () => {
+        if (reloadBusy() || props.unavailableReason) return;
+        setReloadBusy(true);
+        try {
+          await props.fetchCommitData?.(props.sha, true);
+        } finally {
+          setReloadBusy(false);
+        }
+      }}
+      reloadLabel={data() ? "Reload commit" : "Load commit"}
+      reloadBusy={reloadBusy() || !!props.loading}
+      reloadEnabled={!props.unavailableReason}
+      showSummary={!!data()}
     />
   );
 }
