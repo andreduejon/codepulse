@@ -157,6 +157,7 @@ function GraphLine(
     index: number;
     active: boolean;
     isLast: boolean;
+    terminalWidth: () => number;
     viewportOffset: () => number;
     rowRef?: (el: Renderable) => void;
     /** Whether ancestry highlighting is currently active (any commit selected).
@@ -189,7 +190,6 @@ function GraphLine(
 ) {
   const t = useT();
   const { state } = useAppState();
-  const dimensions = useTerminalDimensions();
 
   const commit = () => props.row.commit;
   const padCols = () => state.maxGraphColumns();
@@ -384,7 +384,7 @@ function GraphLine(
   //   + refBadgesWidth + AUTHOR_COL_WIDTH + 2 (author paddingRight) + DATE_COL_WIDTH
   //   + 4 (left panel paddingX=2 each side)
   const subjectAvailableWidth = createMemo(() => {
-    const W = dimensions().width;
+    const W = props.terminalWidth();
     // Detail panel box width = 25% of W (minWidth=60). Its paddingX=2 is internal,
     // so it does NOT reduce the left panel's allocated width.
     const detailPanelWidth =
@@ -632,6 +632,7 @@ export default function GraphView(
   }>,
 ) {
   const { state, actions } = useAppState();
+  const dimensions = useTerminalDimensions();
 
   // For each row, compute which columns stay bright when ancestry highlighting
   // is active. Delegates to the pure `computeBrightColumns` function.
@@ -775,6 +776,7 @@ export default function GraphView(
                   index={index()}
                   active={isActive(index())}
                   isLast={index() === state.graphRows().length - 1}
+                  terminalWidth={() => dimensions().width}
                   viewportOffset={viewportOffset}
                   ancestryActive={() => brightColumnsByHash() !== null}
                   isDimmedByAncestry={() => {

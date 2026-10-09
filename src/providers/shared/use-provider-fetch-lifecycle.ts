@@ -1,6 +1,7 @@
 import { createEffect, createSignal, onCleanup } from "solid-js";
 import type { AppState } from "../../context/state";
 import { collectTopSHAs } from "../github-actions/sha-selection";
+import { isAbortError } from "./http";
 
 export const DEFAULT_INITIAL_SHA_LIMIT = 100;
 
@@ -110,6 +111,8 @@ export function useProviderFetchLifecycle(opts: {
     activeRequestControllers.add(ctrl);
     try {
       await opts.runInitialFetch({ signal: ctrl.signal, shas, showStatus, epoch });
+    } catch (err) {
+      if (!isAbortError(err, ctrl.signal)) throw err;
     } finally {
       signal?.removeEventListener("abort", onAbort);
       activeRequestControllers.delete(ctrl);
@@ -133,6 +136,8 @@ export function useProviderFetchLifecycle(opts: {
     activeRequestControllers.add(ctrl);
     try {
       await opts.runRefresh({ signal: ctrl.signal, showStatus, epoch });
+    } catch (err) {
+      if (!isAbortError(err, ctrl.signal)) throw err;
     } finally {
       signal?.removeEventListener("abort", onAbort);
       activeRequestControllers.delete(ctrl);
