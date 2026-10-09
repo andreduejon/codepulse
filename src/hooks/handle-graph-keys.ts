@@ -36,18 +36,8 @@ export interface GraphKeyOptions {
  * Returns true if the event was consumed (caller should stop processing).
  */
 export function handleGraphKey(e: KeyEvent, opts: GraphKeyOptions): boolean {
-  const {
-    state,
-    actions,
-    layoutMode,
-    setDialog,
-    getDetailScrollboxRef,
-    detailNavRef,
-    loadMoreData,
-    onCommandExecute,
-    setCommandBarMode,
-    setCommandBarValue,
-  } = opts;
+  const { state, actions, layoutMode, setDialog, getDetailScrollboxRef, detailNavRef, loadMoreData, onCommandExecute } =
+    opts;
 
   const scrollbox = getDetailScrollboxRef();
 
@@ -151,10 +141,8 @@ export function handleGraphKey(e: KeyEvent, opts: GraphKeyOptions): boolean {
       onCommandExecute("ancestry");
       return true;
     case "p":
-      // 'p' opens path mode with the current filter pre-filled for editing.
       e.preventDefault();
-      setCommandBarMode("path");
-      setCommandBarValue(state.pathFilter() ?? "");
+      onCommandExecute("path");
       return true;
     case "g": {
       e.preventDefault();

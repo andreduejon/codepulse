@@ -1,4 +1,11 @@
-import type { Renderable, ScrollBoxRenderable, StyledText, TextRenderable } from "@opentui/core";
+import {
+  MouseButton,
+  type MouseEvent,
+  type Renderable,
+  type ScrollBoxRenderable,
+  type StyledText,
+  type TextRenderable,
+} from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSelector, createSignal, For, onCleanup, Show } from "solid-js";
 import {
@@ -158,6 +165,8 @@ function GraphLine(
     active: boolean;
     isLast: boolean;
     terminalWidth: () => number;
+    onMouseDown: (event: MouseEvent) => void;
+    mouseEnabled?: () => boolean;
     viewportOffset: () => number;
     rowRef?: (el: Renderable) => void;
     /** Whether ancestry highlighting is currently active (any commit selected).
@@ -190,6 +199,8 @@ function GraphLine(
 ) {
   const t = useT();
   const { state } = useAppState();
+
+  const [hovered, setHovered] = createSignal(false);
 
   const commit = () => props.row.commit;
   const padCols = () => state.maxGraphColumns();
@@ -414,11 +425,18 @@ function GraphLine(
   const bannerOffset = useBannerScroll(bannerOverflow);
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: TUI block uses existing keyboard graph navigation, not DOM roles.
+    // biome-ignore lint/a11y/useKeyWithMouseEvents: Keyboard selection already highlights the active commit block.
     <box
       ref={(el: Renderable) => props.rowRef?.(el)}
       flexDirection="column"
       width="100%"
-      backgroundColor={props.active ? t().backgroundElement : undefined}
+      backgroundColor={
+        props.active || (hovered() && props.mouseEnabled?.() !== false) ? t().backgroundElement : undefined
+      }
+      onMouseDown={props.onMouseDown}
+      onMouseOver={() => setHovered(true)}
+      onMouseOut={() => setHovered(false)}
     >
       {/* Fan-out rows above the commit (all except the last, which merges
           into the commit row to avoid a redundant █ block). */}
@@ -626,6 +644,8 @@ export default function GraphView(
     onLoadMore?: () => void;
     scrollboxRef?: (el: ScrollBoxRenderable) => void;
     suppressAutoScroll?: () => boolean;
+    mouseEnabled?: () => boolean;
+    onSelectRow?: (index: number) => void;
     snykGetCommitData?: (sha: string) => SnykScanResult | null;
     snykIsScanning?: (sha: string) => boolean;
     openshiftIsLoading?: (sha: string) => boolean;
@@ -757,6 +777,26 @@ export default function GraphView(
       scrollY
       scrollX={false}
       verticalScrollbarOptions={{ visible: false }}
+      onMouseScroll={event => {
+        if (event.scroll?.direction !== "down" || props.mouseEnabled?.() === false) return;
+        // OpenTUI applies wheel scrolling after this handler; inspect the updated viewport.
+        queueMicrotask(() => {
+          const sb = scrollboxRef;
+          if (!sb || sb.isDestroyed || props.mouseEnabled?.() === false) return;
+          if (state.loading() || state.fetching() || !state.hasMore() || state.graphRows().length === 0) return;
+          if (sb.scrollHeight - sb.scrollTop - sb.viewport.height <= LOAD_MORE_THRESHOLD) {
+            props.onLoadMore?.();
+          }
+        });
+      }}
+      viewportOptions={{
+        onMouse: event => {
+          if (props.mouseEnabled?.() === false) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
+        },
+      }}
     >
       <box flexDirection="column" flexGrow={1}>
         <Show when={!state.loading()}>
@@ -777,6 +817,12 @@ export default function GraphView(
                   active={isActive(index())}
                   isLast={index() === state.graphRows().length - 1}
                   terminalWidth={() => dimensions().width}
+                  mouseEnabled={props.mouseEnabled}
+                  onMouseDown={event => {
+                    if (event.button !== MouseButton.LEFT || props.mouseEnabled?.() === false) return;
+                    event.preventDefault();
+                    props.onSelectRow?.(index());
+                  }}
                   viewportOffset={viewportOffset}
                   ancestryActive={() => brightColumnsByHash() !== null}
                   isDimmedByAncestry={() => {

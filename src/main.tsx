@@ -80,8 +80,9 @@ export async function main() {
     ),
     {
       exitOnCtrlC: true,
-      useMouse: false,
-      targetFps: 40,
+      useMouse: true,
+      enableMouseMovement: true,
+      targetFps: 60,
     },
   );
 }

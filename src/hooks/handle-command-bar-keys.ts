@@ -4,13 +4,12 @@
  * Covers three modes:
  *   - "command" : user types a command and presses Enter to execute it
  *   - "path"    : user types a path and presses Enter to apply the filter
- *   - "search"  : user types a search query; Enter confirms, Esc clears
+ *   - "search"  : user types a search query; Enter applies, Esc cancels edits
  *
  * Returns true when the key was consumed and the caller should stop processing.
  */
 import type { KeyEvent } from "@opentui/core";
 import type { AppActions, AppState } from "../context/state";
-import { computeDisplacedIndex } from "../utils/keyboard-nav-utils";
 import type { CommandBarMode } from "./use-keyboard-navigation";
 
 export interface CommandBarKeyOptions {
@@ -27,21 +26,14 @@ export interface CommandBarKeyOptions {
   clearSearchDebounce: () => void;
   onCommandExecute: (cmd: string) => void;
   onPathExecute: (pathValue: string) => void;
+  onSearchExecute: (query: string) => void;
   onClearAncestry: () => void;
 }
 
 /** Build the helper closures that operate on command-bar state. */
 export function createCommandBarHelpers(opts: CommandBarKeyOptions) {
-  const {
-    actions,
-    state,
-    setCommandBarMode,
-    setCommandBarValue,
-    setSearchFocused,
-    setSearchInputValue,
-    clearSearchDebounce,
-    onClearAncestry,
-  } = opts;
+  const { actions, setCommandBarMode, setCommandBarValue, setSearchFocused, setSearchInputValue, clearSearchDebounce } =
+    opts;
 
   /** Clear the search filter entirely. */
   const clearSearch = () => {
@@ -50,50 +42,14 @@ export function createCommandBarHelpers(opts: CommandBarKeyOptions) {
     actions.setSearchQuery("");
   };
 
-  /** Open the search bar. Clears other highlight modes (mutual exclusivity). */
-  const openSearch = () => {
-    actions.setDetailFocused(false);
-    // Mutual exclusion: clear ancestry and path
-    onClearAncestry();
-    actions.setPathFilter(null);
-    actions.setPathMatchSet(null);
-    // Pre-fill with the current active query (empty if no filter)
-    setSearchInputValue(state.searchQuery());
-    setCommandBarMode("search");
-    setSearchFocused(true);
-  };
-
-  /**
-   * If the cursor is on a dimmed (non-highlighted) row, jump to the nearest
-   * highlighted row. Prefers forward direction, falls back to backward.
-   */
-  const displaceIfDimmed = () => {
-    const target = computeDisplacedIndex(state.graphRows(), state.highlightSet(), state.cursorIndex());
-    if (target !== state.cursorIndex()) {
-      actions.setCursorIndex(target);
-      actions.setScrollTargetIndex(target);
-    }
-  };
-
-  /**
-   * Confirm the search (Enter in search mode).
-   * Closes the search bar but keeps the highlight active.
-   */
-  const confirmSearch = () => {
-    setSearchFocused(false);
-    setCommandBarMode("idle");
-    // searchQuery stays set — highlighting persists via highlightSet
-    // If cursor is on a dimmed row, jump to the nearest match
-    displaceIfDimmed();
-  };
-
   /** Return to idle mode, clearing any command bar input. */
   const exitCommandBar = () => {
+    setSearchFocused(false);
     setCommandBarMode("idle");
     setCommandBarValue("");
   };
 
-  return { clearSearch, openSearch, confirmSearch, exitCommandBar };
+  return { clearSearch, exitCommandBar };
 }
 
 export type CommandBarHelpers = ReturnType<typeof createCommandBarHelpers>;
@@ -140,30 +96,21 @@ export function handleCommandOrPathKey(
  */
 export function handleSearchKey(
   e: KeyEvent,
-  opts: Pick<CommandBarKeyOptions, "commandBarMode" | "searchFocused" | "setSearchFocused" | "searchInputValue">,
-  helpers: Pick<CommandBarHelpers, "clearSearch" | "confirmSearch">,
-  setCommandBarMode: (m: CommandBarMode) => void,
+  opts: Pick<CommandBarKeyOptions, "commandBarMode" | "searchInputValue" | "onSearchExecute">,
+  helpers: Pick<CommandBarHelpers, "exitCommandBar">,
 ): boolean {
-  const { commandBarMode, searchFocused, setSearchFocused, searchInputValue } = opts;
-  const { clearSearch, confirmSearch } = helpers;
+  const { commandBarMode, searchInputValue, onSearchExecute } = opts;
 
   if (commandBarMode() !== "search") return false;
 
   if (e.name === "escape") {
-    setSearchFocused(false);
-    clearSearch();
-    setCommandBarMode("idle");
+    helpers.exitCommandBar();
     return true;
   }
-  if (e.name === "return" && searchFocused()) {
+  if (e.name === "return") {
     e.preventDefault();
-    if (!searchInputValue().trim()) {
-      setSearchFocused(false);
-      clearSearch();
-      setCommandBarMode("idle");
-    } else {
-      confirmSearch();
-    }
+    onSearchExecute(searchInputValue().trim());
+    helpers.exitCommandBar();
     return true;
   }
   // All other keys pass to the native <input> while focused

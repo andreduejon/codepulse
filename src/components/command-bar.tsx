@@ -1,16 +1,12 @@
-import { createMemo, For, Show } from "solid-js";
+import { type BoxRenderable, MouseButton } from "@opentui/core";
+import { createMemo, createSignal, For, Show } from "solid-js";
 import type { KnownRepoInfo } from "../config";
 import { useAppState } from "../context/state";
 import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
 import { useT } from "../hooks/use-t";
 import { providerColors } from "../providers/colors";
-import { providerDisplayName } from "../providers/provider";
-import {
-  commandBarInputValue,
-  commandBarPlaceholder,
-  commitCountText,
-  modeBadgeLabel,
-} from "../utils/command-bar-utils";
+import { type ProviderView, providerDisplayName } from "../providers/provider";
+import { commandBarPlaceholder, commitCountText, filterBadgeLabel } from "../utils/command-bar-utils";
 import { groupMembersForRepo, repoDisplayName } from "../utils/group-repos";
 import Badge from "./badge";
 
@@ -20,6 +16,8 @@ interface CommandBarProps {
   searchInputValue: () => string;
   searchFocused: () => boolean;
   onInput: (val: string) => void;
+  mouseEnabled?: () => boolean;
+  onSelectMode?: (mode: "normal" | "search" | "path" | "ancestry") => void;
   /** Whether detail panel is focused — switches border to muted. */
   detailFocused: () => boolean;
   knownRepos: KnownRepoInfo[];
@@ -28,41 +26,17 @@ interface CommandBarProps {
   currentAppName?: string;
 }
 
-/**
- * Command bar section: the always-visible input area below the graph.
- *
- * Renders:
- *  - A single `<input>` widget shared across all modes (idle / command / search / path)
- *  - Commit count display (filtered / total)
- *  - Status row: git badge · mode badge · branch badges
- */
+/** Provider, project and mode rows, with an inline input for colon commands. */
 export default function CommandBar(props: Readonly<CommandBarProps>) {
-  const { state } = useAppState();
+  const { state, actions } = useAppState();
   const t = useT();
-
-  const placeholder = () => commandBarPlaceholder(props.commandBarMode());
-
-  const inputValue = () =>
-    commandBarInputValue({
-      commandBarMode: props.commandBarMode(),
-      commandBarValue: props.commandBarValue(),
-      searchInputValue: props.searchInputValue(),
-      highlightMode: state.highlightMode(),
-      pathFilter: state.pathFilter(),
-    });
-
-  const inputFocused = () => {
-    const mode = props.commandBarMode();
-    return props.searchFocused() || mode === "command" || mode === "path";
-  };
-  const promptPrefix = () => {
-    const mode = props.commandBarMode();
-    if (mode === "command") return ":";
-    if (mode === "search") return "/";
-    return "";
-  };
-
-  const modeBadge = () => modeBadgeLabel(props.commandBarMode(), state.highlightMode());
+  const [hoveredProvider, setHoveredProvider] = createSignal<ProviderView | null>(null);
+  const [hoveredMode, setHoveredMode] = createSignal<string | null>(null);
+  const [contentWidth, setContentWidth] = createSignal(0);
+  const enabledProviders = createMemo(() => {
+    state.providers.getVersion();
+    return state.providers.getEnabledViews();
+  });
 
   const countColor = () => {
     const hSet = state.highlightSet();
@@ -70,7 +44,7 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
     return t().foregroundMuted;
   };
 
-  const countText = () => commitCountText(state.highlightSet(), state.graphRows().length);
+  const countText = () => `${commitCountText(state.highlightSet(), state.graphRows().length)} commits`;
 
   const borderColor = () => (props.detailFocused() ? t().border : t().accent);
   const checkedOutBranch = () => state.currentBranch();
@@ -106,11 +80,18 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
       rightHidden: members.length - start - 3,
     };
   });
+  const wide = createMemo(() => {
+    const providersWidth = enabledProviders().reduce((width, view) => width + providerDisplayName(view).length + 3, -1);
+    const modesWidth =
+      22 + filterBadgeLabel("search", state.searchQuery()).length + filterBadgeLabel("path", state.pathFilter()).length;
+    return contentWidth() >= Math.max(120, providersWidth + modesWidth + 4);
+  });
 
   return (
     <box
       width="100%"
-      minHeight={5}
+      minHeight={wide() ? 5 : 7}
+      flexShrink={0}
       backgroundColor={t().background}
       paddingX={2}
       paddingY={1}
@@ -119,124 +100,201 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
       borderStyle="single"
       borderColor={borderColor()}
     >
-      {/* Input row */}
-      <box flexGrow={1} flexDirection="row">
-        <Show when={promptPrefix()}>
-          <text flexShrink={0} wrapMode="none" fg={t().accent}>
-            {promptPrefix()}
-          </text>
-        </Show>
-        <input
-          focused={inputFocused()}
-          flexGrow={1}
-          placeholder={placeholder()}
-          value={inputValue()}
-          onInput={props.onInput}
-          textColor={t().foreground}
-          focusedTextColor={t().foreground}
-          placeholderColor={t().foregroundMuted}
-          cursorColor={t().accent}
-          backgroundColor={t().background}
-          focusedBackgroundColor={t().background}
-        />
-        <text flexShrink={0} wrapMode="none" fg={countColor()}>
-          {"  "}
-          {countText()}
-        </text>
-      </box>
-
-      <box height={1} />
-
-      {/* Status row: git badge · mode badge · project badges · branch badges */}
-      <box flexDirection="row" width="100%">
-        <box flexDirection="row" flexShrink={1}>
-          {/* Provider view badge */}
-          {(() => {
-            const view = state.activeProviderView();
-            if (view === "git") {
-              return (
-                <text flexShrink={0} wrapMode="none" fg={t().background} bg={t().accent}>
-                  {" Git "}
-                </text>
-              );
-            }
-            const label = providerDisplayName(view);
-            const { bg, fg } = providerColors(t(), view);
-            return (
-              <text flexShrink={0} wrapMode="none" fg={fg} bg={bg}>
-                {` ${label} `}
-              </text>
-            );
-          })()}
-          <text flexShrink={0} wrapMode="none">
-            {" "}
-          </text>
-          {/* Mode badge */}
-          <text flexShrink={0} wrapMode="none" fg={t().accent} bg={t().backgroundElementActive}>
-            {modeBadge()}
-          </text>
-          <Show when={projectBadges().length > 0}>
-            <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-              {" · "}
+      <Show when={props.commandBarMode() !== "idle"}>
+        <box height={1} flexShrink={0} flexDirection="row">
+          <Show when={props.commandBarMode() === "command"}>
+            <text flexShrink={0} wrapMode="none" fg={t().accent}>
+              {":"}
             </text>
-            <Show when={visibleProjects().leftHidden > 0}>
-              <Badge name={`◂${visibleProjects().leftHidden}`} dimmed noShrink />
-              <text flexShrink={0} wrapMode="none">
-                {" "}
-              </text>
-            </Show>
-            <For each={visibleProjects().repos}>
-              {(repo, idx) => (
-                <>
-                  <Show when={idx() > 0}>
-                    <text flexShrink={0} wrapMode="none">
-                      {" "}
-                    </text>
-                  </Show>
-                  <Badge
-                    name={repoDisplayName(repo)}
-                    color={repo.path === props.currentRepo ? t().accent : undefined}
-                    dimmed={repo.path !== props.currentRepo}
-                    noShrink
-                  />
-                </>
-              )}
-            </For>
-            <Show when={visibleProjects().rightHidden > 0}>
-              <text flexShrink={0} wrapMode="none">
-                {" "}
-              </text>
-              <Badge name={`${visibleProjects().rightHidden}▸`} dimmed noShrink />
-            </Show>
           </Show>
+          <input
+            focused
+            flexGrow={1}
+            placeholder={commandBarPlaceholder(props.commandBarMode())}
+            value={props.commandBarMode() === "search" ? props.searchInputValue() : props.commandBarValue()}
+            onInput={props.onInput}
+            textColor={t().foreground}
+            focusedTextColor={t().foreground}
+            placeholderColor={t().foregroundMuted}
+            cursorColor={t().accent}
+            backgroundColor={t().background}
+            focusedBackgroundColor={t().background}
+          />
         </box>
-        <box flexGrow={1} />
-        <Show when={checkedOutBranch() || viewingBranch()}>
-          <Show
-            when={viewingOtherBranch()}
-            fallback={
-              <Badge
-                name={checkedOutBranch()}
-                colorIndex={branchColorIndex(checkedOutBranch()) ?? undefined}
-                color={branchColorIndex(checkedOutBranch()) === null ? t().accent : undefined}
-                noShrink
-              />
-            }
-          >
-            <box flexDirection="row">
-              <Badge
-                name={viewingBranch() ?? ""}
-                colorIndex={branchColorIndex(viewingBranch()) ?? undefined}
-                color={branchColorIndex(viewingBranch()) === null ? t().accent : undefined}
-                noShrink
-              />
-              <text flexShrink={0} wrapMode="none">
-                {" "}
-              </text>
-              <Badge name={checkedOutBranch()} dimmed noShrink />
-            </box>
+        <box height={1} flexShrink={0} />
+      </Show>
+
+      {/* Measure this panel, not terminal width; keep controls mounted across resizes. */}
+      <box
+        width="100%"
+        height={wide() ? 3 : 5}
+        flexShrink={0}
+        onSizeChange={function (this: BoxRenderable) {
+          setContentWidth(this.width);
+        }}
+      >
+        <box position="absolute" top={0} left={0} flexDirection="row" flexShrink={0}>
+          <box flexDirection="row" gap={1} flexShrink={0}>
+            <For each={enabledProviders()}>
+              {view => {
+                const selected = () => state.activeProviderView() === view;
+                const hovered = () => hoveredProvider() === view && props.mouseEnabled?.() !== false;
+                const colors = () => providerColors(t(), view);
+                return (
+                  // biome-ignore lint/a11y/noStaticElementInteractions: TUI provider selection also supports Tab keyboard cycling.
+                  // biome-ignore lint/a11y/useKeyWithMouseEvents: Keyboard-selected provider already uses normal badge colors.
+                  <text
+                    flexShrink={0}
+                    wrapMode="none"
+                    fg={selected() ? colors().bg : hovered() ? t().foreground : t().foregroundMuted}
+                    bg={t().backgroundElementActive}
+                    onMouseOver={() => setHoveredProvider(view)}
+                    onMouseOut={() => setHoveredProvider(null)}
+                    onMouseDown={event => {
+                      if (event.button !== MouseButton.LEFT || props.mouseEnabled?.() === false) return;
+                      event.preventDefault();
+                      actions.setActiveProviderView(view);
+                    }}
+                  >
+                    {` ${providerDisplayName(view)} `}
+                  </text>
+                );
+              }}
+            </For>
+          </box>
+        </box>
+        <box
+          position="absolute"
+          top={wide() ? 2 : 4}
+          left={0}
+          flexDirection="row"
+          width={wide() ? "45%" : "100%"}
+          minWidth={0}
+          flexShrink={0}
+        >
+          <box flexDirection="row" flexShrink={1} minWidth={0} overflow="hidden">
+            <Show when={projectBadges().length > 0}>
+              <Show when={visibleProjects().leftHidden > 0}>
+                <Badge name={`◂${visibleProjects().leftHidden}`} dimmed noShrink />
+                <text flexShrink={0} wrapMode="none">
+                  {" "}
+                </text>
+              </Show>
+              <For each={visibleProjects().repos}>
+                {(repo, idx) => (
+                  <>
+                    <Show when={idx() > 0}>
+                      <text flexShrink={0} wrapMode="none">
+                        {" "}
+                      </text>
+                    </Show>
+                    <Badge
+                      name={repoDisplayName(repo)}
+                      color={repo.path === props.currentRepo ? t().accent : undefined}
+                      dimmed={repo.path !== props.currentRepo}
+                      noShrink
+                    />
+                  </>
+                )}
+              </For>
+              <Show when={visibleProjects().rightHidden > 0}>
+                <text flexShrink={0} wrapMode="none">
+                  {" "}
+                </text>
+                <Badge name={`${visibleProjects().rightHidden}▸`} dimmed noShrink />
+              </Show>
+            </Show>
+          </box>
+        </box>
+        <box
+          position="absolute"
+          top={wide() ? 0 : 2}
+          left={wide() ? "auto" : 0}
+          right={wide() ? 0 : "auto"}
+          flexDirection="row"
+          width="auto"
+          minWidth={0}
+          flexShrink={0}
+        >
+          <box flexDirection="row" gap={1} flexShrink={0}>
+            <For each={["normal", "search", "path", "ancestry"] as const}>
+              {mode => {
+                const selected = () => {
+                  const inputMode = props.commandBarMode();
+                  const activeMode =
+                    inputMode === "search" || inputMode === "path" ? inputMode : (state.highlightMode() ?? "normal");
+                  return activeMode === mode;
+                };
+                const hovered = () => hoveredMode() === mode && props.mouseEnabled?.() !== false;
+                const label = () => {
+                  if (mode === "search") return filterBadgeLabel("search", state.searchQuery());
+                  if (mode === "path") return filterBadgeLabel("path", state.pathFilter());
+                  return mode === "normal" ? " normal " : " ancestry ";
+                };
+                return (
+                  // biome-ignore lint/a11y/noStaticElementInteractions: TUI modes also have keyboard shortcuts.
+                  // biome-ignore lint/a11y/useKeyWithMouseEvents: Keyboard-selected modes use the same highlight colors.
+                  <text
+                    flexShrink={0}
+                    wrapMode="none"
+                    fg={selected() ? t().accent : hovered() ? t().foreground : t().foregroundMuted}
+                    bg={t().backgroundElementActive}
+                    onMouseOver={() => setHoveredMode(mode)}
+                    onMouseOut={() => setHoveredMode(null)}
+                    onMouseDown={event => {
+                      if (event.button !== MouseButton.LEFT || props.mouseEnabled?.() === false) return;
+                      event.preventDefault();
+                      props.onSelectMode?.(mode);
+                    }}
+                  >
+                    {label()}
+                  </text>
+                );
+              }}
+            </For>
+          </box>
+        </box>
+        <box
+          position="absolute"
+          top={wide() ? 2 : 4}
+          right={0}
+          flexDirection="row"
+          gap={1}
+          flexShrink={1}
+          minWidth={0}
+          overflow="hidden"
+          maxWidth="45%"
+        >
+          <Show when={checkedOutBranch() || viewingBranch()}>
+            <Show
+              when={viewingOtherBranch()}
+              fallback={
+                <Badge
+                  name={checkedOutBranch()}
+                  colorIndex={branchColorIndex(checkedOutBranch()) ?? undefined}
+                  color={branchColorIndex(checkedOutBranch()) === null ? t().accent : undefined}
+                  noShrink
+                />
+              }
+            >
+              <box flexDirection="row">
+                <Badge
+                  name={viewingBranch() ?? ""}
+                  colorIndex={branchColorIndex(viewingBranch()) ?? undefined}
+                  color={branchColorIndex(viewingBranch()) === null ? t().accent : undefined}
+                  noShrink
+                />
+                <text flexShrink={0} wrapMode="none">
+                  {" "}
+                </text>
+                <Badge name={checkedOutBranch()} dimmed noShrink />
+              </box>
+            </Show>
           </Show>
-        </Show>
+          <text flexShrink={0} wrapMode="none" fg={countColor()} bg={t().backgroundElementActive}>
+            {` ${countText()} `}
+          </text>
+        </box>
       </box>
     </box>
   );

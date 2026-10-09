@@ -3,8 +3,23 @@ import {
   commandBarInputValue,
   commandBarPlaceholder,
   commitCountText,
+  filterBadgeLabel,
   modeBadgeLabel,
 } from "../src/utils/command-bar-utils";
+
+describe("filterBadgeLabel", () => {
+  test("omits empty and unapplied terms", () => {
+    expect(filterBadgeLabel("Search", "")).toBe(" Search ");
+    expect(filterBadgeLabel("Path", null)).toBe(" Path ");
+  });
+
+  test("preserves terms through ten characters and truncates longer terms to nine plus ellipsis", () => {
+    expect(filterBadgeLabel("Search", "123456789")).toBe(" Search · 123456789 ");
+    expect(filterBadgeLabel("Search", "1234567890")).toBe(" Search · 1234567890 ");
+    expect(filterBadgeLabel("Path", "12345678901")).toBe(" Path · 123456789… ");
+    expect(filterBadgeLabel("Path", "src/components/command-bar.tsx")).toBe(" Path · src/compo… ");
+  });
+});
 
 // ── commandBarPlaceholder ────────────────────────────────────────────────────
 

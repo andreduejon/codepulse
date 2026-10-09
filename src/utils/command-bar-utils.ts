@@ -8,6 +8,10 @@ import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
 
 type HighlightMode = "search" | "path" | "ancestry" | null;
 
+export function filterBadgeLabel(label: string, term: string | null): string {
+  return ` ${label}${term ? ` · ${term.length > 10 ? `${term.slice(0, 9)}…` : term}` : ""} `;
+}
+
 /**
  * Derive the placeholder text for the command bar input based on the current mode.
  */

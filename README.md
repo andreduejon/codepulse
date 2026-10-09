@@ -87,6 +87,25 @@ Use `codepulse -h` for complete shortcuts, commands, and provider setup.
 | `p`                       | Enter path mode                      |
 | `shift + ←` / `shift + →` | Switch project within current group  |
 
+Mouse wheel scrolls the graph without changing the selected commit or details.
+Scrolling near the end of loaded history fetches the next page automatically.
+Hover highlights the commit block background without changing text colors.
+Left-click anywhere in a commit block, including its connector row, to select
+it and return keyboard focus to the graph.
+Graph mouse input is blocked while a dialog is open.
+
+The command bar shows all enabled providers on dark badges. Selected text uses
+provider color; hovered text uses normal foreground. Click to switch directly
+(`Tab` still cycles).
+Wide graph panels show providers and lowercase normal/search/path/ancestry modes
+on the first row, projects and branch/commit count on the second, with a blank
+spacer between. Narrow panels use three rows: providers, modes, then projects
+with branch and commit count on the right. Search and Path badges include
+the applied term, capped at 10 characters; click to edit the full value.
+`/` and `p` open the same temporary inline input as badge clicks. Enter applies; Esc cancels
+without changing the current filter. Normal clears highlighting, not branch
+perspective. Colon commands share the inline input row.
+
 ### Details
 
 | Key                       | Action                                   |
@@ -153,6 +172,7 @@ Switch themes live with `:theme`, or persist a theme in repo configuration.
 | Ayu Mirage                   | `ayu-mirage`         |
 | Synthwave '84                | `synthwave`          |
 | Rosé Pine                    | `rose-pine`          |
+| Olive Garden                 | `olive-garden`       |
 
 ## Roadmap
 

@@ -27,7 +27,7 @@ import type { DiffTarget } from "./git/types";
 import { useAncestry } from "./hooks/use-ancestry";
 import { useDataLoader } from "./hooks/use-data-loader";
 import { useDetailLoader } from "./hooks/use-detail-loader";
-import { type CommandBarMode, useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
+import { type CommandBarMode, type DialogId, useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
 import { usePathFilter } from "./hooks/use-path-filter";
 import { providerAccent } from "./providers/colors";
 import JobLogDialog from "./providers/github-actions/log-dialog";
@@ -40,6 +40,7 @@ import type { OpenShiftResource } from "./providers/openshift/types";
 import { useOpenShift } from "./providers/openshift/use-openshift";
 import { type SnykProviderConfig, useSnyk } from "./providers/snyk/use-snyk";
 import { nextGroupRepoPath } from "./utils/group-repos";
+import { computeDisplacedIndex } from "./utils/keyboard-nav-utils";
 
 export function AppContent(props: Readonly<AppContentProps>) {
   const { state, actions } = createAppState(
@@ -181,9 +182,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     writeConfig({ theme: name }, activeRepoPath());
   });
 
-  const [dialog, setDialog] = createSignal<
-    "menu" | "help" | "theme" | "diff-blame" | "detail" | "job-log" | "openshift-resource" | "debug" | null
-  >(null);
+  const [dialog, setDialog] = createSignal<DialogId>(null);
 
   const [searchFocused, setSearchFocused] = createSignal(false);
   /**
@@ -264,7 +263,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
   let isJumpNavigation = false;
 
   // ── Ancestry highlighting ─────────────────────────────────────────────────
-  const { setAnchor, clearAnchor } = useAncestry(state, actions);
+  const { setAnchor, clearAnchor, reanchorIfOutsideChain } = useAncestry(state, actions);
 
   // ── Path filter ───────────────────────────────────────────────────────────
   const handleJumpToCommit = (hash: string, from: "child" | "parent") => {
@@ -504,19 +503,6 @@ export function AppContent(props: Readonly<AppContentProps>) {
     detailScrollboxRef?.scrollTo(0);
   });
 
-  // Live debounced search: update the active filter 150ms after the user stops typing.
-  // For immediate clear (Esc), the keyboard handler calls actions.setSearchQuery("")
-  // directly and clears this timer.
-  let searchDebounceTimer: ReturnType<typeof setTimeout> | undefined;
-  createEffect(() => {
-    const value = searchInputValue();
-    clearTimeout(searchDebounceTimer);
-    searchDebounceTimer = setTimeout(() => {
-      actions.setSearchQuery(value);
-    }, 150);
-  });
-  onCleanup(() => clearTimeout(searchDebounceTimer));
-
   const handleSearchInput = (value: string) => {
     setSearchInputValue(value);
   };
@@ -610,18 +596,17 @@ export function AppContent(props: Readonly<AppContentProps>) {
         void handleReloadAll();
         break;
       case "search":
-        // Re-open search mode — mutually exclusive with ancestry and path
-        clearAnchor();
-        actions.setPathFilter(null);
-        actions.setPathMatchSet(null);
-        setSearchFocused(true);
-        setCommandBarMode("search");
-        break;
       case "p":
       case "path":
-        // Switch to PATH input mode — user types a path filter next
-        setCommandBarMode("path");
-        setCommandBarValue("");
+        actions.setDetailFocused(false);
+        setSearchFocused(normalized === "search");
+        if (normalized === "search") {
+          setSearchInputValue(state.searchQuery());
+          setCommandBarMode("search");
+        } else {
+          setCommandBarValue(state.pathFilter() ?? "");
+          setCommandBarMode("path");
+        }
         break;
       case "a":
       case "ancestry": {
@@ -660,8 +645,39 @@ export function AppContent(props: Readonly<AppContentProps>) {
     actions,
     clearAnchor,
     setSearchInputValue,
-    clearSearchDebounce: () => clearTimeout(searchDebounceTimer),
+    clearSearchDebounce: () => {},
   });
+
+  const selectMode = (mode: "normal" | "search" | "path" | "ancestry") => {
+    if (mode === "search" || mode === "path") {
+      handleCommandExecute(mode);
+      return;
+    }
+    batch(() => {
+      setSearchFocused(false);
+      setCommandBarMode("idle");
+      setCommandBarValue("");
+      setSearchInputValue("");
+      actions.setSearchQuery("");
+      actions.setPathFilter(null);
+      actions.setPathMatchSet(null);
+      if (mode === "normal") clearAnchor();
+      else handleCommandExecute("ancestry");
+    });
+  };
+
+  const applySearch = (value: string) => {
+    batch(() => {
+      clearAnchor();
+      actions.setPathFilter(null);
+      actions.setPathMatchSet(null);
+      setSearchInputValue(value);
+      actions.setSearchQuery(value);
+    });
+    const target = computeDisplacedIndex(state.graphRows(), state.highlightSet(), state.cursorIndex());
+    actions.setCursorIndex(target);
+    actions.setScrollTargetIndex(target);
+  };
 
   // Keyboard handling
   useKeyboardNavigation({
@@ -674,7 +690,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     setSearchFocused,
     searchInputValue,
     setSearchInputValue,
-    clearSearchDebounce: () => clearTimeout(searchDebounceTimer),
+    clearSearchDebounce: () => {},
     getDetailScrollboxRef: () => detailScrollboxRef,
     detailNavRef,
     loadData,
@@ -686,6 +702,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     setCommandBarValue,
     onCommandExecute: handleCommandExecute,
     onPathExecute: handlePathExecute,
+    onSearchExecute: applySearch,
     onClearAncestry: clearAnchor,
     getCommitData: sha => {
       switch (state.activeProviderView()) {
@@ -716,7 +733,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
   const providerTheme = createMemo(() => {
     const base = themeState.theme();
     const view = state.activeProviderView();
-    return view === "git" ? base : { ...base, accent: providerAccent(base, view) };
+    return { ...base, accent: providerAccent(base, view) };
   });
 
   return (
@@ -775,6 +792,22 @@ export function AppContent(props: Readonly<AppContentProps>) {
                       <ColumnHeader />
 
                       <GraphView
+                        mouseEnabled={() => dialog() == null && state.keyboardScopeOverride() == null}
+                        onSelectRow={index => {
+                          const commit = state.graphRows()[index]?.commit;
+                          if (!commit) return;
+                          batch(() => {
+                            reanchorIfOutsideChain(commit.hash);
+                            setSearchFocused(false);
+                            setCommandBarMode("idle");
+                            setCommandBarValue("");
+                            actions.setDetailFocused(false);
+                            actions.setCursorIndex(index);
+                            actions.setScrollTargetIndex(index);
+                          });
+                          detailNavRef.pendingJumpDirection = null;
+                          detailScrollboxRef?.scrollTo(0);
+                        }}
                         onLoadMore={loadMoreData}
                         snykGetCommitData={snyk.getCommitData}
                         snykIsScanning={snyk.isScanning}
@@ -801,6 +834,8 @@ export function AppContent(props: Readonly<AppContentProps>) {
 
                       {/* Command bar section */}
                       <CommandBar
+                        onSelectMode={selectMode}
+                        mouseEnabled={() => dialog() == null && state.keyboardScopeOverride() == null}
                         commandBarMode={commandBarMode}
                         commandBarValue={commandBarValue}
                         searchInputValue={searchInputValue}
@@ -898,7 +933,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                   <ThemeDialog onClose={() => setDialog(null)} />
                 </Show>
                 <Show when={dialog() === "debug"}>
-                  <DebugDialog onClose={() => setDialog(null)} gitColor={themeState.theme().accent} />
+                  <DebugDialog onClose={() => setDialog(null)} gitColor={themeState.theme().gitBg} />
                 </Show>
                 <Show when={dialog() === "diff-blame" && diffTarget()}>
                   {target => (

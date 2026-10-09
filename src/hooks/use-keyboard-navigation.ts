@@ -58,6 +58,7 @@ interface KeyboardNavigationOptions {
   onCommandExecute: (cmd: string) => void;
   /** Callback to apply a path filter (dispatched when Enter is pressed in path mode). */
   onPathExecute: (pathValue: string) => void;
+  onSearchExecute: (query: string) => void;
   /** Callback to clear ancestry highlighting (called when search opens or on Esc). */
   onClearAncestry: () => void;
   /** CI data getter — forwarded to handleDetailKey for tab availability checks. */
@@ -112,13 +113,14 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     setCommandBarValue,
     onCommandExecute,
     onPathExecute,
+    onSearchExecute,
     onClearAncestry,
     getCommitData,
     getProviderLoading,
     onSwitchGroupRepo,
   } = opts;
 
-  // Build command-bar helpers (clearSearch, openSearch, confirmSearch, exitCommandBar)
+  // Build shared input exit and applied-search clear helpers.
   const cbOpts = {
     state,
     actions,
@@ -133,6 +135,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     clearSearchDebounce,
     onCommandExecute,
     onPathExecute,
+    onSearchExecute,
     onClearAncestry,
   };
   const helpers = createCommandBarHelpers(cbOpts);
@@ -174,7 +177,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     if (handleCommandOrPathKey(e, cbOpts, helpers)) return;
 
     // ── SEARCH mode ───────────────────────────────────────────────────────────
-    if (handleSearchKey(e, cbOpts, helpers, setCommandBarMode)) return;
+    if (handleSearchKey(e, cbOpts, helpers)) return;
 
     // ── IDLE mode (no dialog, no search bar open) ───────────────────────────
 
@@ -189,7 +192,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     // `/` opens SEARCH mode directly
     if (e.name === "/" && !searchFocused()) {
       e.preventDefault();
-      helpers.openSearch();
+      onCommandExecute("search");
       return;
     }
 
