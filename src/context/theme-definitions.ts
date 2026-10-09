@@ -509,7 +509,7 @@ export const oliveGarden: Theme = {
   severityLow: "#56b6c2",
   graphColors: [
     "#92977D",
-    "#9DA36A",
+    "#B5A65D",
     "#C9B991",
     "#6FA6A0",
     "#A88B72",

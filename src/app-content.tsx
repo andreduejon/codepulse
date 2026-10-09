@@ -835,6 +835,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                       {/* Command bar section */}
                       <CommandBar
                         onSelectMode={selectMode}
+                        onSelectProject={switchRepoPath}
                         mouseEnabled={() => dialog() == null && state.keyboardScopeOverride() == null}
                         commandBarMode={commandBarMode}
                         commandBarValue={commandBarValue}

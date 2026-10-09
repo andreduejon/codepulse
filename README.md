@@ -100,8 +100,10 @@ provider color; hovered text uses normal foreground. Click to switch directly
 Wide graph panels show providers and lowercase normal/search/path/ancestry modes
 on the first row, projects and branch/commit count on the second, with a blank
 spacer between. Narrow panels use three rows: providers, modes, then projects
-with branch and commit count on the right. Search and Path badges include
-the applied term, capped at 10 characters; click to edit the full value.
+with branch and commit count on the right.
+Click a project badge to switch repositories (`Shift+Left`/`Shift+Right` still work).
+Search and Path badges include the applied term, capped at 10 characters;
+click to edit the full value.
 `/` and `p` open the same temporary inline input as badge clicks. Enter applies; Esc cancels
 without changing the current filter. Normal clears highlighting, not branch
 perspective. Colon commands share the inline input row.

@@ -18,6 +18,7 @@ interface CommandBarProps {
   onInput: (val: string) => void;
   mouseEnabled?: () => boolean;
   onSelectMode?: (mode: "normal" | "search" | "path" | "ancestry") => void;
+  onSelectProject?: (path: string) => void;
   /** Whether detail panel is focused — switches border to muted. */
   detailFocused: () => boolean;
   knownRepos: KnownRepoInfo[];
@@ -32,6 +33,7 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
   const t = useT();
   const [hoveredProvider, setHoveredProvider] = createSignal<ProviderView | null>(null);
   const [hoveredMode, setHoveredMode] = createSignal<string | null>(null);
+  const [hoveredProject, setHoveredProject] = createSignal<string | null>(null);
   const [contentWidth, setContentWidth] = createSignal(0);
   const enabledProviders = createMemo(() => {
     state.providers.getVersion();
@@ -188,12 +190,38 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
                         {" "}
                       </text>
                     </Show>
-                    <Badge
-                      name={repoDisplayName(repo)}
-                      color={repo.path === props.currentRepo ? t().accent : undefined}
-                      dimmed={repo.path !== props.currentRepo}
-                      noShrink
-                    />
+                    {/* biome-ignore lint/a11y/noStaticElementInteractions: TUI projects also support Shift+Left/Right. */}
+                    {/* biome-ignore lint/a11y/useKeyWithMouseEvents: Keyboard-selected project already uses accent badge colors. */}
+                    <box
+                      flexShrink={0}
+                      onMouseOver={() => setHoveredProject(repo.path)}
+                      onMouseOut={() => setHoveredProject(null)}
+                      onMouseDown={event => {
+                        if (event.button !== MouseButton.LEFT || props.mouseEnabled?.() === false) return;
+                        event.preventDefault();
+                        if (repo.path !== props.currentRepo) props.onSelectProject?.(repo.path);
+                      }}
+                    >
+                      <Show
+                        when={repo.path === props.currentRepo}
+                        fallback={
+                          <text
+                            flexShrink={0}
+                            wrapMode="none"
+                            fg={
+                              hoveredProject() === repo.path && props.mouseEnabled?.() !== false
+                                ? t().foreground
+                                : t().foregroundMuted
+                            }
+                            bg={t().backgroundElementActive}
+                          >
+                            {` ${repoDisplayName(repo)} `}
+                          </text>
+                        }
+                      >
+                        <Badge name={repoDisplayName(repo)} color={t().accent} noShrink />
+                      </Show>
+                    </box>
                   </>
                 )}
               </For>

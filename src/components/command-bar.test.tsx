@@ -245,6 +245,8 @@ test("all non-idle modes add a focused inline input above the spaced rows; group
   const [value, setValue] = createSignal("src/current");
   const [searchValue, setSearchValue] = createSignal("draft");
   const [currentRepo, setCurrentRepo] = createSignal("/repo/charlie");
+  const [mouseEnabled, setMouseEnabled] = createSignal(true);
+  const selectedProjects: string[] = [];
   const setup = await testRender(
     () => (
       <ThemeContext.Provider value={createThemeState()}>
@@ -262,13 +264,18 @@ test("all non-idle modes add a focused inline input above the spaced rows; group
                 group: "app",
               }))}
               currentRepo={currentRepo()}
+              mouseEnabled={mouseEnabled}
+              onSelectProject={path => {
+                selectedProjects.push(path);
+                setCurrentRepo(path);
+              }}
             />
             <text>after bar</text>
           </box>
         </AppStateContext.Provider>
       </ThemeContext.Provider>
     ),
-    { width: 100, height: 12, useMouse: true },
+    { width: 100, height: 12, useMouse: true, enableMouseMovement: true },
   );
   const descendants = (node: Renderable): Renderable[] =>
     node.getChildren().flatMap(child => [child, ...descendants(child)]);
@@ -348,6 +355,48 @@ test("all non-idle modes add a focused inline input above the spaced rows; group
     expect(lineWith("after bar")).toBe(7);
     expect(lines()[lineWith("echo")]).toContain("◂2");
     expect(lines()[lineWith("echo")]).not.toContain("▸");
+    const projectColor = (name: string) =>
+      setup.captureSpans().lines[lineWith(name)]?.spans.find(span => span.text.includes(name))?.bg;
+    const palette = createThemeState().theme();
+    expect(projectColor("delta")).toEqual(RGBA.fromHex(palette.backgroundElementActive));
+    await setup.mockMouse.moveTo(lines()[lineWith("delta")].indexOf("delta") + 2, lineWith("delta"));
+    await setup.flush();
+    expect(projectColor("delta")).toEqual(RGBA.fromHex(palette.backgroundElementActive));
+    expect(setup.captureSpans().lines[lineWith("delta")]?.spans.find(span => span.text.includes("delta"))?.fg).toEqual(
+      RGBA.fromHex(palette.foreground),
+    );
+    expect(currentRepo()).toBe("/repo/echo");
+    await setup.mockMouse.moveTo(0, 0);
+    await setup.flush();
+    expect(projectColor("delta")).toEqual(RGBA.fromHex(palette.backgroundElementActive));
+    const clickProject = async (
+      name: string,
+      button: typeof MouseButtons.LEFT | typeof MouseButtons.RIGHT = MouseButtons.LEFT,
+    ) => {
+      const row = lineWith(name);
+      await setup.mockMouse.click(lines()[row].indexOf(name) + 2, row, button);
+      await setup.flush();
+    };
+    await clickProject("echo");
+    expect(selectedProjects).toEqual([]); // Current project is a no-op.
+    await clickProject("delta", MouseButtons.RIGHT);
+    expect(selectedProjects).toEqual([]);
+    setMouseEnabled(false);
+    await clickProject("delta");
+    expect(selectedProjects).toEqual([]); // Dialog guard blocks project switches.
+    expect(projectColor("delta")).toEqual(RGBA.fromHex(palette.backgroundElementActive));
+    setMouseEnabled(true);
+    await clickProject("delta");
+    expect(selectedProjects).toEqual(["/repo/delta"]);
+    expect(currentRepo()).toBe("/repo/delta");
+    const projectSpan = setup.captureSpans().lines[lineWith("delta")]?.spans.find(span => span.text.includes("delta"));
+    expect(projectSpan?.bg).toEqual(RGBA.fromHex(createThemeState().theme().accent));
+    setup.resize(180, 12);
+    await setup.flush();
+    await clickProject("charlie");
+    expect(selectedProjects).toEqual(["/repo/delta", "/repo/charlie"]);
+    expect(lines()[lineWith("charlie")]).toContain("◂1");
+    expect(lines()[lineWith("charlie")]).toContain("1▸");
   } finally {
     setup.renderer.destroy();
   }
