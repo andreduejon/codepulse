@@ -85,7 +85,7 @@ export default function ErrorScreen(props: Readonly<ErrorScreenProps>) {
         {/* Footer hint */}
         <box flexDirection="row" width={LOGO_WIDTH} height={1}>
           <box flexGrow={1} />
-          <KeyHint key="q" desc=" quit" />
+          <KeyHint key="q" desc=" quit" onClick={() => renderer.destroy()} />
         </box>
       </box>
     </box>

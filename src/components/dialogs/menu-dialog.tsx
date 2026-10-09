@@ -1,6 +1,6 @@
-import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
+import { MouseButton, type MouseEvent, type Renderable, type ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
-import { createEffect, createSignal, For, type JSX, onCleanup } from "solid-js";
+import { batch, createEffect, createSignal, For, type JSX, onCleanup } from "solid-js";
 import type { ConfigInfo } from "../../config";
 import { SHIFT_JUMP } from "../../constants";
 import { useAppState } from "../../context/state";
@@ -125,6 +125,8 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
 
   // ── Tab state ─────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = createSignal<MenuTab>(lastMenuTab());
+  const [hoveredTab, setHoveredTab] = createSignal<MenuTab | null>(null);
+  const [hoveredItem, setHoveredItem] = createSignal<SettingItem | null>(null);
   createEffect(() => {
     setLastMenuTab(activeTab());
   });
@@ -139,6 +141,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     branchTrackWidths,
     bannerOverflow,
     moveCursor,
+    selectItem,
     activateItem,
     valueDisplay,
     footerVerb,
@@ -208,20 +211,19 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     setEditDraft(item.get());
   };
 
-  const saveEdit = () => {
+  const saveEdit = (): boolean => {
     const idx = editingIdx();
-    if (idx == null) return;
+    if (idx == null) return true;
     const item = activeItems()[idx];
-    if (item?.kind === "editable" && item.isDraftValid && !item.isDraftValid(editDraft())) return;
-    if (item?.kind === "editable") item.set(editDraft());
-    if (item?.kind === "editable" && item.staySelectedOnSave) {
-      setPendingSelectionLabel(item.label);
+    const draft = editDraft();
+    if (item?.kind === "editable" && item.isDraftValid && !item.isDraftValid(draft)) return false;
+    batch(() => {
       setEditingIdx(null);
       setEditDraft("");
-      return;
-    }
-    setEditingIdx(null);
-    setEditDraft("");
+      if (item?.kind === "editable") item.set(draft);
+      if (item?.kind === "editable" && item.staySelectedOnSave) setPendingSelectionLabel(item.label);
+    });
+    return true;
   };
 
   const cancelEdit = () => {
@@ -232,13 +234,44 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     setEditDraft("");
   };
 
+  const close = () => (editingIdx() == null ? props.onClose() : cancelEdit());
+
+  const rowMouse = (item: SettingItem, idx: number) => ({
+    onMouseOver: () => setHoveredItem(item),
+    onMouseOut: () => setHoveredItem(null),
+    onMouseDown: (event: MouseEvent) => {
+      if (event.button !== MouseButton.LEFT) return;
+      event.stopPropagation();
+      // Let the native input position its caret without restarting the draft.
+      if (editingIdx() === idx) return;
+      event.preventDefault();
+      batch(() => {
+        // Saving a provider draft can rebuild/insert rows before the clicked target.
+        const matches = (candidate: SettingItem) =>
+          candidate.kind === item.kind &&
+          (candidate.kind === "branch" && item.kind === "branch"
+            ? candidate.name === item.name
+            : "label" in candidate && "label" in item && candidate.label === item.label);
+        const occurrence = activeItems().slice(0, idx).filter(matches).length;
+        if (!saveEdit()) return;
+        setPendingSelectionLabel(null);
+        const target = activeItems()
+          .map((candidate, index) => (matches(candidate) ? index : -1))
+          .filter(index => index >= 0)[occurrence];
+        if (!selectItem(target)) return;
+        if (item.kind === "editable") startEdit();
+        else activateItem();
+      });
+    },
+  });
+
   createEffect(() => {
     const targetLabel = pendingSelectionLabel();
     if (!targetLabel) return;
     const idx = activeItems().findIndex(item => item.kind === "editable" && item.label === targetLabel);
     if (idx < 0) return;
     setPendingSelectionLabel(null);
-    moveCursor(idx - (selectedItemIndex() ?? 0));
+    selectItem(idx);
   });
 
   createEffect(() => {
@@ -444,7 +477,8 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
         flexDirection="row"
         width="100%"
         paddingX={4}
-        backgroundColor={isSel() ? t().backgroundElement : undefined}
+        {...rowMouse(item, idx)}
+        backgroundColor={isSel() || hoveredItem() === item ? t().backgroundElement : undefined}
       >
         {item.visualPrefix ? (
           <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
@@ -476,7 +510,12 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
         paddingX={4}
       >
         {idx > 0 ? <box height={1} /> : null}
-        <box flexDirection="row" width="100%" backgroundColor={isSel() ? t().backgroundElement : undefined}>
+        <box
+          flexDirection="row"
+          width="100%"
+          {...rowMouse(item, idx)}
+          backgroundColor={isSel() || hoveredItem() === item ? t().backgroundElement : undefined}
+        >
           <text flexShrink={0} wrapMode="none" fg={t().accent}>
             <strong>
               <span>{`${indicator()} ${item.label}`}</span>
@@ -502,7 +541,8 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
         width="100%"
         paddingLeft={6}
         paddingRight={4}
-        backgroundColor={isSel() ? t().backgroundElement : undefined}
+        {...rowMouse(item, idx)}
+        backgroundColor={isSel() || hoveredItem() === item ? t().backgroundElement : undefined}
       >
         <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={isSel() ? t().accent : t().foreground}>
           {item.name}
@@ -552,7 +592,8 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
         flexDirection="row"
         width="100%"
         paddingX={4}
-        backgroundColor={isSelected() ? t().backgroundElement : undefined}
+        {...(!isDisabled() ? rowMouse(item, idx) : {})}
+        backgroundColor={isSelected() || (!isDisabled() && hoveredItem() === item) ? t().backgroundElement : undefined}
       >
         <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={labelColor()}>
           {item.label}
@@ -585,7 +626,8 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
           flexDirection="row"
           width="100%"
           paddingX={4}
-          backgroundColor={isEditing() ? t().backgroundElement : isSel() ? t().backgroundElement : undefined}
+          {...rowMouse(item, idx)}
+          backgroundColor={isEditing() || isSel() || hoveredItem() === item ? t().backgroundElement : undefined}
         >
           {isEditing() ? (
             <input
@@ -617,7 +659,14 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
         flexDirection="row"
         width="100%"
         paddingX={4}
-        backgroundColor={isEditing() ? t().backgroundElementActive : isSel() ? t().backgroundElement : undefined}
+        {...rowMouse(item, idx)}
+        backgroundColor={
+          isEditing()
+            ? t().backgroundElementActive
+            : isSel() || hoveredItem() === item
+              ? t().backgroundElement
+              : undefined
+        }
       >
         <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={labelColor()}>
           {item.label}
@@ -678,56 +727,52 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
         paddingX={1}
         paddingY={1}
       >
-        <DialogTitleBar title="Menu" />
+        <DialogTitleBar title="Menu" onClose={close} />
 
         {/* Tab bar with top accent line per selected tab, muted bottom separator */}
         <box flexDirection="row" width="100%" paddingX={4} flexShrink={0}>
-          {/* Repository tab */}
-          <box
-            width={tabWidth(0)}
-            flexGrow={1}
-            justifyContent="center"
-            flexDirection="row"
-            border={["top"]}
-            borderStyle="single"
-            borderColor={activeTab() === "repository" ? t().accent : t().border}
-          >
-            <text flexShrink={0} wrapMode="none" fg={activeTab() === "repository" ? t().accent : t().foregroundMuted}>
-              <strong>{"Repository"}</strong>
-            </text>
-          </box>
-          {/* Branch tab */}
-          <box
-            width={tabWidth(1)}
-            flexGrow={1}
-            justifyContent="center"
-            flexDirection="row"
-            border={["top"]}
-            borderStyle="single"
-            borderColor={activeTab() === "branch" ? t().accent : t().border}
-          >
-            <text flexShrink={0} wrapMode="none" fg={activeTab() === "branch" ? t().accent : t().foregroundMuted}>
-              <strong>{"Branches"}</strong>
-            </text>
-          </box>
-          {/* Providers tab */}
-          <box
-            width={tabWidth(2)}
-            flexGrow={1}
-            justifyContent="center"
-            flexDirection="row"
-            border={["top"]}
-            borderStyle="single"
-            borderColor={activeTab() === "providers" ? t().accent : t().border}
-          >
-            <text flexShrink={0} wrapMode="none" fg={activeTab() === "providers" ? t().accent : t().foregroundMuted}>
-              <strong>{"Providers"}</strong>
-            </text>
-          </box>
-        </box>
-        {/* Muted separator below tabs */}
-        <box width="100%" paddingX={4} flexShrink={0}>
-          <box flexGrow={1} border={["top"]} borderStyle="single" borderColor={t().border} />
+          <For each={TAB_ORDER}>
+            {(tab, idx) => {
+              const selected = () => activeTab() === tab;
+              const lineColor = () => (selected() ? t().accent : hoveredTab() === tab ? t().foreground : t().border);
+              const textColor = () =>
+                selected() ? t().accent : hoveredTab() === tab ? t().foreground : t().foregroundMuted;
+              return (
+                // biome-ignore lint/a11y/noStaticElementInteractions: TUI tabs also support Left/Right.
+                // biome-ignore lint/a11y/useKeyWithMouseEvents: Keyboard-selected tab already uses accent colors.
+                <box
+                  width={tabWidth(idx())}
+                  flexShrink={0}
+                  flexGrow={1}
+                  flexDirection="column"
+                  onMouseOver={() => setHoveredTab(tab)}
+                  onMouseOut={() => setHoveredTab(null)}
+                  onMouseDown={event => {
+                    if (event.button !== MouseButton.LEFT) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (activeTab() === tab) return;
+                    batch(() => {
+                      if (!saveEdit()) return;
+                      setPendingSelectionLabel(null);
+                      setHoveredItem(null);
+                      setActiveTab(tab);
+                    });
+                  }}
+                >
+                  <box border={["top"]} borderStyle="single" borderColor={lineColor()} flexShrink={0} />
+                  <box flexDirection="row" justifyContent="center" flexShrink={0}>
+                    <text flexShrink={0} wrapMode="none" fg={textColor()}>
+                      <strong>
+                        {tab === "repository" ? "Repository" : tab === "branch" ? "Branches" : "Providers"}
+                      </strong>
+                    </text>
+                  </box>
+                  <box border={["top"]} borderStyle="single" borderColor={t().border} flexShrink={0} />
+                </box>
+              );
+            }}
+          </For>
         </box>
 
         {/* Items list */}
@@ -749,14 +794,22 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
         <DialogFooter>
           {editingIdx() == null ? (
             <>
-              <KeyHint key="enter" desc={` ${footerVerb()}`} />
+              <KeyHint
+                key="enter"
+                desc={` ${footerVerb()}`}
+                onClick={() => {
+                  const idx = selectedItemIndex();
+                  if (idx == null) return;
+                  runMenuAction(activeItems()[idx]?.kind === "editable" ? "start-edit" : "activate");
+                }}
+              />
               {(() => {
                 const idx = selectedItemIndex();
                 const item = idx == null ? undefined : activeItems()[idx];
                 return item?.kind === "copyable" && item.onForget ? (
                   <>
                     <KeyHintSeparator />
-                    <KeyHint key="f" desc=" forget" />
+                    <KeyHint key="f" desc=" forget" onClick={forgetSelected} />
                   </>
                 ) : null;
               })()}
@@ -767,9 +820,9 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
             </>
           ) : (
             <>
-              <KeyHint key="enter" desc=" save" />
+              <KeyHint key="enter" desc=" save" onClick={saveEdit} />
               <KeyHintSeparator />
-              <KeyHint key="esc" desc=" cancel" />
+              <KeyHint key="esc" desc=" cancel" onClick={cancelEdit} />
             </>
           )}
         </DialogFooter>

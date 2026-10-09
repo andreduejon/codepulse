@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
-import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
+import { MouseButton, type Renderable, type ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useRenderer } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import packageJson from "../../package.json";
@@ -68,6 +68,7 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
   const hasRepos = () => repos().length > 0;
   const firstSelectableIndex = () => selectableIndexes()[0] ?? 0;
   const [cursor, setCursor] = createSignal(firstSelectableIndex());
+  const [hoveredRow, setHoveredRow] = createSignal<ProjectSelectorRow | null>(null);
   /** Whether the path input field has focus (cursor is on the input row). */
   const selectedRow = () => rows()[cursor()];
   const pathFocused = () => selectedRow()?.kind === "path-input";
@@ -75,9 +76,9 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
   let scrollboxRef: ScrollBoxRenderable | undefined;
   const rowRefs = new Map<ProjectSelectorRow, Renderable>();
   const escapeHint = () => {
-    if (pathFocused() && hasRepos()) return " list  ";
-    if (inApp()) return " back  ";
-    return " quit  ";
+    if (pathFocused() && hasRepos()) return " list";
+    if (inApp()) return " back";
+    return " quit";
   };
 
   createEffect(() => {
@@ -110,7 +111,10 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
 
   /** Handle Esc — go back (in-app) or quit (startup). */
   const handleEscape = () => {
-    if (props.onCancel) {
+    if (pathFocused() && hasRepos()) {
+      setCursor(firstSelectableIndex());
+      setPathInputValue("");
+    } else if (props.onCancel) {
       props.onCancel();
     } else {
       renderer.destroy();
@@ -130,6 +134,14 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
     const nextPos = Math.max(0, Math.min(selectable.length - 1, pos + delta));
     setCursor(selectable[nextPos] ?? cursor());
   };
+  const openSelected = () => {
+    const row = selectedRow();
+    if (row?.kind === "repo" && !row.current) selectRepo(row.repo.path);
+    else if (row?.kind === "path-input") {
+      const value = pathInputValue().trim();
+      if (value) selectRepo(resolve(value.startsWith("~") ? value.replace("~", homedir()) : value));
+    }
+  };
 
   useKeyboard(e => {
     if (e.eventType === "release") return;
@@ -145,12 +157,7 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
     if (pathFocused()) {
       if (e.name === "escape") {
         e.preventDefault();
-        if (hasRepos()) {
-          setCursor(firstSelectableIndex());
-          setPathInputValue("");
-        } else {
-          handleEscape();
-        }
+        handleEscape();
         return;
       }
       if (e.name === "up") {
@@ -162,11 +169,7 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
       }
       if (e.name === "return") {
         e.preventDefault();
-        const value = pathInputValue().trim();
-        if (value) {
-          const expanded = value.startsWith("~") ? value.replace("~", homedir()) : value;
-          selectRepo(resolve(expanded));
-        }
+        openSelected();
         return;
       }
       // Let the input widget handle all other keys (including j, k, etc.)
@@ -187,16 +190,7 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
         break;
       case "return": {
         e.preventDefault();
-        const row = selectedRow();
-        if (row?.kind === "repo" && !row.current) {
-          selectRepo(row.repo.path);
-        } else if (row?.kind === "path-input") {
-          const value = pathInputValue().trim();
-          if (value) {
-            const expanded = value.startsWith("~") ? value.replace("~", homedir()) : value;
-            selectRepo(resolve(expanded));
-          }
-        }
+        openSelected();
         break;
       }
       case "f":
@@ -253,6 +247,8 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
             <box flexDirection="column">
               <For each={rows()}>
                 {(row, idx) => (
+                  // biome-ignore lint/a11y/noStaticElementInteractions: TUI rows also support keyboard navigation and Enter.
+                  // biome-ignore lint/a11y/useKeyWithMouseEvents: Arrow keys and Enter provide the same actions.
                   <box
                     ref={(el: Renderable) => {
                       rowRefs.set(row, el);
@@ -260,8 +256,23 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
                     flexDirection="row"
                     width="100%"
                     paddingX={4}
+                    onMouseOver={() => {
+                      if (isSelectableProjectSelectorRow(row)) setHoveredRow(row);
+                    }}
+                    onMouseOut={() => setHoveredRow(null)}
+                    onMouseDown={event => {
+                      if (event.button !== MouseButton.LEFT || !isSelectableProjectSelectorRow(row)) return;
+                      // Keep native caret positioning when the path input already has focus.
+                      if (row.kind === "path-input" && pathFocused()) return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setCursor(idx());
+                      if (row.kind === "repo") selectRepo(row.repo.path);
+                    }}
                     backgroundColor={
-                      cursor() === idx() && isSelectableProjectSelectorRow(row) ? t().backgroundElement : undefined
+                      (cursor() === idx() || hoveredRow() === row) && isSelectableProjectSelectorRow(row)
+                        ? t().backgroundElement
+                        : undefined
                     }
                   >
                     <Show
@@ -345,17 +356,17 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
         {/* Footer hints */}
         <box flexDirection="row" width={LOGO_WIDTH} height={1}>
           <box flexGrow={1} />
-          <KeyHint key="enter" desc=" open" />
+          <KeyHint key="enter" desc=" open" onClick={openSelected} />
           <KeyHintSeparator />
           <Show when={!pathFocused() && hasRepos()}>
-            <KeyHint key="f" desc=" forget" />
+            <KeyHint key="f" desc=" forget" onClick={forgetSelectedRepo} />
           </Show>
           <Show when={!pathFocused() && hasRepos()}>
             <KeyHintSeparator />
           </Show>
-          <KeyHint key="esc" desc={escapeHint()} />
+          <KeyHint key="esc" desc={escapeHint()} onClick={handleEscape} />
           <KeyHintSeparator />
-          <KeyHint key="q" desc=" quit" />
+          <KeyHint key="q" desc=" quit" onClick={() => renderer.destroy()} />
         </box>
       </box>
     </box>

@@ -1,9 +1,11 @@
-import type { JSX } from "solid-js";
+import { MouseButton } from "@opentui/core";
+import { createSignal, type JSX, Show } from "solid-js";
 import { useT } from "../hooks/use-t";
 
 interface KeyHintProps {
   key: JSX.Element | string;
   desc: JSX.Element | string;
+  onClick?: () => void;
 }
 
 /**
@@ -15,15 +17,40 @@ interface KeyHintProps {
  */
 export function KeyHint(props: Readonly<KeyHintProps>) {
   const t = useT();
+  const [hovered, setHovered] = createSignal(false);
   return (
-    <>
-      <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-        {props.key}
-      </text>
-      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+    <Show
+      when={props.onClick}
+      fallback={
+        <>
+          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
+            {props.key}
+          </text>
+          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+            {props.desc}
+          </text>
+        </>
+      }
+    >
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: TUI action also has its displayed keyboard shortcut. */}
+      {/* biome-ignore lint/a11y/useKeyWithMouseEvents: Keyboard invokes the same action. */}
+      <text
+        flexShrink={0}
+        wrapMode="none"
+        fg={hovered() ? t().foreground : t().foregroundMuted}
+        onMouseOver={() => setHovered(true)}
+        onMouseOut={() => setHovered(false)}
+        onMouseDown={event => {
+          if (event.button !== MouseButton.LEFT) return;
+          event.preventDefault();
+          event.stopPropagation();
+          props.onClick?.();
+        }}
+      >
+        <span style={{ fg: t().foreground }}>{props.key}</span>
         {props.desc}
       </text>
-    </>
+    </Show>
   );
 }
 
