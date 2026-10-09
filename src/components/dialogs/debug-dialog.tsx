@@ -52,7 +52,7 @@ export default function DebugDialog(props: Readonly<{ onClose: () => void; gitCo
         paddingX={1}
         paddingY={1}
       >
-        <DialogTitleBar title="Debug" />
+        <DialogTitleBar title="Debug" onClose={props.onClose} />
         <box width="100%" paddingX={4} flexShrink={0}>
           <box flexGrow={1} border={["top"]} borderStyle="single" borderColor={t().accent} />
         </box>

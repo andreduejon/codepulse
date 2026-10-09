@@ -1,4 +1,6 @@
-import type { JSX } from "solid-js";
+import { MouseButton } from "@opentui/core";
+import { createSignal, type JSX, Show } from "solid-js";
+import { useT } from "../../hooks/use-t";
 import { KeyHint } from "../key-hint";
 import { TITLE_SEP } from "./title-utils";
 
@@ -54,7 +56,9 @@ export function DialogOverlay(
  * When `title` is JSX the caller controls styling (used by the diff dialog
  * for per-segment colors).
  */
-export function DialogTitleBar(props: Readonly<{ title: string | JSX.Element }>) {
+export function DialogTitleBar(props: Readonly<{ title: string | JSX.Element; onClose?: () => void }>) {
+  const t = useT();
+  const [hovered, setHovered] = createSignal(false);
   return (
     <>
       <box flexDirection="row" width="100%" paddingX={4} flexShrink={0}>
@@ -68,7 +72,26 @@ export function DialogTitleBar(props: Readonly<{ title: string | JSX.Element }>)
           )}
         </text>
         <box width={1} flexShrink={0} />
-        <KeyHint key="esc" desc=" close" />
+        <Show when={props.onClose} fallback={<KeyHint key="esc" desc=" close" />}>
+          {/* biome-ignore lint/a11y/noStaticElementInteractions: TUI close also supports Escape. */}
+          {/* biome-ignore lint/a11y/useKeyWithMouseEvents: Escape invokes the same close action. */}
+          <text
+            flexShrink={0}
+            wrapMode="none"
+            fg={hovered() ? t().foreground : t().foregroundMuted}
+            onMouseOver={() => setHovered(true)}
+            onMouseOut={() => setHovered(false)}
+            onMouseDown={event => {
+              if (event.button !== MouseButton.LEFT) return;
+              event.preventDefault();
+              event.stopPropagation();
+              props.onClose?.();
+            }}
+          >
+            <span style={{ fg: t().foreground }}>esc</span>
+            {" close"}
+          </text>
+        </Show>
       </box>
       <box height={1} flexShrink={0} />
     </>
