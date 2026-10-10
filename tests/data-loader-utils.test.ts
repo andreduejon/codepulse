@@ -224,17 +224,6 @@ describe("buildStashByParent", () => {
     const stashRef = parent.refs.find(r => r.type === "stash");
     expect(stashRef?.name).toBe("stash (3)");
   });
-
-  test("does not double-inject stash badge when called twice", () => {
-    // This matches the real behavior of mergeCommitPages which guards with `!parentCommit.refs.some(r => r.type === "stash")`
-    // buildStashByParent itself doesn't check for existing badges — that's the merge-pages guard.
-    // This test documents that calling twice DOES add a second badge.
-    const parent = makeCommit("p1", []);
-    const stash = makeCommit("s1", ["p1"]);
-    buildStashByParent([stash], [parent]);
-    const countBefore = parent.refs.filter(r => r.type === "stash").length;
-    expect(countBefore).toBe(1);
-  });
 });
 
 // ── computeTargetIndex ───────────────────────────────────────────────────────

@@ -340,11 +340,9 @@ export function useDetailCursor({
   };
 
   // Keep navRef updated whenever interactive items change.
-  // IMPORTANT: When the files tab is active, FileListView owns navRef exclusively.
-  // When the github-actions tab is active, ActionsDetailTab owns navRef exclusively.
-  // We must not overwrite it here in those cases.
+  // Files and every provider tab own their navigation refs exclusively.
   createEffect(() => {
-    if (navRef && activeTab() !== "files" && activeTab() !== "github-actions") {
+    if (navRef && activeTab() !== "files" && !isProviderDetailView(activeTab())) {
       navRef.itemCount = interactiveItems().length;
       navRef.activateCurrentItem = activateCurrentItem;
       navRef.itemRefs = itemRefs;
@@ -371,10 +369,9 @@ export function useDetailCursor({
   });
 
   // Keep the footer's contextual enter-key hint in sync with the cursor position.
-  // IMPORTANT: FileListView owns this on the files tab via its own createEffect.
-  // ActionsDetailTab owns this on the github-actions tab via its own createEffect.
+  // Files and every provider tab own their contextual action hint.
   createEffect(() => {
-    if (activeTab() === "files" || activeTab() === "github-actions") return;
+    if (activeTab() === "files" || isProviderDetailView(activeTab())) return;
     const items = interactiveItems();
     const idx = state.detailCursorIndex();
     if (!state.detailFocused() || idx < 0 || idx >= items.length) {
@@ -393,7 +390,7 @@ export function useDetailCursor({
         break;
       case "child":
       case "parent":
-        actions.setDetailCursorAction("navigate");
+        actions.setDetailCursorAction("jump");
         break;
       case "stash-entry":
         actions.setDetailCursorAction(expandedStashes().has(item.stashHash) ? "collapse" : "expand");

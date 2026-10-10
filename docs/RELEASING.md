@@ -7,8 +7,25 @@ every binary passes validation.
 ## Prepare
 
 1. Update `package.json`, `bun.lock`, and `CHANGELOG.md` to the same version.
-2. Merge the release changes through `develop` and then `main`.
-3. Confirm CI passes for the exact `main` commit being released. Verify the
+2. Update user documentation for changed controls and configuration. Run local
+   checks and build the host-platform executable with its embedded-asset smoke test:
+
+   ```sh
+   bun install --frozen-lockfile
+   bun run check
+   bun run check:types
+   bun run test
+   CODEPULSE_BUILD_ASSET_SMOKE=1 bun run build
+   ```
+
+   The build replaces `dist/`. On macOS, sign both executables using the
+   entitlements and commands in the Release workflow before running them.
+   Verify the binary's `--version`, embedded assets, and interactive startup
+   using `scripts/smoke-binary.exp`. CI performs these checks on all four targets.
+   Manually check wide/compact resizing, mouse and keyboard navigation, dialog
+   return paths, and repository switching before tagging.
+3. Merge the release changes through `develop` and then `main`.
+4. Confirm CI passes for the exact `main` commit being released. Verify the
    commit shown by the workflow run, not only the branch name:
 
 ```sh

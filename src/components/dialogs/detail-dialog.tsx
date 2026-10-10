@@ -8,6 +8,7 @@ import { useTerminalDimensions } from "@opentui/solid";
 import { useAppState } from "../../context/state";
 import { useT } from "../../hooks/use-t";
 import DetailPanel, { type DetailPanelProps } from "../detail-panel";
+import { KeyHint, KeyHintSeparator } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
 export function DetailDialog(props: Readonly<DetailPanelProps & { onClose: () => void }>) {
@@ -30,30 +31,22 @@ export function DetailDialog(props: Readonly<DetailPanelProps & { onClose: () =>
         paddingX={1}
         paddingY={1}
       >
-        <DialogTitleBar title="Details" />
+        <DialogTitleBar title="Details" onClose={props.onClose} />
         {/* paddingX=4 matches other dialogs' inner content padding (outer box already has paddingX=1) */}
         <box flexDirection="column" flexGrow={1} paddingX={4}>
-          <DetailPanel {...props} contentWidth={dialogWidth() - 10} />
+          <DetailPanel {...props} mouseEnabled contentWidth={dialogWidth() - 10} />
         </box>
         <DialogFooter>
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            enter
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {` ${enterVerb()}  `}
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            {"←/→"}
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {" switch tab  "}
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
-            {"↑/↓"}
-          </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {" navigate"}
-          </text>
+          <KeyHint
+            key="enter"
+            desc={` ${enterVerb()}`}
+            disabled={props.navRef.itemCount === 0}
+            onClick={() => props.navRef.activateCurrentItem?.()}
+          />
+          <KeyHintSeparator />
+          <KeyHint key="←/→" desc=" switch tab" />
+          <KeyHintSeparator />
+          <KeyHint key="↑/↓" desc=" navigate" />
         </DialogFooter>
       </box>
     </DialogOverlay>

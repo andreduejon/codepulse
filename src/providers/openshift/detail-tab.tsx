@@ -1,4 +1,4 @@
-import type { Renderable } from "@opentui/core";
+import { MouseButton, type MouseEvent, type Renderable } from "@opentui/core";
 import { createEffect, createMemo, createSignal, For, Show, untrack } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
 import { useT } from "../../hooks/use-t";
@@ -12,6 +12,8 @@ import {
 } from "./types";
 
 export interface OpenShiftDetailTabProps {
+  mouseEnabled?: boolean;
+  onMouseFocus?: () => void;
   sha: string;
   getCommitData: (sha: string) => OpenShiftCommitData | null;
   fetchCommitData?: (sha: string, force?: boolean) => Promise<void>;
@@ -100,6 +102,25 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
   const [expandedNamespaces, setExpandedNamespaces] = createSignal<Set<string>>(new Set());
   const itemRefs: Renderable[] = [];
   const refsByKey = new Map<string, Renderable>();
+  const [hoveredKey, setHoveredKey] = createSignal<string | null>(null);
+  const mouseRow = (key: string, index: () => number) => ({
+    onMouseOver: () => setHoveredKey(key),
+    onMouseOut: () => setHoveredKey(null),
+    onMouseDown: (event: MouseEvent) => {
+      if (!props.mouseEnabled || event.button !== MouseButton.LEFT) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (index() < 0) return;
+      if (key === "reload" && (!reloadEnabled() || reloadBusy())) return;
+      props.onMouseFocus?.();
+      props.setDetailCursorIndex(index());
+      activateCurrentItem();
+    },
+  });
+  const hoverBg = (key: string) =>
+    props.mouseEnabled && hoveredKey() === key && (key !== "reload" || (reloadEnabled() && !reloadBusy()))
+      ? t().backgroundElement
+      : undefined;
 
   const flatItemKey = (item: FlatItem) => {
     if (item.kind === "reload") return "reload";
@@ -165,20 +186,22 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
     else if (cursor < 0 || cursor >= count) props.setDetailCursorIndex(Math.max(0, Math.min(count - 1, cursor)));
   });
 
+  const activateCurrentItem = () => {
+    const item = flatItems()[props.detailCursorIndex()];
+    if (!item) return false;
+    if (item.kind === "reload") {
+      if (reloadEnabled() && !reloadBusy()) void props.fetchCommitData?.(props.sha, true);
+    } else if (item.kind === "namespace") toggleNamespace(item.namespace);
+    else props.onOpenResource?.(item.resource);
+    return false;
+  };
+
   createEffect(() => {
     if (!props.navRef) return;
     const items = flatItems();
     props.navRef.itemCount = items.length;
     syncItemRefs();
-    props.navRef.activateCurrentItem = () => {
-      const item = flatItems()[props.detailCursorIndex()];
-      if (!item) return false;
-      if (item.kind === "reload") {
-        if (reloadEnabled() && !reloadBusy()) void props.fetchCommitData?.(props.sha, true);
-      } else if (item.kind === "namespace") toggleNamespace(item.namespace);
-      else props.onOpenResource?.(item.resource);
-      return false;
-    };
+    props.navRef.activateCurrentItem = activateCurrentItem;
   });
 
   createEffect(() => {
@@ -200,28 +223,29 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
     const textColor = () => (isCursored() ? t().accent : t().foreground);
     return (
       <box
+        {...mouseRow(`resource:${resource.id}`, idx)}
         ref={(el: Renderable) => {
           refsByKey.set(`resource:${resource.id}`, el);
           syncItemRefs();
         }}
         flexDirection="row"
         width="100%"
-        backgroundColor={isCursored() ? t().backgroundElementActive : undefined}
+        backgroundColor={isCursored() ? t().backgroundElementActive : hoverBg(`resource:${resource.id}`)}
       >
-        <text flexShrink={0} wrapMode="none" fg={t().border}>
+        <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().border}>
           {lead}
           {connector}
         </text>
-        <text flexShrink={1} wrapMode="none" truncate fg={textColor()}>
+        <text selectable={!props.mouseEnabled} flexShrink={1} wrapMode="none" truncate fg={textColor()}>
           {compactResourceName(resource)}
         </text>
         <Show when={isCachedOpenShiftResource(resource)}>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+          <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
             {" (cached)"}
           </text>
         </Show>
         <box flexGrow={1} />
-        <text flexShrink={0} width={2} wrapMode="none" fg={color()}>
+        <text selectable={!props.mouseEnabled} flexShrink={0} width={2} wrapMode="none" fg={color()}>
           {statusMark(resource.status).padStart(2)}
         </text>
       </box>
@@ -239,15 +263,17 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
   return (
     <box flexDirection="column" width="100%">
       <box
+        {...mouseRow("reload", reloadIdx)}
         ref={(el: Renderable) => {
           refsByKey.set("reload", el);
           syncItemRefs();
         }}
         flexDirection="row"
         width="100%"
-        backgroundColor={isReloadCursored() ? t().backgroundElementActive : undefined}
+        backgroundColor={isReloadCursored() ? t().backgroundElementActive : hoverBg("reload")}
       >
         <text
+          selectable={!props.mouseEnabled}
           flexGrow={1}
           fg={!reloadEnabled() ? t().foregroundMuted : isReloadCursored() ? t().accent : t().foreground}
           wrapMode="none"
@@ -255,7 +281,7 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
           {reloadLabel()}
         </text>
         <Show when={reloadStatus()}>
-          <text flexShrink={0} fg={t().foregroundMuted} wrapMode="none">
+          <text selectable={!props.mouseEnabled} flexShrink={0} fg={t().foregroundMuted} wrapMode="none">
             {reloadStatus()}
           </text>
         </Show>
@@ -297,21 +323,30 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
               return (
                 <box flexDirection="column" width="100%">
                   <box
+                    {...mouseRow(`namespace:${ns.namespace}`, namespaceIdx)}
                     ref={(el: Renderable) => {
                       refsByKey.set(`namespace:${ns.namespace}`, el);
                       syncItemRefs();
                     }}
                     flexDirection="row"
                     width="100%"
-                    backgroundColor={isNamespaceCursored() ? t().backgroundElementActive : undefined}
+                    backgroundColor={
+                      isNamespaceCursored() ? t().backgroundElementActive : hoverBg(`namespace:${ns.namespace}`)
+                    }
                   >
-                    <text flexShrink={0} wrapMode="none" fg={t().border}>
+                    <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().border}>
                       {namespaceConnector()}
                     </text>
-                    <text flexShrink={0} wrapMode="none" fg={isNamespaceCursored() ? t().accent : t().foregroundMuted}>
+                    <text
+                      selectable={!props.mouseEnabled}
+                      flexShrink={0}
+                      wrapMode="none"
+                      fg={isNamespaceCursored() ? t().accent : t().foregroundMuted}
+                    >
                       {namespaceIsExpanded() ? "▾ " : "▸ "}
                     </text>
                     <text
+                      selectable={!props.mouseEnabled}
                       flexGrow={1}
                       flexShrink={1}
                       wrapMode="none"
@@ -320,7 +355,7 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
                     >
                       {ns.namespace}
                     </text>
-                    <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                    <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
                       {String(nsResources().length).padStart(3)}
                     </text>
                   </box>

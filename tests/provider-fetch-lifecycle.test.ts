@@ -131,6 +131,37 @@ describe("useProviderFetchLifecycle", () => {
     });
   });
 
+  test("repo switches settle cancelled initial fetches and refreshes without rejecting", async () => {
+    let lifecycle!: ReturnType<typeof useProviderFetchLifecycle>;
+    const waitForAbort = ({ signal }: { signal?: AbortSignal }) =>
+      new Promise<void>((_resolve, reject) => {
+        signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
+      });
+    createRoot(dispose => {
+      disposers.push(dispose);
+      const { state } = createAppState(100, 0, 0);
+      lifecycle = useProviderFetchLifecycle({
+        state,
+        providerId: "jenkins",
+        identity: () => "id",
+        isAvailable: () => true,
+        isBackgroundReady: () => false,
+        skipShaBackground: true,
+        queriedSHAs: new Set(),
+        reportUnavailable: () => {},
+        runInitialFetch: waitForAbort,
+        runRefresh: waitForAbort,
+        onResetCaches: () => {},
+      });
+    });
+    const initial = lifecycle.fetchInitial();
+    lifecycle.resetCaches();
+    await expect(initial).resolves.toBeUndefined();
+    const refresh = lifecycle.fetchRefresh();
+    lifecycle.resetCaches();
+    await expect(refresh).resolves.toBeUndefined();
+  });
+
   test("clearProviderState removes badges, statuses, and refresh timestamps", () => {
     createRoot(dispose => {
       disposers.push(dispose);

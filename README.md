@@ -87,6 +87,10 @@ Use `codepulse -h` for complete shortcuts, commands, and provider setup.
 | `p`                       | Enter path mode                      |
 | `shift + ←` / `shift + →` | Switch project within current group  |
 
+`/` and `p` open the same temporary inline input as badge clicks. Enter applies; Esc cancels
+without changing the current filter. Normal clears highlighting, not branch
+perspective. Colon commands share the inline input row.
+
 ### Details
 
 | Key                       | Action                                   |
@@ -153,6 +157,7 @@ Switch themes live with `:theme`, or persist a theme in repo configuration.
 | Ayu Mirage                   | `ayu-mirage`         |
 | Synthwave '84                | `synthwave`          |
 | Rosé Pine                    | `rose-pine`          |
+| Olive Garden                 | `olive-garden`       |
 
 ## Roadmap
 

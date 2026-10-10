@@ -119,11 +119,17 @@ export function useAncestry(state: AppState, actions: AppActions) {
     actions.setAncestrySet(buildFirstParentChain(hash));
   };
 
+  /** Mouse selection outside the active chain starts a new backbone. */
+  const reanchorIfOutsideChain = (hash: string) => {
+    const chain = state.ancestrySet();
+    if (chain !== null && !chain.has(hash)) setAnchor(hash);
+  };
+
   /** Deactivate ancestry mode. */
   const clearAnchor = () => {
     ancestryAnchorHash = null;
     actions.setAncestrySet(null);
   };
 
-  return { setAnchor, clearAnchor, buildFirstParentChain };
+  return { setAnchor, clearAnchor, buildFirstParentChain, reanchorIfOutsideChain };
 }

@@ -10,7 +10,15 @@ const SPINNER_FRAMES = ["\u28FE", "\u28FD", "\u28FB", "\u28BF", "\u287F", "\u283
 const SPINNER_FRAME_MS = 120;
 
 export default function Footer(
-  props: Readonly<{ commandBarMode: () => CommandBarMode; filterActive?: boolean; compact?: boolean }>,
+  props: Readonly<{
+    commandBarMode: () => CommandBarMode;
+    filterActive?: boolean;
+    compact?: boolean;
+    onOpenDetails?: () => void;
+    onConfirm?: () => void;
+    onClose?: () => void;
+    mouseEnabled?: boolean;
+  }>,
 ) {
   const t = useT();
   const { state } = useAppState();
@@ -97,12 +105,17 @@ export default function Footer(
             <KeyHintSeparator />
           </Show>
           <Show when={enterAction()}>
-            <KeyHint key="enter" desc={` ${enterAction()}`} />
+            <KeyHint
+              key="enter"
+              desc={` ${enterAction()}`}
+              disabled={!state.selectedCommit() || !enterAction()}
+              onClick={props.mouseEnabled === false ? undefined : props.onConfirm}
+            />
           </Show>
           <Show when={enterAction()}>
             <KeyHintSeparator />
           </Show>
-          <KeyHint key="esc" desc=" back" />
+          <KeyHint key="esc" desc=" back" onClick={props.mouseEnabled === false ? undefined : props.onClose} />
           <KeyHintSeparator />
           <KeyHint key="←/→" desc=" switch tab" />
           <KeyHintSeparator />
@@ -111,9 +124,9 @@ export default function Footer(
 
         {/* ── Input modes (command / search / path) ────────────────────────── */}
         <Show when={!state.detailFocused() && mode() !== "idle"}>
-          <KeyHint key="enter" desc=" confirm" />
+          <KeyHint key="enter" desc=" confirm" onClick={props.mouseEnabled === false ? undefined : props.onConfirm} />
           <KeyHintSeparator />
-          <KeyHint key="esc" desc=" cancel" />
+          <KeyHint key="esc" desc=" cancel" onClick={props.mouseEnabled === false ? undefined : props.onClose} />
           <KeyHintSeparator />
           <KeyHint key="shift ←/→" desc=" switch project" />
         </Show>
@@ -126,7 +139,7 @@ export default function Footer(
           </Show>
           {/* Ancestry mode active */}
           <Show when={ancestryMode()}>
-            <KeyHint key="esc" desc=" clear" />
+            <KeyHint key="esc" desc=" clear" onClick={props.mouseEnabled === false ? undefined : props.onClose} />
           </Show>
           <Show when={ancestryMode()}>
             <KeyHintSeparator />
@@ -135,7 +148,7 @@ export default function Footer(
           {/* No ancestry active */}
           <Show when={!ancestryMode()}>
             <Show when={props.filterActive}>
-              <KeyHint key="esc" desc=" clear" />
+              <KeyHint key="esc" desc=" clear" onClick={props.mouseEnabled === false ? undefined : props.onClose} />
             </Show>
             <Show when={props.filterActive}>
               <KeyHintSeparator />
@@ -149,9 +162,12 @@ export default function Footer(
           <Show when={nextProviderLabel()}>
             <KeyHintSeparator />
           </Show>
-          <Show when={props.compact} fallback={<KeyHint key="enter/→" desc=" show details" />}>
-            <KeyHint key="enter" desc=" show details" />
-          </Show>
+          <KeyHint
+            key={props.compact ? "enter" : "enter/→"}
+            desc={props.compact ? " details" : " show details"}
+            disabled={!state.selectedCommit()}
+            onClick={props.mouseEnabled === false ? undefined : props.onOpenDetails}
+          />
           <KeyHintSeparator />
           <KeyHint key="shift ←/→" desc=" switch project" />
           <KeyHintSeparator />

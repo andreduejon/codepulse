@@ -2,6 +2,55 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.11.0] - 2026-10-10
+
+### Added
+
+- **Mouse navigation** — select whole graph commit blocks, scroll history without
+  changing selection, and load the next page near the viewport bottom.
+- **Clickable detail views** — tabs, copyable metadata, parent/child jumps,
+  files, directories, stashes, and GitHub Actions, Jenkins, OpenShift, and Snyk
+  detail actions work in both the sidebar and compact dialog.
+- **Dialog and footer controls** — mouse support for menus, repository switching,
+  theme preview/confirmation, help tabs, diff/blame, job logs, resource views,
+  welcome/error actions, and confirm/cancel/back controls.
+- **Olive Garden theme** — a metallic olive accent and muted, alternating graph
+  and provider colors, selectable as `olive-garden`.
+
+### Changed
+
+- Arrange the command bar into two rows on wide graph panels and three rows on
+  narrow panels. Show all enabled providers with quiet selected/hover styling.
+- Click project badges to switch repositories; click hidden-project counts to
+  browse the three-project window without switching. Keyboard Shift+Left/Right
+  continues to switch repositories directly.
+- Search and path editing now use a temporary inline input. Enter applies the
+  draft; Escape cancels without clearing the applied filter. Mode badges show
+  focus and abbreviated applied terms; typing no longer filters live.
+- Change keyboard focus only on clicks or keyboard navigation, not hover or
+  wheel scrolling. Dialogs block background mouse input. Action hints use
+  text-only hover and do not select characters when clicked.
+- Keep Git's theme color independent of the active provider accent. Existing
+  themes retain their original Git colors.
+- Move the Help version label to the footer and label parent/child activation
+  as `jump` rather than `navigate`.
+- Remove unused command-bar/debug helpers and redundant tests; add native
+  renderer regressions for mouse, focus, resize, and input behavior.
+
+### Fixed
+
+- Consume expected repository-switch aborts without error logging and share one
+  graph resize listener instead of subscribing once per row.
+- Preserve the Info tab during mouse parent/child navigation; reanchor active
+  ancestry only when clicking a commit outside the current chain.
+- Prevent generic detail navigation from overwriting Jenkins, OpenShift, and
+  Snyk navigation refs and contextual action hints.
+- Preserve provider input drafts and restore the intended selection when saving
+  entries rebuilds menu rows.
+- Keep keyboard log scrolling aligned with wheel scrolling and make wrapping
+  update existing log rows immediately.
+- Return from job logs to the Details dialog in compact mode.
+
 ## [0.10.0] - 2026-09-01
 
 ### Added

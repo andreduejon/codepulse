@@ -1,4 +1,4 @@
-import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
+import { MouseButton, type Renderable, type ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createSignal, For, onCleanup } from "solid-js";
 import { SHIFT_JUMP } from "../../constants";
@@ -90,7 +90,7 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void }>) {
         paddingX={1}
         paddingY={1}
       >
-        <DialogTitleBar title="Color Theme" />
+        <DialogTitleBar title="Color Theme" onClose={props.onClose} />
 
         {/* Theme list — scrollable when terminal height is small */}
         <scrollbox
@@ -108,6 +108,8 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void }>) {
                 const isSelected = () => cursor() === optIndex();
 
                 return (
+                  // biome-ignore lint/a11y/noStaticElementInteractions: TUI themes support arrows and Enter.
+                  // biome-ignore lint/a11y/useKeyWithMouseEvents: Keyboard selection already highlights the theme row.
                   <box
                     ref={(el: Renderable) => {
                       itemRefs[optIndex()] = el;
@@ -116,6 +118,15 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void }>) {
                     width="100%"
                     paddingX={4}
                     backgroundColor={isSelected() ? t().backgroundElement : undefined}
+                    onMouseOver={() => setCursor(optIndex())}
+                    onMouseDown={event => {
+                      if (event.button !== MouseButton.LEFT) return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setCursor(optIndex());
+                      setTheme(opt.key);
+                      confirmTheme();
+                    }}
                   >
                     <text flexGrow={1} wrapMode="none" fg={isSelected() ? t().accent : t().foreground}>
                       {opt.name}
@@ -136,7 +147,7 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void }>) {
 
         {/* Navigation footer */}
         <DialogFooter>
-          <KeyHint key="enter" desc=" confirm" />
+          <KeyHint key="enter" desc=" confirm" onClick={confirmTheme} />
           <KeyHintSeparator />
           <KeyHint key="↑/↓" desc=" navigate" />
         </DialogFooter>

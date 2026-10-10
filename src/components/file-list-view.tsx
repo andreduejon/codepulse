@@ -26,6 +26,9 @@ export interface FileListViewProps {
   navRef: DetailNavRef;
   /** Callback to open the diff+blame dialog for a file. */
   onOpenDiff?: (target: DiffTarget) => void;
+  /** Opt-in for Files-tab row mouse controls. */
+  mouseEnabled?: boolean;
+  onMouseFocus?: () => void;
 }
 
 type InteractiveItem =
@@ -105,6 +108,13 @@ export default function FileListView(props: Readonly<FileListViewProps>) {
     return false;
   };
 
+  const activateMouseItem = (itemIndex: number) => {
+    if (!props.mouseEnabled || itemIndex < 0 || itemIndex >= interactiveItems().length) return;
+    props.onMouseFocus?.();
+    actions.setDetailCursorIndex(itemIndex);
+    activateCurrentItem();
+  };
+
   // Keep navRef updated whenever interactive items change
   createEffect(() => {
     if (props.navRef) {
@@ -168,6 +178,9 @@ export default function FileListView(props: Readonly<FileListViewProps>) {
 
           return (
             <FileTreeEntry
+              mouseEnabled={props.mouseEnabled}
+              itemIndex={itemIdx()}
+              onActivate={activateMouseItem}
               row={treeRow}
               cursored={cursored()}
               collapsed={collapsed()}
