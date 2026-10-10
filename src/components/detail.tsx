@@ -826,6 +826,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
             {/* ══════════════ Files tab ══════════════ */}
             <Show when={activeTab() === "files"}>
               <FileListView
+                mouseEnabled={props.mouseEnabled}
                 files={() => detail()?.files ?? []}
                 loading={() => state.detailLoading()}
                 commitHash={() => commit()?.hash ?? ""}

@@ -104,7 +104,7 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
     }
   };
 
-  /** Activate the item at the current cursor index. Returns true if it was a jump. */
+  /** Activate the item at the current cursor index. No jump-to-commit in this view. */
   const activateCurrentItem = (): boolean => {
     const items = interactiveItems();
     const idx = state.detailCursorIndex();
@@ -112,6 +112,12 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
       activateItem(items[idx]);
     }
     return false; // no jump-to-commit in uncommitted view
+  };
+
+  const activateMouseItem = (itemIndex: number) => {
+    if (!props.mouseEnabled || itemIndex < 0 || itemIndex >= interactiveItems().length) return;
+    actions.setDetailCursorIndex(itemIndex);
+    activateCurrentItem();
   };
 
   // Keep navRef updated
@@ -252,6 +258,9 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
 
             return (
               <FileTreeEntry
+                mouseEnabled={props.mouseEnabled}
+                itemIndex={itemIdx()}
+                onActivate={activateMouseItem}
                 row={treeRow}
                 cursored={cursored()}
                 collapsed={collapsed()}
