@@ -145,6 +145,17 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
     );
   });
 
+  const toggleWrap = () => setWrapEnabled(value => !value);
+  const refreshLog = () => {
+    if (!canLog()) return;
+    if (shouldFollowOpenShiftLog(props.resource) && props.followLog) setFollowNonce(value => value + 1);
+    else void loadLog(true);
+  };
+  const cycleViewMode = () => {
+    if (!canLog()) return;
+    setViewMode(current => (current === "log" ? "json" : "log"));
+  };
+
   useKeyboard(e => {
     if (e.eventType === "release") return;
     if (e.name === "q") {
@@ -164,14 +175,13 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
       scrollboxRef?.scrollTo(e.shift ? Infinity : 0);
     } else if (e.name === "w") {
       e.preventDefault();
-      setWrapEnabled(value => !value);
+      toggleWrap();
     } else if (e.name === "r" && canLog()) {
       e.preventDefault();
-      if (shouldFollowOpenShiftLog(props.resource) && props.followLog) setFollowNonce(value => value + 1);
-      else void loadLog(true);
+      refreshLog();
     } else if (e.name === "c" && canLog()) {
       e.preventDefault();
-      setViewMode(current => (current === "log" ? "json" : "log"));
+      cycleViewMode();
     }
   });
 
@@ -185,7 +195,7 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
         paddingX={1}
         paddingY={1}
       >
-        <DialogTitleBar title={title()} />
+        <DialogTitleBar title={title()} onClose={props.onClose} />
         <scrollbox
           ref={scrollboxRef}
           flexGrow={1}
@@ -218,13 +228,13 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
         <DialogFooter>
           <KeyHint key="↑/↓" desc=" scroll" />
           <KeyHintSeparator />
-          <KeyHint key="w" desc={wrapEnabled() ? " disable wrap" : " enable wrap"} />
+          <KeyHint key="w" desc={wrapEnabled() ? " disable wrap" : " enable wrap"} onClick={toggleWrap} />
           {canLog() ? (
             <>
               <KeyHintSeparator />
-              <KeyHint key="c" desc=" cycle view mode" />
+              <KeyHint key="c" desc=" cycle view mode" disabled={!canLog()} onClick={cycleViewMode} />
               <KeyHintSeparator />
-              <KeyHint key="r" desc=" refresh log" />
+              <KeyHint key="r" desc=" refresh log" disabled={!canLog()} onClick={refreshLog} />
             </>
           ) : null}
         </DialogFooter>
