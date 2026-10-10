@@ -17,7 +17,6 @@ describe("truncateName", () => {
   it("truncates to exactly maxLen characters including ellipsis", () => {
     const result = truncateName("abcdefghijklmnopqrstuvwxyz", 10);
     expect(result).toBe("abcdefg...");
-    expect(result.length).toBe(10);
   });
 
   it("handles empty string", () => {
@@ -26,12 +25,10 @@ describe("truncateName", () => {
 
   it("maxLen=3 returns hard slice without ellipsis", () => {
     expect(truncateName("abcdefg", 3)).toBe("abc");
-    expect(truncateName("abcdefg", 3).length).toBeLessThanOrEqual(3);
   });
 
   it("maxLen=2 returns hard slice without ellipsis", () => {
     expect(truncateName("abcdefg", 2)).toBe("ab");
-    expect(truncateName("abcdefg", 2).length).toBeLessThanOrEqual(2);
   });
 
   it("maxLen=1 returns single character", () => {

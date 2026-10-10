@@ -58,7 +58,6 @@ describe("middleTruncate", () => {
     const result = middleTruncate("abcdefghij", 7);
     // available = 6, left = 3, right = 3
     expect(result).toBe("abc\u2026hij");
-    expect(result.length).toBe(7);
   });
 
   test("handles maxLen of 1 (just ellipsis)", () => {
@@ -69,21 +68,18 @@ describe("middleTruncate", () => {
     const result = middleTruncate("abcdef", 2);
     // available = 1, left = 0, right = 1
     expect(result).toBe("\u2026f");
-    expect(result.length).toBe(2);
   });
 
   test("handles maxLen of 3", () => {
     const result = middleTruncate("abcdef", 3);
     // available = 2, left = 1, right = 1
     expect(result).toBe("a\u2026f");
-    expect(result.length).toBe(3);
   });
 
   test("biases toward keeping the end (right side)", () => {
     const result = middleTruncate("abcdefgh", 6);
     // available = 5, left = 2, right = 3
     expect(result).toBe("ab\u2026fgh");
-    expect(result.length).toBe(6);
   });
 
   test("empty string returns empty", () => {

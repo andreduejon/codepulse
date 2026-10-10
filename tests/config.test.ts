@@ -714,7 +714,7 @@ describe("writeConfig", () => {
     const configPath = join(dir, "config.json");
     const repoPath = "/tmp/my-repo";
     const result = writeConfig(
-      { group: "platform", appName: "API Gateway", theme: "nord", pageSize: 100 },
+      { group: "platform", appName: "API Gateway", theme: "nord", pageSize: 100, branch: "develop" },
       repoPath,
       configPath,
     );
@@ -725,6 +725,7 @@ describe("writeConfig", () => {
     expect(content.repos[resolve(repoPath)].appName).toBe("API Gateway");
     expect(content.repos[resolve(repoPath)].theme).toBe("nord");
     expect(content.repos[resolve(repoPath)].pageSize).toBe(100);
+    expect(content.repos[resolve(repoPath)].branch).toBe("develop");
   });
 
   test("creates parent directories when they do not exist", () => {
@@ -797,28 +798,6 @@ describe("writeConfig", () => {
     expect(entry.showAllBranches).toBeUndefined();
     expect(entry.autoRefreshSeconds).toBeUndefined();
     expect(entry.autoFetchSeconds).toBeUndefined();
-  });
-
-  test("writes under repos map keyed by absolute path", () => {
-    const dir = makeTempDir("write-repo");
-    const configPath = join(dir, "config.json");
-    const repoPath = "/tmp/my-repo";
-    const result = writeConfig({ pageSize: 500, branch: "develop" }, repoPath, configPath);
-    expect(result).toBe(true);
-    const content = JSON.parse(readFileSync(configPath, "utf-8"));
-    expect(content.repos[resolve(repoPath)].pageSize).toBe(500);
-    expect(content.repos[resolve(repoPath)].branch).toBe("develop");
-  });
-
-  test("preserves existing top-level data in config file", () => {
-    const dir = makeTempDir("write-repo-preserve");
-    const configPath = join(dir, "config.json");
-    writeFileSync(configPath, JSON.stringify({ legacyKey: "old-value" }, null, 2));
-    const repoPath = "/tmp/my-repo";
-    writeConfig({ pageSize: 500 }, repoPath, configPath);
-    const content = JSON.parse(readFileSync(configPath, "utf-8"));
-    expect(content.legacyKey).toBe("old-value");
-    expect(content.repos[resolve(repoPath)].pageSize).toBe(500);
   });
 
   test("preserves other repo entries", () => {

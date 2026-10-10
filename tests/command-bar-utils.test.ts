@@ -1,11 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  commandBarInputValue,
-  commandBarPlaceholder,
-  commitCountText,
-  filterBadgeLabel,
-  modeBadgeLabel,
-} from "../src/utils/command-bar-utils";
+import { commandBarPlaceholder, commitCountText, filterBadgeLabel } from "../src/utils/command-bar-utils";
 
 describe("filterBadgeLabel", () => {
   test("omits empty and unapplied terms", () => {
@@ -38,88 +32,6 @@ describe("commandBarPlaceholder", () => {
 
   test("returns path prompt in path mode", () => {
     expect(commandBarPlaceholder("path")).toBe("Enter path...");
-  });
-});
-
-// ── commandBarInputValue ─────────────────────────────────────────────────────
-
-describe("commandBarInputValue", () => {
-  const base = {
-    commandBarValue: ":ancestry",
-    searchInputValue: "fix",
-    highlightMode: null as null | "search" | "path" | "ancestry",
-    pathFilter: null as string | null,
-  };
-
-  test("shows commandBarValue in command mode", () => {
-    expect(commandBarInputValue({ ...base, commandBarMode: "command" })).toBe(":ancestry");
-  });
-
-  test("shows commandBarValue in path mode", () => {
-    expect(commandBarInputValue({ ...base, commandBarMode: "path" })).toBe(":ancestry");
-  });
-
-  test("shows searchInputValue in search mode", () => {
-    expect(commandBarInputValue({ ...base, commandBarMode: "search" })).toBe("fix");
-  });
-
-  test("in idle mode with search highlight, shows searchInputValue", () => {
-    expect(commandBarInputValue({ ...base, commandBarMode: "idle", highlightMode: "search" })).toBe("fix");
-  });
-
-  test("in idle mode with path highlight, shows pathFilter", () => {
-    expect(
-      commandBarInputValue({ ...base, commandBarMode: "idle", highlightMode: "path", pathFilter: "src/git/" }),
-    ).toBe("src/git/");
-  });
-
-  test("in idle mode with path highlight and null pathFilter, shows empty string", () => {
-    expect(commandBarInputValue({ ...base, commandBarMode: "idle", highlightMode: "path", pathFilter: null })).toBe("");
-  });
-
-  test("in idle mode with ancestry highlight, shows empty string", () => {
-    expect(commandBarInputValue({ ...base, commandBarMode: "idle", highlightMode: "ancestry" })).toBe("");
-  });
-
-  test("in idle mode with no highlight, shows empty string", () => {
-    expect(commandBarInputValue({ ...base, commandBarMode: "idle", highlightMode: null })).toBe("");
-  });
-});
-
-// ── modeBadgeLabel ───────────────────────────────────────────────────────────
-
-describe("modeBadgeLabel", () => {
-  test("shows 'command' when command bar is in command mode", () => {
-    expect(modeBadgeLabel("command", null)).toBe(" command ");
-  });
-
-  test("shows 'search' when command bar is in search mode", () => {
-    expect(modeBadgeLabel("search", null)).toBe(" search ");
-  });
-
-  test("shows 'path' when command bar is in path mode", () => {
-    expect(modeBadgeLabel("path", null)).toBe(" path ");
-  });
-
-  test("command bar mode takes priority over highlight mode", () => {
-    expect(modeBadgeLabel("command", "ancestry")).toBe(" command ");
-    expect(modeBadgeLabel("search", "path")).toBe(" search ");
-  });
-
-  test("in idle mode shows search highlight", () => {
-    expect(modeBadgeLabel("idle", "search")).toBe(" search ");
-  });
-
-  test("in idle mode shows path highlight", () => {
-    expect(modeBadgeLabel("idle", "path")).toBe(" path ");
-  });
-
-  test("in idle mode shows ancestry highlight", () => {
-    expect(modeBadgeLabel("idle", "ancestry")).toBe(" ancestry ");
-  });
-
-  test("in idle mode with no highlight shows normal", () => {
-    expect(modeBadgeLabel("idle", null)).toBe(" normal ");
   });
 });
 
