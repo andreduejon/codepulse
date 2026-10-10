@@ -6,6 +6,7 @@ interface KeyHintProps {
   key: JSX.Element | string;
   desc: JSX.Element | string;
   onClick?: () => void;
+  disabled?: boolean;
 }
 
 /**
@@ -20,10 +21,10 @@ export function KeyHint(props: Readonly<KeyHintProps>) {
   const [hovered, setHovered] = createSignal(false);
   return (
     <Show
-      when={props.onClick}
+      when={props.onClick && !props.disabled}
       fallback={
         <>
-          <text flexShrink={0} wrapMode="none" fg={t().foreground}>
+          <text flexShrink={0} wrapMode="none" fg={props.disabled ? t().foregroundMuted : t().foreground}>
             {props.key}
           </text>
           <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
