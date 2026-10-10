@@ -353,6 +353,21 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
     scrollboxRef?.scrollTo(0);
   });
 
+  const toggleBlame = () => {
+    if (!blameFetched()) {
+      fetchBlame();
+    }
+    setShowBlame(!showBlame());
+  };
+  const cycleViewMode = () => {
+    setViewMode(prev => {
+      const idx = VIEW_MODE_CYCLE.indexOf(prev);
+      return VIEW_MODE_CYCLE[(idx + 1) % VIEW_MODE_CYCLE.length];
+    });
+  };
+  const toggleFullFile = () => setFullFileMode(prev => !prev);
+  const toggleWrap = () => setWrapEnabled(prev => !prev);
+
   // ── Keyboard navigation ────────────────────────────────────────────
   useKeyboard(e => {
     if (e.eventType === "release") return;
@@ -400,25 +415,19 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
         break;
       case "b":
         e.preventDefault();
-        if (!blameFetched()) {
-          fetchBlame();
-        }
-        setShowBlame(!showBlame());
+        toggleBlame();
         break;
       case "c":
         e.preventDefault();
-        setViewMode(prev => {
-          const idx = VIEW_MODE_CYCLE.indexOf(prev);
-          return VIEW_MODE_CYCLE[(idx + 1) % VIEW_MODE_CYCLE.length];
-        });
+        cycleViewMode();
         break;
       case "v":
         e.preventDefault();
-        setFullFileMode(prev => !prev);
+        toggleFullFile();
         break;
       case "w":
         e.preventDefault();
-        setWrapEnabled(prev => !prev);
+        toggleWrap();
         break;
     }
   });
@@ -488,7 +497,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
         paddingX={1}
         paddingY={1}
       >
-        <DialogTitleBar title={titleElement()} />
+        <DialogTitleBar title={titleElement()} onClose={props.onClose} />
 
         {/* Stats line: status · +additions −deletions · N lines */}
         <Show when={!loading() && !diff()?.isBinary && displayLines().length > 0}>
@@ -654,20 +663,28 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
           }
         >
           <Show when={hasMultipleFiles()}>
-            <KeyHint key={"\u2190/\u2192"} desc=" file" />
-          </Show>
-          <Show when={hasMultipleFiles()}>
+            <KeyHint
+              key={"\u2190"}
+              desc=" prev"
+              disabled={props.target.fileIndex === 0}
+              onClick={props.target.fileIndex > 0 ? () => navigateFile(-1) : undefined}
+            />
+            <KeyHintSeparator />
+            <KeyHint
+              key={"\u2192"}
+              desc=" next"
+              disabled={props.target.fileIndex === props.target.fileList.length - 1}
+              onClick={props.target.fileIndex < props.target.fileList.length - 1 ? () => navigateFile(1) : undefined}
+            />
             <KeyHintSeparator />
           </Show>
-          <KeyHint key={"\u2191/\u2193"} desc=" scroll" />
+          <KeyHint key="b" desc={showBlame() ? " hide" : " blame"} onClick={toggleBlame} />
           <KeyHintSeparator />
-          <KeyHint key="b" desc={showBlame() ? " hide blame" : " show blame"} />
+          <KeyHint key="v" desc={fullFileMode() ? " hunks" : " file"} onClick={toggleFullFile} />
           <KeyHintSeparator />
-          <KeyHint key="v" desc={fullFileMode() ? " show hunks" : " show file"} />
+          <KeyHint key="c" desc=" view" onClick={cycleViewMode} />
           <KeyHintSeparator />
-          <KeyHint key="c" desc=" cycle view mode" />
-          <KeyHintSeparator />
-          <KeyHint key="w" desc={wrapEnabled() ? " disable wrap" : " enable wrap"} />
+          <KeyHint key="w" desc={wrapEnabled() ? " nowrap" : " wrap"} onClick={toggleWrap} />
         </DialogFooter>
       </box>
     </DialogOverlay>

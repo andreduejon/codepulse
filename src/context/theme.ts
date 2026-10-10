@@ -6,6 +6,7 @@ import {
   gruvbox,
   monokai,
   nord,
+  oliveGarden,
   oneDark,
   openCodeOriginal,
   rosePine,
@@ -23,6 +24,7 @@ export interface Theme {
   foregroundMuted: string;
   border: string;
   primary: string;
+  gitBg: string;
   accent: string;
   info: string;
   error: string;
@@ -59,6 +61,7 @@ export const themes: Record<string, Theme> = {
   "ayu-mirage": ayuDark,
   synthwave: synthwave,
   "rose-pine": rosePine,
+  "olive-garden": oliveGarden,
 };
 
 export const themeNames = Object.keys(themes);

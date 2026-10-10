@@ -1,4 +1,4 @@
-import type { Renderable } from "@opentui/core";
+import { MouseButton, type MouseEvent, type Renderable } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, Show, untrack } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
@@ -10,6 +10,8 @@ import { countUniqueFindings, findingIdentity, groupFindingsById } from "./parse
 import type { SnykFinding, SnykScanResult, SnykSeverity } from "./types";
 
 export interface SnykDetailTabProps {
+  mouseEnabled?: boolean;
+  onMouseFocus?: () => void;
   scan: SnykScanResult | null;
   onScan: () => void | Promise<void>;
   contentWidth?: number;
@@ -96,6 +98,24 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
   const [expandedFindings, setExpandedFindings] = createSignal<Set<string>>(new Set());
   const refsByKey = new Map<string, Renderable>();
   const itemRefs: Renderable[] = [];
+  const [hoveredKey, setHoveredKey] = createSignal<string | null>(null);
+  const mouseRow = (key: string, index: () => number) => ({
+    onMouseOver: () => setHoveredKey(key),
+    onMouseOut: () => setHoveredKey(null),
+    onMouseDown: (event: MouseEvent) => {
+      if (!props.mouseEnabled || event.button !== MouseButton.LEFT || index() < 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (key === "scan" && props.loading) return;
+      props.onMouseFocus?.();
+      props.setDetailCursorIndex(index());
+      activateCurrentItem();
+    },
+  });
+  const hoverBg = (key: string) =>
+    props.mouseEnabled && hoveredKey() === key && (key !== "scan" || !props.loading)
+      ? t().backgroundElement
+      : undefined;
 
   const groups = createMemo<SeverityGroup[]>(() =>
     props.scan
@@ -206,20 +226,22 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
     else if (cursor < 0 || cursor >= count) props.setDetailCursorIndex(Math.max(0, Math.min(count - 1, cursor)));
   });
 
+  const activateCurrentItem = () => {
+    const item = flatItems()[props.detailCursorIndex()];
+    if (!item) return false;
+    if (item.kind === "scan") {
+      if (!props.loading) void props.onScan();
+    } else if (item.kind === "severity") toggleSeverity(item.severity);
+    else toggleFinding(item.finding);
+    return false;
+  };
+
   createEffect(() => {
     const items = flatItems();
     if (!props.navRef) return;
     props.navRef.itemCount = items.length;
     syncRefs();
-    props.navRef.activateCurrentItem = () => {
-      const item = flatItems()[props.detailCursorIndex()];
-      if (!item) return false;
-      if (item.kind === "scan") {
-        if (!props.loading) void props.onScan();
-      } else if (item.kind === "severity") toggleSeverity(item.severity);
-      else toggleFinding(item.finding);
-      return false;
-    };
+    props.navRef.activateCurrentItem = activateCurrentItem;
   });
 
   createEffect(() => {
@@ -240,6 +262,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
   return (
     <box flexDirection="column" width="100%">
       <box
+        {...mouseRow("scan", () => 0)}
         ref={(element: Renderable) => {
           refsByKey.set("scan", element);
           syncRefs();
@@ -247,10 +270,11 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
         flexDirection="row"
         width="100%"
         backgroundColor={
-          props.detailFocused() && props.detailCursorIndex() === 0 ? t().backgroundElementActive : undefined
+          props.detailFocused() && props.detailCursorIndex() === 0 ? t().backgroundElementActive : hoverBg("scan")
         }
       >
         <text
+          selectable={!props.mouseEnabled}
           flexGrow={1}
           fg={props.detailFocused() && props.detailCursorIndex() === 0 ? t().accent : t().foreground}
           wrapMode="none"
@@ -258,7 +282,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
           {props.scan ? "Rescan commit" : "Scan commit"}
         </text>
         <Show when={props.loading}>
-          <text flexShrink={0} fg={t().foregroundMuted} wrapMode="none">
+          <text selectable={!props.mouseEnabled} flexShrink={0} fg={t().foregroundMuted} wrapMode="none">
             scanning...
           </text>
         </Show>
@@ -291,6 +315,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
             return (
               <box flexDirection="column" width="100%">
                 <box
+                  {...mouseRow(itemKey(severityItem()), severityIndex)}
                   ref={(element: Renderable) => {
                     if (isEmpty()) return;
                     refsByKey.set(itemKey(severityItem()), element);
@@ -298,15 +323,27 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
                   }}
                   flexDirection="row"
                   width="100%"
-                  backgroundColor={severityCursored() ? t().backgroundElementActive : undefined}
+                  backgroundColor={
+                    severityCursored()
+                      ? t().backgroundElementActive
+                      : !isEmpty()
+                        ? hoverBg(itemKey(severityItem()))
+                        : undefined
+                  }
                 >
-                  <text flexShrink={0} wrapMode="none" fg={t().border}>
+                  <text selectable={!props.mouseEnabled || isEmpty()} flexShrink={0} wrapMode="none" fg={t().border}>
                     {isEmpty() ? (groupIsLast() ? "└───" : "├───") : groupIsLast() ? "└──" : "├──"}
                   </text>
-                  <text flexShrink={0} wrapMode="none" fg={severityCursored() ? t().accent : t().foregroundMuted}>
+                  <text
+                    selectable={!props.mouseEnabled || isEmpty()}
+                    flexShrink={0}
+                    wrapMode="none"
+                    fg={severityCursored() ? t().accent : t().foregroundMuted}
+                  >
                     {isEmpty() ? " " : severityExpanded() ? "▾ " : "▸ "}
                   </text>
                   <text
+                    selectable={!props.mouseEnabled || isEmpty()}
                     flexGrow={1}
                     flexShrink={1}
                     wrapMode="none"
@@ -314,7 +351,12 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
                   >
                     {isEmpty() ? group.severity.toUpperCase() : <strong>{group.severity.toUpperCase()}</strong>}
                   </text>
-                  <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                  <text
+                    selectable={!props.mouseEnabled || isEmpty()}
+                    flexShrink={0}
+                    wrapMode="none"
+                    fg={t().foregroundMuted}
+                  >
                     {group.findings.length}
                   </text>
                 </box>
@@ -345,22 +387,29 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
                       return (
                         <box flexDirection="column" width="100%">
                           <box
+                            {...mouseRow(key(), index)}
                             ref={(element: Renderable) => {
                               refsByKey.set(key(), element);
                               syncRefs();
                             }}
                             flexDirection="row"
                             width="100%"
-                            backgroundColor={cursored() ? t().backgroundElementActive : undefined}
+                            backgroundColor={cursored() ? t().backgroundElementActive : hoverBg(key())}
                           >
-                            <text flexShrink={0} wrapMode="none" fg={t().border}>
+                            <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().border}>
                               {lead()}
                               {connector()}
                             </text>
-                            <text flexShrink={0} wrapMode="none" fg={cursored() ? t().accent : t().foregroundMuted}>
+                            <text
+                              selectable={!props.mouseEnabled}
+                              flexShrink={0}
+                              wrapMode="none"
+                              fg={cursored() ? t().accent : t().foregroundMuted}
+                            >
                               {expanded() ? "▾ " : "▸ "}
                             </text>
                             <text
+                              selectable={!props.mouseEnabled}
                               flexGrow={1}
                               flexShrink={1}
                               wrapMode="none"

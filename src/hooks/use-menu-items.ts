@@ -135,6 +135,7 @@ export interface MenuItemsResult {
   /** Overflow chars for the currently-selected copyable item (for banner scroll). */
   bannerOverflow: Accessor<number>;
   moveCursor: (delta: number) => void;
+  selectItem: (itemIndex: number) => boolean;
   activateItem: () => void;
   valueDisplay: (item: SettingItem) => string;
   footerVerb: () => string;
@@ -995,6 +996,13 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
     setCurrentCursor((c: number) => Math.max(0, Math.min(len - 1, c + delta)));
   };
 
+  const selectItem = (itemIndex: number): boolean => {
+    const cursor = selectableIndices().indexOf(itemIndex);
+    if (cursor < 0) return false;
+    setCurrentCursor(cursor);
+    return true;
+  };
+
   const activateItemAt = (itemIdx: number) => {
     const items = activeItems();
     const item = items[itemIdx];
@@ -1069,6 +1077,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
     branchTrackWidths,
     bannerOverflow,
     moveCursor,
+    selectItem,
     activateItem,
     valueDisplay,
     footerVerb,

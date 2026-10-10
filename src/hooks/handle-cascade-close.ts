@@ -59,10 +59,6 @@ export function createCloseOneCascadeStep(opts: CascadeCloseOptions): () => bool
     switch (target) {
       case "command-bar":
         exitCommandBar();
-        if (searchFocused()) {
-          setSearchFocused(false);
-          clearSearch();
-        }
         return true;
       case "detail-dialog":
         actions.setDetailFocused(false);

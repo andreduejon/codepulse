@@ -1,7 +1,7 @@
-import type { ScrollBoxRenderable } from "@opentui/core";
-import { For, Show } from "solid-js";
+import { MouseButton, type ScrollBoxRenderable } from "@opentui/core";
+import { batch, createSignal, For, Show } from "solid-js";
 import { isUncommittedHash } from "../constants";
-import type { ProviderStatus } from "../context/state";
+import type { DetailTab, ProviderStatus } from "../context/state";
 import { useAppState } from "../context/state";
 import type { DiffTarget } from "../git/types";
 import { useT } from "../hooks/use-t";
@@ -22,6 +22,10 @@ import UncommittedDetailView from "./uncommitted-detail";
 
 export interface DetailPanelProps {
   contentWidth?: number;
+  /** Opt-in for mouse actions; false also blocks native scrolling behind modals. */
+  mouseEnabled?: boolean;
+  /** Focus the sidebar before activating an item; omitted in compact dialogs. */
+  onMouseFocus?: () => void;
   /** Ref callback for programmatic scrollbox control */
   scrollboxRef?: (el: ScrollBoxRenderable) => void;
   /** Navigation ref for interactive items */
@@ -68,10 +72,12 @@ export interface DetailPanelProps {
  *  - Compact mode: inside a dialog overlay
  */
 export default function DetailPanel(props: Readonly<DetailPanelProps>) {
-  const { state } = useAppState();
+  const { state, actions } = useAppState();
   const t = useT();
+  const [hoveredTab, setHoveredTab] = createSignal<string | null>(null);
+  let scrollbox: ScrollBoxRenderable | undefined;
 
-  const tabs = () => {
+  const tabs = (): { id: DetailTab; label: string; disabled: boolean }[] => {
     const commit = state.selectedCommit();
     const commitHash = commit?.hash ?? "";
     const isUncommitted = isUncommittedHash(commitHash);
@@ -152,7 +158,7 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
         ? providerTabEntry
         : [
             {
-              id: "files",
+              id: "files" as const,
               label: `Files${cd?.files ? ` (${cd.files.length})` : ""}`,
               disabled: cd ? !available.has("files") : false,
             },
@@ -160,7 +166,7 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
       ...(stashMap.has(commitHash)
         ? [
             {
-              id: "stashes",
+              id: "stashes" as const,
               label: `Stashes (${stashMap.get(commitHash)?.length ?? 0})`,
               disabled: false,
             },
@@ -171,35 +177,71 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
   };
 
   return (
-    <>
+    // biome-ignore lint/a11y/noStaticElementInteractions: TUI panel focus also supports keyboard navigation.
+    <box
+      flexDirection="column"
+      flexGrow={1}
+      width="100%"
+      onMouseDown={event => {
+        if (props.mouseEnabled && event.button === MouseButton.LEFT) props.onMouseFocus?.();
+      }}
+    >
       {/* Tab bar: each tab has its own top accent line; wrapper provides continuous bottom border */}
-      <box
-        flexDirection="row"
-        width="100%"
-        flexShrink={0}
-        border={["bottom"]}
-        borderStyle="single"
-        borderColor={t().border}
-      >
+      <box flexDirection="row" width="100%" flexShrink={0}>
         <For each={tabs()}>
           {tab => {
             const isActive = () => state.detailActiveTab() === tab.id;
             const detailActive = () => isActive() && state.detailFocused() && !props.searchFocused;
+            const hovered = () => props.mouseEnabled && !tab.disabled && hoveredTab() === tab.id;
             const lineColor = () =>
-              tab.disabled ? t().border : detailActive() ? t().accent : isActive() ? t().foregroundMuted : t().border;
-            const textColor = () => (tab.disabled ? t().border : detailActive() ? t().accent : t().foregroundMuted);
+              tab.disabled
+                ? t().border
+                : detailActive()
+                  ? t().accent
+                  : hovered()
+                    ? t().foreground
+                    : isActive()
+                      ? t().foregroundMuted
+                      : t().border;
+            const textColor = () =>
+              tab.disabled
+                ? t().border
+                : detailActive()
+                  ? t().accent
+                  : hovered()
+                    ? t().foreground
+                    : t().foregroundMuted;
             return (
+              // biome-ignore lint/a11y/noStaticElementInteractions: TUI tabs also support Left/Right.
+              // biome-ignore lint/a11y/useKeyWithMouseEvents: Keyboard-selected tabs already use accent colors.
               <box
                 flexGrow={1}
-                justifyContent="center"
-                flexDirection="row"
-                border={["top"]}
-                borderStyle="single"
-                borderColor={lineColor()}
+                flexBasis={0}
+                flexDirection="column"
+                onMouseOver={() => setHoveredTab(tab.id)}
+                onMouseOut={() => setHoveredTab(null)}
+                onMouseDown={event => {
+                  if (!props.mouseEnabled || event.button !== MouseButton.LEFT) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  if (tab.disabled) return;
+                  props.onMouseFocus?.();
+                  if (isActive()) return;
+                  batch(() => {
+                    actions.setDetailCursorAction(null);
+                    actions.setDetailActiveTab(tab.id);
+                    actions.setDetailCursorIndex(0);
+                  });
+                  scrollbox?.scrollTo(0);
+                }}
               >
-                <text flexShrink={0} wrapMode="none" fg={textColor()}>
-                  <strong>{tab.label}</strong>
-                </text>
+                <box border={["top"]} borderStyle="single" borderColor={lineColor()} flexShrink={0} />
+                <box flexDirection="row" justifyContent="center" flexShrink={0}>
+                  <text selectable={false} flexShrink={0} wrapMode="none" fg={textColor()}>
+                    <strong>{tab.label}</strong>
+                  </text>
+                </box>
+                <box border={["top"]} borderStyle="single" borderColor={t().border} flexShrink={0} />
               </box>
             );
           }}
@@ -207,16 +249,29 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
       </box>
 
       <scrollbox
-        ref={props.scrollboxRef}
+        ref={el => {
+          scrollbox = el;
+          props.scrollboxRef?.(el);
+        }}
         flexGrow={1}
         scrollY
         scrollX={false}
         verticalScrollbarOptions={{ visible: false }}
+        viewportOptions={{
+          onMouse: event => {
+            if (props.mouseEnabled === false) {
+              event.preventDefault();
+              event.stopPropagation();
+            }
+          },
+        }}
       >
         <Show
           when={!isUncommittedHash(state.selectedCommit()?.hash ?? "")}
           fallback={
             <UncommittedDetailView
+              mouseEnabled={props.mouseEnabled}
+              onMouseFocus={props.onMouseFocus}
               onJumpToCommit={props.onJumpToCommit}
               onOpenDiff={props.onOpenDiff}
               navRef={props.navRef}
@@ -225,6 +280,8 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
         >
           <CommitDetailView
             contentWidth={props.contentWidth}
+            mouseEnabled={props.mouseEnabled}
+            onMouseFocus={props.onMouseFocus}
             onJumpToCommit={props.onJumpToCommit}
             onOpenDiff={props.onOpenDiff}
             navRef={props.navRef}
@@ -251,6 +308,6 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
           />
         </Show>
       </scrollbox>
-    </>
+    </box>
   );
 }

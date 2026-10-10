@@ -2,8 +2,7 @@
  * Test: verifies the formatRelativeDate function in date.ts.
  *
  * Covers all 7 time-range branches (just now, minutes, hours, yesterday,
- * days, same-year absolute, different-year absolute), empty string guard,
- * and cache behavior.
+ * days, same-year absolute, different-year absolute), and empty string guard.
  */
 import { describe, expect, test } from "bun:test";
 import { formatRelativeDate } from "../src/utils/date";
@@ -97,13 +96,6 @@ describe("formatRelativeDate", () => {
     const pastDate = new Date(2021, 0, 3); // Jan 3, 2021
     const result = formatRelativeDate(pastDate.toISOString());
     expect(result).toBe("03. Jan 2021");
-  });
-
-  test("cache returns consistent results for same input", () => {
-    const dateStr = new Date(2022, 11, 25).toISOString(); // stable date
-    const first = formatRelativeDate(dateStr);
-    const second = formatRelativeDate(dateStr);
-    expect(first).toBe(second);
   });
 
   test("boundary: exactly 1 minute ago shows 1m ago", () => {

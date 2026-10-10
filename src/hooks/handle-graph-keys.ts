@@ -31,23 +31,24 @@ export interface GraphKeyOptions {
   setCommandBarValue: (v: string) => void;
 }
 
+export function openGraphDetails(
+  opts: Pick<GraphKeyOptions, "state" | "actions" | "layoutMode" | "setDialog" | "detailNavRef">,
+): boolean {
+  const mode = opts.layoutMode();
+  if (mode === "too-small" || !opts.state.selectedCommit()) return false;
+  opts.detailNavRef.pendingJumpDirection = null;
+  opts.actions.setDetailCursorIndex(0);
+  opts.actions.setDetailFocused(true);
+  if (mode === "compact") opts.setDialog("detail");
+  return true;
+}
+
 /**
  * Handle a key event for graph navigation.
  * Returns true if the event was consumed (caller should stop processing).
  */
 export function handleGraphKey(e: KeyEvent, opts: GraphKeyOptions): boolean {
-  const {
-    state,
-    actions,
-    layoutMode,
-    setDialog,
-    getDetailScrollboxRef,
-    detailNavRef,
-    loadMoreData,
-    onCommandExecute,
-    setCommandBarMode,
-    setCommandBarValue,
-  } = opts;
+  const { state, actions, layoutMode, getDetailScrollboxRef, loadMoreData, onCommandExecute } = opts;
 
   const scrollbox = getDetailScrollboxRef();
 
@@ -116,30 +117,15 @@ export function handleGraphKey(e: KeyEvent, opts: GraphKeyOptions): boolean {
       // Disabled in compact/too-small — no side panel to enter
       if (layoutMode() !== "normal") return false;
       e.preventDefault();
-      if (state.selectedCommit()) {
-        detailNavRef.pendingJumpDirection = null;
-        actions.setDetailCursorIndex(0);
-        actions.setDetailFocused(true);
-      }
+      openGraphDetails(opts);
       return true;
     case "left":
     case "h":
       // bare ←/h on graph: no-op (Shift+← handled at top level)
       return false;
     case "return":
-      // In compact mode, Enter opens the detail dialog
-      if (layoutMode() === "compact" && state.selectedCommit()) {
+      if (openGraphDetails(opts)) {
         e.preventDefault();
-        actions.setDetailCursorIndex(0);
-        actions.setDetailFocused(true);
-        setDialog("detail");
-        return true;
-      }
-      if (layoutMode() === "normal" && state.selectedCommit()) {
-        e.preventDefault();
-        detailNavRef.pendingJumpDirection = null;
-        actions.setDetailCursorIndex(0);
-        actions.setDetailFocused(true);
         return true;
       }
       return false;
@@ -151,10 +137,8 @@ export function handleGraphKey(e: KeyEvent, opts: GraphKeyOptions): boolean {
       onCommandExecute("ancestry");
       return true;
     case "p":
-      // 'p' opens path mode with the current filter pre-filled for editing.
       e.preventDefault();
-      setCommandBarMode("path");
-      setCommandBarValue(state.pathFilter() ?? "");
+      onCommandExecute("path");
       return true;
     case "g": {
       e.preventDefault();

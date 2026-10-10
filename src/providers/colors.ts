@@ -10,7 +10,7 @@ export interface ProviderColors {
 export function providerColors(theme: Theme, view: ProviderView): ProviderColors {
   switch (view) {
     case "git":
-      return { bg: theme.accent, fg: theme.background };
+      return { bg: theme.gitBg, fg: theme.background };
     case "github-actions":
       return { bg: theme.githubActionsBg, fg: theme.githubActionsFg };
     case "jenkins":

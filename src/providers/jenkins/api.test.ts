@@ -232,6 +232,73 @@ describe("buildJenkinsGraphBadges", () => {
 // Jenkins fetch behavior
 // ---------------------------------------------------------------------------
 
+describe("Jenkins request cancellation", () => {
+  test.each(["discovery", "full build fetch", "branch build list", "graph probe", "running build refresh"])(
+    "rejects mid-request abort during %s without debug errors",
+    async path => {
+      const originalFetch = globalThis.fetch;
+      const controller = new AbortController();
+      const reason = new Error("request cancelled");
+      const job = { url: "https://jenkins.example.com/job/foo" };
+      const sha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+      const abortRequest = path === "discovery" || path === "running build refresh" ? 1 : 2;
+      let calls = 0;
+      clearDebugEvents();
+      globalThis.fetch = (async (_input, init) => {
+        if (++calls < abortRequest) {
+          return Response.json(
+            path === "branch build list"
+              ? {
+                  _class: "org.jenkinsci.plugins.workflow.multibranch.WorkflowMultiBranchProject",
+                  jobs: [
+                    {
+                      _class: "org.jenkinsci.plugins.workflow.job.WorkflowJob",
+                      url: `${job.url}/job/main/`,
+                      buildable: true,
+                    },
+                  ],
+                }
+              : { lastBuild: { number: 2 }, builds: [{ number: 2 }] },
+          );
+        }
+        const signal = init?.signal;
+        expect(signal).toBeDefined();
+        expect(signal?.aborted).toBe(false);
+        return new Promise<Response>((_resolve, reject) => {
+          signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
+          queueMicrotask(() => controller.abort(reason));
+        });
+      }) as typeof fetch;
+
+      try {
+        const signal = controller.signal;
+        const request =
+          path === "discovery"
+            ? resolveJenkinsJobs([job], "user", "token", signal)
+            : path === "running build refresh"
+              ? fetchJenkinsRunsForBuilds(
+                  [{ ...makeRun(sha, "2"), status: "running", conclusion: null }],
+                  "user",
+                  "token",
+                  signal,
+                )
+              : path === "graph probe"
+                ? fetchJenkinsGraphDataForSHAs([job], "user", "token", [sha], {
+                    signal,
+                    knownLastBuilds: new Map([[job.url, 1]]),
+                  })
+                : fetchJenkinsDataForSHAs([job], "user", "token", [sha], { signal });
+        await expect(request).rejects.toBe(reason);
+        expect(calls).toBe(abortRequest);
+        expect(getDebugEvents().filter(event => event.source === "error" || event.status === "error")).toEqual([]);
+      } finally {
+        globalThis.fetch = originalFetch;
+        clearDebugEvents();
+      }
+    },
+  );
+});
+
 describe("fetchJenkinsGraphDataForSHAs", () => {
   test("sends Basic auth header and maps matching build", async () => {
     const originalFetch = globalThis.fetch;

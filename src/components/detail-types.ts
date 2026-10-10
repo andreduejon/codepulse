@@ -32,6 +32,9 @@ export interface DetailNavRef {
 
 export interface DetailViewProps {
   contentWidth?: number;
+  /** Opt-in for detail row mouse actions, reactive to modal ownership. */
+  mouseEnabled?: boolean;
+  onMouseFocus?: () => void;
   onJumpToCommit?: (hash: string, from: "child" | "parent") => void;
   /** Open the diff+blame dialog for a file. */
   onOpenDiff?: (target: DiffTarget) => void;

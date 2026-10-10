@@ -1,5 +1,5 @@
-import type { Renderable } from "@opentui/core";
-import { For, Show } from "solid-js";
+import { MouseButton, type Renderable } from "@opentui/core";
+import { createSignal, For, Show } from "solid-js";
 import type { Commit } from "../git/types";
 import { useT } from "../hooks/use-t";
 import type { FileTreeRow } from "../utils/file-tree";
@@ -14,11 +14,15 @@ export interface StashFileRowData {
   collapsed: boolean;
   highlightBg: string | undefined;
   scrolledName: string | null;
+  itemIndex?: number;
   /** Optional ref callback forwarded to the FileTreeEntry for scroll-into-view. */
   ref?: (el: Renderable) => void;
 }
 
 export interface StashEntryProps {
+  mouseEnabled?: boolean;
+  headerItemIndex?: number;
+  onActivate?: (index: number) => void;
   /** The stash commit object. */
   stash: Commit;
   /** Whether to show a spacer above this entry (true for all but the first). */
@@ -50,6 +54,7 @@ export interface StashEntryProps {
  */
 export function StashEntry(props: Readonly<StashEntryProps>) {
   const t = useT();
+  const [hovered, setHovered] = createSignal(false);
 
   const label = () => props.stash.refs[0]?.name ?? "stash";
 
@@ -61,8 +66,31 @@ export function StashEntry(props: Readonly<StashEntryProps>) {
       </Show>
 
       {/* Stash entry header — label + file count only */}
-      <box ref={props.headerRef} backgroundColor={props.headerHighlightBg}>
-        <text fg={t().accent} wrapMode="none" truncate={props.scrolledHeaderText == null}>
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: TUI headers also support cursor navigation and Enter. */}
+      {/* biome-ignore lint/a11y/useKeyWithMouseEvents: Hover does not change keyboard focus. */}
+      <box
+        ref={props.headerRef}
+        backgroundColor={
+          props.headerHighlightBg ?? (props.mouseEnabled && hovered() ? t().backgroundElement : undefined)
+        }
+        onMouseOver={() => {
+          if (props.mouseEnabled) setHovered(true);
+        }}
+        onMouseOut={() => setHovered(false)}
+        onMouseDown={event => {
+          const index = props.headerItemIndex ?? -1;
+          if (!props.mouseEnabled || event.button !== MouseButton.LEFT || index < 0 || !props.onActivate) return;
+          event.preventDefault();
+          event.stopPropagation();
+          props.onActivate(index);
+        }}
+      >
+        <text
+          selectable={!props.mouseEnabled}
+          fg={t().accent}
+          wrapMode="none"
+          truncate={props.scrolledHeaderText == null}
+        >
           <strong>
             {props.expanded ? "▾" : "▸"} {props.scrolledHeaderText ?? label()}
             {props.fileCount != null ? ` (${props.fileCount})` : ""}
@@ -88,6 +116,9 @@ export function StashEntry(props: Readonly<StashEntryProps>) {
         <For each={props.fileRows}>
           {fileRowData => (
             <FileTreeEntry
+              mouseEnabled={props.mouseEnabled}
+              itemIndex={fileRowData.itemIndex}
+              onActivate={props.onActivate}
               ref={fileRowData.ref}
               row={fileRowData.row}
               cursored={fileRowData.cursored}

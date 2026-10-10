@@ -211,6 +211,7 @@ export async function resolveJenkinsJobs(
         );
         discoveries[index] = { job, api };
       } catch (err) {
+        if (isAbortError(err, signal)) throw err;
         firstError ??= bannerOrFallback(err, BANNER.jenkins.fetchFailed, "Jenkins");
       }
     },
@@ -446,6 +447,7 @@ export async function fetchJenkinsRunsForBuilds(
         );
         out.push(mapRun({ url: run.jobUrl, label: run.jobLabel }, build, run.headSha));
       } catch (err) {
+        if (isAbortError(err, signal)) throw err;
         firstError ??= bannerOrFallback(err, BANNER.jenkins.fetchFailed, "Jenkins");
       }
     },
@@ -499,12 +501,14 @@ export async function fetchJenkinsDataForSHAs(
               const build = await fetchJson<JenkinsBuildApi>(buildUrl, username, token, opts.signal);
               for (const sha of matchingHeadShas(build, wanted)) runs.push(mapRun(job, build, sha));
             } catch (err) {
+              if (isAbortError(err, opts.signal)) throw err;
               firstError ??= bannerOrFallback(err, BANNER.jenkins.fetchFailed, "Jenkins");
             }
           },
           opts.signal,
         );
       } catch (err) {
+        if (isAbortError(err, opts.signal)) throw err;
         firstError ??= bannerOrFallback(err, BANNER.jenkins.fetchFailed, "Jenkins");
       }
     },
@@ -577,6 +581,7 @@ export async function fetchJenkinsGraphDataForSHAs(
           for (const sha of matchingHeadShas(build, wanted)) runs.push(mapRun(job, build, sha));
         }
       } catch (err) {
+        if (isAbortError(err, opts.signal)) throw err;
         firstError ??= bannerOrFallback(err, BANNER.jenkins.fetchFailed, "Jenkins");
       }
     },

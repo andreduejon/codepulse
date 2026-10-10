@@ -1,4 +1,4 @@
-import type { Renderable } from "@opentui/core";
+import { MouseButton, type MouseEvent, type Renderable } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/solid";
 import type { JSXElement } from "solid-js";
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
@@ -191,7 +191,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   // IMPORTANT: useDetailCursor must be called AFTER all the state it depends on
   // (stashEntries, expandedStashes, getStashFileTreeRows, etc.) is initialized,
   // because it contains createMemo calls that evaluate eagerly.
-  const { interactiveItems, findItemIndex } = useDetailCursor({
+  const { interactiveItems, findItemIndex, activateCurrentItem } = useDetailCursor({
     state,
     actions,
     navRef: props.navRef,
@@ -321,8 +321,14 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   /** Whether a copyable field is the currently-cursored item. */
   const isCopyableCursored = (field: CopyableField) => isCursored(copyableIdx(field));
 
-  /** Highlight background for a copyable field row. */
-  const copyableHighlightBg = (field: CopyableField): string | undefined => itemHighlightBg(copyableIdx(field));
+  const activateMouseItem = (event: MouseEvent, itemIndex: number) => {
+    if (!props.mouseEnabled || event.button !== MouseButton.LEFT || itemIndex < 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    props.onMouseFocus?.();
+    actions.setDetailCursorIndex(itemIndex);
+    activateCurrentItem();
+  };
 
   /** Banner-scrolled text for a copyable field (or null if not scrolling). */
   const scrolledCopyableText = (field: CopyableField): string | null => {
@@ -339,7 +345,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
    * Local component: renders a single copyable row with cursor highlight,
    * banner-scroll, and "✓ copied" feedback badge.
    *
-   * Closes over: copyableHighlightBg, isCopyableCursored, scrolledCopyableText,
+   * Closes over: itemHighlightBg, isCopyableCursored, scrolledCopyableText,
    * copiedField, t().
    */
   const CopyableRow = (rowProps: {
@@ -352,24 +358,40 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     wrapMode?: "none" | "char" | "word";
     /** Optional ref callback forwarded to the outer box for scroll-into-view. */
     ref?: (el: Renderable) => void;
-  }) => (
-    <box ref={rowProps.ref} flexDirection="row" backgroundColor={copyableHighlightBg(rowProps.field)}>
-      <text
-        flexGrow={1}
-        flexShrink={1}
-        fg={isCopyableCursored(rowProps.field) ? t().accent : (rowProps.fg ?? t().foreground)}
-        wrapMode={rowProps.wrapMode ?? "none"}
-        truncate={rowProps.wrapMode !== "word" && !isCopyableCursored(rowProps.field)}
+  }) => {
+    const [hovered, setHovered] = createSignal(false);
+    return (
+      // biome-ignore lint/a11y/noStaticElementInteractions: TUI rows also support cursor navigation and Enter.
+      // biome-ignore lint/a11y/useKeyWithMouseEvents: Hover does not change keyboard focus.
+      <box
+        ref={rowProps.ref}
+        flexDirection="row"
+        backgroundColor={
+          itemHighlightBg(copyableIdx(rowProps.field)) ??
+          (props.mouseEnabled && hovered() ? t().backgroundElement : undefined)
+        }
+        onMouseOver={() => setHovered(true)}
+        onMouseOut={() => setHovered(false)}
+        onMouseDown={event => activateMouseItem(event, copyableIdx(rowProps.field))}
       >
-        {scrolledCopyableText(rowProps.field) ?? rowProps.children}
-      </text>
-      <Show when={copiedField() === rowProps.field}>
-        <text flexShrink={0} bg={t().primary} fg={t().background} wrapMode="none">
-          {" \u2713 copied "}
+        <text
+          selectable={!props.mouseEnabled}
+          flexGrow={1}
+          flexShrink={1}
+          fg={isCopyableCursored(rowProps.field) ? t().accent : (rowProps.fg ?? t().foreground)}
+          wrapMode={rowProps.wrapMode ?? "none"}
+          truncate={rowProps.wrapMode !== "word" && !isCopyableCursored(rowProps.field)}
+        >
+          {scrolledCopyableText(rowProps.field) ?? rowProps.children}
         </text>
-      </Show>
-    </box>
-  );
+        <Show when={copiedField() === rowProps.field}>
+          <text selectable={!props.mouseEnabled} flexShrink={0} bg={t().primary} fg={t().background} wrapMode="none">
+            {" \u2713 copied "}
+          </text>
+        </Show>
+      </box>
+    );
+  };
 
   /** Render a collapsible section header with interactive highlight */
   function InteractiveSectionHeader(
@@ -382,10 +404,21 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     }>,
   ) {
     const itemIdx = () => findItemIndex("section-header", headerProps.section);
+    const [hovered, setHovered] = createSignal(false);
 
     return (
-      <box ref={headerProps.ref} backgroundColor={itemHighlightBg(itemIdx())}>
-        <text fg={t().accent} wrapMode="none">
+      // biome-ignore lint/a11y/noStaticElementInteractions: TUI headers also support cursor navigation and Enter.
+      // biome-ignore lint/a11y/useKeyWithMouseEvents: Hover does not change keyboard focus.
+      <box
+        ref={headerProps.ref}
+        backgroundColor={
+          itemHighlightBg(itemIdx()) ?? (props.mouseEnabled && hovered() ? t().backgroundElement : undefined)
+        }
+        onMouseOver={() => setHovered(true)}
+        onMouseOut={() => setHovered(false)}
+        onMouseDown={event => activateMouseItem(event, itemIdx())}
+      >
+        <text selectable={!props.mouseEnabled} fg={t().accent} wrapMode="none">
           <strong>
             {headerProps.expanded ? "▾" : "▸"} {headerProps.title} ({headerProps.count})
           </strong>
@@ -407,7 +440,8 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   ) {
     const itemIdx = () => findItemIndex(entryProps.type, undefined, entryProps.entryIndex);
     const cursored = () => isCursored(itemIdx());
-
+    const [hovered, setHovered] = createSignal(false);
+    let entry: Renderable | undefined;
     const tag = () => getTagForHash(entryProps.hash);
 
     /** Resolved badge name for this entry */
@@ -415,6 +449,12 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
       if (entryProps.branchName !== "") return entryProps.branchName;
       return tag() ?? "deleted";
     };
+
+    // Badge text is also part of this action's hit area; other badges stay selectable.
+    createEffect(() => {
+      badgeName();
+      for (const child of entry?.getChildren() ?? []) child.selectable = !props.mouseEnabled;
+    });
 
     /** Banner scroll props: only applied to the badge of the cursored entry */
     const badgeScrollProps = () => {
@@ -425,13 +465,23 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     };
 
     return (
+      // biome-ignore lint/a11y/noStaticElementInteractions: TUI entries also support cursor navigation and Enter.
+      // biome-ignore lint/a11y/useKeyWithMouseEvents: Hover does not change keyboard focus.
       <box
-        ref={entryProps.ref}
+        ref={el => {
+          entry = el;
+          entryProps.ref?.(el);
+        }}
         flexDirection="row"
         flexWrap="wrap"
         gap={1}
         paddingLeft={2}
-        backgroundColor={itemHighlightBg(itemIdx())}
+        backgroundColor={
+          itemHighlightBg(itemIdx()) ?? (props.mouseEnabled && hovered() ? t().backgroundElement : undefined)
+        }
+        onMouseOver={() => setHovered(true)}
+        onMouseOut={() => setHovered(false)}
+        onMouseDown={event => activateMouseItem(event, itemIdx())}
       >
         <text fg={cursored() ? t().accent : t().foreground} wrapMode="none">
           {entryProps.hash.substring(0, SHORT_HASH_LEN)}
@@ -777,6 +827,8 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
             {/* ══════════════ Files tab ══════════════ */}
             <Show when={activeTab() === "files"}>
               <FileListView
+                mouseEnabled={props.mouseEnabled}
+                onMouseFocus={props.onMouseFocus}
                 files={() => detail()?.files ?? []}
                 loading={() => state.detailLoading()}
                 commitHash={() => commit()?.hash ?? ""}
@@ -826,6 +878,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                       };
                       return {
                         row: treeRow,
+                        itemIndex: fileItemIdx,
                         cursored: fileCursored,
                         collapsed: fileCollapsed,
                         highlightBg: itemHighlightBg(fileItemIdx),
@@ -838,6 +891,14 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
 
                   return (
                     <StashEntry
+                      mouseEnabled={props.mouseEnabled}
+                      headerItemIndex={itemIdx()}
+                      onActivate={index => {
+                        if (!props.mouseEnabled || index < 0) return;
+                        props.onMouseFocus?.();
+                        actions.setDetailCursorIndex(index);
+                        activateCurrentItem();
+                      }}
                       stash={stash}
                       showSpacer={si() > 0}
                       expanded={expanded()}
@@ -870,6 +931,8 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
               when={activeTab() === "github-actions" && !!props.githubGetCommitData && !!props.githubFetchJobsForRun}
             >
               <ActionsDetailTab
+                mouseEnabled={props.mouseEnabled}
+                onMouseFocus={props.onMouseFocus}
                 sha={c().hash}
                 // biome-ignore lint/style/noNonNullAssertion: guarded by Show when condition above
                 getCommitData={props.githubGetCommitData!}
@@ -891,6 +954,8 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
 
             <Show when={activeTab() === "jenkins" && !!props.jenkinsGetCommitData && !!props.jenkinsFetchJobsForRun}>
               <JenkinsDetailTab
+                mouseEnabled={props.mouseEnabled}
+                onMouseFocus={props.onMouseFocus}
                 sha={c().hash}
                 // biome-ignore lint/style/noNonNullAssertion: guarded by Show when condition above
                 getCommitData={props.jenkinsGetCommitData!}
@@ -912,6 +977,8 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
             <Show when={activeTab() === "openshift" && props.openshiftGetCommitData}>
               {getCommitData => (
                 <OpenShiftDetailTab
+                  mouseEnabled={props.mouseEnabled}
+                  onMouseFocus={props.onMouseFocus}
                   sha={c().hash}
                   getCommitData={getCommitData()}
                   fetchCommitData={props.openshiftFetchCommitData}
@@ -942,6 +1009,8 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
             </Show>
             <Show when={activeTab() === "snyk" && props.snykGetCommitData && props.snykScanCommit}>
               <SnykDetailTab
+                mouseEnabled={props.mouseEnabled}
+                onMouseFocus={props.onMouseFocus}
                 scan={props.snykGetCommitData?.(c().hash) ?? null}
                 contentWidth={props.contentWidth}
                 onScan={async () => {

@@ -1,4 +1,4 @@
-import type { ScrollBoxRenderable } from "@opentui/core";
+import { MouseButton, type ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { createSignal, For } from "solid-js";
 import packageJson from "../../../package.json";
@@ -11,7 +11,6 @@ export default function HelpDialog(_props: Readonly<{ onClose: () => void }>) {
   const t = useT();
   const renderer = useRenderer();
   const dimensions = useTerminalDimensions();
-  const title = `Help · codepulse v${packageJson.version}`;
   const dialogWidth = () => 80;
   const dialogHeight = () => Math.min(Math.floor(dimensions().height * 0.7), dimensions().height - 8);
   const tabBarInnerWidth = () => dialogWidth() - 2 - 8;
@@ -22,6 +21,7 @@ export default function HelpDialog(_props: Readonly<{ onClose: () => void }>) {
   };
 
   const [activeTab, setActiveTab] = createSignal<HelpTab>("general");
+  const [hoveredTab, setHoveredTab] = createSignal<HelpTab | null>(null);
   let scrollboxRef: ScrollBoxRenderable | undefined;
 
   const tabIndex = () => HELP_TABS.findIndex(t => t.id === activeTab());
@@ -72,37 +72,44 @@ export default function HelpDialog(_props: Readonly<{ onClose: () => void }>) {
         paddingX={1}
         paddingY={1}
       >
-        <DialogTitleBar title={title} />
+        <DialogTitleBar title="Help" onClose={_props.onClose} />
 
         {/* Tab bar — paddingX={4} matches menu-dialog convention (outer=1, inner=4) */}
         <box flexDirection="row" width="100%" paddingX={4} flexShrink={0}>
           <For each={HELP_TABS}>
             {(tab, idx) => {
               const isActive = () => activeTab() === tab.id;
-              const lineColor = () => (isActive() ? t().accent : t().border);
-              const textColor = () => (isActive() ? t().accent : t().foregroundMuted);
+              const lineColor = () => (isActive() ? t().accent : hoveredTab() === tab.id ? t().foreground : t().border);
+              const textColor = () =>
+                isActive() ? t().accent : hoveredTab() === tab.id ? t().foreground : t().foregroundMuted;
               return (
+                // biome-ignore lint/a11y/noStaticElementInteractions: TUI tabs also support Left/Right.
+                // biome-ignore lint/a11y/useKeyWithMouseEvents: Keyboard-selected tab already uses accent colors.
                 <box
                   width={tabWidth(idx())}
                   flexShrink={0}
                   flexGrow={1}
-                  justifyContent="center"
-                  flexDirection="row"
-                  border={["top"]}
-                  borderStyle="single"
-                  borderColor={lineColor()}
+                  flexDirection="column"
+                  onMouseOver={() => setHoveredTab(tab.id)}
+                  onMouseOut={() => setHoveredTab(null)}
+                  onMouseDown={event => {
+                    if (event.button !== MouseButton.LEFT) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setActiveTab(tab.id);
+                  }}
                 >
-                  <text flexShrink={0} wrapMode="none" fg={textColor()}>
-                    <strong>{tab.label}</strong>
-                  </text>
+                  <box border={["top"]} borderStyle="single" borderColor={lineColor()} flexShrink={0} />
+                  <box flexDirection="row" justifyContent="center" flexShrink={0}>
+                    <text flexShrink={0} wrapMode="none" fg={textColor()}>
+                      <strong>{tab.label}</strong>
+                    </text>
+                  </box>
+                  <box border={["top"]} borderStyle="single" borderColor={t().border} flexShrink={0} />
                 </box>
               );
             }}
           </For>
-        </box>
-        {/* Muted separator below tabs */}
-        <box width="100%" paddingX={4} flexShrink={0}>
-          <box flexGrow={1} border={["top"]} borderStyle="single" borderColor={t().border} />
         </box>
 
         {/* Keybind list */}
@@ -141,7 +148,13 @@ export default function HelpDialog(_props: Readonly<{ onClose: () => void }>) {
           </box>
         </scrollbox>
 
-        <DialogFooter>
+        <DialogFooter
+          left={
+            <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+              {`codepulse v${packageJson.version}`}
+            </text>
+          }
+        >
           <KeyHint key="←/→" desc=" switch tab" />
           <KeyHintSeparator />
           <KeyHint key="↑/↓" desc=" scroll" />
