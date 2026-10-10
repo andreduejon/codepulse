@@ -34,6 +34,12 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
   const [hoveredProvider, setHoveredProvider] = createSignal<ProviderView | null>(null);
   const [hoveredMode, setHoveredMode] = createSignal<string | null>(null);
   const [hoveredProject, setHoveredProject] = createSignal<string | null>(null);
+  const [hoveredCount, setHoveredCount] = createSignal<-1 | 1 | null>(null);
+  const [projectWindow, setProjectWindow] = createSignal<{
+    members: KnownRepoInfo[];
+    currentRepo: string;
+    start: number;
+  } | null>(null);
   const [contentWidth, setContentWidth] = createSignal(0);
   const enabledProviders = createMemo(() => {
     state.providers.getVersion();
@@ -75,7 +81,11 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
       0,
       members.findIndex(repo => repo.path === props.currentRepo),
     );
-    const start = Math.min(Math.max(currentIdx - 1, 0), members.length - 3);
+    const manual = projectWindow();
+    const start =
+      manual?.members === members && manual.currentRepo === props.currentRepo
+        ? manual.start
+        : Math.min(Math.max(currentIdx - 1, 0), members.length - 3);
     return {
       leftHidden: start,
       repos: members.slice(start, start + 3),
@@ -88,6 +98,34 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
       22 + filterBadgeLabel("search", state.searchQuery()).length + filterBadgeLabel("path", state.pathFilter()).length;
     return contentWidth() >= Math.max(120, providersWidth + modesWidth + 4);
   });
+  const HiddenProjectCount = (badgeProps: { direction: -1 | 1 }) => (
+    // biome-ignore lint/a11y/noStaticElementInteractions: TUI projects also support Shift+Left/Right.
+    // biome-ignore lint/a11y/useKeyWithMouseEvents: Hover only changes the badge text color.
+    <text
+      selectable={false}
+      flexShrink={0}
+      wrapMode="none"
+      fg={
+        hoveredCount() === badgeProps.direction && props.mouseEnabled?.() !== false
+          ? t().foreground
+          : t().foregroundMuted
+      }
+      bg={t().backgroundElementActive}
+      onMouseOver={() => setHoveredCount(badgeProps.direction)}
+      onMouseOut={() => setHoveredCount(null)}
+      onMouseDown={event => {
+        if (event.button !== MouseButton.LEFT || props.mouseEnabled?.() === false) return;
+        event.preventDefault();
+        setProjectWindow({
+          members: projectBadges(),
+          currentRepo: props.currentRepo,
+          start: Math.max(0, Math.min(visibleProjects().leftHidden + badgeProps.direction, projectBadges().length - 3)),
+        });
+      }}
+    >
+      {badgeProps.direction === -1 ? ` ◂${visibleProjects().leftHidden} ` : ` ${visibleProjects().rightHidden}▸ `}
+    </text>
+  );
 
   return (
     <box
@@ -177,7 +215,7 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
           <box flexDirection="row" flexShrink={1} minWidth={0} overflow="hidden">
             <Show when={projectBadges().length > 0}>
               <Show when={visibleProjects().leftHidden > 0}>
-                <Badge name={`◂${visibleProjects().leftHidden}`} dimmed noShrink />
+                <HiddenProjectCount direction={-1} />
                 <text flexShrink={0} wrapMode="none">
                   {" "}
                 </text>
@@ -229,7 +267,7 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
                 <text flexShrink={0} wrapMode="none">
                   {" "}
                 </text>
-                <Badge name={`${visibleProjects().rightHidden}▸`} dimmed noShrink />
+                <HiddenProjectCount direction={1} />
               </Show>
             </Show>
           </box>

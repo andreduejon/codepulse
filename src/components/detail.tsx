@@ -325,6 +325,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     if (!props.mouseEnabled || event.button !== MouseButton.LEFT || itemIndex < 0) return;
     event.preventDefault();
     event.stopPropagation();
+    props.onMouseFocus?.();
     actions.setDetailCursorIndex(itemIndex);
     activateCurrentItem();
   };
@@ -827,6 +828,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
             <Show when={activeTab() === "files"}>
               <FileListView
                 mouseEnabled={props.mouseEnabled}
+                onMouseFocus={props.onMouseFocus}
                 files={() => detail()?.files ?? []}
                 loading={() => state.detailLoading()}
                 commitHash={() => commit()?.hash ?? ""}
@@ -893,6 +895,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                       headerItemIndex={itemIdx()}
                       onActivate={index => {
                         if (!props.mouseEnabled || index < 0) return;
+                        props.onMouseFocus?.();
                         actions.setDetailCursorIndex(index);
                         activateCurrentItem();
                       }}
@@ -929,6 +932,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
             >
               <ActionsDetailTab
                 mouseEnabled={props.mouseEnabled}
+                onMouseFocus={props.onMouseFocus}
                 sha={c().hash}
                 // biome-ignore lint/style/noNonNullAssertion: guarded by Show when condition above
                 getCommitData={props.githubGetCommitData!}
@@ -951,6 +955,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
             <Show when={activeTab() === "jenkins" && !!props.jenkinsGetCommitData && !!props.jenkinsFetchJobsForRun}>
               <JenkinsDetailTab
                 mouseEnabled={props.mouseEnabled}
+                onMouseFocus={props.onMouseFocus}
                 sha={c().hash}
                 // biome-ignore lint/style/noNonNullAssertion: guarded by Show when condition above
                 getCommitData={props.jenkinsGetCommitData!}
@@ -973,6 +978,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
               {getCommitData => (
                 <OpenShiftDetailTab
                   mouseEnabled={props.mouseEnabled}
+                  onMouseFocus={props.onMouseFocus}
                   sha={c().hash}
                   getCommitData={getCommitData()}
                   fetchCommitData={props.openshiftFetchCommitData}
@@ -1004,6 +1010,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
             <Show when={activeTab() === "snyk" && props.snykGetCommitData && props.snykScanCommit}>
               <SnykDetailTab
                 mouseEnabled={props.mouseEnabled}
+                onMouseFocus={props.onMouseFocus}
                 scan={props.snykGetCommitData?.(c().hash) ?? null}
                 contentWidth={props.contentWidth}
                 onScan={async () => {

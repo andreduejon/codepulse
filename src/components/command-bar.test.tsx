@@ -3,6 +3,7 @@ import { InputRenderable, type Renderable, RGBA } from "@opentui/core";
 import { MouseButtons } from "@opentui/core/testing";
 import { testRender } from "@opentui/solid";
 import { createSignal } from "solid-js";
+import type { KnownRepoInfo } from "../config";
 import { AppStateContext, createAppState } from "../context/state";
 import { createThemeState, ThemeContext, themes } from "../context/theme";
 import { buildGraph } from "../git/graph";
@@ -234,6 +235,149 @@ test("mode badges reflect applied filters, hover in theme colors and only delega
     await setup.flush();
     active("ancestry");
     muted("normal");
+  } finally {
+    setup.renderer.destroy();
+  }
+});
+
+test("hidden project counts slide one project per left click, preserve focus, and reset with repo or members", async () => {
+  const app = createAppState(100, 0, 0);
+  const theme = createThemeState();
+  const names = ["a", "b", "c", "d", "e", "f", "g"];
+  const repos = names.map(name => ({ path: `/repo/${name}`, group: "app" }));
+  const [knownRepos, setKnownRepos] = createSignal<KnownRepoInfo[]>(repos);
+  const [currentRepo, setCurrentRepo] = createSignal("/repo/d");
+  const [mouseEnabled, setMouseEnabled] = createSignal(true);
+  const selected: string[] = [];
+  app.actions.setDetailFocused(true);
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={theme}>
+        <AppStateContext.Provider value={app}>
+          <CommandBar
+            commandBarMode={() => "search"}
+            commandBarValue={() => ""}
+            searchInputValue={() => "draft"}
+            searchFocused={() => true}
+            detailFocused={app.state.detailFocused}
+            onInput={() => {}}
+            mouseEnabled={mouseEnabled}
+            knownRepos={knownRepos()}
+            currentRepo={currentRepo()}
+            onSelectProject={path => {
+              selected.push(path);
+              setCurrentRepo(path);
+            }}
+          />
+        </AppStateContext.Provider>
+      </ThemeContext.Provider>
+    ),
+    { width: 100, height: 14, useMouse: true, enableMouseMovement: true },
+  );
+  const descendants = (node: Renderable): Renderable[] =>
+    node.getChildren().flatMap(child => [child, ...descendants(child)]);
+  const input = () => descendants(setup.renderer.root).find(node => node instanceof InputRenderable);
+  const lines = () => setup.captureCharFrame().split("\n");
+  const row = () => lines().findIndex(line => line.includes("0 commits"));
+  const span = (label: string) => setup.captureSpans().lines[row()]?.spans.find(s => s.text.includes(label));
+  const click = async (
+    label: string,
+    button: typeof MouseButtons.LEFT | typeof MouseButtons.RIGHT = MouseButtons.LEFT,
+  ) => {
+    const x = lines()[row()].indexOf(label);
+    expect(x).toBeGreaterThanOrEqual(0);
+    await setup.mockMouse.click(x + 1, row(), button);
+    await setup.flush();
+  };
+  const windowAt = (start: number, members = names) => {
+    const line = lines()[row()];
+    for (const [idx, name] of members.entries()) {
+      expect(line.includes(` ${name} `)).toBe(idx >= start && idx < start + 3);
+    }
+    expect(line.includes("◂")).toBe(start > 0);
+    if (start > 0) expect(line).toContain(`◂${start}`);
+    const right = Math.max(0, members.length - start - 3);
+    expect(line.includes("▸")).toBe(right > 0);
+    if (right > 0) expect(line).toContain(`${right}▸`);
+  };
+  try {
+    await setup.flush();
+    const focusedInput = input();
+    expect(focusedInput?.focused).toBe(true);
+    for (const width of [100, 180]) {
+      setup.resize(width, 14);
+      await setup.flush();
+      const providerRow = lines().findIndex(line => line.includes("Git"));
+      expect(row()).toBe(providerRow + (width === 100 ? 4 : 2));
+      windowAt(2);
+      for (const label of ["◂2", "2▸"]) {
+        expect(span(label)?.fg).toEqual(RGBA.fromHex(theme.theme().foregroundMuted));
+        expect(span(label)?.bg).toEqual(RGBA.fromHex(theme.theme().backgroundElementActive));
+        await setup.mockMouse.moveTo(lines()[row()].indexOf(label) + 1, row());
+        await setup.flush();
+        expect(span(label)?.fg).toEqual(RGBA.fromHex(theme.theme().foreground));
+        expect(span(label)?.bg).toEqual(RGBA.fromHex(theme.theme().backgroundElementActive));
+        await click(label, MouseButtons.RIGHT);
+        windowAt(2);
+        setMouseEnabled(false);
+        await setup.flush();
+        expect(span(label)?.fg).toEqual(RGBA.fromHex(theme.theme().foregroundMuted));
+        await setup.mockMouse.moveTo(0, 0);
+        await setup.mockMouse.moveTo(lines()[row()].indexOf(label) + 1, row());
+        await setup.flush();
+        expect(span(label)?.fg).toEqual(RGBA.fromHex(theme.theme().foregroundMuted));
+        await click(label);
+        windowAt(2);
+        setMouseEnabled(true);
+        await setup.mockMouse.moveTo(0, 0);
+        await setup.flush();
+      }
+      await click("◂2");
+      windowAt(1);
+      await click("◂1");
+      windowAt(0);
+      for (let start = 1; start <= 4; start++) {
+        await click(`${5 - start}▸`);
+        windowAt(start);
+        expect(currentRepo()).toBe("/repo/d");
+        expect(selected).toEqual([]);
+        expect(app.state.activeProviderView()).toBe("git");
+        expect(app.state.detailFocused()).toBe(true);
+        expect(input()).toBe(focusedInput);
+        expect(input()?.focused).toBe(true);
+        expect(setup.renderer.getSelection()).toBeNull();
+      }
+      await click("◂4");
+      windowAt(3);
+      await click("◂3");
+      windowAt(2);
+    }
+    await click("◂2");
+    windowAt(1);
+    await click(" d ");
+    expect(selected).toEqual([]); // Current repo remains a no-op after sliding.
+    await click(" b ");
+    expect(selected).toEqual(["/repo/b"]);
+    windowAt(0);
+    setCurrentRepo("/repo/f");
+    await setup.flush();
+    windowAt(4);
+    await click("◂4");
+    windowAt(3);
+    await click("◂3");
+    windowAt(2);
+    setKnownRepos(repos.slice(1));
+    await setup.flush();
+    windowAt(3, names.slice(1)); // Membership resets the shifted window to f.
+    await click("◂3");
+    windowAt(2, names.slice(1));
+    setKnownRepos(repos.slice(4));
+    await setup.flush();
+    windowAt(0, names.slice(4));
+    setKnownRepos([{ path: "/repo/f" }]);
+    await setup.flush();
+    windowAt(0, ["f"]);
+    expect(selected).toEqual(["/repo/b"]);
   } finally {
     setup.renderer.destroy();
   }

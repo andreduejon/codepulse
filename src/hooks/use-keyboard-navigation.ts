@@ -1,4 +1,4 @@
-import type { ScrollBoxRenderable } from "@opentui/core";
+import { KeyEvent, parseKeypress, type ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard } from "@opentui/solid";
 import type { Accessor } from "solid-js";
 import type { DetailNavRef } from "../components/detail-types";
@@ -91,7 +91,7 @@ interface KeyboardNavigationOptions {
  * When any is active, j/k skip dimmed rows (jump to next/prev highlighted).
  * Esc clears the active highlight mode.
  */
-export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
+export function useKeyboardNavigation(opts: KeyboardNavigationOptions) {
   const {
     state,
     actions,
@@ -157,7 +157,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
     loadData,
   });
 
-  useKeyboard(e => {
+  const handleKey = (e: KeyEvent) => {
     if (e.eventType === "release") return;
 
     const route = routeGlobalKey({ dialog: dialog(), overrideScope: state.keyboardScopeOverride() }, e.name);
@@ -259,5 +259,16 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions): void {
       setCommandBarMode,
       setCommandBarValue,
     });
-  });
+  };
+
+  useKeyboard(handleKey);
+
+  const dispatch = (sequence: string) => {
+    const key = parseKeypress(sequence);
+    if (key) handleKey(new KeyEvent(key));
+  };
+  return {
+    onFooterEnter: () => dispatch("\r"),
+    onFooterEscape: () => dispatch("\x1b"),
+  };
 }

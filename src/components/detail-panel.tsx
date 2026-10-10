@@ -22,8 +22,10 @@ import UncommittedDetailView from "./uncommitted-detail";
 
 export interface DetailPanelProps {
   contentWidth?: number;
-  /** Opt-in while compact dialog owns focus; sidebar mouse routing is separate. */
+  /** Opt-in for mouse actions; false also blocks native scrolling behind modals. */
   mouseEnabled?: boolean;
+  /** Focus the sidebar before activating an item; omitted in compact dialogs. */
+  onMouseFocus?: () => void;
   /** Ref callback for programmatic scrollbox control */
   scrollboxRef?: (el: ScrollBoxRenderable) => void;
   /** Navigation ref for interactive items */
@@ -175,7 +177,15 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
   };
 
   return (
-    <>
+    // biome-ignore lint/a11y/noStaticElementInteractions: TUI panel focus also supports keyboard navigation.
+    <box
+      flexDirection="column"
+      flexGrow={1}
+      width="100%"
+      onMouseDown={event => {
+        if (props.mouseEnabled && event.button === MouseButton.LEFT) props.onMouseFocus?.();
+      }}
+    >
       {/* Tab bar: each tab has its own top accent line; wrapper provides continuous bottom border */}
       <box flexDirection="row" width="100%" flexShrink={0}>
         <For each={tabs()}>
@@ -211,9 +221,11 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
                 onMouseOver={() => setHoveredTab(tab.id)}
                 onMouseOut={() => setHoveredTab(null)}
                 onMouseDown={event => {
-                  if (!props.mouseEnabled || tab.disabled || event.button !== MouseButton.LEFT) return;
+                  if (!props.mouseEnabled || event.button !== MouseButton.LEFT) return;
                   event.preventDefault();
                   event.stopPropagation();
+                  if (tab.disabled) return;
+                  props.onMouseFocus?.();
                   if (isActive()) return;
                   batch(() => {
                     actions.setDetailCursorAction(null);
@@ -245,12 +257,21 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
         scrollY
         scrollX={false}
         verticalScrollbarOptions={{ visible: false }}
+        viewportOptions={{
+          onMouse: event => {
+            if (props.mouseEnabled === false) {
+              event.preventDefault();
+              event.stopPropagation();
+            }
+          },
+        }}
       >
         <Show
           when={!isUncommittedHash(state.selectedCommit()?.hash ?? "")}
           fallback={
             <UncommittedDetailView
               mouseEnabled={props.mouseEnabled}
+              onMouseFocus={props.onMouseFocus}
               onJumpToCommit={props.onJumpToCommit}
               onOpenDiff={props.onOpenDiff}
               navRef={props.navRef}
@@ -260,6 +281,7 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
           <CommitDetailView
             contentWidth={props.contentWidth}
             mouseEnabled={props.mouseEnabled}
+            onMouseFocus={props.onMouseFocus}
             onJumpToCommit={props.onJumpToCommit}
             onOpenDiff={props.onOpenDiff}
             navRef={props.navRef}
@@ -286,6 +308,6 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
           />
         </Show>
       </scrollbox>
-    </>
+    </box>
   );
 }

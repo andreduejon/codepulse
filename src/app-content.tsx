@@ -681,7 +681,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
   };
 
   // Keyboard handling
-  useKeyboardNavigation({
+  const { onFooterEnter, onFooterEscape } = useKeyboardNavigation({
     state,
     actions,
     dialog,
@@ -859,6 +859,8 @@ export function AppContent(props: Readonly<AppContentProps>) {
                       {/* Footer - hotkey hints, 1 char gap above, right-aligned */}
                       <box height={1} />
                       <Footer
+                        onConfirm={onFooterEnter}
+                        onClose={onFooterEscape}
                         mouseEnabled={dialog() == null && state.keyboardScopeOverride() == null}
                         onOpenDetails={() => {
                           if (dialog() != null || state.keyboardScopeOverride() != null) return;
@@ -875,6 +877,13 @@ export function AppContent(props: Readonly<AppContentProps>) {
                   <Show when={layoutMode() === "normal"}>
                     <box flexDirection="column" width="25%" minWidth={60} flexShrink={0} paddingX={2} paddingBottom={1}>
                       <DetailPanel
+                        mouseEnabled={dialog() == null && state.keyboardScopeOverride() == null}
+                        onMouseFocus={() => {
+                          setSearchFocused(false);
+                          setCommandBarMode("idle");
+                          setCommandBarValue("");
+                          actions.setDetailFocused(true);
+                        }}
                         scrollboxRef={el => {
                           detailScrollboxRef = el;
                         }}
@@ -1003,7 +1012,10 @@ export function AppContent(props: Readonly<AppContentProps>) {
                       jobs={target().jobs}
                       run={target().run}
                       fetchLog={target().fetchLog}
-                      onClose={() => setDialog(null)}
+                      onClose={() => {
+                        if (layoutMode() === "compact" && state.detailFocused()) setDialog("detail");
+                        else setDialog(null);
+                      }}
                     />
                   )}
                 </Show>

@@ -13,6 +13,7 @@ import {
 
 export interface OpenShiftDetailTabProps {
   mouseEnabled?: boolean;
+  onMouseFocus?: () => void;
   sha: string;
   getCommitData: (sha: string) => OpenShiftCommitData | null;
   fetchCommitData?: (sha: string, force?: boolean) => Promise<void>;
@@ -106,14 +107,20 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
     onMouseOver: () => setHoveredKey(key),
     onMouseOut: () => setHoveredKey(null),
     onMouseDown: (event: MouseEvent) => {
-      if (!props.mouseEnabled || event.button !== MouseButton.LEFT || index() < 0) return;
+      if (!props.mouseEnabled || event.button !== MouseButton.LEFT) return;
       event.preventDefault();
       event.stopPropagation();
+      if (index() < 0) return;
+      if (key === "reload" && (!reloadEnabled() || reloadBusy())) return;
+      props.onMouseFocus?.();
       props.setDetailCursorIndex(index());
       activateCurrentItem();
     },
   });
-  const hoverBg = (key: string) => (props.mouseEnabled && hoveredKey() === key ? t().backgroundElement : undefined);
+  const hoverBg = (key: string) =>
+    props.mouseEnabled && hoveredKey() === key && (key !== "reload" || (reloadEnabled() && !reloadBusy()))
+      ? t().backgroundElement
+      : undefined;
 
   const flatItemKey = (item: FlatItem) => {
     if (item.kind === "reload") return "reload";

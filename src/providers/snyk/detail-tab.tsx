@@ -11,6 +11,7 @@ import type { SnykFinding, SnykScanResult, SnykSeverity } from "./types";
 
 export interface SnykDetailTabProps {
   mouseEnabled?: boolean;
+  onMouseFocus?: () => void;
   scan: SnykScanResult | null;
   onScan: () => void | Promise<void>;
   contentWidth?: number;
@@ -105,11 +106,16 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
       if (!props.mouseEnabled || event.button !== MouseButton.LEFT || index() < 0) return;
       event.preventDefault();
       event.stopPropagation();
+      if (key === "scan" && props.loading) return;
+      props.onMouseFocus?.();
       props.setDetailCursorIndex(index());
       activateCurrentItem();
     },
   });
-  const hoverBg = (key: string) => (props.mouseEnabled && hoveredKey() === key ? t().backgroundElement : undefined);
+  const hoverBg = (key: string) =>
+    props.mouseEnabled && hoveredKey() === key && (key !== "scan" || !props.loading)
+      ? t().backgroundElement
+      : undefined;
 
   const groups = createMemo<SeverityGroup[]>(() =>
     props.scan

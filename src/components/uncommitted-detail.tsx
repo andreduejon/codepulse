@@ -116,6 +116,7 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
 
   const activateMouseItem = (itemIndex: number) => {
     if (!props.mouseEnabled || itemIndex < 0 || itemIndex >= interactiveItems().length) return;
+    props.onMouseFocus?.();
     actions.setDetailCursorIndex(itemIndex);
     activateCurrentItem();
   };

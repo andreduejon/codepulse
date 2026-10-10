@@ -102,6 +102,9 @@ on the first row, projects and branch/commit count on the second, with a blank
 spacer between. Narrow panels use three rows: providers, modes, then projects
 with branch and commit count on the right.
 Click a project badge to switch repositories (`Shift+Left`/`Shift+Right` still work).
+Groups show three projects at a time. Left-click the hidden counts (`◂N` / `N▸`)
+to slide one project without changing the repository, provider, or keyboard focus.
+Changing the repository or group members recenters the window on the current project.
 Search and Path badges include the applied term, capped at 10 characters;
 click to edit the full value.
 `/` and `p` open the same temporary inline input as badge clicks. Enter applies; Esc cancels

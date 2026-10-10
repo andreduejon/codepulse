@@ -147,7 +147,7 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void }>) {
 
         {/* Navigation footer */}
         <DialogFooter>
-          <KeyHint key="enter" desc=" confirm" />
+          <KeyHint key="enter" desc=" confirm" onClick={confirmTheme} />
           <KeyHintSeparator />
           <KeyHint key="↑/↓" desc=" navigate" />
         </DialogFooter>

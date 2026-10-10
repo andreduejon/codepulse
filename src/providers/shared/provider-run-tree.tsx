@@ -50,6 +50,7 @@ type FlatItem<TRaw, TJobRaw> =
 
 export interface ProviderRunTreeProps<TRaw, TJobRaw> {
   mouseEnabled?: boolean;
+  onMouseFocus?: () => void;
   runs: ProviderTreeRun<TRaw>[];
   navRef?: DetailNavRef;
   detailCursorIndex: () => number;
@@ -114,11 +115,16 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
       if (!props.mouseEnabled || event.button !== MouseButton.LEFT || index() < 0) return;
       event.preventDefault();
       event.stopPropagation();
+      if (key === "reload" && (!reloadEnabled() || reloadBusy())) return;
+      props.onMouseFocus?.();
       props.setDetailCursorIndex(index());
       activateCurrentItem();
     },
   });
-  const hoverBg = (key: string) => (props.mouseEnabled && hoveredKey() === key ? t().backgroundElement : undefined);
+  const hoverBg = (key: string) =>
+    props.mouseEnabled && hoveredKey() === key && (key !== "reload" || (reloadEnabled() && !reloadBusy()))
+      ? t().backgroundElement
+      : undefined;
 
   const formatStepDuration = (step: ProviderTreeStep) => formatDuration(step.startedAt, step.completedAt);
   const formatRunDuration = (run: ProviderTreeRun<TRaw>) => {
