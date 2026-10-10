@@ -24,6 +24,7 @@ import { ThemeContext } from "./context/theme";
 import { BANNER, displayBanner } from "./debug/banner";
 import { clearDebugEvents } from "./debug/events";
 import type { DiffTarget } from "./git/types";
+import { openGraphDetails } from "./hooks/handle-graph-keys";
 import { useAncestry } from "./hooks/use-ancestry";
 import { useDataLoader } from "./hooks/use-data-loader";
 import { useDetailLoader } from "./hooks/use-detail-loader";
@@ -858,6 +859,11 @@ export function AppContent(props: Readonly<AppContentProps>) {
                       {/* Footer - hotkey hints, 1 char gap above, right-aligned */}
                       <box height={1} />
                       <Footer
+                        mouseEnabled={dialog() == null && state.keyboardScopeOverride() == null}
+                        onOpenDetails={() => {
+                          if (dialog() != null || state.keyboardScopeOverride() != null) return;
+                          openGraphDetails({ state, actions, layoutMode, setDialog, detailNavRef });
+                        }}
                         commandBarMode={commandBarMode}
                         filterActive={!!state.highlightSet() || !!state.viewingBranch()}
                         compact={layoutMode() === "compact"}

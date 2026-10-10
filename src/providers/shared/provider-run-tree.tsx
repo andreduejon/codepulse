@@ -1,4 +1,4 @@
-import type { Renderable } from "@opentui/core";
+import { MouseButton, type MouseEvent, type Renderable } from "@opentui/core";
 import { createEffect, createMemo, createSignal, For, onCleanup, Show, untrack } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
 import type { DebugEventSource } from "../../debug/events";
@@ -49,6 +49,7 @@ type FlatItem<TRaw, TJobRaw> =
   | { kind: "job"; job: ProviderTreeJob<TJobRaw>; run: ProviderTreeRun<TRaw>; flatIndex: number };
 
 export interface ProviderRunTreeProps<TRaw, TJobRaw> {
+  mouseEnabled?: boolean;
   runs: ProviderTreeRun<TRaw>[];
   navRef?: DetailNavRef;
   detailCursorIndex: () => number;
@@ -91,6 +92,33 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
   let autoExpandedSignature: string | null = null;
   let previousDataKey = props.dataKey;
   const itemRefs: Renderable[] = [];
+  const [hoveredKey, setHoveredKey] = createSignal<string | null>(null);
+  const refsByKey = new Map<string, Renderable>();
+  const itemKey = (item: FlatItem<TRaw, TJobRaw>) =>
+    item.kind === "reload"
+      ? "reload"
+      : item.kind === "run"
+        ? `run:${item.run.id}`
+        : `job:${item.run.id}:${item.job.id}`;
+  const syncItemRefs = () => {
+    const items = flatItems();
+    itemRefs.length = items.length;
+    items.forEach((item, index) => {
+      itemRefs[index] = refsByKey.get(itemKey(item)) as Renderable;
+    });
+  };
+  const mouseRow = (key: string, index: () => number) => ({
+    onMouseOver: () => setHoveredKey(key),
+    onMouseOut: () => setHoveredKey(null),
+    onMouseDown: (event: MouseEvent) => {
+      if (!props.mouseEnabled || event.button !== MouseButton.LEFT || index() < 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      props.setDetailCursorIndex(index());
+      activateCurrentItem();
+    },
+  });
+  const hoverBg = (key: string) => (props.mouseEnabled && hoveredKey() === key ? t().backgroundElement : undefined);
 
   const formatStepDuration = (step: ProviderTreeStep) => formatDuration(step.startedAt, step.completedAt);
   const formatRunDuration = (run: ProviderTreeRun<TRaw>) => {
@@ -265,6 +293,8 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     setPendingFocusRunId(null);
     autoExpandedSignature = null;
     itemRefs.length = 0;
+    refsByKey.clear();
+    setHoveredKey(null);
   };
 
   createEffect(() => {
@@ -304,25 +334,28 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     else if (cursor < 0 || cursor >= count) props.setDetailCursorIndex(Math.max(0, Math.min(count - 1, cursor)));
   });
 
+  const activateCurrentItem = () => {
+    const item = flatItems()[props.detailCursorIndex()];
+    if (!item) return false;
+    if (item.kind === "reload") {
+      if (reloadEnabled() && !reloadBusy()) void reloadCommit();
+      return false;
+    }
+    if (item.kind === "run") {
+      toggleRun(item.run);
+      return false;
+    }
+    props.onOpenJobAction?.(item.job, item.run, fetchedJobs().get(item.run.id) ?? []);
+    return false;
+  };
+
   createEffect(() => {
     const items = flatItems();
+    syncItemRefs();
     if (!props.navRef) return;
     props.navRef.itemCount = items.length;
     props.navRef.itemRefs = itemRefs;
-    props.navRef.activateCurrentItem = () => {
-      const item = items[props.detailCursorIndex()];
-      if (!item) return false;
-      if (item.kind === "reload") {
-        if (reloadEnabled() && !reloadBusy()) void reloadCommit();
-        return false;
-      }
-      if (item.kind === "run") {
-        toggleRun(item.run);
-        return false;
-      }
-      props.onOpenJobAction?.(item.job, item.run, fetchedJobs().get(item.run.id) ?? []);
-      return false;
-    };
+    props.navRef.activateCurrentItem = activateCurrentItem;
   });
 
   createEffect(() => {
@@ -350,14 +383,16 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
       <Show when={!!props.onReloadCommit}>
         <box
           ref={(el: Renderable) => {
-            const fi = reloadIdx();
-            if (fi >= 0) itemRefs[fi] = el;
+            refsByKey.set("reload", el);
+            syncItemRefs();
           }}
+          {...mouseRow("reload", reloadIdx)}
           flexDirection="row"
           width="100%"
-          backgroundColor={isReloadCursored() ? t().backgroundElementActive : undefined}
+          backgroundColor={isReloadCursored() ? t().backgroundElementActive : hoverBg("reload")}
         >
           <text
+            selectable={!props.mouseEnabled}
             flexGrow={1}
             fg={!reloadEnabled() ? t().foregroundMuted : isReloadCursored() ? t().accent : t().foreground}
             wrapMode="none"
@@ -365,7 +400,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
             {reloadLabel()}
           </text>
           <Show when={reloadStatus()}>
-            <text flexShrink={0} fg={t().foregroundMuted} wrapMode="none">
+            <text selectable={!props.mouseEnabled} flexShrink={0} fg={t().foregroundMuted} wrapMode="none">
               {reloadStatus()}
             </text>
           </Show>
@@ -406,32 +441,46 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
             <box flexDirection="column" width="100%">
               <box
                 ref={(el: Renderable) => {
-                  const fi = runFlatIndex();
-                  if (fi >= 0) itemRefs[fi] = el;
+                  refsByKey.set(`run:${run.id}`, el);
+                  syncItemRefs();
                 }}
+                {...mouseRow(`run:${run.id}`, runFlatIndex)}
                 flexDirection="row"
                 width="100%"
-                backgroundColor={isCursored() ? t().backgroundElementActive : undefined}
+                backgroundColor={isCursored() ? t().backgroundElementActive : hoverBg(`run:${run.id}`)}
               >
-                <text flexShrink={0} wrapMode="none" fg={t().border}>
+                <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().border}>
                   {runTreePrefix()}
                 </text>
-                <text flexShrink={0} wrapMode="none" fg={runIndicatorColor()}>
+                <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={runIndicatorColor()}>
                   {isExpanded() ? "▾ " : "▸ "}
                 </text>
-                <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={runTextColor()}>
+                <text
+                  selectable={!props.mouseEnabled}
+                  flexGrow={1}
+                  flexShrink={1}
+                  wrapMode="none"
+                  truncate
+                  fg={runTextColor()}
+                >
                   {`${run.label}  #${run.runNumber}`}
                 </text>
                 <box flexShrink={0} width={1} />
-                <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
                   {relTime().padStart(rightInfoWidth())}
                 </text>
                 <Show when={props.showRunDuration !== false && durationWidth() > 0}>
-                  <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                  <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
                     {runDuration() ? ` ${runDuration().padStart(durationWidth())}` : " ".repeat(durationWidth() + 1)}
                   </text>
                 </Show>
-                <text flexShrink={0} width={STATUS_COL_WIDTH} wrapMode="none" fg={color()}>
+                <text
+                  selectable={!props.mouseEnabled}
+                  flexShrink={0}
+                  width={STATUS_COL_WIDTH}
+                  wrapMode="none"
+                  fg={color()}
+                >
                   {statusMark(run.status, run.conclusion).padStart(STATUS_COL_WIDTH)}
                 </text>
               </box>
@@ -493,29 +542,55 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                       <box flexDirection="column" width="100%">
                         <box
                           ref={(el: Renderable) => {
-                            const fi = jobFlatIndex();
-                            if (fi >= 0) itemRefs[fi] = el;
+                            refsByKey.set(`job:${run.id}:${job.id}`, el);
+                            syncItemRefs();
                           }}
+                          {...mouseRow(`job:${run.id}:${job.id}`, jobFlatIndex)}
                           flexDirection="row"
                           width="100%"
-                          backgroundColor={isJobCursored() ? t().backgroundElementActive : undefined}
+                          backgroundColor={
+                            isJobCursored() ? t().backgroundElementActive : hoverBg(`job:${run.id}:${job.id}`)
+                          }
                         >
-                          <text flexShrink={0} wrapMode="none" fg={t().border}>
+                          <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().border}>
                             {jobTreeLead()}
                             {jobTreePrefix()}
                           </text>
-                          <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={jobTextColor()}>
+                          <text
+                            selectable={!props.mouseEnabled}
+                            flexGrow={1}
+                            flexShrink={1}
+                            wrapMode="none"
+                            truncate
+                            fg={jobTextColor()}
+                          >
                             {job.name}
                           </text>
-                          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                          <text
+                            selectable={!props.mouseEnabled}
+                            flexShrink={0}
+                            wrapMode="none"
+                            fg={t().foregroundMuted}
+                          >
                             {stepCountLabel().padStart(rightInfoWidth())}
                           </text>
                           <Show when={durationWidth() > 0}>
-                            <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                            <text
+                              selectable={!props.mouseEnabled}
+                              flexShrink={0}
+                              wrapMode="none"
+                              fg={t().foregroundMuted}
+                            >
                               {duration ? ` ${duration.padStart(durationWidth())}` : " ".repeat(durationWidth() + 1)}
                             </text>
                           </Show>
-                          <text flexShrink={0} width={STATUS_COL_WIDTH} wrapMode="none" fg={jobColor()}>
+                          <text
+                            selectable={!props.mouseEnabled}
+                            flexShrink={0}
+                            width={STATUS_COL_WIDTH}
+                            wrapMode="none"
+                            fg={jobColor()}
+                          >
                             {statusMark(job.status, job.conclusion).padStart(STATUS_COL_WIDTH)}
                           </text>
                         </box>

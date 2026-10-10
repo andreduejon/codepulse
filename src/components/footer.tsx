@@ -10,7 +10,13 @@ const SPINNER_FRAMES = ["\u28FE", "\u28FD", "\u28FB", "\u28BF", "\u287F", "\u283
 const SPINNER_FRAME_MS = 120;
 
 export default function Footer(
-  props: Readonly<{ commandBarMode: () => CommandBarMode; filterActive?: boolean; compact?: boolean }>,
+  props: Readonly<{
+    commandBarMode: () => CommandBarMode;
+    filterActive?: boolean;
+    compact?: boolean;
+    onOpenDetails?: () => void;
+    mouseEnabled?: boolean;
+  }>,
 ) {
   const t = useT();
   const { state } = useAppState();
@@ -150,7 +156,12 @@ export default function Footer(
             <KeyHintSeparator />
           </Show>
           <Show when={props.compact} fallback={<KeyHint key="enter/→" desc=" show details" />}>
-            <KeyHint key="enter" desc=" show details" />
+            <KeyHint
+              key="enter"
+              desc=" details"
+              disabled={!state.selectedCommit()}
+              onClick={props.mouseEnabled === false ? undefined : props.onOpenDetails}
+            />
           </Show>
           <KeyHintSeparator />
           <KeyHint key="shift ←/→" desc=" switch project" />

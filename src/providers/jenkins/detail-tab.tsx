@@ -4,6 +4,7 @@ import { ProviderRunTree, type ProviderTreeJob, type ProviderTreeRun } from "../
 import type { JenkinsCommitData, JenkinsJob, JenkinsJobFetchResult, JenkinsRun } from "./types";
 
 export interface JenkinsDetailTabProps {
+  mouseEnabled?: boolean;
   sha: string;
   getCommitData: (sha: string) => JenkinsCommitData | null;
   fetchJobsForRun: (run: JenkinsRun, signal?: AbortSignal) => Promise<JenkinsJobFetchResult>;
@@ -55,6 +56,7 @@ export function JenkinsDetailTab(props: Readonly<JenkinsDetailTabProps>) {
 
   return (
     <ProviderRunTree
+      mouseEnabled={props.mouseEnabled}
       runs={runs()}
       navRef={props.navRef}
       detailCursorIndex={props.detailCursorIndex}

@@ -28,6 +28,7 @@ import type { GitHubCommitData, GitHubJob, GitHubJobFetchResult, GitHubStep, Git
 // ── Props ─────────────────────────────────────────────────────────────────
 
 export interface ActionsDetailTabProps {
+  mouseEnabled?: boolean;
   /** SHA of the selected commit. */
   sha: string;
   /** Get all CI data for the commit (run list). */
@@ -109,6 +110,7 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
 
   return (
     <ProviderRunTree
+      mouseEnabled={props.mouseEnabled}
       runs={runs()}
       navRef={props.navRef}
       detailCursorIndex={props.detailCursorIndex}

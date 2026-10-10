@@ -876,6 +876,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                       };
                       return {
                         row: treeRow,
+                        itemIndex: fileItemIdx,
                         cursored: fileCursored,
                         collapsed: fileCollapsed,
                         highlightBg: itemHighlightBg(fileItemIdx),
@@ -888,6 +889,13 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
 
                   return (
                     <StashEntry
+                      mouseEnabled={props.mouseEnabled}
+                      headerItemIndex={itemIdx()}
+                      onActivate={index => {
+                        if (!props.mouseEnabled || index < 0) return;
+                        actions.setDetailCursorIndex(index);
+                        activateCurrentItem();
+                      }}
                       stash={stash}
                       showSpacer={si() > 0}
                       expanded={expanded()}
@@ -920,6 +928,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
               when={activeTab() === "github-actions" && !!props.githubGetCommitData && !!props.githubFetchJobsForRun}
             >
               <ActionsDetailTab
+                mouseEnabled={props.mouseEnabled}
                 sha={c().hash}
                 // biome-ignore lint/style/noNonNullAssertion: guarded by Show when condition above
                 getCommitData={props.githubGetCommitData!}
@@ -941,6 +950,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
 
             <Show when={activeTab() === "jenkins" && !!props.jenkinsGetCommitData && !!props.jenkinsFetchJobsForRun}>
               <JenkinsDetailTab
+                mouseEnabled={props.mouseEnabled}
                 sha={c().hash}
                 // biome-ignore lint/style/noNonNullAssertion: guarded by Show when condition above
                 getCommitData={props.jenkinsGetCommitData!}
@@ -962,6 +972,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
             <Show when={activeTab() === "openshift" && props.openshiftGetCommitData}>
               {getCommitData => (
                 <OpenShiftDetailTab
+                  mouseEnabled={props.mouseEnabled}
                   sha={c().hash}
                   getCommitData={getCommitData()}
                   fetchCommitData={props.openshiftFetchCommitData}
@@ -992,6 +1003,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
             </Show>
             <Show when={activeTab() === "snyk" && props.snykGetCommitData && props.snykScanCommit}>
               <SnykDetailTab
+                mouseEnabled={props.mouseEnabled}
                 scan={props.snykGetCommitData?.(c().hash) ?? null}
                 contentWidth={props.contentWidth}
                 onScan={async () => {
