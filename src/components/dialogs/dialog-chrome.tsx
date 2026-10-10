@@ -76,6 +76,7 @@ export function DialogTitleBar(props: Readonly<{ title: string | JSX.Element; on
           {/* biome-ignore lint/a11y/noStaticElementInteractions: TUI close also supports Escape. */}
           {/* biome-ignore lint/a11y/useKeyWithMouseEvents: Escape invokes the same close action. */}
           <text
+            selectable={false}
             flexShrink={0}
             wrapMode="none"
             fg={hovered() ? t().foreground : t().foregroundMuted}

@@ -24,10 +24,15 @@ export function KeyHint(props: Readonly<KeyHintProps>) {
       when={props.onClick && !props.disabled}
       fallback={
         <>
-          <text flexShrink={0} wrapMode="none" fg={props.disabled ? t().foregroundMuted : t().foreground}>
+          <text
+            selectable={false}
+            flexShrink={0}
+            wrapMode="none"
+            fg={props.disabled ? t().foregroundMuted : t().foreground}
+          >
             {props.key}
           </text>
-          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+          <text selectable={false} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
             {props.desc}
           </text>
         </>
@@ -36,6 +41,7 @@ export function KeyHint(props: Readonly<KeyHintProps>) {
       {/* biome-ignore lint/a11y/noStaticElementInteractions: TUI action also has its displayed keyboard shortcut. */}
       {/* biome-ignore lint/a11y/useKeyWithMouseEvents: Keyboard invokes the same action. */}
       <text
+        selectable={false}
         flexShrink={0}
         wrapMode="none"
         fg={hovered() ? t().foreground : t().foregroundMuted}
@@ -58,7 +64,7 @@ export function KeyHint(props: Readonly<KeyHintProps>) {
 export function KeyHintSeparator() {
   const t = useT();
   return (
-    <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+    <text selectable={false} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
       {" · "}
     </text>
   );

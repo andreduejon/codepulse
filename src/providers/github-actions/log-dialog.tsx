@@ -110,7 +110,6 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
     );
   const [jobIndex, setJobIndex] = createSignal(initialIndex());
   const [logs, setLogs] = createSignal<Map<string, LoadedLog>>(new Map());
-  const [scrollRow, setScrollRow] = createSignal(0);
   const [viewMode, setViewMode] = createSignal<LogViewMode>("all");
   const [wrapEnabled, setWrapEnabled] = createSignal(false);
 
@@ -186,23 +185,24 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
     const max = Math.max(0, filteredLines().length - 1);
     return Math.max(0, Math.min(next, max));
   };
-  const scroll = (delta: number) => setScrollRow(row => clampedScroll(row + delta));
+  const scroll = (delta: number) => scrollboxRef?.scrollTo(clampedScroll(scrollboxRef.scrollTop + delta));
 
   createEffect(() => {
     currentJob().id;
     viewMode();
-    setScrollRow(0);
     scrollboxRef?.scrollTo(0);
-  });
-
-  createEffect(() => {
-    scrollboxRef?.scrollTo(scrollRow());
   });
 
   const navigateJob = (direction: -1 | 1) => {
     const next = jobIndex() + direction;
     if (next < 0 || next >= orderedJobs().length) return;
     setJobIndex(next);
+  };
+  const cycleViewMode = () =>
+    setViewMode(prev => VIEW_MODE_CYCLE[(VIEW_MODE_CYCLE.indexOf(prev) + 1) % VIEW_MODE_CYCLE.length]);
+  const toggleWrap = () => setWrapEnabled(prev => !prev);
+  const openRun = () => {
+    if (props.run.url) openUrl(props.run.url);
   };
 
   useKeyboard(e => {
@@ -242,23 +242,20 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
         break;
       case "g":
         e.preventDefault();
-        setScrollRow(e.shift ? clampedScroll(filteredLines().length) : 0);
+        scrollboxRef?.scrollTo(e.shift ? clampedScroll(filteredLines().length) : 0);
         break;
       case "c":
         e.preventDefault();
-        setViewMode(prev => {
-          const idx = VIEW_MODE_CYCLE.indexOf(prev);
-          return VIEW_MODE_CYCLE[(idx + 1) % VIEW_MODE_CYCLE.length];
-        });
+        cycleViewMode();
         break;
       case "w":
         e.preventDefault();
-        setWrapEnabled(prev => !prev);
+        toggleWrap();
         break;
       case "o":
         if (!props.run.url) break;
         e.preventDefault();
-        openUrl(props.run.url);
+        openRun();
         break;
     }
   });
@@ -290,12 +287,12 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
   const renderLine = (line: LogLine) => {
     const th = theme();
     const lineNo = line.lineNo.toString().padStart(maxLineNoWidth());
-    const contentWrapMode = wrapEnabled() ? "word" : "none";
+    const contentWrapMode = () => (wrapEnabled() ? "word" : "none");
     if (line.kind === "group") {
       return (
         <box flexDirection="row" width="100%">
           <text flexShrink={0} wrapMode="none" fg={th.foregroundMuted}>{`${lineNo}  `}</text>
-          <text wrapMode={contentWrapMode} fg={th.accent}>
+          <text wrapMode={contentWrapMode()} fg={th.accent}>
             <strong>{`▸ ${line.text}`}</strong>
           </text>
         </box>
@@ -305,7 +302,7 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
       return (
         <box flexDirection="row" width="100%" backgroundColor={th.diffRemovedBg}>
           <text flexShrink={0} wrapMode="none" fg={th.foregroundMuted}>{`${lineNo}  `}</text>
-          <text wrapMode={contentWrapMode} fg={th.error}>
+          <text wrapMode={contentWrapMode()} fg={th.error}>
             {line.text}
           </text>
         </box>
@@ -315,7 +312,7 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
       return (
         <box flexDirection="row" width="100%">
           <text flexShrink={0} wrapMode="none" fg={th.foregroundMuted}>{`${lineNo}  `}</text>
-          <text wrapMode={contentWrapMode} fg={th.accent}>
+          <text wrapMode={contentWrapMode()} fg={th.accent}>
             {line.text}
           </text>
         </box>
@@ -324,7 +321,7 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
     return (
       <box flexDirection="row" width="100%">
         <text flexShrink={0} wrapMode="none" fg={th.foregroundMuted}>{`${lineNo}  `}</text>
-        <text wrapMode={contentWrapMode} fg={th.foreground}>
+        <text wrapMode={contentWrapMode()} fg={th.foreground}>
           {line.text}
         </text>
       </box>
@@ -341,7 +338,7 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
         paddingX={1}
         paddingY={1}
       >
-        <DialogTitleBar title={titleElement()} />
+        <DialogTitleBar title={titleElement()} onClose={props.onClose} />
 
         <scrollbox
           ref={scrollboxRef}
@@ -381,20 +378,25 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
 
         <DialogFooter>
           <Show when={hasMultipleJobs()}>
-            <KeyHint key={"←/→"} desc=" jobs" />
-          </Show>
-          <Show when={hasMultipleJobs()}>
+            <KeyHint key="←" desc=" prev" disabled={jobIndex() === 0} onClick={() => navigateJob(-1)} />
+            <KeyHintSeparator />
+            <KeyHint
+              key="→"
+              desc=" next"
+              disabled={jobIndex() === orderedJobs().length - 1}
+              onClick={() => navigateJob(1)}
+            />
             <KeyHintSeparator />
           </Show>
           <KeyHint key={"↑/↓"} desc=" scroll" />
           <KeyHintSeparator />
           <Show when={props.run.url}>
-            <KeyHint key="o" desc=" open run" />
+            <KeyHint key="o" desc=" open" onClick={openRun} />
             <KeyHintSeparator />
           </Show>
-          <KeyHint key="c" desc=" cycle view mode" />
+          <KeyHint key="c" desc=" view" onClick={cycleViewMode} />
           <KeyHintSeparator />
-          <KeyHint key="w" desc={wrapEnabled() ? " disable wrap" : " enable wrap"} />
+          <KeyHint key="w" desc={wrapEnabled() ? " nowrap" : " wrap"} onClick={toggleWrap} />
         </DialogFooter>
       </box>
     </DialogOverlay>
