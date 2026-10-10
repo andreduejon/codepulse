@@ -32,6 +32,8 @@ export interface DetailNavRef {
 
 export interface DetailViewProps {
   contentWidth?: number;
+  /** Opt-in for compact Info-tab mouse actions. */
+  mouseEnabled?: boolean;
   onJumpToCommit?: (hash: string, from: "child" | "parent") => void;
   /** Open the diff+blame dialog for a file. */
   onOpenDiff?: (target: DiffTarget) => void;

@@ -393,7 +393,7 @@ export function useDetailCursor({
         break;
       case "child":
       case "parent":
-        actions.setDetailCursorAction("navigate");
+        actions.setDetailCursorAction("jump");
         break;
       case "stash-entry":
         actions.setDetailCursorAction(expandedStashes().has(item.stashHash) ? "collapse" : "expand");
