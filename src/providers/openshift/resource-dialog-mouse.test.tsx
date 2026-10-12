@@ -176,7 +176,7 @@ for (const kind of ["Pod", "Build"] as const) {
       expect(d.open()).toBe(false);
       expect(d.close).toHaveBeenCalledTimes(2);
     } finally {
-      d.renderer.destroy();
+      await d.dispose();
     }
   });
 }
@@ -206,7 +206,7 @@ test("non-log resources and missing log loader expose no log controls", async ()
       await d.click("esc close");
       expect(d.open()).toBe(false);
     } finally {
-      d.renderer.destroy();
+      await d.dispose();
     }
   }
 });
@@ -258,7 +258,7 @@ for (const kind of ["Pod", "Build"] as const) {
       expect(d.streams[5].signal.aborted).toBe(true);
       expect(d.close).toHaveBeenCalledTimes(2);
     } finally {
-      d.renderer.destroy();
+      await d.dispose();
     }
   });
 }
@@ -309,6 +309,6 @@ test("native wheel and keyboard share scroll position and suspend/resume sticky 
     expect(sb.stickyScroll).toBe(true);
     expect(d.frame()).toContain("row-140");
   } finally {
-    d.renderer.destroy();
+    await d.dispose();
   }
 });

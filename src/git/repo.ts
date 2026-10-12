@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { resolve } from "node:path";
 import { DEFAULT_MAX_COUNT } from "../constants";
 import { BANNER, classifyGitFailure, debugError } from "../debug/banner";
 import { runGit } from "./repo-git";
@@ -551,7 +551,7 @@ export async function getLastFetchTime(repoPath: string): Promise<Date | null> {
     const gitDir = stdout.trim();
     // git rev-parse --git-dir returns a relative path for normal repos
     // but an absolute path for linked worktrees — handle both
-    const fetchHeadPath = gitDir.startsWith("/") ? join(gitDir, "FETCH_HEAD") : join(repoPath, gitDir, "FETCH_HEAD");
+    const fetchHeadPath = resolve(repoPath, gitDir, "FETCH_HEAD");
     const file = Bun.file(fetchHeadPath);
     const exists = await file.exists();
     if (!exists) return null;

@@ -1,4 +1,3 @@
-import { homedir } from "node:os";
 import type { Accessor } from "solid-js";
 import { createEffect, createMemo, createSignal } from "solid-js";
 import type { CodepulseConfig, ConfigInfo } from "../config";
@@ -725,15 +724,11 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
     // ── Configuration section (only when configInfo is available) ──
     const ci = opts.configInfo;
     if (ci) {
-      const shortenHome = (p: string) =>
-        p.replace(new RegExp(`^${homedir().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`), "~");
-
       items.push({ kind: "header", label: "Configuration" });
       items.push({
-        kind: "info",
+        kind: "copyable",
         label: "Config file",
-        get: () => shortenHome(ci.globalPath),
-        valid: () => ci.globalExists,
+        get: () => ci.globalPath,
       });
     }
 

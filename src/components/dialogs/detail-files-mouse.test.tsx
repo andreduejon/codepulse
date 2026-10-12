@@ -147,9 +147,9 @@ async function renderFiles(source: DiffSource = "commit", compact = true, many =
     await setup.mockMouse.moveTo(x, y);
     await flush();
   };
-  const dispose = () => {
+  const dispose = async () => {
     if (navRef.scrollTimer) clearTimeout(navRef.scrollTimer);
-    setup.renderer.destroy();
+    await setup.dispose();
   };
   try {
     // Exercise the production sidebar-to-dialog navRef handoff.
@@ -157,7 +157,7 @@ async function renderFiles(source: DiffSource = "commit", compact = true, many =
     setShowCompact(compact);
     await flush();
   } catch (error) {
-    dispose();
+    await dispose();
     throw error;
   }
   return {
@@ -280,7 +280,7 @@ for (const source of ["commit", "staged", "unstaged", "untracked"] as const) {
       expect(d.renderer.getSelection()).toBeNull();
       expect(d.onJumpToCommit).not.toHaveBeenCalled();
     } finally {
-      d.dispose();
+      await d.dispose();
     }
   });
 }
@@ -322,7 +322,7 @@ test("working-tree tab clicks guard right/disabled tabs and reset collapsed rows
     expect(d.cell(tab.x, tab.y)?.fg).toEqual(RGBA.fromHex(d.theme.border));
     expect(d.onOpenDiff).toHaveBeenCalledTimes(3);
   } finally {
-    d.dispose();
+    await d.dispose();
   }
 });
 
@@ -341,7 +341,7 @@ test("native wheel over file rows scrolls without activating or moving the detai
     expect(d.state.detailActiveTab()).toBe("files");
     expect(d.onOpenDiff).not.toHaveBeenCalled();
   } finally {
-    d.dispose();
+    await d.dispose();
   }
 });
 
@@ -364,7 +364,7 @@ test("sidebar committed and working-tree rows require mouse opt-in and stay sele
       expect(d.onOpenDiff).not.toHaveBeenCalled();
       expect(d.onJumpToCommit).not.toHaveBeenCalled();
     } finally {
-      d.dispose();
+      await d.dispose();
     }
   }
 });

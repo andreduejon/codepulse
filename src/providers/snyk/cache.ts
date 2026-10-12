@@ -1,12 +1,12 @@
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readdir, readFile, realpath, rename, rm, stat, utimes, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { storageRoot } from "../../utils/storage-path";
 import { isSnykScanResult } from "./parser";
 import type { SnykCacheLimit, SnykScanResult } from "./types";
 
 export const DEFAULT_SNYK_CACHE_LIMIT: SnykCacheLimit = 20;
-export const DEFAULT_SNYK_CACHE_ROOT = join(homedir(), ".cache", "codepulse", "snyk");
+export const DEFAULT_SNYK_CACHE_ROOT = join(storageRoot("cache"), "snyk");
 
 export interface SnykCacheOptions {
   root?: string;

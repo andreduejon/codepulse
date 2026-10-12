@@ -59,6 +59,6 @@ test("welcome hints hover text-only, ignore right-click, and share callbacks wit
     expect(onQuit).toHaveBeenCalledTimes(2);
     expect(setup.renderer.isDestroyed).toBe(false);
   } finally {
-    setup.renderer.destroy();
+    await setup.dispose();
   }
 });

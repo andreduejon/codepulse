@@ -145,9 +145,12 @@ async function renderDiff(long = false) {
     blameSpy,
     annotations,
     theme: theme.theme(),
-    dispose: () => {
-      setup.renderer.destroy();
-      restore();
+    dispose: async () => {
+      try {
+        await setup.dispose();
+      } finally {
+        restore();
+      }
     },
   };
 }
@@ -222,7 +225,7 @@ test("diff footer mouse actions share keyboard toggles, text-only hover and clos
     expect(d.open(), "Escape closes reopened dialog").toBe(false);
     expect(d.close).toHaveBeenCalledTimes(2);
   } finally {
-    d.dispose();
+    await d.dispose();
   }
 });
 
@@ -298,7 +301,7 @@ test("file arrows respect boundaries and lazy blame follows reactive targets, ca
     expect(d.frame()).not.toContain("prev");
     expect(d.frame()).not.toContain("next");
   } finally {
-    d.dispose();
+    await d.dispose();
   }
 });
 
@@ -350,6 +353,6 @@ test("native wheel updates the rendered diff window; keyboard scrolling and togg
     expect(d.frame()).toContain("row-001");
     expect(d.rowTexts()).not.toContain("row-100");
   } finally {
-    d.dispose();
+    await d.dispose();
   }
 });

@@ -7,6 +7,7 @@
  * We mock process.exit to capture exit codes without terminating the test runner.
  */
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import { resolve } from "node:path";
 import { parseArgs } from "../src/cli/parse-args";
 
 /** Fake argv prefix: parseArgs slices from index 2. */
@@ -69,13 +70,14 @@ describe("parseArgs", () => {
   // ── Positional repo path ──────────────────────────────────────────
 
   test("positional absolute path sets repoPath", () => {
-    const opts = parseArgs([...ARGV_PREFIX, "/tmp/my-repo"]);
-    expect(opts.repoPath).toBe("/tmp/my-repo");
+    const path = resolve("/tmp/my-repo");
+    const opts = parseArgs([...ARGV_PREFIX, path]);
+    expect(opts.repoPath).toBe(path);
   });
 
   test("positional relative path is resolved against cwd", () => {
     const opts = parseArgs([...ARGV_PREFIX, "my-repo"]);
-    expect(opts.repoPath).toBe(`${process.cwd()}/my-repo`);
+    expect(opts.repoPath).toBe(resolve(process.cwd(), "my-repo"));
   });
 
   // ── Unknown flags ─────────────────────────────────────────────────

@@ -1,4 +1,5 @@
 import { expect, spyOn, test } from "bun:test";
+import { resolve } from "node:path";
 import { type BoxRenderable, InputRenderable, type Renderable, RGBA, ScrollBoxRenderable } from "@opentui/core";
 import { MouseButtons } from "@opentui/core/testing";
 import { testRender } from "@opentui/solid";
@@ -150,9 +151,9 @@ test("repo selector hover, mouse selection, path draft, Escape and keyboard shar
     expect(input.value).toBe("/repo/mouse-custom");
     await click("enter open");
     expect(selected).toHaveLength(selections + 1);
-    expect(selected.at(-1)).toBe("/repo/mouse-custom");
+    expect(selected.at(-1)).toBe(resolve("/repo/mouse-custom"));
     await key("RETURN");
-    expect(selected.at(-1)).toBe("/repo/mouse-custom");
+    expect(selected.at(-1)).toBe(resolve("/repo/mouse-custom"));
     await key("ESCAPE");
 
     await move("Beta");
@@ -187,7 +188,7 @@ test("repo selector hover, mouse selection, path draft, Escape and keyboard shar
     expect(cancelled).toBe(2);
   } finally {
     destroy.mockRestore();
-    setup.renderer.destroy();
+    await setup.dispose();
     remove.mockRestore();
   }
 });
@@ -228,7 +229,7 @@ test("Escape closes a focused path input when there are no saved repos", async (
     await setup.flush();
     expect(open()).toBe(false);
   } finally {
-    setup.renderer.destroy();
+    await setup.dispose();
   }
 });
 
@@ -277,6 +278,6 @@ test("repo selector wheel scrolls and keyboard reaches the path row", async () =
     expect(input.focused).toBe(false);
     expect(scrollbox.scrollTop).toBe(0);
   } finally {
-    setup.renderer.destroy();
+    await setup.dispose();
   }
 });

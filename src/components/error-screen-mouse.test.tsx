@@ -31,6 +31,6 @@ test("error screen Quit hover is text-only; only left-click quits", async () => 
     await setup.mockMouse.click(x, y);
     expect(setup.renderer.isDestroyed).toBe(true);
   } finally {
-    setup.renderer.destroy();
+    await setup.dispose();
   }
 });
