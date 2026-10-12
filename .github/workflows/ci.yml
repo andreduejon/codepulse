@@ -9,14 +9,18 @@ on:
 env:
   BUN_VERSION: "1.4.3"
 
-jobs:
-  windows:
-    uses: ./.github/workflows/windows.yml
-    permissions:
-      contents: read
+permissions:
+  contents: read
 
+jobs:
   check:
-    runs-on: ubuntu-latest
+    name: Check ${{ matrix.runner }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -36,4 +40,8 @@ jobs:
         run: bun run check:types
 
       - name: Run tests
+        timeout-minutes: 3
         run: bun run test
+
+      - name: Installer regression checks
+        run: bun scripts/test-install.ts

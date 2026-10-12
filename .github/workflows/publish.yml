@@ -1,6 +1,7 @@
 name: Release
 
 on:
+  workflow_dispatch:
   push:
     tags: ["v*"]
 
@@ -25,6 +26,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Verify release version
+        if: ${{ github.event_name == 'push' }}
         run: test "v$(bun -p "require('./package.json').version")" = "${GITHUB_REF_NAME}"
 
       - name: Check types
@@ -40,6 +42,7 @@ jobs:
     needs: verify
     name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
     permissions:
       contents: read
     strategy:
@@ -62,6 +65,14 @@ jobs:
             os: linux
             arch: x64
             runner: ubuntu-latest
+          - target: windows-x64
+            os: win32
+            arch: x64
+            runner: windows-latest
+          - target: windows-arm64
+            os: win32
+            arch: arm64
+            runner: windows-11-arm
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -74,9 +85,16 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile --os=${{ matrix.os }} --cpu=${{ matrix.arch }}
 
-      - name: Install smoke-test tools
-        if: ${{ matrix.os == 'linux' }}
-        run: sudo apt-get update && sudo apt-get install -y expect
+      - name: Verify native Windows architecture
+        if: ${{ matrix.os == 'win32' }}
+        run: bun -e 'if (process.arch !== "${{ matrix.arch }}") process.exit(1)'
+
+      - name: Native tests
+        timeout-minutes: 3
+        run: bun test
+
+      - name: Installer regression checks
+        run: bun scripts/test-install.ts
 
       - name: Build standalone executable
         env:
@@ -93,32 +111,64 @@ jobs:
           codesign --verify --verbose=4 "dist/${{ matrix.target }}/smoke-opentui-assets"
 
       - name: Smoke-test executable and embedded assets
+        if: ${{ matrix.os != 'win32' }}
         shell: bash
         run: |
           binary="$GITHUB_WORKSPACE/dist/${{ matrix.target }}/codepulse"
           asset_smoke="$GITHUB_WORKSPACE/dist/${{ matrix.target }}/smoke-opentui-assets"
           test "$("$binary" --version)" = "codepulse v$(bun -p "require('./package.json').version")"
+          "$binary" --help
           "$asset_smoke"
-          expect scripts/smoke-binary.exp "$binary" "$GITHUB_WORKSPACE"
+          bun scripts/smoke-binary.ts "$binary" "$GITHUB_WORKSPACE"
+
+      - name: Smoke-test Windows executable and embedded assets
+        if: ${{ matrix.os == 'win32' }}
+        run: |
+          $binary = './dist/${{ matrix.target }}/codepulse.exe'
+          $expected = 'codepulse v' + (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $actual = & $binary --version
+          if ($LASTEXITCODE -ne 0 -or $actual -ne $expected) { throw "Version smoke failed: $actual" }
+          & $binary --help
+          if ($LASTEXITCODE -ne 0) { throw 'Help smoke failed' }
+          & './dist/${{ matrix.target }}/smoke-opentui-assets.exe'
+          if ($LASTEXITCODE -ne 0) { throw 'Embedded asset smoke failed' }
+          bun scripts/smoke-binary.ts $binary $env:GITHUB_WORKSPACE
+          if ($LASTEXITCODE -ne 0) { throw 'Interactive executable smoke failed' }
 
       - name: Create release archive
+        if: ${{ matrix.os != 'win32' }}
         run: tar -C "dist/${{ matrix.target }}" -czf "codepulse-${{ matrix.target }}.tar.gz" codepulse
+
+      - name: Create manual Unix test archive
+        if: ${{ github.event_name == 'workflow_dispatch' && matrix.os != 'win32' }}
+        run: tar -C "dist/${{ matrix.target }}" -czf "test-${{ matrix.target }}.tar.gz" codepulse smoke-opentui-assets
+
+      - name: Create Windows release archive
+        if: ${{ matrix.os == 'win32' }}
+        run: Compress-Archive -Path 'dist/${{ matrix.target }}/codepulse.exe' -DestinationPath 'codepulse-${{ matrix.target }}.zip'
+
+      - name: Create manual Windows test archive
+        if: ${{ github.event_name == 'workflow_dispatch' && matrix.os == 'win32' }}
+        run: Compress-Archive -Path 'dist/${{ matrix.target }}/*.exe' -DestinationPath 'test-${{ matrix.target }}.zip'
+
+      - name: Upload manual test archive
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-${{ matrix.target }}
+          path: test-${{ matrix.target }}.*
+          if-no-files-found: error
 
       - name: Upload release archive
         uses: actions/upload-artifact@v7
         with:
           name: codepulse-${{ matrix.target }}
-          path: codepulse-${{ matrix.target }}.tar.gz
+          path: codepulse-${{ matrix.target }}.*
           if-no-files-found: error
 
-  windows:
-    needs: verify
-    uses: ./.github/workflows/windows.yml
-    permissions:
-      contents: read
-
   publish:
-    needs: [build, windows]
+    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
+    needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write

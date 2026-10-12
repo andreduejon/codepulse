@@ -29,9 +29,7 @@ const outdir = `./dist/${artifact}`;
 const isWindows = target.startsWith("bun-windows-");
 const extension = isWindows ? ".exe" : "";
 const outfile = `${outdir}/codepulse${extension}`;
-const define = target.startsWith("bun-linux-")
-  ? { "process.env.OPENTUI_LIBC": JSON.stringify("glibc") }
-  : undefined;
+const define = target.startsWith("bun-linux-") ? { "process.env.OPENTUI_LIBC": JSON.stringify("glibc") } : undefined;
 
 rmSync(outdir, { recursive: true, force: true });
 

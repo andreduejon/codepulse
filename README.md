@@ -35,8 +35,9 @@ targets are macOS arm64/x64 and glibc Linux arm64/x64. Windows and musl-based
 Linux distributions such as Alpine are not currently supported.
 
 Native Windows x64/ARM64 builds and a PowerShell installer are in development,
-not yet published in a supported release. See [Windows testing](docs/WINDOWS-TESTING.md)
-for test artifacts, validation steps, and current limitations.
+not yet published in a supported release. Windows binaries are unsigned;
+SmartScreen reputation warnings are possible. Checksums verify file integrity,
+not publisher trust. Do not disable security protections for a malware detection.
 
 ## Usage
 
@@ -60,8 +61,6 @@ repo configuration.
 ## Releasing
 
 See the [release process](docs/RELEASING.md).
-
-Planned features and platform support: [roadmap](docs/ROADMAP.md).
 
 ## Keyboard Shortcuts
 

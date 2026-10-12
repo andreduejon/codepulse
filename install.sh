@@ -42,7 +42,8 @@ else
 fi
 
 tmp_dir="$(mktemp -d)"
-trap 'rm -rf "$tmp_dir"' EXIT INT TERM
+staged_dir=""
+trap 'rm -rf "$tmp_dir"; if [ -n "$staged_dir" ]; then rm -rf "$staged_dir"; fi' EXIT INT TERM
 
 curl -fsSL "$release_url/$archive" -o "$tmp_dir/$archive"
 curl -fsSL "$release_url/SHA256SUMS" -o "$tmp_dir/SHA256SUMS"
@@ -73,14 +74,20 @@ if [ "$actual" != "$expected" ]; then
 fi
 
 tar -xzf "$tmp_dir/$archive" -C "$tmp_dir"
+if [ ! -f "$tmp_dir/codepulse" ] || [ -L "$tmp_dir/codepulse" ]; then
+  printf 'codepulse: codepulse is missing or invalid in %s\n' "$archive" >&2
+  exit 1
+fi
 mkdir -p "$install_dir"
-cp "$tmp_dir/codepulse" "$install_dir/codepulse"
-chmod 755 "$install_dir/codepulse"
+staged_dir="$(mktemp -d "$install_dir/.codepulse.XXXXXX")"
+cp "$tmp_dir/codepulse" "$staged_dir/codepulse"
+chmod 755 "$staged_dir/codepulse"
 # macOS 26+ kills ad-hoc GitHub downloads (Taskgated Invalid Signature).
 # Re-sign locally so Gatekeeper accepts the installed copy.
 if [ "$platform" = "darwin" ] && command -v codesign >/dev/null 2>&1; then
-  codesign --force --sign - --preserve-metadata=entitlements "$install_dir/codepulse"
+  codesign --force --sign - --preserve-metadata=entitlements "$staged_dir/codepulse"
 fi
+mv -f "$staged_dir/codepulse" "$install_dir/codepulse"
 
 printf 'Installed codepulse to %s/codepulse\n' "$install_dir"
 case ":$PATH:" in

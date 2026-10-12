@@ -22,11 +22,11 @@
 		"start": "bun run src/index.tsx",
 		"build": "bun run scripts/build.ts",
 		"test": "bun test",
-		"lint": "biome lint src/ tests/",
-		"format": "biome format src/ tests/",
-		"check": "biome check src/ tests/",
-		"check:types": "tsc -p tsconfig.json --noEmit && tsc -p tests/tsconfig.json --noEmit",
-		"check:fix": "biome check --write src/ tests/"
+		"lint": "biome lint src/ tests/ scripts/",
+		"format": "biome format src/ tests/ scripts/",
+		"check": "biome check src/ tests/ scripts/",
+		"check:types": "tsc -p tsconfig.json --noEmit && tsc -p tests/tsconfig.json --noEmit && tsc -p scripts/tsconfig.json --noEmit",
+		"check:fix": "biome check --write src/ tests/ scripts/"
 	},
 	"dependencies": {
 		"@opentui/core": "0.6.1",
