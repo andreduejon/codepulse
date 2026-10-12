@@ -240,14 +240,14 @@ async function renderSidebar(provider: ProviderView = "git") {
       return column > x;
     });
   };
-  const dispose = () => {
+  const dispose = async () => {
     if (navRef.scrollTimer) clearTimeout(navRef.scrollTimer);
-    setup.renderer.destroy();
+    await setup.dispose();
   };
   try {
     await flush();
   } catch (error) {
-    dispose();
+    await dispose();
     throw error;
   }
   return {
@@ -313,7 +313,7 @@ test("sidebar first click focuses before file activation; hover, leave and wheel
     expect(d.state.detailFocused()).toBe(false);
     expect(d.focus).toHaveBeenCalledTimes(1);
   } finally {
-    d.dispose();
+    await d.dispose();
   }
 });
 
@@ -345,7 +345,7 @@ test("sidebar tab edges, active tab and noninteractive area focus; disabled tabs
     await d.click("No modified files");
     expect(d.state.detailFocused()).toBe(true);
   } finally {
-    d.dispose();
+    await d.dispose();
   }
 });
 
@@ -366,8 +366,11 @@ test("Info row establishes focus before copy activation", async () => {
     expect(d.focus).toHaveBeenCalledTimes(1);
     expect(d.state.detailCursorAction()).toBe("copy");
   } finally {
-    d?.dispose();
-    spy.mockRestore();
+    try {
+      await d?.dispose();
+    } finally {
+      spy.mockRestore();
+    }
   }
 });
 
@@ -405,8 +408,11 @@ test("stash and working-tree rows focus before their existing activation", async
     expect(d.openDiff.mock.calls[1][0].source).toBe("unstaged");
     expect(d.focus).toHaveBeenCalledTimes(3);
   } finally {
-    d.dispose();
-    load.mockRestore();
+    try {
+      await d.dispose();
+    } finally {
+      load.mockRestore();
+    }
   }
 });
 
@@ -450,7 +456,7 @@ test("reactive dialog and keyboard-scope guards block sidebar and graph clicks, 
     expect(d.state.detailFocused()).toBe(true);
     expect(d.openDiff).toHaveBeenCalledTimes(2);
   } finally {
-    d.dispose();
+    await d.dispose();
   }
 });
 
@@ -507,7 +513,7 @@ test("provider rows focus on the first click, retain focus after leave, and busy
       expect(d.state.detailFocused()).toBe(true);
       expect(d.reload).toHaveBeenCalledTimes(1);
     } finally {
-      d.dispose();
+      await d.dispose();
     }
   }
 });

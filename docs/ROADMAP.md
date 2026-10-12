@@ -3,32 +3,20 @@
 Planned scope, not shipped functionality. Release scope may change after
 feasibility checks. Current Windows support remains unclaimed until validated.
 
-## v0.12.0 — Custom themes and Windows support
+## v0.12.0 — Windows support and runtime migration
 
-### Custom themes and theme dialog improvements
+### Bun and OpenTUI migration
 
-- Load user theme configuration alongside predefined themes.
-- Show a Custom section in the theme dialog with the existing preview,
-  confirm, and cancel behavior. Persist selection only on confirmation.
-- Validate custom themes independently. Report invalid entries or malformed
-  configuration in Debug without breaking predefined themes.
-- Fall back to a predefined theme if the selected custom theme disappears.
-- Add an optional color-details view for the previewed theme: field names,
-  color swatches, and exact effective HEX values, including graph palette
-  entries. Values should be selectable/copyable without an external color tool.
-- For partial overrides, show which fields are inherited and which are
-  overridden, with base and effective HEX values for changed fields.
-- Make modified themes recognizable in the picker with a text/icon indicator,
-  or list derived variants separately in Custom while preserving the original.
-  Do not rely on color alone to communicate override status.
-- Document the configuration format and examples in README; update Help.
+- Standardize local development and all CI/release builds on Bun 1.4.3.
+- Upgrade the OpenTUI Core/Solid pair together; migrate removed layout APIs.
+- Await terminal restoration (`renderer.closed`) before repository re-exec.
+- Migrate renderer test cleanup to awaited disposal.
+- Review peer dependency warnings and retain compatible Solid/compiler versions.
+- Validate tests, types, lint, embedded assets, and compiled executables on all
+  six targets. Recheck scrolling, resizing, input, highlighting, and clean exit
+  interactively; source tests alone are not release proof.
 
-Before implementation, decide the configuration filename and merge rules:
-complete definitions or partial overrides of a predefined base. Recommended:
-reserve predefined IDs and give custom themes distinct IDs. Decide whether
-overrides produce a separate custom variant or modify a marked existing entry;
-do not silently replace an unmarked predefined theme. A duplicate/export-as-
-custom action is an optional follow-up, not required for loading variants.
+Custom themes and HEX/override dialog improvements are deferred to v0.13.0.
 
 ### Native Windows support
 
@@ -71,7 +59,34 @@ installation, and update work on the stated native Windows baseline.
 
 Out of scope: shortcuts, Explorer context menus, graphical installers.
 
-## v0.13.0 — SQLite cache
+## v0.13.0 — Custom themes and SQLite cache
+
+### Custom themes and theme dialog improvements
+
+- Load user theme configuration alongside predefined themes.
+- Show a Custom section in the theme dialog with the existing preview,
+  confirm, and cancel behavior. Persist selection only on confirmation.
+- Validate custom themes independently. Report invalid entries or malformed
+  configuration in Debug without breaking predefined themes.
+- Fall back to a predefined theme if the selected custom theme disappears.
+- Add an optional color-details view for the previewed theme: field names,
+  color swatches, and exact effective HEX values, including graph palette
+  entries. Values should be selectable/copyable without an external color tool.
+- For partial overrides, show which fields are inherited and which are
+  overridden, with base and effective HEX values for changed fields.
+- Make modified themes recognizable in the picker with a text/icon indicator,
+  or list derived variants separately in Custom while preserving the original.
+  Do not rely on color alone to communicate override status.
+- Document the configuration format and examples in README; update Help.
+
+Before implementation, decide the configuration filename and merge rules:
+complete definitions or partial overrides of a predefined base. Recommended:
+reserve predefined IDs and give custom themes distinct IDs. Decide whether
+overrides produce a separate custom variant or modify a marked existing entry;
+do not silently replace an unmarked predefined theme. A duplicate/export-as-
+custom action is an optional follow-up, not required for loading variants.
+
+### SQLite cache
 
 Use Bun's built-in `bun:sqlite` for provider caching. Keep editable configuration
 and custom themes in JSON. SQLite does not itself solve Windows path support.

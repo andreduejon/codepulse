@@ -56,7 +56,7 @@ test("theme footer confirm hover is text-only and left-click preserves the hover
     expect(setup.captureCharFrame()).not.toContain("Color Theme");
     expect(theme.themeName()).toBe("nord");
   } finally {
-    setup.renderer.destroy();
+    await setup.dispose();
   }
 });
 
@@ -145,6 +145,6 @@ test("theme rows hover-preview and confirm; clickable close cancels; wheel scrol
     expect(open()).toBe(false);
     expect(theme.themeName()).toBe("nord");
   } finally {
-    setup.renderer.destroy();
+    await setup.dispose();
   }
 });

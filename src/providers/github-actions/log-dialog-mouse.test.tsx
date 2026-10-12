@@ -113,9 +113,12 @@ async function renderLog(provider: "github-actions" | "jenkins", long = false) {
     setUrl,
     theme: theme.theme(),
     resolve: () => resolveLog(raw),
-    dispose: () => {
-      setup.renderer.destroy();
-      openUrl.mockRestore();
+    dispose: async () => {
+      try {
+        await setup.dispose();
+      } finally {
+        openUrl.mockRestore();
+      }
     },
   };
 }
@@ -224,7 +227,7 @@ for (const provider of ["github-actions", "jenkins"] as const) {
       expect(d.open()).toBe(false);
       expect(d.close).toHaveBeenCalledTimes(2);
     } finally {
-      d.dispose();
+      await d.dispose();
     }
   });
 }
@@ -275,6 +278,6 @@ test("native wheel and keyboard use the same scroll position, including jumps an
     expect(d.frame()).toContain("row-001");
     expect(d.fetchLog.mock.calls.map(([job]) => job.id)).toEqual([1, 2]);
   } finally {
-    d.dispose();
+    await d.dispose();
   }
 });

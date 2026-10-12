@@ -257,18 +257,18 @@ async function renderProvider(provider: Provider, compact = true, deferredJobs =
     await setup.mockMouse.click(x, y, button);
     await flush();
   };
-  const dispose = () => {
+  const dispose = async () => {
     resolveJobs();
     resolveReload();
     if (navRef.scrollTimer) clearTimeout(navRef.scrollTimer);
-    setup.renderer.destroy();
+    await setup.dispose();
   };
   try {
     await flush();
     setShowCompact(compact);
     await flush();
   } catch (error) {
-    dispose();
+    await dispose();
     throw error;
   }
   return {
@@ -380,7 +380,7 @@ for (const provider of ["github-actions", "jenkins"] as const) {
       expect(d.cell(x, y)?.bg).toEqual(RGBA.fromHex(d.theme.backgroundElementActive));
       expect(d.renderer.getSelection()).toBeNull();
     } finally {
-      d.dispose();
+      await d.dispose();
     }
   });
 
@@ -412,7 +412,7 @@ for (const provider of ["github-actions", "jenkins"] as const) {
       await d.click("Load commit");
       expect(d.reload).toHaveBeenLastCalledWith(sha, true);
     } finally {
-      d.dispose();
+      await d.dispose();
     }
   });
 }
@@ -463,7 +463,7 @@ test("OpenShift namespace/resource/reload routing follows grouped and sorted res
     expect(d.state.detailCursorIndex()).toBe(1);
     expect(d.openResource).toHaveBeenLastCalledWith(resources[0]);
   } finally {
-    d.dispose();
+    await d.dispose();
   }
 });
 
@@ -516,7 +516,7 @@ test("Snyk severity/finding/scan actions ignore empty severities and loading sca
     await d.click("Scan commit");
     expect(d.scanCommit).toHaveBeenLastCalledWith(sha, false);
   } finally {
-    d.dispose();
+    await d.dispose();
   }
 });
 
@@ -558,7 +558,7 @@ for (const provider of ["github-actions", "jenkins", "openshift", "snyk"] as con
       expect(d.openResource).not.toHaveBeenCalled();
       expect(d.scanCommit).not.toHaveBeenCalled();
     } finally {
-      d.dispose();
+      await d.dispose();
     }
   });
 }

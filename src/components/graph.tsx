@@ -732,7 +732,7 @@ export default function GraphView(
         return;
       }
       const rowEl = rowRefs[idx];
-      if (rowEl && rowEl.getLayoutNode().getComputedLayout().height > 0) {
+      if (rowEl && rowEl.getComputedLayout().height > 0) {
         scrollRowIntoView(idx);
         actions.setPendingScrollHash(null);
         return;

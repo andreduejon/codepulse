@@ -141,7 +141,7 @@ async function renderFooter() {
   try {
     await setup.flush();
   } catch (error) {
-    setup.renderer.destroy();
+    await setup.dispose();
     throw error;
   }
   return {
@@ -207,7 +207,7 @@ test("compact footer details hover is text-only, ignores right click, and left c
     d.expectOpened();
     expect(d.renderer.getSelection()).toBeNull();
   } finally {
-    d.renderer.destroy();
+    await d.dispose();
   }
 });
 
@@ -233,7 +233,7 @@ test("compact footer details is disabled without a selected commit, including En
     expect(d.keyResult).toHaveBeenLastCalledWith(false);
     d.expectClosed();
   } finally {
-    d.renderer.destroy();
+    await d.dispose();
   }
 });
 
@@ -256,7 +256,7 @@ test("mouseEnabled false blocks compact footer clicks while Enter opens the same
     expect(d.keyResult).toHaveBeenLastCalledWith(true);
     d.expectOpened();
   } finally {
-    d.renderer.destroy();
+    await d.dispose();
   }
 });
 
@@ -276,7 +276,7 @@ test("too-small shared guard blocks both the footer action and Enter", async () 
     expect(d.keyResult).toHaveBeenLastCalledWith(false);
     d.expectClosed();
   } finally {
-    d.renderer.destroy();
+    await d.dispose();
   }
 });
 
@@ -301,7 +301,7 @@ test("normal footer show-details hint opens the shared details action", async ()
     }
     expect(d.onOpenDetails).toHaveBeenCalledTimes(2);
   } finally {
-    d.renderer.destroy();
+    await d.dispose();
   }
 });
 
@@ -342,7 +342,7 @@ for (const mode of ["command", "path", "search"] as const) {
       }
       expect(d.keyResult).not.toHaveBeenCalled();
     } finally {
-      d.renderer.destroy();
+      await d.dispose();
     }
   });
 
@@ -372,7 +372,7 @@ for (const mode of ["command", "path", "search"] as const) {
       expect(d.onPathExecute).not.toHaveBeenCalled();
       expect(d.onSearchExecute).not.toHaveBeenCalled();
     } finally {
-      d.renderer.destroy();
+      await d.dispose();
     }
   });
 }
@@ -417,7 +417,7 @@ for (const layout of ["compact", "normal"] as const) {
       expect(d.state.detailFocused()).toBe(false);
       expect(d.dialog()).toBeNull();
     } finally {
-      d.renderer.destroy();
+      await d.dispose();
     }
   });
 }
@@ -455,7 +455,7 @@ test("footer clear follows search, ancestry, path, and branch cascade one step a
     expect(d.loadData).toHaveBeenCalledTimes(1);
     expect(d.captureCharFrame()).not.toContain("esc clear");
   } finally {
-    d.renderer.destroy();
+    await d.dispose();
   }
 });
 
@@ -487,7 +487,7 @@ test("footer confirm respects modal routing and escape closes the modal before t
     await d.flush();
     expect(d.state.searchQuery()).toBe("");
   } finally {
-    d.renderer.destroy();
+    await d.dispose();
   }
 });
 
@@ -529,6 +529,6 @@ test("mouseEnabled false blocks confirm, cancel, back, and clear hover and click
     await d.flush();
     expect(d.state.searchQuery()).toBe("");
   } finally {
-    d.renderer.destroy();
+    await d.dispose();
   }
 });

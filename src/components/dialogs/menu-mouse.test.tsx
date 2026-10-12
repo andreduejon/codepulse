@@ -162,12 +162,15 @@ async function renderMenu(height = 60, configInfo?: config.ConfigInfo) {
     move,
     key,
     input,
-    dispose: () => {
-      setup.renderer.destroy();
-      clipboardSpy.mockRestore();
-      read.mockRestore();
-      write.mockRestore();
-      setLastMenuTab(previousTab);
+    dispose: async () => {
+      try {
+        await setup.dispose();
+      } finally {
+        clipboardSpy.mockRestore();
+        read.mockRestore();
+        write.mockRestore();
+        setLastMenuTab(previousTab);
+      }
     },
   };
 }
@@ -183,7 +186,7 @@ test("menu config path copies full long Windows path with mouse and keyboard", a
     expect(m.copy).toHaveBeenCalledTimes(2);
     expect(m.copy).toHaveBeenLastCalledWith(path, "Config file");
   } finally {
-    m.dispose();
+    await m.dispose();
   }
 });
 
@@ -212,7 +215,7 @@ test("menu tabs hover across all three rows and switch by left click; keyboard t
     await m.key("ARROW_LEFT");
     expect(lastMenuTab()).toBe("repository");
   } finally {
-    m.dispose();
+    await m.dispose();
   }
 });
 
@@ -285,7 +288,7 @@ test("menu row hover never selects; clicks share copy, action, dialog, toggle, c
     expect(m.branch).toHaveBeenLastCalledWith("feature-mouse");
     expect(m.close).toHaveBeenCalledTimes(1);
   } finally {
-    m.dispose();
+    await m.dispose();
   }
 });
 
@@ -361,7 +364,7 @@ test("menu editable clicks preserve caret and drafts, save before navigation, re
     await m.click("esc close");
     expect(m.close).toHaveBeenCalledTimes(1);
   } finally {
-    m.dispose();
+    await m.dispose();
   }
 });
 
@@ -443,7 +446,7 @@ test("menu footer Enter activates, starts editing and saves; Escape cancels with
     expect(m.input()).toBeUndefined();
     expect(m.close).not.toHaveBeenCalled();
   } finally {
-    m.dispose();
+    await m.dispose();
   }
 });
 
@@ -465,7 +468,7 @@ test("saving an inserting provider draft keeps the clicked target, including rep
     await m.key("RETURN");
     expect(m.snyk().enabled).toBe(false);
   } finally {
-    m.dispose();
+    await m.dispose();
   }
 });
 
@@ -531,7 +534,7 @@ test("Enter saves provider additions once, exits input, retains selection and su
       await m.key("ESCAPE");
     }
   } finally {
-    m.dispose();
+    await m.dispose();
   }
 });
 
@@ -562,6 +565,6 @@ test("menu native wheel scrolls without selecting or activating; keyboard naviga
     await m.key("ESCAPE");
     expect(m.close).toHaveBeenCalledTimes(1);
   } finally {
-    m.dispose();
+    await m.dispose();
   }
 });

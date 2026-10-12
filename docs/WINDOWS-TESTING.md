@@ -6,6 +6,9 @@ version (0.11.0); they are development artifacts for the 0.12.0 work.
 
 ## Build on macOS/Linux
 
+Use Bun 1.4.3, matching CI/release pins. Bun 1.3.14 cannot initialize OpenTUI
+on native Windows ARM64 because that runtime lacks the required FFI support.
+
 Install optional native dependencies for cross-compilation without changing the
 lockfile, then build each architecture:
 
@@ -62,7 +65,7 @@ warning for investigation.
 
 ## Native CI and installation checks
 
-CI and Release call the Windows validation workflow on native `windows-2025`
+CI and Release call the Windows validation workflow on native `windows-latest`
 (x64) and `windows-11-arm` (ARM64) runners. It checks native architecture, runs
 tests, verifies installer failure handling, builds executables, and runs CLI
 and embedded-asset smoke checks. CI uploads `test-windows-x64` and

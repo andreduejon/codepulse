@@ -26,7 +26,7 @@ test("startup selector and fatal errors respect minimum dimensions and recover a
       await setup.flush();
       expect(setup.captureCharFrame()).toContain("Terminal too small");
     } finally {
-      setup.renderer.destroy();
+      await setup.dispose();
     }
   }
 });

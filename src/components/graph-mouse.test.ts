@@ -168,6 +168,6 @@ test("graph wheel preserves selection; left click selects; modal blocks mouse", 
     await setup.mockMouse.scroll(30, 3, "down");
     expect(loads).toBe(1); // exhausted history does not fetch again
   } finally {
-    setup.renderer.destroy();
+    await setup.dispose();
   }
 });

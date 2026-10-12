@@ -176,9 +176,9 @@ async function renderDetail(compact = true, fileCount = 40, family = false, jump
     await setup.mockMouse.moveTo(x, y);
     await flush();
   };
-  const dispose = () => {
+  const dispose = async () => {
     if (navRef.scrollTimer) clearTimeout(navRef.scrollTimer);
-    setup.renderer.destroy();
+    await setup.dispose();
   };
   try {
     // The sidebar populates the shared navRef before the compact dialog opens.
@@ -186,7 +186,7 @@ async function renderDetail(compact = true, fileCount = 40, family = false, jump
     setShowCompact(compact);
     await flush();
   } catch (error) {
-    dispose();
+    await dispose();
     throw error;
   }
   return {
@@ -296,7 +296,7 @@ test("compact tabs hover without switching and accept only left clicks across to
       }
     }
   } finally {
-    d.dispose();
+    await d.dispose();
   }
 });
 
@@ -337,7 +337,7 @@ test("compact footer Enter invokes the real current file activation, is nonselec
     expect(d.open()).toBe(false);
     expect(d.frame()).not.toContain("Details");
   } finally {
-    d.dispose();
+    await d.dispose();
   }
 });
 
@@ -365,7 +365,7 @@ test("empty Files tab ignores hover and clicks; footer Enter is disabled when th
       expect(d.state.detailCursorAction()).toBe("copy");
     }
   } finally {
-    d.dispose();
+    await d.dispose();
   }
 });
 
@@ -385,7 +385,7 @@ test("native wheel scrolls compact detail without activating files; sidebar tab 
     expect(sb.scrollTop).toBeLessThan(top);
     expect(d.onOpenDiff).not.toHaveBeenCalled();
   } finally {
-    d.dispose();
+    await d.dispose();
   }
   const sidebar = await renderDetail(false);
   try {
@@ -404,7 +404,7 @@ test("native wheel scrolls compact detail without activating files; sidebar tab 
     }
     expect(sidebar.onOpenDiff).not.toHaveBeenCalled();
   } finally {
-    sidebar.dispose();
+    await sidebar.dispose();
   }
 });
 
@@ -460,8 +460,11 @@ test("compact Info copies exact fields, highlights on hover without moving the c
     expect(d.text("Branch").selectable).toBe(true);
     expect(d.text(" main ").selectable).toBe(true);
   } finally {
-    d?.dispose();
-    clipboardSpy.mockRestore();
+    try {
+      await d?.dispose();
+    } finally {
+      clipboardSpy.mockRestore();
+    }
   }
 });
 
@@ -516,7 +519,7 @@ test("compact Info toggles headers and navigates exact family entries after flat
     expect(d.frame()).not.toContain("def1234");
     expect(d.renderer.getSelection()).toBeNull();
   } finally {
-    d.dispose();
+    await d.dispose();
   }
 });
 
@@ -553,7 +556,7 @@ test("compact Info parent clicks and keyboard Enter preserve the tab during the 
       expect(d.state.detailCursorIndex()).toBe(0);
       expect(d.navRef.pendingJumpDirection).toBeNull();
     } finally {
-      d.dispose();
+      await d.dispose();
     }
   }
 });
@@ -585,7 +588,10 @@ test("sidebar Info mouse actions stay disabled and its content stays selectable"
     expect(copy).not.toHaveBeenCalled();
     expect(d.onJumpToCommit).not.toHaveBeenCalled();
   } finally {
-    d?.dispose();
-    clipboardSpy.mockRestore();
+    try {
+      await d?.dispose();
+    } finally {
+      clipboardSpy.mockRestore();
+    }
   }
 });
