@@ -38,18 +38,19 @@ distributions such as Alpine are not currently supported.
 
 ### Windows
 
-Download and run the installer in PowerShell:
+Download the installer in PowerShell, then run it after the download succeeds:
 
 ```powershell
-Invoke-WebRequest https://github.com/andreduejon/codepulse/releases/latest/download/install.ps1 -OutFile "$env:TEMP/codepulse-install.ps1"
+curl.exe -fsSL https://github.com/andreduejon/codepulse/releases/latest/download/install.ps1 -o "$env:TEMP/codepulse-install.ps1"
 & "$env:TEMP/codepulse-install.ps1"
 ```
 
 The installer detects native x64/ARM64 architecture, verifies SHA-256, and installs
-to `%LOCALAPPDATA%\codepulse\bin`. Add that folder to your user PATH, then open
-a new terminal to use `codepulse` from any directory. Set `CODEPULSE_INSTALL_DIR`
-for a custom location or `CODEPULSE_VERSION` for a specific release. Git for
-Windows must be on PATH; Bun and Node.js are not required to run Codepulse.
+to `%LOCALAPPDATA%\codepulse\bin`. It adds that folder to your user PATH and
+current PowerShell session, so `codepulse` works immediately. Restart other open
+terminals to pick up the change. Set `CODEPULSE_INSTALL_DIR` for a custom location
+or `CODEPULSE_VERSION` for a specific release. Git for Windows must be on PATH.
+Bun and Node.js are not required to run Codepulse.
 If local policy blocks scripts, use the release ZIP rather than weakening policy.
 
 Windows binaries are unsigned;
