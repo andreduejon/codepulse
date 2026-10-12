@@ -77,8 +77,11 @@ Windows executables are unsigned; SmartScreen reputation warnings are possible.
 `bun scripts/test-install.ts` runs offline in CI and release builds on every
 platform. It checks the native installer (`install.sh` or `install.ps1`):
 success, checksum/archive/download failures, preservation of an existing
-installation, and cleanup. Unix checks also cover glibc rejection and signing
-failures. These are development regression tests, not part of normal installation.
+installation, and cleanup. Windows checks also cover automatic user/current-session
+PATH setup and duplicate prevention, restoring the original user PATH afterward.
+Use a disposable Windows profile if checks might be forcibly stopped, bypassing cleanup.
+Unix checks also cover glibc rejection and signing failures. These are development
+regression tests, not part of normal installation.
 Both installers stage the executable before replacing an existing binary.
 
 Verify the published assets and test installation in a temporary directory:
@@ -100,12 +103,28 @@ each native architecture in PowerShell:
 ```powershell
 $env:CODEPULSE_VERSION = 'v<release-version>'
 $env:CODEPULSE_INSTALL_DIR = Join-Path $env:TEMP ('codepulse-install-' + [guid]::NewGuid())
+$savedProcessPath = $env:PATH
+$userEnvironment = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment')
+$savedUserPath = $userEnvironment.GetValue('Path', $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+$savedUserPathKind = if ($null -ne $savedUserPath) { $userEnvironment.GetValueKind('Path') }
 try {
     Invoke-WebRequest "https://github.com/andreduejon/codepulse/releases/download/$env:CODEPULSE_VERSION/install.ps1" -OutFile "$env:TEMP/codepulse-install.ps1"
     & "$env:TEMP/codepulse-install.ps1"
+    Get-Command codepulse -CommandType Application | Out-Null
     & (Join-Path $env:CODEPULSE_INSTALL_DIR 'codepulse.exe') --version
     & "$env:TEMP/codepulse-install.ps1" # Verify replacement of an existing install.
 } finally {
+    if ($null -eq $savedUserPath) {
+        $userEnvironment.DeleteValue('Path', $false)
+    } else {
+        $userEnvironment.SetValue('Path', $savedUserPath, $savedUserPathKind)
+    }
+    $userEnvironment.Dispose()
+    $env:PATH = $savedProcessPath
+    if ('Codepulse.EnvironmentNotifier' -as [type]) {
+        $result = [UIntPtr]::Zero
+        [Codepulse.EnvironmentNotifier]::SendMessageTimeout([IntPtr]0xffff, 0x001a, [UIntPtr]::Zero, 'Environment', 2, 1000, [ref]$result) | Out-Null
+    }
     Remove-Item $env:CODEPULSE_INSTALL_DIR -Recurse -Force
     Remove-Item "$env:TEMP/codepulse-install.ps1" -Force
     Remove-Item Env:CODEPULSE_INSTALL_DIR, Env:CODEPULSE_VERSION

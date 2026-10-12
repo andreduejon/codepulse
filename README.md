@@ -51,8 +51,9 @@ curl.exe -fsSL https://github.com/andreduejon/codepulse/releases/latest/download
 ```
 
 The installer detects native x64/ARM64 architecture, verifies SHA-256, and installs
-to `%LOCALAPPDATA%\codepulse\bin`. Add that folder to your user PATH, then open
-a new terminal to use `codepulse` from any directory.
+to `%LOCALAPPDATA%\codepulse\bin`. It adds that folder to your user PATH and
+current PowerShell session, so `codepulse` works immediately. Restart other open
+terminals to pick up the change.
 If local policy blocks scripts, use the release ZIP rather than weakening policy.
 
 Windows binaries are unsigned.

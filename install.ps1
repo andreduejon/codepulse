@@ -32,6 +32,16 @@ if (-not $installDir) {
 }
 $installDir = [System.IO.Path]::GetFullPath($installDir)
 
+function Test-InstallDirectoryInPath {
+    param([string] $PathValue)
+    foreach ($entry in ($PathValue -split ';')) {
+        # Quoted PATH entries are not searchable by PowerShell.
+        $entry = $entry.Trim().Replace('/', '\').TrimEnd('\')
+        if ($entry -ieq $installDir.Replace('/', '\').TrimEnd('\')) { return $true }
+    }
+    return $false
+}
+
 $releaseUrl = 'https://github.com/andreduejon/codepulse/releases'
 if ($version -ceq 'latest') {
     $releaseUrl += '/latest/download'
@@ -82,10 +92,45 @@ try {
     }
 
     Write-Host "Installed codepulse to $destination"
-    if ($installDir -notin ($env:PATH -split ';')) {
-        Write-Host "Add $installDir to your user PATH via Settings > System > About > Advanced system settings > Environment Variables."
-        Write-Host 'Open a new terminal afterward to run codepulse.'
+    $userEnvironment = $null
+    try {
+        $userEnvironment = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment')
+        # Keep expandable entries and their registry type, not the merged process PATH.
+        $userPath = $userEnvironment.GetValue('Path', $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+        if ($null -ne $userPath -and $userPath -isnot [string]) { throw 'user PATH is not a string' }
+        $pathKind = if ($null -eq $userPath) { [Microsoft.Win32.RegistryValueKind]::ExpandString } else { $userEnvironment.GetValueKind('Path') }
+        $matchingPath = if ($userPath -and $pathKind -eq [Microsoft.Win32.RegistryValueKind]::ExpandString) { [Environment]::ExpandEnvironmentVariables($userPath) } else { $userPath }
+        if (-not (Test-InstallDirectoryInPath $matchingPath)) {
+            $newPath = if ($userPath) { "$userPath;$installDir" } else { $installDir }
+            $userEnvironment.SetValue('Path', $newPath, $pathKind)
+            Write-Host "Added $installDir to your user PATH"
+
+            # Notify Explorer so newly launched terminals inherit the updated PATH.
+            if (-not ('Codepulse.EnvironmentNotifier' -as [type])) {
+                Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+namespace Codepulse {
+    public static class EnvironmentNotifier {
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        public static extern IntPtr SendMessageTimeout(IntPtr window, uint message,
+            UIntPtr wParam, string lParam, uint flags, uint timeout, out UIntPtr result);
     }
+}
+'@
+            }
+            $result = [UIntPtr]::Zero
+            [Codepulse.EnvironmentNotifier]::SendMessageTimeout([IntPtr]0xffff, 0x001a, [UIntPtr]::Zero, 'Environment', 2, 1000, [ref]$result) | Out-Null
+        }
+    } catch {
+        Write-Warning "codepulse is installed, but automatic user PATH setup failed: $($_.Exception.Message). Add $installDir to your user PATH manually for future terminals."
+    } finally {
+        if ($userEnvironment) { $userEnvironment.Dispose() }
+    }
+    if (-not (Test-InstallDirectoryInPath $env:PATH)) {
+        $env:PATH = if ($env:PATH) { "$env:PATH;$installDir" } else { $installDir }
+    }
+    Write-Host 'Run codepulse now. Other open terminals may need to be restarted.'
 } finally {
     if ($stagedFile -and (Test-Path -LiteralPath $stagedFile)) {
         Remove-Item -LiteralPath $stagedFile -Force
