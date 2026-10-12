@@ -342,10 +342,14 @@ process.exit(1);
     await writeFile(
       descendantPath,
       `
-const { writeFileSync, existsSync } = require("node:fs");
+const { writeFileSync, renameSync, existsSync } = require("node:fs");
 process.on("SIGTERM", () => {});
-writeFileSync(process.env.FAKE_READY, JSON.stringify({ pid: process.pid, parentPid: process.ppid }));
-setInterval(() => writeFileSync(process.env.FAKE_HEARTBEAT, String(Date.now()) + ":" + existsSync(process.cwd())), 10);
+const publish = (path, text) => {
+  writeFileSync(path + ".tmp", text);
+  renameSync(path + ".tmp", path);
+};
+publish(process.env.FAKE_READY, JSON.stringify({ pid: process.pid, parentPid: process.ppid }));
+setInterval(() => publish(process.env.FAKE_HEARTBEAT, String(Date.now()) + ":" + existsSync(process.cwd())), 10);
 `,
     );
     const env = await fakeSnyk(
