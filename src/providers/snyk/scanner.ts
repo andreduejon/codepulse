@@ -120,6 +120,14 @@ function throwScanFailure(stdout: string, stderr: string | undefined, exitCode: 
 
 export const runSnykCommand: SnykCommandRunner = async (command, options) => {
   throwIfAborted(options.signal);
+  if (process.platform === "win32") {
+    const env = { ...(options.env ?? process.env) };
+    const path = env.PATH ?? Object.entries(env).find(([key]) => key.toUpperCase() === "PATH")?.[1];
+    for (const key of Object.keys(env)) {
+      if (key.toUpperCase() === "PATH") delete env[key];
+    }
+    options = { ...options, env: { ...env, PATH: path } };
+  }
   const started = Date.now();
   const source = command[0] === "snyk" ? "Snyk" : "Git";
   const message = command.map(redactDebugValue).join(" ");
