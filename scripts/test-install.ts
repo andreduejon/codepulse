@@ -48,6 +48,7 @@ try {
     & $env:TEST_INSTALLER @parameters | Out-Null
 } catch {
     $failure = $_.Exception.Message
+    if (-not $failure) { $failure = $_.ToString() }
 }
 $result = @{
     failure = $failure
@@ -168,8 +169,9 @@ else if (command === "curl") {
         nativeArch: string;
       } = JSON.parse(await readFile(resultFile, "utf8"));
       if (entry.failure) {
-        assert(report.failure, `${entry.name} must fail`);
-        if (entry.failure !== "any") assert(report.failure.includes(entry.failure), `${entry.name}: ${report.failure}`);
+        assert.notEqual(report.failure, null, `${entry.name} must fail`);
+        if (entry.failure !== "any")
+          assert(report.failure?.includes(entry.failure), `${entry.name}: ${report.failure}`);
       } else {
         assert.equal(report.failure, null, `${entry.name}: ${report.failure}`);
       }
