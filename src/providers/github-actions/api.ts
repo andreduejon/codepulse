@@ -502,9 +502,10 @@ function checkSuiteNodeFields(includeJobs: boolean): string {
 
 export function isGitHubJobsFieldSchemaError(message: string): boolean {
   return (
-    /field ['"]jobs['"] does(?:n't| not) exist/i.test(message) ||
-    /unknown field ['"]jobs['"]/i.test(message) ||
-    /['"]jobs['"] is not defined/i.test(message)
+    /field ['"]?jobs['"]? does(?:n't| not) exist/i.test(message) ||
+    /unknown field ['"]?jobs\b['"]?/i.test(message) ||
+    /['"]?\bjobs\b['"]? is not defined/i.test(message) ||
+    /cannot query field ['"]?jobs['"]? on type/i.test(message)
   );
 }
 
@@ -589,10 +590,12 @@ async function fetchCIDataForSHAsOnce(
   shas: string[],
   opts: { signal?: AbortSignal; includeJobs: boolean },
 ): Promise<GraphQLFetchResult & { jobsSchemaRejected?: boolean }> {
-  const { signal, includeJobs } = opts;
+  const { signal } = opts;
+  let includeJobs = opts.includeJobs;
   const empty: GraphQLFetchResult = { data: [], jobs: new Map(), error: null };
   const runs: GitHubWorkflowRun[] = [];
   const jobs = new Map<number, GitHubJob[]>();
+  let jobsUnsupported = false;
 
   try {
     const res = await fetchWithRetry(graphqlEndpoint(repo), {
@@ -613,13 +616,13 @@ async function fetchCIDataForSHAsOnce(
     }
 
     const json = (await res.json()) as GqlBatchQueryResult;
-    let jobsUnsupported = false;
     if (json.errors?.length) {
-      debugError("GitHub", json.errors.map(e => e.message).join("; "));
-      if (graphqlJobsFieldUnsupported(json.errors)) {
+      if (includeJobs && graphqlJobsFieldUnsupported(json.errors)) {
         jobsUnsupported = true;
         if (!json.data?.repository) return { ...empty, jobsSchemaRejected: true, jobsUnsupported: true };
+        includeJobs = false;
       } else {
+        debugError("GitHub", [...new Set(json.errors.map(e => e.message))].join(". "));
         return { ...empty, error: BANNER.github.fetchFailed };
       }
     }
@@ -644,15 +647,21 @@ async function fetchCIDataForSHAsOnce(
           data: runs,
           jobs,
           error: debugGitHubHttp(pageRes, "fetch", `GraphQL HTTP ${pageRes.status} for ${repo.owner}/${repo.repo}`),
+          jobsUnsupported: jobsUnsupported || undefined,
         };
       }
       const pageJson = (await pageRes.json()) as GqlBatchQueryResult;
       if (pageJson.errors?.length) {
-        debugError("GitHub", pageJson.errors.map(e => e.message).join("; "));
-        if (graphqlJobsFieldUnsupported(pageJson.errors) && !pageJson.data?.repository) {
-          return { data: runs, jobs, error: null, jobsSchemaRejected: true, jobsUnsupported: true };
+        if (includeJobs && graphqlJobsFieldUnsupported(pageJson.errors)) {
+          jobsUnsupported = true;
+          if (!pageJson.data?.repository) {
+            return { data: runs, jobs, error: null, jobsSchemaRejected: true, jobsUnsupported: true };
+          }
+          includeJobs = false;
+        } else {
+          debugError("GitHub", [...new Set(pageJson.errors.map(e => e.message))].join(". "));
+          return { data: runs, jobs, error: BANNER.github.fetchFailed, jobsUnsupported: jobsUnsupported || undefined };
         }
-        return { data: runs, jobs, error: BANNER.github.fetchFailed };
       }
       pending = collectRunsFromRepoData(
         pageJson.data?.repository ?? {},
@@ -665,7 +674,12 @@ async function fetchCIDataForSHAsOnce(
     return { data: runs, jobs, error: null, jobsUnsupported: jobsUnsupported || undefined };
   } catch (err) {
     if (signal?.aborted) throw err;
-    return { data: runs, jobs, error: bannerOrFallback(err, BANNER.github.fetchFailed, "GitHub") };
+    return {
+      data: runs,
+      jobs,
+      error: bannerOrFallback(err, BANNER.github.fetchFailed, "GitHub"),
+      jobsUnsupported: jobsUnsupported || undefined,
+    };
   }
 }
 
@@ -678,8 +692,8 @@ async function fetchCIDataForSHAsOnce(
  * before calling this function.
  *
  * Returns runs + pre-populated jobs map in a single HTTP request.
- * Older GitHub Enterprise schemas without WorkflowRun.jobs retry once
- * without that field; expand still loads jobs via REST.
+ * Schemas without WorkflowRun.jobs retry once without that field.
+ * Expand still loads jobs via REST.
  * Falls back gracefully on errors (returns empty result, never throws).
  */
 export async function fetchCIDataForSHAs(

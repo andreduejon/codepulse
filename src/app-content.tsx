@@ -177,12 +177,6 @@ export function AppContent(props: Readonly<AppContentProps>) {
     reloadRuntimeConfig();
   });
 
-  // Auto-persist theme changes (confirmed selections and reverts from ThemeDialog)
-  createEffect(() => {
-    const name = themeState.themeName();
-    writeConfig({ theme: name }, activeRepoPath());
-  });
-
   const [dialog, setDialog] = createSignal<DialogId>(null);
 
   const [searchFocused, setSearchFocused] = createSignal(false);
@@ -740,9 +734,8 @@ export function AppContent(props: Readonly<AppContentProps>) {
   return (
     <ThemeContext.Provider
       value={{
+        ...themeState,
         theme: providerTheme,
-        setTheme: themeState.setTheme,
-        themeName: themeState.themeName,
       }}
     >
       <AppStateContext.Provider value={{ state, actions }}>
@@ -946,7 +939,10 @@ export function AppContent(props: Readonly<AppContentProps>) {
                   <HelpDialog onClose={() => setDialog(null)} />
                 </Show>
                 <Show when={dialog() === "theme"}>
-                  <ThemeDialog onClose={() => setDialog(null)} />
+                  <ThemeDialog
+                    onClose={() => setDialog(null)}
+                    onSelect={name => writeConfig({ theme: name }, activeRepoPath())}
+                  />
                 </Show>
                 <Show when={dialog() === "debug"}>
                   <DebugDialog onClose={() => setDialog(null)} gitColor={themeState.theme().gitBg} />

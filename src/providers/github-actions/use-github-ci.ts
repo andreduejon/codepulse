@@ -31,6 +31,7 @@ import {
   providerUnavailable,
 } from "../../context/state";
 import { BANNER, bannerOrFallback, debugError } from "../../debug/banner";
+import { addDebugEvent } from "../../debug/events";
 
 import { DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS } from "../shared/auto-refresh";
 import { useProviderFetchLifecycle } from "../shared/use-provider-fetch-lifecycle";
@@ -181,7 +182,7 @@ export function useGitHubCI(opts: {
    */
   const queriedSHAs = new Set<string>();
   let authFrozen = false;
-  /** Sticky: GHE GraphQL without WorkflowRun.jobs. Skip that field after the first retry. */
+  /** Skip unsupported WorkflowRun.jobs after the first retry. */
   let jobsUnsupported = false;
 
   function rememberAuthError(error: string | null): void {
@@ -221,7 +222,14 @@ export function useGitHubCI(opts: {
 
     if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { firstError: null, failedSHAs: [] };
 
-    if (results.some(result => result.jobsUnsupported)) jobsUnsupported = true;
+    if (!jobsUnsupported && results.some(result => result.jobsUnsupported)) {
+      jobsUnsupported = true;
+      addDebugEvent({
+        source: "GitHub",
+        status: "info",
+        message: "GraphQL workflow jobs unavailable. Using REST on expand.",
+      });
+    }
     const firstError = results.find(r => r.error)?.error ?? null;
     const failedSHAs: string[] = [];
     for (let i = 0; i < results.length; i++) {

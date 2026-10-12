@@ -16,7 +16,10 @@ commit and branch context.
 ## Requirements
 
 - Git
-- macOS or glibc Linux on arm64 or x64; Windows 11 x64/ARM64 with Windows Terminal
+- macOS or glibc Linux on arm64 or x64
+- Windows 11 x64/ARM64 with Windows Terminal
+
+Musl-based Linux distributions such as Alpine are not currently supported.
 
 ## Install
 
@@ -28,13 +31,7 @@ curl -fsSL https://github.com/andreduejon/codepulse/releases/latest/download/ins
 
 The installer downloads the binary for your platform, verifies its SHA-256
 checksum, and installs `codepulse` to `~/.local/bin`. Bun and Node.js are not
-required. Set `CODEPULSE_INSTALL_DIR` to install into another directory on your
-`PATH`.
-
-Release archives are also available for manual installation from
-[GitHub Releases](https://github.com/andreduejon/codepulse/releases). Supported
-targets are macOS, glibc Linux, and Windows on arm64/x64. Musl-based Linux
-distributions such as Alpine are not currently supported.
+required.
 
 ### Windows
 
@@ -47,26 +44,16 @@ Invoke-WebRequest https://github.com/andreduejon/codepulse/releases/latest/downl
 
 The installer detects native x64/ARM64 architecture, verifies SHA-256, and installs
 to `%LOCALAPPDATA%\codepulse\bin`. Add that folder to your user PATH, then open
-a new terminal to use `codepulse` from any directory. Set `CODEPULSE_INSTALL_DIR`
-for a custom location or `CODEPULSE_VERSION` for a specific release. Git for
-Windows must be on PATH; Bun and Node.js are not required to run Codepulse.
+a new terminal to use `codepulse` from any directory. Git for Windows must be on
+PATH. Bun and Node.js are not required to run Codepulse.
 If local policy blocks scripts, use the release ZIP rather than weakening policy.
 
-Windows binaries are unsigned;
+Windows binaries are unsigned.
 SmartScreen reputation warnings are possible. Checksums verify file integrity,
 not publisher trust. Do not disable security protections for a malware detection.
 
-### Configuration and cache
-
-| Platform | Configuration | Provider cache root |
-|----------|---------------|---------------------|
-| macOS / Linux | `~/.config/codepulse/config.json` | `~/.cache/codepulse` |
-| Windows | `%APPDATA%\codepulse\config.json` | `%LOCALAPPDATA%\codepulse\Cache` |
-
-Settings are saved per repository. Menu → Repository → Configuration shows the
-full config path; click it or press Enter to copy. Windows AppData locations
-fall back to the corresponding folders under your home if environment variables
-are absent. Earlier experimental Windows `.config`/`.cache` files are not migrated.
+See [installation options](docs/usage.md#installation-options) for custom
+locations, specific versions, and manual installation.
 
 ## Usage
 
@@ -76,85 +63,12 @@ codepulse [path]
 
 If no path is given, the current directory is used.
 
-Local auto-refresh only reloads repository state from disk. Remote fetching
-stays manual by default (`f` / `:fetch`) and can be enabled separately via
-repo configuration.
+Navigate commits with `↑`/`↓` or `j`/`k`, inspect details with `→`, and press `?`
+for help. Use `codepulse --help` for CLI help or `--version` for the version.
 
-## Options
-
-| Flag            | Description  |
-|-----------------|--------------|
-| `-h, --help`    | Show help    |
-| `-v, --version` | Show version |
-
-## Releasing
-
-See the [release process](docs/RELEASING.md).
-
-## Keyboard Shortcuts
-
-Use `codepulse -h` for complete shortcuts, commands, and provider setup.
-
-### General
-
-| Key   | Action                    |
-|-------|---------------------------|
-| `esc` | Back / clear current mode |
-| `tab` | Cycle provider view       |
-| `:`   | Open command mode         |
-| `/`   | Open search mode          |
-| `m`   | Open menu dialog          |
-| `f`   | Fetch from remote         |
-| `?`   | Open help dialog          |
-| `q`   | Quit                      |
-
-### Graph
-
-| Key                       | Action                               |
-|---------------------------|--------------------------------------|
-| `↑` / `↓` or `j` / `k`    | Navigate commits                     |
-| `shift + ↑` / `shift + ↓` | Jump 10 commits                      |
-| `g` / `G`                 | First / last commit                  |
-| `→` / `l`                 | Focus detail panel                   |
-| `enter`                   | Focus details / open compact dialog  |
-| `a`                       | Enter ancestry mode                  |
-| `p`                       | Enter path mode                      |
-| `shift + ←` / `shift + →` | Switch project within current group  |
-
-`/` and `p` open the same temporary inline input as badge clicks. Enter applies; Esc cancels
-without changing the current filter. Normal clears highlighting, not branch
-perspective. Colon commands share the inline input row.
-
-### Details
-
-| Key                       | Action                                   |
-|---------------------------|------------------------------------------|
-| `↑` / `↓` or `j` / `k`    | Navigate items                           |
-| `shift + ↑` / `shift + ↓` | Jump 10 items                            |
-| `←` / `h`                 | Previous tab / exit details on first tab |
-| `→` / `l`                 | Next tab                                 |
-| `g` / `G`                 | Top / bottom                             |
-| `enter`                   | Activate selected item                   |
-
-## Commands
-
-| Command       | Description                             |
-|---------------|-----------------------------------------|
-| `:ancestry`   | Highlight ancestry for selected commit  |
-| `:branches`   | Open menu dialog on Branches tab        |
-| `:clear`      | Dismiss current status message          |
-| `:debug`      | Toggle debug dialog                     |
-| `:fetch`      | Fetch from remote                       |
-| `:help`       | Open help dialog                        |
-| `:menu`       | Open menu dialog                        |
-| `:path`       | Switch to path mode                     |
-| `:providers`  | Open menu dialog on Providers tab       |
-| `:quit`       | Quit application                        |
-| `:reload`     | Reload repository data from disk        |
-| `:repo`       | Open menu dialog on Repository tab      |
-| `:search`     | Switch to search mode                   |
-| `:switch`     | Open repository switcher                |
-| `:theme`      | Open theme dialog                       |
+Settings are saved per repository. Remote fetching is manual by default.
+See the [usage guide](docs/usage.md) for shortcuts, commands, configuration,
+and refresh behavior.
 
 ## Providers
 
@@ -176,22 +90,15 @@ diagnostic conventions.
 
 ## Themes
 
-Switch themes live with `:theme`, or persist a theme in repo configuration.
+Choose from 12 predefined themes or create custom themes by extending a built-in
+palette or defining every color independently. Preview themes live with `:theme`
+and save selections per repository. Built-in themes remain unchanged.
 
-| Name                         | Config value         |
-|------------------------------|----------------------|
-| Catppuccin Mocha *(default)* | `catppuccin-mocha`   |
-| OpenCode Original            | `open-code-original` |
-| Tokyo Night                  | `tokyo-night`        |
-| Dracula                      | `dracula`            |
-| Nord                         | `nord`               |
-| One Dark Pro                 | `one-dark`           |
-| Gruvbox Dark                 | `gruvbox`            |
-| Monokai Pro                  | `monokai`            |
-| Ayu Mirage                   | `ayu-mirage`         |
-| Synthwave '84                | `synthwave`          |
-| Rosé Pine                    | `rose-pine`          |
-| Olive Garden                 | `olive-garden`       |
+Theme Details show color swatches, selectable HEX values, and base-versus-override
+comparisons. Invalid custom definitions are isolated with diagnostics.
+
+See the [theme guide](docs/themes.md) for controls, available themes, and custom
+configuration examples.
 
 ## Roadmap
 

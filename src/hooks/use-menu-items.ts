@@ -4,7 +4,7 @@ import type { CodepulseConfig, ConfigInfo } from "../config";
 import { getRepoDisplayConfig, writeConfig } from "../config";
 import { AUTO_REFRESH_MS, INTERVAL_OPTIONS, MAX_COUNT_OPTIONS, MS_TO_LABEL } from "../constants";
 import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL, useAppState } from "../context/state";
-import { themes } from "../context/theme";
+import type { Theme } from "../context/theme";
 import { getTokenSource, parseGitHubRemote } from "../providers/github-actions/api";
 import type { JenkinsJobConfig } from "../providers/jenkins/types";
 import { isValidJenkinsJobUrl } from "../providers/jenkins/validation";
@@ -101,6 +101,7 @@ export interface MenuItemsOptions {
   activeTab: Accessor<MenuTab>;
   /** Theme name accessor (e.g. "catppuccin-mocha"). */
   themeName: Accessor<string>;
+  themes: Record<string, Theme>;
   /** Set the active theme by name. */
   setTheme: (name: string) => void;
   /** Clipboard copy callback. */
@@ -674,7 +675,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
         kind: "dialog",
         label: "Color theme",
         dialogId: "theme",
-        get: () => themes[opts.themeName()]?.name ?? opts.themeName(),
+        get: () => opts.themes[opts.themeName()]?.name ?? opts.themeName(),
       },
       {
         kind: "cycle",

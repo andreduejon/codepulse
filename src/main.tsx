@@ -3,6 +3,7 @@ import { render } from "@opentui/solid";
 import App from "./app";
 import { parseArgs } from "./cli/parse-args";
 import { getKnownRepoInfos, type KnownRepoInfo, loadConfig, mergeOptions, resolveConfigInfo } from "./config";
+import { loadCustomThemes } from "./context/custom-themes";
 import { getRepoRoot, isGitAvailable, isGitRepo } from "./git/repo";
 
 /** Startup mode determines which screen the app shows first. */
@@ -22,6 +23,7 @@ export async function main() {
   const configInfo = resolveConfigInfo(normalizedCli.repoPath);
   const { config } = loadConfig(normalizedCli.repoPath);
   const opts = mergeOptions(normalizedCli, config);
+  const customThemes = loadCustomThemes();
 
   let startupMode: StartupMode;
 
@@ -68,6 +70,7 @@ export async function main() {
         all={opts.all}
         maxCount={opts.maxCount}
         themeName={opts.themeName}
+        customThemes={customThemes}
         autoRefreshInterval={opts.autoRefreshInterval}
         autoFetchInterval={opts.autoFetchInterval}
         configInfo={configInfo}

@@ -111,7 +111,7 @@ export const [lastMenuTab, setLastMenuTab] = createSignal<MenuTab>("repository")
 export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   const renderer = useRenderer();
   const { actions } = useAppState();
-  const { theme, themeName, setTheme } = useTheme();
+  const { theme, themeName, setTheme, themes } = useTheme();
   const t = () => theme();
   const dimensions = useTerminalDimensions();
   const dialogWidth = () => 72;
@@ -148,6 +148,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   } = useMenuItems({
     activeTab,
     themeName,
+    themes,
     setTheme,
     copyToClipboard,
     onFetch: () => props.onFetch(),

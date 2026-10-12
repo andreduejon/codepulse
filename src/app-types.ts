@@ -1,5 +1,5 @@
 import type { ConfigInfo } from "./config";
-import type { createThemeState } from "./context/theme";
+import type { CustomTheme, createThemeState } from "./context/theme";
 import type { Branch, Commit, GraphRow, TagInfo } from "./git/types";
 import type { StartupMode } from "./main";
 import type { ProviderView } from "./providers/provider";
@@ -10,6 +10,7 @@ export interface AppProps {
   all?: boolean;
   maxCount?: number;
   themeName?: string;
+  customThemes?: readonly CustomTheme[];
   autoRefreshInterval?: number;
   autoFetchInterval?: number;
   configInfo?: ConfigInfo;
