@@ -76,7 +76,7 @@ try {
     $stagedFile = Join-Path $installDir (".codepulse-" + [guid]::NewGuid() + '.exe')
     Copy-Item -LiteralPath $executable -Destination $stagedFile
     if (Test-Path -LiteralPath $destination) {
-        [System.IO.File]::Replace($stagedFile, $destination, $null)
+        [System.IO.File]::Replace($stagedFile, $destination, [System.Management.Automation.Language.NullString]::Value)
     } else {
         [System.IO.File]::Move($stagedFile, $destination)
     }
