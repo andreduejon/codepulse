@@ -339,7 +339,8 @@ else if (command === "curl") {
       assert(powershell, "PowerShell required");
       const result = Bun.spawnSync([powershell, "-NoProfile", "-NonInteractive", "-Command", driver], {
         env: {
-          ...env,
+          // Let each shell find its own modules instead of inheriting PowerShell 7's.
+          ...Object.fromEntries(Object.entries(env).filter(([key]) => key.toUpperCase() !== "PSMODULEPATH")),
           TEMP: temp,
           TMP: temp,
           LOCALAPPDATA: home,
