@@ -12,7 +12,16 @@ export function openUrl(url: string | undefined): void {
     if (process.platform === "darwin") {
       Bun.spawn(["open", parsed.toString()]);
     } else if (process.platform === "win32") {
-      Bun.spawn(["cmd", "/c", "start", "", parsed.toString()]);
+      Bun.spawn(
+        [
+          "powershell.exe",
+          "-NoProfile",
+          "-NonInteractive",
+          "-Command",
+          "Start-Process -FilePath $env:CODEPULSE_OPEN_URL",
+        ],
+        { env: { ...process.env, CODEPULSE_OPEN_URL: parsed.toString() } },
+      );
     } else {
       Bun.spawn(["xdg-open", parsed.toString()]);
     }

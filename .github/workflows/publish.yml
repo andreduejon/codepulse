@@ -111,8 +111,14 @@ jobs:
           path: codepulse-${{ matrix.target }}.tar.gz
           if-no-files-found: error
 
+  windows:
+    needs: verify
+    uses: ./.github/workflows/windows.yml
+    permissions:
+      contents: read
+
   publish:
-    needs: build
+    needs: [build, windows]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -124,20 +130,21 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           path: release-assets
+          pattern: codepulse-*
           merge-multiple: true
 
       - name: Generate checksums
         working-directory: release-assets
-        run: sha256sum codepulse-*.tar.gz > SHA256SUMS
+        run: sha256sum codepulse-*.tar.gz codepulse-*.zip > SHA256SUMS
 
       - name: Upload GitHub Release assets
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" release-assets/* install.sh --clobber
+            gh release upload "$GITHUB_REF_NAME" release-assets/* install.sh install.ps1 --clobber
           else
-            gh release create "$GITHUB_REF_NAME" release-assets/* install.sh \
+            gh release create "$GITHUB_REF_NAME" release-assets/* install.sh install.ps1 \
               --draft \
               --generate-notes \
               --title "$GITHUB_REF_NAME" \

@@ -1,10 +1,10 @@
-import { homedir } from "node:os";
 import { join } from "node:path";
+import { storageRoot } from "../../utils/storage-path";
 import { DEFAULT_PROVIDER_LIMIT, type ProviderLimit } from "../shared/auto-refresh";
 import { mergeById, ShaJsonCache } from "../shared/sha-json-cache";
 import type { GitHubJob, GitHubStep, GitHubWorkflowRun } from "./types";
 
-export const DEFAULT_GITHUB_CACHE_ROOT = join(homedir(), ".cache", "codepulse", "github-actions");
+export const DEFAULT_GITHUB_CACHE_ROOT = join(storageRoot("cache"), "github-actions");
 
 export interface GitHubCacheEntry {
   sha: string;

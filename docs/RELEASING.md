@@ -18,10 +18,12 @@ every binary passes validation.
    CODEPULSE_BUILD_ASSET_SMOKE=1 bun run build
    ```
 
-   The build replaces `dist/`. On macOS, sign both executables using the
+   The build replaces only its target directory under `dist/`. On macOS, sign both executables using the
    entitlements and commands in the Release workflow before running them.
    Verify the binary's `--version`, embedded assets, and interactive startup
-   using `scripts/smoke-binary.exp`. CI performs these checks on all four targets.
+   using `scripts/smoke-binary.exp` on macOS/Linux. Windows validation uses native
+   x64/ARM64 runners for tests, CLI and embedded-asset smoke checks; see
+   [Windows testing](WINDOWS-TESTING.md) for required interactive validation.
    Manually check wide/compact resizing, mouse and keyboard navigation, dialog
    return paths, and repository switching before tagging.
 3. Merge the release changes through `develop` and then `main`.
@@ -55,6 +57,11 @@ The workflow validates the tagged source, builds and tests all supported
 platform artifacts, creates checksums, and publishes the GitHub Release only
 after every matrix job succeeds.
 
+Release assets include four macOS/Linux tarballs, Windows x64/ARM64 ZIPs,
+`SHA256SUMS`, `install.sh`, and `install.ps1`. Interactive-test ZIPs are CI
+artifacts only, not published release assets. Windows publication is gated by
+the native Windows validation workflow as well as Unix build jobs.
+
 ## Verify
 
 Verify the published assets and test installation in a temporary directory:
@@ -68,4 +75,22 @@ curl -fsSL https://github.com/andreduejon/codepulse/releases/latest/download/ins
   CODEPULSE_INSTALL_DIR="$install_dir" sh
 "$install_dir/codepulse" --version
 rm -rf "$test_root"
+```
+
+After Windows assets are published, verify installation and replacement on
+each native architecture in PowerShell:
+
+```powershell
+$env:CODEPULSE_VERSION = 'v<release-version>'
+$env:CODEPULSE_INSTALL_DIR = Join-Path $env:TEMP ('codepulse-install-' + [guid]::NewGuid())
+try {
+    Invoke-WebRequest "https://github.com/andreduejon/codepulse/releases/download/$env:CODEPULSE_VERSION/install.ps1" -OutFile "$env:TEMP/codepulse-install.ps1"
+    & "$env:TEMP/codepulse-install.ps1"
+    & (Join-Path $env:CODEPULSE_INSTALL_DIR 'codepulse.exe') --version
+    & "$env:TEMP/codepulse-install.ps1" # Verify replacement of an existing install.
+} finally {
+    Remove-Item $env:CODEPULSE_INSTALL_DIR -Recurse -Force
+    Remove-Item "$env:TEMP/codepulse-install.ps1" -Force
+    Remove-Item Env:CODEPULSE_INSTALL_DIR, Env:CODEPULSE_VERSION
+}
 ```

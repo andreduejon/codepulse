@@ -34,6 +34,10 @@ Release archives are also available for manual installation from
 targets are macOS arm64/x64 and glibc Linux arm64/x64. Windows and musl-based
 Linux distributions such as Alpine are not currently supported.
 
+Native Windows x64/ARM64 builds and a PowerShell installer are in development,
+not yet published in a supported release. See [Windows testing](docs/WINDOWS-TESTING.md)
+for test artifacts, validation steps, and current limitations.
+
 ## Usage
 
 ```sh
@@ -56,6 +60,8 @@ repo configuration.
 ## Releasing
 
 See the [release process](docs/RELEASING.md).
+
+Planned features and platform support: [roadmap](docs/ROADMAP.md).
 
 ## Keyboard Shortcuts
 

@@ -1,5 +1,4 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { DEFAULT_MAX_COUNT } from "./constants";
 import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL } from "./context/state";
@@ -13,6 +12,7 @@ import {
   OPENSHIFT_TEXT_MAX_LENGTH,
 } from "./providers/openshift/validation";
 import { isProviderAutoRefreshSeconds, isProviderLimit } from "./providers/shared/auto-refresh";
+import { storageRoot } from "./utils/storage-path";
 
 const GENERAL_TEXT_MAX_LENGTH = 255;
 const REPO_METADATA_MAX_LENGTH = 64;
@@ -317,7 +317,7 @@ export interface ConfigInfo {
 
 /** Default path to the global config file. */
 export function defaultConfigPath(): string {
-  return join(homedir(), ".config", "codepulse", "config.json");
+  return join(storageRoot("config"), "config.json");
 }
 
 /**
@@ -760,7 +760,7 @@ export function mergeOptions(cli: { repoPath: string }, config: CodepulseConfig)
 }
 
 /**
- * Write config to the global config file at `~/.config/codepulse/config.json`.
+ * Write config to the platform's per-user global config file.
  *
  * Always writes under `repos[repoPath]`. Global top-level fields are not used.
  *

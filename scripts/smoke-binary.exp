@@ -3,16 +3,32 @@
 set timeout 30
 set binary [lindex $argv 0]
 set repository [lindex $argv 1]
-stty rows 24 columns 80
+stty rows 35 columns 100
 
 set smoke_root "/tmp/codepulse-smoke-[pid]"
 file mkdir "$smoke_root/home" "$smoke_root/not-a-repository"
 set env(HOME) "$smoke_root/home"
 spawn -noecho $binary "$smoke_root/not-a-repository"
+stty rows 35 columns 100 < $spawn_out(slave,name)
+exec kill -WINCH [exp_pid]
 
 expect {
   -re {Enter custom path} {
     send -- "$repository\r"
+  }
+  timeout {
+    catch {close}
+    catch {wait}
+    file delete -force $smoke_root
+    exit 1
+  }
+}
+
+expect {
+  -re {Welcome to your git graph visualizer} {
+    stty rows 24 columns 80 < $spawn_out(slave,name)
+    set child_pid [exp_pid]
+    exec kill -WINCH $child_pid
   }
   timeout {
     catch {close}

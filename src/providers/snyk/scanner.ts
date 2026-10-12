@@ -1,6 +1,6 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { addDebugEvent, redactDebugValue } from "../../debug/events";
 import { SnykCache } from "./cache";
 import { parseSnykOutput, shouldReplaceSnykResult } from "./parser";
@@ -35,8 +35,24 @@ function throwIfAborted(signal?: AbortSignal): void {
 
 const SNYK_GROUP_KILL_GRACE_MS = 500;
 
-export function killSnykProcessGroup(pid: number | undefined, signal: NodeJS.Signals): void {
-  if (!pid) return;
+export async function killSnykProcessGroup(pid: number | undefined, signal: NodeJS.Signals): Promise<void> {
+  if (!pid || !Number.isSafeInteger(pid) || pid < 1) return;
+  if (process.platform === "win32") {
+    const child = Bun.spawn(["taskkill.exe", "/PID", String(pid), "/T", "/F"], {
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    if ((await child.exited) !== 0) {
+      // A process that exited before taskkill started needs no further cleanup.
+      try {
+        process.kill(pid, 0);
+      } catch {
+        return;
+      }
+      throw new Error("Unable to stop Snyk process tree.");
+    }
+    return;
+  }
   try {
     process.kill(-pid, signal);
   } catch {
@@ -44,6 +60,38 @@ export function killSnykProcessGroup(pid: number | undefined, signal: NodeJS.Sig
       process.kill(pid, signal);
     } catch {}
   }
+}
+
+async function snykSpawnCommand(command: string[], options: Parameters<SnykCommandRunner>[1]): Promise<string[]> {
+  if (process.platform !== "win32" || command[0] !== "snyk") return command;
+  const executable =
+    Bun.which("snyk.exe", { cwd: options.cwd, PATH: options.env?.PATH }) ??
+    Bun.which("snyk.cmd", { cwd: options.cwd, PATH: options.env?.PATH }) ??
+    Bun.which("snyk", { cwd: options.cwd, PATH: options.env?.PATH });
+  if (!executable) return command;
+  if (!/\.cmd$/i.test(executable)) return [executable, ...command.slice(1)];
+
+  // npm's global and local .bin shims both point into a sibling Snyk package.
+  // Read its bin metadata rather than passing paths or arguments through cmd.exe.
+  const binDirectory = dirname(executable);
+  for (const packagePath of [
+    join(binDirectory, "node_modules", "snyk", "package.json"),
+    join(binDirectory, "..", "snyk", "package.json"),
+  ]) {
+    let metadata: { bin?: string | { snyk?: string } };
+    try {
+      metadata = JSON.parse(await readFile(packagePath, "utf8"));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+      throw error;
+    }
+    const entry = typeof metadata.bin === "string" ? metadata.bin : metadata.bin?.snyk;
+    const node =
+      Bun.which(join(binDirectory, "node.exe")) ?? Bun.which("node.exe", { cwd: options.cwd, PATH: options.env?.PATH });
+    if (!entry || !node) throw new Error("Unable to resolve the Snyk npm entrypoint or Node.js runtime.");
+    return [node, resolve(dirname(packagePath), entry), ...command.slice(1)];
+  }
+  throw new Error("Unable to resolve the Snyk npm entrypoint for snyk.cmd.");
 }
 
 function outputError(stdout: string, stderr: string | undefined): string {
@@ -76,28 +124,37 @@ export const runSnykCommand: SnykCommandRunner = async (command, options) => {
   const source = command[0] === "snyk" ? "Snyk" : "Git";
   const message = command.map(redactDebugValue).join(" ");
   const isolateGroup = command[0] === "snyk";
-  const child = Bun.spawn(command, {
+  const spawnCommand = await snykSpawnCommand(command, options);
+  throwIfAborted(options.signal);
+  const child = Bun.spawn(spawnCommand, {
     cwd: options.cwd,
     env: options.env,
     stdout: "pipe",
     stderr: "pipe",
-    detached: isolateGroup,
+    detached: isolateGroup && process.platform !== "win32",
   });
-  let killTimer: ReturnType<typeof setTimeout> | undefined;
-  const stopChild = (signal: NodeJS.Signals = "SIGTERM") => {
-    if (child.exitCode != null) return;
-    if (isolateGroup) killSnykProcessGroup(child.pid, signal);
-    else {
-      try {
-        child.kill();
-      } catch {}
-    }
+  let cleanup: Promise<void> | undefined;
+  const stopChild = () => {
+    cleanup ??= (async () => {
+      if (process.platform === "win32") {
+        await killSnykProcessGroup(child.pid, "SIGKILL");
+      } else if (isolateGroup) {
+        await killSnykProcessGroup(child.pid, "SIGTERM");
+        await new Promise(resolve => setTimeout(resolve, SNYK_GROUP_KILL_GRACE_MS));
+        // The leader may already have exited while descendants are still alive.
+        await killSnykProcessGroup(child.pid, "SIGKILL");
+      } else if (child.exitCode == null) {
+        child.kill("SIGKILL");
+      }
+      await child.exited;
+    })();
+    return cleanup;
   };
   const onAbort = () => {
-    stopChild("SIGTERM");
-    killTimer = setTimeout(() => stopChild("SIGKILL"), SNYK_GROUP_KILL_GRACE_MS);
+    void stopChild().catch(() => {});
   };
   options.signal?.addEventListener("abort", onAbort, { once: true });
+  if (options.signal?.aborted) onAbort();
   try {
     let stdout: string;
     let stderr: string;
@@ -118,9 +175,13 @@ export const runSnykCommand: SnykCommandRunner = async (command, options) => {
       addDebugEvent({ source, message: redactDebugValue(stderr.trim()), status: "error" });
     }
     return { stdout, stderr, exitCode };
+  } catch (error) {
+    void stopChild().catch(() => {});
+    throw error;
   } finally {
-    if (killTimer) clearTimeout(killTimer);
     options.signal?.removeEventListener("abort", onAbort);
+    if (child.exitCode == null || options.signal?.aborted) stopChild();
+    await cleanup;
   }
 };
 

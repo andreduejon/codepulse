@@ -1,11 +1,11 @@
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readdir, readFile, realpath, rename, rm, stat, utimes, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { storageRoot } from "../../utils/storage-path";
 import type { OpenShiftCacheLimit, OpenShiftResource, OpenShiftStatus } from "./types";
 
 export const DEFAULT_OPENSHIFT_CACHE_LIMIT: OpenShiftCacheLimit = 20;
-export const DEFAULT_OPENSHIFT_CACHE_ROOT = join(homedir(), ".cache", "codepulse", "openshift");
+export const DEFAULT_OPENSHIFT_CACHE_ROOT = join(storageRoot("cache"), "openshift");
 
 export interface OpenShiftCachedBuild {
   id: string;

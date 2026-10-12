@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { SnykCache } from "./cache";
-import { killSnykProcessGroup, type SnykCommandRunner, scanSnykCommit } from "./scanner";
+import { killSnykProcessGroup, runSnykCommand, type SnykCommandRunner, scanSnykCommit } from "./scanner";
 import type { SnykScanResult } from "./types";
 
 const SHA = "a".repeat(40);
@@ -35,11 +35,48 @@ function restoreEnv(name: string, value: string | undefined): void {
   else process.env[name] = value;
 }
 
+async function fakeSnyk(binPath: string, script: string, local = false): Promise<Record<string, string | undefined>> {
+  await mkdir(binPath, { recursive: true });
+  const packagePath = local ? join(binPath, "..", "snyk") : join(binPath, "node_modules", "snyk");
+  await mkdir(packagePath, { recursive: true });
+  const entryPath = join(packagePath, "cli.js");
+  await writeFile(join(packagePath, "package.json"), JSON.stringify({ bin: { snyk: "cli.js" } }));
+  await writeFile(entryPath, script);
+  if (process.platform === "win32") {
+    await copyFile(process.execPath, join(binPath, "node.exe"));
+    const relativeEntry = local ? "..\\snyk\\cli.js" : "node_modules\\snyk\\cli.js";
+    await writeFile(join(binPath, "snyk.cmd"), `@echo off\r\n"%~dp0node.exe" "%~dp0${relativeEntry}" %*\r\n`);
+  } else {
+    const executable = join(binPath, "snyk");
+    await writeFile(executable, '#!/bin/sh\nexec "$FAKE_SNYK_BUN" "$FAKE_SNYK_ENTRY" "$@"\n');
+    await chmod(executable, 0o755);
+  }
+  return {
+    ...process.env,
+    PATH: `${binPath}${delimiter}${process.env.PATH ?? ""}`,
+    FAKE_SNYK_BUN: process.execPath,
+    FAKE_SNYK_ENTRY: entryPath,
+  };
+}
+
+async function waitForFile(path: string): Promise<string> {
+  const deadline = Date.now() + 5000;
+  while (Date.now() < deadline) {
+    try {
+      return await readFile(path, "utf8");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      await Bun.sleep(20);
+    }
+  }
+  throw new Error(`Timed out waiting for ${path}`);
+}
+
 describe("scanSnykCommit", () => {
   test("scans an exact commit with real git and a PATH-resolved Snyk executable", async () => {
     const testRoot = await root();
     const repoPath = join(testRoot, "repo");
-    const binPath = join(testRoot, "bin");
+    const binPath = join(testRoot, "bin space & (literal) %PATH% 'quote'");
     const cacheRoot = join(testRoot, "cache");
     const capturePath = join(testRoot, "snyk-capture.txt");
     await Promise.all([mkdir(repoPath), mkdir(binPath)]);
@@ -62,33 +99,32 @@ describe("scanSnykCommit", () => {
       worktrees: await runLocal(["git", "worktree", "list", "--porcelain"], repoPath),
     };
 
-    const fakeSnykPath = join(binPath, "snyk");
-    await writeFile(
-      fakeSnykPath,
-      `#!/bin/sh
-set -eu
-{
-  printf 'sha=%s\\n' "$(git rev-parse HEAD)"
-  if git symbolic-ref -q HEAD >/dev/null 2>&1; then
-    printf 'detached=false\\n'
-  else
-    printf 'detached=true\\n'
-  fi
-  printf 'marker=%s\\n' "$(git show HEAD:marker.txt)"
-  printf 'token=%s\\n' "\${SNYK_TOKEN-}"
-  printf 'args=%s\\n' "$*"
-} > "$FAKE_SNYK_CAPTURE"
-printf '%s\\n' '{"vulnerabilities":[{"id":"SNYK-INTEGRATION","severity":"high","packageName":"dep","version":"1.0.0"}]}'
+    const fixtureEnv = await fakeSnyk(
+      binPath,
+      `const { writeFileSync } = require("node:fs");
+const git = (...args) => Bun.spawnSync(["git", ...args]);
+writeFileSync(process.env.FAKE_SNYK_CAPTURE, [
+  "sha=" + git("rev-parse", "HEAD").stdout.toString().trim(),
+  "detached=" + (git("symbolic-ref", "-q", "HEAD").exitCode !== 0),
+  "marker=" + git("show", "HEAD:marker.txt").stdout.toString().trim(),
+  "token=" + process.env.SNYK_TOKEN,
+  "args=" + process.argv.slice(2).join(" "),
+].join("\\n"));
+console.log(JSON.stringify({vulnerabilities:[{id:"SNYK-INTEGRATION",severity:"high",packageName:"dep",version:"1.0.0"}]}));
+process.exit(1);
 `,
     );
-    await chmod(fakeSnykPath, 0o755);
 
     const originalPath = process.env.PATH;
     const originalToken = process.env.CODEPULSE_TEST_SNYK_TOKEN;
     const originalCapture = process.env.FAKE_SNYK_CAPTURE;
+    const originalBun = process.env.FAKE_SNYK_BUN;
+    const originalEntry = process.env.FAKE_SNYK_ENTRY;
     let result: SnykScanResult;
     try {
-      process.env.PATH = `${binPath}${delimiter}${originalPath ?? ""}`;
+      process.env.PATH = fixtureEnv.PATH;
+      process.env.FAKE_SNYK_BUN = fixtureEnv.FAKE_SNYK_BUN;
+      process.env.FAKE_SNYK_ENTRY = fixtureEnv.FAKE_SNYK_ENTRY;
       process.env.CODEPULSE_TEST_SNYK_TOKEN = "custom-token-value";
       process.env.FAKE_SNYK_CAPTURE = capturePath;
       result = await scanSnykCommit(
@@ -99,6 +135,8 @@ printf '%s\\n' '{"vulnerabilities":[{"id":"SNYK-INTEGRATION","severity":"high","
       restoreEnv("PATH", originalPath);
       restoreEnv("CODEPULSE_TEST_SNYK_TOKEN", originalToken);
       restoreEnv("FAKE_SNYK_CAPTURE", originalCapture);
+      restoreEnv("FAKE_SNYK_BUN", originalBun);
+      restoreEnv("FAKE_SNYK_ENTRY", originalEntry);
     }
 
     expect(result.sha).toBe(targetSha);
@@ -244,11 +282,138 @@ printf '%s\\n' '{"vulnerabilities":[{"id":"SNYK-INTEGRATION","severity":"high","
     expect(await new SnykCache({ root: cacheRoot }).read("/repo", SHA)).toEqual(result);
   });
 
-  test("kills a detached process group", async () => {
-    const child = Bun.spawn(["sleep", "30"], { detached: true, stdout: "ignore", stderr: "ignore" });
-    killSnykProcessGroup(child.pid, "SIGTERM");
-    expect(await child.exited).not.toBe(0);
+  test("passes shell metacharacters as literal Snyk arguments", async () => {
+    const testRoot = await root();
+    const env = await fakeSnyk(
+      join(testRoot, "bin & space %PATH%"),
+      "console.log(JSON.stringify(process.argv.slice(2)));process.exit(3);",
+      true,
+    );
+    const args = ["test", "space value", "a&b", "%PATH%", "$(echo injected)", 'a"quote', "a'b", "end\\"];
+    const result = await runSnykCommand(["snyk", ...args], { cwd: testRoot, env });
+    expect(JSON.parse(result.stdout)).toEqual(args);
+    expect(result.exitCode).toBe(3);
   });
+
+  test("pre-abort never starts Snyk", async () => {
+    const testRoot = await root();
+    const capture = join(testRoot, "started");
+    const env = await fakeSnyk(
+      join(testRoot, "bin"),
+      `require("node:fs").writeFileSync(${JSON.stringify(capture)}, "started");`,
+    );
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      runSnykCommand(["snyk", "test"], { cwd: testRoot, env, signal: controller.signal }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+    await expect(readFile(capture)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  test("cleans the worktree after a command startup error", async () => {
+    const testRoot = await root();
+    let worktreePath = "";
+    let removed = false;
+    const runner: SnykCommandRunner = async (command, options) => {
+      if (command[1] === "rev-parse") return { stdout: SHA, exitCode: 0 };
+      if (command[0] === "snyk") {
+        return runSnykCommand([join(testRoot, "missing-executable")], options);
+      }
+      if (command[2] === "add") {
+        worktreePath = command[4] ?? "";
+        await mkdir(worktreePath);
+      } else if (command[2] === "remove") {
+        removed = true;
+      }
+      return { stdout: "", exitCode: 0 };
+    };
+    await expect(
+      scanSnykCommit({ repoPath: testRoot, sha: SHA }, { cacheRoot: join(testRoot, "cache"), runCommand: runner }),
+    ).rejects.toThrow();
+    expect(removed).toBe(true);
+    await expect(readFile(worktreePath)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  test("awaits cancellation of a Bun parent and descendant before worktree removal", async () => {
+    const testRoot = await root();
+    const ready = join(testRoot, "ready");
+    const heartbeat = join(testRoot, "heartbeat");
+    const descendantPath = join(testRoot, "descendant.js");
+    await writeFile(
+      descendantPath,
+      `
+const { writeFileSync, existsSync } = require("node:fs");
+process.on("SIGTERM", () => {});
+writeFileSync(process.env.FAKE_READY, JSON.stringify({ pid: process.pid, parentPid: process.ppid }));
+setInterval(() => writeFileSync(process.env.FAKE_HEARTBEAT, String(Date.now()) + ":" + existsSync(process.cwd())), 10);
+`,
+    );
+    const env = await fakeSnyk(
+      join(testRoot, "bin"),
+      `
+const child = Bun.spawn([process.env.FAKE_SNYK_BUN, ${JSON.stringify(descendantPath)}], { stdout: "ignore", stderr: "ignore" });
+setInterval(() => {}, 1000);
+`,
+    );
+    env.FAKE_READY = ready;
+    env.FAKE_HEARTBEAT = heartbeat;
+    const controller = new AbortController();
+    let parentPid: number | undefined;
+    let descendantPid: number | undefined;
+    let worktreePath = "";
+    let cleanupHeartbeat: { before: string; after: string } | undefined;
+    let finished = false;
+    const runner: SnykCommandRunner = async (command, options) => {
+      if (command[1] === "rev-parse") return { stdout: SHA, exitCode: 0 };
+      if (command[1] === "worktree" && command[2] === "add") {
+        worktreePath = command[4] ?? "";
+        await mkdir(worktreePath);
+        return { stdout: "", exitCode: 0 };
+      }
+      if (command[0] === "snyk") {
+        return runSnykCommand(command, { ...options, env });
+      }
+      // The runner must finish tree cleanup before scanSnykCommit reaches here.
+      const before = await readFile(heartbeat, "utf8");
+      await Bun.sleep(100);
+      cleanupHeartbeat = { before, after: await readFile(heartbeat, "utf8") };
+      return { stdout: "", exitCode: 0 };
+    };
+    const scan = scanSnykCommit(
+      { repoPath: testRoot, sha: SHA, signal: controller.signal },
+      { cacheRoot: join(testRoot, "cache"), runCommand: runner },
+    );
+    const outcome = scan.then(
+      () => null,
+      error => error,
+    );
+    try {
+      const pids = JSON.parse(await waitForFile(ready));
+      descendantPid = pids.pid;
+      parentPid = pids.parentPid;
+      await waitForFile(heartbeat);
+      controller.abort();
+      expect(await outcome).toMatchObject({ name: "AbortError" });
+      expect(cleanupHeartbeat).toBeDefined();
+      expect(cleanupHeartbeat?.after).toBe(cleanupHeartbeat?.before);
+      expect(cleanupHeartbeat?.before.endsWith(":true")).toBe(true);
+      if (!parentPid) throw new Error("Fixture did not report its parent PID.");
+      const stoppedParentPid = parentPid;
+      expect(() => process.kill(stoppedParentPid, 0)).toThrow();
+      await expect(readFile(worktreePath)).rejects.toMatchObject({ code: "ENOENT" });
+      finished = true;
+    } finally {
+      controller.abort();
+      await scan.catch(() => {});
+      // Also stop the fixture if an assertion failed before cancellation completed.
+      if (!finished && parentPid) await killSnykProcessGroup(parentPid, "SIGKILL");
+      if (!finished && descendantPid) {
+        try {
+          process.kill(descendantPid, "SIGKILL");
+        } catch {}
+      }
+    }
+  }, 15000);
 
   test("aborts an active scan and still removes the worktree", async () => {
     const cacheRoot = await root();

@@ -20,14 +20,21 @@ export async function runGit(
     stderr: "pipe",
   });
 
-  // If the caller aborts, kill the subprocess immediately
+  let treeCleanup: Promise<unknown> | undefined;
+  // Git can spawn credential/network helpers; stop descendants on Windows too.
   if (signal) {
     const onAbort = () => {
       try {
-        proc.kill();
+        if (process.platform === "win32") {
+          treeCleanup = Bun.spawn(["taskkill.exe", "/PID", String(proc.pid), "/T", "/F"], {
+            stdout: "ignore",
+            stderr: "ignore",
+          }).exited;
+        } else proc.kill();
       } catch {}
     };
     signal.addEventListener("abort", onAbort, { once: true });
+    if (signal.aborted) onAbort();
     proc.exited.then(() => signal.removeEventListener("abort", onAbort)).catch(() => {});
   }
 
@@ -46,5 +53,7 @@ export async function runGit(
     // Process was killed — pipes may throw
     addDebugEvent({ source: "Git", message: command, status: "aborted", durationMs: Date.now() - started });
     return { stdout: "", stderr: "aborted", exitCode: 1 };
+  } finally {
+    await treeCleanup;
   }
 }

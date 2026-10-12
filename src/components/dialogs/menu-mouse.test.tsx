@@ -18,7 +18,7 @@ import MenuDialog, { lastMenuTab, setLastMenuTab } from "./menu-dialog";
 const descendants = (node: Renderable): Renderable[] =>
   node.getChildren().flatMap(child => [child, ...descendants(child)]);
 
-async function renderMenu(height = 60) {
+async function renderMenu(height = 60, configInfo?: config.ConfigInfo) {
   const previousTab = lastMenuTab();
   setLastMenuTab("repository");
   const write = spyOn(config, "writeConfig").mockReturnValue(true);
@@ -88,6 +88,7 @@ async function renderMenu(height = 60) {
                 onFetch={fetch}
                 onOpenDialog={dialog}
                 onViewBranch={branch}
+                configInfo={configInfo}
                 githubConfig={github()}
                 onGithubConfigChange={setGithub}
                 jenkinsConfig={jenkins()}
@@ -170,6 +171,21 @@ async function renderMenu(height = 60) {
     },
   };
 }
+
+test("menu config path copies full long Windows path with mouse and keyboard", async () => {
+  const path = `C:\\Users\\Test User\\${"long-directory\\".repeat(8)}config.json`;
+  const m = await renderMenu(80, { globalPath: path, globalExists: true, hasRepoOverrides: true, warnings: [] });
+  try {
+    await m.click("config.json");
+    expect(m.copy).toHaveBeenLastCalledWith(path, "Config file");
+    expect(m.captureCharFrame()).toContain("enter copy");
+    await m.key("RETURN");
+    expect(m.copy).toHaveBeenCalledTimes(2);
+    expect(m.copy).toHaveBeenLastCalledWith(path, "Config file");
+  } finally {
+    m.dispose();
+  }
+});
 
 test("menu tabs hover across all three rows and switch by left click; keyboard tabs still work", async () => {
   const m = await renderMenu();
