@@ -141,17 +141,20 @@ async function renderStashes(compact = true, deferred = false) {
     await setup.mockMouse.click(x, y, button);
     await flush();
   };
-  const dispose = () => {
+  const dispose = async () => {
     if (navRef.scrollTimer) clearTimeout(navRef.scrollTimer);
-    setup.renderer.destroy();
-    load.mockRestore();
+    try {
+      await setup.dispose();
+    } finally {
+      load.mockRestore();
+    }
   };
   try {
     await flush();
     setShowCompact(compact);
     await flush();
   } catch (error) {
-    dispose();
+    await dispose();
     throw error;
   }
   return {
@@ -230,7 +233,7 @@ test("compact stash headers and files hover without cursor changes and ignore ri
     }
     expect(d.onJumpToCommit).not.toHaveBeenCalled();
   } finally {
-    d.dispose();
+    await d.dispose();
   }
 });
 
@@ -327,7 +330,7 @@ test("stash directory and header shifts route exact indices to cached stash diff
     expect(d.renderer.getSelection()).toBeNull();
     expect(d.onJumpToCommit).not.toHaveBeenCalled();
   } finally {
-    d.dispose();
+    await d.dispose();
   }
 });
 
@@ -354,7 +357,7 @@ test("stash expansion stays asynchronous and reuses loaded files after collapse"
     expect(d.frame()).toContain("beta.ts");
     expect(d.load).toHaveBeenCalledTimes(1);
   } finally {
-    d.dispose();
+    await d.dispose();
   }
 });
 
@@ -379,6 +382,6 @@ test("sidebar stash headers and files remain selectable with mouse controls disa
     expect(d.onOpenDiff).not.toHaveBeenCalled();
     expect(d.onJumpToCommit).not.toHaveBeenCalled();
   } finally {
-    d.dispose();
+    await d.dispose();
   }
 });

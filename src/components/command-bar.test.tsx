@@ -105,7 +105,7 @@ test("provider badges switch directly; panel width switches between two and thre
     await setup.flush();
     expect(lineWith("develop")).toBe(lineWith("GitHub Actions") + 4);
   } finally {
-    setup.renderer.destroy();
+    await setup.dispose();
   }
 });
 
@@ -236,7 +236,7 @@ test("mode badges reflect applied filters, hover in theme colors and only delega
     active("ancestry");
     muted("normal");
   } finally {
-    setup.renderer.destroy();
+    await setup.dispose();
   }
 });
 
@@ -379,7 +379,7 @@ test("hidden project counts slide one project per left click, preserve focus, an
     windowAt(0, ["f"]);
     expect(selected).toEqual(["/repo/b"]);
   } finally {
-    setup.renderer.destroy();
+    await setup.dispose();
   }
 });
 
@@ -542,6 +542,6 @@ test("all non-idle modes add a focused inline input above the spaced rows; group
     expect(lines()[lineWith("charlie")]).toContain("◂1");
     expect(lines()[lineWith("charlie")]).toContain("1▸");
   } finally {
-    setup.renderer.destroy();
+    await setup.dispose();
   }
 });

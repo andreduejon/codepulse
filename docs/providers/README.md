@@ -19,6 +19,11 @@ Provider-specific guides describe any additional live updates or automatic work.
 
 ## Cache
 
+Paths shown in provider guides are the macOS/Linux defaults. On Windows,
+provider caches instead use `%LOCALAPPDATA%\codepulse\Cache\<provider>`;
+configuration uses `%APPDATA%\codepulse\config.json`. Missing environment
+variables fall back to the user's `AppData\Local` and `AppData\Roaming` folders.
+
 **Cache limit** is the number of commit snapshots retained on disk, not the
 number of runs, builds, jobs, resources, or findings. Supported values are 10,
 20, and 50; the default is 20.

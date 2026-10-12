@@ -1,10 +1,10 @@
-import { homedir } from "node:os";
 import { join } from "node:path";
+import { storageRoot } from "../../utils/storage-path";
 import { DEFAULT_PROVIDER_LIMIT, type ProviderLimit } from "../shared/auto-refresh";
 import { mergeById, ShaJsonCache } from "../shared/sha-json-cache";
 import type { JenkinsJob, JenkinsJobFetchResult, JenkinsRun, JenkinsStage } from "./types";
 
-export const DEFAULT_JENKINS_CACHE_ROOT = join(homedir(), ".cache", "codepulse", "jenkins");
+export const DEFAULT_JENKINS_CACHE_ROOT = join(storageRoot("cache"), "jenkins");
 
 export interface JenkinsCacheEntry {
   sha: string;

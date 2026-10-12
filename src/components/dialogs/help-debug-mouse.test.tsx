@@ -115,7 +115,10 @@ test("Help tabs hover and click; Help and Debug support wheel and clickable clos
       expect(dialog()).toBeNull();
     }
   } finally {
-    setup.renderer.destroy();
-    clearDebugEvents();
+    try {
+      await setup.dispose();
+    } finally {
+      clearDebugEvents();
+    }
   }
 });

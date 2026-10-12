@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
-import { MouseButton, type Renderable, type ScrollBoxRenderable } from "@opentui/core";
+import { type CliRenderer, MouseButton, type Renderable, type ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useRenderer } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import packageJson from "../../package.json";
@@ -105,8 +105,7 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
       props.onSelectRepo(canonical);
       return;
     }
-    renderer.destroy();
-    reExecWith(canonical);
+    void reExecWith(canonical, renderer).catch(error => console.error("Unable to switch repository:", error));
   };
 
   /** Handle Esc — go back (in-app) or quit (startup). */
@@ -380,8 +379,7 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
  * Uses spawnSync with an array of arguments (not a shell string) to prevent
  * shell interpretation of special characters in the repo path.
  *
- * NOTE: the caller must call `renderer.destroy()` first to cleanly
- * restore the terminal before spawning the child process.
+ * Wait for terminal restoration before the replacement process uses its streams.
  */
 function canonicalRepoPath(repoPath: string): string {
   // Resolve ~ to home directory
@@ -393,16 +391,19 @@ function canonicalRepoPath(repoPath: string): string {
   return rootResult.status === 0 && rootResult.stdout.trim() ? rootResult.stdout.trim() : resolved;
 }
 
-function reExecWith(repoPath: string): void {
+export async function reExecWith(repoPath: string, renderer: Pick<CliRenderer, "destroy" | "closed">): Promise<void> {
+  renderer.destroy();
+  await renderer.closed;
   // Use spawnSync with an array to avoid shell interpolation of the repo path.
   // execSync(string) passes through a shell and is vulnerable to injection via
   // special characters in the path (backticks, $(), etc.).
   const standalone = Bun.isStandaloneExecutable || Bun.main.startsWith("/$bunfs/");
   const executable = standalone ? process.execPath : process.argv[0];
   const args = standalone ? [repoPath] : [process.argv[1], repoPath];
-  spawnSync(executable, args, {
+  const result = spawnSync(executable, args, {
     stdio: "inherit",
     env: process.env,
   });
-  process.exit(0);
+  if (result.error) throw result.error;
+  process.exit(result.status ?? 1);
 }
