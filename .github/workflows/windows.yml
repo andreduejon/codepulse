@@ -16,7 +16,7 @@ jobs:
       matrix:
         include:
           - arch: x64
-            runner: windows-2025
+            runner: windows-latest
           - arch: arm64
             runner: windows-11-arm
     env:
@@ -41,7 +41,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           bun run check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: HTTP concurrency diagnostic
+        timeout-minutes: 2
+        run: bun test tests/shared-http.test.ts
       - name: Native tests
+        timeout-minutes: 3
         run: bun test
       - name: Installer regression checks
         shell: pwsh

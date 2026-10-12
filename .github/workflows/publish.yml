@@ -9,7 +9,7 @@ env:
 
 jobs:
   verify:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
@@ -61,7 +61,7 @@ jobs:
           - target: linux-x64
             os: linux
             arch: x64
-            runner: ubuntu-24.04
+            runner: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -119,7 +119,7 @@ jobs:
 
   publish:
     needs: [build, windows]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
