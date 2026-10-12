@@ -43,7 +43,7 @@ try {
         }
     }
     $processorArchitecture = Get-CimInstance -ClassName Win32_Processor | Select-Object -First 1 -ExpandProperty Architecture
-    $nativeArch = switch ($processorArchitecture) {
+    [string] $nativeArch = switch ($processorArchitecture) {
         9 { 'X64' }
         12 { 'Arm64' }
     }
@@ -376,7 +376,7 @@ else if (command === "curl") {
         processRestored: boolean;
         machinePathBefore: RegistryPath;
         machinePathAfter: RegistryPath;
-        nativeArch: string | null;
+        nativeArch: string;
         pathExt: string | null;
       } = JSON.parse(await readFile(resultFile, "utf8"));
       assert.deepEqual(report.restoreFailures, [], `${caseLabel}: PATH restoration`);
@@ -393,7 +393,7 @@ else if (command === "curl") {
       } else {
         assert.equal(report.failure, null, `${caseLabel}: ${report.failure}`);
       }
-      arch = arch || report.nativeArch?.toLowerCase() || "";
+      arch = arch || report.nativeArch.toLowerCase();
       const runCount =
         entry.pathCase === "user matches"
           ? 5
