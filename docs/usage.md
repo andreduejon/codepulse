@@ -93,9 +93,16 @@ the [provider guide](providers/README.md).
 ## Installation options
 
 The installers download a native standalone binary and verify its SHA-256
-checksum. Bun and Node.js are not required. Git must be on PATH. Supported
-targets are macOS, glibc Linux, and Windows on arm64/x64. Windows requires
-Windows 11 and Windows Terminal. Musl-based Linux such as Alpine is unsupported.
+checksum. Bun and Node.js are not required. Git must be on PATH (Git for Windows
+on Windows). The terminal must be at least 90 columns × 30 rows. Supported
+targets are macOS, glibc Linux, and Windows 11 on x64/ARM64. Windows requires
+Windows Terminal. Musl-based Linux such as Alpine is unsupported.
+
+Installer commands use `curl` and `sh` on macOS/Linux, or `curl.exe` and
+PowerShell on Windows. Use `curl.exe` explicitly because Windows PowerShell can
+treat `curl` as an alias for `Invoke-WebRequest`. Run the downloaded script only
+after the download succeeds. A failed download can leave an older installer at
+that path. PowerShell remains necessary to execute `install.ps1`.
 
 - `CODEPULSE_INSTALL_DIR` overrides the installation folder. Ensure it is on PATH.
 - `CODEPULSE_VERSION` selects a specific release instead of the latest version.

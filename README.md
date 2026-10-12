@@ -13,15 +13,24 @@ is the primary navigation surface, with optional CI/CD, runtime, and vulnerabili
 signals from GitHub Actions, Jenkins, OpenShift, and Snyk layered onto the same
 commit and branch context.
 
-## Requirements
+## Prerequisites
 
-- Git
-- macOS or glibc Linux on arm64 or x64
-- Windows 11 x64/ARM64 with Windows Terminal
+- Git installed and available on `PATH` (Git for Windows on Windows).
+- An interactive terminal at least **90 columns × 30 rows**.
 
-Musl-based Linux distributions such as Alpine are not currently supported.
+| Operating system | Architectures | Terminal |
+|------------------|---------------|----------|
+| macOS | x64, ARM64 | Terminal emulator |
+| Linux (glibc) | x64, ARM64 | Terminal emulator |
+| Windows 11 | x64, ARM64 | Windows Terminal |
+
+Release binaries are standalone. Bun and Node.js are not required.
+Musl-based Linux distributions such as Alpine are not supported.
 
 ## Install
+
+Installer commands require `curl` and `sh` on macOS/Linux, or `curl.exe` and
+PowerShell on Windows. Manual release archives are also available.
 
 ### macOS / Linux
 
@@ -30,22 +39,20 @@ curl -fsSL https://github.com/andreduejon/codepulse/releases/latest/download/ins
 ```
 
 The installer downloads the binary for your platform, verifies its SHA-256
-checksum, and installs `codepulse` to `~/.local/bin`. Bun and Node.js are not
-required.
+checksum, and installs `codepulse` to `~/.local/bin`.
 
 ### Windows
 
-Download and run the installer in PowerShell:
+Download the installer in PowerShell, then run it after the download succeeds:
 
 ```powershell
-Invoke-WebRequest https://github.com/andreduejon/codepulse/releases/latest/download/install.ps1 -OutFile "$env:TEMP/codepulse-install.ps1"
+curl.exe -fsSL https://github.com/andreduejon/codepulse/releases/latest/download/install.ps1 -o "$env:TEMP/codepulse-install.ps1"
 & "$env:TEMP/codepulse-install.ps1"
 ```
 
 The installer detects native x64/ARM64 architecture, verifies SHA-256, and installs
 to `%LOCALAPPDATA%\codepulse\bin`. Add that folder to your user PATH, then open
-a new terminal to use `codepulse` from any directory. Git for Windows must be on
-PATH. Bun and Node.js are not required to run Codepulse.
+a new terminal to use `codepulse` from any directory.
 If local policy blocks scripts, use the release ZIP rather than weakening policy.
 
 Windows binaries are unsigned.
@@ -93,9 +100,6 @@ diagnostic conventions.
 Choose from 12 predefined themes or create custom themes by extending a built-in
 palette or defining every color independently. Preview themes live with `:theme`
 and save selections per repository. Built-in themes remain unchanged.
-
-Theme Details show color swatches, selectable HEX values, and base-versus-override
-comparisons. Invalid custom definitions are isolated with diagnostics.
 
 See the [theme guide](docs/themes.md) for controls, available themes, and custom
 configuration examples.
