@@ -2,6 +2,40 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.12.0] - 2026-10-12
+
+### Added
+
+- **Native Windows distribution** — standalone x64/ARM64 executables, ZIP
+  archives, and a checksum-verifying PowerShell installer. Windows binaries
+  are unsigned; SmartScreen reputation warnings remain possible.
+- **Platform validation** — Linux/macOS/Windows CI and six native release
+  targets, with shared executable PTY smoke and offline installer regressions.
+  Manual build runs provide test archives without publishing a release.
+
+### Changed
+
+- Upgrade Bun to 1.4.3, OpenTUI Core/Solid to 0.6.1, Biome to 2.5.15, and
+  Bun types to 1.4.3. Migrate graph layout and asynchronous renderer teardown.
+- Store Windows configuration in roaming AppData and provider caches in local
+  AppData; preserve existing macOS/Linux storage locations.
+- Make the full configuration path copyable through Menu mouse/keyboard actions.
+- Include build/validation scripts in formatting, lint, and type checks.
+
+### Fixed
+
+- Apply minimum-terminal-size handling to startup repository/error screens and
+  restore their normal content after resizing.
+- Await terminal restoration before repository re-exec and preserve child exit
+  status; handle absolute linked-worktree Git paths on Windows.
+- Resolve standard Windows Snyk npm shims without shell interpolation, normalize
+  PATH casing, and terminate scan process trees before worktree cleanup.
+- Open browser URLs on Windows without interpreting URL text as shell commands.
+- Stage Unix installer updates before replacing existing binaries so failed
+  extraction, copying, or signing preserves the previous installation.
+- Override transitive Seroval to 1.6.9 to address known critical/high advisories
+  while retaining OpenTUI's required Solid version.
+
 ## [0.11.0] - 2026-10-10
 
 ### Added

@@ -16,9 +16,11 @@ commit and branch context.
 ## Requirements
 
 - Git
-- macOS or Linux on arm64 or x64
+- macOS or glibc Linux on arm64 or x64; Windows 11 x64/ARM64 with Windows Terminal
 
 ## Install
+
+### macOS / Linux
 
 ```sh
 curl -fsSL https://github.com/andreduejon/codepulse/releases/latest/download/install.sh | sh
@@ -31,13 +33,40 @@ required. Set `CODEPULSE_INSTALL_DIR` to install into another directory on your
 
 Release archives are also available for manual installation from
 [GitHub Releases](https://github.com/andreduejon/codepulse/releases). Supported
-targets are macOS arm64/x64 and glibc Linux arm64/x64. Windows and musl-based
-Linux distributions such as Alpine are not currently supported.
+targets are macOS, glibc Linux, and Windows on arm64/x64. Musl-based Linux
+distributions such as Alpine are not currently supported.
 
-Native Windows x64/ARM64 builds and a PowerShell installer are in development,
-not yet published in a supported release. Windows binaries are unsigned;
+### Windows
+
+Download and run the installer in PowerShell:
+
+```powershell
+Invoke-WebRequest https://github.com/andreduejon/codepulse/releases/latest/download/install.ps1 -OutFile "$env:TEMP/codepulse-install.ps1"
+& "$env:TEMP/codepulse-install.ps1"
+```
+
+The installer detects native x64/ARM64 architecture, verifies SHA-256, and installs
+to `%LOCALAPPDATA%\codepulse\bin`. Add that folder to your user PATH, then open
+a new terminal to use `codepulse` from any directory. Set `CODEPULSE_INSTALL_DIR`
+for a custom location or `CODEPULSE_VERSION` for a specific release. Git for
+Windows must be on PATH; Bun and Node.js are not required to run Codepulse.
+If local policy blocks scripts, use the release ZIP rather than weakening policy.
+
+Windows binaries are unsigned;
 SmartScreen reputation warnings are possible. Checksums verify file integrity,
 not publisher trust. Do not disable security protections for a malware detection.
+
+### Configuration and cache
+
+| Platform | Configuration | Provider cache root |
+|----------|---------------|---------------------|
+| macOS / Linux | `~/.config/codepulse/config.json` | `~/.cache/codepulse` |
+| Windows | `%APPDATA%\codepulse\config.json` | `%LOCALAPPDATA%\codepulse\Cache` |
+
+Settings are saved per repository. Menu → Repository → Configuration shows the
+full config path; click it or press Enter to copy. Windows AppData locations
+fall back to the corresponding folders under your home if environment variables
+are absent. Earlier experimental Windows `.config`/`.cache` files are not migrated.
 
 ## Usage
 

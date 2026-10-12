@@ -90,6 +90,13 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     { kind: "binding", key: "esc", desc: "Close / back", indent: 1 },
     { kind: "binding", key: "f", desc: "Forget selected repo", indent: 1 },
     { kind: "binding", key: "↑/↓  or  j/k", desc: "Move selection", indent: 1 },
+    { kind: "spacer" },
+    { kind: "section", label: "Configuration and Windows" },
+    { kind: "binding", key: ":repo → Configuration", desc: "Select config path; Enter or click copies", indent: 1 },
+    { kind: "binding", key: "Windows config", desc: "%APPDATA%\\codepulse\\config.json", indent: 1 },
+    { kind: "binding", key: "Windows cache", desc: "%LOCALAPPDATA%\\codepulse\\Cache", indent: 1 },
+    { kind: "binding", key: "Windows command", desc: "Add install folder to PATH; open new terminal", indent: 1 },
+    { kind: "binding", key: "Windows Terminal", desc: "Windows 11 x64/ARM64; Git must be on PATH", indent: 1 },
   ],
   commands: [
     { kind: "binding", key: ":ancestry", desc: "Highlight first-parent ancestry" },
