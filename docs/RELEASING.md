@@ -77,8 +77,10 @@ Windows executables are unsigned; SmartScreen reputation warnings are possible.
 `bun scripts/test-install.ts` runs offline in CI and release builds on every
 platform. It checks the native installer (`install.sh` or `install.ps1`):
 success, checksum/archive/download failures, preservation of an existing
-installation, and cleanup. Windows checks also cover automatic user/current-session
-PATH setup and duplicate prevention, restoring the original user PATH afterward.
+installation, and cleanup. Windows checks run every case in both Windows PowerShell
+5.1 and PowerShell 7 when available, covering native x64/ARM64 detection and detection
+failures, automatic user/current-session PATH setup, and duplicate prevention.
+The original user PATH is restored after each runtime/case.
 Use a disposable Windows profile if checks might be forcibly stopped, bypassing cleanup.
 Unix checks also cover glibc rejection and signing failures. These are development
 regression tests, not part of normal installation.

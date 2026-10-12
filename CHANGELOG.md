@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.12.1] - 2026-10-13
+
+### Fixed
+
+- Replace fragile Windows installer startup architecture detection with a native
+  processor query compatible with Windows PowerShell 5.1 and PowerShell 7.
+- Register the installation folder in user PATH and the current PowerShell
+  session, preserving existing entries and the registry value type. Repeated
+  installation does not add duplicate entries. System PATH remains unchanged.
+- Expand Windows installer regressions to cover both available PowerShell
+  runtimes, architecture detection failures, and canonical command-discovery paths.
+
 ## [0.12.0] - 2026-10-12
 
 ### Added

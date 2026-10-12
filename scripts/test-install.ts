@@ -1,13 +1,15 @@
 // Run offline on Unix or Windows: bun scripts/test-install.ts
 import assert from "node:assert/strict";
-import { chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 
 const windows = process.platform === "win32";
-const powershell = windows ? (Bun.which("pwsh") ?? Bun.which("powershell")) : null;
+const powershells = windows
+  ? ["pwsh", "powershell"].map(command => Bun.which(command)).filter((path): path is string => path !== null)
+  : [null];
 const realMktemp = windows ? null : Bun.which("mktemp");
-assert(windows ? powershell : realMktemp, windows ? "PowerShell required" : "mktemp required");
+assert(windows ? powershells.length : realMktemp, windows ? "PowerShell required" : "mktemp required");
 
 // Keep the command fixed: paths and case inputs are data, never PowerShell source.
 // shortcut: Windows checks restore user PATH in finally, use a disposable profile if forced termination is possible.
@@ -32,24 +34,38 @@ $paths = [System.Collections.Generic.List[object]]::new()
 $downloads = [System.Collections.Generic.List[object]]::new()
 $failure = $null
 try {
-    $nativeArch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
+    if ($env:TEST_PROCESSOR_ARCHITECTURE) {
+        function Get-CimInstance {
+            param($ClassName)
+            if ($env:TEST_PROCESSOR_ARCHITECTURE -ne 'missing') {
+                [pscustomobject]@{ Architecture = [int]$env:TEST_PROCESSOR_ARCHITECTURE }
+            }
+        }
+    }
+    $processorArchitecture = Get-CimInstance -ClassName Win32_Processor | Select-Object -First 1 -ExpandProperty Architecture
+    [string] $nativeArch = switch ($processorArchitecture) {
+        9 { 'X64' }
+        12 { 'Arm64' }
+    }
     $arch = $nativeArch
     if ($env:TEST_ARCH) { $arch = $env:TEST_ARCH }
-    $archive = "codepulse-windows-$($arch.ToLowerInvariant()).zip"
-    $archivePath = Join-Path $env:TEST_FIXTURE $archive
-    $sourceFile = Join-Path $env:TEST_SOURCE 'codepulse.exe'
-    if ($env:TEST_CASE -eq 'missing executable') {
-        $sourceFile = Join-Path $env:TEST_SOURCE 'other.txt'
+    if ($arch) {
+        $archive = "codepulse-windows-$($arch.ToLowerInvariant()).zip"
+        $archivePath = Join-Path $env:TEST_FIXTURE $archive
+        $sourceFile = Join-Path $env:TEST_SOURCE 'codepulse.exe'
+        if ($env:TEST_CASE -eq 'missing executable') {
+            $sourceFile = Join-Path $env:TEST_SOURCE 'other.txt'
+        }
+        Compress-Archive -LiteralPath $sourceFile -DestinationPath $archivePath -Force
+        if ($env:TEST_CASE -eq 'invalid archive') {
+            [System.IO.File]::WriteAllText($archivePath, 'not a zip')
+        }
+        $hash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($env:TEST_CASE -eq 'bad checksum') { $hash = '0' * 64 }
+        $checksumName = $archive
+        if ($env:TEST_CASE -eq 'missing checksum') { $checksumName = 'unrelated.zip' }
+        [System.IO.File]::WriteAllText((Join-Path $env:TEST_FIXTURE 'SHA256SUMS'), "$hash  $checksumName" + [Environment]::NewLine)
     }
-    Compress-Archive -LiteralPath $sourceFile -DestinationPath $archivePath -Force
-    if ($env:TEST_CASE -eq 'invalid archive') {
-        [System.IO.File]::WriteAllText($archivePath, 'not a zip')
-    }
-    $hash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
-    if ($env:TEST_CASE -eq 'bad checksum') { $hash = '0' * 64 }
-    $checksumName = $archive
-    if ($env:TEST_CASE -eq 'missing checksum') { $checksumName = 'unrelated.zip' }
-    [System.IO.File]::WriteAllText((Join-Path $env:TEST_FIXTURE 'SHA256SUMS'), "$hash  $checksumName" + [Environment]::NewLine)
 
     $download = {
         param($Uri, $OutFile)
@@ -191,6 +207,7 @@ $result = @{
     machinePathBefore = $savedMachinePath
     machinePathAfter = $machinePathAfter
     nativeArch = $nativeArch
+    pathExt = $env:PATHEXT
 } | ConvertTo-Json -Depth 5 -Compress
 [System.IO.File]::WriteAllText($env:TEST_RESULT, $result)
 `;
@@ -203,6 +220,7 @@ const cases: {
   defaultDir?: boolean;
   failure?: string;
   pathCase?: string;
+  processorArchitecture?: string;
 }[] = [
   { name: "latest x64 default directory", arch: "X64", version: "", defaultDir: true, pathCase: "absent" },
   { name: "versioned ARM64 replacement", arch: "Arm64", version: "1.2.3", os: "Darwin", pathCase: "empty" },
@@ -211,6 +229,22 @@ const cases: {
   ...(windows
     ? [
         { name: "native architecture", arch: "", version: "", pathCase: "repeat" },
+        { name: "detected x64 architecture", arch: "", version: "", processorArchitecture: "9" },
+        { name: "detected ARM64 architecture", arch: "", version: "", processorArchitecture: "12" },
+        {
+          name: "missing processor information",
+          arch: "",
+          version: "",
+          processorArchitecture: "missing",
+          failure: "codepulse: could not detect the native Windows architecture",
+        },
+        {
+          name: "unsupported native architecture",
+          arch: "",
+          version: "",
+          processorArchitecture: "0",
+          failure: "codepulse: unsupported native Windows architecture: 0",
+        },
         { name: "existing user PATH matches", arch: "X64", version: "", pathCase: "user matches" },
         { name: "existing process PATH matches", arch: "X64", version: "", pathCase: "process matches" },
         { name: "non-string user PATH warning", arch: "X64", version: "", pathCase: "non-string" },
@@ -273,7 +307,11 @@ else if (command === "curl") {
     }
   }
 
-  for (const [index, entry] of cases.entries()) {
+  for (const [index, { entry, powershell }] of powershells
+    .flatMap(powershell => cases.map(entry => ({ entry, powershell })))
+    .entries()) {
+    const caseLabel = powershell ? `${entry.name} (${powershell})` : entry.name;
+    const detectionFailure = !!entry.failure && entry.processorArchitecture !== undefined;
     const home = join(root, `home ${index}`);
     const installDir = entry.defaultDir
       ? join(home, ...(windows ? ["codepulse", "bin"] : [".local", "bin"]))
@@ -301,7 +339,8 @@ else if (command === "curl") {
       assert(powershell, "PowerShell required");
       const result = Bun.spawnSync([powershell, "-NoProfile", "-NonInteractive", "-Command", driver], {
         env: {
-          ...env,
+          // Let each shell find its own modules instead of inheriting PowerShell 7's.
+          ...Object.fromEntries(Object.entries(env).filter(([key]) => key.toUpperCase() !== "PSMODULEPATH")),
           TEMP: temp,
           TMP: temp,
           LOCALAPPDATA: home,
@@ -309,11 +348,12 @@ else if (command === "curl") {
           TEST_RESULT: resultFile,
           TEST_ARCH: entry.arch,
           TEST_PATH_CASE: entry.pathCase ?? "expandable",
+          TEST_PROCESSOR_ARCHITECTURE: entry.processorArchitecture ?? "",
         },
         stdout: "pipe",
         stderr: "pipe",
       });
-      assert.equal(result.exitCode, 0, `${entry.name}: ${result.stdout.toString()}\n${result.stderr.toString()}`);
+      assert.equal(result.exitCode, 0, `${caseLabel}: ${result.stdout.toString()}\n${result.stderr.toString()}`);
       type RegistryPath = { present: boolean; value: unknown; kind: string | null };
       const report: {
         failure: string | null;
@@ -337,21 +377,21 @@ else if (command === "curl") {
         machinePathBefore: RegistryPath;
         machinePathAfter: RegistryPath;
         nativeArch: string;
+        pathExt: string | null;
       } = JSON.parse(await readFile(resultFile, "utf8"));
-      assert.deepEqual(report.restoreFailures, [], `${entry.name}: PATH restoration`);
+      assert.deepEqual(report.restoreFailures, [], `${caseLabel}: PATH restoration`);
       assert.deepEqual(
         report.restoredUserPath,
         report.savedUserPath,
-        `${entry.name}: raw user PATH restored, including absence and kind`,
+        `${caseLabel}: raw user PATH restored, including absence and kind`,
       );
-      assert.equal(report.processRestored, true, `${entry.name}: process PATH restored`);
-      assert.deepEqual(report.machinePathAfter, report.machinePathBefore, `${entry.name}: machine PATH unchanged`);
+      assert.equal(report.processRestored, true, `${caseLabel}: process PATH restored`);
+      assert.deepEqual(report.machinePathAfter, report.machinePathBefore, `${caseLabel}: machine PATH unchanged`);
       if (entry.failure) {
-        assert.notEqual(report.failure, null, `${entry.name} must fail`);
-        if (entry.failure !== "any")
-          assert(report.failure?.includes(entry.failure), `${entry.name}: ${report.failure}`);
+        assert.notEqual(report.failure, null, `${caseLabel} must fail`);
+        if (entry.failure !== "any") assert(report.failure?.includes(entry.failure), `${caseLabel}: ${report.failure}`);
       } else {
-        assert.equal(report.failure, null, `${entry.name}: ${report.failure}`);
+        assert.equal(report.failure, null, `${caseLabel}: ${report.failure}`);
       }
       arch = arch || report.nativeArch.toLowerCase();
       const runCount =
@@ -362,25 +402,25 @@ else if (command === "curl") {
             : entry.pathCase === "repeat"
               ? 2
               : 1;
-      assert.equal(report.paths.length, runCount, `${entry.name}: installation count`);
-      assert.equal(report.downloads.length, runCount * 2, `${entry.name}: download count`);
+      assert.equal(report.paths.length, runCount, `${caseLabel}: installation count`);
+      assert.equal(report.downloads.length, detectionFailure ? 0 : runCount * 2, `${caseLabel}: download count`);
       urls = report.downloads.slice(0, 2).map(request => request.uri);
       for (let index = 1; index < runCount; index++) {
         assert.deepEqual(
           report.downloads.slice(index * 2, index * 2 + 2).map(request => request.uri),
           urls,
-          `${entry.name}: repeated installation URLs`,
+          `${caseLabel}: repeated installation URLs`,
         );
       }
       for (const request of report.downloads) {
         await assert.rejects(
           readdir(dirname(request.outFile)),
           { code: "ENOENT" },
-          `${entry.name}: temporary directory cleanup`,
+          `${caseLabel}: temporary directory cleanup`,
         );
       }
       for (const path of report.paths) {
-        const label = `${entry.name}: ${path.scenario} run ${path.iteration + 1}`;
+        const label = `${caseLabel}: ${path.scenario} run ${path.iteration + 1}`;
         if (entry.failure) {
           assert.deepEqual(path.userAfter, path.userBefore, `${label}: user PATH unchanged on failure`);
           assert.equal(path.processAfter, path.processBefore, `${label}: process PATH unchanged on failure`);
@@ -413,11 +453,22 @@ else if (command === "curl") {
         } else {
           assert.deepEqual(path.warnings, [], `${label}: automatic PATH setup succeeds without warnings`);
         }
-        assert(
-          path.commandSources.some(
-            source => resolve(source).toLowerCase() === resolve(installDir, executable).toLowerCase(),
+        const expectedSource = (await realpath(join(installDir, executable))).toLowerCase();
+        const canonicalSources = await Promise.all(
+          path.commandSources.map(source =>
+            realpath(source)
+              .then(source => source.toLowerCase())
+              .catch(() => null),
           ),
-          `${label}: Get-Command codepulse finds the installed fixture without executing it`,
+        );
+        assert(
+          canonicalSources.includes(expectedSource),
+          `${label}: Get-Command codepulse finds the installed fixture without executing it; ${JSON.stringify({
+            commandSources: path.commandSources,
+            canonicalSources,
+            expectedSource,
+            PATHEXT: report.pathExt,
+          })}`,
         );
       }
     } else {
@@ -467,19 +518,19 @@ else if (command === "curl") {
     assert.equal(
       await readFile(join(installDir, executable), "utf8"),
       entry.failure ? "good installed binary" : "new binary",
-      entry.name,
+      caseLabel,
     );
-    assert.deepEqual(await readdir(installDir), [executable], `${entry.name}: staging cleanup`);
-    assert.deepEqual(await readdir(temp), [], `${entry.name}: temporary download cleanup`);
+    assert.deepEqual(await readdir(installDir), [executable], `${caseLabel}: staging cleanup`);
+    assert.deepEqual(await readdir(temp), [], `${caseLabel}: temporary download cleanup`);
     const releasePath = !entry.version || entry.version === "latest" ? "latest/download" : "download/v1.2.3";
     const releaseUrl = `https://github.com/andreduejon/codepulse/releases/${releasePath}`;
     const archive = `codepulse-${platform}-${arch}.${windows ? "zip" : "tar.gz"}`;
     assert.deepEqual(
       urls,
-      entry.name === "musl" ? [] : [`${releaseUrl}/${archive}`, `${releaseUrl}/SHA256SUMS`],
-      `${entry.name}: architecture/version URLs`,
+      detectionFailure || entry.name === "musl" ? [] : [`${releaseUrl}/${archive}`, `${releaseUrl}/SHA256SUMS`],
+      `${caseLabel}: architecture/version URLs`,
     );
-    console.log(`PASS: ${entry.name}`);
+    console.log(`PASS: ${caseLabel}`);
   }
   console.log(`All ${windows ? "Windows" : "Unix"} installer checks passed.`);
 } finally {

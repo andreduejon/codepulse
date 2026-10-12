@@ -1,20 +1,28 @@
-# Download may be injected for offline checks; OSArchitecture defaults to the
-# native OS architecture, even when PowerShell runs under emulation.
+# Download may be injected for offline checks; architecture detection uses the
+# native processor, even when PowerShell runs under emulation.
 [CmdletBinding()]
 param(
     [scriptblock] $Download = {
         param($Uri, $OutFile)
         Invoke-WebRequest -Uri $Uri -OutFile $OutFile -UseBasicParsing
     },
-    [string] $OSArchitecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
+    [string] $OSArchitecture
 )
 
 $ErrorActionPreference = 'Stop'
 
-if (-not [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
-    [System.Runtime.InteropServices.OSPlatform]::Windows
-)) {
+if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
     throw 'codepulse: this installer requires Windows'
+}
+
+if (-not $OSArchitecture) {
+    $processorArchitecture = Get-CimInstance -ClassName Win32_Processor | Select-Object -First 1 -ExpandProperty Architecture
+    if ($null -eq $processorArchitecture) { throw 'codepulse: could not detect the native Windows architecture' }
+    $OSArchitecture = switch ($processorArchitecture) {
+        9 { 'X64' }
+        12 { 'Arm64' }
+        default { throw "codepulse: unsupported native Windows architecture: $processorArchitecture" }
+    }
 }
 
 $arch = switch ($OSArchitecture) {
