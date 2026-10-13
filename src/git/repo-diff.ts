@@ -183,7 +183,7 @@ export function parseBlameOutput(stdout: string): BlameLine[] {
 /**
  * Fetch the unified diff for a specific file.
  * The git command varies based on the diff source:
- * - commit: `git diff-tree -p <hash>^! -- <path>` (or just `<hash>` for root commits)
+ * - commit: `git diff-tree -p <hash>^1 <hash> -- <path>` (or `--root <hash>` for root commits)
  * - stash: `git diff -p <hash>^1 <hash> -- <path>`
  * - staged: `git diff --cached -p -- <path>`
  * - unstaged: `git diff -p -- <path>`
@@ -203,12 +203,10 @@ export async function getFileDiff(
 
   let args: string[];
   switch (source) {
-    case "commit": {
-      // Check if this is a root commit (no parents) by using just the hash
-      // For non-root commits, use ^! which means "commit vs its first parent"
-      args = ["diff-tree", "-p", "--no-commit-id", `${commitHash}^!`, "--", filePath];
+    case "commit":
+      // First parent, like the commit's file list (merges included); root commits fall back below.
+      args = ["diff-tree", "-p", "--no-commit-id", `${commitHash}^1`, commitHash, "--", filePath];
       break;
-    }
     case "stash":
       args = ["diff", "-p", `${commitHash}^1`, commitHash, "--", filePath];
       break;
@@ -220,25 +218,22 @@ export async function getFileDiff(
       break;
   }
 
-  const { stdout, exitCode, stderr } = await runGit(repoPath, args, signal);
+  let result = await runGit(repoPath, args, signal);
 
-  // Root commits: ^! fails, fall back to show <hash> -- <path>
-  if (exitCode !== 0 && source === "commit" && stderr.includes("unknown revision")) {
-    const fallback = await runGit(
+  // Root commits have no ^1: diff against the empty tree instead.
+  if (result.exitCode !== 0 && source === "commit" && /bad revision|unknown revision/.test(result.stderr)) {
+    result = await runGit(
       repoPath,
       ["diff-tree", "-p", "--no-commit-id", "--root", commitHash, "--", filePath],
       signal,
     );
-    if (fallback.exitCode === 0) {
-      return parseUnifiedDiff(fallback.stdout, filePath);
-    }
   }
 
-  if (exitCode !== 0 || !stdout.trim()) {
+  if (result.exitCode !== 0 || !result.stdout.trim()) {
     return { filePath, hunks: [], isBinary: false };
   }
 
-  return parseUnifiedDiff(stdout, filePath);
+  return parseUnifiedDiff(result.stdout, filePath);
 }
 
 /** Read an untracked file and present as an all-added diff. */
