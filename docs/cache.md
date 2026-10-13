@@ -88,7 +88,13 @@ Symlink aliases share a cache. Moving or renaming a repository starts a cold
 cache under a new identity. The abandoned identity is subject to inactivity
 cleanup.
 
-Old JSON snapshots and text-log files are not migrated or deleted. They are not
-included in the SQLite screen or automatic cleanup. Known development schema v1
-databases are rebuilt cold as schema v2. Unknown or corrupt databases are
-preserved, with diagnostics available in `:debug`.
+## Upgrading to v0.13.0
+
+The upgrade starts with a cold provider cache. Old JSON snapshots and text-log
+files are not migrated or deleted, and are not included in the SQLite screen or
+automatic cleanup. Provider data is fetched or scanned again through normal
+provider actions; legacy cached data is not available offline in the new cache.
+Repository files, provider configuration, and custom themes are unchanged.
+
+Known development schema v1 databases are rebuilt cold as schema v2. Unknown or
+corrupt databases are preserved, with diagnostics available in `:debug`.

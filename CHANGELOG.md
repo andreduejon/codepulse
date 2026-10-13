@@ -2,6 +2,45 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.13.0] - 2026-10-14
+
+### Added
+
+- **Custom themes** — load `themes.json` beside global configuration, inherit
+  from a predefined theme or define a standalone palette, and inspect effective
+  colors and explicit overrides. Invalid entries are skipped independently.
+- **Theme inspector** — preview themes, save without closing, and browse
+  scrollable HEX colors with pinned theme metadata and override markers.
+- **Global cache management** — use `:cache` to inspect grouped repository cache
+  sizes, copy the database path, reset inactivity timers, and evict repository
+  data. Provider activity pauses while the screen is open.
+- Standalone SQLite smoke checks across all six release targets, including
+  provider snapshots, logs, reopen, cascading deletion, and cache management.
+
+### Changed
+
+- Store provider snapshots and logs in one shared SQLite database with bounded
+  retention and inactivity cleanup. Configuration and themes remain JSON.
+- **Cold-cache upgrade** — legacy JSON snapshots and text logs are not imported
+  or deleted. Provider data is fetched or scanned again through normal provider
+  actions; old files remain outside SQLite management and cleanup. Known
+  development schema v1 databases are rebuilt cold as v2; unknown or corrupt
+  databases are preserved with diagnostics.
+- Write configuration atomically and preserve unreadable existing files rather
+  than replacing them. Share terminal provider snapshot persistence.
+- Pin the Bun setup action to a commit SHA.
+
+### Fixed
+
+- Preserve non-ASCII and exact untracked paths, list root-commit files and staged
+  renames, and compare merge-commit file diffs against the first parent.
+- Load HEAD beyond the first history page and cancel Git work on loader cleanup.
+- Bound file-content, diff, and blame reads at 8 MiB.
+- Strip terminal escape sequences from CI and pod logs.
+- Keep credentialed Jenkins build and cached-run requests on the configured
+  origin, and surface GitHub job/check-suite page-limit truncation.
+- Clean up Snyk scan worktrees orphaned by killed processes.
+
 ## [0.12.1] - 2026-10-13
 
 ### Fixed
