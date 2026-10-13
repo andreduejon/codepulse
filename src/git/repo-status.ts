@@ -108,7 +108,12 @@ export async function getStashFiles(repoPath: string, stashHash: string, signal?
  * Uses `git diff --cached --raw --numstat` to get files staged for commit.
  */
 export async function getStagedFiles(repoPath: string, signal?: AbortSignal): Promise<FileChange[]> {
-  const { stdout, exitCode } = await runGit(repoPath, ["diff", "--cached", "--raw", "--numstat", "--"], signal);
+  // --no-renames: numstat would print "dir/{old => new}", which is not a real path.
+  const { stdout, exitCode } = await runGit(
+    repoPath,
+    ["diff", "--cached", "--no-renames", "--raw", "--numstat", "--"],
+    signal,
+  );
   if (exitCode !== 0 || !stdout.trim()) return [];
   return parseDiffTreeOutput(stdout);
 }
@@ -118,7 +123,7 @@ export async function getStagedFiles(repoPath: string, signal?: AbortSignal): Pr
  * Uses `git diff --raw --numstat` (no HEAD, no --cached) to get modified tracked files.
  */
 export async function getUnstagedFiles(repoPath: string, signal?: AbortSignal): Promise<FileChange[]> {
-  const { stdout, exitCode } = await runGit(repoPath, ["diff", "--raw", "--numstat", "--"], signal);
+  const { stdout, exitCode } = await runGit(repoPath, ["diff", "--no-renames", "--raw", "--numstat", "--"], signal);
   if (exitCode !== 0 || !stdout.trim()) return [];
   return parseDiffTreeOutput(stdout);
 }

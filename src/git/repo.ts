@@ -399,7 +399,12 @@ export async function getCommitDetail(
 
   // Single diff-tree call: --raw gives status letters, --numstat gives +/- stats.
   // Git outputs the raw lines first, then a blank separator, then numstat lines.
-  const diffProc = runGit(repoPath, ["diff-tree", "--no-commit-id", "-r", "--raw", "--numstat", hash, "--"], signal);
+  // --root lists the initial commit's files (diff against the empty tree).
+  const diffProc = runGit(
+    repoPath,
+    ["diff-tree", "--root", "--no-commit-id", "-r", "--raw", "--numstat", hash, "--"],
+    signal,
+  );
 
   const [msgResult, diffResult] = await Promise.all([msgProc, diffProc]);
   if (signal?.aborted) return null;

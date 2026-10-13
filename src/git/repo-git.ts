@@ -14,7 +14,8 @@ export async function runGit(
     return { stdout: "", stderr: "aborted", exitCode: 1 };
   }
 
-  const proc = Bun.spawn(["git", ...args], {
+  // quotePath=false: print non-ASCII paths as UTF-8 instead of quoted octal escapes.
+  const proc = Bun.spawn(["git", "-c", "core.quotePath=false", ...args], {
     cwd: repoPath,
     stdout: "pipe",
     stderr: "pipe",
