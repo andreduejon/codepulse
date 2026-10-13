@@ -146,6 +146,32 @@ export function mergeById<T extends { id: string | number }>(existing: readonly 
   return [...byId.values()];
 }
 
+/**
+ * Merge each SHA's terminal results into its cached snapshot, then apply the count limit once.
+ * Stops writing as soon as `isCurrent` turns false (repository switch, provider reset).
+ */
+export async function persistMergedSnapshots<T extends { sha: string }, I>(
+  disk: ShaSqliteCache<T>,
+  repoPath: string,
+  shas: readonly string[],
+  isCurrent: () => boolean,
+  incomingFor: (sha: string) => I[],
+  merge: (sha: string, existing: T | null, incoming: I[]) => T,
+): Promise<void> {
+  if (!isCurrent()) return;
+  const writes = await Promise.all(
+    shas.map(async sha => {
+      const incoming = incomingFor(sha);
+      if (incoming.length === 0) return false;
+      const existing = await disk.read(repoPath, sha);
+      if (!isCurrent()) return false;
+      await disk.write(repoPath, merge(sha, existing, incoming), { evict: false });
+      return true;
+    }),
+  );
+  if (writes.some(Boolean) && isCurrent()) await disk.evictForRepo(repoPath);
+}
+
 export interface ShaSqliteCacheOptions<T> {
   provider: string;
   root?: string;

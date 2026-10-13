@@ -11,6 +11,7 @@ import {
 import { BANNER, debugError } from "../../debug/banner";
 import { collectTopSHAs } from "../github-actions/sha-selection";
 import { sleep } from "../shared/http";
+import { persistMergedSnapshots } from "../shared/sha-sqlite-cache";
 import { useProviderFetchLifecycle } from "../shared/use-provider-fetch-lifecycle";
 import {
   applyOpenShiftWatchEvent,
@@ -277,17 +278,18 @@ export function useOpenShift(opts: {
     data: Map<string, OpenShiftCommitData>,
     epoch: number,
   ): Promise<void> {
-    for (const [sha, commit] of data) {
-      if (!lifecycle.isCurrent(epoch, repoPath)) return;
-      const incoming = commit.namespaces
-        .flatMap(ns => ns.builds)
-        .map(toCachedBuild)
-        .filter((build): build is NonNullable<typeof build> => build !== null && isTerminalBuildStatus(build.status));
-      if (incoming.length === 0) continue;
-      const existing = await disk.read(repoPath, sha);
-      if (!lifecycle.isCurrent(epoch, repoPath)) return;
-      await disk.write(repoPath, { sha, builds: mergeById(existing?.builds ?? [], incoming) });
-    }
+    await persistMergedSnapshots(
+      disk,
+      repoPath,
+      [...data.keys()],
+      () => lifecycle.isCurrent(epoch, repoPath),
+      sha =>
+        (data.get(sha)?.namespaces ?? [])
+          .flatMap(ns => ns.builds)
+          .map(toCachedBuild)
+          .filter((build): build is NonNullable<typeof build> => build !== null && isTerminalBuildStatus(build.status)),
+      (sha, existing, incoming) => ({ sha, builds: mergeById(existing?.builds ?? [], incoming) }),
+    );
   }
 
   function eligibleSHAs(): Set<string> {

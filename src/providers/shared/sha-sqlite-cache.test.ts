@@ -6,7 +6,13 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { clearDebugEvents, getDebugEvents } from "../../debug/events";
 import type { ProviderCacheLimit } from "./auto-refresh";
-import { closeProviderCaches, mergeById, providerCacheDatabase, ShaSqliteCache } from "./sha-sqlite-cache";
+import {
+  closeProviderCaches,
+  mergeById,
+  persistMergedSnapshots,
+  providerCacheDatabase,
+  ShaSqliteCache,
+} from "./sha-sqlite-cache";
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -44,6 +50,42 @@ function setAccess(root: string, sha: string, accessedAt: number) {
     .query("UPDATE snapshots SET accessed_at = ? WHERE provider = ? AND sha = ?")
     .run(accessedAt, "test", sha);
 }
+
+describe("persistMergedSnapshots", () => {
+  test("merges per SHA, skips empty and stale work, then applies the count limit once", async () => {
+    setSystemTime(new Date("2026-01-01T00:00:00.000Z")); // equal access times: eviction order falls back to sha
+    const root = await cacheRoot();
+    const disk = cache(root, "test", 10);
+    const shas = Array.from({ length: 12 }, (_, index) => index.toString(16).padStart(40, "0"));
+    await disk.write("/repo", { sha: shas[10], value: "old" });
+    const merge = (sha: string, existing: Entry | null, incoming: string[]) => ({
+      sha,
+      value: [existing?.value, ...incoming].filter(Boolean).join("+"),
+    });
+
+    await persistMergedSnapshots(
+      disk,
+      "/repo",
+      shas,
+      () => false,
+      () => ["new"],
+      merge,
+    );
+    expect(await disk.list("/repo")).toEqual([shas[10]]);
+
+    await persistMergedSnapshots(
+      disk,
+      "/repo",
+      shas,
+      () => true,
+      sha => (sha === shas[11] ? [] : ["new"]),
+      merge,
+    );
+    expect((await disk.list("/repo")).sort()).toEqual(shas.slice(1, 11));
+    expect((await disk.read("/repo", shas[10]))?.value).toBe("old+new");
+    expect((await disk.read("/repo", shas[1]))?.value).toBe("new");
+  });
+});
 
 describe("ShaSqliteCache", () => {
   test("stores normalized snapshots, canonical path, schema version and bound JSON", async () => {

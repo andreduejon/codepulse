@@ -34,6 +34,7 @@ import { BANNER, bannerOrFallback, debugError } from "../../debug/banner";
 import { addDebugEvent } from "../../debug/events";
 
 import { DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS } from "../shared/auto-refresh";
+import { persistMergedSnapshots } from "../shared/sha-sqlite-cache";
 import { useProviderFetchLifecycle } from "../shared/use-provider-fetch-lifecycle";
 import {
   buildCommitDataMap,
@@ -286,32 +287,24 @@ export function useGitHubCI(opts: {
   }
 
   async function persistTerminalRuns(repoPath: string, shas: readonly string[], epoch: number): Promise<void> {
-    if (!lifecycle.isCurrent(epoch, repoPath)) return;
-    const writes = await Promise.all(
-      shas.map(async sha => {
-        const incoming = (commitDataCache.get(sha)?.runs ?? []).filter(isTerminalGitHubRun);
-        if (incoming.length === 0) return false;
-        const existing = await disk.read(repoPath, sha);
-        if (!lifecycle.isCurrent(epoch, repoPath)) return false;
-        await disk.write(
-          repoPath,
-          {
-            sha,
-            runs: mergeGitHubRuns(existing?.runs ?? [], incoming),
-            jobs: mergeGitHubJobs(
-              existing?.jobs,
-              jobsMapFromGitHubCache(
-                jobsCache,
-                incoming.map(run => run.id),
-              ),
-            ),
-          },
-          { evict: false },
-        );
-        return true;
+    await persistMergedSnapshots(
+      disk,
+      repoPath,
+      shas,
+      () => lifecycle.isCurrent(epoch, repoPath),
+      sha => (commitDataCache.get(sha)?.runs ?? []).filter(isTerminalGitHubRun),
+      (sha, existing, incoming) => ({
+        sha,
+        runs: mergeGitHubRuns(existing?.runs ?? [], incoming),
+        jobs: mergeGitHubJobs(
+          existing?.jobs,
+          jobsMapFromGitHubCache(
+            jobsCache,
+            incoming.map(run => run.id),
+          ),
+        ),
       }),
     );
-    if (writes.some(Boolean) && lifecycle.isCurrent(epoch, repoPath)) await disk.evictForRepo(repoPath);
   }
 
   // ── Main fetch entry points ───────────────────────────────────────────
