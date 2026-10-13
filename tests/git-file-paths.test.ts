@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { getCommitDetail, runGit } from "../src/git/repo";
 import { getStagedFiles, getUntrackedFiles } from "../src/git/repo-status";
 
-test("file lists use real paths for root commits, non-ASCII names, and staged renames", async () => {
+test("file lists use exact paths for root commits, non-ASCII and space-padded names, and staged renames", async () => {
   const root = await mkdtemp(join(tmpdir(), "codepulse-git-file-paths-"));
   const git = async (...args: string[]) => {
     const result = await runGit(root, args);
@@ -25,7 +25,8 @@ test("file lists use real paths for root commits, non-ASCII names, and staged re
     expect(paths(detail?.files ?? [])).toEqual(["A café.txt", "A dir/old.txt"]);
 
     await writeFile(join(root, "naïve.md"), "x\n");
-    expect(paths(await getUntrackedFiles(root))).toEqual(["A naïve.md"]);
+    await writeFile(join(root, " lead.txt"), "x\n");
+    expect(paths(await getUntrackedFiles(root))).toEqual(["A  lead.txt", "A naïve.md"]);
 
     await git("mv", "dir/old.txt", "dir/new.txt");
     expect(paths(await getStagedFiles(root))).toEqual(["A dir/new.txt", "D dir/old.txt"]);
