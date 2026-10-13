@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, spyOn, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -15,8 +15,7 @@ const disposers: (() => void)[] = [];
 
 afterEach(async () => {
   for (const dispose of disposers.splice(0)) dispose();
-  // Windows Git/taskkill handles can outlive synchronous Solid cleanup.
-  await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true, maxRetries: 5 })));
+  await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })));
 });
 
 /** Temp repo on `main`; `commits` are subjects committed in order, each touching file.txt. */
@@ -123,10 +122,18 @@ test("HEAD past the first page is still loaded, selected, and anchors the uncomm
 
 test("disposal stops in-flight loads from writing state", async () => {
   const { root } = await makeRepo(["c1"]);
-  const { state, dispose } = mount(root, 50);
-  dispose();
-  await Bun.sleep(300); // longer than a tiny-repo load
-  expect(state.commits()).toEqual([]);
+  const spawn = spyOn(Bun, "spawn");
+  try {
+    const { state, dispose } = mount(root, 50);
+    expect(spawn).toHaveBeenCalled();
+    dispose();
+    // Wait for Git and Windows taskkill to release the temp repo before cleanup.
+    await Promise.all(spawn.mock.results.map(result => (result.value as ReturnType<typeof Bun.spawn>).exited));
+    await Bun.sleep(0);
+    expect(state.commits()).toEqual([]);
+  } finally {
+    spawn.mockRestore();
+  }
 });
 
 test("detail loader shows the selected commit's files, merge files, and uncommitted changes", async () => {
