@@ -12,6 +12,8 @@ import {
   getTokenSource,
   isGitHubJobsFieldSchemaError,
   isTrustedGitHubHost,
+  MAX_CHECK_SUITE_PAGES,
+  MAX_JOB_PAGES,
   mapRunToBadge,
   nextGithubLink,
   normalizeGitHubHost,
@@ -443,6 +445,23 @@ describe("fetchRunJobs", () => {
     expect(jobs.map(j => j.name)).toEqual(["a", "b"]);
     expect(n).toBe(2);
   });
+
+  it("reports incomplete jobs instead of a silent partial list at the page limit", async () => {
+    let n = 0;
+    mockFetch(
+      mock(async () => {
+        n++;
+        return new Response(JSON.stringify({ jobs: [makeApiJob({ id: n, name: `job-${n}` })] }), {
+          status: 200,
+          headers: { Link: `<https://api.github.com/repos/o/r/actions/runs/123/jobs?page=${n + 1}>; rel="next"` },
+        });
+      }),
+    );
+    const { jobs, error } = await fetchRunJobs(TEST_REPO, TEST_TOKEN, 123);
+    expect(error).toBe(BANNER.github.incomplete);
+    expect(jobs).toHaveLength(MAX_JOB_PAGES);
+    expect(n).toBe(MAX_JOB_PAGES);
+  });
 });
 
 describe("isGitHubJobsFieldSchemaError", () => {
@@ -787,6 +806,26 @@ describe("fetchCIDataForSHAs", () => {
       expect(query.includes("jobs(")).toBe(index < rejectedPage);
     });
     expect(getDebugEvents().filter(event => event.status === "error")).toEqual([]);
+  });
+
+  it("keeps check suites found before the page limit and logs the truncation", async () => {
+    let page = 0;
+    mockFetch(
+      mock(async () => {
+        page++;
+        const response = makeBatchResponse([{ sha: "abc", suites: [{ wfRunId: page }] }]);
+        const commit = response.data.repository.c0 as {
+          checkSuites: { pageInfo: { hasNextPage: boolean; endCursor: string | null } };
+        };
+        commit.checkSuites.pageInfo = { hasNextPage: true, endCursor: `PAGE${page}` };
+        return new Response(JSON.stringify(response), { status: 200 });
+      }),
+    );
+    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
+    expect(result.error).toBeNull();
+    expect(result.data).toHaveLength(MAX_CHECK_SUITE_PAGES);
+    expect(page).toBe(MAX_CHECK_SUITE_PAGES);
+    expect(getDebugEvents().some(event => event.message.includes("Check suites truncated"))).toBe(true);
   });
 
   it("keeps unrelated GraphQL failures visible and deduplicates their messages", async () => {

@@ -671,6 +671,13 @@ async function fetchCIDataForSHAsOnce(
       );
     }
 
+    // Not an error: the batch's data stays usable, and failing it would refetch every page each refresh.
+    if (pending.length > 0) {
+      debugError(
+        "GitHub",
+        `Check suites truncated after ${MAX_CHECK_SUITE_PAGES} pages for ${pending.length} commit(s)`,
+      );
+    }
     return { data: runs, jobs, error: null, jobsUnsupported: jobsUnsupported || undefined };
   } catch (err) {
     if (signal?.aborted) throw err;
@@ -761,6 +768,10 @@ export async function fetchRunJobs(
       const json = (await res.json()) as { jobs?: GitHubApiJob[] };
       jobs.push(...(json.jobs ?? []).map(mapApiJob));
       url = nextGithubLink(res.headers.get("link"), origin);
+    }
+    if (url) {
+      debugError("GitHub", `Jobs for run ${runId} truncated after ${MAX_JOB_PAGES} pages`);
+      return { jobs, error: BANNER.github.incomplete };
     }
     return { jobs, error: null };
   } catch (err) {
