@@ -41,8 +41,9 @@ async function readWorktreeFile(repoPath: string, filePath: string): Promise<Fil
 /**
  * @internal Exported for testing.
  * Parse unified diff output (`git diff -p`) for a single file into a structured FileDiff.
+ * `cut` = output was stopped at MAX_FILE_BYTES, so its last line may be partial.
  */
-export function parseUnifiedDiff(stdout: string, filePath: string): FileDiff {
+export function parseUnifiedDiff(stdout: string, filePath: string, cut = false): FileDiff {
   if (!stdout.trim()) {
     return { filePath, hunks: [], isBinary: false };
   }
@@ -53,12 +54,13 @@ export function parseUnifiedDiff(stdout: string, filePath: string): FileDiff {
   }
 
   const lines = stdout.split("\n");
+  if (cut) lines.pop();
   const hunks: import("./types").DiffHunk[] = [];
   let currentHunk: import("./types").DiffHunk | null = null;
   let oldLine = 0;
   let newLine = 0;
   let totalLines = 0;
-  let truncated = false;
+  let truncated = cut;
 
   for (const line of lines) {
     // Once we hit the line limit, stop parsing
@@ -218,7 +220,7 @@ export async function getFileDiff(
       break;
   }
 
-  let result = await runGit(repoPath, args, signal);
+  let result = await runGit(repoPath, args, signal, MAX_FILE_BYTES);
 
   // Root commits have no ^1: diff against the empty tree instead.
   if (result.exitCode !== 0 && source === "commit" && /bad revision|unknown revision/.test(result.stderr)) {
@@ -226,14 +228,15 @@ export async function getFileDiff(
       repoPath,
       ["diff-tree", "-p", "--no-commit-id", "--root", commitHash, "--", filePath],
       signal,
+      MAX_FILE_BYTES,
     );
   }
 
-  if (result.exitCode !== 0 || !result.stdout.trim()) {
+  if ((result.exitCode !== 0 && !result.truncated) || !result.stdout.trim()) {
     return { filePath, hunks: [], isBinary: false };
   }
 
-  return parseUnifiedDiff(result.stdout, filePath);
+  return parseUnifiedDiff(result.stdout, filePath, result.truncated);
 }
 
 /** Read an untracked file and present as an all-added diff. */
@@ -323,8 +326,15 @@ export async function getFileBlame(
   // For non-commit sources, blame against HEAD
   const ref = source === "commit" ? commitHash : "HEAD";
 
-  const { stdout, exitCode } = await runGit(repoPath, ["blame", "--porcelain", ref, "--", filePath], signal);
+  const { stdout, exitCode, truncated } = await runGit(
+    repoPath,
+    ["blame", "--porcelain", ref, "--", filePath],
+    signal,
+    MAX_FILE_BYTES,
+  );
 
-  if (exitCode !== 0 || !stdout.trim()) return [];
-  return parseBlameOutput(stdout);
+  if ((exitCode !== 0 && !truncated) || !stdout.trim()) return [];
+  const lines = parseBlameOutput(stdout);
+  // A byte cut can end inside the last entry.
+  return truncated ? lines.slice(0, -1) : lines;
 }

@@ -2,10 +2,10 @@ import { expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getFileContent, getFileDiff } from "../src/git/repo-diff";
+import { getFileBlame, getFileContent, getFileDiff } from "../src/git/repo-diff";
 import { runGit } from "../src/git/repo-git";
 
-test("file views stop reading at the byte cap for committed and untracked files", async () => {
+test("file, diff, and blame views stop reading at the byte cap", async () => {
   const root = await mkdtemp(join(tmpdir(), "codepulse-git-large-file-"));
   const git = async (...args: string[]) => {
     const result = await runGit(root, args);
@@ -34,9 +34,15 @@ test("file views stop reading at the byte cap for committed and untracked files"
       isBinary: false,
       truncated: true,
     });
-    const diff = await getFileDiff(root, head, "untracked.txt", "untracked");
-    expect(diff.truncated).toBe(true);
-    expect(diff.hunks[0]?.lines.map(line => line.content)).toEqual(["short"]);
+    for (const [file, source] of [
+      ["untracked.txt", "untracked"],
+      ["big.txt", "commit"],
+    ] as const) {
+      const diff = await getFileDiff(root, head, file, source);
+      expect(diff.truncated).toBe(true);
+      expect(diff.hunks[0]?.lines.map(line => line.content)).toEqual(["short"]);
+    }
+    expect((await getFileBlame(root, head, "big.txt", "commit")).map(line => line.content)).toEqual(["short"]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
