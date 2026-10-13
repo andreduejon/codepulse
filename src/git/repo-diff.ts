@@ -4,6 +4,8 @@ import type { BlameLine, DiffSource, FileContent, FileDiff } from "./types";
 
 /** Maximum number of diff lines before truncation. */
 const MAX_DIFF_LINES = 5000;
+/** Byte cap for loading file content into memory; far more than MAX_DIFF_LINES of typical text. */
+const MAX_FILE_BYTES = 8 * 1024 * 1024;
 
 function bytesAreBinary(view: Uint8Array): boolean {
   const checkLen = Math.min(view.length, 8192);
@@ -13,10 +15,11 @@ function bytesAreBinary(view: Uint8Array): boolean {
   return false;
 }
 
-function textToFileContent(filePath: string, content: string): FileContent {
+/** `cut` = content was stopped at MAX_FILE_BYTES, so its last line may be partial. */
+function textToFileContent(filePath: string, content: string, cut = false): FileContent {
   const lines = content.split("\n");
-  if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
-  const truncated = lines.length > MAX_DIFF_LINES;
+  if (cut || (lines.length > 0 && lines[lines.length - 1] === "")) lines.pop();
+  const truncated = cut || lines.length > MAX_DIFF_LINES;
   return {
     filePath,
     lines: truncated ? lines.slice(0, MAX_DIFF_LINES) : lines,
@@ -25,15 +28,14 @@ function textToFileContent(filePath: string, content: string): FileContent {
   };
 }
 
-async function readWorktreeFile(repoPath: string, filePath: string): Promise<FileContent> {
-  const fullPath = join(repoPath, filePath);
-  const file = Bun.file(fullPath);
-  const exists = await file.exists();
-  if (!exists) return { filePath, lines: [], isBinary: false };
-  const bytes = await file.arrayBuffer();
-  const view = new Uint8Array(bytes);
+/** Read at most MAX_FILE_BYTES of a working-tree file; null when it does not exist. */
+async function readWorktreeFile(repoPath: string, filePath: string): Promise<FileContent | null> {
+  const file = Bun.file(join(repoPath, filePath));
+  if (!(await file.exists())) return null;
+  const cut = file.size > MAX_FILE_BYTES;
+  const view = new Uint8Array(await (cut ? file.slice(0, MAX_FILE_BYTES) : file).arrayBuffer());
   if (bytesAreBinary(view)) return { filePath, lines: [], isBinary: true };
-  return textToFileContent(filePath, new TextDecoder().decode(view));
+  return textToFileContent(filePath, new TextDecoder().decode(view), cut);
 }
 
 /**
@@ -242,24 +244,9 @@ export async function getFileDiff(
 /** Read an untracked file and present as an all-added diff. */
 async function getUntrackedFileDiff(repoPath: string, filePath: string): Promise<FileDiff> {
   try {
-    const fullPath = join(repoPath, filePath);
-    const file = Bun.file(fullPath);
-    const exists = await file.exists();
-    if (!exists) return { filePath, hunks: [], isBinary: false };
-
-    const bytes = await file.arrayBuffer();
-    const view = new Uint8Array(bytes);
-    if (bytesAreBinary(view)) return { filePath, hunks: [], isBinary: true };
-
-    const content = new TextDecoder().decode(view);
-    const lines = content.split("\n");
-    // Remove trailing empty line from split
-    if (lines.length > 0 && lines[lines.length - 1] === "") {
-      lines.pop();
-    }
-
-    const truncated = lines.length > MAX_DIFF_LINES;
-    const displayLines = truncated ? lines.slice(0, MAX_DIFF_LINES) : lines;
+    const content = await readWorktreeFile(repoPath, filePath);
+    if (!content || content.isBinary) return { filePath, hunks: [], isBinary: content?.isBinary ?? false };
+    const displayLines = content.lines;
 
     const diffLines: import("./types").DiffLine[] = displayLines.map((line, idx) => ({
       type: "add" as const,
@@ -280,7 +267,7 @@ async function getUntrackedFileDiff(repoPath: string, filePath: string): Promise
         },
       ],
       isBinary: false,
-      ...(truncated ? { truncated: true } : {}),
+      ...(content.truncated ? { truncated: true } : {}),
     };
   } catch {
     return { filePath, hunks: [], isBinary: false };
@@ -299,7 +286,8 @@ export async function getFileContent(
   source: DiffSource,
   signal?: AbortSignal,
 ): Promise<FileContent> {
-  if (source === "unstaged" || source === "untracked") return readWorktreeFile(repoPath, filePath);
+  if (source === "unstaged" || source === "untracked")
+    return (await readWorktreeFile(repoPath, filePath)) ?? { filePath, lines: [], isBinary: false };
 
   const specs = (() => {
     switch (source) {
@@ -313,11 +301,11 @@ export async function getFileContent(
   })();
 
   for (const spec of specs) {
-    const { stdout, exitCode, stderr } = await runGit(repoPath, ["show", spec], signal);
-    if (exitCode === 0) {
+    const { stdout, exitCode, stderr, truncated } = await runGit(repoPath, ["show", spec], signal, MAX_FILE_BYTES);
+    if (exitCode === 0 || truncated) {
       // Git emits this for binary blobs through stdout; keep behavior conservative.
       if (stdout.includes("\0")) return { filePath, lines: [], isBinary: true };
-      return textToFileContent(filePath, stdout);
+      return textToFileContent(filePath, stdout, truncated);
     }
     if (stderr.includes("exists on disk, but not in")) continue;
   }
