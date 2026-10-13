@@ -15,7 +15,8 @@ const disposers: (() => void)[] = [];
 
 afterEach(async () => {
   for (const dispose of disposers.splice(0)) dispose();
-  await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })));
+  // Windows Git/taskkill handles can outlive synchronous Solid cleanup.
+  await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true, maxRetries: 5 })));
 });
 
 /** Temp repo on `main`; `commits` are subjects committed in order, each touching file.txt. */
