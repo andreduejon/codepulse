@@ -447,7 +447,7 @@ export async function fetchJenkinsRunsForBuilds(
     async run => {
       try {
         const build = await fetchJson<JenkinsBuildApi>(
-          jenkinsApiUrl(run.url, treeApiSuffix(buildDetailTree())),
+          jenkinsApiUrl(onOrigin(run.url, run.jobUrl), treeApiSuffix(buildDetailTree())),
           username,
           token,
           signal,
@@ -652,7 +652,7 @@ export async function fetchJenkinsRunJobs(
 ): Promise<{ jobs: JenkinsJob[]; error: string | null }> {
   try {
     const wfapi = await fetchJson<JenkinsWfapiDescribe>(
-      jenkinsApiUrl(run.url, "wfapi/describe"),
+      jenkinsApiUrl(onOrigin(run.url, run.jobUrl), "wfapi/describe"),
       username,
       token,
       signal,
@@ -700,7 +700,7 @@ export async function fetchJenkinsConsoleLog(
   token: string,
   signal?: AbortSignal,
 ): Promise<string> {
-  const url = `${normalizeJenkinsJobUrl(run.url)}/consoleText`;
+  const url = `${normalizeJenkinsJobUrl(onOrigin(run.url, run.jobUrl))}/consoleText`;
   if (!isSafeJenkinsRequestUrl(url)) return "";
   const res = await fetchWithRetry(url, {
     headers: authHeaders(username, token),

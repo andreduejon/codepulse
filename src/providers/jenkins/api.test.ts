@@ -8,8 +8,10 @@ import {
   extractCandidateShas,
   extractHeadShas,
   extractSha,
+  fetchJenkinsConsoleLog,
   fetchJenkinsDataForSHAs,
   fetchJenkinsGraphDataForSHAs,
+  fetchJenkinsRunJobs,
   fetchJenkinsRunsForBuilds,
   jenkinsApiUrl,
   normalizeJenkinsJobUrl,
@@ -804,4 +806,36 @@ describe("fetchJenkinsRunsForBuilds", () => {
       globalThis.fetch = originalFetch;
     }
   });
+});
+
+test("cached run requests stay on the job origin even when the stored run URL names another host", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    calls.push(String(input));
+    return Response.json({});
+  }) as typeof fetch;
+  const run: JenkinsRun = {
+    id: "https://jenkins.example.com/job/foo#12",
+    name: "foo",
+    status: "completed",
+    conclusion: "success",
+    headSha: "a".repeat(40),
+    runNumber: 12,
+    startedAt: null,
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    url: "https://evil.example.net/job/foo/12/",
+    jobLabel: "foo",
+    jobUrl: "https://jenkins.example.com/job/foo",
+  };
+
+  try {
+    await fetchJenkinsRunsForBuilds([run], "user", "token");
+    await fetchJenkinsRunJobs(run, "user", "token");
+    await fetchJenkinsConsoleLog(run, "user", "token");
+    expect(calls).toHaveLength(3);
+    expect(calls.every(url => url.startsWith("https://jenkins.example.com/job/foo/12/"))).toBe(true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
