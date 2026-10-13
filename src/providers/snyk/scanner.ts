@@ -1,6 +1,6 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { addDebugEvent, redactDebugValue } from "../../debug/events";
 import { SnykCache } from "./cache";
 import { parseSnykOutput, shouldReplaceSnykResult } from "./parser";
@@ -207,6 +207,43 @@ async function resolveCommitSha(
   return sha;
 }
 
+const SCAN_ROOT_PREFIX = "codepulse-snyk-";
+const SCAN_ROOT_PATTERN = /^codepulse-snyk-(\d+)-[^/\\]+$/;
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+/**
+ * Remove scan worktrees left by codepulse processes that died before their cleanup ran
+ * (killed, terminal closed). Only `worktree` folders inside `codepulse-snyk-<pid>-…` roots of dead PIDs are touched.
+ */
+export async function removeOrphanedScanWorktrees(
+  repoPath: string,
+  runCommand: SnykCommandRunner = runSnykCommand,
+  signal?: AbortSignal,
+): Promise<void> {
+  try {
+    const listed = await runCommand(["git", "worktree", "list", "--porcelain"], { cwd: repoPath, signal });
+    if (listed.exitCode !== 0) return;
+    for (const line of listed.stdout.split("\n")) {
+      if (!line.startsWith("worktree ")) continue;
+      const path = line.slice("worktree ".length).trim();
+      const pid = Number(SCAN_ROOT_PATTERN.exec(basename(dirname(path)))?.[1]);
+      if (basename(path) !== "worktree" || !pid || pid === process.pid || isProcessAlive(pid)) continue;
+      await runCommand(["git", "worktree", "remove", "--force", path], { cwd: repoPath, signal });
+      await rm(dirname(path), { recursive: true, force: true });
+    }
+  } catch {
+    // Best effort: housekeeping must never block a scan.
+  }
+}
+
 export async function scanSnykCommit(
   options: SnykScanOptions,
   dependencies: SnykScannerDependencies = {},
@@ -221,7 +258,10 @@ export async function scanSnykCommit(
   }
 
   throwIfAborted(options.signal);
-  const temporaryRoot = await mkdtemp(join(tmpdir(), "codepulse-snyk-"));
+  await removeOrphanedScanWorktrees(options.repoPath, runCommand, options.signal);
+  throwIfAborted(options.signal);
+  // The PID in the name lets later scans tell orphaned worktrees from another live instance's.
+  const temporaryRoot = await mkdtemp(join(tmpdir(), `${SCAN_ROOT_PREFIX}${process.pid}-`));
   const worktreePath = join(temporaryRoot, "worktree");
   try {
     const added = await runCommand(["git", "worktree", "add", "--detach", worktreePath, sha], {
