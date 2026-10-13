@@ -146,6 +146,18 @@ function authHeaders(username: string | undefined, token: string): Record<string
   return { Authorization: `Basic ${Buffer.from(`${username}:${token}`).toString("base64")}` };
 }
 
+/**
+ * Jenkins builds absolute URLs from its own "Jenkins URL" setting, which may name another host.
+ * Move them onto the configured origin so credentials never leave it.
+ */
+function onOrigin(url: string, base: string): string {
+  const parsed = new URL(url);
+  const origin = new URL(base).origin;
+  return parsed.origin === origin
+    ? parsed.toString()
+    : new URL(`${parsed.pathname}${parsed.search}`, origin).toString();
+}
+
 function isJenkinsLoginRedirect(location: string | null): boolean {
   return !!location && /securityRealm\/commenceLogin/i.test(location);
 }
@@ -235,19 +247,14 @@ export async function resolveJenkinsJobs(
       continue;
     }
     for (const child of (discovery.api.jobs ?? []).filter(isEnabledMultibranchJob)) {
-      let childUrl: URL;
+      let url: string;
       try {
-        childUrl = new URL(child.url ?? "");
+        url = normalizeJenkinsJobUrl(onOrigin(child.url ?? "", parentOrigin));
       } catch {
         debugError("Jenkins", child.url ?? "");
         firstError ??= BANNER.jenkins.invalidJobUrl;
         continue;
       }
-      const url = normalizeJenkinsJobUrl(
-        childUrl.origin === parentOrigin
-          ? childUrl.toString()
-          : new URL(`${childUrl.pathname}${childUrl.search}`, parentOrigin).toString(),
-      );
       if (!url || resolved.has(url)) continue;
       if (!isSafeJenkinsRequestUrl(url)) {
         debugError("Jenkins", url);
@@ -419,7 +426,7 @@ function mapRun(job: JenkinsJobConfig, build: JenkinsBuildApi, sha: string): Jen
     headSha: sha,
     startedAt,
     updatedAt,
-    url: build.url ?? `${normalizeJenkinsJobUrl(job.url)}/${number}`,
+    url: build.url ? onOrigin(build.url, job.url) : `${normalizeJenkinsJobUrl(job.url)}/${number}`,
     jobLabel: label,
     jobUrl: normalizeJenkinsJobUrl(job.url),
     ...status,
@@ -496,7 +503,7 @@ export async function fetchJenkinsDataForSHAs(
             try {
               if (!ref.number && !ref.url) return;
               const buildUrl = ref.url
-                ? jenkinsApiUrl(ref.url, treeApiSuffix(buildDetailTree()))
+                ? jenkinsApiUrl(onOrigin(ref.url, job.url), treeApiSuffix(buildDetailTree()))
                 : jenkinsApiUrl(`${job.url}/${ref.number}`, treeApiSuffix(buildDetailTree()));
               const build = await fetchJson<JenkinsBuildApi>(buildUrl, username, token, opts.signal);
               for (const sha of matchingHeadShas(build, wanted)) runs.push(mapRun(job, build, sha));

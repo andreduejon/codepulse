@@ -503,6 +503,37 @@ describe("fetchJenkinsDataForSHAs", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  test("keeps credentialed requests on the configured origin when Jenkins reports another host", async () => {
+    const originalFetch = globalThis.fetch;
+    const sha = "a".repeat(40);
+    const calls: string[] = [];
+    globalThis.fetch = (async input => {
+      const url = input.toString();
+      calls.push(url);
+      if (decodeURIComponent(url).includes("builds[number,url]")) {
+        return Response.json({ builds: [{ number: 1, url: "https://evil.example.net/job/foo/1/" }] });
+      }
+      return Response.json({
+        number: 1,
+        url: "https://evil.example.net/job/foo/1/",
+        result: "SUCCESS",
+        timestamp: 1_700_000_000_000,
+        actions: [{ lastBuiltRevision: { SHA1: sha } }],
+      });
+    }) as typeof fetch;
+
+    try {
+      const result = await fetchJenkinsDataForSHAs([{ url: "https://jenkins.example.com/job/foo" }], "user", "token", [
+        sha,
+      ]);
+      expect(calls).toHaveLength(2);
+      expect(calls.every(url => url.startsWith("https://jenkins.example.com/"))).toBe(true);
+      expect(result.data[0].url).toBe("https://jenkins.example.com/job/foo/1/");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
 
 describe("resolveJenkinsJobs", () => {
