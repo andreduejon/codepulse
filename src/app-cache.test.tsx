@@ -6,6 +6,7 @@ import { CliRenderer } from "@opentui/core";
 import { testRender } from "@opentui/solid";
 import { AppContent } from "./app-content";
 import * as config from "./config";
+import * as configWrite from "./config-write";
 import type { AppActions, AppState } from "./context/state";
 import { createThemeState } from "./context/theme";
 import { buildGraph } from "./git/graph";
@@ -58,7 +59,7 @@ test(":cache groups apps, resets and evicts only selected repository, then resto
     };
     return hook;
   });
-  const backfill = spyOn(config, "backfillRepoConfig").mockImplementation(() => {});
+  const backfill = spyOn(configWrite, "backfillRepoConfig").mockImplementation(() => {});
   const loadConfig = spyOn(config, "loadConfig").mockReturnValue({ config: {}, warnings: [] });
   const displayConfig = spyOn(config, "getRepoDisplayConfig").mockReturnValue({});
   const known = spyOn(config, "getKnownRepoInfos").mockReturnValue([]);

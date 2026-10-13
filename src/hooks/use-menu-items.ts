@@ -1,7 +1,8 @@
 import type { Accessor } from "solid-js";
 import { createEffect, createMemo, createSignal } from "solid-js";
 import type { CodepulseConfig, ConfigInfo } from "../config";
-import { getRepoDisplayConfig, writeConfig } from "../config";
+import { getRepoDisplayConfig } from "../config";
+import { writeConfig } from "../config-write";
 import { AUTO_REFRESH_MS, INTERVAL_OPTIONS, MAX_COUNT_OPTIONS, MS_TO_LABEL } from "../constants";
 import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL, useAppState } from "../context/state";
 import type { Theme } from "../context/theme";

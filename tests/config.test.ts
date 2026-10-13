@@ -3,15 +3,14 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
-  backfillRepoConfig,
   type CodepulseConfig,
   defaultConfig,
   getKnownRepoInfos,
   loadConfig,
   mergeOptions,
   resolveConfigInfo,
-  writeConfig,
 } from "../src/config";
+import { backfillRepoConfig, writeConfig } from "../src/config-write";
 import { DEFAULT_MAX_COUNT } from "../src/constants";
 import { DEFAULT_AUTO_REFRESH_INTERVAL } from "../src/context/state";
 import { PROVIDER_CACHE_LIMIT_OPTIONS } from "../src/providers/shared/auto-refresh";

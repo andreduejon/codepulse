@@ -4,6 +4,7 @@ import { MouseButtons } from "@opentui/core/testing";
 import { testRender } from "@opentui/solid";
 import { createSignal, Show } from "solid-js";
 import * as config from "../../config";
+import * as configWrite from "../../config-write";
 import { AppStateContext, createAppState } from "../../context/state";
 import { createThemeState, ThemeContext } from "../../context/theme";
 import * as clipboard from "../../hooks/use-clipboard";
@@ -21,7 +22,7 @@ const descendants = (node: Renderable): Renderable[] =>
 async function renderMenu(height = 60, configInfo?: config.ConfigInfo) {
   const previousTab = lastMenuTab();
   setLastMenuTab("repository");
-  const write = spyOn(config, "writeConfig").mockReturnValue(true);
+  const write = spyOn(configWrite, "writeConfig").mockReturnValue(true);
   const read = spyOn(config, "getRepoDisplayConfig").mockReturnValue({});
   const copy = mock((_text: string, _id: string) => {});
   const clipboardSpy = spyOn(clipboard, "useClipboard").mockImplementation(() => ({
