@@ -4,8 +4,8 @@
  * Covers all 7 time-range branches (just now, minutes, hours, yesterday,
  * days, same-year absolute, different-year absolute), and empty string guard.
  */
-import { describe, expect, test } from "bun:test";
-import { formatRelativeDate } from "../src/utils/date";
+import { describe, expect, spyOn, test } from "bun:test";
+import { formatGraphDate, formatRelativeDate } from "../src/utils/date";
 
 /** Create an ISO date string offset from now by the given milliseconds. */
 const ago = (ms: number): string => new Date(Date.now() - ms).toISOString();
@@ -13,6 +13,23 @@ const ago = (ms: number): string => new Date(Date.now() - ms).toISOString();
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
+
+describe("formatGraphDate", () => {
+  test("future dates use absolute graph formatting across the year boundary", () => {
+    const clock = spyOn(Date, "now").mockReturnValue(new Date(2026, 11, 30, 12).getTime());
+    try {
+      expect(formatGraphDate(new Date(2026, 11, 31, 14, 5).toISOString())).toBe("31. Dec 14:05");
+      expect(formatGraphDate(new Date(2027, 0, 1, 14, 5).toISOString())).toBe("01. Jan 2027");
+      clock.mockReturnValue(new Date(2027, 0, 1, 12).getTime());
+      expect(formatGraphDate(new Date(2027, 0, 1, 14, 5).toISOString())).toBe("01. Jan 14:05");
+      expect(formatGraphDate(new Date(2026, 11, 31, 14, 5).toISOString())).toBe("31. Dec 2026");
+      expect(formatGraphDate("")).toBe("");
+      expect(formatGraphDate("invalid")).toBe("");
+    } finally {
+      clock.mockRestore();
+    }
+  });
+});
 
 describe("formatRelativeDate", () => {
   test("empty string returns empty string", () => {

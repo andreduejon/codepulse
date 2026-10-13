@@ -8,8 +8,10 @@
 
 import {
   DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS,
+  DEFAULT_PROVIDER_CACHE_LIMIT,
   DEFAULT_PROVIDER_LIMIT,
   type ProviderAutoRefreshSeconds,
+  type ProviderCacheLimit,
   type ProviderLimit,
 } from "../shared/auto-refresh";
 
@@ -114,7 +116,7 @@ export interface GitHubProviderConfig {
   trustedEnterpriseHost: string | null;
   /** Graph SHA window queried from Actions. */
   fetchDepth: ProviderLimit;
-  cacheLimit: ProviderLimit;
+  cacheLimit: ProviderCacheLimit;
   autoRefreshSeconds: ProviderAutoRefreshSeconds;
 }
 
@@ -123,6 +125,6 @@ export const DEFAULT_GITHUB_CONFIG: GitHubProviderConfig = {
   tokenEnvVar: "GITHUB_TOKEN",
   trustedEnterpriseHost: null,
   fetchDepth: DEFAULT_PROVIDER_LIMIT,
-  cacheLimit: DEFAULT_PROVIDER_LIMIT,
+  cacheLimit: DEFAULT_PROVIDER_CACHE_LIMIT,
   autoRefreshSeconds: DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS,
 };

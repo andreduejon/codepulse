@@ -1,4 +1,4 @@
-import { createEffect, createSignal, onCleanup } from "solid-js";
+import { type Accessor, createEffect, createSignal, onCleanup, untrack } from "solid-js";
 import type { AppState } from "../../context/state";
 import { collectTopSHAs } from "../github-actions/sha-selection";
 import { isAbortError } from "./http";
@@ -15,6 +15,7 @@ export interface ProviderFetchArgs {
 export function useProviderFetchLifecycle(opts: {
   state: AppState;
   providerId: string;
+  suspended?: Accessor<boolean>;
   shaLimit?: number | (() => number);
   identity: () => string;
   isAvailable: () => boolean;
@@ -55,7 +56,23 @@ export function useProviderFetchLifecycle(opts: {
   }
 
   function isCurrent(epoch: number, repoPath: string): boolean {
-    return epoch === cacheEpoch && repoPath === state.repoPath();
+    return !opts.suspended?.() && epoch === cacheEpoch && repoPath === state.repoPath();
+  }
+
+  async function runRequest<T>(run: (signal: AbortSignal) => Promise<T>, signal?: AbortSignal): Promise<T> {
+    const ctrl = new AbortController();
+    if (opts.suspended?.()) ctrl.abort();
+    const onAbort = () => ctrl.abort(signal?.reason);
+    if (signal?.aborted) onAbort();
+    else signal?.addEventListener("abort", onAbort, { once: true });
+    activeRequestControllers.add(ctrl);
+    try {
+      ctrl.signal.throwIfAborted();
+      return await run(ctrl.signal);
+    } finally {
+      signal?.removeEventListener("abort", onAbort);
+      activeRequestControllers.delete(ctrl);
+    }
   }
 
   function noteFetchStarted() {
@@ -83,7 +100,7 @@ export function useProviderFetchLifecycle(opts: {
   }
 
   function finishFetch(epoch: number) {
-    if (epoch !== cacheEpoch) return;
+    if (opts.suspended?.() || epoch !== cacheEpoch) return;
     fetchInFlight = false;
     if (!pendingBackgroundFetch) return;
     pendingBackgroundFetch = false;
@@ -93,6 +110,7 @@ export function useProviderFetchLifecycle(opts: {
   }
 
   async function fetchInitial(signal?: AbortSignal, shas?: string[], showStatus = false) {
+    if (opts.suspended?.()) return;
     const epoch = cacheEpoch;
     if (!showStatus && inBackoff()) return;
     if (fetchInFlight) {
@@ -104,23 +122,17 @@ export function useProviderFetchLifecycle(opts: {
       return;
     }
     fetchInFlight = true;
-    const ctrl = new AbortController();
-    const onAbort = () => ctrl.abort(signal?.reason);
-    if (signal?.aborted) onAbort();
-    else signal?.addEventListener("abort", onAbort, { once: true });
-    activeRequestControllers.add(ctrl);
     try {
-      await opts.runInitialFetch({ signal: ctrl.signal, shas, showStatus, epoch });
+      await runRequest(signal => opts.runInitialFetch({ signal, shas, showStatus, epoch }), signal);
     } catch (err) {
-      if (!isAbortError(err, ctrl.signal)) throw err;
+      if (epoch === cacheEpoch && !isAbortError(err, signal)) throw err;
     } finally {
-      signal?.removeEventListener("abort", onAbort);
-      activeRequestControllers.delete(ctrl);
       finishFetch(epoch);
     }
   }
 
   async function fetchRefresh(signal?: AbortSignal, showStatus = false) {
+    if (opts.suspended?.()) return;
     const epoch = cacheEpoch;
     if (!showStatus && inBackoff()) return;
     if (fetchInFlight) {
@@ -129,18 +141,11 @@ export function useProviderFetchLifecycle(opts: {
     }
     if (!opts.isAvailable()) return;
     fetchInFlight = true;
-    const ctrl = new AbortController();
-    const onAbort = () => ctrl.abort(signal?.reason);
-    if (signal?.aborted) onAbort();
-    else signal?.addEventListener("abort", onAbort, { once: true });
-    activeRequestControllers.add(ctrl);
     try {
-      await opts.runRefresh({ signal: ctrl.signal, showStatus, epoch });
+      await runRequest(signal => opts.runRefresh({ signal, showStatus, epoch }), signal);
     } catch (err) {
-      if (!isAbortError(err, ctrl.signal)) throw err;
+      if (epoch === cacheEpoch && !isAbortError(err, signal)) throw err;
     } finally {
-      signal?.removeEventListener("abort", onAbort);
-      activeRequestControllers.delete(ctrl);
       finishFetch(epoch);
     }
   }
@@ -150,6 +155,7 @@ export function useProviderFetchLifecycle(opts: {
   }
 
   function startAutoRefresh() {
+    if (opts.suspended?.()) return;
     if (autoRefreshTimer) return;
     const interval = currentInterval();
     if (interval <= 0) return;
@@ -177,8 +183,9 @@ export function useProviderFetchLifecycle(opts: {
     }
   }
 
-  function resetCaches() {
+  function cancelRequests() {
     cacheEpoch++;
+    if (fetchInFlight) lastFetchedAt = 0;
     stopAutoRefresh();
     fetchAbortCtrl?.abort();
     fetchAbortCtrl = null;
@@ -188,6 +195,10 @@ export function useProviderFetchLifecycle(opts: {
     activeRequestControllers.clear();
     fetchInFlight = false;
     pendingBackgroundFetch = false;
+  }
+
+  function resetCaches() {
+    cancelRequests();
     hasFetchedOnce = false;
     lastFetchedAt = 0;
     consecutiveErrors = 0;
@@ -195,6 +206,10 @@ export function useProviderFetchLifecycle(opts: {
     opts.onResetCaches();
     setIdentityVersion(v => v + 1);
   }
+
+  createEffect(() => {
+    if (opts.suspended?.()) untrack(cancelRequests);
+  });
 
   let previousIdentity = "";
   createEffect(() => {
@@ -210,6 +225,7 @@ export function useProviderFetchLifecycle(opts: {
 
   createEffect(() => {
     identityVersion();
+    if (opts.suspended?.()) return;
     const view = state.activeProviderView();
     if (view !== providerId) {
       stopAutoRefresh();
@@ -242,6 +258,7 @@ export function useProviderFetchLifecycle(opts: {
 
   createEffect(() => {
     identityVersion();
+    if (opts.suspended?.()) return;
     if (opts.skipShaBackground) return;
     const rows = state.graphRows();
     if (rows.length === 0) return;
@@ -261,6 +278,7 @@ export function useProviderFetchLifecycle(opts: {
   });
 
   createEffect(() => {
+    if (opts.suspended?.()) return;
     opts.refreshInterval?.();
     state.autoRefreshInterval();
     if (state.activeProviderView() === providerId) {
@@ -269,13 +287,7 @@ export function useProviderFetchLifecycle(opts: {
     }
   });
 
-  onCleanup(() => {
-    stopAutoRefresh();
-    if (backgroundFetchAbortCtrl) {
-      backgroundFetchAbortCtrl.abort();
-      backgroundFetchAbortCtrl = null;
-    }
-  });
+  onCleanup(cancelRequests);
 
   return {
     getEpoch,
@@ -287,5 +299,6 @@ export function useProviderFetchLifecycle(opts: {
     startAutoRefresh,
     fetchInitial,
     fetchRefresh,
+    runRequest,
   };
 }

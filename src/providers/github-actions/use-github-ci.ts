@@ -92,6 +92,7 @@ export function useGitHubCI(opts: {
    */
   config?: Partial<GitHubProviderConfig> | Accessor<Partial<GitHubProviderConfig>>;
   cacheRoot?: string;
+  suspended?: Accessor<boolean>;
 }): UseGitHubCIResult {
   const { state, actions } = opts;
 
@@ -205,6 +206,7 @@ export function useGitHubCI(opts: {
   async function fetchForSHAs(shas: string[], signal?: AbortSignal): Promise<FetchForShasResult> {
     const epoch = lifecycle.getEpoch();
     const repoPath = state.repoPath();
+    if (!lifecycle.isCurrent(epoch, repoPath)) return { firstError: null, failedSHAs: [] };
     if (shas.length === 0) return { firstError: null, failedSHAs: [] };
     const repo = cachedGitHubRepo();
     const token = getGitHubToken(config.tokenEnvVar);
@@ -263,6 +265,7 @@ export function useGitHubCI(opts: {
   }
 
   async function hydrateCachedCandidates(repoPath: string, shas: readonly string[], epoch: number): Promise<void> {
+    if (!lifecycle.isCurrent(epoch, repoPath)) return;
     const pending = shas.filter(sha => !commitDataCache.has(sha));
     const entries = await Promise.all(pending.map(async sha => ({ sha, entry: await disk.read(repoPath, sha) })));
     if (!lifecycle.isCurrent(epoch, repoPath)) return;
@@ -283,6 +286,7 @@ export function useGitHubCI(opts: {
   }
 
   async function persistTerminalRuns(repoPath: string, shas: readonly string[], epoch: number): Promise<void> {
+    if (!lifecycle.isCurrent(epoch, repoPath)) return;
     const writes = await Promise.all(
       shas.map(async sha => {
         const incoming = (commitDataCache.get(sha)?.runs ?? []).filter(isTerminalGitHubRun);
@@ -314,6 +318,7 @@ export function useGitHubCI(opts: {
 
   const lifecycle = useProviderFetchLifecycle({
     state,
+    suspended: opts.suspended,
     providerId: "github-actions",
     shaLimit: () => configAccessor().fetchDepth ?? DEFAULT_GITHUB_CONFIG.fetchDepth,
     refreshInterval: () => (configAccessor().autoRefreshSeconds ?? DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS) * 1000,
@@ -364,11 +369,11 @@ export function useGitHubCI(opts: {
         return;
       }
       lifecycle.noteFetchStarted();
-      for (const sha of unqueried) queriedSHAs.add(sha);
       if (showStatus) actions.setProviderStatus("github-actions", providerLoading());
       try {
         const { firstError, failedSHAs } = await fetchForSHAs(unqueried, signal);
         if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return;
+        for (const sha of unqueried) queriedSHAs.add(sha);
         for (const sha of failedSHAs) queriedSHAs.delete(sha);
         rememberAuthError(firstError);
         lifecycle.noteFetchResult(!firstError);
@@ -425,6 +430,7 @@ export function useGitHubCI(opts: {
   });
 
   async function refreshWindow(): Promise<void> {
+    if (opts.suspended?.()) return;
     const window = collectTopSHAs(state.graphRows(), config.fetchDepth);
     for (const sha of window) queriedSHAs.delete(sha);
     await lifecycle.fetchInitial(undefined, window, true);
@@ -447,12 +453,13 @@ export function useGitHubCI(opts: {
     const repoPath = state.repoPath();
     const cached = jobsCache.get(run.id);
     if (cached) return { jobs: cached, error: null };
+    if (!lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
 
     const repo = cachedGitHubRepo();
     const token = getGitHubToken(config.tokenEnvVar);
     if (!repo || !token) return { jobs: [], error: BANNER.github.unavailable };
 
-    const { jobs, error } = await fetchRunJobs(repo, token, run.id, signal);
+    const { jobs, error } = await lifecycle.runRequest(signal => fetchRunJobs(repo, token, run.id, signal), signal);
     if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
     if (error) return { jobs, error };
     if (run.status === "completed") {
@@ -477,6 +484,7 @@ export function useGitHubCI(opts: {
     fetchJobLogForJob: async (jobId, run, signal) => {
       const epoch = lifecycle.getEpoch();
       const repoPath = state.repoPath();
+      if (!lifecycle.isCurrent(epoch, repoPath)) return "";
       const key = String(jobId);
       if (isTerminalGitHubRun(run)) {
         const diskLog = await disk.readLog(repoPath, run.headSha, key).catch(() => null);
@@ -486,7 +494,7 @@ export function useGitHubCI(opts: {
       const repo = cachedGitHubRepo();
       const token = getGitHubToken(config.tokenEnvVar);
       if (!repo || !token) return "";
-      const log = await fetchJobLog(repo, token, jobId, signal);
+      const log = await lifecycle.runRequest(signal => fetchJobLog(repo, token, jobId, signal), signal);
       if (!lifecycle.isCurrent(epoch, repoPath)) return "";
       if (isTerminalGitHubRun(run) && log && lifecycle.isCurrent(epoch, repoPath))
         await disk.writeLog(repoPath, run.headSha, key, log).catch(() => {});

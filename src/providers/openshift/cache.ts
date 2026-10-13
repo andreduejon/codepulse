@@ -1,11 +1,8 @@
-import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readdir, readFile, realpath, rename, rm, stat, utimes, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
-import { storageRoot } from "../../utils/storage-path";
+import { DEFAULT_PROVIDER_CACHE_ROOT, ShaSqliteCache } from "../shared/sha-sqlite-cache";
 import type { OpenShiftCacheLimit, OpenShiftResource, OpenShiftStatus } from "./types";
 
 export const DEFAULT_OPENSHIFT_CACHE_LIMIT: OpenShiftCacheLimit = 20;
-export const DEFAULT_OPENSHIFT_CACHE_ROOT = join(storageRoot("cache"), "openshift");
+export const DEFAULT_OPENSHIFT_CACHE_ROOT = DEFAULT_PROVIDER_CACHE_ROOT;
 
 export interface OpenShiftCachedBuild {
   id: string;
@@ -27,19 +24,6 @@ export interface OpenShiftCacheEntry {
 export interface OpenShiftCacheOptions {
   root?: string;
   maxEntries?: OpenShiftCacheLimit;
-}
-
-async function repositoryHash(repoPath: string): Promise<string> {
-  let canonicalPath = resolve(repoPath);
-  try {
-    canonicalPath = await realpath(canonicalPath);
-  } catch {}
-  return createHash("sha256").update(canonicalPath).digest("hex");
-}
-
-function assertExactSha(sha: string): string {
-  if (!/^[0-9a-f]{40,64}$/i.test(sha)) throw new Error("OpenShift cache requires an exact commit SHA.");
-  return sha.toLowerCase();
 }
 
 const STATUSES = new Set<OpenShiftStatus>(["pass", "fail", "running", "unknown"]);
@@ -99,115 +83,33 @@ export function cachedBuildToResource(build: OpenShiftCachedBuild): OpenShiftRes
   };
 }
 
-export class OpenShiftCache {
-  readonly root: string;
-  readonly maxEntries: OpenShiftCacheLimit;
-
+export class OpenShiftCache extends ShaSqliteCache<OpenShiftCacheEntry> {
   constructor(options: OpenShiftCacheOptions = {}) {
-    this.root = options.root ?? DEFAULT_OPENSHIFT_CACHE_ROOT;
-    this.maxEntries = options.maxEntries ?? DEFAULT_OPENSHIFT_CACHE_LIMIT;
+    super({
+      provider: "openshift",
+      root: options.root ?? DEFAULT_OPENSHIFT_CACHE_ROOT,
+      maxEntries: options.maxEntries ?? DEFAULT_OPENSHIFT_CACHE_LIMIT,
+      isEntry: isOpenShiftCacheEntry,
+      invalidMessage: "Cannot cache an invalid OpenShift build snapshot.",
+    });
   }
 
-  async repoDir(repoPath: string): Promise<string> {
-    return join(this.root, await repositoryHash(repoPath));
+  override readLog(repoPath: string, sha: string, namespace: string, buildName?: string): Promise<string | null> {
+    return super.readLog(repoPath, sha, buildName === undefined ? namespace : `${namespace}_${buildName}`);
   }
 
-  async list(repoPath: string): Promise<string[]> {
-    try {
-      const names = await readdir(await this.repoDir(repoPath));
-      return names
-        .filter(name => /^[0-9a-f]{40,64}\.json$/i.test(name))
-        .map(name => name.replace(/\.json$/i, "").toLowerCase());
-    } catch {
-      return [];
-    }
-  }
-
-  async pathFor(repoPath: string, sha: string): Promise<string> {
-    return join(await this.repoDir(repoPath), `${assertExactSha(sha)}.json`);
-  }
-
-  logPath(repoDir: string, sha: string, namespace: string, buildName: string): string {
-    return join(repoDir, "logs", `${assertExactSha(sha)}_${namespace}_${buildName}.txt`);
-  }
-
-  async read(repoPath: string, sha: string): Promise<OpenShiftCacheEntry | null> {
-    const path = await this.pathFor(repoPath, sha);
-    try {
-      const value: unknown = JSON.parse(await readFile(path, "utf8"));
-      if (!isOpenShiftCacheEntry(value) || value.sha.toLowerCase() !== assertExactSha(sha)) {
-        await rm(path, { force: true });
-        return null;
-      }
-      const now = new Date();
-      await utimes(path, now, now).catch(() => {});
-      return value;
-    } catch (error) {
-      const code = error && typeof error === "object" && "code" in error ? error.code : null;
-      if (code !== "ENOENT") await rm(path, { force: true }).catch(() => {});
-      return null;
-    }
-  }
-
-  async write(repoPath: string, entry: OpenShiftCacheEntry): Promise<void> {
-    if (!isOpenShiftCacheEntry(entry)) throw new Error("Cannot cache an invalid OpenShift build snapshot.");
-    const path = await this.pathFor(repoPath, entry.sha);
-    const directory = dirname(path);
-    const temporaryPath = join(directory, `.${entry.sha}.${randomUUID()}.tmp`);
-    await mkdir(directory, { recursive: true });
-    try {
-      await writeFile(temporaryPath, `${JSON.stringify({ ...entry, sha: entry.sha.toLowerCase() })}\n`, {
-        encoding: "utf8",
-        mode: 0o600,
-      });
-      await rename(temporaryPath, path);
-    } finally {
-      await rm(temporaryPath, { force: true }).catch(() => {});
-    }
-    await this.evict(directory);
-  }
-
-  async readLog(repoPath: string, sha: string, namespace: string, buildName: string): Promise<string | null> {
-    try {
-      return await readFile(this.logPath(await this.repoDir(repoPath), sha, namespace, buildName), "utf8");
-    } catch {
-      return null;
-    }
-  }
-
-  async writeLog(repoPath: string, sha: string, namespace: string, buildName: string, log: string): Promise<void> {
-    const repoDir = await this.repoDir(repoPath);
-    const path = this.logPath(repoDir, sha, namespace, buildName);
-    await mkdir(dirname(path), { recursive: true });
-    const temporaryPath = `${path}.${randomUUID()}.tmp`;
-    try {
-      await writeFile(temporaryPath, log, { encoding: "utf8", mode: 0o600 });
-      await rename(temporaryPath, path);
-    } finally {
-      await rm(temporaryPath, { force: true }).catch(() => {});
-    }
-  }
-
-  private async evict(directory: string): Promise<void> {
-    const names = (await readdir(directory)).filter(name => /^[0-9a-f]{40,64}\.json$/i.test(name));
-    if (names.length <= this.maxEntries) return;
-    const entries = await Promise.all(
-      names.map(async name => ({ name, accessedAt: (await stat(join(directory, name))).atimeMs })),
-    );
-    entries.sort((left, right) => left.accessedAt - right.accessedAt || left.name.localeCompare(right.name));
-    const removed = entries.slice(0, entries.length - this.maxEntries);
-    await Promise.all(
-      removed.map(async entry => {
-        const sha = entry.name.replace(/\.json$/i, "");
-        await rm(join(directory, entry.name), { force: true });
-        const logsDir = join(directory, "logs");
-        try {
-          const logs = await readdir(logsDir);
-          await Promise.all(
-            logs.filter(name => name.startsWith(`${sha}_`)).map(name => rm(join(logsDir, name), { force: true })),
-          );
-        } catch {}
-      }),
+  override writeLog(
+    repoPath: string,
+    sha: string,
+    namespace: string,
+    buildNameOrLog: string,
+    log?: string,
+  ): Promise<void> {
+    return super.writeLog(
+      repoPath,
+      sha,
+      log === undefined ? namespace : `${namespace}_${buildNameOrLog}`,
+      log ?? buildNameOrLog,
     );
   }
 }

@@ -7,33 +7,6 @@ can inherit a predefined palette or provide a complete standalone definition.
 
 Open `:theme` to browse the Predefined and Custom sections.
 
-| Control | Action |
-|---------|--------|
-| ↑/↓ | Preview a theme without saving |
-| Shift + ↑/↓ | Jump 10 themes or scroll 10 color rows in Details |
-| Enter / Select / theme click | Apply and save without closing |
-| Esc / Close | Dismiss, retain the last saved theme, discard unsaved preview |
-| d / Details hint | Switch between the theme list and Details |
-| ↑/↓, PgUp/PgDn, mouse wheel in Details | Scroll colors |
-
-Hovering highlights rows without changing the preview. Selections are saved per
-repository in `config.json`.
-
-Details show the theme ID, color swatches, and selectable HEX values. Custom
-themes also show their base name and ID, such as `Nord (nord)`, or
-`none (standalone)`. Predefined IDs can be copied for use in a custom theme's
-`base` field.
-
-- A tick inside the signature-color swatch marks the applied theme. A solid
-  block shows the signature color of a previewed or hovered theme.
-- In Details, `*` after a derived theme's name means it explicitly overrides a
-  base color.
-  It remains after saving and is not an unsaved-change indicator.
-- In Details, overridden fields and graph colors have `*` and show
-  **base → effective HEX**. Inherited colors show only the effective value.
-- Explicit overrides are marked even when their value equals the base.
-  Standalone definitions have no base and no override markers.
-
 ## Predefined themes
 
 | Name | ID |
@@ -107,6 +80,6 @@ snykFg, snykBg, openShiftFg, openShiftBg
 Themes load at startup. Restart Codepulse after editing `themes.json`. Invalid
 entries are skipped independently with diagnostics in `:debug`. A malformed
 file does not break predefined themes. A missing or invalid selected custom
-theme falls back to Catppuccin Mocha.
+theme falls back to the default theme.
 
 The dialog inspects colors but does not edit or export definitions.

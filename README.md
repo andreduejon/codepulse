@@ -15,8 +15,8 @@ commit and branch context.
 
 ## Prerequisites
 
-- Git installed and available on `PATH` (Git for Windows on Windows).
-- An interactive terminal at least **90 columns × 30 rows**.
+- Git installed and available on path.
+- An interactive terminal with at least **90 columns and 30 rows**.
 
 | Operating system | Architectures | Terminal |
 |------------------|---------------|----------|
@@ -25,11 +25,10 @@ commit and branch context.
 | Windows 11 | x64, ARM64 | Windows Terminal |
 
 Release binaries are standalone. Bun and Node.js are not required.
-Musl-based Linux distributions such as Alpine are not supported.
 
 ## Install
 
-Installer commands require `curl` and `sh` on macOS/Linux, or `curl.exe` and
+Installer commands require `curl` and `sh` on macOS/Linux, or `curl` and
 PowerShell on Windows. Manual release archives are also available.
 
 ### macOS / Linux
@@ -55,13 +54,6 @@ to `%LOCALAPPDATA%\codepulse\bin`. It adds that folder to your user PATH and
 current PowerShell session, so `codepulse` works immediately. Restart other open
 terminals to pick up the change.
 If local policy blocks scripts, use the release ZIP rather than weakening policy.
-
-Windows binaries are unsigned.
-SmartScreen reputation warnings are possible. Checksums verify file integrity,
-not publisher trust. Do not disable security protections for a malware detection.
-
-See [installation options](docs/usage.md#installation-options) for custom
-locations, specific versions, and manual installation.
 
 ## Usage
 
@@ -96,11 +88,17 @@ diagnostic conventions.
 - **Snyk** — exact-commit vulnerability snapshots with severity counts and
   finding details. See [Snyk provider](docs/providers/snyk.md).
 
+## Cache
+
+Provider snapshots and logs share a SQLite cache. Use `:cache` to inspect cached
+apps, reset inactivity timers, and evict a selected repository's cache.
+See the [cache guide](docs/cache.md) for retention and controls.
+
 ## Themes
 
 Choose from 12 predefined themes or create custom themes by extending a built-in
 palette or defining every color independently. Preview themes live with `:theme`
-and save selections per repository. Built-in themes remain unchanged.
+and save selections per repository.
 
 See the [theme guide](docs/themes.md) for controls, available themes, and custom
 configuration examples.

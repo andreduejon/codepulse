@@ -11,7 +11,13 @@ import {
   OPENSHIFT_SERVER_URL_MAX_LENGTH,
   OPENSHIFT_TEXT_MAX_LENGTH,
 } from "./providers/openshift/validation";
-import { isProviderAutoRefreshSeconds, isProviderLimit } from "./providers/shared/auto-refresh";
+import {
+  isProviderAutoRefreshSeconds,
+  isProviderCacheLimit,
+  isProviderLimit,
+  PROVIDER_CACHE_LIMIT_OPTIONS,
+  type ProviderCacheLimit,
+} from "./providers/shared/auto-refresh";
 import { storageRoot } from "./utils/storage-path";
 
 const GENERAL_TEXT_MAX_LENGTH = 255;
@@ -43,7 +49,7 @@ export interface CodepulseConfig {
       /** Trusted GitHub Enterprise host for this repo. github.com is always allowed. */
       trustedEnterpriseHost?: string;
       fetchDepth?: 10 | 20 | 50;
-      cacheLimit?: 10 | 20 | 50;
+      cacheLimit?: ProviderCacheLimit;
       autoRefreshSeconds?: 0 | 120 | 300 | 600;
     };
     jenkins?: {
@@ -53,7 +59,7 @@ export interface CodepulseConfig {
       /** @deprecated Prefer fetchDepth. Still read as fetch-size fallback. */
       graphBuildLimit?: 10 | 20 | 50;
       fetchDepth?: 10 | 20 | 50;
-      cacheLimit?: 10 | 20 | 50;
+      cacheLimit?: ProviderCacheLimit;
       autoRefreshSeconds?: 0 | 120 | 300 | 600;
       jobs?: { label?: string; url: string }[];
     };
@@ -63,7 +69,7 @@ export interface CodepulseConfig {
       tokenEnvVar?: string;
       namespaces?: string[];
       commitShaAnnotation?: string;
-      cacheLimit?: 10 | 20 | 50;
+      cacheLimit?: ProviderCacheLimit;
       fetchDepth?: 10 | 20 | 50;
       autoRefreshSeconds?: 0 | 120 | 300 | 600;
     };
@@ -71,7 +77,7 @@ export interface CodepulseConfig {
       enabled?: boolean;
       tokenEnvVar?: string;
       autoScanBranches?: string[];
-      maxCachedScans?: 10 | 20 | 50;
+      maxCachedScans?: ProviderCacheLimit;
     };
   };
 }
@@ -550,10 +556,16 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
         if (trustedEnterpriseHost !== undefined) {
           config.providers.github.trustedEnterpriseHost = trustedEnterpriseHost;
         }
-        for (const field of ["cacheLimit", "fetchDepth"] as const) {
-          if (gh[field] === undefined) continue;
-          if (isProviderLimit(gh[field])) config.providers.github[field] = gh[field];
-          else warnings.push(`${path}: "providers.github.${field}" must be one of 10, 20, 50, ignoring`);
+        if (gh.cacheLimit !== undefined) {
+          if (isProviderCacheLimit(gh.cacheLimit)) config.providers.github.cacheLimit = gh.cacheLimit;
+          else
+            warnings.push(
+              `${path}: "providers.github.cacheLimit" must be one of ${PROVIDER_CACHE_LIMIT_OPTIONS.join(", ")}, ignoring`,
+            );
+        }
+        if (gh.fetchDepth !== undefined) {
+          if (isProviderLimit(gh.fetchDepth)) config.providers.github.fetchDepth = gh.fetchDepth;
+          else warnings.push(`${path}: "providers.github.fetchDepth" must be one of 10, 20, 50, ignoring`);
         }
         if (gh.autoRefreshSeconds !== undefined) {
           if (isProviderAutoRefreshSeconds(gh.autoRefreshSeconds))
@@ -586,10 +598,16 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
             config.providers.jenkins.graphBuildLimit = jenkins.graphBuildLimit;
           else warnings.push(`${path}: "providers.jenkins.graphBuildLimit" must be one of 10, 20, 50, ignoring`);
         }
-        for (const field of ["cacheLimit", "fetchDepth"] as const) {
-          if (jenkins[field] === undefined) continue;
-          if (isProviderLimit(jenkins[field])) config.providers.jenkins[field] = jenkins[field];
-          else warnings.push(`${path}: "providers.jenkins.${field}" must be one of 10, 20, 50, ignoring`);
+        if (jenkins.cacheLimit !== undefined) {
+          if (isProviderCacheLimit(jenkins.cacheLimit)) config.providers.jenkins.cacheLimit = jenkins.cacheLimit;
+          else
+            warnings.push(
+              `${path}: "providers.jenkins.cacheLimit" must be one of ${PROVIDER_CACHE_LIMIT_OPTIONS.join(", ")}, ignoring`,
+            );
+        }
+        if (jenkins.fetchDepth !== undefined) {
+          if (isProviderLimit(jenkins.fetchDepth)) config.providers.jenkins.fetchDepth = jenkins.fetchDepth;
+          else warnings.push(`${path}: "providers.jenkins.fetchDepth" must be one of 10, 20, 50, ignoring`);
         }
         if (config.providers.jenkins.fetchDepth === undefined && config.providers.jenkins.graphBuildLimit !== undefined)
           config.providers.jenkins.fetchDepth = config.providers.jenkins.graphBuildLimit;
@@ -658,10 +676,16 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
           const value = parseOptionalText(`providers.openshift.${field}`, openshift[field], OPENSHIFT_TEXT_MAX_LENGTH);
           if (value !== undefined) config.providers.openshift[field] = value;
         }
-        for (const field of ["cacheLimit", "fetchDepth"] as const) {
-          if (openshift[field] === undefined) continue;
-          if (isProviderLimit(openshift[field])) config.providers.openshift[field] = openshift[field];
-          else warnings.push(`${path}: "providers.openshift.${field}" must be one of 10, 20, 50, ignoring`);
+        if (openshift.cacheLimit !== undefined) {
+          if (isProviderCacheLimit(openshift.cacheLimit)) config.providers.openshift.cacheLimit = openshift.cacheLimit;
+          else
+            warnings.push(
+              `${path}: "providers.openshift.cacheLimit" must be one of ${PROVIDER_CACHE_LIMIT_OPTIONS.join(", ")}, ignoring`,
+            );
+        }
+        if (openshift.fetchDepth !== undefined) {
+          if (isProviderLimit(openshift.fetchDepth)) config.providers.openshift.fetchDepth = openshift.fetchDepth;
+          else warnings.push(`${path}: "providers.openshift.fetchDepth" must be one of 10, 20, 50, ignoring`);
         }
         if (openshift.autoRefreshSeconds !== undefined) {
           if (isProviderAutoRefreshSeconds(openshift.autoRefreshSeconds))
@@ -722,10 +746,12 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
           }
         }
         if (snyk.maxCachedScans !== undefined) {
-          if (snyk.maxCachedScans === 10 || snyk.maxCachedScans === 20 || snyk.maxCachedScans === 50) {
+          if (isProviderCacheLimit(snyk.maxCachedScans)) {
             config.providers.snyk.maxCachedScans = snyk.maxCachedScans;
           } else {
-            warnings.push(`${path}: "providers.snyk.maxCachedScans" must be one of 10, 20, 50, ignoring`);
+            warnings.push(
+              `${path}: "providers.snyk.maxCachedScans" must be one of ${PROVIDER_CACHE_LIMIT_OPTIONS.join(", ")}, ignoring`,
+            );
           }
         }
       }

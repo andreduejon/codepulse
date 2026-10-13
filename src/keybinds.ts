@@ -94,10 +94,20 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     { kind: "binding", key: "esc", desc: "Close / back", indent: 1 },
     { kind: "binding", key: "f", desc: "Forget selected repo", indent: 1 },
     { kind: "binding", key: "↑/↓  or  j/k", desc: "Move selection", indent: 1 },
+    { kind: "spacer" },
+    { kind: "section", label: "Cache" },
+    { kind: "binding", key: "enter", desc: "Copy selected cache file path / confirm action", indent: 1 },
+    { kind: "binding", key: "e", desc: "Evict selected repository across providers with confirmation", indent: 1 },
+    { kind: "binding", key: "r", desc: "Reset selected repository's inactivity timer to 90 days", indent: 1 },
+    { kind: "binding", key: "shift+r", desc: "Reset all inactivity timers with confirmation", indent: 1 },
+    { kind: "binding", key: "q", desc: "Quit application", indent: 1 },
+    { kind: "binding", key: "esc", desc: "Cancel confirmation / back", indent: 1 },
+    { kind: "binding", key: "↑/↓  or  j/k", desc: "Move selection", indent: 1 },
   ],
   commands: [
     { kind: "binding", key: ":ancestry", desc: "Highlight first-parent ancestry" },
     { kind: "binding", key: ":branches", desc: "Open menu on Branches tab" },
+    { kind: "binding", key: ":cache", desc: "Open global app cache overview" },
     { kind: "binding", key: ":clear", desc: "Dismiss current status message" },
     { kind: "binding", key: ":debug", desc: "Toggle debug dialog" },
     { kind: "binding", key: ":fetch", desc: "Fetch from remote" },
@@ -141,7 +151,7 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     {
       kind: "binding",
       key: "Cache count",
-      desc: "Maximum cached commit run snapshots per repository. Options: 10, 20, 50.",
+      desc: "Maximum cached commit run snapshots per repository. Options: 10, 20, 50, 100, 200, 500. Default 20.",
       indent: 1,
     },
     {
@@ -179,7 +189,7 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     {
       kind: "binding",
       key: "Cache count",
-      desc: "Maximum cached commit build snapshots per repository. Options: 10, 20, 50.",
+      desc: "Maximum cached commit build snapshots per repository. Options: 10, 20, 50, 100, 200, 500. Default 20.",
       indent: 1,
     },
     {
@@ -223,7 +233,7 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     {
       kind: "binding",
       key: "Cache count",
-      desc: "Maximum cached commit Build snapshots per repository. Options: 10, 20, 50.",
+      desc: "Maximum cached commit Build snapshots per repository. Options: 10, 20, 50, 100, 200, 500. Default 20.",
       indent: 1,
     },
     {
@@ -267,7 +277,7 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     {
       kind: "binding",
       key: "Cache count",
-      desc: "Maximum cached commit scans per repository. Options: 10, 20, 50.",
+      desc: "Maximum cached commit scans per repository. Options: 10, 20, 50, 100, 200, 500. Default 20.",
       indent: 1,
     },
     {

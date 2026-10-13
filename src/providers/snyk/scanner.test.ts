@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { chmod, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
+import { closeProviderCaches } from "../shared/sha-sqlite-cache";
 import { SnykCache } from "./cache";
 import { killSnykProcessGroup, runSnykCommand, type SnykCommandRunner, scanSnykCommit } from "./scanner";
 import type { SnykScanResult } from "./types";
@@ -10,6 +11,10 @@ const SHA = "a".repeat(40);
 const roots: string[] = [];
 
 afterEach(async () => {
+  for (const path of roots) {
+    closeProviderCaches(path);
+    closeProviderCaches(join(path, "cache"));
+  }
   await Promise.all(roots.splice(0).map(path => rm(path, { recursive: true, force: true })));
 });
 

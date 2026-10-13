@@ -1,15 +1,13 @@
-import { join } from "node:path";
-import { storageRoot } from "../../utils/storage-path";
-import { DEFAULT_PROVIDER_LIMIT, type ProviderLimit } from "../shared/auto-refresh";
-import { mergeById, ShaJsonCache } from "../shared/sha-json-cache";
+import { DEFAULT_PROVIDER_CACHE_LIMIT, type ProviderCacheLimit } from "../shared/auto-refresh";
+import { DEFAULT_PROVIDER_CACHE_ROOT, mergeById, ShaSqliteCache } from "../shared/sha-sqlite-cache";
 import type { JenkinsJob, JenkinsJobFetchResult, JenkinsRun, JenkinsStage } from "./types";
 
-export const DEFAULT_JENKINS_CACHE_ROOT = join(storageRoot("cache"), "jenkins");
+export const DEFAULT_JENKINS_CACHE_ROOT = DEFAULT_PROVIDER_CACHE_ROOT;
 
 export interface JenkinsCacheEntry {
   sha: string;
   runs: JenkinsRun[];
-  /** Pipeline jobs + stages keyed by run id. Logs stay off disk. */
+  /** Pipeline jobs + stages keyed by run id. Log text is stored as a separate artifact. */
   jobs?: Record<string, JenkinsJob[]>;
 }
 
@@ -95,11 +93,12 @@ export function jobsMapFromCache(jobsCache: ReadonlyMap<string, JenkinsJobFetchR
   return jobs;
 }
 
-export class JenkinsCache extends ShaJsonCache<JenkinsCacheEntry> {
-  constructor(options: { root?: string; maxEntries?: ProviderLimit } = {}) {
+export class JenkinsCache extends ShaSqliteCache<JenkinsCacheEntry> {
+  constructor(options: { root?: string; maxEntries?: ProviderCacheLimit } = {}) {
     super({
+      provider: "jenkins",
       root: options.root ?? DEFAULT_JENKINS_CACHE_ROOT,
-      maxEntries: options.maxEntries ?? DEFAULT_PROVIDER_LIMIT,
+      maxEntries: options.maxEntries ?? DEFAULT_PROVIDER_CACHE_LIMIT,
       isEntry: isJenkinsCacheEntry,
       invalidMessage: "Cannot cache an invalid Jenkins run snapshot.",
     });

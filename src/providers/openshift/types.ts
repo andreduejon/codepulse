@@ -5,10 +5,11 @@ import {
   PROVIDER_AUTO_REFRESH_SECONDS,
   PROVIDER_MS_TO_LABEL,
   type ProviderAutoRefreshSeconds,
+  type ProviderCacheLimit,
   type ProviderLimit,
 } from "../shared/auto-refresh";
 
-export type OpenShiftCacheLimit = ProviderLimit;
+export type OpenShiftCacheLimit = ProviderCacheLimit;
 
 export const OPENSHIFT_AUTO_REFRESH_OPTIONS = PROVIDER_AUTO_REFRESH_OPTIONS;
 export const OPENSHIFT_AUTO_REFRESH_SECONDS = PROVIDER_AUTO_REFRESH_SECONDS;
@@ -27,7 +28,7 @@ export interface OpenShiftProviderConfig {
   namespaces: string[];
   commitShaAnnotation: string;
   cacheLimit: OpenShiftCacheLimit;
-  fetchDepth: OpenShiftCacheLimit;
+  fetchDepth: ProviderLimit;
   /** Builds + IST poll while OpenShift view is focused. 0 = off. */
   autoRefreshSeconds: OpenShiftAutoRefreshSeconds;
 }

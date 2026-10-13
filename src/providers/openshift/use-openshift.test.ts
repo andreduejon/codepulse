@@ -1,10 +1,16 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
+import { createRoot, createSignal } from "solid-js";
+import { createAppState } from "../../context/state";
+import { buildGraph } from "../../git/graph";
+import * as api from "./api";
+import { OpenShiftCache } from "./cache";
 import type { OpenShiftCommitData, OpenShiftResource } from "./types";
 import {
   commitDataFromCacheEntry,
   commitHasDigestSeed,
   mergeLiveIntoCommit,
   selectOpenShiftCandidateSHAs,
+  useOpenShift,
 } from "./use-openshift";
 
 const SHA = "a".repeat(40);
@@ -27,6 +33,211 @@ const pod: OpenShiftResource = {
   status: "running",
   imageRefs: ["sha256:abc"],
 };
+
+const cleanup: Array<() => void> = [];
+afterEach(() => {
+  for (const finish of cleanup.splice(0).reverse()) finish();
+});
+
+function mountOpenShift(suspendedInitially = false) {
+  const tokenEnvVar = "CODEPULSE_TEST_OPENSHIFT_TOKEN";
+  const original = process.env[tokenEnvVar];
+  process.env[tokenEnvVar] = "test-token";
+  cleanup.push(() => {
+    if (original === undefined) delete process.env[tokenEnvVar];
+    else process.env[tokenEnvVar] = original;
+  });
+  const entry = { sha: SHA, builds: [{ ...build, commitSha: SHA }] };
+  const listed: api.OpenShiftListedInventory = {
+    resources: [{ ...pod, commitSha: SHA }],
+    controllers: [],
+    failures: [],
+    successfulRequests: 1,
+    error: null,
+    resourceVersions: new Map([["ns:Pod", "1"]]),
+  };
+  const cacheList = spyOn(OpenShiftCache.prototype, "list").mockResolvedValue([SHA]);
+  const cacheRead = spyOn(OpenShiftCache.prototype, "read").mockResolvedValue(entry);
+  const cacheWrite = spyOn(OpenShiftCache.prototype, "write").mockResolvedValue(undefined);
+  const logRead = spyOn(OpenShiftCache.prototype, "readLog").mockResolvedValue(null);
+  const logWrite = spyOn(OpenShiftCache.prototype, "writeLog").mockResolvedValue(undefined);
+  const inventory = spyOn(api, "fetchOpenShiftInventory").mockResolvedValue({
+    data: new Map([[SHA, commitDataFromCacheEntry(entry)]]),
+    error: null,
+    failures: [],
+    successfulRequests: 1,
+  });
+  const live = spyOn(api, "fetchOpenShiftResources").mockResolvedValue(listed);
+  const watches: Array<{
+    signal: AbortSignal;
+    onEvent: Parameters<typeof api.watchOpenShiftStream>[5];
+    resolve: (result: api.OpenShiftWatchResult) => void;
+  }> = [];
+  const watch = spyOn(api, "watchOpenShiftStream").mockImplementation(
+    (...args) => new Promise(resolve => watches.push({ signal: args[4], onEvent: args[5], resolve })),
+  );
+  for (const mock of [cacheList, cacheRead, cacheWrite, logRead, logWrite, inventory, live, watch]) {
+    cleanup.push(() => mock.mockRestore());
+  }
+  cleanup.push(() => {
+    for (const watch of watches) watch.resolve("end");
+  });
+  let mounted!: {
+    state: ReturnType<typeof createAppState>["state"];
+    openShift: ReturnType<typeof useOpenShift>;
+    setSuspended: (value: boolean) => void;
+  };
+  createRoot(dispose => {
+    cleanup.push(dispose);
+    const { state, actions } = createAppState();
+    actions.setRepoPath("/repo");
+    actions.setActiveProviderView("openshift");
+    actions.setGraphRows(
+      buildGraph([
+        {
+          hash: SHA,
+          shortHash: SHA.slice(0, 7),
+          parents: [],
+          subject: "build",
+          body: "",
+          author: "Author",
+          authorEmail: "author@example.com",
+          authorDate: "2026-01-01T00:00:00Z",
+          committer: "Author",
+          committerEmail: "author@example.com",
+          commitDate: "2026-01-01T00:00:00Z",
+          refs: [],
+        },
+      ]),
+    );
+    const [suspended, setSuspended] = createSignal(suspendedInitially);
+    const openShift = useOpenShift({
+      state,
+      actions,
+      suspended,
+      config: {
+        enabled: true,
+        tokenEnvVar,
+        serverUrl: "https://cluster.example",
+        namespaces: ["ns"],
+        autoRefreshSeconds: 0,
+      },
+    });
+    mounted = { state, openShift, setSuspended };
+  });
+  return { ...mounted, cacheList, cacheRead, cacheWrite, logRead, logWrite, inventory, live, watches };
+}
+
+describe("OpenShift suspension", () => {
+  test("preserves memory and badges, stops watches/cache probes, and rejects old watch events after resume", async () => {
+    const mounted = mountOpenShift();
+    await Bun.sleep(0);
+    const { openShift, state, setSuspended, watches } = mounted;
+    expect(watches).toHaveLength(1);
+    await openShift.fetchCommitDataForSHA(SHA);
+    const memory = openShift.getCommitData(SHA);
+    const badges = state.graphBadges();
+    expect(memory?.namespaces[0].pods).toHaveLength(1);
+    setSuspended(true);
+    expect(watches[0].signal.aborted).toBe(true);
+    expect(openShift.getCommitData(SHA)).toEqual(memory);
+    expect(state.graphBadges()).toEqual(badges);
+    expect(state.activeProviderView()).toBe("openshift");
+    const probes = mounted.cacheRead.mock.calls.length;
+    const requests = mounted.inventory.mock.calls.length;
+    await openShift.refresh();
+    await openShift.fetchCommitDataForSHA(SHA, true);
+    expect(await openShift.loadBuildLog(build)).toBe("");
+    expect(await openShift.loadPodLog(pod)).toBe("");
+    expect(await openShift.loadResourceObject(build)).toBeNull();
+    expect(mounted.cacheRead.mock.calls.length).toBe(probes);
+    expect(mounted.logRead).not.toHaveBeenCalled();
+    expect(mounted.inventory.mock.calls.length).toBe(requests);
+    expect(mounted.live).toHaveBeenCalledTimes(1);
+
+    setSuspended(false);
+    await Bun.sleep(0);
+    expect(watches).toHaveLength(2);
+    watches[0].onEvent({ type: "DELETED", object: { kind: "Pod", metadata: { name: "app", namespace: "ns" } } });
+    watches[0].resolve("end");
+    await Bun.sleep(0);
+    expect(openShift.getCommitData(SHA)?.namespaces[0].pods).toHaveLength(1);
+    expect(openShift.liveAge()).toBe("live");
+  });
+
+  test("explicit invalidation while paused cannot hydrate or fetch until resume", async () => {
+    const mounted = mountOpenShift(true);
+    const { openShift, setSuspended } = mounted;
+    openShift.invalidate();
+    await openShift.refresh();
+    await openShift.fetchCommitDataForSHA(SHA, true);
+    await Bun.sleep(0);
+    expect(mounted.cacheList).not.toHaveBeenCalled();
+    expect(mounted.cacheRead).not.toHaveBeenCalled();
+    expect(mounted.cacheWrite).not.toHaveBeenCalled();
+    expect(mounted.inventory).not.toHaveBeenCalled();
+    expect(mounted.live).not.toHaveBeenCalled();
+    setSuspended(false);
+    await Bun.sleep(0);
+    expect(mounted.cacheList).toHaveBeenCalledTimes(1);
+    expect(mounted.inventory).toHaveBeenCalledTimes(1);
+    expect(openShift.getCommitData(SHA)).not.toBeNull();
+  });
+
+  test("a pre-suspension log completion cannot write cache after resume", async () => {
+    const mounted = mountOpenShift();
+    await Bun.sleep(0);
+    let resolve!: (value: string) => void;
+    let signal: AbortSignal | undefined;
+    const log = spyOn(api, "fetchOpenShiftBuildLog").mockImplementation(
+      (_server, _token, _ns, _name, requestSignal) => {
+        signal = requestSignal;
+        return new Promise(settle => {
+          resolve = settle;
+        });
+      },
+    );
+    cleanup.push(() => log.mockRestore());
+    const pending = mounted.openShift.loadBuildLog(build, true);
+    mounted.setSuspended(true);
+    expect(signal?.aborted).toBe(true);
+    mounted.setSuspended(false);
+    resolve("old log");
+    expect(await pending).toBe("");
+    expect(mounted.logWrite).not.toHaveBeenCalled();
+  });
+
+  test("a late inventory response cannot publish or persist after resume", async () => {
+    const mounted = mountOpenShift();
+    await Bun.sleep(0);
+    let resolve!: (value: Awaited<ReturnType<typeof api.fetchOpenShiftInventory>>) => void;
+    mounted.inventory.mockImplementationOnce(
+      () =>
+        new Promise(settle => {
+          resolve = settle;
+        }),
+    );
+    const pending = mounted.openShift.refresh();
+    await Bun.sleep(0);
+    mounted.setSuspended(true);
+    mounted.setSuspended(false);
+    await Bun.sleep(0);
+    const writes = mounted.cacheWrite.mock.calls.length;
+    const watches = mounted.live.mock.calls.length;
+    resolve({
+      data: new Map([
+        [SHA, commitDataFromCacheEntry({ sha: SHA, builds: [{ ...build, commitSha: SHA, status: "fail" }] })],
+      ]),
+      error: null,
+      failures: [],
+      successfulRequests: 1,
+    });
+    await pending;
+    expect(mounted.openShift.getCommitData(SHA)?.namespaces[0].builds[0].status).toBe("pass");
+    expect(mounted.cacheWrite.mock.calls.length).toBe(writes);
+    expect(mounted.live.mock.calls.length).toBe(watches);
+  });
+});
 
 describe("selectOpenShiftCandidateSHAs", () => {
   test("keeps only annotated SHAs that sit in the graph window", () => {

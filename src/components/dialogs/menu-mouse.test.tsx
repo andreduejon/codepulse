@@ -65,6 +65,7 @@ async function renderMenu(height = 60, configInfo?: config.ConfigInfo) {
   });
   const fetch = mock(() => {});
   const reload = mock(() => {});
+  const cache = mock(() => {});
   const dialog = mock((_id: "theme") => {});
   const branch = mock((_name: string | null) => {});
   let app!: ReturnType<typeof createAppState>;
@@ -87,6 +88,7 @@ async function renderMenu(height = 60, configInfo?: config.ConfigInfo) {
                 onReload={reload}
                 onFetch={fetch}
                 onOpenDialog={dialog}
+                onOpenCache={cache}
                 onViewBranch={branch}
                 configInfo={configInfo}
                 githubConfig={github()}
@@ -149,6 +151,7 @@ async function renderMenu(height = 60, configInfo?: config.ConfigInfo) {
     close,
     fetch,
     reload,
+    cache,
     dialog,
     branch,
     github,
@@ -185,6 +188,25 @@ test("menu config path copies full long Windows path with mouse and keyboard", a
     await m.key("RETURN");
     expect(m.copy).toHaveBeenCalledTimes(2);
     expect(m.copy).toHaveBeenLastCalledWith(path, "Config file");
+  } finally {
+    await m.dispose();
+  }
+});
+
+test("repository Actions includes Cache, activated by left click or keyboard without changing settings", async () => {
+  const m = await renderMenu();
+  try {
+    expect(m.point("Actions").y).toBeLessThan(m.point("Cache").y);
+    expect(m.point("Cache").y).toBeLessThan(m.point("Preferences").y);
+    await m.click("Cache", MouseButtons.RIGHT);
+    expect(m.cache).not.toHaveBeenCalled();
+    await m.click("Cache");
+    expect(m.cache).toHaveBeenCalledTimes(1);
+    await m.key("RETURN");
+    expect(m.cache).toHaveBeenCalledTimes(2);
+    expect(m.fetch).not.toHaveBeenCalled();
+    expect(m.reload).not.toHaveBeenCalled();
+    expect(m.write).not.toHaveBeenCalled();
   } finally {
     await m.dispose();
   }
@@ -287,6 +309,37 @@ test("menu row hover never selects; clicks share copy, action, dialog, toggle, c
     await m.click("feature-mouse");
     expect(m.branch).toHaveBeenLastCalledWith("feature-mouse");
     expect(m.close).toHaveBeenCalledTimes(1);
+  } finally {
+    await m.dispose();
+  }
+});
+
+test("menu mouse and keyboard cycle large cache limits while fetch size remains bounded", async () => {
+  const m = await renderMenu();
+  try {
+    await m.click("Providers");
+    await m.click("Cache count");
+    expect(m.github().cacheLimit).toBe(50);
+    for (const limit of [100, 200, 500, 10, 20] as const) {
+      await m.key("RETURN");
+      expect(m.github().cacheLimit).toBe(limit);
+      expect(m.github().fetchDepth).toBe(20);
+      expect(m.write).toHaveBeenLastCalledWith(
+        expect.objectContaining({ providers: { github: expect.objectContaining({ cacheLimit: limit }) } }),
+        "/repo/menu-mouse",
+      );
+    }
+    for (const limit of [50, 100, 200, 500, 10, 20] as const) {
+      await m.click("Cache count");
+      expect(m.github().cacheLimit).toBe(limit);
+    }
+    await m.click("Fetch size");
+    expect(m.github().fetchDepth).toBe(50);
+    await m.key("RETURN");
+    expect(m.github().fetchDepth).toBe(10);
+    await m.key("RETURN");
+    expect(m.github().fetchDepth).toBe(20);
+    expect(m.github().cacheLimit).toBe(20);
   } finally {
     await m.dispose();
   }

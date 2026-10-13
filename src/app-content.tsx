@@ -2,6 +2,7 @@ import type { ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { batch, createEffect, createMemo, createSignal, onCleanup, onMount, Show, untrack } from "solid-js";
 import type { AppContentProps, RepoSessionSnapshot } from "./app-types";
+import CacheScreen from "./components/cache-screen";
 import CommandBar from "./components/command-bar";
 import DetailPanel from "./components/detail-panel";
 import type { DetailNavRef } from "./components/detail-types";
@@ -39,6 +40,8 @@ import { useJenkinsCI } from "./providers/jenkins/use-jenkins-ci";
 import OpenShiftResourceDialog from "./providers/openshift/resource-dialog";
 import type { OpenShiftResource } from "./providers/openshift/types";
 import { useOpenShift } from "./providers/openshift/use-openshift";
+import { type CacheRepositorySummary, evictRepositoryCache } from "./providers/shared/cache-management";
+import { repositoryIdentity, setProviderCacheSuspended } from "./providers/shared/sha-sqlite-cache";
 import { type SnykProviderConfig, useSnyk } from "./providers/snyk/use-snyk";
 import { nextGroupRepoPath } from "./utils/group-repos";
 import { computeDisplacedIndex } from "./utils/keyboard-nav-utils";
@@ -53,6 +56,13 @@ export function AppContent(props: Readonly<AppContentProps>) {
   const themeState = props.themeState;
   const renderer = useRenderer();
   const [activeRepoPath, setActiveRepoPath] = createSignal(props.repoPath);
+  const [cacheScreenVisible, setCacheScreenVisible] = createSignal(false);
+  let disposed = false;
+  createEffect(() => setProviderCacheSuspended(cacheScreenVisible()));
+  onCleanup(() => {
+    disposed = true;
+    setProviderCacheSuspended(false);
+  });
 
   // GitHub Actions provider config.
   const [githubConfig, setGithubConfig] = createSignal({
@@ -141,10 +151,11 @@ export function AppContent(props: Readonly<AppContentProps>) {
     state,
     actions,
     config: githubConfig,
+    suspended: cacheScreenVisible,
   });
-  const jenkinsCI = useJenkinsCI({ state, actions, config: jenkinsConfig });
-  const openShift = useOpenShift({ state, actions, config: openShiftConfig });
-  const snyk = useSnyk({ state, actions, config: snykConfig });
+  const jenkinsCI = useJenkinsCI({ state, actions, config: jenkinsConfig, suspended: cacheScreenVisible });
+  const openShift = useOpenShift({ state, actions, config: openShiftConfig, suspended: cacheScreenVisible });
+  const snyk = useSnyk({ state, actions, config: snykConfig, suspended: cacheScreenVisible });
 
   // Setup screen visibility — shown when startup mode is "setup"
   const [setupVisible, setSetupVisible] = createSignal(props.startupMode.kind === "setup");
@@ -233,6 +244,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
   // Ref for programmatic scrolling of the detail panel
   let graphScrollboxRef: ScrollBoxRenderable | undefined;
   let detailScrollboxRef: ScrollBoxRenderable | undefined;
+  let cacheGraphScrollTop = 0;
   const [pendingGraphScrollTop, setPendingGraphScrollTop] = createSignal<number | null>(null);
   let scrollRestoreVersion = 0;
   let scrollRestoreTimers: ReturnType<typeof setTimeout>[] = [];
@@ -526,6 +538,12 @@ export function AppContent(props: Readonly<AppContentProps>) {
     }
   };
 
+  const openCacheScreen = () => {
+    cacheGraphScrollTop = graphScrollboxRef?.scrollTop ?? 0;
+    setDialog(null);
+    setCacheScreenVisible(true);
+  };
+
   /** Switch the graph to view a specific branch perspective. */
   const handleViewBranch = (branch: string | null) => {
     actions.setViewingBranch(branch);
@@ -543,6 +561,9 @@ export function AppContent(props: Readonly<AppContentProps>) {
     const normalized = cmd.toLowerCase().replace(/^:/, "");
 
     switch (normalized) {
+      case "cache":
+        openCacheScreen();
+        break;
       case "q":
       case "quit":
         renderer.destroy();
@@ -626,6 +647,24 @@ export function AppContent(props: Readonly<AppContentProps>) {
         // Unknown command — ignore silently
         break;
     }
+  };
+
+  const evictCacheRepository = async (repo: CacheRepositorySummary) => {
+    const { hash } = await repositoryIdentity(activeRepoPath());
+    if (disposed || !cacheScreenVisible()) throw new Error("Cache screen is closed.");
+    const removed = evictRepositoryCache(repo.repoHash);
+    if (hash === repo.repoHash) {
+      gitHubCI.invalidate();
+      jenkinsCI.invalidate();
+      openShift.invalidate();
+      snyk.invalidate();
+    }
+    return removed;
+  };
+
+  const closeCacheScreen = () => {
+    setCacheScreenVisible(false);
+    setPendingGraphScrollTop(cacheGraphScrollTop);
   };
 
   /**
@@ -740,7 +779,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     >
       <AppStateContext.Provider value={{ state, actions }}>
         <Show
-          when={layoutMode() !== "too-small"}
+          when={cacheScreenVisible() || layoutMode() !== "too-small"}
           fallback={
             <ErrorScreen
               error={`Terminal too small (${dimensions().width}\u00d7${dimensions().height})\nResize to at least ${MIN_TERMINAL_WIDTH} columns and ${MIN_TERMINAL_HEIGHT} rows.`}
@@ -758,15 +797,27 @@ export function AppContent(props: Readonly<AppContentProps>) {
             }
           >
             <Show
-              when={!repoSelectorVisible()}
+              when={!repoSelectorVisible() && !cacheScreenVisible()}
               fallback={
-                <ProjectSelector
-                  knownRepos={knownRepoInfos()}
-                  currentRepo={activeRepoPath()}
-                  onSelectRepo={switchRepoPath}
-                  onCancel={() => setRepoSelectorVisible(false)}
-                  setKeyboardScopeOverride={actions.setKeyboardScopeOverride}
-                />
+                <Show
+                  when={cacheScreenVisible()}
+                  fallback={
+                    <ProjectSelector
+                      knownRepos={knownRepoInfos()}
+                      currentRepo={activeRepoPath()}
+                      onSelectRepo={switchRepoPath}
+                      onCancel={() => setRepoSelectorVisible(false)}
+                      setKeyboardScopeOverride={actions.setKeyboardScopeOverride}
+                    />
+                  }
+                >
+                  <CacheScreen
+                    currentRepo={activeRepoPath()}
+                    onEvict={evictCacheRepository}
+                    onClose={closeCacheScreen}
+                    setKeyboardScopeOverride={actions.setKeyboardScopeOverride}
+                  />
+                </Show>
               }
             >
               <box flexDirection="column" width="100%" height="100%" backgroundColor={themeState.theme().background}>
@@ -916,6 +967,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                     onReload={() => void handleReloadAll()}
                     onFetch={() => void handleFetchAll()}
                     onOpenDialog={handleOpenDialog}
+                    onOpenCache={openCacheScreen}
                     onViewBranch={handleViewBranch}
                     configInfo={props.configInfo}
                     onSwitchRepo={() => {

@@ -9,6 +9,7 @@ import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useClipboard } from "../../hooks/use-clipboard";
 import { COPYABLE_VISIBLE_WIDTH, type SettingItem, useMenuItems } from "../../hooks/use-menu-items";
 import type { JenkinsJobConfig } from "../../providers/jenkins/types";
+import type { ProviderCacheLimit } from "../../providers/shared/auto-refresh";
 import { scrollIndexedItemIntoView } from "../../utils/scroll";
 import Badge from "../badge";
 import { KeyHint, KeyHintSeparator } from "../key-hint";
@@ -34,13 +35,14 @@ interface MenuDialogProps {
   configInfo?: ConfigInfo;
   /** Open the project selector to switch repos. */
   onSwitchRepo?: () => void;
+  onOpenCache?: () => void;
   /** Current GitHub provider config (passed through to Providers tab). */
   githubConfig?: {
     enabled: boolean;
     tokenEnvVar: string;
     trustedEnterpriseHost: string | null;
     fetchDepth: 10 | 20 | 50;
-    cacheLimit: 10 | 20 | 50;
+    cacheLimit: ProviderCacheLimit;
     autoRefreshSeconds: 0 | 120 | 300 | 600;
   };
   /** Callback to update GitHub provider config. */
@@ -49,7 +51,7 @@ interface MenuDialogProps {
     tokenEnvVar: string;
     trustedEnterpriseHost: string | null;
     fetchDepth: 10 | 20 | 50;
-    cacheLimit: 10 | 20 | 50;
+    cacheLimit: ProviderCacheLimit;
     autoRefreshSeconds: 0 | 120 | 300 | 600;
   }) => void;
   jenkinsConfig?: {
@@ -57,7 +59,7 @@ interface MenuDialogProps {
     username?: string;
     tokenEnvVar: string;
     fetchDepth: 10 | 20 | 50;
-    cacheLimit: 10 | 20 | 50;
+    cacheLimit: ProviderCacheLimit;
     autoRefreshSeconds: 0 | 120 | 300 | 600;
     jobs: JenkinsJobConfig[];
   };
@@ -66,7 +68,7 @@ interface MenuDialogProps {
     username?: string;
     tokenEnvVar: string;
     fetchDepth: 10 | 20 | 50;
-    cacheLimit: 10 | 20 | 50;
+    cacheLimit: ProviderCacheLimit;
     autoRefreshSeconds: 0 | 120 | 300 | 600;
     jobs: JenkinsJobConfig[];
   }) => void;
@@ -76,7 +78,7 @@ interface MenuDialogProps {
     tokenEnvVar: string;
     namespaces: string[];
     commitShaAnnotation: string;
-    cacheLimit: 10 | 20 | 50;
+    cacheLimit: ProviderCacheLimit;
     fetchDepth: 10 | 20 | 50;
     autoRefreshSeconds: 0 | 120 | 300 | 600;
   };
@@ -86,7 +88,7 @@ interface MenuDialogProps {
     tokenEnvVar: string;
     namespaces: string[];
     commitShaAnnotation: string;
-    cacheLimit: 10 | 20 | 50;
+    cacheLimit: ProviderCacheLimit;
     fetchDepth: 10 | 20 | 50;
     autoRefreshSeconds: 0 | 120 | 300 | 600;
   }) => void;
@@ -94,13 +96,13 @@ interface MenuDialogProps {
     enabled: boolean;
     tokenEnvVar: string;
     autoScanBranches: string[];
-    maxCachedScans: 10 | 20 | 50;
+    maxCachedScans: ProviderCacheLimit;
   };
   onSnykConfigChange?: (cfg: {
     enabled: boolean;
     tokenEnvVar: string;
     autoScanBranches: string[];
-    maxCachedScans: 10 | 20 | 50;
+    maxCachedScans: ProviderCacheLimit;
   }) => void;
   onRepoDisplayConfigChange?: (cfg: { group?: string; appName?: string }) => void;
 }
@@ -158,6 +160,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     onClose: () => props.onClose(),
     configInfo: props.configInfo,
     onSwitchRepo: props.onSwitchRepo,
+    onOpenCache: props.onOpenCache,
     githubConfig: () => props.githubConfig,
     onGithubConfigChange: props.onGithubConfigChange,
     jenkinsConfig: () => props.jenkinsConfig,

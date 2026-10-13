@@ -1,15 +1,13 @@
-import { join } from "node:path";
-import { storageRoot } from "../../utils/storage-path";
-import { DEFAULT_PROVIDER_LIMIT, type ProviderLimit } from "../shared/auto-refresh";
-import { mergeById, ShaJsonCache } from "../shared/sha-json-cache";
+import { DEFAULT_PROVIDER_CACHE_LIMIT, type ProviderCacheLimit } from "../shared/auto-refresh";
+import { DEFAULT_PROVIDER_CACHE_ROOT, mergeById, ShaSqliteCache } from "../shared/sha-sqlite-cache";
 import type { GitHubJob, GitHubStep, GitHubWorkflowRun } from "./types";
 
-export const DEFAULT_GITHUB_CACHE_ROOT = join(storageRoot("cache"), "github-actions");
+export const DEFAULT_GITHUB_CACHE_ROOT = DEFAULT_PROVIDER_CACHE_ROOT;
 
 export interface GitHubCacheEntry {
   sha: string;
   runs: GitHubWorkflowRun[];
-  /** Completed jobs + steps keyed by run id. Logs stay off disk. */
+  /** Completed jobs + steps keyed by run id. Log text is stored as a separate artifact. */
   jobs?: Record<string, GitHubJob[]>;
 }
 
@@ -96,11 +94,12 @@ export function jobsMapFromGitHubCache(jobsCache: ReadonlyMap<number, GitHubJob[
   return jobs;
 }
 
-export class GitHubCache extends ShaJsonCache<GitHubCacheEntry> {
-  constructor(options: { root?: string; maxEntries?: ProviderLimit } = {}) {
+export class GitHubCache extends ShaSqliteCache<GitHubCacheEntry> {
+  constructor(options: { root?: string; maxEntries?: ProviderCacheLimit } = {}) {
     super({
+      provider: "github-actions",
       root: options.root ?? DEFAULT_GITHUB_CACHE_ROOT,
-      maxEntries: options.maxEntries ?? DEFAULT_PROVIDER_LIMIT,
+      maxEntries: options.maxEntries ?? DEFAULT_PROVIDER_CACHE_LIMIT,
       isEntry: isGitHubCacheEntry,
       invalidMessage: "Cannot cache an invalid GitHub Actions run snapshot.",
     });

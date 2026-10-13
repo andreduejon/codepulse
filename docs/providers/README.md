@@ -19,14 +19,40 @@ Provider-specific guides describe any additional live updates or automatic work.
 
 ## Cache
 
-Paths shown in provider guides are the macOS/Linux defaults. On Windows,
-provider caches instead use `%LOCALAPPDATA%\codepulse\Cache\<provider>`;
-configuration uses `%APPDATA%\codepulse\config.json`. Missing environment
-variables fall back to the user's `AppData\Local` and `AppData\Roaming` folders.
+All providers share one SQLite database at `~/.cache/codepulse/cache.sqlite`
+on macOS/Linux or `%LOCALAPPDATA%\codepulse\Cache\cache.sqlite` on Windows.
+Snapshots are isolated by provider, canonical repository path hash, and commit SHA.
+Each snapshot has a generated integer ID. Cached logs are `log` artifacts in the
+same database, linked to their parent snapshot. Updating a snapshot preserves
+its ID and logs. Successful cached log reads and writes update the parent's
+last-access time.
+Configuration remains JSON at `%APPDATA%\codepulse\config.json` on Windows.
+Missing environment variables fall back to the user's `AppData\Local` and
+`AppData\Roaming` folders.
 
 **Cache limit** is the number of commit snapshots retained on disk, not the
 number of runs, builds, jobs, resources, or findings. Supported values are 10,
-20, and 50; the default is 20.
+20, 50, 100, 200, and 500. The default is 20. Fetch size remains 10, 20, or 50.
+
+Least-recently-accessed snapshots leave when the limit is exceeded, along with
+associated artifacts through a foreign-key cascade. Foreign keys are enabled on
+every app database connection. Log writes and eviction are transactional. Log
+caching is best effort and requires an existing parent snapshot. If that snapshot
+is absent or has been evicted, the live log still appears but is not persisted,
+and no replacement snapshot is created.
+
+Repositories with no cache access or timer reset for 90 days are cleaned up at
+startup, across all providers. The global `:cache` screen shows total cached data
+sizes and cleanup dates per app, resets inactivity timers, and evicts only a
+selected repository across providers after confirmation.
+Inspection does not update access times. See the [cache guide](../cache.md).
+
+Schema version 2 uses the same database path. Known development version 1 databases are reset
+transactionally without importing their contents. Unknown or corrupt databases
+are left untouched. Legacy JSON snapshots and log files are not migrated or
+deleted. Moving a repository changes its cache identity. SQLite reuses space
+freed by eviction, but its file does not necessarily shrink. Database failures
+are recorded in Debug and do not discard usable live provider data.
 
 Cached data can remain visible after its remote object is deleted. Each provider
 guide describes what is persisted and when live data replaces cached data.

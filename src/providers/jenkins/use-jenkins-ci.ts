@@ -41,6 +41,7 @@ export function useJenkinsCI(opts: {
   actions: AppActions;
   config?: Partial<JenkinsProviderConfig> | Accessor<Partial<JenkinsProviderConfig>>;
   cacheRoot?: string;
+  suspended?: Accessor<boolean>;
 }): UseJenkinsCIResult {
   const { state, actions } = opts;
   const configAccessor: Accessor<Partial<JenkinsProviderConfig>> =
@@ -110,6 +111,7 @@ export function useJenkinsCI(opts: {
   async function fetchForSHAs(shas: string[], mode: "shallow" | "full", signal?: AbortSignal) {
     const epoch = lifecycle.getEpoch();
     const repoPath = state.repoPath();
+    if (!lifecycle.isCurrent(epoch, repoPath)) return { firstError: null, stale: true };
     const token = getJenkinsToken(config.tokenEnvVar);
     if (!token || shas.length === 0) return { firstError: null };
     const jobs = discoveredJobs ?? config.jobs;
@@ -149,6 +151,7 @@ export function useJenkinsCI(opts: {
   }
 
   async function hydrateCachedCandidates(repoPath: string, shas: readonly string[], epoch: number): Promise<void> {
+    if (!lifecycle.isCurrent(epoch, repoPath)) return;
     const entries = await Promise.all(shas.map(sha => disk.read(repoPath, sha)));
     if (!lifecycle.isCurrent(epoch, repoPath)) return;
     let changed = false;
@@ -164,6 +167,7 @@ export function useJenkinsCI(opts: {
   }
 
   async function persistTerminalRuns(repoPath: string, shas: readonly string[], epoch: number): Promise<void> {
+    if (!lifecycle.isCurrent(epoch, repoPath)) return;
     const writes = await Promise.all(
       shas.map(async sha => {
         const incoming = [...runCache.values()].filter(
@@ -195,6 +199,7 @@ export function useJenkinsCI(opts: {
 
   const lifecycle = useProviderFetchLifecycle({
     state,
+    suspended: opts.suspended,
     providerId: "jenkins",
     shaLimit: () => configAccessor().fetchDepth ?? DEFAULT_JENKINS_CONFIG.fetchDepth,
     refreshInterval: () => (configAccessor().autoRefreshSeconds ?? DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS) * 1000,
@@ -312,9 +317,13 @@ export function useJenkinsCI(opts: {
       const repoPath = state.repoPath();
       const cached = jobsCache.get(run.id);
       if (cached) return cached;
+      if (!lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
       const token = getJenkinsToken(config.tokenEnvVar);
       if (!token) return { jobs: [], error: BANNER.jenkins.missingToken(config.tokenEnvVar) };
-      const result = await fetchJenkinsRunJobs(run, config.username, token, signal);
+      const result = await lifecycle.runRequest(
+        signal => fetchJenkinsRunJobs(run, config.username, token, signal),
+        signal,
+      );
       if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
       if (run.status === "completed" && result.error === null) {
         if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
@@ -328,6 +337,7 @@ export function useJenkinsCI(opts: {
       const cached = logCache.get(run.id);
       if (cached) return cached;
       const repoPath = state.repoPath();
+      if (!lifecycle.isCurrent(epoch, repoPath)) return "";
       if (isTerminalJenkinsRun(run)) {
         const diskLog = await disk.readLog(repoPath, run.headSha, run.id).catch(() => null);
         if (!lifecycle.isCurrent(epoch, repoPath)) return "";
@@ -338,7 +348,10 @@ export function useJenkinsCI(opts: {
       }
       const token = getJenkinsToken(config.tokenEnvVar);
       if (!token) return "";
-      const log = await fetchJenkinsConsoleLog(run, config.username, token, signal);
+      const log = await lifecycle.runRequest(
+        signal => fetchJenkinsConsoleLog(run, config.username, token, signal),
+        signal,
+      );
       if (!lifecycle.isCurrent(epoch, repoPath)) return "";
       if (run.status === "completed" && log) {
         logCache.set(run.id, log);
@@ -354,7 +367,7 @@ export function useJenkinsCI(opts: {
       if (!lifecycle.isCurrent(epoch, repoPath)) return;
       if (!force) return;
       queriedSHAs.delete(sha);
-      await fetchForSHAs([sha], "full");
+      await lifecycle.runRequest(signal => fetchForSHAs([sha], "full", signal));
     },
     refresh: async () => {
       await lifecycle.fetchRefresh(undefined, true);

@@ -29,7 +29,7 @@ Configure the provider per repository from `:providers`:
 - Set the environment variable containing an API token. Default:
   `OPENSHIFT_TOKEN`. Prefer a long-lived service-account token over
   `oc whoami -t` (env is fixed until Codepulse restarts).
-- Cache limit (`10`, `20`, `50`): maximum commit snapshots kept on disk.
+- Cache limit (`10`, `20`, `50`, `100`, `200`, `500`): maximum commit snapshots kept on disk.
 - Fetch size (`10`, `20`, `50`): how many graph commits are candidates. Only
   those commits that also have a Build or ImageStreamTag seed are matched.
 - Auto refresh (`off`, `2m`, `5m`, `10m`): poll Builds and ImageStreamTags
@@ -54,18 +54,19 @@ resource kind, and technical details in the Debug dialog.
 
 ## Cache
 
-Terminal Builds (`Complete`, `Failed`, `Error`, `Cancelled`), their API objects,
-and their logs are stored under:
+Terminal Builds (`Complete`, `Failed`, `Error`, `Cancelled`) and their API objects
+are stored in `~/.cache/codepulse/cache.sqlite` under provider `openshift`.
+Terminal Build logs are `log` artifacts in the same database, linked to the
+commit snapshot and keyed by namespace and Build name. Log caching is best
+effort. Without a parent snapshot, the fetched log still appears but is not
+persisted and does not recreate the snapshot.
 
-```text
-~/.cache/codepulse/openshift/<repository-hash>/<commit-sha>.json
-~/.cache/codepulse/openshift/<repository-hash>/logs/<sha>_<namespace>_<build>.txt
-```
-
-Each file is one commit SHA. Limit `10` / `20` / `50` is SHA files, not Builds.
-Live terminal Builds merge into the existing file by Build id. OpenShift
-history prune does not drop Builds already cached. Oldest SHA files evict at
-the limit. Pods, workloads, and ImageStreamTags are not written to disk.
+Each snapshot is one commit SHA. Limits `10`, `20`, `50`, `100`, `200`, and `500`
+count snapshots, not Builds. Live terminal Builds merge into the existing
+snapshot by Build id, preserving its snapshot ID and logs. OpenShift history
+prune does not drop Builds already cached. Least-recently-accessed snapshots
+evict at the limit, cascading to their log artifacts. Pods, workloads, and
+ImageStreamTags are not written to disk.
 
 An expired token (401) stops further requests. The banner reads `OpenShift
 token expired. Live data unavailable.` Graph and details keep the last Live
@@ -102,8 +103,8 @@ that produced them.
 
 ## Logs
 
-- Terminal Build logs load from disk when present, otherwise from the Build log
-  API, then cache. They are not streamed.
+- Terminal Build logs load from the shared database when present, otherwise from
+  the Build log API, then cache if the parent snapshot exists. They are not streamed.
 - Running Build logs and Pod logs use `?follow=true`. History then tail. Last
   1000 lines. Open at the bottom; stay pinned only if you are already at the
   bottom. When the stream closes the title shows `log ended`. Press `r` to
