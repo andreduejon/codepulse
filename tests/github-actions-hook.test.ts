@@ -6,6 +6,7 @@ import { createRoot } from "solid-js";
 import { createAppState } from "../src/context/state";
 import { clearDebugEvents, getDebugEvents } from "../src/debug/events";
 import { useGitHubCI } from "../src/providers/github-actions/use-github-ci";
+import { closeProviderCaches } from "../src/providers/shared/sha-sqlite-cache";
 
 test("unsupported GraphQL jobs stay disabled while runs and REST expansion still work", async () => {
   const approvedTemp = join(tmpdir(), "opencode");
@@ -125,6 +126,7 @@ test("unsupported GraphQL jobs stay disabled while runs and REST expansion still
     if (originalToken === undefined) delete process.env[tokenEnvVar];
     else process.env[tokenEnvVar] = originalToken;
     clearDebugEvents();
+    closeProviderCaches(cacheRoot); // Windows cannot delete an open SQLite file
     rmSync(cacheRoot, { recursive: true, force: true });
   }
 });
