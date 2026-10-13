@@ -18,45 +18,26 @@ describe("filterBadgeLabel", () => {
 // ── commandBarPlaceholder ────────────────────────────────────────────────────
 
 describe("commandBarPlaceholder", () => {
-  test("returns empty string in idle mode", () => {
-    expect(commandBarPlaceholder("idle")).toBe("");
-  });
-
-  test("returns command prompt in command mode", () => {
-    expect(commandBarPlaceholder("command")).toBe("Enter command...");
-  });
-
-  test("returns search prompt in search mode", () => {
-    expect(commandBarPlaceholder("search")).toBe("Search commits...");
-  });
-
-  test("returns path prompt in path mode", () => {
-    expect(commandBarPlaceholder("path")).toBe("Enter path...");
+  test.each([
+    ["empty string in idle mode", "idle", ""],
+    ["command prompt in command mode", "command", "Enter command..."],
+    ["search prompt in search mode", "search", "Search commits..."],
+    ["path prompt in path mode", "path", "Enter path..."],
+  ] as const)("returns %s", (_label, mode, expected) => {
+    expect(commandBarPlaceholder(mode)).toBe(expected);
   });
 });
 
 // ── commitCountText ──────────────────────────────────────────────────────────
 
 describe("commitCountText", () => {
-  test("shows total only when no highlight is active", () => {
-    expect(commitCountText(null, 42)).toBe("42");
-  });
-
-  test("shows 'matches / total' when highlight is active", () => {
-    const hSet = new Set(["abc", "def"]);
-    expect(commitCountText(hSet, 100)).toBe("2 / 100");
-  });
-
-  test("shows '0 / total' when highlight is active but nothing matches", () => {
-    expect(commitCountText(new Set(), 50)).toBe("0 / 50");
-  });
-
-  test("shows 'total / total' when every row matches", () => {
-    const hSet = new Set(["a", "b", "c"]);
-    expect(commitCountText(hSet, 3)).toBe("3 / 3");
-  });
-
-  test("shows '0' for empty repo with no highlight", () => {
-    expect(commitCountText(null, 0)).toBe("0");
+  test.each([
+    ["total only when no highlight is active", null, 42, "42"],
+    ["'matches / total' when highlight is active", new Set(["abc", "def"]), 100, "2 / 100"],
+    ["'0 / total' when highlight is active but nothing matches", new Set<string>(), 50, "0 / 50"],
+    ["'total / total' when every row matches", new Set(["a", "b", "c"]), 3, "3 / 3"],
+    ["'0' for empty repo with no highlight", null, 0, "0"],
+  ])("shows %s", (_label, highlightSet, total, expected) => {
+    expect(commitCountText(highlightSet, total)).toBe(expected);
   });
 });

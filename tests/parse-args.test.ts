@@ -51,20 +51,8 @@ describe("parseArgs", () => {
 
   // ── --help / --version ────────────────────────────────────────────
 
-  test("--help exits with code 0", () => {
-    expectParseArgsExit([...ARGV_PREFIX, "--help"], 0);
-  });
-
-  test("-h exits with code 0", () => {
-    expectParseArgsExit([...ARGV_PREFIX, "-h"], 0);
-  });
-
-  test("--version exits with code 0", () => {
-    expectParseArgsExit([...ARGV_PREFIX, "--version"], 0);
-  });
-
-  test("-v exits with code 0", () => {
-    expectParseArgsExit([...ARGV_PREFIX, "-v"], 0);
+  test.each(["--help", "-h", "--version", "-v"])("%s exits with code 0", flag => {
+    expectParseArgsExit([...ARGV_PREFIX, flag], 0);
   });
 
   // ── Positional repo path ──────────────────────────────────────────

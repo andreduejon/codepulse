@@ -5,24 +5,19 @@ import { makeCommit } from "./test-helpers";
 // ─── parseSearchQuery ────────────────────────────────────────────────
 
 describe("parseSearchQuery", () => {
-  test("empty string returns substring mode with empty query", () => {
-    const result = parseSearchQuery("");
+  test.each([
+    ["empty string returns substring mode with empty query", "", ""],
+    ["whitespace-only string returns substring mode with empty query", "   ", ""],
+    ["plain text returns substring mode with lowercased query", "Fix Bug", "fix bug"],
+    ["invalid regex falls back to substring mode", "/[invalid(/", "/[invalid(/"],
+    ["single slash is treated as substring", "/", "/"],
+    ["two slashes with nothing between is treated as substring (//)", "//", "//"],
+    ["leading slash without trailing slash is substring", "/partial", "/partial"],
+    ["trailing slash without leading slash is substring", "partial/", "partial/"],
+  ])("%s", (_label, query, substring) => {
+    const result = parseSearchQuery(query);
     expect(result.mode).toBe("substring");
-    expect(result.substring).toBe("");
-    expect(result.regex).toBeNull();
-  });
-
-  test("whitespace-only string returns substring mode with empty query", () => {
-    const result = parseSearchQuery("   ");
-    expect(result.mode).toBe("substring");
-    expect(result.substring).toBe("");
-    expect(result.regex).toBeNull();
-  });
-
-  test("plain text returns substring mode with lowercased query", () => {
-    const result = parseSearchQuery("Fix Bug");
-    expect(result.mode).toBe("substring");
-    expect(result.substring).toBe("fix bug");
+    expect(result.substring).toBe(substring);
     expect(result.regex).toBeNull();
   });
 
@@ -39,41 +34,6 @@ describe("parseSearchQuery", () => {
     expect(result.regex?.test("fix")).toBe(true);
     expect(result.regex?.test("FIX")).toBe(true);
     expect(result.regex?.test("Fix")).toBe(true);
-  });
-
-  test("invalid regex falls back to substring mode", () => {
-    const result = parseSearchQuery("/[invalid(/");
-    expect(result.mode).toBe("substring");
-    expect(result.substring).toBe("/[invalid(/");
-    expect(result.regex).toBeNull();
-  });
-
-  test("single slash is treated as substring", () => {
-    const result = parseSearchQuery("/");
-    expect(result.mode).toBe("substring");
-    expect(result.substring).toBe("/");
-    expect(result.regex).toBeNull();
-  });
-
-  test("two slashes with nothing between is treated as substring (//)", () => {
-    const result = parseSearchQuery("//");
-    expect(result.mode).toBe("substring");
-    expect(result.substring).toBe("//");
-    expect(result.regex).toBeNull();
-  });
-
-  test("leading slash without trailing slash is substring", () => {
-    const result = parseSearchQuery("/partial");
-    expect(result.mode).toBe("substring");
-    expect(result.substring).toBe("/partial");
-    expect(result.regex).toBeNull();
-  });
-
-  test("trailing slash without leading slash is substring", () => {
-    const result = parseSearchQuery("partial/");
-    expect(result.mode).toBe("substring");
-    expect(result.substring).toBe("partial/");
-    expect(result.regex).toBeNull();
   });
 
   test("preserves raw query string", () => {
@@ -119,55 +79,20 @@ describe("matchCommit", () => {
   // Override author for deterministic tests
   (commit as { author: string }).author = "Jane Doe";
 
-  test("empty query matches everything", () => {
-    const search = parseSearchQuery("");
-    expect(matchCommit(commit, search)).toBe(true);
-  });
-
-  test("substring matches subject (case-insensitive)", () => {
-    const search = parseSearchQuery("SEARCH");
-    expect(matchCommit(commit, search)).toBe(true);
-  });
-
-  test("substring matches author", () => {
-    const search = parseSearchQuery("jane");
-    expect(matchCommit(commit, search)).toBe(true);
-  });
-
-  test("substring matches shortHash", () => {
-    const search = parseSearchQuery("abc1234");
-    expect(matchCommit(commit, search)).toBe(true);
-  });
-
-  test("substring matches ref name", () => {
-    const search = parseSearchQuery("origin/main");
-    expect(matchCommit(commit, search)).toBe(true);
-  });
-
-  test("substring does not match body or full hash", () => {
+  test.each([
+    ["empty query matches everything", "", true],
+    ["substring matches subject (case-insensitive)", "SEARCH", true],
+    ["substring matches author", "jane", true],
+    ["substring matches shortHash", "abc1234", true],
+    ["substring matches ref name", "origin/main", true],
     // Full hash beyond shortHash should not match
-    const search = parseSearchQuery("567890");
-    expect(matchCommit(commit, search)).toBe(false);
-  });
-
-  test("regex matches subject", () => {
-    const search = parseSearchQuery("/^feat:/");
-    expect(matchCommit(commit, search)).toBe(true);
-  });
-
-  test("regex does not match when pattern fails", () => {
-    const search = parseSearchQuery("/^fix:/");
-    expect(matchCommit(commit, search)).toBe(false);
-  });
-
-  test("regex matches author", () => {
-    const search = parseSearchQuery("/jane.*doe/");
-    expect(matchCommit(commit, search)).toBe(true);
-  });
-
-  test("regex matches ref name", () => {
-    const search = parseSearchQuery("/origin\\/main/");
-    expect(matchCommit(commit, search)).toBe(true);
+    ["substring does not match body or full hash", "567890", false],
+    ["regex matches subject", "/^feat:/", true],
+    ["regex does not match when pattern fails", "/^fix:/", false],
+    ["regex matches author", "/jane.*doe/", true],
+    ["regex matches ref name", "/origin\\/main/", true],
+  ])("%s", (_label, query, expected) => {
+    expect(matchCommit(commit, parseSearchQuery(query))).toBe(expected);
   });
 
   test("invalid regex falls back to substring and still matches", () => {
