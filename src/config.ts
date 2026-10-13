@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { DEFAULT_MAX_COUNT } from "./constants";
 import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL } from "./context/state";
@@ -801,18 +801,15 @@ export function writeConfig(config: CodepulseConfig, repoPath: string, configPat
   const globalPath = configPath ?? defaultConfigPath();
 
   try {
-    // Read existing file to preserve all existing data
+    // Read existing file to preserve all existing data. Unparseable or non-object
+    // content throws: never replace a file we cannot understand.
     let existing: Record<string, unknown> = {};
     if (existsSync(globalPath)) {
-      try {
-        const raw = readFileSync(globalPath, "utf-8");
-        const parsed = JSON.parse(raw);
-        if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
-          existing = parsed;
-        }
-      } catch {
-        // Existing file is corrupt — overwrite entirely
+      const parsed = JSON.parse(readFileSync(globalPath, "utf-8"));
+      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+        throw new Error("existing file is not a JSON object");
       }
+      existing = parsed;
     }
 
     const merged: Record<string, unknown> = { ...existing };
@@ -838,11 +835,23 @@ export function writeConfig(config: CodepulseConfig, repoPath: string, configPat
       mkdirSync(dir, { recursive: true });
     }
 
-    writeFileSync(globalPath, `${JSON.stringify(merged, null, 2)}\n`, "utf-8");
+    writeJsonAtomic(globalPath, merged);
     return true;
   } catch (err) {
     console.error(`Error: failed to write config to ${globalPath}: ${err instanceof Error ? err.message : err}`);
     return false;
+  }
+}
+
+/** Write via temp file + rename so a crash mid-write never leaves a truncated config. */
+function writeJsonAtomic(path: string, value: unknown): void {
+  const tmp = `${path}.${process.pid}.tmp`;
+  try {
+    writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`, "utf-8");
+    renameSync(tmp, path);
+  } catch (err) {
+    rmSync(tmp, { force: true });
+    throw err;
   }
 }
 
@@ -869,7 +878,7 @@ export function removeRepoConfig(repoPath: string, configPath?: string): boolean
       merged.repos = nextRepos;
     }
 
-    writeFileSync(globalPath, `${JSON.stringify(merged, null, 2)}\n`, "utf-8");
+    writeJsonAtomic(globalPath, merged);
     return true;
   } catch (err) {
     console.error(`Error: failed to update config at ${globalPath}: ${err instanceof Error ? err.message : err}`);

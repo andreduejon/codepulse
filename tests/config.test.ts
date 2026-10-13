@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
@@ -834,27 +834,43 @@ describe("writeConfig", () => {
     expect(content.repos[resolve(repoPath)].pageSize).toBe(200);
   });
 
-  test("overwrites corrupt existing file", () => {
+  test("refuses to overwrite corrupt existing file", () => {
     const dir = makeTempDir("write-corrupt");
     const configPath = join(dir, "config.json");
     writeFileSync(configPath, "not valid json!!!");
     const repoPath = "/tmp/my-repo";
-    const result = writeConfig({ theme: "dracula" }, repoPath, configPath);
-    expect(result).toBe(true);
-    const content = JSON.parse(readFileSync(configPath, "utf-8"));
-    expect(content.repos[resolve(repoPath)].theme).toBe("dracula");
+    const errorSpy = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(writeConfig({ theme: "dracula" }, repoPath, configPath)).toBe(false);
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      errorSpy.mockRestore();
+    }
+    expect(readFileSync(configPath, "utf-8")).toBe("not valid json!!!");
   });
 
-  test("overwrites existing file that is an array", () => {
+  test("refuses to overwrite existing file that is an array", () => {
     const dir = makeTempDir("write-array");
     const configPath = join(dir, "config.json");
     writeFileSync(configPath, JSON.stringify([1, 2, 3]));
     const repoPath = "/tmp/my-repo";
-    const result = writeConfig({ pageSize: 500 }, repoPath, configPath);
-    expect(result).toBe(true);
+    const errorSpy = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(writeConfig({ pageSize: 500 }, repoPath, configPath)).toBe(false);
+    } finally {
+      errorSpy.mockRestore();
+    }
+    expect(readFileSync(configPath, "utf-8")).toBe("[1,2,3]");
+  });
+
+  test("replaces the file atomically without leaving temp files", () => {
+    const dir = makeTempDir("write-atomic");
+    const configPath = join(dir, "config.json");
+    writeConfig({ theme: "nord" }, "/tmp/my-repo", configPath);
+    writeConfig({ theme: "dracula" }, "/tmp/other-repo", configPath);
+    expect(readdirSync(dir)).toEqual(["config.json"]);
     const content = JSON.parse(readFileSync(configPath, "utf-8"));
-    expect(content.repos[resolve(repoPath)].pageSize).toBe(500);
-    expect(Array.isArray(content)).toBe(false);
+    expect(Object.keys(content.repos)).toHaveLength(2);
   });
 
   test("writes JSON with 2-space indent and trailing newline", () => {
