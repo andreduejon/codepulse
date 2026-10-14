@@ -12,6 +12,8 @@ import {
   getTokenSource,
   isGitHubJobsFieldSchemaError,
   isTrustedGitHubHost,
+  MAX_CHECK_SUITE_PAGES,
+  MAX_JOB_PAGES,
   mapRunToBadge,
   nextGithubLink,
   normalizeGitHubHost,
@@ -23,184 +25,97 @@ import type { GitHubApiJob } from "../src/providers/github-actions/types";
 
 describe("parseGitHubRemote", () => {
   describe("HTTPS URLs", () => {
-    it("parses standard HTTPS URL with .git suffix", () => {
-      expect(parseGitHubRemote("https://github.com/owner/repo.git")).toEqual({
-        hostname: "github.com",
-        owner: "owner",
-        repo: "repo",
-      });
-    });
-
-    it("parses HTTPS URL without .git suffix", () => {
-      expect(parseGitHubRemote("https://github.com/owner/repo")).toEqual({
-        hostname: "github.com",
-        owner: "owner",
-        repo: "repo",
-      });
-    });
-
-    it("parses HTTPS URL with trailing slash", () => {
-      expect(parseGitHubRemote("https://github.com/owner/repo/")).toEqual({
-        hostname: "github.com",
-        owner: "owner",
-        repo: "repo",
-      });
-    });
-
-    it("parses HTTPS URL with .git and trailing slash", () => {
-      expect(parseGitHubRemote("https://github.com/owner/repo.git/")).toEqual({
-        hostname: "github.com",
-        owner: "owner",
-        repo: "repo",
-      });
-    });
-
-    it("handles org names with hyphens", () => {
-      expect(parseGitHubRemote("https://github.com/my-org/my-repo.git")).toEqual({
-        hostname: "github.com",
-        owner: "my-org",
-        repo: "my-repo",
-      });
-    });
-
-    it("handles org names with underscores and dots", () => {
-      expect(parseGitHubRemote("https://github.com/my_org/my.repo")).toEqual({
-        hostname: "github.com",
-        owner: "my_org",
-        repo: "my.repo",
-      });
-    });
-
-    it("is case-insensitive for the domain", () => {
-      expect(parseGitHubRemote("https://GitHub.COM/Owner/Repo.git")).toEqual({
-        hostname: "GitHub.COM",
-        owner: "Owner",
-        repo: "Repo",
-      });
-    });
-
-    it("parses GitHub Enterprise HTTPS URL", () => {
-      expect(parseGitHubRemote("https://github.example.com/owner/repo.git")).toEqual({
-        hostname: "github.example.com",
-        owner: "owner",
-        repo: "repo",
-      });
+    it.each([
+      [
+        "parses standard HTTPS URL with .git suffix",
+        "https://github.com/owner/repo.git",
+        "github.com",
+        "owner",
+        "repo",
+      ],
+      ["parses HTTPS URL without .git suffix", "https://github.com/owner/repo", "github.com", "owner", "repo"],
+      ["parses HTTPS URL with trailing slash", "https://github.com/owner/repo/", "github.com", "owner", "repo"],
+      [
+        "parses HTTPS URL with .git and trailing slash",
+        "https://github.com/owner/repo.git/",
+        "github.com",
+        "owner",
+        "repo",
+      ],
+      ["handles org names with hyphens", "https://github.com/my-org/my-repo.git", "github.com", "my-org", "my-repo"],
+      [
+        "handles org names with underscores and dots",
+        "https://github.com/my_org/my.repo",
+        "github.com",
+        "my_org",
+        "my.repo",
+      ],
+      ["is case-insensitive for the domain", "https://GitHub.COM/Owner/Repo.git", "GitHub.COM", "Owner", "Repo"],
+      [
+        "parses GitHub Enterprise HTTPS URL",
+        "https://github.example.com/owner/repo.git",
+        "github.example.com",
+        "owner",
+        "repo",
+      ],
+    ])("%s", (_label, url, hostname, owner, repo) => {
+      expect(parseGitHubRemote(url)).toEqual({ hostname, owner, repo });
     });
   });
 
   describe("SSH scp-style URLs", () => {
-    it("parses git@ SSH URL with .git suffix", () => {
-      expect(parseGitHubRemote("git@github.com:owner/repo.git")).toEqual({
-        hostname: "github.com",
-        owner: "owner",
-        repo: "repo",
-      });
-    });
-
-    it("parses git@ SSH URL without .git suffix", () => {
-      expect(parseGitHubRemote("git@github.com:owner/repo")).toEqual({
-        hostname: "github.com",
-        owner: "owner",
-        repo: "repo",
-      });
-    });
-
-    it("handles org/repo with hyphens in SSH format", () => {
-      expect(parseGitHubRemote("git@github.com:my-org/my-repo.git")).toEqual({
-        hostname: "github.com",
-        owner: "my-org",
-        repo: "my-repo",
-      });
-    });
-
-    it("parses GitHub Enterprise SSH URL", () => {
-      expect(parseGitHubRemote("git@github.example.com:owner/repo.git")).toEqual({
-        hostname: "github.example.com",
-        owner: "owner",
-        repo: "repo",
-      });
+    it.each([
+      ["parses git@ SSH URL with .git suffix", "git@github.com:owner/repo.git", "github.com", "owner", "repo"],
+      ["parses git@ SSH URL without .git suffix", "git@github.com:owner/repo", "github.com", "owner", "repo"],
+      [
+        "handles org/repo with hyphens in SSH format",
+        "git@github.com:my-org/my-repo.git",
+        "github.com",
+        "my-org",
+        "my-repo",
+      ],
+      [
+        "parses GitHub Enterprise SSH URL",
+        "git@github.example.com:owner/repo.git",
+        "github.example.com",
+        "owner",
+        "repo",
+      ],
+    ])("%s", (_label, url, hostname, owner, repo) => {
+      expect(parseGitHubRemote(url)).toEqual({ hostname, owner, repo });
     });
   });
 
   describe("SSH protocol URLs", () => {
-    it("parses ssh:// URL with git@ prefix", () => {
-      expect(parseGitHubRemote("ssh://git@github.com/owner/repo.git")).toEqual({
-        hostname: "github.com",
-        owner: "owner",
-        repo: "repo",
-      });
-    });
-
-    it("parses ssh:// URL without git@ prefix", () => {
-      expect(parseGitHubRemote("ssh://github.com/owner/repo.git")).toEqual({
-        hostname: "github.com",
-        owner: "owner",
-        repo: "repo",
-      });
-    });
-
-    it("parses ssh:// URL without .git suffix", () => {
-      expect(parseGitHubRemote("ssh://git@github.com/owner/repo")).toEqual({
-        hostname: "github.com",
-        owner: "owner",
-        repo: "repo",
-      });
+    it.each([
+      ["parses ssh:// URL with git@ prefix", "ssh://git@github.com/owner/repo.git"],
+      ["parses ssh:// URL without git@ prefix", "ssh://github.com/owner/repo.git"],
+      ["parses ssh:// URL without .git suffix", "ssh://git@github.com/owner/repo"],
+    ])("%s", (_label, url) => {
+      expect(parseGitHubRemote(url)).toEqual({ hostname: "github.com", owner: "owner", repo: "repo" });
     });
   });
 
   describe("non-GitHub hosted services — parsed with their hostname", () => {
-    it("parses GitLab HTTPS URL (hostname=gitlab.com)", () => {
-      expect(parseGitHubRemote("https://gitlab.com/owner/repo.git")).toEqual({
-        hostname: "gitlab.com",
-        owner: "owner",
-        repo: "repo",
-      });
-    });
-
-    it("parses GitLab SSH URL (hostname=gitlab.com)", () => {
-      expect(parseGitHubRemote("git@gitlab.com:owner/repo.git")).toEqual({
-        hostname: "gitlab.com",
-        owner: "owner",
-        repo: "repo",
-      });
-    });
-
-    it("parses Bitbucket URL (hostname=bitbucket.org)", () => {
-      expect(parseGitHubRemote("https://bitbucket.org/owner/repo.git")).toEqual({
-        hostname: "bitbucket.org",
-        owner: "owner",
-        repo: "repo",
-      });
-    });
-
-    it("parses self-hosted git URL", () => {
-      expect(parseGitHubRemote("https://git.example.com/owner/repo.git")).toEqual({
-        hostname: "git.example.com",
-        owner: "owner",
-        repo: "repo",
-      });
+    it.each([
+      ["parses GitLab HTTPS URL (hostname=gitlab.com)", "https://gitlab.com/owner/repo.git", "gitlab.com"],
+      ["parses GitLab SSH URL (hostname=gitlab.com)", "git@gitlab.com:owner/repo.git", "gitlab.com"],
+      ["parses Bitbucket URL (hostname=bitbucket.org)", "https://bitbucket.org/owner/repo.git", "bitbucket.org"],
+      ["parses self-hosted git URL", "https://git.example.com/owner/repo.git", "git.example.com"],
+    ])("%s", (_label, url, hostname) => {
+      expect(parseGitHubRemote(url)).toEqual({ hostname, owner: "owner", repo: "repo" });
     });
   });
 
   describe("malformed URLs — return null", () => {
-    it("returns null for empty string", () => {
-      expect(parseGitHubRemote("")).toBeNull();
-    });
-
-    it("returns null for whitespace-only string", () => {
-      expect(parseGitHubRemote("   ")).toBeNull();
-    });
-
-    it("returns null for malformed URL", () => {
-      expect(parseGitHubRemote("not-a-url")).toBeNull();
-    });
-
-    it("returns null for URL missing repo part", () => {
-      expect(parseGitHubRemote("https://github.com/owner")).toBeNull();
-    });
-
-    it("returns null for URL missing owner part", () => {
-      expect(parseGitHubRemote("https://github.com/")).toBeNull();
+    it.each([
+      ["empty string", ""],
+      ["whitespace-only string", "   "],
+      ["malformed URL", "not-a-url"],
+      ["URL missing repo part", "https://github.com/owner"],
+      ["URL missing owner part", "https://github.com/"],
+    ])("returns null for %s", (_label, url) => {
+      expect(parseGitHubRemote(url)).toBeNull();
     });
   });
 
@@ -216,34 +131,23 @@ describe("parseGitHubRemote", () => {
 });
 
 describe("normalizeGitHubHost", () => {
-  it("accepts hostname only", () => {
-    expect(normalizeGitHubHost("ghe.example.com")).toBe("ghe.example.com");
-  });
-
-  it("accepts hostname with port", () => {
-    expect(normalizeGitHubHost("ghe.example.com:8443")).toBe("ghe.example.com:8443");
-  });
-
-  it("rejects protocol", () => {
-    expect(normalizeGitHubHost("https://ghe.example.com")).toBeNull();
-  });
-
-  it("rejects path", () => {
-    expect(normalizeGitHubHost("ghe.example.com/foo")).toBeNull();
+  it.each([
+    ["accepts hostname only", "ghe.example.com", "ghe.example.com"],
+    ["accepts hostname with port", "ghe.example.com:8443", "ghe.example.com:8443"],
+    ["rejects protocol", "https://ghe.example.com", null],
+    ["rejects path", "ghe.example.com/foo", null],
+  ])("%s", (_label, host, expected) => {
+    expect(normalizeGitHubHost(host)).toBe(expected);
   });
 });
 
 describe("isTrustedGitHubHost", () => {
-  it("always trusts github.com", () => {
-    expect(isTrustedGitHubHost("github.com", null)).toBe(true);
-  });
-
-  it("trusts configured enterprise host", () => {
-    expect(isTrustedGitHubHost("ghe.example.com", "ghe.example.com")).toBe(true);
-  });
-
-  it("rejects unconfigured hosts", () => {
-    expect(isTrustedGitHubHost("gitlab.com", "ghe.example.com")).toBe(false);
+  it.each([
+    ["always trusts github.com", "github.com", null, true],
+    ["trusts configured enterprise host", "ghe.example.com", "ghe.example.com", true],
+    ["rejects unconfigured hosts", "gitlab.com", "ghe.example.com", false],
+  ])("%s", (_label, host, trustedHost, expected) => {
+    expect(isTrustedGitHubHost(host, trustedHost)).toBe(expected);
   });
 });
 
@@ -255,42 +159,18 @@ describe("getGitHubToken", () => {
     delete process.env.GITHUB_TOKEN;
   });
 
-  it("returns the token when env var is set", () => {
-    process.env.TEST_GH_TOKEN = "ghp_abc123";
-    expect(getGitHubToken("TEST_GH_TOKEN")).toBe("ghp_abc123");
-  });
-
-  it("trims whitespace from the token", () => {
-    process.env.TEST_GH_TOKEN = "  ghp_abc123  ";
-    expect(getGitHubToken("TEST_GH_TOKEN")).toBe("ghp_abc123");
-  });
-
-  it("returns null when env var is missing", () => {
-    expect(getGitHubToken("TEST_GH_TOKEN")).toBeNull();
-  });
-
-  it("returns null when env var is empty string", () => {
-    process.env.TEST_GH_TOKEN = "";
-    expect(getGitHubToken("TEST_GH_TOKEN")).toBeNull();
-  });
-
-  it("returns null when env var is whitespace only", () => {
-    process.env.TEST_GH_TOKEN = "   ";
-    expect(getGitHubToken("TEST_GH_TOKEN")).toBeNull();
-  });
-
-  it("reads from GITHUB_TOKEN by default name", () => {
-    process.env.GITHUB_TOKEN = "ghp_default";
-    expect(getGitHubToken("GITHUB_TOKEN")).toBe("ghp_default");
-  });
-
-  it("reads from a custom env var name", () => {
-    process.env.TEST_GH_TOKEN = "ghp_custom";
-    expect(getGitHubToken("TEST_GH_TOKEN")).toBe("ghp_custom");
+  it.each([
+    ["returns the token when env var is set", "TEST_GH_TOKEN", "ghp_abc123", "ghp_abc123"],
+    ["trims whitespace from the token", "TEST_GH_TOKEN", "  ghp_abc123  ", "ghp_abc123"],
+    ["returns null when env var is empty string", "TEST_GH_TOKEN", "", null],
+    ["returns null when env var is whitespace only", "TEST_GH_TOKEN", "   ", null],
+    ["reads from GITHUB_TOKEN by default name", "GITHUB_TOKEN", "ghp_default", "ghp_default"],
+  ])("%s", (_label, envVarName, value, expected) => {
+    process.env[envVarName] = value;
+    expect(getGitHubToken(envVarName)).toBe(expected);
   });
 
   it("returns null when env var is missing", () => {
-    delete process.env.TEST_GH_TOKEN;
     expect(getGitHubToken("TEST_GH_TOKEN")).toBeNull();
   });
 });
@@ -321,60 +201,23 @@ describe("getTokenSource", () => {
 // ── mapRunToBadge ─────────────────────────────────────────────────────────
 
 describe("mapRunToBadge", () => {
-  it('maps completed + success → "pass"', () => {
-    expect(mapRunToBadge("completed", "success")).toBe("pass");
-  });
-
-  it('maps completed + failure → "fail"', () => {
-    expect(mapRunToBadge("completed", "failure")).toBe("fail");
-  });
-
-  it('maps completed + cancelled → "unknown" (not a build failure)', () => {
-    expect(mapRunToBadge("completed", "cancelled")).toBe("unknown");
-  });
-
-  it('maps completed + timed_out → "fail"', () => {
-    expect(mapRunToBadge("completed", "timed_out")).toBe("fail");
-  });
-
-  it('maps completed + startup_failure → "fail"', () => {
-    expect(mapRunToBadge("completed", "startup_failure")).toBe("fail");
-  });
-
-  it('maps completed + skipped → "unknown"', () => {
-    expect(mapRunToBadge("completed", "skipped")).toBe("unknown");
-  });
-
-  it('maps completed + neutral → "unknown"', () => {
-    expect(mapRunToBadge("completed", "neutral")).toBe("unknown");
-  });
-
-  it('maps completed + action_required → "unknown"', () => {
-    expect(mapRunToBadge("completed", "action_required")).toBe("unknown");
-  });
-
-  it('maps completed + null → "unknown"', () => {
-    expect(mapRunToBadge("completed", null)).toBe("unknown");
-  });
-
-  it('maps in_progress → "running"', () => {
-    expect(mapRunToBadge("in_progress", null)).toBe("running");
-  });
-
-  it('maps queued → "running"', () => {
-    expect(mapRunToBadge("queued", null)).toBe("running");
-  });
-
-  it('maps waiting → "running"', () => {
-    expect(mapRunToBadge("waiting", null)).toBe("running");
-  });
-
-  it('maps requested → "running"', () => {
-    expect(mapRunToBadge("requested", null)).toBe("running");
-  });
-
-  it('maps pending → "running"', () => {
-    expect(mapRunToBadge("pending", null)).toBe("running");
+  it.each([
+    ["completed", "success", "pass"],
+    ["completed", "failure", "fail"],
+    ["completed", "cancelled", "unknown"], // not a build failure
+    ["completed", "timed_out", "fail"],
+    ["completed", "startup_failure", "fail"],
+    ["completed", "skipped", "unknown"],
+    ["completed", "neutral", "unknown"],
+    ["completed", "action_required", "unknown"],
+    ["completed", null, "unknown"],
+    ["in_progress", null, "running"],
+    ["queued", null, "running"],
+    ["waiting", null, "running"],
+    ["requested", null, "running"],
+    ["pending", null, "running"],
+  ] as const)("maps %s + %p → %p", (status, conclusion, expected) => {
+    expect(mapRunToBadge(status, conclusion)).toBe(expected);
   });
 });
 
@@ -602,13 +445,33 @@ describe("fetchRunJobs", () => {
     expect(jobs.map(j => j.name)).toEqual(["a", "b"]);
     expect(n).toBe(2);
   });
+
+  it("reports incomplete jobs instead of a silent partial list at the page limit", async () => {
+    let n = 0;
+    mockFetch(
+      mock(async () => {
+        n++;
+        return new Response(JSON.stringify({ jobs: [makeApiJob({ id: n, name: `job-${n}` })] }), {
+          status: 200,
+          headers: { Link: `<https://api.github.com/repos/o/r/actions/runs/123/jobs?page=${n + 1}>; rel="next"` },
+        });
+      }),
+    );
+    const { jobs, error } = await fetchRunJobs(TEST_REPO, TEST_TOKEN, 123);
+    expect(error).toBe(BANNER.github.incomplete);
+    expect(jobs).toHaveLength(MAX_JOB_PAGES);
+    expect(n).toBe(MAX_JOB_PAGES);
+  });
 });
 
 describe("isGitHubJobsFieldSchemaError", () => {
   it("matches GHE WorkflowRun.jobs schema errors", () => {
     expect(isGitHubJobsFieldSchemaError("Field 'jobs' doesn't exist on type 'WorkflowRun'")).toBe(true);
     expect(isGitHubJobsFieldSchemaError('Field "jobs" does not exist on type WorkflowRun')).toBe(true);
+    expect(isGitHubJobsFieldSchemaError("Field jobs does not exist on type WorkFloRun")).toBe(true);
+    expect(isGitHubJobsFieldSchemaError('Cannot query field "jobs" on type "WorkflowRun".')).toBe(true);
     expect(isGitHubJobsFieldSchemaError("Not Found")).toBe(false);
+    expect(isGitHubJobsFieldSchemaError("Field 'steps' doesn't exist on type 'WorkflowRun'")).toBe(false);
   });
 });
 
@@ -864,6 +727,34 @@ describe("fetchCIDataForSHAs", () => {
     expect(query).not.toContain("jobs(");
   });
 
+  it("handles ten repeated unquoted jobs schema errors without reporting a failure", async () => {
+    const queries: string[] = [];
+    mockFetch(
+      mock(async (_url: string, init: RequestInit) => {
+        queries.push(JSON.parse(init.body as string).query as string);
+        return new Response(
+          JSON.stringify(
+            queries.length === 1
+              ? {
+                  errors: Array.from({ length: 10 }, () => ({
+                    message: "Field jobs does not exist on type WorkFloRun",
+                  })),
+                }
+              : makeBatchResponse([{ sha: "abc", suites: [{ wfRunId: 1 }] }]),
+          ),
+          { status: 200 },
+        );
+      }),
+    );
+    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
+    expect(result.error).toBeNull();
+    expect(result.jobsUnsupported).toBe(true);
+    expect(result.data).toHaveLength(1);
+    expect(queries).toHaveLength(2);
+    expect(queries[1]).not.toContain("jobs(");
+    expect(getDebugEvents().filter(event => event.status === "error")).toEqual([]);
+  });
+
   it("keeps runs when jobs schema errors arrive with data", async () => {
     const response = {
       ...makeBatchResponse([{ sha: "abc", suites: [{ wfRunId: 3, wfName: "CI" }] }]),
@@ -882,6 +773,86 @@ describe("fetchCIDataForSHAs", () => {
     expect(result.jobsUnsupported).toBe(true);
     expect(result.data).toHaveLength(1);
     expect(result.data[0].id).toBe(3);
+  });
+
+  it.each([1, 2])("stops querying jobs after partial schema errors on page %i", async rejectedPage => {
+    const queries: string[] = [];
+    mockFetch(
+      mock(async (_url: string, init: RequestInit) => {
+        queries.push(JSON.parse(init.body as string).query as string);
+        const page = queries.length;
+        const response = makeBatchResponse([{ sha: "abc", suites: [{ wfRunId: page }] }]);
+        const commit = response.data.repository.c0 as {
+          checkSuites: { pageInfo: { hasNextPage: boolean; endCursor: string | null } };
+        };
+        commit.checkSuites.pageInfo = { hasNextPage: page < 3, endCursor: page < 3 ? `PAGE${page}` : null };
+        return new Response(
+          JSON.stringify({
+            ...response,
+            ...(page === rejectedPage
+              ? { errors: [{ message: "Field jobs does not exist on type WorkflowRun" }] }
+              : {}),
+          }),
+          { status: 200 },
+        );
+      }),
+    );
+    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
+    expect(result.error).toBeNull();
+    expect(result.jobsUnsupported).toBe(true);
+    expect(result.data.map(run => run.id)).toEqual([1, 2, 3]);
+    expect(queries).toHaveLength(3);
+    queries.forEach((query, index) => {
+      expect(query.includes("jobs(")).toBe(index < rejectedPage);
+    });
+    expect(getDebugEvents().filter(event => event.status === "error")).toEqual([]);
+  });
+
+  it("keeps check suites found before the page limit and logs the truncation", async () => {
+    let page = 0;
+    mockFetch(
+      mock(async () => {
+        page++;
+        const response = makeBatchResponse([{ sha: "abc", suites: [{ wfRunId: page }] }]);
+        const commit = response.data.repository.c0 as {
+          checkSuites: { pageInfo: { hasNextPage: boolean; endCursor: string | null } };
+        };
+        commit.checkSuites.pageInfo = { hasNextPage: true, endCursor: `PAGE${page}` };
+        return new Response(JSON.stringify(response), { status: 200 });
+      }),
+    );
+    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
+    expect(result.error).toBeNull();
+    expect(result.data).toHaveLength(MAX_CHECK_SUITE_PAGES);
+    expect(page).toBe(MAX_CHECK_SUITE_PAGES);
+    expect(getDebugEvents().some(event => event.message.includes("Check suites truncated"))).toBe(true);
+  });
+
+  it("keeps unrelated GraphQL failures visible and deduplicates their messages", async () => {
+    let calls = 0;
+    mockFetch(
+      mock(async () => {
+        calls++;
+        return new Response(
+          JSON.stringify({
+            errors: [
+              { message: "Field jobs does not exist on type WorkflowRun" },
+              { message: "Not Found" },
+              { message: "Not Found" },
+            ],
+          }),
+          { status: 200 },
+        );
+      }),
+    );
+    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["abc"]);
+    expect(result.error).toBe(BANNER.github.fetchFailed);
+    expect(result.jobsUnsupported).not.toBe(true);
+    expect(calls).toBe(1);
+    const errors = getDebugEvents().filter(event => event.status === "error");
+    expect(errors).toHaveLength(1);
+    expect(errors[0].message.match(/Not Found/g)).toHaveLength(1);
+    expect(errors[0].message).toContain("Field jobs does not exist");
   });
 
   it("returns empty result on network error", async () => {

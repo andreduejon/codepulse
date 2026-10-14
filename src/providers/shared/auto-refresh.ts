@@ -2,6 +2,10 @@ export const PROVIDER_LIMIT_OPTIONS = [10, 20, 50] as const;
 export type ProviderLimit = (typeof PROVIDER_LIMIT_OPTIONS)[number];
 export const DEFAULT_PROVIDER_LIMIT: ProviderLimit = 20;
 
+export const PROVIDER_CACHE_LIMIT_OPTIONS = [10, 20, 50, 100, 200, 500] as const;
+export type ProviderCacheLimit = (typeof PROVIDER_CACHE_LIMIT_OPTIONS)[number];
+export const DEFAULT_PROVIDER_CACHE_LIMIT: ProviderCacheLimit = 20;
+
 export const PROVIDER_AUTO_REFRESH_OPTIONS = ["off", "2m", "5m", "10m"] as const;
 export const PROVIDER_AUTO_REFRESH_SECONDS = [0, 120, 300, 600] as const;
 export type ProviderAutoRefreshSeconds = (typeof PROVIDER_AUTO_REFRESH_SECONDS)[number];
@@ -23,12 +27,20 @@ export function isProviderLimit(value: unknown): value is ProviderLimit {
   return value === 10 || value === 20 || value === 50;
 }
 
+export function isProviderCacheLimit(value: unknown): value is ProviderCacheLimit {
+  return PROVIDER_CACHE_LIMIT_OPTIONS.some(limit => limit === value);
+}
+
 export function isProviderAutoRefreshSeconds(value: unknown): value is ProviderAutoRefreshSeconds {
   return value === 0 || value === 120 || value === 300 || value === 600;
 }
 
 export function cycleProviderLimit(value: string): ProviderLimit {
   return value === "10" ? 10 : value === "50" ? 50 : 20;
+}
+
+export function cycleProviderCacheLimit(value: string): ProviderCacheLimit {
+  return PROVIDER_CACHE_LIMIT_OPTIONS.find(limit => String(limit) === value) ?? DEFAULT_PROVIDER_CACHE_LIMIT;
 }
 
 export function cycleAutoRefreshSeconds(value: string): ProviderAutoRefreshSeconds {

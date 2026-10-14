@@ -11,6 +11,7 @@ import {
 import { BANNER, debugError } from "../../debug/banner";
 import { collectTopSHAs } from "../github-actions/sha-selection";
 import { sleep } from "../shared/http";
+import { persistMergedSnapshots } from "../shared/sha-sqlite-cache";
 import { useProviderFetchLifecycle } from "../shared/use-provider-fetch-lifecycle";
 import {
   applyOpenShiftWatchEvent,
@@ -147,6 +148,7 @@ export function useOpenShift(opts: {
   actions: AppActions;
   config?: Partial<OpenShiftProviderConfig> | Accessor<Partial<OpenShiftProviderConfig>>;
   cacheRoot?: string;
+  suspended?: Accessor<boolean>;
 }): UseOpenShiftResult {
   const { state, actions } = opts;
   const configAccessor: Accessor<Partial<OpenShiftProviderConfig>> =
@@ -209,6 +211,7 @@ export function useOpenShift(opts: {
 
   const lifecycle = useProviderFetchLifecycle({
     state,
+    suspended: opts.suspended,
     providerId: "openshift",
     skipShaBackground: true,
     identity: () => {
@@ -236,7 +239,7 @@ export function useOpenShift(opts: {
     },
     runRefresh: async ({ signal, showStatus, epoch }) => {
       await runBuildInventory({ signal, showStatus, epoch });
-      if (showStatus) setWatchEpoch(value => value + 1);
+      if (showStatus && !signal?.aborted && epoch === lifecycle.getEpoch()) setWatchEpoch(value => value + 1);
     },
     onResetCaches: () => {
       commits.clear();
@@ -252,12 +255,14 @@ export function useOpenShift(opts: {
   });
 
   async function hydrateCachedCandidates(repoPath: string, epoch: number): Promise<void> {
+    if (!lifecycle.isCurrent(epoch, repoPath)) return;
     const cached = await disk.list(repoPath);
     if (!lifecycle.isCurrent(epoch, repoPath)) return;
     if (cached.length === 0) return;
     const hints = selectOpenShiftCandidateSHAs(collectTopSHAs(state.graphRows(), config.fetchDepth), cached);
     let changed = false;
     for (const sha of hints) {
+      if (!lifecycle.isCurrent(epoch, repoPath)) return;
       if (commits.has(sha)) continue;
       const entry = await disk.read(repoPath, sha);
       if (!lifecycle.isCurrent(epoch, repoPath)) return;
@@ -273,16 +278,18 @@ export function useOpenShift(opts: {
     data: Map<string, OpenShiftCommitData>,
     epoch: number,
   ): Promise<void> {
-    for (const [sha, commit] of data) {
-      const incoming = commit.namespaces
-        .flatMap(ns => ns.builds)
-        .map(toCachedBuild)
-        .filter((build): build is NonNullable<typeof build> => build !== null && isTerminalBuildStatus(build.status));
-      if (incoming.length === 0) continue;
-      const existing = await disk.read(repoPath, sha);
-      if (!lifecycle.isCurrent(epoch, repoPath)) return;
-      await disk.write(repoPath, { sha, builds: mergeById(existing?.builds ?? [], incoming) });
-    }
+    await persistMergedSnapshots(
+      disk,
+      repoPath,
+      [...data.keys()],
+      () => lifecycle.isCurrent(epoch, repoPath),
+      sha =>
+        (data.get(sha)?.namespaces ?? [])
+          .flatMap(ns => ns.builds)
+          .map(toCachedBuild)
+          .filter((build): build is NonNullable<typeof build> => build !== null && isTerminalBuildStatus(build.status)),
+      (sha, existing, incoming) => ({ sha, builds: mergeById(existing?.builds ?? [], incoming) }),
+    );
   }
 
   function eligibleSHAs(): Set<string> {
@@ -384,17 +391,18 @@ export function useOpenShift(opts: {
   }
 
   async function runWatchSession(signal: AbortSignal, epoch: number): Promise<void> {
+    const repoPath = state.repoPath();
     const token = getOpenShiftToken(config.tokenEnvVar);
     if (!token) return;
     const gen = ++watchGen;
     let delayMs = 1000;
     setLiveLabel("loading...");
     try {
-      while (!signal.aborted && epoch === lifecycle.getEpoch()) {
+      while (!signal.aborted && lifecycle.isCurrent(epoch, repoPath)) {
         try {
           setLiveLabel("loading...");
           const listed = await fetchOpenShiftResources(config, token, signal, "live", { commitShas: [] });
-          if (signal.aborted || epoch !== lifecycle.getEpoch()) return;
+          if (signal.aborted || !lifecycle.isCurrent(epoch, repoPath)) return;
           if (listed.error === BANNER.openshift.tokenExpired) {
             actions.setProviderStatus("openshift", providerError(BANNER.openshift.tokenExpired));
             return;
@@ -405,7 +413,7 @@ export function useOpenShift(opts: {
           const onAbort = () => child.abort();
           signal.addEventListener("abort", onAbort, { once: true });
           const onEvent = (event: Parameters<typeof applyOpenShiftWatchEvent>[1]) => {
-            if (!live.listed) return;
+            if (signal.aborted || !lifecycle.isCurrent(epoch, repoPath) || !live.listed) return;
             const result = applyOpenShiftWatchEvent(live.listed, event, config.commitShaAnnotation);
             if (result === "gone") {
               child.abort();
@@ -432,9 +440,9 @@ export function useOpenShift(opts: {
           const running = watches.filter((job): job is NonNullable<typeof job> => job !== null);
           setLiveLabel(running.length > 0 ? "live" : "");
           const results = running.length > 0 ? await Promise.all(running) : [];
-          if (!signal.aborted && epoch === lifecycle.getEpoch()) setLiveLabel("loading...");
+          if (!signal.aborted && lifecycle.isCurrent(epoch, repoPath)) setLiveLabel("loading...");
           signal.removeEventListener("abort", onAbort);
-          if (signal.aborted || epoch !== lifecycle.getEpoch()) return;
+          if (signal.aborted || !lifecycle.isCurrent(epoch, repoPath)) return;
           if (results.includes("auth")) {
             actions.setProviderStatus("openshift", providerError(BANNER.openshift.tokenExpired));
             return;
@@ -446,7 +454,7 @@ export function useOpenShift(opts: {
           delayMs = 1000;
           await sleep(delayMs, signal);
         } catch (err) {
-          if (signal.aborted || epoch !== lifecycle.getEpoch()) return;
+          if (signal.aborted || !lifecycle.isCurrent(epoch, repoPath)) return;
           debugError("OpenShift", err);
           setLiveLabel("loading...");
           try {
@@ -463,6 +471,10 @@ export function useOpenShift(opts: {
   }
 
   createEffect(() => {
+    if (opts.suspended?.()) {
+      setLiveLabel("");
+      return;
+    }
     configAccessor();
     state.repoPath();
     watchEpoch();
@@ -482,6 +494,7 @@ export function useOpenShift(opts: {
     },
     refresh: async () => lifecycle.fetchRefresh(undefined, true),
     fetchCommitDataForSHA: async (sha, force) => {
+      if (opts.suspended?.()) return;
       try {
         if (!adoptCommit(sha) && !force) return;
         if (force) {
@@ -501,6 +514,7 @@ export function useOpenShift(opts: {
     loadBuildLog: async (resource, force = false) => {
       const epoch = lifecycle.getEpoch();
       const repoPath = state.repoPath();
+      if (!lifecycle.isCurrent(epoch, repoPath)) return "";
       const sha = resource.commitSha;
       if (sha && isTerminalBuildStatus(resource.status) && !force) {
         const cached = await disk.readLog(repoPath, sha, resource.namespace, resource.name);
@@ -509,7 +523,9 @@ export function useOpenShift(opts: {
       }
       const token = getOpenShiftToken(config.tokenEnvVar);
       if (!token) throw new Error(unavailableMessage());
-      const log = await fetchOpenShiftBuildLog(config.serverUrl, token, resource.namespace, resource.name);
+      const log = await lifecycle.runRequest(signal =>
+        fetchOpenShiftBuildLog(config.serverUrl, token, resource.namespace, resource.name, signal),
+      );
       if (!lifecycle.isCurrent(epoch, repoPath)) return "";
       if (sha && isTerminalBuildStatus(resource.status) && lifecycle.isCurrent(epoch, repoPath)) {
         await disk.writeLog(repoPath, sha, resource.namespace, resource.name, log);
@@ -517,11 +533,20 @@ export function useOpenShift(opts: {
       return log;
     },
     loadPodLog: async (resource, container) => {
+      const epoch = lifecycle.getEpoch();
+      const repoPath = state.repoPath();
+      if (!lifecycle.isCurrent(epoch, repoPath)) return "";
       const token = getOpenShiftToken(config.tokenEnvVar);
       if (!token) throw new Error(unavailableMessage());
-      return fetchOpenShiftPodLog(config.serverUrl, token, resource.namespace, resource.name, container);
+      const log = await lifecycle.runRequest(signal =>
+        fetchOpenShiftPodLog(config.serverUrl, token, resource.namespace, resource.name, container, signal),
+      );
+      return lifecycle.isCurrent(epoch, repoPath) ? log : "";
     },
     followLog: async (resource, signal, onText) => {
+      const epoch = lifecycle.getEpoch();
+      const repoPath = state.repoPath();
+      if (!lifecycle.isCurrent(epoch, repoPath)) return;
       const token = getOpenShiftToken(config.tokenEnvVar);
       if (!token) throw new Error(unavailableMessage());
       let acc = "";
@@ -529,15 +554,21 @@ export function useOpenShift(opts: {
         resource.kind === "Pod"
           ? openShiftPodLogUrl(config.serverUrl, resource.namespace, resource.name, undefined, true)
           : openShiftBuildLogUrl(config.serverUrl, resource.namespace, resource.name, true);
-      await followOpenShiftLog(url, token, signal, chunk => {
-        acc = appendOpenShiftLogFollow(acc, chunk);
-        onText(acc);
-      });
+      await lifecycle.runRequest(
+        signal =>
+          followOpenShiftLog(url, token, signal, chunk => {
+            if (signal.aborted || !lifecycle.isCurrent(epoch, repoPath)) return;
+            acc = appendOpenShiftLogFollow(acc, chunk);
+            onText(acc);
+          }),
+        signal,
+      );
     },
     loadResourceObject: async resource => {
       const epoch = lifecycle.getEpoch();
       const repoPath = state.repoPath();
       if (resource.object !== undefined) return resource.object;
+      if (!lifecycle.isCurrent(epoch, repoPath)) return null;
       if (resource.kind === "Build" && resource.commitSha && isTerminalBuildStatus(resource.status)) {
         const entry = await disk.read(repoPath, resource.commitSha);
         if (!lifecycle.isCurrent(epoch, repoPath)) return null;
@@ -548,7 +579,10 @@ export function useOpenShift(opts: {
       }
       const token = getOpenShiftToken(config.tokenEnvVar);
       if (!token) throw new Error(unavailableMessage());
-      return fetchOpenShiftObject(config.serverUrl, token, resource);
+      const object = await lifecycle.runRequest(signal =>
+        fetchOpenShiftObject(config.serverUrl, token, resource, signal),
+      );
+      return lifecycle.isCurrent(epoch, repoPath) ? object : null;
     },
   };
 }

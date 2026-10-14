@@ -5,7 +5,8 @@ import { type CliRenderer, MouseButton, type Renderable, type ScrollBoxRenderabl
 import { useKeyboard, useRenderer } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import packageJson from "../../package.json";
-import { type KnownRepoInfo, removeRepoConfig } from "../config";
+import type { KnownRepoInfo } from "../config";
+import { removeRepoConfig } from "../config-write";
 import { useT } from "../hooks/use-t";
 import type { KeyboardScope } from "../keyboard/scope";
 import {
@@ -280,7 +281,7 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
                         <Show
                           when={row.kind === "path-input"}
                           fallback={
-                            <text wrapMode="none" truncate fg={t().foregroundMuted}>
+                            <text wrapMode="none" truncate fg={t().accent}>
                               {row.kind === "group" ? <strong>{row.label}</strong> : ""}
                             </text>
                           }

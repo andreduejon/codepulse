@@ -1,15 +1,26 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { chmod, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, copyFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { delimiter, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
+import { closeProviderCaches } from "../shared/sha-sqlite-cache";
 import { SnykCache } from "./cache";
-import { killSnykProcessGroup, runSnykCommand, type SnykCommandRunner, scanSnykCommit } from "./scanner";
+import {
+  killSnykProcessGroup,
+  removeOrphanedScanWorktrees,
+  runSnykCommand,
+  type SnykCommandRunner,
+  scanSnykCommit,
+} from "./scanner";
 import type { SnykScanResult } from "./types";
 
 const SHA = "a".repeat(40);
 const roots: string[] = [];
 
 afterEach(async () => {
+  for (const path of roots) {
+    closeProviderCaches(path);
+    closeProviderCaches(join(path, "cache"));
+  }
   await Promise.all(roots.splice(0).map(path => rm(path, { recursive: true, force: true })));
 });
 
@@ -434,5 +445,31 @@ setInterval(() => {}, 1000);
       scanSnykCommit({ repoPath: "/repo", sha: SHA, signal: controller.signal }, { cacheRoot, runCommand: runner }),
     ).rejects.toMatchObject({ name: "AbortError" });
     expect(commands.some(command => command.slice(0, 4).join(" ") === "git worktree remove --force")).toBe(true);
+  });
+
+  test("removes only scan worktrees whose codepulse process is gone", async () => {
+    const testRoot = await root();
+    const repoPath = join(testRoot, "repo");
+    await mkdir(repoPath);
+    await runLocal(["git", "init"], repoPath);
+    await runLocal(
+      ["git", "-c", "user.name=T", "-c", "user.email=t@example.test", "commit", "--allow-empty", "-m", "i"],
+      repoPath,
+    );
+    const exited = Bun.spawn(["git", "--version"], { stdout: "ignore" });
+    await exited.exited;
+    const orphan = join(testRoot, `codepulse-snyk-${exited.pid}-old`, "worktree");
+    const live = join(testRoot, `codepulse-snyk-${process.ppid}-now`, "worktree");
+    const user = join(testRoot, "user-worktree");
+    for (const path of [orphan, live, user]) await runLocal(["git", "worktree", "add", "--detach", path], repoPath);
+
+    await removeOrphanedScanWorktrees(repoPath);
+
+    const listed = await runLocal(["git", "worktree", "list", "--porcelain"], repoPath);
+    expect(listed).not.toContain(`codepulse-snyk-${exited.pid}-old`);
+    expect(listed).toContain(`codepulse-snyk-${process.ppid}-now`);
+    expect(listed).toContain("user-worktree");
+    await expect(stat(dirname(orphan))).rejects.toMatchObject({ code: "ENOENT" });
+    expect((await stat(live)).isDirectory()).toBe(true);
   });
 });

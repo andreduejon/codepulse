@@ -11,7 +11,8 @@ creating or modifying a GitHub Release; publication requires a pushed version ta
 
 ## Prepare
 
-1. Update `package.json`, `bun.lock`, and `CHANGELOG.md` to the same version.
+1. Update `package.json` and `CHANGELOG.md` to the same version. Keep `bun.lock`
+   synchronized with dependencies; it does not record the root package version.
 2. Update user documentation for changed controls and configuration. Run local
    checks and build the host-platform executable with its embedded-asset smoke test:
 

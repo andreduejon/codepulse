@@ -4,7 +4,7 @@ import { type BoxRenderable, InputRenderable, type Renderable, RGBA, ScrollBoxRe
 import { MouseButtons } from "@opentui/core/testing";
 import { testRender } from "@opentui/solid";
 import { createSignal, Show } from "solid-js";
-import * as config from "../config";
+import * as configWrite from "../config-write";
 import { createThemeState, ThemeContext } from "../context/theme";
 import ProjectSelector from "./project-selector";
 
@@ -62,12 +62,14 @@ test("repo selector hover, mouse selection, path draft, Escape and keyboard shar
     setup.mockInput.pressKey(name);
     await setup.flush();
   };
-  const remove = spyOn(config, "removeRepoConfig").mockReturnValue(true);
+  const remove = spyOn(configWrite, "removeRepoConfig").mockReturnValue(true);
   const destroy = spyOn(setup.renderer, "destroy");
   try {
     await setup.flush();
     const input = descendants(setup.renderer.root).find(node => node instanceof InputRenderable) as InputRenderable;
     const highlight = RGBA.fromHex(theme.theme().backgroundElement);
+    expect(span("Group A")?.fg).toEqual(RGBA.fromHex(theme.theme().accent));
+    expect(span("Group B")?.fg).toEqual(RGBA.fromHex(theme.theme().accent));
     expect(span("Alpha")?.fg).toEqual(RGBA.fromHex(theme.theme().accent));
     await move("Beta");
     expect(span("Beta")?.bg).toEqual(highlight);

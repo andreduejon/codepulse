@@ -283,41 +283,18 @@ describe("parseTagLine", () => {
 });
 
 describe("parseTrackInfo", () => {
-  test("ahead only", () => {
-    const result = parseTrackInfo("ahead 3");
-    expect(result.ahead).toBe(3);
-    expect(result.behind).toBeUndefined();
-  });
-
-  test("behind only", () => {
-    const result = parseTrackInfo("behind 5");
-    expect(result.ahead).toBeUndefined();
-    expect(result.behind).toBe(5);
-  });
-
-  test("ahead and behind", () => {
-    const result = parseTrackInfo("ahead 3, behind 2");
-    expect(result.ahead).toBe(3);
-    expect(result.behind).toBe(2);
-  });
-
-  test("empty string (up to date)", () => {
-    const result = parseTrackInfo("");
-    expect(result.ahead).toBeUndefined();
-    expect(result.behind).toBeUndefined();
-  });
-
-  test("whitespace only", () => {
-    const result = parseTrackInfo("   ");
-    expect(result.ahead).toBeUndefined();
-    expect(result.behind).toBeUndefined();
-  });
-
-  test("gone (upstream deleted)", () => {
+  test.each([
+    ["ahead only", "ahead 3", 3, undefined],
+    ["behind only", "behind 5", undefined, 5],
+    ["ahead and behind", "ahead 3, behind 2", 3, 2],
+    ["empty string (up to date)", "", undefined, undefined],
+    ["whitespace only", "   ", undefined, undefined],
     // git outputs "gone" when the upstream branch has been deleted
-    const result = parseTrackInfo("gone");
-    expect(result.ahead).toBeUndefined();
-    expect(result.behind).toBeUndefined();
+    ["gone (upstream deleted)", "gone", undefined, undefined],
+  ])("%s", (_label, track, ahead, behind) => {
+    const result = parseTrackInfo(track);
+    expect(result.ahead).toBe(ahead);
+    expect(result.behind).toBe(behind);
   });
 });
 
@@ -425,46 +402,24 @@ describe("parseStatusPorcelain", () => {
     expect(parseStatusPorcelain("  \n  ")).toBeNull();
   });
 
-  test("counts staged files (index column)", () => {
-    const output = "M  src/app.ts\nA  src/new.ts\nD  old.ts\n";
-    const result = parseStatusPorcelain(output);
-    assertNotNull(result, "result");
-    expect(result.staged).toBe(3);
-    expect(result.unstaged).toBe(0);
-    expect(result.untracked).toBe(0);
-  });
-
-  test("counts unstaged files (worktree column)", () => {
-    const output = " M src/app.ts\n M src/other.ts\n";
-    const result = parseStatusPorcelain(output);
-    assertNotNull(result, "result");
-    expect(result.staged).toBe(0);
-    expect(result.unstaged).toBe(2);
-    expect(result.untracked).toBe(0);
-  });
-
-  test("counts untracked files", () => {
-    const output = "?? newfile.ts\n?? another.ts\n";
-    const result = parseStatusPorcelain(output);
-    assertNotNull(result, "result");
-    expect(result.staged).toBe(0);
-    expect(result.unstaged).toBe(0);
-    expect(result.untracked).toBe(2);
-  });
-
-  test("handles mixed staged + unstaged + untracked", () => {
-    const output = [
-      "M  staged-only.ts",
-      " M unstaged-only.ts",
-      "MM both.ts", // staged AND unstaged
-      "?? newfile.ts",
-    ].join("\n");
-    const result = parseStatusPorcelain(output);
-    assertNotNull(result, "result");
+  test.each([
+    ["counts staged files (index column)", "M  src/app.ts\nA  src/new.ts\nD  old.ts\n", 3, 0, 0],
+    ["counts unstaged files (worktree column)", " M src/app.ts\n M src/other.ts\n", 0, 2, 0],
+    ["counts untracked files", "?? newfile.ts\n?? another.ts\n", 0, 0, 2],
     // "M " = staged, " M" = unstaged, "MM" = both staged+unstaged, "??" = untracked
-    expect(result.staged).toBe(2); // M_ and MM
-    expect(result.unstaged).toBe(2); // _M and MM
-    expect(result.untracked).toBe(1);
+    [
+      "handles mixed staged + unstaged + untracked",
+      "M  staged-only.ts\n M unstaged-only.ts\nMM both.ts\n?? newfile.ts",
+      2,
+      2,
+      1,
+    ],
+  ])("%s", (_label, output, staged, unstaged, untracked) => {
+    const result = parseStatusPorcelain(output);
+    assertNotNull(result, "result");
+    expect(result.staged).toBe(staged);
+    expect(result.unstaged).toBe(unstaged);
+    expect(result.untracked).toBe(untracked);
   });
 
   test("returns null when all lines are empty or too short", () => {
@@ -601,38 +556,24 @@ describe("computeFileWidths", () => {
 });
 
 describe("resolveRenamePath", () => {
-  test("plain path — no braces, returned as-is", () => {
-    expect(resolveRenamePath("src/git/repo.ts")).toBe("src/git/repo.ts");
-  });
-
-  test("top-level rename {old => new}", () => {
-    expect(resolveRenamePath("{old.txt => new.txt}")).toBe("new.txt");
-  });
-
-  test("rename within directory dir/{old => new}", () => {
-    expect(resolveRenamePath("src/components/dialogs/{operations-dialog.tsx => menu-dialog.tsx}")).toBe(
+  test.each([
+    ["plain path — no braces, returned as-is", "src/git/repo.ts", "src/git/repo.ts"],
+    ["top-level rename {old => new}", "{old.txt => new.txt}", "new.txt"],
+    [
+      "rename within directory dir/{old => new}",
+      "src/components/dialogs/{operations-dialog.tsx => menu-dialog.tsx}",
       "src/components/dialogs/menu-dialog.tsx",
-    );
-  });
-
-  test("directory move {src/old => dst/new}/file.txt", () => {
-    expect(resolveRenamePath("{src/old => dst/new}/file.txt")).toBe("dst/new/file.txt");
-  });
-
-  test("move to subdirectory with shared prefix dir/{old.jar => sub/new.jar}", () => {
-    expect(
-      resolveRenamePath(
-        "cicd/{api/openapi-generator-cli-7.9.0.jar => openapi-generator/openapi-generator-cli-7.10.0.jar}",
-      ),
-    ).toBe("cicd/openapi-generator/openapi-generator-cli-7.10.0.jar");
-  });
-
-  test("rename with empty old part { => new}/file (new file added to subdir)", () => {
-    expect(resolveRenamePath("{ => src}/file.ts")).toBe("src/file.ts");
-  });
-
-  test("rename with empty new part {old => }/file (moved to root)", () => {
-    expect(resolveRenamePath("{src => }/file.ts")).toBe("file.ts");
+    ],
+    ["directory move {src/old => dst/new}/file.txt", "{src/old => dst/new}/file.txt", "dst/new/file.txt"],
+    [
+      "move to subdirectory with shared prefix dir/{old.jar => sub/new.jar}",
+      "cicd/{api/openapi-generator-cli-7.9.0.jar => openapi-generator/openapi-generator-cli-7.10.0.jar}",
+      "cicd/openapi-generator/openapi-generator-cli-7.10.0.jar",
+    ],
+    ["rename with empty old part { => new}/file (new file added to subdir)", "{ => src}/file.ts", "src/file.ts"],
+    ["rename with empty new part {old => }/file (moved to root)", "{src => }/file.ts", "file.ts"],
+  ])("%s", (_label, path, expected) => {
+    expect(resolveRenamePath(path)).toBe(expected);
   });
 });
 

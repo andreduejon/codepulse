@@ -8,7 +8,7 @@ import { MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH } from "./constants";
 import { createThemeState } from "./context/theme";
 
 export default function App(props: Readonly<AppProps>) {
-  const themeState = createThemeState(props.themeName);
+  const themeState = createThemeState(props.themeName, props.customThemes);
 
   const mode = props.startupMode;
 

@@ -444,34 +444,19 @@ filename file.txt
 });
 
 describe("formatHunkHeader", () => {
-  test("formats a standard hunk header with both ranges", () => {
-    const result = formatHunkHeader("@@ -5,6 +12,8 @@");
-    expect(result).toBe("Lines 5\u201310 \u2192 12\u201319");
-  });
-
-  test("includes function context when present", () => {
-    const result = formatHunkHeader("@@ -10,6 +10,7 @@ function main() {");
-    expect(result).toBe("Lines 10\u201315 \u2192 10\u201316 \u00b7 function main() {");
-  });
-
-  test("handles count of 1 (single line)", () => {
-    const result = formatHunkHeader("@@ -3,1 +3,1 @@");
-    expect(result).toBe("Lines 3 \u2192 3");
-  });
-
-  test("handles implicit count of 1 (no comma)", () => {
-    const result = formatHunkHeader("@@ -3 +3 @@");
-    expect(result).toBe("Lines 3 \u2192 3");
-  });
-
-  test("handles count of 0 (empty range)", () => {
-    const result = formatHunkHeader("@@ -5,0 +5,2 @@");
-    expect(result).toBe("Lines (none) \u2192 5\u20136");
-  });
-
-  test("falls back to raw string for unparseable input", () => {
-    const raw = "not a hunk header";
-    expect(formatHunkHeader(raw)).toBe(raw);
+  test.each([
+    ["formats a standard hunk header with both ranges", "@@ -5,6 +12,8 @@", "Lines 5\u201310 \u2192 12\u201319"],
+    [
+      "includes function context when present",
+      "@@ -10,6 +10,7 @@ function main() {",
+      "Lines 10\u201315 \u2192 10\u201316 \u00b7 function main() {",
+    ],
+    ["handles count of 1 (single line)", "@@ -3,1 +3,1 @@", "Lines 3 \u2192 3"],
+    ["handles implicit count of 1 (no comma)", "@@ -3 +3 @@", "Lines 3 \u2192 3"],
+    ["handles count of 0 (empty range)", "@@ -5,0 +5,2 @@", "Lines (none) \u2192 5\u20136"],
+    ["falls back to raw string for unparseable input", "not a hunk header", "not a hunk header"],
+  ])("%s", (_label, header, expected) => {
+    expect(formatHunkHeader(header)).toBe(expected);
   });
 });
 
@@ -482,28 +467,13 @@ function dl(kind: DisplayLineKind): { kind: DisplayLineKind } {
 }
 
 describe("buildRowOffsets", () => {
-  test("empty array produces single zero entry", () => {
-    const offsets = buildRowOffsets([]);
-    expect(offsets).toEqual([0]);
-  });
-
-  test("all regular lines (height 1 each)", () => {
-    const lines = [dl("context"), dl("add"), dl("delete"), dl("hunk-header")];
-    const offsets = buildRowOffsets(lines);
-    expect(offsets).toEqual([0, 1, 2, 3, 4]);
-  });
-
-  test("spacer lines are 1 row", () => {
-    const lines = [dl("context"), dl("spacer"), dl("add")];
-    const offsets = buildRowOffsets(lines);
-    // context=1row, spacer=1row, add=1row → [0, 1, 2, 3]
-    expect(offsets).toEqual([0, 1, 2, 3]);
-  });
-
-  test("multiple spacers", () => {
-    const lines = [dl("spacer"), dl("spacer")];
-    const offsets = buildRowOffsets(lines);
-    expect(offsets).toEqual([0, 1, 2]);
+  test.each([
+    ["empty array produces single zero entry", [], [0]],
+    ["all regular lines (height 1 each)", [dl("context"), dl("add"), dl("delete"), dl("hunk-header")], [0, 1, 2, 3, 4]],
+    ["spacer lines are 1 row", [dl("context"), dl("spacer"), dl("add")], [0, 1, 2, 3]],
+    ["multiple spacers", [dl("spacer"), dl("spacer")], [0, 1, 2]],
+  ])("%s", (_label, lines, expected) => {
+    expect(buildRowOffsets(lines)).toEqual(expected);
   });
 
   test("total row count is last element", () => {
@@ -760,78 +730,40 @@ describe("expandWithContinuations", () => {
 // ── Gutter helpers ────────────────────────────────────────────────────
 
 describe("gutterWidth", () => {
-  test("width of 0 is 1 (string '0' has length 1)", () => {
-    expect(gutterWidth(0)).toBe(1);
-  });
-
-  test("width of 9 is 1", () => {
-    expect(gutterWidth(9)).toBe(1);
-  });
-
-  test("width of 10 is 2", () => {
-    expect(gutterWidth(10)).toBe(2);
-  });
-
-  test("width of 99 is 2", () => {
-    expect(gutterWidth(99)).toBe(2);
-  });
-
-  test("width of 100 is 3", () => {
-    expect(gutterWidth(100)).toBe(3);
-  });
-
-  test("width of 1000 is 4", () => {
-    expect(gutterWidth(1000)).toBe(4);
+  test.each([
+    [0, 1], // string '0' has length 1
+    [9, 1],
+    [10, 2],
+    [99, 2],
+    [100, 3],
+    [1000, 4],
+  ])("width of %p is %p", (maxLineNo, expected) => {
+    expect(gutterWidth(maxLineNo)).toBe(expected);
   });
 });
 
 describe("padLineNo", () => {
-  test("pads single digit to width 3", () => {
-    expect(padLineNo(5, 3)).toBe("  5");
-  });
-
-  test("exact width — no padding added", () => {
-    expect(padLineNo(42, 2)).toBe("42");
-  });
-
-  test("returns spaces when lineNo is undefined", () => {
-    expect(padLineNo(undefined, 4)).toBe("    ");
-  });
-
-  test("width 1, lineNo 1", () => {
-    expect(padLineNo(1, 1)).toBe("1");
-  });
-
-  test("width 0 with defined value produces unpadded number string", () => {
-    expect(padLineNo(7, 0)).toBe("7");
+  test.each([
+    ["pads single digit to width 3", 5, 3, "  5"],
+    ["exact width — no padding added", 42, 2, "42"],
+    ["returns spaces when lineNo is undefined", undefined, 4, "    "],
+    ["width 1, lineNo 1", 1, 1, "1"],
+    ["width 0 with defined value produces unpadded number string", 7, 0, "7"],
+  ])("%s", (_label, lineNo, width, expected) => {
+    expect(padLineNo(lineNo, width)).toBe(expected);
   });
 });
 
 describe("buildGutter", () => {
-  test("both line numbers present", () => {
-    const result = buildGutter({ oldLineNo: 3, newLineNo: 5 }, 2, 2);
-    expect(result).toBe(" 3  5");
-  });
-
-  test("only old line number (delete line)", () => {
-    const result = buildGutter({ oldLineNo: 10, newLineNo: undefined }, 2, 2);
-    expect(result).toBe("10   ");
-  });
-
-  test("only new line number (add line)", () => {
-    const result = buildGutter({ oldLineNo: undefined, newLineNo: 10 }, 2, 2);
-    expect(result).toBe("   10");
-  });
-
-  test("neither line number (hunk header / spacer)", () => {
+  test.each([
+    ["both line numbers present", { oldLineNo: 3, newLineNo: 5 }, 2, 2, " 3  5"],
+    ["only old line number (delete line)", { oldLineNo: 10, newLineNo: undefined }, 2, 2, "10   "],
+    ["only new line number (add line)", { oldLineNo: undefined, newLineNo: 10 }, 2, 2, "   10"],
     // padLineNo(undefined, 3) + " " + padLineNo(undefined, 3) = "   " + " " + "   " = 7 spaces
-    const result = buildGutter({ oldLineNo: undefined, newLineNo: undefined }, 3, 3);
-    expect(result).toBe("       ");
-  });
-
-  test("asymmetric widths", () => {
-    const result = buildGutter({ oldLineNo: 5, newLineNo: 123 }, 1, 3);
-    expect(result).toBe("5 123");
+    ["neither line number (hunk header / spacer)", { oldLineNo: undefined, newLineNo: undefined }, 3, 3, "       "],
+    ["asymmetric widths", { oldLineNo: 5, newLineNo: 123 }, 1, 3, "5 123"],
+  ])("%s", (_label, line, oldWidth, newWidth, expected) => {
+    expect(buildGutter(line, oldWidth, newWidth)).toBe(expected);
   });
 });
 
@@ -847,80 +779,41 @@ const mockColors = {
 };
 
 describe("diffLineColor", () => {
-  test("add returns diffAdded color", () => {
-    expect(diffLineColor("add", mockColors)).toBe("#00ff00");
-  });
-
-  test("delete returns diffRemoved color", () => {
-    expect(diffLineColor("delete", mockColors)).toBe("#ff0000");
-  });
-
-  test("hunk-header returns accent color", () => {
-    expect(diffLineColor("hunk-header", mockColors)).toBe("#8888ff");
-  });
-
-  test("context returns foreground color", () => {
-    expect(diffLineColor("context", mockColors)).toBe("#ffffff");
-  });
-
-  test("spacer returns foreground color", () => {
-    expect(diffLineColor("spacer", mockColors)).toBe("#ffffff");
-  });
-
-  test("continuation returns foreground color", () => {
-    expect(diffLineColor("continuation", mockColors)).toBe("#ffffff");
+  test.each<[DisplayLineKind, string]>([
+    ["add", "#00ff00"], // diffAdded
+    ["delete", "#ff0000"], // diffRemoved
+    ["hunk-header", "#8888ff"], // accent
+    ["context", "#ffffff"], // foreground
+    ["spacer", "#ffffff"],
+    ["continuation", "#ffffff"],
+  ])("%s returns %p", (kind, expected) => {
+    expect(diffLineColor(kind, mockColors)).toBe(expected);
   });
 });
 
 describe("diffLinePrefix", () => {
-  test("add returns '+'", () => {
-    expect(diffLinePrefix("add")).toBe("+");
-  });
-
-  test("delete returns '-'", () => {
-    expect(diffLinePrefix("delete")).toBe("-");
-  });
-
-  test("context returns space", () => {
-    expect(diffLinePrefix("context")).toBe(" ");
-  });
-
-  test("hunk-header returns empty string", () => {
-    expect(diffLinePrefix("hunk-header")).toBe("");
-  });
-
-  test("spacer returns empty string", () => {
-    expect(diffLinePrefix("spacer")).toBe("");
-  });
-
-  test("continuation returns empty string", () => {
-    expect(diffLinePrefix("continuation")).toBe("");
+  test.each<[DisplayLineKind, string]>([
+    ["add", "+"],
+    ["delete", "-"],
+    ["context", " "],
+    ["hunk-header", ""],
+    ["spacer", ""],
+    ["continuation", ""],
+  ])("%s returns %p", (kind, expected) => {
+    expect(diffLinePrefix(kind)).toBe(expected);
   });
 });
 
 describe("diffLineBg", () => {
-  test("add returns diffAddedBg", () => {
-    expect(diffLineBg("add", mockColors)).toBe("#002200");
-  });
-
-  test("delete returns diffRemovedBg", () => {
-    expect(diffLineBg("delete", mockColors)).toBe("#220000");
-  });
-
-  test("context returns undefined", () => {
-    expect(diffLineBg("context", mockColors)).toBeUndefined();
-  });
-
-  test("hunk-header returns undefined", () => {
-    expect(diffLineBg("hunk-header", mockColors)).toBeUndefined();
-  });
-
-  test("spacer returns undefined", () => {
-    expect(diffLineBg("spacer", mockColors)).toBeUndefined();
-  });
-
-  test("continuation returns undefined", () => {
-    expect(diffLineBg("continuation", mockColors)).toBeUndefined();
+  test.each<[DisplayLineKind, string | undefined]>([
+    ["add", "#002200"], // diffAddedBg
+    ["delete", "#220000"], // diffRemovedBg
+    ["context", undefined],
+    ["hunk-header", undefined],
+    ["spacer", undefined],
+    ["continuation", undefined],
+  ])("%s returns %p", (kind, expected) => {
+    expect(diffLineBg(kind, mockColors)).toBe(expected);
   });
 });
 

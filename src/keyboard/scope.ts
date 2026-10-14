@@ -5,6 +5,7 @@ export type KeyboardScope =
   | "menu"
   | "menu-token-edit"
   | "repo-selector"
+  | "cache"
   | "help"
   | "theme"
   | "diff-blame"

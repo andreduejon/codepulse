@@ -4,6 +4,8 @@ import type { BlameLine, DiffSource, FileContent, FileDiff } from "./types";
 
 /** Maximum number of diff lines before truncation. */
 const MAX_DIFF_LINES = 5000;
+/** Byte cap for loading file content into memory; far more than MAX_DIFF_LINES of typical text. */
+const MAX_FILE_BYTES = 8 * 1024 * 1024;
 
 function bytesAreBinary(view: Uint8Array): boolean {
   const checkLen = Math.min(view.length, 8192);
@@ -13,10 +15,11 @@ function bytesAreBinary(view: Uint8Array): boolean {
   return false;
 }
 
-function textToFileContent(filePath: string, content: string): FileContent {
+/** `cut` = content was stopped at MAX_FILE_BYTES, so its last line may be partial. */
+function textToFileContent(filePath: string, content: string, cut = false): FileContent {
   const lines = content.split("\n");
-  if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
-  const truncated = lines.length > MAX_DIFF_LINES;
+  if (cut || (lines.length > 0 && lines[lines.length - 1] === "")) lines.pop();
+  const truncated = cut || lines.length > MAX_DIFF_LINES;
   return {
     filePath,
     lines: truncated ? lines.slice(0, MAX_DIFF_LINES) : lines,
@@ -25,22 +28,22 @@ function textToFileContent(filePath: string, content: string): FileContent {
   };
 }
 
-async function readWorktreeFile(repoPath: string, filePath: string): Promise<FileContent> {
-  const fullPath = join(repoPath, filePath);
-  const file = Bun.file(fullPath);
-  const exists = await file.exists();
-  if (!exists) return { filePath, lines: [], isBinary: false };
-  const bytes = await file.arrayBuffer();
-  const view = new Uint8Array(bytes);
+/** Read at most MAX_FILE_BYTES of a working-tree file; null when it does not exist. */
+async function readWorktreeFile(repoPath: string, filePath: string): Promise<FileContent | null> {
+  const file = Bun.file(join(repoPath, filePath));
+  if (!(await file.exists())) return null;
+  const cut = file.size > MAX_FILE_BYTES;
+  const view = new Uint8Array(await (cut ? file.slice(0, MAX_FILE_BYTES) : file).arrayBuffer());
   if (bytesAreBinary(view)) return { filePath, lines: [], isBinary: true };
-  return textToFileContent(filePath, new TextDecoder().decode(view));
+  return textToFileContent(filePath, new TextDecoder().decode(view), cut);
 }
 
 /**
  * @internal Exported for testing.
  * Parse unified diff output (`git diff -p`) for a single file into a structured FileDiff.
+ * `cut` = output was stopped at MAX_FILE_BYTES, so its last line may be partial.
  */
-export function parseUnifiedDiff(stdout: string, filePath: string): FileDiff {
+export function parseUnifiedDiff(stdout: string, filePath: string, cut = false): FileDiff {
   if (!stdout.trim()) {
     return { filePath, hunks: [], isBinary: false };
   }
@@ -51,12 +54,13 @@ export function parseUnifiedDiff(stdout: string, filePath: string): FileDiff {
   }
 
   const lines = stdout.split("\n");
+  if (cut) lines.pop();
   const hunks: import("./types").DiffHunk[] = [];
   let currentHunk: import("./types").DiffHunk | null = null;
   let oldLine = 0;
   let newLine = 0;
   let totalLines = 0;
-  let truncated = false;
+  let truncated = cut;
 
   for (const line of lines) {
     // Once we hit the line limit, stop parsing
@@ -181,7 +185,7 @@ export function parseBlameOutput(stdout: string): BlameLine[] {
 /**
  * Fetch the unified diff for a specific file.
  * The git command varies based on the diff source:
- * - commit: `git diff-tree -p <hash>^! -- <path>` (or just `<hash>` for root commits)
+ * - commit: `git diff-tree -p <hash>^1 <hash> -- <path>` (or `--root <hash>` for root commits)
  * - stash: `git diff -p <hash>^1 <hash> -- <path>`
  * - staged: `git diff --cached -p -- <path>`
  * - unstaged: `git diff -p -- <path>`
@@ -201,12 +205,10 @@ export async function getFileDiff(
 
   let args: string[];
   switch (source) {
-    case "commit": {
-      // Check if this is a root commit (no parents) by using just the hash
-      // For non-root commits, use ^! which means "commit vs its first parent"
-      args = ["diff-tree", "-p", "--no-commit-id", `${commitHash}^!`, "--", filePath];
+    case "commit":
+      // First parent, like the commit's file list (merges included); root commits fall back below.
+      args = ["diff-tree", "-p", "--no-commit-id", `${commitHash}^1`, commitHash, "--", filePath];
       break;
-    }
     case "stash":
       args = ["diff", "-p", `${commitHash}^1`, commitHash, "--", filePath];
       break;
@@ -218,48 +220,31 @@ export async function getFileDiff(
       break;
   }
 
-  const { stdout, exitCode, stderr } = await runGit(repoPath, args, signal);
+  let result = await runGit(repoPath, args, signal, MAX_FILE_BYTES);
 
-  // Root commits: ^! fails, fall back to show <hash> -- <path>
-  if (exitCode !== 0 && source === "commit" && stderr.includes("unknown revision")) {
-    const fallback = await runGit(
+  // Root commits have no ^1: diff against the empty tree instead.
+  if (result.exitCode !== 0 && source === "commit" && /bad revision|unknown revision/.test(result.stderr)) {
+    result = await runGit(
       repoPath,
       ["diff-tree", "-p", "--no-commit-id", "--root", commitHash, "--", filePath],
       signal,
+      MAX_FILE_BYTES,
     );
-    if (fallback.exitCode === 0) {
-      return parseUnifiedDiff(fallback.stdout, filePath);
-    }
   }
 
-  if (exitCode !== 0 || !stdout.trim()) {
+  if ((result.exitCode !== 0 && !result.truncated) || !result.stdout.trim()) {
     return { filePath, hunks: [], isBinary: false };
   }
 
-  return parseUnifiedDiff(stdout, filePath);
+  return parseUnifiedDiff(result.stdout, filePath, result.truncated);
 }
 
 /** Read an untracked file and present as an all-added diff. */
 async function getUntrackedFileDiff(repoPath: string, filePath: string): Promise<FileDiff> {
   try {
-    const fullPath = join(repoPath, filePath);
-    const file = Bun.file(fullPath);
-    const exists = await file.exists();
-    if (!exists) return { filePath, hunks: [], isBinary: false };
-
-    const bytes = await file.arrayBuffer();
-    const view = new Uint8Array(bytes);
-    if (bytesAreBinary(view)) return { filePath, hunks: [], isBinary: true };
-
-    const content = new TextDecoder().decode(view);
-    const lines = content.split("\n");
-    // Remove trailing empty line from split
-    if (lines.length > 0 && lines[lines.length - 1] === "") {
-      lines.pop();
-    }
-
-    const truncated = lines.length > MAX_DIFF_LINES;
-    const displayLines = truncated ? lines.slice(0, MAX_DIFF_LINES) : lines;
+    const content = await readWorktreeFile(repoPath, filePath);
+    if (!content || content.isBinary) return { filePath, hunks: [], isBinary: content?.isBinary ?? false };
+    const displayLines = content.lines;
 
     const diffLines: import("./types").DiffLine[] = displayLines.map((line, idx) => ({
       type: "add" as const,
@@ -280,7 +265,7 @@ async function getUntrackedFileDiff(repoPath: string, filePath: string): Promise
         },
       ],
       isBinary: false,
-      ...(truncated ? { truncated: true } : {}),
+      ...(content.truncated ? { truncated: true } : {}),
     };
   } catch {
     return { filePath, hunks: [], isBinary: false };
@@ -299,7 +284,8 @@ export async function getFileContent(
   source: DiffSource,
   signal?: AbortSignal,
 ): Promise<FileContent> {
-  if (source === "unstaged" || source === "untracked") return readWorktreeFile(repoPath, filePath);
+  if (source === "unstaged" || source === "untracked")
+    return (await readWorktreeFile(repoPath, filePath)) ?? { filePath, lines: [], isBinary: false };
 
   const specs = (() => {
     switch (source) {
@@ -313,11 +299,11 @@ export async function getFileContent(
   })();
 
   for (const spec of specs) {
-    const { stdout, exitCode, stderr } = await runGit(repoPath, ["show", spec], signal);
-    if (exitCode === 0) {
+    const { stdout, exitCode, stderr, truncated } = await runGit(repoPath, ["show", spec], signal, MAX_FILE_BYTES);
+    if (exitCode === 0 || truncated) {
       // Git emits this for binary blobs through stdout; keep behavior conservative.
       if (stdout.includes("\0")) return { filePath, lines: [], isBinary: true };
-      return textToFileContent(filePath, stdout);
+      return textToFileContent(filePath, stdout, truncated);
     }
     if (stderr.includes("exists on disk, but not in")) continue;
   }
@@ -340,8 +326,15 @@ export async function getFileBlame(
   // For non-commit sources, blame against HEAD
   const ref = source === "commit" ? commitHash : "HEAD";
 
-  const { stdout, exitCode } = await runGit(repoPath, ["blame", "--porcelain", ref, "--", filePath], signal);
+  const { stdout, exitCode, truncated } = await runGit(
+    repoPath,
+    ["blame", "--porcelain", ref, "--", filePath],
+    signal,
+    MAX_FILE_BYTES,
+  );
 
-  if (exitCode !== 0 || !stdout.trim()) return [];
-  return parseBlameOutput(stdout);
+  if ((exitCode !== 0 && !truncated) || !stdout.trim()) return [];
+  const lines = parseBlameOutput(stdout);
+  // A byte cut can end inside the last entry.
+  return truncated ? lines.slice(0, -1) : lines;
 }

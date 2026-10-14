@@ -43,20 +43,12 @@ describe("buildCommitLogArgs", () => {
     expect(args).toContain("--skip=200");
   });
 
-  test("skip = 0 does NOT add --skip argument", () => {
-    const args = buildCommitLogArgs({ skip: 0 });
-    const skipArgs = args.filter(a => a.startsWith("--skip"));
-    expect(skipArgs.length).toBe(0);
-  });
-
-  test("skip undefined does NOT add --skip argument", () => {
-    const args = buildCommitLogArgs({});
-    const skipArgs = args.filter(a => a.startsWith("--skip"));
-    expect(skipArgs.length).toBe(0);
-  });
-
-  test("negative skip does NOT add --skip argument", () => {
-    const args = buildCommitLogArgs({ skip: -5 });
+  test.each([
+    ["skip = 0", { skip: 0 }],
+    ["skip undefined", {}],
+    ["negative skip", { skip: -5 }],
+  ])("%s does NOT add --skip argument", (_label, options) => {
+    const args = buildCommitLogArgs(options);
     const skipArgs = args.filter(a => a.startsWith("--skip"));
     expect(skipArgs.length).toBe(0);
   });

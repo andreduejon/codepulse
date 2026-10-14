@@ -1,12 +1,14 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, utimes, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { closeProviderCaches, providerCacheDatabase } from "../shared/sha-sqlite-cache";
 import { mergeById, OpenShiftCache, type OpenShiftCacheEntry } from "./cache";
 
 const roots: string[] = [];
 
 afterEach(async () => {
+  for (const root of roots) closeProviderCaches(root);
   await Promise.all(roots.splice(0).map(path => rm(path, { recursive: true, force: true })));
 });
 
@@ -58,7 +60,8 @@ describe("OpenShiftCache", () => {
     await cache.write("/repo", snapshot);
 
     expect(await cache.read("/repo", snapshot.sha)).toEqual({ ...snapshot, sha: snapshot.sha.toLowerCase() });
-    const stored = JSON.parse(await readFile(await cache.pathFor("/repo", snapshot.sha), "utf8"));
+    const row = providerCacheDatabase(cache.root).query<{ payload: string }, []>("SELECT payload FROM snapshots").get();
+    const stored = JSON.parse(row?.payload ?? "");
     expect(Object.keys(stored)).toEqual(["sha", "builds"]);
     expect(stored.builds[0].object).toEqual({ kind: "Build", metadata: { name: "build-1" } });
   });
@@ -66,12 +69,11 @@ describe("OpenShiftCache", () => {
   test("ignores and deletes corrupt entries", async () => {
     const cache = new OpenShiftCache({ root: await cacheRoot() });
     const sha = "b".repeat(40);
-    const path = await cache.pathFor("/repo", sha);
     await cache.write("/repo", entry(sha));
-    await writeFile(path, "not-json");
+    providerCacheDatabase(cache.root).query("UPDATE snapshots SET payload = ?").run(JSON.stringify({ sha }));
 
     expect(await cache.read("/repo", sha)).toBeNull();
-    expect(await Bun.file(path).exists()).toBe(false);
+    expect(await cache.list("/repo")).toEqual([]);
   });
 
   test("evicts least recently accessed SHA and its logs", async () => {
@@ -80,8 +82,9 @@ describe("OpenShiftCache", () => {
     for (const [index, sha] of shas.entries()) {
       await cache.write("/repo", entry(sha));
       await cache.writeLog("/repo", sha, "ns", "build-1", "log");
-      const accessedAt = new Date(1_700_000_000_000 + index * 1_000);
-      await utimes(await cache.pathFor("/repo", sha), accessedAt, accessedAt);
+      providerCacheDatabase(cache.root)
+        .query("UPDATE snapshots SET accessed_at = ? WHERE sha = ?")
+        .run(1_700_000_000_000 + index * 1_000, sha);
     }
     await cache.read("/repo", shas[0]);
     const newest = "f".repeat(40);

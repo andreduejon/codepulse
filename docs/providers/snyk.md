@@ -56,16 +56,18 @@ Snyk Open Source only scans supported manifests and lockfiles. Unsupported ecosy
 
 ## Cache
 
-Normalized results are stored under:
+Normalized results are stored in the shared SQLite database under provider `snyk`,
+isolated from other providers' snapshots and log artifacts:
 
 ```text
-~/.cache/codepulse/snyk/<repository-hash>/<commit-sha>.json
+~/.cache/codepulse/cache.sqlite
 ```
 
-Cache limit can be `10`, `20`, or `50`; default is `20`. It limits commit scan
+Cache limit can be `10`, `20`, `50`, `100`, `200`, or `500`. Default is `20`. It limits commit scan
 snapshots per repository. Least-recently-accessed snapshots are removed when the
-limit is exceeded. Cached results do not expire by age. Tokens and raw Snyk
-output are not stored.
+limit is exceeded. Repository-wide 90-day inactivity cleanup also applies.
+Snyk stores normalized
+snapshots only, not log artifacts. Tokens and raw Snyk output are not stored.
 
 ## Security
 

@@ -1,19 +1,19 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
-  backfillRepoConfig,
   type CodepulseConfig,
   defaultConfig,
   getKnownRepoInfos,
   loadConfig,
   mergeOptions,
   resolveConfigInfo,
-  writeConfig,
 } from "../src/config";
+import { backfillRepoConfig, writeConfig } from "../src/config-write";
 import { DEFAULT_MAX_COUNT } from "../src/constants";
 import { DEFAULT_AUTO_REFRESH_INTERVAL } from "../src/context/state";
+import { PROVIDER_CACHE_LIMIT_OPTIONS } from "../src/providers/shared/auto-refresh";
 
 const TEST_ROOT = join(tmpdir(), `codepulse-config-test-${Date.now()}`);
 
@@ -47,6 +47,9 @@ describe("provider defaults", () => {
     expect(providers.github?.enabled).toBe(false);
     expect(providers.jenkins?.enabled).toBe(false);
     expect(providers.openshift?.enabled).toBe(false);
+    expect(providers.github?.cacheLimit).toBe(20);
+    expect(providers.jenkins?.cacheLimit).toBe(20);
+    expect(providers.openshift?.cacheLimit).toBe(20);
     expect(providers.snyk).toEqual({
       enabled: false,
       tokenEnvVar: "SNYK_TOKEN",
@@ -69,6 +72,9 @@ describe("provider defaults", () => {
     backfillRepoConfig(repoPath, configPath);
 
     const providers = loadConfig(repoPath, configPath).config.providers;
+    expect(providers?.github?.cacheLimit).toBe(20);
+    expect(providers?.jenkins?.cacheLimit).toBe(20);
+    expect(providers?.openshift?.cacheLimit).toBe(20);
     expect(providers?.github?.enabled).toBe(true);
     expect(providers?.jenkins?.enabled).toBe(true);
     expect(providers?.openshift?.enabled).toBe(true);
@@ -82,6 +88,81 @@ describe("provider defaults", () => {
 });
 
 describe("loadConfig", () => {
+  test("round-trips every cache limit for all providers without widening fetch limits", () => {
+    const repoPath = "/tmp/repo";
+    for (const limit of PROVIDER_CACHE_LIMIT_OPTIONS) {
+      const configPath = makeRepoConfig(`cache-limits-roundtrip-${limit}`, repoPath, {});
+      const providers: CodepulseConfig["providers"] = {
+        github: { cacheLimit: limit, fetchDepth: 10 },
+        jenkins: { cacheLimit: limit, fetchDepth: 20, graphBuildLimit: 50 },
+        openshift: { cacheLimit: limit, fetchDepth: 50 },
+        snyk: { maxCachedScans: limit },
+      };
+      expect(writeConfig({ providers }, repoPath, configPath)).toBe(true);
+      const { config, warnings } = loadConfig(repoPath, configPath);
+      expect(config.providers).toEqual(providers);
+      expect(warnings).toEqual([]);
+      backfillRepoConfig(repoPath, configPath);
+      const backfilled = loadConfig(repoPath, configPath).config.providers;
+      expect(backfilled?.github?.cacheLimit).toBe(limit);
+      expect(backfilled?.jenkins?.cacheLimit).toBe(limit);
+      expect(backfilled?.openshift?.cacheLimit).toBe(limit);
+      expect(backfilled?.snyk?.maxCachedScans).toBe(limit);
+    }
+  });
+
+  test("rejects larger cache choices for fetchDepth and legacy graphBuildLimit", () => {
+    const repoPath = "/tmp/repo";
+    for (const limit of [100, 200, 500] as const) {
+      const configPath = makeRepoConfig(`fetch-limit-${limit}`, repoPath, {
+        providers: {
+          github: { cacheLimit: limit, fetchDepth: limit },
+          jenkins: { cacheLimit: limit, fetchDepth: limit, graphBuildLimit: limit },
+          openshift: { cacheLimit: limit, fetchDepth: limit },
+          snyk: { maxCachedScans: limit },
+        },
+      });
+      const { config, warnings } = loadConfig(repoPath, configPath);
+      expect(config.providers).toEqual({
+        github: { cacheLimit: limit },
+        jenkins: { cacheLimit: limit },
+        openshift: { cacheLimit: limit },
+        snyk: { maxCachedScans: limit },
+      });
+      expect(warnings).toHaveLength(4);
+      for (const field of [
+        "github.fetchDepth",
+        "jenkins.fetchDepth",
+        "jenkins.graphBuildLimit",
+        "openshift.fetchDepth",
+      ]) {
+        expect(warnings).toContain(`${configPath} [repos]: "providers.${field}" must be one of 10, 20, 50, ignoring`);
+      }
+    }
+  });
+
+  test("rejects invalid cache limits with cache-specific options in warnings", () => {
+    const repoPath = "/tmp/repo";
+    for (const limit of [0, 30, 501, "100"]) {
+      const configPath = makeRepoConfig(`invalid-cache-limit-${limit}`, repoPath, {
+        providers: {
+          github: { cacheLimit: limit },
+          jenkins: { cacheLimit: limit },
+          openshift: { cacheLimit: limit },
+          snyk: { maxCachedScans: limit },
+        },
+      });
+      const { config, warnings } = loadConfig(repoPath, configPath);
+      expect(config.providers).toEqual({ github: {}, jenkins: {}, openshift: {}, snyk: {} });
+      expect(warnings).toHaveLength(4);
+      for (const field of ["github.cacheLimit", "jenkins.cacheLimit", "openshift.cacheLimit", "snyk.maxCachedScans"]) {
+        expect(warnings).toContain(
+          `${configPath} [repos]: "providers.${field}" must be one of 10, 20, 50, 100, 200, 500, ignoring`,
+        );
+      }
+    }
+  });
+
   test("returns empty object when config file does not exist", () => {
     const configPath = join(makeTempDir("no-config"), "config.json");
     const { config: result } = loadConfig("/tmp/repo", configPath);
@@ -752,27 +833,43 @@ describe("writeConfig", () => {
     expect(content.repos[resolve(repoPath)].pageSize).toBe(200);
   });
 
-  test("overwrites corrupt existing file", () => {
+  test("refuses to overwrite corrupt existing file", () => {
     const dir = makeTempDir("write-corrupt");
     const configPath = join(dir, "config.json");
     writeFileSync(configPath, "not valid json!!!");
     const repoPath = "/tmp/my-repo";
-    const result = writeConfig({ theme: "dracula" }, repoPath, configPath);
-    expect(result).toBe(true);
-    const content = JSON.parse(readFileSync(configPath, "utf-8"));
-    expect(content.repos[resolve(repoPath)].theme).toBe("dracula");
+    const errorSpy = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(writeConfig({ theme: "dracula" }, repoPath, configPath)).toBe(false);
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      errorSpy.mockRestore();
+    }
+    expect(readFileSync(configPath, "utf-8")).toBe("not valid json!!!");
   });
 
-  test("overwrites existing file that is an array", () => {
+  test("refuses to overwrite existing file that is an array", () => {
     const dir = makeTempDir("write-array");
     const configPath = join(dir, "config.json");
     writeFileSync(configPath, JSON.stringify([1, 2, 3]));
     const repoPath = "/tmp/my-repo";
-    const result = writeConfig({ pageSize: 500 }, repoPath, configPath);
-    expect(result).toBe(true);
+    const errorSpy = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(writeConfig({ pageSize: 500 }, repoPath, configPath)).toBe(false);
+    } finally {
+      errorSpy.mockRestore();
+    }
+    expect(readFileSync(configPath, "utf-8")).toBe("[1,2,3]");
+  });
+
+  test("replaces the file atomically without leaving temp files", () => {
+    const dir = makeTempDir("write-atomic");
+    const configPath = join(dir, "config.json");
+    writeConfig({ theme: "nord" }, "/tmp/my-repo", configPath);
+    writeConfig({ theme: "dracula" }, "/tmp/other-repo", configPath);
+    expect(readdirSync(dir)).toEqual(["config.json"]);
     const content = JSON.parse(readFileSync(configPath, "utf-8"));
-    expect(content.repos[resolve(repoPath)].pageSize).toBe(500);
-    expect(Array.isArray(content)).toBe(false);
+    expect(Object.keys(content.repos)).toHaveLength(2);
   });
 
   test("writes JSON with 2-space indent and trailing newline", () => {

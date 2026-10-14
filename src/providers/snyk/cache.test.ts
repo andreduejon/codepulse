@@ -1,13 +1,15 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, utimes, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { closeProviderCaches, providerCacheDatabase } from "../shared/sha-sqlite-cache";
 import { SnykCache } from "./cache";
 import type { SnykScanResult } from "./types";
 
 const roots: string[] = [];
 
 afterEach(async () => {
+  for (const root of roots) closeProviderCaches(root);
   await Promise.all(roots.splice(0).map(path => rm(path, { recursive: true, force: true })));
 });
 
@@ -33,19 +35,20 @@ describe("SnykCache", () => {
     await cache.write("/repo", scan);
 
     expect(await cache.read("/repo", scan.sha)).toEqual(scan);
-    const stored = await readFile(await cache.pathFor("/repo", scan.sha), "utf8");
-    expect(Object.keys(JSON.parse(stored))).toEqual(["sha", "scannedAt", "counts", "findings"]);
+    const stored = providerCacheDatabase(cache.root)
+      .query<{ payload: string }, []>("SELECT payload FROM snapshots")
+      .get();
+    expect(Object.keys(JSON.parse(stored?.payload ?? ""))).toEqual(["sha", "scannedAt", "counts", "findings"]);
   });
 
   test("ignores and deletes corrupt entries", async () => {
     const cache = new SnykCache({ root: await cacheRoot() });
     const sha = "b".repeat(40);
-    const path = await cache.pathFor("/repo", sha);
     await cache.write("/repo", result(sha));
-    await writeFile(path, "not-json");
+    providerCacheDatabase(cache.root).query("UPDATE snapshots SET payload = ?").run(JSON.stringify({ sha }));
 
     expect(await cache.read("/repo", sha)).toBeNull();
-    expect(await Bun.file(path).exists()).toBe(false);
+    expect(await cache.list("/repo")).toEqual([]);
   });
 
   test("evicts the least recently accessed entry", async () => {
@@ -53,8 +56,9 @@ describe("SnykCache", () => {
     const shas = Array.from({ length: 10 }, (_, index) => index.toString(16).padStart(40, "0"));
     for (const [index, sha] of shas.entries()) {
       await cache.write("/repo", result(sha));
-      const accessedAt = new Date(1_700_000_000_000 + index * 1_000);
-      await utimes(await cache.pathFor("/repo", sha), accessedAt, accessedAt);
+      providerCacheDatabase(cache.root)
+        .query("UPDATE snapshots SET accessed_at = ? WHERE sha = ?")
+        .run(1_700_000_000_000 + index * 1_000, sha);
     }
     await cache.read("/repo", shas[0]);
     const newest = "f".repeat(40);

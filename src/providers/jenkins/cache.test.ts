@@ -2,12 +2,14 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { closeProviderCaches } from "../shared/sha-sqlite-cache";
 import { isJenkinsCacheEntry, JenkinsCache } from "./cache";
 import type { JenkinsJob, JenkinsRun } from "./types";
 
 const roots: string[] = [];
 
 afterEach(async () => {
+  for (const root of roots) closeProviderCaches(root);
   await Promise.all(roots.splice(0).map(path => rm(path, { recursive: true, force: true })));
 });
 

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { GraphRow } from "../src/git/types";
 import {
   type CascadeState,
+  type CascadeTarget,
   computeCascadeTarget,
   computeDisplacedIndex,
   countHighlightedBelow,
@@ -46,60 +47,23 @@ function makeSet(...hashes: string[]): Set<string> {
 describe("findHighlightedIndex", () => {
   const rows = makeRows("a", "b", "c", "d", "e");
 
-  test("returns `from` when hSet is null (no highlight active)", () => {
-    expect(findHighlightedIndex(rows, null, 2, 1, 1)).toBe(2);
-  });
-
-  test("returns `from` when hSet is empty", () => {
-    expect(findHighlightedIndex(rows, new Set(), 2, 1, 1)).toBe(2);
-  });
-
-  test("finds the next highlighted row forward", () => {
-    const hSet = makeSet("c", "e");
-    // from=0 (before 'a'), direction=1, count=1 → 'c' is at index 2
-    expect(findHighlightedIndex(rows, hSet, 0, 1, 1)).toBe(2);
-  });
-
-  test("finds the next highlighted row backward", () => {
-    const hSet = makeSet("a", "c");
-    // from=4 (at 'e'), direction=-1, count=1 → 'c' is at index 2
-    expect(findHighlightedIndex(rows, hSet, 4, -1, 1)).toBe(2);
-  });
-
-  test("steps over multiple highlighted rows when count > 1", () => {
-    const hSet = makeSet("b", "d");
-    // from=0, direction=1, count=2 → skip 'b' (index 1), land on 'd' (index 3)
-    expect(findHighlightedIndex(rows, hSet, 0, 1, 2)).toBe(3);
-  });
-
-  test("returns `from` when no highlighted row exists in that direction", () => {
-    const hSet = makeSet("a");
-    // from=1 (at 'b'), direction=1 → no highlighted row ahead
-    expect(findHighlightedIndex(rows, hSet, 1, 1, 1)).toBe(1);
-  });
-
-  test("works with the sentinel -1 `from` to find the first highlighted row", () => {
-    const hSet = makeSet("c");
-    // Caller uses -1 as 'before the array', direction=1, count=1 → 'c' at index 2
-    expect(findHighlightedIndex(rows, hSet, -1, 1, 1)).toBe(2);
-  });
-
-  test("works with rows.length as `from` to find the last highlighted row", () => {
-    const hSet = makeSet("b");
-    // Caller uses rows.length as 'after the array', direction=-1, count=1 → 'b' at index 1
-    expect(findHighlightedIndex(rows, hSet, rows.length, -1, 1)).toBe(1);
-  });
-
-  test("stops at count, not at array boundary", () => {
-    const hSet = makeSet("a", "b", "c", "d", "e");
-    // All highlighted; from=-1, direction=1, count=3 → land on index 2 ('c')
-    expect(findHighlightedIndex(rows, hSet, -1, 1, 3)).toBe(2);
-  });
-
-  test("handles the case where `from` itself is highlighted but search starts beyond it", () => {
-    const hSet = makeSet("a", "c");
-    // from=0 (at 'a'), direction=1, count=1 → 'c' at index 2 (not 'a' itself)
-    expect(findHighlightedIndex(rows, hSet, 0, 1, 1)).toBe(2);
+  test.each([
+    ["returns `from` when hSet is null (no highlight active)", null, 2, 1, 1, 2],
+    ["returns `from` when hSet is empty", new Set<string>(), 2, 1, 1, 2],
+    ["finds the next highlighted row forward", makeSet("c", "e"), 0, 1, 1, 2],
+    ["finds the next highlighted row backward", makeSet("a", "c"), 4, -1, 1, 2],
+    // skip 'b' (index 1), land on 'd' (index 3)
+    ["steps over multiple highlighted rows when count > 1", makeSet("b", "d"), 0, 1, 2, 3],
+    ["returns `from` when no highlighted row exists in that direction", makeSet("a"), 1, 1, 1, 1],
+    // Caller uses -1 as 'before the array'
+    ["works with the sentinel -1 `from` to find the first highlighted row", makeSet("c"), -1, 1, 1, 2],
+    // Caller uses rows.length as 'after the array'
+    ["works with rows.length as `from` to find the last highlighted row", makeSet("b"), rows.length, -1, 1, 1],
+    ["stops at count, not at array boundary", makeSet("a", "b", "c", "d", "e"), -1, 1, 3, 2],
+    // from=0 (at 'a') → 'c' at index 2, not 'a' itself
+    ["handles the case where `from` itself is highlighted but search starts beyond it", makeSet("a", "c"), 0, 1, 1, 2],
+  ] as const)("%s", (_label, hSet, from, direction, count, expected) => {
+    expect(findHighlightedIndex(rows, hSet, from, direction, count)).toBe(expected);
   });
 });
 
@@ -108,37 +72,16 @@ describe("findHighlightedIndex", () => {
 describe("countHighlightedBelow", () => {
   const rows = makeRows("a", "b", "c", "d", "e");
 
-  test("returns 0 when hSet is null", () => {
-    expect(countHighlightedBelow(rows, null, 0, 10)).toBe(0);
-  });
-
-  test("counts highlighted rows strictly below `from`", () => {
-    const hSet = makeSet("c", "e");
-    // from=0 ('a') → rows below: b, c, d, e → 2 highlighted ('c' and 'e')
-    expect(countHighlightedBelow(rows, hSet, 0, 10)).toBe(2);
-  });
-
-  test("does not count the `from` row itself even if highlighted", () => {
-    const hSet = makeSet("a", "c");
-    // from=0 ('a') is highlighted — not counted; 'c' below is counted
-    expect(countHighlightedBelow(rows, hSet, 0, 10)).toBe(1);
-  });
-
-  test("respects the `limit` parameter", () => {
-    const hSet = makeSet("b", "c", "d");
-    // from=0, limit=2 → finds 'b' and 'c', stops at 2
-    expect(countHighlightedBelow(rows, hSet, 0, 2)).toBe(2);
-  });
-
-  test("returns 0 when from is the last row", () => {
-    const hSet = makeSet("a", "b");
-    expect(countHighlightedBelow(rows, hSet, 4, 10)).toBe(0);
-  });
-
-  test("returns 0 when no highlighted rows exist below from", () => {
-    const hSet = makeSet("a");
-    // from=1 ('b') — 'a' is above, nothing below is highlighted
-    expect(countHighlightedBelow(rows, hSet, 1, 10)).toBe(0);
+  test.each([
+    ["returns 0 when hSet is null", null, 0, 10, 0],
+    // from=0 ('a') → rows below: b, c, d, e → 'c' and 'e'
+    ["counts highlighted rows strictly below `from`", makeSet("c", "e"), 0, 10, 2],
+    ["does not count the `from` row itself even if highlighted", makeSet("a", "c"), 0, 10, 1],
+    ["respects the `limit` parameter", makeSet("b", "c", "d"), 0, 2, 2],
+    ["returns 0 when from is the last row", makeSet("a", "b"), 4, 10, 0],
+    ["returns 0 when no highlighted rows exist below from", makeSet("a"), 1, 10, 0],
+  ])("%s", (_label, hSet, from, limit, expected) => {
+    expect(countHighlightedBelow(rows, hSet, from, limit)).toBe(expected);
   });
 });
 
@@ -147,47 +90,19 @@ describe("countHighlightedBelow", () => {
 describe("computeDisplacedIndex", () => {
   const rows = makeRows("a", "b", "c", "d", "e");
 
-  test("returns curIdx when hSet is null", () => {
-    expect(computeDisplacedIndex(rows, null, 2)).toBe(2);
-  });
-
-  test("returns curIdx when hSet is empty", () => {
-    expect(computeDisplacedIndex(rows, new Set(), 2)).toBe(2);
-  });
-
-  test("returns curIdx when already on a highlighted row", () => {
-    const hSet = makeSet("c");
-    expect(computeDisplacedIndex(rows, hSet, 2)).toBe(2); // 'c' is index 2
-  });
-
-  test("jumps forward when only forward match exists", () => {
-    const hSet = makeSet("d");
-    // cursor at 'b' (index 1), 'd' is at index 3
-    expect(computeDisplacedIndex(rows, hSet, 1)).toBe(3);
-  });
-
-  test("jumps backward when only backward match exists", () => {
-    const hSet = makeSet("a");
-    // cursor at 'c' (index 2), 'a' is at index 0
-    expect(computeDisplacedIndex(rows, hSet, 2)).toBe(0);
-  });
-
-  test("prefers closer match; on tie prefers backward", () => {
-    const hSet = makeSet("a", "e");
-    // cursor at 'c' (index 2). Distance to 'a' (index 0) = 2, distance to 'e' (index 4) = 2 → tie → prefer backward ('a')
+  test.each([
+    ["returns curIdx when hSet is null", null, 2, 2],
+    ["returns curIdx when hSet is empty", new Set<string>(), 2, 2],
+    ["returns curIdx when already on a highlighted row", makeSet("c"), 2, 2],
+    ["jumps forward when only forward match exists", makeSet("d"), 1, 3],
+    ["jumps backward when only backward match exists", makeSet("a"), 2, 0],
+    // Distance to 'a' = 2, distance to 'e' = 2 → tie → prefer backward ('a')
     // Original condition: curIdx - bwd <= fwd - curIdx → 2 <= 2 → true → picks bwd
-    expect(computeDisplacedIndex(rows, hSet, 2)).toBe(0);
-  });
-
-  test("picks the closer of fwd and bwd when not a tie", () => {
-    const hSet = makeSet("b", "e");
-    // cursor at 'c' (index 2). Distance to 'b' = 1, distance to 'e' = 2 → pick 'b'
-    expect(computeDisplacedIndex(rows, hSet, 2)).toBe(1);
-  });
-
-  test("returns curIdx when no highlighted row exists anywhere", () => {
-    const hSet = makeSet("z"); // hash not in rows
-    expect(computeDisplacedIndex(rows, hSet, 2)).toBe(2);
+    ["prefers closer match; on tie prefers backward", makeSet("a", "e"), 2, 0],
+    ["picks the closer of fwd and bwd when not a tie", makeSet("b", "e"), 2, 1],
+    ["returns curIdx when no highlighted row exists anywhere", makeSet("z"), 2, 2],
+  ])("%s", (_label, hSet, curIdx, expected) => {
+    expect(computeDisplacedIndex(rows, hSet, curIdx)).toBe(expected);
   });
 });
 
@@ -233,46 +148,23 @@ describe("computeCascadeTarget", () => {
     expect(computeCascadeTarget({ ...base, dialog: "theme" })).toBe("dialog");
   });
 
-  test("search focused closes after dialogs", () => {
-    expect(computeCascadeTarget({ ...base, searchFocused: true })).toBe("search-focused");
-  });
-
-  test("detail focused closes after search", () => {
-    expect(computeCascadeTarget({ ...base, detailFocused: true })).toBe("detail-focused");
-  });
-
-  test("search highlight cleared after detail focus", () => {
-    expect(
-      computeCascadeTarget({
-        ...base,
-        highlightSet: new Set(["abc"]),
-        searchQuery: "fix",
-      }),
-    ).toBe("search-highlight");
-  });
-
-  test("ancestry highlight cleared after search highlight", () => {
-    expect(
-      computeCascadeTarget({
-        ...base,
-        highlightSet: new Set(["abc"]),
-        ancestrySet: new Set(["abc"]),
-      }),
-    ).toBe("ancestry-highlight");
-  });
-
-  test("path highlight cleared after ancestry", () => {
-    expect(
-      computeCascadeTarget({
-        ...base,
-        highlightSet: new Set(["abc"]),
-        pathFilter: "src/",
-      }),
-    ).toBe("path-highlight");
-  });
-
-  test("branch view cleared last", () => {
-    expect(computeCascadeTarget({ ...base, viewingBranch: "feature/foo" })).toBe("branch-view");
+  test.each<[string, Partial<CascadeState>, CascadeTarget]>([
+    ["search focused closes after dialogs", { searchFocused: true }, "search-focused"],
+    ["detail focused closes after search", { detailFocused: true }, "detail-focused"],
+    [
+      "search highlight cleared after detail focus",
+      { highlightSet: new Set(["abc"]), searchQuery: "fix" },
+      "search-highlight",
+    ],
+    [
+      "ancestry highlight cleared after search highlight",
+      { highlightSet: new Set(["abc"]), ancestrySet: new Set(["abc"]) },
+      "ancestry-highlight",
+    ],
+    ["path highlight cleared after ancestry", { highlightSet: new Set(["abc"]), pathFilter: "src/" }, "path-highlight"],
+    ["branch view cleared last", { viewingBranch: "feature/foo" }, "branch-view"],
+  ])("%s", (_label, overrides, expected) => {
+    expect(computeCascadeTarget({ ...base, ...overrides })).toBe(expected);
   });
 
   test("cascade order is strictly priority-ordered", () => {

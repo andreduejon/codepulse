@@ -1,8 +1,9 @@
 import type { ConfigInfo } from "./config";
-import type { createThemeState } from "./context/theme";
+import type { CustomTheme, createThemeState } from "./context/theme";
 import type { Branch, Commit, GraphRow, TagInfo } from "./git/types";
 import type { StartupMode } from "./main";
 import type { ProviderView } from "./providers/provider";
+import type { ProviderCacheLimit } from "./providers/shared/auto-refresh";
 
 export interface AppProps {
   repoPath: string;
@@ -10,6 +11,7 @@ export interface AppProps {
   all?: boolean;
   maxCount?: number;
   themeName?: string;
+  customThemes?: readonly CustomTheme[];
   autoRefreshInterval?: number;
   autoFetchInterval?: number;
   configInfo?: ConfigInfo;
@@ -19,7 +21,7 @@ export interface AppProps {
     tokenEnvVar?: string;
     trustedEnterpriseHost?: string;
     fetchDepth?: 10 | 20 | 50;
-    cacheLimit?: 10 | 20 | 50;
+    cacheLimit?: ProviderCacheLimit;
     autoRefreshSeconds?: 0 | 120 | 300 | 600;
   };
   initialJenkinsConfig?: {
@@ -28,7 +30,7 @@ export interface AppProps {
     tokenEnvVar?: string;
     graphBuildLimit?: 10 | 20 | 50;
     fetchDepth?: 10 | 20 | 50;
-    cacheLimit?: 10 | 20 | 50;
+    cacheLimit?: ProviderCacheLimit;
     autoRefreshSeconds?: 0 | 120 | 300 | 600;
     jobs?: { label?: string; url: string }[];
   };
@@ -38,7 +40,7 @@ export interface AppProps {
     tokenEnvVar?: string;
     namespaces?: string[];
     commitShaAnnotation?: string;
-    cacheLimit?: 10 | 20 | 50;
+    cacheLimit?: ProviderCacheLimit;
     fetchDepth?: 10 | 20 | 50;
     autoRefreshSeconds?: 0 | 120 | 300 | 600;
   };
@@ -46,7 +48,7 @@ export interface AppProps {
     enabled?: boolean;
     tokenEnvVar?: string;
     autoScanBranches?: string[];
-    maxCachedScans?: 10 | 20 | 50;
+    maxCachedScans?: ProviderCacheLimit;
   };
 }
 

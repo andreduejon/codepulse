@@ -88,16 +88,9 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
       const pageSize = state.maxCount();
       const silentMaxCount = computeSilentMaxCount(pageSize, state.commits(), silent, preserveLoaded);
 
-      const [commits, branches, currentBranch, remoteUrl, tagDetails, stashes, wtStatus] = await Promise.all([
-        getCommits(
-          path,
-          {
-            maxCount: silentMaxCount,
-            branch: effectiveBranch,
-            all: effectiveAll,
-          },
-          ctrl.signal,
-        ),
+      const logOptions = { branch: effectiveBranch, all: effectiveAll };
+      let [commits, branches, currentBranch, remoteUrl, tagDetails, stashes, wtStatus] = await Promise.all([
+        getCommits(path, { ...logOptions, maxCount: silentMaxCount }, ctrl.signal),
         getBranches(path, ctrl.signal),
         getCurrentBranch(path, ctrl.signal),
         getRemoteUrl(path, ctrl.signal),
@@ -108,6 +101,18 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
 
       // If we were superseded by a newer loadData call, discard results
       if (ctrl.signal.aborted || repoPath() !== path) return;
+
+      // HEAD can sit past the first page (an old branch checked out while --all shows newer work).
+      // Without it there is no selection anchor and no uncommitted row, so widen the page a few times.
+      const logIncludesHead = effectiveAll || !effectiveBranch;
+      for (
+        let count = silentMaxCount;
+        !silent && logIncludesHead && !findCurrentHeadHash(commits) && commits.length >= count && count < pageSize * 16;
+      ) {
+        count *= 2;
+        commits = await getCommits(path, { ...logOptions, maxCount: count }, ctrl.signal);
+        if (ctrl.signal.aborted || repoPath() !== path) return;
+      }
 
       // Detect whether more commits exist beyond this page.
       // Compare raw git result count against the requested page size (not silentMaxCount,
@@ -318,6 +323,10 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
   onCleanup(() => {
     if (autoRefreshTimer) clearInterval(autoRefreshTimer);
     if (autoFetchTimer) clearInterval(autoFetchTimer);
+    // Stop in-flight git work so it cannot write into state after disposal.
+    loadAbortCtrl?.abort();
+    loadMoreAbortCtrl?.abort();
+    fetchOperation++;
   });
 
   return { loadData, loadMoreData, handleFetch };

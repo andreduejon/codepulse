@@ -778,16 +778,12 @@ describe("buildOpenShiftGraphBadges", () => {
     return buildOpenShiftGraphBadges(data).get(SHA);
   };
 
-  test("uses fail when any matched resource fails", () => {
-    expect(badgeFor("pass", "running", "fail")?.badge).toBe("fail");
-  });
-
-  test("uses running when no resource fails and one is running", () => {
-    expect(badgeFor("pass", "running")?.badge).toBe("running");
-  });
-
-  test("uses unknown before pass", () => {
-    expect(badgeFor("pass", "unknown")?.badge).toBe("unknown");
+  test.each<[string, OpenShiftResource["status"][], OpenShiftResource["status"]]>([
+    ["fail when any matched resource fails", ["pass", "running", "fail"], "fail"],
+    ["running when no resource fails and one is running", ["pass", "running"], "running"],
+    ["unknown before pass", ["pass", "unknown"], "unknown"],
+  ])("uses %s", (_label, statuses, expected) => {
+    expect(badgeFor(...statuses)?.badge).toBe(expected);
   });
 
   test("uses pass only when every resource passes", () => {

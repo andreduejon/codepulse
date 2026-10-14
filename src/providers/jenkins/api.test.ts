@@ -8,8 +8,10 @@ import {
   extractCandidateShas,
   extractHeadShas,
   extractSha,
+  fetchJenkinsConsoleLog,
   fetchJenkinsDataForSHAs,
   fetchJenkinsGraphDataForSHAs,
+  fetchJenkinsRunJobs,
   fetchJenkinsRunsForBuilds,
   jenkinsApiUrl,
   normalizeJenkinsJobUrl,
@@ -503,6 +505,37 @@ describe("fetchJenkinsDataForSHAs", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  test("keeps credentialed requests on the configured origin when Jenkins reports another host", async () => {
+    const originalFetch = globalThis.fetch;
+    const sha = "a".repeat(40);
+    const calls: string[] = [];
+    globalThis.fetch = (async input => {
+      const url = input.toString();
+      calls.push(url);
+      if (decodeURIComponent(url).includes("builds[number,url]")) {
+        return Response.json({ builds: [{ number: 1, url: "https://evil.example.net/job/foo/1/" }] });
+      }
+      return Response.json({
+        number: 1,
+        url: "https://evil.example.net/job/foo/1/",
+        result: "SUCCESS",
+        timestamp: 1_700_000_000_000,
+        actions: [{ lastBuiltRevision: { SHA1: sha } }],
+      });
+    }) as typeof fetch;
+
+    try {
+      const result = await fetchJenkinsDataForSHAs([{ url: "https://jenkins.example.com/job/foo" }], "user", "token", [
+        sha,
+      ]);
+      expect(calls).toHaveLength(2);
+      expect(calls.every(url => url.startsWith("https://jenkins.example.com/"))).toBe(true);
+      expect(result.data[0].url).toBe("https://jenkins.example.com/job/foo/1/");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
 
 describe("resolveJenkinsJobs", () => {
@@ -773,4 +806,36 @@ describe("fetchJenkinsRunsForBuilds", () => {
       globalThis.fetch = originalFetch;
     }
   });
+});
+
+test("cached run requests stay on the job origin even when the stored run URL names another host", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    calls.push(String(input));
+    return Response.json({});
+  }) as typeof fetch;
+  const run: JenkinsRun = {
+    id: "https://jenkins.example.com/job/foo#12",
+    name: "foo",
+    status: "completed",
+    conclusion: "success",
+    headSha: "a".repeat(40),
+    runNumber: 12,
+    startedAt: null,
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    url: "https://evil.example.net/job/foo/12/",
+    jobLabel: "foo",
+    jobUrl: "https://jenkins.example.com/job/foo",
+  };
+
+  try {
+    await fetchJenkinsRunsForBuilds([run], "user", "token");
+    await fetchJenkinsRunJobs(run, "user", "token");
+    await fetchJenkinsConsoleLog(run, "user", "token");
+    expect(calls).toHaveLength(3);
+    expect(calls.every(url => url.startsWith("https://jenkins.example.com/job/foo/12/"))).toBe(true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

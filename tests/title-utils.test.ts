@@ -17,32 +17,18 @@ describe("getDialogTitleContentWidth", () => {
 // ── splitPath ────────────────────────────────────────────────────────
 
 describe("splitPath", () => {
-  test("splits nested path into dirPrefix and basename", () => {
-    expect(splitPath("src/components/dialogs/diff-utils.ts")).toEqual({
-      dirPrefix: "src/components/dialogs/",
-      basename: "diff-utils.ts",
-    });
-  });
-
-  test("returns empty dirPrefix for rootless filename", () => {
-    expect(splitPath("README.md")).toEqual({
-      dirPrefix: "",
-      basename: "README.md",
-    });
-  });
-
-  test("handles single directory level", () => {
-    expect(splitPath("src/app.ts")).toEqual({
-      dirPrefix: "src/",
-      basename: "app.ts",
-    });
-  });
-
-  test("handles deeply nested path", () => {
-    expect(splitPath("a/b/c/d/e/f.txt")).toEqual({
-      dirPrefix: "a/b/c/d/e/",
-      basename: "f.txt",
-    });
+  test.each([
+    [
+      "splits nested path into dirPrefix and basename",
+      "src/components/dialogs/diff-utils.ts",
+      "src/components/dialogs/",
+      "diff-utils.ts",
+    ],
+    ["returns empty dirPrefix for rootless filename", "README.md", "", "README.md"],
+    ["handles single directory level", "src/app.ts", "src/", "app.ts"],
+    ["handles deeply nested path", "a/b/c/d/e/f.txt", "a/b/c/d/e/", "f.txt"],
+  ])("%s", (_label, path, dirPrefix, basename) => {
+    expect(splitPath(path)).toEqual({ dirPrefix, basename });
   });
 });
 
@@ -54,36 +40,15 @@ describe("middleTruncate", () => {
     expect(middleTruncate("hello", 5)).toBe("hello");
   });
 
-  test("truncates long string with ellipsis in the middle", () => {
-    const result = middleTruncate("abcdefghij", 7);
-    // available = 6, left = 3, right = 3
-    expect(result).toBe("abc\u2026hij");
-  });
-
-  test("handles maxLen of 1 (just ellipsis)", () => {
-    expect(middleTruncate("abcdef", 1)).toBe("\u2026");
-  });
-
-  test("handles maxLen of 2", () => {
-    const result = middleTruncate("abcdef", 2);
-    // available = 1, left = 0, right = 1
-    expect(result).toBe("\u2026f");
-  });
-
-  test("handles maxLen of 3", () => {
-    const result = middleTruncate("abcdef", 3);
-    // available = 2, left = 1, right = 1
-    expect(result).toBe("a\u2026f");
-  });
-
-  test("biases toward keeping the end (right side)", () => {
-    const result = middleTruncate("abcdefgh", 6);
-    // available = 5, left = 2, right = 3
-    expect(result).toBe("ab\u2026fgh");
-  });
-
-  test("empty string returns empty", () => {
-    expect(middleTruncate("", 5)).toBe("");
+  test.each([
+    ["truncates long string with ellipsis in the middle", "abcdefghij", 7, "abc\u2026hij"], // available = 6, left = 3, right = 3
+    ["handles maxLen of 1 (just ellipsis)", "abcdef", 1, "\u2026"],
+    ["handles maxLen of 2", "abcdef", 2, "\u2026f"], // available = 1, left = 0, right = 1
+    ["handles maxLen of 3", "abcdef", 3, "a\u2026f"], // available = 2, left = 1, right = 1
+    ["biases toward keeping the end (right side)", "abcdefgh", 6, "ab\u2026fgh"], // available = 5, left = 2, right = 3
+    ["empty string returns empty", "", 5, ""],
+  ])("%s", (_label, input, maxLen, expected) => {
+    expect(middleTruncate(input, maxLen)).toBe(expected);
   });
 });
 
