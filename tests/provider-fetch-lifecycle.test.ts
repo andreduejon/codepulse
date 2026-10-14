@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { createRoot } from "solid-js";
+import { createRoot, createSignal } from "solid-js";
 import { createAppState } from "../src/context/state";
 import { useProviderFetchLifecycle } from "../src/providers/shared/use-provider-fetch-lifecycle";
 
@@ -10,6 +10,115 @@ afterEach(() => {
 });
 
 describe("useProviderFetchLifecycle", () => {
+  test("suspension aborts and invalidates work without resetting memory, including after resume", async () => {
+    const [suspended, setSuspended] = createSignal(false);
+    let lifecycle!: ReturnType<typeof useProviderFetchLifecycle>;
+    let memory = "cached";
+    let resets = 0;
+    const requests: Array<{ signal?: AbortSignal; resolve: () => void }> = [];
+    createRoot(dispose => {
+      disposers.push(dispose);
+      const { state, actions } = createAppState(100, 0, 0);
+      actions.setRepoPath("/repo");
+      actions.setActiveProviderView("jenkins");
+      lifecycle = useProviderFetchLifecycle({
+        state,
+        providerId: "jenkins",
+        suspended,
+        identity: () => "id",
+        isAvailable: () => true,
+        isBackgroundReady: () => false,
+        skipShaBackground: true,
+        queriedSHAs: new Set(),
+        reportUnavailable: () => {},
+        runInitialFetch: async ({ signal, epoch }) => {
+          await new Promise<void>(resolve => requests.push({ signal, resolve }));
+          if (lifecycle.isCurrent(epoch, "/repo")) memory = "fresh";
+        },
+        runRefresh: async () => {},
+        onResetCaches: () => {
+          resets++;
+          memory = "";
+        },
+      });
+    });
+    const oldEpoch = lifecycle.getEpoch();
+    await lifecycle.fetchInitial(); // Queue catch-up behind the active request.
+    setSuspended(true);
+    expect(requests[0].signal?.aborted).toBe(true);
+    expect(lifecycle.isCurrent(oldEpoch, "/repo")).toBe(false);
+    expect(memory).toBe("cached");
+    expect(resets).toBe(0);
+    await lifecycle.fetchInitial(undefined, undefined, true);
+    await lifecycle.fetchRefresh(undefined, true);
+    expect(requests).toHaveLength(1);
+
+    setSuspended(false);
+    expect(requests).toHaveLength(2);
+    requests[0].resolve();
+    await Bun.sleep(0);
+    expect(memory).toBe("cached");
+    expect(requests).toHaveLength(2);
+    requests[1].resolve();
+    await Bun.sleep(0);
+    expect(memory).toBe("fresh");
+  });
+
+  test("explicit invalidation and timer changes cannot restart a suspended provider", async () => {
+    const [suspended, setSuspended] = createSignal(true);
+    let lifecycle!: ReturnType<typeof useProviderFetchLifecycle>;
+    let setInterval!: (value: number) => void;
+    let fetches = 0;
+    let refreshes = 0;
+    let probes = 0;
+    createRoot(dispose => {
+      disposers.push(dispose);
+      const { state, actions } = createAppState(100, 0, 0);
+      actions.setActiveProviderView("jenkins");
+      actions.setAutoRefreshInterval(5);
+      setInterval = actions.setAutoRefreshInterval;
+      lifecycle = useProviderFetchLifecycle({
+        state,
+        providerId: "jenkins",
+        suspended,
+        identity: () => "id",
+        isAvailable: () => {
+          probes++;
+          return true;
+        },
+        isBackgroundReady: () => false,
+        skipShaBackground: true,
+        queriedSHAs: new Set(),
+        reportUnavailable: () => {},
+        runInitialFetch: async () => {
+          fetches++;
+          lifecycle.noteFetchStarted();
+        },
+        runRefresh: async () => {
+          refreshes++;
+        },
+        onResetCaches: () => {},
+      });
+    });
+    lifecycle.resetCaches();
+    lifecycle.startAutoRefresh();
+    setInterval(3);
+    await lifecycle.fetchInitial();
+    await lifecycle.fetchRefresh();
+    await Bun.sleep(15);
+    expect(probes).toBe(0);
+    expect(fetches).toBe(0);
+    expect(refreshes).toBe(0);
+    setSuspended(false);
+    await Bun.sleep(15);
+    expect(fetches).toBe(1);
+    expect(refreshes).toBeGreaterThan(0);
+    setSuspended(true);
+    const before = refreshes;
+    await Bun.sleep(15);
+    expect(refreshes).toBe(before);
+  });
+
   test("queues a second fetch while one is in flight", async () => {
     let resolveFirst!: () => void;
     let initialCalls = 0;

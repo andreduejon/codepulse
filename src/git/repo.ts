@@ -397,16 +397,6 @@ export async function getCommitDetail(
   // from being mistaken for a path if it matches a filename)
   const msgProc = runGit(repoPath, ["log", "-1", "--format=%B", hash, "--"], signal);
 
-  // Single diff-tree call: --raw gives status letters, --numstat gives +/- stats.
-  // Git outputs the raw lines first, then a blank separator, then numstat lines.
-  const diffProc = runGit(repoPath, ["diff-tree", "--no-commit-id", "-r", "--raw", "--numstat", hash, "--"], signal);
-
-  const [msgResult, diffResult] = await Promise.all([msgProc, diffProc]);
-  if (signal?.aborted) return null;
-
-  const fullMessage = msgResult.stdout;
-  const files = parseDiffTreeOutput(diffResult.stdout);
-
   // Use existing commit info if provided (avoids a redundant git log subprocess)
   let commit: Commit;
   if (existingCommit) {
@@ -424,6 +414,20 @@ export async function getCommitDetail(
     if (!parsed) return null;
     commit = parsed;
   }
+
+  // Single diff-tree call: --raw gives status letters, --numstat gives +/- stats.
+  // Git outputs the raw lines first, then a blank separator, then numstat lines.
+  // --root lists the initial commit's files; merges diff against their first parent
+  // (one-revision diff-tree prints nothing for merges).
+  const revisions = commit.parents.length > 1 ? [`${hash}^1`, hash] : [hash];
+  const [msgResult, diffResult] = await Promise.all([
+    msgProc,
+    runGit(repoPath, ["diff-tree", "--root", "--no-commit-id", "-r", "--raw", "--numstat", ...revisions, "--"], signal),
+  ]);
+  if (signal?.aborted) return null;
+
+  const fullMessage = msgResult.stdout;
+  const files = parseDiffTreeOutput(diffResult.stdout);
 
   const lines = fullMessage.trim().split("\n");
 

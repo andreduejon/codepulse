@@ -1,4 +1,5 @@
 import { type Accessor, createContext, createSignal, useContext } from "solid-js";
+import { addDebugEvent } from "../debug/events";
 import {
   ayuDark,
   catppuccinMocha,
@@ -49,6 +50,13 @@ export interface Theme {
   openShiftBg: string;
 }
 
+export interface CustomTheme {
+  id: string;
+  theme: Theme;
+  base?: string;
+  overrides: Exclude<keyof Theme, "name">[];
+}
+
 export const themes: Record<string, Theme> = {
   "open-code-original": openCodeOriginal,
   "catppuccin-mocha": catppuccinMocha,
@@ -70,18 +78,30 @@ const ThemeContext = createContext<{
   theme: Accessor<Theme>;
   setTheme: (name: string) => void;
   themeName: Accessor<string>;
+  themes: Record<string, Theme>;
+  customThemes: readonly CustomTheme[];
 }>();
 
-export function createThemeState(initialTheme: string = "catppuccin-mocha") {
-  const [themeName, setThemeName] = createSignal(initialTheme);
-  const theme = () => themes[themeName()] ?? catppuccinMocha;
+export function createThemeState(initialTheme: string = "catppuccin-mocha", customThemes: readonly CustomTheme[] = []) {
+  const registry = { ...themes, ...Object.fromEntries(customThemes.map(custom => [custom.id, custom.theme])) };
+  const initialName = Object.hasOwn(registry, initialTheme) ? initialTheme : "catppuccin-mocha";
+  if (initialName !== initialTheme) {
+    addDebugEvent({
+      source: "error",
+      message: `Theme ${JSON.stringify(initialTheme)} unavailable; using Catppuccin Mocha`,
+    });
+  }
+  const [themeName, setThemeName] = createSignal(initialName);
+  const theme = () => registry[themeName()];
 
   return {
     theme,
     setTheme: (name: string) => {
-      if (themes[name]) setThemeName(name);
+      if (Object.hasOwn(registry, name)) setThemeName(name);
     },
     themeName,
+    themes: registry,
+    customThemes,
     ThemeContext,
   };
 }

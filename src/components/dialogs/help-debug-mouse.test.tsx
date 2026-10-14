@@ -6,10 +6,11 @@ import { createSignal, Show } from "solid-js";
 import packageJson from "../../../package.json";
 import { createThemeState, ThemeContext } from "../../context/theme";
 import { addDebugEvent, clearDebugEvents } from "../../debug/events";
+import { KEYBINDS } from "../../keybinds";
 import DebugDialog from "./debug-dialog";
 import HelpDialog from "./help-dialog";
 
-test("Help tabs hover and click; Help and Debug support wheel and clickable close", async () => {
+test("Help tabs hover and click. Help and Debug support wheel and clickable close", async () => {
   const theme = createThemeState();
   const [dialog, setDialog] = createSignal<"help" | "debug" | null>("help");
   const setup = await testRender(
@@ -44,6 +45,17 @@ test("Help tabs hover and click; Help and Debug support wheel and clickable clos
     node.getChildren().flatMap(child => [child, ...descendants(child)]);
   try {
     await setup.flush();
+    const sections = KEYBINDS.general.filter(row => row.kind === "section").map(row => row.label);
+    expect(sections).toContain("Color Theme");
+    expect(sections).not.toContain("Theme inspector");
+    expect(sections).not.toContain("Configuration and Windows");
+    const themeStart = KEYBINDS.general.findIndex(row => row.kind === "section" && row.label === "Color Theme");
+    const themeEnd = KEYBINDS.general.findIndex(row => row.kind === "section" && row.label === "Help");
+    const themeKeys = KEYBINDS.general
+      .slice(themeStart + 1, themeEnd)
+      .filter(row => row.kind === "binding")
+      .map(row => row.key);
+    expect(themeKeys).toEqual(["↑/↓", "shift + ↑/↓", "enter", "esc", "d", "PgUp/PgDn"]);
     const header = lines().find(line => line.includes("esc close"));
     expect(header).toContain("Help");
     expect(header).not.toContain("codepulse");

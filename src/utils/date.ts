@@ -1,5 +1,18 @@
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+/** Absolute graph date, including future dates: same-year time or different-year year. */
+export function formatGraphDate(dateStr: string): string {
+  if (!dateStr) return "";
+  const date = new Date(dateStr);
+  if (!Number.isFinite(date.getTime())) return "";
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = MONTHS[date.getMonth()];
+  if (date.getFullYear() !== new Date(Date.now()).getFullYear()) return `${day}. ${month} ${date.getFullYear()}`;
+  const hours = String(date.getHours()).padStart(2, "0");
+  const mins = String(date.getMinutes()).padStart(2, "0");
+  return `${day}. ${month} ${hours}:${mins}`;
+}
+
 // Cache for formatRelativeDate — avoids repeated Date parsing and arithmetic.
 // Entries are keyed by date string. When the cache exceeds MAX entries,
 // the oldest half is evicted (Map preserves insertion order) to avoid
@@ -43,7 +56,6 @@ export function formatRelativeDate(dateStr: string): string {
   }
 
   const date = new Date(dateStr);
-  const nowDate = new Date(now);
   const diffMs = now - date.getTime();
   const diffMins = Math.floor(diffMs / 60000);
   const diffHours = Math.floor(diffMins / 60);
@@ -59,16 +71,7 @@ export function formatRelativeDate(dateStr: string): string {
   else if (diffDays < 7) result = `${diffDays}d ago`;
   else {
     isStable = true; // Absolute format — won't change on subsequent calls
-    const day = String(date.getDate()).padStart(2, "0");
-    const month = MONTHS[date.getMonth()];
-    const hours = String(date.getHours()).padStart(2, "0");
-    const mins = String(date.getMinutes()).padStart(2, "0");
-
-    if (date.getFullYear() === nowDate.getFullYear()) {
-      result = `${day}. ${month} ${hours}:${mins}`;
-    } else {
-      result = `${day}. ${month} ${date.getFullYear()}`;
-    }
+    result = formatGraphDate(dateStr);
   }
 
   // Evict the oldest entries if cache is full

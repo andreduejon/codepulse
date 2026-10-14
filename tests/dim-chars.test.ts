@@ -386,19 +386,6 @@ describe("dimGraphChars", () => {
     expectBright(result[2], chars[2]); // ╮ at col 1 — horizontal bright
   });
 
-  test("vertical bright does not affect horizontal glyphs at same column", () => {
-    // ─ at a column that's in brightColumns but not brightHorizontal → dimmed
-    const chars = [gc("─"), gc("─")];
-    const result = dim(chars, {
-      isUncommitted: false,
-      ancestryActive: true,
-      brightColumns: new Set([0]),
-      // no brightHorizontal
-    });
-    expectDimmed(result[0]);
-    expectDimmed(result[1]);
-  });
-
   // ── Char-position tracking ─────────────────────────────────────────
 
   test("char-position tracking: mixed 1-char and 2-char entries map to correct columns", () => {

@@ -1,10 +1,11 @@
 import type { Accessor } from "solid-js";
 import { createEffect, createMemo, createSignal } from "solid-js";
 import type { CodepulseConfig, ConfigInfo } from "../config";
-import { getRepoDisplayConfig, writeConfig } from "../config";
+import { getRepoDisplayConfig } from "../config";
+import { writeConfig } from "../config-write";
 import { AUTO_REFRESH_MS, INTERVAL_OPTIONS, MAX_COUNT_OPTIONS, MS_TO_LABEL } from "../constants";
 import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL, useAppState } from "../context/state";
-import { themes } from "../context/theme";
+import type { Theme } from "../context/theme";
 import { getTokenSource, parseGitHubRemote } from "../providers/github-actions/api";
 import type { JenkinsJobConfig } from "../providers/jenkins/types";
 import { isValidJenkinsJobUrl } from "../providers/jenkins/validation";
@@ -16,11 +17,15 @@ import {
 import type { ProviderDetailView } from "../providers/provider";
 import {
   cycleAutoRefreshSeconds,
+  cycleProviderCacheLimit,
   cycleProviderLimit,
   DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS,
   PROVIDER_AUTO_REFRESH_OPTIONS,
+  PROVIDER_CACHE_LIMIT_OPTIONS,
+  PROVIDER_LIMIT_OPTIONS,
   PROVIDER_MS_TO_LABEL,
   type ProviderAutoRefreshSeconds,
+  type ProviderCacheLimit,
   type ProviderLimit,
 } from "../providers/shared/auto-refresh";
 import type { SnykCacheLimit } from "../providers/snyk/types";
@@ -101,6 +106,7 @@ export interface MenuItemsOptions {
   activeTab: Accessor<MenuTab>;
   /** Theme name accessor (e.g. "catppuccin-mocha"). */
   themeName: Accessor<string>;
+  themes: Record<string, Theme>;
   /** Set the active theme by name. */
   setTheme: (name: string) => void;
   /** Clipboard copy callback. */
@@ -114,6 +120,7 @@ export interface MenuItemsOptions {
   configInfo?: ConfigInfo;
   /** Open the project selector to switch repos. */
   onSwitchRepo?: () => void;
+  onOpenCache?: () => void;
   /** Current GitHub provider config (tokenEnvVar, enabled, trustedEnterpriseHost). */
   githubConfig?: Accessor<GitHubMenuConfig | undefined>;
   /** Callback to update GitHub provider config. */
@@ -145,7 +152,7 @@ export interface GitHubMenuConfig {
   tokenEnvVar: string;
   trustedEnterpriseHost: string | null;
   fetchDepth: ProviderLimit;
-  cacheLimit: ProviderLimit;
+  cacheLimit: ProviderCacheLimit;
   autoRefreshSeconds: ProviderAutoRefreshSeconds;
 }
 
@@ -154,7 +161,7 @@ export interface JenkinsMenuConfig {
   username?: string;
   tokenEnvVar: string;
   fetchDepth: ProviderLimit;
-  cacheLimit: ProviderLimit;
+  cacheLimit: ProviderCacheLimit;
   autoRefreshSeconds: ProviderAutoRefreshSeconds;
   jobs: JenkinsJobConfig[];
 }
@@ -165,7 +172,7 @@ export interface OpenShiftMenuConfig {
   tokenEnvVar: string;
   namespaces: string[];
   commitShaAnnotation: string;
-  cacheLimit: ProviderLimit;
+  cacheLimit: ProviderCacheLimit;
   fetchDepth: ProviderLimit;
   autoRefreshSeconds: ProviderAutoRefreshSeconds;
 }
@@ -216,12 +223,9 @@ export function buildSnykProviderItems(
     {
       kind: "cycle",
       label: "Cache count",
-      options: ["10", "20", "50"],
+      options: PROVIDER_CACHE_LIMIT_OPTIONS.map(String),
       get: () => String(cfg.maxCachedScans),
-      set: value => {
-        const maxCachedScans: SnykCacheLimit = value === "10" ? 10 : value === "50" ? 50 : 20;
-        update({ ...cfg, maxCachedScans });
-      },
+      set: value => update({ ...cfg, maxCachedScans: cycleProviderCacheLimit(value) }),
     },
     {
       kind: "editable",
@@ -287,14 +291,14 @@ export function buildOpenShiftProviderItems(
     {
       kind: "cycle",
       label: "Cache count",
-      options: ["10", "20", "50"],
+      options: PROVIDER_CACHE_LIMIT_OPTIONS.map(String),
       get: () => String(cfg.cacheLimit),
-      set: v => update({ ...cfg, cacheLimit: cycleProviderLimit(v) }),
+      set: v => update({ ...cfg, cacheLimit: cycleProviderCacheLimit(v) }),
     },
     {
       kind: "cycle",
       label: "Fetch size",
-      options: ["10", "20", "50"],
+      options: PROVIDER_LIMIT_OPTIONS.map(String),
       get: () => String(cfg.fetchDepth),
       set: v => update({ ...cfg, fetchDepth: cycleProviderLimit(v) }),
     },
@@ -401,10 +405,10 @@ export function buildGitHubProviderItems(
     {
       kind: "cycle",
       label: "Cache count",
-      options: ["10", "20", "50"],
+      options: PROVIDER_CACHE_LIMIT_OPTIONS.map(String),
       get: () => String(ghCfg.cacheLimit),
       set: v => {
-        const newCfg = { ...ghCfg, cacheLimit: cycleProviderLimit(v) };
+        const newCfg = { ...ghCfg, cacheLimit: cycleProviderCacheLimit(v) };
         onChange?.(newCfg);
         persist?.(newCfg);
       },
@@ -412,7 +416,7 @@ export function buildGitHubProviderItems(
     {
       kind: "cycle",
       label: "Fetch size",
-      options: ["10", "20", "50"],
+      options: PROVIDER_LIMIT_OPTIONS.map(String),
       get: () => String(ghCfg.fetchDepth),
       set: v => {
         const newCfg = { ...ghCfg, fetchDepth: cycleProviderLimit(v) };
@@ -488,10 +492,10 @@ export function buildJenkinsProviderItems(
     {
       kind: "cycle",
       label: "Cache count",
-      options: ["10", "20", "50"],
+      options: PROVIDER_CACHE_LIMIT_OPTIONS.map(String),
       get: () => String(jenkinsCfg.cacheLimit),
       set: v => {
-        const newCfg = { ...jenkinsCfg, cacheLimit: cycleProviderLimit(v) };
+        const newCfg = { ...jenkinsCfg, cacheLimit: cycleProviderCacheLimit(v) };
         onChange?.(newCfg);
         persist?.(newCfg);
       },
@@ -499,7 +503,7 @@ export function buildJenkinsProviderItems(
     {
       kind: "cycle",
       label: "Fetch size",
-      options: ["10", "20", "50"],
+      options: PROVIDER_LIMIT_OPTIONS.map(String),
       get: () => String(jenkinsCfg.fetchDepth),
       set: v => {
         const newCfg = { ...jenkinsCfg, fetchDepth: cycleProviderLimit(v) };
@@ -668,13 +672,16 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
       ...(opts.onSwitchRepo
         ? [{ kind: "action" as const, label: "Switch repository", run: () => opts.onSwitchRepo?.() }]
         : []),
+      ...(opts.onOpenCache
+        ? [{ kind: "action" as const, label: "Inspect cache", run: () => opts.onOpenCache?.() }]
+        : []),
 
       { kind: "header", label: "Preferences" },
       {
         kind: "dialog",
         label: "Color theme",
         dialogId: "theme",
-        get: () => themes[opts.themeName()]?.name ?? opts.themeName(),
+        get: () => opts.themes[opts.themeName()]?.name ?? opts.themeName(),
       },
       {
         kind: "cycle",

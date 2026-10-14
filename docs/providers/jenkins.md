@@ -15,7 +15,7 @@ Configure the provider per repository from `:providers`:
 - Set the environment variable containing an API token. Default:
   `JENKINS_TOKEN`.
 - Add HTTPS job or multibranch pipeline URLs without embedded credentials.
-- Cache limit (`10`, `20`, `50`): maximum commit snapshots kept on disk.
+- Cache limit (`10`, `20`, `50`, `100`, `200`, `500`): maximum commit snapshots kept on disk.
 - Fetch size (`10`, `20`, `50`): how many graph commits are queried, and how
   many recent builds to inspect per job.
 - Auto refresh (`off`, `2m`, `5m`, `10m`): re-query running builds while the
@@ -42,10 +42,13 @@ cache refresh.
 ## Matching and refresh
 
 Builds are matched through immutable SCM revision SHAs. Completed runs, jobs,
-and stages are stored under
-`~/.cache/codepulse/jenkins/<repository-hash>/<commit-sha>.json`. Console logs
-are fetched on first open and kept next to that file under `logs/`. The cache
-limit caps commit snapshots; associated logs leave with the SHA.
+and stages are stored in `~/.cache/codepulse/cache.sqlite` under provider `jenkins`.
+Console logs are fetched on first open. Completed-build logs are cached as
+`log` artifacts in the same database when their commit snapshot exists.
+Without that parent snapshot, the fetched log still appears but is not persisted
+and does not recreate the snapshot. The cache limit caps commit snapshots.
+Deleting or evicting a snapshot cascades to its logs. Snapshot updates preserve
+existing logs.
 A build deleted in Jenkins stays in the local cache.
 Auto refresh only re-queries SHAs that still show as running.
 Scrolling outside fetch size reads disk cache only — it does not query Jenkins.

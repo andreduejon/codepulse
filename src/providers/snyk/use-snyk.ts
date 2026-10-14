@@ -71,6 +71,7 @@ export function useSnyk(opts: {
   state: AppState;
   actions: AppActions;
   config: Accessor<Partial<SnykProviderConfig>>;
+  suspended?: Accessor<boolean>;
   scan?: typeof scanSnykCommit;
   readCache?: typeof getCachedSnykScan;
 }): UseSnykResult {
@@ -103,6 +104,7 @@ export function useSnyk(opts: {
   let activeController: AbortController | null = null;
   let epoch = 0;
   let disposed = false;
+  const [workVersion, setWorkVersion] = createSignal(0);
 
   function publishResults(): void {
     setResultsVersion(version => version + 1);
@@ -110,7 +112,7 @@ export function useSnyk(opts: {
   }
 
   function mergeResult(result: SnykScanResult, expectedEpoch: number): void {
-    if (disposed || expectedEpoch !== epoch) return;
+    if (disposed || opts.suspended?.() || expectedEpoch !== epoch) return;
     const sha = result.sha.toLowerCase();
     const existing = results.get(sha);
     if (!shouldReplaceSnykResult(existing, result)) return;
@@ -125,13 +127,20 @@ export function useSnyk(opts: {
     setScanningVersion(version => version + 1);
   }
 
-  function resetForIdentityChange(): void {
+  function cancelWork(): void {
     epoch++;
     activeController?.abort();
     activeController = null;
     clearQueuedScans();
-    autoScanAttempted.clear();
     cacheProbeAttempted.clear();
+    for (const sha of autoScanAttempted) {
+      if (!results.has(sha)) autoScanAttempted.delete(sha);
+    }
+  }
+
+  function resetForIdentityChange(): void {
+    cancelWork();
+    autoScanAttempted.clear();
     results = new Map();
     publishResults();
     const current = config();
@@ -141,6 +150,7 @@ export function useSnyk(opts: {
         ? providerUnavailable(`Snyk unavailable. Missing ${current.tokenEnvVar}.`)
         : providerIdle(),
     );
+    setWorkVersion(version => version + 1);
   }
 
   function createQueueEntry(sha: string, force: boolean): ScanQueueEntry {
@@ -152,7 +162,7 @@ export function useSnyk(opts: {
   }
 
   async function drainQueue(): Promise<void> {
-    if (disposed || activeEntry || queue.length === 0) return;
+    if (disposed || opts.suspended?.() || activeEntry || queue.length === 0) return;
     const entry = queue.shift();
     if (!entry) return;
     queuedBySHA.delete(entry.sha);
@@ -172,18 +182,28 @@ export function useSnyk(opts: {
         force: entry.force,
         maxCachedScans: currentConfig.maxCachedScans,
       });
-      if (!controller.signal.aborted && entry.epoch === epoch && entry.repoPath === state.repoPath()) {
+      if (
+        !controller.signal.aborted &&
+        !opts.suspended?.() &&
+        entry.epoch === epoch &&
+        entry.repoPath === state.repoPath()
+      ) {
         mergeResult(scanResult, entry.epoch);
         actions.setProviderLastSuccessfulRefresh(SNYK_PROVIDER_ID, new Date());
         if (queue.length === 0) actions.setProviderStatus(SNYK_PROVIDER_ID, providerIdle());
       }
     } catch (error) {
-      if (!controller.signal.aborted && entry.epoch === epoch && entry.repoPath === state.repoPath()) {
+      if (
+        !controller.signal.aborted &&
+        !opts.suspended?.() &&
+        entry.epoch === epoch &&
+        entry.repoPath === state.repoPath()
+      ) {
         const message = error instanceof Error ? error.message : String(error);
         actions.setProviderStatus(SNYK_PROVIDER_ID, providerError(message));
       }
     } finally {
-      entry.resolve(scanResult);
+      entry.resolve(controller.signal.aborted || entry.epoch !== epoch ? null : scanResult);
       activeEntry = null;
       if (activeController === controller) activeController = null;
       if (!queuedBySHA.has(entry.sha)) {
@@ -195,7 +215,7 @@ export function useSnyk(opts: {
   }
 
   function enqueueScan(sha: string, force: boolean): Promise<SnykScanResult | null> {
-    if (disposed) return Promise.resolve(null);
+    if (disposed || opts.suspended?.()) return Promise.resolve(null);
     const normalizedSHA = sha.trim().toLowerCase();
     if (!EXACT_SHA.test(normalizedSHA)) {
       actions.setProviderStatus(SNYK_PROVIDER_ID, providerError("Snyk scan requires an exact commit SHA."));
@@ -267,6 +287,12 @@ export function useSnyk(opts: {
   });
 
   createEffect(() => {
+    if (opts.suspended?.()) untrack(cancelWork);
+  });
+
+  createEffect(() => {
+    workVersion();
+    if (opts.suspended?.()) return;
     const current = config();
     const repoPath = state.repoPath();
     const visibleSHAs = [
@@ -282,17 +308,27 @@ export function useSnyk(opts: {
     if (toRead.length === 0) return;
     for (const sha of toRead) cacheProbeAttempted.add(sha);
     const expectedEpoch = epoch;
-    void Promise.all(toRead.map(sha => readCache(repoPath, sha, { maxCachedScans: current.maxCachedScans }))).then(
-      cached => {
-        if (expectedEpoch !== epoch || repoPath !== state.repoPath() || disposed) return;
+    void (async () => {
+      // SQLite reads are synchronous, so yield between batches on large graphs.
+      for (let offset = 0; offset < toRead.length; offset += 20) {
+        if (expectedEpoch !== epoch || repoPath !== state.repoPath() || disposed || opts.suspended?.()) return;
+        const cached = await Promise.all(
+          toRead
+            .slice(offset, offset + 20)
+            .map(sha => readCache(repoPath, sha, { maxCachedScans: current.maxCachedScans })),
+        );
+        if (expectedEpoch !== epoch || repoPath !== state.repoPath() || disposed || opts.suspended?.()) return;
         for (const result of cached) {
           if (result) mergeResult(result, expectedEpoch);
         }
-      },
-    );
+        if (offset + 20 < toRead.length) await Bun.sleep(0);
+      }
+    })();
   });
 
   createEffect(() => {
+    workVersion();
+    if (opts.suspended?.()) return;
     const current = config();
     const repoPath = state.repoPath();
     const branches = state.branches();
@@ -305,13 +341,13 @@ export function useSnyk(opts: {
       if (autoScanAttempted.has(sha)) continue;
       autoScanAttempted.add(sha);
       void readCache(repoPath, sha, { maxCachedScans: current.maxCachedScans }).then(cached => {
-        if (expectedEpoch !== epoch || repoPath !== state.repoPath() || disposed) return;
+        if (expectedEpoch !== epoch || repoPath !== state.repoPath() || disposed || opts.suspended?.()) return;
         if (cached) {
           mergeResult(cached, expectedEpoch);
           return;
         }
         void enqueueScan(sha, false).then(result => {
-          if (!result && expectedEpoch === epoch && repoPath === state.repoPath() && !disposed)
+          if (!result && expectedEpoch === epoch && repoPath === state.repoPath() && !disposed && !opts.suspended?.())
             autoScanAttempted.delete(sha);
         });
       });

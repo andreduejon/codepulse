@@ -16,6 +16,7 @@ import MessageBox from "../../components/message-box";
 import { useTheme } from "../../context/theme";
 import { useT } from "../../hooks/use-t";
 import { openUrl } from "../../utils/open-url";
+import { stripTerminalControls } from "../../utils/terminal-text";
 
 type LogLineKind = "group" | "error" | "warning" | "normal";
 type LogViewMode = "all" | "issues" | "errors" | "raw";
@@ -51,7 +52,7 @@ const VIEW_MODE_TITLE_LABEL: Record<LogViewMode, string> = {
 };
 
 function stripTimestamp(line: string): string {
-  return line
+  return stripTerminalControls(line)
     .replace(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z\s?/, "")
     .replace(/^\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z\]\s?/, "");
 }

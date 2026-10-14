@@ -50,9 +50,13 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     { kind: "binding", key: "↑/↓", desc: "Move selection", indent: 1 },
     { kind: "binding", key: "←/→  or  h/l", desc: "Switch tabs", indent: 1 },
     { kind: "spacer" },
-    { kind: "section", label: "Theme" },
-    { kind: "binding", key: "enter", desc: "Confirm theme", indent: 1 },
-    { kind: "binding", key: "↑/↓", desc: "Move selection", indent: 1 },
+    { kind: "section", label: "Color Theme" },
+    { kind: "binding", key: "↑/↓", desc: "Preview themes / scroll Details", indent: 1 },
+    { kind: "binding", key: "shift + ↑/↓", desc: "Jump 10 themes / scroll 10 rows", indent: 1 },
+    { kind: "binding", key: "enter", desc: "Apply theme without closing", indent: 1 },
+    { kind: "binding", key: "esc", desc: "Close and discard unsaved preview", indent: 1 },
+    { kind: "binding", key: "d", desc: "Toggle Details", indent: 1 },
+    { kind: "binding", key: "PgUp/PgDn", desc: "Page through Details colors", indent: 1 },
     { kind: "spacer" },
     { kind: "section", label: "Help" },
     { kind: "binding", key: "g", desc: "Top", indent: 1 },
@@ -91,16 +95,19 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     { kind: "binding", key: "f", desc: "Forget selected repo", indent: 1 },
     { kind: "binding", key: "↑/↓  or  j/k", desc: "Move selection", indent: 1 },
     { kind: "spacer" },
-    { kind: "section", label: "Configuration and Windows" },
-    { kind: "binding", key: ":repo → Configuration", desc: "Select config path; Enter or click copies", indent: 1 },
-    { kind: "binding", key: "Windows config", desc: "%APPDATA%\\codepulse\\config.json", indent: 1 },
-    { kind: "binding", key: "Windows cache", desc: "%LOCALAPPDATA%\\codepulse\\Cache", indent: 1 },
-    { kind: "binding", key: "Windows command", desc: "Add install folder to PATH; open new terminal", indent: 1 },
-    { kind: "binding", key: "Windows Terminal", desc: "Windows 11 x64/ARM64; Git must be on PATH", indent: 1 },
+    { kind: "section", label: "Cache" },
+    { kind: "binding", key: "enter", desc: "Copy selected cache file path / confirm action", indent: 1 },
+    { kind: "binding", key: "e", desc: "Evict selected repository across providers with confirmation", indent: 1 },
+    { kind: "binding", key: "r", desc: "Reset selected repository's inactivity timer to 90 days", indent: 1 },
+    { kind: "binding", key: "shift+r", desc: "Reset all inactivity timers with confirmation", indent: 1 },
+    { kind: "binding", key: "q", desc: "Quit application", indent: 1 },
+    { kind: "binding", key: "esc", desc: "Cancel confirmation / back", indent: 1 },
+    { kind: "binding", key: "↑/↓  or  j/k", desc: "Move selection", indent: 1 },
   ],
   commands: [
     { kind: "binding", key: ":ancestry", desc: "Highlight first-parent ancestry" },
     { kind: "binding", key: ":branches", desc: "Open menu on Branches tab" },
+    { kind: "binding", key: ":cache", desc: "Open global app cache overview" },
     { kind: "binding", key: ":clear", desc: "Dismiss current status message" },
     { kind: "binding", key: ":debug", desc: "Toggle debug dialog" },
     { kind: "binding", key: ":fetch", desc: "Fetch from remote" },
@@ -144,7 +151,7 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     {
       kind: "binding",
       key: "Cache count",
-      desc: "Maximum cached commit run snapshots per repository. Options: 10, 20, 50.",
+      desc: "Maximum cached commit run snapshots per repository. Options: 10, 20, 50, 100, 200, 500. Default 20.",
       indent: 1,
     },
     {
@@ -182,7 +189,7 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     {
       kind: "binding",
       key: "Cache count",
-      desc: "Maximum cached commit build snapshots per repository. Options: 10, 20, 50.",
+      desc: "Maximum cached commit build snapshots per repository. Options: 10, 20, 50, 100, 200, 500. Default 20.",
       indent: 1,
     },
     {
@@ -200,7 +207,7 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     {
       kind: "binding",
       key: "New job",
-      desc: "Add a job or multibranch pipeline URL. Type is detected automatically; up to 25 enabled branches load across all parents.",
+      desc: "Add a job or multibranch pipeline URL. Type is detected automatically. Up to 25 enabled branches load across all parents.",
       indent: 1,
     },
     { kind: "spacer" },
@@ -226,7 +233,7 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     {
       kind: "binding",
       key: "Cache count",
-      desc: "Maximum cached commit Build snapshots per repository. Options: 10, 20, 50.",
+      desc: "Maximum cached commit Build snapshots per repository. Options: 10, 20, 50, 100, 200, 500. Default 20.",
       indent: 1,
     },
     {
@@ -270,7 +277,7 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     {
       kind: "binding",
       key: "Cache count",
-      desc: "Maximum cached commit scans per repository. Options: 10, 20, 50.",
+      desc: "Maximum cached commit scans per repository. Options: 10, 20, 50, 100, 200, 500. Default 20.",
       indent: 1,
     },
     {

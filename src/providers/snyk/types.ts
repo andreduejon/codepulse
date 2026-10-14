@@ -1,3 +1,5 @@
+import type { ProviderCacheLimit } from "../shared/auto-refresh";
+
 export type SnykSeverity = "critical" | "high" | "medium" | "low";
 
 export interface SnykSeverityCounts {
@@ -32,7 +34,7 @@ export interface SnykScanResult {
   failedProjects?: number;
 }
 
-export type SnykCacheLimit = 10 | 20 | 50;
+export type SnykCacheLimit = ProviderCacheLimit;
 
 export interface SnykScanOptions {
   repoPath: string;

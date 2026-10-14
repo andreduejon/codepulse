@@ -229,45 +229,37 @@ describe("buildStashByParent", () => {
 // ── computeTargetIndex ───────────────────────────────────────────────────────
 
 describe("computeTargetIndex", () => {
-  test("returns 0 as fallback when no stickyHash and no current-branch row", () => {
-    const rows = [makeRow("a"), makeRow("b"), makeRow("c")];
-    expect(computeTargetIndex(rows)).toBe(0);
-  });
-
-  test("returns the current-branch row index when no stickyHash", () => {
-    const rows = [makeRow("a"), makeRow("b", true), makeRow("c")];
-    // 'b' is on current branch at index 1
-    expect(computeTargetIndex(rows)).toBe(1);
-  });
-
-  test("restores to stickyHash index when found", () => {
-    const rows = [makeRow("a"), makeRow("b"), makeRow("c", true)];
-    // stickyHash = 'b' at index 1
-    expect(computeTargetIndex(rows, "b")).toBe(1);
-  });
-
-  test("stickyHash takes priority over current-branch row", () => {
-    const rows = [makeRow("a"), makeRow("b", true), makeRow("c")];
-    // current branch is at index 1 ('b'), but stickyHash = 'c' (index 2)
-    expect(computeTargetIndex(rows, "c")).toBe(2);
-  });
-
-  test("falls back to current-branch row when stickyHash is not found", () => {
-    const rows = [makeRow("a"), makeRow("b", true), makeRow("c")];
+  test.each([
+    [
+      "returns 0 as fallback when no stickyHash and no current-branch row",
+      [makeRow("a"), makeRow("b"), makeRow("c")],
+      undefined,
+      0,
+    ],
+    [
+      "returns the current-branch row index when no stickyHash",
+      [makeRow("a"), makeRow("b", true), makeRow("c")],
+      undefined,
+      1,
+    ],
+    ["restores to stickyHash index when found", [makeRow("a"), makeRow("b"), makeRow("c", true)], "b", 1],
+    ["stickyHash takes priority over current-branch row", [makeRow("a"), makeRow("b", true), makeRow("c")], "c", 2],
     // stickyHash 'gone' is not in rows → fall through to current branch at index 1
-    expect(computeTargetIndex(rows, "gone")).toBe(1);
-  });
-
-  test("falls back to 0 when stickyHash not found and no current-branch row", () => {
-    const rows = [makeRow("a"), makeRow("b"), makeRow("c")];
-    expect(computeTargetIndex(rows, "gone")).toBe(0);
-  });
-
-  test("handles empty rows array without throwing", () => {
-    expect(computeTargetIndex([])).toBe(0);
-  });
-
-  test("handles empty rows with stickyHash without throwing", () => {
-    expect(computeTargetIndex([], "abc")).toBe(0);
+    [
+      "falls back to current-branch row when stickyHash is not found",
+      [makeRow("a"), makeRow("b", true), makeRow("c")],
+      "gone",
+      1,
+    ],
+    [
+      "falls back to 0 when stickyHash not found and no current-branch row",
+      [makeRow("a"), makeRow("b"), makeRow("c")],
+      "gone",
+      0,
+    ],
+    ["handles empty rows array without throwing", [], undefined, 0],
+    ["handles empty rows with stickyHash without throwing", [], "abc", 0],
+  ])("%s", (_label, rows, stickyHash, expected) => {
+    expect(computeTargetIndex(rows, stickyHash)).toBe(expected);
   });
 });

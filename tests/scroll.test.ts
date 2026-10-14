@@ -22,22 +22,14 @@ function scrollbox(viewportTop: number, height: number) {
 }
 
 describe("scrollElementIntoView", () => {
-  test("aligns a tall selectable item by its top edge", () => {
-    const { box, positions } = scrollbox(0, 10);
-    scrollElementIntoView(box, element(20, 15));
-    expect(positions).toEqual([19]);
-  });
-
-  test("scrolls a normal item bottom into view", () => {
-    const { box, positions } = scrollbox(0, 10);
-    scrollElementIntoView(box, element(12, 1));
-    expect(positions).toEqual([4]);
-  });
-
-  test("uses screen coordinates for nested rows", () => {
-    const { box, positions } = scrollbox(5, 10);
-    scrollElementIntoView(box, element(20, 1));
-    expect(positions).toEqual([7]);
+  test.each([
+    ["aligns a tall selectable item by its top edge", 0, element(20, 15), [19]],
+    ["scrolls a normal item bottom into view", 0, element(12, 1), [4]],
+    ["uses screen coordinates for nested rows", 5, element(20, 1), [7]],
+  ])("%s", (_label, viewportTop, target, expected) => {
+    const { box, positions } = scrollbox(viewportTop, 10);
+    scrollElementIntoView(box, target);
+    expect(positions).toEqual(expected);
   });
 
   test("ignores items without layout", () => {

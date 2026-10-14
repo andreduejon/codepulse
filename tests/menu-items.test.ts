@@ -3,11 +3,13 @@ import {
   buildGitHubProviderItems,
   buildJenkinsProviderItems,
   buildOpenShiftProviderItems,
+  buildSnykProviderItems,
   type GitHubMenuConfig,
   isOptionalRepoMetadataValid,
   type JenkinsMenuConfig,
   type OpenShiftMenuConfig,
   optionalRepoMetadataValue,
+  type SnykMenuConfig,
 } from "../src/hooks/use-menu-items";
 
 describe("buildGitHubProviderItems", () => {
@@ -94,9 +96,18 @@ describe("buildGitHubProviderItems", () => {
 
   it("cycles fetch size, cache count, and auto refresh", () => {
     let changed = baseCfg;
-    const items = buildGitHubProviderItems(baseCfg, "https://github.com/owner/repo.git", "env", cfg => {
-      changed = cfg;
-    });
+    let persisted = baseCfg;
+    const items = buildGitHubProviderItems(
+      baseCfg,
+      "https://github.com/owner/repo.git",
+      "env",
+      cfg => {
+        changed = cfg;
+      },
+      cfg => {
+        persisted = cfg;
+      },
+    );
     const fetchSize = items.find(item => item.kind === "cycle" && item.label === "Fetch size");
     const cacheCount = items.find(item => item.kind === "cycle" && item.label === "Cache count");
     const autoRefresh = items.find(item => item.kind === "cycle" && item.label === "Auto refresh");
@@ -106,8 +117,14 @@ describe("buildGitHubProviderItems", () => {
     if (fetchSize?.kind !== "cycle" || cacheCount?.kind !== "cycle" || autoRefresh?.kind !== "cycle") return;
     fetchSize.set("10");
     expect(changed.fetchDepth).toBe(10);
-    cacheCount.set("50");
-    expect(changed.cacheLimit).toBe(50);
+    expect(fetchSize.options).toEqual(["10", "20", "50"]);
+    expect(cacheCount.options).toEqual(["10", "20", "50", "100", "200", "500"]);
+    for (const limit of [10, 20, 50, 100, 200, 500] as const) {
+      cacheCount.set(String(limit));
+      expect(changed.cacheLimit).toBe(limit);
+      expect(persisted).toEqual(changed);
+      expect(changed.fetchDepth).toBe(20);
+    }
     autoRefresh.set("5m");
     expect(changed.autoRefreshSeconds).toBe(300);
   });
@@ -172,6 +189,41 @@ describe("buildOpenShiftProviderItems", () => {
     cycle.set("10m");
     expect(changed.autoRefreshSeconds).toBe(600);
   });
+
+  it("offers and persists every cache option without expanding fetch size", () => {
+    const cfg: OpenShiftMenuConfig = {
+      enabled: true,
+      serverUrl: "https://api.example.com:6443",
+      tokenEnvVar: "OPENSHIFT_TOKEN",
+      namespaces: [],
+      commitShaAnnotation: "dev/commit-sha",
+      cacheLimit: 20,
+      fetchDepth: 20,
+      autoRefreshSeconds: 120,
+    };
+    let changed = cfg;
+    let persisted = cfg;
+    const items = buildOpenShiftProviderItems(
+      cfg,
+      next => {
+        changed = next;
+      },
+      next => {
+        persisted = next;
+      },
+    );
+    const cacheCount = items.find(item => item.kind === "cycle" && item.label === "Cache count");
+    const fetchSize = items.find(item => item.kind === "cycle" && item.label === "Fetch size");
+    if (cacheCount?.kind !== "cycle" || fetchSize?.kind !== "cycle") throw new Error("expected limit rows");
+    expect(cacheCount.options).toEqual(["10", "20", "50", "100", "200", "500"]);
+    expect(fetchSize.options).toEqual(["10", "20", "50"]);
+    for (const limit of [10, 20, 50, 100, 200, 500] as const) {
+      cacheCount.set(String(limit));
+      expect(changed.cacheLimit).toBe(limit);
+      expect(persisted).toEqual(changed);
+      expect(changed.fetchDepth).toBe(20);
+    }
+  });
 });
 
 describe("buildJenkinsProviderItems", () => {
@@ -213,9 +265,16 @@ describe("buildJenkinsProviderItems", () => {
       jobs: [],
     };
     let changed = baseCfg;
-    const items = buildJenkinsProviderItems(baseCfg, cfg => {
-      changed = cfg;
-    });
+    let persisted = baseCfg;
+    const items = buildJenkinsProviderItems(
+      baseCfg,
+      cfg => {
+        changed = cfg;
+      },
+      cfg => {
+        persisted = cfg;
+      },
+    );
     const fetchSize = items.find(item => item.kind === "cycle" && item.label === "Fetch size");
     const cacheCount = items.find(item => item.kind === "cycle" && item.label === "Cache count");
     const autoRefresh = items.find(item => item.kind === "cycle" && item.label === "Auto refresh");
@@ -229,13 +288,50 @@ describe("buildJenkinsProviderItems", () => {
     expect(changed.fetchDepth).toBe(10);
     fetchSize.set("50");
     expect(changed.fetchDepth).toBe(50);
-    cacheCount.set("10");
-    expect(changed.cacheLimit).toBe(10);
+    expect(cacheCount.options).toEqual(["10", "20", "50", "100", "200", "500"]);
+    for (const limit of [10, 20, 50, 100, 200, 500] as const) {
+      cacheCount.set(String(limit));
+      expect(changed.cacheLimit).toBe(limit);
+      expect(persisted).toEqual(changed);
+      expect(changed.fetchDepth).toBe(20);
+    }
     expect(autoRefresh.options).toEqual(["off", "2m", "5m", "10m"]);
     autoRefresh.set("off");
     expect(changed.autoRefreshSeconds).toBe(0);
     autoRefresh.set("10m");
     expect(changed.autoRefreshSeconds).toBe(600);
+  });
+});
+
+describe("buildSnykProviderItems", () => {
+  it("offers and persists every bounded cache option", () => {
+    const cfg: SnykMenuConfig = {
+      enabled: true,
+      tokenEnvVar: "SNYK_TOKEN",
+      autoScanBranches: [],
+      maxCachedScans: 20,
+    };
+    let changed = cfg;
+    let persisted = cfg;
+    const items = buildSnykProviderItems(
+      cfg,
+      () => [],
+      next => {
+        changed = next;
+      },
+      next => {
+        persisted = next;
+      },
+    );
+    const cacheCount = items.find(item => item.kind === "cycle" && item.label === "Cache count");
+    if (cacheCount?.kind !== "cycle") throw new Error("expected cache row");
+    expect(cacheCount.get()).toBe("20");
+    expect(cacheCount.options).toEqual(["10", "20", "50", "100", "200", "500"]);
+    for (const limit of [10, 20, 50, 100, 200, 500] as const) {
+      cacheCount.set(String(limit));
+      expect(changed.maxCachedScans).toBe(limit);
+      expect(persisted).toEqual(changed);
+    }
   });
 });
 

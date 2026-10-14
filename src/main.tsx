@@ -3,7 +3,11 @@ import { render } from "@opentui/solid";
 import App from "./app";
 import { parseArgs } from "./cli/parse-args";
 import { getKnownRepoInfos, type KnownRepoInfo, loadConfig, mergeOptions, resolveConfigInfo } from "./config";
+import { loadCustomThemes } from "./context/custom-themes";
+import { addDebugEvent, redactDebugValue } from "./debug/events";
 import { getRepoRoot, isGitAvailable, isGitRepo } from "./git/repo";
+import { cleanupInactiveProviderCaches } from "./providers/shared/cache-management";
+import { closeProviderCaches } from "./providers/shared/sha-sqlite-cache";
 
 /** Startup mode determines which screen the app shows first. */
 export type StartupMode =
@@ -13,7 +17,14 @@ export type StartupMode =
   | { kind: "error"; message: string };
 
 export async function main() {
+  process.once("exit", () => closeProviderCaches());
   const cli = parseArgs(process.argv);
+  try {
+    cleanupInactiveProviderCaches();
+  } catch (error) {
+    const message = redactDebugValue(error instanceof Error ? error.message : String(error));
+    addDebugEvent({ source: "error", status: "error", message: `Provider cache cleanup: ${message}` });
+  }
   const normalizedCli = {
     ...cli,
     repoPath: (await getRepoRoot(cli.repoPath)) ?? cli.repoPath,
@@ -22,6 +33,7 @@ export async function main() {
   const configInfo = resolveConfigInfo(normalizedCli.repoPath);
   const { config } = loadConfig(normalizedCli.repoPath);
   const opts = mergeOptions(normalizedCli, config);
+  const customThemes = loadCustomThemes();
 
   let startupMode: StartupMode;
 
@@ -68,6 +80,7 @@ export async function main() {
         all={opts.all}
         maxCount={opts.maxCount}
         themeName={opts.themeName}
+        customThemes={customThemes}
         autoRefreshInterval={opts.autoRefreshInterval}
         autoFetchInterval={opts.autoFetchInterval}
         configInfo={configInfo}

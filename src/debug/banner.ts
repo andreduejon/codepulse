@@ -19,6 +19,7 @@ export const BANNER = {
     fetchFailed: "GitHub fetch failed.",
     tokenExpired: "GitHub token expired. Live data unavailable.",
     jobsFailed: "GitHub jobs failed.",
+    incomplete: "GitHub data incomplete. Page limit reached.",
     logFailed: "GitHub log failed.",
     timeout: "GitHub request timed out.",
   },

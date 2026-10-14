@@ -11,6 +11,7 @@ import {
 import { getDialogTitleContentWidth, middleTruncate, TITLE_SEP } from "../../components/dialogs/title-utils";
 import { KeyHint, KeyHintSeparator } from "../../components/key-hint";
 import { useT } from "../../hooks/use-t";
+import { stripTerminalControls } from "../../utils/terminal-text";
 import type { OpenShiftResource } from "./types";
 import { shouldFollowOpenShiftLog } from "./watch";
 
@@ -121,7 +122,7 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
     if (viewMode() === "log") {
       if (logLoading()) return ["loading..."];
       if (logError()) return [logError() ?? ""];
-      return (logText() ?? "").split("\n");
+      return stripTerminalControls(logText() ?? "").split("\n");
     }
     if (objectLoading()) return ["loading..."];
     if (objectError()) return [objectError() ?? ""];
