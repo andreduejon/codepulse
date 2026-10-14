@@ -14,21 +14,13 @@ All notable changes to this project will be documented in this file.
 - **Global cache management** — use `:cache` to inspect grouped repository cache
   sizes, copy the database path, reset inactivity timers, and evict repository
   data. Provider activity pauses while the screen is open.
-- Standalone SQLite smoke checks across all six release targets, including
-  provider snapshots, logs, reopen, cascading deletion, and cache management.
 
 ### Changed
 
 - Store provider snapshots and logs in one shared SQLite database with bounded
   retention and inactivity cleanup. Configuration and themes remain JSON.
-- **Cold-cache upgrade** — legacy JSON snapshots and text logs are not imported
-  or deleted. Provider data is fetched or scanned again through normal provider
-  actions; old files remain outside SQLite management and cleanup. Known
-  development schema v1 databases are rebuilt cold as v2; unknown or corrupt
-  databases are preserved with diagnostics.
 - Write configuration atomically and preserve unreadable existing files rather
   than replacing them. Share terminal provider snapshot persistence.
-- Pin the Bun setup action to a commit SHA.
 
 ### Fixed
 
