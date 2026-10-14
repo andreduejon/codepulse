@@ -672,7 +672,9 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
       ...(opts.onSwitchRepo
         ? [{ kind: "action" as const, label: "Switch repository", run: () => opts.onSwitchRepo?.() }]
         : []),
-      ...(opts.onOpenCache ? [{ kind: "action" as const, label: "Cache", run: () => opts.onOpenCache?.() }] : []),
+      ...(opts.onOpenCache
+        ? [{ kind: "action" as const, label: "Inspect cache", run: () => opts.onOpenCache?.() }]
+        : []),
 
       { kind: "header", label: "Preferences" },
       {

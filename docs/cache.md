@@ -18,7 +18,7 @@ frees reusable database space but does not necessarily shrink the file.
 
 ## Global Cache screen
 
-Open `:cache` from the repository view, or choose **Menu → Repository → Actions → Cache**.
+Open `:cache` from the repository view, or choose **Menu → Repository → Actions → Inspect cache**.
 The global screen uses the repository
 switcher's centered logo and card layout. `General` shows one `Cache data` row
 with the database path. Select it and press Enter, or click its path, to copy

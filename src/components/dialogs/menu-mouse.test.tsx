@@ -194,14 +194,14 @@ test("menu config path copies full long Windows path with mouse and keyboard", a
   }
 });
 
-test("repository Actions includes Cache, activated by left click or keyboard without changing settings", async () => {
+test("repository Actions includes Inspect cache, activated by left click or keyboard without changing settings", async () => {
   const m = await renderMenu();
   try {
-    expect(m.point("Actions").y).toBeLessThan(m.point("Cache").y);
-    expect(m.point("Cache").y).toBeLessThan(m.point("Preferences").y);
-    await m.click("Cache", MouseButtons.RIGHT);
+    expect(m.point("Actions").y).toBeLessThan(m.point("Inspect cache").y);
+    expect(m.point("Inspect cache").y).toBeLessThan(m.point("Preferences").y);
+    await m.click("Inspect cache", MouseButtons.RIGHT);
     expect(m.cache).not.toHaveBeenCalled();
-    await m.click("Cache");
+    await m.click("Inspect cache");
     expect(m.cache).toHaveBeenCalledTimes(1);
     await m.key("RETURN");
     expect(m.cache).toHaveBeenCalledTimes(2);

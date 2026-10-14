@@ -215,9 +215,9 @@ test(":cache groups apps, resets and evicts only selected repository, then resto
     setup.mockInput.pressKey("RETURN");
     await setup.flush();
     const lines = setup.captureCharFrame().split("\n");
-    const y = lines.findIndex(line => line.includes("Cache"));
+    const y = lines.findIndex(line => line.includes("Inspect cache"));
     expect(y).toBeGreaterThanOrEqual(0);
-    await setup.mockMouse.click(lines[y].indexOf("Cache") + 1, y);
+    await setup.mockMouse.click(lines[y].indexOf("Inspect cache") + 1, y);
     await setup.flush();
     expect(app.state.keyboardScopeOverride()).toBe("cache");
     expect(setup.captureCharFrame()).toContain("General");
