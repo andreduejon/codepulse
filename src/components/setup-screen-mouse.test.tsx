@@ -19,6 +19,9 @@ test("welcome hints hover text-only, ignore right-click, and share callbacks wit
   );
   try {
     await setup.flush();
+    const spans = setup.captureSpans().lines.flatMap(line => line.spans);
+    expect(spans.find(span => span.text.includes("Welcome"))?.fg).toEqual(RGBA.fromHex(theme.theme().accent));
+    expect(spans.find(span => span.text.includes("Handy keys"))?.fg).toEqual(RGBA.fromHex(theme.theme().accent));
     for (const [label, action, other] of [
       ["continue", onComplete, onQuit],
       ["quit", onQuit, onComplete],

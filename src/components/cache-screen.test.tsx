@@ -175,7 +175,7 @@ test("compact app rows aggregate all providers; selected reset reaches every pro
     });
     const card = descendants(fullscreen).find(node => node.id === "cache-card") as BoxRenderable;
     expect(card.width).toBe(LOGO_WIDTH);
-    expect(card.height).toBe(9);
+    expect(card.height).toBe(10);
     expect(Math.abs(card.x * 2 + card.width - fullscreen.width)).toBeLessThanOrEqual(1);
     expect(card.border).toEqual(["left"]);
     expect(card.borderColor).toEqual(RGBA.fromHex(setup.theme.theme().accent));
@@ -184,6 +184,8 @@ test("compact app rows aggregate all providers; selected reset reaches every pro
     expect(setup.frame()).toContain("██████");
     expect(setup.point(`v${packageJson.version}`).y).toBe(card.y + card.height - 2);
     expect(setup.point(`v${packageJson.version}`).x).toBeGreaterThan(card.x + card.width - 12);
+    expect(setup.point(`v${packageJson.version}`).y).toBe(setup.row(ALPHA).y + 2);
+    expect(withoutWhitespace(setup.frame().split("\n")[setup.point(`v${packageJson.version}`).y - 1])).toBe("");
     expect(setup.point("esc back").y).toBeGreaterThanOrEqual(card.y + card.height + 1);
     expect(setup.point("cache-beta").y).toBeLessThan(setup.point("cache-alpha (current)").y);
     expect(descendants(fullscreen).filter(node => node.id.startsWith("cache-row-"))).toHaveLength(2);
@@ -259,13 +261,13 @@ test("compact app rows aggregate all providers; selected reset reaches every pro
     setup.expectSelected("cache-alpha");
     expect(setup.frame()).not.toContain("Repository timer reset");
     expect(setup.frame()).not.toContain("Cleanup:");
-    expect(card.height).toBe(9);
+    expect(card.height).toBe(10);
     expect(setup.frame()).toContain(
       formatGraphDate(new Date(after.groups.find(group => group.provider === "jenkins")?.cleanupAt ?? 0).toISOString()),
     );
     await setup.key("r");
     setup.expectSelected("cache-alpha");
-    expect(card.height).toBe(9);
+    expect(card.height).toBe(10);
     const beforeEviction = data.contents();
     await setup.key("e");
     expect(setup.frame()).toContain("Evict only cache-alpha (all providers)?");
@@ -330,6 +332,9 @@ test("repo info is muted and right-aligned; KB includes all provider payloads an
       expect(metadata.fg).toEqual(RGBA.fromHex(setup.theme.theme().foregroundMuted));
       expect(metadata.plainText.trim()).toBe(info);
       expect(metadata.x + metadata.width).toBe(row.x + row.width);
+      expect(metadata.x + metadata.width).toBe(
+        setup.point(`v${packageJson.version}`).x - 1 + `v${packageJson.version}`.length,
+      );
       expect(label.x + label.width).toBeLessThanOrEqual(metadata.x);
       const line = setup.frame().split("\n")[row.y];
       expect(line).toContain(info);
@@ -358,7 +363,7 @@ test("General shows only Cache data, selectable and copyable even when its path 
     const nodes = descendants(setup.renderer.root);
     const header = nodes.find(node => node.id === "cache-general")?.getChildren()[0] as TextRenderable;
     expect(header.selectable).toBe(false);
-    expect(header.fg).toEqual(RGBA.fromHex(setup.theme.theme().foregroundMuted));
+    expect(header.fg).toEqual(RGBA.fromHex(setup.theme.theme().accent));
     expect(setup.frame()).toContain("General");
     expect(setup.frame()).toContain("enter copy");
     expect(setup.frame()).toContain("shift+r reset all");
@@ -392,6 +397,11 @@ test("General shows only Cache data, selectable and copyable even when its path 
     expect(copy).toHaveBeenCalledTimes(1);
     expect(copy).toHaveBeenLastCalledWith(join(root, "cache.sqlite"), "cache-file-cache.sqlite");
     expect(setup.frame()).toContain("✓ copied");
+    const copiedBadge = row.getChildren()[2] as TextRenderable;
+    expect(copiedBadge.plainText).toBe(" ✓ copied ");
+    expect(copiedBadge.fg).toEqual(RGBA.fromHex(setup.theme.theme().background));
+    expect(copiedBadge.bg).toEqual(RGBA.fromHex(setup.theme.theme().primary));
+    expect(copiedBadge.selectable).toBe(false);
     await setup.mockMouse.click(path.x + 1, path.y, MouseButtons.RIGHT);
     await setup.flush();
     expect(copy).toHaveBeenCalledTimes(1);
@@ -573,7 +583,7 @@ test("shift+r confirms repository count, cancels safely, survives resize, and re
     expect(setup.frame()).toContain("Reset timers for 2 repositories?");
     expect(setup.frame()).toContain("enter confirm");
     const card = descendants(setup.renderer.root).find(node => node.id === "cache-card") as BoxRenderable;
-    expect(card.height).toBe(10);
+    expect(card.height).toBe(11);
     for (const key of ["e", "TAB", "j", "r", "g"]) await setup.key(key);
     await setup.clickRow(BETA);
     setup.expectSelected("cache-alpha");
@@ -590,7 +600,7 @@ test("shift+r confirms repository count, cancels safely, survives resize, and re
     }
     await setup.key("ESCAPE");
     expect(setup.close).not.toHaveBeenCalled();
-    expect(card.height).toBe(9);
+    expect(card.height).toBe(10);
     expect(data.contents()).toEqual(contents);
     await setup.click("shift+r reset all");
     await setup.click("esc cancel");
@@ -610,7 +620,7 @@ test("shift+r confirms repository count, cancels safely, survives resize, and re
     );
     expect(setup.frame()).not.toContain("Reset 2 repository timers");
     expect(setup.frame()).not.toContain("Nothing deleted");
-    expect(card.height).toBe(9);
+    expect(card.height).toBe(10);
     const date = formatGraphDate(new Date(after.groups[0].cleanupAt).toISOString());
     expect((await setup.cells(ALPHA))[1]).toEndWith(` · ${date}`);
     expect((await setup.cells(BETA))[1]).toEndWith(` · ${date}`);
@@ -695,7 +705,7 @@ test("empty and corrupt databases are safe; an injected root never inspects or c
   try {
     expect(setup.frame()).toContain("No cached provider data");
     const card = descendants(setup.renderer.root).find(node => node.id === "cache-card") as BoxRenderable;
-    expect(card.height).toBe(6);
+    expect(card.height).toBe(7);
     for (const key of ["j", "k", "r", "e", "TAB"]) await setup.key(key);
     await setup.key("r", true);
     expect(setup.frame()).not.toContain("confirm");

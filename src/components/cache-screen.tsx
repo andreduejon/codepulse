@@ -140,10 +140,10 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
         )
       : 0;
   const availableCardHeight = () => Math.max(1, dimensions().height - (showLogo() ? LOGO_HEIGHT + 2 : 0) - 2);
-  const confirmationHeight = () => messageHeight(confirmationText(), Math.max(1, availableCardHeight() - 4));
+  const confirmationHeight = () => messageHeight(confirmationText(), Math.max(1, availableCardHeight() - 5));
   const cardHeight = () =>
     Math.min(
-      rows().length + 3 + confirmationHeight() + messageHeight(error()) + messageHeight(result()),
+      rows().length + 4 + confirmationHeight() + messageHeight(error()) + messageHeight(result()),
       availableCardHeight(),
     );
 
@@ -327,6 +327,7 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
             flexGrow={1}
             flexShrink={1}
             minHeight={0}
+            paddingRight={2}
             scrollY
             scrollX={false}
             verticalScrollbarOptions={{ visible: false }}
@@ -367,7 +368,7 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
                         <Show
                           when={row.kind === "repo" ? row : undefined}
                           fallback={
-                            <text selectable={false} width="100%" wrapMode="none" truncate fg={t().foregroundMuted}>
+                            <text selectable={false} width="100%" wrapMode="none" truncate fg={t().accent}>
                               <strong>{row.kind === "header" ? row.label : ""}</strong>
                             </text>
                           }
@@ -424,8 +425,14 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
                             {file().path}
                           </text>
                           <Show when={copiedId() === row.id}>
-                            <text selectable={false} flexShrink={0} fg={t().success}>
-                              {" ✓ copied"}
+                            <text
+                              selectable={false}
+                              flexShrink={0}
+                              wrapMode="none"
+                              bg={t().primary}
+                              fg={t().background}
+                            >
+                              {" ✓ copied "}
                             </text>
                           </Show>
                         </>
@@ -437,7 +444,7 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
             </box>
           </scrollbox>
           <Show when={confirmation()}>
-            <text flexShrink={0} maxHeight={Math.max(1, cardHeight() - 4)} wrapMode="word" fg={t().warning}>
+            <text flexShrink={0} maxHeight={Math.max(1, cardHeight() - 5)} wrapMode="word" fg={t().warning}>
               {confirmationText()}
             </text>
           </Show>
@@ -451,6 +458,7 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
               {result()}
             </text>
           </Show>
+          <box height={1} flexShrink={0} />
           <box flexDirection="row" height={1} flexShrink={0} paddingRight={2}>
             <box flexGrow={1} />
             <text selectable={false} wrapMode="none" fg={t().foregroundMuted}>

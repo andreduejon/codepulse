@@ -68,6 +68,8 @@ test("repo selector hover, mouse selection, path draft, Escape and keyboard shar
     await setup.flush();
     const input = descendants(setup.renderer.root).find(node => node instanceof InputRenderable) as InputRenderable;
     const highlight = RGBA.fromHex(theme.theme().backgroundElement);
+    expect(span("Group A")?.fg).toEqual(RGBA.fromHex(theme.theme().accent));
+    expect(span("Group B")?.fg).toEqual(RGBA.fromHex(theme.theme().accent));
     expect(span("Alpha")?.fg).toEqual(RGBA.fromHex(theme.theme().accent));
     await move("Beta");
     expect(span("Beta")?.bg).toEqual(highlight);

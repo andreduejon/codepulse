@@ -281,7 +281,7 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
                         <Show
                           when={row.kind === "path-input"}
                           fallback={
-                            <text wrapMode="none" truncate fg={t().foregroundMuted}>
+                            <text wrapMode="none" truncate fg={t().accent}>
                               {row.kind === "group" ? <strong>{row.label}</strong> : ""}
                             </text>
                           }
