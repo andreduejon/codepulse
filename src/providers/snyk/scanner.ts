@@ -6,7 +6,13 @@ import { SnykCache } from "./cache";
 import { parseSnykDepGraphs } from "./dep-graph";
 import { parseSnykOutput, shouldReplaceSnykResult } from "./parser";
 import { discoverSnykDependencyProjects, type SnykDependencyProjectInput } from "./projects";
-import type { SnykCacheLimit, SnykDependencyProjectResult, SnykScanOptions, SnykScanResult } from "./types";
+import type {
+  SnykCacheLimit,
+  SnykDependencyGraph,
+  SnykDependencyProjectResult,
+  SnykScanOptions,
+  SnykScanResult,
+} from "./types";
 
 export interface SnykCommandResult {
   stdout: string;
@@ -405,12 +411,14 @@ async function scanDependencyProjects(
         ? error.message
         : "Snyk dependency graph scan failed. Check Snyk CLI and authentication, then rescan.";
   }
-  return projects.map(project => {
+  const pending: Promise<void>[] = [];
+  const results = projects.map((project): SnykDependencyProjectResult => {
     const blocked = unavailable.get(project.targetFile);
     if (blocked) return blocked;
     const matches = graphs.filter(
       graph => projectForTarget(graph.targetFile, ready, trackedFiles, graph.packageManager) === project,
     );
+    pending.push(...matches.map(graph => applyManifestScopes(graph, commandOptions.cwd)));
     const failure = reason ?? (matches.length === 0 ? "Snyk returned no dependency graph for this project." : null);
     return {
       targetFile: project.targetFile,
@@ -420,6 +428,39 @@ async function scanDependencyProjects(
       reason: failure,
     };
   });
+  await Promise.all(pending);
+  return results;
+}
+
+const MANIFEST_PACKAGE_MANAGERS = new Set(["npm", "yarn", "pnpm", "bun"]);
+
+/**
+ * Snyk's pnpm graphs flag runtime packages as dev when dev tools also use them. Direct dependencies take
+ * their scope from the `package.json` beside the graph instead; without a readable manifest Snyk's flags stay.
+ */
+export async function applyManifestScopes(graph: SnykDependencyGraph, worktreePath: string): Promise<void> {
+  if (!MANIFEST_PACKAGE_MANAGERS.has(graph.packageManager)) return;
+  let manifest: Record<string, unknown>;
+  try {
+    manifest = JSON.parse(await readFile(join(worktreePath, posix.dirname(graph.targetFile), "package.json"), "utf8"));
+  } catch {
+    return;
+  }
+  const names = (field: string) => {
+    const value = manifest?.[field];
+    return value && typeof value === "object" && !Array.isArray(value) ? Object.keys(value) : [];
+  };
+  const prod = new Set(["dependencies", "optionalDependencies", "peerDependencies"].flatMap(names));
+  const dev = new Set(names("devDependencies"));
+  const packages = new Map(graph.packages.map(pkg => [pkg.id, pkg.name]));
+  const root = graph.nodes.find(node => node.nodeId === graph.rootNodeId);
+  const direct = new Set(root?.deps ?? []);
+  for (const node of graph.nodes) {
+    if (!direct.has(node.nodeId)) continue;
+    const name = packages.get(node.pkgId) ?? "";
+    if (prod.has(name)) node.scope = "prod";
+    else if (dev.has(name)) node.scope = "dev";
+  }
 }
 
 export async function scanSnykCommit(

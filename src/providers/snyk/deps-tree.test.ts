@@ -138,7 +138,7 @@ describe("dependency tree", () => {
     expect(buildDependencyTree(projects, new Set()).rows).toEqual([{ ...initial[0], expanded: false }]);
   });
 
-  test("nested occurrences keep full paths, independent scopes and branch connectors", () => {
+  test("nested occurrences keep full paths, inherited scopes and branch connectors", () => {
     const projects = [project()];
     const expanded = defaultDependencyExpansion(projects);
     const parent = buildDependencyTree(projects, expanded).rows[1];
@@ -149,7 +149,8 @@ describe("dependency tree", () => {
       depth: 2,
       prefix: "│  └─ ",
       label: "@fixture/shared@2.0.0",
-      scope: "unknown",
+      // Inherited from the direct dependency `parent`, not Snyk's per-package `unknown`.
+      scope: "prod",
       expandable: true,
       expanded: false,
       path: ["fixture@unknown", "parent@1.0.0", "@fixture/shared@2.0.0"],
@@ -212,7 +213,11 @@ describe("dependency tree", () => {
     for (const row of shared) expanded.add(row.key);
     rows = buildDependencyTree(projects, expanded).rows;
     expect(rows.filter(row => row.label === "leaf@3.0.0")).toHaveLength(2);
-    expect(rows.filter(row => row.label === "leaf@3.0.0").every(row => row.scope === "prod")).toBe(true);
+    // Each occurrence takes its direct dependency's scope.
+    expect(rows.filter(row => row.label === "leaf@3.0.0").map(row => [row.path[1], row.scope])).toEqual([
+      ["parent@1.0.0", "prod"],
+      ["dev-parent@1.0.0", "dev"],
+    ]);
     expect(JSON.stringify(projects)).toBe(original);
   });
 

@@ -100,6 +100,12 @@ existing message overlay; usable findings are retained.
   click). It filters direct dependencies (where devDependencies are declared) and
   keeps their whole subtrees; `prod` is everything not flagged dev. Counts and
   filter matches follow the scope.
+- For npm, Yarn, pnpm, and Bun projects, direct dependencies take their scope from
+  the `package.json` next to the scanned manifest (`dependencies`,
+  `optionalDependencies`, `peerDependencies` → prod; only `devDependencies` → dev),
+  because Snyk flags runtime packages as dev when dev tools also use them. Without
+  a readable `package.json`, Snyk's flags stay. Every row below a direct dependency
+  inherits its scope. Snapshots scanned before this change need a rescan.
 - A **Group by** row above Scope cycles `[tree]` → `[package]`. The package view
   lists unique `name@version` packages A–Z (versions of one package sit together),
   with muted **direct** (declared directly) and **dev** (reached only through dev

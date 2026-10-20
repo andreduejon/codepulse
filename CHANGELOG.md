@@ -31,6 +31,9 @@ All notable changes to this project will be documented in this file.
 
 - Rename the Snyk detail tab to **Vulnerabilities**, size detail tabs by label
   length, and show Stashes only in Git view.
+- Take direct-dependency scopes from `package.json` for npm, Yarn, pnpm, and Bun
+  graphs (Snyk marks shared runtime packages as dev), and let rows inherit their
+  direct dependency's scope. Rescan to correct older snapshots.
 - Include development dependencies in Snyk scans and discard older snapshots
   without dependency coverage metadata. Retain findings when graph capture fails.
 - List one vulnerability per CVE, manifest, and package (graph chips count the

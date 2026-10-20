@@ -566,6 +566,8 @@ function buildTree(
           lead: projectLead + (multipleGraphs ? (graphIsLast ? "   " : "│  ") : ""),
           depth: multipleGraphs ? 2 : 1,
           nextIndex: 0,
+          // Rows inherit their direct dependency's scope; Snyk's per-package flags are unreliable below it.
+          directScope: null as SnykDependencyScope | null,
         },
       ];
       while (stack.length > 0) {
@@ -599,7 +601,7 @@ function buildTree(
           prefix: `${frame.lead}${isLast ? "└─ " : "├─ "}`,
           label,
           projectIndex,
-          scope: node.node.scope ?? "unknown",
+          scope: frame.directScope ?? node.node.scope ?? "unknown",
           expandable,
           expanded: nodeExpanded,
           reference,
@@ -617,6 +619,7 @@ function buildTree(
             lead: frame.lead + (isLast ? "   " : "│  "),
             depth: frame.depth + 1,
             nextIndex: 0,
+            directScope: frame.directScope ?? node.node.scope ?? "unknown",
           });
         } else if (!cycle) ancestors.delete(sourceId);
       }

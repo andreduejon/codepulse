@@ -5,6 +5,7 @@ import { delimiter, dirname, join } from "node:path";
 import { closeProviderCaches } from "../shared/sha-sqlite-cache";
 import { SnykCache } from "./cache";
 import {
+  applyManifestScopes,
   killSnykProcessGroup,
   removeOrphanedScanWorktrees,
   runSnykCommand,
@@ -12,7 +13,7 @@ import {
   type SnykCommandRunner,
   scanSnykCommit,
 } from "./scanner";
-import type { SnykScanResult } from "./types";
+import type { SnykDependencyGraph, SnykScanResult } from "./types";
 
 const SHA = "a".repeat(40);
 const roots: string[] = [];
@@ -888,4 +889,57 @@ setInterval(() => {}, 1000);
     await expect(stat(dirname(orphan))).rejects.toMatchObject({ code: "ENOENT" });
     expect((await stat(live)).isDirectory()).toBe(true);
   });
+});
+
+test("direct dependency scopes come from package.json, falling back to Snyk's flags", async () => {
+  const root = await mkdtemp(join(tmpdir(), "codepulse-manifest-"));
+  try {
+    const graph = (packageManager: string): SnykDependencyGraph => ({
+      targetFile: "web/package.json",
+      packageManager,
+      rootNodeId: "root",
+      packages: ["app", "core", "tooling", "peer", "unlisted"].map(name => ({ id: name, name, version: "1.0.0" })),
+      nodes: [
+        {
+          nodeId: "root",
+          pkgId: "app",
+          deps: ["core", "tooling", "peer", "unlisted"],
+          scope: "unknown",
+          referenceNodeId: null,
+        },
+        { nodeId: "core", pkgId: "core", deps: ["deep"], scope: "dev", referenceNodeId: null },
+        { nodeId: "tooling", pkgId: "tooling", deps: [], scope: "prod", referenceNodeId: null },
+        { nodeId: "peer", pkgId: "peer", deps: [], scope: "dev", referenceNodeId: null },
+        { nodeId: "unlisted", pkgId: "unlisted", deps: [], scope: "dev", referenceNodeId: null },
+        { nodeId: "deep", pkgId: "core", deps: [], scope: "dev", referenceNodeId: null },
+      ],
+    });
+    const scopes = (input: SnykDependencyGraph) => input.nodes.map(node => node.scope);
+    // No manifest: Snyk's flags stay.
+    const missing = graph("pnpm");
+    await applyManifestScopes(missing, root);
+    expect(scopes(missing)).toEqual(scopes(graph("pnpm")));
+    await mkdir(join(root, "web"));
+    await writeFile(
+      join(root, "web/package.json"),
+      JSON.stringify({
+        dependencies: { core: "1" },
+        devDependencies: { core: "1", tooling: "1" },
+        peerDependencies: { peer: "1" },
+      }),
+    );
+    const fixed = graph("pnpm");
+    await applyManifestScopes(fixed, root);
+    // Direct only: prod wins over dev; unlisted and nested nodes keep Snyk's flags.
+    expect(scopes(fixed)).toEqual(["unknown", "prod", "dev", "prod", "dev", "dev"]);
+    const maven = graph("maven");
+    await applyManifestScopes(maven, root);
+    expect(scopes(maven)).toEqual(scopes(graph("maven")));
+    await writeFile(join(root, "web/package.json"), "{ invalid");
+    const invalid = graph("yarn");
+    await applyManifestScopes(invalid, root);
+    expect(scopes(invalid)).toEqual(scopes(graph("yarn")));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
