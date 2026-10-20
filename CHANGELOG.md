@@ -10,10 +10,14 @@ All notable changes to this project will be documented in this file.
   alongside findings, with per-project failures and safe Bun-to-Yarn conversion
   in temporary worktrees.
 - Add the Snyk **Dependencies** browser for scanned supported projects, with
-  expandable project/dependency groups, muted dev labels, reference/cycle markers,
-  selected paths, and persistent failed/skipped-project reasons.
+  bold project headers showing package counts, expandable dependency groups,
+  short Maven names (full name on the selected row), copyable leaves, muted dev labels,
+  muted `repeated`/`circular` markers, a **Scope** `[all]`/`[prod]`/`[dev]` switch,
+  and persistent failed/skipped-project reasons.
 - Add live filters to both Snyk detail trees, including collapsed/repeated
-  dependency paths. Keep Dependencies available before scanning, use scanned
+  dependency paths; large dependency results open one level with per-row match
+  counts, and opening past 1,000 rows closes other branches. Add **Group by**
+  `[tree]`/`[package]` and **Copy dependencies as JSON** to Dependencies. Keep Dependencies available before scanning, use scanned
   file/project roots, and surface unavailable graph scans in the message overlay.
 - Show a CVSS score, mature-exploit marker, and fix dot (upgrade, override, no fix)
   on every vulnerability, with a pinned legend; expand to title, package, `via`

@@ -80,16 +80,35 @@ the Snyk view, including before the first scan. Use **Scan commit** in either ta
 Missing tools, unsupported dependency projects, and graph failures appear in the
 existing message overlay; usable findings are retained.
 
-- Scanned files/projects are the root nodes, with direct dependencies visible.
-  Module groups appear only when a lockfile produces multiple graphs. Use **Up/Down**
-  to select a row, **Enter** or a left click to expand/collapse. **Left/Right**
-  switches tabs.
+- Scanned files/projects are bold root headers (like severity headers), with
+  direct dependencies visible and a right-aligned package count: `N`, or
+  `matches/total` while filtering; the filter row shows the overall count the same
+  way. Single-graph projects show their own name muted, one space before the
+  count (module rows name multi-graph projects). Headers with nothing to open (no matches, failed/skipped) stay listed, muted
+  with `·`, and are not cursor stops. Module groups appear only when a lockfile
+  produces multiple graphs. Use **Up/Down** to select a row, **Enter** or a left
+  click to expand/collapse; closing a node closes everything below it. On a leaf,
+  **Enter** copies its full `name@version`. **Left/Right** switches tabs.
+- Maven coordinates show as `artifact@version`; the cursor row shows the full
+  `group:artifact@version` (banner-scrolling when clipped), which Enter copies.
 - Only development dependencies show a muted **dev** flag, aligned right.
   Production and unknown scopes are unmarked; an absent flag does not prove
-  production scope. Repeated nodes remain references, with expandable canonical
-  children; cycles stop instead of expanding indefinitely.
-- The selected row's full dependency path remains visible when names are clipped.
-  Failed/skipped-project reasons remain visible even when their groups collapse.
+  production scope. Repeated packages show a muted **repeated** word (Snyk lists
+  their dependencies once; they still expand to the same children); a package that
+  depends back on an ancestor shows **circular** and stops there.
+- A **Scope** row above the filter cycles `[all]` → `[prod]` → `[dev]` (Enter or
+  click). It filters direct dependencies (where devDependencies are declared) and
+  keeps their whole subtrees; `prod` is everything not flagged dev. Counts and
+  filter matches follow the scope.
+- A **Group by** row above Scope cycles `[tree]` → `[package]`. The package view
+  lists unique `name@version` packages A–Z (versions of one package sit together),
+  with muted **direct** (declared directly) and **dev** (reached only through dev
+  dependencies) markers; each opens to the direct dependencies that pull it in.
+- **Copy dependencies as JSON** (below Rescan) copies commit, scan time, Scope,
+  filter, and per project a flat package list (`name`, `version`, `direct`, `dev`,
+  `via`), respecting the active Scope and filter. Graphs stay out; they are large.
+- Nesting shows each dependency's path. Failed/skipped-project reasons remain
+  visible even when their groups collapse.
 - **Rescan commit** refreshes findings and graphs together. Existing tree data
   remains inspectable while scanning.
 
@@ -154,7 +173,11 @@ count sits at the right end of the filter row; scans with no vulnerabilities hid
 the filter. Expansion choices survive filtering and return when it clears. Active-filter counts read `current/original`
 for the total and each severity (for example, `3/12`), with
 zero counts muted.
-Very large expansions are limited to 5,000 dependency rows with a visible notice;
+Filtering opens every matching path when the result fits in 200 rows; larger
+results open one level, and each closed row shows how many matching packages lie
+below it (`N+` when counting stopped early). Opening a row that would exceed
+1,000 visible rows closes the other open branches, keeping the path to that row.
+The 1,000-row limit and its notice remain for a single row with more children;
 the filter still searches the full graph, so narrow it to reach remaining nodes.
 Unusually cyclic graphs also have a bounded matching-path search. If that limit
 is reached, the view explicitly marks matching paths incomplete; package match

@@ -1,5 +1,5 @@
-import { expect, mock, test } from "bun:test";
-import { InputRenderable, type Renderable, RGBA, TextRenderable } from "@opentui/core";
+import { expect, mock, spyOn, test } from "bun:test";
+import { InputRenderable, type Renderable, RGBA, TextAttributes, TextRenderable } from "@opentui/core";
 import { MouseButtons } from "@opentui/core/testing";
 import { testRender, useKeyboard } from "@opentui/solid";
 import { batch, createSignal, Show } from "solid-js";
@@ -7,6 +7,7 @@ import type { DetailNavRef } from "../../components/detail-types";
 import { createAppState } from "../../context/state";
 import { createThemeState, ThemeContext } from "../../context/theme";
 import { handleDetailKey } from "../../hooks/handle-detail-keys";
+import * as clipboard from "../../hooks/use-clipboard";
 import { resetRepeatNav } from "../../utils/keyboard-nav-utils";
 import { SnykDependenciesTab } from "./deps-tab";
 import type { SnykDependencyGraph, SnykDependencyProjectResult, SnykScanResult } from "./types";
@@ -68,6 +69,12 @@ async function renderDependencies(initial: SnykScanResult | null = scanFixture()
     pendingJumpDirection: null,
     scrollToFile: () => {},
   };
+  // Leaf rows copy on Enter; never spawn the real clipboard tool in tests.
+  const copy = mock((_text: string, _id: string) => {});
+  const clipboardSpy = spyOn(clipboard, "useClipboard").mockImplementation(() => ({
+    copiedId: () => null,
+    copyToClipboard: copy,
+  }));
   const [scan, setScan] = createSignal(initial);
   const [loading, setLoading] = createSignal(false);
   const [modal, setModal] = createSignal(false);
@@ -129,7 +136,7 @@ async function renderDependencies(initial: SnykScanResult | null = scanFixture()
   };
   const point = (label: string) => {
     if (label === "filter") {
-      const row = navRef.itemRefs[1];
+      const row = navRef.itemRefs[4];
       if (!row) throw new Error("Filter row missing.");
       return { x: row.x + 1, y: row.screenY };
     }
@@ -158,7 +165,11 @@ async function renderDependencies(initial: SnykScanResult | null = scanFixture()
   };
   const dispose = async () => {
     if (navRef.scrollTimer) clearTimeout(navRef.scrollTimer);
-    await setup.dispose();
+    try {
+      await setup.dispose();
+    } finally {
+      clipboardSpy.mockRestore();
+    }
   };
   try {
     await flush();
@@ -188,6 +199,7 @@ async function renderDependencies(initial: SnykScanResult | null = scanFixture()
     input,
     type,
     dispose,
+    copy,
   };
 }
 
@@ -196,8 +208,11 @@ test("dependency browser has an inline filter, folded file root, right-aligned d
   try {
     const lines = d.frame().split("\n");
     const scanLine = lines.findIndex(line => line.includes("Rescan commit"));
-    expect(lines[scanLine + 1].trim()).toBe("");
-    expect(lines[scanLine + 2]).toContain("Enter dependency filter...");
+    expect(lines[scanLine + 1]).toMatch(/^Copy dependencies as JSON\s*$/);
+    expect(lines[scanLine + 2].trim()).toBe("");
+    expect(lines[scanLine + 3]).toMatch(/^Group by\s+\[tree\]\s*$/);
+    expect(lines[scanLine + 4]).toMatch(/^Scope\s+\[all\]\s*$/);
+    expect(lines[scanLine + 5]).toContain("Enter dependency filter...");
     expect(d.frame()).not.toContain("Filter:");
     expect(d.frame()).not.toContain("supported projects scanned");
     expect(d.frame()).not.toContain("Snapshot:");
@@ -221,16 +236,25 @@ test("dependency browser has an inline filter, folded file root, right-aligned d
     const devSpans = d.captureSpans().lines[d.point("dev-only@2.0.0").y]?.spans;
     expect(devSpans?.find(span => span.text.trim() === "dev")?.fg).toEqual(RGBA.fromHex(d.theme.foregroundMuted));
     expect(d.frame()).not.toContain("@fixture/shared");
-    expect(d.navRef.itemCount).toBe(6);
-    expect(d.navRef.itemRefs).toHaveLength(6);
+    expect(d.navRef.itemCount).toBe(9);
+    expect(d.navRef.itemRefs).toHaveLength(9);
     expect(d.navRef.itemRefs.every(ref => ref?.getChildren().length > 0)).toBe(true);
-    expect(d.index("filter")).toBe(1);
-    expect(d.index("web/bun.lock")).toBe(2);
-    expect(d.index("parent@1.0.0")).toBe(3);
+    expect(d.index("filter")).toBe(4);
+    expect(d.index("web/bun.lock")).toBe(5);
+    expect(d.index("parent@1.0.0")).toBe(6);
     expect(d.input()?.focused).toBe(false);
     expect(d.state.detailCursorAction()).toBe("rescan");
+    for (const [index, action] of [
+      [1, "copy"],
+      [2, "switch"],
+      [3, "switch"],
+    ] as const) {
+      await d.key("ARROW_DOWN");
+      expect(d.state.detailCursorIndex()).toBe(index);
+      expect(d.state.detailCursorAction()).toBe(action);
+    }
     await d.key("ARROW_DOWN");
-    expect(d.state.detailCursorIndex()).toBe(1);
+    expect(d.state.detailCursorIndex()).toBe(4);
     expect(d.state.detailCursorAction()).toBe("done");
     expect(d.input()?.focused).toBe(true);
     await d.key("RETURN");
@@ -243,31 +267,33 @@ test("dependency browser has an inline filter, folded file root, right-aligned d
     expect(d.input()?.focused).toBe(false);
     expect(d.state.detailCursorAction()).toBe("filter");
     await d.key("ARROW_DOWN");
-    expect(d.state.detailCursorIndex()).toBe(2);
+    expect(d.state.detailCursorIndex()).toBe(5);
     expect(d.state.detailCursorAction()).toBe("collapse");
     await d.key("RETURN");
-    expect(d.navRef.itemCount).toBe(3);
+    expect(d.navRef.itemCount).toBe(6);
     expect(d.frame()).not.toContain("parent@1.0.0");
     expect(d.frame()).not.toContain("\nscanned");
     expect(d.state.detailCursorAction()).toBe("expand");
     await d.key("RETURN");
-    expect(d.navRef.itemCount).toBe(6);
+    expect(d.navRef.itemCount).toBe(9);
     await d.key("ARROW_UP");
-    expect(d.state.detailCursorIndex()).toBe(1);
+    expect(d.state.detailCursorIndex()).toBe(4);
     expect(d.input()?.focused).toBe(true);
     await d.key("ARROW_DOWN");
-    expect(d.state.detailCursorIndex()).toBe(2);
+    expect(d.state.detailCursorIndex()).toBe(5);
     await d.key("ARROW_DOWN");
     await d.key("RETURN");
-    expect(d.navRef.itemCount).toBe(8);
+    expect(d.navRef.itemCount).toBe(11);
     await d.key("RETURN");
-    expect(d.navRef.itemCount).toBe(6);
+    expect(d.navRef.itemCount).toBe(9);
     const leafIndex = d.index("mystery@3.0.0");
     d.actions.setDetailCursorIndex(leafIndex);
     await d.flush();
-    expect(d.state.detailCursorAction()).toBeNull();
+    // Leaves copy their full name@version instead of toggling.
+    expect(d.state.detailCursorAction()).toBe("copy");
     await d.key("RETURN");
-    expect(d.navRef.itemCount).toBe(6);
+    expect(d.copy).toHaveBeenLastCalledWith("mystery@3.0.0", expect.any(String));
+    expect(d.navRef.itemCount).toBe(9);
     expect(d.onScan).not.toHaveBeenCalled();
     await d.key("ARROW_UP");
     expect(d.state.detailCursorIndex()).toBe(leafIndex - 1);
@@ -292,7 +318,7 @@ test("left-click focuses rows; hover, right-click and modal ownership do not act
     expect(span?.bg).toEqual(RGBA.fromHex(d.theme.backgroundElement));
     expect(d.text("parent@1.0.0").selectable).toBe(false);
     await d.click("parent@1.0.0", MouseButtons.RIGHT);
-    expect(d.navRef.itemCount).toBe(6);
+    expect(d.navRef.itemCount).toBe(9);
     expect(d.onMouseFocus).not.toHaveBeenCalled();
     expect(d.state.detailFocused()).toBe(false);
     await d.click("parent@1.0.0");
@@ -323,7 +349,7 @@ test("mouse actions are opt-in and a busy Scan row is inert without blocking cac
     expect(sidebar.text("parent@1.0.0").selectable).toBe(true);
     await sidebar.click("parent@1.0.0");
     await sidebar.click("Rescan commit");
-    expect(sidebar.navRef.itemCount).toBe(6);
+    expect(sidebar.navRef.itemCount).toBe(9);
     expect(sidebar.state.detailCursorIndex()).toBe(0);
     expect(sidebar.onMouseFocus).not.toHaveBeenCalled();
     expect(sidebar.onScan).not.toHaveBeenCalled();
@@ -406,7 +432,7 @@ test("live filtering expands ancestors, preserves native typing and reports inco
     expect(input?.focused).toBe(true);
     expect(input?.value).toBe("leaf");
     expect(input?.cursorOffset).toBe(4);
-    expect(d.state.detailCursorIndex()).toBe(1);
+    expect(d.state.detailCursorIndex()).toBe(4);
     expect(d.frame()).toContain("parent@1.0.0");
     expect(d.frame()).toContain("@fixture/shared@4.0.0");
     expect(d.frame()).toContain("leaf@5.0.0");
@@ -418,12 +444,14 @@ test("live filtering expands ancestors, preserves native typing and reports inco
     expect(d.input()).toBe(input);
     expect(input?.value).toBe("leaxf");
     expect(input?.cursorOffset).toBe(4);
-    expect(d.frame()).toContain("No matching dependencies · coverage incomplete");
+    // No "no match" message: headers stay listed with zero counts; failed coverage stays visible.
+    expect(d.frame()).not.toContain("No matching dependencies");
+    expect(d.frame()).toMatch(/0\/\d+/);
     expect(d.frame()).toContain("failed · Graph extraction incomplete");
     expect(d.frame()).toContain("skipped · Unsupported lockfile format");
     await d.key("ESCAPE");
     expect(d.input()?.focused).toBe(false);
-    expect(d.state.detailCursorIndex()).toBe(1);
+    expect(d.state.detailCursorIndex()).toBe(4);
     expect(d.frame()).toContain("leaxf");
     await d.key("RETURN");
     expect(d.input()?.value).toBe("leaxf");
@@ -436,7 +464,7 @@ test("live filtering expands ancestors, preserves native typing and reports inco
     await d.type("qmfjk:/@.-");
     expect(d.input()?.value).toBe("qmfjk:/@.-");
     expect(d.input()?.cursorOffset).toBe(10);
-    expect(d.state.detailCursorIndex()).toBe(1);
+    expect(d.state.detailCursorIndex()).toBe(4);
     expect(d.state.detailActiveTab()).toBe(tab);
     expect(d.onScan).not.toHaveBeenCalled();
     await d.key("ESCAPE");
@@ -445,7 +473,7 @@ test("live filtering expands ancestors, preserves native typing and reports inco
     await d.type("leaf");
     await d.click("web/bun.lock");
     expect(d.input()?.focused).toBe(false);
-    expect(d.state.detailCursorIndex()).toBe(2);
+    expect(d.state.detailCursorIndex()).toBe(5);
     expect(d.state.detailCursorAction()).toBe("expand");
   } finally {
     await d.dispose();
@@ -454,30 +482,48 @@ test("live filtering expands ancestors, preserves native typing and reports inco
 
 test("references expand canonical children with their own dev flag, cycles stop, and selected paths wrap", async () => {
   const d = await renderDependencies();
+  // Repeated/circular rows carry a muted, right-aligned word instead of an arrow marker.
+  const marked = (label: string, marker: string) => {
+    const row = d.navRef.itemRefs.find(
+      ref =>
+        ref?.getChildren().some(node => node instanceof TextRenderable && node.plainText === label) &&
+        ref.getChildren().some(node => node instanceof TextRenderable && node.plainText === ` ${marker}`),
+    );
+    if (!row) throw new Error(`Missing ${marker} row: ${label}`);
+    return row;
+  };
   try {
     await d.click("parent@1.0.0");
-    expect(d.frame()).toContain("parent@1.0.0 ↩ cycle");
+    expect(d.frame()).not.toContain("↩");
+    expect(d.frame()).toMatch(/parent@1\.0\.0\s+circular\s*$/m);
+    const circular = marked("parent@1.0.0", "circular");
+    const word = circular.getChildren().find(node => node instanceof TextRenderable && node.plainText === " circular");
+    expect((word?.x ?? 0) + (word?.width ?? 0)).toBe(110);
+    const wordSpan = d.captureSpans().lines[circular.screenY]?.spans.find(span => span.text.trim() === "circular");
+    expect(wordSpan?.fg).toEqual(RGBA.fromHex(d.theme.foregroundMuted));
     await d.click("dev-only@2.0.0");
-    const reference = d.text("@fixture/shared@4.0.0 ↪ reference");
-    expect(
-      reference.parent?.getChildren().some(node => node instanceof TextRenderable && node.plainText === " dev"),
-    ).toBe(true);
-    d.actions.setDetailCursorIndex(d.index("@fixture/shared@4.0.0 ↪ reference"));
+    expect(d.frame()).not.toContain("↪");
+    const reference = marked("@fixture/shared@4.0.0", "repeated");
+    expect(reference.getChildren().some(node => node instanceof TextRenderable && node.plainText === " dev")).toBe(
+      true,
+    );
+    expect(d.frame()).toMatch(/@fixture\/shared@4\.0\.0\s+repeated dev\s*$/m);
+    d.actions.setDetailCursorIndex(d.navRef.itemRefs.indexOf(reference));
     await d.flush();
     expect(d.state.detailCursorAction()).toBe("expand");
     const beforeReference = d.navRef.itemCount;
     await d.key("RETURN");
     expect(d.navRef.itemCount).toBe(beforeReference + 1);
     expect(d.frame()).toContain("leaf@5.0.0");
-    const cycle = d.index("parent@1.0.0 ↩ cycle");
-    d.actions.setDetailCursorIndex(cycle);
+    d.actions.setDetailCursorIndex(d.navRef.itemRefs.indexOf(marked("parent@1.0.0", "circular")));
     await d.flush();
     const count = d.navRef.itemCount;
-    expect(d.state.detailCursorAction()).toBeNull();
+    expect(d.state.detailCursorAction()).toBe("copy");
     d.navRef.activateCurrentItem();
     await d.flush();
     expect(d.navRef.itemCount).toBe(count);
-    expect(d.text("Path:").plainText).toContain("fixture-app@1.0.0 → parent@1.0.0 → parent@1.0.0");
+    // Nesting shows the path; no extra Path line.
+    expect(d.frame()).not.toContain("Path:");
   } finally {
     await d.dispose();
   }
@@ -493,14 +539,13 @@ test("references expand canonical children with their own dev flag, cycles stop,
     }
     narrow.actions.setDetailCursorIndex(narrow.index(`${longName}@5.0.0`));
     await narrow.flush();
-    const path = `Path: fixture-app@1.0.0 → parent@1.0.0 → @fixture/shared@4.0.0 → ${longName}@5.0.0`;
-    expect(narrow.text("Path:").plainText).toBe(path);
-    expect(narrow.text("Path:").height).toBeGreaterThan(1);
-    expect(narrow.frame().replace(/\s+/g, "")).toContain(path.replace(/\s+/g, ""));
-    expect(narrow.text(`${longName}@5.0.0`).width).toBeGreaterThan(0);
-    expect(narrow.text(`${longName}@5.0.0`).width).toBeLessThanOrEqual(20);
+    // A clipped name on the cursor row banner-scrolls from its start instead of a Path line.
+    expect(narrow.frame()).not.toContain("Path:");
+    const visible = narrow.text("@fixture/a").plainText;
+    expect(`${longName}@5.0.0`.startsWith(visible)).toBe(true);
+    expect(visible.length).toBeLessThan(`${longName}@5.0.0`.length);
     expect(narrow.frame()).not.toContain("�");
-    expect(narrow.state.detailCursorAction()).toBeNull();
+    expect(narrow.state.detailCursorAction()).toBe("copy");
   } finally {
     await narrow.dispose();
   }
@@ -533,7 +578,7 @@ test("collapse clamps cursors, scan identity resets filter/expansion to Scan, an
       d.setScan(snapshot);
       await d.flush();
       expect(d.state.detailCursorIndex()).toBe(0);
-      expect(d.navRef.itemCount).toBe(6);
+      expect(d.navRef.itemCount).toBe(9);
       expect(d.frame()).not.toContain("@fixture/shared@4.0.0");
       await d.click("parent@1.0.0");
     }
@@ -542,14 +587,14 @@ test("collapse clamps cursors, scan identity resets filter/expansion to Scan, an
     d.setScan({ ...snapshot });
     await d.flush();
     expect(d.input()?.value).toBe("leaf");
-    expect(d.state.detailCursorIndex()).toBe(1);
+    expect(d.state.detailCursorIndex()).toBe(4);
     d.setScan({ ...snapshot, scannedAt: "2026-10-19T14:00:00Z" });
     await d.flush();
     expect(d.input()?.focused).toBe(false);
     expect(d.frame()).toContain("Enter dependency filter...");
     expect(d.state.detailCursorIndex()).toBe(0);
     expect(d.state.detailCursorAction()).toBe("rescan");
-    expect(d.navRef.itemCount).toBe(6);
+    expect(d.navRef.itemCount).toBe(9);
     expect(d.frame()).not.toContain("@fixture/shared@4.0.0");
     const oldActivate = d.navRef.activateCurrentItem;
     d.setMounted(false);
@@ -605,7 +650,7 @@ test("unscanned commits and snapshots with no supported projects have clear Scan
     expect(d.frame()).not.toContain("Snapshot:");
     expect(d.frame()).toContain("No supported dependency projects found.");
     expect(d.state.detailCursorAction()).toBe("rescan");
-    expect(d.navRef.itemCount).toBe(2);
+    expect(d.navRef.itemCount).toBe(5);
     await d.click("filter");
     await d.type("missing");
     expect(d.frame()).toContain("No supported dependency projects found.");
@@ -623,7 +668,7 @@ test("large trees expose their dependency cap and filtering can reach matches be
   const graph = scan.dependencyProjects[0].graphs[0];
   graph.nodes = [{ ...graph.nodes[0], deps: [] }];
   graph.packages = graph.packages.slice(0, 1);
-  for (let index = 0; index < 5001; index++) {
+  for (let index = 0; index < 1001; index++) {
     const id = `dependency-${index}`;
     graph.packages.push({ id, name: id, version: "1.0.0" });
     graph.nodes.push({ nodeId: id, pkgId: id, deps: [], scope: "prod", referenceNodeId: null });
@@ -631,21 +676,200 @@ test("large trees expose their dependency cap and filtering can reach matches be
   }
   const d = await renderDependencies(scan);
   try {
-    expect(d.navRef.itemCount).toBe(5003);
-    expect(d.navRef.itemRefs).toHaveLength(5003);
+    expect(d.navRef.itemCount).toBe(1006);
+    expect(d.navRef.itemRefs).toHaveLength(1006);
     const frame = d.frame();
     for (let index = 0; index < 36; index++) expect(frame).toContain(`dependency-${index}@1.0.0`);
-    expect(d.text("Dependency tree truncated").plainText).toContain("5,000 dependencies");
+    expect(d.text("Dependency tree truncated").plainText).toContain("1,000 dependencies");
     await d.click("filter");
-    await d.mockInput.pasteBracketedText("dependency-5000");
+    await d.mockInput.pasteBracketedText("dependency-1000");
     await d.flush();
-    expect(d.frame()).toContain("dependency-5000@1.0.0");
+    expect(d.frame()).toContain("dependency-1000@1.0.0");
     expect(d.frame()).not.toContain("Dependency tree truncated");
-    expect(d.navRef.itemCount).toBe(4);
-    expect(d.navRef.itemRefs).toHaveLength(4);
+    expect(d.navRef.itemCount).toBe(7);
+    expect(d.navRef.itemRefs).toHaveLength(7);
     await d.type("x");
-    expect(d.frame()).toContain("No matching dependencies");
+    expect(d.frame()).not.toContain("No matching dependencies");
+    expect(d.frame()).toMatch(/0\/\d+/);
     expect(d.frame()).not.toContain("coverage incomplete");
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("headers count packages like severity headers; short Maven names, full name on the cursor and copy; closing cascades", async () => {
+  const scan = scanFixture();
+  const mystery = scan.dependencyProjects[0].graphs[0].packages.find(pkg => pkg.name === "mystery");
+  if (mystery) mystery.name = "org.fixture:mystery";
+  const d = await renderDependencies(scan);
+  try {
+    const row = (text: string) =>
+      d
+        .frame()
+        .split("\n")
+        .find(line => line.includes(text)) ?? "";
+    // Header at column 0, bold, with the package count (root excluded); filter row shows the total.
+    expect(row("web/bun.lock (converted)")).toMatch(/^▾ web\/bun\.lock \(converted\)\s{2,}fixture-app 5$/);
+    // Manifest stays the bold label; the project name follows muted.
+    const nameAt = d.point("fixture-app");
+    let nameColumn = 0;
+    const nameSpan = d.captureSpans().lines[nameAt.y]?.spans.find(item => {
+      nameColumn += item.text.length;
+      return nameColumn > nameAt.x;
+    });
+    expect(nameSpan?.fg).toEqual(RGBA.fromHex(d.theme.foregroundMuted));
+    const header = d.point("web/bun.lock");
+    let column = 0;
+    const span = d.captureSpans().lines[header.y]?.spans.find(item => {
+      column += item.text.length;
+      return column > header.x;
+    });
+    expect(((span?.attributes ?? 0) & TextAttributes.BOLD) !== 0).toBe(true);
+    expect(row("Enter dependency filter...")).toMatch(/Enter dependency filter\.\.\.\s+5\s*$/);
+    // Maven coordinates: short label, full coordinates in the Path line and in the copied text.
+    expect(d.frame()).toContain("mystery@3.0.0");
+    expect(d.frame()).not.toContain("org.fixture");
+    d.actions.setDetailCursorIndex(d.index("mystery@3.0.0"));
+    await d.flush();
+    // The cursor row shows full Maven coordinates (no separate Path line).
+    expect(d.frame()).toContain("org.fixture:mystery@3.0.0");
+    expect(d.frame()).not.toContain("Path:");
+    await d.key("RETURN");
+    expect(d.copy).toHaveBeenLastCalledWith("org.fixture:mystery@3.0.0", expect.any(String));
+    // Closing a node closes everything below it.
+    await d.click("parent@1.0.0");
+    await d.click("@fixture/shared@4.0.0");
+    expect(d.frame()).toContain("leaf@5.0.0");
+    await d.click("parent@1.0.0");
+    expect(d.frame()).not.toContain("@fixture/shared@4.0.0");
+    await d.click("parent@1.0.0");
+    expect(d.frame()).toContain("@fixture/shared@4.0.0");
+    expect(d.frame()).not.toContain("leaf@5.0.0");
+    // Filtering: N/M on header and filter row; zero keeps the header listed, muted and not a cursor stop.
+    await d.click("filter");
+    await d.type("leaf");
+    expect(row("(converted)")).toMatch(/\(converted\)\s{2,}fixture-app 1\/5$/);
+    expect(d.frame()).toMatch(/leaf\s+1\/5/);
+    await d.type("zzz");
+    expect(row("(converted)")).toMatch(/^· web\/bun\.lock \(converted\)\s{2,}fixture-app 0\/5$/);
+    expect(d.navRef.itemCount).toBe(5);
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("unchanged rows keep their renderables across tree rebuilds", async () => {
+  const d = await renderDependencies();
+  try {
+    const before = d.text("mystery@3.0.0");
+    // Opening a sibling rebuilds the tree; the unchanged row must not be re-created.
+    await d.click("dev-only@2.0.0");
+    expect(d.frame()).toContain("dev-only@2.0.0");
+    expect(d.text("mystery@3.0.0")).toBe(before);
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("Scope cycles all, prod and dev like Group by and keeps the cursor on its row", async () => {
+  const d = await renderDependencies();
+  try {
+    d.actions.setDetailCursorIndex(3);
+    await d.flush();
+    expect(d.state.detailCursorAction()).toBe("switch");
+    expect(d.frame()).toMatch(/^Scope\s+\[all\]\s*$/m);
+    await d.key("RETURN");
+    expect(d.frame()).toMatch(/^Scope\s+\[prod\]\s*$/m);
+    expect(d.frame()).toContain("parent@1.0.0");
+    expect(d.frame()).not.toContain("dev-only@2.0.0");
+    await d.key("RETURN");
+    expect(d.frame()).toMatch(/^Scope\s+\[dev\]\s*$/m);
+    expect(d.frame()).toContain("dev-only@2.0.0");
+    expect(d.frame()).not.toContain("mystery@3.0.0");
+    expect(d.state.detailCursorIndex()).toBe(3);
+    await d.click("Scope");
+    expect(d.frame()).toMatch(/^Scope\s+\[all\]\s*$/m);
+    expect(d.frame()).toContain("mystery@3.0.0");
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("opening a row past the row cap closes other branches instead of truncating", async () => {
+  const scan = scanFixture();
+  const graph = scan.dependencyProjects[0].graphs[0];
+  graph.packages = [graph.packages[0]];
+  graph.nodes = [{ ...graph.nodes[0], deps: ["a", "b"] }];
+  for (const branch of ["a", "b"]) {
+    graph.packages.push({ id: branch, name: `branch-${branch}`, version: "1.0.0" });
+    graph.nodes.push({ nodeId: branch, pkgId: branch, deps: [], scope: "prod", referenceNodeId: null });
+    for (let index = 0; index < 600; index++) {
+      const id = `${branch}-${index}`;
+      graph.packages.push({ id, name: id, version: "1.0.0" });
+      graph.nodes.push({ nodeId: id, pkgId: id, deps: [], scope: "prod", referenceNodeId: null });
+      graph.nodes[graph.nodes.length - 1 - index - 1].deps.push(id);
+    }
+  }
+  const d = await renderDependencies(scan);
+  try {
+    await d.click("branch-a@1.0.0");
+    expect(d.frame()).toContain("a-0@1.0.0");
+    d.actions.setDetailCursorIndex(d.index("branch-b@1.0.0"));
+    d.navRef.activateCurrentItem();
+    await d.flush();
+    expect(
+      d
+        .text("branch-a@1.0.0")
+        .parent?.getChildren()
+        .some(node => node instanceof TextRenderable && node.plainText === "▸ "),
+    ).toBe(true);
+    expect(d.frame()).not.toContain("Dependency tree truncated");
+    expect(d.navRef.itemCount).toBe(5 + 1 + 2 + 600);
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("Group by switches between the tree and a package list with direct markers", async () => {
+  const d = await renderDependencies();
+  try {
+    d.actions.setDetailCursorIndex(2);
+    await d.flush();
+    expect(d.state.detailCursorAction()).toBe("switch");
+    await d.key("RETURN");
+    expect(d.frame()).toMatch(/^Group by\s+\[package\]\s*$/m);
+    expect(d.state.detailCursorIndex()).toBe(2);
+    // A–Z unique packages; direct dependencies carry a muted `direct`, dev-only ones `dev`.
+    expect(d.frame()).toMatch(/├─ ▸ @fixture\/shared@4\.0\.0\s*$/m);
+    expect(d.frame()).toMatch(/├─ {3}dev-only@2\.0\.0\s+direct dev$/m);
+    expect(d.frame()).toMatch(/└─ {3}parent@1\.0\.0\s+direct$/m);
+    await d.click("@fixture/shared@4.0.0");
+    expect(d.frame()).toMatch(/│ {2}├─ {3}dev-only@2\.0\.0\s*$/m);
+    expect(d.frame()).toMatch(/│ {2}└─ {3}parent@1\.0\.0\s*$/m);
+    await d.click("Group by");
+    expect(d.frame()).toMatch(/^Group by\s+\[tree\]\s*$/m);
+    expect(d.frame()).toContain("▸ parent@1.0.0");
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("Copy dependencies as JSON copies the flat package list with scope and filter", async () => {
+  const d = await renderDependencies();
+  try {
+    await d.click("filter");
+    await d.type("shared");
+    d.actions.setDetailCursorIndex(1);
+    await d.flush();
+    expect(d.state.detailCursorAction()).toBe("copy");
+    await d.key("RETURN");
+    const [text, id] = d.copy.mock.calls[d.copy.mock.calls.length - 1];
+    expect(id).toBe("copyJson");
+    const json = JSON.parse(text);
+    expect(json).toMatchObject({ commit: "a".repeat(40), scope: "all", filter: "shared", includesDev: true });
+    expect(json.projects[0].packages).toEqual([
+      { name: "@fixture/shared", version: "4.0.0", direct: false, dev: false, via: ["dev-only@2.0.0", "parent@1.0.0"] },
+    ]);
   } finally {
     await d.dispose();
   }

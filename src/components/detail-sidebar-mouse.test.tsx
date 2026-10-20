@@ -549,10 +549,10 @@ test("clearing either Snyk filter reveals its row after navigating deep into a l
         detailNavRef: d.navRef,
       });
       await d.flush();
-      // Vulnerabilities has Copy JSON and Group by above its filter; Dependencies does not.
-      const filterIndex = tab === "snyk" ? 3 : 1;
+      // Vulnerabilities: Copy JSON and Group by above its filter; Dependencies adds Scope.
+      const filterIndex = tab === "snyk" ? 3 : 4;
       expect(d.state.detailCursorIndex()).toBe(filterIndex);
-      expect(d.scrollbox.scrollTop).toBeLessThanOrEqual(3);
+      expect(d.scrollbox.scrollTop).toBeLessThanOrEqual(filterIndex);
       const row = d.navRef.itemRefs[filterIndex];
       expect(row.screenY).toBeGreaterThanOrEqual(d.scrollbox.viewport.screenY);
       expect(row.screenY).toBeLessThan(d.scrollbox.viewport.screenY + d.scrollbox.viewport.height);

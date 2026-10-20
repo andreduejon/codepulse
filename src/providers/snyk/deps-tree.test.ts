@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { isSnykDependencyGraph } from "./dep-graph";
-import { buildDependencyTree, defaultDependencyExpansion } from "./deps-tree";
+import { buildDependencyTree, defaultDependencyExpansion, dependencyPackageList } from "./deps-tree";
 import type { SnykDependencyGraph, SnykDependencyProjectResult } from "./types";
 
 function graph(): SnykDependencyGraph {
@@ -89,9 +89,9 @@ describe("dependency tree", () => {
     const expanded = defaultDependencyExpansion(projects);
     const result = buildDependencyTree(projects, expanded);
     expect(result.rows.map(row => [row.kind, row.depth, row.prefix, row.label, row.scope, row.expanded])).toEqual([
-      ["project", 0, "└──", "yarn.lock", null, true],
-      ["dependency", 1, "   ├─ ", "parent@1.0.0", "prod", false],
-      ["dependency", 1, "   └─ ", "dev-parent@1.0.0", "dev", false],
+      ["project", 0, "", "yarn.lock", null, true],
+      ["dependency", 1, "├─ ", "parent@1.0.0", "prod", false],
+      ["dependency", 1, "└─ ", "dev-parent@1.0.0", "dev", false],
     ]);
     expect(result.rows.map(row => row.path)).toEqual([
       ["yarn.lock"],
@@ -114,14 +114,14 @@ describe("dependency tree", () => {
     const { rows } = buildDependencyTree(projects, defaultDependencyExpansion(projects));
     const headings = rows.filter(row => row.kind !== "dependency");
     expect(headings.map(row => [row.kind, row.projectIndex, row.prefix, row.label])).toEqual([
-      ["project", 0, "├──", "yarn.lock"],
-      ["graph", 0, "│  ├─ ", "fixture"],
-      ["graph", 0, "│  └─ ", "modules/fallback/yarn.lock"],
-      ["project", 1, "├──", "yarn.lock"],
-      ["project", 2, "└──", "yarn.lock"],
+      ["project", 0, "", "yarn.lock"],
+      ["graph", 0, "├─ ", "fixture"],
+      ["graph", 0, "└─ ", "modules/fallback/yarn.lock"],
+      ["project", 1, "", "yarn.lock"],
+      ["project", 2, "", "yarn.lock"],
     ]);
-    expect(rows[2].prefix).toBe("│  │  ├─ ");
-    expect(rows[5].prefix).toBe("│     ├─ ");
+    expect(rows[2].prefix).toBe("│  ├─ ");
+    expect(rows[5].prefix).toBe("   ├─ ");
     expect(new Set(rows.map(row => row.key)).size).toBe(rows.length);
   });
 
@@ -147,7 +147,7 @@ describe("dependency tree", () => {
     expect(shared).toMatchObject({
       kind: "dependency",
       depth: 2,
-      prefix: "   │  └─ ",
+      prefix: "│  └─ ",
       label: "@fixture/shared@2.0.0",
       scope: "unknown",
       expandable: true,
@@ -158,7 +158,7 @@ describe("dependency tree", () => {
     const rows = buildDependencyTree(projects, expanded).rows;
     expect(rows[3]).toMatchObject({
       depth: 3,
-      prefix: "   │     └─ ",
+      prefix: "│     └─ ",
       label: "leaf@3.0.0",
       expandable: false,
       expanded: false,
@@ -249,9 +249,9 @@ describe("dependency tree", () => {
     expanded.add(buildDependencyTree(projects, expanded).rows[2].key);
     const rows = buildDependencyTree(projects, expanded).rows;
     expect(rows[1]).toMatchObject({ reference: true, cycle: false, expanded: true });
+    // The sibling `parent:pruned` duplicates `parent` and is collapsed into it.
     expect(rows.filter(row => row.cycle).map(row => [row.reference, row.expandable, row.expanded])).toEqual([
       [false, false, false],
-      [true, false, false],
     ]);
   });
 
@@ -290,7 +290,7 @@ describe("dependency tree", () => {
       "@fixture/shared@2.0.0",
       "leaf@3.0.0",
     ]);
-    expect(result.rows[4].prefix).toBe("   └─ ");
+    expect(result.rows[4].prefix).toBe("└─ ");
     expect(result.rows.filter(row => row.expandable).every(row => row.expanded)).toBe(true);
     expect(buildDependencyTree([project(), project()], new Set(), "leaf").matchCount).toBe(2);
   });
@@ -304,7 +304,8 @@ describe("dependency tree", () => {
     const collapsed = buildDependencyTree(projects, expanded, "leaf");
     expect(collapsed.matchCount).toBe(1);
     expect(collapsed.rows).toHaveLength(5);
-    expect(collapsed.rows[1]).toEqual({ ...parent, expanded: false });
+    // Closed while filtering: the row counts matches below it.
+    expect(collapsed.rows[1]).toEqual({ ...parent, expanded: false, matches: "1" });
     expanded.add(parent.key);
     expect(buildDependencyTree(projects, expanded, "leaf")).toEqual(initial);
     expanded.delete(initial.rows[0].key);
@@ -330,12 +331,12 @@ describe("dependency tree", () => {
     expect(exact.rows.filter(row => row.label === "@fixture/shared@2.0.0")).toHaveLength(2);
     expect(exact.rows.some(row => row.label === "@fixture/shared@3.0.0" || row.label === "leaf@3.0.0")).toBe(false);
     for (const missing of ["shared@2.0.0", "@fixture/shared@2", "leaf@3", "lea@3.0.0", "2.0.0"]) {
-      expect(buildDependencyTree(projects, new Set(), missing)).toEqual({
-        rows: [],
-        matchCount: 0,
-        truncated: false,
-        filterIncomplete: false,
-      });
+      const result = buildDependencyTree(projects, new Set(), missing);
+      expect(result).toMatchObject({ matchCount: 0, truncated: false, filterIncomplete: false });
+      // Only the project header remains, with a zero count and nothing to open.
+      expect(result.rows.map(row => [row.kind, row.count, row.total, row.expandable])).toEqual([
+        ["project", 0, 5, false],
+      ]);
     }
   });
 
@@ -403,11 +404,20 @@ describe("dependency tree", () => {
     ];
     const result = buildDependencyTree(projects, defaultDependencyExpansion(projects, "missing"), "missing");
     expect(result.rows.map(row => [row.kind, row.projectIndex, row.prefix, row.label, row.expandable])).toEqual([
-      ["project", 1, "├──", "skipped/yarn.lock", false],
-      ["project", 2, "├──", "failed/yarn.lock", false],
-      ["project", 3, "└──", "partial/yarn.lock", false],
+      // Like severity headers, scanned projects without matches stay listed with a zero count.
+      ["project", 0, "", "yarn.lock", false],
+      ["project", 1, "", "skipped/yarn.lock", false],
+      ["project", 2, "", "failed/yarn.lock", false],
+      ["project", 3, "", "partial/yarn.lock", false],
+    ]);
+    expect(result.rows.map(row => [row.count, row.total])).toEqual([
+      [0, 4],
+      [0, 0],
+      [0, 0],
+      [0, 4],
     ]);
     expect(result.rows.map(row => projects[row.projectIndex].reason)).toEqual([
+      null,
       "Not supported",
       "Failed",
       "Incomplete scan",
@@ -454,21 +464,30 @@ describe("dependency tree", () => {
       key += "/0";
       expanded.add(key);
     }
-    const rows = buildDependencyTree(projects, expanded).rows;
+    const full = buildDependencyTree(projects, expanded);
+    const rows = full.rows;
     const last = rows[rows.length - 1];
-    expect(rows).toHaveLength(dependencyCount + 1);
+    // The chain is deeper than the 1,000-row cap: traversal stays iterative and stops at the cap.
+    const shown = 1000;
+    expect(full.truncated).toBe(true);
+    expect(rows).toHaveLength(shown + 1);
     expect(last).toMatchObject({
-      label: `pkg-${dependencyCount}@1.0.0`,
-      depth: dependencyCount,
-      expandable: false,
-      expanded: false,
+      label: `pkg-${shown}@1.0.0`,
+      depth: shown,
+      expandable: true,
+      expanded: true,
       cycle: false,
     });
-    expect(last.path).toHaveLength(dependencyCount + 1);
+    expect(last.path).toHaveLength(shown + 1);
     expect(last.path[0]).toBe("pkg-0@1.0.0");
     const query = `pkg-${dependencyCount}@1.0.0`;
     const filtered = buildDependencyTree(projects, defaultDependencyExpansion(projects, query), query);
-    expect(filtered).toEqual({ rows, matchCount: 1, truncated: false, filterIncomplete: false });
+    // Too deep to open fully: the filter opens one level and the closed row counts the match below.
+    expect(filtered).toMatchObject({ matchCount: 1, truncated: false, filterIncomplete: false });
+    expect(filtered.rows.map(row => [row.label, row.count, row.expanded, row.matches])).toEqual([
+      ["yarn.lock", 1, true, undefined],
+      ["pkg-1@1.0.0", undefined, false, "1"],
+    ]);
     expect(new Set(rows.map(row => row.key)).size).toBe(rows.length);
   });
 
@@ -492,9 +511,11 @@ describe("dependency tree", () => {
     const query = "pkg-1000@1.0.0";
     const expanded = defaultDependencyExpansion(projects, query);
     const result = buildDependencyTree(projects, expanded, query);
-    expect(result).toMatchObject({ matchCount: 1, truncated: true, filterIncomplete: false });
-    expect(result.rows.filter(row => row.kind === "dependency")).toHaveLength(5000);
-    expect(result.rows.some(row => row.label === query)).toBe(true);
+    // Large result: one level open; closed rows count matches below within a step limit.
+    expect(result).toMatchObject({ matchCount: 1, truncated: false, filterIncomplete: false });
+    expect(result.rows.filter(row => row.kind === "dependency")).toHaveLength(1000);
+    expect(result.rows.find(row => row.label === query)).toMatchObject({ expandable: false });
+    expect(result.rows.find(row => row.label === "pkg-1@1.0.0")?.matches).toMatch(/^1\+?$/);
     expect(edgeVisits).toBeLessThanOrEqual(edgeCount * 8);
     expanded.delete(result.rows[0].key);
     const collapsed = buildDependencyTree(projects, expanded, query);
@@ -517,7 +538,7 @@ describe("dependency tree", () => {
     const expanded = defaultDependencyExpansion(projects, query);
     const result = buildDependencyTree(projects, expanded, query);
     expect(result).toMatchObject({ matchCount: 2, truncated: false, filterIncomplete: true });
-    expect(result.rows.map(row => row.label)).toEqual(["yarn.lock", query]);
+    expect(result.rows.map(row => row.label)).toEqual(["yarn.lock", query, "yarn.lock"]);
     expect(result.rows[1]).toMatchObject({ expandable: false, cycle: false, reference: false });
     expect(buildDependencyTree(projects, new Set(), query)).toMatchObject({
       matchCount: 2,
@@ -526,7 +547,7 @@ describe("dependency tree", () => {
     });
   });
 
-  test("caps repeated DAG paths at 5000 dependency rows without losing full counts or failure roots", () => {
+  test("caps repeated DAG paths at 1000 dependency rows without losing full counts or failure roots", () => {
     const input = graph();
     const levels = 20;
     input.rootNodeId = "node-0";
@@ -551,10 +572,11 @@ describe("dependency tree", () => {
       { ...project([]), status: "failed", reason: "Failed" },
       { ...project([]), status: "skipped", reason: "Not supported" },
     ];
-    const expanded = defaultDependencyExpansion(projects, "pkg");
+    // Everything opened by hand; filters alone now open one level for large results.
+    const expanded = { has: () => true } as unknown as ReadonlySet<string>;
     for (const query of ["pkg", ""]) {
       const result = buildDependencyTree(projects, expanded, query);
-      expect(result.rows.filter(row => row.kind === "dependency")).toHaveLength(5000);
+      expect(result.rows.filter(row => row.kind === "dependency")).toHaveLength(1000);
       expect(result.rows.filter(row => row.kind === "project").map(row => row.projectIndex)).toEqual([0, 1, 2, 3]);
       expect(result.truncated).toBe(true);
       expect(result.filterIncomplete).toBe(false);
@@ -567,18 +589,121 @@ describe("dependency tree", () => {
     const query = "pkg-after-cap";
     const narrowed = buildDependencyTree(projects, defaultDependencyExpansion(projects, query), query);
     expect(narrowed).toMatchObject({ matchCount: 1, truncated: false });
-    expect(narrowed.rows[1].label).toBe("pkg-after-cap@3.0.0");
+    // The first project stays listed without matches; the match sits under the second.
+    expect(narrowed.rows.slice(0, 3).map(row => [row.label, row.count])).toEqual([
+      ["yarn.lock", 0],
+      ["later/yarn.lock", 1],
+      ["pkg-after-cap@3.0.0", undefined],
+    ]);
   });
 
   test("the exact row cap is not reported as truncated until another visible occurrence exists", () => {
     const input = graph();
-    input.nodes[0].deps = Array.from({ length: 5000 }, () => "leaf");
+    input.nodes[0].deps = Array.from({ length: 1000 }, () => "leaf");
     const projects = [project([input])];
     const expanded = defaultDependencyExpansion(projects);
     expect(buildDependencyTree(projects, expanded)).toMatchObject({ truncated: false });
     input.nodes[0].deps.push("leaf");
     const result = buildDependencyTree(projects, expanded);
-    expect(result.rows).toHaveLength(5001);
+    expect(result.rows).toHaveLength(1001);
     expect(result.truncated).toBe(true);
+  });
+
+  test("scope filters direct dependencies and keeps their subtrees, counts and matches", () => {
+    // pruned: dev-parent reaches shared only through a reference node.
+    const projects = [project([prunedGraph()]), project([])];
+    const labels = (scope: "all" | "prod" | "dev", query = "") =>
+      buildDependencyTree(projects, defaultDependencyExpansion(projects, query, scope), query, scope);
+    const prod = labels("prod");
+    expect(prod.rows.filter(row => row.depth === 1).map(row => row.label)).toEqual(["parent@1.0.0"]);
+    expect(prod.rows.map(row => [row.label, row.count, row.total])[0]).toEqual(["yarn.lock", 3, 3]);
+    const dev = labels("dev");
+    expect(dev.rows.filter(row => row.depth === 1).map(row => row.label)).toEqual(["dev-parent@1.0.0"]);
+    // Reference nodes count their canonical subtree.
+    expect(dev.rows[0]).toMatchObject({ count: 3, total: 3 });
+    expect(labels("all").rows[0]).toMatchObject({ count: 4, total: 4 });
+    // Matches outside the scope do not count.
+    expect(labels("dev", "parent")).toMatchObject({ matchCount: 1 });
+    expect(labels("dev", "parent").rows.map(row => row.label)).toEqual(["yarn.lock", "dev-parent@1.0.0", "yarn.lock"]);
+    expect(labels("prod", "dev-parent")).toMatchObject({ matchCount: 0 });
+    expect(labels("prod", "dev-parent").rows[0]).toMatchObject({ count: 0, total: 3, expandable: false });
+  });
+
+  test("group by package lists unique packages A-Z, opening to the direct dependencies that pull them in", () => {
+    const projects = [project([prunedGraph()])];
+    const build = (query = "", scope: "all" | "prod" | "dev" = "all") =>
+      buildDependencyTree(
+        projects,
+        defaultDependencyExpansion(projects, query, scope, "package"),
+        query,
+        scope,
+        "package",
+      );
+    const all = build();
+    expect(all.rows.map(row => [row.prefix, row.label, row.scope, row.direct, row.expandable, row.expanded])).toEqual([
+      ["", "yarn.lock", null, undefined, true, true],
+      ["├─ ", "@fixture/shared@2.0.0", "prod", false, true, false],
+      ["├─ ", "dev-parent@1.0.0", "dev", true, false, false],
+      ["├─ ", "leaf@3.0.0", "prod", false, true, false],
+      ["└─ ", "parent@1.0.0", "prod", true, false, false],
+    ]);
+    expect(all.rows[0]).toMatchObject({ count: 4, total: 4 });
+    const opened = buildDependencyTree(projects, new Set([all.rows[0].key, all.rows[3].key]), "", "all", "package");
+    // Reached through a reference node from dev-parent, too.
+    expect(opened.rows.slice(4, 6).map(row => [row.prefix, row.label, row.path])).toEqual([
+      ["│  ├─ ", "dev-parent@1.0.0", ["leaf@3.0.0", "dev-parent@1.0.0"]],
+      ["│  └─ ", "parent@1.0.0", ["leaf@3.0.0", "parent@1.0.0"]],
+    ]);
+    // Small filter results open fully; counts follow the filter and scope.
+    const filtered = build("leaf");
+    expect(filtered).toMatchObject({ matchCount: 1, truncated: false });
+    expect(filtered.rows.map(row => row.label)).toEqual([
+      "yarn.lock",
+      "leaf@3.0.0",
+      "dev-parent@1.0.0",
+      "parent@1.0.0",
+    ]);
+    expect(build("", "dev").rows.map(row => [row.label, row.scope])).toEqual([
+      ["yarn.lock", null],
+      ["@fixture/shared@2.0.0", "dev"],
+      ["dev-parent@1.0.0", "dev"],
+      ["leaf@3.0.0", "dev"],
+    ]);
+  });
+
+  test("a child listed as both node and pruned reference (pnpm peers) shows once, as the node", () => {
+    const input = prunedGraph();
+    input.nodes[1].deps = ["shared:pruned", "shared"];
+    const projects = [project([input])];
+    const parentKey = buildDependencyTree(projects, defaultDependencyExpansion(projects)).rows[1].key;
+    const rows = buildDependencyTree(projects, new Set([...defaultDependencyExpansion(projects), parentKey])).rows;
+    expect(rows.slice(1, 3).map(row => [row.label, row.reference])).toEqual([
+      ["parent@1.0.0", false],
+      ["@fixture/shared@2.0.0", false],
+    ]);
+    expect(rows[3].label).toBe("dev-parent@1.0.0");
+  });
+
+  test("the JSON package list follows filter and scope", () => {
+    const input = graph();
+    input.packages.push({ id: "leaf@4.0.0", name: "leaf", version: "4.0.0" });
+    input.nodes.push({ nodeId: "leaf-4", pkgId: "leaf@4.0.0", deps: [], scope: "dev", referenceNodeId: null });
+    input.nodes[2].deps.push("leaf-4");
+    const projects = [project([input])];
+    expect(dependencyPackageList(projects, "LEAF", "all")[0]).toEqual({
+      targetFile: "yarn.lock",
+      packageManager: "yarn",
+      status: "scanned",
+      reason: null,
+      packages: [
+        { name: "leaf", version: "3.0.0", direct: false, dev: false, via: ["dev-parent@1.0.0", "parent@1.0.0"] },
+        { name: "leaf", version: "4.0.0", direct: false, dev: true, via: ["dev-parent@1.0.0"] },
+      ],
+    });
+    expect(dependencyPackageList(projects, "", "prod")[0].packages.map(pkg => pkg.name)).toEqual([
+      "@fixture/shared",
+      "leaf",
+      "parent",
+    ]);
   });
 });
