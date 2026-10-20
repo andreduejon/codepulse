@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { isSnykDependencyGraph } from "./dep-graph";
-import { buildDependencyTree, defaultDependencyExpansion, dependencyPackageList } from "./deps-tree";
+import {
+  buildDependencyTree,
+  type DependencyVulnerability,
+  defaultDependencyExpansion,
+  dependencyPackageList,
+  vulnerabilityKey,
+} from "./deps-tree";
 import type { SnykDependencyGraph, SnykDependencyProjectResult } from "./types";
 
 function graph(): SnykDependencyGraph {
@@ -710,5 +716,40 @@ describe("dependency tree", () => {
       "leaf",
       "parent",
     ]);
+  });
+
+  test("findings mark their package and the worst score below, and open the shortest path to each", () => {
+    const projects = [project([prunedGraph()])];
+    const finding = (severity: DependencyVulnerability["severity"], score: number): DependencyVulnerability => ({
+      severity,
+      score,
+      exploit: false,
+    });
+    const vulnerabilities = new Map([
+      [vulnerabilityKey("yarn.lock", "leaf@3.0.0"), finding("high", 7.5)],
+      // No manifest: matches any graph.
+      [vulnerabilityKey("", "dev-parent@1.0.0"), finding("low", 3.1)],
+    ]);
+    const expanded = defaultDependencyExpansion(projects, "", "all", "tree", vulnerabilities);
+    const rows = buildDependencyTree(projects, expanded, "", "all", "tree", vulnerabilities).rows;
+    expect(rows.map(row => [row.label, row.expanded, row.vulnerability?.score, row.vulnerableBelow?.score])).toEqual([
+      ["yarn.lock", true, undefined, undefined],
+      ["parent@1.0.0", true, undefined, undefined],
+      ["@fixture/shared@2.0.0", true, undefined, undefined],
+      ["leaf@3.0.0", false, 7.5, undefined],
+      // Only the shortest path opens; this reference keeps its own finding and the worst below.
+      ["dev-parent@1.0.0", false, 3.1, 7.5],
+    ]);
+    // Higher severity wins over a higher score.
+    vulnerabilities.set(vulnerabilityKey("yarn.lock", "@fixture/shared@2.0.0"), finding("critical", 2.0));
+    const worst = buildDependencyTree(projects, new Set(['["project",0]']), "", "all", "tree", vulnerabilities).rows[1];
+    expect(worst.vulnerableBelow).toMatchObject({ severity: "critical", score: 2.0 });
+    // Filters and the package view keep their own expansion.
+    expect(defaultDependencyExpansion(projects, "", "all", "package", vulnerabilities)).toEqual(
+      defaultDependencyExpansion(projects),
+    );
+    // The package view marks each package's own findings.
+    const list = buildDependencyTree(projects, new Set(['["project",0]']), "", "all", "package", vulnerabilities);
+    expect(list.rows.find(row => row.label === "leaf@3.0.0")?.vulnerability?.score).toBe(7.5);
   });
 });

@@ -983,3 +983,60 @@ for (const provider of ["github-actions", "jenkins", "openshift", "snyk"] as con
     }
   });
 }
+
+test("Dependencies pins its own legend when the scan has findings", async () => {
+  const d = await renderProvider("snyk");
+  try {
+    d.setSnykScan({
+      ...scan,
+      // The legend samples the highest score: high 7.5 beats medium 9.1 (severity first).
+      findings: scan.findings.map(finding => ({ ...finding, cvssScore: finding.severity === "high" ? 7.5 : 9.1 })),
+      dependencyProjects: [
+        {
+          targetFile: "package.json",
+          packageManager: "yarn",
+          status: "scanned",
+          reason: null,
+          graphs: [
+            {
+              targetFile: "package.json",
+              packageManager: "yarn",
+              rootNodeId: "root",
+              packages: [
+                { id: "root", name: "fixture", version: "1.0.0" },
+                { id: "high", name: "high-package", version: "1.0.0" },
+              ],
+              nodes: [
+                { nodeId: "root", pkgId: "root", deps: ["high"], scope: "unknown", referenceNodeId: null },
+                { nodeId: "high", pkgId: "high", deps: [], scope: "prod", referenceNodeId: null },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    d.actions.setDetailActiveTab("snyk-deps");
+    await d.flush();
+    const lines = d.frame().split("\n");
+    const legend = lines.findIndex(line => line.includes("score (nested)"));
+    expect(lines[legend]).toMatch(/! ! mature exploit \(nested\) {2}7\.5 7\.5 score \(nested\)\s*$/);
+    expect(lines[legend - 1].trim()).toBe("");
+    // First marker coloured (the package's own), second muted (nested in a closed row); labels muted.
+    const exploitAt = lines[legend].indexOf("! !");
+    const scoreAt = lines[legend].indexOf("7.5 7.5");
+    for (const [x, color] of [
+      [exploitAt, d.theme.error],
+      [exploitAt + 2, d.theme.foregroundMuted],
+      [scoreAt, d.theme.severityHigh],
+      [scoreAt + 4, d.theme.foregroundMuted],
+      [lines[legend].indexOf("score (nested)"), d.theme.foregroundMuted],
+    ] as const)
+      expect(d.cell(x, legend)?.fg).toEqual(RGBA.fromHex(color));
+    expect(d.frame()).not.toContain("● upgrade");
+    d.setSnykScan({ ...scan, findings: [], counts: { critical: 0, high: 0, medium: 0, low: 0 } });
+    await d.flush();
+    expect(d.frame()).not.toContain("score (nested)");
+  } finally {
+    await d.dispose();
+  }
+});

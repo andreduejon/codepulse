@@ -113,6 +113,18 @@ existing message overlay; usable findings are retained.
 - **Copy dependencies as JSON** (below Rescan) copies commit, scan time, Scope,
   filter, and per project a flat package list (`name`, `version`, `direct`, `dev`,
   `via`), respecting the active Scope and filter. Graphs stay out; they are large.
+- Vulnerable packages show their worst CVSS score in its severity colour, with
+  `!` before it when a finding has a mature exploit, on every occurrence in both
+  Group by views. Closed rows show the worst score inside them (and `!` if any
+  finding inside has a mature exploit) in muted text; open rows show nothing.
+  Fixes and individual findings live in Vulnerabilities. A legend
+  (`! ! mature exploit (nested)  9.8 9.8 score (nested)`: coloured for the package
+  itself, muted for closed rows; scores sample the scan's highest score) is pinned below the tab when the scan has findings. Siblings share a
+  score slot, so `dev`/`repeated` line up when any sibling has a score (a `!`
+  widens only its own row); leaves
+  sit one space after their connector. Scores sit one space after the markers, flush right.
+  Without a filter, the tree opens the shortest path to every vulnerable package;
+  when that exceeds 1,000 rows, only direct dependencies with findings below open.
 - Nesting shows each dependency's path. Failed/skipped-project reasons remain
   visible even when their groups collapse.
 - **Rescan commit** refreshes findings and graphs together. Existing tree data

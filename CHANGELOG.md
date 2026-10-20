@@ -17,8 +17,10 @@ All notable changes to this project will be documented in this file.
 - Add live filters to both Snyk detail trees, including collapsed/repeated
   dependency paths; large dependency results open one level with per-row match
   counts, and opening past 1,000 rows closes other branches. Add **Group by**
-  `[tree]`/`[package]` and **Copy dependencies as JSON** to Dependencies. Keep Dependencies available before scanning, use scanned
-  file/project roots, and surface unavailable graph scans in the message overlay.
+  `[tree]`/`[package]` and **Copy dependencies as JSON** to Dependencies.
+- Mark vulnerable packages in Dependencies with their worst score and a
+  mature-exploit `!` (muted on closed rows for what is inside), with a pinned
+  legend, and open the shortest path to each by default.
 - Show a CVSS score, mature-exploit marker, and fix dot (upgrade, override, no fix)
   on every vulnerability, with a pinned legend; expand to title, package, `via`
   dependency, manifest, exploit maturity, and fix line, each copyable.

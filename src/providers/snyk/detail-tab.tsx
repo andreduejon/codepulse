@@ -85,7 +85,7 @@ type FlatItem =
   | { kind: "finding"; entry: SnykVulnerabilityEntry }
   | { kind: "field"; owner: string; line: DetailLine };
 
-function severityColor(theme: Theme, severity: SnykSeverity): string {
+export function severityColor(theme: Theme, severity: SnykSeverity): string {
   switch (severity) {
     case "critical":
       return theme.severityCritical;
@@ -98,11 +98,13 @@ function severityColor(theme: Theme, severity: SnykSeverity): string {
   }
 }
 
-const LEGEND: [string, string, DetailLine["tone"]][] = [
-  ["●", "upgrade", "upgrade"],
-  ["●", "override", "override"],
-  ["●", "no fix", "no fix"],
-  ["!", "mature exploit", "exploit"],
+/** Coloured markers (space-separated), then a muted label. */
+export type SnykLegendItem = [markers: [string, (theme: Theme) => string][], label: string];
+const LEGEND: SnykLegendItem[] = [
+  [[["●", theme => toneColor(theme, "upgrade")]], "upgrade"],
+  [[["●", theme => toneColor(theme, "override")]], "override"],
+  [[["●", theme => toneColor(theme, "no fix")]], "no fix"],
+  [[["!", theme => toneColor(theme, "exploit")]], "mature exploit"],
 ];
 /** Row tail: " " + 4-char score + " " + exploit marker + " " + fix dot (colored like CI status). */
 const ROW_TAIL_WIDTH = 9;
@@ -898,16 +900,25 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
 }
 
 /** Fix/exploit legend; DetailPanel renders it sticky below the scroll area. */
-export function SnykLegend() {
+export function SnykLegend(props: { items?: readonly SnykLegendItem[] }) {
   const t = useT();
   return (
     <box flexDirection="row" width="100%" flexShrink={0} justifyContent="flex-end">
-      <For each={LEGEND}>
-        {([marker, label, tone], index) => (
+      <For each={props.items ?? LEGEND}>
+        {([markers, label], index) => (
           <>
-            <text selectable={false} flexShrink={0} wrapMode="none" fg={toneColor(t(), tone)}>
-              {`${index() === 0 ? "" : "  "}${marker} `}
-            </text>
+            <Show when={index() > 0}>
+              <text selectable={false} flexShrink={0} wrapMode="none">
+                {"  "}
+              </text>
+            </Show>
+            <For each={markers}>
+              {([marker, color]) => (
+                <text selectable={false} flexShrink={0} wrapMode="none" fg={color(t())}>
+                  {`${marker} `}
+                </text>
+              )}
+            </For>
             <text selectable={false} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
               {label}
             </text>

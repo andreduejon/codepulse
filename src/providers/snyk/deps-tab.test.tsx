@@ -841,11 +841,11 @@ test("Group by switches between the tree and a package list with direct markers"
     expect(d.state.detailCursorIndex()).toBe(2);
     // A–Z unique packages; direct dependencies carry a muted `direct`, dev-only ones `dev`.
     expect(d.frame()).toMatch(/├─ ▸ @fixture\/shared@4\.0\.0\s*$/m);
-    expect(d.frame()).toMatch(/├─ {3}dev-only@2\.0\.0\s+direct dev$/m);
-    expect(d.frame()).toMatch(/└─ {3}parent@1\.0\.0\s+direct$/m);
+    expect(d.frame()).toMatch(/├─ dev-only@2\.0\.0\s+direct dev$/m);
+    expect(d.frame()).toMatch(/└─ parent@1\.0\.0\s+direct$/m);
     await d.click("@fixture/shared@4.0.0");
-    expect(d.frame()).toMatch(/│ {2}├─ {3}dev-only@2\.0\.0\s*$/m);
-    expect(d.frame()).toMatch(/│ {2}└─ {3}parent@1\.0\.0\s*$/m);
+    expect(d.frame()).toMatch(/│ {2}├─ dev-only@2\.0\.0\s*$/m);
+    expect(d.frame()).toMatch(/│ {2}└─ parent@1\.0\.0\s*$/m);
     await d.click("Group by");
     expect(d.frame()).toMatch(/^Group by\s+\[tree\]\s*$/m);
     expect(d.frame()).toContain("▸ parent@1.0.0");
@@ -872,5 +872,139 @@ test("Copy dependencies as JSON copies the flat package list with scope and filt
     ]);
   } finally {
     await d.dispose();
+  }
+});
+
+test("vulnerable packages show their worst score and exploit marker; closed rows show the worst inside, muted", async () => {
+  const scan = scanFixture();
+  const finding = (id: string, path: string[], severity: "critical" | "low", score: number, exploit: string | null) => {
+    const [dependency, version] = (path[path.length - 1] ?? "").split(/@(?=[^@]+$)/);
+    return {
+      id,
+      title: id,
+      severity,
+      dependency,
+      installedVersion: version,
+      fixedVersion: null,
+      fixedIn: [],
+      exploit,
+      cvssScore: score,
+      dependencyType: path.length === 1 ? ("direct" as const) : ("transitive" as const),
+      dependencyPath: path,
+      upgradeDependency: null,
+      upgradeVersion: null,
+      cves: [id],
+      project: "fixture-app",
+      targetFile: "web/package.json",
+    };
+  };
+  const leafPath = ["parent@1.0.0", "@fixture/shared@4.0.0", "leaf@5.0.0"];
+  scan.findings = [
+    finding("CVE-1", leafPath, "critical", 9.8, null),
+    // A lower finding with a mature exploit: the score stays the worst, "!" still shows.
+    finding("CVE-2", leafPath, "low", 2.0, "Mature"),
+    finding("CVE-3", ["mystery@3.0.0"], "low", 3.1, null),
+    finding("CVE-4", ["dev-only@2.0.0"], "low", 4.0, null),
+  ];
+  const d = await renderDependencies(scan);
+  try {
+    const line = (text: string) =>
+      d
+        .frame()
+        .split("\n")
+        .find(row => row.includes(text)) ?? "";
+    const spans = (text: string) => d.captureSpans().lines[d.point(text).y]?.spans ?? [];
+    // The shortest path to leaf opens; open rows on the way show nothing.
+    expect(line("parent@1.0.0")).toMatch(/▾ parent@1\.0\.0\s*$/);
+    expect(line("@fixture/shared@4.0.0")).toMatch(/▾ @fixture\/shared@4\.0\.0\s*$/);
+    expect(line("leaf@5.0.0")).toMatch(/leaf@5\.0\.0\s+! 9\.8$/);
+    // "!" (error) and a critical score share a colour in this theme, so they render as one span.
+    expect(spans("leaf@5.0.0").find(span => span.text.trim() === "! 9.8")?.fg).toEqual(
+      RGBA.fromHex(d.theme.severityCritical),
+    );
+    expect(d.theme.severityCritical).toBe(d.theme.error);
+    // One space after markers; scores flush right share a column.
+    expect(line("mystery@3.0.0")).toMatch(/mystery@3\.0\.0\s+3\.1$/);
+    expect(spans("mystery@3.0.0").find(span => span.text === "3.1")?.fg).toEqual(RGBA.fromHex(d.theme.severityLow));
+    expect(line("dev-only@2.0.0")).toMatch(/dev-only@2\.0\.0\s+dev 4\.0$/);
+    expect(line("dev-only@2.0.0").lastIndexOf("4.0")).toBe(line("mystery@3.0.0").lastIndexOf("3.1"));
+    expect(d.frame()).not.toMatch(/[●○×]/);
+    // Closed: the worst score inside and "!" (from any finding inside), muted, in the same column.
+    await d.click("parent@1.0.0");
+    expect(line("parent@1.0.0")).toMatch(/▸ parent@1\.0\.0\s+! 9\.8$/);
+    expect(line("parent@1.0.0").lastIndexOf("9.8")).toBe(line("mystery@3.0.0").lastIndexOf("3.1"));
+    expect(spans("parent@1.0.0").find(span => span.text === " ! 9.8")?.fg).toEqual(
+      RGBA.fromHex(d.theme.foregroundMuted),
+    );
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("leaves sit one space after the connector; siblings share a score slot so dev lines up", async () => {
+  const scan = scanFixture();
+  const graph = scan.dependencyProjects[0].graphs[0];
+  const mysteryNode = graph.nodes.find(node => node.nodeId === "unknown");
+  if (mysteryNode) mysteryNode.scope = "dev";
+  scan.findings = [
+    {
+      id: "CVE-9",
+      title: "CVE-9",
+      severity: "low",
+      dependency: "dev-only",
+      installedVersion: "2.0.0",
+      fixedVersion: null,
+      fixedIn: [],
+      exploit: "Mature",
+      cvssScore: 4.0,
+      dependencyType: "direct",
+      dependencyPath: ["dev-only@2.0.0"],
+      upgradeDependency: null,
+      upgradeVersion: null,
+      cves: ["CVE-9"],
+      project: "fixture-app",
+      targetFile: "web/package.json",
+    },
+  ];
+  const d = await renderDependencies(scan);
+  try {
+    const line = (text: string) =>
+      d
+        .frame()
+        .split("\n")
+        .find(row => row.includes(text)) ?? "";
+    expect(line("mystery@3.0.0")).toMatch(/^└─ mystery@3\.0\.0\s+dev\s+$/);
+    expect(line("dev-only@2.0.0")).toMatch(/dev-only@2\.0\.0\s+dev ! 4\.0$/);
+    // mystery has no score but its sibling does: its dev moves into the score column, without room for "!".
+    expect(line("mystery@3.0.0")).toMatch(/dev {4}$/);
+    expect(line("mystery@3.0.0").lastIndexOf("dev")).toBe(line("dev-only@2.0.0").lastIndexOf("dev") + 2);
+  } finally {
+    await d.dispose();
+  }
+  // A sibling's "!" never pushes other scores away from their markers.
+  scan.findings = [
+    ...scan.findings,
+    {
+      ...scan.findings[0],
+      id: "CVE-8",
+      cves: ["CVE-8"],
+      dependency: "mystery",
+      installedVersion: "3.0.0",
+      exploit: null,
+      cvssScore: 3.1,
+      dependencyPath: ["mystery@3.0.0"],
+    },
+  ];
+  const mixed = await renderDependencies(scan);
+  try {
+    const row = (text: string) =>
+      mixed
+        .frame()
+        .split("\n")
+        .find(line => line.includes(text)) ?? "";
+    expect(row("mystery@3.0.0")).toMatch(/mystery@3\.0\.0\s+dev 3\.1$/);
+    expect(row("dev-only@2.0.0")).toMatch(/dev-only@2\.0\.0\s+dev ! 4\.0$/);
+  } finally {
+    await mixed.dispose();
   }
 });
