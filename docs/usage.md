@@ -48,6 +48,7 @@ Normal clears highlighting without changing branch perspective.
 | `shift + ↑` / `shift + ↓` | Jump 10 items |
 | `←` / `h` | Previous tab / exit details on the first tab |
 | `→` / `l` | Next tab |
+| `v` | Snyk Dependencies: show a vulnerable package's findings |
 | `g` / `G` | Top / bottom |
 | `enter` | Activate selected item |
 

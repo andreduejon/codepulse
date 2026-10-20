@@ -14,7 +14,7 @@ import type {
 import type { JenkinsCommitData, JenkinsJob, JenkinsJobFetchResult, JenkinsRun } from "../providers/jenkins/types";
 import type { OpenShiftCommitData, OpenShiftResource } from "../providers/openshift/types";
 import { providerDetailTab } from "../providers/provider";
-import { dependencyLegend } from "../providers/snyk/deps-tab";
+import { DEPENDENCY_LEGEND } from "../providers/snyk/deps-tab";
 import { SnykLegend } from "../providers/snyk/detail-tab";
 import type { SnykScanResult } from "../providers/snyk/types";
 import { scheduleScrollIntoView, scrollElementIntoView } from "../utils/scroll";
@@ -199,7 +199,7 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
     if ((tab !== "snyk" && tab !== "snyk-deps") || isUncommittedHash(hash)) return null;
     const findings = props.snykGetCommitData?.(hash)?.findings ?? [];
     if (findings.length === 0) return null;
-    return tab === "snyk" ? { items: undefined } : { items: dependencyLegend(findings) };
+    return tab === "snyk" ? { items: undefined } : { items: DEPENDENCY_LEGEND };
   };
 
   return (

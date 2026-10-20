@@ -7,7 +7,7 @@ import type { Theme } from "../../context/theme";
 import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useClipboard } from "../../hooks/use-clipboard";
 import { useT } from "../../hooks/use-t";
-import { filterSnykFindings, SnykFilterRow, useSnykFilter } from "./filter";
+import { filterSnykFindings, highlightMatch, SnykFilterRow, useSnykFilter } from "./filter";
 import {
   countUniqueFindings,
   groupSnykFixes,
@@ -32,6 +32,8 @@ export interface SnykDetailTabProps {
   detailFocused: () => boolean;
   setDetailCursorAction: (action: string | null) => void;
   setDetailCursorIndex: (idx: number) => void;
+  /** Vulnerabilities: a filter handed over by the Dependencies jump, read once when the tab opens. */
+  takePendingFilter?: () => string | null;
 }
 
 const SEVERITIES: SnykSeverity[] = ["critical", "high", "medium", "low"];
@@ -435,6 +437,12 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
     on(scanIdentity, () => {
       resettingFilter = filter.query() !== "";
       filter.reset();
+      // Jump from Dependencies: show that package's findings; the query effect puts the cursor on the filter.
+      const pending = props.takePendingFilter?.();
+      if (pending) {
+        resettingFilter = false;
+        filter.setQuery(pending);
+      }
       setExpandedSections(new Set(SEVERITIES.map(severity => `severity:${severity}`)));
       setExpandedFindings(new Set<string>());
       setCollapsedGroups(new Set<string>());
@@ -539,7 +547,11 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
             truncate={bannerOverflow() === 0 || !cursored()}
             fg={cursored() ? t().accent : toneColor(t(), line.tone)}
           >
-            {line.wrap ? text : cursored() ? scrolled(line.full ?? text, true, metadataWidth()) : text}
+            {line.wrap
+              ? highlightMatch(text, filter.query(), t().snykBg)
+              : cursored()
+                ? scrolled(line.full ?? text, true, metadataWidth())
+                : highlightMatch(text, filter.query(), t().snykBg)}
           </text>
           <Show when={textIndex === 0 && line.suffix}>
             <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
@@ -605,7 +617,9 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
             truncate={bannerOverflow() === 0 || !cursored()}
             fg={cursored() ? t().accent : t().foreground}
           >
-            {scrolled(entry.label, cursored(), findingLabelWidth())}
+            {cursored()
+              ? scrolled(entry.label, true, findingLabelWidth())
+              : highlightMatch(entry.label, filter.query(), t().snykBg)}
           </text>
           {/* "!" sits right before the score: padding + marker + space, then the score (7 columns total). */}
           <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().error}>
@@ -642,27 +656,12 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
     );
   };
 
-  /** Right-aligned count, `current/original` while filtering; muted when zero. */
-  const Count = (countProps: { current: number; original: number; selectable: boolean }) => {
-    const filtering = () => !!filter.query().trim();
-    return (
-      <>
-        <text
-          selectable={countProps.selectable}
-          flexShrink={0}
-          wrapMode="none"
-          fg={filtering() && countProps.current > 0 ? t().foreground : t().foregroundMuted}
-        >
-          {` ${countProps.current}`}
-        </text>
-        <Show when={filtering() && countProps.original > 0}>
-          <text selectable={countProps.selectable} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {`/${countProps.original}`}
-          </text>
-        </Show>
-      </>
-    );
-  };
+  /** Right-aligned muted count, `current/original` while filtering. */
+  const Count = (countProps: { current: number; original: number; selectable: boolean }) => (
+    <text selectable={countProps.selectable} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+      {` ${countProps.current}${filter.query().trim() && countProps.original > 0 ? `/${countProps.original}` : ""}`}
+    </text>
+  );
 
   const PackageView = (packageProps: { pkg: PackageRow; last: boolean }) => {
     const pkg = packageProps.pkg;
@@ -702,7 +701,11 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
             truncate
             fg={cursored() ? t().accent : pkg.self || isEmpty() ? t().foregroundMuted : t().foreground}
           >
-            {pkg.self ? "self" : shortCoordinate(pkg.name)}
+            {pkg.self || cursored()
+              ? pkg.self
+                ? "self"
+                : shortCoordinate(pkg.name)
+              : highlightMatch(shortCoordinate(pkg.name), filter.query(), t().snykBg)}
           </text>
           <Count current={pkg.entries.length} original={pkg.original} selectable={!props.mouseEnabled || isEmpty()} />
         </box>
@@ -871,19 +874,9 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
             mouseEnabled={props.mouseEnabled}
             rowRef={rowRef({ kind: "filter" })}
           >
-            <text
-              flexShrink={0}
-              selectable={false}
-              fg={filter.query().trim() && uniqueTotal() > 0 ? t().foreground : t().foregroundMuted}
-              wrapMode="none"
-            >
-              {uniqueTotal()}
+            <text flexShrink={0} selectable={false} fg={t().foregroundMuted} wrapMode="none">
+              {filter.query().trim() ? `${uniqueTotal()}/${originalTotal()}` : uniqueTotal()}
             </text>
-            <Show when={filter.query().trim()}>
-              <text flexShrink={0} selectable={false} fg={t().foregroundMuted} wrapMode="none">
-                {`/${originalTotal()}`}
-              </text>
-            </Show>
           </SnykFilterRow>
         </Show>
         <Show when={props.scan?.partial}>

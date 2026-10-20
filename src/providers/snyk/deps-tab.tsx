@@ -1,8 +1,7 @@
-import { MouseButton, type MouseEvent, type Renderable } from "@opentui/core";
+import { type KeyEvent, MouseButton, type MouseEvent, type Renderable } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, onCleanup, Show, untrack } from "solid-js";
 import { DETAIL_PANEL_WIDTH_FRACTION } from "../../constants";
-import type { Theme } from "../../context/theme";
 import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useClipboard } from "../../hooks/use-clipboard";
 import { useT } from "../../hooks/use-t";
@@ -12,43 +11,29 @@ import {
   type DependencyScopeFilter,
   type DependencyTreeRow,
   type DependencyVulnerabilities,
-  type DependencyVulnerability,
   defaultDependencyExpansion,
   dependencyPackageList,
   vulnerabilityKey,
 } from "./deps-tree";
 import { type SnykDetailTabProps, type SnykLegendItem, severityColor } from "./detail-tab";
-import { SnykFilterRow, useSnykFilter } from "./filter";
-import { groupSnykVulnerabilities, isMatureExploit } from "./parser";
+import { highlightMatch, SnykFilterRow, useSnykFilter } from "./filter";
+import { groupSnykVulnerabilities } from "./parser";
 import type { SnykFinding } from "./types";
 
-export type SnykDependenciesTabProps = SnykDetailTabProps;
+export type SnykDependenciesTabProps = SnykDetailTabProps & {
+  /** `v` on a vulnerable package: open Vulnerabilities filtered to `name@version`. */
+  onShowVulnerabilities: (query: string) => void;
+  setDetailCursorShortcut: (shortcut: { key: string; desc: string } | null) => void;
+};
 
-/**
- * Pinned below the tab when the scan has findings. Each entry shows the package's own marker (coloured) and
- * the nested one on closed rows (muted); scores sample the scan's highest score.
- */
-export function dependencyLegend(findings: readonly SnykFinding[]): SnykLegendItem[] {
-  const worst = groupSnykVulnerabilities(findings)[0]?.finding;
-  const score = worst?.cvssScore == null ? "9.8" : worst.cvssScore.toFixed(1);
-  const muted = (theme: Theme) => theme.foregroundMuted;
-  return [
-    [
-      [
-        ["!", theme => theme.error],
-        ["!", muted],
-      ],
-      "mature exploit (nested)",
-    ],
-    [
-      [
-        [score, theme => severityColor(theme, worst?.severity ?? "high")],
-        [score, muted],
-      ],
-      "score (nested)",
-    ],
-  ];
-}
+/** Pinned below the tab when the scan has findings: the triangle's colour is the package's worst severity. */
+export const DEPENDENCY_LEGEND: SnykLegendItem[] = [
+  [
+    (["critical", "high", "medium", "low"] as const).map(severity => ["▲", theme => severityColor(theme, severity)]),
+    "severity",
+  ],
+];
+const VULNERABILITY_SHORTCUT = { key: "v", desc: "vulnerabilities" };
 
 const GROUP_BY_OPTIONS: DependencyGroupBy[] = ["tree", "package"];
 const SCOPE_OPTIONS: DependencyScopeFilter[] = ["all", "prod", "dev"];
@@ -64,19 +49,13 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
   const dimensions = useTerminalDimensions();
   const filter = useSnykFilter(props, FILTER_INDEX);
   const [scope, setScope] = createSignal<DependencyScopeFilter>("all");
-  /** Worst finding per manifest + package (score and severity), and whether any is a mature exploit. */
+  /** Worst severity per manifest + package. */
   const vulnerabilities = createMemo((): DependencyVulnerabilities => {
-    const packages = new Map<string, DependencyVulnerability>();
+    const packages = new Map<string, SnykFinding["severity"]>();
+    // Entries arrive worst first, so the first one per package wins.
     for (const { finding } of groupSnykVulnerabilities(props.scan?.findings ?? [])) {
       const key = vulnerabilityKey(finding.targetFile ?? "", `${finding.dependency}@${finding.installedVersion}`);
-      const worst = packages.get(key);
-      // Entries arrive worst first, so the first one per package sets severity and score.
-      packages.set(
-        key,
-        worst
-          ? { ...worst, exploit: worst.exploit || isMatureExploit(finding) }
-          : { severity: finding.severity, score: finding.cvssScore ?? null, exploit: isMatureExploit(finding) },
-      );
+      if (!packages.has(key)) packages.set(key, finding.severity);
     }
     return packages;
   });
@@ -131,35 +110,20 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
       .map(word => ` ${word}`)
       .join("");
   const matchesText = (row: DependencyTreeRow) => (row.matches === undefined ? "" : ` ${row.matches}`);
-  const scoreText = (score: number | null) => (score === null ? "" : score.toFixed(1));
-  /** One space before the score (or before "!"); score and dot sit flush right, so scores still align. */
-  const exploitText = (vulnerability: DependencyVulnerability) => (vulnerability.exploit ? " ! " : " ");
-  /** " ! 9.8" (mature exploit) or " 9.8": the package's own, else the worst inside a closed row (muted). */
-  const vulnerabilityWidth = (row: DependencyTreeRow) => {
-    const vulnerability = row.vulnerability ?? row.vulnerableBelow;
-    return vulnerability ? exploitText(vulnerability).length + scoreText(vulnerability.score).length : 0;
-  };
-  /**
-   * Siblings share a slot as wide as their widest score (without "!"), so `dev`/`repeated` line up; none → no
-   * slot. A "!" widens only its own row.
-   */
-  const parentKey = (row: DependencyTreeRow) => row.key.slice(0, row.key.lastIndexOf("/"));
-  const scoreSlots = createMemo(() => {
-    const slots = new Map<string, number>();
-    for (const row of rows()) {
-      if (row.kind !== "dependency") continue;
-      const vulnerability = row.vulnerability ?? row.vulnerableBelow;
-      const width = vulnerability ? 1 + scoreText(vulnerability.score).length : 0;
-      slots.set(parentKey(row), Math.max(slots.get(parentKey(row)) ?? 0, width));
-    }
-    return slots;
-  });
-  const scoreSlot = (row: DependencyTreeRow) =>
-    Math.max(vulnerabilityWidth(row), row.kind === "dependency" ? (scoreSlots().get(parentKey(row)) ?? 0) : 0);
   /** Leaves have no arrow: one space after the connector, like Vulnerabilities' detail rows. */
   const markerWidth = (row: DependencyTreeRow) => (row.kind === "dependency" && !row.expandable ? 0 : 2);
+  /** Sibling groups (same parent) with any triangle reserve its column on every row, so `dev`/`repeated` line up. */
+  const parentKey = (row: DependencyTreeRow) => row.key.slice(0, row.key.lastIndexOf("/"));
+  const markerGroups = createMemo(
+    () => new Set(rows().flatMap(row => (row.kind === "dependency" && row.vulnerability ? [parentKey(row)] : []))),
+  );
+  const markerGap = (row: DependencyTreeRow) =>
+    !row.vulnerability && row.kind === "dependency" && markerGroups().has(parentKey(row));
   const suffixWidth = (row: DependencyTreeRow) =>
-    markers(row).length + (row.scope === "dev" ? 4 : 0) + matchesText(row).length + scoreSlot(row);
+    markers(row).length +
+    (row.scope === "dev" ? 4 : 0) +
+    matchesText(row).length +
+    (row.vulnerability || markerGap(row) ? 2 : 0);
   const prefix = (row: DependencyTreeRow) => {
     const budget = Math.max(0, usableWidth() - 1 - suffixWidth(row));
     const connector = row.prefix.slice(Math.max(0, row.prefix.length - Math.max(0, budget - 11)));
@@ -171,6 +135,14 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
     // Maven `group:artifact@version` shows as `artifact@version`; the cursor row shows full coordinates.
     const name = row.kind === "dependency" && !full ? row.label.slice(row.label.lastIndexOf(":") + 1) : row.label;
     return `${name}${incomplete ? " · incomplete" : ""}`;
+  };
+  /** Filter hits within the package name (or the whole label for an exact `name@version` query), like matching. */
+  const highlightedLabel = (row: DependencyTreeRow) => {
+    const text = label(row);
+    const query = filter.query().trim();
+    const at = query.lastIndexOf("@") > 0 ? text.length : text.lastIndexOf("@");
+    const name = at > 0 ? text.slice(0, at) : text;
+    return [highlightMatch(name, query, t().snykBg), text.slice(name.length)];
   };
   /** Nesting shows the path; the cursor row shows the full name, banner-scrolled when clipped. */
   const labelWidth = (row: DependencyTreeRow) =>
@@ -288,7 +260,7 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
     untrack(() => {
       filter.reset();
       previousView = JSON.stringify(["", scope(), groupBy()]);
-      setExpanded(defaultDependencyExpansion(projects(), "", scope(), groupBy(), vulnerabilities()));
+      setExpanded(defaultDependencyExpansion(projects(), "", scope(), groupBy()));
       setHoveredKey(null);
       props.setDetailCursorIndex(0);
       props.navRef?.scrollToCursor?.();
@@ -302,7 +274,7 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
     const queryChanged = JSON.parse(previousView || "[]")[0] !== query;
     previousView = view;
     untrack(() => {
-      setExpanded(defaultDependencyExpansion(projects(), query, scope(), groupBy(), vulnerabilities()));
+      setExpanded(defaultDependencyExpansion(projects(), query, scope(), groupBy()));
       // Switching Scope or Group by keeps the cursor on its row.
       if (!queryChanged) return;
       props.setDetailCursorIndex(FILTER_INDEX);
@@ -316,12 +288,27 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
     if (cursor < 0 || cursor >= count) props.setDetailCursorIndex(Math.max(0, Math.min(count - 1, cursor)));
   });
 
+  /** The cursored vulnerable package, if any: `v` and the footer hint act on it. */
+  const cursorVulnerable = () => {
+    if (!props.detailFocused()) return null;
+    const row = navRows()[props.detailCursorIndex() - ROW_BASE];
+    return row?.kind === "dependency" && row.vulnerability ? row : null;
+  };
+  const handleKey = (event: KeyEvent) => {
+    const row = cursorVulnerable();
+    if (event.name !== "v" || event.ctrl || event.meta || !row) return false;
+    props.onShowVulnerabilities(row.path[row.path.length - 1] ?? row.label);
+    return true;
+  };
+  createEffect(() => props.setDetailCursorShortcut(cursorVulnerable() ? VULNERABILITY_SHORTCUT : null));
+
   createEffect(() => {
     const count = navRows().length + (props.scan ? ROW_BASE : 1);
     syncRefs();
     if (!props.navRef) return;
     props.navRef.itemCount = count;
     props.navRef.activateCurrentItem = activateCurrentItem;
+    props.navRef.handleKey = handleKey;
   });
 
   createEffect(() => {
@@ -359,8 +346,10 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
         props.navRef.itemCount = 0;
         props.navRef.itemRefs = [];
         props.navRef.activateCurrentItem = () => false;
+        props.navRef.handleKey = undefined;
       }
       props.setDetailCursorAction(null);
+      props.setDetailCursorShortcut(null);
     }
     refsByKey.clear();
     itemRefs.length = 0;
@@ -476,19 +465,9 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
           }}
           placeholder="Enter dependency filter..."
         >
-          <text
-            flexShrink={0}
-            selectable={false}
-            fg={filtering() && packageTotals().count > 0 ? t().foreground : t().foregroundMuted}
-            wrapMode="none"
-          >
-            {filtering() ? packageTotals().count : packageTotals().total}
+          <text flexShrink={0} selectable={false} fg={t().foregroundMuted} wrapMode="none">
+            {filtering() ? `${packageTotals().count}/${packageTotals().total}` : packageTotals().total}
           </text>
-          <Show when={filtering()}>
-            <text flexShrink={0} selectable={false} fg={t().foregroundMuted} wrapMode="none">
-              {`/${packageTotals().total}`}
-            </text>
-          </Show>
         </SnykFilterRow>
         {/* Blank row before the tree, as in Vulnerabilities. */}
         <box height={1} flexShrink={0} />
@@ -558,6 +537,8 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
                       <strong>{label(row)}</strong>
                     ) : cursored(index()) && row.kind === "dependency" ? (
                       label(row, true).substring(bannerOffset(), bannerOffset() + labelWidth(row))
+                    ) : row.kind === "dependency" ? (
+                      highlightedLabel(row)
                     ) : (
                       label(row)
                     )}
@@ -586,43 +567,25 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
                   </Show>
                   {/* Closed rows while filtering: matches below, like header counts. */}
                   <Show when={matchesText(row)}>
-                    <text
-                      selectable={!props.mouseEnabled}
-                      flexShrink={0}
-                      fg={row.matches !== "0" ? t().foreground : t().foregroundMuted}
-                      wrapMode="none"
-                    >
+                    <text selectable={!props.mouseEnabled} flexShrink={0} fg={t().foregroundMuted} wrapMode="none">
                       {matchesText(row)}
                     </text>
                   </Show>
-                  <Show when={scoreSlot(row) > vulnerabilityWidth(row)}>
+                  <Show when={markerGap(row)}>
                     <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none">
-                      {" ".repeat(scoreSlot(row) - vulnerabilityWidth(row))}
+                      {"  "}
                     </text>
                   </Show>
-                  {/* Vulnerable package: "!" for a mature exploit, worst score in its severity colour. */}
+                  {/* Vulnerable package: a triangle in its worst severity colour; `v` opens its findings. */}
                   <Show when={row.vulnerability}>
-                    {vulnerability => (
-                      <>
-                        <text selectable={!props.mouseEnabled} flexShrink={0} fg={t().error} wrapMode="none">
-                          {exploitText(vulnerability())}
-                        </text>
-                        <text
-                          selectable={!props.mouseEnabled}
-                          flexShrink={0}
-                          fg={severityColor(t(), vulnerability().severity)}
-                          wrapMode="none"
-                        >
-                          {scoreText(vulnerability().score)}
-                        </text>
-                      </>
-                    )}
-                  </Show>
-                  {/* Closed rows: the worst inside, muted, so a closed branch still shows something is off. */}
-                  <Show when={!row.vulnerability && row.vulnerableBelow}>
-                    {below => (
-                      <text selectable={!props.mouseEnabled} flexShrink={0} fg={t().foregroundMuted} wrapMode="none">
-                        {`${exploitText(below())}${scoreText(below().score)}`}
+                    {severity => (
+                      <text
+                        selectable={!props.mouseEnabled}
+                        flexShrink={0}
+                        fg={severityColor(t(), severity())}
+                        wrapMode="none"
+                      >
+                        {" ▲"}
                       </text>
                     )}
                   </Show>
@@ -639,19 +602,9 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
                   </Show>
                   {/* Headers count packages like severity headers count findings: N, or N/M while filtering. */}
                   <Show when={header && row.total !== undefined}>
-                    <text
-                      selectable={!props.mouseEnabled}
-                      flexShrink={0}
-                      fg={filtering() && (row.count ?? 0) > 0 ? t().foreground : t().foregroundMuted}
-                      wrapMode="none"
-                    >
-                      {` ${row.count ?? 0}`}
+                    <text selectable={!props.mouseEnabled} flexShrink={0} fg={t().foregroundMuted} wrapMode="none">
+                      {` ${row.count ?? 0}${filtering() && (row.total ?? 0) > 0 ? `/${row.total}` : ""}`}
                     </text>
-                    <Show when={filtering() && (row.total ?? 0) > 0}>
-                      <text selectable={!props.mouseEnabled} flexShrink={0} fg={t().foregroundMuted} wrapMode="none">
-                        {`/${row.total}`}
-                      </text>
-                    </Show>
                   </Show>
                 </box>
               </box>

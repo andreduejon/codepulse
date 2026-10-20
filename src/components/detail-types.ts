@@ -28,6 +28,8 @@ export interface DetailNavRef {
   itemRefs: Renderable[];
   /** Coalesced scroll-into-view timer for fast cursor movement. */
   scrollTimer?: ReturnType<typeof setTimeout>;
+  /** Row shortcuts of the active tab (e.g. `v` on a vulnerable dependency); true when handled. */
+  handleKey?: (event: KeyEvent) => boolean;
   /** Native detail-filter input owns typing before app shortcuts run. */
   handleFilterKey?: (event: KeyEvent) => boolean;
   /** Reveal the current row after a filter or scan resets its cursor. */

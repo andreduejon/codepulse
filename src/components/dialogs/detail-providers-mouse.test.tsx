@@ -984,13 +984,11 @@ for (const provider of ["github-actions", "jenkins", "openshift", "snyk"] as con
   });
 }
 
-test("Dependencies pins its own legend when the scan has findings", async () => {
+test("Dependencies marks vulnerable packages with a severity triangle, pins its legend, and v jumps to their findings", async () => {
   const d = await renderProvider("snyk");
   try {
     d.setSnykScan({
       ...scan,
-      // The legend samples the highest score: high 7.5 beats medium 9.1 (severity first).
-      findings: scan.findings.map(finding => ({ ...finding, cvssScore: finding.severity === "high" ? 7.5 : 9.1 })),
       dependencyProjects: [
         {
           targetFile: "package.json",
@@ -1018,24 +1016,52 @@ test("Dependencies pins its own legend when the scan has findings", async () => 
     d.actions.setDetailActiveTab("snyk-deps");
     await d.flush();
     const lines = d.frame().split("\n");
-    const legend = lines.findIndex(line => line.includes("score (nested)"));
-    expect(lines[legend]).toMatch(/! ! mature exploit \(nested\) {2}7\.5 7\.5 score \(nested\)\s*$/);
+    const legend = lines.findIndex(line => line.includes("severity"));
+    expect(lines[legend]).toMatch(/▲ ▲ ▲ ▲ severity\s*$/);
     expect(lines[legend - 1].trim()).toBe("");
-    // First marker coloured (the package's own), second muted (nested in a closed row); labels muted.
-    const exploitAt = lines[legend].indexOf("! !");
-    const scoreAt = lines[legend].indexOf("7.5 7.5");
+    const dots = lines[legend].indexOf("▲ ▲ ▲ ▲");
     for (const [x, color] of [
-      [exploitAt, d.theme.error],
-      [exploitAt + 2, d.theme.foregroundMuted],
-      [scoreAt, d.theme.severityHigh],
-      [scoreAt + 4, d.theme.foregroundMuted],
-      [lines[legend].indexOf("score (nested)"), d.theme.foregroundMuted],
+      [dots, d.theme.severityCritical],
+      [dots + 2, d.theme.severityHigh],
+      [dots + 4, d.theme.severityMedium],
+      [dots + 6, d.theme.severityLow],
+      [lines[legend].indexOf("severity"), d.theme.foregroundMuted],
     ] as const)
       expect(d.cell(x, legend)?.fg).toEqual(RGBA.fromHex(color));
-    expect(d.frame()).not.toContain("● upgrade");
-    d.setSnykScan({ ...scan, findings: [], counts: { critical: 0, high: 0, medium: 0, low: 0 } });
+    expect(d.frame()).not.toContain("▲ upgrade");
+    // v on the vulnerable row: Vulnerabilities opens filtered to that package.
+    const row = lines.findIndex(line => line.includes("high-package@1.0.0"));
+    expect(lines[row]).toMatch(/high-package@1\.0\.0\s+▲\s*$/);
+    await d.click("high-package@1.0.0");
+    expect(d.frame()).toContain("v vulnerabilities");
+    d.mockInput.pressKey("v");
     await d.flush();
-    expect(d.frame()).not.toContain("score (nested)");
+    expect(d.state.detailActiveTab()).toBe("snyk");
+    expect(d.frame()).toContain("high-package@1.0.0");
+    expect(d.frame()).toContain("CVE-2026-0001");
+    expect(d.frame()).not.toContain("CVE-2026-0002");
+    d.setSnykScan({ ...scan, findings: [], counts: { critical: 0, high: 0, medium: 0, low: 0 } });
+    d.actions.setDetailActiveTab("snyk-deps");
+    await d.flush();
+    expect(d.frame()).not.toContain("▲ severity");
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("Vulnerabilities highlights filter hits in row text", async () => {
+  const d = await renderProvider("snyk");
+  try {
+    d.setSnykScan(scan);
+    await d.flush();
+    await d.click("filter");
+    await d.mockInput.typeText("0001");
+    await d.flush();
+    const lines = d.frame().split("\n");
+    const y = lines.findIndex(line => line.includes("CVE-2026-0001"));
+    const x = lines[y].indexOf("0001");
+    expect(d.cell(x, y)?.fg).toEqual(RGBA.fromHex(d.theme.snykBg));
+    expect(d.cell(lines[y].indexOf("CVE"), y)?.fg).toEqual(RGBA.fromHex(d.theme.foreground));
   } finally {
     await d.dispose();
   }

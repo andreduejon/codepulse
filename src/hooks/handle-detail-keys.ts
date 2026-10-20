@@ -37,6 +37,10 @@ export function handleDetailKey(e: KeyEvent, opts: DetailKeyOptions): boolean {
   // Only active when detail is focused or the detail dialog is open
   if (!state.detailFocused() && dialog() !== "detail") return false;
   if (detailNavRef.handleFilterKey?.(e)) return true;
+  if (detailNavRef.handleKey?.(e)) {
+    e.preventDefault();
+    return true;
+  }
 
   const scrollbox = getDetailScrollboxRef();
 

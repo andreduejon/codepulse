@@ -29,39 +29,18 @@ export interface DependencyTreeRow {
   rootName?: string;
   /** Group by package: the package is itself a direct dependency. */
   direct?: boolean;
-  /** The package's own findings (worst first). */
-  vulnerability?: DependencyVulnerability;
-  /** Closed rows: worst score anywhere below, and whether any finding below has a mature exploit. */
-  vulnerableBelow?: DependencyVulnerability;
+  /** The package's worst finding severity; details live in Vulnerabilities. */
+  vulnerability?: SnykSeverity;
   /** While filtering, closed rows: unique matching packages below them (`N+` when the search stopped early). */
   matches?: string;
 }
 
-/** Worst finding of a package (Vulnerabilities order: severity, then score) and any mature exploit. */
-export interface DependencyVulnerability {
-  severity: SnykSeverity;
-  score: number | null;
-  exploit: boolean;
-}
-
-/** Keyed by {@link vulnerabilityKey}: the graph's manifest and `name@version`. */
-export type DependencyVulnerabilities = ReadonlyMap<string, DependencyVulnerability>;
+/** Worst severity per {@link vulnerabilityKey}: the graph's manifest and `name@version`. */
+export type DependencyVulnerabilities = ReadonlyMap<string, SnykSeverity>;
 const NO_VULNERABILITIES: DependencyVulnerabilities = new Map();
 
 /** Findings without a manifest use an empty one and match any graph. */
 export const vulnerabilityKey = (targetFile: string, label: string) => `${targetFile}\u0000${label}`;
-
-const SEVERITY_RANK: Record<SnykSeverity, number> = { critical: 0, high: 1, medium: 2, low: 3 };
-/** Worst of both (severity, then score); a mature exploit in either counts. */
-const worse = (left: DependencyVulnerability | undefined, right: DependencyVulnerability): DependencyVulnerability => {
-  if (!left) return right;
-  const worst =
-    SEVERITY_RANK[right.severity] < SEVERITY_RANK[left.severity] ||
-    (right.severity === left.severity && (right.score ?? -1) > (left.score ?? -1))
-      ? right
-      : left;
-  return { ...worst, exploit: left.exploit || right.exploit };
-};
 
 function lookupVulnerability<T>(
   map: ReadonlyMap<string, T>,
@@ -73,76 +52,6 @@ function lookupVulnerability<T>(
     if (found) return found;
   }
   return undefined;
-}
-
-/** Worst finding below each canonical node, propagated up from every vulnerable package. */
-function vulnerableBelow(
-  graph: IndexedGraph,
-  targetFile: string,
-  vulnerabilities: DependencyVulnerabilities,
-): Map<string, DependencyVulnerability> {
-  const below = new Map<string, DependencyVulnerability>();
-  if (vulnerabilities.size === 0) return below;
-  const parents = new Map<string, string[]>();
-  for (const { node, source } of graph.nodes.values()) {
-    if (node !== source) continue;
-    for (const id of node.deps) {
-      const child = graph.nodes.get(id)?.source.nodeId;
-      if (child) parents.set(child, [...(parents.get(child) ?? []), node.nodeId]);
-    }
-  }
-  for (const { node, pkg, source } of graph.nodes.values()) {
-    if (node !== source) continue;
-    const vulnerability = lookupVulnerability(vulnerabilities, [targetFile], packageLabel(pkg));
-    if (!vulnerability) continue;
-    const visited = new Set<string>();
-    const pending = [...(parents.get(node.nodeId) ?? [])];
-    while (pending.length > 0) {
-      const id = pending.pop() as string;
-      if (visited.has(id)) continue;
-      visited.add(id);
-      below.set(id, worse(below.get(id), vulnerability));
-      pending.push(...(parents.get(id) ?? []));
-    }
-  }
-  return below;
-}
-
-const vulnerabilityFields = (own?: DependencyVulnerability, below?: DependencyVulnerability) => ({
-  ...(own ? { vulnerability: own } : {}),
-  ...(below ? { vulnerableBelow: below } : {}),
-});
-
-/** Row keys to open so the shortest path to each vulnerable package is visible (breadth-first from the root). */
-function shortestVulnerablePaths(
-  graph: SnykDependencyGraph,
-  graphKey: string,
-  scope: DependencyScopeFilter,
-  vulnerabilities: DependencyVulnerabilities,
-): string[] {
-  const model = indexGraph(graph, "", scope);
-  const keys = new Map<string, string>([[model.root.source.nodeId, graphKey]]);
-  const pending = [model.root];
-  for (let index = 0; index < pending.length; index++) {
-    const current = pending[index];
-    const key = keys.get(current.source.nodeId) as string;
-    for (const edge of childrenFor(model, current, new Set(), { remaining: 0, incomplete: false })) {
-      if (current === model.root && !inScope(edge.node.node, scope)) continue;
-      const source = edge.node.source.nodeId;
-      if (keys.has(source)) continue;
-      keys.set(source, `${key}/${edge.index}`);
-      pending.push(edge.node);
-    }
-  }
-  const open = new Set<string>();
-  for (const [source, key] of keys) {
-    const node = model.nodes.get(source);
-    if (!node || !lookupVulnerability(vulnerabilities, [graph.targetFile], packageLabel(node.pkg))) continue;
-    // Open every ancestor row; the vulnerable row itself stays closed.
-    for (let at = key.indexOf("/", graphKey.length + 1); at >= 0; at = key.indexOf("/", at + 1))
-      open.add(key.slice(0, at));
-  }
-  return [...open];
 }
 
 /** Which direct dependencies (and their subtrees) to show: `prod` is everything not flagged dev. */
@@ -367,7 +276,6 @@ export function defaultDependencyExpansion(
   query?: string,
   scope: DependencyScopeFilter = "all",
   groupBy: DependencyGroupBy = "tree",
-  vulnerabilities: DependencyVulnerabilities = NO_VULNERABILITIES,
 ): Set<string> {
   const expanded = new Set<string>();
   projects.forEach((project, projectIndex) => {
@@ -383,24 +291,6 @@ export function defaultDependencyExpansion(
     if (!full.truncated && full.rows.length <= FULL_EXPANSION_ROWS) {
       for (const row of full.rows) if (row.expandable) expanded.add(row.key);
     }
-  } else if (groupBy === "tree" && vulnerabilities.size > 0) {
-    // Open the shortest path to every vulnerable package, so each shows at least once.
-    const opened = new Set(expanded);
-    projects.forEach((project, projectIndex) => {
-      project.graphs.forEach((graph, graphIndex) => {
-        for (const key of shortestVulnerablePaths(
-          graph,
-          JSON.stringify(["graph", projectIndex, graphIndex]),
-          scope,
-          vulnerabilities,
-        ))
-          opened.add(key);
-      });
-    });
-    if (!buildTree(projects, opened, "", scope, vulnerabilities).truncated) return opened;
-    // Too many rows: open only direct dependencies with findings below.
-    for (const row of buildTree(projects, expanded, "", scope, vulnerabilities).rows)
-      if (row.kind === "dependency" && row.vulnerableBelow && row.expandable) expanded.add(row.key);
   }
   return expanded;
 }
@@ -571,12 +461,10 @@ function buildPackages(
         cycle: false,
         path: [label],
         direct: entry.direct,
-        ...vulnerabilityFields(
-          lookupVulnerability(
-            vulnerabilities,
-            project.graphs.map(graph => graph.targetFile),
-            label,
-          ),
+        vulnerability: lookupVulnerability(
+          vulnerabilities,
+          project.graphs.map(graph => graph.targetFile),
+          label,
         ),
       });
       dependencyRows++;
@@ -636,8 +524,7 @@ function buildTree(
         ).filter(id => id !== model.root.node.pkgId),
       );
       const shown = query ? model.matching : all;
-      const below = vulnerableBelow(model, graph.targetFile, vulnerabilities);
-      return { graph, graphIndex, model, children, all, shown, below };
+      return { graph, graphIndex, model, children, all, shown };
     });
     const all = new Set(graphs.flatMap(graph => [...graph.all]));
     const shown = new Set(graphs.flatMap(graph => [...graph.shown]));
@@ -673,7 +560,7 @@ function buildTree(
     });
     if (!projectExpanded) return;
 
-    graphs.forEach(({ graph, graphIndex, model, children, all, shown, below }, visibleGraphIndex) => {
+    graphs.forEach(({ graph, graphIndex, model, children, all, shown }, visibleGraphIndex) => {
       const root = model.root;
       const rootLabel = packageLabel(root.pkg);
       const graphKey = JSON.stringify(["graph", projectIndex, graphIndex]);
@@ -752,10 +639,7 @@ function buildTree(
           cycle,
           path,
           ...(query && expandable && !nodeExpanded ? { matches: matchesBelow(model, node, countBudget) } : {}),
-          ...vulnerabilityFields(
-            lookupVulnerability(vulnerabilities, [graph.targetFile], label),
-            cycle || nodeExpanded ? undefined : below.get(sourceId),
-          ),
+          vulnerability: lookupVulnerability(vulnerabilities, [graph.targetFile], label),
         });
         dependencyRows++;
         if (nodeExpanded) {

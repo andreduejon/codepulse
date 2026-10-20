@@ -4,7 +4,9 @@
  * Shown when the terminal is too narrow for the normal two-column layout and
  * the user has focused the detail panel (e.g. via Enter or →).
  */
+
 import { useTerminalDimensions } from "@opentui/solid";
+import { Show } from "solid-js";
 import { useAppState } from "../../context/state";
 import { useT } from "../../hooks/use-t";
 import DetailPanel, { type DetailPanelProps } from "../detail-panel";
@@ -44,6 +46,14 @@ export function DetailDialog(props: Readonly<DetailPanelProps & { onClose: () =>
             onClick={() => props.navRef.activateCurrentItem?.()}
           />
           <KeyHintSeparator />
+          <Show when={state.detailCursorShortcut()}>
+            {shortcut => (
+              <>
+                <KeyHint key={shortcut().key} desc={` ${shortcut().desc}`} />
+                <KeyHintSeparator />
+              </>
+            )}
+          </Show>
           <KeyHint key="←/→" desc=" switch tab" />
           <KeyHintSeparator />
           <KeyHint key="↑/↓" desc=" navigate" />

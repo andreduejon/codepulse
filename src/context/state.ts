@@ -82,6 +82,8 @@ export function createAppState(
   const [detailLoading, setDetailLoading] = createSignal(false);
   const [detailCursorAction, setDetailCursorAction] = createSignal<string | null>(null);
   const [detailActiveTab, setDetailActiveTab] = createSignal<DetailTab>("files");
+  const [detailCursorShortcut, setDetailCursorShortcut] = createSignal<{ key: string; desc: string } | null>(null);
+  const [snykPendingFilter, setSnykPendingFilter] = createSignal<string | null>(null);
   const [uncommittedDetail, setUncommittedDetail] = createSignal<UncommittedDetail | null>(null);
 
   // ── UI state & settings ───────────────────────────────────────────
@@ -233,6 +235,8 @@ export function createAppState(
     detailLoading,
     detailCursorAction,
     detailActiveTab,
+    detailCursorShortcut,
+    snykPendingFilter,
     uncommittedDetail,
     viewingBranch,
     pathFilter,
@@ -281,6 +285,8 @@ export function createAppState(
     setDetailLoading,
     setDetailCursorAction,
     setDetailActiveTab,
+    setDetailCursorShortcut,
+    setSnykPendingFilter,
     setUncommittedDetail,
     setViewingBranch,
     setPathFilter,

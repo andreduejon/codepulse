@@ -18,9 +18,9 @@ All notable changes to this project will be documented in this file.
   dependency paths; large dependency results open one level with per-row match
   counts, and opening past 1,000 rows closes other branches. Add **Group by**
   `[tree]`/`[package]` and **Copy dependencies as JSON** to Dependencies.
-- Mark vulnerable packages in Dependencies with their worst score and a
-  mature-exploit `!` (muted on closed rows for what is inside), with a pinned
-  legend, and open the shortest path to each by default.
+- Mark vulnerable packages in Dependencies with a `▲` in their worst severity
+  colour (pinned legend); **v** opens Vulnerabilities filtered to that package.
+- Highlight filter hits in both Snyk tabs in the Snyk colour; mute filter counts.
 - Show a CVSS score, mature-exploit marker, and fix dot (upgrade, override, no fix)
   on every vulnerability, with a pinned legend; expand to title, package, `via`
   dependency, manifest, exploit maturity, and fix line, each copyable.

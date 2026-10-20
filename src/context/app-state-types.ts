@@ -61,6 +61,10 @@ export interface DetailState {
   detailLoading: Accessor<boolean>;
   detailCursorAction: Accessor<string | null>;
   detailActiveTab: Accessor<DetailTab>;
+  /** Extra key the cursored detail row offers (footer hint), e.g. `v` → Vulnerabilities on a vulnerable dependency. */
+  detailCursorShortcut: Accessor<{ key: string; desc: string } | null>;
+  /** Filter Vulnerabilities applies when it opens next (set by the Dependencies jump). */
+  snykPendingFilter: Accessor<string | null>;
   uncommittedDetail: Accessor<UncommittedDetail | null>;
 }
 
@@ -123,6 +127,8 @@ export interface DetailActions {
   setDetailLoading: (loading: boolean) => void;
   setDetailCursorAction: (action: string | null) => void;
   setDetailActiveTab: (tab: DetailTab) => void;
+  setDetailCursorShortcut: (shortcut: { key: string; desc: string } | null) => void;
+  setSnykPendingFilter: (query: string | null) => void;
   setUncommittedDetail: (detail: UncommittedDetail | null) => void;
 }
 

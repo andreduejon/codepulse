@@ -24,6 +24,18 @@ export function filterSnykFindings(findings: readonly SnykFinding[], query: stri
   );
 }
 
+/** Filter hits: the first case-insensitive occurrence of `query` in `text`, in `color`; else plain text. */
+export function highlightMatch(text: string, query: string, color: string): JSX.Element {
+  const term = query.trim().toLowerCase();
+  const at = term ? text.toLowerCase().indexOf(term) : -1;
+  if (at < 0) return text;
+  return [
+    text.slice(0, at),
+    <span style={{ fg: color }}>{text.slice(at, at + term.length)}</span>,
+    text.slice(at + term.length),
+  ];
+}
+
 /** `index` is the filter row's cursor position in the owning tab. */
 export function useSnykFilter(props: Readonly<SnykDetailTabProps>, index = 1) {
   const [query, setQuery] = createSignal("");

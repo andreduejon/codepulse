@@ -1010,6 +1010,11 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
             </Show>
             <Show when={activeTab() === "snyk" && props.snykGetCommitData && props.snykScanCommit}>
               <SnykDetailTab
+                takePendingFilter={() => {
+                  const query = state.snykPendingFilter();
+                  actions.setSnykPendingFilter(null);
+                  return query;
+                }}
                 mouseEnabled={props.mouseEnabled}
                 onMouseFocus={props.onMouseFocus}
                 scan={props.snykGetCommitData?.(c().hash) ?? null}
@@ -1027,6 +1032,13 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
             </Show>
             <Show when={activeTab() === "snyk-deps" && props.snykGetCommitData && props.snykScanCommit}>
               <SnykDependenciesTab
+                setDetailCursorShortcut={actions.setDetailCursorShortcut}
+                onShowVulnerabilities={query => {
+                  actions.setSnykPendingFilter(query);
+                  actions.setDetailCursorAction(null);
+                  actions.setDetailActiveTab("snyk");
+                  actions.setDetailCursorIndex(0);
+                }}
                 mouseEnabled={props.mouseEnabled}
                 onMouseFocus={props.onMouseFocus}
                 scan={props.snykGetCommitData?.(c().hash) ?? null}

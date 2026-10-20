@@ -80,6 +80,7 @@ async function renderDependencies(initial: SnykScanResult | null = scanFixture()
   const [modal, setModal] = createSignal(false);
   const [mounted, setMounted] = createSignal(true);
   const onScan = mock(() => {});
+  const onShowVulnerabilities = mock((_query: string) => {});
   let app!: ReturnType<typeof createAppState>;
   const onMouseFocus = mock(() => app.actions.setDetailFocused(true));
   const setup = await testRender(
@@ -111,6 +112,8 @@ async function renderDependencies(initial: SnykScanResult | null = scanFixture()
                 detailFocused={app.state.detailFocused}
                 setDetailCursorIndex={app.actions.setDetailCursorIndex}
                 setDetailCursorAction={app.actions.setDetailCursorAction}
+                setDetailCursorShortcut={app.actions.setDetailCursorShortcut}
+                onShowVulnerabilities={onShowVulnerabilities}
               />
             </Show>
           </box>
@@ -188,6 +191,7 @@ async function renderDependencies(initial: SnykScanResult | null = scanFixture()
     setModal,
     setMounted,
     onScan,
+    onShowVulnerabilities,
     onMouseFocus,
     flush,
     frame,
@@ -875,9 +879,9 @@ test("Copy dependencies as JSON copies the flat package list with scope and filt
   }
 });
 
-test("vulnerable packages show their worst score and exploit marker; closed rows show the worst inside, muted", async () => {
+test("vulnerable packages show a triangle in their worst severity colour; v opens their findings", async () => {
   const scan = scanFixture();
-  const finding = (id: string, path: string[], severity: "critical" | "low", score: number, exploit: string | null) => {
+  const finding = (id: string, path: string[], severity: "critical" | "low") => {
     const [dependency, version] = (path[path.length - 1] ?? "").split(/@(?=[^@]+$)/);
     return {
       id,
@@ -887,8 +891,8 @@ test("vulnerable packages show their worst score and exploit marker; closed rows
       installedVersion: version,
       fixedVersion: null,
       fixedIn: [],
-      exploit,
-      cvssScore: score,
+      exploit: null,
+      cvssScore: 5,
       dependencyType: path.length === 1 ? ("direct" as const) : ("transitive" as const),
       dependencyPath: path,
       upgradeDependency: null,
@@ -898,13 +902,11 @@ test("vulnerable packages show their worst score and exploit marker; closed rows
       targetFile: "web/package.json",
     };
   };
-  const leafPath = ["parent@1.0.0", "@fixture/shared@4.0.0", "leaf@5.0.0"];
   scan.findings = [
-    finding("CVE-1", leafPath, "critical", 9.8, null),
-    // A lower finding with a mature exploit: the score stays the worst, "!" still shows.
-    finding("CVE-2", leafPath, "low", 2.0, "Mature"),
-    finding("CVE-3", ["mystery@3.0.0"], "low", 3.1, null),
-    finding("CVE-4", ["dev-only@2.0.0"], "low", 4.0, null),
+    finding("CVE-1", ["mystery@3.0.0"], "low"),
+    // Worst severity wins.
+    finding("CVE-2", ["mystery@3.0.0"], "critical"),
+    finding("CVE-3", ["dev-only@2.0.0"], "low"),
   ];
   const d = await renderDependencies(scan);
   try {
@@ -914,54 +916,76 @@ test("vulnerable packages show their worst score and exploit marker; closed rows
         .split("\n")
         .find(row => row.includes(text)) ?? "";
     const spans = (text: string) => d.captureSpans().lines[d.point(text).y]?.spans ?? [];
-    // The shortest path to leaf opens; open rows on the way show nothing.
-    expect(line("parent@1.0.0")).toMatch(/▾ parent@1\.0\.0\s*$/);
-    expect(line("@fixture/shared@4.0.0")).toMatch(/▾ @fixture\/shared@4\.0\.0\s*$/);
-    expect(line("leaf@5.0.0")).toMatch(/leaf@5\.0\.0\s+! 9\.8$/);
-    // "!" (error) and a critical score share a colour in this theme, so they render as one span.
-    expect(spans("leaf@5.0.0").find(span => span.text.trim() === "! 9.8")?.fg).toEqual(
+    // Nothing opens for findings; only the package itself is marked, flush right after `dev`.
+    expect(d.frame()).toMatch(/▸ parent@1\.0\.0\s*$/m);
+    expect(line("mystery@3.0.0")).toMatch(/mystery@3\.0\.0\s+▲$/);
+    expect(line("dev-only@2.0.0")).toMatch(/dev-only@2\.0\.0\s+dev ▲$/);
+    expect(spans("mystery@3.0.0").find(span => span.text.includes("▲"))?.fg).toEqual(
       RGBA.fromHex(d.theme.severityCritical),
     );
-    expect(d.theme.severityCritical).toBe(d.theme.error);
-    // One space after markers; scores flush right share a column.
-    expect(line("mystery@3.0.0")).toMatch(/mystery@3\.0\.0\s+3\.1$/);
-    expect(spans("mystery@3.0.0").find(span => span.text === "3.1")?.fg).toEqual(RGBA.fromHex(d.theme.severityLow));
-    expect(line("dev-only@2.0.0")).toMatch(/dev-only@2\.0\.0\s+dev 4\.0$/);
-    expect(line("dev-only@2.0.0").lastIndexOf("4.0")).toBe(line("mystery@3.0.0").lastIndexOf("3.1"));
-    expect(d.frame()).not.toMatch(/[●○×]/);
-    // Closed: the worst score inside and "!" (from any finding inside), muted, in the same column.
-    await d.click("parent@1.0.0");
-    expect(line("parent@1.0.0")).toMatch(/▸ parent@1\.0\.0\s+! 9\.8$/);
-    expect(line("parent@1.0.0").lastIndexOf("9.8")).toBe(line("mystery@3.0.0").lastIndexOf("3.1"));
-    expect(spans("parent@1.0.0").find(span => span.text === " ! 9.8")?.fg).toEqual(
-      RGBA.fromHex(d.theme.foregroundMuted),
+    expect(spans("dev-only@2.0.0").find(span => span.text.includes("▲"))?.fg).toEqual(
+      RGBA.fromHex(d.theme.severityLow),
     );
+    expect(d.frame()).not.toMatch(/\d\.\d$|!/m);
+    // `v` on a vulnerable row hands its full `name@version` over; elsewhere it does nothing.
+    d.actions.setDetailCursorIndex(d.index("mystery@3.0.0"));
+    await d.flush();
+    expect(d.state.detailCursorShortcut()).toEqual({ key: "v", desc: "vulnerabilities" });
+    await d.key("v");
+    expect(d.onShowVulnerabilities).toHaveBeenCalledWith("mystery@3.0.0");
+    await d.click("parent@1.0.0");
+    expect(d.state.detailCursorShortcut()).toBeNull();
+    await d.key("v");
+    expect(d.onShowVulnerabilities).toHaveBeenCalledTimes(1);
   } finally {
     await d.dispose();
   }
 });
 
-test("leaves sit one space after the connector; siblings share a score slot so dev lines up", async () => {
+test("leaves sit one space after the connector", async () => {
+  const d = await renderDependencies();
+  try {
+    const line = d
+      .frame()
+      .split("\n")
+      .find(row => row.includes("mystery@3.0.0"));
+    expect(line).toMatch(/^└─ mystery@3\.0\.0\s*$/);
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("filter hits are highlighted in package names, not versions", async () => {
+  const d = await renderDependencies();
+  try {
+    await d.click("filter");
+    await d.type("aren");
+    const spans = d.captureSpans().lines[d.point("parent@1.0.0").y]?.spans ?? [];
+    expect(spans.find(span => span.text === "aren")?.fg).toEqual(RGBA.fromHex(d.theme.snykBg));
+    expect(spans.find(span => span.text.includes("@1.0.0"))?.fg).toEqual(RGBA.fromHex(d.theme.foreground));
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("a triangle in a sibling group reserves its column on every sibling, so dev lines up", async () => {
   const scan = scanFixture();
-  const graph = scan.dependencyProjects[0].graphs[0];
-  const mysteryNode = graph.nodes.find(node => node.nodeId === "unknown");
-  if (mysteryNode) mysteryNode.scope = "dev";
   scan.findings = [
     {
-      id: "CVE-9",
-      title: "CVE-9",
+      id: "CVE-1",
+      title: "CVE-1",
       severity: "low",
-      dependency: "dev-only",
-      installedVersion: "2.0.0",
+      dependency: "mystery",
+      installedVersion: "3.0.0",
       fixedVersion: null,
       fixedIn: [],
-      exploit: "Mature",
-      cvssScore: 4.0,
+      exploit: null,
+      cvssScore: 3,
       dependencyType: "direct",
-      dependencyPath: ["dev-only@2.0.0"],
+      dependencyPath: ["mystery@3.0.0"],
       upgradeDependency: null,
       upgradeVersion: null,
-      cves: ["CVE-9"],
+      cves: ["CVE-1"],
       project: "fixture-app",
       targetFile: "web/package.json",
     },
@@ -973,38 +997,10 @@ test("leaves sit one space after the connector; siblings share a score slot so d
         .frame()
         .split("\n")
         .find(row => row.includes(text)) ?? "";
-    expect(line("mystery@3.0.0")).toMatch(/^└─ mystery@3\.0\.0\s+dev\s+$/);
-    expect(line("dev-only@2.0.0")).toMatch(/dev-only@2\.0\.0\s+dev ! 4\.0$/);
-    // mystery has no score but its sibling does: its dev moves into the score column, without room for "!".
-    expect(line("mystery@3.0.0")).toMatch(/dev {4}$/);
-    expect(line("mystery@3.0.0").lastIndexOf("dev")).toBe(line("dev-only@2.0.0").lastIndexOf("dev") + 2);
+    expect(line("mystery@3.0.0")).toMatch(/mystery@3\.0\.0\s+▲$/);
+    // dev-only has no triangle, but its sibling does: dev moves into the same column as a marked row's dev.
+    expect(line("dev-only@2.0.0")).toMatch(/dev-only@2\.0\.0\s+dev {2}$/);
   } finally {
     await d.dispose();
-  }
-  // A sibling's "!" never pushes other scores away from their markers.
-  scan.findings = [
-    ...scan.findings,
-    {
-      ...scan.findings[0],
-      id: "CVE-8",
-      cves: ["CVE-8"],
-      dependency: "mystery",
-      installedVersion: "3.0.0",
-      exploit: null,
-      cvssScore: 3.1,
-      dependencyPath: ["mystery@3.0.0"],
-    },
-  ];
-  const mixed = await renderDependencies(scan);
-  try {
-    const row = (text: string) =>
-      mixed
-        .frame()
-        .split("\n")
-        .find(line => line.includes(text)) ?? "";
-    expect(row("mystery@3.0.0")).toMatch(/mystery@3\.0\.0\s+dev 3\.1$/);
-    expect(row("dev-only@2.0.0")).toMatch(/dev-only@2\.0\.0\s+dev ! 4\.0$/);
-  } finally {
-    await mixed.dispose();
   }
 });
