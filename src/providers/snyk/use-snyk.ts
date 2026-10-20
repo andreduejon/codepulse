@@ -1,7 +1,13 @@
 import type { Accessor } from "solid-js";
 import { createEffect, createSignal, onCleanup, untrack } from "solid-js";
 import type { AppActions, AppState } from "../../context/state";
-import { providerError, providerIdle, providerLoading, providerUnavailable } from "../../context/state";
+import {
+  providerError,
+  providerIdle,
+  providerLoading,
+  providerUnavailable,
+  providerWarning,
+} from "../../context/state";
 import type { ProviderView } from "../provider";
 import { buildSnykGraphBadges } from "./badges";
 import { DEFAULT_SNYK_CACHE_LIMIT } from "./cache";
@@ -190,7 +196,21 @@ export function useSnyk(opts: {
       ) {
         mergeResult(scanResult, entry.epoch);
         actions.setProviderLastSuccessfulRefresh(SNYK_PROVIDER_ID, new Date());
-        if (queue.length === 0) actions.setProviderStatus(SNYK_PROVIDER_ID, providerIdle());
+        if (queue.length === 0) {
+          const failure = scanResult.dependencyProjects.find(project => project.status !== "scanned")?.reason;
+          const dependenciesRequested =
+            state.detailActiveTab() === "snyk-deps" && state.selectedCommit()?.hash === entry.sha;
+          actions.setProviderStatus(
+            SNYK_PROVIDER_ID,
+            failure
+              ? providerError(failure)
+              : dependenciesRequested && scanResult.dependencyProjects.length === 0
+                ? providerWarning(
+                    "No supported dependency project. Dependency graphs currently support Bun, pnpm and Yarn v1.",
+                  )
+                : providerIdle(),
+          );
+        }
       }
     } catch (error) {
       if (

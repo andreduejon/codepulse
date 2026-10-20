@@ -1,4 +1,4 @@
-import type { Renderable } from "@opentui/core";
+import type { KeyEvent, Renderable } from "@opentui/core";
 import type { ProviderStatus } from "../context/state";
 import type { DiffTarget } from "../git/types";
 import type {
@@ -28,6 +28,10 @@ export interface DetailNavRef {
   itemRefs: Renderable[];
   /** Coalesced scroll-into-view timer for fast cursor movement. */
   scrollTimer?: ReturnType<typeof setTimeout>;
+  /** Native detail-filter input owns typing before app shortcuts run. */
+  handleFilterKey?: (event: KeyEvent) => boolean;
+  /** Reveal the current row after a filter or scan resets its cursor. */
+  scrollToCursor?: () => void;
 }
 
 export interface DetailViewProps {

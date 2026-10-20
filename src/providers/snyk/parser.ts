@@ -1,3 +1,5 @@
+import { posix, win32 } from "node:path";
+import { isSnykDependencyGraph, normalizeSnykTargetFile } from "./dep-graph";
 import type { SnykFinding, SnykScanResult, SnykSeverity, SnykSeverityCounts } from "./types";
 
 export interface SnykParseOptions {
@@ -58,10 +60,28 @@ function cveIdentifiers(vulnerability: Record<string, unknown>): string[] {
   ];
 }
 
-function fixedVersion(vulnerability: Record<string, unknown>, dependency: string): string | null {
+/** Numeric-aware version order; non-numeric segments (e.g. `Final`) compare as text. */
+export function compareVersions(left: string, right: string): number {
+  const a = left.split(/[.\-+]/);
+  const b = right.split(/[.\-+]/);
+  for (let index = 0; index < Math.max(a.length, b.length); index++) {
+    const x = a[index] ?? "0";
+    const y = b[index] ?? "0";
+    const order = /^\d+$/.test(x) && /^\d+$/.test(y) ? Number(x) - Number(y) : x.localeCompare(y);
+    if (order !== 0) return order;
+  }
+  return 0;
+}
+
+function fixedVersion(vulnerability: Record<string, unknown>, dependency: string, installed: string): string | null {
   if (Array.isArray(vulnerability.fixedIn)) {
-    const fixed = vulnerability.fixedIn.find(value => typeof value === "string" && value.length > 0);
-    if (typeof fixed === "string") return fixed;
+    // Snyk lists one fix per release line; prefer the lowest one above the installed version.
+    const fixed = vulnerability.fixedIn.filter(
+      (value): value is string => typeof value === "string" && value.length > 0,
+    );
+    const above = fixed.filter(value => compareVersions(value, installed) > 0).sort(compareVersions);
+    if (above.length > 0) return above[0];
+    if (fixed.length > 0) return fixed.join(", ");
   }
 
   if (Array.isArray(vulnerability.upgradePath)) {
@@ -77,6 +97,8 @@ function normalizeFinding(value: unknown, project: string | null, targetFile: st
   if (!isObject(value)) return null;
   const severity = typeof value.severity === "string" ? value.severity.toLowerCase() : "";
   if (!SEVERITIES.has(severity as SnykSeverity)) return null;
+  // License-policy issues share the vulnerabilities array; they are not security findings.
+  if (value.type === "license" || stringValue(value.id)?.startsWith("snyk:lic:")) return null;
 
   const fromPath = dependencyFromPath(value.from);
   const dependency = stringValue(value.packageName) ?? stringValue(value.name) ?? fromPath?.name ?? "(unknown)";
@@ -90,7 +112,12 @@ function normalizeFinding(value: unknown, project: string | null, targetFile: st
     severity: severity as SnykSeverity,
     dependency,
     installedVersion,
-    fixedVersion: fixedVersion(value, dependency),
+    fixedVersion: fixedVersion(value, dependency, installedVersion),
+    fixedIn: Array.isArray(value.fixedIn)
+      ? value.fixedIn.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
+      : [],
+    exploit: stringValue(value.exploit),
+    cvssScore: typeof value.cvssScore === "number" && Number.isFinite(value.cvssScore) ? value.cvssScore : null,
     dependencyType: path.length === 0 ? "unknown" : path.length === 1 ? "direct" : "transitive",
     dependencyPath: path,
     upgradeDependency: upgrade?.name ?? null,
@@ -111,33 +138,168 @@ export function findingIdentity(finding: SnykFinding): string {
     : finding.id;
 }
 
-export interface GroupedSnykFinding {
-  finding: SnykFinding;
-  occurrences: number;
-}
-
 function preferFinding(current: SnykFinding, incoming: SnykFinding): SnykFinding {
   return current.dependencyType !== "direct" && incoming.dependencyType === "direct" ? incoming : current;
 }
 
-export function groupFindingsById(findings: SnykFinding[]): GroupedSnykFinding[] {
-  const groups = new Map<string, GroupedSnykFinding>();
+export type SnykFixKind = "upgrade" | "override" | "no fix";
+const FIX_RANK: Record<SnykFixKind, number> = { upgrade: 0, override: 1, "no fix": 2 };
+
+/** upgrade: bump a dependency you declare; override: only the transitive package has a fix. */
+export function snykFixKind(finding: SnykFinding): SnykFixKind {
+  if (finding.upgradeDependency && finding.upgradeVersion) return "upgrade";
+  if (finding.fixedVersion) return finding.dependencyType === "direct" ? "upgrade" : "override";
+  return "no fix";
+}
+
+/** Snyk maturity levels meaning a working exploit is known in the wild. */
+export function isMatureExploit(finding: SnykFinding): boolean {
+  return ["mature", "high", "functional"].includes(finding.exploit?.toLowerCase() ?? "");
+}
+
+/** CVE IDs label a vulnerability; Snyk ID is the fallback when no CVE exists. */
+export function snykVulnerabilityLabel(finding: SnykFinding): string {
+  return finding.cves?.length ? finding.cves.join(", ") : finding.id;
+}
+
+export interface SnykVulnerabilityEntry {
+  key: string;
+  label: string;
+  fix: SnykFixKind;
+  finding: SnykFinding;
+  paths: number;
+}
+
+/**
+ * One entry per vulnerability + manifest + package; multiple dependency paths to the
+ * same package merge. Sorted by {@link compareSnykEntries}.
+ */
+export function groupSnykVulnerabilities(findings: readonly SnykFinding[]): SnykVulnerabilityEntry[] {
+  const entries = new Map<string, SnykVulnerabilityEntry>();
   for (const finding of findings) {
-    const identity = findingIdentity(finding);
-    const existing = groups.get(identity);
+    const label = snykVulnerabilityLabel(finding);
+    const key = [
+      findingIdentity(finding),
+      finding.targetFile ?? finding.project ?? "",
+      finding.dependency,
+      finding.installedVersion,
+    ].join("\u0000");
+    const existing = entries.get(key);
     if (!existing) {
-      groups.set(identity, { finding, occurrences: 1 });
+      entries.set(key, { key, label, fix: snykFixKind(finding), finding, paths: 1 });
       continue;
     }
-    existing.occurrences++;
+    // shortcut: merged paths show the preferred (direct) path's fix, list per-path fixes if users need them.
+    existing.paths++;
     existing.finding = preferFinding(existing.finding, finding);
+    existing.fix = snykFixKind(existing.finding);
   }
-  return [...groups.values()];
+  return [...entries.values()].sort(compareSnykEntries);
+}
+
+const SEVERITY_RANK: Record<SnykSeverity, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+
+/** One CVE order for every view: severity, score (highest first), fix kind, then label. */
+export function compareSnykEntries(left: SnykVulnerabilityEntry, right: SnykVulnerabilityEntry): number {
+  return (
+    SEVERITY_RANK[left.finding.severity] - SEVERITY_RANK[right.finding.severity] ||
+    (right.finding.cvssScore ?? -1) - (left.finding.cvssScore ?? -1) ||
+    FIX_RANK[left.fix] - FIX_RANK[right.fix] ||
+    left.label.localeCompare(right.label) ||
+    left.key.localeCompare(right.key)
+  );
+}
+
+export interface SnykFixPackage {
+  /** Package to change: the vulnerable package (override) or the dependency to upgrade. */
+  name: string;
+  /** Installed version of `name`, when known. */
+  from: string | null;
+  /** Highest version needed across its entries; null when none has a fix. */
+  version: string | null;
+  entries: SnykVulnerabilityEntry[];
+}
+
+export interface SnykFixGroup {
+  /** Direct dependency (`name@version`) the entries come through. */
+  key: string;
+  entries: SnykVulnerabilityEntry[];
+  /** Fix of the direct dependency itself (vulnerable directly, or an upgrade path); null when none. */
+  self: SnykFixPackage | null;
+  /** Other packages to override. */
+  packages: SnykFixPackage[];
+}
+
+function fixGroupKey(entry: SnykVulnerabilityEntry): string {
+  const finding = entry.finding;
+  const via = finding.dependencyType === "transitive" ? finding.dependencyPath?.[0] : undefined;
+  return via ?? `${finding.dependency}@${finding.installedVersion}`;
+}
+
+function pathVersion(path: string[] | undefined, name: string): string | null {
+  return path?.find(entry => entry.startsWith(`${name}@`))?.slice(name.length + 1) || null;
+}
+
+function fixPackage(entry: SnykVulnerabilityEntry): Omit<SnykFixPackage, "entries"> {
+  const finding = entry.finding;
+  if (finding.upgradeDependency && finding.upgradeVersion)
+    return {
+      name: finding.upgradeDependency,
+      from: pathVersion(finding.dependencyPath, finding.upgradeDependency),
+      version: finding.upgradeVersion,
+    };
+  return { name: finding.dependency, from: finding.installedVersion, version: finding.fixedVersion };
+}
+
+/**
+ * Groups entries by the direct dependency they come through (or the package itself when
+ * direct), then by the package to change: the dependency itself (`self`) or an override.
+ * Each entry lands in exactly one place, so sizes sum to the total. Groups with a direct
+ * fix first, then override-only, then unfixable; larger first within each.
+ */
+export function groupSnykFixes(entries: readonly SnykVulnerabilityEntry[]): SnykFixGroup[] {
+  const groups = new Map<string, SnykFixGroup>();
+  for (const entry of entries) {
+    const key = fixGroupKey(entry);
+    let group = groups.get(key);
+    if (!group) {
+      group = { key, entries: [], self: null, packages: [] };
+      groups.set(key, group);
+    }
+    group.entries.push(entry);
+    const target = fixPackage(entry);
+    const isSelf = key.slice(0, key.lastIndexOf("@")) === target.name;
+    const existing = isSelf ? group.self : group.packages.find(item => item.name === target.name);
+    if (!existing) {
+      if (isSelf) group.self = { ...target, entries: [entry] };
+      else group.packages.push({ ...target, entries: [entry] });
+    } else {
+      existing.entries.push(entry);
+      if (target.version && (!existing.version || compareVersions(target.version, existing.version) > 0))
+        existing.version = target.version;
+    }
+  }
+  for (const group of groups.values()) {
+    group.entries.sort(compareSnykEntries);
+    for (const item of [...group.packages, ...(group.self ? [group.self] : [])]) item.entries.sort(compareSnykEntries);
+    group.packages.sort((left, right) => left.name.localeCompare(right.name));
+  }
+  const maxScore = (group: SnykFixGroup) => Math.max(-1, ...group.entries.map(entry => entry.finding.cvssScore ?? -1));
+  // Fixable by changing the direct dependency first, then by override, then unfixable.
+  const rank = (group: SnykFixGroup) => (group.self?.version ? 0 : group.packages.some(pkg => pkg.version) ? 1 : 2);
+  return [...groups.values()].sort(
+    (left, right) =>
+      rank(left) - rank(right) ||
+      right.entries.length - left.entries.length ||
+      maxScore(right) - maxScore(left) ||
+      left.key.localeCompare(right.key),
+  );
 }
 
 export function countUniqueFindings(findings: SnykFinding[]): SnykSeverityCounts {
   const counts = emptyCounts();
-  for (const group of groupFindingsById(findings)) counts[group.finding.severity]++;
+  // Same unit as the Vulnerabilities tab: one per vulnerability, manifest and package.
+  for (const entry of groupSnykVulnerabilities(findings)) counts[entry.finding.severity]++;
   return counts;
 }
 
@@ -163,8 +325,13 @@ export function parseSnykOutput(raw: string | unknown, options: SnykParseOptions
     }
     if (!Array.isArray(value.vulnerabilities)) continue;
     validProjects++;
-    const project = stringValue(value.projectName) ?? stringValue(value.displayTargetFile) ?? null;
-    const targetFile = stringValue(value.targetFile) ?? null;
+    const projectName = stringValue(value.projectName);
+    const project = projectName
+      ? win32.parse(projectName).root
+        ? null
+        : projectName
+      : normalizeSnykTargetFile(value.displayTargetFile);
+    const targetFile = normalizeSnykTargetFile(value.displayTargetFile) ?? normalizeSnykTargetFile(value.targetFile);
     const vulnerabilities = Array.isArray(value.vulnerabilities) ? value.vulnerabilities : [];
     for (const vulnerability of vulnerabilities) {
       const finding = normalizeFinding(vulnerability, project, targetFile);
@@ -179,6 +346,8 @@ export function parseSnykOutput(raw: string | unknown, options: SnykParseOptions
   return {
     sha: options.sha.toLowerCase(),
     scannedAt: options.scannedAt ?? new Date().toISOString(),
+    includesDev: true,
+    dependencyProjects: [],
     counts,
     findings,
     ...(failedProjects > 0 ? { partial: true, failedProjects } : {}),
@@ -188,6 +357,34 @@ export function parseSnykOutput(raw: string | unknown, options: SnykParseOptions
 export function isSnykScanResult(value: unknown): value is SnykScanResult {
   if (!isObject(value) || typeof value.sha !== "string" || !/^[0-9a-f]{40,64}$/i.test(value.sha)) return false;
   if (typeof value.scannedAt !== "string" || Number.isNaN(Date.parse(value.scannedAt))) return false;
+  if (value.includesDev !== true || !Array.isArray(value.dependencyProjects)) return false;
+  const validDependencyProjects = value.dependencyProjects.every(project => {
+    if (
+      !isObject(project) ||
+      typeof project.targetFile !== "string" ||
+      normalizeSnykTargetFile(project.targetFile) !== project.targetFile ||
+      (project.packageManager !== "bun" && project.packageManager !== "pnpm" && project.packageManager !== "yarn") ||
+      !Array.isArray(project.graphs) ||
+      !project.graphs.every(isSnykDependencyGraph)
+    ) {
+      return false;
+    }
+    const directory = posix.dirname(project.targetFile);
+    const graphManager = project.packageManager === "bun" ? "yarn" : project.packageManager;
+    if (
+      project.graphs.some(
+        graph =>
+          graph.packageManager !== graphManager || (directory !== "." && !graph.targetFile.startsWith(`${directory}/`)),
+      )
+    )
+      return false;
+    if (project.status === "scanned") return project.graphs.length > 0 && project.reason === null;
+    if (typeof project.reason !== "string" || project.reason.trim().length === 0) return false;
+    return project.status === "failed" || (project.status === "skipped" && project.graphs.length === 0);
+  });
+  if (!validDependencyProjects) return false;
+  if (new Set(value.dependencyProjects.map(project => project.targetFile)).size !== value.dependencyProjects.length)
+    return false;
   if (!isObject(value.counts) || !Array.isArray(value.findings)) return false;
   if (value.partial !== undefined && typeof value.partial !== "boolean") return false;
   const failedProjects = value.failedProjects;
@@ -219,6 +416,10 @@ export function isSnykScanResult(value: unknown): value is SnykScanResult {
       typeof finding.dependency === "string" &&
       typeof finding.installedVersion === "string" &&
       (typeof finding.fixedVersion === "string" || finding.fixedVersion === null) &&
+      Array.isArray(finding.fixedIn) &&
+      finding.fixedIn.every(entry => typeof entry === "string") &&
+      (typeof finding.exploit === "string" || finding.exploit === null) &&
+      ((typeof finding.cvssScore === "number" && Number.isFinite(finding.cvssScore)) || finding.cvssScore === null) &&
       (finding.dependencyType === undefined ||
         finding.dependencyType === "direct" ||
         finding.dependencyType === "transitive" ||
@@ -233,8 +434,9 @@ export function isSnykScanResult(value: unknown): value is SnykScanResult {
         finding.upgradeVersion === null) &&
       (finding.cves === undefined ||
         (Array.isArray(finding.cves) && finding.cves.every(entry => typeof entry === "string"))) &&
-      (typeof finding.project === "string" || finding.project === null) &&
-      (typeof finding.targetFile === "string" || finding.targetFile === null)
+      ((typeof finding.project === "string" && !win32.parse(finding.project).root) || finding.project === null) &&
+      (finding.targetFile === null ||
+        (typeof finding.targetFile === "string" && normalizeSnykTargetFile(finding.targetFile) === finding.targetFile))
     );
   });
   if (!validFindings) return false;

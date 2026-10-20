@@ -59,6 +59,8 @@ function result(sha: string, scannedAt = "2026-08-24T10:00:00.000Z"): SnykScanRe
   return {
     sha,
     scannedAt,
+    includesDev: true,
+    dependencyProjects: [],
     counts: { critical: 0, high: 0, medium: 0, low: 0 },
     findings: [],
   };
@@ -117,6 +119,34 @@ function mountSnyk(options: {
 }
 
 describe("useSnyk", () => {
+  test("Dependency scans without supported projects show a warning while retaining findings", async () => {
+    const { state, snyk } = mountSnyk({
+      scan: async () => result(SHA_A),
+      setup: actions => {
+        actions.setActiveProviderView("snyk");
+        actions.setGraphRows(graphRows([SHA_A]));
+        actions.setDetailActiveTab("snyk-deps");
+      },
+    });
+    await snyk.scanCommit(SHA_A);
+    expect(snyk.getCommitData(SHA_A)).not.toBeNull();
+    expect(state.providerStatusFor("snyk")).toEqual({
+      kind: "warning",
+      message: "No supported dependency project. Dependency graphs currently support Bun, pnpm and Yarn v1.",
+    });
+  });
+
+  test("graph failures reach the existing message overlay without discarding valid findings", async () => {
+    const scan = result(SHA_A);
+    scan.dependencyProjects = [
+      { targetFile: "bun.lock", packageManager: "bun", status: "failed", graphs: [], reason: "Bun conversion failed." },
+    ];
+    const { state, snyk } = mountSnyk({ scan: async () => scan });
+    await snyk.scanCommit(SHA_A);
+    expect(snyk.getCommitData(SHA_A)).toEqual(scan);
+    expect(state.providerStatusFor("snyk")).toEqual({ kind: "error", message: "Bun conversion failed." });
+  });
+
   test("suspension preserves results and badges, aborts scans, and drops queued work", async () => {
     const pending = deferred<SnykScanResult>();
     const calls: SnykScanOptions[] = [];

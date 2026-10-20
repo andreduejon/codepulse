@@ -90,6 +90,8 @@ export function useDetailCursor({
   onJumpToCommit,
   onOpenDiff,
 }: UseDetailCursorOptions) {
+  const tabOwnsCursor = () =>
+    activeTab() === "files" || activeTab() === "snyk-deps" || isProviderDetailView(activeTab());
   // ── Build flat list of interactive items (tab-aware) ──
   // IMPORTANT: This memo must be defined AFTER fileTreeRows, stashEntries,
   // expandedStashes, getStashFileTreeRows, collapsedDirs, and stashCollapsedDirs
@@ -182,11 +184,9 @@ export function useDetailCursor({
   });
 
   // Clamp cursor when interactive items change, and position cursor after jump.
-  // IMPORTANT: When the files tab is active, FileListView owns cursor clamping.
-  // Skip this effect on the files tab to avoid resetting the cursor to 0 based
-  // on detail.tsx's empty interactiveItems() (which has no "files" branch).
+  // Files/provider tabs own their cursor; the parent's empty list must not clamp it.
   createEffect(() => {
-    if (activeTab() === "files" || isProviderDetailView(activeTab())) return;
+    if (tabOwnsCursor()) return;
     const items = interactiveItems();
     const count = items.length;
 
@@ -342,7 +342,7 @@ export function useDetailCursor({
   // Keep navRef updated whenever interactive items change.
   // Files and every provider tab own their navigation refs exclusively.
   createEffect(() => {
-    if (navRef && activeTab() !== "files" && !isProviderDetailView(activeTab())) {
+    if (navRef && !tabOwnsCursor()) {
       navRef.itemCount = interactiveItems().length;
       navRef.activateCurrentItem = activateCurrentItem;
       navRef.itemRefs = itemRefs;
@@ -371,7 +371,7 @@ export function useDetailCursor({
   // Keep the footer's contextual enter-key hint in sync with the cursor position.
   // Files and every provider tab own their contextual action hint.
   createEffect(() => {
-    if (activeTab() === "files" || isProviderDetailView(activeTab())) return;
+    if (tabOwnsCursor()) return;
     const items = interactiveItems();
     const idx = state.detailCursorIndex();
     if (!state.detailFocused() || idx < 0 || idx >= items.length) {

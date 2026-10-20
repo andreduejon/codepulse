@@ -14,6 +14,7 @@ import { useT } from "../hooks/use-t";
 import { ActionsDetailTab } from "../providers/github-actions/detail-tab";
 import { JenkinsDetailTab } from "../providers/jenkins/detail-tab";
 import { OpenShiftDetailTab } from "../providers/openshift/detail-tab";
+import { SnykDependenciesTab } from "../providers/snyk/deps-tab";
 import { SnykDetailTab } from "../providers/snyk/detail-tab";
 import { formatDate } from "../utils/date";
 import { isCursored as _isCursored, itemHighlightBg as _itemHighlightBg } from "../utils/detail-cursor";
@@ -1009,6 +1010,23 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
             </Show>
             <Show when={activeTab() === "snyk" && props.snykGetCommitData && props.snykScanCommit}>
               <SnykDetailTab
+                mouseEnabled={props.mouseEnabled}
+                onMouseFocus={props.onMouseFocus}
+                scan={props.snykGetCommitData?.(c().hash) ?? null}
+                contentWidth={props.contentWidth}
+                onScan={async () => {
+                  await props.snykScanCommit?.(c().hash, !!props.snykGetCommitData?.(c().hash));
+                }}
+                loading={props.snykIsScanning?.(c().hash) ?? false}
+                navRef={props.navRef}
+                detailCursorIndex={() => state.detailCursorIndex()}
+                detailFocused={() => state.detailFocused()}
+                setDetailCursorAction={actions.setDetailCursorAction}
+                setDetailCursorIndex={actions.setDetailCursorIndex}
+              />
+            </Show>
+            <Show when={activeTab() === "snyk-deps" && props.snykGetCommitData && props.snykScanCommit}>
+              <SnykDependenciesTab
                 mouseEnabled={props.mouseEnabled}
                 onMouseFocus={props.onMouseFocus}
                 scan={props.snykGetCommitData?.(c().hash) ?? null}

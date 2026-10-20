@@ -13,7 +13,8 @@ export type DetailTab =
   | "github-actions"
   | "jenkins"
   | "openshift"
-  | "snyk";
+  | "snyk"
+  | "snyk-deps";
 
 export type HighlightMode = "ancestry" | "path" | "search" | null;
 

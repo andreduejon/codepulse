@@ -12,11 +12,7 @@ interface TabAvailabilityInput {
    * The active provider view.
    */
   activeProviderView?: ProviderView;
-  /**
-   * Provider data getter — used to determine whether the provider tab has
-   * data for the current commit. When omitted the Actions tab is always included
-   * (backwards-compatible default for callers that don't have access to CI state).
-   */
+  /** Optional snapshot getter supplied by provider-aware callers. */
   getCommitData?: (sha: string) => unknown;
   /**
    * True while the initial provider fetch is in-flight. When loading, the
@@ -41,8 +37,8 @@ export function getUncommittedProviderNotice(activeProviderView: ProviderView): 
 /**
  * Returns the list of available tabs for the current commit.
  * Each provider takes the first position and no files tab is shown. The
- * info tab is always shown. If there are stashes on the commit, they are
- * also presented in the details section in an additional tab.
+ * info tab is always shown. In Git view, stashes on the commit are
+ * presented in an additional tab.
  */
 export function getAvailableTabs(input: TabAvailabilityInput): DetailTab[] {
   const { commit, uncommittedDetail, commitDetail, stashByParent, activeProviderView } = input;
@@ -60,11 +56,12 @@ export function getAvailableTabs(input: TabAvailabilityInput): DetailTab[] {
 
   if (activeProviderView && isProviderDetailView(activeProviderView)) {
     tabs.push(activeProviderView);
+    if (activeProviderView === "snyk") tabs.push("snyk-deps");
   } else if (commitDetail?.files.length) {
     tabs.push("files");
   }
 
-  if (stashByParent.has(commit?.hash ?? "")) {
+  if (!isProviderDetailView(activeProviderView ?? "git") && stashByParent.has(commit?.hash ?? "")) {
     tabs.push("stashes");
   }
 

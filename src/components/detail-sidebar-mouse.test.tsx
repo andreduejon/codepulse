@@ -1,5 +1,5 @@
 import { expect, mock, spyOn, test } from "bun:test";
-import { RGBA, type ScrollBoxRenderable } from "@opentui/core";
+import { InputRenderable, type KeyEvent, type Renderable, RGBA, type ScrollBoxRenderable } from "@opentui/core";
 import { MouseButtons } from "@opentui/core/testing";
 import { testRender } from "@opentui/solid";
 import { createSignal } from "solid-js";
@@ -9,6 +9,7 @@ import { createThemeState, ThemeContext } from "../context/theme";
 import { buildGraph } from "../git/graph";
 import * as repo from "../git/repo";
 import type { CommitDetail, DiffTarget } from "../git/types";
+import { handleDetailKey } from "../hooks/handle-detail-keys";
 import * as clipboard from "../hooks/use-clipboard";
 import type { GitHubJob, GitHubWorkflowRun } from "../providers/github-actions/types";
 import type { JenkinsJob, JenkinsRun } from "../providers/jenkins/types";
@@ -81,11 +82,14 @@ const resource: OpenShiftResource = {
 const scan: SnykScanResult = {
   sha: detail.hash,
   scannedAt: date,
+  includesDev: true,
+  dependencyProjects: [],
   counts: { critical: 0, high: 1, medium: 0, low: 0 },
   findings: [
     {
       id: "finding",
       title: "Finding metadata",
+      cves: ["CVE-2026-0100"],
       severity: "high",
       dependency: "fixture-package",
       installedVersion: "1.0.0",
@@ -95,7 +99,7 @@ const scan: SnykScanResult = {
     },
   ],
 };
-async function renderSidebar(provider: ProviderView = "git") {
+async function renderSidebar(provider: ProviderView = "git", snykScan: SnykScanResult = scan) {
   const theme = createThemeState();
   const [dialog, setDialog] = createSignal<string | null>(null);
   const [searchFocused, setSearchFocused] = createSignal(true);
@@ -190,10 +194,10 @@ async function renderSidebar(provider: ProviderView = "git") {
                   openshiftFetchCommitData={reload}
                   openshiftIsLoading={busy}
                   onOpenOpenShiftResource={openJob}
-                  snykGetCommitData={() => scan}
+                  snykGetCommitData={sha => (sha === snykScan.sha ? snykScan : null)}
                   snykScanCommit={async () => {
                     await reload();
-                    return scan;
+                    return snykScan;
                   }}
                   snykIsScanning={busy}
                 />
@@ -208,6 +212,12 @@ async function renderSidebar(provider: ProviderView = "git") {
   const flush = () => setup.flush({ maxPasses: 20 });
   const frame = () => setup.captureCharFrame();
   const point = (label: string) => {
+    if (label === "filter") {
+      const all = (node: Renderable): Renderable[] => node.getChildren().flatMap(child => [child, ...all(child)]);
+      const row = all(setup.renderer.root).find(node => node instanceof InputRenderable)?.parent;
+      if (!row) throw new Error("Filter row missing.");
+      return { x: row.x + 1, y: row.screenY };
+    }
     const rows = frame().split("\n");
     const y = rows.findIndex(row => row.includes(label));
     if (y < 0) throw new Error(`Missing visible text: ${label}\n${frame()}`);
@@ -349,6 +359,209 @@ test("sidebar tab edges, active tab and noninteractive area focus; disabled tabs
   }
 });
 
+test("tab bar hides stashes outside Git and keeps the full Vulnerabilities label clickable", async () => {
+  const d = await renderSidebar();
+  try {
+    d.actions.setStashByParent(new Map([[detail.hash, [{ ...detail, hash: "stash", parents: [detail.hash] }]]]));
+    await d.flush();
+    expect(d.frame()).toContain("Stashes (1)");
+
+    for (const provider of ["github-actions", "jenkins", "openshift", "snyk"] as const) {
+      d.actions.setActiveProviderView(provider);
+      d.actions.setDetailActiveTab("info");
+      await d.flush();
+      expect(d.frame()).not.toContain("Stashes (1)");
+      if (provider === "snyk") {
+        const label = d.point("Vulnerabilities");
+        expect(label.x + "Vulnerabilities".length).toBeLessThan(d.point("Info").x);
+        await d.click("Vulnerabilities");
+        expect(d.state.detailActiveTab()).toBe("snyk");
+        expect(d.frame()).toContain("CVE-2026-0100");
+      }
+    }
+
+    d.actions.setActiveProviderView("git");
+    await d.flush();
+    expect(d.frame()).toContain("Stashes (1)");
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("Dependencies tab routes cached graphs and owns keyboard cursor navigation alongside Vulnerabilities and Info", async () => {
+  const withDependencies: SnykScanResult = {
+    ...scan,
+    dependencyProjects: [
+      {
+        targetFile: "bun.lock",
+        packageManager: "bun",
+        status: "scanned",
+        reason: null,
+        graphs: [
+          {
+            targetFile: "yarn.lock",
+            packageManager: "yarn",
+            rootNodeId: "root",
+            packages: [
+              { id: "fixture-deps@1.0.0", name: "fixture-deps", version: "1.0.0" },
+              { id: "fixture-parent@1.0.0", name: "fixture-parent", version: "1.0.0" },
+              { id: "fixture-child@1.0.0", name: "fixture-child", version: "1.0.0" },
+            ],
+            nodes: [
+              {
+                nodeId: "root",
+                pkgId: "fixture-deps@1.0.0",
+                deps: ["parent"],
+                scope: "unknown",
+                referenceNodeId: null,
+              },
+              {
+                nodeId: "parent",
+                pkgId: "fixture-parent@1.0.0",
+                deps: ["child"],
+                scope: "prod",
+                referenceNodeId: null,
+              },
+              { nodeId: "child", pkgId: "fixture-child@1.0.0", deps: [], scope: "dev", referenceNodeId: null },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  const d = await renderSidebar("snyk", withDependencies);
+  const key = async (name: string) => {
+    handleDetailKey({ name, preventDefault() {} } as KeyEvent, {
+      state: d.state,
+      actions: d.actions,
+      dialog: () => null,
+      getDetailScrollboxRef: () => d.scrollbox,
+      detailNavRef: d.navRef,
+      getCommitData: () => withDependencies,
+    });
+    await d.flush();
+  };
+  try {
+    expect(d.frame()).toContain("Dependencies");
+    await d.click("Vulnerabilities");
+    await key("right");
+    expect(d.state.detailActiveTab()).toBe("snyk-deps");
+    expect(d.frame()).toContain("bun.lock (converted)");
+    expect(d.frame()).toContain("fixture-parent@1.0.0");
+    expect(d.frame()).not.toContain("fixture-child@1.0.0");
+
+    await d.click("fixture-parent@1.0.0");
+    expect(d.state.detailCursorIndex()).toBeGreaterThan(0);
+    expect(d.state.detailCursorAction()).toBe("collapse");
+    expect(d.frame()).toContain("fixture-child@1.0.0");
+    const selected = d.state.detailCursorIndex();
+    await key("return");
+    expect(d.state.detailCursorIndex()).toBe(selected);
+    expect(d.state.detailCursorAction()).toBe("expand");
+    expect(d.frame()).not.toContain("fixture-child@1.0.0");
+
+    await key("right");
+    expect(d.state.detailActiveTab()).toBe("info");
+    await key("left");
+    expect(d.state.detailActiveTab()).toBe("snyk-deps");
+    expect(d.navRef.itemCount).toBeGreaterThan(1);
+    await key("left");
+    expect(d.state.detailActiveTab()).toBe("snyk");
+    expect(d.frame()).toContain("CVE-2026-0100");
+
+    d.actions.setCursorIndex(1);
+    await d.flush();
+    expect(d.frame().split("\n").slice(0, 3).join("\n")).toContain("Dependencies");
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("clearing either Snyk filter reveals its row after navigating deep into a long tree", async () => {
+  const findings = Array.from({ length: 200 }, (_, index) => ({
+    ...scan.findings[0],
+    id: `fixture-${index}`,
+    dependency: `fixture-${index}`,
+  }));
+  const many: SnykScanResult = {
+    ...scan,
+    counts: { critical: 0, high: 200, medium: 0, low: 0 },
+    findings,
+    dependencyProjects: [
+      {
+        targetFile: "bun.lock",
+        packageManager: "bun",
+        status: "scanned",
+        reason: null,
+        graphs: [
+          {
+            targetFile: "yarn.lock",
+            packageManager: "yarn",
+            rootNodeId: "root",
+            packages: [
+              { id: "fixture-root@1", name: "fixture-root", version: "1" },
+              ...findings.map(finding => ({
+                id: `${finding.dependency}@1.0.0`,
+                name: finding.dependency,
+                version: "1.0.0",
+              })),
+            ],
+            nodes: [
+              {
+                nodeId: "root",
+                pkgId: "fixture-root@1",
+                deps: findings.map(finding => finding.id),
+                scope: "unknown",
+                referenceNodeId: null,
+              },
+              ...findings.map(finding => ({
+                nodeId: finding.id,
+                pkgId: `${finding.dependency}@1.0.0`,
+                deps: [],
+                scope: "prod" as const,
+                referenceNodeId: null,
+              })),
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  for (const tab of ["snyk", "snyk-deps"] as const) {
+    const d = await renderSidebar("snyk", many);
+    try {
+      d.actions.setDetailActiveTab(tab);
+      await d.flush();
+      await d.click("filter");
+      await d.mockInput.typeText("fixture");
+      await d.flush();
+      d.navRef.activateCurrentItem();
+      await d.flush();
+      d.actions.setDetailCursorIndex(150);
+      d.scrollbox.scrollTo(110);
+      await d.flush();
+      expect(d.scrollbox.scrollTop).toBeGreaterThan(0);
+      handleDetailKey({ name: "escape", preventDefault() {}, stopPropagation() {} } as KeyEvent, {
+        state: d.state,
+        actions: d.actions,
+        dialog: () => null,
+        getDetailScrollboxRef: () => d.scrollbox,
+        detailNavRef: d.navRef,
+      });
+      await d.flush();
+      // Vulnerabilities has Copy JSON and Group by above its filter; Dependencies does not.
+      const filterIndex = tab === "snyk" ? 3 : 1;
+      expect(d.state.detailCursorIndex()).toBe(filterIndex);
+      expect(d.scrollbox.scrollTop).toBeLessThanOrEqual(3);
+      const row = d.navRef.itemRefs[filterIndex];
+      expect(row.screenY).toBeGreaterThanOrEqual(d.scrollbox.viewport.screenY);
+      expect(row.screenY).toBeLessThan(d.scrollbox.viewport.screenY + d.scrollbox.viewport.height);
+    } finally {
+      await d.dispose();
+    }
+  }
+});
+
 test("Info row establishes focus before copy activation", async () => {
   let d: Awaited<ReturnType<typeof renderSidebar>> | undefined;
   const copy = mock(() => expect(d?.state.detailFocused()).toBe(true));
@@ -471,7 +684,7 @@ test("provider rows focus on the first click, retain focus after leave, and busy
             ? jenkinsRun.name
             : provider === "openshift"
               ? resource.name
-              : "fixture-package@1.0.0";
+              : "CVE-2026-0100";
       const row = d.point(label);
       await d.move(row.x, row.y);
       expect(d.state.detailFocused()).toBe(false);

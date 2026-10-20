@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { chmod, copyFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, copyFile, mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { closeProviderCaches } from "../shared/sha-sqlite-cache";
@@ -8,6 +8,7 @@ import {
   killSnykProcessGroup,
   removeOrphanedScanWorktrees,
   runSnykCommand,
+  type SnykCommandResult,
   type SnykCommandRunner,
   scanSnykCommit,
 } from "./scanner";
@@ -81,6 +82,60 @@ async function waitForFile(path: string): Promise<string> {
     }
   }
   throw new Error(`Timed out waiting for ${path}`);
+}
+
+function dependencyGraph(packageManager = "yarn", target = "yarn.lock"): string {
+  return `DepGraph data:\n${JSON.stringify({
+    schemaVersion: "1.3.0",
+    pkgManager: { name: packageManager },
+    pkgs: [
+      { id: "fixture@1.0.0", info: { name: "fixture", version: "1.0.0" } },
+      { id: "dep@1.0.0", info: { name: "dep", version: "1.0.0" } },
+    ],
+    graph: {
+      rootNodeId: "root",
+      nodes: [
+        { nodeId: "root", pkgId: "fixture@1.0.0", deps: [{ nodeId: "dep" }] },
+        { nodeId: "dep", pkgId: "dep@1.0.0", deps: [], info: { labels: { scope: "prod" } } },
+      ],
+    },
+  })}\nDepGraph target:\n${target}\nDepGraph end\n`;
+}
+
+async function dependencyFixture(files: Record<string, string>) {
+  const testRoot = await root();
+  const repoPath = join(testRoot, "repo");
+  await mkdir(repoPath);
+  let worktreePath = "";
+  const calls: { command: string[]; cwd: string }[] = [];
+  const output: { findings: SnykCommandResult; graph: SnykCommandResult; bun: SnykCommandResult } = {
+    findings: {
+      stdout: JSON.stringify({ packageManager: "yarn", displayTargetFile: "yarn.lock", vulnerabilities: [] }),
+      exitCode: 0,
+    },
+    graph: { stdout: dependencyGraph(), exitCode: 0 },
+    bun: { stdout: "", exitCode: 0 },
+  };
+  const runner: SnykCommandRunner = async (command, options) => {
+    calls.push({ command, cwd: options.cwd });
+    if (command[1] === "rev-parse") return { stdout: SHA, exitCode: 0 };
+    if (command[1] === "worktree" && command[2] === "add") {
+      worktreePath = command[4];
+      await mkdir(worktreePath);
+      for (const [path, content] of Object.entries(files)) {
+        await mkdir(dirname(join(worktreePath, path)), { recursive: true });
+        await writeFile(join(worktreePath, path), content);
+      }
+    }
+    if (command[1] === "ls-files") return { stdout: Object.keys(files).join("\0"), exitCode: 0 };
+    if (command[0] === "bun") {
+      if (output.bun.exitCode === 0) await writeFile(join(options.cwd, "yarn.lock"), "# yarn lockfile v1\n");
+      return output.bun;
+    }
+    if (command[0] === "snyk") return command.includes("--print-graph") ? output.graph : output.findings;
+    return { stdout: "", exitCode: 0 };
+  };
+  return { repoPath, cacheRoot: join(testRoot, "cache"), runner, output, calls, worktreePath: () => worktreePath };
 }
 
 describe("scanSnykCommit", () => {
@@ -157,7 +212,7 @@ process.exit(1);
       "detached=true",
       "marker=target commit",
       "token=custom-token-value",
-      "args=test --json --all-projects",
+      "args=test --json --all-projects --dev",
     ]);
     expect(await new SnykCache({ root: cacheRoot }).read(repoPath, targetSha)).toEqual(result);
     expect({
@@ -199,6 +254,7 @@ process.exit(1);
       "test",
       "--json",
       "--all-projects",
+      "--dev",
     ]);
     expect(commands.find(call => call.command[0] === "snyk")?.cwd).toContain("codepulse-snyk-");
     expect(commands.some(call => call.command.slice(0, 4).join(" ") === "git worktree remove --force")).toBe(true);
@@ -213,6 +269,8 @@ process.exit(1);
       scannedAt: "2026-08-20T10:00:00.000Z",
       counts: { critical: 0, high: 0, medium: 0, low: 0 },
       findings: [],
+      includesDev: true,
+      dependencyProjects: [],
     };
     await cache.write("/repo", old);
     const commands: string[][] = [];
@@ -237,6 +295,8 @@ process.exit(1);
       sha: SHA,
       scannedAt: "2026-08-20T10:00:00.000Z",
       counts: { critical: 0, high: 1, medium: 0, low: 0 },
+      includesDev: true,
+      dependencyProjects: [],
       findings: [
         {
           id: "SNYK-OLD",
@@ -245,6 +305,9 @@ process.exit(1);
           dependency: "dep",
           installedVersion: "1.0.0",
           fixedVersion: null,
+          fixedIn: [],
+          exploit: null,
+          cvssScore: null,
           project: "working",
           targetFile: null,
         },
@@ -293,6 +356,338 @@ process.exit(1);
     expect(await new SnykCache({ root: cacheRoot }).read("/repo", SHA)).toEqual(result);
   });
 
+  test("converts Bun only in the worktree, scans sequentially with dev dependencies and caches graphs", async () => {
+    const f = await dependencyFixture({
+      "package.json": '{"packageManager":"bun@1.4.3"}',
+      "bun.lock": "committed lockfile",
+    });
+    const result = await scanSnykCommit(
+      { repoPath: f.repoPath, sha: SHA },
+      { cacheRoot: f.cacheRoot, runCommand: f.runner, which: () => process.execPath },
+    );
+    expect(result.includesDev).toBe(true);
+    expect(result.dependencyProjects).toMatchObject([
+      {
+        targetFile: "bun.lock",
+        packageManager: "bun",
+        status: "scanned",
+        reason: null,
+        graphs: [{ targetFile: "yarn.lock" }],
+      },
+    ]);
+    expect(f.calls.filter(call => call.command[0] !== "git").map(call => call.command)).toEqual([
+      ["bun", "install", "--yarn", "--frozen-lockfile", "--ignore-scripts"],
+      ["snyk", "test", "--json", "--all-projects", "--dev"],
+      ["snyk", "test", "--print-graph", "--all-projects", "--dev"],
+    ]);
+    expect(f.calls.filter(call => call.command[0] !== "git").every(call => call.cwd === f.worktreePath())).toBe(true);
+    expect(await new SnykCache({ root: f.cacheRoot }).read(f.repoPath, SHA)).toEqual(result);
+    await expect(stat(join(f.repoPath, "yarn.lock"))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(stat(f.worktreePath())).rejects.toMatchObject({ code: "ENOENT" });
+
+    const callCount = f.calls.length;
+    expect(
+      await scanSnykCommit({ repoPath: f.repoPath, sha: SHA }, { cacheRoot: f.cacheRoot, runCommand: f.runner }),
+    ).toEqual(result);
+    expect(f.calls.length).toBe(callCount + 1);
+  });
+
+  test("groups pnpm workspace graphs under the committed lockfile without running pnpm", async () => {
+    const f = await dependencyFixture({
+      "package.json": '{"packageManager":"pnpm@10.0.0"}',
+      "pnpm-lock.yaml": "lockfileVersion: 9",
+      "pnpm-workspace.yaml": "packages: [packages/*]",
+      "packages/a/package.json": "{}",
+      "packages/b/package.json": "{}",
+    });
+    f.output.findings.stdout = JSON.stringify({
+      packageManager: "pnpm",
+      displayTargetFile: "pnpm-lock.yaml",
+      vulnerabilities: [],
+    });
+    f.output.graph.stdout =
+      dependencyGraph("pnpm", "packages/a/package.json") + dependencyGraph("pnpm", "packages/b/package.json");
+    const result = await scanSnykCommit(
+      { repoPath: f.repoPath, sha: SHA },
+      { cacheRoot: f.cacheRoot, runCommand: f.runner },
+    );
+    expect(result.dependencyProjects).toHaveLength(1);
+    expect(result.dependencyProjects[0]).toMatchObject({
+      targetFile: "pnpm-lock.yaml",
+      packageManager: "pnpm",
+      status: "scanned",
+    });
+    expect(result.dependencyProjects[0].graphs.map(graph => graph.targetFile)).toEqual([
+      "packages/a/package.json",
+      "packages/b/package.json",
+    ]);
+    expect(f.calls.filter(call => call.command[0] !== "git").map(call => call.command[0])).toEqual(["snyk", "snyk"]);
+  });
+
+  test("scans native Yarn v1 without a local Yarn command", async () => {
+    const f = await dependencyFixture({ "package.json": "{}", "yarn.lock": "# yarn lockfile v1\n" });
+    const result = await scanSnykCommit(
+      { repoPath: f.repoPath, sha: SHA },
+      { cacheRoot: f.cacheRoot, runCommand: f.runner, which: () => null },
+    );
+    expect(result.dependencyProjects[0]).toMatchObject({
+      targetFile: "yarn.lock",
+      packageManager: "yarn",
+      status: "scanned",
+    });
+    expect(f.calls.some(call => call.command[0] === "yarn")).toBe(false);
+  });
+
+  test("matches the nearest project and excludes unsupported modern Yarn graphs", async () => {
+    const f = await dependencyFixture({
+      "package.json": "{}",
+      "bun.lock": "lock",
+      "a/package.json": "{}",
+      "a/yarn.lock": "# yarn lockfile v1\n",
+      "modern/package.json": '{"packageManager":"yarn@4.0.0"}',
+      "modern/yarn.lock": "__metadata:\n  version: 8\n",
+    });
+    f.output.graph.stdout =
+      dependencyGraph() + dependencyGraph("yarn", "a/yarn.lock") + dependencyGraph("yarn", "modern/yarn.lock");
+    const result = await scanSnykCommit(
+      { repoPath: f.repoPath, sha: SHA },
+      { cacheRoot: f.cacheRoot, runCommand: f.runner, which: () => process.execPath },
+    );
+    expect(
+      result.dependencyProjects.map(project => [project.targetFile, project.graphs.map(graph => graph.targetFile)]),
+    ).toEqual([
+      ["bun.lock", ["yarn.lock"]],
+      ["a/yarn.lock", ["a/yarn.lock"]],
+    ]);
+  });
+
+  test("keeps existing vulnerability-only scans for unsupported dependency managers", async () => {
+    const f = await dependencyFixture({ "package.json": "{}", "package-lock.json": "{}" });
+    f.output.findings.stdout = JSON.stringify({
+      packageManager: "npm",
+      displayTargetFile: "package-lock.json",
+      vulnerabilities: [],
+    });
+    const result = await scanSnykCommit(
+      { repoPath: f.repoPath, sha: SHA },
+      { cacheRoot: f.cacheRoot, runCommand: f.runner },
+    );
+    expect(result.dependencyProjects).toEqual([]);
+    expect(f.calls.filter(call => call.command[0] === "snyk")).toHaveLength(1);
+  });
+
+  test("missing Bun reports an actionable error instead of accepting npm fallback as a clean scan", async () => {
+    const f = await dependencyFixture({ "package.json": "{}", "bun.lock": "lock" });
+    f.output.findings.stdout = JSON.stringify({
+      packageManager: "npm",
+      displayTargetFile: "package.json",
+      vulnerabilities: [],
+    });
+    await expect(
+      scanSnykCommit(
+        { repoPath: f.repoPath, sha: SHA },
+        { cacheRoot: f.cacheRoot, runCommand: f.runner, which: () => null },
+      ),
+    ).rejects.toThrow("Bun not found on PATH. Install Bun to scan bun.lock.");
+    expect(f.calls.some(call => call.command[0] === "bun" || call.command.includes("--print-graph"))).toBe(false);
+    expect(await new SnykCache({ root: f.cacheRoot }).read(f.repoPath, SHA)).toBeNull();
+    await expect(stat(f.worktreePath())).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  test("retains successful projects when a Bun project is skipped", async () => {
+    const f = await dependencyFixture({
+      "package.json": "{}",
+      "bun.lock": "lock",
+      "a/package.json": "{}",
+      "a/pnpm-lock.yaml": "lockfileVersion: 9",
+    });
+    f.output.findings.stdout = JSON.stringify([
+      { packageManager: "npm", displayTargetFile: "package.json", vulnerabilities: [] },
+      {
+        packageManager: "pnpm",
+        displayTargetFile: "a/pnpm-lock.yaml",
+        vulnerabilities: [{ id: "SNYK-FIXTURE", severity: "high", name: "dep", version: "1.0.0" }],
+      },
+    ]);
+    f.output.findings.exitCode = 1;
+    f.output.graph.stdout = dependencyGraph("pnpm", "a/package.json");
+    const result = await scanSnykCommit(
+      { repoPath: f.repoPath, sha: SHA },
+      { cacheRoot: f.cacheRoot, runCommand: f.runner, which: () => null },
+    );
+    expect(result).toMatchObject({ partial: true, failedProjects: 1, counts: { high: 1 } });
+    expect(result.dependencyProjects).toMatchObject([
+      {
+        targetFile: "bun.lock",
+        status: "skipped",
+        graphs: [],
+        reason: "Bun not found on PATH. Install Bun to scan bun.lock.",
+      },
+      { targetFile: "a/pnpm-lock.yaml", status: "scanned", graphs: [{ targetFile: "a/package.json" }] },
+    ]);
+    expect(await new SnykCache({ root: f.cacheRoot }).read(f.repoPath, SHA)).toEqual(result);
+  });
+
+  test("skipped Bun cannot swallow an independent npm shrinkwrap project's findings", async () => {
+    const f = await dependencyFixture({
+      "package.json": "{}",
+      "bun.lock": "lock",
+      "app/package.json": "{}",
+      "app/npm-shrinkwrap.json": "{}",
+    });
+    f.output.findings.stdout = JSON.stringify([
+      { displayTargetFile: "package.json", vulnerabilities: [] },
+      {
+        packageManager: "npm",
+        displayTargetFile: "app/package.json",
+        vulnerabilities: [{ id: "SNYK-FIXTURE", severity: "high", name: "dep", version: "1.0.0" }],
+      },
+    ]);
+    const result = await scanSnykCommit(
+      { repoPath: f.repoPath, sha: SHA },
+      { cacheRoot: f.cacheRoot, runCommand: f.runner, which: () => null },
+    );
+    expect(result).toMatchObject({ partial: true, failedProjects: 1, counts: { high: 1 } });
+    expect(result.findings[0].targetFile).toBe("app/package.json");
+    expect(result.dependencyProjects).toMatchObject([{ targetFile: "bun.lock", status: "skipped" }]);
+    expect(f.calls.some(call => call.command.includes("--print-graph"))).toBe(false);
+  });
+
+  test("a broken nested manifest does not discard findings or graphs from a valid project", async () => {
+    const f = await dependencyFixture({
+      "package.json": "{}",
+      "bun.lock": "lock",
+      "broken/package.json": "invalid JSON",
+      "broken/yarn.lock": "# yarn lockfile v1\n",
+    });
+    f.output.findings = {
+      stdout: JSON.stringify([
+        { displayTargetFile: "yarn.lock", vulnerabilities: [] },
+        { displayTargetFile: "broken/yarn.lock", error: "Fixture project failed" },
+      ]),
+      exitCode: 2,
+    };
+    const result = await scanSnykCommit(
+      { repoPath: f.repoPath, sha: SHA },
+      { cacheRoot: f.cacheRoot, runCommand: f.runner, which: () => process.execPath },
+    );
+    expect(result).toMatchObject({ partial: true, failedProjects: 1 });
+    expect(result.dependencyProjects).toMatchObject([
+      { targetFile: "bun.lock", status: "scanned", graphs: [{ targetFile: "yarn.lock" }] },
+      { targetFile: "broken/yarn.lock", status: "failed", graphs: [] },
+    ]);
+    expect(result.dependencyProjects[1].reason).toContain("readable regular files without symlinks");
+    expect(await new SnykCache({ root: f.cacheRoot }).read(f.repoPath, SHA)).toEqual(result);
+  });
+
+  test("Bun conversion failure never caches a fallback project result", async () => {
+    const f = await dependencyFixture({ "package.json": "{}", "bun.lock": "lock" });
+    f.output.bun.exitCode = 1;
+    await expect(
+      scanSnykCommit(
+        { repoPath: f.repoPath, sha: SHA },
+        { cacheRoot: f.cacheRoot, runCommand: f.runner, which: () => process.execPath },
+      ),
+    ).rejects.toThrow("Bun lockfile conversion failed.");
+    expect(await new SnykCache({ root: f.cacheRoot }).read(f.repoPath, SHA)).toBeNull();
+  });
+
+  test("rejects Bun conversions that change the committed lockfile", async () => {
+    const f = await dependencyFixture({ "package.json": "{}", "bun.lock": "lock" });
+    const runner: SnykCommandRunner = async (command, options) => {
+      const output = await f.runner(command, options);
+      if (command[0] === "bun") await writeFile(join(options.cwd, "bun.lock"), "changed");
+      return output;
+    };
+    await expect(
+      scanSnykCommit(
+        { repoPath: f.repoPath, sha: SHA },
+        { cacheRoot: f.cacheRoot, runCommand: runner, which: () => process.execPath },
+      ),
+    ).rejects.toThrow("Bun conversion changed bun.lock.");
+  });
+
+  test("graph format failures keep valid findings and record failed dependency coverage", async () => {
+    const f = await dependencyFixture({ "package.json": "{}", "yarn.lock": "# yarn lockfile v1\n" });
+    f.output.graph.stdout = "unexpected graph format";
+    const result = await scanSnykCommit(
+      { repoPath: f.repoPath, sha: SHA },
+      { cacheRoot: f.cacheRoot, runCommand: f.runner },
+    );
+    expect(result.partial).toBeUndefined();
+    expect(result.dependencyProjects[0]).toMatchObject({
+      status: "failed",
+      graphs: [],
+      reason: "Unsupported Snyk CLI output.",
+    });
+    expect(await new SnykCache({ root: f.cacheRoot }).read(f.repoPath, SHA)).toEqual(result);
+  });
+
+  test("graph exit 2 retains returned graphs but never labels their coverage complete", async () => {
+    const f = await dependencyFixture({ "package.json": "{}", "yarn.lock": "# yarn lockfile v1\n" });
+    f.output.graph.exitCode = 2;
+    const result = await scanSnykCommit(
+      { repoPath: f.repoPath, sha: SHA },
+      { cacheRoot: f.cacheRoot, runCommand: f.runner },
+    );
+    expect(result.dependencyProjects[0]).toMatchObject({
+      status: "failed",
+      reason: "Snyk dependency graph scan was incomplete. Returned graphs are partial results.",
+    });
+    expect(result.dependencyProjects[0].graphs).toHaveLength(1);
+  });
+
+  test("a missing graph is a failure, not an empty successful tree", async () => {
+    const f = await dependencyFixture({ "package.json": "{}", "yarn.lock": "# yarn lockfile v1\n" });
+    f.output.graph.stdout = dependencyGraph("pnpm", "package.json");
+    const result = await scanSnykCommit(
+      { repoPath: f.repoPath, sha: SHA },
+      { cacheRoot: f.cacheRoot, runCommand: f.runner },
+    );
+    expect(result.dependencyProjects[0]).toMatchObject({
+      status: "failed",
+      graphs: [],
+      reason: "Snyk returned no dependency graph for this project.",
+    });
+  });
+
+  test("cancellation during Bun conversion prevents Snyk and cache writes", async () => {
+    const f = await dependencyFixture({ "package.json": "{}", "bun.lock": "lock" });
+    const controller = new AbortController();
+    const runner: SnykCommandRunner = async (command, options) => {
+      const output = await f.runner(command, options);
+      if (command[0] === "bun") controller.abort();
+      return output;
+    };
+    await expect(
+      scanSnykCommit(
+        { repoPath: f.repoPath, sha: SHA, signal: controller.signal },
+        { cacheRoot: f.cacheRoot, runCommand: runner, which: () => process.execPath },
+      ),
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(f.calls.some(call => call.command[0] === "snyk")).toBe(false);
+    expect(await new SnykCache({ root: f.cacheRoot }).read(f.repoPath, SHA)).toBeNull();
+    await expect(stat(f.worktreePath())).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  test("cancellation during graph scanning prevents partial cache writes", async () => {
+    const f = await dependencyFixture({ "package.json": "{}", "yarn.lock": "# yarn lockfile v1\n" });
+    const controller = new AbortController();
+    const runner: SnykCommandRunner = async (command, options) => {
+      const output = await f.runner(command, options);
+      if (command.includes("--print-graph")) controller.abort();
+      return output;
+    };
+    await expect(
+      scanSnykCommit(
+        { repoPath: f.repoPath, sha: SHA, signal: controller.signal },
+        { cacheRoot: f.cacheRoot, runCommand: runner },
+      ),
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(await new SnykCache({ root: f.cacheRoot }).read(f.repoPath, SHA)).toBeNull();
+    await expect(stat(f.worktreePath())).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
   test("passes shell metacharacters as literal Snyk arguments", async () => {
     const testRoot = await root();
     const env = await fakeSnyk(
@@ -304,6 +699,26 @@ process.exit(1);
     const result = await runSnykCommand(["snyk", ...args], { cwd: testRoot, env });
     expect(JSON.parse(result.stdout)).toEqual(args);
     expect(result.exitCode).toBe(3);
+  });
+
+  test("resolves a Yarn-global Snyk package without passing arguments through cmd.exe", async () => {
+    const testRoot = await root();
+    const bin = join(testRoot, "Yarn", "bin");
+    const env = await fakeSnyk(bin, "console.log(JSON.stringify(process.argv.slice(2)));process.exit(1);");
+    const globalPackage = join(bin, "..", "Data", "global", "node_modules", "snyk");
+    await mkdir(dirname(globalPackage), { recursive: true });
+    await rename(join(bin, "node_modules", "snyk"), globalPackage);
+    env.FAKE_SNYK_ENTRY = join(globalPackage, "cli.js");
+    const result = await runSnykCommand(["snyk", "test", "space & literal", "%PATH%"], { cwd: testRoot, env });
+    expect(result.exitCode).toBe(1);
+    expect(JSON.parse(result.stdout)).toEqual(["test", "space & literal", "%PATH%"]);
+  });
+
+  test("missing Snyk CLI reports an actionable installation error", async () => {
+    const testRoot = await root();
+    await expect(
+      runSnykCommand(["snyk", "test"], { cwd: testRoot, env: { ...process.env, PATH: "" } }),
+    ).rejects.toThrow("Snyk CLI not found on PATH. Install Snyk CLI to scan.");
   });
 
   test("pre-abort never starts Snyk", async () => {
@@ -385,6 +800,7 @@ setInterval(() => {}, 1000);
         await mkdir(worktreePath);
         return { stdout: "", exitCode: 0 };
       }
+      if (command[1] === "ls-files") return { stdout: "", exitCode: 0 };
       if (command[0] === "snyk") {
         return runSnykCommand(command, { ...options, env });
       }

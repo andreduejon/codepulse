@@ -17,6 +17,7 @@ import {
 } from "../src/providers/shared/cache-management";
 import { closeProviderCaches, providerCacheDatabase } from "../src/providers/shared/sha-sqlite-cache";
 import { SnykCache } from "../src/providers/snyk/cache";
+import type { SnykScanResult } from "../src/providers/snyk/types";
 
 const client = getTreeSitterClient();
 const cacheRoot = await mkdtemp(join(tmpdir(), "codepulse-sqlite-smoke-"));
@@ -35,9 +36,11 @@ try {
   await github.write(cacheRoot, { sha, runs: [] });
   await jenkins.write(cacheRoot, { sha, runs: [] });
   await openshift.write(cacheRoot, { sha, builds: [] });
-  const scan = {
+  const scan: SnykScanResult = {
     sha,
     scannedAt: new Date().toISOString(),
+    includesDev: true,
+    dependencyProjects: [],
     counts: { critical: 0, high: 0, medium: 0, low: 0 },
     findings: [],
   };

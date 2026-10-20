@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Capture normalized Snyk dependency graphs for Bun, pnpm, and Yarn v1 projects
+  alongside findings, with per-project failures and safe Bun-to-Yarn conversion
+  in temporary worktrees.
+- Add the Snyk **Dependencies** browser for scanned supported projects, with
+  expandable project/dependency groups, muted dev labels, reference/cycle markers,
+  selected paths, and persistent failed/skipped-project reasons.
+- Add live filters to both Snyk detail trees, including collapsed/repeated
+  dependency paths. Keep Dependencies available before scanning, use scanned
+  file/project roots, and surface unavailable graph scans in the message overlay.
+- Show a CVSS score, mature-exploit marker, and fix dot (upgrade, override, no fix)
+  on every vulnerability, with a pinned legend; expand to title, package, `via`
+  dependency, manifest, exploit maturity, and fix line, each copyable.
+- Add **Group by** `[severity]` / `[dependency]` to Vulnerabilities: the dependency
+  view groups findings under the direct dependency and package to change.
+- Add **Copy scan as JSON** for handing parsed findings to agent tools; it respects
+  the active filter.
+
+### Changed
+
+- Rename the Snyk detail tab to **Vulnerabilities**, size detail tabs by label
+  length, and show Stashes only in Git view.
+- Include development dependencies in Snyk scans and discard older snapshots
+  without dependency coverage metadata. Retain findings when graph capture fails.
+- List one vulnerability per CVE, manifest, and package (graph chips count the
+  same unit), and pick the lowest fixed version above the installed one.
+- Hide Snyk license-policy issues. Previously scanned commits need a rescan after
+  updating.
+
 ## [0.13.0] - 2026-10-14
 
 ### Added

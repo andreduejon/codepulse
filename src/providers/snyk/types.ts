@@ -2,6 +2,40 @@ import type { ProviderCacheLimit } from "../shared/auto-refresh";
 
 export type SnykSeverity = "critical" | "high" | "medium" | "low";
 
+export type SnykDependencyScope = "prod" | "dev" | "unknown";
+
+export type SnykDependencyPackageManager = "bun" | "pnpm" | "yarn";
+
+export interface SnykDependencyPackage {
+  id: string;
+  name: string;
+  version: string | null;
+}
+
+export interface SnykDependencyNode {
+  nodeId: string;
+  pkgId: string;
+  deps: string[];
+  scope: SnykDependencyScope;
+  referenceNodeId: string | null;
+}
+
+export interface SnykDependencyGraph {
+  targetFile: string;
+  packageManager: string;
+  rootNodeId: string;
+  packages: SnykDependencyPackage[];
+  nodes: SnykDependencyNode[];
+}
+
+export interface SnykDependencyProjectResult {
+  targetFile: string;
+  packageManager: SnykDependencyPackageManager;
+  status: "scanned" | "skipped" | "failed";
+  graphs: SnykDependencyGraph[];
+  reason: string | null;
+}
+
 export interface SnykSeverityCounts {
   critical: number;
   high: number;
@@ -16,6 +50,11 @@ export interface SnykFinding {
   dependency: string;
   installedVersion: string;
   fixedVersion: string | null;
+  /** All Snyk `fixedIn` versions; cache entries without it predate the fixed-version choice. */
+  fixedIn?: string[];
+  /** Snyk exploit maturity, e.g. `Mature`, `Proof of Concept`; null when absent. */
+  exploit?: string | null;
+  cvssScore?: number | null;
   dependencyType?: "direct" | "transitive" | "unknown";
   dependencyPath?: string[];
   upgradeDependency?: string | null;
@@ -28,6 +67,8 @@ export interface SnykFinding {
 export interface SnykScanResult {
   sha: string;
   scannedAt: string;
+  includesDev: true;
+  dependencyProjects: SnykDependencyProjectResult[];
   counts: SnykSeverityCounts;
   findings: SnykFinding[];
   partial?: boolean;
