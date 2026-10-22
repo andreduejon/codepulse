@@ -48,6 +48,9 @@ All notable changes to this project will be documented in this file.
   same unit), and pick the lowest fixed version above the installed one.
 - Hide Snyk license-policy issues. Previously scanned commits need a rescan after
   updating.
+- Count projects Snyk could not resolve as failed, even when its JSON findings omit
+  them (Snyk only reports them on stderr): such scans are now partial and name the
+  failed manifests.
 
 ## [0.13.0] - 2026-10-14
 

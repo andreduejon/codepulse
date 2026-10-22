@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { chmod, copyFile, mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, copyFile, mkdir, mkdtemp, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { closeProviderCaches } from "../shared/sha-sqlite-cache";
@@ -7,6 +7,7 @@ import { SnykCache } from "./cache";
 import {
   applyManifestScopes,
   killSnykProcessGroup,
+  parseSnykProjectFailures,
   removeOrphanedScanWorktrees,
   runSnykCommand,
   type SnykCommandResult,
@@ -755,6 +756,44 @@ process.exit(1);
     expect(await new SnykCache({ root: f.cacheRoot }).read(f.repoPath, SHA)).toEqual(result);
   });
 
+  test("projects Snyk reports only on graph-run stderr make the scan partial and are named", async () => {
+    const f = await dependencyFixture({ "package.json": "{}", "yarn.lock": "# yarn lockfile v1\n" });
+    const runner: SnykCommandRunner = async (command, options) => {
+      const output = await f.runner(command, options);
+      if (!command.includes("--print-graph")) return output;
+      const manifest = join(await realpath(options.cwd), "vendor", "lib", "package.json");
+      return {
+        ...output,
+        stderr: `${manifest}:\n  Missing node_modules folder: we can't test without dependencies.\nPlease run 'npm install' first.\n✗ 1/2 potential projects failed to get dependencies.\n`,
+      };
+    };
+    const result = await scanSnykCommit(
+      { repoPath: f.repoPath, sha: SHA },
+      { cacheRoot: f.cacheRoot, runCommand: runner },
+    );
+    expect(result).toMatchObject({ partial: true, failedProjects: 1, failedTargets: ["vendor/lib/package.json"] });
+    expect(result.dependencyProjects[0]).toMatchObject({ status: "scanned" });
+    expect(await new SnykCache({ root: f.cacheRoot }).read(f.repoPath, SHA)).toEqual(result);
+  });
+
+  test("graph-run failures add to findings failures without counting them twice", async () => {
+    const f = await dependencyFixture({ "package.json": "{}", "yarn.lock": "# yarn lockfile v1\n" });
+    f.output.findings = {
+      stdout: JSON.stringify([
+        { error: "Could not resolve dependencies." },
+        { packageManager: "yarn", displayTargetFile: "yarn.lock", vulnerabilities: [] },
+      ]),
+      exitCode: 2,
+    };
+    f.output.graph.stderr = "✗ 2/3 potential projects failed to get dependencies.\n";
+    const result = await scanSnykCommit(
+      { repoPath: f.repoPath, sha: SHA },
+      { cacheRoot: f.cacheRoot, runCommand: f.runner },
+    );
+    expect(result).toMatchObject({ partial: true, failedProjects: 2 });
+    expect(result.failedTargets).toBeUndefined();
+  });
+
   test("graph exit 2 retains returned graphs but never labels their coverage complete", async () => {
     const f = await dependencyFixture({ "package.json": "{}", "yarn.lock": "# yarn lockfile v1\n" });
     f.output.graph.exitCode = 2;
@@ -1073,4 +1112,26 @@ test("direct dependency scopes come from package.json, falling back to Snyk's fl
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+describe("parseSnykProjectFailures", () => {
+  test("counts Snyk's summary and names manifests below either worktree spelling", () => {
+    const stderr = [
+      "/private/var/scan/worktree/vendor/lib/package.json:",
+      "  Missing node_modules folder: we can't test without dependencies.",
+      "/var/scan/worktree/tools/pom.xml:",
+      "  Could not resolve dependencies.",
+      "/elsewhere/package.json:",
+      "✗ 3/6 potential projects failed to get dependencies.",
+    ].join("\n");
+    expect(parseSnykProjectFailures(stderr, ["/var/scan/worktree", "/private/var/scan/worktree"])).toEqual({
+      count: 3,
+      targets: ["tools/pom.xml", "vendor/lib/package.json"],
+    });
+  });
+
+  test("ignores stderr without Snyk's failure summary", () => {
+    expect(parseSnykProjectFailures("/repo/package.json:\n  warning\n", ["/repo"])).toEqual({ count: 0, targets: [] });
+    expect(parseSnykProjectFailures("", ["/repo"])).toEqual({ count: 0, targets: [] });
+  });
 });

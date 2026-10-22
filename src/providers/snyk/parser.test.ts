@@ -287,6 +287,24 @@ describe("parseSnykOutput", () => {
       }),
     ).toBe(false);
   });
+
+  test("accepts named failed manifests only on partial scans and within the failed count", () => {
+    const base = {
+      sha: SHA,
+      scannedAt: "2026-08-21T10:00:00.000Z",
+      includesDev: true,
+      dependencyProjects: [],
+      counts: { critical: 0, high: 0, medium: 0, low: 0 },
+      findings: [],
+    };
+    const partial = { ...base, partial: true, failedProjects: 1 };
+    expect(isSnykScanResult({ ...partial, failedTargets: ["vendor/lib/package.json"] })).toBe(true);
+    expect(isSnykScanResult({ ...base, failedTargets: ["vendor/lib/package.json"] })).toBe(false);
+    expect(isSnykScanResult({ ...partial, failedTargets: [] })).toBe(false);
+    expect(isSnykScanResult({ ...partial, failedTargets: ["a/package.json", "b/package.json"] })).toBe(false);
+    expect(isSnykScanResult({ ...partial, failedTargets: ["/tmp/package.json"] })).toBe(false);
+    expect(isSnykScanResult({ ...partial, failedTargets: ["../package.json"] })).toBe(false);
+  });
 });
 
 describe("isSnykScanResult", () => {

@@ -185,6 +185,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
         includesDev: scan.includesDev,
         partial: scan.partial ?? false,
         failedProjects: scan.failedProjects ?? 0,
+        failedTargets: scan.failedTargets ?? [],
         filter: filter.query().trim() || null,
         counts: scan.counts,
         filteredCounts: countUniqueFindings(filteredFindings()),
@@ -412,7 +413,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
         </Show>
         <Show when={props.scan?.partial}>
           <text fg={t().warning} wrapMode="none" truncate>
-            {`partial scan · ${props.scan?.failedProjects ?? 0} project${props.scan?.failedProjects === 1 ? "" : "s"} failed`}
+            {`partial scan · ${props.scan?.failedProjects ?? 0} project${props.scan?.failedProjects === 1 ? "" : "s"} failed${props.scan?.failedTargets ? `: ${props.scan.failedTargets.join(", ")}` : ""}`}
           </text>
         </Show>
 

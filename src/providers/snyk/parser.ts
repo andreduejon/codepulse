@@ -401,6 +401,17 @@ export function isSnykScanResult(value: unknown): value is SnykScanResult {
     return false;
   }
   if (value.partial !== true && failedProjects !== undefined) return false;
+  const failedTargets = value.failedTargets;
+  if (
+    failedTargets !== undefined &&
+    (value.partial !== true ||
+      !Array.isArray(failedTargets) ||
+      failedTargets.length === 0 ||
+      failedTargets.length > (failedProjects as number) ||
+      !failedTargets.every(target => typeof target === "string" && normalizeSnykTargetFile(target) === target))
+  ) {
+    return false;
+  }
 
   for (const severity of SEVERITIES) {
     const count = value.counts[severity];

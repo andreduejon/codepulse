@@ -73,6 +73,8 @@ export interface SnykScanResult {
   findings: SnykFinding[];
   partial?: boolean;
   failedProjects?: number;
+  /** Manifests Snyk could not resolve, when it named them; only on partial scans. */
+  failedTargets?: string[];
 }
 
 export type SnykCacheLimit = ProviderCacheLimit;

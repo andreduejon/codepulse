@@ -1,9 +1,9 @@
-import { lstat, mkdtemp, readFile, rm } from "node:fs/promises";
+import { lstat, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, dirname, join, posix, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, posix, relative, resolve } from "node:path";
 import { addDebugEvent, redactDebugValue } from "../../debug/events";
 import { SnykCache } from "./cache";
-import { parseSnykDepGraphs } from "./dep-graph";
+import { normalizeSnykTargetFile, parseSnykDepGraphs } from "./dep-graph";
 import { parseSnykOutput, shouldReplaceSnykResult } from "./parser";
 import { discoverSnykDependencyProjects, type SnykDependencyProjectInput } from "./projects";
 import type {
@@ -403,21 +403,56 @@ function findingsWithoutUnavailableBun(
   return [...retained, ...[...unavailableBun.values()].map(project => ({ error: project.reason }))];
 }
 
+export interface SnykProjectFailures {
+  count: number;
+  /** Repository-relative manifests Snyk named; may be fewer than `count`. */
+  targets: string[];
+}
+
+const NO_PROJECT_FAILURES: SnykProjectFailures = { count: 0, targets: [] };
+
+/**
+ * Projects Snyk found but could not resolve (`✗ 1/6 potential projects failed to get dependencies.`, each preceded by
+ * `<absolute manifest path>:`). Snyk prints them only on stderr, and `--json` leaves them out entirely.
+ */
+export function parseSnykProjectFailures(stderr: string, roots: readonly string[]): SnykProjectFailures {
+  const summary = /(\d+)\/\d+ potential projects? failed to get dependencies/.exec(stderr);
+  if (!summary) return NO_PROJECT_FAILURES;
+  const targets = new Set<string>();
+  for (const line of stderr.split(/\r?\n/)) {
+    const path = /^(.+):$/.exec(line.trim())?.[1];
+    if (!path || !isAbsolute(path)) continue;
+    for (const root of roots) {
+      const target = normalizeSnykTargetFile(relative(root, path));
+      if (target) {
+        targets.add(target);
+        break;
+      }
+    }
+  }
+  const count = Math.max(Number(summary[1]), targets.size);
+  return { count, targets: [...targets].sort() };
+}
+
 async function scanDependencyProjects(
   projects: readonly SnykDependencyProjectInput[],
   unavailable: ReadonlyMap<string, SnykDependencyProjectResult>,
   commandOptions: Parameters<SnykCommandRunner>[1],
   runCommand: SnykCommandRunner,
   trackedFiles: readonly string[],
-): Promise<SnykDependencyProjectResult[]> {
+): Promise<{ projects: SnykDependencyProjectResult[]; failures: SnykProjectFailures }> {
   const ready = projects.filter(project => !unavailable.has(project.targetFile));
-  if (ready.length === 0) return [...unavailable.values()];
+  if (ready.length === 0) return { projects: [...unavailable.values()], failures: NO_PROJECT_FAILURES };
   let graphs: ReturnType<typeof parseSnykDepGraphs> = [];
   let reason: string | null = null;
+  let failures = NO_PROJECT_FAILURES;
   try {
     const scan = await runCommand(["snyk", "test", "--print-graph", "--all-projects", "--dev"], commandOptions);
     throwIfAborted(commandOptions.signal);
     graphs = parseSnykDepGraphs(scan.stdout);
+    // Snyk prints realpaths (macOS `/var` is `/private/var`), so match both spellings of the worktree.
+    const roots = [commandOptions.cwd, await realpath(commandOptions.cwd).catch(() => commandOptions.cwd)];
+    failures = parseSnykProjectFailures(scan.stderr ?? "", roots);
     if (scan.exitCode !== 0 && scan.exitCode !== 1)
       reason = "Snyk dependency graph scan was incomplete. Returned graphs are partial results.";
   } catch (error) {
@@ -451,7 +486,7 @@ async function scanDependencyProjects(
     };
   });
   await Promise.all(pending);
-  return results;
+  return { projects: results, failures };
 }
 
 const MANIFEST_PACKAGE_MANAGERS = new Set(["npm", "yarn", "pnpm", "bun"]);
@@ -559,13 +594,15 @@ export async function scanSnykCommit(
         throw new Error("Snyk returned unusable results.");
       }
     }
-    result.dependencyProjects = await scanDependencyProjects(
-      projects,
-      unavailable,
-      commandOptions,
-      runCommand,
-      trackedFiles,
-    );
+    const graphRun = await scanDependencyProjects(projects, unavailable, commandOptions, runCommand, trackedFiles);
+    result.dependencyProjects = graphRun.projects;
+    // Both runs detect the same projects; only the graph run reports the ones Snyk could not resolve.
+    const failedProjects = Math.max(result.failedProjects ?? 0, graphRun.failures.count);
+    if (failedProjects > 0) {
+      result.partial = true;
+      result.failedProjects = failedProjects;
+      if (graphRun.failures.targets.length > 0) result.failedTargets = graphRun.failures.targets;
+    }
     const existing = await cache.read(options.repoPath, sha);
     throwIfAborted(options.signal);
     if (!shouldReplaceSnykResult(existing ?? undefined, result)) {
