@@ -15,9 +15,9 @@ import type { JenkinsCommitData, JenkinsJob, JenkinsJobFetchResult, JenkinsRun }
 import type { OpenShiftCommitData, OpenShiftResource } from "../providers/openshift/types";
 import { providerDetailTab } from "../providers/provider";
 import { DEPENDENCY_LEGEND } from "../providers/snyk/deps-tab";
-import { VULNERABILITY_LEGEND } from "../providers/snyk/detail-tab";
 import { SnykLegend } from "../providers/snyk/tab-shared";
 import type { SnykScanResult } from "../providers/snyk/types";
+import { VULNERABILITY_LEGEND } from "../providers/snyk/vulnerabilities-model";
 import { scheduleScrollIntoView, scrollElementIntoView } from "../utils/scroll";
 import { getAvailableTabs } from "../utils/tab-utils";
 import CommitDetailView from "./detail";
