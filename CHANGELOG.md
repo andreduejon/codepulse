@@ -55,6 +55,11 @@ All notable changes to this project will be documented in this file.
   projects stay visible instead of a "Kept last complete snapshot" error.
 - Status banners have a clickable `✕` to dismiss them.
 
+### Fixed
+
+- Apply each repository's saved theme when switching repositories; the previous
+  repository's theme stayed and was saved into the new one on the next settings change.
+
 ## [0.13.0] - 2026-10-14
 
 ### Added

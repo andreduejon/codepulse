@@ -18,7 +18,7 @@ import GraphView, { ColumnHeader } from "./components/graph";
 import MessageBox, { type UIMessage } from "./components/message-box";
 import ProjectSelector from "./components/project-selector";
 import SetupScreen from "./components/setup-screen";
-import { getKnownRepoInfos, getRepoDisplayConfig, loadConfig } from "./config";
+import { defaultConfig, getKnownRepoInfos, getRepoDisplayConfig, loadConfig } from "./config";
 import { backfillRepoConfig, writeConfig } from "./config-write";
 import { COMPACT_THRESHOLD_WIDTH, DEFAULT_MAX_COUNT, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH } from "./constants";
 import { AppStateContext, createAppState, providerIdle, providerStatusMessage } from "./context/state";
@@ -145,6 +145,9 @@ export function AppContent(props: Readonly<AppContentProps>) {
       maxCachedScans: config.providers?.snyk?.maxCachedScans ?? 20,
     });
     setRepoDisplayConfig(getRepoDisplayConfig(path));
+    // The theme is per repository; without this a switch keeps the previous repo's theme, and the next settings
+    // change saves it into this one.
+    themeState.setTheme(config.theme ?? defaultConfig().theme);
   };
 
   // ── GitHub CI data hook (called during setup, before Provider renders — per AGENTS.md rule 5) ──
