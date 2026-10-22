@@ -1,4 +1,4 @@
-import { type KeyEvent, MouseButton, type MouseEvent, type Renderable } from "@opentui/core";
+import type { KeyEvent, Renderable } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, onCleanup, Show, untrack } from "solid-js";
 import { DETAIL_PANEL_WIDTH_FRACTION } from "../../constants";
@@ -6,6 +6,7 @@ import { BANNER } from "../../debug/banner";
 import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useClipboard } from "../../hooks/use-clipboard";
 import { useT } from "../../hooks/use-t";
+import { DependencyRow, dependencyLabelWidth, isEmptyHeader, parentKey } from "./deps-row";
 import {
   buildDependencyTree,
   type DependencyGroupBy,
@@ -15,8 +16,15 @@ import {
   dependencyPackageList,
   dependencyVulnerabilities,
 } from "./deps-tree";
-import { type SnykDetailTabProps, type SnykLegendItem, severityColor } from "./detail-tab";
 import { highlightMatch, SnykFilterRow, useSnykFilter } from "./filter";
+import {
+  SnykControlRow,
+  type SnykDetailTabProps,
+  type SnykLegendItem,
+  severityColor,
+  snykScanIdentity,
+  useSnykRows,
+} from "./tab-shared";
 import { useSnykTabMemory } from "./view-memory";
 
 export type SnykDependenciesTabProps = SnykDetailTabProps & {
@@ -52,9 +60,8 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
   const vulnerabilities = createMemo(() => dependencyVulnerabilities(props.scan?.findings ?? []));
   const [groupBy, setGroupBy] = createSignal<DependencyGroupBy>("tree");
   const projects = createMemo(() => props.scan?.dependencyProjects ?? []);
-  const scanIdentity = createMemo(() => (props.scan ? `${props.scan.sha}:${props.scan.scannedAt}` : ""));
+  const scanIdentity = createMemo(() => snykScanIdentity(props.scan));
   const [expanded, setExpanded] = createSignal(defaultDependencyExpansion(projects()));
-  const [hoveredKey, setHoveredKey] = createSignal<string | null>(null);
   const tree = createMemo(() =>
     buildDependencyTree(projects(), expanded(), filter.query(), scope(), groupBy(), vulnerabilities()),
   );
@@ -73,8 +80,6 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
     return list;
   });
   const filtering = () => !!filter.query().trim();
-  /** Headers without anything to open (no matches, failed/skipped) are not cursor stops, like empty severities. */
-  const isEmptyHeader = (row: DependencyTreeRow) => row.kind !== "dependency" && !row.expandable;
   const navRows = createMemo(() => rows().filter(row => !isEmptyHeader(row)));
   const navIndexes = createMemo(() => new Map(navRows().map((row, index) => [row.key, index + ROW_BASE])));
   const packageTotals = createMemo(() =>
@@ -97,32 +102,14 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
 
   const usableWidth = () =>
     Math.max(1, props.contentWidth ?? Math.max(Math.floor(dimensions().width * DETAIL_PANEL_WIDTH_FRACTION), 60) - 4);
-  /** Right-aligned muted markers; nesting and these words replace arrow markers that read like errors. */
-  const markers = (row: DependencyTreeRow) =>
-    [row.direct ? "direct" : "", row.reference ? "repeated" : "", row.cycle ? "circular" : ""]
-      .filter(Boolean)
-      .map(word => ` ${word}`)
-      .join("");
-  const matchesText = (row: DependencyTreeRow) => (row.matches === undefined ? "" : ` ${row.matches}`);
-  /** Leaves have no arrow: one space after the connector, like Vulnerabilities' detail rows. */
-  const markerWidth = (row: DependencyTreeRow) => (row.kind === "dependency" && !row.expandable ? 0 : 2);
   /** Sibling groups (same parent) with any triangle reserve its column on every row, so `dev`/`repeated` line up. */
-  const parentKey = (row: DependencyTreeRow) => row.key.slice(0, row.key.lastIndexOf("/"));
   const markerGroups = createMemo(
     () => new Set(rows().flatMap(row => (row.kind === "dependency" && row.vulnerability ? [parentKey(row)] : []))),
   );
-  const markerGap = (row: DependencyTreeRow) =>
-    !row.vulnerability && row.kind === "dependency" && markerGroups().has(parentKey(row));
-  const suffixWidth = (row: DependencyTreeRow) =>
-    markers(row).length +
-    (row.scope === "dev" ? 4 : 0) +
-    matchesText(row).length +
-    (row.vulnerability || markerGap(row) ? 2 : 0);
-  const prefix = (row: DependencyTreeRow) => {
-    const budget = Math.max(0, usableWidth() - 1 - suffixWidth(row));
-    const connector = row.prefix.slice(Math.max(0, row.prefix.length - Math.max(0, budget - 11)));
-    return connector.slice(0, Math.max(0, budget - 2));
-  };
+  const layout = (row: DependencyTreeRow) => ({
+    width: usableWidth(),
+    gap: !row.vulnerability && row.kind === "dependency" && markerGroups().has(parentKey(row)),
+  });
   const label = (row: DependencyTreeRow, full = false) => {
     const project = projects()[row.projectIndex];
     const incomplete = row.kind !== "dependency" && project?.status === "failed" && project.graphs.length > 0;
@@ -139,8 +126,7 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
     return [highlightMatch(name, query, t().snykBg), text.slice(name.length)];
   };
   /** Nesting shows the path; the cursor row shows the full name, banner-scrolled when clipped. */
-  const labelWidth = (row: DependencyTreeRow) =>
-    Math.max(1, usableWidth() - prefix(row).length - markerWidth(row) - suffixWidth(row));
+  const labelWidth = (row: DependencyTreeRow) => dependencyLabelWidth(row, layout(row));
   const bannerOverflow = createMemo(() => {
     if (!props.detailFocused()) return 0;
     const row = navRows()[props.detailCursorIndex() - ROW_BASE];
@@ -228,31 +214,17 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
     });
     return false;
   };
-  const mouseRow = (key: string, index: () => number) => ({
-    onMouseOver: () => setHoveredKey(key),
-    onMouseOut: () => setHoveredKey(null),
-    onMouseDown: (event: MouseEvent) => {
-      if (!props.mouseEnabled || event.button !== MouseButton.LEFT || index() < 0) return;
-      event.preventDefault();
-      event.stopPropagation();
-      if (key === "scan" && props.loading) return;
-      props.onMouseFocus?.();
-      props.setDetailCursorIndex(index());
-      activateCurrentItem();
-    },
-  });
-  const cursored = (index: number) => props.detailFocused() && props.detailCursorIndex() === index;
-  const background = (key: string, index: number) =>
-    cursored(index)
-      ? t().backgroundElementActive
-      : props.mouseEnabled && hoveredKey() === key && (key !== "scan" || !props.loading)
-        ? t().backgroundElement
-        : undefined;
+  const rowsUi = useSnykRows(props, () => activateCurrentItem());
+  const cursored = rowsUi.cursored;
+  const controlRef = (key: string, index: number) => (element: Renderable) => {
+    refsByKey.set(key, element);
+    itemRefs[index] = element;
+  };
 
   createEffect(() => {
     const identity = scanIdentity();
     untrack(() => {
-      setHoveredKey(null);
+      rowsUi.clearHover();
       // Back from another tab on the same scan: restore the view as it was left.
       const saved = savedView(identity);
       if (saved) {
@@ -372,113 +344,52 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
 
   return (
     <box flexDirection="column" width="100%" flexShrink={0}>
-      <box
-        {...mouseRow("scan", () => 0)}
-        ref={(element: Renderable) => {
-          refsByKey.set("scan", element);
-          itemRefs[0] = element;
-        }}
-        flexDirection="row"
-        width="100%"
-        backgroundColor={background("scan", 0)}
-      >
-        <text
-          selectable={!props.mouseEnabled}
-          flexGrow={1}
-          flexShrink={1}
-          fg={cursored(0) ? t().accent : t().foreground}
-          wrapMode="none"
-          truncate
-        >
-          {props.scan ? "Rescan commit" : "Scan commit"}
-        </text>
-        <Show when={props.loading}>
-          <text selectable={!props.mouseEnabled} flexShrink={0} fg={t().foregroundMuted} wrapMode="none">
-            scanning...
-          </text>
-        </Show>
-      </box>
+      <SnykControlRow
+        rows={rowsUi}
+        id="scan"
+        index={0}
+        label={props.scan ? "Rescan commit" : "Scan commit"}
+        status={props.loading ? "scanning..." : undefined}
+        mouseEnabled={props.mouseEnabled}
+        rowRef={controlRef("scan", 0)}
+      />
 
       {/* Copy, Group by, Scope and filter only when there is something to browse (like Vulnerabilities). */}
       <Show when={controls()}>
-        <box
-          {...mouseRow("copyJson", () => COPY_INDEX)}
-          ref={(element: Renderable) => {
-            refsByKey.set("copyJson", element);
-            itemRefs[COPY_INDEX] = element;
-          }}
-          flexDirection="row"
-          width="100%"
-          backgroundColor={background("copyJson", COPY_INDEX)}
-        >
-          <text
-            selectable={!props.mouseEnabled}
-            flexGrow={1}
-            wrapMode="none"
-            fg={cursored(COPY_INDEX) ? t().accent : t().foreground}
-          >
-            Copy dependencies as JSON
-          </text>
-          <Show when={copiedId() === "copyJson"}>
-            <text selectable={!props.mouseEnabled} flexShrink={0} bg={t().primary} fg={t().background} wrapMode="none">
-              {" \u2713 copied "}
-            </text>
-          </Show>
-        </box>
+        <SnykControlRow
+          rows={rowsUi}
+          id="copyJson"
+          index={COPY_INDEX}
+          label="Copy dependencies as JSON"
+          copied={copiedId() === "copyJson"}
+          mouseEnabled={props.mouseEnabled}
+          rowRef={controlRef("copyJson", COPY_INDEX)}
+        />
         <box height={1} flexShrink={0} />
         {/* Group by and Scope cycle like Group by in Vulnerabilities. */}
-        <box
-          {...mouseRow("groupBy", () => GROUP_BY_INDEX)}
-          ref={(element: Renderable) => {
-            refsByKey.set("groupBy", element);
-            itemRefs[GROUP_BY_INDEX] = element;
-          }}
-          flexDirection="row"
-          width="100%"
-          backgroundColor={background("groupBy", GROUP_BY_INDEX)}
-        >
-          <text
-            selectable={!props.mouseEnabled}
-            flexGrow={1}
-            wrapMode="none"
-            fg={cursored(GROUP_BY_INDEX) ? t().accent : t().foreground}
-          >
-            Group by
-          </text>
-          <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foreground}>
-            {`[${groupBy()}]`}
-          </text>
-        </box>
-        <box
-          {...mouseRow("scope", () => SCOPE_INDEX)}
-          ref={(element: Renderable) => {
-            refsByKey.set("scope", element);
-            itemRefs[SCOPE_INDEX] = element;
-          }}
-          flexDirection="row"
-          width="100%"
-          backgroundColor={background("scope", SCOPE_INDEX)}
-        >
-          <text
-            selectable={!props.mouseEnabled}
-            flexGrow={1}
-            wrapMode="none"
-            fg={cursored(SCOPE_INDEX) ? t().accent : t().foreground}
-          >
-            Scope
-          </text>
-          <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foreground}>
-            {`[${scope()}]`}
-          </text>
-        </box>
+        <SnykControlRow
+          rows={rowsUi}
+          id="groupBy"
+          index={GROUP_BY_INDEX}
+          label="Group by"
+          value={groupBy()}
+          mouseEnabled={props.mouseEnabled}
+          rowRef={controlRef("groupBy", GROUP_BY_INDEX)}
+        />
+        <SnykControlRow
+          rows={rowsUi}
+          id="scope"
+          index={SCOPE_INDEX}
+          label="Scope"
+          value={scope()}
+          mouseEnabled={props.mouseEnabled}
+          rowRef={controlRef("scope", SCOPE_INDEX)}
+        />
         <SnykFilterRow
           filter={filter}
           selected={cursored(FILTER_INDEX)}
           mouseEnabled={props.mouseEnabled}
-          rowRef={(element: Renderable) => {
-            refsByKey.set("filter", element);
-            itemRefs[FILTER_INDEX] = element;
-          }}
+          rowRef={controlRef("filter", FILTER_INDEX)}
           placeholder="Enter dependency filter..."
         >
           <text flexShrink={0} selectable={false} fg={t().foregroundMuted} wrapMode="none">
@@ -499,112 +410,35 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
           {row => {
             let element: Renderable | undefined;
             const index = () => navIndexes().get(row.key) ?? -1;
-            const header = row.kind !== "dependency";
-            const empty = isEmptyHeader(row);
             onCleanup(() => {
               if (refsByKey.get(row.key) === element) refsByKey.delete(row.key);
             });
             return (
-              <box flexDirection="column" width="100%" flexShrink={0}>
-                <box
-                  {...(empty ? {} : mouseRow(row.key, index))}
-                  ref={(ref: Renderable) => {
-                    if (empty) return;
-                    element = ref;
-                    refsByKey.set(row.key, ref);
-                    if (index() >= 0) itemRefs[index()] = ref;
-                  }}
-                  flexDirection="row"
-                  width="100%"
-                  backgroundColor={empty ? undefined : background(row.key, index())}
-                >
-                  {/* Empty text still takes a column; headers have no connector. */}
-                  <Show when={prefix(row)}>
-                    <text selectable={!props.mouseEnabled} flexShrink={0} fg={t().border} wrapMode="none">
-                      {prefix(row)}
-                    </text>
-                  </Show>
-                  <Show when={markerWidth(row) > 0}>
-                    <text
-                      selectable={!props.mouseEnabled}
-                      flexShrink={0}
-                      fg={cursored(index()) ? t().accent : t().foregroundMuted}
-                      wrapMode="none"
-                    >
-                      {row.expandable ? (row.expanded ? "▾ " : "▸ ") : "· "}
-                    </text>
-                  </Show>
-                  <text
-                    selectable={!props.mouseEnabled}
-                    flexGrow={1}
-                    flexShrink={1}
-                    fg={cursored(index()) ? t().accent : empty ? t().foregroundMuted : t().foreground}
-                    wrapMode="none"
-                    truncate
-                  >
-                    {header && !empty ? (
-                      <strong>{label(row)}</strong>
-                    ) : cursored(index()) && row.kind === "dependency" ? (
-                      label(row, true).substring(bannerOffset(), bannerOffset() + labelWidth(row))
-                    ) : row.kind === "dependency" ? (
-                      highlightedLabel(row)
-                    ) : (
-                      label(row)
-                    )}
-                  </text>
-                  <Show when={markers(row)}>
-                    <text selectable={!props.mouseEnabled} flexShrink={0} fg={t().foregroundMuted} wrapMode="none">
-                      {markers(row)}
-                    </text>
-                  </Show>
-                  <Show when={row.scope === "dev"}>
-                    <text selectable={!props.mouseEnabled} flexShrink={0} fg={t().foregroundMuted} wrapMode="none">
-                      {" dev"}
-                    </text>
-                  </Show>
-                  {/* Closed rows while filtering: matches below, like header counts. */}
-                  <Show when={matchesText(row)}>
-                    <text selectable={!props.mouseEnabled} flexShrink={0} fg={t().foregroundMuted} wrapMode="none">
-                      {matchesText(row)}
-                    </text>
-                  </Show>
-                  <Show when={markerGap(row)}>
-                    <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none">
-                      {"  "}
-                    </text>
-                  </Show>
-                  {/* Vulnerable package: a triangle in its worst severity colour; `v` opens its findings. */}
-                  <Show when={row.vulnerability}>
-                    {severity => (
-                      <text
-                        selectable={!props.mouseEnabled}
-                        flexShrink={0}
-                        fg={severityColor(t(), severity())}
-                        wrapMode="none"
-                      >
-                        {" ▲"}
-                      </text>
-                    )}
-                  </Show>
-                  <Show when={copiedId() === row.key}>
-                    <text
-                      selectable={!props.mouseEnabled}
-                      flexShrink={0}
-                      bg={t().primary}
-                      fg={t().background}
-                      wrapMode="none"
-                    >
-                      {" \u2713 copied "}
-                    </text>
-                  </Show>
-                  {/* Headers count packages like severity headers count findings: N, or N/M while filtering. */}
-                  <Show when={header && row.total !== undefined}>
-                    <text selectable={!props.mouseEnabled} flexShrink={0} fg={t().foregroundMuted} wrapMode="none">
-                      {` ${row.count ?? 0}${filtering() && (row.total ?? 0) > 0 ? `/${row.total}` : ""}`}
-                    </text>
-                  </Show>
-                </box>
-              </box>
+              <DependencyRow
+                row={row}
+                index={index}
+                rows={rowsUi}
+                layout={layout(row)}
+                label={
+                  row.kind !== "dependency" && !isEmptyHeader(row) ? (
+                    <strong>{label(row)}</strong>
+                  ) : cursored(index()) && row.kind === "dependency" ? (
+                    label(row, true).substring(bannerOffset(), bannerOffset() + labelWidth(row))
+                  ) : row.kind === "dependency" ? (
+                    highlightedLabel(row)
+                  ) : (
+                    label(row)
+                  )
+                }
+                copied={copiedId() === row.key}
+                filtering={filtering()}
+                mouseEnabled={props.mouseEnabled}
+                rowRef={ref => {
+                  element = ref;
+                  refsByKey.set(row.key, ref);
+                  if (index() >= 0) itemRefs[index()] = ref;
+                }}
+              />
             );
           }}
         </For>

@@ -1,8 +1,8 @@
 import { type KeyEvent, MouseButton, type Renderable } from "@opentui/core";
 import { createEffect, createSignal, type JSX, onCleanup } from "solid-js";
 import { useT } from "../../hooks/use-t";
-import type { SnykDetailTabProps } from "./detail-tab";
 import { snykFixKind } from "./parser";
+import type { SnykDetailTabProps } from "./tab-shared";
 import type { SnykFinding } from "./types";
 
 /** `name@version` queries match the finding's own package exactly (like Dependencies); anything else is a substring of any field. */

@@ -15,7 +15,8 @@ import type { JenkinsCommitData, JenkinsJob, JenkinsJobFetchResult, JenkinsRun }
 import type { OpenShiftCommitData, OpenShiftResource } from "../providers/openshift/types";
 import { providerDetailTab } from "../providers/provider";
 import { DEPENDENCY_LEGEND } from "../providers/snyk/deps-tab";
-import { SnykLegend } from "../providers/snyk/detail-tab";
+import { VULNERABILITY_LEGEND } from "../providers/snyk/detail-tab";
+import { SnykLegend } from "../providers/snyk/tab-shared";
 import type { SnykScanResult } from "../providers/snyk/types";
 import { scheduleScrollIntoView, scrollElementIntoView } from "../utils/scroll";
 import { getAvailableTabs } from "../utils/tab-utils";
@@ -199,7 +200,7 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
     if ((tab !== "snyk" && tab !== "snyk-deps") || isUncommittedHash(hash)) return null;
     const findings = props.snykGetCommitData?.(hash)?.findings ?? [];
     if (findings.length === 0) return null;
-    return tab === "snyk" ? { items: undefined } : { items: DEPENDENCY_LEGEND };
+    return tab === "snyk" ? { items: VULNERABILITY_LEGEND } : { items: DEPENDENCY_LEGEND };
   };
 
   return (

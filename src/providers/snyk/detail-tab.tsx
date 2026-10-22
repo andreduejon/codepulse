@@ -1,7 +1,6 @@
 import { MouseButton, type MouseEvent, type Renderable } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, on, Show, untrack } from "solid-js";
-import type { DetailNavRef } from "../../components/detail-types";
 import { DETAIL_PANEL_WIDTH_FRACTION } from "../../constants";
 import type { Theme } from "../../context/theme";
 import { useBannerScroll } from "../../hooks/use-banner-scroll";
@@ -18,28 +17,9 @@ import {
   type SnykFixPackage,
   type SnykVulnerabilityEntry,
 } from "./parser";
-import type { SnykScanResult, SnykSeverity } from "./types";
-import { type SnykViewMemory, useSnykTabMemory } from "./view-memory";
-
-export interface SnykDetailTabProps {
-  mouseEnabled?: boolean;
-  onMouseFocus?: () => void;
-  scan: SnykScanResult | null;
-  onScan: () => void | Promise<void>;
-  contentWidth?: number;
-  loading?: boolean;
-  navRef?: DetailNavRef;
-  detailCursorIndex: () => number;
-  detailFocused: () => boolean;
-  setDetailCursorAction: (action: string | null) => void;
-  setDetailCursorIndex: (idx: number) => void;
-  /** Vulnerabilities: a filter handed over by the Dependencies jump, read once when the tab opens. */
-  takePendingFilter?: () => string | null;
-  /** Survives tab switches; each tab restores its state from it for the same scan. */
-  memory?: SnykViewMemory;
-  /** False once another tab is selected, so its cursor reset is not recorded. */
-  active?: () => boolean;
-}
+import { type SnykDetailTabProps, type SnykLegendItem, severityColor, snykScanIdentity } from "./tab-shared";
+import type { SnykSeverity } from "./types";
+import { useSnykTabMemory } from "./view-memory";
 
 const SEVERITIES: SnykSeverity[] = ["critical", "high", "medium", "low"];
 const MIN_PANEL_WIDTH = 60;
@@ -92,22 +72,8 @@ type FlatItem =
   | { kind: "finding"; entry: SnykVulnerabilityEntry }
   | { kind: "field"; owner: string; line: DetailLine };
 
-export function severityColor(theme: Theme, severity: SnykSeverity): string {
-  switch (severity) {
-    case "critical":
-      return theme.severityCritical;
-    case "high":
-      return theme.severityHigh;
-    case "medium":
-      return theme.severityMedium;
-    case "low":
-      return theme.severityLow;
-  }
-}
-
-/** Coloured markers (space-separated), then a muted label. */
-export type SnykLegendItem = [markers: [string, (theme: Theme) => string][], label: string];
-const LEGEND: SnykLegendItem[] = [
+/** Pinned below the tab when the scan has findings. */
+export const VULNERABILITY_LEGEND: SnykLegendItem[] = [
   [[["●", theme => toneColor(theme, "upgrade")]], "upgrade"],
   [[["●", theme => toneColor(theme, "override")]], "override"],
   [[["●", theme => toneColor(theme, "no fix")]], "no fix"],
@@ -358,7 +324,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
       return Math.max(0, (item.line.full ?? item.line.text).length - metadataWidth());
     return 0;
   });
-  const scanIdentity = createMemo(() => (props.scan ? `${props.scan.sha}:${props.scan.scannedAt}` : ""));
+  const scanIdentity = createMemo(() => snykScanIdentity(props.scan));
   const bannerOffset = useBannerScroll(bannerOverflow);
   const scrolled = (text: string, active: boolean, width: number) => {
     if (!active || bannerOverflow() === 0) return text;
@@ -923,36 +889,6 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
         <box height={1} flexShrink={0} />
         <For each={sections()}>{section => <SectionView section={section} />}</For>
       </Show>
-    </box>
-  );
-}
-
-/** Fix/exploit legend; DetailPanel renders it sticky below the scroll area. */
-export function SnykLegend(props: { items?: readonly SnykLegendItem[] }) {
-  const t = useT();
-  return (
-    <box flexDirection="row" width="100%" flexShrink={0} justifyContent="flex-end">
-      <For each={props.items ?? LEGEND}>
-        {([markers, label], index) => (
-          <>
-            <Show when={index() > 0}>
-              <text selectable={false} flexShrink={0} wrapMode="none">
-                {"  "}
-              </text>
-            </Show>
-            <For each={markers}>
-              {([marker, color]) => (
-                <text selectable={false} flexShrink={0} wrapMode="none" fg={color(t())}>
-                  {`${marker} `}
-                </text>
-              )}
-            </For>
-            <text selectable={false} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-              {label}
-            </text>
-          </>
-        )}
-      </For>
     </box>
   );
 }
