@@ -19,7 +19,7 @@ import {
   type SnykVulnerabilityEntry,
 } from "./parser";
 import type { SnykScanResult, SnykSeverity } from "./types";
-import type { SnykViewMemory } from "./view-memory";
+import { type SnykViewMemory, useSnykTabMemory } from "./view-memory";
 
 export interface SnykDetailTabProps {
   mouseEnabled?: boolean;
@@ -447,8 +447,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
       // Jump from Dependencies: show that package's findings.
       const pending = props.takePendingFilter?.();
       // Back from another tab on the same scan: restore the view as it was left (a jump replaces the filter).
-      const saved = props.memory?.vulnerabilities;
-      const restore = saved?.identity === identity ? saved : undefined;
+      const restore = savedView(identity);
       const query = pending || restore?.query;
       if (query) {
         resettingFilter = false;
@@ -466,21 +465,19 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
     }),
   );
 
-  // Record the view while this tab is shown; the cursor only while it is the active tab.
-  createEffect(() => {
-    if (!props.memory) return;
-    const cursor = props.detailCursorIndex();
-    const previous = props.memory.vulnerabilities;
-    const identity = scanIdentity();
-    props.memory.vulnerabilities = {
-      identity,
+  const savedView = useSnykTabMemory({
+    memory: props.memory,
+    key: "vulnerabilities",
+    identity: scanIdentity,
+    cursor: props.detailCursorIndex,
+    active: props.active,
+    view: () => ({
       groupBy: groupBy(),
       query: filter.query(),
       expandedSections: expandedSections(),
       expandedFindings: expandedFindings(),
       collapsedGroups: collapsedGroups(),
-      cursor: props.active?.() === false ? (previous?.identity === identity ? previous.cursor : 0) : cursor,
-    };
+    }),
   });
 
   createEffect(

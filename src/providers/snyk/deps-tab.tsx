@@ -17,6 +17,7 @@ import {
 } from "./deps-tree";
 import { type SnykDetailTabProps, type SnykLegendItem, severityColor } from "./detail-tab";
 import { highlightMatch, SnykFilterRow, useSnykFilter } from "./filter";
+import { useSnykTabMemory } from "./view-memory";
 
 export type SnykDependenciesTabProps = SnykDetailTabProps & {
   /** `v` on a vulnerable package: open Vulnerabilities filtered to `name@version`. */
@@ -253,8 +254,8 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
     untrack(() => {
       setHoveredKey(null);
       // Back from another tab on the same scan: restore the view as it was left.
-      const saved = props.memory?.dependencies;
-      if (saved && saved.identity === identity) {
+      const saved = savedView(identity);
+      if (saved) {
         setGroupBy(saved.groupBy);
         setScope(saved.scope);
         filter.setQuery(saved.query);
@@ -272,20 +273,13 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
     });
   });
 
-  // Record the view while this tab is shown; the cursor only while it is the active tab.
-  createEffect(() => {
-    if (!props.memory) return;
-    const cursor = props.detailCursorIndex();
-    const previous = props.memory.dependencies;
-    const identity = scanIdentity();
-    props.memory.dependencies = {
-      identity,
-      groupBy: groupBy(),
-      scope: scope(),
-      query: filter.query(),
-      expanded: expanded(),
-      cursor: props.active?.() === false ? (previous?.identity === identity ? previous.cursor : 0) : cursor,
-    };
+  const savedView = useSnykTabMemory({
+    memory: props.memory,
+    key: "dependencies",
+    identity: scanIdentity,
+    cursor: props.detailCursorIndex,
+    active: props.active,
+    view: () => ({ groupBy: groupBy(), scope: scope(), query: filter.query(), expanded: expanded() }),
   });
 
   createEffect(() => {
