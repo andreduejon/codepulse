@@ -92,6 +92,9 @@ Bun, and Yarn. When Snyk returns a graph for a different lockfile than the one
 picked, the project is listed as failed with a reason; set `packageManager` to fix
 it.
 
+Graphs need a second Snyk run. For Maven this resolves dependencies again: about
+10 s for a 5-module project, after the findings run has filled `~/.m2`.
+
 Graphs, scopes, and per-project failures are cached with findings. A graph
 failure does not discard usable vulnerability results. Returned graphs from an
 incomplete graph command are marked incomplete, not a successful empty tree.
