@@ -1,5 +1,5 @@
 import { createEffect } from "solid-js";
-import type { DependencyGroupBy, DependencyScopeFilter } from "./deps-tree";
+import type { DependencyGroupBy, DependencyScopeFilter } from "./deps-model";
 
 /** View state of one Snyk tab, valid only for the scan it was recorded on. */
 interface SnykTabMemory {

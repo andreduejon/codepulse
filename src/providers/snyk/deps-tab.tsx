@@ -6,16 +6,15 @@ import { BANNER } from "../../debug/banner";
 import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useClipboard } from "../../hooks/use-clipboard";
 import { useT } from "../../hooks/use-t";
-import { DependencyRow, dependencyLabelWidth, isEmptyHeader, parentKey } from "./deps-row";
 import {
-  buildDependencyTree,
   type DependencyGroupBy,
   type DependencyScopeFilter,
   type DependencyTreeRow,
-  defaultDependencyExpansion,
-  dependencyPackageList,
   dependencyVulnerabilities,
-} from "./deps-tree";
+} from "./deps-model";
+import { dependencyPackageList } from "./deps-packages";
+import { DependencyRow, dependencyLabelWidth, isEmptyHeader, parentKey } from "./deps-row";
+import { buildDependencyTree, defaultDependencyExpansion } from "./deps-tree";
 import { highlightMatch, SnykFilterRow, useSnykFilter } from "./filter";
 import {
   SnykControlRow,

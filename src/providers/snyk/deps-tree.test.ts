@@ -1,12 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { isSnykDependencyGraph } from "./dep-graph";
-import {
-  buildDependencyTree,
-  defaultDependencyExpansion,
-  dependencyPackageList,
-  dependencyVulnerabilities,
-  vulnerabilityKey,
-} from "./deps-tree";
+import { dependencyVulnerabilities, vulnerabilityKey } from "./deps-model";
+import { dependencyPackageList } from "./deps-packages";
+import { buildDependencyTree, defaultDependencyExpansion } from "./deps-tree";
 import type { SnykDependencyGraph, SnykDependencyProjectResult, SnykSeverity } from "./types";
 
 function graph(): SnykDependencyGraph {

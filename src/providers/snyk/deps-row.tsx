@@ -1,7 +1,7 @@
 import type { Renderable } from "@opentui/core";
 import { type JSX, Show } from "solid-js";
 import { useT } from "../../hooks/use-t";
-import type { DependencyTreeRow } from "./deps-tree";
+import type { DependencyTreeRow } from "./deps-model";
 import { type SnykRows, severityColor } from "./tab-shared";
 
 /** Headers without anything to open (no matches, failed/skipped) are not cursor stops, like empty severities. */
