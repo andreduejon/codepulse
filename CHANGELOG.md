@@ -51,6 +51,8 @@ All notable changes to this project will be documented in this file.
 - Count projects Snyk could not resolve as failed, even when its JSON findings omit
   them (Snyk only reports them on stderr): such scans are now partial and name the
   failed manifests.
+- **Rescan commit** stores a partial result over a complete snapshot, so its failed
+  projects stay visible instead of a "Kept last complete snapshot" error.
 
 ## [0.13.0] - 2026-10-14
 

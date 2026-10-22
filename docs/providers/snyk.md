@@ -47,8 +47,10 @@ Each result is a snapshot of that commit against Snyk vulnerability data at disp
 - **Failed scan** — authentication, dependency resolution, repository setup, or
   Snyk execution failed.
 
-A partial scan does not replace an existing complete snapshot. Fix the project
-or environment problem, then scan again. Technical details appear in Debug.
+A partial scan does not replace an existing complete snapshot, unless you rescan
+the commit yourself (**Rescan commit**): then it is stored, so its failed projects
+stay visible. Fix the project or environment problem, then scan again. Technical
+details appear in Debug.
 
 ## Display
 

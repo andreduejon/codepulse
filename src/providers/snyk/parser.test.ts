@@ -270,6 +270,7 @@ describe("parseSnykOutput", () => {
     expect(shouldReplaceSnykResult(undefined, partial)).toBe(true);
     expect(shouldReplaceSnykResult(partial, complete)).toBe(false);
     expect(shouldReplaceSnykResult(complete, partial)).toBe(false);
+    expect(shouldReplaceSnykResult(complete, partial, true)).toBe(true);
     expect(shouldReplaceSnykResult(partial, { ...complete, scannedAt: "2026-08-25T10:00:00.000Z" })).toBe(true);
     expect(shouldReplaceSnykResult(complete, { ...complete, scannedAt: "2026-08-25T10:00:00.000Z" })).toBe(true);
   });

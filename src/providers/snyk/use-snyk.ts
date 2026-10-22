@@ -135,11 +135,11 @@ export function useSnyk(opts: {
     actions.setGraphBadges(SNYK_PROVIDER_ID, buildSnykGraphBadges(results.values()));
   }
 
-  function mergeResult(result: SnykScanResult, expectedEpoch: number): void {
+  function mergeResult(result: SnykScanResult, expectedEpoch: number, rescan = false): void {
     if (disposed || opts.suspended?.() || expectedEpoch !== epoch) return;
     const sha = result.sha.toLowerCase();
     const existing = results.get(sha);
-    if (!shouldReplaceSnykResult(existing, result)) return;
+    if (!shouldReplaceSnykResult(existing, result, rescan)) return;
     results.set(sha, result);
     publishResults();
   }
@@ -212,7 +212,7 @@ export function useSnyk(opts: {
         entry.epoch === epoch &&
         entry.repoPath === state.repoPath()
       ) {
-        mergeResult(scanResult, entry.epoch);
+        mergeResult(scanResult, entry.epoch, entry.force);
         actions.setProviderLastSuccessfulRefresh(SNYK_PROVIDER_ID, new Date());
         if (queue.length === 0) actions.setProviderStatus(SNYK_PROVIDER_ID, snykDependencyStatus(scanResult));
       }

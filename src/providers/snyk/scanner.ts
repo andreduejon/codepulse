@@ -605,7 +605,7 @@ export async function scanSnykCommit(
     }
     const existing = await cache.read(options.repoPath, sha);
     throwIfAborted(options.signal);
-    if (!shouldReplaceSnykResult(existing ?? undefined, result)) {
+    if (!shouldReplaceSnykResult(existing ?? undefined, result, options.force)) {
       throw new Error("Partial scan. Kept last complete snapshot.");
     }
     await cache.write(options.repoPath, result);

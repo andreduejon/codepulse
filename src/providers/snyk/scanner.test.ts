@@ -290,7 +290,10 @@ process.exit(1);
     expect(await cache.read("/repo", SHA)).toEqual(old);
   });
 
-  test("does not replace a complete cache entry with a partial rescan", async () => {
+  test.each([
+    { rescan: true, kept: false },
+    { rescan: false, kept: true },
+  ])("a partial result replaces a complete snapshot only on a manual rescan (%o)", async ({ rescan, kept }) => {
     const cacheRoot = await root();
     const cache = new SnykCache({ root: cacheRoot });
     const complete: SnykScanResult = {
@@ -315,10 +318,12 @@ process.exit(1);
         },
       ],
     };
-    await cache.write("/repo", complete);
+    // A manual rescan starts over a cached snapshot; otherwise another instance writes one during the scan.
+    if (rescan) await cache.write("/repo", complete);
     const runner: SnykCommandRunner = async command => {
       if (command[1] === "rev-parse") return { stdout: SHA, exitCode: 0 };
       if (command[0] === "snyk") {
+        if (!rescan) await cache.write("/repo", complete);
         return {
           stdout: JSON.stringify([{ error: "unsupported project" }, { projectName: "working", vulnerabilities: [] }]),
           exitCode: 2,
@@ -327,10 +332,15 @@ process.exit(1);
       return { stdout: "", exitCode: 0 };
     };
 
-    await expect(
-      scanSnykCommit({ repoPath: "/repo", sha: SHA, force: true }, { cacheRoot, runCommand: runner }),
-    ).rejects.toThrow("Partial scan. Kept last complete snapshot.");
-    expect(await cache.read("/repo", SHA)).toEqual(complete);
+    const scan = scanSnykCommit({ repoPath: "/repo", sha: SHA, force: rescan }, { cacheRoot, runCommand: runner });
+    if (kept) {
+      await expect(scan).rejects.toThrow("Partial scan. Kept last complete snapshot.");
+      expect(await cache.read("/repo", SHA)).toEqual(complete);
+    } else {
+      const result = await scan;
+      expect(result).toMatchObject({ partial: true, failedProjects: 1 });
+      expect(await cache.read("/repo", SHA)).toEqual(result);
+    }
   });
 
   test("caches successful projects from partial exit 2 output", async () => {
