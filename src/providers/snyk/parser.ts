@@ -363,7 +363,7 @@ export function isSnykScanResult(value: unknown): value is SnykScanResult {
       !isObject(project) ||
       typeof project.targetFile !== "string" ||
       normalizeSnykTargetFile(project.targetFile) !== project.targetFile ||
-      (project.packageManager !== "bun" && project.packageManager !== "pnpm" && project.packageManager !== "yarn") ||
+      !["bun", "maven", "npm", "pnpm", "yarn"].includes(project.packageManager as string) ||
       !Array.isArray(project.graphs) ||
       !project.graphs.every(isSnykDependencyGraph)
     ) {

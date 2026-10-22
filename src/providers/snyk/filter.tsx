@@ -59,6 +59,10 @@ export function useSnykFilter(props: Readonly<SnykDetailTabProps>, index = 1) {
     stop();
     setQuery("");
   };
+  /** Restoring the cursor onto the filter row must not start editing (Left/Right would move the caret). */
+  const suppressAutoEdit = () => {
+    autoEditSuppressed = true;
+  };
   const handleKey = (event: KeyEvent) => {
     if (!editing()) {
       if (query() && event.name === "escape") {
@@ -89,7 +93,7 @@ export function useSnykFilter(props: Readonly<SnykDetailTabProps>, index = 1) {
   onCleanup(() => {
     if (props.navRef?.handleFilterKey === handleKey) delete props.navRef.handleFilterKey;
   });
-  return { query, setQuery, editing, start, stop, reset };
+  return { query, setQuery, editing, start, stop, reset, suppressAutoEdit };
 }
 
 export function SnykFilterRow(props: {

@@ -118,6 +118,54 @@ describe("parseSnykDepGraphs", () => {
     expect(graph.nodes.slice(0, 3).map(node => node.scope)).toEqual(["unknown", "unknown", "unknown"]);
   });
 
+  test("Maven scopes come from node IDs: test is dev, everything the app ships with is prod", () => {
+    const ids = [
+      "org.example:app:jar:1.0:compile",
+      "org.example:server-api:jar:1.0:provided",
+      "org.example:driver:jar:1.0:runtime",
+      "org.example:native:jar:linux:1.0:system",
+      "org.example:junit:jar:1.0:test",
+      "org.example:mock:jar:tests:1.0:test:pruned",
+      "org.example:odd:jar:1.0:constructor",
+      "org.example:noted:jar:1.0:provided (scope not updated to provided)",
+    ];
+    // A pruned node shares its canonical node's package.
+    const pkgId = (nodeId: string) => `${nodeId.replace(/:pruned$/, "")}@1.0`;
+    const nodeIds = [...ids, "org.example:mock:jar:tests:1.0:test"];
+    const graph = {
+      schemaVersion: "1.3.0",
+      pkgManager: { name: "maven" },
+      pkgs: [{ id: "root@1.0", info: { name: "root", version: "1.0" } }].concat(
+        nodeIds
+          .filter(id => !id.endsWith(":pruned"))
+          .map(id => ({ id: pkgId(id), info: { name: id, version: "1.0" } })),
+      ),
+      graph: {
+        rootNodeId: "root-node",
+        nodes: [
+          { nodeId: "root-node", pkgId: "root@1.0", deps: ids.map(nodeId => ({ nodeId })) },
+          ...nodeIds.map(nodeId => ({ nodeId, pkgId: pkgId(nodeId), deps: [] })),
+        ],
+      },
+    };
+    const [maven] = parseSnykDepGraphs(block(graph, "module/pom.xml"));
+    expect(maven.nodes.map(node => node.scope)).toEqual([
+      "unknown",
+      "prod",
+      "prod",
+      "prod",
+      "prod",
+      "dev",
+      "dev",
+      "unknown",
+      "prod",
+      "dev",
+    ]);
+    // Other managers never read scopes from node IDs.
+    const [yarn] = parseSnykDepGraphs(block({ ...graph, pkgManager: { name: "yarn" } }));
+    expect(yarn.nodes.every(node => node.scope === "unknown")).toBe(true);
+  });
+
   test("parses multiple projects, CRLF, surrounding CLI text and repeated target names", () => {
     const output = [
       "Testing projects...",

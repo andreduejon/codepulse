@@ -88,6 +88,12 @@ Symlink aliases share a cache. Moving or renaming a repository starts a cold
 cache under a new identity. The abandoned identity is subject to inactivity
 cleanup.
 
+## Upgrading to v0.14.0
+
+Snyk snapshots cached by earlier versions lack development-dependency and
+dependency-graph coverage, so they are discarded and scanned again on demand; there
+is no migration. Other providers' cache entries are unchanged.
+
 ## Upgrading to v0.13.0
 
 The upgrade starts with a cold provider cache. Old JSON snapshots and text-log

@@ -274,6 +274,9 @@ function projectForTarget(
   packageManager?: string,
 ): SnykDependencyProjectInput | undefined {
   const normalized = target.replaceAll("\\", "/");
+  // Snyk reports every pom.xml under its own path, so Maven graphs match exactly.
+  if (packageManager === "maven")
+    return projects.find(project => project.packageManager === "maven" && project.targetFile === normalized);
   const containsTarget = (file: string) =>
     posix.dirname(file) === "." || normalized.startsWith(`${posix.dirname(file)}/`);
   const closestLockfile = trackedFiles
@@ -286,6 +289,7 @@ function projectForTarget(
     .sort((left, right) => right.split("/").length - left.split("/").length)[0];
   return projects
     .filter(project => {
+      if (project.packageManager === "maven") return false;
       if (packageManager && (project.packageManager === "bun" ? "yarn" : project.packageManager) !== packageManager) {
         return false;
       }
@@ -311,6 +315,18 @@ async function prepareDependencyProjects(
         graphs: [],
         reason: project.discoveryError,
       });
+      continue;
+    }
+    if (project.packageManager === "maven") {
+      const mvn = process.platform === "win32" ? "mvn.cmd" : "mvn";
+      if (!project.mavenWrapper && !(dependencies.which ?? Bun.which)(mvn))
+        unavailable.set(project.targetFile, {
+          targetFile: project.targetFile,
+          packageManager: "maven",
+          status: "skipped",
+          graphs: [],
+          reason: "Maven not found on PATH. Install Maven or commit the Maven Wrapper (mvnw) to scan pom.xml.",
+        });
       continue;
     }
     if (project.packageManager !== "bun") continue;
@@ -419,7 +435,13 @@ async function scanDependencyProjects(
       graph => projectForTarget(graph.targetFile, ready, trackedFiles, graph.packageManager) === project,
     );
     pending.push(...matches.map(graph => applyManifestScopes(graph, commandOptions.cwd)));
-    const failure = reason ?? (matches.length === 0 ? "Snyk returned no dependency graph for this project." : null);
+    const failure =
+      reason ??
+      (matches.length === 0
+        ? project.packageManager === "maven"
+          ? "Snyk returned no dependency graph for this pom.xml. Check that Java and Maven can resolve its dependencies, then rescan."
+          : "Snyk returned no dependency graph for this project."
+        : null);
     return {
       targetFile: project.targetFile,
       packageManager: project.packageManager,

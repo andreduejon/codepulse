@@ -50,7 +50,8 @@ export const BANNER = {
     disabled: "Snyk is disabled.",
     missingToken: (envVar: string) => `Snyk unavailable. Missing ${envVar}.`,
     exactCommit: "Snyk scan requires an exact commit SHA.",
-    noDependencyProject: "No supported dependency project. Dependency graphs support Bun, pnpm, and Yarn v1 lockfiles.",
+    noDependencyProject:
+      "No supported dependency project. Dependency graphs support Bun, npm, pnpm, Yarn, and Maven projects.",
     graphsIncomplete: (incomplete: number, total: number) =>
       `Snyk dependency graphs incomplete: ${incomplete} of ${total} projects.`,
   },

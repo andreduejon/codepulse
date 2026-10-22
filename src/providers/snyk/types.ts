@@ -4,7 +4,7 @@ export type SnykSeverity = "critical" | "high" | "medium" | "low";
 
 export type SnykDependencyScope = "prod" | "dev" | "unknown";
 
-export type SnykDependencyPackageManager = "bun" | "pnpm" | "yarn";
+export type SnykDependencyPackageManager = "bun" | "maven" | "npm" | "pnpm" | "yarn";
 
 export interface SnykDependencyPackage {
   id: string;

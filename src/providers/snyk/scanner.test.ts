@@ -439,7 +439,7 @@ process.exit(1);
     expect(f.calls.some(call => call.command[0] === "yarn")).toBe(false);
   });
 
-  test("matches the nearest project and excludes unsupported modern Yarn graphs", async () => {
+  test("matches the nearest project, including Yarn 2-4 graphs", async () => {
     const f = await dependencyFixture({
       "package.json": "{}",
       "bun.lock": "lock",
@@ -459,14 +459,141 @@ process.exit(1);
     ).toEqual([
       ["bun.lock", ["yarn.lock"]],
       ["a/yarn.lock", ["a/yarn.lock"]],
+      ["modern/yarn.lock", ["modern/yarn.lock"]],
+    ]);
+  });
+
+  test("captures npm graphs from package-lock.json without running npm, with package.json scopes", async () => {
+    const f = await dependencyFixture({
+      "package.json": '{"devDependencies":{"dep":"1.0.0"}}',
+      "package-lock.json": "{}",
+    });
+    f.output.findings.stdout = JSON.stringify({
+      packageManager: "npm",
+      displayTargetFile: "package-lock.json",
+      vulnerabilities: [],
+    });
+    f.output.graph.stdout = dependencyGraph("npm", "package-lock.json");
+    const result = await scanSnykCommit(
+      { repoPath: f.repoPath, sha: SHA },
+      { cacheRoot: f.cacheRoot, runCommand: f.runner, which: () => null },
+    );
+    expect(result.dependencyProjects).toMatchObject([
+      {
+        targetFile: "package-lock.json",
+        packageManager: "npm",
+        status: "scanned",
+        graphs: [{ targetFile: "package-lock.json", packageManager: "npm" }],
+      },
+    ]);
+    // Snyk flagged `dep` prod; package.json declares it in devDependencies.
+    expect(result.dependencyProjects[0].graphs[0].nodes.find(node => node.nodeId === "dep")?.scope).toBe("dev");
+    expect(f.calls.filter(call => call.command[0] !== "git").map(call => call.command[0])).toEqual(["snyk", "snyk"]);
+  });
+
+  test("captures Maven graphs per pom.xml by exact path, with scopes from node IDs", async () => {
+    const mavenGraph = (target: string, artifact: string) =>
+      `DepGraph data:\n${JSON.stringify({
+        schemaVersion: "1.3.0",
+        pkgManager: { name: "maven" },
+        pkgs: [
+          { id: `x:${artifact}@1.0`, info: { name: `x:${artifact}`, version: "1.0" } },
+          { id: "junit:junit@4.13", info: { name: "junit:junit", version: "4.13" } },
+          { id: "x:api@1.0", info: { name: "x:api", version: "1.0" } },
+        ],
+        graph: {
+          rootNodeId: "root-node",
+          nodes: [
+            {
+              nodeId: "root-node",
+              pkgId: `x:${artifact}@1.0`,
+              deps: [{ nodeId: "junit:junit:jar:4.13:test" }, { nodeId: "x:api:jar:1.0:provided" }],
+            },
+            { nodeId: "junit:junit:jar:4.13:test", pkgId: "junit:junit@4.13", deps: [] },
+            { nodeId: "x:api:jar:1.0:provided", pkgId: "x:api@1.0", deps: [] },
+          ],
+        },
+      })}\nDepGraph target:\n${target}\nDepGraph end\n`;
+    const f = await dependencyFixture({ "pom.xml": "<project/>", "core/pom.xml": "<project/>" });
+    f.output.findings.stdout = JSON.stringify([
+      { packageManager: "maven", displayTargetFile: "pom.xml", vulnerabilities: [] },
+      { packageManager: "maven", displayTargetFile: "core/pom.xml", vulnerabilities: [] },
+    ]);
+    f.output.graph.stdout = mavenGraph("pom.xml", "parent") + mavenGraph("core/pom.xml", "core");
+    const result = await scanSnykCommit(
+      { repoPath: f.repoPath, sha: SHA },
+      { cacheRoot: f.cacheRoot, runCommand: f.runner, which: command => (command.startsWith("mvn") ? command : null) },
+    );
+    expect(
+      result.dependencyProjects.map(project => [
+        project.targetFile,
+        project.packageManager,
+        project.status,
+        project.graphs.map(graph => graph.targetFile),
+      ]),
+    ).toEqual([
+      ["core/pom.xml", "maven", "scanned", ["core/pom.xml"]],
+      ["pom.xml", "maven", "scanned", ["pom.xml"]],
+    ]);
+    expect(result.dependencyProjects[0].graphs[0].nodes.map(node => node.scope)).toEqual(["unknown", "dev", "prod"]);
+    expect(await new SnykCache({ root: f.cacheRoot }).read(f.repoPath, SHA)).toEqual(result);
+  });
+
+  test("skips Maven projects without mvn or a wrapper; a tracked wrapper is enough", async () => {
+    const wrapper = process.platform === "win32" ? "mvnw.cmd" : "mvnw";
+    const findings = JSON.stringify({ packageManager: "maven", displayTargetFile: "pom.xml", vulnerabilities: [] });
+    const bare = await dependencyFixture({ "pom.xml": "<project/>" });
+    bare.output.findings.stdout = findings;
+    const skipped = await scanSnykCommit(
+      { repoPath: bare.repoPath, sha: SHA },
+      { cacheRoot: bare.cacheRoot, runCommand: bare.runner, which: () => null },
+    );
+    expect(skipped.dependencyProjects).toEqual([
+      {
+        targetFile: "pom.xml",
+        packageManager: "maven",
+        status: "skipped",
+        graphs: [],
+        reason: "Maven not found on PATH. Install Maven or commit the Maven Wrapper (mvnw) to scan pom.xml.",
+      },
+    ]);
+    expect(bare.calls.some(call => call.command.includes("--print-graph"))).toBe(false);
+
+    const wrapped = await dependencyFixture({ "pom.xml": "<project/>", [wrapper]: "" });
+    wrapped.output.findings.stdout = findings;
+    wrapped.output.graph.stdout = "";
+    const failed = await scanSnykCommit(
+      { repoPath: wrapped.repoPath, sha: SHA },
+      { cacheRoot: wrapped.cacheRoot, runCommand: wrapped.runner, which: () => null },
+    );
+    expect(wrapped.calls.some(call => call.command.includes("--print-graph"))).toBe(true);
+    expect(failed.dependencyProjects[0]).toMatchObject({ status: "failed", graphs: [] });
+  });
+
+  test("a pom.xml without a graph names Java and Maven, and never claims a JavaScript graph", async () => {
+    const f = await dependencyFixture({ "pom.xml": "<project/>", "web/package.json": "{}", "web/yarn.lock": "" });
+    f.output.graph.stdout = dependencyGraph("yarn", "web/yarn.lock");
+    const result = await scanSnykCommit(
+      { repoPath: f.repoPath, sha: SHA },
+      { cacheRoot: f.cacheRoot, runCommand: f.runner, which: () => "mvn" },
+    );
+    expect(result.dependencyProjects).toMatchObject([
+      { targetFile: "web/yarn.lock", status: "scanned", graphs: [{ targetFile: "web/yarn.lock" }] },
+      {
+        targetFile: "pom.xml",
+        status: "failed",
+        graphs: [],
+        reason:
+          "Snyk returned no dependency graph for this pom.xml. Check that Java and Maven can resolve its dependencies, then rescan.",
+      },
     ]);
   });
 
   test("keeps existing vulnerability-only scans for unsupported dependency managers", async () => {
-    const f = await dependencyFixture({ "package.json": "{}", "package-lock.json": "{}" });
+    const f = await dependencyFixture({ Gemfile: "", "Gemfile.lock": "" });
     f.output.findings.stdout = JSON.stringify({
-      packageManager: "npm",
-      displayTargetFile: "package-lock.json",
+      packageManager: "rubygems",
+      displayTargetFile: "Gemfile.lock",
       vulnerabilities: [],
     });
     const result = await scanSnykCommit(
@@ -544,14 +671,18 @@ process.exit(1);
         vulnerabilities: [{ id: "SNYK-FIXTURE", severity: "high", name: "dep", version: "1.0.0" }],
       },
     ]);
+    f.output.graph.stdout = dependencyGraph("npm", "app/npm-shrinkwrap.json");
     const result = await scanSnykCommit(
       { repoPath: f.repoPath, sha: SHA },
       { cacheRoot: f.cacheRoot, runCommand: f.runner, which: () => null },
     );
     expect(result).toMatchObject({ partial: true, failedProjects: 1, counts: { high: 1 } });
     expect(result.findings[0].targetFile).toBe("app/package.json");
-    expect(result.dependencyProjects).toMatchObject([{ targetFile: "bun.lock", status: "skipped" }]);
-    expect(f.calls.some(call => call.command.includes("--print-graph"))).toBe(false);
+    // The shrinkwrap project is an npm graph project of its own; the skipped Bun one keeps its reason.
+    expect(result.dependencyProjects).toMatchObject([
+      { targetFile: "bun.lock", status: "skipped" },
+      { targetFile: "app/npm-shrinkwrap.json", packageManager: "npm", status: "scanned" },
+    ]);
   });
 
   test("a broken nested manifest does not discard findings or graphs from a valid project", async () => {

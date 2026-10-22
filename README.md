@@ -86,7 +86,7 @@ diagnostic conventions.
 - **OpenShift** — commit-matched Builds and live workload health for configured
   namespaces. See [OpenShift provider](docs/providers/openshift.md).
 - **Snyk** — commit-scoped vulnerability snapshots with severity counts, finding
-  details, and a dependency browser for Bun, pnpm, and Yarn v1 projects.
+  details, and a dependency browser for Bun, npm, pnpm, Yarn, and Maven projects.
   See [Snyk provider](docs/providers/snyk.md).
 
 ## Cache

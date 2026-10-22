@@ -11,15 +11,12 @@ import {
   type DependencyGroupBy,
   type DependencyScopeFilter,
   type DependencyTreeRow,
-  type DependencyVulnerabilities,
   defaultDependencyExpansion,
   dependencyPackageList,
-  vulnerabilityKey,
+  dependencyVulnerabilities,
 } from "./deps-tree";
 import { type SnykDetailTabProps, type SnykLegendItem, severityColor } from "./detail-tab";
 import { highlightMatch, SnykFilterRow, useSnykFilter } from "./filter";
-import { groupSnykVulnerabilities } from "./parser";
-import type { SnykFinding } from "./types";
 
 export type SnykDependenciesTabProps = SnykDetailTabProps & {
   /** `v` on a vulnerable package: open Vulnerabilities filtered to `name@version`. */
@@ -50,16 +47,8 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
   const dimensions = useTerminalDimensions();
   const filter = useSnykFilter(props, FILTER_INDEX);
   const [scope, setScope] = createSignal<DependencyScopeFilter>("all");
-  /** Worst severity per manifest + package. */
-  const vulnerabilities = createMemo((): DependencyVulnerabilities => {
-    const packages = new Map<string, SnykFinding["severity"]>();
-    // Entries arrive worst first, so the first one per package wins.
-    for (const { finding } of groupSnykVulnerabilities(props.scan?.findings ?? [])) {
-      const key = vulnerabilityKey(finding.targetFile ?? "", `${finding.dependency}@${finding.installedVersion}`);
-      if (!packages.has(key)) packages.set(key, finding.severity);
-    }
-    return packages;
-  });
+  /** Each package's own findings (manifest + `name@version`): triangles and the JSON copy. */
+  const vulnerabilities = createMemo(() => dependencyVulnerabilities(props.scan?.findings ?? []));
   const [groupBy, setGroupBy] = createSignal<DependencyGroupBy>("tree");
   const projects = createMemo(() => props.scan?.dependencyProjects ?? []);
   const scanIdentity = createMemo(() => (props.scan ? `${props.scan.sha}:${props.scan.scannedAt}` : ""));
@@ -168,7 +157,7 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
         includesDev: scan.includesDev,
         scope: scope(),
         filter: filter.query().trim() || null,
-        projects: dependencyPackageList(projects(), filter.query(), scope()),
+        projects: dependencyPackageList(projects(), filter.query(), scope(), vulnerabilities()),
       },
       null,
       2,
@@ -260,15 +249,43 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
         : undefined;
 
   createEffect(() => {
-    scanIdentity();
+    const identity = scanIdentity();
     untrack(() => {
-      filter.reset();
-      previousView = JSON.stringify(["", scope(), groupBy()]);
-      setExpanded(defaultDependencyExpansion(projects(), "", scope(), groupBy()));
       setHoveredKey(null);
-      props.setDetailCursorIndex(0);
+      // Back from another tab on the same scan: restore the view as it was left.
+      const saved = props.memory?.dependencies;
+      if (saved && saved.identity === identity) {
+        setGroupBy(saved.groupBy);
+        setScope(saved.scope);
+        filter.setQuery(saved.query);
+        previousView = JSON.stringify([saved.query, saved.scope, saved.groupBy]);
+        setExpanded(new Set(saved.expanded));
+        filter.suppressAutoEdit();
+        props.setDetailCursorIndex(saved.cursor);
+      } else {
+        filter.reset();
+        previousView = JSON.stringify(["", scope(), groupBy()]);
+        setExpanded(defaultDependencyExpansion(projects(), "", scope(), groupBy()));
+        props.setDetailCursorIndex(0);
+      }
       props.navRef?.scrollToCursor?.();
     });
+  });
+
+  // Record the view while this tab is shown; the cursor only while it is the active tab.
+  createEffect(() => {
+    if (!props.memory) return;
+    const cursor = props.detailCursorIndex();
+    const previous = props.memory.dependencies;
+    const identity = scanIdentity();
+    props.memory.dependencies = {
+      identity,
+      groupBy: groupBy(),
+      scope: scope(),
+      query: filter.query(),
+      expanded: expanded(),
+      cursor: props.active?.() === false ? (previous?.identity === identity ? previous.cursor : 0) : cursor,
+    };
   });
 
   createEffect(() => {
@@ -541,18 +558,6 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
                       label(row)
                     )}
                   </text>
-                  {/* Project name: muted, right-aligned one gap before the count; it gives way first when space is tight. */}
-                  <Show when={row.rootName}>
-                    <text
-                      selectable={!props.mouseEnabled}
-                      flexShrink={100}
-                      fg={t().foregroundMuted}
-                      wrapMode="none"
-                      truncate
-                    >
-                      {` ${row.rootName?.slice(row.rootName.lastIndexOf(":") + 1)}`}
-                    </text>
-                  </Show>
                   <Show when={markers(row)}>
                     <text selectable={!props.mouseEnabled} flexShrink={0} fg={t().foregroundMuted} wrapMode="none">
                       {markers(row)}

@@ -1,5 +1,5 @@
 import { posix, win32 } from "node:path";
-import type { SnykDependencyGraph, SnykDependencyNode, SnykDependencyPackage } from "./types";
+import type { SnykDependencyGraph, SnykDependencyNode, SnykDependencyPackage, SnykDependencyScope } from "./types";
 
 function unsupportedOutput(): never {
   throw new Error("Unsupported Snyk CLI output.");
@@ -74,6 +74,21 @@ export function isSnykDependencyGraph(value: unknown): value is SnykDependencyGr
   return true;
 }
 
+// Maven graphs carry no scope labels; the scope is the last part of `group:artifact:type[:classifier]:version:scope`,
+// sometimes followed by a Maven note such as ` (scope not updated to provided)`.
+const MAVEN_SCOPES = new Map<string, SnykDependencyScope>([
+  ["compile", "prod"],
+  ["provided", "prod"],
+  ["runtime", "prod"],
+  ["system", "prod"],
+  ["test", "dev"],
+]);
+
+function mavenScope(nodeId: string): SnykDependencyScope {
+  const id = (nodeId.endsWith(":pruned") ? nodeId.slice(0, -":pruned".length) : nodeId).replace(/ \(.*\)$/, "");
+  return MAVEN_SCOPES.get(id.slice(id.lastIndexOf(":") + 1)) ?? "unknown";
+}
+
 function parseGraph(raw: string, target: string): SnykDependencyGraph {
   let value: unknown;
   try {
@@ -107,6 +122,7 @@ function parseGraph(raw: string, target: string): SnykDependencyGraph {
     }
     return { id: pkg.id, name: pkg.info.name, version: pkg.info.version ?? null };
   });
+  const maven = value.pkgManager.name === "maven";
   const nodes: SnykDependencyNode[] = value.graph.nodes.map((node: unknown) => {
     if (
       !isObject(node) ||
@@ -128,7 +144,12 @@ function parseGraph(raw: string, target: string): SnykDependencyGraph {
         if (!isObject(dep) || !isString(dep.nodeId)) unsupportedOutput();
         return dep.nodeId;
       }),
-      scope: scope === "prod" || scope === "dev" ? scope : "unknown",
+      scope:
+        scope === "prod" || scope === "dev"
+          ? scope
+          : maven && scope === undefined
+            ? mavenScope(node.nodeId)
+            : "unknown",
       referenceNodeId: node.nodeId.endsWith(":pruned") ? node.nodeId.slice(0, -":pruned".length) : null,
     };
   });

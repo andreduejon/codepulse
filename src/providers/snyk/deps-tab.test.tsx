@@ -718,15 +718,8 @@ test("headers count packages like severity headers; short Maven names, full name
         .split("\n")
         .find(line => line.includes(text)) ?? "";
     // Header at column 0, bold, with the package count (root excluded); filter row shows the total.
-    expect(row("web/bun.lock (converted)")).toMatch(/^▾ web\/bun\.lock \(converted\)\s{2,}fixture-app 5$/);
-    // Manifest stays the bold label; the project name follows muted.
-    const nameAt = d.point("fixture-app");
-    let nameColumn = 0;
-    const nameSpan = d.captureSpans().lines[nameAt.y]?.spans.find(item => {
-      nameColumn += item.text.length;
-      return nameColumn > nameAt.x;
-    });
-    expect(nameSpan?.fg).toEqual(RGBA.fromHex(d.theme.foregroundMuted));
+    // The manifest path alone names the project; no root package name.
+    expect(row("web/bun.lock (converted)")).toMatch(/^▾ web\/bun\.lock \(converted\)\s{2,}5$/);
     const header = d.point("web/bun.lock");
     let column = 0;
     const span = d.captureSpans().lines[header.y]?.spans.find(item => {
@@ -757,10 +750,10 @@ test("headers count packages like severity headers; short Maven names, full name
     // Filtering: N/M on header and filter row; zero keeps the header listed, muted and not a cursor stop.
     await d.click("filter");
     await d.type("leaf");
-    expect(row("(converted)")).toMatch(/\(converted\)\s{2,}fixture-app 1\/5$/);
+    expect(row("(converted)")).toMatch(/\(converted\)\s{2,}1\/5$/);
     expect(d.frame()).toMatch(/leaf\s+1\/5/);
     await d.type("zzz");
-    expect(row("(converted)")).toMatch(/^· web\/bun\.lock \(converted\)\s{2,}fixture-app 0\/5$/);
+    expect(row("(converted)")).toMatch(/^· web\/bun\.lock \(converted\)\s{2,}0\/5$/);
     expect(d.navRef.itemCount).toBe(5);
   } finally {
     await d.dispose();
@@ -877,7 +870,15 @@ test("Copy dependencies as JSON copies the flat package list with scope and filt
     const json = JSON.parse(text);
     expect(json).toMatchObject({ commit: "a".repeat(40), scope: "all", filter: "shared", includesDev: true });
     expect(json.projects[0].packages).toEqual([
-      { name: "@fixture/shared", version: "4.0.0", direct: false, dev: false, via: ["dev-only@2.0.0", "parent@1.0.0"] },
+      {
+        name: "@fixture/shared",
+        version: "4.0.0",
+        direct: false,
+        dev: false,
+        via: ["dev-only@2.0.0", "parent@1.0.0"],
+        severity: null,
+        vulnerabilities: [],
+      },
     ]);
   } finally {
     await d.dispose();
@@ -942,6 +943,13 @@ test("vulnerable packages show a triangle in their worst severity colour; v open
     expect(d.state.detailCursorShortcut()).toBeNull();
     await d.key("v");
     expect(d.onShowVulnerabilities).toHaveBeenCalledTimes(1);
+    // Copy dependencies as JSON carries each package's own findings.
+    d.actions.setDetailCursorIndex(1);
+    await d.flush();
+    await d.key("RETURN");
+    const json = JSON.parse(d.copy.mock.calls[d.copy.mock.calls.length - 1][0]);
+    const mystery = json.projects[0].packages.find((pkg: { name: string }) => pkg.name === "mystery");
+    expect(mystery).toMatchObject({ severity: "critical", vulnerabilities: ["CVE-2", "CVE-1"] });
   } finally {
     await d.dispose();
   }

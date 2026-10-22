@@ -132,7 +132,7 @@ describe("useSnyk", () => {
     expect(snyk.getCommitData(SHA_A)).not.toBeNull();
     expect(state.providerStatusFor("snyk")).toEqual({
       kind: "warning",
-      message: "No supported dependency project. Dependency graphs support Bun, pnpm, and Yarn v1 lockfiles.",
+      message: "No supported dependency project. Dependency graphs support Bun, npm, pnpm, Yarn, and Maven projects.",
     });
   });
 

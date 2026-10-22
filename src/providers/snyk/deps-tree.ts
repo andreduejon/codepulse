@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { compareVersions } from "./parser";
+import { compareVersions, groupSnykVulnerabilities } from "./parser";
 import type {
   SnykDependencyGraph,
   SnykDependencyNode,
   SnykDependencyPackage,
   SnykDependencyProjectResult,
   SnykDependencyScope,
+  SnykFinding,
   SnykSeverity,
 } from "./types";
 
@@ -25,8 +26,6 @@ export interface DependencyTreeRow {
   /** Project/module headers: unique packages (matches while filtering) and the unfiltered total. */
   count?: number;
   total?: number;
-  /** Project headers with a single graph: the project's own package name (graph root). */
-  rootName?: string;
   /** Group by package: the package is itself a direct dependency. */
   direct?: boolean;
   /** The package's worst finding severity; details live in Vulnerabilities. */
@@ -35,12 +34,31 @@ export interface DependencyTreeRow {
   matches?: string;
 }
 
-/** Worst severity per {@link vulnerabilityKey}: the graph's manifest and `name@version`. */
-export type DependencyVulnerabilities = ReadonlyMap<string, SnykSeverity>;
+/** A package's own findings: worst severity and their CVE (or Snyk) IDs, worst first. */
+export interface DependencyVulnerability {
+  severity: SnykSeverity;
+  ids: string[];
+}
+/** Per {@link vulnerabilityKey}: the graph's manifest and `name@version`. */
+export type DependencyVulnerabilities = ReadonlyMap<string, DependencyVulnerability>;
 const NO_VULNERABILITIES: DependencyVulnerabilities = new Map();
 
 /** Findings without a manifest use an empty one and match any graph. */
 export const vulnerabilityKey = (targetFile: string, label: string) => `${targetFile}\u0000${label}`;
+
+/** Each finding's own package (manifest + `name@version`), as Vulnerabilities lists them. */
+export function dependencyVulnerabilities(findings: readonly SnykFinding[]): DependencyVulnerabilities {
+  const packages = new Map<string, DependencyVulnerability>();
+  // Entries arrive worst first, so the first one per package sets its severity.
+  for (const { finding } of groupSnykVulnerabilities(findings)) {
+    const key = vulnerabilityKey(finding.targetFile ?? "", `${finding.dependency}@${finding.installedVersion}`);
+    const entry = packages.get(key) ?? { severity: finding.severity, ids: [] };
+    for (const id of finding.cves?.length ? finding.cves : [finding.id])
+      if (!entry.ids.includes(id)) entry.ids.push(id);
+    packages.set(key, entry);
+  }
+  return packages;
+}
 
 function lookupVulnerability<T>(
   map: ReadonlyMap<string, T>,
@@ -322,17 +340,15 @@ interface PackageEntry {
 /** The package list ignores the filter, so typing reuses it; keyed by the (immutable) scanned project. */
 const packageCache = new WeakMap<
   SnykDependencyProjectResult,
-  Map<DependencyScopeFilter, { packages: Map<string, PackageEntry>; rootName?: string }>
+  Map<DependencyScopeFilter, { packages: Map<string, PackageEntry> }>
 >();
 
 function collectPackages(project: SnykDependencyProjectResult, scope: DependencyScopeFilter) {
   const cached = packageCache.get(project)?.get(scope);
   if (cached) return cached;
   const packages = new Map<string, PackageEntry>();
-  let rootName: string | undefined;
   for (const graph of project.graphs) {
     const model = indexGraph(graph, "", scope);
-    if (project.graphs.length === 1) rootName = model.root.pkg.name || undefined;
     for (const id of model.root.source.deps) {
       const direct = model.nodes.get(id);
       assert(direct, "Dependency graph node missing.");
@@ -361,7 +377,7 @@ function collectPackages(project: SnykDependencyProjectResult, scope: Dependency
       }
     }
   }
-  const result = { packages, rootName };
+  const result = { packages };
   const byScope = packageCache.get(project) ?? new Map();
   byScope.set(scope, result);
   packageCache.set(project, byScope);
@@ -376,10 +392,12 @@ export function dependencyPackageList(
   projects: readonly SnykDependencyProjectResult[],
   query: string,
   scope: DependencyScopeFilter,
+  vulnerabilities: DependencyVulnerabilities = NO_VULNERABILITIES,
 ) {
   const normalizedQuery = query.trim().toLowerCase();
   return projects.map(project => {
     const { packages } = collectPackages(project, scope);
+    const targetFiles = project.graphs.map(graph => graph.targetFile);
     return {
       targetFile: project.targetFile,
       packageManager: project.packageManager,
@@ -394,9 +412,15 @@ export function dependencyPackageList(
           direct: entry.direct,
           dev: !entry.prod,
           via: [...entry.via].sort(),
+          ...vulnerabilityFields(lookupVulnerability(vulnerabilities, targetFiles, packageLabel(entry.pkg))),
         })),
     };
   });
+}
+
+/** The package's own findings for the JSON list: worst severity and IDs; details live in Copy scan as JSON. */
+function vulnerabilityFields(found: DependencyVulnerability | undefined) {
+  return { severity: found?.severity ?? null, vulnerabilities: found?.ids ?? [] };
 }
 
 function buildPackages(
@@ -411,7 +435,7 @@ function buildPackages(
   let dependencyRows = 0;
   let truncated = false;
   projects.forEach((project, projectIndex) => {
-    const { packages, rootName } = collectPackages(project, scope);
+    const { packages } = collectPackages(project, scope);
     const targetFiles = project.graphs.map(graph => graph.targetFile);
     const shown = [...packages.entries()]
       .filter(([, entry]) => !query || matchesQuery(entry.pkg, query))
@@ -435,7 +459,6 @@ function buildPackages(
       path: [project.targetFile],
       count: shown.length,
       total: packages.size,
-      rootName,
     });
     if (!projectExpanded) return;
     shown.forEach(([label, entry], index) => {
@@ -462,7 +485,7 @@ function buildPackages(
         cycle: false,
         path: [label],
         direct: entry.direct,
-        vulnerability: lookupVulnerability(vulnerabilities, targetFiles, label),
+        vulnerability: lookupVulnerability(vulnerabilities, targetFiles, label)?.severity,
       });
       dependencyRows++;
       if (!packageExpanded) return;
@@ -486,7 +509,7 @@ function buildPackages(
           cycle: false,
           path: [label, viaLabel],
           // The direct dependency's own findings, like every package occurrence.
-          vulnerability: lookupVulnerability(vulnerabilities, targetFiles, viaLabel),
+          vulnerability: lookupVulnerability(vulnerabilities, targetFiles, viaLabel)?.severity,
         });
         dependencyRows++;
       });
@@ -555,8 +578,6 @@ function buildTree(
       path: [project.targetFile],
       count,
       total,
-      // Module rows already name multi-graph projects.
-      rootName: multipleGraphs ? undefined : graphs[0]?.model.root.pkg.name || undefined,
     });
     if (!projectExpanded) return;
 
@@ -639,7 +660,7 @@ function buildTree(
           cycle,
           path,
           ...(query && expandable && !nodeExpanded ? { matches: matchesBelow(model, node, countBudget) } : {}),
-          vulnerability: lookupVulnerability(vulnerabilities, [graph.targetFile], label),
+          vulnerability: lookupVulnerability(vulnerabilities, [graph.targetFile], label)?.severity,
         });
         dependencyRows++;
         if (nodeExpanded) {

@@ -988,35 +988,38 @@ for (const provider of ["github-actions", "jenkins", "openshift", "snyk"] as con
   });
 }
 
-test("Dependencies marks vulnerable packages with a severity triangle, pins its legend, and v jumps to their findings", async () => {
-  const d = await renderProvider("snyk");
-  try {
-    d.setSnykScan({
-      ...scan,
-      dependencyProjects: [
+/** One yarn graph whose only dependency, high-package@1.0.0, has the fixture's high finding. */
+const dependencyScan: SnykScanResult = {
+  ...scan,
+  dependencyProjects: [
+    {
+      targetFile: "package.json",
+      packageManager: "yarn",
+      status: "scanned",
+      reason: null,
+      graphs: [
         {
           targetFile: "package.json",
           packageManager: "yarn",
-          status: "scanned",
-          reason: null,
-          graphs: [
-            {
-              targetFile: "package.json",
-              packageManager: "yarn",
-              rootNodeId: "root",
-              packages: [
-                { id: "root", name: "fixture", version: "1.0.0" },
-                { id: "high", name: "high-package", version: "1.0.0" },
-              ],
-              nodes: [
-                { nodeId: "root", pkgId: "root", deps: ["high"], scope: "unknown", referenceNodeId: null },
-                { nodeId: "high", pkgId: "high", deps: [], scope: "prod", referenceNodeId: null },
-              ],
-            },
+          rootNodeId: "root",
+          packages: [
+            { id: "root", name: "fixture", version: "1.0.0" },
+            { id: "high", name: "high-package", version: "1.0.0" },
+          ],
+          nodes: [
+            { nodeId: "root", pkgId: "root", deps: ["high"], scope: "unknown", referenceNodeId: null },
+            { nodeId: "high", pkgId: "high", deps: [], scope: "prod", referenceNodeId: null },
           ],
         },
       ],
-    });
+    },
+  ],
+};
+
+test("Dependencies marks vulnerable packages with a severity triangle, pins its legend, and v jumps to their findings", async () => {
+  const d = await renderProvider("snyk");
+  try {
+    d.setSnykScan(dependencyScan);
     d.actions.setDetailActiveTab("snyk-deps");
     await d.flush();
     const lines = d.frame().split("\n");
@@ -1048,6 +1051,65 @@ test("Dependencies marks vulnerable packages with a severity triangle, pins its 
     d.actions.setDetailActiveTab("snyk-deps");
     await d.flush();
     expect(d.frame()).not.toContain("▲ severity");
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("Snyk tabs keep their view across tab switches for the same scan, and start fresh after a rescan", async () => {
+  const d = await renderProvider("snyk");
+  try {
+    d.setSnykScan(dependencyScan);
+    d.actions.setDetailActiveTab("snyk-deps");
+    await d.flush();
+    await d.click("Group by");
+    await d.click("Scope");
+    await d.click("Enter dependency filter...");
+    await d.mockInput.typeText("high");
+    d.mockInput.pressKey("ESCAPE");
+    await d.flush();
+    await d.click("high-package@1.0.0");
+    const depsCursor = d.state.detailCursorIndex();
+    expect(depsCursor).toBeGreaterThan(4);
+    // Left to Vulnerabilities, change its grouping, and come back.
+    d.mockInput.pressKey("ARROW_LEFT");
+    await d.flush();
+    expect(d.state.detailActiveTab()).toBe("snyk");
+    await d.click("Group by");
+    expect(d.frame()).toContain("[dependency]");
+    d.mockInput.pressKey("ARROW_RIGHT");
+    await d.flush();
+    expect(d.state.detailActiveTab()).toBe("snyk-deps");
+    for (const text of ["[package]", "[prod]", "high-package@1.0.0"]) expect(d.frame()).toContain(text);
+    expect(d.frame()).toMatch(/^\s*high\s+1\/1\s*$/m);
+    expect(d.state.detailCursorIndex()).toBe(depsCursor);
+    d.mockInput.pressKey("ARROW_LEFT");
+    await d.flush();
+    expect(d.frame()).toContain("[dependency]");
+    expect(d.state.detailCursorIndex()).toBe(2);
+    // The restored filter row does not start editing: Left/Right still switch tabs.
+    d.mockInput.pressKey("ARROW_RIGHT");
+    await d.flush();
+    d.actions.setDetailCursorIndex(4);
+    await d.flush();
+    d.mockInput.pressKey("ESCAPE");
+    await d.flush();
+    d.mockInput.pressKey("ARROW_LEFT");
+    await d.flush();
+    d.mockInput.pressKey("ARROW_RIGHT");
+    await d.flush();
+    expect(d.state.detailCursorIndex()).toBe(4);
+    d.mockInput.pressKey("ARROW_LEFT");
+    await d.flush();
+    expect(d.state.detailActiveTab()).toBe("snyk");
+    // A rescan is a new snapshot: both tabs start from defaults.
+    d.setSnykScan({ ...dependencyScan, scannedAt: "2026-08-25T10:00:00.000Z" });
+    await d.flush();
+    expect(d.frame()).toContain("[severity]");
+    d.mockInput.pressKey("ARROW_RIGHT");
+    await d.flush();
+    for (const text of ["[tree]", "[all]", "Enter dependency filter..."]) expect(d.frame()).toContain(text);
+    expect(d.state.detailCursorIndex()).toBe(0);
   } finally {
     await d.dispose();
   }

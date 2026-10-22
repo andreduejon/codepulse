@@ -2,13 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.14.0] - 2026-10-22
 
 ### Added
 
-- Capture normalized Snyk dependency graphs for Bun, pnpm, and Yarn v1 projects
-  alongside findings, with per-project failures and safe Bun-to-Yarn conversion
-  in temporary worktrees.
+- Capture normalized Snyk dependency graphs for Bun, npm, pnpm, Yarn (1–4), and
+  Maven projects alongside findings, with per-project failures and safe Bun-to-Yarn conversion
+  in temporary worktrees. Every tracked `pom.xml` is its own project; Maven `test`
+  dependencies are dev, `compile`/`provided`/`runtime`/`system` are prod. Maven projects
+  need Java plus `mvn` on PATH or a committed Maven Wrapper (`mvnw`).
 - Add the Snyk **Dependencies** browser for scanned supported projects, with
   bold project headers showing package counts, expandable dependency groups,
   short Maven names (full name on the selected row), copyable leaves, muted dev labels,
@@ -17,7 +19,9 @@ All notable changes to this project will be documented in this file.
 - Add live filters to both Snyk detail trees (`name@version` matches that package
   exactly, anything else is a substring), including collapsed/repeated dependency paths; large dependency results open one level with per-row match
   counts, and opening past 1,000 rows closes other branches. Add **Group by**
-  `[tree]`/`[package]` and **Copy dependencies as JSON** to Dependencies.
+  `[tree]`/`[package]` and **Copy dependencies as JSON** (with each package's own
+  worst severity and CVE IDs) to Dependencies. Both Snyk tabs keep their view while
+  switching tabs for the same scan.
 - Mark vulnerable packages in Dependencies with a `▲` in their worst severity
   colour (pinned legend); **v** opens Vulnerabilities filtered to that package.
 - Highlight filter hits in both Snyk tabs in the Snyk colour; mute filter counts.

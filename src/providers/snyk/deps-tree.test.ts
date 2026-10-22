@@ -1,7 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { isSnykDependencyGraph } from "./dep-graph";
-import { buildDependencyTree, defaultDependencyExpansion, dependencyPackageList, vulnerabilityKey } from "./deps-tree";
-import type { SnykDependencyGraph, SnykDependencyProjectResult } from "./types";
+import {
+  buildDependencyTree,
+  defaultDependencyExpansion,
+  dependencyPackageList,
+  dependencyVulnerabilities,
+  vulnerabilityKey,
+} from "./deps-tree";
+import type { SnykDependencyGraph, SnykDependencyProjectResult, SnykSeverity } from "./types";
 
 function graph(): SnykDependencyGraph {
   return {
@@ -695,14 +701,34 @@ describe("dependency tree", () => {
     input.nodes.push({ nodeId: "leaf-4", pkgId: "leaf@4.0.0", deps: [], scope: "dev", referenceNodeId: null });
     input.nodes[2].deps.push("leaf-4");
     const projects = [project([input])];
-    expect(dependencyPackageList(projects, "LEAF", "all")[0]).toEqual({
+    // Only the package's own findings, matched like the triangles (manifest + `name@version`).
+    const vulnerabilities = new Map([
+      [vulnerabilityKey("yarn.lock", "leaf@3.0.0"), { severity: "high" as const, ids: ["CVE-1", "SNYK-2"] }],
+    ]);
+    expect(dependencyPackageList(projects, "LEAF", "all", vulnerabilities)[0]).toEqual({
       targetFile: "yarn.lock",
       packageManager: "yarn",
       status: "scanned",
       reason: null,
       packages: [
-        { name: "leaf", version: "3.0.0", direct: false, dev: false, via: ["dev-parent@1.0.0", "parent@1.0.0"] },
-        { name: "leaf", version: "4.0.0", direct: false, dev: true, via: ["dev-parent@1.0.0"] },
+        {
+          name: "leaf",
+          version: "3.0.0",
+          direct: false,
+          dev: false,
+          via: ["dev-parent@1.0.0", "parent@1.0.0"],
+          severity: "high",
+          vulnerabilities: ["CVE-1", "SNYK-2"],
+        },
+        {
+          name: "leaf",
+          version: "4.0.0",
+          direct: false,
+          dev: true,
+          via: ["dev-parent@1.0.0"],
+          severity: null,
+          vulnerabilities: [],
+        },
       ],
     });
     expect(dependencyPackageList(projects, "", "prod")[0].packages.map(pkg => pkg.name)).toEqual([
@@ -712,12 +738,40 @@ describe("dependency tree", () => {
     ]);
   });
 
+  test("vulnerabilities per package: worst severity first, unique CVE or Snyk IDs, keyed by manifest", () => {
+    const finding = (id: string, severity: SnykSeverity, cves: string[], targetFile: string | null = "yarn.lock") => ({
+      id,
+      title: id,
+      severity,
+      dependency: "leaf",
+      installedVersion: "3.0.0",
+      fixedVersion: null,
+      fixedIn: [],
+      exploit: null,
+      cvssScore: null,
+      cves,
+      project: "app",
+      targetFile,
+    });
+    const map = dependencyVulnerabilities([
+      finding("SNYK-LOW", "low", []),
+      finding("SNYK-CRIT", "critical", ["CVE-9"]),
+      finding("SNYK-HIGH", "high", ["CVE-9", "CVE-8"]),
+      finding("SNYK-NONE", "medium", [], null),
+    ]);
+    expect(map.get(vulnerabilityKey("yarn.lock", "leaf@3.0.0"))).toEqual({
+      severity: "critical",
+      ids: ["CVE-9", "CVE-8", "SNYK-LOW"],
+    });
+    expect(map.get(vulnerabilityKey("", "leaf@3.0.0"))).toEqual({ severity: "medium", ids: ["SNYK-NONE"] });
+  });
+
   test("findings mark their package (worst severity) in both views; nothing opens for them", () => {
     const projects = [project([prunedGraph()])];
     const vulnerabilities = new Map([
-      [vulnerabilityKey("yarn.lock", "leaf@3.0.0"), "high" as const],
+      [vulnerabilityKey("yarn.lock", "leaf@3.0.0"), { severity: "high" as const, ids: ["CVE-1"] }],
       // No manifest: matches any graph.
-      [vulnerabilityKey("", "dev-parent@1.0.0"), "low" as const],
+      [vulnerabilityKey("", "dev-parent@1.0.0"), { severity: "low" as const, ids: ["CVE-2"] }],
     ]);
     const expanded = defaultDependencyExpansion(projects);
     // Default expansion ignores findings: only the project opens.

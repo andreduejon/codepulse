@@ -76,7 +76,7 @@ describe("discoverSnykDependencyProjects", () => {
     ]);
   });
 
-  test("does not convert stale Bun lockfiles in a repository declaring npm", async () => {
+  test("a repository declaring npm scans its npm lockfile, never converting stale Bun input", async () => {
     const files = {
       "package.json": '{"packageManager":"npm@11.0.0"}',
       "package-lock.json": "{}",
@@ -85,15 +85,20 @@ describe("discoverSnykDependencyProjects", () => {
       "yarn.lock": YARN_V1,
     };
     const root = await fixture(files);
-    expect(await discoverSnykDependencyProjects(root, Object.keys(files))).toEqual([]);
+    expect(await discoverSnykDependencyProjects(root, Object.keys(files))).toEqual([
+      { targetFile: "package-lock.json", scanTargetFile: "package-lock.json", packageManager: "npm" },
+    ]);
+    await expect(readFile(join(root, "yarn.lock"), "utf8")).resolves.toBe(YARN_V1);
   });
 
   test.each(["package-lock.json", "npm-shrinkwrap.json"])(
-    "preserves npm lockfile precedence over undeclared stale Bun input: %s",
+    "npm lockfiles take precedence over undeclared Bun input, as in Snyk: %s",
     async lockfile => {
       const files = { "package.json": "{}", [lockfile]: "{}", "bun.lock": "{}" };
       const root = await fixture(files);
-      expect(await discoverSnykDependencyProjects(root, Object.keys(files))).toEqual([]);
+      expect(await discoverSnykDependencyProjects(root, Object.keys(files))).toEqual([
+        { targetFile: lockfile, scanTargetFile: lockfile, packageManager: "npm" },
+      ]);
     },
   );
 
@@ -102,9 +107,11 @@ describe("discoverSnykDependencyProjects", () => {
     ['{"packageManager":"yarn@4.9.0"}', YARN_V1],
     ["{}", `${YARN_V1}\n${YARN_MODERN}`],
     ["{}", '# comment mentioning # yarn lockfile v1\nexample:\n  version: "1.0.0"\n'],
-  ])("does not discover modern or non-v1 Yarn: %s", async (manifest, lockfile) => {
+  ])("discovers Yarn 2-4 and any other yarn.lock as Yarn: %s", async (manifest, lockfile) => {
     const root = await fixture({ "package.json": manifest, "yarn.lock": lockfile });
-    expect(await discoverSnykDependencyProjects(root, ["package.json", "yarn.lock"])).toEqual([]);
+    expect(await discoverSnykDependencyProjects(root, ["package.json", "yarn.lock"])).toEqual([
+      { targetFile: "yarn.lock", scanTargetFile: "yarn.lock", packageManager: "yarn" },
+    ]);
   });
 
   test("accepts Yarn v1 with CRLF line endings", async () => {
@@ -244,9 +251,53 @@ describe("discoverSnykDependencyProjects", () => {
     },
   );
 
+  test("discovers every tracked pom.xml as a Maven project, noting a wrapper beside it or above it", async () => {
+    const wrapper = process.platform === "win32" ? "mvnw.cmd" : "mvnw";
+    const files = {
+      "pom.xml": "<project/>",
+      "core/pom.xml": "<project/>",
+      "tools/gen/pom.xml": "<project/>",
+      [`tools/${wrapper}`]: "",
+      "node_modules/pkg/pom.xml": "<project/>",
+    };
+    const root = await fixture(files);
+    const projects = await discoverSnykDependencyProjects(root, Object.keys(files).reverse());
+    expect(projects).toEqual([
+      { targetFile: "core/pom.xml", scanTargetFile: "core/pom.xml", packageManager: "maven", mavenWrapper: false },
+      { targetFile: "pom.xml", scanTargetFile: "pom.xml", packageManager: "maven", mavenWrapper: false },
+      {
+        targetFile: "tools/gen/pom.xml",
+        scanTargetFile: "tools/gen/pom.xml",
+        packageManager: "maven",
+        mavenWrapper: true,
+      },
+    ]);
+    const withRootWrapper = await discoverSnykDependencyProjects(root, ["pom.xml", "core/pom.xml", wrapper]);
+    expect(withRootWrapper.map(project => project.mavenWrapper)).toEqual([true, true]);
+  });
+
+  test("lists Maven projects after JavaScript projects and flags unreadable poms", async () => {
+    const root = await fixture({ "package.json": "{}", "yarn.lock": YARN_V1, "real/pom.xml": "<project/>" });
+    await mkdir(join(root, "broken"));
+    await symlink(join(root, "real/pom.xml"), join(root, "broken/pom.xml"));
+    const projects = await discoverSnykDependencyProjects(root, [
+      "real/pom.xml",
+      "broken/pom.xml",
+      "yarn.lock",
+      "package.json",
+    ]);
+    expect(projects.map(project => [project.targetFile, project.packageManager])).toEqual([
+      ["yarn.lock", "yarn"],
+      ["broken/pom.xml", "maven"],
+      ["real/pom.xml", "maven"],
+    ]);
+    expect(projects[1].discoveryError).toContain("pom.xml is a readable regular file without symlinks");
+    expect(projects[2].discoveryError).toBeUndefined();
+  });
+
   test("returns no projects when the tracked list has no supported projects", async () => {
-    const root = await fixture({ "package.json": "{}", "package-lock.json": "{}", "bun.lockb": "binary placeholder" });
-    expect(await discoverSnykDependencyProjects(root, ["package.json", "package-lock.json", "bun.lockb"])).toEqual([]);
+    const root = await fixture({ "package.json": "{}", "bun.lockb": "binary placeholder", "Gemfile.lock": "" });
+    expect(await discoverSnykDependencyProjects(root, ["package.json", "bun.lockb", "Gemfile.lock"])).toEqual([]);
     expect(await discoverSnykDependencyProjects(root, [])).toEqual([]);
   });
 });

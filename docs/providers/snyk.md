@@ -29,6 +29,11 @@ Enable Snyk in **Menu → Providers**. Configure concrete local branch names for
   project directory, then scans the generated Yarn lockfile. It verifies that
   the committed `bun.lock` was not changed. Missing Bun or failed conversion
   must not be reported as a clean scan based on an npm fallback.
+- For Maven, Snyk runs Maven to resolve dependencies, so Codepulse needs Java
+  plus `mvn` on PATH or a committed Maven Wrapper (`mvnw`, `mvnw.cmd` on Windows)
+  beside the `pom.xml` or in a parent directory. Without either, Maven projects
+  are listed as skipped. The first wrapper run downloads Maven and needs network
+  access; private repositories need a working `~/.m2/settings.xml`.
 
 Each result is a snapshot of that commit against Snyk vulnerability data at displayed scan time. Cached results do not expire automatically.
 
@@ -62,12 +67,30 @@ Snyk Open Source only scans supported manifests and lockfiles. Unsupported ecosy
 
 ### Dependency graph capture
 
-Scans also capture dependency graphs for committed `bun.lock`, `pnpm-lock.yaml`,
-and Yarn v1 `yarn.lock` projects. Codepulse runs a separate
+Scans also capture dependency graphs for committed `package-lock.json`,
+`npm-shrinkwrap.json`, `bun.lock`, `pnpm-lock.yaml`, and `yarn.lock` (Yarn 1–4)
+projects, and for committed Maven `pom.xml` files. Codepulse runs a separate
 `snyk test --print-graph --all-projects --dev` after findings collection, in the
-same worktree. Yarn v2–4 and other package managers retain vulnerability scanning
-but are not part of dependency graph support yet. Local pnpm/Yarn executables
-are not invoked for these lockfile scans.
+same worktree. Other package managers (for example Gradle) retain vulnerability
+scanning but are not part of dependency graph support yet. Local npm/pnpm/Yarn
+executables are not invoked for these lockfile scans.
+
+Every tracked `pom.xml` is its own project, matching Snyk: aggregator parents and
+modules alike, each listed under its own path. A module that depends on a sibling
+module shows that sibling as a leaf; its dependencies are under the sibling's own
+project. Snyk's Maven graphs carry no scope labels, so Codepulse reads the Maven
+scope from each node: `test` is dev, and `compile`, `provided`, `runtime`, and
+`system` are prod (`provided` libraries still run, supplied by the server). A
+`pom.xml` without a returned graph is listed as failed; check that Java and Maven
+can resolve its dependencies (`mvn dependency:tree`), then scan again.
+Maven build plugins (`<build><plugins>`) and their dependencies are not part of
+Snyk's graph or findings, so a clean result does not cover the build toolchain.
+
+One project is taken per `package.json` directory. A `packageManager` field picks
+its lockfile; otherwise an npm lockfile wins, as Snyk scans it first, then pnpm,
+Bun, and Yarn. When Snyk returns a graph for a different lockfile than the one
+picked, the project is listed as failed with a reason; set `packageManager` to fix
+it.
 
 Graphs, scopes, and per-project failures are cached with findings. A graph
 failure does not discard usable vulnerability results. Returned graphs from an
@@ -88,8 +111,7 @@ Dependencies belong to the selected commit.
 - Scanned files/projects are bold root headers (like severity headers), with
   direct dependencies visible and a right-aligned package count: `N`, or
   `matches/total` while filtering; the filter row shows the overall count the same
-  way. Single-graph projects show their own name muted, one space before the
-  count (module rows name multi-graph projects). Headers with nothing to open (no matches, failed/skipped) stay listed, muted
+  way. Headers show only the manifest path. Headers with nothing to open (no matches, failed/skipped) stay listed, muted
   with `·`, and are not cursor stops. Module groups appear only when a lockfile
   produces multiple graphs. Use **Up/Down** to select a row, **Enter** or a left
   click to expand/collapse; closing a node closes everything below it. On a leaf,
@@ -117,7 +139,9 @@ Dependencies belong to the selected commit.
   dependencies) markers; each opens to the direct dependencies that pull it in.
 - **Copy dependencies as JSON** (below Rescan, when a supported project was found) copies commit, scan time, Scope,
   filter, and per project a flat package list (`name`, `version`, `direct`, `dev`,
-  `via`), respecting the active Scope and filter. Graphs stay out; they are large.
+  `via`, plus `severity` and `vulnerabilities`: the package's own worst severity and
+  CVE or Snyk IDs, `null`/`[]` when it has none), respecting the active Scope and
+  filter. Graphs stay out (they are large); finding details live in **Copy scan as JSON**.
 - Vulnerable packages show a `▲` in their worst finding's severity colour, on
   every occurrence in both Group by views; only the package itself is marked, and
   nothing opens for findings. Press **v** on a marked row to open Vulnerabilities
@@ -209,9 +233,11 @@ Unusually cyclic graphs also have a bounded matching-path search. If that limit
 is reached, the view explicitly marks matching paths incomplete; package match
 counts still come from the full graph.
 
-**Copy dependencies as JSON** does not include vulnerability data yet; use
-**Copy scan as JSON** for findings. Scan timestamps appear in both JSON copies,
-not in the tree.
+Scan timestamps appear in both JSON copies, not in the tree.
+
+Each tab keeps its Group by, Scope, filter, open rows, and cursor while you switch
+between tabs, for example after **v** and back. Selecting another commit or
+rescanning starts both tabs fresh.
 
 ### CLI compatibility
 

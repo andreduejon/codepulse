@@ -19,6 +19,7 @@ import {
   type SnykVulnerabilityEntry,
 } from "./parser";
 import type { SnykScanResult, SnykSeverity } from "./types";
+import type { SnykViewMemory } from "./view-memory";
 
 export interface SnykDetailTabProps {
   mouseEnabled?: boolean;
@@ -34,6 +35,10 @@ export interface SnykDetailTabProps {
   setDetailCursorIndex: (idx: number) => void;
   /** Vulnerabilities: a filter handed over by the Dependencies jump, read once when the tab opens. */
   takePendingFilter?: () => string | null;
+  /** Survives tab switches; each tab restores its state from it for the same scan. */
+  memory?: SnykViewMemory;
+  /** False once another tab is selected, so its cursor reset is not recorded. */
+  active?: () => boolean;
 }
 
 const SEVERITIES: SnykSeverity[] = ["critical", "high", "medium", "low"];
@@ -436,22 +441,47 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
   };
 
   createEffect(
-    on(scanIdentity, () => {
+    on(scanIdentity, identity => {
       resettingFilter = filter.query() !== "";
       filter.reset();
-      // Jump from Dependencies: show that package's findings; the query effect puts the cursor on the filter.
+      // Jump from Dependencies: show that package's findings.
       const pending = props.takePendingFilter?.();
-      if (pending) {
+      // Back from another tab on the same scan: restore the view as it was left (a jump replaces the filter).
+      const saved = props.memory?.vulnerabilities;
+      const restore = saved?.identity === identity ? saved : undefined;
+      const query = pending || restore?.query;
+      if (query) {
         resettingFilter = false;
-        filter.setQuery(pending);
+        filter.setQuery(query);
       }
-      setExpandedSections(new Set(SEVERITIES.map(severity => `severity:${severity}`)));
-      setExpandedFindings(new Set<string>());
-      setCollapsedGroups(new Set<string>());
-      props.setDetailCursorIndex(0);
+      setGroupBy(restore?.groupBy ?? "severity");
+      setExpandedSections(new Set(restore?.expandedSections ?? SEVERITIES.map(severity => `severity:${severity}`)));
+      setExpandedFindings(new Set(restore?.expandedFindings));
+      setCollapsedGroups(new Set(restore?.collapsedGroups));
+      if (restore && !pending) {
+        filter.suppressAutoEdit();
+        props.setDetailCursorIndex(restore.cursor);
+      } else props.setDetailCursorIndex(0);
       props.navRef?.scrollToCursor?.();
     }),
   );
+
+  // Record the view while this tab is shown; the cursor only while it is the active tab.
+  createEffect(() => {
+    if (!props.memory) return;
+    const cursor = props.detailCursorIndex();
+    const previous = props.memory.vulnerabilities;
+    const identity = scanIdentity();
+    props.memory.vulnerabilities = {
+      identity,
+      groupBy: groupBy(),
+      query: filter.query(),
+      expandedSections: expandedSections(),
+      expandedFindings: expandedFindings(),
+      collapsedGroups: collapsedGroups(),
+      cursor: props.active?.() === false ? (previous?.identity === identity ? previous.cursor : 0) : cursor,
+    };
+  });
 
   createEffect(
     on(

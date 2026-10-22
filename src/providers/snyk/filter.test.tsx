@@ -52,6 +52,7 @@ test("filter input keeps its identity and geometry, with repository-path hover/f
       setEditing(false);
       setQuery("");
     },
+    suppressAutoEdit: () => {},
   };
   const descendants = (node: Renderable): Renderable[] =>
     node.getChildren().flatMap(child => [child, ...descendants(child)]);
