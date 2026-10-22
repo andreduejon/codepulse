@@ -53,6 +53,7 @@ All notable changes to this project will be documented in this file.
   failed manifests.
 - **Rescan commit** stores a partial result over a complete snapshot, so its failed
   projects stay visible instead of a "Kept last complete snapshot" error.
+- Status banners have a clickable `✕` to dismiss them.
 
 ## [0.13.0] - 2026-10-14
 

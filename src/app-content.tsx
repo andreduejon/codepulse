@@ -177,6 +177,12 @@ export function AppContent(props: Readonly<AppContentProps>) {
     };
   });
 
+  /** Dismisses the banner: `:clear` (which also clears Debug) or its `✕`. */
+  const clearScreenMessage = () => {
+    actions.setError(null);
+    actions.setProviderStatus(state.activeProviderView(), providerIdle());
+  };
+
   const handleSetupComplete = () => {
     // Backfill all default settings so the user can see and edit them in the config file
     backfillRepoConfig(activeRepoPath());
@@ -598,8 +604,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
         setDialog(dialog() === "debug" ? null : "debug");
         break;
       case "clear":
-        actions.setError(null);
-        actions.setProviderStatus(state.activeProviderView(), providerIdle());
+        clearScreenMessage();
         clearDebugEvents();
         break;
       case "f":
@@ -872,6 +877,8 @@ export function AppContent(props: Readonly<AppContentProps>) {
                               title={msg().title}
                               message={msg().message}
                               detail={msg().detail}
+                              onDismiss={clearScreenMessage}
+                              mouseEnabled={dialog() == null && state.keyboardScopeOverride() == null}
                             />
                             <box height={1} />
                           </box>

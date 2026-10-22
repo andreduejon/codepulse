@@ -61,7 +61,7 @@ Theme controls and custom configuration are in the [theme guide](themes.md).
 | `:ancestry` | Highlight ancestry for the selected commit |
 | `:branches` | Open menu dialog on Branches tab |
 | `:cache` | Open global cache screen |
-| `:clear` | Dismiss the current status message |
+| `:clear` | Dismiss the current status message (or click its `✕`) and clear Debug |
 | `:debug` | Toggle debug dialog |
 | `:fetch` | Fetch from remote |
 | `:help` | Open help dialog |
