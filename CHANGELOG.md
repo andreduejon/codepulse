@@ -14,8 +14,8 @@ All notable changes to this project will be documented in this file.
   short Maven names (full name on the selected row), copyable leaves, muted dev labels,
   muted `repeated`/`circular` markers, a **Scope** `[all]`/`[prod]`/`[dev]` switch,
   and persistent failed/skipped-project reasons.
-- Add live filters to both Snyk detail trees, including collapsed/repeated
-  dependency paths; large dependency results open one level with per-row match
+- Add live filters to both Snyk detail trees (`name@version` matches that package
+  exactly, anything else is a substring), including collapsed/repeated dependency paths; large dependency results open one level with per-row match
   counts, and opening past 1,000 rows closes other branches. Add **Group by**
   `[tree]`/`[package]` and **Copy dependencies as JSON** to Dependencies.
 - Mark vulnerable packages in Dependencies with a `▲` in their worst severity
@@ -37,7 +37,9 @@ All notable changes to this project will be documented in this file.
   graphs (Snyk marks shared runtime packages as dev), and let rows inherit their
   direct dependency's scope. Rescan to correct older snapshots.
 - Include development dependencies in Snyk scans and discard older snapshots
-  without dependency coverage metadata. Retain findings when graph capture fails.
+  without dependency coverage metadata. Retain findings when graph capture fails;
+  missing or incomplete dependency graphs show as a yellow warning banner (one
+  summary for all affected projects), and scan failures stay red.
 - List one vulnerability per CVE, manifest, and package (graph chips count the
   same unit), and pick the lowest fixed version above the installed one.
 - Hide Snyk license-policy issues. Previously scanned commits need a rescan after

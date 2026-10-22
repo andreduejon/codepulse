@@ -46,6 +46,14 @@ export const BANNER = {
     timeout: "OpenShift request timed out.",
     watchDenied: "OpenShift watch denied. Resource data might be stale. Reload to refresh.",
   },
+  snyk: {
+    disabled: "Snyk is disabled.",
+    missingToken: (envVar: string) => `Snyk unavailable. Missing ${envVar}.`,
+    exactCommit: "Snyk scan requires an exact commit SHA.",
+    noDependencyProject: "No supported dependency project. Dependency graphs support Bun, pnpm, and Yarn v1 lockfiles.",
+    graphsIncomplete: (incomplete: number, total: number) =>
+      `Snyk dependency graphs incomplete: ${incomplete} of ${total} projects.`,
+  },
 } as const;
 
 const STATIC_BANNERS = new Set<string>(

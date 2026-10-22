@@ -738,5 +738,31 @@ describe("dependency tree", () => {
     ]);
     const list = buildDependencyTree(projects, new Set(['["project",0]']), "", "all", "package", vulnerabilities);
     expect(list.rows.find(row => row.label === "leaf@3.0.0")?.vulnerability).toBe("high");
+    // Via rows are package occurrences too: each shows the direct dependency's own findings.
+    const leafKey = list.rows.find(row => row.label === "leaf@3.0.0")?.key ?? "";
+    const opened = buildDependencyTree(
+      projects,
+      new Set(['["project",0]', leafKey]),
+      "",
+      "all",
+      "package",
+      vulnerabilities,
+    );
+    const via = opened.rows.filter(row => row.key.startsWith(`${leafKey}/`));
+    expect(via.map(row => [row.label, row.path, row.vulnerability])).toEqual([
+      ["dev-parent@1.0.0", ["leaf@3.0.0", "dev-parent@1.0.0"], "low"],
+      ["parent@1.0.0", ["leaf@3.0.0", "parent@1.0.0"], undefined],
+    ]);
+  });
+
+  test("a package matching in several graphs of one project counts once, like the project header", () => {
+    const module = graph();
+    module.targetFile = "modules/b/yarn.lock";
+    const projects = [project([graph(), module])];
+    const result = buildDependencyTree(projects, defaultDependencyExpansion(projects), "leaf");
+    expect(result.matchCount).toBe(1);
+    expect(result.rows[0]).toMatchObject({ kind: "project", count: 1 });
+    // Separate projects still add up.
+    expect(buildDependencyTree([project([graph(), module]), project()], new Set(), "leaf").matchCount).toBe(2);
   });
 });

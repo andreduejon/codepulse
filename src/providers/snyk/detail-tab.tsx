@@ -306,8 +306,10 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
   ];
   const flatItems = createMemo<FlatItem[]>(() => [
     { kind: "scan" as const },
-    ...(props.scan ? [{ kind: "copyJson" as const }] : []),
-    ...(originalTotal() > 0 ? [{ kind: "groupBy" as const }, { kind: "filter" as const }] : []),
+    // Copy, Group by and filter only when the scan has findings to show.
+    ...(originalTotal() > 0
+      ? [{ kind: "copyJson" as const }, { kind: "groupBy" as const }, { kind: "filter" as const }]
+      : []),
     ...sections().flatMap((section): FlatItem[] =>
       section.entries.length === 0
         ? []
@@ -523,7 +525,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
     }
   });
 
-  const scoreText = (score: number | null | undefined) => (score == null ? "" : score.toFixed(1));
+  const scoreText = (score: number | null) => (score == null ? "" : score.toFixed(1));
 
   const Field = (fieldProps: { owner: string; line: DetailLine; last: boolean; branch: string }) => {
     const line = fieldProps.line;
@@ -826,28 +828,34 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
       </box>
 
       <Show when={props.scan}>
-        <box
-          {...mouseRow("copyJson", () => COPY_INDEX)}
-          ref={rowRef({ kind: "copyJson" })}
-          flexDirection="row"
-          width="100%"
-          backgroundColor={isCursor(COPY_INDEX) ? t().backgroundElementActive : hoverBg("copyJson")}
-        >
-          <text
-            selectable={!props.mouseEnabled}
-            flexGrow={1}
-            wrapMode="none"
-            fg={isCursor(COPY_INDEX) ? t().accent : t().foreground}
-          >
-            Copy scan as JSON
-          </text>
-          <Show when={copiedId() === "copyJson"}>
-            <text selectable={!props.mouseEnabled} flexShrink={0} bg={t().primary} fg={t().background} wrapMode="none">
-              {" \u2713 copied "}
-            </text>
-          </Show>
-        </box>
         <Show when={originalTotal() > 0}>
+          <box
+            {...mouseRow("copyJson", () => COPY_INDEX)}
+            ref={rowRef({ kind: "copyJson" })}
+            flexDirection="row"
+            width="100%"
+            backgroundColor={isCursor(COPY_INDEX) ? t().backgroundElementActive : hoverBg("copyJson")}
+          >
+            <text
+              selectable={!props.mouseEnabled}
+              flexGrow={1}
+              wrapMode="none"
+              fg={isCursor(COPY_INDEX) ? t().accent : t().foreground}
+            >
+              Copy scan as JSON
+            </text>
+            <Show when={copiedId() === "copyJson"}>
+              <text
+                selectable={!props.mouseEnabled}
+                flexShrink={0}
+                bg={t().primary}
+                fg={t().background}
+                wrapMode="none"
+              >
+                {" \u2713 copied "}
+              </text>
+            </Show>
+          </box>
           <box height={1} flexShrink={0} />
           <box
             {...mouseRow("groupBy", () => GROUP_BY_INDEX)}

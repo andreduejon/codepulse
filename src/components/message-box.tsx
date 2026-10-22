@@ -1,7 +1,7 @@
 import { For } from "solid-js";
 import { useT } from "../hooks/use-t";
 
-export type UIMessageKind = "error" | "info";
+export type UIMessageKind = "error" | "warning" | "info";
 
 export interface UIMessage {
   kind: UIMessageKind;
@@ -20,7 +20,7 @@ interface MessageBoxProps {
 
 export default function MessageBox(props: Readonly<MessageBoxProps>) {
   const t = useT();
-  const borderColor = () => (props.kind === "error" ? t().error : t().info);
+  const borderColor = () => (props.kind === "error" ? t().error : props.kind === "warning" ? t().warning : t().info);
   const backgroundColor = () => (props.variant === "dialog" ? t().backgroundPanel : t().background);
   const messageLines = () => props.message.split("\n");
   const detailLines = () => (props.detail ? props.detail.split("\n") : []);

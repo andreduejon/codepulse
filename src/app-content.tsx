@@ -172,7 +172,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     if (state.activeProviderView() === "git" || !message) return null;
 
     return {
-      kind: status.kind === "error" ? ("error" as const) : ("info" as const),
+      kind: status.kind === "error" || status.kind === "warning" ? status.kind : ("info" as const),
       message: displayBanner(message, message),
     };
   });

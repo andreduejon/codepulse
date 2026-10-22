@@ -5,8 +5,11 @@ import type { SnykDetailTabProps } from "./detail-tab";
 import { snykFixKind } from "./parser";
 import type { SnykFinding } from "./types";
 
+/** `name@version` queries match the finding's own package exactly (like Dependencies); anything else is a substring of any field. */
 export function filterSnykFindings(findings: readonly SnykFinding[], query: string): SnykFinding[] {
   const term = query.trim().toLowerCase();
+  if (term.lastIndexOf("@") > 0)
+    return findings.filter(finding => `${finding.dependency}@${finding.installedVersion}`.toLowerCase() === term);
   return findings.filter(
     finding =>
       !term ||

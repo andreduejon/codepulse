@@ -428,7 +428,7 @@ test("live filtering expands ancestors, preserves native typing and reports inco
     expect(d.frame()).toContain("failed · Graph extraction incomplete");
     await d.click("skipped/yarn.lock");
     expect(d.frame()).toContain("skipped · Unsupported lockfile format");
-    expect(d.frame()).not.toContain("No supported dependency projects");
+    expect(d.frame()).not.toContain("No supported dependency project.");
     expect(d.frame()).not.toContain("No dependencies");
     await d.click("filter");
     await d.type("leaf");
@@ -635,7 +635,8 @@ test("collapse clamps cursors, scan identity resets filter/expansion to Scan, an
 test("unscanned commits and snapshots with no supported projects have clear Scan/Rescan states", async () => {
   const d = await renderDependencies(null);
   try {
-    expect(d.frame()).toContain("No dependency scan for this commit");
+    // Like Vulnerabilities: only the Scan commit row, no placeholder text.
+    expect(d.frame().trim()).toBe("Scan commit");
     expect(d.navRef.itemCount).toBe(1);
     expect(d.state.detailCursorAction()).toBe("scan");
     await d.key("RETURN");
@@ -652,13 +653,17 @@ test("unscanned commits and snapshots with no supported projects have clear Scan
     await d.flush();
     expect(d.frame()).not.toContain("supported projects scanned");
     expect(d.frame()).not.toContain("Snapshot:");
-    expect(d.frame()).toContain("No supported dependency projects found.");
+    expect(d.frame()).toContain("No supported dependency project.");
     expect(d.state.detailCursorAction()).toBe("rescan");
-    expect(d.navRef.itemCount).toBe(5);
-    await d.click("filter");
-    await d.type("missing");
-    expect(d.frame()).toContain("No supported dependency projects found.");
-    expect(d.frame()).not.toContain("No matching dependencies");
+    // Nothing to browse: Rescan only, no Copy, Group by, Scope or filter (like Vulnerabilities without findings).
+    expect(d.navRef.itemCount).toBe(1);
+    for (const hidden of ["Copy dependencies as JSON", "Group by", "Scope", "Enter dependency filter..."])
+      expect(d.frame()).not.toContain(hidden);
+    expect(d.input()).toBeUndefined();
+    for (let step = 0; step < 3; step++) await d.key("ARROW_DOWN");
+    expect(d.state.detailCursorIndex()).toBe(0);
+    expect(d.state.detailCursorAction()).toBe("rescan");
+    expect(d.input()).toBeUndefined();
     d.actions.setDetailFocused(false);
     await d.flush();
     expect(d.state.detailCursorAction()).toBeNull();

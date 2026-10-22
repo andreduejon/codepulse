@@ -412,6 +412,7 @@ function buildPackages(
   let truncated = false;
   projects.forEach((project, projectIndex) => {
     const { packages, rootName } = collectPackages(project, scope);
+    const targetFiles = project.graphs.map(graph => graph.targetFile);
     const shown = [...packages.entries()]
       .filter(([, entry]) => !query || matchesQuery(entry.pkg, query))
       .sort(([, a], [, b]) => byNameAndVersion(a, b));
@@ -461,11 +462,7 @@ function buildPackages(
         cycle: false,
         path: [label],
         direct: entry.direct,
-        vulnerability: lookupVulnerability(
-          vulnerabilities,
-          project.graphs.map(graph => graph.targetFile),
-          label,
-        ),
+        vulnerability: lookupVulnerability(vulnerabilities, targetFiles, label),
       });
       dependencyRows++;
       if (!packageExpanded) return;
@@ -488,6 +485,8 @@ function buildPackages(
           reference: false,
           cycle: false,
           path: [label, viaLabel],
+          // The direct dependency's own findings, like every package occurrence.
+          vulnerability: lookupVulnerability(vulnerabilities, targetFiles, viaLabel),
         });
         dependencyRows++;
       });
@@ -512,7 +511,6 @@ function buildTree(
   const visibleProjects = projects.map((project, projectIndex) => {
     const graphs = project.graphs.map((graph, graphIndex) => {
       const model = indexGraph(graph, query, scope);
-      matchCount += model.matching.size;
       const children = childrenFor(model, model.root, new Set([model.root.source.nodeId]), budget).filter(edge =>
         inScope(edge.node.node, scope),
       );
@@ -528,6 +526,8 @@ function buildTree(
     });
     const all = new Set(graphs.flatMap(graph => [...graph.all]));
     const shown = new Set(graphs.flatMap(graph => [...graph.shown]));
+    // A package matching in several graphs of one project counts once, like the project header.
+    if (query) matchCount += shown.size;
     // Like severity headers, projects and modules stay listed while filtering; counts show matches.
     return { project, projectIndex, graphs, count: shown.size, total: all.size };
   });

@@ -50,11 +50,11 @@ export interface SnykFinding {
   dependency: string;
   installedVersion: string;
   fixedVersion: string | null;
-  /** All Snyk `fixedIn` versions; cache entries without it predate the fixed-version choice. */
-  fixedIn?: string[];
+  /** All Snyk `fixedIn` versions. */
+  fixedIn: string[];
   /** Snyk exploit maturity, e.g. `Mature`, `Proof of Concept`; null when absent. */
-  exploit?: string | null;
-  cvssScore?: number | null;
+  exploit: string | null;
+  cvssScore: number | null;
   dependencyType?: "direct" | "transitive" | "unknown";
   dependencyPath?: string[];
   upgradeDependency?: string | null;

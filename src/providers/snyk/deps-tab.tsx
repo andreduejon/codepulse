@@ -2,6 +2,7 @@ import { type KeyEvent, MouseButton, type MouseEvent, type Renderable } from "@o
 import { useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, onCleanup, Show, untrack } from "solid-js";
 import { DETAIL_PANEL_WIDTH_FRACTION } from "../../constants";
+import { BANNER } from "../../debug/banner";
 import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useClipboard } from "../../hooks/use-clipboard";
 import { useT } from "../../hooks/use-t";
@@ -96,6 +97,9 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
   );
   const { copiedId, copyToClipboard } = useClipboard();
   const incompleteProjects = createMemo(() => projects().filter(project => project.status !== "scanned"));
+  /** Copy, Group by, Scope and filter only when there is something to browse (like Vulnerabilities without findings). */
+  const controls = () => !!props.scan && projects().length > 0;
+  const itemCount = () => (controls() ? ROW_BASE + navRows().length : 1);
   const refsByKey = new Map<string, Renderable>();
   const itemRefs: Renderable[] = [];
   let disposed = false;
@@ -174,7 +178,7 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
     itemRefs.length = 0;
     for (const key of [
       "scan",
-      ...(props.scan ? ["copyJson", "groupBy", "scope", "filter"] : []),
+      ...(controls() ? ["copyJson", "groupBy", "scope", "filter"] : []),
       ...navRows().map(row => row.key),
     ]) {
       itemRefs.push(refsByKey.get(key) as Renderable);
@@ -184,21 +188,21 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
   const activateCurrentItem = () => {
     if (disposed) return false;
     const index = props.detailCursorIndex();
-    if (props.scan && index === FILTER_INDEX) {
+    if (controls() && index === FILTER_INDEX) {
       if (filter.editing()) filter.stop();
       else filter.start();
       return false;
     }
     filter.stop();
-    if (props.scan && index === SCOPE_INDEX) {
+    if (controls() && index === SCOPE_INDEX) {
       setScope(SCOPE_OPTIONS[(SCOPE_OPTIONS.indexOf(scope()) + 1) % SCOPE_OPTIONS.length]);
       return false;
     }
-    if (props.scan && index === COPY_INDEX) {
+    if (controls() && index === COPY_INDEX) {
       copyToClipboard(dependenciesJson(), "copyJson");
       return false;
     }
-    if (props.scan && index === GROUP_BY_INDEX) {
+    if (controls() && index === GROUP_BY_INDEX) {
       setGroupBy(GROUP_BY_OPTIONS[(GROUP_BY_OPTIONS.indexOf(groupBy()) + 1) % GROUP_BY_OPTIONS.length]);
       return false;
     }
@@ -283,7 +287,7 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
   });
 
   createEffect(() => {
-    const count = navRows().length + (props.scan ? ROW_BASE : 1);
+    const count = itemCount();
     const cursor = untrack(props.detailCursorIndex);
     if (cursor < 0 || cursor >= count) props.setDetailCursorIndex(Math.max(0, Math.min(count - 1, cursor)));
   });
@@ -303,7 +307,7 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
   createEffect(() => props.setDetailCursorShortcut(cursorVulnerable() ? VULNERABILITY_SHORTCUT : null));
 
   createEffect(() => {
-    const count = navRows().length + (props.scan ? ROW_BASE : 1);
+    const count = itemCount();
     syncRefs();
     if (!props.navRef) return;
     props.navRef.itemCount = count;
@@ -322,15 +326,15 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
       props.setDetailCursorAction(props.loading ? null : props.scan ? "rescan" : "scan");
       return;
     }
-    if (props.scan && index === COPY_INDEX) {
+    if (controls() && index === COPY_INDEX) {
       props.setDetailCursorAction("copy");
       return;
     }
-    if (props.scan && (index === SCOPE_INDEX || index === GROUP_BY_INDEX)) {
+    if (controls() && (index === SCOPE_INDEX || index === GROUP_BY_INDEX)) {
       props.setDetailCursorAction("switch");
       return;
     }
-    if (props.scan && index === FILTER_INDEX) {
+    if (controls() && index === FILTER_INDEX) {
       props.setDetailCursorAction(filter.editing() ? "done" : "filter");
       return;
     }
@@ -384,7 +388,8 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
         </Show>
       </box>
 
-      <Show when={props.scan}>
+      {/* Copy, Group by, Scope and filter only when there is something to browse (like Vulnerabilities). */}
+      <Show when={controls()}>
         <box
           {...mouseRow("copyJson", () => COPY_INDEX)}
           ref={(element: Renderable) => {
@@ -469,21 +474,14 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
             {filtering() ? `${packageTotals().count}/${packageTotals().total}` : packageTotals().total}
           </text>
         </SnykFilterRow>
-        {/* Blank row before the tree, as in Vulnerabilities. */}
-        <box height={1} flexShrink={0} />
       </Show>
 
-      <Show
-        when={props.scan}
-        fallback={
-          <text fg={t().foregroundMuted} wrapMode="word">
-            No dependency scan for this commit. Scan commit to browse dependencies.
-          </text>
-        }
-      >
+      <Show when={props.scan}>
+        {/* Blank row before the tree, as in Vulnerabilities. */}
+        <box height={1} flexShrink={0} />
         <Show when={projects().length === 0}>
           <text fg={t().foregroundMuted} wrapMode="word">
-            No supported dependency projects found.
+            {BANNER.snyk.noDependencyProject}
           </text>
         </Show>
         <For each={rows()}>

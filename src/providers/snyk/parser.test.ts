@@ -326,6 +326,9 @@ describe("fix-oriented vulnerability entries", () => {
     installedVersion: "11.0.24",
     fixedVersion: "11.0.25",
     project: "app",
+    fixedIn: [],
+    exploit: null,
+    cvssScore: null,
     targetFile: "pom.xml",
     cves: ["CVE-2026-1"],
   };
@@ -415,6 +418,9 @@ test("dependency groups: one per direct dependency, sizes sum to the total, high
     installedVersion: "1.0.0",
     project: "app",
     targetFile: "pom.xml",
+    fixedIn: [],
+    exploit: null,
+    cvssScore: null,
     dependencyType: "transitive" as const,
   };
   const findings = [

@@ -192,7 +192,7 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
     ];
   };
 
-  /** Vulnerabilities: fix and exploit markers; Dependencies: score markers. Only when the scan has findings. */
+  /** Vulnerabilities: fix and exploit markers; Dependencies: severity triangles. Only when the scan has findings. */
   const snykLegend = () => {
     const hash = state.selectedCommit()?.hash ?? "";
     const tab = state.detailActiveTab();

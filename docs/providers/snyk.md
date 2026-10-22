@@ -77,8 +77,13 @@ incomplete graph command are marked incomplete, not a successful empty tree.
 
 **Dependencies** is always available beside **Vulnerabilities** and **Info** in
 the Snyk view, including before the first scan. Use **Scan commit** in either tab.
-Missing tools, unsupported dependency projects, and graph failures appear in the
-existing message overlay; usable findings are retained.
+After a scan, the banner above the command bar reports dependency coverage in
+yellow: **No supported dependency project** when the repository has none, or
+**Snyk dependency graphs incomplete: N of M projects** with one line per failed or
+skipped project (for example, Bun missing). Findings are retained either way; only
+a failed scan (Snyk missing, authentication, unusable output) shows a red error.
+The banner reports the latest scan; the failed/skipped lines at the bottom of
+Dependencies belong to the selected commit.
 
 - Scanned files/projects are bold root headers (like severity headers), with
   direct dependencies visible and a right-aligned package count: `N`, or
@@ -110,13 +115,14 @@ existing message overlay; usable findings are retained.
   lists unique `name@version` packages A–Z (versions of one package sit together),
   with muted **direct** (declared directly) and **dev** (reached only through dev
   dependencies) markers; each opens to the direct dependencies that pull it in.
-- **Copy dependencies as JSON** (below Rescan) copies commit, scan time, Scope,
+- **Copy dependencies as JSON** (below Rescan, when a supported project was found) copies commit, scan time, Scope,
   filter, and per project a flat package list (`name`, `version`, `direct`, `dev`,
   `via`), respecting the active Scope and filter. Graphs stay out; they are large.
 - Vulnerable packages show a `▲` in their worst finding's severity colour, on
   every occurrence in both Group by views; only the package itself is marked, and
   nothing opens for findings. Press **v** on a marked row to open Vulnerabilities
-  filtered to its `name@version` (the footer shows the hint). Scores, exploits and
+  filtered to its `name@version` (the footer shows the hint): that package's own
+  findings in every manifest, not those of packages it pulls in. Scores, exploits and
   fixes live in Vulnerabilities. A legend (`▲ ▲ ▲ ▲ severity`) is pinned below the
   tab when the scan has findings. Leaves sit one space after their connector.
 - Filter hits are highlighted in the package name in the Snyk colour (both tabs
@@ -128,8 +134,10 @@ existing message overlay; usable findings are retained.
 - **Rescan commit** refreshes findings and graphs together. Existing tree data
   remains inspectable while scanning.
 
-After a commit has a scan result, both tabs show a placeholder-only filter below
-the scan action: **Enter vulnerability filter...** or **Enter dependency filter...**.
+Below the scan action, each tab shows its Copy, Group by (and Scope) and filter
+rows only when it has something to browse: Dependencies when a supported project
+was found, Vulnerabilities when the scan has findings. Otherwise only the scan
+action remains. Both filters use a placeholder-only input: **Enter dependency filter...** or **Enter vulnerability filter...**.
 Unscanned commits do not show a filter. Click the input or select its row with
 **Up/Down** to type immediately. **Enter/Esc** stops editing without clearing the
 filter; **Esc** again clears it. Leaving and reselecting the row automatically
@@ -138,12 +146,15 @@ instead of switching tabs; app shortcuts are treated as filter text.
 The native field stays in place when focus changes, using the repository path
 input's subtle hover/focus background, muted placeholder, and accent caret.
 
-Vulnerabilities match package/version, title, CVE, Snyk ID, fix tag (`upgrade`,
-`override`, `no fix`), manifest path, and the direct dependency it comes through. Dependencies match
-package names case-insensitively, or exact `name@version`; matching paths expand
-through collapsed/repeated nodes. Filtering affects detail trees, not the Git
+Both filters are case-insensitive and use one rule: an exact `name@version` query
+(an `@` after the first character) matches only that package itself, so a partial
+version such as `lodash@4.17` matches nothing; anything else is a substring.
+Vulnerabilities match substrings in package/version, title, CVE, Snyk ID, fix tag
+(`upgrade`, `override`, `no fix`), exploit maturity (e.g. `mature`), manifest path,
+and the direct dependency it comes through; Dependencies match package names, and
+matching paths expand through collapsed/repeated nodes. Filtering affects detail trees, not the Git
 commit graph. No-match results retain failed/skipped-project coverage warnings.
-**Copy scan as JSON** (below the scan action, whenever a scan exists) copies the
+**Copy scan as JSON** (below the scan action, when the scan has findings) copies the
 parsed scan both views are built from: commit, scan time, `counts` (whole scan),
 `filteredCounts` (what the filter shows), project status (graphs left out), the
 active filter, and the findings it shows — handy as input for agent tools.
@@ -185,8 +196,7 @@ package, via, manifest, paths, exploit, fix) is a cursor stop: long text
 banner-scrolls and Enter copies.
 License-policy issues are not shown. Severities with no (matching) findings are muted with a `·` marker,
 aligned and not expandable; while filtering they still show `0/M`. The total
-count sits at the right end of the filter row; scans with no vulnerabilities hide
-the filter. Expansion choices survive filtering and return when it clears. Active-filter counts read `current/original`
+count sits at the right end of the filter row. Expansion choices survive filtering and return when it clears. Active-filter counts read `current/original`
 for the total and each severity (for example, `3/12`), with
 zero counts muted.
 Filtering opens every matching path when the result fits in 200 rows; larger
@@ -199,8 +209,9 @@ Unusually cyclic graphs also have a bounded matching-path search. If that limit
 is reached, the view explicitly marks matching paths incomplete; package match
 counts still come from the full graph.
 
-Vulnerability annotations in the dependency tree and JSON copy remain separate
-increments. Scan timestamps remain in cached snapshots, not the tree display.
+**Copy dependencies as JSON** does not include vulnerability data yet; use
+**Copy scan as JSON** for findings. Scan timestamps appear in both JSON copies,
+not in the tree.
 
 ### CLI compatibility
 

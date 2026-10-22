@@ -20,6 +20,9 @@ test("finding filter matches package/version, title, CVE and ID without mutating
     severity: "high",
     fixedVersion: null,
     project: "fixture",
+    fixedIn: [],
+    exploit: null,
+    cvssScore: null,
     targetFile: "yarn.lock",
   };
   for (const query of ["PACKAGE", "@fixture/package@1.2.3", "allocation", "cve-2026-12345", "snyk-fixture-42", "  "])
@@ -251,6 +254,9 @@ test("vulnerability filter matches fix kind, manifest and via dependency", () =>
     installedVersion: "1.0.0",
     fixedVersion: "1.0.1",
     project: "app",
+    fixedIn: [],
+    exploit: null,
+    cvssScore: null,
     targetFile: "worker/pom.xml",
     dependencyType: "transitive" as const,
     dependencyPath: ["starter-web@3.4.1", "core@1.0.0"],
@@ -258,4 +264,31 @@ test("vulnerability filter matches fix kind, manifest and via dependency", () =>
   for (const query of ["override", "worker/pom", "starter-web"])
     expect(filterSnykFindings([finding], query)).toHaveLength(1);
   expect(filterSnykFindings([finding], "upgrade")).toHaveLength(0);
+});
+
+test("name@version queries match the finding's own package exactly; plain names stay substrings", () => {
+  const base = {
+    title: "Bypass",
+    severity: "high" as const,
+    fixedVersion: null,
+    fixedIn: [],
+    exploit: null,
+    cvssScore: null,
+    project: "app",
+    targetFile: "package.json",
+  };
+  const own = { ...base, id: "OWN", dependency: "x", installedVersion: "1.0.2", dependencyType: "direct" as const };
+  const longer = { ...base, id: "LONGER", dependency: "x", installedVersion: "1.0.21" };
+  const through = {
+    ...base,
+    id: "THROUGH",
+    dependency: "y",
+    installedVersion: "2.0.0",
+    dependencyType: "transitive" as const,
+    dependencyPath: ["x@1.0.2", "y@2.0.0"],
+  };
+  const findings = [own, longer, through];
+  expect(filterSnykFindings(findings, " X@1.0.2 ").map(finding => finding.id)).toEqual(["OWN"]);
+  expect(filterSnykFindings(findings, "x@1.0").map(finding => finding.id)).toEqual([]);
+  expect(filterSnykFindings(findings, "x").map(finding => finding.id)).toEqual(["OWN", "LONGER", "THROUGH"]);
 });

@@ -435,8 +435,8 @@ async function scanDependencyProjects(
 const MANIFEST_PACKAGE_MANAGERS = new Set(["npm", "yarn", "pnpm", "bun"]);
 
 /**
- * Snyk's pnpm graphs flag runtime packages as dev when dev tools also use them. Direct dependencies take
- * their scope from the `package.json` beside the graph instead; without a readable manifest Snyk's flags stay.
+ * Snyk can flag runtime packages as dev when dev tools also use them (seen in pnpm graphs). Direct dependencies
+ * take their scope from the `package.json` beside the graph instead; without a readable manifest Snyk's flags stay.
  */
 export async function applyManifestScopes(graph: SnykDependencyGraph, worktreePath: string): Promise<void> {
   if (!MANIFEST_PACKAGE_MANAGERS.has(graph.packageManager)) return;

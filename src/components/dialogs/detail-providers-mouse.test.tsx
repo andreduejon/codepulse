@@ -122,6 +122,9 @@ const scan: SnykScanResult = {
     installedVersion: "1.0.0",
     fixedVersion: "2.0.0",
     project: "fixture",
+    fixedIn: [],
+    exploit: null,
+    cvssScore: null,
     targetFile: "package.json",
   })),
 };
@@ -926,16 +929,17 @@ test("closing a severity closes its open CVEs", async () => {
   }
 });
 
-test("Snyk scan without vulnerabilities hides the filter row", async () => {
+test("Snyk scan without vulnerabilities hides copy, group by, and filter rows", async () => {
   const d = await renderProvider("snyk");
   try {
     d.setSnykScan({ ...scan, counts: { critical: 0, high: 0, medium: 0, low: 0 }, findings: [] });
     await d.flush();
-    expect(d.frame()).not.toContain("Enter vulnerability filter...");
-    expect(d.navRef.itemCount).toBe(2);
+    for (const hidden of ["Copy scan as JSON", "Group by", "Enter vulnerability filter..."])
+      expect(d.frame()).not.toContain(hidden);
+    expect(d.navRef.itemCount).toBe(1);
     expect(d.frame()).not.toContain("mature exploit");
     const rows = d.frame().split("\n");
-    expect(rows[rows.findIndex(line => line.includes("Rescan commit")) + 3]).toMatch(/^\s{9}· CRITICAL\s+0\s*$/);
+    expect(rows[rows.findIndex(line => line.includes("Rescan commit")) + 2]).toMatch(/^\s{9}· CRITICAL\s+0\s*$/);
   } finally {
     await d.dispose();
   }

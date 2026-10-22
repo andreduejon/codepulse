@@ -8,6 +8,7 @@ import {
   collectSnykAutoScanTips,
   type SnykProviderConfig,
   selectSnykCacheProbes,
+  snykDependencyStatus,
   type UseSnykResult,
   useSnyk,
 } from "./use-snyk";
@@ -119,32 +120,61 @@ function mountSnyk(options: {
 }
 
 describe("useSnyk", () => {
-  test("Dependency scans without supported projects show a warning while retaining findings", async () => {
+  test("scans without supported dependency projects warn in any tab while retaining findings", async () => {
     const { state, snyk } = mountSnyk({
       scan: async () => result(SHA_A),
       setup: actions => {
         actions.setActiveProviderView("snyk");
         actions.setGraphRows(graphRows([SHA_A]));
-        actions.setDetailActiveTab("snyk-deps");
       },
     });
     await snyk.scanCommit(SHA_A);
     expect(snyk.getCommitData(SHA_A)).not.toBeNull();
     expect(state.providerStatusFor("snyk")).toEqual({
       kind: "warning",
-      message: "No supported dependency project. Dependency graphs currently support Bun, pnpm and Yarn v1.",
+      message: "No supported dependency project. Dependency graphs support Bun, pnpm, and Yarn v1 lockfiles.",
     });
   });
 
-  test("graph failures reach the existing message overlay without discarding valid findings", async () => {
+  test("failed and skipped graphs warn with one summary without discarding valid findings", async () => {
     const scan = result(SHA_A);
     scan.dependencyProjects = [
-      { targetFile: "bun.lock", packageManager: "bun", status: "failed", graphs: [], reason: "Bun conversion failed." },
+      { targetFile: "pnpm-lock.yaml", packageManager: "pnpm", status: "scanned", graphs: [], reason: null },
+      { targetFile: "web/bun.lock", packageManager: "bun", status: "skipped", graphs: [], reason: "Bun not found." },
+      { targetFile: "api/yarn.lock", packageManager: "yarn", status: "failed", graphs: [], reason: "Graph failed." },
     ];
     const { state, snyk } = mountSnyk({ scan: async () => scan });
     await snyk.scanCommit(SHA_A);
     expect(snyk.getCommitData(SHA_A)).toEqual(scan);
-    expect(state.providerStatusFor("snyk")).toEqual({ kind: "error", message: "Bun conversion failed." });
+    expect(state.providerStatusFor("snyk")).toEqual({
+      kind: "warning",
+      message: [
+        "Snyk dependency graphs incomplete: 2 of 3 projects.",
+        "web/bun.lock: Bun not found.",
+        "api/yarn.lock: Graph failed.",
+      ].join("\n"),
+    });
+  });
+
+  test("complete dependency coverage clears the banner", () => {
+    const scan = result(SHA_A);
+    scan.dependencyProjects = [
+      { targetFile: "pnpm-lock.yaml", packageManager: "pnpm", status: "scanned", graphs: [], reason: null },
+    ];
+    expect(snykDependencyStatus(scan)).toEqual({ kind: "idle" });
+  });
+
+  test("scan failures stay errors", async () => {
+    const { state, snyk } = mountSnyk({
+      scan: async () => {
+        throw new Error("Snyk CLI not found on PATH. Install Snyk CLI to scan.");
+      },
+    });
+    await snyk.scanCommit(SHA_A);
+    expect(state.providerStatusFor("snyk")).toEqual({
+      kind: "error",
+      message: "Snyk CLI not found on PATH. Install Snyk CLI to scan.",
+    });
   });
 
   test("suspension preserves results and badges, aborts scans, and drops queued work", async () => {
