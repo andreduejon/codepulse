@@ -16,6 +16,7 @@ import {
   itemKey,
   type PackageRow,
   packagesOf,
+  partialScanText,
   ROW_TAIL_WIDTH,
   type Section,
   shortCoordinate,
@@ -413,7 +414,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
         </Show>
         <Show when={props.scan?.partial}>
           <text fg={t().warning} wrapMode="none" truncate>
-            {`partial scan · ${props.scan?.failedProjects ?? 0} project${props.scan?.failedProjects === 1 ? "" : "s"} failed${props.scan?.failedTargets ? `: ${props.scan.failedTargets.join(", ")}` : ""}`}
+            {partialScanText(props.scan ?? {})}
           </text>
         </Show>
 

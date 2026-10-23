@@ -32,6 +32,7 @@ All notable changes to this project will be documented in this file.
   view groups findings under the direct dependency and package to change.
 - Add **Copy scan as JSON** for handing parsed findings to agent tools; it respects
   the active filter.
+- Status banners have a clickable `✕` to dismiss them.
 
 ### Changed
 
@@ -53,7 +54,6 @@ All notable changes to this project will be documented in this file.
   failed manifests.
 - **Rescan commit** stores a partial result over a complete snapshot, so its failed
   projects stay visible instead of a "Kept last complete snapshot" error.
-- Status banners have a clickable `✕` to dismiss them.
 - **Show all branches** lists local and remote branches, tags, and HEAD instead of every
   ref, so commits behind tool-private refs (T3 checkpoints, `git maintenance` prefetches)
   no longer appear in the graph.
@@ -65,6 +65,7 @@ All notable changes to this project will be documented in this file.
   Existing snapshots are corrected without a rescan.
 - Apply each repository's saved theme when switching repositories; the previous
   repository's theme stayed and was saved into the new one on the next settings change.
+  An unknown theme falls back to the default, as at startup.
 
 ## [0.13.0] - 2026-10-14
 

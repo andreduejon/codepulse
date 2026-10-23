@@ -146,8 +146,9 @@ export function AppContent(props: Readonly<AppContentProps>) {
     });
     setRepoDisplayConfig(getRepoDisplayConfig(path));
     // The theme is per repository; without this a switch keeps the previous repo's theme, and the next settings
-    // change saves it into this one.
-    themeState.setTheme(config.theme ?? defaultConfig().theme);
+    // change saves it into this one. An unknown theme falls back to the default, as at startup.
+    const theme = config.theme ?? defaultConfig().theme;
+    themeState.setTheme(Object.hasOwn(themeState.themes, theme) ? theme : defaultConfig().theme);
   };
 
   // ── GitHub CI data hook (called during setup, before Provider renders — per AGENTS.md rule 5) ──

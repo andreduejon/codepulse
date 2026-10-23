@@ -8,7 +8,7 @@ import {
   snykUpgrade,
 } from "./parser";
 import type { SnykLegendItem } from "./tab-shared";
-import type { SnykSeverity } from "./types";
+import type { SnykScanResult, SnykSeverity } from "./types";
 
 export type Section = {
   key: string;
@@ -156,4 +156,12 @@ export function wrapWords(value: string, width: number): string[] {
 function compactDependencyName(value: string): string {
   const separator = value.lastIndexOf(":");
   return separator >= 0 ? value.slice(separator + 1) : value;
+}
+
+/** `partial scan · 2 projects failed: a/package.json, …`; the ellipsis marks failures Snyk did not name. */
+export function partialScanText(scan: Pick<SnykScanResult, "failedProjects" | "failedTargets">): string {
+  const count = scan.failedProjects ?? 0;
+  const targets = scan.failedTargets ?? [];
+  const names = targets.length < count && targets.length > 0 ? [...targets, "…"] : targets;
+  return `partial scan · ${count} project${count === 1 ? "" : "s"} failed${names.length > 0 ? `: ${names.join(", ")}` : ""}`;
 }
