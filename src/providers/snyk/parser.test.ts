@@ -8,6 +8,7 @@ import {
   parseSnykOutput,
   shouldReplaceSnykResult,
   snykFixKind,
+  snykUpgrade,
 } from "./parser";
 
 const SHA = "a".repeat(40);
@@ -375,6 +376,39 @@ describe("fix-oriented vulnerability entries", () => {
     expect(snykFixKind({ ...base, dependencyType: "direct" })).toBe("upgrade");
     expect(snykFixKind({ ...base, dependencyType: "transitive" })).toBe("override");
     expect(snykFixKind({ ...base, fixedVersion: null })).toBe("no fix");
+  });
+
+  test("Snyk upgrade paths that keep every installed version are no upgrade", () => {
+    const parse = (fixedIn: string[]) =>
+      parseSnykOutput(
+        {
+          vulnerabilities: [
+            {
+              id: "SNYK-JS-BRACES-1",
+              severity: "high",
+              packageName: "braces",
+              version: "3.0.3",
+              fixedIn,
+              isUpgradable: true,
+              from: ["app@1.0.0", "build-angular@21.2.28", "build-webpack@0.2102.28", "chokidar@3.6.0", "braces@3.0.3"],
+              upgradePath: [false, "build-angular@21.2.28", "build-webpack@0.2102.28"],
+            },
+          ],
+        },
+        { sha: SHA, scannedAt: "now" },
+      ).findings[0];
+    expect(parse([])).toMatchObject({ upgradeDependency: null, upgradeVersion: null });
+    expect(snykFixKind(parse([]))).toBe("no fix");
+    expect(snykFixKind(parse(["3.0.4"]))).toBe("override");
+    // Older snapshots stored the no-op path; it still reads as no upgrade.
+    const stored = { ...parse([]), upgradeDependency: "build-angular", upgradeVersion: "21.2.28" };
+    expect(snykUpgrade(stored)).toBeNull();
+    expect(snykFixKind(stored)).toBe("no fix");
+    expect(snykUpgrade({ ...stored, upgradeVersion: "21.3.0" })).toEqual({
+      name: "build-angular",
+      from: "21.2.28",
+      version: "21.3.0",
+    });
   });
 
   test("one entry per vulnerability, manifest and package; paths merge; fixable first", () => {

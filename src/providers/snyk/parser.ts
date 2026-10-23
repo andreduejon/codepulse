@@ -39,8 +39,11 @@ function dependencyPath(value: unknown): string[] {
   return entries.length > 1 ? entries.slice(1) : entries;
 }
 
-function upgradeTarget(value: unknown): { name: string; version: string } | null {
+/** The direct dependency to bump, or null when Snyk's path keeps every listed version (seen in pnpm results). */
+function upgradeTarget(value: unknown, from: unknown): { name: string; version: string } | null {
   if (!Array.isArray(value)) return null;
+  const installed = Array.isArray(from) ? from : [];
+  if (value.slice(1).every((entry, index) => !entry || entry === installed[index + 1])) return null;
   return packageAndVersion(value[1]);
 }
 
@@ -104,7 +107,7 @@ function normalizeFinding(value: unknown, project: string | null, targetFile: st
   const dependency = stringValue(value.packageName) ?? stringValue(value.name) ?? fromPath?.name ?? "(unknown)";
   const installedVersion = stringValue(value.version) ?? fromPath?.version ?? "(unknown)";
   const path = dependencyPath(value.from);
-  const upgrade = upgradeTarget(value.upgradePath);
+  const upgrade = upgradeTarget(value.upgradePath, value.from);
 
   return {
     id: stringValue(value.id) ?? "unknown",
@@ -145,9 +148,21 @@ function preferFinding(current: SnykFinding, incoming: SnykFinding): SnykFinding
 export type SnykFixKind = "upgrade" | "override" | "no fix";
 const FIX_RANK: Record<SnykFixKind, number> = { upgrade: 0, override: 1, "no fix": 2 };
 
+/**
+ * The direct dependency bump that fixes a finding: name, installed version, target. Null when there is none or the
+ * target is the installed version (older snapshots stored Snyk's no-op paths).
+ */
+export function snykUpgrade(finding: SnykFinding): { name: string; from: string | null; version: string } | null {
+  if (!finding.upgradeDependency || !finding.upgradeVersion) return null;
+  const from = pathVersion(finding.dependencyPath, finding.upgradeDependency);
+  return from === finding.upgradeVersion
+    ? null
+    : { name: finding.upgradeDependency, from, version: finding.upgradeVersion };
+}
+
 /** upgrade: bump a dependency you declare; override: only the transitive package has a fix. */
 export function snykFixKind(finding: SnykFinding): SnykFixKind {
-  if (finding.upgradeDependency && finding.upgradeVersion) return "upgrade";
+  if (snykUpgrade(finding)) return "upgrade";
   if (finding.fixedVersion) return finding.dependencyType === "direct" ? "upgrade" : "override";
   return "no fix";
 }
@@ -242,12 +257,8 @@ function pathVersion(path: string[] | undefined, name: string): string | null {
 
 function fixPackage(entry: SnykVulnerabilityEntry): Omit<SnykFixPackage, "entries"> {
   const finding = entry.finding;
-  if (finding.upgradeDependency && finding.upgradeVersion)
-    return {
-      name: finding.upgradeDependency,
-      from: pathVersion(finding.dependencyPath, finding.upgradeDependency),
-      version: finding.upgradeVersion,
-    };
+  const upgrade = snykUpgrade(finding);
+  if (upgrade) return upgrade;
   return { name: finding.dependency, from: finding.installedVersion, version: finding.fixedVersion };
 }
 

@@ -5,6 +5,7 @@ import {
   type SnykFixKind,
   type SnykFixPackage,
   type SnykVulnerabilityEntry,
+  snykUpgrade,
 } from "./parser";
 import type { SnykLegendItem } from "./tab-shared";
 import type { SnykSeverity } from "./types";
@@ -79,10 +80,8 @@ export function packagesOf(group: SnykFixGroup): SnykFixPackage[] {
 
 function fixText(entry: SnykVulnerabilityEntry): string {
   const finding = entry.finding;
-  if (finding.upgradeDependency && finding.upgradeVersion)
-    return `Upgrade ${compactDependencyName(finding.upgradeDependency)} ${
-      dependencyVersion(finding.dependencyPath, finding.upgradeDependency) ?? "?"
-    } → ${finding.upgradeVersion}`;
+  const upgrade = snykUpgrade(finding);
+  if (upgrade) return `Upgrade ${compactDependencyName(upgrade.name)} ${upgrade.from ?? "?"} → ${upgrade.version}`;
   if (entry.fix === "upgrade")
     return `Upgrade ${compactDependencyName(finding.dependency)} ${finding.installedVersion} → ${finding.fixedVersion}`;
   return finding.fixedVersion ? `Fixed in ${finding.fixedVersion}` : "No fixed version available";
@@ -157,10 +156,4 @@ export function wrapWords(value: string, width: number): string[] {
 function compactDependencyName(value: string): string {
   const separator = value.lastIndexOf(":");
   return separator >= 0 ? value.slice(separator + 1) : value;
-}
-
-function dependencyVersion(path: string[] | undefined, dependency: string): string | null {
-  const prefix = `${dependency}@`;
-  const match = path?.find(entry => entry.startsWith(prefix));
-  return match?.slice(prefix.length) || null;
 }

@@ -57,6 +57,9 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Ignore Snyk upgrade paths that keep every installed version (seen with pnpm), which
+  showed as "Upgrade X 1.0 → 1.0"; these findings now show their override or no fix.
+  Existing snapshots are corrected without a rescan.
 - Apply each repository's saved theme when switching repositories; the previous
   repository's theme stayed and was saved into the new one on the next settings change.
 
