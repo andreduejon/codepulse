@@ -54,6 +54,9 @@ All notable changes to this project will be documented in this file.
 - **Rescan commit** stores a partial result over a complete snapshot, so its failed
   projects stay visible instead of a "Kept last complete snapshot" error.
 - Status banners have a clickable `✕` to dismiss them.
+- **Show all branches** lists local and remote branches, tags, and HEAD instead of every
+  ref, so commits behind tool-private refs (T3 checkpoints, `git maintenance` prefetches)
+  no longer appear in the graph.
 
 ### Fixed
 

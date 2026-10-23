@@ -120,6 +120,13 @@ export function parseCommitLine(line: string, remoteNames: Set<string>): Commit 
 }
 
 /**
+ * "All branches": local and remote branches, tags, and HEAD (also detached). Tool-private refs such as T3
+ * checkpoints (`refs/t3/`) or `git maintenance` prefetches (`refs/prefetch/`) stay out, like in Git's own
+ * decorations, and so do stash internals. `--ignore-missing` keeps an unborn HEAD from failing the log.
+ */
+const ALL_BRANCH_REVISIONS = ["--branches", "--remotes", "--tags", "--ignore-missing", "HEAD"];
+
+/**
  * @internal Exported for testing. Build the git-log argument array from options.
  * Pure function — no I/O.
  */
@@ -141,9 +148,8 @@ export function buildCommitLogArgs(options: {
   }
 
   if (options.all) {
-    // Exclude stash refs so their internal commits (index, untracked) don't
-    // leak into the log.  We inject stash entries separately via getStashList().
-    args.push("--exclude=refs/stash*", "--all");
+    // Stash entries are injected separately via getStashList(); "--" keeps a file named HEAD from being a path.
+    args.push(...ALL_BRANCH_REVISIONS, "--");
   } else if (options.branch) {
     // Place branch before "--" so git treats it as a revision, not a path.
     // The "--" prevents ambiguity if a file exists with the same name as the branch.
@@ -491,7 +497,7 @@ export async function isGitAvailable(): Promise<boolean> {
 
 /**
  * Return the set of commit hashes that touch the given pathspec.
- * Runs `git log --format=%H [--all | branch] -- <path>` to get the full list
+ * Runs `git log --format=%H [all branches | branch] -- <path>` to get the full list
  * of hashes matching the path, without loading commit metadata.
  *
  * Used for display-level path filtering: the set is stored in state and used
@@ -506,7 +512,7 @@ export async function getPathMatchingHashes(
   const args = ["log", "--format=%H"];
 
   if (options.all) {
-    args.push("--exclude=refs/stash*", "--all");
+    args.push(...ALL_BRANCH_REVISIONS);
   } else if (options.branch) {
     args.push(options.branch);
   }
