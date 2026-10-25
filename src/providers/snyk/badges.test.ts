@@ -41,6 +41,8 @@ test("buildSnykGraphBadges keys badges by exact scan SHA", () => {
   const result: SnykScanResult = {
     sha: SHA,
     scannedAt: SCANNED_AT,
+    includesDev: true,
+    dependencyProjects: [],
     counts: { critical: 0, high: 1, medium: 0, low: 0 },
     findings: [],
   };

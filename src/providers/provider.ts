@@ -23,7 +23,7 @@ export type ProviderDetailView = Exclude<ProviderView, "git">;
 
 export interface ProviderMetadata {
   displayName: string;
-  /** Short label for detail panel tab. Defaults to displayName. */
+  /** Label for detail panel tab. Defaults to displayName. */
   detailLabel?: string;
   category: "source" | "ci" | "runtime" | "scan-quality";
 }
@@ -33,7 +33,7 @@ export const PROVIDER_METADATA: Record<ProviderView, ProviderMetadata> = {
   "github-actions": { displayName: "GitHub Actions", detailLabel: "Actions", category: "ci" },
   jenkins: { displayName: "Jenkins", category: "ci" },
   openshift: { displayName: "OpenShift", category: "runtime" },
-  snyk: { displayName: "Snyk", category: "scan-quality" },
+  snyk: { displayName: "Snyk", detailLabel: "Vulnerabilities", category: "scan-quality" },
 };
 
 export interface GraphStatusCounts {

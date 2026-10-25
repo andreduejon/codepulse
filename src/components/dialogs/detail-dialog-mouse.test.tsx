@@ -213,7 +213,7 @@ async function renderDetail(compact = true, fileCount = 40, family = false, jump
   };
 }
 
-test("compact tabs hover without switching and accept only left clicks across top, text padding and bottom", async () => {
+test("label-sized compact tabs hover without switching and accept only left clicks across top, text padding and bottom", async () => {
   const d = await renderDetail();
   try {
     expect(d.frame()).toContain("Details");
@@ -282,9 +282,10 @@ test("compact tabs hover without switching and accept only left clicks across to
       if (!infoTab || !filesTab) throw new Error("Missing tabs after resize");
       expect(filesTab.x + filesTab.width).toBe(infoTab.x);
       expect(filesTab.width + infoTab.width).toBe(d.scrollbox.width);
-      expect([filesTab.width, infoTab.width].sort((a, b) => a - b)).toEqual([
-        Math.floor(d.scrollbox.width / 2),
-        Math.ceil(d.scrollbox.width / 2),
+      const labelWidthDifference = "Files (40)".length - "Info".length;
+      expect([infoTab.width, filesTab.width]).toEqual([
+        Math.floor((d.scrollbox.width - labelWidthDifference) / 2),
+        Math.ceil((d.scrollbox.width + labelWidthDifference) / 2),
       ]);
       for (const y of [infoTab.y, infoTab.y + 2]) {
         expect(

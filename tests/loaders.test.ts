@@ -36,7 +36,7 @@ async function makeRepo(commits: string[]) {
   return { root, git };
 }
 
-function mount(repoPath: string, maxCount: number, withDetail = false) {
+function mount(repoPath: string, maxCount: number, withDetail = false, getCommitData?: (sha: string) => unknown) {
   return createRoot(dispose => {
     disposers.push(dispose);
     const { state, actions } = createAppState(maxCount, 0, 0);
@@ -49,6 +49,7 @@ function mount(repoPath: string, maxCount: number, withDetail = false) {
         actions,
         getIsJumpNavigation: () => false,
         detailNavRef: { pendingJumpDirection: null } as DetailNavRef,
+        getCommitData,
       });
     }
     return { state, actions, loader, setPath, dispose };
@@ -165,4 +166,44 @@ test("detail loader shows the selected commit's files, merge files, and uncommit
   actions.setCursorIndex(rowOf("base"));
   await until(() => state.commitDetail()?.subject === "base", "root detail");
   expect(files()).toEqual(["file.txt"]);
+});
+
+test("switching from Git stashes to a provider selects its detail tab and resets the cursor", async () => {
+  const { root } = await makeRepo(["base"]);
+  const { state, actions } = mount(root, 50, true);
+  await until(() => !state.detailLoading() && state.commitDetail() !== null, "commit detail");
+  const selected = state.selectedCommit();
+  if (!selected) throw new Error("Missing selected commit");
+  actions.setStashByParent(new Map([[selected.hash, [{ ...selected, hash: "stash", parents: [selected.hash] }]]]));
+
+  for (const provider of ["github-actions", "jenkins", "openshift", "snyk"] as const) {
+    actions.setActiveProviderView("git");
+    actions.setDetailActiveTab("stashes");
+    actions.setDetailCursorIndex(3);
+    actions.setActiveProviderView(provider);
+
+    expect(state.detailActiveTab()).toBe(provider);
+    expect(state.detailCursorIndex()).toBe(0);
+    expect(state.detailLoading()).toBe(false);
+  }
+});
+
+test("Dependencies stays available without cached coverage and falls back only when leaving Snyk", async () => {
+  const { root } = await makeRepo(["base"]);
+  const [projects, setProjects] = createSignal<unknown[]>([{ status: "skipped" }]);
+  const { state, actions } = mount(root, 50, true, () => ({ dependencyProjects: projects() }));
+  await until(() => !state.detailLoading() && state.commitDetail() !== null, "commit detail");
+  actions.setActiveProviderView("snyk");
+  actions.setDetailActiveTab("snyk-deps");
+  actions.setDetailCursorIndex(3);
+  expect(state.detailActiveTab()).toBe("snyk-deps");
+
+  setProjects([]);
+  expect(state.detailActiveTab()).toBe("snyk-deps");
+
+  setProjects([{ status: "failed" }]);
+  actions.setDetailActiveTab("snyk-deps");
+  expect(state.detailActiveTab()).toBe("snyk-deps");
+  actions.setActiveProviderView("jenkins");
+  expect(state.detailActiveTab()).toBe("jenkins");
 });

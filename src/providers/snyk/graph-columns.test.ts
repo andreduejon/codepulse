@@ -6,6 +6,8 @@ import type { SnykScanResult } from "./types";
 const scan = (partial = false): SnykScanResult => ({
   sha: "a".repeat(40),
   scannedAt: "2026-08-21T10:00:00.000Z",
+  includesDev: true,
+  dependencyProjects: [],
   counts: { critical: 0, high: 0, medium: 0, low: 0 },
   findings: [],
   ...(partial ? { partial: true, failedProjects: 1 } : {}),

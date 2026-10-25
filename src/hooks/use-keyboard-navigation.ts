@@ -166,6 +166,14 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions) {
       return;
     }
 
+    if (
+      commandBarMode() === "idle" &&
+      !searchFocused() &&
+      (state.detailFocused() || dialog() === "detail") &&
+      detailNavRef.handleFilterKey?.(e)
+    )
+      return;
+
     // ── Group repo switching ─────────────────────────────────────────────────
     if (e.shift && (e.name === "left" || e.name === "right")) {
       e.preventDefault();

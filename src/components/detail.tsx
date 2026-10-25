@@ -14,7 +14,9 @@ import { useT } from "../hooks/use-t";
 import { ActionsDetailTab } from "../providers/github-actions/detail-tab";
 import { JenkinsDetailTab } from "../providers/jenkins/detail-tab";
 import { OpenShiftDetailTab } from "../providers/openshift/detail-tab";
+import { SnykDependenciesTab } from "../providers/snyk/deps-tab";
 import { SnykDetailTab } from "../providers/snyk/detail-tab";
+import type { SnykViewMemory } from "../providers/snyk/view-memory";
 import { formatDate } from "../utils/date";
 import { isCursored as _isCursored, itemHighlightBg as _itemHighlightBg } from "../utils/detail-cursor";
 import Badge from "./badge";
@@ -100,6 +102,8 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
 
   // Active tab for committed commits: "info" | "files" | "stashes"
   const activeTab = () => state.detailActiveTab();
+  /** Snyk tab view state across tab switches (mutable ref; this view outlives its tabs). */
+  const snykMemory: SnykViewMemory = {};
 
   // Split refs into branches (branch/remote/head) and tags
   const branchRefs = () => {
@@ -1009,6 +1013,39 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
             </Show>
             <Show when={activeTab() === "snyk" && props.snykGetCommitData && props.snykScanCommit}>
               <SnykDetailTab
+                memory={snykMemory}
+                active={() => activeTab() === "snyk"}
+                takePendingFilter={() => {
+                  const query = state.snykPendingFilter();
+                  actions.setSnykPendingFilter(null);
+                  return query;
+                }}
+                mouseEnabled={props.mouseEnabled}
+                onMouseFocus={props.onMouseFocus}
+                scan={props.snykGetCommitData?.(c().hash) ?? null}
+                contentWidth={props.contentWidth}
+                onScan={async () => {
+                  await props.snykScanCommit?.(c().hash, !!props.snykGetCommitData?.(c().hash));
+                }}
+                loading={props.snykIsScanning?.(c().hash) ?? false}
+                navRef={props.navRef}
+                detailCursorIndex={() => state.detailCursorIndex()}
+                detailFocused={() => state.detailFocused()}
+                setDetailCursorAction={actions.setDetailCursorAction}
+                setDetailCursorIndex={actions.setDetailCursorIndex}
+              />
+            </Show>
+            <Show when={activeTab() === "snyk-deps" && props.snykGetCommitData && props.snykScanCommit}>
+              <SnykDependenciesTab
+                memory={snykMemory}
+                active={() => activeTab() === "snyk-deps"}
+                setDetailCursorShortcut={actions.setDetailCursorShortcut}
+                onShowVulnerabilities={query => {
+                  actions.setSnykPendingFilter(query);
+                  actions.setDetailCursorAction(null);
+                  actions.setDetailActiveTab("snyk");
+                  actions.setDetailCursorIndex(0);
+                }}
                 mouseEnabled={props.mouseEnabled}
                 onMouseFocus={props.onMouseFocus}
                 scan={props.snykGetCommitData?.(c().hash) ?? null}

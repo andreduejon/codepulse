@@ -1,5 +1,5 @@
 import { MouseButton, type ScrollBoxRenderable } from "@opentui/core";
-import { batch, createSignal, For, Show } from "solid-js";
+import { batch, createSignal, For, onCleanup, Show } from "solid-js";
 import { isUncommittedHash } from "../constants";
 import type { DetailTab, ProviderStatus } from "../context/state";
 import { useAppState } from "../context/state";
@@ -14,7 +14,11 @@ import type {
 import type { JenkinsCommitData, JenkinsJob, JenkinsJobFetchResult, JenkinsRun } from "../providers/jenkins/types";
 import type { OpenShiftCommitData, OpenShiftResource } from "../providers/openshift/types";
 import { providerDetailTab } from "../providers/provider";
+import { DEPENDENCY_LEGEND } from "../providers/snyk/deps-tab";
+import { SnykLegend } from "../providers/snyk/tab-shared";
 import type { SnykScanResult } from "../providers/snyk/types";
+import { VULNERABILITY_LEGEND } from "../providers/snyk/vulnerabilities-model";
+import { scheduleScrollIntoView, scrollElementIntoView } from "../utils/scroll";
 import { getAvailableTabs } from "../utils/tab-utils";
 import CommitDetailView from "./detail";
 import type { DetailNavRef } from "./detail-types";
@@ -76,6 +80,18 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
   const t = useT();
   const [hoveredTab, setHoveredTab] = createSignal<string | null>(null);
   let scrollbox: ScrollBoxRenderable | undefined;
+  const scrollToCursor = () =>
+    scheduleScrollIntoView(props.navRef, () => {
+      const row = props.navRef.itemRefs[state.detailCursorIndex()];
+      return !!scrollbox && !!row && scrollElementIntoView(scrollbox, row, 1);
+    });
+  props.navRef.scrollToCursor = scrollToCursor;
+  onCleanup(() => {
+    if (props.navRef.scrollToCursor === scrollToCursor) {
+      delete props.navRef.scrollToCursor;
+      if (props.navRef.scrollTimer) clearTimeout(props.navRef.scrollTimer);
+    }
+  });
 
   const tabs = (): { id: DetailTab; label: string; disabled: boolean }[] => {
     const commit = state.selectedCommit();
@@ -163,7 +179,8 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
               disabled: cd ? !available.has("files") : false,
             },
           ]),
-      ...(stashMap.has(commitHash)
+      ...(available.has("snyk-deps") ? [{ id: "snyk-deps" as const, label: "Dependencies", disabled: false }] : []),
+      ...(available.has("stashes")
         ? [
             {
               id: "stashes" as const,
@@ -174,6 +191,16 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
         : []),
       { id: "info", label: "Info", disabled: false },
     ];
+  };
+
+  /** Vulnerabilities: fix and exploit markers; Dependencies: severity triangles. Only when the scan has findings. */
+  const snykLegend = () => {
+    const hash = state.selectedCommit()?.hash ?? "";
+    const tab = state.detailActiveTab();
+    if ((tab !== "snyk" && tab !== "snyk-deps") || isUncommittedHash(hash)) return null;
+    const findings = props.snykGetCommitData?.(hash)?.findings ?? [];
+    if (findings.length === 0) return null;
+    return tab === "snyk" ? { items: VULNERABILITY_LEGEND } : { items: DEPENDENCY_LEGEND };
   };
 
   return (
@@ -216,7 +243,7 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
               // biome-ignore lint/a11y/useKeyWithMouseEvents: Keyboard-selected tabs already use accent colors.
               <box
                 flexGrow={1}
-                flexBasis={0}
+                flexBasis={tab.label.length + 2}
                 flexDirection="column"
                 onMouseOver={() => setHoveredTab(tab.id)}
                 onMouseOut={() => setHoveredTab(null)}
@@ -308,6 +335,14 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
           />
         </Show>
       </scrollbox>
+      <Show when={snykLegend()}>
+        {legend => (
+          <>
+            <box height={1} flexShrink={0} />
+            <SnykLegend items={legend().items} />
+          </>
+        )}
+      </Show>
     </box>
   );
 }
