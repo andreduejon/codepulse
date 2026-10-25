@@ -5,8 +5,6 @@ import type { ConfigInfo } from "../../config";
 import { SHIFT_JUMP } from "../../constants";
 import { useAppState } from "../../context/state";
 import { useTheme } from "../../context/theme";
-import { useBannerScroll } from "../../hooks/use-banner-scroll";
-import { useClipboard } from "../../hooks/use-clipboard";
 import {
   COPYABLE_VISIBLE_WIDTH,
   type GitHubMenuConfig,
@@ -14,8 +12,10 @@ import {
   type OpenShiftMenuConfig,
   type SettingItem,
   type SnykMenuConfig,
-  useMenuItems,
-} from "../../hooks/use-menu-items";
+} from "../../hooks/menu-items-types";
+import { useBannerScroll } from "../../hooks/use-banner-scroll";
+import { useClipboard } from "../../hooks/use-clipboard";
+import { useMenuItems } from "../../hooks/use-menu-items";
 import { scrollIndexedItemIntoView } from "../../utils/scroll";
 import { KeyHint, KeyHintSeparator } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";

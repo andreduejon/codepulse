@@ -1,7 +1,7 @@
 import type { MouseEvent, Renderable } from "@opentui/core";
 import type { JSX } from "solid-js";
 import type { Theme } from "../../context/theme";
-import { COPYABLE_VISIBLE_WIDTH, type SettingItem } from "../../hooks/use-menu-items";
+import { COPYABLE_VISIBLE_WIDTH, type SettingItem } from "../../hooks/menu-items-types";
 import Badge from "../badge";
 
 /** Column widths for the menu item value and hotkey display columns. */
