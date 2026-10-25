@@ -48,6 +48,7 @@ Normal clears highlighting without changing branch perspective.
 | `shift + ↑` / `shift + ↓` | Jump 10 items |
 | `←` / `h` | Previous tab / exit details on the first tab |
 | `→` / `l` | Next tab |
+| `v` | Snyk Dependencies: show a vulnerable package's findings |
 | `g` / `G` | Top / bottom |
 | `enter` | Activate selected item |
 
@@ -60,7 +61,7 @@ Theme controls and custom configuration are in the [theme guide](themes.md).
 | `:ancestry` | Highlight ancestry for the selected commit |
 | `:branches` | Open menu dialog on Branches tab |
 | `:cache` | Open global cache screen |
-| `:clear` | Dismiss the current status message |
+| `:clear` | Dismiss the current status message (or click its `✕`) and clear Debug |
 | `:debug` | Toggle debug dialog |
 | `:fetch` | Fetch from remote |
 | `:help` | Open help dialog |

@@ -2,7 +2,7 @@
  * Test: verifies buildCommitLogArgs — the pure arg-building logic extracted
  * from getCommits in repo.ts.
  *
- * Covers: --skip, --max-count defaults, --all with stash exclusion,
+ * Covers: --skip, --max-count defaults, all branches without tool refs,
  * branch + "--" disambiguation, and option interactions.
  */
 import { describe, expect, test } from "bun:test";
@@ -55,20 +55,16 @@ describe("buildCommitLogArgs", () => {
 
   // ── all ───────────────────────────────────────────────────────────
 
-  test("all=true adds stash exclusion BEFORE --all", () => {
+  test("all=true lists branches, remotes, tags and HEAD instead of --all", () => {
     const args = buildCommitLogArgs({ all: true });
-    const excludeIdx = args.indexOf("--exclude=refs/stash*");
-    const allIdx = args.indexOf("--all");
-    expect(excludeIdx).toBeGreaterThan(-1);
-    expect(allIdx).toBeGreaterThan(-1);
-    // --exclude must appear before --all for git to apply it correctly
-    expect(excludeIdx).toBeLessThan(allIdx);
+    expect(args.slice(-6)).toEqual(["--branches", "--remotes", "--tags", "--ignore-missing", "HEAD", "--"]);
+    expect(args).not.toContain("--all");
   });
 
-  test("all=false does NOT add --all or --exclude", () => {
+  test("all=false adds no revisions", () => {
     const args = buildCommitLogArgs({ all: false });
-    expect(args).not.toContain("--all");
-    expect(args).not.toContain("--exclude=refs/stash*");
+    expect(args).not.toContain("--branches");
+    expect(args).not.toContain("HEAD");
   });
 
   // ── branch ────────────────────────────────────────────────────────
@@ -82,10 +78,10 @@ describe("buildCommitLogArgs", () => {
     expect(branchIdx).toBeLessThan(dashIdx);
   });
 
-  test("branch does NOT add --all or --exclude", () => {
+  test("branch does NOT add the all-branches revisions", () => {
     const args = buildCommitLogArgs({ branch: "main" });
-    expect(args).not.toContain("--all");
-    expect(args).not.toContain("--exclude=refs/stash*");
+    expect(args).not.toContain("--branches");
+    expect(args).not.toContain("HEAD");
   });
 
   // ── all + branch interaction ──────────────────────────────────────
@@ -93,9 +89,8 @@ describe("buildCommitLogArgs", () => {
   test("all=true takes precedence over branch (branch is ignored)", () => {
     // In the code, `if (options.all)` is checked first, `else if (options.branch)`.
     const args = buildCommitLogArgs({ all: true, branch: "main" });
-    expect(args).toContain("--all");
+    expect(args).toContain("--branches");
     expect(args).not.toContain("main");
-    expect(args).not.toContain("--");
   });
 
   // ── combined options ──────────────────────────────────────────────
@@ -108,8 +103,12 @@ describe("buildCommitLogArgs", () => {
       `--format=${EXPECTED_FORMAT}`,
       "--max-count=100",
       "--skip=300",
-      "--exclude=refs/stash*",
-      "--all",
+      "--branches",
+      "--remotes",
+      "--tags",
+      "--ignore-missing",
+      "HEAD",
+      "--",
     ]);
   });
 

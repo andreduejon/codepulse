@@ -1,7 +1,14 @@
 import type { Accessor } from "solid-js";
 import { createEffect, createSignal, onCleanup, untrack } from "solid-js";
-import type { AppActions, AppState } from "../../context/state";
-import { providerError, providerIdle, providerLoading, providerUnavailable } from "../../context/state";
+import type { AppActions, AppState, ProviderStatus } from "../../context/state";
+import {
+  providerError,
+  providerIdle,
+  providerLoading,
+  providerUnavailable,
+  providerWarning,
+} from "../../context/state";
+import { BANNER } from "../../debug/banner";
 import type { ProviderView } from "../provider";
 import { buildSnykGraphBadges } from "./badges";
 import { DEFAULT_SNYK_CACHE_LIMIT } from "./cache";
@@ -12,6 +19,23 @@ import type { SnykCacheLimit, SnykScanResult } from "./types";
 // provider.ts adds this identifier as part of the provider registration change.
 const SNYK_PROVIDER_ID = "snyk" as ProviderView;
 const EXACT_SHA = /^[0-9a-f]{40,64}$/i;
+
+/**
+ * Banner status after a scan with usable findings: missing graphs are warnings, not errors.
+ * Header first, then one line per failed/skipped project.
+ */
+export function snykDependencyStatus(scan: SnykScanResult): ProviderStatus {
+  const projects = scan.dependencyProjects;
+  if (projects.length === 0) return providerWarning(BANNER.snyk.noDependencyProject);
+  const incomplete = projects.filter(project => project.status !== "scanned");
+  if (incomplete.length === 0) return providerIdle();
+  return providerWarning(
+    [
+      BANNER.snyk.graphsIncomplete(incomplete.length, projects.length),
+      ...incomplete.map(project => `${project.targetFile}: ${project.reason ?? project.status}`),
+    ].join("\n"),
+  );
+}
 
 export function collectSnykAutoScanTips(
   branches: readonly { name: string; isRemote: boolean; lastCommitHash: string }[],
@@ -111,11 +135,11 @@ export function useSnyk(opts: {
     actions.setGraphBadges(SNYK_PROVIDER_ID, buildSnykGraphBadges(results.values()));
   }
 
-  function mergeResult(result: SnykScanResult, expectedEpoch: number): void {
+  function mergeResult(result: SnykScanResult, expectedEpoch: number, rescan = false): void {
     if (disposed || opts.suspended?.() || expectedEpoch !== epoch) return;
     const sha = result.sha.toLowerCase();
     const existing = results.get(sha);
-    if (!shouldReplaceSnykResult(existing, result)) return;
+    if (!shouldReplaceSnykResult(existing, result, rescan)) return;
     results.set(sha, result);
     publishResults();
   }
@@ -147,7 +171,7 @@ export function useSnyk(opts: {
     actions.setProviderStatus(
       SNYK_PROVIDER_ID,
       current.enabled && !hasToken(current.tokenEnvVar)
-        ? providerUnavailable(`Snyk unavailable. Missing ${current.tokenEnvVar}.`)
+        ? providerUnavailable(BANNER.snyk.missingToken(current.tokenEnvVar))
         : providerIdle(),
     );
     setWorkVersion(version => version + 1);
@@ -188,9 +212,9 @@ export function useSnyk(opts: {
         entry.epoch === epoch &&
         entry.repoPath === state.repoPath()
       ) {
-        mergeResult(scanResult, entry.epoch);
+        mergeResult(scanResult, entry.epoch, entry.force);
         actions.setProviderLastSuccessfulRefresh(SNYK_PROVIDER_ID, new Date());
-        if (queue.length === 0) actions.setProviderStatus(SNYK_PROVIDER_ID, providerIdle());
+        if (queue.length === 0) actions.setProviderStatus(SNYK_PROVIDER_ID, snykDependencyStatus(scanResult));
       }
     } catch (error) {
       if (
@@ -218,16 +242,14 @@ export function useSnyk(opts: {
     if (disposed || opts.suspended?.()) return Promise.resolve(null);
     const normalizedSHA = sha.trim().toLowerCase();
     if (!EXACT_SHA.test(normalizedSHA)) {
-      actions.setProviderStatus(SNYK_PROVIDER_ID, providerError("Snyk scan requires an exact commit SHA."));
+      actions.setProviderStatus(SNYK_PROVIDER_ID, providerError(BANNER.snyk.exactCommit));
       return Promise.resolve(null);
     }
     if (!isAvailable()) {
       const current = config();
       actions.setProviderStatus(
         SNYK_PROVIDER_ID,
-        providerUnavailable(
-          current.enabled ? `Snyk unavailable. Missing ${current.tokenEnvVar}.` : "Snyk is disabled.",
-        ),
+        providerUnavailable(current.enabled ? BANNER.snyk.missingToken(current.tokenEnvVar) : BANNER.snyk.disabled),
       );
       return Promise.resolve(null);
     }
@@ -260,7 +282,7 @@ export function useSnyk(opts: {
         SNYK_PROVIDER_ID,
         hasToken(current.tokenEnvVar)
           ? providerIdle()
-          : providerUnavailable(`Snyk unavailable. Missing ${current.tokenEnvVar}.`),
+          : providerUnavailable(BANNER.snyk.missingToken(current.tokenEnvVar)),
       );
     } else {
       state.providers.unregister(SNYK_PROVIDER_ID);

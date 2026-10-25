@@ -7,6 +7,7 @@
  * Returns true when the key was consumed.
  */
 import type { KeyEvent, ScrollBoxRenderable } from "@opentui/core";
+import { batch } from "solid-js";
 import type { DetailNavRef } from "../components/detail-types";
 import { SHIFT_JUMP } from "../constants";
 import type { AppActions, AppState } from "../context/state";
@@ -36,6 +37,11 @@ export function handleDetailKey(e: KeyEvent, opts: DetailKeyOptions): boolean {
 
   // Only active when detail is focused or the detail dialog is open
   if (!state.detailFocused() && dialog() !== "detail") return false;
+  if (detailNavRef.handleFilterKey?.(e)) return true;
+  if (detailNavRef.handleKey?.(e)) {
+    e.preventDefault();
+    return true;
+  }
 
   const scrollbox = getDetailScrollboxRef();
 
@@ -69,9 +75,12 @@ export function handleDetailKey(e: KeyEvent, opts: DetailKeyOptions): boolean {
           actions.setDetailFocused(false);
         }
       } else {
-        actions.setDetailCursorAction(null);
-        actions.setDetailActiveTab(tabs[currentIdx - 1]);
-        actions.setDetailCursorIndex(0);
+        // Batched like the tab click: the new tab mounts after the reset and may restore its own cursor.
+        batch(() => {
+          actions.setDetailCursorAction(null);
+          actions.setDetailActiveTab(tabs[currentIdx - 1]);
+          actions.setDetailCursorIndex(0);
+        });
         scrollbox?.scrollTo(0);
       }
       return true;
@@ -90,9 +99,12 @@ export function handleDetailKey(e: KeyEvent, opts: DetailKeyOptions): boolean {
       });
       const currentIdx = tabs.indexOf(state.detailActiveTab());
       if (currentIdx < tabs.length - 1) {
-        actions.setDetailCursorAction(null);
-        actions.setDetailActiveTab(tabs[currentIdx + 1]);
-        actions.setDetailCursorIndex(0);
+        // Batched like the tab click: the new tab mounts after the reset and may restore its own cursor.
+        batch(() => {
+          actions.setDetailCursorAction(null);
+          actions.setDetailActiveTab(tabs[currentIdx + 1]);
+          actions.setDetailCursorIndex(0);
+        });
         scrollbox?.scrollTo(0);
       }
       return true;

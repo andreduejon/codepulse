@@ -2,6 +2,71 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.14.0] - 2026-10-25
+
+### Added
+
+- Capture normalized Snyk dependency graphs for Bun, npm, pnpm, Yarn (1–4), and
+  Maven projects alongside findings, with per-project failures and safe Bun-to-Yarn conversion
+  in temporary worktrees. Every tracked `pom.xml` is its own project; Maven `test`
+  dependencies are dev, `compile`/`provided`/`runtime`/`system` are prod. Maven projects
+  need Java plus `mvn` on PATH or a committed Maven Wrapper (`mvnw`).
+- Add the Snyk **Dependencies** browser for scanned supported projects, with
+  bold project headers showing package counts, expandable dependency groups,
+  short Maven names (full name on the selected row), copyable leaves, muted dev labels,
+  muted `repeated`/`circular` markers, a **Scope** `[all]`/`[prod]`/`[dev]` switch,
+  and persistent failed/skipped-project reasons.
+- Add live filters to both Snyk detail trees (`name@version` matches that package
+  exactly, anything else is a substring), including collapsed/repeated dependency paths; large dependency results open one level with per-row match
+  counts, and opening past 1,000 rows closes other branches. Add **Group by**
+  `[tree]`/`[package]` and **Copy dependencies as JSON** (with each package's own
+  worst severity and CVE IDs) to Dependencies. Both Snyk tabs keep their view while
+  switching tabs for the same scan.
+- Mark vulnerable packages in Dependencies with a `▲` in their worst severity
+  colour (pinned legend); **v** opens Vulnerabilities filtered to that package.
+- Highlight filter hits in both Snyk tabs in the Snyk colour; mute filter counts.
+- Show a CVSS score, mature-exploit marker, and fix dot (upgrade, override, no fix)
+  on every vulnerability, with a pinned legend; expand to title, package, `via`
+  dependency, manifest, exploit maturity, and fix line, each copyable.
+- Add **Group by** `[severity]` / `[dependency]` to Vulnerabilities: the dependency
+  view groups findings under the direct dependency and package to change.
+- Add **Copy scan as JSON** for handing parsed findings to agent tools; it respects
+  the active filter.
+- Status banners have a clickable `✕` to dismiss them.
+
+### Changed
+
+- Rename the Snyk detail tab to **Vulnerabilities**, size detail tabs by label
+  length, and show Stashes only in Git view.
+- Take direct-dependency scopes from `package.json` for npm, Yarn, pnpm, and Bun
+  graphs (Snyk marks shared runtime packages as dev), and let rows inherit their
+  direct dependency's scope. Rescan to correct older snapshots.
+- Include development dependencies in Snyk scans and discard older snapshots
+  without dependency coverage metadata. Retain findings when graph capture fails;
+  missing or incomplete dependency graphs show as a yellow warning banner (one
+  summary for all affected projects), and scan failures stay red.
+- List one vulnerability per CVE, manifest, and package (graph chips count the
+  same unit), and pick the lowest fixed version above the installed one.
+- Hide Snyk license-policy issues. Previously scanned commits need a rescan after
+  updating.
+- Count projects Snyk could not resolve as failed, even when its JSON findings omit
+  them (Snyk only reports them on stderr): such scans are now partial and name the
+  failed manifests.
+- **Rescan commit** stores a partial result over a complete snapshot, so its failed
+  projects stay visible instead of a "Kept last complete snapshot" error.
+- **Show all branches** lists local and remote branches, tags, and HEAD instead of every
+  ref, so commits behind tool-private refs (T3 checkpoints, `git maintenance` prefetches)
+  no longer appear in the graph.
+
+### Fixed
+
+- Ignore Snyk upgrade paths that keep every installed version (seen with pnpm), which
+  showed as "Upgrade X 1.0 → 1.0"; these findings now show their override or no fix.
+  Existing snapshots are corrected without a rescan.
+- Apply each repository's saved theme when switching repositories; the previous
+  repository's theme stayed and was saved into the new one on the next settings change.
+  An unknown theme falls back to the default, as at startup.
+
 ## [0.13.0] - 2026-10-14
 
 ### Added

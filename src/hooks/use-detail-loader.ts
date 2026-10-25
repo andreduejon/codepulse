@@ -164,6 +164,24 @@ export function useDetailLoader({
 
     const isUncommitted = isUncommittedHash(commit.hash);
 
+    if (tab === "snyk-deps") {
+      const provider = state.activeProviderView();
+      const available = getAvailableTabs({
+        commit,
+        uncommittedDetail: ud,
+        commitDetail: cd,
+        stashByParent: state.stashByParent(),
+        activeProviderView: provider,
+        getCommitData,
+      });
+      if (!available.includes(tab)) {
+        actions.setDetailActiveTab(getDefaultDetailTab(commit, provider));
+        actions.setDetailCursorIndex(0);
+        actions.setDetailCursorAction(null);
+      }
+      return;
+    }
+
     // Check if current tab is empty
     let isEmpty = false;
     if (isUncommitted && ud) {

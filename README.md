@@ -85,8 +85,9 @@ diagnostic conventions.
   [Jenkins provider](docs/providers/jenkins.md).
 - **OpenShift** — commit-matched Builds and live workload health for configured
   namespaces. See [OpenShift provider](docs/providers/openshift.md).
-- **Snyk** — exact-commit vulnerability snapshots with severity counts and
-  finding details. See [Snyk provider](docs/providers/snyk.md).
+- **Snyk** — commit-scoped vulnerability snapshots with severity counts, finding
+  details, and a dependency browser for Bun, npm, pnpm, Yarn, and Maven projects.
+  See [Snyk provider](docs/providers/snyk.md).
 
 ## Cache
 

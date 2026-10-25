@@ -115,6 +115,14 @@ export default function Footer(
           <Show when={enterAction()}>
             <KeyHintSeparator />
           </Show>
+          <Show when={state.detailCursorShortcut()}>
+            {shortcut => (
+              <>
+                <KeyHint key={shortcut().key} desc={` ${shortcut().desc}`} />
+                <KeyHintSeparator />
+              </>
+            )}
+          </Show>
           <KeyHint key="esc" desc=" back" onClick={props.mouseEnabled === false ? undefined : props.onClose} />
           <KeyHintSeparator />
           <KeyHint key="←/→" desc=" switch tab" />
