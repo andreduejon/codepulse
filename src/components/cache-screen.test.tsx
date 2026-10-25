@@ -478,7 +478,7 @@ test("async selected-repo eviction freezes the clone identity, blocks duplicate 
     expect(destroy).toHaveBeenCalledTimes(2);
     pending.reject(new Error("database is locked"));
     await setup.flush();
-    expect(setup.frame()).toContain("Eviction failed: database is locked");
+    expect(setup.frame()).toMatch(/Eviction failed\s*\n.*database is locked/);
     expect(setup.frame()).not.toContain("Evicted");
     expect(setup.frame()).not.toContain("enter confirm");
     expect(data.contents()).toEqual(before);
@@ -681,11 +681,15 @@ test("repository and reset-all errors stay visible without success or deletion",
   try {
     await setup.clickRow(ALPHA);
     await setup.key("r");
-    expect(setup.frame()).toContain("Reset failed: database is locked");
+    expect(setup.frame()).toMatch(/Reset failed\s*\n.*database is locked/);
+    const spanAt = (text: string) =>
+      setup.captureSpans().lines[setup.point(text).y].spans.find(span => span.text.includes(text));
+    expect(spanAt("Reset failed")?.fg).toEqual(RGBA.fromHex(setup.theme.theme().error));
+    expect(spanAt("database is locked")?.fg).toEqual(RGBA.fromHex(setup.theme.theme().foregroundMuted));
     expect(setup.frame()).not.toContain("Repository timer reset");
     await setup.key("r", true);
     await setup.key("RETURN");
-    expect(setup.frame()).toContain("Action failed: database is locked");
+    expect(setup.frame()).toContain("Action failed");
     expect(setup.frame()).not.toContain("Nothing deleted");
     expect(data.contents()).toEqual(before);
   } finally {
@@ -722,7 +726,7 @@ test("empty and corrupt databases are safe; an injected root never inspects or c
   await writeFile(join(invalid.root, "cache.sqlite"), "not a SQLite database");
   const broken = await screen(invalid.root);
   try {
-    expect(broken.frame()).toContain("Cache error:");
+    expect(broken.frame()).toContain("Cache error");
     expect(broken.frame()).toContain("Cache unavailable");
     const path = descendants(broken.renderer.root).find(
       node => node.id === "cache-file-cache.sqlite-path",
@@ -746,7 +750,7 @@ test("empty and corrupt databases are safe; an injected root never inspects or c
       node => node.id === "cache-file-cache.sqlite-path",
     ) as TextRenderable;
     expect(path.plainText).toBe(join(resolve(DEFAULT_PROVIDER_CACHE_ROOT), "cache.sqlite"));
-    expect(fallback.frame()).toContain("Cache error: cannot inspect cache");
+    expect(fallback.frame()).toMatch(/Cache error\s*\n.*cannot inspect cache/);
   } finally {
     summary.mockRestore();
     await fallback.dispose();

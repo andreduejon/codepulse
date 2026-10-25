@@ -8,6 +8,8 @@ All notable changes to this project will be documented in this file.
 
 - Status banners show a bold headline, their source, and muted detail lines
   (`Partial scan · Snyk`, then `Kept last complete snapshot.`).
+- Cache screen confirmations, errors and results use the same layout inside their
+  card: a bold headline in the message colour with muted detail below.
 
 ## [0.14.0] - 2026-10-25
 
