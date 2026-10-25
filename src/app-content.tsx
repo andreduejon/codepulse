@@ -1,6 +1,9 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { batch, createEffect, createMemo, createSignal, onCleanup, onMount, Show, untrack } from "solid-js";
+import { runAppCommand } from "./app-commands";
+import { githubSettings, jenkinsSettings, openShiftSettings, snykSettings } from "./app-provider-config";
+import { applyRepoSession, captureRepoSession } from "./app-repo-session";
 import type { AppContentProps, RepoSessionSnapshot } from "./app-types";
 import CacheScreen from "./components/cache-screen";
 import CommandBar from "./components/command-bar";
@@ -10,7 +13,7 @@ import DebugDialog from "./components/dialogs/debug-dialog";
 import { DetailDialog } from "./components/dialogs/detail-dialog";
 import DiffBlameDialog from "./components/dialogs/diff-blame-dialog";
 import HelpDialog from "./components/dialogs/help-dialog";
-import MenuDialog, { setLastMenuTab } from "./components/dialogs/menu-dialog";
+import MenuDialog from "./components/dialogs/menu-dialog";
 import ThemeDialog from "./components/dialogs/theme-dialog";
 import ErrorScreen from "./components/error-screen";
 import Footer from "./components/footer";
@@ -24,7 +27,6 @@ import { COMPACT_THRESHOLD_WIDTH, DEFAULT_MAX_COUNT, MIN_TERMINAL_HEIGHT, MIN_TE
 import { AppStateContext, createAppState, providerIdle, providerStatusMessage } from "./context/state";
 import { ThemeContext } from "./context/theme";
 import { BANNER, displayBanner } from "./debug/banner";
-import { clearDebugEvents } from "./debug/events";
 import type { DiffTarget } from "./git/types";
 import { openGraphDetails } from "./hooks/handle-graph-keys";
 import { useAncestry } from "./hooks/use-ancestry";
@@ -66,45 +68,10 @@ export function AppContent(props: Readonly<AppContentProps>) {
     setProviderCacheSuspended(false);
   });
 
-  // GitHub Actions provider config.
-  const [githubConfig, setGithubConfig] = createSignal({
-    enabled: props.initialGithubConfig?.enabled ?? false,
-    tokenEnvVar: props.initialGithubConfig?.tokenEnvVar ?? "GITHUB_TOKEN",
-    trustedEnterpriseHost: props.initialGithubConfig?.trustedEnterpriseHost ?? null,
-    fetchDepth: props.initialGithubConfig?.fetchDepth ?? 20,
-    cacheLimit: props.initialGithubConfig?.cacheLimit ?? 20,
-    autoRefreshSeconds: props.initialGithubConfig?.autoRefreshSeconds ?? 120,
-  });
-
-  // Jenkins provider config
-  const [jenkinsConfig, setJenkinsConfig] = createSignal({
-    enabled: props.initialJenkinsConfig?.enabled ?? false,
-    username: props.initialJenkinsConfig?.username,
-    tokenEnvVar: props.initialJenkinsConfig?.tokenEnvVar ?? "JENKINS_TOKEN",
-    fetchDepth: props.initialJenkinsConfig?.fetchDepth ?? props.initialJenkinsConfig?.graphBuildLimit ?? 20,
-    cacheLimit: props.initialJenkinsConfig?.cacheLimit ?? 20,
-    autoRefreshSeconds: props.initialJenkinsConfig?.autoRefreshSeconds ?? 120,
-    jobs: props.initialJenkinsConfig?.jobs ?? [],
-  });
-
-  // OpenShift provider config
-  const [openShiftConfig, setOpenShiftConfig] = createSignal({
-    enabled: props.initialOpenShiftConfig?.enabled ?? false,
-    serverUrl: props.initialOpenShiftConfig?.serverUrl ?? "",
-    tokenEnvVar: props.initialOpenShiftConfig?.tokenEnvVar ?? "OPENSHIFT_TOKEN",
-    namespaces: props.initialOpenShiftConfig?.namespaces ?? [],
-    commitShaAnnotation: props.initialOpenShiftConfig?.commitShaAnnotation ?? "dev/commit-sha",
-    cacheLimit: props.initialOpenShiftConfig?.cacheLimit ?? 20,
-    fetchDepth: props.initialOpenShiftConfig?.fetchDepth ?? 20,
-    autoRefreshSeconds: props.initialOpenShiftConfig?.autoRefreshSeconds ?? 120,
-  });
-
-  const [snykConfig, setSnykConfig] = createSignal<SnykProviderConfig>({
-    enabled: props.initialSnykConfig?.enabled ?? false,
-    tokenEnvVar: props.initialSnykConfig?.tokenEnvVar ?? "SNYK_TOKEN",
-    autoScanBranches: props.initialSnykConfig?.autoScanBranches ?? [],
-    maxCachedScans: props.initialSnykConfig?.maxCachedScans ?? 20,
-  });
+  const [githubConfig, setGithubConfig] = createSignal(githubSettings(props.initialGithubConfig));
+  const [jenkinsConfig, setJenkinsConfig] = createSignal(jenkinsSettings(props.initialJenkinsConfig));
+  const [openShiftConfig, setOpenShiftConfig] = createSignal(openShiftSettings(props.initialOpenShiftConfig));
+  const [snykConfig, setSnykConfig] = createSignal<SnykProviderConfig>(snykSettings(props.initialSnykConfig));
 
   const [repoDisplayConfig, setRepoDisplayConfig] = createSignal(getRepoDisplayConfig(activeRepoPath()));
 
@@ -112,39 +79,10 @@ export function AppContent(props: Readonly<AppContentProps>) {
     const path = activeRepoPath();
     backfillRepoConfig(path);
     const { config } = loadConfig(path);
-    setGithubConfig({
-      enabled: config.providers?.github?.enabled ?? false,
-      tokenEnvVar: config.providers?.github?.tokenEnvVar ?? "GITHUB_TOKEN",
-      trustedEnterpriseHost: config.providers?.github?.trustedEnterpriseHost ?? null,
-      fetchDepth: config.providers?.github?.fetchDepth ?? 20,
-      cacheLimit: config.providers?.github?.cacheLimit ?? 20,
-      autoRefreshSeconds: config.providers?.github?.autoRefreshSeconds ?? 120,
-    });
-    setJenkinsConfig({
-      enabled: config.providers?.jenkins?.enabled ?? false,
-      username: config.providers?.jenkins?.username,
-      tokenEnvVar: config.providers?.jenkins?.tokenEnvVar ?? "JENKINS_TOKEN",
-      fetchDepth: config.providers?.jenkins?.fetchDepth ?? config.providers?.jenkins?.graphBuildLimit ?? 20,
-      cacheLimit: config.providers?.jenkins?.cacheLimit ?? 20,
-      autoRefreshSeconds: config.providers?.jenkins?.autoRefreshSeconds ?? 120,
-      jobs: config.providers?.jenkins?.jobs ?? [],
-    });
-    setOpenShiftConfig({
-      enabled: config.providers?.openshift?.enabled ?? false,
-      serverUrl: config.providers?.openshift?.serverUrl ?? "",
-      tokenEnvVar: config.providers?.openshift?.tokenEnvVar ?? "OPENSHIFT_TOKEN",
-      namespaces: config.providers?.openshift?.namespaces ?? [],
-      commitShaAnnotation: config.providers?.openshift?.commitShaAnnotation ?? "dev/commit-sha",
-      cacheLimit: config.providers?.openshift?.cacheLimit ?? 20,
-      fetchDepth: config.providers?.openshift?.fetchDepth ?? 20,
-      autoRefreshSeconds: config.providers?.openshift?.autoRefreshSeconds ?? 120,
-    });
-    setSnykConfig({
-      enabled: config.providers?.snyk?.enabled ?? false,
-      tokenEnvVar: config.providers?.snyk?.tokenEnvVar ?? "SNYK_TOKEN",
-      autoScanBranches: config.providers?.snyk?.autoScanBranches ?? [],
-      maxCachedScans: config.providers?.snyk?.maxCachedScans ?? 20,
-    });
+    setGithubConfig(githubSettings(config.providers?.github));
+    setJenkinsConfig(jenkinsSettings(config.providers?.jenkins));
+    setOpenShiftConfig(openShiftSettings(config.providers?.openshift));
+    setSnykConfig(snykSettings(config.providers?.snyk));
     setRepoDisplayConfig(getRepoDisplayConfig(path));
     // The theme is per repository; without this a switch keeps the previous repo's theme, and the next settings
     // change saves it into this one. An unknown theme falls back to the default, as at startup.
@@ -348,45 +286,11 @@ export function AppContent(props: Readonly<AppContentProps>) {
 
   const saveRepoSessionSnapshot = (path: string) => {
     if (!path || state.repoPath() !== path || state.graphRows().length === 0) return;
-    repoSessionCache.set(path, {
-      commits: state.commits(),
-      graphRows: state.graphRows(),
-      branches: state.branches(),
-      currentBranch: state.currentBranch(),
-      repoPath: state.repoPath(),
-      remoteUrl: state.remoteUrl(),
-      tagDetails: new Map(state.tagDetails()),
-      stashByParent: new Map(state.stashByParent()),
-      cursorIndex: state.cursorIndex(),
-      scrollTargetIndex: state.scrollTargetIndex(),
-      maxGraphColumns: state.maxGraphColumns(),
-      hasMore: state.hasMore(),
-      lastFetchTime: state.lastFetchTime(),
-      activeProviderView: state.activeProviderView(),
-      graphScrollTop: graphScrollboxRef?.scrollTop ?? 0,
-    });
+    repoSessionCache.set(path, captureRepoSession(state, graphScrollboxRef?.scrollTop ?? 0));
   };
 
   const restoreRepoSessionSnapshot = (snapshot: RepoSessionSnapshot) => {
-    batch(() => {
-      actions.setCommits(snapshot.commits);
-      actions.setGraphRows(snapshot.graphRows);
-      actions.setBranches(snapshot.branches);
-      actions.setCurrentBranch(snapshot.currentBranch);
-      actions.setRepoPath(snapshot.repoPath);
-      actions.setRemoteUrl(snapshot.remoteUrl);
-      actions.setTagDetails(new Map(snapshot.tagDetails));
-      actions.setStashByParent(new Map(snapshot.stashByParent));
-      actions.setCursorIndex(snapshot.cursorIndex);
-      actions.setScrollTargetIndex(snapshot.scrollTargetIndex);
-      actions.setMaxGraphColumns(snapshot.maxGraphColumns);
-      actions.setHasMore(snapshot.hasMore);
-      actions.setLastFetchTime(snapshot.lastFetchTime);
-      actions.setActiveProviderView(snapshot.activeProviderView);
-      actions.setLoading(false);
-      actions.setFetching(false);
-      actions.setDetailLoading(false);
-    });
+    applyRepoSession(actions, snapshot);
     setPendingGraphScrollTop(snapshot.graphScrollTop);
   };
 
@@ -480,6 +384,22 @@ export function AppContent(props: Readonly<AppContentProps>) {
     await refreshActiveProvider();
   };
 
+  /** The active provider's data for a commit; Git has none. */
+  const activeProviderCommitData = (sha: string) => {
+    switch (state.activeProviderView()) {
+      case "github-actions":
+        return gitHubCI.getCommitData(sha);
+      case "jenkins":
+        return jenkinsCI.getCommitData(sha);
+      case "openshift":
+        return openShift.getCommitData(sha);
+      case "snyk":
+        return snyk.getCommitData(sha);
+      case "git":
+        return null;
+    }
+  };
+
   // All git data loading: initial load, pagination, fetch, and auto-refresh timer.
   const { loadData, loadMoreData, handleFetch } = useDataLoader({
     repoPath: activeRepoPath,
@@ -500,20 +420,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     actions,
     getIsJumpNavigation: () => isJumpNavigation,
     detailNavRef,
-    getCommitData: sha => {
-      switch (state.activeProviderView()) {
-        case "github-actions":
-          return gitHubCI.getCommitData(sha);
-        case "jenkins":
-          return jenkinsCI.getCommitData(sha);
-        case "openshift":
-          return openShift.getCommitData(sha);
-        case "snyk":
-          return snyk.getCommitData(sha);
-        case "git":
-          return null;
-      }
-    },
+    getCommitData: activeProviderCommitData,
     getProviderLoading: () => state.providerStatus().kind === "loading",
   });
 
@@ -566,100 +473,25 @@ export function AppContent(props: Readonly<AppContentProps>) {
     loadData(undefined, stickyHash);
   };
 
-  /**
-   * Execute a command dispatched from the command bar.
-   * Receives the trimmed value entered after `:` (e.g. "q", "quit", "m", "search").
-   */
-  const handleCommandExecute = (cmd: string) => {
-    const normalized = cmd.toLowerCase().replace(/^:/, "");
-
-    switch (normalized) {
-      case "cache":
-        openCacheScreen();
-        break;
-      case "q":
-      case "quit":
-        renderer.destroy();
-        break;
-      case "m":
-      case "menu":
-        setDialog("menu");
-        break;
-      case "repo":
-        setLastMenuTab("repository");
-        setDialog("menu");
-        break;
-      case "branches":
-        setLastMenuTab("branch");
-        setDialog("menu");
-        break;
-      case "providers":
-        setLastMenuTab("providers");
-        setDialog("menu");
-        break;
-      case "switch":
-        setRepoSelectorVisible(true);
-        break;
-      case "help":
-        setDialog("help");
-        break;
-      case "theme":
-        setDialog("theme");
-        break;
-      case "debug":
-        setDialog(dialog() === "debug" ? null : "debug");
-        break;
-      case "clear":
-        clearScreenMessage();
-        clearDebugEvents();
-        break;
-      case "f":
-      case "fetch":
-        clearAnchor();
-        void handleFetchAll();
-        break;
-      case "r":
-      case "reload":
-        clearAnchor();
-        void handleReloadAll();
-        break;
-      case "search":
-      case "p":
-      case "path":
-        actions.setDetailFocused(false);
-        setSearchFocused(normalized === "search");
-        if (normalized === "search") {
-          setSearchInputValue(state.searchQuery());
-          setCommandBarMode("search");
-        } else {
-          setCommandBarValue(state.pathFilter() ?? "");
-          setCommandBarMode("path");
-        }
-        break;
-      case "a":
-      case "ancestry": {
-        // Toggle ancestry mode — highlights the first-parent chain through the
-        // selected commit (both backward ancestors and forward descendants).
-        if (state.ancestrySet() !== null) {
-          // Already active — toggle off
-          clearAnchor();
-          break;
-        }
-        // Mutually exclusive with search and path
-        actions.setSearchQuery("");
-        actions.setPathFilter(null);
-        actions.setPathMatchSet(null);
-        const anchor = state.selectedCommit()?.hash ?? null;
-        if (anchor) {
-          setAnchor(anchor);
-        }
-        break;
-      }
-      default:
-        // Unknown command — ignore silently
-        break;
-    }
-  };
+  const handleCommandExecute = (cmd: string) =>
+    runAppCommand(cmd, {
+      state,
+      actions,
+      quit: () => renderer.destroy(),
+      dialog,
+      setDialog,
+      openCacheScreen,
+      openRepoSelector: () => setRepoSelectorVisible(true),
+      clearScreenMessage,
+      setAnchor,
+      clearAnchor,
+      fetchAll: handleFetchAll,
+      reloadAll: handleReloadAll,
+      setSearchFocused,
+      setSearchInputValue,
+      setCommandBarMode,
+      setCommandBarValue,
+    });
 
   const evictCacheRepository = async (repo: CacheRepositorySummary) => {
     const { hash } = await repositoryIdentity(activeRepoPath());
@@ -750,23 +582,48 @@ export function AppContent(props: Readonly<AppContentProps>) {
     onPathExecute: handlePathExecute,
     onSearchExecute: applySearch,
     onClearAncestry: clearAnchor,
-    getCommitData: sha => {
-      switch (state.activeProviderView()) {
-        case "github-actions":
-          return gitHubCI.getCommitData(sha);
-        case "jenkins":
-          return jenkinsCI.getCommitData(sha);
-        case "openshift":
-          return openShift.getCommitData(sha);
-        case "snyk":
-          return snyk.getCommitData(sha);
-        case "git":
-          return null;
-      }
-    },
+    getCommitData: activeProviderCommitData,
     getProviderLoading: () => state.providerStatus().kind === "loading",
     onSwitchGroupRepo: switchGroupRepo,
   });
+
+  /** Provider data and dialogs for the detail panel and the compact detail dialog. */
+  const providerDetailProps = {
+    githubGetCommitData: gitHubCI.getCommitData,
+    githubFetchJobsForRun: gitHubCI.fetchJobsForRun,
+    githubFetchCommitData: gitHubCI.fetchCommitDataForSHA,
+    get githubProviderStatus() {
+      return state.providerStatus();
+    },
+    onOpenJobLog: handleOpenJobLog,
+    jenkinsGetCommitData: jenkinsCI.getCommitData,
+    jenkinsFetchJobsForRun: jenkinsCI.fetchJobsForRun,
+    jenkinsFetchCommitData: jenkinsCI.fetchCommitDataForSHA,
+    onOpenJenkinsJobLog: handleOpenJenkinsJobLog,
+    get jenkinsProviderStatus() {
+      return state.providerStatus();
+    },
+    openshiftGetCommitData: openShift.getCommitData,
+    openshiftFetchCommitData: openShift.fetchCommitDataForSHA,
+    openshiftIsLoading: openShift.isLoading,
+    openshiftLiveAge: openShift.liveAge,
+    onOpenOpenShiftResource: handleOpenOpenShiftResource,
+    get openshiftProviderStatus() {
+      return state.providerStatus();
+    },
+    snykGetCommitData: snyk.getCommitData,
+    snykIsScanning: snyk.isScanning,
+    snykScanCommit: snyk.scanCommit,
+    get snykProviderStatus() {
+      return state.providerStatusFor("snyk");
+    },
+  };
+
+  /** Dialogs opened from the details return to the compact detail dialog when they close. */
+  const closeToDetail = () => {
+    if (layoutMode() === "compact" && state.detailFocused()) setDialog("detail");
+    else setDialog(null);
+  };
 
   // ── Provider-aware theme: override accent with githubActionsBg in CI mode ──
   // createMemo is placed here — after all const declarations above — to respect
@@ -950,26 +807,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                         searchFocused={searchFocused()}
                         onJumpToCommit={handleJumpToCommit}
                         onOpenDiff={handleOpenDiff}
-                        githubGetCommitData={gitHubCI.getCommitData}
-                        githubFetchJobsForRun={gitHubCI.fetchJobsForRun}
-                        githubFetchCommitData={gitHubCI.fetchCommitDataForSHA}
-                        githubProviderStatus={state.providerStatus()}
-                        onOpenJobLog={handleOpenJobLog}
-                        jenkinsGetCommitData={jenkinsCI.getCommitData}
-                        jenkinsFetchJobsForRun={jenkinsCI.fetchJobsForRun}
-                        jenkinsFetchCommitData={jenkinsCI.fetchCommitDataForSHA}
-                        onOpenJenkinsJobLog={handleOpenJenkinsJobLog}
-                        jenkinsProviderStatus={state.providerStatus()}
-                        openshiftGetCommitData={openShift.getCommitData}
-                        openshiftFetchCommitData={openShift.fetchCommitDataForSHA}
-                        openshiftIsLoading={openShift.isLoading}
-                        openshiftLiveAge={openShift.liveAge}
-                        onOpenOpenShiftResource={handleOpenOpenShiftResource}
-                        openshiftProviderStatus={state.providerStatus()}
-                        snykGetCommitData={snyk.getCommitData}
-                        snykIsScanning={snyk.isScanning}
-                        snykScanCommit={snyk.scanCommit}
-                        snykProviderStatus={state.providerStatusFor("snyk")}
+                        {...providerDetailProps}
                       />
                     </box>
                   </Show>
@@ -1018,14 +856,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                   {target => (
                     <DiffBlameDialog
                       target={target()}
-                      onClose={() => {
-                        // In compact mode with detail focused, return to the detail dialog
-                        if (layoutMode() === "compact" && state.detailFocused()) {
-                          setDialog("detail");
-                        } else {
-                          setDialog(null);
-                        }
-                      }}
+                      onClose={closeToDetail}
                       onNavigate={t => {
                         setDiffTarget(t);
                         detailNavRef.scrollToFile(t.filePath);
@@ -1044,26 +875,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                     onJumpToCommit={handleJumpToCommit}
                     onOpenDiff={handleOpenDiff}
                     onClose={() => setDialog(null)}
-                    githubGetCommitData={gitHubCI.getCommitData}
-                    githubFetchJobsForRun={gitHubCI.fetchJobsForRun}
-                    githubFetchCommitData={gitHubCI.fetchCommitDataForSHA}
-                    githubProviderStatus={state.providerStatus()}
-                    onOpenJobLog={handleOpenJobLog}
-                    jenkinsGetCommitData={jenkinsCI.getCommitData}
-                    jenkinsFetchJobsForRun={jenkinsCI.fetchJobsForRun}
-                    jenkinsFetchCommitData={jenkinsCI.fetchCommitDataForSHA}
-                    onOpenJenkinsJobLog={handleOpenJenkinsJobLog}
-                    jenkinsProviderStatus={state.providerStatus()}
-                    openshiftGetCommitData={openShift.getCommitData}
-                    openshiftFetchCommitData={openShift.fetchCommitDataForSHA}
-                    openshiftIsLoading={openShift.isLoading}
-                    openshiftLiveAge={openShift.liveAge}
-                    onOpenOpenShiftResource={handleOpenOpenShiftResource}
-                    openshiftProviderStatus={state.providerStatus()}
-                    snykGetCommitData={snyk.getCommitData}
-                    snykIsScanning={snyk.isScanning}
-                    snykScanCommit={snyk.scanCommit}
-                    snykProviderStatus={state.providerStatusFor("snyk")}
+                    {...providerDetailProps}
                   />
                 </Show>
                 {/* Job log dialog */}
@@ -1075,10 +887,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                       jobs={target().jobs}
                       run={target().run}
                       fetchLog={target().fetchLog}
-                      onClose={() => {
-                        if (layoutMode() === "compact" && state.detailFocused()) setDialog("detail");
-                        else setDialog(null);
-                      }}
+                      onClose={closeToDetail}
                     />
                   )}
                 </Show>
@@ -1091,10 +900,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                       }
                       followLog={openShift.followLog}
                       loadObject={item => openShift.loadResourceObject(item)}
-                      onClose={() => {
-                        if (layoutMode() === "compact" && state.detailFocused()) setDialog("detail");
-                        else setDialog(null);
-                      }}
+                      onClose={closeToDetail}
                     />
                   )}
                 </Show>
