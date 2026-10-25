@@ -1,37 +1,23 @@
 import { MouseButton, type MouseEvent, type Renderable } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/solid";
-import type { JSXElement } from "solid-js";
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
 import { DETAIL_PANEL_WIDTH_FRACTION, isUncommittedHash, UNCOMMITTED_PLACEHOLDER } from "../constants";
 import { useAppState } from "../context/state";
-import { BANNER } from "../debug/banner";
 import type { Commit, GraphRow } from "../git/types";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
 import { useClipboard } from "../hooks/use-clipboard";
 import { type CopyableField, useDetailCursor } from "../hooks/use-detail-cursor";
 import { useStashState } from "../hooks/use-stash-state";
 import { useT } from "../hooks/use-t";
-import { ActionsDetailTab } from "../providers/github-actions/detail-tab";
-import { JenkinsDetailTab } from "../providers/jenkins/detail-tab";
-import { OpenShiftDetailTab } from "../providers/openshift/detail-tab";
-import { SnykDependenciesTab } from "../providers/snyk/deps-tab";
-import { SnykDetailTab } from "../providers/snyk/detail-tab";
 import type { SnykViewMemory } from "../providers/snyk/view-memory";
 import { formatDate } from "../utils/date";
 import { isCursored as _isCursored, itemHighlightBg as _itemHighlightBg } from "../utils/detail-cursor";
-import Badge from "./badge";
+import { ProviderDetailTabs } from "./detail-provider-tabs";
+import { DetailRefs } from "./detail-refs";
+import { CopyableRow, type DetailRowsView, InteractiveCommitEntry, InteractiveSectionHeader } from "./detail-rows";
+import { cursoredItemText } from "./detail-scroll";
 import type { DetailNavRef, DetailViewProps } from "./detail-types";
-import {
-  BADGE_PADDING,
-  DIR_INDICATOR_WIDTH,
-  ENTRY_PADDING_LEFT,
-  HASH_BADGE_GAP,
-  PANEL_PADDING_X,
-  SHORT_HASH_LEN,
-  STAT_GAP,
-  STAT_PADDING_LEFT,
-  STATUS_COL_WIDTH,
-} from "./detail-types";
+import { PANEL_PADDING_X } from "./detail-types";
 import FileListView from "./file-list-view";
 import type { StashFileRowData } from "./stash-entry";
 import { StashEntry } from "./stash-entry";
@@ -104,40 +90,6 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   const activeTab = () => state.detailActiveTab();
   /** Snyk tab view state across tab switches (mutable ref; this view outlives its tabs). */
   const snykMemory: SnykViewMemory = {};
-
-  // Split refs into branches (branch/remote/head) and tags
-  const branchRefs = () => {
-    const c = commit();
-    if (!c) return [];
-    return c.refs.filter(r => r.type !== "tag");
-  };
-
-  const tagRefs = () => {
-    const c = commit();
-    if (!c) return [];
-    return c.refs.filter(r => r.type === "tag");
-  };
-
-  // The node color index for this commit's lane
-  const nodeColorIndex = () => row()?.nodeColor ?? 0;
-
-  // For non-tip commits: find the remote counterpart of branchName
-  const remoteName = () => {
-    const bn = row()?.branchName;
-    if (!bn) return null;
-    const remote = state.branches().find(b => b.isRemote && b.name.endsWith(`/${bn}`));
-    return remote?.name ?? null;
-  };
-
-  /**
-   * Look up upstream tracking info for a local branch name.
-   * Returns null when the branch has no upstream configured.
-   */
-  const branchTracking = (name: string) => {
-    const b = state.branches().find(br => !br.isRemote && br.name === name);
-    if (!b?.upstream) return null;
-    return { upstream: b.upstream, ahead: b.ahead ?? 0, behind: b.behind ?? 0 };
-  };
 
   // Whether to show committer info (only when different from author)
   const showCommitter = () => {
@@ -235,75 +187,17 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     const items = interactiveItems();
     const idx = state.detailCursorIndex();
     if (idx < 0 || idx >= items.length) return null;
-
-    const item = items[idx];
-    const pw = panelUsableWidth();
-
-    switch (item.type) {
-      case "section-header":
-        return null; // short text, no scroll needed
-
-      case "child":
-      case "parent": {
-        // Layout: paddingLeft + hash(7) + gap(1) + ` name ` badge
-        const r = row();
-        const entryBranch =
-          item.type === "child" ? (r?.childBranches[item.index] ?? "") : (r?.parentBranches[item.index] ?? "");
-        let name = entryBranch;
-        if (name === "") {
-          const tag = getTagForHash(item.hash);
-          name = tag ?? "deleted";
-        }
-        const available = pw - ENTRY_PADDING_LEFT - SHORT_HASH_LEN - HASH_BADGE_GAP - BADGE_PADDING;
-        if (name.length <= available) return null;
-        return { text: name, visibleWidth: available };
-      }
-
-      case "stash-entry": {
-        // Header shows only label + optional " (N)" file count suffix.
-        // The label is the scrollable part; file count is short and appended outside scroll.
-        const stash = stashEntries()[item.stashIndex];
-        if (!stash) return null;
-        const label = stash.refs[0]?.name ?? "stash";
-        const indicatorWidth = 2; // "▸ " or "▾ "
-        const available = pw - indicatorWidth;
-        if (label.length <= available) return null;
-        return { text: label, visibleWidth: available };
-      }
-
-      case "stash-dir": {
-        // Layout: prefix + connector + dirIndicator + name
-        const rows = getStashFileTreeRows(item.stashHash);
-        const treeRow = rows[item.index];
-        if (!treeRow) return null;
-        const fixedChars = treeRow.prefix.length + treeRow.connector.length + DIR_INDICATOR_WIDTH;
-        const available = pw - fixedChars;
-        if (treeRow.name.length <= available) return null;
-        return { text: treeRow.name, visibleWidth: available };
-      }
-
-      case "stash-file": {
-        // Layout: prefix + connector + name + stat columns
-        const rows = getStashFileTreeRows(item.stashHash);
-        const treeRow = rows[item.index];
-        if (!treeRow) return null;
-        const fw = getStashFileWidths(item.stashHash);
-        const statWidth = STAT_PADDING_LEFT + STATUS_COL_WIDTH + STAT_GAP + fw.addColWidth + STAT_GAP + fw.delColWidth;
-        const fixedChars = treeRow.prefix.length + treeRow.connector.length + statWidth;
-        const available = pw - fixedChars;
-        if (treeRow.name.length <= available) return null;
-        return { text: treeRow.name, visibleWidth: available };
-      }
-
-      case "copyable": {
-        // Body uses wrapMode="word", no banner scroll
-        if (item.field === "body") return null;
-        const text = getCopyableText(item.field);
-        const available = pw;
-        if (text.length <= available) return null;
-        return { text, visibleWidth: available };
-      }
-    }
+    return cursoredItemText(items[idx], panelUsableWidth(), {
+      row: row(),
+      getTagForHash,
+      stashLabel: index => {
+        const stash = stashEntries()[index];
+        return stash ? (stash.refs[0]?.name ?? "stash") : null;
+      },
+      stashTreeRows: getStashFileTreeRows,
+      stashFileWidths: getStashFileWidths,
+      copyableText: getCopyableText,
+    });
   });
 
   // Drive banner scroll via shared hook — overflow is derived from cursoredTextInfo
@@ -345,164 +239,20 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     return text.substring(off, off + info.visibleWidth);
   };
 
-  /**
-   * Local component: renders a single copyable row with cursor highlight,
-   * banner-scroll, and "✓ copied" feedback badge.
-   *
-   * Closes over: itemHighlightBg, isCopyableCursored, scrolledCopyableText,
-   * copiedField, t().
-   */
-  const CopyableRow = (rowProps: {
-    field: CopyableField;
-    /** Fallback content shown when not banner-scrolling. */
-    children: JSXElement;
-    /** Text color when not cursored. Defaults to t().foreground. */
-    fg?: string;
-    /** wrapMode for the text element. Defaults to "none". */
-    wrapMode?: "none" | "char" | "word";
-    /** Optional ref callback forwarded to the outer box for scroll-into-view. */
-    ref?: (el: Renderable) => void;
-  }) => {
-    const [hovered, setHovered] = createSignal(false);
-    return (
-      // biome-ignore lint/a11y/noStaticElementInteractions: TUI rows also support cursor navigation and Enter.
-      // biome-ignore lint/a11y/useKeyWithMouseEvents: Hover does not change keyboard focus.
-      <box
-        ref={rowProps.ref}
-        flexDirection="row"
-        backgroundColor={
-          itemHighlightBg(copyableIdx(rowProps.field)) ??
-          (props.mouseEnabled && hovered() ? t().backgroundElement : undefined)
-        }
-        onMouseOver={() => setHovered(true)}
-        onMouseOut={() => setHovered(false)}
-        onMouseDown={event => activateMouseItem(event, copyableIdx(rowProps.field))}
-      >
-        <text
-          selectable={!props.mouseEnabled}
-          flexGrow={1}
-          flexShrink={1}
-          fg={isCopyableCursored(rowProps.field) ? t().accent : (rowProps.fg ?? t().foreground)}
-          wrapMode={rowProps.wrapMode ?? "none"}
-          truncate={rowProps.wrapMode !== "word" && !isCopyableCursored(rowProps.field)}
-        >
-          {scrolledCopyableText(rowProps.field) ?? rowProps.children}
-        </text>
-        <Show when={copiedField() === rowProps.field}>
-          <text selectable={!props.mouseEnabled} flexShrink={0} bg={t().primary} fg={t().background} wrapMode="none">
-            {" \u2713 copied "}
-          </text>
-        </Show>
-      </box>
-    );
-  };
-
-  /** Render a collapsible section header with interactive highlight */
-  function InteractiveSectionHeader(
-    headerProps: Readonly<{
-      title: string;
-      count: number;
-      expanded: boolean;
-      section: "children" | "parents";
-      ref?: (el: Renderable) => void;
-    }>,
-  ) {
-    const itemIdx = () => findItemIndex("section-header", headerProps.section);
-    const [hovered, setHovered] = createSignal(false);
-
-    return (
-      // biome-ignore lint/a11y/noStaticElementInteractions: TUI headers also support cursor navigation and Enter.
-      // biome-ignore lint/a11y/useKeyWithMouseEvents: Hover does not change keyboard focus.
-      <box
-        ref={headerProps.ref}
-        backgroundColor={
-          itemHighlightBg(itemIdx()) ?? (props.mouseEnabled && hovered() ? t().backgroundElement : undefined)
-        }
-        onMouseOver={() => setHovered(true)}
-        onMouseOut={() => setHovered(false)}
-        onMouseDown={event => activateMouseItem(event, itemIdx())}
-      >
-        <text selectable={!props.mouseEnabled} fg={t().accent} wrapMode="none">
-          <strong>
-            {headerProps.expanded ? "▾" : "▸"} {headerProps.title} ({headerProps.count})
-          </strong>
-        </text>
-      </box>
-    );
-  }
-
-  /** Render a child/parent entry row with interactive highlight */
-  function InteractiveCommitEntry(
-    entryProps: Readonly<{
-      hash: string;
-      entryIndex: number;
-      type: "child" | "parent";
-      branchName: string;
-      colorIndex: number;
-      ref?: (el: Renderable) => void;
-    }>,
-  ) {
-    const itemIdx = () => findItemIndex(entryProps.type, undefined, entryProps.entryIndex);
-    const cursored = () => isCursored(itemIdx());
-    const [hovered, setHovered] = createSignal(false);
-    let entry: Renderable | undefined;
-    const tag = () => getTagForHash(entryProps.hash);
-
-    /** Resolved badge name for this entry */
-    const badgeName = () => {
-      if (entryProps.branchName !== "") return entryProps.branchName;
-      return tag() ?? "deleted";
-    };
-
-    // Badge text is also part of this action's hit area; other badges stay selectable.
-    createEffect(() => {
-      badgeName();
-      for (const child of entry?.getChildren() ?? []) child.selectable = !props.mouseEnabled;
-    });
-
-    /** Banner scroll props: only applied to the badge of the cursored entry */
-    const badgeScrollProps = () => {
-      if (!cursored()) return {};
+  const rowsView: DetailRowsView = {
+    mouseEnabled: () => props.mouseEnabled,
+    findItemIndex,
+    isCursored,
+    highlightBg: itemHighlightBg,
+    activate: activateMouseItem,
+    copiedField,
+    scrolledCopyableText,
+    bannerScroll: text => {
       const info = cursoredTextInfo();
-      if (!info || info.text !== badgeName()) return {};
-      return { visibleWidth: info.visibleWidth, bannerOffset: bannerOffset() };
-    };
-
-    return (
-      // biome-ignore lint/a11y/noStaticElementInteractions: TUI entries also support cursor navigation and Enter.
-      // biome-ignore lint/a11y/useKeyWithMouseEvents: Hover does not change keyboard focus.
-      <box
-        ref={el => {
-          entry = el;
-          entryProps.ref?.(el);
-        }}
-        flexDirection="row"
-        flexWrap="wrap"
-        gap={1}
-        paddingLeft={2}
-        backgroundColor={
-          itemHighlightBg(itemIdx()) ?? (props.mouseEnabled && hovered() ? t().backgroundElement : undefined)
-        }
-        onMouseOver={() => setHovered(true)}
-        onMouseOut={() => setHovered(false)}
-        onMouseDown={event => activateMouseItem(event, itemIdx())}
-      >
-        <text fg={cursored() ? t().accent : t().foreground} wrapMode="none">
-          {entryProps.hash.substring(0, SHORT_HASH_LEN)}
-        </text>
-        <Show
-          when={entryProps.branchName !== ""}
-          fallback={
-            <Show when={tag()} fallback={<Badge name="deleted" colorIndex={0} dimmed />}>
-              <Badge name={tag() as string} colorIndex={entryProps.colorIndex} {...badgeScrollProps()} />
-            </Show>
-          }
-        >
-          <Badge name={entryProps.branchName} colorIndex={entryProps.colorIndex} {...badgeScrollProps()} />
-        </Show>
-      </box>
-    );
-  }
+      return info && info.text === text ? { visibleWidth: info.visibleWidth, bannerOffset: bannerOffset() } : null;
+    },
+    getTagForHash,
+  };
 
   return (
     <box flexDirection="column" flexGrow={1}>
@@ -518,113 +268,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
           <>
             {/* ══════════════ Info tab ══════════════ */}
             <Show when={activeTab() === "info"}>
-              {/* ── Branch ── */}
-              <text fg={t().accent} wrapMode="none">
-                <strong>Branch</strong>
-              </text>
-              <box flexDirection="column">
-                <Show
-                  when={branchRefs().length > 0}
-                  fallback={
-                    <Show
-                      when={(row()?.branchName ?? "") !== ""}
-                      fallback={(() => {
-                        const tag = getTagForHash(c().hash);
-                        return tag ? (
-                          <Badge
-                            name={tag}
-                            colorIndex={nodeColorIndex()}
-                            visibleWidth={panelUsableWidth() - BADGE_PADDING}
-                          />
-                        ) : (
-                          <Badge name="deleted" colorIndex={0} dimmed />
-                        );
-                      })()}
-                    >
-                      {/* Graph-inferred branch: local badge, optional remote badge, right-aligned tracking */}
-                      <box flexDirection="row" width="100%">
-                        <Badge
-                          name={r().branchName}
-                          colorIndex={nodeColorIndex()}
-                          visibleWidth={panelUsableWidth() - BADGE_PADDING}
-                        />
-                        {(() => {
-                          const tr = branchTracking(r().branchName);
-                          if (!tr) {
-                            // No tracking — show remote badge if present
-                            const rn = remoteName();
-                            return rn ? (
-                              <Badge
-                                name={rn}
-                                colorIndex={nodeColorIndex()}
-                                visibleWidth={panelUsableWidth() - BADGE_PADDING}
-                              />
-                            ) : null;
-                          }
-                          return (
-                            <>
-                              <box flexGrow={1} />
-                              <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                                {`↑${tr.ahead} ↓${tr.behind}`}
-                              </text>
-                            </>
-                          );
-                        })()}
-                      </box>
-                    </Show>
-                  }
-                >
-                  {/* Sort: locals first, remotes after */}
-                  <For
-                    each={[
-                      ...branchRefs().filter(r => r.type !== "remote"),
-                      ...branchRefs().filter(r => r.type === "remote"),
-                    ]}
-                  >
-                    {ref => {
-                      const tr = ref.type === "branch" ? branchTracking(ref.name) : null;
-                      return (
-                        <box flexDirection="row" width="100%">
-                          <Badge
-                            name={ref.name}
-                            colorIndex={nodeColorIndex()}
-                            dimmed={ref.type === "stash" || ref.type === "uncommitted"}
-                            visibleWidth={panelUsableWidth() - BADGE_PADDING}
-                          />
-                          {tr ? (
-                            <>
-                              <box flexGrow={1} />
-                              <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                                {`↑${tr.ahead} ↓${tr.behind}`}
-                              </text>
-                            </>
-                          ) : null}
-                        </box>
-                      );
-                    }}
-                  </For>
-                </Show>
-              </box>
-              <box height={1} />
-
-              {/* ── Tags ── */}
-              <Show when={tagRefs().length > 0}>
-                <text fg={t().accent} wrapMode="none">
-                  <strong>Tags</strong>
-                </text>
-                <box flexDirection="row" flexWrap="wrap" gap={1}>
-                  <For each={tagRefs()}>
-                    {ref => (
-                      <Badge
-                        name={ref.name}
-                        colorIndex={nodeColorIndex()}
-                        visibleWidth={panelUsableWidth() - BADGE_PADDING}
-                      />
-                    )}
-                  </For>
-                </box>
-                <box height={1} />
-              </Show>
+              <DetailRefs commit={c()} row={r()} panelWidth={panelUsableWidth()} getTagForHash={getTagForHash} />
 
               {/* ── Metadata block (subheaders with copyable values) ── */}
               <text fg={t().accent} wrapMode="none">
@@ -639,6 +283,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 }
               >
                 <CopyableRow
+                  view={rowsView}
                   field="hash"
                   ref={(el: Renderable) => {
                     itemRefs[findItemIndex("copyable", "hash")] = el;
@@ -661,6 +306,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 }
               >
                 <CopyableRow
+                  view={rowsView}
                   field="author"
                   ref={(el: Renderable) => {
                     itemRefs[findItemIndex("copyable", "author")] = el;
@@ -685,6 +331,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 }
               >
                 <CopyableRow
+                  view={rowsView}
                   field="date"
                   ref={(el: Renderable) => {
                     itemRefs[findItemIndex("copyable", "date")] = el;
@@ -700,6 +347,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   <strong>Committer</strong>
                 </text>
                 <CopyableRow
+                  view={rowsView}
                   field="committer"
                   ref={(el: Renderable) => {
                     itemRefs[findItemIndex("copyable", "committer")] = el;
@@ -715,6 +363,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   <strong>Commit Date</strong>
                 </text>
                 <CopyableRow
+                  view={rowsView}
                   field="commitDate"
                   ref={(el: Renderable) => {
                     itemRefs[findItemIndex("copyable", "commitDate")] = el;
@@ -739,6 +388,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 }
               >
                 <CopyableRow
+                  view={rowsView}
                   field="subject"
                   ref={(el: Renderable) => {
                     itemRefs[findItemIndex("copyable", "subject")] = el;
@@ -754,6 +404,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   <strong>Body</strong>
                 </text>
                 <CopyableRow
+                  view={rowsView}
                   field="body"
                   fg={t().foregroundMuted}
                   wrapMode="word"
@@ -770,6 +421,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
               {/* ── Children (collapsible) ── */}
               <Show when={filteredChildren().length > 0}>
                 <InteractiveSectionHeader
+                  view={rowsView}
                   title="Children"
                   count={filteredChildren().length}
                   expanded={childrenExpanded()}
@@ -782,6 +434,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   <For each={filteredChildren()}>
                     {(child, i) => (
                       <InteractiveCommitEntry
+                        view={rowsView}
                         hash={child.hash}
                         entryIndex={i()}
                         type="child"
@@ -800,6 +453,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
               {/* ── Parents (collapsible) ── */}
               <Show when={r().parentHashes.length > 0}>
                 <InteractiveSectionHeader
+                  view={rowsView}
                   title="Parents"
                   count={r().parentHashes.length}
                   expanded={parentsExpanded()}
@@ -812,6 +466,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                   <For each={r().parentHashes}>
                     {(parentHash, i) => (
                       <InteractiveCommitEntry
+                        view={rowsView}
                         hash={parentHash}
                         entryIndex={i()}
                         type="parent"
@@ -930,137 +585,8 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
               </Show>
             </Show>
 
-            {/* ══════════════ Actions tab ══════════════ */}
-            <Show
-              when={activeTab() === "github-actions" && !!props.githubGetCommitData && !!props.githubFetchJobsForRun}
-            >
-              <ActionsDetailTab
-                mouseEnabled={props.mouseEnabled}
-                onMouseFocus={props.onMouseFocus}
-                sha={c().hash}
-                // biome-ignore lint/style/noNonNullAssertion: guarded by Show when condition above
-                getCommitData={props.githubGetCommitData!}
-                // biome-ignore lint/style/noNonNullAssertion: guarded by Show when condition above
-                fetchJobsForRun={props.githubFetchJobsForRun!}
-                fetchCommitData={props.githubFetchCommitData}
-                unavailableReason={
-                  props.githubProviderStatus?.kind === "unavailable" ? props.githubProviderStatus.message : null
-                }
-                loading={props.githubProviderStatus?.kind === "loading"}
-                navRef={props.navRef}
-                detailCursorIndex={() => state.detailCursorIndex()}
-                detailFocused={() => state.detailFocused()}
-                setDetailCursorAction={actions.setDetailCursorAction}
-                setDetailCursorIndex={actions.setDetailCursorIndex}
-                onOpenJobLog={props.onOpenJobLog}
-              />
-            </Show>
-
-            <Show when={activeTab() === "jenkins" && !!props.jenkinsGetCommitData && !!props.jenkinsFetchJobsForRun}>
-              <JenkinsDetailTab
-                mouseEnabled={props.mouseEnabled}
-                onMouseFocus={props.onMouseFocus}
-                sha={c().hash}
-                // biome-ignore lint/style/noNonNullAssertion: guarded by Show when condition above
-                getCommitData={props.jenkinsGetCommitData!}
-                // biome-ignore lint/style/noNonNullAssertion: guarded by Show when condition above
-                fetchJobsForRun={props.jenkinsFetchJobsForRun!}
-                fetchCommitData={props.jenkinsFetchCommitData}
-                unavailableReason={
-                  props.jenkinsProviderStatus?.kind === "unavailable" ? props.jenkinsProviderStatus.message : null
-                }
-                loading={props.jenkinsProviderStatus?.kind === "loading"}
-                navRef={props.navRef}
-                detailCursorIndex={() => state.detailCursorIndex()}
-                detailFocused={() => state.detailFocused()}
-                setDetailCursorAction={actions.setDetailCursorAction}
-                setDetailCursorIndex={actions.setDetailCursorIndex}
-                onOpenJobLog={props.onOpenJenkinsJobLog}
-              />
-            </Show>
-            <Show when={activeTab() === "openshift" && props.openshiftGetCommitData}>
-              {getCommitData => (
-                <OpenShiftDetailTab
-                  mouseEnabled={props.mouseEnabled}
-                  onMouseFocus={props.onMouseFocus}
-                  sha={c().hash}
-                  getCommitData={getCommitData()}
-                  fetchCommitData={props.openshiftFetchCommitData}
-                  isLoading={props.openshiftIsLoading}
-                  liveAge={props.openshiftLiveAge}
-                  onOpenResource={props.onOpenOpenShiftResource}
-                  unavailableReason={
-                    props.openshiftProviderStatus?.kind === "unavailable" ? props.openshiftProviderStatus.message : null
-                  }
-                  liveUnavailable={
-                    props.openshiftProviderStatus?.kind === "error" &&
-                    props.openshiftProviderStatus.message === BANNER.openshift.tokenExpired
-                  }
-                  warningReason={
-                    props.openshiftProviderStatus?.kind === "warning" &&
-                    props.openshiftProviderStatus.message !== BANNER.openshift.watchDenied
-                      ? props.openshiftProviderStatus.message
-                      : null
-                  }
-                  loading={props.openshiftProviderStatus?.kind === "loading"}
-                  navRef={props.navRef}
-                  detailCursorIndex={() => state.detailCursorIndex()}
-                  detailFocused={() => state.detailFocused()}
-                  setDetailCursorAction={actions.setDetailCursorAction}
-                  setDetailCursorIndex={actions.setDetailCursorIndex}
-                />
-              )}
-            </Show>
-            <Show when={activeTab() === "snyk" && props.snykGetCommitData && props.snykScanCommit}>
-              <SnykDetailTab
-                memory={snykMemory}
-                active={() => activeTab() === "snyk"}
-                takePendingFilter={() => {
-                  const query = state.snykPendingFilter();
-                  actions.setSnykPendingFilter(null);
-                  return query;
-                }}
-                mouseEnabled={props.mouseEnabled}
-                onMouseFocus={props.onMouseFocus}
-                scan={props.snykGetCommitData?.(c().hash) ?? null}
-                contentWidth={props.contentWidth}
-                onScan={async () => {
-                  await props.snykScanCommit?.(c().hash, !!props.snykGetCommitData?.(c().hash));
-                }}
-                loading={props.snykIsScanning?.(c().hash) ?? false}
-                navRef={props.navRef}
-                detailCursorIndex={() => state.detailCursorIndex()}
-                detailFocused={() => state.detailFocused()}
-                setDetailCursorAction={actions.setDetailCursorAction}
-                setDetailCursorIndex={actions.setDetailCursorIndex}
-              />
-            </Show>
-            <Show when={activeTab() === "snyk-deps" && props.snykGetCommitData && props.snykScanCommit}>
-              <SnykDependenciesTab
-                memory={snykMemory}
-                active={() => activeTab() === "snyk-deps"}
-                setDetailCursorShortcut={actions.setDetailCursorShortcut}
-                onShowVulnerabilities={query => {
-                  actions.setSnykPendingFilter(query);
-                  actions.setDetailCursorAction(null);
-                  actions.setDetailActiveTab("snyk");
-                  actions.setDetailCursorIndex(0);
-                }}
-                mouseEnabled={props.mouseEnabled}
-                onMouseFocus={props.onMouseFocus}
-                scan={props.snykGetCommitData?.(c().hash) ?? null}
-                contentWidth={props.contentWidth}
-                onScan={async () => {
-                  await props.snykScanCommit?.(c().hash, !!props.snykGetCommitData?.(c().hash));
-                }}
-                loading={props.snykIsScanning?.(c().hash) ?? false}
-                navRef={props.navRef}
-                detailCursorIndex={() => state.detailCursorIndex()}
-                detailFocused={() => state.detailFocused()}
-                setDetailCursorAction={actions.setDetailCursorAction}
-                setDetailCursorIndex={actions.setDetailCursorIndex}
-              />
-            </Show>
+            {/* ══════════════ Provider tabs ══════════════ */}
+            <ProviderDetailTabs view={props} sha={c().hash} snykMemory={snykMemory} />
           </>
         )}
       </Show>
