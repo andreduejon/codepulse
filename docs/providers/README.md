@@ -59,6 +59,8 @@ guide describes what is persisted and when live data replaces cached data.
 
 ## Errors and diagnostics
 
-Short status messages appear in the main view. Technical request details are
+Short status messages appear in the main view as a banner: a bold headline and
+its source (`Git` or the provider), with any detail in muted lines below. Click
+its `✕` or run `:clear` to dismiss it. Technical request details are
 kept in the Debug dialog (`:debug`) with credentials redacted. When one part of
 a provider request fails, Codepulse keeps usable partial data where possible.

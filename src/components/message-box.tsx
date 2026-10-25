@@ -1,11 +1,15 @@
 import { MouseButton, type MouseEvent } from "@opentui/core";
 import { createSignal, For, Show } from "solid-js";
+import { bannerParts } from "../debug/banner";
 import { useT } from "../hooks/use-t";
+import { TITLE_SEP } from "./dialogs/title-utils";
 
 export type UIMessageKind = "error" | "warning" | "info";
 
 export interface UIMessage {
   kind: UIMessageKind;
+  /** Where the message comes from (`Git`, `Snyk`, …); shown muted after the headline. */
+  source?: string;
   title?: string;
   message: string;
   detail?: string;
@@ -13,6 +17,8 @@ export interface UIMessage {
 
 interface MessageBoxProps {
   kind: UIMessageKind;
+  /** Shown muted after the headline. Without a title, the message's first sentence becomes the headline. */
+  source?: string;
   title?: string;
   message: string;
   detail?: string;
@@ -27,11 +33,13 @@ export default function MessageBox(props: Readonly<MessageBoxProps>) {
   const [closeHovered, setCloseHovered] = createSignal(false);
   const borderColor = () => (props.kind === "error" ? t().error : props.kind === "warning" ? t().warning : t().info);
   const backgroundColor = () => (props.variant === "dialog" ? t().backgroundPanel : t().background);
-  const messageLines = () => props.message.split("\n");
-  const detailLines = () => (props.detail ? props.detail.split("\n") : []);
-  const headerLine = () => props.title ?? messageLines()[0] ?? "";
-  const bodyLines = () =>
-    props.title ? [...messageLines(), ...detailLines()] : [...messageLines().slice(1), ...detailLines()];
+  const parts = () => {
+    const lines = props.message.split("\n");
+    if (props.title) return { title: props.title, detail: lines };
+    if (props.source) return bannerParts(props.source, props.message);
+    return { title: lines[0] ?? "", detail: lines.slice(1) };
+  };
+  const bodyLines = () => [...parts().detail, ...(props.detail ? props.detail.split("\n") : [])];
 
   return (
     <box
@@ -46,7 +54,8 @@ export default function MessageBox(props: Readonly<MessageBoxProps>) {
     >
       <box paddingX={4} flexDirection="row">
         <text wrapMode="word" flexGrow={1} flexShrink={1} fg={t().foreground}>
-          <strong>{headerLine()}</strong>
+          <strong>{parts().title}</strong>
+          {props.source ? <span style={{ fg: t().foregroundMuted }}>{`${TITLE_SEP}${props.source}`}</span> : null}
         </text>
         <Show when={props.onDismiss}>
           {dismiss => (

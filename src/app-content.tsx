@@ -41,6 +41,7 @@ import { useJenkinsCI } from "./providers/jenkins/use-jenkins-ci";
 import OpenShiftResourceDialog from "./providers/openshift/resource-dialog";
 import type { OpenShiftResource } from "./providers/openshift/types";
 import { useOpenShift } from "./providers/openshift/use-openshift";
+import { providerDisplayName } from "./providers/provider";
 import { type CacheRepositorySummary, evictRepositoryCache } from "./providers/shared/cache-management";
 import { repositoryIdentity, setProviderCacheSuspended } from "./providers/shared/sha-sqlite-cache";
 import { type SnykProviderConfig, useSnyk } from "./providers/snyk/use-snyk";
@@ -169,7 +170,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
 
   const screenMessage = createMemo<UIMessage | null>(() => {
     const err = state.error();
-    if (err) return { kind: "error" as const, message: displayBanner(err, BANNER.git.fetchFailed) };
+    if (err) return { kind: "error" as const, source: "Git", message: displayBanner(err, BANNER.git.fetchFailed) };
 
     const status = state.providerStatus();
     const message = providerStatusMessage(status);
@@ -177,6 +178,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
 
     return {
       kind: status.kind === "error" || status.kind === "warning" ? status.kind : ("info" as const),
+      source: providerDisplayName(state.activeProviderView()),
       message: displayBanner(message, message),
     };
   });
@@ -878,6 +880,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                           <box flexDirection="column" width="100%" flexShrink={0}>
                             <MessageBox
                               kind={msg().kind}
+                              source={msg().source}
                               title={msg().title}
                               message={msg().message}
                               detail={msg().detail}

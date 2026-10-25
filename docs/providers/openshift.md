@@ -68,8 +68,8 @@ prune does not drop Builds already cached. Least-recently-accessed snapshots
 evict at the limit, cascading to their log artifacts. Pods, workloads, and
 ImageStreamTags are not written to disk.
 
-An expired token (401) stops further requests. The banner reads `OpenShift
-token expired. Live data unavailable.` Graph and details keep the last Live
+An expired token (401) stops further requests. The banner reads **Token expired** ·
+OpenShift with `Live data unavailable.` below. Graph and details keep the last Live
 and Cache data. Provider reload and live requests are disabled. Cached Build
 JSON and logs remain viewable.
 
@@ -139,8 +139,8 @@ Live freshness also needs `watch` on Deployments, DeploymentConfigs, and Pods
 in each configured namespace. OpenShift/`kubernetes` `view` already has
 `get`/`list`/`watch`. A custom ServiceAccount needs the extra `watch` verb on
 those three kinds; Builds and ImageStreamTags stay `list` only. Without watch,
-the last list stays until Reload. The graph banner reads `OpenShift watch
-denied. Resource data might be stale. Reload to refresh.` `live` only appears
+the last list stays until Reload. The graph banner reads **Watch denied** ·
+OpenShift with `Resource data might be stale. Reload to refresh.` below. `live` only appears
 while a watch socket is connected.
 
 Build and Pod log views need `get` on those log subresources (`?follow=true`

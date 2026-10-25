@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+
+- Status banners show a bold headline, their source, and muted detail lines
+  (`Partial scan · Snyk`, then `Kept last complete snapshot.`).
+
 ## [0.14.0] - 2026-10-25
 
 ### Added
