@@ -156,7 +156,7 @@ error in the banner above the command bar.
   dependencies) markers; each opens to the direct dependencies that pull it in.
 - **Copy dependencies as JSON** (below Rescan, when a supported project was found) copies commit, scan time, Scope,
   filter, and per project a flat package list (`name`, `version`, `direct`, `dev`,
-  `pin` when forced, `via`, plus `severity` and `vulnerabilities`: the package's own worst severity and
+  `pin` and `removable` when set, `via`, plus `severity` and `vulnerabilities`: the package's own worst severity and
   CVE or Snyk IDs, `null`/`[]` when it has none), respecting the active Scope and
   filter. Graphs stay out (they are large); finding details live in **Copy scan as JSON**.
 - Vulnerable packages show a `▲` in their worst finding's severity colour, on
@@ -173,6 +173,16 @@ error in the banner above the command bar.
   in range. A parent selector (`express>path-to-regexp`) marks every matching
   version of the target. Type `override` in the filter to list them with their paths.
   Snapshots scanned before this change need a rescan.
+- **removable** follows **override** when the override could go: every package that
+  asks for the target (or the project's own `package.json`, for a direct dependency)
+  would, without it, already resolve to a version the override allows, taking the
+  highest published version in that parent's range. Parents' ranges come from the
+  registry through `pnpm view` (or `npm view`), so `.npmrc` registries and
+  credentials apply; answers are cached (a version's dependencies for good, version
+  lists for a day). Exact pins, aliases (`npm:`), `workspace:` ranges, or an
+  unreachable registry keep the override without **removable**. Type `removable` in
+  the filter to list them. On Windows, where pnpm and npm are `.cmd` shims, the check
+  is skipped.
 - Filter hits are highlighted in the package name in the Snyk colour (both tabs
   highlight matches in row text). Sibling rows reserve the `▲` column when any
   sibling has one, so `dev`/`repeated` line up per level. Filter counts (`N/M`)

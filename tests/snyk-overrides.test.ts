@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { applyOverrideRules, overrideTarget, parsePnpmLockfileOverrides } from "../src/providers/snyk/overrides";
+import {
+  applyOverrideRules,
+  highestSatisfying,
+  markRemovableOverrides,
+  type OverrideRule,
+  overrideTarget,
+  parsePnpmLockfileOverrides,
+} from "../src/providers/snyk/overrides";
+import type { RegistryLookup } from "../src/providers/snyk/registry";
 import type { SnykDependencyGraph } from "../src/providers/snyk/types";
 
 describe("overrideTarget", () => {
@@ -36,7 +44,7 @@ describe("parsePnpmLockfileOverrides", () => {
     expect(parsePnpmLockfileOverrides(lockfile)).toEqual([
       { name: "lodash", spec: "4.17.21" },
       { name: "@babel/core", spec: "^7.26.0" },
-      { name: "path-to-regexp", spec: "0.1.12" },
+      { name: "path-to-regexp", spec: "0.1.12", parent: "express" },
     ]);
   });
 
@@ -75,5 +83,113 @@ describe("applyOverrideRules", () => {
       "semver@7.6.3": "override",
       "alias@1.0.0": "override",
     });
+  });
+});
+
+describe("highestSatisfying", () => {
+  const versions = ["0.1.7", "0.1.10", "0.1.12", "0.2.0", "1.0.0-beta.1", "1.0.0"];
+
+  test("picks the highest version in range, like pnpm and npm", () => {
+    expect(highestSatisfying(versions, "~0.1.7")).toBe("0.1.12");
+    expect(highestSatisfying(versions, "0.1.10")).toBe("0.1.10");
+    expect(highestSatisfying(versions, "^0.2.0")).toBe("0.2.0");
+    expect(highestSatisfying(versions, ">=0.2.0")).toBe("1.0.0");
+    expect(highestSatisfying(versions, "^2.0.0")).toBeNull();
+  });
+
+  test("skips prereleases unless the range names one", () => {
+    expect(highestSatisfying(["1.0.0-beta.1"], ">=0.2.0")).toBeNull();
+    expect(highestSatisfying(versions, "1.0.0-beta.1")).toBe("1.0.0-beta.1");
+  });
+});
+
+describe("markRemovableOverrides", () => {
+  /** app → express@4.21.2 → path-to-regexp@0.1.12 (overridden), app → path-to-regexp directly when `direct`. */
+  const graph = (direct = false): SnykDependencyGraph => ({
+    targetFile: "package.json",
+    packageManager: "pnpm",
+    rootNodeId: "root",
+    packages: [
+      { id: "app@1.0.0", name: "app", version: "1.0.0" },
+      { id: "express@4.21.2", name: "express", version: "4.21.2" },
+      { id: "path-to-regexp@0.1.12", name: "path-to-regexp", version: "0.1.12", pin: "override" },
+    ],
+    nodes: [
+      {
+        nodeId: "root",
+        pkgId: "app@1.0.0",
+        deps: direct ? ["express", "ptr"] : ["express"],
+        scope: "prod",
+        referenceNodeId: null,
+      },
+      { nodeId: "express", pkgId: "express@4.21.2", deps: ["ptr"], scope: "prod", referenceNodeId: null },
+      { nodeId: "ptr", pkgId: "path-to-regexp@0.1.12", deps: [], scope: "prod", referenceNodeId: null },
+    ],
+  });
+  const lookup = (expressAsks: string | undefined, versions = ["0.1.10", "0.1.12"]) => {
+    const calls: string[] = [];
+    const registry: RegistryLookup = {
+      versions: async name => {
+        calls.push(`versions ${name}`);
+        return versions;
+      },
+      dependencies: async (name, version) => {
+        calls.push(`dependencies ${name}@${version}`);
+        return expressAsks === undefined ? null : { "path-to-regexp": expressAsks };
+      },
+    };
+    return { registry, calls };
+  };
+  const noRoot = async () => ({});
+  const rule: OverrideRule = { name: "path-to-regexp", spec: ">=0.1.12" };
+  const removable = (g: SnykDependencyGraph) => g.packages[2].removable ?? false;
+
+  test("is removable when the parent's own range already resolves into the override", async () => {
+    const g = graph();
+    const { registry, calls } = lookup("~0.1.10");
+    await markRemovableOverrides([g], [rule], registry, noRoot);
+    expect(removable(g)).toBe(true);
+    expect(calls.sort()).toEqual(["dependencies express@4.21.2", "versions path-to-regexp"]);
+  });
+
+  test("stays when a parent pins a version outside the override", async () => {
+    const g = graph();
+    await markRemovableOverrides([g], [rule], lookup("0.1.10").registry, noRoot);
+    expect(removable(g)).toBe(false);
+  });
+
+  test("stays when the registry can't answer", async () => {
+    const g = graph();
+    await markRemovableOverrides([g], [rule], lookup(undefined).registry, noRoot);
+    expect(removable(g)).toBe(false);
+  });
+
+  test("checks the project's own range for a direct dependency", async () => {
+    const g = graph(true);
+    const { registry } = lookup("~0.1.10");
+    await markRemovableOverrides([g], [rule], registry, async () => ({ "path-to-regexp": "0.1.7" }));
+    expect(removable(g)).toBe(false);
+    const again = graph(true);
+    await markRemovableOverrides([again], [rule], registry, async () => ({ "path-to-regexp": "^0.1.10" }));
+    expect(removable(again)).toBe(true);
+  });
+
+  test("a parent selector only asks that parent", async () => {
+    const g = graph(true);
+    const { registry, calls } = lookup("~0.1.10");
+    await markRemovableOverrides([g], [{ ...rule, parent: "express" }], registry, async () => ({}));
+    expect(removable(g)).toBe(true);
+    expect(calls).toContain("dependencies express@4.21.2");
+  });
+
+  test("exact pins and aliases are never removable", async () => {
+    const g = graph();
+    await markRemovableOverrides(
+      [g],
+      [{ name: "path-to-regexp", spec: "npm:other@1.0.0" }],
+      lookup("~0.1.10").registry,
+      noRoot,
+    );
+    expect(removable(g)).toBe(false);
   });
 });

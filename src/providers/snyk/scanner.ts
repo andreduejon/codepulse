@@ -6,9 +6,10 @@ import { addDebugEvent, redactDebugValue } from "../../debug/events";
 import { SnykCache } from "./cache";
 import { normalizeSnykTargetFile, parseSnykDepGraphs } from "./dep-graph";
 import { snykFailureReason } from "./failure-reason";
-import { applyLockfileOverrides } from "./overrides";
+import { applyLockfileOverrides, manifestRanges, markRemovableOverrides, pnpmOverrideRules } from "./overrides";
 import { parseSnykOutput, shouldReplaceSnykResult } from "./parser";
 import { discoverSnykDependencyProjects, type SnykDependencyProjectInput } from "./projects";
+import { createRegistryLookup, RegistryCache, type RegistryLookup } from "./registry";
 import type {
   SnykCacheLimit,
   SnykDependencyGraph,
@@ -479,6 +480,7 @@ async function scanDependencyProjects(
   commandOptions: Parameters<SnykCommandRunner>[1],
   runCommand: SnykCommandRunner,
   trackedFiles: readonly string[],
+  registry: () => RegistryLookup | null,
 ): Promise<{ projects: SnykDependencyProjectResult[]; failures: SnykProjectFailures }> {
   const ready = projects.filter(project => !unavailable.has(project.targetFile));
   if (ready.length === 0) return { projects: [...unavailable.values()], failures: NO_PROJECT_FAILURES };
@@ -531,7 +533,35 @@ async function scanDependencyProjects(
     };
   });
   await Promise.all(pending);
+  await markRemovablePnpmOverrides(results, commandOptions, registry);
   return { projects: results, failures };
+}
+
+/** Flags pnpm overrides that could go, asking the registry only when a project has overridden packages. */
+async function markRemovablePnpmOverrides(
+  projects: readonly SnykDependencyProjectResult[],
+  commandOptions: Parameters<SnykCommandRunner>[1],
+  registry: () => RegistryLookup | null,
+): Promise<void> {
+  const manifests = new Map<string, Promise<Record<string, string>>>();
+  const rootRanges = (manifest: string) => {
+    const directory = posix.dirname(manifest);
+    let ranges = manifests.get(directory);
+    if (!ranges) {
+      ranges = manifestRanges(commandOptions.cwd, directory);
+      manifests.set(directory, ranges);
+    }
+    return ranges;
+  };
+  for (const project of projects) {
+    if (project.packageManager !== "pnpm") continue;
+    if (!project.graphs.some(graph => graph.packages.some(pkg => pkg.pin === "override"))) continue;
+    const lookup = registry();
+    if (!lookup) return;
+    const rules = await pnpmOverrideRules(commandOptions.cwd, posix.dirname(project.targetFile));
+    await markRemovableOverrides(project.graphs, rules, lookup, rootRanges);
+    throwIfAborted(commandOptions.signal);
+  }
 }
 
 const MANIFEST_PACKAGE_MANAGERS = new Set(["npm", "yarn", "pnpm", "bun"]);
@@ -639,7 +669,23 @@ export async function scanSnykCommit(
         throw new Error("Snyk returned unusable results.");
       }
     }
-    const graphRun = await scanDependencyProjects(projects, unavailable, commandOptions, runCommand, trackedFiles);
+    let lookup: RegistryLookup | null | undefined;
+    const registry = () =>
+      (lookup ??= createRegistryLookup({
+        runCommand,
+        cwd: commandOptions.cwd,
+        signal: commandOptions.signal,
+        which: dependencies.which ?? (command => Bun.which(command)),
+        cache: new RegistryCache(dependencies.cacheRoot),
+      }));
+    const graphRun = await scanDependencyProjects(
+      projects,
+      unavailable,
+      commandOptions,
+      runCommand,
+      trackedFiles,
+      registry,
+    );
     result.dependencyProjects = graphRun.projects;
     // Both runs detect the same projects; only the graph run reports the ones Snyk could not resolve.
     const failedProjects = Math.max(result.failedProjects ?? 0, graphRun.failures.count);

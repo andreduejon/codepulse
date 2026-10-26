@@ -460,6 +460,38 @@ process.exit(1);
     expect(await new SnykCache({ root: f.cacheRoot }).read(f.repoPath, SHA)).toEqual(result);
   });
 
+  test("asks the registry whether a pnpm override could go", async () => {
+    const f = await dependencyFixture({
+      "package.json": '{"packageManager":"pnpm@10.0.0","dependencies":{"dep":"^1.0.0"}}',
+      "pnpm-lock.yaml": "lockfileVersion: '9.0'\n\noverrides:\n  dep: '>=1.0.0'\n",
+    });
+    f.output.findings.stdout = JSON.stringify({
+      packageManager: "pnpm",
+      displayTargetFile: "pnpm-lock.yaml",
+      vulnerabilities: [],
+    });
+    f.output.graph.stdout = dependencyGraph("pnpm", "package.json");
+    const views: string[] = [];
+    const runner: SnykCommandRunner = async (command, options) => {
+      if (command[0] !== "pnpm") return f.runner(command, options);
+      views.push(command.join(" "));
+      return { stdout: JSON.stringify(["0.9.0", "1.0.0"]), exitCode: 0 };
+    };
+    const result = await scanSnykCommit(
+      { repoPath: f.repoPath, sha: SHA },
+      { cacheRoot: f.cacheRoot, runCommand: runner, which: name => (name === "pnpm" ? "/bin/pnpm" : null) },
+    );
+    // dep is a direct dependency: the project's own ^1.0.0 already resolves to 1.0.0.
+    expect(result.dependencyProjects[0].graphs[0].packages[1]).toEqual({
+      id: "dep@1.0.0",
+      name: "dep",
+      version: "1.0.0",
+      pin: "override",
+      removable: true,
+    });
+    expect(views).toEqual(["pnpm view dep versions --json"]);
+  });
+
   test("scans native Yarn v1 without a local Yarn command", async () => {
     const f = await dependencyFixture({ "package.json": "{}", "yarn.lock": "# yarn lockfile v1\n" });
     const result = await scanSnykCommit(

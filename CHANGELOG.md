@@ -9,6 +9,9 @@ All notable changes to this project will be documented in this file.
 - Mark Snyk dependencies that a pnpm override forces with a muted `override`
   keyword in Dependencies, read from `pnpm-lock.yaml`. The dependency filter also
   matches the keyword, so `override` lists them with their paths.
+- Flag pnpm overrides that could go with a muted `removable` keyword: every parent's
+  own range (from `pnpm view`, cached) would already resolve to a version the
+  override allows.
 
 ### Changed
 
