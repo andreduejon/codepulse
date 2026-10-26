@@ -15,6 +15,10 @@ All notable changes to this project will be documented in this file.
   stop a provider. Snyk projects without a dependency graph list each path with its
   reason under **Dependencies**; partial scans name their failed projects under
   **Vulnerabilities**. Close a notice with its `✕` or `:clear`.
+- Failed Snyk projects show the reason Snyk printed (for example an out-of-sync
+  lockfile or an unresolvable parent POM) instead of a generic "no dependency
+  graph". A missing `node_modules` folder explains that the project needs a
+  lockfile, since scans run on a clean checkout.
 
 ## [0.14.0] - 2026-10-25
 

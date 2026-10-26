@@ -431,6 +431,17 @@ export function isSnykScanResult(value: unknown): value is SnykScanResult {
   ) {
     return false;
   }
+  const failureReasons = value.failureReasons;
+  if (
+    failureReasons !== undefined &&
+    (!Array.isArray(failedTargets) ||
+      !isObject(failureReasons) ||
+      !Object.entries(failureReasons).every(
+        ([target, reason]) => failedTargets.includes(target) && typeof reason === "string" && reason.trim().length > 0,
+      ))
+  ) {
+    return false;
+  }
 
   for (const severity of SEVERITIES) {
     const count = value.counts[severity];

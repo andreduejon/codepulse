@@ -61,6 +61,17 @@ describe("snykPartialScanNotice", () => {
     });
   });
 
+  test("shows Snyk's reason under each failed manifest when it printed one", () => {
+    expect(
+      snykPartialScanNotice({
+        partial: true,
+        failedProjects: 2,
+        failedTargets: ["a/package.json", "b/pom.xml"],
+        failureReasons: { "b/pom.xml": "Could not resolve dependencies." },
+      })?.entries,
+    ).toEqual([{ label: "a/package.json" }, { label: "b/pom.xml", text: "Could not resolve dependencies." }]);
+  });
+
   test("counts failures Snyk did not name", () => {
     expect(
       snykPartialScanNotice({ partial: true, failedProjects: 3, failedTargets: ["a/package.json"] }),

@@ -781,9 +781,42 @@ process.exit(1);
       { repoPath: f.repoPath, sha: SHA },
       { cacheRoot: f.cacheRoot, runCommand: runner },
     );
-    expect(result).toMatchObject({ partial: true, failedProjects: 1, failedTargets: ["vendor/lib/package.json"] });
-    expect(result.dependencyProjects[0]).toMatchObject({ status: "scanned" });
+    expect(result).toMatchObject({
+      partial: true,
+      failedProjects: 1,
+      failedTargets: ["vendor/lib/package.json"],
+      failureReasons: {
+        "vendor/lib/package.json":
+          "Missing node_modules folder. Snyk needs a lockfile for this project, since scans run on a clean checkout.",
+      },
+    });
+    // A nested manifest's failure stays with the scan; the root project keeps its graph.
+    expect(result.dependencyProjects[0]).toMatchObject({ status: "scanned", reason: null });
     expect(await new SnykCache({ root: f.cacheRoot }).read(f.repoPath, SHA)).toEqual(result);
+  });
+
+  test("a project without a graph shows the reason Snyk printed for its manifest", async () => {
+    const f = await dependencyFixture({ "package.json": "{}", "yarn.lock": "# yarn lockfile v1\n" });
+    // Snyk returns a graph for another package manager only, so the yarn project has none.
+    f.output.graph.stdout = dependencyGraph("pnpm", "package.json");
+    const runner: SnykCommandRunner = async (command, options) => {
+      const output = await f.runner(command, options);
+      if (!command.includes("--print-graph")) return output;
+      const manifest = join(await realpath(options.cwd), "package.json");
+      return {
+        ...output,
+        stderr: `${manifest}:\n  yarn.lock is out of sync with package.json.\n✗ 1/1 potential projects failed to get dependencies.\n`,
+      };
+    };
+    const result = await scanSnykCommit(
+      { repoPath: f.repoPath, sha: SHA },
+      { cacheRoot: f.cacheRoot, runCommand: runner },
+    );
+    expect(result.dependencyProjects[0]).toMatchObject({
+      status: "failed",
+      reason: "yarn.lock is out of sync with package.json.",
+    });
+    expect(result.failureReasons).toEqual({ "package.json": "yarn.lock is out of sync with package.json." });
   });
 
   test("graph-run failures add to findings failures without counting them twice", async () => {
@@ -1137,11 +1170,36 @@ describe("parseSnykProjectFailures", () => {
     expect(parseSnykProjectFailures(stderr, ["/var/scan/worktree", "/private/var/scan/worktree"])).toEqual({
       count: 3,
       targets: ["tools/pom.xml", "vendor/lib/package.json"],
+      reasons: {
+        "tools/pom.xml": "Could not resolve dependencies.",
+        "vendor/lib/package.json":
+          "Missing node_modules folder. Snyk needs a lockfile for this project, since scans run on a clean checkout.",
+      },
+    });
+  });
+
+  test("keeps Snyk's reason lines until the next path, blank line or summary, without worktree paths", () => {
+    const stderr = [
+      "✗ 2/4 potential projects failed to get dependencies.",
+      "",
+      "/repo/services/api/pom.xml:",
+      "  Command failed: mvn dependency:tree in /repo/services/api",
+      "  [ERROR] Non-resolvable parent POM for com.example:api:1.0",
+      "",
+      "Testing /repo...",
+      "/repo/web/package.json:",
+      "  Failed to parse package-lock.json. Run with `-d` for debug output.",
+    ].join("\n");
+    expect(parseSnykProjectFailures(stderr, ["/repo"]).reasons).toEqual({
+      "services/api/pom.xml":
+        "Command failed: mvn dependency:tree in services/api [ERROR] Non-resolvable parent POM for com.example:api:1.0",
+      "web/package.json": "Failed to parse package-lock.json.",
     });
   });
 
   test("ignores stderr without Snyk's failure summary", () => {
-    expect(parseSnykProjectFailures("/repo/package.json:\n  warning\n", ["/repo"])).toEqual({ count: 0, targets: [] });
-    expect(parseSnykProjectFailures("", ["/repo"])).toEqual({ count: 0, targets: [] });
+    const none = { count: 0, targets: [], reasons: {} };
+    expect(parseSnykProjectFailures("/repo/package.json:\n  warning\n", ["/repo"])).toEqual(none);
+    expect(parseSnykProjectFailures("", ["/repo"])).toEqual(none);
   });
 });

@@ -38,7 +38,7 @@ export function snykProjectNotice(projects: readonly SnykDependencyProjectResult
 
 /** Vulnerabilities notice for a partial scan: the projects Snyk could not test; findings cover the rest. */
 export function snykPartialScanNotice(
-  scan: Pick<SnykScanResult, "partial" | "failedProjects" | "failedTargets">,
+  scan: Pick<SnykScanResult, "partial" | "failedProjects" | "failedTargets" | "failureReasons">,
 ): SnykNotice | null {
   if (!scan.partial) return null;
   const count = scan.failedProjects ?? 0;
@@ -53,7 +53,10 @@ export function snykPartialScanNotice(
     kind: "warning",
     title: `Partial scan · ${plural(count, "project")} failed`,
     detail: ["Findings cover the other projects."],
-    entries: shown.map(label => ({ label })),
+    entries: shown.map(label => {
+      const text = scan.failureReasons?.[label];
+      return text ? { label, text } : { label };
+    }),
     ...(footer ? { footer } : {}),
   };
 }

@@ -75,6 +75,8 @@ export interface SnykScanResult {
   failedProjects?: number;
   /** Manifests Snyk could not resolve, when it named them; only on partial scans. */
   failedTargets?: string[];
+  /** Snyk's reason per failed target, when it printed one; only for targets in `failedTargets`. */
+  failureReasons?: Record<string, string>;
 }
 
 export type SnykCacheLimit = ProviderCacheLimit;

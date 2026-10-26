@@ -70,7 +70,12 @@ another project fails and labels the result with the failed project count. Snyk
 leaves projects it cannot resolve (for example a vendored `package.json` without
 a lockfile or `node_modules`) out of its JSON findings and only prints them on
 stderr; Codepulse reads them from the graph run, so these scans are partial too
-and name the failed manifests.
+and name the failed manifests. Snyk's reason under each manifest is kept, on one
+line without worktree paths or debug hints (long build output is shortened), and
+shows in the notices under **Vulnerabilities** and **Dependencies**. *Missing
+node_modules folder* says the project needs a lockfile: scans run on a clean
+checkout, so `npm install` would not help. Without a reason, Dependencies falls
+back to *Snyk returned no dependency graph*.
 
 Snyk Open Source only scans supported manifests and lockfiles. Unsupported ecosystems or lockfiles produce no usable project result. Add a lockfile Snyk supports, then scan again.
 

@@ -5,6 +5,7 @@ import { BANNER } from "../../debug/banner";
 import { addDebugEvent, redactDebugValue } from "../../debug/events";
 import { SnykCache } from "./cache";
 import { normalizeSnykTargetFile, parseSnykDepGraphs } from "./dep-graph";
+import { snykFailureReason } from "./failure-reason";
 import { parseSnykOutput, shouldReplaceSnykResult } from "./parser";
 import { discoverSnykDependencyProjects, type SnykDependencyProjectInput } from "./projects";
 import type {
@@ -408,31 +409,67 @@ export interface SnykProjectFailures {
   count: number;
   /** Repository-relative manifests Snyk named; may be fewer than `count`. */
   targets: string[];
+  /** Snyk's reason per named manifest, when it printed one. */
+  reasons: Record<string, string>;
 }
 
-const NO_PROJECT_FAILURES: SnykProjectFailures = { count: 0, targets: [] };
+const NO_PROJECT_FAILURES: SnykProjectFailures = { count: 0, targets: [], reasons: {} };
+
+/** Lines that end a failed project's reason block. */
+const REASON_END = /^(?:✗|✔|-{3,}|Testing |Tested )|potential projects? failed to get dependencies/;
+/** Reason lines kept per project; the rest is build output. */
+const MAX_REASON_LINES = 6;
 
 /**
  * Projects Snyk found but could not resolve (`✗ 1/6 potential projects failed to get dependencies.`, each preceded by
- * `<absolute manifest path>:`). Snyk prints them only on stderr, and `--json` leaves them out entirely.
+ * `<absolute manifest path>:` and followed by its reason). Snyk prints them only on stderr, and `--json` leaves them
+ * out entirely.
  */
 export function parseSnykProjectFailures(stderr: string, roots: readonly string[]): SnykProjectFailures {
   const summary = /(\d+)\/\d+ potential projects? failed to get dependencies/.exec(stderr);
   if (!summary) return NO_PROJECT_FAILURES;
   const targets = new Set<string>();
+  const reasonLines = new Map<string, string[]>();
+  let current: string[] | null = null;
   for (const line of stderr.split(/\r?\n/)) {
     const path = /^(.+):$/.exec(line.trim())?.[1];
-    if (!path || !isAbsolute(path)) continue;
-    for (const root of roots) {
-      const target = normalizeSnykTargetFile(relative(root, path));
-      if (target) {
-        targets.add(target);
-        break;
+    if (path && isAbsolute(path)) {
+      current = null;
+      for (const root of roots) {
+        const target = normalizeSnykTargetFile(relative(root, path));
+        if (target) {
+          targets.add(target);
+          current = reasonLines.get(target) ?? [];
+          reasonLines.set(target, current);
+          break;
+        }
       }
+      continue;
     }
+    if (!line.trim() || REASON_END.test(line.trim())) current = null;
+    else if (current && current.length < MAX_REASON_LINES) current.push(line);
+  }
+  const reasons: Record<string, string> = {};
+  for (const [target, lines] of reasonLines) {
+    const reason = snykFailureReason(lines, roots);
+    if (reason) reasons[target] = reason;
   }
   const count = Math.max(Number(summary[1]), targets.size);
-  return { count, targets: [...targets].sort() };
+  return { count, targets: [...targets].sort(), reasons };
+}
+
+/**
+ * Snyk's reason for a project without a graph: the pom.xml itself, or the manifest beside the lockfile. Reasons for
+ * nested manifests stay with the scan's failed targets, so a parent project never shows a child's failure.
+ */
+function snykReasonForProject(
+  project: SnykDependencyProjectInput,
+  reasons: Readonly<Record<string, string>>,
+): string | null {
+  if (project.packageManager === "maven") return reasons[project.targetFile] ?? null;
+  const directory = posix.dirname(project.targetFile);
+  const target = Object.keys(reasons).find(file => posix.dirname(file) === directory);
+  return target ? reasons[target] : null;
 }
 
 async function scanDependencyProjects(
@@ -474,9 +511,10 @@ async function scanDependencyProjects(
     const failure =
       reason ??
       (matches.length === 0
-        ? project.packageManager === "maven"
-          ? "Snyk returned no dependency graph for this pom.xml. Check that Java and Maven can resolve its dependencies, then rescan."
-          : "Snyk returned no dependency graph for this project."
+        ? (snykReasonForProject(project, failures.reasons) ??
+          (project.packageManager === "maven"
+            ? "Snyk returned no dependency graph for this pom.xml. Check that Java and Maven can resolve its dependencies, then rescan."
+            : "Snyk returned no dependency graph for this project."))
         : null);
     return {
       targetFile: project.targetFile,
@@ -603,6 +641,7 @@ export async function scanSnykCommit(
       result.partial = true;
       result.failedProjects = failedProjects;
       if (graphRun.failures.targets.length > 0) result.failedTargets = graphRun.failures.targets;
+      if (Object.keys(graphRun.failures.reasons).length > 0) result.failureReasons = graphRun.failures.reasons;
     }
     const existing = await cache.read(options.repoPath, sha);
     throwIfAborted(options.signal);
