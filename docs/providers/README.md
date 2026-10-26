@@ -59,8 +59,19 @@ guide describes what is persisted and when live data replaces cached data.
 
 ## Errors and diagnostics
 
-Short status messages appear in the main view as a banner: a bold headline and
-its source (`Git` or the provider), with any detail in muted lines below. Click
-its `✕` or run `:clear` to dismiss it. Technical request details are
+Messages go to one of two places:
+
+- **Banner** over the graph, for problems that stop a provider from working:
+  missing setup or token, authentication, timeouts, failed requests, Git errors.
+  It shows a bold headline and its source (`Git` or the provider), with any
+  detail in muted lines below.
+- **Tab notice**, pinned under the detail tabs, for results that work but are
+  incomplete: provider warnings (OpenShift watch denied or partial inventory,
+  Jenkins branch-job limit) and per-commit gaps (Snyk partial scans, Snyk projects
+  without a dependency graph). It uses the same layout on a raised background.
+
+Click a message's `✕` or run `:clear` to dismiss it; `:clear` closes both. A
+closed Snyk notice returns with the next scan of that commit; a provider warning
+returns when the provider reports it again. Technical request details are
 kept in the Debug dialog (`:debug`) with credentials redacted. When one part of
 a provider request fails, Codepulse keeps usable partial data where possible.

@@ -1,6 +1,6 @@
 import type { Accessor } from "solid-js";
 import { createEffect, createSignal, onCleanup, untrack } from "solid-js";
-import type { AppActions, AppState, ProviderStatus } from "../../context/state";
+import type { AppActions, AppState } from "../../context/state";
 import {
   providerError,
   providerIdle,
@@ -19,23 +19,6 @@ import type { SnykCacheLimit, SnykScanResult } from "./types";
 // provider.ts adds this identifier as part of the provider registration change.
 const SNYK_PROVIDER_ID = "snyk" as ProviderView;
 const EXACT_SHA = /^[0-9a-f]{40,64}$/i;
-
-/**
- * Banner status after a scan with usable findings: missing graphs are warnings, not errors.
- * Header first, then one line per failed/skipped project.
- */
-export function snykDependencyStatus(scan: SnykScanResult): ProviderStatus {
-  const projects = scan.dependencyProjects;
-  if (projects.length === 0) return providerWarning(BANNER.snyk.noDependencyProject);
-  const incomplete = projects.filter(project => project.status !== "scanned");
-  if (incomplete.length === 0) return providerIdle();
-  return providerWarning(
-    [
-      BANNER.snyk.graphsIncomplete(incomplete.length, projects.length),
-      ...incomplete.map(project => `${project.targetFile}: ${project.reason ?? project.status}`),
-    ].join("\n"),
-  );
-}
 
 export function collectSnykAutoScanTips(
   branches: readonly { name: string; isRemote: boolean; lastCommitHash: string }[],
@@ -214,7 +197,8 @@ export function useSnyk(opts: {
       ) {
         mergeResult(scanResult, entry.epoch, entry.force);
         actions.setProviderLastSuccessfulRefresh(SNYK_PROVIDER_ID, new Date());
-        if (queue.length === 0) actions.setProviderStatus(SNYK_PROVIDER_ID, snykDependencyStatus(scanResult));
+        // Coverage gaps (failed or skipped projects) show in the Dependencies tab, not the banner.
+        if (queue.length === 0) actions.setProviderStatus(SNYK_PROVIDER_ID, providerIdle());
       }
     } catch (error) {
       if (
@@ -224,7 +208,11 @@ export function useSnyk(opts: {
         entry.repoPath === state.repoPath()
       ) {
         const message = error instanceof Error ? error.message : String(error);
-        actions.setProviderStatus(SNYK_PROVIDER_ID, providerError(message));
+        // A partial rescan kept the complete snapshot: Snyk still works, so it's a warning for the tab notice.
+        actions.setProviderStatus(
+          SNYK_PROVIDER_ID,
+          message === BANNER.snyk.partialRescan ? providerWarning(message) : providerError(message),
+        );
       }
     } finally {
       entry.resolve(controller.signal.aborted || entry.epoch !== epoch ? null : scanResult);

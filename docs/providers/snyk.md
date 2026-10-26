@@ -47,9 +47,12 @@ Each result is a snapshot of that commit against Snyk vulnerability data at disp
 - **Failed scan** — authentication, dependency resolution, repository setup, or
   Snyk execution failed.
 
-A partial scan does not replace an existing complete snapshot, unless you rescan
-the commit yourself (**Rescan commit**): then it is stored, so its failed projects
-stay visible. Fix the project or environment problem, then scan again. Technical
+A partial scan shows a notice under **Vulnerabilities** naming the projects that
+failed (**Partial scan · N projects failed**). It does not replace an existing
+complete snapshot, unless you rescan the commit yourself (**Rescan commit**): then
+it is stored, so its failed projects stay visible. When an automatic scan comes back
+partial and a complete snapshot exists, the Snyk tabs show **Partial scan** with
+*Kept last complete snapshot.* Fix the project or environment problem, then scan again. Technical
 details appear in Debug.
 
 ## Display
@@ -109,13 +112,13 @@ incomplete graph command are marked incomplete, not a successful empty tree.
 
 **Dependencies** is always available beside **Vulnerabilities** and **Info** in
 the Snyk view, including before the first scan. Use **Scan commit** in either tab.
-After a scan, the banner above the command bar reports dependency coverage in
-yellow: **No supported dependency project** when the repository has none, or
-**Snyk dependency graphs incomplete: N of M projects** with one line per failed or
-skipped project (for example, Bun missing). Findings are retained either way; only
-a failed scan (Snyk missing, authentication, unusable output) shows a red error.
-The banner reports the latest scan; the failed/skipped lines at the bottom of
-Dependencies belong to the selected commit.
+When a project has no graph, its header stays in the tree and a notice pinned at
+the bottom of Dependencies explains why: **N projects failed, M skipped**, then each
+manifest path with its reason (for example, Bun missing). The notice belongs to the
+selected commit; close it with `✕` until the next scan of that commit. A repository
+without a supported project says so inside the tab. Findings are retained either
+way; only a failed scan (Snyk missing, authentication, unusable output) shows a red
+error in the banner above the command bar.
 
 - Scanned files/projects are bold root headers (like severity headers), with
   direct dependencies visible and a right-aligned package count: `N`, or

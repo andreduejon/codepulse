@@ -1,6 +1,7 @@
 import { lstat, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, posix, relative, resolve } from "node:path";
+import { BANNER } from "../../debug/banner";
 import { addDebugEvent, redactDebugValue } from "../../debug/events";
 import { SnykCache } from "./cache";
 import { normalizeSnykTargetFile, parseSnykDepGraphs } from "./dep-graph";
@@ -606,7 +607,7 @@ export async function scanSnykCommit(
     const existing = await cache.read(options.repoPath, sha);
     throwIfAborted(options.signal);
     if (!shouldReplaceSnykResult(existing ?? undefined, result, options.force)) {
-      throw new Error("Partial scan. Kept last complete snapshot.");
+      throw new Error(BANNER.snyk.partialRescan);
     }
     await cache.write(options.repoPath, result);
     return result;

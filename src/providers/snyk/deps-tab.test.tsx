@@ -420,14 +420,12 @@ test("live filtering expands ancestors, preserves native typing and reports inco
   try {
     expect(d.frame()).not.toContain("supported projects scanned");
     expect(d.text("broken/pnpm-lock.yaml").plainText).toContain("incomplete");
-    expect(d.frame()).toContain("failed · Graph extraction incomplete");
-    expect(d.frame()).toContain("skipped · Unsupported lockfile format");
+    // Reasons live in the panel's pinned notice, not in the tab.
+    expect(d.frame()).not.toContain("Graph extraction incomplete");
     await d.click("broken/pnpm-lock.yaml");
     expect(d.state.detailCursorAction()).toBe("expand");
     expect(d.text("broken/pnpm-lock.yaml").plainText).toContain("incomplete");
-    expect(d.frame()).toContain("failed · Graph extraction incomplete");
     await d.click("skipped/yarn.lock");
-    expect(d.frame()).toContain("skipped · Unsupported lockfile format");
     expect(d.frame()).not.toContain("No supported dependency project.");
     expect(d.frame()).not.toContain("No dependencies");
     await d.click("filter");
@@ -441,18 +439,14 @@ test("live filtering expands ancestors, preserves native typing and reports inco
     expect(d.frame()).toContain("@fixture/shared@4.0.0");
     expect(d.frame()).toContain("leaf@5.0.0");
     expect(d.frame()).not.toContain("mystery@3.0.0");
-    expect(d.frame()).toContain("Graph extraction incomplete");
-    expect(d.frame()).toContain("Unsupported lockfile format");
     await d.key("ARROW_LEFT");
     await d.type("x");
     expect(d.input()).toBe(input);
     expect(input?.value).toBe("leaxf");
     expect(input?.cursorOffset).toBe(4);
-    // No "no match" message: headers stay listed with zero counts; failed coverage stays visible.
+    // No "no match" message: headers stay listed with zero counts.
     expect(d.frame()).not.toContain("No matching dependencies");
     expect(d.frame()).toMatch(/0\/\d+/);
-    expect(d.frame()).toContain("failed · Graph extraction incomplete");
-    expect(d.frame()).toContain("skipped · Unsupported lockfile format");
     await d.key("ESCAPE");
     expect(d.input()?.focused).toBe(false);
     expect(d.state.detailCursorIndex()).toBe(4);

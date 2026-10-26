@@ -67,7 +67,6 @@ describe("bannerParts", () => {
     ["GitHub Actions", BANNER.github.disabled, "Disabled", []],
     ["Jenkins", BANNER.jenkins.incomplete, "Data incomplete", ["Branch-job limit reached."]],
     ["OpenShift", BANNER.openshift.watchDenied, "Watch denied", ["Resource data might be stale. Reload to refresh."]],
-    ["Snyk", BANNER.snyk.graphsIncomplete(1, 6), "Dependency graphs incomplete: 1 of 6 projects", []],
     ["Snyk", "Partial scan. Kept last complete snapshot.", "Partial scan", ["Kept last complete snapshot."]],
     [
       "Snyk",

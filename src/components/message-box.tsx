@@ -22,7 +22,10 @@ interface MessageBoxProps {
   title?: string;
   message: string;
   detail?: string;
-  variant?: "screen" | "dialog";
+  /** Labelled detail lines: label in the foreground colour, its text muted on the next line. */
+  entries?: readonly { label: string; text?: string }[];
+  /** `screen`: app background; `dialog`: panel background; `inset`: raised background, for notices inside a panel. */
+  variant?: "screen" | "dialog" | "inset";
   /** Shows a clickable `✕` at the end of the header line. */
   onDismiss?: () => void;
   mouseEnabled?: boolean;
@@ -32,14 +35,19 @@ export default function MessageBox(props: Readonly<MessageBoxProps>) {
   const t = useT();
   const [closeHovered, setCloseHovered] = createSignal(false);
   const borderColor = () => (props.kind === "error" ? t().error : props.kind === "warning" ? t().warning : t().info);
-  const backgroundColor = () => (props.variant === "dialog" ? t().backgroundPanel : t().background);
+  const backgroundColor = () =>
+    props.variant === "dialog"
+      ? t().backgroundPanel
+      : props.variant === "inset"
+        ? t().backgroundElement
+        : t().background;
   const parts = () => {
-    const lines = props.message.split("\n");
+    const lines = props.message ? props.message.split("\n") : [];
     if (props.title) return { title: props.title, detail: lines };
     if (props.source) return bannerParts(props.source, props.message);
     return { title: lines[0] ?? "", detail: lines.slice(1) };
   };
-  const bodyLines = () => [...parts().detail, ...(props.detail ? props.detail.split("\n") : [])];
+  const detailLines = () => (props.detail ? props.detail.split("\n") : []);
 
   return (
     <box
@@ -79,7 +87,30 @@ export default function MessageBox(props: Readonly<MessageBoxProps>) {
           )}
         </Show>
       </box>
-      <For each={bodyLines()}>
+      <For each={parts().detail}>
+        {line => (
+          <box paddingX={4}>
+            <text wrapMode="word" fg={t().foregroundMuted}>
+              {line}
+            </text>
+          </box>
+        )}
+      </For>
+      <For each={props.entries ?? []}>
+        {entry => (
+          <box paddingX={4} flexDirection="column">
+            <text wrapMode="char" fg={t().foreground}>
+              {entry.label}
+            </text>
+            <Show when={entry.text}>
+              <text wrapMode="word" fg={t().foregroundMuted}>
+                {entry.text}
+              </text>
+            </Show>
+          </box>
+        )}
+      </For>
+      <For each={detailLines()}>
         {line => (
           <box paddingX={4}>
             <text wrapMode="word" fg={t().foregroundMuted}>

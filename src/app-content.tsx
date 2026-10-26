@@ -4,6 +4,7 @@ import { batch, createEffect, createMemo, createSignal, onCleanup, onMount, Show
 import { runAppCommand } from "./app-commands";
 import { githubSettings, jenkinsSettings, openShiftSettings, snykSettings } from "./app-provider-config";
 import { applyRepoSession, captureRepoSession } from "./app-repo-session";
+import { isTabNoticeStatus, type TabNotice, tabNoticeFor } from "./app-tab-notice";
 import type { AppContentProps, RepoSessionSnapshot } from "./app-types";
 import CacheScreen from "./components/cache-screen";
 import CommandBar from "./components/command-bar";
@@ -23,7 +24,13 @@ import ProjectSelector from "./components/project-selector";
 import SetupScreen from "./components/setup-screen";
 import { defaultConfig, getKnownRepoInfos, getRepoDisplayConfig, loadConfig } from "./config";
 import { backfillRepoConfig, writeConfig } from "./config-write";
-import { COMPACT_THRESHOLD_WIDTH, DEFAULT_MAX_COUNT, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH } from "./constants";
+import {
+  COMPACT_THRESHOLD_WIDTH,
+  DEFAULT_MAX_COUNT,
+  isUncommittedHash,
+  MIN_TERMINAL_HEIGHT,
+  MIN_TERMINAL_WIDTH,
+} from "./constants";
 import { AppStateContext, createAppState, providerIdle, providerStatusMessage } from "./context/state";
 import { ThemeContext } from "./context/theme";
 import { BANNER, displayBanner } from "./debug/banner";
@@ -112,7 +119,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
 
     const status = state.providerStatus();
     const message = providerStatusMessage(status);
-    if (state.activeProviderView() === "git" || !message) return null;
+    if (state.activeProviderView() === "git" || !message || isTabNoticeStatus(status)) return null;
 
     return {
       kind: status.kind === "error" || status.kind === "warning" ? status.kind : ("info" as const),
@@ -121,7 +128,29 @@ export function AppContent(props: Readonly<AppContentProps>) {
     };
   });
 
-  /** Dismisses the banner: `:clear` (which also clears Debug) or its `✕`. */
+  /** Scan notices closed with `✕` or `:clear`; a rescan changes the key and brings them back. */
+  const [dismissedTabNotices, setDismissedTabNotices] = createSignal<ReadonlySet<string>>(new Set());
+  const tabNotice = createMemo<TabNotice | null>(() => {
+    const view = state.activeProviderView();
+    const hash = state.selectedCommit()?.hash ?? "";
+    const notice = tabNoticeFor({
+      view,
+      source: providerDisplayName(view),
+      status: state.providerStatus(),
+      tab: state.detailActiveTab(),
+      snykScan: hash && !isUncommittedHash(hash) ? snyk.getCommitData(hash) : null,
+    });
+    return notice && !dismissedTabNotices().has(notice.key) ? notice : null;
+  });
+  /** Closes the tab notice: provider warnings clear the status, scan notices are remembered by key. */
+  const dismissTabNotice = () => {
+    const notice = tabNotice();
+    if (!notice) return;
+    if (notice.fromStatus) actions.setProviderStatus(state.activeProviderView(), providerIdle());
+    else setDismissedTabNotices(keys => new Set([...keys, notice.key]));
+  };
+
+  /** Dismisses the banner: `:clear` (which also clears Debug and the tab notice) or its `✕`. */
   const clearScreenMessage = () => {
     actions.setError(null);
     actions.setProviderStatus(state.activeProviderView(), providerIdle());
@@ -482,7 +511,10 @@ export function AppContent(props: Readonly<AppContentProps>) {
       setDialog,
       openCacheScreen,
       openRepoSelector: () => setRepoSelectorVisible(true),
-      clearScreenMessage,
+      clearScreenMessage: () => {
+        dismissTabNotice();
+        clearScreenMessage();
+      },
       setAnchor,
       clearAnchor,
       fetchAll: handleFetchAll,
@@ -617,6 +649,10 @@ export function AppContent(props: Readonly<AppContentProps>) {
     get snykProviderStatus() {
       return state.providerStatusFor("snyk");
     },
+    get tabNotice() {
+      return tabNotice();
+    },
+    onDismissTabNotice: dismissTabNotice,
   };
 
   /** Dialogs opened from the details return to the compact detail dialog when they close. */

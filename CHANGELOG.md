@@ -10,6 +10,11 @@ All notable changes to this project will be documented in this file.
   (`Partial scan · Snyk`, then `Kept last complete snapshot.`).
 - Cache screen confirmations, errors and results use the same layout inside their
   card: a bold headline in the message colour with muted detail below.
+- Results that work but are incomplete show as a notice pinned under the detail
+  tabs instead of the banner over the graph, which now only reports problems that
+  stop a provider. Snyk projects without a dependency graph list each path with its
+  reason under **Dependencies**; partial scans name their failed projects under
+  **Vulnerabilities**. Close a notice with its `✕` or `:clear`.
 
 ## [0.14.0] - 2026-10-25
 
