@@ -97,12 +97,6 @@ export function ProviderDetailTabs(
               props.view.openshiftProviderStatus?.kind === "error" &&
               props.view.openshiftProviderStatus.message === BANNER.openshift.tokenExpired
             }
-            warningReason={
-              props.view.openshiftProviderStatus?.kind === "warning" &&
-              props.view.openshiftProviderStatus.message !== BANNER.openshift.watchDenied
-                ? props.view.openshiftProviderStatus.message
-                : null
-            }
             loading={props.view.openshiftProviderStatus?.kind === "loading"}
             {...cursor}
           />
