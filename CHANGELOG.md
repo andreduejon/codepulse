@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Mark Snyk dependencies that a pnpm override forces with a muted `override`
+  keyword in Dependencies, read from `pnpm-lock.yaml`. The dependency filter also
+  matches the keyword, so `override` lists them with their paths.
+
 ### Changed
 
 - Status banners show a bold headline, their source, and muted detail lines

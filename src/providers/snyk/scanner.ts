@@ -6,6 +6,7 @@ import { addDebugEvent, redactDebugValue } from "../../debug/events";
 import { SnykCache } from "./cache";
 import { normalizeSnykTargetFile, parseSnykDepGraphs } from "./dep-graph";
 import { snykFailureReason } from "./failure-reason";
+import { applyLockfileOverrides } from "./overrides";
 import { parseSnykOutput, shouldReplaceSnykResult } from "./parser";
 import { discoverSnykDependencyProjects, type SnykDependencyProjectInput } from "./projects";
 import type {
@@ -507,7 +508,12 @@ async function scanDependencyProjects(
     const matches = graphs.filter(
       graph => projectForTarget(graph.targetFile, ready, trackedFiles, graph.packageManager) === project,
     );
-    pending.push(...matches.map(graph => applyManifestScopes(graph, commandOptions.cwd)));
+    pending.push(
+      ...matches.flatMap(graph => [
+        applyManifestScopes(graph, commandOptions.cwd),
+        applyLockfileOverrides(graph, commandOptions.cwd),
+      ]),
+    );
     const failure =
       reason ??
       (matches.length === 0

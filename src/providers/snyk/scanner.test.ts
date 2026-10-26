@@ -436,6 +436,30 @@ process.exit(1);
     expect(f.calls.filter(call => call.command[0] !== "git").map(call => call.command[0])).toEqual(["snyk", "snyk"]);
   });
 
+  test("marks packages the pnpm lockfile overrides, for workspace graphs too", async () => {
+    const f = await dependencyFixture({
+      "package.json": '{"packageManager":"pnpm@10.0.0"}',
+      "pnpm-lock.yaml": "lockfileVersion: '9.0'\n\noverrides:\n  dep: ^1.0.0\n  other: 2.0.0\n\nimporters:\n  .: {}\n",
+      "pnpm-workspace.yaml": "packages: [packages/*]",
+      "packages/a/package.json": "{}",
+    });
+    f.output.findings.stdout = JSON.stringify({
+      packageManager: "pnpm",
+      displayTargetFile: "pnpm-lock.yaml",
+      vulnerabilities: [],
+    });
+    f.output.graph.stdout = dependencyGraph("pnpm", "packages/a/package.json");
+    const result = await scanSnykCommit(
+      { repoPath: f.repoPath, sha: SHA },
+      { cacheRoot: f.cacheRoot, runCommand: f.runner },
+    );
+    expect(result.dependencyProjects[0].graphs[0].packages).toEqual([
+      { id: "fixture@1.0.0", name: "fixture", version: "1.0.0" },
+      { id: "dep@1.0.0", name: "dep", version: "1.0.0", pin: "override" },
+    ]);
+    expect(await new SnykCache({ root: f.cacheRoot }).read(f.repoPath, SHA)).toEqual(result);
+  });
+
   test("scans native Yarn v1 without a local Yarn command", async () => {
     const f = await dependencyFixture({ "package.json": "{}", "yarn.lock": "# yarn lockfile v1\n" });
     const result = await scanSnykCommit(

@@ -1011,3 +1011,26 @@ test("a triangle in a sibling group reserves its column on every sibling, so dev
     await d.dispose();
   }
 });
+
+test("pinned packages carry muted override and removable keywords, and the filter finds them", async () => {
+  const scan = scanFixture();
+  const packages = scan.dependencyProjects[0].graphs[0].packages;
+  packages[1] = { ...packages[1], pin: "override" };
+  packages[3] = { ...packages[3], pin: "override", removable: true };
+  const d = await renderDependencies(scan);
+  try {
+    expect(d.frame()).toMatch(/parent@1\.0\.0\s+override\s*$/m);
+    expect(d.frame()).toMatch(/mystery@3\.0\.0\s+override removable\s*$/m);
+    const spans = d.captureSpans().lines[d.point("mystery@3.0.0").y]?.spans ?? [];
+    const muted = RGBA.fromHex(d.theme.foregroundMuted);
+    expect(spans.find(span => span.text.includes("override"))?.fg).toEqual(muted);
+    expect(spans.find(span => span.text.includes("removable"))?.fg).toEqual(muted);
+    await d.click("filter");
+    await d.type("removable");
+    expect(d.frame()).toContain("mystery@3.0.0");
+    expect(d.frame()).not.toContain("parent@1.0.0");
+    expect(d.frame()).not.toContain("dev-only@2.0.0");
+  } finally {
+    await d.dispose();
+  }
+});

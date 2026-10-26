@@ -4,6 +4,7 @@ import type {
   SnykDependencyGraph,
   SnykDependencyNode,
   SnykDependencyPackage,
+  SnykDependencyPin,
   SnykDependencyProjectResult,
   SnykDependencyScope,
   SnykFinding,
@@ -30,6 +31,9 @@ export interface DependencyTreeRow {
   direct?: boolean;
   /** The package's worst finding severity; details live in Vulnerabilities. */
   vulnerability?: SnykSeverity;
+  /** The project forces this version (`override`, `managed`); `removable` when the override could go. */
+  pin?: SnykDependencyPin;
+  removable?: boolean;
   /** While filtering, closed rows: unique matching packages below them (`N+` when the search stopped early). */
   matches?: string;
 }
@@ -92,11 +96,21 @@ export function packageLabel(pkg: SnykDependencyPackage): string {
   return `${pkg.name}@${pkg.version ?? "unknown"}`;
 }
 
-/** `name@version` queries match exactly; anything else is a name substring. */
+/** Row keywords for a pinned package, as shown after its name: `override`, `managed`, `removable`. */
+export function pinKeywords(pkg: Pick<SnykDependencyPackage, "pin" | "removable">): string[] {
+  return [pkg.pin ?? "", pkg.removable ? "removable" : ""].filter(Boolean);
+}
+
+/** Row fields for a pinned package; empty when the project doesn't force its version. */
+export function pinFields(pkg: SnykDependencyPackage): Pick<DependencyTreeRow, "pin" | "removable"> {
+  return { ...(pkg.pin ? { pin: pkg.pin } : {}), ...(pkg.removable ? { removable: true } : {}) };
+}
+
+/** `name@version` queries match exactly; anything else is a substring of the name or a pin keyword. */
 export function matchesQuery(pkg: SnykDependencyPackage, query: string): boolean {
   return query.lastIndexOf("@") > 0
     ? packageLabel(pkg).toLowerCase() === query
-    : pkg.name.toLowerCase().includes(query);
+    : pkg.name.toLowerCase().includes(query) || pinKeywords(pkg).some(word => word.includes(query));
 }
 
 // shortcut: cap rows at 1,000 since rendering cost grows per row (~0.1 ms each); add viewport virtualization for larger trees.

@@ -13,6 +13,7 @@ import {
   MAX_DEPENDENCY_ROWS,
   NO_VULNERABILITIES,
   packageLabel,
+  pinFields,
   projectRow,
 } from "./deps-model";
 import { buildPackages } from "./deps-packages";
@@ -289,6 +290,7 @@ function buildTree(
           path,
           ...(query && expandable && !nodeExpanded ? { matches: matchesBelow(model, node, countBudget) } : {}),
           vulnerability: lookupVulnerability(vulnerabilities, [graph.targetFile], label)?.severity,
+          ...pinFields(node.pkg),
         });
         dependencyRows++;
         if (nodeExpanded) {

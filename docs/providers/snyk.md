@@ -156,7 +156,7 @@ error in the banner above the command bar.
   dependencies) markers; each opens to the direct dependencies that pull it in.
 - **Copy dependencies as JSON** (below Rescan, when a supported project was found) copies commit, scan time, Scope,
   filter, and per project a flat package list (`name`, `version`, `direct`, `dev`,
-  `via`, plus `severity` and `vulnerabilities`: the package's own worst severity and
+  `pin` when forced, `via`, plus `severity` and `vulnerabilities`: the package's own worst severity and
   CVE or Snyk IDs, `null`/`[]` when it has none), respecting the active Scope and
   filter. Graphs stay out (they are large); finding details live in **Copy scan as JSON**.
 - Vulnerable packages show a `▲` in their worst finding's severity colour, on
@@ -166,6 +166,13 @@ error in the banner above the command bar.
   findings in every manifest, not those of packages it pulls in. Scores, exploits and
   fixes live in Vulnerabilities. A legend (`▲ ▲ ▲ ▲ severity`) is pinned below the
   tab when the scan has findings. Leaves sit one space after their connector.
+- Packages whose version the project forces carry a muted **override** keyword,
+  in both Group by views. For pnpm it comes from the `overrides:` section of
+  `pnpm-lock.yaml` (what pnpm applied from `pnpm-workspace.yaml` or `package.json`);
+  a package is marked when its name matches and, for a version range, its version is
+  in range. A parent selector (`express>path-to-regexp`) marks every matching
+  version of the target. Type `override` in the filter to list them with their paths.
+  Snapshots scanned before this change need a rescan.
 - Filter hits are highlighted in the package name in the Snyk colour (both tabs
   highlight matches in row text). Sibling rows reserve the `▲` column when any
   sibling has one, so `dev`/`repeated` line up per level. Filter counts (`N/M`)
@@ -192,7 +199,8 @@ Both filters are case-insensitive and use one rule: an exact `name@version` quer
 version such as `lodash@4.17` matches nothing; anything else is a substring.
 Vulnerabilities match substrings in package/version, title, CVE, Snyk ID, fix tag
 (`upgrade`, `override`, `no fix`), exploit maturity (e.g. `mature`), manifest path,
-and the direct dependency it comes through; Dependencies match package names, and
+and the direct dependency it comes through; Dependencies match package names and
+the `override` keyword, and
 matching paths expand through collapsed/repeated nodes. Filtering affects detail trees, not the Git
 commit graph. No-match results retain failed/skipped-project coverage warnings.
 **Copy scan as JSON** (below the scan action, when the scan has findings) copies the
