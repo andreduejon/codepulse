@@ -6,12 +6,13 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Mark Snyk dependencies that a pnpm override forces with a muted `override`
-  keyword in Dependencies, read from `pnpm-lock.yaml`. The dependency filter also
+- Mark Snyk dependencies that an override forces with a muted `override` keyword
+  in Dependencies: pnpm's from `pnpm-lock.yaml`, npm `overrides`, Yarn
+  `resolutions`, and both for Bun, from `package.json`. The dependency filter also
   matches the keyword, so `override` lists them with their paths.
-- Flag pnpm overrides that could go with a muted `removable` keyword: every parent's
-  own range (from `pnpm view`, cached) would already resolve to a version the
-  override allows.
+- Flag overrides that could go with a muted `removable` keyword: every parent's own
+  range (from `pnpm view` or `npm view`, cached) would already resolve to a version
+  the override allows.
 
 ### Changed
 

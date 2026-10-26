@@ -492,6 +492,58 @@ process.exit(1);
     expect(views).toEqual(["pnpm view dep versions --json"]);
   });
 
+  test("reads npm overrides from package.json and asks the registry whether they could go", async () => {
+    const f = await dependencyFixture({
+      "package.json": '{"dependencies":{"dep":"^1.0.0"},"overrides":{"dep":"$dep"}}',
+      "package-lock.json": '{"lockfileVersion":3}',
+    });
+    f.output.findings.stdout = JSON.stringify({
+      packageManager: "npm",
+      displayTargetFile: "package-lock.json",
+      vulnerabilities: [],
+    });
+    f.output.graph.stdout = dependencyGraph("npm", "package-lock.json");
+    const views: string[] = [];
+    const runner: SnykCommandRunner = async (command, options) => {
+      if (command[0] !== "npm") return f.runner(command, options);
+      views.push(command.join(" "));
+      return { stdout: JSON.stringify(["1.0.0"]), exitCode: 0 };
+    };
+    const result = await scanSnykCommit(
+      { repoPath: f.repoPath, sha: SHA },
+      { cacheRoot: f.cacheRoot, runCommand: runner, which: name => (name === "npm" ? "/bin/npm" : null) },
+    );
+    expect(result.dependencyProjects[0].graphs[0].packages[1]).toEqual({
+      id: "dep@1.0.0",
+      name: "dep",
+      version: "1.0.0",
+      pin: "override",
+      removable: true,
+    });
+    expect(views).toEqual(["npm view dep versions --json"]);
+  });
+
+  test("marks Yarn resolutions without a registry tool", async () => {
+    const f = await dependencyFixture({
+      "package.json": '{"resolutions":{"**/dep":"1.0.0"},"overrides":{"fixture":"2.0.0"}}',
+      "yarn.lock": "# yarn lockfile v1\n",
+    });
+    f.output.findings.stdout = JSON.stringify({
+      packageManager: "yarn",
+      displayTargetFile: "yarn.lock",
+      vulnerabilities: [],
+    });
+    f.output.graph.stdout = dependencyGraph("yarn", "yarn.lock");
+    const result = await scanSnykCommit(
+      { repoPath: f.repoPath, sha: SHA },
+      { cacheRoot: f.cacheRoot, runCommand: f.runner, which: () => null },
+    );
+    expect(result.dependencyProjects[0].graphs[0].packages).toEqual([
+      { id: "fixture@1.0.0", name: "fixture", version: "1.0.0" },
+      { id: "dep@1.0.0", name: "dep", version: "1.0.0", pin: "override" },
+    ]);
+  });
+
   test("scans native Yarn v1 without a local Yarn command", async () => {
     const f = await dependencyFixture({ "package.json": "{}", "yarn.lock": "# yarn lockfile v1\n" });
     const result = await scanSnykCommit(

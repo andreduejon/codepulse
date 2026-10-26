@@ -6,7 +6,7 @@ import { addDebugEvent, redactDebugValue } from "../../debug/events";
 import { SnykCache } from "./cache";
 import { normalizeSnykTargetFile, parseSnykDepGraphs } from "./dep-graph";
 import { snykFailureReason } from "./failure-reason";
-import { applyLockfileOverrides, manifestRanges, markRemovableOverrides, pnpmOverrideRules } from "./overrides";
+import { applyOverrideRules, manifestRanges, markRemovableOverrides, projectOverrideRules } from "./overrides";
 import { parseSnykOutput, shouldReplaceSnykResult } from "./parser";
 import { discoverSnykDependencyProjects, type SnykDependencyProjectInput } from "./projects";
 import { createRegistryLookup, RegistryCache, type RegistryLookup } from "./registry";
@@ -510,12 +510,7 @@ async function scanDependencyProjects(
     const matches = graphs.filter(
       graph => projectForTarget(graph.targetFile, ready, trackedFiles, graph.packageManager) === project,
     );
-    pending.push(
-      ...matches.flatMap(graph => [
-        applyManifestScopes(graph, commandOptions.cwd),
-        applyLockfileOverrides(graph, commandOptions.cwd),
-      ]),
-    );
+    pending.push(...matches.map(graph => applyManifestScopes(graph, commandOptions.cwd)));
     const failure =
       reason ??
       (matches.length === 0
@@ -533,12 +528,12 @@ async function scanDependencyProjects(
     };
   });
   await Promise.all(pending);
-  await markRemovablePnpmOverrides(results, commandOptions, registry);
+  await markOverrides(results, commandOptions, registry);
   return { projects: results, failures };
 }
 
-/** Flags pnpm overrides that could go, asking the registry only when a project has overridden packages. */
-async function markRemovablePnpmOverrides(
+/** Marks what each project's overrides force, asking the registry only when a project has overridden packages. */
+async function markOverrides(
   projects: readonly SnykDependencyProjectResult[],
   commandOptions: Parameters<SnykCommandRunner>[1],
   registry: () => RegistryLookup | null,
@@ -554,11 +549,14 @@ async function markRemovablePnpmOverrides(
     return ranges;
   };
   for (const project of projects) {
-    if (project.packageManager !== "pnpm") continue;
+    if (project.graphs.length === 0) continue;
+    const rules = await projectOverrideRules(commandOptions.cwd, project);
+    throwIfAborted(commandOptions.signal);
+    if (rules.length === 0) continue;
+    for (const graph of project.graphs) applyOverrideRules(graph, rules);
     if (!project.graphs.some(graph => graph.packages.some(pkg => pkg.pin === "override"))) continue;
     const lookup = registry();
-    if (!lookup) return;
-    const rules = await pnpmOverrideRules(commandOptions.cwd, posix.dirname(project.targetFile));
+    if (!lookup) continue;
     await markRemovableOverrides(project.graphs, rules, lookup, rootRanges);
     throwIfAborted(commandOptions.signal);
   }
@@ -670,14 +668,18 @@ export async function scanSnykCommit(
       }
     }
     let lookup: RegistryLookup | null | undefined;
-    const registry = () =>
-      (lookup ??= createRegistryLookup({
-        runCommand,
-        cwd: commandOptions.cwd,
-        signal: commandOptions.signal,
-        which: dependencies.which ?? (command => Bun.which(command)),
-        cache: new RegistryCache(dependencies.cacheRoot),
-      }));
+    // Created once on first use; `null` (no usable pnpm or npm) is remembered too.
+    const registry = () => {
+      if (lookup === undefined)
+        lookup = createRegistryLookup({
+          runCommand,
+          cwd: commandOptions.cwd,
+          signal: commandOptions.signal,
+          which: dependencies.which ?? (command => Bun.which(command)),
+          cache: new RegistryCache(dependencies.cacheRoot),
+        });
+      return lookup;
+    };
     const graphRun = await scanDependencyProjects(
       projects,
       unavailable,

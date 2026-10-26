@@ -1,11 +1,17 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   applyOverrideRules,
   highestSatisfying,
   markRemovableOverrides,
   type OverrideRule,
   overrideTarget,
+  parseNpmOverrides,
   parsePnpmLockfileOverrides,
+  parseYarnResolutions,
+  projectOverrideRules,
 } from "../src/providers/snyk/overrides";
 import type { RegistryLookup } from "../src/providers/snyk/registry";
 import type { SnykDependencyGraph } from "../src/providers/snyk/types";
@@ -50,6 +56,91 @@ describe("parsePnpmLockfileOverrides", () => {
 
   test("is empty without an overrides section", () => {
     expect(parsePnpmLockfileOverrides("lockfileVersion: '9.0'\nimporters: {}\n")).toEqual([]);
+  });
+});
+
+describe("parseNpmOverrides", () => {
+  test("nested objects limit rules to their parent, and `.` overrides the parent itself", () => {
+    expect(
+      parseNpmOverrides({
+        foo: "1.0.0",
+        "@scope/bar@^2": "2.1.0",
+        express: { ".": "4.21.0", "path-to-regexp": "0.1.12", body: { qs: "6.13.0" } },
+      }),
+    ).toEqual([
+      { name: "foo", spec: "1.0.0" },
+      { name: "@scope/bar", spec: "2.1.0" },
+      { name: "express", spec: "4.21.0" },
+      { name: "path-to-regexp", spec: "0.1.12", parent: "express" },
+      { name: "qs", spec: "6.13.0", parent: "body" },
+    ]);
+  });
+
+  test("`$name` takes the project's own range, and is dropped without one", () => {
+    expect(parseNpmOverrides({ foo: "$foo", bar: "$bar" }, { foo: "^1.2.0" })).toEqual([
+      { name: "foo", spec: "^1.2.0" },
+    ]);
+  });
+
+  test("is empty for anything but an object", () => {
+    expect(parseNpmOverrides(undefined)).toEqual([]);
+    expect(parseNpmOverrides(["foo"])).toEqual([]);
+  });
+});
+
+describe("parseYarnResolutions", () => {
+  test("reads the target and its direct parent, keeping scopes together", () => {
+    expect(
+      parseYarnResolutions({
+        foo: "1.0.0",
+        "**/bar": "^2.0.0",
+        "express/path-to-regexp": "0.1.12",
+        "@scope/a/@scope/b": "3.0.0",
+        "webpack/**/qs": "6.13.0",
+        "baz@npm:^1.0.0": "npm:1.4.0",
+        skipped: 1,
+      }),
+    ).toEqual([
+      { name: "foo", spec: "1.0.0" },
+      { name: "bar", spec: "^2.0.0" },
+      { name: "path-to-regexp", spec: "0.1.12", parent: "express" },
+      { name: "@scope/b", spec: "3.0.0", parent: "@scope/a" },
+      { name: "qs", spec: "6.13.0" },
+      { name: "baz", spec: "npm:1.4.0" },
+    ]);
+  });
+});
+
+describe("projectOverrideRules", () => {
+  const withManifest = async (manifest: unknown, run: (root: string) => Promise<void>) => {
+    const root = await mkdtemp(join(tmpdir(), "codepulse-overrides-"));
+    try {
+      await writeFile(join(root, "package.json"), JSON.stringify(manifest));
+      await run(root);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  };
+  const manifest = { overrides: { a: "1.0.0" }, resolutions: { b: "2.0.0" } };
+
+  test("npm reads overrides, Yarn resolutions, Bun both", async () => {
+    await withManifest(manifest, async root => {
+      const rules = (packageManager: string, targetFile: string) =>
+        projectOverrideRules(root, { packageManager, targetFile });
+      expect(await rules("npm", "package-lock.json")).toEqual([{ name: "a", spec: "1.0.0" }]);
+      expect(await rules("yarn", "yarn.lock")).toEqual([{ name: "b", spec: "2.0.0" }]);
+      expect(await rules("bun", "bun.lock")).toEqual([
+        { name: "a", spec: "1.0.0" },
+        { name: "b", spec: "2.0.0" },
+      ]);
+      expect(await rules("maven", "pom.xml")).toEqual([]);
+    });
+  });
+
+  test("is empty without a readable manifest", async () => {
+    expect(
+      await projectOverrideRules(tmpdir(), { packageManager: "npm", targetFile: "missing/package-lock.json" }),
+    ).toEqual([]);
   });
 });
 

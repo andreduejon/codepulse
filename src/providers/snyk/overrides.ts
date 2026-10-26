@@ -189,26 +189,96 @@ export async function pnpmOverrideRules(worktreePath: string, directory: string)
   return lockfile ? parsePnpmLockfileOverrides(lockfile) : [];
 }
 
-/** Marks overridden packages from the lockfile beside the graph (pnpm). */
-export async function applyLockfileOverrides(graph: SnykDependencyGraph, worktreePath: string): Promise<void> {
-  if (graph.packageManager !== "pnpm") return;
-  applyOverrideRules(graph, await pnpmOverrideRules(worktreePath, posix.dirname(graph.targetFile)));
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === "object" && !Array.isArray(value);
+
+/**
+ * npm `overrides` (Bun reads the flat form too). A nested object limits its rules to that parent, and its `.` key
+ * overrides the parent itself. `$foo` takes the range the project's own manifest asks for `foo`.
+ */
+export function parseNpmOverrides(overrides: unknown, ranges: Readonly<Record<string, string>> = {}): OverrideRule[] {
+  const rules: OverrideRule[] = [];
+  const add = (name: string, spec: string, parent: string | undefined) => {
+    const resolved = spec.startsWith("$") ? ranges[spec.slice(1)] : spec;
+    if (name && resolved) rules.push({ name, spec: resolved, ...(parent ? { parent } : {}) });
+  };
+  const visit = (entries: Record<string, unknown>, parent: string | undefined) => {
+    for (const [selector, value] of Object.entries(entries)) {
+      if (selector === ".") continue;
+      const name = stepName(selector);
+      if (typeof value === "string") add(name, value, parent);
+      else if (isRecord(value)) {
+        if (typeof value["."] === "string") add(name, value["."], parent);
+        visit(value, name);
+      }
+    }
+  };
+  if (isRecord(overrides)) visit(overrides, undefined);
+  return rules;
+}
+
+/** Yarn `resolutions` (Bun reads them too): `foo`, `bar/foo`, `foo@npm:^1`, and `**` steps for any depth. */
+export function parseYarnResolutions(resolutions: unknown): OverrideRule[] {
+  if (!isRecord(resolutions)) return [];
+  const rules: OverrideRule[] = [];
+  for (const [selector, spec] of Object.entries(resolutions)) {
+    if (typeof spec !== "string" || !spec) continue;
+    const parts = selector.split("/");
+    const steps: string[] = [];
+    for (let index = 0; index < parts.length; index++) {
+      const part = parts[index] ?? "";
+      steps.push(part.startsWith("@") && index + 1 < parts.length ? `${part}/${parts[++index]}` : part);
+    }
+    const name = stepName(steps.at(-1) ?? "");
+    const before = steps.at(-2);
+    // `bar/**/foo` reaches `foo` at any depth below `bar`, so it names no direct parent.
+    const parent = before && before !== "**" ? stepName(before) : undefined;
+    if (name) rules.push({ name, spec, ...(parent ? { parent } : {}) });
+  }
+  return rules;
+}
+
+async function readManifest(worktreePath: string, directory: string): Promise<Record<string, unknown> | null> {
+  try {
+    const manifest: unknown = JSON.parse(await readFile(join(worktreePath, directory, "package.json"), "utf8"));
+    return isRecord(manifest) ? manifest : null;
+  } catch {
+    return null;
+  }
+}
+
+function rangesOf(manifest: Record<string, unknown>): Record<string, string> {
+  const ranges: Record<string, string> = {};
+  for (const field of ["optionalDependencies", "devDependencies", "dependencies"]) {
+    const value = manifest[field];
+    if (!isRecord(value)) continue;
+    for (const [name, range] of Object.entries(value)) if (typeof range === "string") ranges[name] = range;
+  }
+  return ranges;
 }
 
 /** Ranges the project's own `package.json` asks for (all dependency fields). */
 export async function manifestRanges(worktreePath: string, directory: string): Promise<Record<string, string>> {
-  let manifest: unknown;
-  try {
-    manifest = JSON.parse(await readFile(join(worktreePath, directory, "package.json"), "utf8"));
-  } catch {
-    return {};
-  }
-  if (!manifest || typeof manifest !== "object") return {};
-  const ranges: Record<string, string> = {};
-  for (const field of ["optionalDependencies", "devDependencies", "dependencies"]) {
-    const value = (manifest as Record<string, unknown>)[field];
-    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
-    for (const [name, range] of Object.entries(value)) if (typeof range === "string") ranges[name] = range;
-  }
-  return ranges;
+  const manifest = await readManifest(worktreePath, directory);
+  return manifest ? rangesOf(manifest) : {};
+}
+
+/**
+ * The overrides a project's package manager applies: pnpm's lockfile records them; npm reads `overrides`, Yarn
+ * `resolutions` and Bun both, from the `package.json` beside the lockfile (workspace packages' own are ignored).
+ */
+export async function projectOverrideRules(
+  worktreePath: string,
+  project: { targetFile: string; packageManager: string },
+): Promise<OverrideRule[]> {
+  const directory = posix.dirname(project.targetFile);
+  const { packageManager } = project;
+  if (packageManager === "pnpm") return pnpmOverrideRules(worktreePath, directory);
+  if (packageManager !== "npm" && packageManager !== "yarn" && packageManager !== "bun") return [];
+  const manifest = await readManifest(worktreePath, directory);
+  if (!manifest) return [];
+  return [
+    ...(packageManager === "yarn" ? [] : parseNpmOverrides(manifest.overrides, rangesOf(manifest))),
+    ...(packageManager === "npm" ? [] : parseYarnResolutions(manifest.resolutions)),
+  ];
 }

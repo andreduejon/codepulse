@@ -168,16 +168,20 @@ error in the banner above the command bar.
   tab when the scan has findings. Leaves sit one space after their connector.
 - Packages whose version the project forces carry a muted **override** keyword,
   in both Group by views. For pnpm it comes from the `overrides:` section of
-  `pnpm-lock.yaml` (what pnpm applied from `pnpm-workspace.yaml` or `package.json`);
-  a package is marked when its name matches and, for a version range, its version is
-  in range. A parent selector (`express>path-to-regexp`) marks every matching
-  version of the target. Type `override` in the filter to list them with their paths.
+  `pnpm-lock.yaml` (what pnpm applied from `pnpm-workspace.yaml` or `package.json`).
+  npm reads `overrides`, Yarn `resolutions` and Bun both, from the `package.json`
+  beside the lockfile; workspace packages' own fields are ignored, as the package
+  managers do. npm's `$name` references take the project's own range for `name`.
+  A package is marked when its name matches and, for a version range, its version is
+  in range. A parent selector (`express>path-to-regexp`, a nested npm object, or
+  Yarn's `express/path-to-regexp`) marks every matching version of the target. Type `override` in the filter to list them with their paths.
   Snapshots scanned before this change need a rescan.
 - **removable** follows **override** when the override could go: every package that
   asks for the target (or the project's own `package.json`, for a direct dependency)
   would, without it, already resolve to a version the override allows, taking the
   highest published version in that parent's range. Parents' ranges come from the
-  registry through `pnpm view` (or `npm view`), so `.npmrc` registries and
+  registry through `pnpm view` (or `npm view`, whichever is on PATH, for every
+  package manager), so `.npmrc` registries and
   credentials apply; answers are cached (a version's dependencies for good, version
   lists for a day). Exact pins, aliases (`npm:`), `workspace:` ranges, or an
   unreachable registry keep the override without **removable**. Type `removable` in
