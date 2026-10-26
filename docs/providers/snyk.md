@@ -156,7 +156,7 @@ error in the banner above the command bar.
   dependencies) markers; each opens to the direct dependencies that pull it in.
 - **Copy dependencies as JSON** (below Rescan, when a supported project was found) copies commit, scan time, Scope,
   filter, and per project a flat package list (`name`, `version`, `direct`, `dev`,
-  `pin` and `removable` when set, `via`, plus `severity` and `vulnerabilities`: the package's own worst severity and
+  `pin` (`override` or `managed`) and `removable` when set, `via`, plus `severity` and `vulnerabilities`: the package's own worst severity and
   CVE or Snyk IDs, `null`/`[]` when it has none), respecting the active Scope and
   filter. Graphs stay out (they are large); finding details live in **Copy scan as JSON**.
 - Vulnerable packages show a `▲` in their worst finding's severity colour, on
@@ -187,6 +187,16 @@ error in the banner above the command bar.
   unreachable registry keep the override without **removable**. Type `removable` in
   the filter to list them. On Windows, where pnpm and npm are `.cmd` shims, the check
   is skipped.
+- Maven packages pulled in through another dependency carry a muted **managed**
+  keyword when the POM's effective `<dependencyManagement>` pins them: its own
+  entries, then those of its parents found in the repository (at `relativePath`,
+  default `../pom.xml`, or by coordinates), then in-repo BOMs it imports with
+  `<scope>import</scope>`. `${property}` versions resolve with the POM's own and
+  inherited properties and `project.version`; a known version must match the one
+  Snyk resolved, while one set outside the repository (a Spring Boot parent, say)
+  marks by name. Direct dependencies are not marked, since their own declaration
+  already decides the version. Parents and BOMs outside the repository are not
+  read, so their pins are not marked. Type `managed` in the filter to list them.
 - Filter hits are highlighted in the package name in the Snyk colour (both tabs
   highlight matches in row text). Sibling rows reserve the `▲` column when any
   sibling has one, so `dev`/`repeated` line up per level. Filter counts (`N/M`)

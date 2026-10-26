@@ -13,6 +13,9 @@ All notable changes to this project will be documented in this file.
 - Flag overrides that could go with a muted `removable` keyword: every parent's own
   range (from `pnpm view` or `npm view`, cached) would already resolve to a version
   the override allows.
+- Mark Maven dependencies that `<dependencyManagement>` pins with a muted `managed`
+  keyword, following in-repo parent POMs, imported in-repo BOMs and `${property}`
+  versions. Only packages pulled in through another dependency are marked.
 
 ### Changed
 

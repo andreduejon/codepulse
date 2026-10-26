@@ -610,6 +610,54 @@ process.exit(1);
     expect(f.calls.filter(call => call.command[0] !== "git").map(call => call.command[0])).toEqual(["snyk", "snyk"]);
   });
 
+  test("marks Maven packages an in-repo parent's dependencyManagement pins", async () => {
+    const graph = `DepGraph data:\n${JSON.stringify({
+      schemaVersion: "1.3.0",
+      pkgManager: { name: "maven" },
+      pkgs: [
+        { id: "x:core@1.0", info: { name: "x:core", version: "1.0" } },
+        { id: "x:lib@1.0", info: { name: "x:lib", version: "1.0" } },
+        { id: "x:api@2.0", info: { name: "x:api", version: "2.0" } },
+      ],
+      graph: {
+        rootNodeId: "root-node",
+        nodes: [
+          { nodeId: "root-node", pkgId: "x:core@1.0", deps: [{ nodeId: "x:lib:jar:1.0:compile" }] },
+          { nodeId: "x:lib:jar:1.0:compile", pkgId: "x:lib@1.0", deps: [{ nodeId: "x:api:jar:2.0:compile" }] },
+          { nodeId: "x:api:jar:2.0:compile", pkgId: "x:api@2.0", deps: [] },
+        ],
+      },
+    })}\nDepGraph target:\ncore/pom.xml\nDepGraph end\n`;
+    const f = await dependencyFixture({
+      "pom.xml":
+        "<project><groupId>x</groupId><artifactId>parent</artifactId><version>1.0</version>" +
+        "<properties><api.version>2.0</api.version></properties><dependencyManagement><dependencies>" +
+        `<dependency><groupId>x</groupId><artifactId>api</artifactId><version>\${api.version}</version></dependency>` +
+        "<dependency><groupId>x</groupId><artifactId>lib</artifactId><version>1.0</version></dependency>" +
+        "</dependencies></dependencyManagement></project>",
+      "core/pom.xml":
+        "<project><parent><groupId>x</groupId><artifactId>parent</artifactId><version>1.0</version></parent>" +
+        "<artifactId>core</artifactId></project>",
+    });
+    f.output.findings.stdout = JSON.stringify([
+      { packageManager: "maven", displayTargetFile: "pom.xml", vulnerabilities: [] },
+      { packageManager: "maven", displayTargetFile: "core/pom.xml", vulnerabilities: [] },
+    ]);
+    f.output.graph.stdout = graph;
+    const result = await scanSnykCommit(
+      { repoPath: f.repoPath, sha: SHA },
+      { cacheRoot: f.cacheRoot, runCommand: f.runner, which: command => (command.startsWith("mvn") ? command : null) },
+    );
+    const core = result.dependencyProjects.find(project => project.targetFile === "core/pom.xml");
+    // x:lib is a direct dependency, so only x:api counts as managed.
+    expect(core?.graphs[0].packages.map(pkg => [pkg.name, pkg.pin ?? null])).toEqual([
+      ["x:core", null],
+      ["x:lib", null],
+      ["x:api", "managed"],
+    ]);
+    expect(await new SnykCache({ root: f.cacheRoot }).read(f.repoPath, SHA)).toEqual(result);
+  });
+
   test("captures Maven graphs per pom.xml by exact path, with scopes from node IDs", async () => {
     const mavenGraph = (target: string, artifact: string) =>
       `DepGraph data:\n${JSON.stringify({

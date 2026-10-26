@@ -6,6 +6,7 @@ import { addDebugEvent, redactDebugValue } from "../../debug/events";
 import { SnykCache } from "./cache";
 import { normalizeSnykTargetFile, parseSnykDepGraphs } from "./dep-graph";
 import { snykFailureReason } from "./failure-reason";
+import { applyMavenManaged, mavenManagedVersions, PomIndex } from "./maven-managed";
 import { applyOverrideRules, manifestRanges, markRemovableOverrides, projectOverrideRules } from "./overrides";
 import { parseSnykOutput, shouldReplaceSnykResult } from "./parser";
 import { discoverSnykDependencyProjects, type SnykDependencyProjectInput } from "./projects";
@@ -532,7 +533,10 @@ async function scanDependencyProjects(
   return { projects: results, failures };
 }
 
-/** Marks what each project's overrides force, asking the registry only when a project has overridden packages. */
+/**
+ * Marks what each project's overrides force (asking the registry only when a project has overridden packages) and
+ * what Maven's `<dependencyManagement>` pins.
+ */
 async function markOverrides(
   projects: readonly SnykDependencyProjectResult[],
   commandOptions: Parameters<SnykCommandRunner>[1],
@@ -548,8 +552,19 @@ async function markOverrides(
     }
     return ranges;
   };
+  // Every tracked pom.xml is a project, so their paths cover in-repo parents and BOMs.
+  const poms = new PomIndex(
+    commandOptions.cwd,
+    projects.filter(project => project.packageManager === "maven").map(project => project.targetFile),
+  );
   for (const project of projects) {
     if (project.graphs.length === 0) continue;
+    if (project.packageManager === "maven") {
+      const managed = await mavenManagedVersions(poms, project.targetFile);
+      throwIfAborted(commandOptions.signal);
+      for (const graph of project.graphs) applyMavenManaged(graph, managed);
+      continue;
+    }
     const rules = await projectOverrideRules(commandOptions.cwd, project);
     throwIfAborted(commandOptions.signal);
     if (rules.length === 0) continue;
