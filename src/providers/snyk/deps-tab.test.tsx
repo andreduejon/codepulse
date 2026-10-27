@@ -1034,3 +1034,22 @@ test("pinned packages carry muted override and removable keywords, and the filte
     await d.dispose();
   }
 });
+
+test("the pinned filter finds override and managed packages alike", async () => {
+  const scan = scanFixture();
+  const packages = scan.dependencyProjects[0].graphs[0].packages;
+  packages[1] = { ...packages[1], pin: "override" };
+  packages[3] = { ...packages[3], pin: "managed" };
+  const d = await renderDependencies(scan);
+  try {
+    await d.click("filter");
+    await d.type("pinned");
+    expect(d.frame()).toMatch(/parent@1\.0\.0\s+override\s*$/m);
+    expect(d.frame()).toMatch(/mystery@3\.0\.0\s+managed\s*$/m);
+    expect(d.frame()).not.toContain("dev-only@2.0.0");
+    // `pinned` is a filter word only; rows keep their own keyword.
+    expect(d.frame()).not.toMatch(/\spinned\s*$/m);
+  } finally {
+    await d.dispose();
+  }
+});

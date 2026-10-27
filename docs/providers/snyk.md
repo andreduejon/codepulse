@@ -197,6 +197,8 @@ error in the banner above the command bar.
   marks by name. Direct dependencies are not marked, since their own declaration
   already decides the version. Parents and BOMs outside the repository are not
   read, so their pins are not marked. Type `managed` in the filter to list them.
+- Type `pinned` in the filter to list **override** and **managed** packages
+  together; the rows keep their own keyword.
 - Filter hits are highlighted in the package name in the Snyk colour (both tabs
   highlight matches in row text). Sibling rows reserve the `▲` column when any
   sibling has one, so `dev`/`repeated` line up per level. Filter counts (`N/M`)

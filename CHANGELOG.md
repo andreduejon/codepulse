@@ -16,6 +16,8 @@ All notable changes to this project will be documented in this file.
 - Mark Maven dependencies that `<dependencyManagement>` pins with a muted `managed`
   keyword, following in-repo parent POMs, imported in-repo BOMs and `${property}`
   versions. Only packages pulled in through another dependency are marked.
+- The dependency filter word `pinned` lists `override` and `managed` packages
+  together.
 
 ### Changed
 

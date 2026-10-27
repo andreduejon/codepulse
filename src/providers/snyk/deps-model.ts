@@ -106,11 +106,14 @@ export function pinFields(pkg: SnykDependencyPackage): Pick<DependencyTreeRow, "
   return { ...(pkg.pin ? { pin: pkg.pin } : {}), ...(pkg.removable ? { removable: true } : {}) };
 }
 
+/** Filter words beyond the shown keywords: `pinned` finds every override and managed pin at once. */
+const filterKeywords = (pkg: SnykDependencyPackage) => [...pinKeywords(pkg), ...(pkg.pin ? ["pinned"] : [])];
+
 /** `name@version` queries match exactly; anything else is a substring of the name or a pin keyword. */
 export function matchesQuery(pkg: SnykDependencyPackage, query: string): boolean {
   return query.lastIndexOf("@") > 0
     ? packageLabel(pkg).toLowerCase() === query
-    : pkg.name.toLowerCase().includes(query) || pinKeywords(pkg).some(word => word.includes(query));
+    : pkg.name.toLowerCase().includes(query) || filterKeywords(pkg).some(word => word.includes(query));
 }
 
 // shortcut: cap rows at 1,000 since rendering cost grows per row (~0.1 ms each); add viewport virtualization for larger trees.
