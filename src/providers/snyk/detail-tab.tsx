@@ -28,9 +28,6 @@ const MIN_PANEL_WIDTH = 60;
 const PANEL_PADDING_X = 4;
 const FINDING_PREFIX_WIDTH = 5;
 const METADATA_PREFIX_WIDTH = 6;
-const COPY_INDEX = 1;
-const GROUP_BY_INDEX = 2;
-const FILTER_INDEX = 3;
 type GroupBy = "severity" | "dependency";
 const GROUP_BY_OPTIONS: GroupBy[] = ["severity", "dependency"];
 
@@ -47,7 +44,12 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
   const isSectionExpanded = (section: Section) =>
     section.severity ? expandedSections().has(section.key) : !collapsedGroups().has(section.key);
   const isPackageExpanded = (pkg: PackageRow) => !collapsedGroups().has(pkg.key);
-  const filter = useSnykFilter(props, FILTER_INDEX);
+  // Cursor order: Scan (left out while Snyk is unavailable), Copy, Group by, filter, then the findings.
+  const base = () => (props.unavailable ? 0 : 1);
+  const copyIndex = () => base();
+  const groupByIndex = () => base() + 1;
+  const filterIndex = () => base() + 2;
+  const filter = useSnykFilter(props, filterIndex);
   const { copiedId, copyToClipboard } = useClipboard();
   let resettingFilter = false;
   const refsByKey = new Map<string, Renderable>();
@@ -106,7 +108,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
       : []),
   ];
   const flatItems = createMemo<FlatItem[]>(() => [
-    { kind: "scan" as const },
+    ...(props.unavailable ? [] : [{ kind: "scan" as const }]),
     // Copy, Group by and filter only when the scan has findings to show.
     ...(originalTotal() > 0
       ? [{ kind: "copyJson" as const }, { kind: "groupBy" as const }, { kind: "filter" as const }]
@@ -284,7 +286,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
           resettingFilter = false;
           return;
         }
-        props.setDetailCursorIndex(FILTER_INDEX);
+        props.setDetailCursorIndex(filterIndex());
         props.navRef?.scrollToCursor?.();
       },
       { defer: true },
@@ -370,9 +372,10 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
       <SnykControlRow
         rows={rowsUi}
         id="scan"
-        index={0}
+        index={props.unavailable ? -1 : 0}
         label={props.scan ? "Rescan commit" : "Scan commit"}
         status={props.loading ? BUSY.scanning : undefined}
+        disabled={props.unavailable}
         mouseEnabled={props.mouseEnabled}
         rowRef={element => {
           refsByKey.set("scan", element);
@@ -385,7 +388,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
           <SnykControlRow
             rows={rowsUi}
             id="copyJson"
-            index={COPY_INDEX}
+            index={copyIndex()}
             label="Copy scan as JSON"
             copied={copiedId() === "copyJson"}
             mouseEnabled={props.mouseEnabled}
@@ -395,7 +398,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
           <SnykControlRow
             rows={rowsUi}
             id="groupBy"
-            index={GROUP_BY_INDEX}
+            index={groupByIndex()}
             label="Group by"
             value={groupBy()}
             mouseEnabled={props.mouseEnabled}
@@ -403,7 +406,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
           />
           <SnykFilterRow
             filter={filter}
-            selected={rowsUi.cursored(FILTER_INDEX)}
+            selected={rowsUi.cursored(filterIndex())}
             mouseEnabled={props.mouseEnabled}
             rowRef={rowRef({ kind: "filter" })}
           >

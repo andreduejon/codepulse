@@ -27,6 +27,8 @@ export function ProviderDetailTabs(
     setDetailCursorAction: actions.setDetailCursorAction,
     setDetailCursorIndex: actions.setDetailCursorIndex,
   };
+  /** Like the CI and OpenShift Reload rows, Scan is muted and skipped while Snyk cannot work. */
+  const snykUnavailable = () => props.view.snykProviderStatus?.kind === "unavailable";
   const snykScan = async () => {
     await props.view.snykScanCommit?.(props.sha, !!props.view.snykGetCommitData?.(props.sha));
   };
@@ -118,6 +120,7 @@ export function ProviderDetailTabs(
           contentWidth={props.view.contentWidth}
           onScan={snykScan}
           loading={props.view.snykIsScanning?.(props.sha) ?? false}
+          unavailable={snykUnavailable()}
           {...cursor}
         />
       </Show>
@@ -139,6 +142,7 @@ export function ProviderDetailTabs(
           contentWidth={props.view.contentWidth}
           onScan={snykScan}
           loading={props.view.snykIsScanning?.(props.sha) ?? false}
+          unavailable={snykUnavailable()}
           {...cursor}
         />
       </Show>

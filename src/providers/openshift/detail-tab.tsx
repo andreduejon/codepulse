@@ -1,8 +1,9 @@
-import { MouseButton, type MouseEvent, type Renderable } from "@opentui/core";
+import type { Renderable } from "@opentui/core";
 import { createEffect, createMemo, createSignal, For, on, Show, untrack } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
 import { useT } from "../../hooks/use-t";
 import { BUSY } from "../../utils/busy-text";
+import { ProviderActionRow, ProviderSummaryRow, useDetailRowMouse } from "../shared/detail-rows";
 import { type StatusCategory, statusIcon } from "../shared/status";
 import { openShiftStatusColor } from "./graph-columns";
 import {
@@ -102,25 +103,14 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
   const [expandedNamespaces, setExpandedNamespaces] = createSignal<Set<string>>(new Set());
   const itemRefs: Renderable[] = [];
   const refsByKey = new Map<string, Renderable>();
-  const [hoveredKey, setHoveredKey] = createSignal<string | null>(null);
-  const mouseRow = (key: string, index: () => number) => ({
-    onMouseOver: () => setHoveredKey(key),
-    onMouseOut: () => setHoveredKey(null),
-    onMouseDown: (event: MouseEvent) => {
-      if (!props.mouseEnabled || event.button !== MouseButton.LEFT) return;
-      event.preventDefault();
-      event.stopPropagation();
-      if (index() < 0) return;
-      if (key === "reload" && (!reloadEnabled() || reloadBusy())) return;
-      props.onMouseFocus?.();
-      props.setDetailCursorIndex(index());
-      activateCurrentItem();
-    },
+  const rows = useDetailRowMouse({
+    mouseEnabled: () => props.mouseEnabled,
+    onMouseFocus: props.onMouseFocus,
+    setDetailCursorIndex: props.setDetailCursorIndex,
+    activate: () => activateCurrentItem(),
+    inert: key => key === "reload" && (!reloadEnabled() || reloadBusy()),
   });
-  const hoverBg = (key: string) =>
-    props.mouseEnabled && hoveredKey() === key && (key !== "reload" || (reloadEnabled() && !reloadBusy()))
-      ? t().backgroundElement
-      : undefined;
+  const { mouseRow, hoverBg } = rows;
 
   const flatItemKey = (item: FlatItem) => {
     if (item.kind === "reload") return "reload";
@@ -138,8 +128,9 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
 
   const namespaces = createMemo(() => data()?.namespaces ?? []);
   const resources = createMemo(() => namespaces().flatMap(namespaceResources));
-  const reloadLabel = () => (data() ? "Reload resources" : "Load resources");
-  const reloadHint = () => (reloadLabel() === "Load resources" ? "load" : "reload");
+  // Same wording as the CI tabs: the row (re)loads this commit's resources.
+  const reloadLabel = () => (data() ? "Reload commit" : "Load commit");
+  const reloadHint = () => (data() ? "reload" : "load");
 
   const flatItems = createMemo<FlatItem[]>(() => [
     ...(reloadEnabled() ? [{ kind: "reload" as const }] : []),
@@ -291,42 +282,22 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
 
   return (
     <box flexDirection="column" width="100%">
-      <box
-        {...mouseRow("reload", reloadIdx)}
-        ref={(el: Renderable) => {
+      <ProviderActionRow
+        label={reloadLabel()}
+        status={reloadStatus()}
+        disabled={!reloadEnabled()}
+        cursored={isReloadCursored()}
+        mouseEnabled={props.mouseEnabled}
+        rows={rows}
+        rowKey="reload"
+        index={reloadIdx}
+        rowRef={el => {
           refsByKey.set("reload", el);
           syncItemRefs();
         }}
-        flexDirection="row"
-        width="100%"
-        backgroundColor={isReloadCursored() ? t().backgroundElementActive : hoverBg("reload")}
-      >
-        <text
-          selectable={!props.mouseEnabled}
-          flexGrow={1}
-          fg={!reloadEnabled() ? t().foregroundMuted : isReloadCursored() ? t().accent : t().foreground}
-          wrapMode="none"
-        >
-          {reloadLabel()}
-        </text>
-        <Show when={reloadStatus()}>
-          <text selectable={!props.mouseEnabled} flexShrink={0} fg={t().foregroundMuted} wrapMode="none">
-            {reloadStatus()}
-          </text>
-        </Show>
-      </box>
+      />
       <Show when={!!data()}>
-        <box flexDirection="row" width="100%">
-          <box flexGrow={1}>
-            <text fg={t().foregroundMuted} wrapMode="none">
-              total resources
-            </text>
-          </box>
-          <box flexShrink={0} width={2} />
-          <text fg={t().foregroundMuted} wrapMode="none">
-            {resources().length}
-          </text>
-        </box>
+        <ProviderSummaryRow label="total resources" count={resources().length} />
       </Show>
       <Show when={resources().length > 0}>
         <box flexDirection="column" width="100%">

@@ -1,10 +1,11 @@
-import { MouseButton, type MouseEvent, type Renderable } from "@opentui/core";
+import type { Renderable } from "@opentui/core";
 import { createEffect, createMemo, createSignal, For, onCleanup, Show, untrack } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
 import type { DebugEventSource } from "../../debug/events";
 import { useT } from "../../hooks/use-t";
 import { BUSY } from "../../utils/busy-text";
 import { formatDuration, formatRelativeDate } from "../../utils/date";
+import { ProviderActionRow, ProviderSummaryRow, useDetailRowMouse } from "./detail-rows";
 import { fetchProviderJobs } from "./provider-job-fetch";
 import { categorize, statusColor, statusIcon } from "./status";
 
@@ -96,7 +97,6 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
   let autoExpandedSignature: string | null = null;
   let previousDataKey = props.dataKey;
   const itemRefs: Renderable[] = [];
-  const [hoveredKey, setHoveredKey] = createSignal<string | null>(null);
   const refsByKey = new Map<string, Renderable>();
   const itemKey = (item: FlatItem<TRaw, TJobRaw>) =>
     item.kind === "reload"
@@ -111,23 +111,14 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
       itemRefs[index] = refsByKey.get(itemKey(item)) as Renderable;
     });
   };
-  const mouseRow = (key: string, index: () => number) => ({
-    onMouseOver: () => setHoveredKey(key),
-    onMouseOut: () => setHoveredKey(null),
-    onMouseDown: (event: MouseEvent) => {
-      if (!props.mouseEnabled || event.button !== MouseButton.LEFT || index() < 0) return;
-      event.preventDefault();
-      event.stopPropagation();
-      if (key === "reload" && (!reloadEnabled() || reloadBusy())) return;
-      props.onMouseFocus?.();
-      props.setDetailCursorIndex(index());
-      activateCurrentItem();
-    },
+  const rows = useDetailRowMouse({
+    mouseEnabled: () => props.mouseEnabled,
+    onMouseFocus: props.onMouseFocus,
+    setDetailCursorIndex: props.setDetailCursorIndex,
+    activate: () => activateCurrentItem(),
+    inert: key => key === "reload" && (!reloadEnabled() || reloadBusy()),
   });
-  const hoverBg = (key: string) =>
-    props.mouseEnabled && hoveredKey() === key && (key !== "reload" || (reloadEnabled() && !reloadBusy()))
-      ? t().backgroundElement
-      : undefined;
+  const { mouseRow, hoverBg } = rows;
 
   const formatStepDuration = (step: ProviderTreeStep) => formatDuration(step.startedAt, step.completedAt);
   const formatRunDuration = (run: ProviderTreeRun<TRaw>) => {
@@ -181,7 +172,8 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     const jobs = fetchedJobs();
     const items: FlatItem<TRaw, TJobRaw>[] = [];
     let idx = 0;
-    if (props.onReloadCommit) items.push({ kind: "reload", flatIndex: idx++ });
+    // A disabled reload row stays visible (muted) but leaves the cursor order.
+    if (props.onReloadCommit && reloadEnabled()) items.push({ kind: "reload", flatIndex: idx++ });
     for (const run of props.runs) {
       items.push({ kind: "run", run, flatIndex: idx++ });
       if (expanded.has(run.id)) {
@@ -324,7 +316,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     runSignatures.clear();
     itemRefs.length = 0;
     refsByKey.clear();
-    setHoveredKey(null);
+    rows.clearHover();
   };
 
   createEffect(() => {
@@ -411,43 +403,23 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
   return (
     <box flexDirection="column" width="100%" flexGrow={1}>
       <Show when={!!props.onReloadCommit}>
-        <box
-          ref={(el: Renderable) => {
+        <ProviderActionRow
+          label={reloadLabel()}
+          status={reloadStatus()}
+          disabled={!reloadEnabled()}
+          cursored={isReloadCursored()}
+          mouseEnabled={props.mouseEnabled}
+          rows={rows}
+          rowKey="reload"
+          index={reloadIdx}
+          rowRef={el => {
             refsByKey.set("reload", el);
             syncItemRefs();
           }}
-          {...mouseRow("reload", reloadIdx)}
-          flexDirection="row"
-          width="100%"
-          backgroundColor={isReloadCursored() ? t().backgroundElementActive : hoverBg("reload")}
-        >
-          <text
-            selectable={!props.mouseEnabled}
-            flexGrow={1}
-            fg={!reloadEnabled() ? t().foregroundMuted : isReloadCursored() ? t().accent : t().foreground}
-            wrapMode="none"
-          >
-            {reloadLabel()}
-          </text>
-          <Show when={reloadStatus()}>
-            <text selectable={!props.mouseEnabled} flexShrink={0} fg={t().foregroundMuted} wrapMode="none">
-              {reloadStatus()}
-            </text>
-          </Show>
-        </box>
+        />
       </Show>
       <Show when={props.showSummary !== false}>
-        <box flexDirection="row" width="100%">
-          <box flexGrow={1}>
-            <text fg={t().foregroundMuted} wrapMode="none">
-              {props.summaryLabel}
-            </text>
-          </box>
-          <box flexShrink={0} width={2} />
-          <text fg={t().foregroundMuted} wrapMode="none">
-            {props.runs.length}
-          </text>
-        </box>
+        <ProviderSummaryRow label={props.summaryLabel} count={props.runs.length} />
       </Show>
       <For each={props.runs}>
         {(run, runIndexFn) => {

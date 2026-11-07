@@ -1,0 +1,99 @@
+import { MouseButton, type MouseEvent, type Renderable } from "@opentui/core";
+import { createSignal, Show } from "solid-js";
+import { useT } from "../../hooks/use-t";
+
+/**
+ * Hover and left-click handling shared by provider detail rows (CI runs/jobs, OpenShift namespaces/resources, action
+ * rows). A click focuses the sidebar, moves the cursor to the row and activates it. Rows outside the cursor order
+ * (index < 0) and inert rows (a disabled or busy action) neither react nor highlight.
+ */
+export function useDetailRowMouse(opts: {
+  mouseEnabled: () => boolean | undefined;
+  onMouseFocus?: () => void;
+  setDetailCursorIndex: (index: number) => void;
+  activate: () => unknown;
+  /** True for a row that is visible but cannot be used right now. */
+  inert?: (key: string) => boolean;
+}) {
+  const t = useT();
+  const [hoveredKey, setHoveredKey] = createSignal<string | null>(null);
+  const mouseRow = (key: string, index: () => number) => ({
+    onMouseOver: () => setHoveredKey(key),
+    onMouseOut: () => setHoveredKey(null),
+    onMouseDown: (event: MouseEvent) => {
+      if (!opts.mouseEnabled() || event.button !== MouseButton.LEFT) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (index() < 0 || opts.inert?.(key)) return;
+      opts.onMouseFocus?.();
+      opts.setDetailCursorIndex(index());
+      opts.activate();
+    },
+  });
+  const hoverBg = (key: string) =>
+    opts.mouseEnabled() && hoveredKey() === key && !opts.inert?.(key) ? t().backgroundElement : undefined;
+  return { mouseRow, hoverBg, clearHover: () => setHoveredKey(null) };
+}
+
+export type DetailRowMouse = ReturnType<typeof useDetailRowMouse>;
+
+/**
+ * The first row of a provider tab: `Load commit` / `Reload commit`, with muted status on the right while it works
+ * (`fetching runs...`) or what it last saw (`live`). A disabled row is muted and left out of the cursor order.
+ */
+export function ProviderActionRow(
+  props: Readonly<{
+    label: string;
+    status?: string;
+    disabled: boolean;
+    cursored: boolean;
+    mouseEnabled?: boolean;
+    rows: DetailRowMouse;
+    rowKey: string;
+    index: () => number;
+    rowRef: (element: Renderable) => void;
+  }>,
+) {
+  const t = useT();
+  return (
+    <box
+      ref={props.rowRef}
+      {...props.rows.mouseRow(props.rowKey, props.index)}
+      flexDirection="row"
+      width="100%"
+      backgroundColor={props.cursored ? t().backgroundElementActive : props.rows.hoverBg(props.rowKey)}
+    >
+      <text
+        selectable={!props.mouseEnabled}
+        flexGrow={1}
+        fg={props.disabled ? t().foregroundMuted : props.cursored ? t().accent : t().foreground}
+        wrapMode="none"
+      >
+        {props.label}
+      </text>
+      <Show when={props.status}>
+        <text selectable={!props.mouseEnabled} flexShrink={0} fg={t().foregroundMuted} wrapMode="none">
+          {props.status}
+        </text>
+      </Show>
+    </box>
+  );
+}
+
+/** The muted `total …  N` line under the action row; hidden until the commit's data is known (unknown ≠ zero). */
+export function ProviderSummaryRow(props: Readonly<{ label: string; count: number }>) {
+  const t = useT();
+  return (
+    <box flexDirection="row" width="100%">
+      <box flexGrow={1}>
+        <text fg={t().foregroundMuted} wrapMode="none">
+          {props.label}
+        </text>
+      </box>
+      <box flexShrink={0} width={2} />
+      <text fg={t().foregroundMuted} wrapMode="none">
+        {props.count}
+      </text>
+    </box>
+  );
+}

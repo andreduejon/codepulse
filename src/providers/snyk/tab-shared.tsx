@@ -13,6 +13,8 @@ export interface SnykDetailTabProps {
   onScan: () => void | Promise<void>;
   contentWidth?: number;
   loading?: boolean;
+  /** Snyk cannot scan (disabled token, setup missing): Scan is muted and left out of the cursor order. */
+  unavailable?: boolean;
   navRef?: DetailNavRef;
   detailCursorIndex: () => number;
   detailFocused: () => boolean;
@@ -90,7 +92,7 @@ export function useSnykRows(props: Readonly<SnykDetailTabProps>, activate: () =>
       if (!props.mouseEnabled || event.button !== MouseButton.LEFT || index() < 0) return;
       event.preventDefault();
       event.stopPropagation();
-      if (key === "scan" && props.loading) return;
+      if (key === "scan" && (props.loading || props.unavailable)) return;
       props.onMouseFocus?.();
       props.setDetailCursorIndex(index());
       activate();
@@ -99,7 +101,10 @@ export function useSnykRows(props: Readonly<SnykDetailTabProps>, activate: () =>
   const background = (key: string, index: number) =>
     cursored(index)
       ? t().backgroundElementActive
-      : index >= 0 && props.mouseEnabled && hoveredKey() === key && (key !== "scan" || !props.loading)
+      : index >= 0 &&
+          props.mouseEnabled &&
+          hoveredKey() === key &&
+          (key !== "scan" || !(props.loading || props.unavailable))
         ? t().backgroundElement
         : undefined;
   return { cursored, mouseRow, background, clearHover: () => setHoveredKey(null) };
@@ -118,6 +123,8 @@ export function SnykControlRow(props: {
   /** Muted status after the label, e.g. `scanning...`. */
   status?: string;
   copied?: boolean;
+  /** Muted, like a provider's disabled Reload row. */
+  disabled?: boolean;
   mouseEnabled?: boolean;
   rowRef: (element: Renderable) => void;
 }) {
@@ -134,7 +141,7 @@ export function SnykControlRow(props: {
         selectable={!props.mouseEnabled}
         flexGrow={1}
         flexShrink={1}
-        fg={props.rows.cursored(props.index) ? t().accent : t().foreground}
+        fg={props.disabled ? t().foregroundMuted : props.rows.cursored(props.index) ? t().accent : t().foreground}
         wrapMode="none"
         truncate
       >

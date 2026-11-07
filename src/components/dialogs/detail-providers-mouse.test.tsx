@@ -229,6 +229,9 @@ async function renderProvider(provider: Provider, compact = true, deferredJobs =
         snykGetCommitData: () => (hasData() ? snykScan() : null),
         snykScanCommit: scanCommit,
         snykIsScanning: loading,
+        get snykProviderStatus() {
+          return status();
+        },
       };
       return (
         <ThemeContext.Provider value={theme}>
@@ -475,18 +478,18 @@ test("OpenShift namespace/resource/reload routing follows grouped and sorted res
     await d.click("z-tag");
     expect(d.state.detailCursorIndex()).toBe(4);
     expect(d.openResource).toHaveBeenLastCalledWith(resources[1]);
-    await hoverAndRightClick(d, "Reload resources");
-    await d.click("Reload resources");
+    await hoverAndRightClick(d, "Reload commit");
+    await d.click("Reload commit");
     expect(d.reload).toHaveBeenLastCalledWith(sha, true);
     d.setLoading(true);
     await d.flush();
-    await d.click("Reload resources");
+    await d.click("Reload commit");
     expect(d.reload).toHaveBeenCalledTimes(1);
     d.setLoading(false);
     d.setUnavailable(true);
     await d.flush();
     const cursor = d.state.detailCursorIndex();
-    await d.click("Reload resources");
+    await d.click("Reload commit");
     expect(d.state.detailCursorIndex()).toBe(cursor);
     expect(d.reload).toHaveBeenCalledTimes(1);
     await d.click("team-a-pod");
@@ -515,6 +518,36 @@ test("OpenShift live updates keep collapsed namespaces collapsed and the cursor 
     await d.dispose();
   }
 });
+
+for (const [provider, label] of [
+  ["github-actions", "Reload commit"],
+  ["jenkins", "Reload commit"],
+  ["openshift", "Reload commit"],
+  ["snyk", "Rescan commit"],
+] as const) {
+  test(`${provider}: an unavailable provider mutes its action row and leaves it out of the cursor order`, async () => {
+    const d = await renderProvider(provider);
+    try {
+      const count = d.navRef.itemCount;
+      d.setUnavailable(true);
+      await d.flush();
+      expect(d.navRef.itemCount).toBe(count - 1);
+      const { x, y } = d.point(label);
+      expect(d.cell(x, y)?.fg).toEqual(RGBA.fromHex(d.theme.foregroundMuted));
+      d.state.detailCursorIndex() !== 0 && d.actions.setDetailCursorIndex(0);
+      await d.flush();
+      expect(d.state.detailCursorAction()).not.toMatch(/^(re)?(load|scan)$/);
+      await d.click(label);
+      expect(d.reload).not.toHaveBeenCalled();
+      expect(d.scanCommit).not.toHaveBeenCalled();
+      d.setUnavailable(false);
+      await d.flush();
+      expect(d.navRef.itemCount).toBe(count);
+    } finally {
+      await d.dispose();
+    }
+  });
+}
 
 test("Snyk severity/finding/scan actions ignore empty severities and loading scans", async () => {
   const d = await renderProvider("snyk");
@@ -987,7 +1020,7 @@ for (const provider of ["github-actions", "jenkins", "openshift", "snyk"] as con
           : provider === "jenkins"
             ? ["Reload commit", "Build 1", "Jenkins job 1"]
             : provider === "openshift"
-              ? ["Reload resources", "team-a", "team-a-pod", "a-tag"]
+              ? ["Reload commit", "team-a", "team-a-pod", "a-tag"]
               : ["Rescan commit", "HIGH", "CVE-2026-0001"];
       const cursor = d.state.detailCursorIndex();
       const action = d.state.detailCursorAction();
