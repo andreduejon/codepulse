@@ -66,7 +66,7 @@ const renderInfo = (v: MenuRowsView, item: Extract<SettingItem, { kind: "info" }
       </text>
       {hasStatus() ? (
         <text flexShrink={0} width={HOTKEY_COL_WIDTH} wrapMode="none" fg={isValid() ? v.t().success : v.t().error}>
-          {(isValid() ? "✓" : "✕").padStart(HOTKEY_COL_WIDTH)}
+          {(isValid() ? "✓" : "✗").padStart(HOTKEY_COL_WIDTH)}
         </text>
       ) : (
         <box width={HOTKEY_COL_WIDTH} flexShrink={0} />
@@ -302,7 +302,7 @@ const renderEditable = (v: MenuRowsView, item: Extract<SettingItem, { kind: "edi
         </text>
       ) : (
         <text flexShrink={0} width={HOTKEY_COL_WIDTH} wrapMode="none" fg={valid() ? v.t().success : v.t().error}>
-          {(valid() ? "✓" : "✕").padStart(HOTKEY_COL_WIDTH)}
+          {(valid() ? "✓" : "✗").padStart(HOTKEY_COL_WIDTH)}
         </text>
       )}
     </box>

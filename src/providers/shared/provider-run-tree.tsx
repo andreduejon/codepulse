@@ -485,7 +485,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                   truncate
                   fg={runTextColor()}
                 >
-                  {`${run.label}  #${run.runNumber}`}
+                  {`${run.label} #${run.runNumber}`}
                 </text>
                 <box flexShrink={0} width={1} />
                 <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>

@@ -41,7 +41,7 @@ export default function SetupScreen(props: Readonly<SetupScreenProps>) {
   const displayPath = () => {
     const short = props.repoPath.replace(homedir(), "~");
     if (short.length <= MAX_PATH_CHARS) return short;
-    return `...${short.slice(-(MAX_PATH_CHARS - 3))}`;
+    return `…${short.slice(-(MAX_PATH_CHARS - 1))}`;
   };
 
   return (

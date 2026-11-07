@@ -52,7 +52,11 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
     return t().foregroundMuted;
   };
 
-  const countText = () => `${commitCountText(state.highlightSet(), state.graphRows().length)} commits`;
+  // "1 commit", "12 commits", "1 / 201 commits": the noun follows the total.
+  const countText = () => {
+    const total = state.graphRows().length;
+    return `${commitCountText(state.highlightSet(), total)} ${total === 1 ? "commit" : "commits"}`;
+  };
 
   const borderColor = () => (props.detailFocused() ? t().border : t().accent);
   const checkedOutBranch = () => state.currentBranch();

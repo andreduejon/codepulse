@@ -523,7 +523,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
             </Show>
             <Show when={diffStats().deletions > 0}>
               <text wrapMode="none" fg={t().diffRemoved}>
-                {`\u2212${diffStats().deletions}`}
+                {`-${diffStats().deletions}`}
               </text>
             </Show>
             <Show when={activeIsTruncated()}>
