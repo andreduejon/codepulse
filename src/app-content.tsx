@@ -119,13 +119,16 @@ export function AppContent(props: Readonly<AppContentProps>) {
 
     const status = state.providerStatus();
     const message = providerStatusMessage(status);
-    if (state.activeProviderView() === "git" || !message || isTabNoticeStatus(status)) return null;
+    if (state.activeProviderView() !== "git" && message && !isTabNoticeStatus(status))
+      return {
+        kind: status.kind === "error" || status.kind === "warning" ? status.kind : ("info" as const),
+        source: providerDisplayName(state.activeProviderView()),
+        message: displayBanner(message, message),
+      };
 
-    return {
-      kind: status.kind === "error" || status.kind === "warning" ? status.kind : ("info" as const),
-      source: providerDisplayName(state.activeProviderView()),
-      message: displayBanner(message, message),
-    };
+    // Snyk scans keep running in other views; a failure must not pass silently. The view's own problems come first.
+    const background = snyk.backgroundError();
+    return background ? { kind: "error" as const, source: "Snyk", message: background } : null;
   });
 
   /** Scan notices closed with `✕` or `:clear`; a rescan changes the key and brings them back. */
@@ -153,7 +156,10 @@ export function AppContent(props: Readonly<AppContentProps>) {
   /** Dismisses the banner: `:clear` (which also clears Debug and the tab notice) or its `✕`. */
   const clearScreenMessage = () => {
     actions.setError(null);
-    actions.setProviderStatus(state.activeProviderView(), providerIdle());
+    snyk.dismissBackgroundError();
+    // Only a status the banner showed; a loading provider keeps its spinner.
+    if (providerStatusMessage(state.providerStatus()))
+      actions.setProviderStatus(state.activeProviderView(), providerIdle());
   };
 
   const handleSetupComplete = () => {

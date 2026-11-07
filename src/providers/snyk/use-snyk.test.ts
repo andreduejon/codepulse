@@ -169,6 +169,44 @@ describe("useSnyk", () => {
     expect(state.providerStatusFor("snyk")).toEqual({ kind: "warning", message: BANNER.snyk.partialRescan });
   });
 
+  test("reports scanning as background activity while scans run or wait", async () => {
+    const pending = deferred<SnykScanResult>();
+    const { state, snyk } = mountSnyk({ scan: () => pending.promise });
+    const activity = () => state.providers.get("snyk")?.activity?.();
+    expect(activity()).toBeNull();
+    const scan = snyk.scanCommit(SHA_A);
+    expect(activity()).toBe("scanning");
+    pending.resolve(result(SHA_A));
+    await scan;
+    expect(activity()).toBeNull();
+  });
+
+  test("only a scan that fails in another view leaves an error, until dismissed or the Snyk view opens", async () => {
+    const { actions, snyk } = mountSnyk({
+      setup: actions => actions.setActiveProviderView("snyk"),
+      scan: async options => {
+        if (options.sha !== SHA_B) throw new Error("Snyk scan failed.");
+        return result(options.sha);
+      },
+    });
+    // In the Snyk view the provider status shows the error itself.
+    await snyk.scanCommit(SHA_A);
+    expect(snyk.backgroundError()).toBeNull();
+    actions.setActiveProviderView("git");
+    await snyk.scanCommit(SHA_B);
+    expect(snyk.backgroundError()).toBeNull();
+    await snyk.scanCommit(SHA_C);
+    expect(snyk.backgroundError()).toBe("Snyk scan failed.");
+    // A later success keeps the failure visible.
+    await snyk.scanCommit(SHA_B, true);
+    expect(snyk.backgroundError()).toBe("Snyk scan failed.");
+    snyk.dismissBackgroundError();
+    expect(snyk.backgroundError()).toBeNull();
+    await snyk.scanCommit(SHA_C, true);
+    actions.setActiveProviderView("snyk");
+    expect(snyk.backgroundError()).toBeNull();
+  });
+
   test("suspension preserves results and badges, aborts scans, and drops queued work", async () => {
     const pending = deferred<SnykScanResult>();
     const calls: SnykScanOptions[] = [];

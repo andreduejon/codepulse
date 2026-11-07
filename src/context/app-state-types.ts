@@ -78,6 +78,8 @@ export interface SettingsState {
   autoFetchInterval: Accessor<number>;
   lastFetchTime: Accessor<Date | null>;
   fetching: Accessor<boolean>;
+  /** `fetching` is loading more local history (scrolling), not a remote fetch. */
+  fetchingHistory: Accessor<boolean>;
   hasMore: Accessor<boolean>;
   keyboardScopeOverride: Accessor<KeyboardScope | null>;
 }
@@ -141,7 +143,8 @@ export interface SettingsActions {
   setAutoRefreshInterval: (ms: number) => void;
   setAutoFetchInterval: (ms: number) => void;
   setLastFetchTime: (time: Date | null) => void;
-  setFetching: (fetching: boolean) => void;
+  /** `history` marks loading more local history rather than a remote fetch; both block each other. */
+  setFetching: (fetching: boolean, history?: boolean) => void;
   setHasMore: (hasMore: boolean) => void;
   setKeyboardScopeOverride: (scope: KeyboardScope | null) => void;
 }
