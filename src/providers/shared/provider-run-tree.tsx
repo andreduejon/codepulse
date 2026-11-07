@@ -280,13 +280,33 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     }
   };
 
+  /** Completed, with every loaded job completed: its jobs and steps cannot change any more. */
+  const isSettled = (run: ProviderTreeRun<TRaw>) =>
+    run.status === "completed" && (fetchedJobs().get(run.id) ?? []).every(job => job.status === "completed");
+
   const reloadCommit = async () => {
-    const failedRunIds = new Set(jobErrors().keys());
+    // Expanded runs that failed to load or were still running get fresh jobs and steps too.
+    const stale = new Set(props.runs.filter(run => jobErrors().has(run.id) || !isSettled(run)).map(run => run.id));
     await props.onReloadCommit?.();
     await Promise.all(
-      props.runs.filter(run => failedRunIds.has(run.id) && expandedRuns().has(run.id)).map(run => loadJobsForRun(run)),
+      props.runs.filter(run => stale.has(run.id) && expandedRuns().has(run.id)).map(run => loadJobsForRun(run)),
     );
   };
+
+  // Auto refresh replaces the runs: an expanded run whose status moved reloads its jobs and steps.
+  const runSignatures = new Map<string, string>();
+  createEffect(() => {
+    const runs = props.runs;
+    untrack(() => {
+      for (const run of runs) {
+        const signature = `${run.status}:${run.conclusion}:${run.updatedAt}`;
+        const previous = runSignatures.get(run.id);
+        runSignatures.set(run.id, signature);
+        if (previous === undefined || previous === signature) continue;
+        if (expandedRuns().has(run.id) && loadedRuns().has(run.id)) void loadJobsForRun(run);
+      }
+    });
+  });
 
   const resetRunState = () => {
     for (const ctrl of fetchControllers.values()) ctrl.abort();
@@ -298,6 +318,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     setLoadedRuns(new Set<string>());
     setPendingFocusRunId(null);
     autoExpandedSignature = null;
+    runSignatures.clear();
     itemRefs.length = 0;
     refsByKey.clear();
     setHoveredKey(null);
