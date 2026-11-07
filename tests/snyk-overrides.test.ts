@@ -13,7 +13,7 @@ import {
   parseYarnResolutions,
   projectOverrideRules,
 } from "../src/providers/snyk/overrides";
-import type { RegistryLookup } from "../src/providers/snyk/registry";
+import type { PackageRanges, RegistryLookup } from "../src/providers/snyk/registry";
 import type { SnykDependencyGraph } from "../src/providers/snyk/types";
 
 describe("overrideTarget", () => {
@@ -24,6 +24,8 @@ describe("overrideTarget", () => {
     expect(overrideTarget("@scope/pkg@^1")).toBe("@scope/pkg");
     expect(overrideTarget("express@4>path-to-regexp")).toBe("path-to-regexp");
     expect(overrideTarget("a>@scope/b@<2")).toBe("@scope/b");
+    expect(overrideTarget("lodash@>=4.17.0")).toBe("lodash");
+    expect(overrideTarget("express@>=4>path-to-regexp")).toBe("path-to-regexp");
   });
 });
 
@@ -39,6 +41,8 @@ describe("parsePnpmLockfileOverrides", () => {
       "  lodash: 4.17.21",
       "  '@babel/core@<7.26': ^7.26.0",
       "  express@4>path-to-regexp: 0.1.12",
+      "  'semver@>=7.0.0 <7.5.2': ^7.5.2",
+      "  'webpack@>=5>terser': 5.31.0",
       "  removed-pkg: '-'",
       "",
       "importers:",
@@ -51,6 +55,8 @@ describe("parsePnpmLockfileOverrides", () => {
       { name: "lodash", spec: "4.17.21" },
       { name: "@babel/core", spec: "^7.26.0" },
       { name: "path-to-regexp", spec: "0.1.12", parent: "express" },
+      { name: "semver", spec: "^7.5.2" },
+      { name: "terser", spec: "5.31.0", parent: "webpack" },
     ]);
   });
 
@@ -226,7 +232,7 @@ describe("markRemovableOverrides", () => {
       },
       dependencies: async (name, version) => {
         calls.push(`dependencies ${name}@${version}`);
-        return expressAsks === undefined ? null : { "path-to-regexp": expressAsks };
+        return expressAsks === undefined ? null : { ranges: { "path-to-regexp": expressAsks }, peers: {} };
       },
     };
     return { registry, calls };
@@ -273,7 +279,7 @@ describe("markRemovableOverrides", () => {
     expect(calls).toContain("dependencies express@4.21.2");
   });
 
-  test("exact pins and aliases are never removable", async () => {
+  test("aliases are never removable", async () => {
     const g = graph();
     await markRemovableOverrides(
       [g],
@@ -282,5 +288,43 @@ describe("markRemovableOverrides", () => {
       noRoot,
     );
     expect(removable(g)).toBe(false);
+  });
+
+  test("an exact pin is removable only while its parents already resolve to that version", async () => {
+    const exact: OverrideRule = { name: "path-to-regexp", spec: "0.1.12" };
+    const g = graph();
+    await markRemovableOverrides([g], [exact], lookup("~0.1.10").registry, noRoot);
+    expect(removable(g)).toBe(true);
+    const newer = graph();
+    await markRemovableOverrides([newer], [exact], lookup("~0.1.10", ["0.1.10", "0.1.12", "0.1.13"]).registry, noRoot);
+    expect(removable(newer)).toBe(false);
+  });
+
+  test("peer-only parents follow the others, and decide only when every parent is a peer", async () => {
+    // app → express → ptr, and a plugin that only peers on ptr (like update-browserslist-db on browserslist).
+    const withPlugin = (viaExpress: boolean): SnykDependencyGraph => {
+      const g = graph();
+      g.packages.push({ id: "plugin@1.0.0", name: "plugin", version: "1.0.0" });
+      g.nodes[0].deps = viaExpress ? ["express", "plugin"] : ["plugin"];
+      if (!viaExpress) g.nodes = g.nodes.filter(node => node.nodeId !== "express");
+      g.nodes.push({ nodeId: "plugin", pkgId: "plugin@1.0.0", deps: ["ptr"], scope: "prod", referenceNodeId: null });
+      return g;
+    };
+    const registry = (pluginPeer: string): RegistryLookup => ({
+      versions: async () => ["0.1.10", "0.1.12"],
+      dependencies: async (name): Promise<PackageRanges> =>
+        name === "plugin"
+          ? { ranges: {}, peers: { "path-to-regexp": pluginPeer } }
+          : { ranges: { "path-to-regexp": "~0.1.10" }, peers: {} },
+    });
+    const g = withPlugin(true);
+    await markRemovableOverrides([g], [rule], registry("0.1.10"), noRoot);
+    expect(removable(g)).toBe(true);
+    const peersOnly = withPlugin(false);
+    await markRemovableOverrides([peersOnly], [rule], registry("0.1.10"), noRoot);
+    expect(removable(peersOnly)).toBe(false);
+    const peersOnlyInRange = withPlugin(false);
+    await markRemovableOverrides([peersOnlyInRange], [rule], registry(">=0.1.0"), noRoot);
+    expect(removable(peersOnlyInRange)).toBe(true);
   });
 });

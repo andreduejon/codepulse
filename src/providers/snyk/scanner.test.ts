@@ -290,6 +290,26 @@ process.exit(1);
     expect(await cache.read("/repo", SHA)).toEqual(old);
   });
 
+  test("a scan where every project failed names each manifest with Snyk's reason", async () => {
+    const runner: SnykCommandRunner = async (command, options) => {
+      if (command[1] === "rev-parse") return { stdout: SHA, exitCode: 0 };
+      if (command[0] === "snyk")
+        return {
+          stdout: JSON.stringify({
+            ok: false,
+            error: `Failed to get dependencies for all 1 potential projects.\n\n${options.cwd}/api/requirements.txt:\nSomething went wrong getting dependencies`,
+          }),
+          exitCode: 2,
+        };
+      return { stdout: "", exitCode: 0 };
+    };
+    await expect(
+      scanSnykCommit({ repoPath: "/repo", sha: SHA, force: true }, { cacheRoot: await root(), runCommand: runner }),
+    ).rejects.toThrow(
+      "Snyk could not resolve any project.\napi/requirements.txt: Something went wrong getting dependencies",
+    );
+  });
+
   test.each([
     { rescan: true, kept: false },
     { rescan: false, kept: true },

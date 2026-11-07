@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, posix, relative, resolve } from "node:path";
 import { BANNER } from "../../debug/banner";
 import { addDebugEvent, redactDebugValue } from "../../debug/events";
+import { repositoryIdentity } from "../shared/sha-sqlite-cache";
 import { SnykCache } from "./cache";
 import { normalizeSnykTargetFile, parseSnykDepGraphs } from "./dep-graph";
 import { snykFailureReason } from "./failure-reason";
@@ -130,10 +131,24 @@ function outputError(stdout: string, stderr: string | undefined): string {
   return "";
 }
 
-function throwScanFailure(stdout: string, stderr: string | undefined, exitCode: number): never {
+function throwScanFailure(
+  stdout: string,
+  stderr: string | undefined,
+  exitCode: number,
+  roots: readonly string[],
+): never {
   const detail = outputError(stdout, stderr);
   if (detail) addDebugEvent({ source: "Snyk", message: detail, status: "error" });
   if (exitCode === 3) throw new Error("Snyk found no supported dependency project.");
+  // Every project failed: name them with Snyk's reasons, as a partial scan does.
+  const failures = parseSnykProjectFailures(detail, roots);
+  if (failures.targets.length > 0)
+    throw new Error(
+      [
+        "Snyk could not resolve any project.",
+        ...failures.targets.map(target => `${target}: ${failures.reasons[target] ?? "no reason given"}`),
+      ].join("\n"),
+    );
   throw new Error("Snyk scan failed.");
 }
 
@@ -429,7 +444,10 @@ const MAX_REASON_LINES = 6;
  * out entirely.
  */
 export function parseSnykProjectFailures(stderr: string, roots: readonly string[]): SnykProjectFailures {
-  const summary = /(\d+)\/\d+ potential projects? failed to get dependencies/.exec(stderr);
+  const summary =
+    /(\d+)\/\d+ potential projects? failed to get dependencies|Failed to get dependencies for all (\d+) potential projects?/.exec(
+      stderr,
+    );
   if (!summary) return NO_PROJECT_FAILURES;
   const targets = new Set<string>();
   const reasonLines = new Map<string, string[]>();
@@ -457,7 +475,7 @@ export function parseSnykProjectFailures(stderr: string, roots: readonly string[
     const reason = snykFailureReason(lines, roots);
     if (reason) reasons[target] = reason;
   }
-  const count = Math.max(Number(summary[1]), targets.size);
+  const count = Math.max(Number(summary[1] ?? summary[2]), targets.size);
   return { count, targets: [...targets].sort(), reasons };
 }
 
@@ -666,7 +684,10 @@ export async function scanSnykCommit(
 
     if (scan.exitCode !== 0 && scan.exitCode !== 1 && !result) {
       if (unavailableBunReason) throw new Error(unavailableBunReason);
-      throwScanFailure(scan.stdout, scan.stderr, scan.exitCode);
+      throwScanFailure(scan.stdout, scan.stderr, scan.exitCode, [
+        worktreePath,
+        await realpath(worktreePath).catch(() => worktreePath),
+      ]);
     }
 
     if (!result) {
@@ -683,12 +704,14 @@ export async function scanSnykCommit(
       }
     }
     let lookup: RegistryLookup | null | undefined;
+    const registryScope = (await repositoryIdentity(options.repoPath)).hash;
     // Created once on first use; `null` (no usable pnpm or npm) is remembered too.
     const registry = () => {
       if (lookup === undefined)
         lookup = createRegistryLookup({
           runCommand,
           cwd: commandOptions.cwd,
+          scope: registryScope,
           signal: commandOptions.signal,
           which: dependencies.which ?? (command => Bun.which(command)),
           cache: new RegistryCache(dependencies.cacheRoot),

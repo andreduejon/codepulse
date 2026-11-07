@@ -3,12 +3,19 @@ import { addDebugEvent } from "../../debug/events";
 import { DEFAULT_PROVIDER_CACHE_ROOT, providerCacheDatabase } from "../shared/sha-sqlite-cache";
 import type { SnykCommandRunner } from "./scanner";
 
+/** Ranges a published version asks for; peers apart, since they accept what other packages resolve. */
+export interface PackageRanges {
+  /** dependencies and optionalDependencies */
+  ranges: Record<string, string>;
+  peers: Record<string, string>;
+}
+
 /** Package metadata the override check needs; null when the registry could not answer. */
 export interface RegistryLookup {
   /** Published versions of a package. */
   versions(name: string): Promise<string[] | null>;
-  /** The ranges `name@version` asks for (dependencies and optionalDependencies). */
-  dependencies(name: string, version: string): Promise<Record<string, string> | null>;
+  /** The ranges `name@version` asks for. */
+  dependencies(name: string, version: string): Promise<PackageRanges | null>;
 }
 
 /** Version lists change; a published version's dependencies never do. */
@@ -77,6 +84,8 @@ const ranges = (value: unknown): Record<string, string> =>
 export function createRegistryLookup(options: {
   runCommand: SnykCommandRunner;
   cwd: string;
+  /** Repositories can point at different registries, so cached answers stay per repository (its cache hash). */
+  scope: string;
   signal?: AbortSignal;
   which: (command: string) => string | null;
   cache: RegistryCache;
@@ -114,7 +123,8 @@ export function createRegistryLookup(options: {
     }
   };
   const remembered = new Map<string, Promise<unknown>>();
-  const lookup = (key: string, maxAgeMs: number, load: () => Promise<unknown>) => {
+  const lookup = (entry: string, maxAgeMs: number, load: () => Promise<unknown>) => {
+    const key = `${options.scope}:${entry}`;
     let pending = remembered.get(key);
     if (!pending) {
       pending = (async () => {
@@ -135,14 +145,17 @@ export function createRegistryLookup(options: {
       return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : null;
     },
     async dependencies(name, version) {
-      const value = await lookup(`dependencies:${name}@${version}`, Number.POSITIVE_INFINITY, async () => {
+      const value = await lookup(`manifest:${name}@${version}`, Number.POSITIVE_INFINITY, async () => {
         const manifest = await view([`${name}@${version}`]);
         // `view` of an exact version is one manifest; keep only what the check reads.
         return isRecord(manifest)
-          ? { ...ranges(manifest.optionalDependencies), ...ranges(manifest.dependencies) }
+          ? {
+              ranges: { ...ranges(manifest.optionalDependencies), ...ranges(manifest.dependencies) },
+              peers: ranges(manifest.peerDependencies),
+            }
           : undefined;
       });
-      return isRecord(value) ? ranges(value) : null;
+      return isRecord(value) ? { ranges: ranges(value.ranges), peers: ranges(value.peers) } : null;
     },
   };
 }

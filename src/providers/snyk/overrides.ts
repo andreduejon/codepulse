@@ -20,15 +20,26 @@ const stepName = (step: string) => {
   return at > 0 ? trimmed.slice(0, at) : trimmed;
 };
 
-/** The package an override selector targets: the last `>` step, without its own version (`foo@1>@scope/bar@<2`). */
+/** pnpm's parent delimiter: a `>` not after `@` or a space, so `lodash@>=4` stays one step. */
+const PARENT_DELIMITER = /[^ |@]>/;
+
+/** Splits a selector at pnpm's first parent delimiter (`foo@1>bar` is `foo` and `bar`). */
+function splitSelector(selector: string): { parent?: string; target: string } {
+  const index = selector.search(PARENT_DELIMITER);
+  return index === -1
+    ? { target: selector }
+    : { parent: selector.slice(0, index + 1), target: selector.slice(index + 2) };
+}
+
+/** The package an override selector targets, without its own version (`foo@1>@scope/bar@<2` is `@scope/bar`). */
 export function overrideTarget(selector: string): string {
-  return stepName(selector.split(">").at(-1) ?? "");
+  return stepName(splitSelector(selector).target);
 }
 
 /** The parent a selector is limited to (`foo@1>bar` is `foo`), if any. */
 function overrideParent(selector: string): string | undefined {
-  const steps = selector.split(">");
-  return steps.length > 1 ? stepName(steps.at(-2) ?? "") : undefined;
+  const { parent } = splitSelector(selector);
+  return parent === undefined ? undefined : stepName(parent);
 }
 
 /**
@@ -67,6 +78,7 @@ const satisfies = (version: string, spec: string) => {
 };
 
 /** Whether a rule forced this package: same name, and a version within its range when it has one. */
+// shortcut: a selector's own range (`lodash@<4.17.21`) is dropped, so a package already at the forced version is marked too; match requested ranges if users report false markers.
 const forces = (rule: OverrideRule, pkg: SnykDependencyPackage) =>
   rule.name === pkg.name && (!isRange(rule.spec) || (pkg.version !== null && satisfies(pkg.version, rule.spec)));
 
@@ -125,7 +137,8 @@ function overrideParents(graphs: readonly SnykDependencyGraph[], rule: OverrideR
 /**
  * An override is removable when every package that asks for its target would, without it, already resolve to a
  * version the override allows: the highest published version in the parent's own range satisfies the override.
- * Unknown ranges (registry unreachable, aliases, `workspace:`) keep it.
+ * Peer-only parents accept what the others resolve, so they decide only when every parent is a peer (then npm and
+ * pnpm install the peer from its range). Unknown ranges (registry unreachable, aliases, `workspace:`) keep it.
  */
 async function isRemovable(
   graphs: readonly SnykDependencyGraph[],
@@ -138,20 +151,23 @@ async function isRemovable(
   if (parents.length === 0) return false;
   const versions = await lookup.versions(rule.name);
   if (!versions) return false;
-  const answers = await Promise.all(
-    parents.map(async parent => {
-      const range =
-        parent.manifest !== null
-          ? (await rootRanges(parent.manifest))[rule.name]
-          : parent.version === null
-            ? undefined
-            : (await lookup.dependencies(parent.name, parent.version))?.[rule.name];
-      if (!range || !isRange(range)) return false;
-      const resolved = highestSatisfying(versions, range);
-      return resolved !== null && satisfies(resolved, rule.spec);
+  const asked = await Promise.all(
+    parents.map(async (parent): Promise<{ range?: string; peer?: string } | null> => {
+      if (parent.manifest !== null) return { range: (await rootRanges(parent.manifest))[rule.name] };
+      if (parent.version === null) return null;
+      const manifest = await lookup.dependencies(parent.name, parent.version);
+      return manifest && { range: manifest.ranges[rule.name], peer: manifest.peers[rule.name] };
     }),
   );
-  return answers.every(Boolean);
+  const peerOnly = (entry: { range?: string; peer?: string } | null) =>
+    entry !== null && entry.range === undefined && entry.peer !== undefined;
+  const deciding = asked.filter(entry => !peerOnly(entry));
+  const askedRanges = deciding.length > 0 ? deciding.map(entry => entry?.range) : asked.map(entry => entry?.peer);
+  return askedRanges.every(range => {
+    if (!range || !isRange(range)) return false;
+    const resolved = highestSatisfying(versions, range);
+    return resolved !== null && satisfies(resolved, rule.spec);
+  });
 }
 
 /** Marks overridden packages `removable` when every rule that forced them could go. */
