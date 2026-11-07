@@ -347,6 +347,20 @@ describe("dependency tree", () => {
     }
   });
 
+  test("pins survive the cache check only in their known forms", () => {
+    const withPin = (pin: unknown, removable?: unknown) => {
+      const input = graph();
+      Object.assign(input.packages[1], { pin, ...(removable === undefined ? {} : { removable }) });
+      return isSnykDependencyGraph(input);
+    };
+    expect(withPin("override")).toBe(true);
+    expect(withPin("managed")).toBe(true);
+    expect(withPin("override", true)).toBe(true);
+    expect(withPin("managed", true)).toBe(false);
+    expect(withPin("override", false)).toBe(false);
+    expect(withPin("pinned")).toBe(false);
+  });
+
   test("filtering follows a pruned-only path to canonical descendants", () => {
     const input = prunedGraph();
     input.nodes[0].deps = ["dev-parent"];

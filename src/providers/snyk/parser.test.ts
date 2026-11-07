@@ -306,6 +306,11 @@ describe("parseSnykOutput", () => {
     expect(isSnykScanResult({ ...partial, failedTargets: ["a/package.json", "b/package.json"] })).toBe(false);
     expect(isSnykScanResult({ ...partial, failedTargets: ["/tmp/package.json"] })).toBe(false);
     expect(isSnykScanResult({ ...partial, failedTargets: ["../package.json"] })).toBe(false);
+    const named = { ...partial, failedTargets: ["vendor/lib/package.json"] };
+    expect(isSnykScanResult({ ...named, failureReasons: { "vendor/lib/package.json": "No lockfile." } })).toBe(true);
+    expect(isSnykScanResult({ ...partial, failureReasons: { "vendor/lib/package.json": "No lockfile." } })).toBe(false);
+    expect(isSnykScanResult({ ...named, failureReasons: { "other/package.json": "No lockfile." } })).toBe(false);
+    expect(isSnykScanResult({ ...named, failureReasons: { "vendor/lib/package.json": " " } })).toBe(false);
   });
 });
 

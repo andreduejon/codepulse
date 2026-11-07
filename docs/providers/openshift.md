@@ -49,7 +49,8 @@ Resource lists follow Kubernetes `metadata.continue` tokens until complete and
 retain the final `metadata.resourceVersion` for watches. Each list is bounded to
 100 pages and 50,000 items, and repeated continuation tokens stop that resource
 request. Resources fetched before a later-page failure remain visible. Codepulse
-reports partial inventory through the provider message and records namespace,
+reports partial inventory in a notice under the OpenShift tab (**Inventory partially
+failed**) and records namespace,
 resource kind, and technical details in the Debug dialog.
 
 ## Cache
@@ -68,8 +69,8 @@ prune does not drop Builds already cached. Least-recently-accessed snapshots
 evict at the limit, cascading to their log artifacts. Pods, workloads, and
 ImageStreamTags are not written to disk.
 
-An expired token (401) stops further requests. The banner reads `OpenShift
-token expired. Live data unavailable.` Graph and details keep the last Live
+An expired token (401) stops further requests. The banner reads **Token expired** ·
+OpenShift with `Live data unavailable.` below. Graph and details keep the last Live
 and Cache data. Provider reload and live requests are disabled. Cached Build
 JSON and logs remain viewable.
 
@@ -139,8 +140,8 @@ Live freshness also needs `watch` on Deployments, DeploymentConfigs, and Pods
 in each configured namespace. OpenShift/`kubernetes` `view` already has
 `get`/`list`/`watch`. A custom ServiceAccount needs the extra `watch` verb on
 those three kinds; Builds and ImageStreamTags stay `list` only. Without watch,
-the last list stays until Reload. The graph banner reads `OpenShift watch
-denied. Resource data might be stale. Reload to refresh.` `live` only appears
+the last list stays until Reload. A notice under the OpenShift tab reads **Watch
+denied** with `Resource data might be stale. Reload to refresh.` below. `live` only appears
 while a watch socket is connected.
 
 Build and Pod log views need `get` on those log subresources (`?follow=true`
@@ -169,6 +170,7 @@ rules:
     verbs: ["get", "list", "watch"]
 ```
 
-Partial permission failures preserve successful inventory and show a warning.
+Partial permission failures preserve successful inventory and show a notice under
+the OpenShift tab. When every request fails, the banner over the graph shows the error.
 Routes, Services, Helm releases, and console links are outside the provider's
 current scope.

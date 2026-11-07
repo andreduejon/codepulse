@@ -532,3 +532,73 @@ test("mouseEnabled false blocks confirm, cancel, back, and clear hover and click
     await d.dispose();
   }
 });
+
+test("footer names provider work in every view; generic loading only covers work without a label", async () => {
+  const d = await renderFooter();
+  try {
+    const [scanning, setScanning] = createSignal<string | null>("scanning");
+    d.state.providers.register({ id: "snyk", displayName: "Snyk", isAvailable: () => true, activity: scanning });
+    d.state.providers.register({ id: "openshift", displayName: "OpenShift", isAvailable: () => true });
+    await d.flush();
+    expect(d.captureCharFrame()).toContain("Snyk scanning");
+    // In its own view the provider's label replaces the generic word for the same work.
+    d.actions.setActiveProviderView("snyk");
+    d.actions.setProviderStatus("snyk", { kind: "loading" });
+    await d.flush();
+    expect(d.captureCharFrame()).toContain("Snyk scanning");
+    expect(d.captureCharFrame()).not.toContain("loading");
+    d.state.providers.register({
+      id: "jenkins",
+      displayName: "Jenkins",
+      isAvailable: () => true,
+      activity: () => "syncing",
+    });
+    d.actions.setActiveProviderView("openshift");
+    d.actions.setProviderStatus("openshift", { kind: "loading" });
+    await d.flush();
+    expect(d.captureCharFrame()).toContain("loading · Jenkins syncing · Snyk scanning");
+    setScanning(null);
+    await d.flush();
+    expect(d.captureCharFrame()).not.toContain("Snyk scanning");
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("footer names Git's own work; reading commit details only spins", async () => {
+  const d = await renderFooter();
+  const label = () =>
+    d
+      .captureCharFrame()
+      .split("\n")
+      .find(line => /⣾|⣽|⣻|⢿|⡿|⠿|⣯|⣷/.test(line)) ?? "";
+  try {
+    d.actions.setFetching(true);
+    await d.flush();
+    expect(label()).toContain("Git fetching");
+    d.actions.setFetching(true, true);
+    await d.flush();
+    expect(label()).toContain("Git reading log");
+    d.actions.setFetching(false);
+    d.actions.setLoading(true);
+    await d.flush();
+    expect(label()).toContain("Git reading log");
+    d.actions.setLoading(false);
+    d.actions.setDetailLoading(true);
+    await d.flush();
+    expect(label()).not.toBe("");
+    expect(label()).not.toMatch(/Git|loading/);
+    d.actions.setDetailLoading(false);
+    d.actions.setFetching(true);
+    d.state.providers.register({
+      id: "snyk",
+      displayName: "Snyk",
+      isAvailable: () => true,
+      activity: () => "scanning",
+    });
+    await d.flush();
+    expect(label()).toContain("Git fetching · Snyk scanning");
+  } finally {
+    await d.dispose();
+  }
+});

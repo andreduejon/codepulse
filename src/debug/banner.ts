@@ -50,10 +50,9 @@ export const BANNER = {
     disabled: "Snyk is disabled.",
     missingToken: (envVar: string) => `Snyk unavailable. Missing ${envVar}.`,
     exactCommit: "Snyk scan requires an exact commit SHA.",
+    partialRescan: "Partial scan. Kept last complete snapshot.",
     noDependencyProject:
       "No supported dependency project. Dependency graphs support Bun, npm, pnpm, Yarn, and Maven projects.",
-    graphsIncomplete: (incomplete: number, total: number) =>
-      `Snyk dependency graphs incomplete: ${incomplete} of ${total} projects.`,
   },
 } as const;
 
@@ -103,4 +102,31 @@ export function displayBanner(message: string, fallback: string): string {
 
 function looksLikeGitDump(message: string): boolean {
   return /fatal:|unable to access|failed to connect|could not resolve host/i.test(message);
+}
+
+export interface BannerParts {
+  title: string;
+  detail: string[];
+}
+
+/**
+ * Splits a banner sentence for display under its source: the first sentence becomes the headline without the
+ * source's own name (`GitHub unavailable. Missing GITHUB_TOKEN.` under `GitHub Actions` → `Unavailable` plus
+ * `Missing GITHUB_TOKEN.`), later sentences and lines become detail.
+ */
+export function bannerParts(source: string, message: string): BannerParts {
+  const [first = "", ...lines] = message.split("\n");
+  const [headline = "", ...sentences] = first.trim().split(/(?<=[.!?])\s+(?=[A-Z0-9])/);
+  const detail = [sentences.join(" "), ...lines].filter(line => line.trim().length > 0);
+  return { title: withoutSource(headline.replace(/\.$/, ""), source), detail };
+}
+
+function withoutSource(headline: string, source: string): string {
+  const names = new Set([source, source.split(" ")[0]]);
+  for (const name of [...names].sort((a, b) => b.length - a.length)) {
+    if (!name || headline.slice(0, name.length).toLowerCase() !== name.toLowerCase()) continue;
+    const rest = /^\s+(?:is\s+)?(\S.*)$/.exec(headline.slice(name.length))?.[1];
+    if (rest) return rest[0].toUpperCase() + rest.slice(1);
+  }
+  return headline;
 }

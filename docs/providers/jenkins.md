@@ -34,7 +34,8 @@ valid, unique branch jobs in Jenkins API order. This is one global limit across
 all configured multibranch parents, not 25 jobs per parent.
 
 If more jobs are available, existing runs and badges from included jobs remain
-visible and Codepulse shows `Jenkins data incomplete. Branch-job limit reached.`
+visible and a notice under the Jenkins tab reads **Data incomplete** with
+`Branch-job limit reached.` below.
 Remaining branch jobs are not queried. The Debug dialog records the affected
 parent URL and limit. Truncated discovery is not stored as an authoritative
 cache refresh.

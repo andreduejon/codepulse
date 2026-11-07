@@ -1,11 +1,17 @@
 import { lstat, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, posix, relative, resolve } from "node:path";
+import { BANNER } from "../../debug/banner";
 import { addDebugEvent, redactDebugValue } from "../../debug/events";
+import { repositoryIdentity } from "../shared/sha-sqlite-cache";
 import { SnykCache } from "./cache";
 import { normalizeSnykTargetFile, parseSnykDepGraphs } from "./dep-graph";
+import { snykFailureReason } from "./failure-reason";
+import { applyMavenManaged, mavenManagedVersions, PomIndex } from "./maven-managed";
+import { applyOverrideRules, manifestRanges, markRemovableOverrides, projectOverrideRules } from "./overrides";
 import { parseSnykOutput, shouldReplaceSnykResult } from "./parser";
 import { discoverSnykDependencyProjects, type SnykDependencyProjectInput } from "./projects";
+import { createRegistryLookup, RegistryCache, type RegistryLookup } from "./registry";
 import type {
   SnykCacheLimit,
   SnykDependencyGraph,
@@ -125,10 +131,24 @@ function outputError(stdout: string, stderr: string | undefined): string {
   return "";
 }
 
-function throwScanFailure(stdout: string, stderr: string | undefined, exitCode: number): never {
+function throwScanFailure(
+  stdout: string,
+  stderr: string | undefined,
+  exitCode: number,
+  roots: readonly string[],
+): never {
   const detail = outputError(stdout, stderr);
   if (detail) addDebugEvent({ source: "Snyk", message: detail, status: "error" });
   if (exitCode === 3) throw new Error("Snyk found no supported dependency project.");
+  // Every project failed: name them with Snyk's reasons, as a partial scan does.
+  const failures = parseSnykProjectFailures(detail, roots);
+  if (failures.targets.length > 0)
+    throw new Error(
+      [
+        "Snyk could not resolve any project.",
+        ...failures.targets.map(target => `${target}: ${failures.reasons[target] ?? "no reason given"}`),
+      ].join("\n"),
+    );
   throw new Error("Snyk scan failed.");
 }
 
@@ -407,31 +427,70 @@ export interface SnykProjectFailures {
   count: number;
   /** Repository-relative manifests Snyk named; may be fewer than `count`. */
   targets: string[];
+  /** Snyk's reason per named manifest, when it printed one. */
+  reasons: Record<string, string>;
 }
 
-const NO_PROJECT_FAILURES: SnykProjectFailures = { count: 0, targets: [] };
+const NO_PROJECT_FAILURES: SnykProjectFailures = { count: 0, targets: [], reasons: {} };
+
+/** Lines that end a failed project's reason block. */
+const REASON_END = /^(?:✗|✔|-{3,}|Testing |Tested )|potential projects? failed to get dependencies/;
+/** Reason lines kept per project; the rest is build output. */
+const MAX_REASON_LINES = 6;
 
 /**
  * Projects Snyk found but could not resolve (`✗ 1/6 potential projects failed to get dependencies.`, each preceded by
- * `<absolute manifest path>:`). Snyk prints them only on stderr, and `--json` leaves them out entirely.
+ * `<absolute manifest path>:` and followed by its reason). Snyk prints them only on stderr, and `--json` leaves them
+ * out entirely.
  */
 export function parseSnykProjectFailures(stderr: string, roots: readonly string[]): SnykProjectFailures {
-  const summary = /(\d+)\/\d+ potential projects? failed to get dependencies/.exec(stderr);
+  const summary =
+    /(\d+)\/\d+ potential projects? failed to get dependencies|Failed to get dependencies for all (\d+) potential projects?/.exec(
+      stderr,
+    );
   if (!summary) return NO_PROJECT_FAILURES;
   const targets = new Set<string>();
+  const reasonLines = new Map<string, string[]>();
+  let current: string[] | null = null;
   for (const line of stderr.split(/\r?\n/)) {
     const path = /^(.+):$/.exec(line.trim())?.[1];
-    if (!path || !isAbsolute(path)) continue;
-    for (const root of roots) {
-      const target = normalizeSnykTargetFile(relative(root, path));
-      if (target) {
-        targets.add(target);
-        break;
+    if (path && isAbsolute(path)) {
+      current = null;
+      for (const root of roots) {
+        const target = normalizeSnykTargetFile(relative(root, path));
+        if (target) {
+          targets.add(target);
+          current = reasonLines.get(target) ?? [];
+          reasonLines.set(target, current);
+          break;
+        }
       }
+      continue;
     }
+    if (!line.trim() || REASON_END.test(line.trim())) current = null;
+    else if (current && current.length < MAX_REASON_LINES) current.push(line);
   }
-  const count = Math.max(Number(summary[1]), targets.size);
-  return { count, targets: [...targets].sort() };
+  const reasons: Record<string, string> = {};
+  for (const [target, lines] of reasonLines) {
+    const reason = snykFailureReason(lines, roots);
+    if (reason) reasons[target] = reason;
+  }
+  const count = Math.max(Number(summary[1] ?? summary[2]), targets.size);
+  return { count, targets: [...targets].sort(), reasons };
+}
+
+/**
+ * Snyk's reason for a project without a graph: the pom.xml itself, or the manifest beside the lockfile. Reasons for
+ * nested manifests stay with the scan's failed targets, so a parent project never shows a child's failure.
+ */
+function snykReasonForProject(
+  project: SnykDependencyProjectInput,
+  reasons: Readonly<Record<string, string>>,
+): string | null {
+  if (project.packageManager === "maven") return reasons[project.targetFile] ?? null;
+  const directory = posix.dirname(project.targetFile);
+  const target = Object.keys(reasons).find(file => posix.dirname(file) === directory);
+  return target ? reasons[target] : null;
 }
 
 async function scanDependencyProjects(
@@ -440,6 +499,7 @@ async function scanDependencyProjects(
   commandOptions: Parameters<SnykCommandRunner>[1],
   runCommand: SnykCommandRunner,
   trackedFiles: readonly string[],
+  registry: () => RegistryLookup | null,
 ): Promise<{ projects: SnykDependencyProjectResult[]; failures: SnykProjectFailures }> {
   const ready = projects.filter(project => !unavailable.has(project.targetFile));
   if (ready.length === 0) return { projects: [...unavailable.values()], failures: NO_PROJECT_FAILURES };
@@ -473,9 +533,10 @@ async function scanDependencyProjects(
     const failure =
       reason ??
       (matches.length === 0
-        ? project.packageManager === "maven"
-          ? "Snyk returned no dependency graph for this pom.xml. Check that Java and Maven can resolve its dependencies, then rescan."
-          : "Snyk returned no dependency graph for this project."
+        ? (snykReasonForProject(project, failures.reasons) ??
+          (project.packageManager === "maven"
+            ? "Snyk returned no dependency graph for this pom.xml. Check that Java and Maven can resolve its dependencies, then rescan."
+            : "Snyk returned no dependency graph for this project."))
         : null);
     return {
       targetFile: project.targetFile,
@@ -486,7 +547,52 @@ async function scanDependencyProjects(
     };
   });
   await Promise.all(pending);
+  await markOverrides(results, commandOptions, registry);
   return { projects: results, failures };
+}
+
+/**
+ * Marks what each project's overrides force (asking the registry only when a project has overridden packages) and
+ * what Maven's `<dependencyManagement>` pins.
+ */
+async function markOverrides(
+  projects: readonly SnykDependencyProjectResult[],
+  commandOptions: Parameters<SnykCommandRunner>[1],
+  registry: () => RegistryLookup | null,
+): Promise<void> {
+  const manifests = new Map<string, Promise<Record<string, string>>>();
+  const rootRanges = (manifest: string) => {
+    const directory = posix.dirname(manifest);
+    let ranges = manifests.get(directory);
+    if (!ranges) {
+      ranges = manifestRanges(commandOptions.cwd, directory);
+      manifests.set(directory, ranges);
+    }
+    return ranges;
+  };
+  // Every tracked pom.xml is a project, so their paths cover in-repo parents and BOMs.
+  const poms = new PomIndex(
+    commandOptions.cwd,
+    projects.filter(project => project.packageManager === "maven").map(project => project.targetFile),
+  );
+  for (const project of projects) {
+    if (project.graphs.length === 0) continue;
+    if (project.packageManager === "maven") {
+      const managed = await mavenManagedVersions(poms, project.targetFile);
+      throwIfAborted(commandOptions.signal);
+      for (const graph of project.graphs) applyMavenManaged(graph, managed);
+      continue;
+    }
+    const rules = await projectOverrideRules(commandOptions.cwd, project);
+    throwIfAborted(commandOptions.signal);
+    if (rules.length === 0) continue;
+    for (const graph of project.graphs) applyOverrideRules(graph, rules);
+    if (!project.graphs.some(graph => graph.packages.some(pkg => pkg.pin === "override"))) continue;
+    const lookup = registry();
+    if (!lookup) continue;
+    await markRemovableOverrides(project.graphs, rules, lookup, rootRanges);
+    throwIfAborted(commandOptions.signal);
+  }
 }
 
 const MANIFEST_PACKAGE_MANAGERS = new Set(["npm", "yarn", "pnpm", "bun"]);
@@ -578,7 +684,10 @@ export async function scanSnykCommit(
 
     if (scan.exitCode !== 0 && scan.exitCode !== 1 && !result) {
       if (unavailableBunReason) throw new Error(unavailableBunReason);
-      throwScanFailure(scan.stdout, scan.stderr, scan.exitCode);
+      throwScanFailure(scan.stdout, scan.stderr, scan.exitCode, [
+        worktreePath,
+        await realpath(worktreePath).catch(() => worktreePath),
+      ]);
     }
 
     if (!result) {
@@ -594,7 +703,29 @@ export async function scanSnykCommit(
         throw new Error("Snyk returned unusable results.");
       }
     }
-    const graphRun = await scanDependencyProjects(projects, unavailable, commandOptions, runCommand, trackedFiles);
+    let lookup: RegistryLookup | null | undefined;
+    const registryScope = (await repositoryIdentity(options.repoPath)).hash;
+    // Created once on first use; `null` (no usable pnpm or npm) is remembered too.
+    const registry = () => {
+      if (lookup === undefined)
+        lookup = createRegistryLookup({
+          runCommand,
+          cwd: commandOptions.cwd,
+          scope: registryScope,
+          signal: commandOptions.signal,
+          which: dependencies.which ?? (command => Bun.which(command)),
+          cache: new RegistryCache(dependencies.cacheRoot),
+        });
+      return lookup;
+    };
+    const graphRun = await scanDependencyProjects(
+      projects,
+      unavailable,
+      commandOptions,
+      runCommand,
+      trackedFiles,
+      registry,
+    );
     result.dependencyProjects = graphRun.projects;
     // Both runs detect the same projects; only the graph run reports the ones Snyk could not resolve.
     const failedProjects = Math.max(result.failedProjects ?? 0, graphRun.failures.count);
@@ -602,11 +733,12 @@ export async function scanSnykCommit(
       result.partial = true;
       result.failedProjects = failedProjects;
       if (graphRun.failures.targets.length > 0) result.failedTargets = graphRun.failures.targets;
+      if (Object.keys(graphRun.failures.reasons).length > 0) result.failureReasons = graphRun.failures.reasons;
     }
     const existing = await cache.read(options.repoPath, sha);
     throwIfAborted(options.signal);
     if (!shouldReplaceSnykResult(existing ?? undefined, result, options.force)) {
-      throw new Error("Partial scan. Kept last complete snapshot.");
+      throw new Error(BANNER.snyk.partialRescan);
     }
     await cache.write(options.repoPath, result);
     return result;

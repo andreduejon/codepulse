@@ -2,6 +2,57 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.15.0] - 2026-11-07
+
+### Added
+
+- Mark Snyk dependencies that an override forces with a muted `override` keyword
+  in Dependencies: pnpm's from `pnpm-lock.yaml`, npm `overrides`, Yarn
+  `resolutions`, and both for Bun, from `package.json`. The dependency filter also
+  matches the keyword, so `override` lists them with their paths.
+- Flag overrides that could go with a muted `removable` keyword: every parent's own
+  range (from `pnpm view` or `npm view`, cached per repository) would already resolve
+  to a version the override allows.
+- Mark Maven dependencies that `<dependencyManagement>` pins with a muted `managed`
+  keyword, following in-repo parent POMs, imported in-repo BOMs and `${property}`
+  versions. Only packages pulled in through another dependency are marked.
+- The dependency filter word `pinned` lists `override` and `managed` packages
+  together.
+- The footer shows **Snyk scanning** (instead of `loading`) while Snyk scans run, in
+  every view; scans keep running in other views, and one that fails there shows its
+  error in the banner.
+
+### Changed
+
+- Status banners show a bold headline, their source, and muted detail lines
+  (`Partial scan · Snyk`, then `Kept last complete snapshot.`).
+- Cache screen confirmations, errors and results use the same layout inside their
+  card: a bold headline in the message colour with muted detail below.
+- Results that work but are incomplete show as a notice pinned under the detail
+  tabs instead of the banner over the graph, which now only reports problems that
+  stop a provider. Snyk projects without a dependency graph list each path with its
+  reason under **Dependencies**; partial scans name their failed projects under
+  **Vulnerabilities**. Close a notice with its `✕` or `:clear`.
+- Failed Snyk projects show the reason Snyk printed (for example an out-of-sync
+  lockfile or an unresolvable parent POM) instead of a generic "no dependency
+  graph". A missing `node_modules` folder explains that the project needs a
+  lockfile, since scans run on a clean checkout.
+- Snyk snapshots from v0.14.0 stay valid; rescan a commit to get the new markers
+  and Snyk's failure reasons.
+- When Snyk could not resolve any project, the banner names each manifest with
+  Snyk's reason instead of a generic "Snyk scan failed."
+- The footer names Git's work instead of `loading`: **Git fetching** (`f`, from the
+  remote) and **Git reading log** (local: start, reload, repository switch, branch
+  views, more history while scrolling). Reading a commit's details only shows the
+  spinner.
+
+### Fixed
+
+- Override transitive Seroval to 1.6.11 for CVE-2026-116582 and CVE-2026-116583,
+  found by scanning Codepulse with its own Snyk provider.
+- Snyk legends wrap whole entries in narrow panels instead of clipping the first
+  marker.
+
 ## [0.14.0] - 2026-10-25
 
 ### Added

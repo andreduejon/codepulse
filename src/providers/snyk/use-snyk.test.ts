@@ -2,13 +2,13 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createRoot, createSignal } from "solid-js";
 import type { AppActions, AppState } from "../../context/state";
 import { createAppState } from "../../context/state";
+import { BANNER } from "../../debug/banner";
 import { buildGraph } from "../../git/graph";
 import type { SnykScanOptions, SnykScanResult } from "./types";
 import {
   collectSnykAutoScanTips,
   type SnykProviderConfig,
   selectSnykCacheProbes,
-  snykDependencyStatus,
   type UseSnykResult,
   useSnyk,
 } from "./use-snyk";
@@ -120,7 +120,7 @@ function mountSnyk(options: {
 }
 
 describe("useSnyk", () => {
-  test("scans without supported dependency projects warn in any tab while retaining findings", async () => {
+  test("scans without supported dependency projects keep the banner clear while retaining findings", async () => {
     const { state, snyk } = mountSnyk({
       scan: async () => result(SHA_A),
       setup: actions => {
@@ -130,13 +130,10 @@ describe("useSnyk", () => {
     });
     await snyk.scanCommit(SHA_A);
     expect(snyk.getCommitData(SHA_A)).not.toBeNull();
-    expect(state.providerStatusFor("snyk")).toEqual({
-      kind: "warning",
-      message: "No supported dependency project. Dependency graphs support Bun, npm, pnpm, Yarn, and Maven projects.",
-    });
+    expect(state.providerStatusFor("snyk")).toEqual({ kind: "idle" });
   });
 
-  test("failed and skipped graphs warn with one summary without discarding valid findings", async () => {
+  test("failed and skipped graphs stay in the Dependencies tab without discarding valid findings", async () => {
     const scan = result(SHA_A);
     scan.dependencyProjects = [
       { targetFile: "pnpm-lock.yaml", packageManager: "pnpm", status: "scanned", graphs: [], reason: null },
@@ -146,22 +143,7 @@ describe("useSnyk", () => {
     const { state, snyk } = mountSnyk({ scan: async () => scan });
     await snyk.scanCommit(SHA_A);
     expect(snyk.getCommitData(SHA_A)).toEqual(scan);
-    expect(state.providerStatusFor("snyk")).toEqual({
-      kind: "warning",
-      message: [
-        "Snyk dependency graphs incomplete: 2 of 3 projects.",
-        "web/bun.lock: Bun not found.",
-        "api/yarn.lock: Graph failed.",
-      ].join("\n"),
-    });
-  });
-
-  test("complete dependency coverage clears the banner", () => {
-    const scan = result(SHA_A);
-    scan.dependencyProjects = [
-      { targetFile: "pnpm-lock.yaml", packageManager: "pnpm", status: "scanned", graphs: [], reason: null },
-    ];
-    expect(snykDependencyStatus(scan)).toEqual({ kind: "idle" });
+    expect(state.providerStatusFor("snyk")).toEqual({ kind: "idle" });
   });
 
   test("scan failures stay errors", async () => {
@@ -175,6 +157,54 @@ describe("useSnyk", () => {
       kind: "error",
       message: "Snyk CLI not found on PATH. Install Snyk CLI to scan.",
     });
+  });
+
+  test("a partial scan that kept the complete snapshot is a warning for the tab notice", async () => {
+    const { state, snyk } = mountSnyk({
+      scan: async () => {
+        throw new Error(BANNER.snyk.partialRescan);
+      },
+    });
+    await snyk.scanCommit(SHA_A);
+    expect(state.providerStatusFor("snyk")).toEqual({ kind: "warning", message: BANNER.snyk.partialRescan });
+  });
+
+  test("reports scanning as background activity while scans run or wait", async () => {
+    const pending = deferred<SnykScanResult>();
+    const { state, snyk } = mountSnyk({ scan: () => pending.promise });
+    const activity = () => state.providers.get("snyk")?.activity?.();
+    expect(activity()).toBeNull();
+    const scan = snyk.scanCommit(SHA_A);
+    expect(activity()).toBe("scanning");
+    pending.resolve(result(SHA_A));
+    await scan;
+    expect(activity()).toBeNull();
+  });
+
+  test("only a scan that fails in another view leaves an error, until dismissed or the Snyk view opens", async () => {
+    const { actions, snyk } = mountSnyk({
+      setup: actions => actions.setActiveProviderView("snyk"),
+      scan: async options => {
+        if (options.sha !== SHA_B) throw new Error("Snyk scan failed.");
+        return result(options.sha);
+      },
+    });
+    // In the Snyk view the provider status shows the error itself.
+    await snyk.scanCommit(SHA_A);
+    expect(snyk.backgroundError()).toBeNull();
+    actions.setActiveProviderView("git");
+    await snyk.scanCommit(SHA_B);
+    expect(snyk.backgroundError()).toBeNull();
+    await snyk.scanCommit(SHA_C);
+    expect(snyk.backgroundError()).toBe("Snyk scan failed.");
+    // A later success keeps the failure visible.
+    await snyk.scanCommit(SHA_B, true);
+    expect(snyk.backgroundError()).toBe("Snyk scan failed.");
+    snyk.dismissBackgroundError();
+    expect(snyk.backgroundError()).toBeNull();
+    await snyk.scanCommit(SHA_C, true);
+    actions.setActiveProviderView("snyk");
+    expect(snyk.backgroundError()).toBeNull();
   });
 
   test("suspension preserves results and badges, aborts scans, and drops queued work", async () => {

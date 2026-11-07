@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { BANNER, bannerOrFallback, classifyGitFailure, debugError, displayBanner, isBanner } from "../src/debug/banner";
+import {
+  BANNER,
+  bannerOrFallback,
+  bannerParts,
+  classifyGitFailure,
+  debugError,
+  displayBanner,
+  isBanner,
+} from "../src/debug/banner";
 import { clearDebugEvents, getDebugEvents } from "../src/debug/events";
 
 afterEach(() => clearDebugEvents());
@@ -49,5 +57,33 @@ describe("banner catalog", () => {
     expect(classifyGitFailure(dump)).toBe(BANNER.git.fetchTimedOut);
     expect(displayBanner(dump, BANNER.git.fetchFailed)).toBe(BANNER.git.fetchTimedOut);
     expect(displayBanner(BANNER.git.fetchFailed, BANNER.git.logFailed)).toBe(BANNER.git.fetchFailed);
+  });
+});
+
+describe("bannerParts", () => {
+  test.each([
+    ["Git", BANNER.git.fetchFailed, "Fetch failed", []],
+    ["GitHub Actions", BANNER.github.missingToken("GITHUB_TOKEN"), "Unavailable", ["Missing GITHUB_TOKEN."]],
+    ["GitHub Actions", BANNER.github.disabled, "Disabled", []],
+    ["Jenkins", BANNER.jenkins.incomplete, "Data incomplete", ["Branch-job limit reached."]],
+    ["OpenShift", BANNER.openshift.watchDenied, "Watch denied", ["Resource data might be stale. Reload to refresh."]],
+    ["Snyk", "Partial scan. Kept last complete snapshot.", "Partial scan", ["Kept last complete snapshot."]],
+    [
+      "Snyk",
+      BANNER.snyk.noDependencyProject,
+      "No supported dependency project",
+      ["Dependency graphs support Bun, npm, pnpm, Yarn, and Maven projects."],
+    ],
+  ])("%s: %s", (source, message, title, detail) => {
+    expect(bannerParts(source, message)).toEqual({ title, detail });
+  });
+
+  test("keeps a headline that is only the source name and splits extra lines into detail", () => {
+    expect(bannerParts("Git", "Git.")).toEqual({ title: "Git", detail: [] });
+    expect(bannerParts("Git", "GitHub fetch failed.")).toEqual({ title: "GitHub fetch failed", detail: [] });
+    expect(bannerParts("Snyk", "Scan failed.\nsnyk exited 2")).toEqual({
+      title: "Scan failed",
+      detail: ["snyk exited 2"],
+    });
   });
 });

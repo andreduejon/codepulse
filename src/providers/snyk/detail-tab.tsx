@@ -16,7 +16,6 @@ import {
   itemKey,
   type PackageRow,
   packagesOf,
-  partialScanText,
   ROW_TAIL_WIDTH,
   type Section,
   shortCoordinate,
@@ -411,11 +410,6 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
               {filter.query().trim() ? `${uniqueTotal()}/${originalTotal()}` : uniqueTotal()}
             </text>
           </SnykFilterRow>
-        </Show>
-        <Show when={props.scan?.partial}>
-          <text fg={t().warning} wrapMode="none" truncate>
-            {partialScanText(props.scan ?? {})}
-          </text>
         </Show>
 
         <box height={1} flexShrink={0} />

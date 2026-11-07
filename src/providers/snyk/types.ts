@@ -6,10 +6,16 @@ export type SnykDependencyScope = "prod" | "dev" | "unknown";
 
 export type SnykDependencyPackageManager = "bun" | "maven" | "npm" | "pnpm" | "yarn";
 
+/** A version the project forces: `override` (overrides or resolutions) or Maven `managed` (dependencyManagement). */
+export type SnykDependencyPin = "override" | "managed";
+
 export interface SnykDependencyPackage {
   id: string;
   name: string;
   version: string | null;
+  pin?: SnykDependencyPin;
+  /** The override could go: every parent's own range already resolves to an allowed version. */
+  removable?: boolean;
 }
 
 export interface SnykDependencyNode {
@@ -75,6 +81,8 @@ export interface SnykScanResult {
   failedProjects?: number;
   /** Manifests Snyk could not resolve, when it named them; only on partial scans. */
   failedTargets?: string[];
+  /** Snyk's reason per failed target, when it printed one; only for targets in `failedTargets`. */
+  failureReasons?: Record<string, string>;
 }
 
 export type SnykCacheLimit = ProviderCacheLimit;

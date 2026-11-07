@@ -1,16 +1,17 @@
 import { describe, expect, it } from "bun:test";
+import type {
+  GitHubMenuConfig,
+  JenkinsMenuConfig,
+  OpenShiftMenuConfig,
+  SnykMenuConfig,
+} from "../src/hooks/menu-items-types";
 import {
   buildGitHubProviderItems,
   buildJenkinsProviderItems,
   buildOpenShiftProviderItems,
   buildSnykProviderItems,
-  type GitHubMenuConfig,
-  isOptionalRepoMetadataValid,
-  type JenkinsMenuConfig,
-  type OpenShiftMenuConfig,
-  optionalRepoMetadataValue,
-  type SnykMenuConfig,
-} from "../src/hooks/use-menu-items";
+} from "../src/hooks/menu-provider-items";
+import { isOptionalRepoMetadataValid, optionalRepoMetadataValue } from "../src/hooks/use-menu-items";
 
 describe("buildGitHubProviderItems", () => {
   const baseCfg: GitHubMenuConfig = {

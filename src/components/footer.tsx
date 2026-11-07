@@ -23,18 +23,38 @@ export default function Footer(
   const t = useT();
   const { state } = useAppState();
 
-  const isLoading = () => state.loading() || state.fetching() || state.detailLoading();
+  /** Git's own work by name; reading a commit's details is too quick for words, so it only spins. */
+  const gitActivity = () =>
+    state.fetching() && !state.fetchingHistory()
+      ? "Git fetching"
+      : state.loading() || state.fetchingHistory()
+        ? "Git reading log"
+        : null;
 
   const providerStatus = () => state.providerStatus();
+  /** Providers naming their own work (`Snyk scanning`), in every view. */
+  const activities = () => {
+    state.providers.getVersion();
+    return state.providers.getEnabledViews().flatMap(view => {
+      const provider = state.providers.get(view);
+      const activity = provider?.activity?.();
+      return provider && activity ? [`${provider.displayName} ${activity}`] : [];
+    });
+  };
+  /** Generic `loading` for provider work without its own label; a provider that names its work says it instead. */
+  const genericLoading = () =>
+    providerStatus().kind === "loading" && !state.providers.get(state.activeProviderView())?.activity?.();
+  const busy = () =>
+    state.loading() ||
+    state.fetching() ||
+    state.detailLoading() ||
+    providerStatus().kind === "loading" ||
+    activities().length > 0;
 
   const loadingLabel = () => {
-    if (isLoading()) return " loading";
-    // providerStatus.kind === "loading" means a background CI fetch is in-flight.
-    // Show the text regardless of which view is active — the spinner char is
-    // already shown in this case, so the label should match to avoid the
-    // visual inconsistency of a spinning braille with no accompanying text.
-    if (providerStatus().kind === "loading") return " loading";
-    return "";
+    const git = gitActivity();
+    const parts = [...(git ? [git] : []), ...(genericLoading() ? ["loading"] : []), ...activities()];
+    return parts.length > 0 ? ` ${parts.join(" · ")}` : "";
   };
 
   // Animation frame counter, cycles while loading
@@ -42,7 +62,7 @@ export default function Footer(
   let spinnerTimer: ReturnType<typeof setInterval> | null = null;
 
   createEffect(() => {
-    if (isLoading() || providerStatus().kind === "loading") {
+    if (busy()) {
       setFrame(0);
       if (!spinnerTimer) {
         spinnerTimer = setInterval(() => {
@@ -63,7 +83,7 @@ export default function Footer(
 
   // Always render the spinner element to avoid layout shift;
   // show the braille char when loading, empty space when idle.
-  const spinnerChar = () => (isLoading() || providerStatus().kind === "loading" ? SPINNER_FRAMES[frame()] : " ");
+  const spinnerChar = () => (busy() ? SPINNER_FRAMES[frame()] : " ");
   const spinnerColor = () => t().accent;
 
   const enterAction = () => {

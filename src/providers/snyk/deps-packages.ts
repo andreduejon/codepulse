@@ -13,6 +13,7 @@ import {
   matchesQuery,
   NO_VULNERABILITIES,
   packageLabel,
+  pinFields,
   projectRow,
 } from "./deps-model";
 import { compareVersions } from "./parser";
@@ -99,6 +100,7 @@ export function dependencyPackageList(
           version: entry.pkg.version,
           direct: entry.direct,
           dev: !entry.prod,
+          ...pinFields(entry.pkg),
           via: [...entry.via].sort(),
           ...vulnerabilityFields(lookupVulnerability(vulnerabilities, targetFiles, packageLabel(entry.pkg))),
         })),
@@ -159,6 +161,7 @@ export function buildPackages(
         path: [label],
         direct: entry.direct,
         vulnerability: lookupVulnerability(vulnerabilities, targetFiles, label)?.severity,
+        ...pinFields(entry.pkg),
       });
       dependencyRows++;
       if (!packageExpanded) return;

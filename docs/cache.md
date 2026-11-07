@@ -88,6 +88,17 @@ Symlink aliases share a cache. Moving or renaming a repository starts a cold
 cache under a new identity. The abandoned identity is subject to inactivity
 cleanup.
 
+Snyk's override check also stores npm registry answers in a separate table of
+the same database (see [Snyk cache](providers/snyk.md#cache)). They are bounded to
+20,000 entries, are not shown in sizes, and are not removed by eviction or
+inactivity cleanup.
+
+## Upgrading to v0.15.0
+
+Snyk snapshots from v0.14.0 remain valid. Rescan a commit to get the
+`override`, `managed` and `removable` markers and the reasons Snyk printed for
+failed projects; older snapshots show no markers and only generic failure reasons.
+
 ## Upgrading to v0.14.0
 
 Snyk snapshots cached by earlier versions lack development-dependency and

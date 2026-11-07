@@ -1,4 +1,4 @@
-import { createContext, createMemo, createSignal, useContext } from "solid-js";
+import { batch, createContext, createMemo, createSignal, useContext } from "solid-js";
 import { DEFAULT_MAX_COUNT } from "../constants";
 import type { Branch, Commit, CommitDetail, GraphRow, TagInfo, UncommittedDetail } from "../git/types";
 import type { KeyboardScope } from "../keyboard/scope";
@@ -99,7 +99,13 @@ export function createAppState(
     initialAutoFetchInterval ?? DEFAULT_AUTO_FETCH_INTERVAL,
   );
   const [lastFetchTime, setLastFetchTime] = createSignal<Date | null>(null);
-  const [fetching, setFetching] = createSignal(false);
+  const [fetching, setFetchingSignal] = createSignal(false);
+  const [fetchingHistory, setFetchingHistory] = createSignal(false);
+  const setFetching = (value: boolean, history = false) =>
+    batch(() => {
+      setFetchingSignal(value);
+      setFetchingHistory(value && history);
+    });
   const [hasMore, setHasMore] = createSignal(true);
 
   // ── Provider / CI ─────────────────────────────────────────────────
@@ -231,6 +237,7 @@ export function createAppState(
     pendingScrollHash,
     lastFetchTime,
     fetching,
+    fetchingHistory,
     hasMore,
     detailLoading,
     detailCursorAction,
