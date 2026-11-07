@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { createRoot, createSignal } from "solid-js";
 import { createAppState } from "../../context/state";
+import { BANNER } from "../../debug/banner";
 import { buildGraph } from "../../git/graph";
 import * as api from "./api";
 import { OpenShiftCache } from "./cache";
@@ -236,6 +237,49 @@ describe("OpenShift suspension", () => {
     expect(mounted.openShift.getCommitData(SHA)?.namespaces[0].builds[0].status).toBe("pass");
     expect(mounted.cacheWrite.mock.calls.length).toBe(writes);
     expect(mounted.live.mock.calls.length).toBe(watches);
+  });
+});
+
+describe("OpenShift live list failures", () => {
+  const failedList = (successfulRequests: number, error: string): api.OpenShiftListedInventory => ({
+    resources: [],
+    controllers: [],
+    failures: [{ namespace: "ns", kind: "Pod", path: "/api/v1/namespaces/ns/pods", error: "boom" }],
+    successfulRequests,
+    error,
+    resourceVersions: new Map(),
+  });
+  const pods = (mounted: ReturnType<typeof mountOpenShift>) =>
+    mounted.openShift.getCommitData(SHA)?.namespaces[0]?.pods ?? [];
+
+  test("a live list where every request failed keeps the visible workloads and reports the error", async () => {
+    const mounted = mountOpenShift();
+    await Bun.sleep(0);
+    await mounted.openShift.fetchCommitDataForSHA(SHA);
+    expect(pods(mounted)).toHaveLength(1);
+    mounted.live.mockResolvedValueOnce(failedList(0, BANNER.openshift.inventoryFailed));
+    await mounted.openShift.fetchCommitDataForSHA(SHA, true);
+    for (let i = 0; i < 20 && mounted.state.providerStatusFor("openshift").kind !== "error"; i++) await Bun.sleep(5);
+    expect(mounted.state.providerStatusFor("openshift")).toEqual({
+      kind: "error",
+      message: BANNER.openshift.inventoryFailed,
+    });
+    expect(pods(mounted)).toHaveLength(1);
+  });
+
+  test("a partially failed live list keeps the failed kind's workloads and shows a warning", async () => {
+    const mounted = mountOpenShift();
+    await Bun.sleep(0);
+    await mounted.openShift.fetchCommitDataForSHA(SHA);
+    expect(pods(mounted)).toHaveLength(1);
+    mounted.live.mockResolvedValueOnce(failedList(2, BANNER.openshift.inventoryPartial));
+    await mounted.openShift.fetchCommitDataForSHA(SHA, true);
+    for (let i = 0; i < 20 && mounted.state.providerStatusFor("openshift").kind !== "warning"; i++) await Bun.sleep(5);
+    expect(mounted.state.providerStatusFor("openshift")).toEqual({
+      kind: "warning",
+      message: BANNER.openshift.inventoryPartial,
+    });
+    expect(pods(mounted)).toHaveLength(1);
   });
 });
 

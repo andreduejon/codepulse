@@ -61,6 +61,24 @@ function emptyNamespace(namespace: string): OpenShiftNamespaceData {
   };
 }
 
+/**
+ * A live list that failed for some namespace/kind keeps that slice of the previous list, so a failed request does not
+ * look like the workloads went away. Successful slices replace their previous contents as usual.
+ */
+export function keepFailedLiveSlices(
+  previous: OpenShiftListedInventory | null | undefined,
+  next: OpenShiftListedInventory,
+): OpenShiftListedInventory {
+  if (!previous || next.failures.length === 0) return next;
+  const failed = new Set(next.failures.map(failure => `${failure.namespace}:${failure.kind}`));
+  const keep = (item: { namespace: string; kind: string }) => failed.has(`${item.namespace}:${item.kind}`);
+  return {
+    ...next,
+    resources: [...next.resources, ...previous.resources.filter(keep)],
+    controllers: [...next.controllers, ...previous.controllers.filter(keep)],
+  };
+}
+
 export function commitDataFromCacheEntry(entry: OpenShiftCacheEntry): OpenShiftCommitData {
   const namespaces = new Map<string, OpenShiftNamespaceData>();
   for (const build of entry.builds) {
@@ -407,8 +425,19 @@ export function useOpenShift(opts: {
             actions.setProviderStatus("openshift", providerError(BANNER.openshift.tokenExpired));
             return;
           }
-          live.listed = listed;
-          applyLive(listed);
+          // Every request failed: keep the last live data visible, report, and retry with backoff.
+          if (listed.successfulRequests === 0 && listed.error) {
+            actions.setProviderStatus("openshift", providerError(listed.error));
+            await sleep(delayMs, signal);
+            delayMs = Math.min(delayMs * 2, 10_000);
+            continue;
+          }
+          const merged = keepFailedLiveSlices(live.listed, listed);
+          live.listed = merged;
+          applyLive(merged);
+          if (listed.error) actions.setProviderStatus("openshift", providerWarning(listed.error));
+          else if (state.providerStatusFor("openshift").kind === "error")
+            actions.setProviderStatus("openshift", providerIdle());
           const child = new AbortController();
           const onAbort = () => child.abort();
           signal.addEventListener("abort", onAbort, { once: true });
