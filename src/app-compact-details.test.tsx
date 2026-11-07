@@ -78,3 +78,69 @@ test("closing compact Details with the mouse leaves detail focus like Esc does",
     for (const spy of spies) spy.mockRestore();
   }
 });
+
+test("compact Details shows why the provider cannot work, since the banner is behind the overlay", async () => {
+  const repo = resolve("/repo/compact-details");
+  let app: { state: AppState; actions: AppActions } | undefined;
+  const spies = [
+    spyOn(configWrite, "backfillRepoConfig").mockImplementation(() => {}),
+    spyOn(config, "loadConfig").mockReturnValue({ config: {}, warnings: [] }),
+    spyOn(config, "getRepoDisplayConfig").mockReturnValue({}),
+    spyOn(config, "getKnownRepoInfos").mockReturnValue([{ path: repo }]),
+    spyOn(detailLoader, "useDetailLoader").mockImplementation(() => {}),
+    spyOn(CliRenderer.prototype, "setTerminalTitle").mockImplementation(() => {}),
+    spyOn(dataLoader, "useDataLoader").mockImplementation(options => {
+      app = { state: options.state, actions: options.actions };
+      const commits = [
+        {
+          hash: "d".repeat(40),
+          shortHash: "ddddddd",
+          parents: [],
+          subject: "only commit",
+          body: "",
+          author: "Author",
+          authorEmail: "author@example.com",
+          authorDate: "2026-10-13T10:00:00Z",
+          committer: "Author",
+          committerEmail: "author@example.com",
+          commitDate: "2026-10-13T10:00:00Z",
+          refs: [],
+        },
+      ];
+      options.actions.setRepoPath(repo);
+      options.actions.setCommits(commits);
+      options.actions.setGraphRows(buildGraph(commits));
+      options.actions.setLoading(false);
+      return { loadData: async () => {}, loadMoreData: async () => {}, handleFetch: async () => {} };
+    }),
+  ];
+  let setup: Awaited<ReturnType<typeof testRender>> | undefined;
+  try {
+    setup = await testRender(
+      () => (
+        <AppContent
+          repoPath={repo}
+          startupMode={{ kind: "graph" }}
+          themeState={createThemeState()}
+          autoRefreshInterval={0}
+          autoFetchInterval={0}
+        />
+      ),
+      { width: 110, height: 40, kittyKeyboard: true, useMouse: true },
+    );
+    await setup.flush();
+    if (!app) throw new Error("App fixture did not initialize");
+    app.actions.setError("Git remote unreachable.");
+    await setup.flush();
+    setup.mockInput.pressKey("RETURN");
+    await setup.flush();
+    const lines = setup.captureCharFrame().split("\n");
+    const title = lines.findIndex(line => line.includes("Details") && line.includes("esc close"));
+    const banner = lines.findIndex((line, index) => index > title && line.includes("Remote unreachable · Git"));
+    expect(title).toBeGreaterThanOrEqual(0);
+    expect(banner).toBeGreaterThan(title);
+  } finally {
+    await setup?.dispose();
+    for (const spy of spies) spy.mockRestore();
+  }
+});

@@ -923,6 +923,8 @@ export function AppContent(props: Readonly<AppContentProps>) {
                       });
                     }}
                     {...providerDetailProps}
+                    message={screenMessage()}
+                    onDismissMessage={clearScreenMessage}
                   />
                 </Show>
                 {/* Job log dialog */}
