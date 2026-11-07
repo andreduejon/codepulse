@@ -144,7 +144,7 @@ test("failure first: focusing the tab opens the first failed run with the cursor
   ]);
   const [cursor, setCursor] = createSignal(0);
   const [focused, setFocused] = createSignal(false);
-  const fetchJobs = mock(async () => ({
+  const fetchJobs = mock(async (_run: ProviderTreeRun<null>) => ({
     jobs: [
       { ...job("completed", "success", "completed"), id: "unit", name: "unit" },
       { ...job("completed", "failure", "completed"), id: "e2e", name: "e2e" },

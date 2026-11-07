@@ -134,11 +134,13 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void; onSel
         props.onClose();
         break;
       case "down":
+      case "j":
         e.preventDefault();
         if (showDetails()) detailsRef?.scrollBy(e.shift ? SHIFT_JUMP : 1, "absolute");
         else moveCursor(e.shift ? SHIFT_JUMP : 1);
         break;
       case "up":
+      case "k":
         e.preventDefault();
         if (showDetails()) detailsRef?.scrollBy(e.shift ? -SHIFT_JUMP : -1, "absolute");
         else moveCursor(e.shift ? -SHIFT_JUMP : -1);

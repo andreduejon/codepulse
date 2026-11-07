@@ -88,7 +88,7 @@ describe("help reference", () => {
         .slice(start + 1, end < 0 ? undefined : end)
         .flatMap(row => (row.kind === "binding" ? [row.key] : []));
       for (const item of items) {
-        if (item.kind === "header" || item.kind === "copyable") continue;
+        if (item.kind === "header" || item.kind === "copyable" || !("label" in item)) continue;
         expect(helpKeys).toContain(item.label);
       }
     }

@@ -1,6 +1,7 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { For } from "solid-js";
+import { SHIFT_JUMP } from "../../constants";
 import { getDebugEvents } from "../../debug/events";
 import { formatDebugDuration, formatDebugMessage, formatDebugStatus, formatDebugTimestamp } from "../../debug/format";
 import { useT } from "../../hooks/use-t";
@@ -32,10 +33,10 @@ export default function DebugDialog(props: Readonly<{ onClose: () => void; gitCo
       props.onClose();
     } else if (e.name === "up" || e.name === "k") {
       e.preventDefault();
-      scrollboxRef?.scrollBy(e.shift ? -5 : -1, "absolute");
+      scrollboxRef?.scrollBy(e.shift ? -SHIFT_JUMP : -1, "absolute");
     } else if (e.name === "down" || e.name === "j") {
       e.preventDefault();
-      scrollboxRef?.scrollBy(e.shift ? 5 : 1, "absolute");
+      scrollboxRef?.scrollBy(e.shift ? SHIFT_JUMP : 1, "absolute");
     } else if (e.name === "g") {
       e.preventDefault();
       scrollboxRef?.scrollTo(e.shift ? Infinity : 0);

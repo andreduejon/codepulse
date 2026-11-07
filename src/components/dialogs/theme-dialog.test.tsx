@@ -95,6 +95,13 @@ test.each(["escape", "click"])(
       setup.mockInput.pressKey("ARROW_UP");
       await setup.flush();
       expect(theme.themeName()).toBe("olive-garden");
+      // j / k move like the arrows, as in every other list.
+      setup.mockInput.pressKey("j");
+      await setup.flush();
+      expect(theme.themeName()).toBe(derivedTheme.id);
+      setup.mockInput.pressKey("k");
+      await setup.flush();
+      expect(theme.themeName()).toBe("olive-garden");
       setup.mockInput.pressKey("ARROW_DOWN");
       await setup.flush();
       if (close === "escape") setup.mockInput.pressEnter();
