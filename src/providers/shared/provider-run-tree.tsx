@@ -471,7 +471,8 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                 <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
                   {relTime().padStart(rightInfoWidth())}
                 </text>
-                <Show when={props.showRunDuration !== false && durationWidth() > 0}>
+                {/* Keep the duration column even when runs hide theirs (Jenkins), so runs and jobs line up. */}
+                <Show when={durationWidth() > 0}>
                   <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
                     {runDuration() ? ` ${runDuration().padStart(durationWidth())}` : " ".repeat(durationWidth() + 1)}
                   </text>

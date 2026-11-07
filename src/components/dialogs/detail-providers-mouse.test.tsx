@@ -564,6 +564,22 @@ test("OpenShift tree lines close on the last group and the last stream", async (
   }
 });
 
+test("Jenkins runs keep the duration column so their time lines up with the stage counts below", async () => {
+  const d = await renderProvider("jenkins");
+  try {
+    await d.click(jenkinsRuns[0].name);
+    await d.flush();
+    const rows = d.frame().split("\n");
+    const run = rows.find(row => row.includes(jenkinsRuns[0].name)) ?? "";
+    const job = rows.find(row => row.includes("Jenkins job")) ?? "";
+    const runInfoEnd = /\S(?=\s+\S\s*$)/.exec(run)?.index;
+    expect(job).toContain("1 stage");
+    expect(runInfoEnd).toBe(job.indexOf("1 stage") + "1 stage".length - 1);
+  } finally {
+    await d.dispose();
+  }
+});
+
 test("Snyk severity/finding/scan actions ignore empty severities and loading scans", async () => {
   const d = await renderProvider("snyk");
   try {
