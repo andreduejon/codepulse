@@ -14,6 +14,7 @@ import {
   fetchJenkinsRunJobs,
   fetchJenkinsRunsForBuilds,
   jenkinsApiUrl,
+  mapStatus,
   normalizeJenkinsJobUrl,
   resolveJenkinsJobs,
 } from "./api";
@@ -838,4 +839,13 @@ test("cached run requests stay on the job origin even when the stored run URL na
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+describe("mapStatus", () => {
+  test("aborted builds are cancelled and not-built builds skipped, matching their stages", () => {
+    expect(mapStatus({ building: false, result: "ABORTED" })).toEqual({ status: "completed", conclusion: "cancelled" });
+    expect(mapStatus({ building: false, result: "NOT_BUILT" })).toEqual({ status: "completed", conclusion: "skipped" });
+    expect(mapStatus({ building: false, result: "UNSTABLE" })).toEqual({ status: "completed", conclusion: "unstable" });
+    expect(mapStatus({ building: true, result: null })).toEqual({ status: "running", conclusion: null });
+  });
 });

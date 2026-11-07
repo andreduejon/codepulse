@@ -386,10 +386,15 @@ function matchingHeadShas(raw: unknown, wanted: Set<string>): string[] {
   return [...new Set(matches)];
 }
 
-function mapStatus(build: JenkinsBuildApi): Pick<JenkinsRun, "status" | "conclusion"> {
+/** Jenkins build results in the shared vocabulary, so builds and their stages (`mapWfapiStatus`) agree. */
+const BUILD_CONCLUSIONS: Record<string, string> = { aborted: "cancelled", not_built: "skipped" };
+
+export function mapStatus(
+  build: Pick<JenkinsBuildApi, "building" | "result">,
+): Pick<JenkinsRun, "status" | "conclusion"> {
   if (build.building) return { status: "running", conclusion: null };
   const result = (build.result ?? "UNKNOWN").toLowerCase();
-  return { status: "completed", conclusion: result };
+  return { status: "completed", conclusion: BUILD_CONCLUSIONS[result] ?? result };
 }
 
 function mapWfapiStatus(status: string | undefined): { status: string; conclusion: string | null } {
