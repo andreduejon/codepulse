@@ -332,3 +332,20 @@ test("a failed log shows its reason in an error box, and an empty log says so, n
     await d.dispose();
   }
 });
+
+test("/ searches the resource log and object like the CI log", async () => {
+  const d = await renderResource("Build");
+  try {
+    await d.key("/");
+    await d.mockInput.typeText("wrap-end");
+    await d.flush();
+    expect(d.frame()).toContain("1/1");
+    await d.key("RETURN");
+    expect(d.frame()).toContain("n/N next/prev");
+    await d.key("ESCAPE");
+    expect(d.frame()).not.toContain("1/1");
+    expect(d.open()).toBe(true);
+  } finally {
+    await d.dispose();
+  }
+});

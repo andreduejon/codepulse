@@ -328,3 +328,34 @@ test("warning lines use the theme's warning colour, not the provider accent", as
     await d.dispose();
   }
 });
+
+test("/ searches the log: typing jumps to hits, n/N cycle them, q types, Esc clears then closes", async () => {
+  const d = await renderLog("github-actions");
+  try {
+    d.resolve();
+    await d.flush();
+    await d.key("/");
+    await d.mockInput.typeText("quiet");
+    await d.flush();
+    expect(d.close).not.toHaveBeenCalled();
+    expect(d.frame()).toContain("/ quiet");
+    expect(d.frame()).toContain("0/0");
+    for (let i = 0; i < "quiet".length; i++) await d.key("BACKSPACE");
+    await d.mockInput.typeText("-line");
+    await d.flush();
+    expect(d.frame()).toContain("1/2");
+    await d.key("RETURN");
+    await d.key("n");
+    expect(d.frame()).toContain("2/2");
+    await d.key("n", { shift: true });
+    expect(d.frame()).toContain("1/2");
+    expect(d.cell("-line")?.bg).toEqual(RGBA.fromHex(d.theme.accent));
+    await d.key("ESCAPE");
+    expect(d.frame()).not.toContain("1/2");
+    expect(d.close).not.toHaveBeenCalled();
+    await d.key("ESCAPE");
+    expect(d.close).toHaveBeenCalledTimes(1);
+  } finally {
+    await d.dispose();
+  }
+});

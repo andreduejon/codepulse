@@ -1,6 +1,6 @@
 /** JobLogDialog — paged GitHub Actions job logs, styled like the diff dialog. */
 
-import type { ScrollBoxRenderable } from "@opentui/core";
+import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, type JSX, Show } from "solid-js";
 import {
@@ -10,6 +10,7 @@ import {
   DialogTitleBar,
   getStandardDialogFrame,
 } from "../../components/dialogs/dialog-chrome";
+import { highlightHits, LogSearchRow, useLogSearch } from "../../components/dialogs/log-search";
 import { handleLogScrollKey, type LogViewState, LogViewStatus } from "../../components/dialogs/log-view";
 import { getDialogTitleContentWidth, middleTruncate, TITLE_SEP } from "../../components/dialogs/title-utils";
 import { KeyHint, KeyHintSeparator } from "../../components/key-hint";
@@ -199,6 +200,13 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
 
   const maxLineNoWidth = createMemo(() => Math.max(1, ...filteredLines().map(line => line.lineNo.toString().length)));
 
+  const lineRefs: Renderable[] = [];
+  const search = useLogSearch({
+    texts: () => filteredLines().map(line => line.text),
+    rowAt: index => lineRefs[index],
+    scrollbox: () => scrollboxRef,
+  });
+
   createEffect(() => {
     currentJob().id;
     viewMode();
@@ -219,6 +227,7 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
 
   useKeyboard(e => {
     if (e.eventType === "release") return;
+    if (search.handleKey(e)) return;
     if (handleLogScrollKey(e, scrollboxRef, dialogHeight() - 6)) {
       e.preventDefault();
       return;
@@ -286,45 +295,53 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
     );
   });
 
-  const renderLine = (line: LogLine) => {
+  const renderLine = (line: LogLine, index: () => number) => {
     const th = theme();
     const lineNo = line.lineNo.toString().padStart(maxLineNoWidth());
     const contentWrapMode = () => (wrapEnabled() ? "word" : "none");
+    const text = (value: string) => highlightHits(value, search.term(), { fg: th.background, bg: th.accent });
+    const lineNoColor = () => (search.current() === index() ? th.accent : th.foregroundMuted);
+    const ref = (element: Renderable) => {
+      lineRefs[index()] = element;
+    };
     if (line.kind === "group") {
       return (
-        <box flexDirection="row" width="100%">
-          <text flexShrink={0} wrapMode="none" fg={th.foregroundMuted}>{`${lineNo}  `}</text>
+        <box ref={ref} flexDirection="row" width="100%">
+          <text flexShrink={0} wrapMode="none" fg={lineNoColor()}>{`${lineNo}  `}</text>
           <text wrapMode={contentWrapMode()} fg={th.accent}>
-            <strong>{`▸ ${line.text}`}</strong>
+            <strong>
+              {"▸ "}
+              {text(line.text)}
+            </strong>
           </text>
         </box>
       );
     }
     if (line.kind === "error") {
       return (
-        <box flexDirection="row" width="100%" backgroundColor={th.diffRemovedBg}>
-          <text flexShrink={0} wrapMode="none" fg={th.foregroundMuted}>{`${lineNo}  `}</text>
+        <box ref={ref} flexDirection="row" width="100%" backgroundColor={th.diffRemovedBg}>
+          <text flexShrink={0} wrapMode="none" fg={lineNoColor()}>{`${lineNo}  `}</text>
           <text wrapMode={contentWrapMode()} fg={th.error}>
-            {line.text}
+            {text(line.text)}
           </text>
         </box>
       );
     }
     if (line.kind === "warning") {
       return (
-        <box flexDirection="row" width="100%">
-          <text flexShrink={0} wrapMode="none" fg={th.foregroundMuted}>{`${lineNo}  `}</text>
+        <box ref={ref} flexDirection="row" width="100%">
+          <text flexShrink={0} wrapMode="none" fg={lineNoColor()}>{`${lineNo}  `}</text>
           <text wrapMode={contentWrapMode()} fg={th.warning}>
-            {line.text}
+            {text(line.text)}
           </text>
         </box>
       );
     }
     return (
-      <box flexDirection="row" width="100%">
-        <text flexShrink={0} wrapMode="none" fg={th.foregroundMuted}>{`${lineNo}  `}</text>
+      <box ref={ref} flexDirection="row" width="100%">
+        <text flexShrink={0} wrapMode="none" fg={lineNoColor()}>{`${lineNo}  `}</text>
         <text wrapMode={contentWrapMode()} fg={th.foreground}>
-          {line.text}
+          {text(line.text)}
         </text>
       </box>
     );
@@ -353,12 +370,16 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
         >
           {/* An error box brings its own frame and inset, so it skips the text inset (like the diff dialog). */}
           <box flexDirection="column" width="100%" paddingX={viewState()?.kind === "error" ? 0 : 4}>
-            <Show when={viewState()} fallback={<For each={filteredLines()}>{line => renderLine(line)}</For>}>
+            <Show
+              when={viewState()}
+              fallback={<For each={filteredLines()}>{(line, index) => renderLine(line, index)}</For>}
+            >
               {state => <LogViewStatus state={state()} />}
             </Show>
           </box>
         </scrollbox>
 
+        <LogSearchRow search={search} placeholder="Search log..." />
         <DialogFooter>
           <Show when={hasMultipleJobs()}>
             <KeyHint key="←" desc=" prev" disabled={jobIndex() === 0} onClick={() => navigateJob(-1)} />
@@ -371,7 +392,12 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
             />
             <KeyHintSeparator />
           </Show>
-          <KeyHint key={"↑/↓"} desc=" scroll" />
+          <Show
+            when={search.term()}
+            fallback={<KeyHint key="/" desc=" search" onClick={() => search.setEditing(true)} />}
+          >
+            <KeyHint key="n/N" desc=" next/prev" onClick={() => search.step(1)} />
+          </Show>
           <KeyHintSeparator />
           <KeyHint key="c" desc=" view" onClick={cycleViewMode} />
           <KeyHintSeparator />

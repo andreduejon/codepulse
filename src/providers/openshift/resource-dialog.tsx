@@ -1,4 +1,4 @@
-import type { ScrollBoxRenderable } from "@opentui/core";
+import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import {
@@ -8,6 +8,7 @@ import {
   DialogTitleBar,
   getStandardDialogFrame,
 } from "../../components/dialogs/dialog-chrome";
+import { highlightHits, LogSearchRow, useLogSearch } from "../../components/dialogs/log-search";
 import { handleLogScrollKey, type LogViewState, LogViewStatus } from "../../components/dialogs/log-view";
 import { getDialogTitleContentWidth, middleTruncate, TITLE_SEP } from "../../components/dialogs/title-utils";
 import { KeyHint, KeyHintSeparator } from "../../components/key-hint";
@@ -137,6 +138,8 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
     return null;
   };
   const lineNoWidth = createMemo(() => lines().length.toString().length);
+  const lineRefs: Renderable[] = [];
+  const search = useLogSearch({ texts: lines, rowAt: index => lineRefs[index], scrollbox: () => scrollboxRef });
   const title = createMemo(() => {
     const mode = viewMode() === "log" ? (followEnded() ? "log ended" : "log") : "object";
     const fixed = ["OpenShift", props.resource.kind, props.resource.namespace, mode].join(TITLE_SEP);
@@ -167,6 +170,7 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
 
   useKeyboard(e => {
     if (e.eventType === "release") return;
+    if (search.handleKey(e)) return;
     if (handleLogScrollKey(e, scrollboxRef, dialogFrame().height - 6)) {
       e.preventDefault();
       return;
@@ -217,12 +221,22 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
               fallback={
                 <For each={lines()}>
                   {(line, index) => (
-                    <box flexDirection="row" width="100%">
-                      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                    <box
+                      ref={(element: Renderable) => {
+                        lineRefs[index()] = element;
+                      }}
+                      flexDirection="row"
+                      width="100%"
+                    >
+                      <text
+                        flexShrink={0}
+                        wrapMode="none"
+                        fg={search.current() === index() ? t().accent : t().foregroundMuted}
+                      >
                         {`${String(index() + 1).padStart(lineNoWidth())}  `}
                       </text>
                       <text wrapMode={wrapEnabled() ? "word" : "none"} fg={t().foreground}>
-                        {line}
+                        {highlightHits(line, search.term(), { fg: t().background, bg: t().accent })}
                       </text>
                     </box>
                   )}
@@ -233,9 +247,15 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
             </Show>
           </box>
         </scrollbox>
+        <LogSearchRow search={search} placeholder={viewMode() === "log" ? "Search log..." : "Search object..."} />
         <DialogFooter>
-          {/* Same words and order as the CI log dialog: scroll · view · wrap · refresh. */}
-          <KeyHint key="↑/↓" desc=" scroll" />
+          {/* Same words and order as the CI log and diff dialogs: search · view · wrap · refresh. */}
+          <Show
+            when={search.term()}
+            fallback={<KeyHint key="/" desc=" search" onClick={() => search.setEditing(true)} />}
+          >
+            <KeyHint key="n/N" desc=" next/prev" onClick={() => search.step(1)} />
+          </Show>
           {canLog() ? (
             <>
               <KeyHintSeparator />
