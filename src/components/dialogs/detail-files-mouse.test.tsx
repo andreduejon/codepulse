@@ -368,3 +368,19 @@ test("sidebar committed and working-tree rows require mouse opt-in and stay sele
     }
   }
 });
+
+test("provider views still list the uncommitted files, with a muted note that the provider has no data", async () => {
+  const d = await renderFiles("unstaged");
+  try {
+    d.actions.setActiveProviderView("github-actions");
+    await d.flush();
+    expect(d.frame()).toContain("No GitHub Actions data for uncommitted changes.");
+    expect(d.frame()).toContain("beta.ts");
+    await d.click("beta.ts");
+    expect(d.onOpenDiff).toHaveBeenLastCalledWith(
+      expect.objectContaining({ filePath: "src/nested/beta.ts", source: "unstaged" }),
+    );
+  } finally {
+    await d.dispose();
+  }
+});

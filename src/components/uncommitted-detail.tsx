@@ -44,7 +44,6 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
 
   // Get files for the active tab from uncommittedDetail
   const activeFiles = createMemo(() => {
-    if (providerNotice()) return [];
     const ud = state.uncommittedDetail();
     if (!ud) return [];
     const tab = activeTab();
@@ -218,24 +217,20 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
 
   return (
     <box flexDirection="column" flexGrow={1}>
+      {/* Provider views still list the working-tree files; the provider just has nothing for them. */}
+      <Show when={providerNotice()}>
+        {notice => (
+          <text fg={t().foregroundMuted} wrapMode="word">
+            {notice()}
+          </text>
+        )}
+      </Show>
       <Show
-        when={!providerNotice() && activeFiles().length > 0}
+        when={activeFiles().length > 0}
         fallback={
-          <Show
-            when={providerNotice()}
-            keyed
-            fallback={
-              <box flexGrow={1} alignItems="center" justifyContent="center">
-                <text fg={t().foregroundMuted}>{state.detailLoading() ? "loading..." : `No ${activeTab()} files`}</text>
-              </box>
-            }
-          >
-            {notice => (
-              <box flexGrow={1} alignItems="flex-start" justifyContent="flex-start">
-                <text fg={t().foregroundMuted}>{notice}</text>
-              </box>
-            )}
-          </Show>
+          <box flexGrow={1} alignItems="center" justifyContent="center">
+            <text fg={t().foregroundMuted}>{state.detailLoading() ? "loading..." : `No ${activeTab()} files`}</text>
+          </box>
         }
       >
         {/* Total lines changed (skip for untracked which have 0/0 stats) */}

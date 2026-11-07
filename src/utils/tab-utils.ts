@@ -31,7 +31,7 @@ export function getDefaultDetailTab(commit: Commit, activeProviderView: Provider
 
 export function getUncommittedProviderNotice(activeProviderView: ProviderView): string | null {
   if (!isProviderDetailView(activeProviderView)) return null;
-  return `${providerDisplayName(activeProviderView)} data unavailable for uncommitted changes.`;
+  return `No ${providerDisplayName(activeProviderView)} data for uncommitted changes.`;
 }
 
 /**
