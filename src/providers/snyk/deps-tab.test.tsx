@@ -420,14 +420,12 @@ test("live filtering expands ancestors, preserves native typing and reports inco
   try {
     expect(d.frame()).not.toContain("supported projects scanned");
     expect(d.text("broken/pnpm-lock.yaml").plainText).toContain("incomplete");
-    expect(d.frame()).toContain("failed · Graph extraction incomplete");
-    expect(d.frame()).toContain("skipped · Unsupported lockfile format");
+    // Reasons live in the panel's pinned notice, not in the tab.
+    expect(d.frame()).not.toContain("Graph extraction incomplete");
     await d.click("broken/pnpm-lock.yaml");
     expect(d.state.detailCursorAction()).toBe("expand");
     expect(d.text("broken/pnpm-lock.yaml").plainText).toContain("incomplete");
-    expect(d.frame()).toContain("failed · Graph extraction incomplete");
     await d.click("skipped/yarn.lock");
-    expect(d.frame()).toContain("skipped · Unsupported lockfile format");
     expect(d.frame()).not.toContain("No supported dependency project.");
     expect(d.frame()).not.toContain("No dependencies");
     await d.click("filter");
@@ -441,18 +439,14 @@ test("live filtering expands ancestors, preserves native typing and reports inco
     expect(d.frame()).toContain("@fixture/shared@4.0.0");
     expect(d.frame()).toContain("leaf@5.0.0");
     expect(d.frame()).not.toContain("mystery@3.0.0");
-    expect(d.frame()).toContain("Graph extraction incomplete");
-    expect(d.frame()).toContain("Unsupported lockfile format");
     await d.key("ARROW_LEFT");
     await d.type("x");
     expect(d.input()).toBe(input);
     expect(input?.value).toBe("leaxf");
     expect(input?.cursorOffset).toBe(4);
-    // No "no match" message: headers stay listed with zero counts; failed coverage stays visible.
+    // No "no match" message: headers stay listed with zero counts.
     expect(d.frame()).not.toContain("No matching dependencies");
     expect(d.frame()).toMatch(/0\/\d+/);
-    expect(d.frame()).toContain("failed · Graph extraction incomplete");
-    expect(d.frame()).toContain("skipped · Unsupported lockfile format");
     await d.key("ESCAPE");
     expect(d.input()?.focused).toBe(false);
     expect(d.state.detailCursorIndex()).toBe(4);
@@ -1013,6 +1007,48 @@ test("a triangle in a sibling group reserves its column on every sibling, so dev
     expect(line("mystery@3.0.0")).toMatch(/mystery@3\.0\.0\s+▲$/);
     // dev-only has no triangle, but its sibling does: dev moves into the same column as a marked row's dev.
     expect(line("dev-only@2.0.0")).toMatch(/dev-only@2\.0\.0\s+dev {2}$/);
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("pinned packages carry muted override and removable keywords, and the filter finds them", async () => {
+  const scan = scanFixture();
+  const packages = scan.dependencyProjects[0].graphs[0].packages;
+  packages[1] = { ...packages[1], pin: "override" };
+  packages[3] = { ...packages[3], pin: "override", removable: true };
+  const d = await renderDependencies(scan);
+  try {
+    expect(d.frame()).toMatch(/parent@1\.0\.0\s+override\s*$/m);
+    expect(d.frame()).toMatch(/mystery@3\.0\.0\s+override removable\s*$/m);
+    const spans = d.captureSpans().lines[d.point("mystery@3.0.0").y]?.spans ?? [];
+    const muted = RGBA.fromHex(d.theme.foregroundMuted);
+    expect(spans.find(span => span.text.includes("override"))?.fg).toEqual(muted);
+    expect(spans.find(span => span.text.includes("removable"))?.fg).toEqual(muted);
+    await d.click("filter");
+    await d.type("removable");
+    expect(d.frame()).toContain("mystery@3.0.0");
+    expect(d.frame()).not.toContain("parent@1.0.0");
+    expect(d.frame()).not.toContain("dev-only@2.0.0");
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("the pinned filter finds override and managed packages alike", async () => {
+  const scan = scanFixture();
+  const packages = scan.dependencyProjects[0].graphs[0].packages;
+  packages[1] = { ...packages[1], pin: "override" };
+  packages[3] = { ...packages[3], pin: "managed" };
+  const d = await renderDependencies(scan);
+  try {
+    await d.click("filter");
+    await d.type("pinned");
+    expect(d.frame()).toMatch(/parent@1\.0\.0\s+override\s*$/m);
+    expect(d.frame()).toMatch(/mystery@3\.0\.0\s+managed\s*$/m);
+    expect(d.frame()).not.toContain("dev-only@2.0.0");
+    // `pinned` is a filter word only; rows keep their own keyword.
+    expect(d.frame()).not.toMatch(/\spinned\s*$/m);
   } finally {
     await d.dispose();
   }

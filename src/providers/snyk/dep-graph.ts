@@ -37,7 +37,12 @@ export function isSnykDependencyGraph(value: unknown): value is SnykDependencyGr
   if (
     !value.packages.every(
       (pkg: unknown): pkg is SnykDependencyPackage =>
-        isObject(pkg) && isString(pkg.id) && isString(pkg.name) && (pkg.version === null || isString(pkg.version)),
+        isObject(pkg) &&
+        isString(pkg.id) &&
+        isString(pkg.name) &&
+        (pkg.version === null || isString(pkg.version)) &&
+        (pkg.pin === undefined || pkg.pin === "override" || pkg.pin === "managed") &&
+        (pkg.removable === undefined || (pkg.removable === true && pkg.pin === "override")),
     ) ||
     !value.nodes.every(
       (node: unknown): node is SnykDependencyNode =>

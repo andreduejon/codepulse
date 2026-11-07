@@ -9,7 +9,13 @@ export const isEmptyHeader = (row: DependencyTreeRow) => row.kind !== "dependenc
 
 /** Right-aligned muted markers; nesting and these words replace arrow markers that read like errors. */
 const markers = (row: DependencyTreeRow) =>
-  [row.direct ? "direct" : "", row.reference ? "repeated" : "", row.cycle ? "circular" : ""]
+  [
+    row.direct ? "direct" : "",
+    row.reference ? "repeated" : "",
+    row.cycle ? "circular" : "",
+    row.pin ?? "",
+    row.removable ? "removable" : "",
+  ]
     .filter(Boolean)
     .map(word => ` ${word}`)
     .join("");

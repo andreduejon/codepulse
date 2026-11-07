@@ -75,3 +75,27 @@ test("banners without a dismiss handler show no cross", async () => {
     setup.renderer.destroy();
   }
 });
+
+test("a source shows muted after the headline; later sentences become muted detail", async () => {
+  const theme = createThemeState();
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={theme}>
+        <MessageBox kind="error" source="Snyk" message="Partial scan. Kept last complete snapshot." />
+      </ThemeContext.Provider>
+    ),
+    { width: 60, height: 6 },
+  );
+  try {
+    await setup.renderOnce();
+    const lines = setup.captureCharFrame().split("\n");
+    expect(lines[1]).toContain("     Partial scan · Snyk");
+    expect(lines[2]).toContain("     Kept last complete snapshot.");
+    const spans = setup.captureSpans().lines[1].spans;
+    const span = (text: string) => spans.find(candidate => candidate.text.includes(text));
+    expect(span("Snyk")?.fg).toEqual(RGBA.fromHex(theme.theme().foregroundMuted));
+    expect(span("Partial scan")?.fg).toEqual(RGBA.fromHex(theme.theme().foreground));
+  } finally {
+    setup.renderer.destroy();
+  }
+});

@@ -1,6 +1,6 @@
 {
 	"name": "@andreduejon/codepulse",
-	"version": "0.14.0",
+	"version": "0.15.0",
 	"private": true,
 	"description": "A terminal git graph visualizer that is read-only by default",
 	"license": "MIT",
@@ -34,7 +34,7 @@
 		"solid-js": "1.9.12"
 	},
 	"overrides": {
-		"seroval": "1.6.9"
+		"seroval": "1.6.11"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.5.15",

@@ -7,13 +7,13 @@ import * as config from "../../config";
 import * as configWrite from "../../config-write";
 import { AppStateContext, createAppState } from "../../context/state";
 import { createThemeState, ThemeContext } from "../../context/theme";
-import * as clipboard from "../../hooks/use-clipboard";
 import type {
   GitHubMenuConfig,
   JenkinsMenuConfig,
   OpenShiftMenuConfig,
   SnykMenuConfig,
-} from "../../hooks/use-menu-items";
+} from "../../hooks/menu-items-types";
+import * as clipboard from "../../hooks/use-clipboard";
 import MenuDialog, { lastMenuTab, setLastMenuTab } from "./menu-dialog";
 
 const descendants = (node: Renderable): Renderable[] =>

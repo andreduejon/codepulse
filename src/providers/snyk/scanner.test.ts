@@ -290,6 +290,26 @@ process.exit(1);
     expect(await cache.read("/repo", SHA)).toEqual(old);
   });
 
+  test("a scan where every project failed names each manifest with Snyk's reason", async () => {
+    const runner: SnykCommandRunner = async (command, options) => {
+      if (command[1] === "rev-parse") return { stdout: SHA, exitCode: 0 };
+      if (command[0] === "snyk")
+        return {
+          stdout: JSON.stringify({
+            ok: false,
+            error: `Failed to get dependencies for all 1 potential projects.\n\n${options.cwd}/api/requirements.txt:\nSomething went wrong getting dependencies`,
+          }),
+          exitCode: 2,
+        };
+      return { stdout: "", exitCode: 0 };
+    };
+    await expect(
+      scanSnykCommit({ repoPath: "/repo", sha: SHA, force: true }, { cacheRoot: await root(), runCommand: runner }),
+    ).rejects.toThrow(
+      "Snyk could not resolve any project.\napi/requirements.txt: Something went wrong getting dependencies",
+    );
+  });
+
   test.each([
     { rescan: true, kept: false },
     { rescan: false, kept: true },
@@ -436,6 +456,114 @@ process.exit(1);
     expect(f.calls.filter(call => call.command[0] !== "git").map(call => call.command[0])).toEqual(["snyk", "snyk"]);
   });
 
+  test("marks packages the pnpm lockfile overrides, for workspace graphs too", async () => {
+    const f = await dependencyFixture({
+      "package.json": '{"packageManager":"pnpm@10.0.0"}',
+      "pnpm-lock.yaml": "lockfileVersion: '9.0'\n\noverrides:\n  dep: ^1.0.0\n  other: 2.0.0\n\nimporters:\n  .: {}\n",
+      "pnpm-workspace.yaml": "packages: [packages/*]",
+      "packages/a/package.json": "{}",
+    });
+    f.output.findings.stdout = JSON.stringify({
+      packageManager: "pnpm",
+      displayTargetFile: "pnpm-lock.yaml",
+      vulnerabilities: [],
+    });
+    f.output.graph.stdout = dependencyGraph("pnpm", "packages/a/package.json");
+    const result = await scanSnykCommit(
+      { repoPath: f.repoPath, sha: SHA },
+      { cacheRoot: f.cacheRoot, runCommand: f.runner },
+    );
+    expect(result.dependencyProjects[0].graphs[0].packages).toEqual([
+      { id: "fixture@1.0.0", name: "fixture", version: "1.0.0" },
+      { id: "dep@1.0.0", name: "dep", version: "1.0.0", pin: "override" },
+    ]);
+    expect(await new SnykCache({ root: f.cacheRoot }).read(f.repoPath, SHA)).toEqual(result);
+  });
+
+  test("asks the registry whether a pnpm override could go", async () => {
+    const f = await dependencyFixture({
+      "package.json": '{"packageManager":"pnpm@10.0.0","dependencies":{"dep":"^1.0.0"}}',
+      "pnpm-lock.yaml": "lockfileVersion: '9.0'\n\noverrides:\n  dep: '>=1.0.0'\n",
+    });
+    f.output.findings.stdout = JSON.stringify({
+      packageManager: "pnpm",
+      displayTargetFile: "pnpm-lock.yaml",
+      vulnerabilities: [],
+    });
+    f.output.graph.stdout = dependencyGraph("pnpm", "package.json");
+    const views: string[] = [];
+    const runner: SnykCommandRunner = async (command, options) => {
+      if (command[0] !== "pnpm") return f.runner(command, options);
+      views.push(command.join(" "));
+      return { stdout: JSON.stringify(["0.9.0", "1.0.0"]), exitCode: 0 };
+    };
+    const result = await scanSnykCommit(
+      { repoPath: f.repoPath, sha: SHA },
+      { cacheRoot: f.cacheRoot, runCommand: runner, which: name => (name === "pnpm" ? "/bin/pnpm" : null) },
+    );
+    // dep is a direct dependency: the project's own ^1.0.0 already resolves to 1.0.0.
+    expect(result.dependencyProjects[0].graphs[0].packages[1]).toEqual({
+      id: "dep@1.0.0",
+      name: "dep",
+      version: "1.0.0",
+      pin: "override",
+      removable: true,
+    });
+    expect(views).toEqual(["pnpm view dep versions --json"]);
+  });
+
+  test("reads npm overrides from package.json and asks the registry whether they could go", async () => {
+    const f = await dependencyFixture({
+      "package.json": '{"dependencies":{"dep":"^1.0.0"},"overrides":{"dep":"$dep"}}',
+      "package-lock.json": '{"lockfileVersion":3}',
+    });
+    f.output.findings.stdout = JSON.stringify({
+      packageManager: "npm",
+      displayTargetFile: "package-lock.json",
+      vulnerabilities: [],
+    });
+    f.output.graph.stdout = dependencyGraph("npm", "package-lock.json");
+    const views: string[] = [];
+    const runner: SnykCommandRunner = async (command, options) => {
+      if (command[0] !== "npm") return f.runner(command, options);
+      views.push(command.join(" "));
+      return { stdout: JSON.stringify(["1.0.0"]), exitCode: 0 };
+    };
+    const result = await scanSnykCommit(
+      { repoPath: f.repoPath, sha: SHA },
+      { cacheRoot: f.cacheRoot, runCommand: runner, which: name => (name === "npm" ? "/bin/npm" : null) },
+    );
+    expect(result.dependencyProjects[0].graphs[0].packages[1]).toEqual({
+      id: "dep@1.0.0",
+      name: "dep",
+      version: "1.0.0",
+      pin: "override",
+      removable: true,
+    });
+    expect(views).toEqual(["npm view dep versions --json"]);
+  });
+
+  test("marks Yarn resolutions without a registry tool", async () => {
+    const f = await dependencyFixture({
+      "package.json": '{"resolutions":{"**/dep":"1.0.0"},"overrides":{"fixture":"2.0.0"}}',
+      "yarn.lock": "# yarn lockfile v1\n",
+    });
+    f.output.findings.stdout = JSON.stringify({
+      packageManager: "yarn",
+      displayTargetFile: "yarn.lock",
+      vulnerabilities: [],
+    });
+    f.output.graph.stdout = dependencyGraph("yarn", "yarn.lock");
+    const result = await scanSnykCommit(
+      { repoPath: f.repoPath, sha: SHA },
+      { cacheRoot: f.cacheRoot, runCommand: f.runner, which: () => null },
+    );
+    expect(result.dependencyProjects[0].graphs[0].packages).toEqual([
+      { id: "fixture@1.0.0", name: "fixture", version: "1.0.0" },
+      { id: "dep@1.0.0", name: "dep", version: "1.0.0", pin: "override" },
+    ]);
+  });
+
   test("scans native Yarn v1 without a local Yarn command", async () => {
     const f = await dependencyFixture({ "package.json": "{}", "yarn.lock": "# yarn lockfile v1\n" });
     const result = await scanSnykCommit(
@@ -500,6 +628,54 @@ process.exit(1);
     // Snyk flagged `dep` prod; package.json declares it in devDependencies.
     expect(result.dependencyProjects[0].graphs[0].nodes.find(node => node.nodeId === "dep")?.scope).toBe("dev");
     expect(f.calls.filter(call => call.command[0] !== "git").map(call => call.command[0])).toEqual(["snyk", "snyk"]);
+  });
+
+  test("marks Maven packages an in-repo parent's dependencyManagement pins", async () => {
+    const graph = `DepGraph data:\n${JSON.stringify({
+      schemaVersion: "1.3.0",
+      pkgManager: { name: "maven" },
+      pkgs: [
+        { id: "x:core@1.0", info: { name: "x:core", version: "1.0" } },
+        { id: "x:lib@1.0", info: { name: "x:lib", version: "1.0" } },
+        { id: "x:api@2.0", info: { name: "x:api", version: "2.0" } },
+      ],
+      graph: {
+        rootNodeId: "root-node",
+        nodes: [
+          { nodeId: "root-node", pkgId: "x:core@1.0", deps: [{ nodeId: "x:lib:jar:1.0:compile" }] },
+          { nodeId: "x:lib:jar:1.0:compile", pkgId: "x:lib@1.0", deps: [{ nodeId: "x:api:jar:2.0:compile" }] },
+          { nodeId: "x:api:jar:2.0:compile", pkgId: "x:api@2.0", deps: [] },
+        ],
+      },
+    })}\nDepGraph target:\ncore/pom.xml\nDepGraph end\n`;
+    const f = await dependencyFixture({
+      "pom.xml":
+        "<project><groupId>x</groupId><artifactId>parent</artifactId><version>1.0</version>" +
+        "<properties><api.version>2.0</api.version></properties><dependencyManagement><dependencies>" +
+        `<dependency><groupId>x</groupId><artifactId>api</artifactId><version>\${api.version}</version></dependency>` +
+        "<dependency><groupId>x</groupId><artifactId>lib</artifactId><version>1.0</version></dependency>" +
+        "</dependencies></dependencyManagement></project>",
+      "core/pom.xml":
+        "<project><parent><groupId>x</groupId><artifactId>parent</artifactId><version>1.0</version></parent>" +
+        "<artifactId>core</artifactId></project>",
+    });
+    f.output.findings.stdout = JSON.stringify([
+      { packageManager: "maven", displayTargetFile: "pom.xml", vulnerabilities: [] },
+      { packageManager: "maven", displayTargetFile: "core/pom.xml", vulnerabilities: [] },
+    ]);
+    f.output.graph.stdout = graph;
+    const result = await scanSnykCommit(
+      { repoPath: f.repoPath, sha: SHA },
+      { cacheRoot: f.cacheRoot, runCommand: f.runner, which: command => (command.startsWith("mvn") ? command : null) },
+    );
+    const core = result.dependencyProjects.find(project => project.targetFile === "core/pom.xml");
+    // x:lib is a direct dependency, so only x:api counts as managed.
+    expect(core?.graphs[0].packages.map(pkg => [pkg.name, pkg.pin ?? null])).toEqual([
+      ["x:core", null],
+      ["x:lib", null],
+      ["x:api", "managed"],
+    ]);
+    expect(await new SnykCache({ root: f.cacheRoot }).read(f.repoPath, SHA)).toEqual(result);
   });
 
   test("captures Maven graphs per pom.xml by exact path, with scopes from node IDs", async () => {
@@ -781,9 +957,42 @@ process.exit(1);
       { repoPath: f.repoPath, sha: SHA },
       { cacheRoot: f.cacheRoot, runCommand: runner },
     );
-    expect(result).toMatchObject({ partial: true, failedProjects: 1, failedTargets: ["vendor/lib/package.json"] });
-    expect(result.dependencyProjects[0]).toMatchObject({ status: "scanned" });
+    expect(result).toMatchObject({
+      partial: true,
+      failedProjects: 1,
+      failedTargets: ["vendor/lib/package.json"],
+      failureReasons: {
+        "vendor/lib/package.json":
+          "Missing node_modules folder. Snyk needs a lockfile for this project, since scans run on a clean checkout.",
+      },
+    });
+    // A nested manifest's failure stays with the scan; the root project keeps its graph.
+    expect(result.dependencyProjects[0]).toMatchObject({ status: "scanned", reason: null });
     expect(await new SnykCache({ root: f.cacheRoot }).read(f.repoPath, SHA)).toEqual(result);
+  });
+
+  test("a project without a graph shows the reason Snyk printed for its manifest", async () => {
+    const f = await dependencyFixture({ "package.json": "{}", "yarn.lock": "# yarn lockfile v1\n" });
+    // Snyk returns a graph for another package manager only, so the yarn project has none.
+    f.output.graph.stdout = dependencyGraph("pnpm", "package.json");
+    const runner: SnykCommandRunner = async (command, options) => {
+      const output = await f.runner(command, options);
+      if (!command.includes("--print-graph")) return output;
+      const manifest = join(await realpath(options.cwd), "package.json");
+      return {
+        ...output,
+        stderr: `${manifest}:\n  yarn.lock is out of sync with package.json.\n✗ 1/1 potential projects failed to get dependencies.\n`,
+      };
+    };
+    const result = await scanSnykCommit(
+      { repoPath: f.repoPath, sha: SHA },
+      { cacheRoot: f.cacheRoot, runCommand: runner },
+    );
+    expect(result.dependencyProjects[0]).toMatchObject({
+      status: "failed",
+      reason: "yarn.lock is out of sync with package.json.",
+    });
+    expect(result.failureReasons).toEqual({ "package.json": "yarn.lock is out of sync with package.json." });
   });
 
   test("graph-run failures add to findings failures without counting them twice", async () => {
@@ -1137,11 +1346,36 @@ describe("parseSnykProjectFailures", () => {
     expect(parseSnykProjectFailures(stderr, ["/var/scan/worktree", "/private/var/scan/worktree"])).toEqual({
       count: 3,
       targets: ["tools/pom.xml", "vendor/lib/package.json"],
+      reasons: {
+        "tools/pom.xml": "Could not resolve dependencies.",
+        "vendor/lib/package.json":
+          "Missing node_modules folder. Snyk needs a lockfile for this project, since scans run on a clean checkout.",
+      },
+    });
+  });
+
+  test("keeps Snyk's reason lines until the next path, blank line or summary, without worktree paths", () => {
+    const stderr = [
+      "✗ 2/4 potential projects failed to get dependencies.",
+      "",
+      "/repo/services/api/pom.xml:",
+      "  Command failed: mvn dependency:tree in /repo/services/api",
+      "  [ERROR] Non-resolvable parent POM for com.example:api:1.0",
+      "",
+      "Testing /repo...",
+      "/repo/web/package.json:",
+      "  Failed to parse package-lock.json. Run with `-d` for debug output.",
+    ].join("\n");
+    expect(parseSnykProjectFailures(stderr, ["/repo"]).reasons).toEqual({
+      "services/api/pom.xml":
+        "Command failed: mvn dependency:tree in services/api [ERROR] Non-resolvable parent POM for com.example:api:1.0",
+      "web/package.json": "Failed to parse package-lock.json.",
     });
   });
 
   test("ignores stderr without Snyk's failure summary", () => {
-    expect(parseSnykProjectFailures("/repo/package.json:\n  warning\n", ["/repo"])).toEqual({ count: 0, targets: [] });
-    expect(parseSnykProjectFailures("", ["/repo"])).toEqual({ count: 0, targets: [] });
+    const none = { count: 0, targets: [], reasons: {} };
+    expect(parseSnykProjectFailures("/repo/package.json:\n  warning\n", ["/repo"])).toEqual(none);
+    expect(parseSnykProjectFailures("", ["/repo"])).toEqual(none);
   });
 });

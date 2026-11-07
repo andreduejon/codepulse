@@ -1,6 +1,6 @@
 import type { Accessor } from "solid-js";
 import { createEffect, createSignal, onCleanup, untrack } from "solid-js";
-import type { AppActions, AppState, ProviderStatus } from "../../context/state";
+import type { AppActions, AppState } from "../../context/state";
 import {
   providerError,
   providerIdle,
@@ -19,23 +19,6 @@ import type { SnykCacheLimit, SnykScanResult } from "./types";
 // provider.ts adds this identifier as part of the provider registration change.
 const SNYK_PROVIDER_ID = "snyk" as ProviderView;
 const EXACT_SHA = /^[0-9a-f]{40,64}$/i;
-
-/**
- * Banner status after a scan with usable findings: missing graphs are warnings, not errors.
- * Header first, then one line per failed/skipped project.
- */
-export function snykDependencyStatus(scan: SnykScanResult): ProviderStatus {
-  const projects = scan.dependencyProjects;
-  if (projects.length === 0) return providerWarning(BANNER.snyk.noDependencyProject);
-  const incomplete = projects.filter(project => project.status !== "scanned");
-  if (incomplete.length === 0) return providerIdle();
-  return providerWarning(
-    [
-      BANNER.snyk.graphsIncomplete(incomplete.length, projects.length),
-      ...incomplete.map(project => `${project.targetFile}: ${project.reason ?? project.status}`),
-    ].join("\n"),
-  );
-}
 
 export function collectSnykAutoScanTips(
   branches: readonly { name: string; isRemote: boolean; lastCommitHash: string }[],
@@ -80,6 +63,9 @@ export interface UseSnykResult {
   scanCommit: (sha: string, force?: boolean) => Promise<SnykScanResult | null>;
   isAvailable: () => boolean;
   invalidate: () => void;
+  /** The error of a scan that failed while another view was open; cleared when the Snyk view opens. */
+  backgroundError: () => string | null;
+  dismissBackgroundError: () => void;
 }
 
 interface ScanQueueEntry {
@@ -129,6 +115,8 @@ export function useSnyk(opts: {
   let epoch = 0;
   let disposed = false;
   const [workVersion, setWorkVersion] = createSignal(0);
+  /** A scan that failed out of sight; finished scans need no message, the footer hint just goes away. */
+  const [backgroundError, setBackgroundError] = createSignal<string | null>(null);
 
   function publishResults(): void {
     setResultsVersion(version => version + 1);
@@ -165,6 +153,7 @@ export function useSnyk(opts: {
   function resetForIdentityChange(): void {
     cancelWork();
     autoScanAttempted.clear();
+    setBackgroundError(null);
     results = new Map();
     publishResults();
     const current = config();
@@ -214,7 +203,8 @@ export function useSnyk(opts: {
       ) {
         mergeResult(scanResult, entry.epoch, entry.force);
         actions.setProviderLastSuccessfulRefresh(SNYK_PROVIDER_ID, new Date());
-        if (queue.length === 0) actions.setProviderStatus(SNYK_PROVIDER_ID, snykDependencyStatus(scanResult));
+        // Coverage gaps (failed or skipped projects) show in the Dependencies tab, not the banner.
+        if (queue.length === 0) actions.setProviderStatus(SNYK_PROVIDER_ID, providerIdle());
       }
     } catch (error) {
       if (
@@ -224,7 +214,10 @@ export function useSnyk(opts: {
         entry.repoPath === state.repoPath()
       ) {
         const message = error instanceof Error ? error.message : String(error);
-        actions.setProviderStatus(SNYK_PROVIDER_ID, providerError(message));
+        // A partial rescan kept the complete snapshot: Snyk still works, so it's a warning for the tab notice.
+        const partial = message === BANNER.snyk.partialRescan;
+        actions.setProviderStatus(SNYK_PROVIDER_ID, partial ? providerWarning(message) : providerError(message));
+        if (!partial && untrack(state.activeProviderView) !== SNYK_PROVIDER_ID) setBackgroundError(message);
       }
     } finally {
       entry.resolve(controller.signal.aborted || entry.epoch !== epoch ? null : scanResult);
@@ -277,7 +270,15 @@ export function useSnyk(opts: {
   createEffect(() => {
     const current = config();
     if (current.enabled) {
-      state.providers.register({ id: SNYK_PROVIDER_ID, displayName: "Snyk", isAvailable });
+      state.providers.register({
+        id: SNYK_PROVIDER_ID,
+        displayName: "Snyk",
+        isAvailable,
+        activity: () => {
+          scanningVersion();
+          return scanningSHAs.size > 0 ? "scanning" : null;
+        },
+      });
       actions.setProviderStatus(
         SNYK_PROVIDER_ID,
         hasToken(current.tokenEnvVar)
@@ -310,6 +311,11 @@ export function useSnyk(opts: {
 
   createEffect(() => {
     if (opts.suspended?.()) untrack(cancelWork);
+  });
+
+  // Opening the Snyk view shows the error there, so the background banner has done its job.
+  createEffect(() => {
+    if (state.activeProviderView() === SNYK_PROVIDER_ID) setBackgroundError(null);
   });
 
   createEffect(() => {
@@ -397,5 +403,7 @@ export function useSnyk(opts: {
     scanCommit: (sha, force = false) => enqueueScan(sha, force),
     isAvailable,
     invalidate: resetForIdentityChange,
+    backgroundError,
+    dismissBackgroundError: () => setBackgroundError(null),
   };
 }

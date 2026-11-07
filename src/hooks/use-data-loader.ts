@@ -180,7 +180,7 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
 
     const ctrl = new AbortController();
     loadMoreAbortCtrl = ctrl;
-    actions.setFetching(true);
+    actions.setFetching(true, true);
 
     try {
       const pageSize = state.maxCount();

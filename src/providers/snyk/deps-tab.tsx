@@ -90,7 +90,6 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
       }),
   );
   const { copiedId, copyToClipboard } = useClipboard();
-  const incompleteProjects = createMemo(() => projects().filter(project => project.status !== "scanned"));
   /** Copy, Group by, Scope and filter only when there is something to browse (like Vulnerabilities without findings). */
   const controls = () => !!props.scan && projects().length > 0;
   const itemCount = () => (controls() ? ROW_BASE + navRows().length : 1);
@@ -451,13 +450,6 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
             {`${tree().matchCount} packages match; matching-path search is incomplete. Narrow the filter.`}
           </text>
         </Show>
-        <For each={incompleteProjects()}>
-          {project => (
-            <text fg={project.status === "failed" ? t().warning : t().foregroundMuted} wrapMode="word">
-              {`${project.targetFile}: ${project.status}${project.reason ? ` · ${project.reason}` : ""}`}
-            </text>
-          )}
-        </For>
       </Show>
     </box>
   );

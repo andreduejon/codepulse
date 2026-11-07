@@ -155,7 +155,7 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
       setError("");
     } catch (cause) {
       setSummary(null);
-      setError(`Cache error: ${cause instanceof Error ? cause.message : String(cause)}`);
+      setError(`Cache error\n${cause instanceof Error ? cause.message : String(cause)}`);
     }
     const index = rows().findIndex(row => row.id === key);
     const indexes = selectableIndexes();
@@ -198,7 +198,7 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
       resetRepositoryCacheTimer(row.repo.repoHash, props.cacheRoot);
       refresh();
     } catch (cause) {
-      setError(`Reset failed: ${cause instanceof Error ? cause.message : String(cause)}`);
+      setError(`Reset failed\n${cause instanceof Error ? cause.message : String(cause)}`);
     }
   };
   const requestResetAll = () => {
@@ -235,7 +235,7 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
     } catch (cause) {
       if (disposed) return;
       setError(
-        `${action.kind === "evict" ? "Eviction" : "Action"} failed: ${cause instanceof Error ? cause.message : String(cause)}`,
+        `${action.kind === "evict" ? "Eviction" : "Action"} failed\n${cause instanceof Error ? cause.message : String(cause)}`,
       );
     } finally {
       if (!disposed) {
@@ -444,19 +444,13 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
             </box>
           </scrollbox>
           <Show when={confirmation()}>
-            <text flexShrink={0} maxHeight={Math.max(1, cardHeight() - 5)} wrapMode="word" fg={t().warning}>
-              {confirmationText()}
-            </text>
+            <CardMessage text={confirmationText()} color={t().warning} maxHeight={Math.max(1, cardHeight() - 5)} />
           </Show>
           <Show when={error()}>
-            <text flexShrink={0} maxHeight={3} wrapMode="word" fg={t().error}>
-              {error()}
-            </text>
+            <CardMessage text={error()} color={t().error} maxHeight={3} />
           </Show>
           <Show when={result()}>
-            <text flexShrink={0} maxHeight={3} wrapMode="word" fg={t().success}>
-              {result()}
-            </text>
+            <CardMessage text={result()} color={t().success} maxHeight={3} />
           </Show>
           <box height={1} flexShrink={0} />
           <box flexDirection="row" height={1} flexShrink={0} paddingRight={2}>
@@ -507,6 +501,26 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
           </box>
         </box>
       </box>
+    </box>
+  );
+}
+
+/** Like a banner inside the card: the first line is a bold headline in the message's colour, the rest is muted. */
+function CardMessage(props: Readonly<{ text: string; color: string; maxHeight: number }>) {
+  const t = useT();
+  const lines = () => props.text.split("\n");
+  return (
+    <box flexDirection="column" flexShrink={0} maxHeight={props.maxHeight} overflow="hidden">
+      <text flexShrink={0} wrapMode="word" fg={props.color}>
+        <strong>{lines()[0]}</strong>
+      </text>
+      <For each={lines().slice(1)}>
+        {line => (
+          <text flexShrink={0} wrapMode="word" fg={t().foregroundMuted}>
+            {line}
+          </text>
+        )}
+      </For>
     </box>
   );
 }

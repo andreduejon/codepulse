@@ -1,5 +1,6 @@
 import { MouseButton, type ScrollBoxRenderable } from "@opentui/core";
 import { batch, createSignal, For, onCleanup, Show } from "solid-js";
+import type { TabNotice } from "../app-tab-notice";
 import { isUncommittedHash } from "../constants";
 import type { DetailTab, ProviderStatus } from "../context/state";
 import { useAppState } from "../context/state";
@@ -22,6 +23,7 @@ import { scheduleScrollIntoView, scrollElementIntoView } from "../utils/scroll";
 import { getAvailableTabs } from "../utils/tab-utils";
 import CommitDetailView from "./detail";
 import type { DetailNavRef } from "./detail-types";
+import MessageBox from "./message-box";
 import UncommittedDetailView from "./uncommitted-detail";
 
 export interface DetailPanelProps {
@@ -67,6 +69,9 @@ export interface DetailPanelProps {
   snykIsScanning?: (sha: string) => boolean;
   snykScanCommit?: (sha: string, force?: boolean) => Promise<SnykScanResult | null>;
   snykProviderStatus?: ProviderStatus;
+  /** Notice pinned under the tab content ("works, but incomplete"); see `tabNoticeFor`. */
+  tabNotice?: TabNotice | null;
+  onDismissTabNotice?: () => void;
 }
 
 /**
@@ -335,6 +340,25 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
           />
         </Show>
       </scrollbox>
+      <Show when={props.tabNotice}>
+        {notice => (
+          <>
+            <box height={1} flexShrink={0} />
+            <box flexShrink={0}>
+              <MessageBox
+                kind={notice().kind}
+                variant="inset"
+                title={notice().title}
+                message={notice().detail.join("\n")}
+                entries={notice().entries}
+                detail={notice().footer}
+                mouseEnabled={props.mouseEnabled}
+                onDismiss={props.onDismissTabNotice}
+              />
+            </box>
+          </>
+        )}
+      </Show>
       <Show when={snykLegend()}>
         {legend => (
           <>

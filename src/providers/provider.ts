@@ -81,6 +81,11 @@ export interface ProviderRegistration {
   displayName: string;
   /** Returns true when the provider can produce data (token + matching remote). */
   isAvailable: () => boolean;
+  /**
+   * Long-running work as a short verb (`scanning`), shown after the display name in the footer in every view,
+   * instead of the generic `loading`. Set it only when it ends reliably: it can't get stuck after a view switch.
+   */
+  activity?: () => string | null;
 }
 
 export interface ProviderRegistry {

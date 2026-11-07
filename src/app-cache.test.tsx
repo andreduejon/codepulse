@@ -160,7 +160,7 @@ test(":cache groups apps, resets and evicts only selected repository, then resto
     });
     setup.mockInput.pressKey("r");
     await setup.flush();
-    expect(setup.captureCharFrame()).toContain("Reset failed: database is locked");
+    expect(setup.captureCharFrame()).toMatch(/Reset failed\s*\n.*database is locked/);
     expect(invalidate).not.toHaveBeenCalled();
     expect(realSummary(root).groups).toHaveLength(3);
     resetTimer.mockClear();
@@ -181,7 +181,7 @@ test(":cache groups apps, resets and evicts only selected repository, then resto
     setup.mockInput.pressKey("e");
     setup.mockInput.pressKey("RETURN");
     await setup.flush();
-    expect(setup.captureCharFrame()).toContain("Eviction failed: database is locked");
+    expect(setup.captureCharFrame()).toMatch(/Eviction failed\s*\n.*database is locked/);
     expect(invalidate).not.toHaveBeenCalled();
     expect(realSummary(root).groups).toHaveLength(3);
     evict.mockClear();

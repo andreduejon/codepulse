@@ -77,7 +77,10 @@ test("pages through history to the end and keeps the cursor on the selected comm
   expect(state.selectedCommit()?.subject).toBe("c5");
 
   actions.setCursorIndex(1);
-  await loader.loadMoreData();
+  const more = loader.loadMoreData();
+  // Paging reads local history, which the footer names apart from a remote fetch.
+  expect(state.fetchingHistory()).toBe(true);
+  await more;
   expect(subjects(state.commits())).toEqual(["c5", "c4", "c3", "c2"]);
   expect(state.selectedCommit()?.subject).toBe("c4");
 
@@ -87,6 +90,7 @@ test("pages through history to the end and keeps the cursor on the selected comm
   await loader.loadMoreData();
   expect(state.commits()).toHaveLength(5);
   expect(state.fetching()).toBe(false);
+  expect(state.fetchingHistory()).toBe(false);
 });
 
 test("switching repositories discards the previous repository's load", async () => {

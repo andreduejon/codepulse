@@ -22,7 +22,6 @@ export interface OpenShiftDetailTabProps {
   onOpenResource?: (resource: OpenShiftResource) => void;
   unavailableReason?: string | null;
   liveUnavailable?: boolean;
-  warningReason?: string | null;
   loading?: boolean;
   navRef?: DetailNavRef;
   detailCursorIndex: () => number;
@@ -298,15 +297,6 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
             {resources().length}
           </text>
         </box>
-      </Show>
-      <Show when={props.warningReason}>
-        {warning => (
-          <box paddingBottom={1}>
-            <text fg={t().accent} wrapMode="word">
-              {warning()}
-            </text>
-          </box>
-        )}
       </Show>
       <Show when={resources().length > 0}>
         <box flexDirection="column" width="100%">
