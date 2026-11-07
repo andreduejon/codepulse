@@ -221,7 +221,7 @@ test("compact app rows aggregate all providers; selected reset reaches every pro
     await setup.clickRow(BETA);
     expect(setup.frame()).toContain("r reset");
     expect(setup.frame()).not.toContain("reset 90 days");
-    expect(setup.frame()).toContain("shift+r reset all");
+    expect(setup.frame()).toContain("R reset all");
     expect(setup.frame()).not.toContain("Shift+r");
     expect(setup.frame()).toContain("e evict");
     expect(setup.frame()).toContain("q quit");
@@ -272,7 +272,7 @@ test("compact app rows aggregate all providers; selected reset reaches every pro
     await setup.key("e");
     expect(setup.frame()).toContain("Evict only cache-alpha (all providers)?");
     expect(setup.frame()).toContain(ALPHA);
-    expect(setup.frame()).not.toContain("shift+r reset all");
+    expect(setup.frame()).not.toContain("R reset all");
     for (const key of ["j", "g", "r", "e"]) await setup.key(key);
     await setup.clickRow(BETA);
     setup.expectSelected("cache-alpha");
@@ -366,7 +366,7 @@ test("General shows only Cache data, selectable and copyable even when its path 
     expect(header.fg).toEqual(RGBA.fromHex(setup.theme.theme().accent));
     expect(setup.frame()).toContain("General");
     expect(setup.frame()).toContain("enter copy");
-    expect(setup.frame()).toContain("shift+r reset all");
+    expect(setup.frame()).toContain("R reset all");
     expect(setup.frame()).not.toContain("e evict");
     expect(setup.frame()).not.toMatch(/(?:^|\s)r reset(?:\s|$)/);
     expect(nodes.filter(node => node.id.startsWith("cache-file-") && !node.id.endsWith("-path"))).toHaveLength(1);
@@ -569,7 +569,7 @@ test("actual groups sort alphabetically, ungrouped last; app names break access 
   }
 });
 
-test("shift+r confirms repository count, cancels safely, survives resize, and resets without deleting data", async () => {
+test("R (shift+r) confirms repository count, cancels safely, survives resize, and resets without deleting data", async () => {
   const data = await fixture();
   await data.seed(ALPHA, "github-actions", Date.now() - 6000);
   await data.seed(ALPHA, "jenkins", Date.now() - 4000);
@@ -602,10 +602,10 @@ test("shift+r confirms repository count, cancels safely, survives resize, and re
     expect(setup.close).not.toHaveBeenCalled();
     expect(card.height).toBe(10);
     expect(data.contents()).toEqual(contents);
-    await setup.click("shift+r reset all");
+    await setup.click("R reset all");
     await setup.click("esc cancel");
     expect(data.contents()).toEqual(contents);
-    await setup.click("shift+r reset all");
+    await setup.click("R reset all");
     await setup.click("enter confirm", MouseButtons.RIGHT);
     expect(data.contents()).toEqual(contents);
     const started = Date.now();
@@ -627,7 +627,7 @@ test("shift+r confirms repository count, cancels safely, survives resize, and re
     await setup.key("RETURN");
     expect(management.getProviderCacheSummary(data.root).groups).toEqual(after.groups);
     await setup.click("Cache data");
-    await setup.click("shift+r reset all");
+    await setup.click("R reset all");
     await setup.click("enter confirm");
     expect(setup.frame()).not.toContain("enter confirm");
     setup.expectSelected("Cache data");

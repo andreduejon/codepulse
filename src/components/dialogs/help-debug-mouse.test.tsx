@@ -55,7 +55,7 @@ test("Help tabs hover and click. Help and Debug support wheel and clickable clos
       .slice(themeStart + 1, themeEnd)
       .filter(row => row.kind === "binding")
       .map(row => row.key);
-    expect(themeKeys).toEqual(["↑/↓", "shift + ↑/↓", "enter", "esc", "d", "PgUp/PgDn"]);
+    expect(themeKeys).toEqual(["↑/↓", "shift ↑/↓", "enter", "esc", "d", "PgUp/PgDn"]);
     const header = lines().find(line => line.includes("esc close"));
     expect(header).toContain("Help");
     expect(header).not.toContain("codepulse");

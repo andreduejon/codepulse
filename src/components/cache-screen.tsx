@@ -480,7 +480,7 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
                     <KeyHintSeparator />
                   </Show>
                   <KeyHint
-                    key="shift+r"
+                    key="R"
                     desc=" reset all"
                     onClick={requestResetAll}
                     disabled={busy() || repositories().length === 0}

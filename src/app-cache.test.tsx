@@ -126,7 +126,7 @@ test(":cache groups apps, resets and evicts only selected repository, then resto
     await setup.mockInput.typeText("cache");
     setup.mockInput.pressKey("RETURN");
     await setup.flush();
-    expect(setup.captureCharFrame()).toContain("shift+r");
+    expect(setup.captureCharFrame()).toContain("R");
     expect(setup.captureCharFrame()).toContain("other-cache");
     expect(app.state.keyboardScopeOverride()).toBe("cache");
     setup.mockInput.pressKey("g");
@@ -151,7 +151,7 @@ test(":cache groups apps, resets and evicts only selected repository, then resto
     setup.mockInput.pressKey("ESCAPE");
     await setup.flush();
     expect(app.state.searchQuery()).toBe(original.search);
-    expect(setup.captureCharFrame()).toContain("shift+r");
+    expect(setup.captureCharFrame()).toContain("R");
     expect(resetTimer).not.toHaveBeenCalled();
     setup.resize(110, 40);
     await setup.flush();
@@ -199,7 +199,7 @@ test(":cache groups apps, resets and evicts only selected repository, then resto
     expect(realSummary(root).groups.map(group => group.repoPath)).toEqual([other]);
     setup.mockInput.pressKey("ESCAPE");
     await setup.flush();
-    expect(setup.captureCharFrame()).not.toContain("shift+r");
+    expect(setup.captureCharFrame()).not.toContain("R");
     expect(app.state.keyboardScopeOverride()).toBeNull();
     expect({
       path: app.state.repoPath(),

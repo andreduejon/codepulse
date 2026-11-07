@@ -44,7 +44,7 @@ Closing it returns to the previous repository view and resumes normal work.
 |-----|--------|
 | `↑` / `↓`, `j` / `k` | Select an app |
 | `r` | Reset selected repository's inactivity timer, across all providers |
-| `shift+r` | Reset all repository timers, with confirmation |
+| `R` (shift+r) | Reset all repository timers, with confirmation |
 | `e` | Evict selected repository across all providers, with confirmation |
 | `Enter` | Copy selected file path or confirm pending action |
 | `Esc` | Cancel confirmation, otherwise return to repository view |
@@ -81,7 +81,7 @@ snapshots sooner.
 
 Timer resets set eligibility to 90 days from now, without modifying actual
 last-access dates. `r` applies to the whole selected repository, not only the
-selected provider. `shift+r` applies to all cached repositories.
+selected provider. `R` (shift+r) applies to all cached repositories.
 
 Repository identity uses the existing hash of its canonical folder path.
 Symlink aliases share a cache. Moving or renaming a repository starts a cold
