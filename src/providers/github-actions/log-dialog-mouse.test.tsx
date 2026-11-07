@@ -170,7 +170,7 @@ for (const provider of ["github-actions", "jenkins"] as const) {
       };
       await boundary("prev", "ARROW_LEFT", "h");
       await d.click("→ next");
-      expect(d.frame()).toContain("No log output available.");
+      expect(d.frame()).toContain("No log output.");
       await d.key("h");
       expect(d.frame()).toContain("fetching log...");
       expect(d.fetchLog.mock.calls.map(([job]) => job.id)).toEqual([1, 2]);
@@ -209,9 +209,10 @@ for (const provider of ["github-actions", "jenkins"] as const) {
       await d.key("o");
       expect(d.openUrl).toHaveBeenCalledTimes(2);
       await d.key("l");
-      expect(d.frame()).toContain("No log output available.");
+      expect(d.frame()).toContain("No log output.");
       await d.key("ARROW_RIGHT");
-      expect(d.frame()).toContain("Failed to load log.");
+      expect(d.frame()).toContain("Failed to load log");
+      expect(d.frame()).toContain("fake failure");
       await boundary("next", "ARROW_RIGHT", "l");
       await d.click("← prev");
       await d.key("ARROW_LEFT");
@@ -295,6 +296,34 @@ test("with wrap on, G and repeated down reach the last wrapped row", async () =>
     expect(d.frame()).not.toContain("END-40");
     for (let i = 0; i < 20; i++) await d.key("ARROW_DOWN", { shift: true });
     expect(d.frame()).toContain("END-40");
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("r fetches the current log again, retrying a failure, and warnings use the warning colour", async () => {
+  const d = await renderLog("github-actions");
+  try {
+    await d.key("l");
+    await d.key("l");
+    expect(d.frame()).toContain("fake failure");
+    const calls = d.fetchLog.mock.calls.length;
+    await d.key("r");
+    expect(d.fetchLog.mock.calls.length).toBe(calls + 1);
+    expect(d.frame()).toContain("fake failure");
+    await d.click("r refresh");
+    expect(d.fetchLog.mock.calls.length).toBe(calls + 2);
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("warning lines use the theme's warning colour, not the provider accent", async () => {
+  const d = await renderLog("github-actions");
+  try {
+    d.resolve();
+    await d.flush();
+    expect(d.cell("warning-line")?.fg).toEqual(RGBA.fromHex(d.theme.warning));
   } finally {
     await d.dispose();
   }

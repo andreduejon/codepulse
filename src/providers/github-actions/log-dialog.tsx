@@ -10,11 +10,10 @@ import {
   DialogTitleBar,
   getStandardDialogFrame,
 } from "../../components/dialogs/dialog-chrome";
+import { handleLogScrollKey, type LogViewState, LogViewStatus } from "../../components/dialogs/log-view";
 import { getDialogTitleContentWidth, middleTruncate, TITLE_SEP } from "../../components/dialogs/title-utils";
 import { KeyHint, KeyHintSeparator } from "../../components/key-hint";
-import MessageBox from "../../components/message-box";
 import { useTheme } from "../../context/theme";
-import { useT } from "../../hooks/use-t";
 import { BUSY } from "../../utils/busy-text";
 import { openUrl } from "../../utils/open-url";
 import { stripTerminalControls } from "../../utils/terminal-text";
@@ -43,7 +42,6 @@ interface JobLogDialogProps {
   onClose: () => void;
 }
 
-const SCROLL_JUMP = 10;
 const VIEW_MODE_CYCLE: LogViewMode[] = ["all", "issues", "errors", "raw"];
 const VIEW_MODE_TITLE_LABEL: Record<LogViewMode, string> = {
   all: "",
@@ -83,7 +81,6 @@ export function parseLogLines(raw: string): LogLine[] {
 }
 
 export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
-  const t = useT();
   const renderer = useRenderer();
   const { theme } = useTheme();
   const dimensions = useTerminalDimensions();
@@ -139,14 +136,33 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
     setLoadedLog(job.id, { raw: null, loading: true, error: null });
     props
       .fetchLog(job)
-      .then(text => {
+      // An empty log is a successful, neutral result; only a failed request is an error (with its reason).
+      .then(text => setLoadedLog(job.id, { raw: text, loading: false, error: null }))
+      .catch(error =>
         setLoadedLog(job.id, {
-          raw: text || null,
+          raw: null,
           loading: false,
-          error: text ? null : "No log output available.",
-        });
-      })
-      .catch(() => setLoadedLog(job.id, { raw: null, loading: false, error: "Failed to load log." }));
+          error: error instanceof Error && error.message ? error.message : String(error),
+        }),
+      );
+  };
+  /** `r`: fetch the current job's log again (newer output of a running job, or a retry after a failure). */
+  const refreshLog = () => {
+    const key = String(currentJob().id);
+    if (logs().get(key)?.loading) return;
+    setLogs(prev => {
+      const next = new Map(prev);
+      next.delete(key);
+      return next;
+    });
+  };
+  const viewState = (): LogViewState | null => {
+    const loaded = currentLoadedLog();
+    if (loaded.loading) return { kind: "loading", text: BUSY.fetchingLog };
+    if (loaded.error) return { kind: "error", title: "Failed to load log", message: loaded.error };
+    if (!loaded.raw?.trim()) return { kind: "empty", text: "No log output." };
+    if (filteredLines().length === 0) return { kind: "empty", text: "No log lines in this view." };
+    return null;
   };
 
   createEffect(() => {
@@ -183,9 +199,6 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
 
   const maxLineNoWidth = createMemo(() => Math.max(1, ...filteredLines().map(line => line.lineNo.toString().length)));
 
-  // Scroll by rendered rows and let the scrollbox clamp: wrapped lines take several rows each.
-  const scroll = (delta: number) => scrollboxRef?.scrollBy(delta, "absolute");
-
   createEffect(() => {
     currentJob().id;
     viewMode();
@@ -206,6 +219,10 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
 
   useKeyboard(e => {
     if (e.eventType === "release") return;
+    if (handleLogScrollKey(e, scrollboxRef, dialogHeight() - 6)) {
+      e.preventDefault();
+      return;
+    }
     switch (e.name) {
       case "q":
         e.preventDefault();
@@ -225,23 +242,9 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
         e.preventDefault();
         navigateJob(1);
         break;
-      case "up":
-      case "k":
+      case "r":
         e.preventDefault();
-        scroll(e.shift ? -SCROLL_JUMP : -1);
-        break;
-      case "down":
-      case "j":
-        e.preventDefault();
-        scroll(e.shift ? SCROLL_JUMP : 1);
-        break;
-      case " ":
-        e.preventDefault();
-        scroll(Math.floor((dialogHeight() - 6) / 2));
-        break;
-      case "g":
-        e.preventDefault();
-        scrollboxRef?.scrollTo(e.shift ? Infinity : 0);
+        refreshLog();
         break;
       case "c":
         e.preventDefault();
@@ -311,7 +314,7 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
       return (
         <box flexDirection="row" width="100%">
           <text flexShrink={0} wrapMode="none" fg={th.foregroundMuted}>{`${lineNo}  `}</text>
-          <text wrapMode={contentWrapMode()} fg={th.accent}>
+          <text wrapMode={contentWrapMode()} fg={th.warning}>
             {line.text}
           </text>
         </box>
@@ -348,29 +351,10 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
           scrollX={false}
           verticalScrollbarOptions={{ visible: false }}
         >
-          <box flexDirection="column" width="100%" paddingX={4}>
-            <Show when={currentLoadedLog().loading}>
-              <box flexGrow={1} alignItems="center" justifyContent="center" paddingY={2}>
-                <text fg={t().foregroundMuted}>{BUSY.fetchingLog}</text>
-              </box>
-            </Show>
-            <Show when={!currentLoadedLog().loading && currentLoadedLog().error}>
-              <box paddingY={2}>
-                <MessageBox
-                  kind="error"
-                  title="Failed to load log"
-                  message={currentLoadedLog().error ?? "Unknown error"}
-                  variant="dialog"
-                />
-              </box>
-            </Show>
-            <Show when={!currentLoadedLog().loading && !currentLoadedLog().error && filteredLines().length === 0}>
-              <box flexGrow={1} alignItems="center" justifyContent="center" paddingY={2}>
-                <text fg={t().foregroundMuted}>No log lines in this view</text>
-              </box>
-            </Show>
-            <Show when={!currentLoadedLog().loading && !currentLoadedLog().error && filteredLines().length > 0}>
-              <For each={filteredLines()}>{line => renderLine(line)}</For>
+          {/* An error box brings its own frame and inset, so it skips the text inset (like the diff dialog). */}
+          <box flexDirection="column" width="100%" paddingX={viewState()?.kind === "error" ? 0 : 4}>
+            <Show when={viewState()} fallback={<For each={filteredLines()}>{line => renderLine(line)}</For>}>
+              {state => <LogViewStatus state={state()} />}
             </Show>
           </box>
         </scrollbox>
@@ -389,13 +373,15 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
           </Show>
           <KeyHint key={"↑/↓"} desc=" scroll" />
           <KeyHintSeparator />
-          <Show when={props.run.url}>
-            <KeyHint key="o" desc=" open" onClick={openRun} />
-            <KeyHintSeparator />
-          </Show>
           <KeyHint key="c" desc=" view" onClick={cycleViewMode} />
           <KeyHintSeparator />
           <KeyHint key="w" desc={wrapEnabled() ? " nowrap" : " wrap"} onClick={toggleWrap} />
+          <KeyHintSeparator />
+          <KeyHint key="r" desc=" refresh" onClick={refreshLog} />
+          <Show when={props.run.url}>
+            <KeyHintSeparator />
+            <KeyHint key="o" desc=" open" onClick={openRun} />
+          </Show>
         </DialogFooter>
       </box>
     </DialogOverlay>

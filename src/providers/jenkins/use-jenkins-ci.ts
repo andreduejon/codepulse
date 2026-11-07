@@ -354,7 +354,7 @@ export function useJenkinsCI(opts: {
         }
       }
       const token = getJenkinsToken(config.tokenEnvVar);
-      if (!token) return "";
+      if (!token) throw new Error(BANNER.jenkins.missingToken(config.tokenEnvVar));
       const log = await lifecycle.runRequest(
         signal => fetchJenkinsConsoleLog(run, config.username, token, signal),
         signal,

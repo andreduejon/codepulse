@@ -858,3 +858,32 @@ describe("mapStatus", () => {
     expect(mapStatus({ building: true, result: null })).toEqual({ status: "running", conclusion: null });
   });
 });
+
+describe("fetchJenkinsConsoleLog failures", () => {
+  const run = {
+    id: "1",
+    name: "app",
+    status: "completed",
+    conclusion: "success",
+    headSha: "a".repeat(40),
+    runNumber: 1,
+    startedAt: null,
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    url: "https://jenkins.example.com/job/app/1/",
+    jobLabel: "app",
+    jobUrl: "https://jenkins.example.com/job/app",
+  };
+  test("a failed request throws its reason instead of looking like an empty log", async () => {
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = (async () => new Response("nope", { status: 401 })) as unknown as typeof fetch;
+      await expect(fetchJenkinsConsoleLog(run, "user", "token")).rejects.toThrow(BANNER.jenkins.tokenExpired);
+      globalThis.fetch = (async () => new Response("boom", { status: 500 })) as unknown as typeof fetch;
+      await expect(fetchJenkinsConsoleLog(run, "user", "token")).rejects.toThrow(BANNER.jenkins.logFailed);
+      globalThis.fetch = (async () => new Response("", { status: 200 })) as unknown as typeof fetch;
+      expect(await fetchJenkinsConsoleLog(run, "user", "token")).toBe("");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});

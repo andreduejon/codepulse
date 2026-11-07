@@ -707,14 +707,16 @@ export async function fetchJenkinsConsoleLog(
   signal?: AbortSignal,
 ): Promise<string> {
   const url = `${normalizeJenkinsJobUrl(onOrigin(run.url, run.jobUrl))}/consoleText`;
-  if (!isSafeJenkinsRequestUrl(url)) return "";
+  // A failed request throws its banner so the log dialog can say why; "" is a build without output.
+  if (!isSafeJenkinsRequestUrl(url)) throw new Error(BANNER.jenkins.invalidJobUrl);
   const res = await fetchWithRetry(url, {
     headers: authHeaders(username, token),
     signal,
   });
+  if (res.status === 401) throw new Error(BANNER.jenkins.tokenExpired);
   if (!res.ok) {
     debugError("Jenkins", `${res.status} ${res.statusText} ${url}`);
-    return "";
+    throw new Error(BANNER.jenkins.logFailed);
   }
   return res.text();
 }

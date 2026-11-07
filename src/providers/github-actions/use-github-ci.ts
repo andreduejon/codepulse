@@ -488,7 +488,8 @@ export function useGitHubCI(opts: {
       }
       const repo = cachedGitHubRepo();
       const token = getGitHubToken(config.tokenEnvVar);
-      if (!repo || !token) return "";
+      if (!repo || !token)
+        throw new Error(token ? BANNER.github.noRemote : BANNER.github.missingToken(config.tokenEnvVar));
       const log = await lifecycle.runRequest(signal => fetchJobLog(repo, token, jobId, signal), signal);
       if (!lifecycle.isCurrent(epoch, repoPath)) return "";
       if (isTerminalGitHubRun(run) && log && lifecycle.isCurrent(epoch, repoPath))

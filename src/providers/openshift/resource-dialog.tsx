@@ -1,6 +1,6 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
-import { createEffect, createMemo, createSignal, For, onCleanup } from "solid-js";
+import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import {
   DialogFooter,
   DialogOverlay,
@@ -8,6 +8,7 @@ import {
   DialogTitleBar,
   getStandardDialogFrame,
 } from "../../components/dialogs/dialog-chrome";
+import { handleLogScrollKey, type LogViewState, LogViewStatus } from "../../components/dialogs/log-view";
 import { getDialogTitleContentWidth, middleTruncate, TITLE_SEP } from "../../components/dialogs/title-utils";
 import { KeyHint, KeyHintSeparator } from "../../components/key-hint";
 import { useT } from "../../hooks/use-t";
@@ -24,7 +25,6 @@ interface OpenShiftResourceDialogProps {
   loadObject?: (resource: OpenShiftResource) => Promise<unknown>;
 }
 
-const SCROLL_JUMP = 10;
 type ViewMode = "log" | "json";
 
 function resourceHasLog(resource: OpenShiftResource): boolean {
@@ -119,16 +119,23 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
     queueMicrotask(() => scrollboxRef?.scrollTo(Infinity));
   });
 
-  const lines = createMemo(() => {
+  const lines = createMemo(() =>
+    viewMode() === "log" ? stripTerminalControls(logText() ?? "").split("\n") : (objectText() ?? "").split("\n"),
+  );
+  /** Loading, failed or empty: shown instead of numbered lines, the same way as the CI log dialog. */
+  const viewState = (): LogViewState | null => {
     if (viewMode() === "log") {
-      if (logLoading()) return [BUSY.fetchingLog];
-      if (logError()) return [logError() ?? ""];
-      return stripTerminalControls(logText() ?? "").split("\n");
+      if (logLoading()) return { kind: "loading", text: BUSY.fetchingLog };
+      const error = logError();
+      if (error) return { kind: "error", title: "Failed to load log", message: error };
+      if (!logText()?.trim()) return { kind: "empty", text: "No log output." };
+      return null;
     }
-    if (objectLoading()) return [BUSY.fetchingObject];
-    if (objectError()) return [objectError() ?? ""];
-    return (objectText() ?? "").split("\n");
-  });
+    if (objectLoading()) return { kind: "loading", text: BUSY.fetchingObject };
+    const error = objectError();
+    if (error) return { kind: "error", title: "Failed to load object", message: error };
+    return null;
+  };
   const lineNoWidth = createMemo(() => lines().length.toString().length);
   const title = createMemo(() => {
     const mode = viewMode() === "log" ? (followEnded() ? "log ended" : "log") : "object";
@@ -160,21 +167,16 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
 
   useKeyboard(e => {
     if (e.eventType === "release") return;
+    if (handleLogScrollKey(e, scrollboxRef, dialogFrame().height - 6)) {
+      e.preventDefault();
+      return;
+    }
     if (e.name === "q") {
       e.preventDefault();
       renderer.destroy();
     } else if (e.name === "escape") {
       e.preventDefault();
       props.onClose();
-    } else if (e.name === "up" || e.name === "k") {
-      e.preventDefault();
-      scrollboxRef?.scrollBy(e.shift ? -SCROLL_JUMP : -1, "absolute");
-    } else if (e.name === "down" || e.name === "j") {
-      e.preventDefault();
-      scrollboxRef?.scrollBy(e.shift ? SCROLL_JUMP : 1, "absolute");
-    } else if (e.name === "g") {
-      e.preventDefault();
-      scrollboxRef?.scrollTo(e.shift ? Infinity : 0);
     } else if (e.name === "w") {
       e.preventDefault();
       toggleWrap();
@@ -209,34 +211,43 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
           stickyStart={viewMode() === "log" ? "bottom" : undefined}
           verticalScrollbarOptions={{ visible: false }}
         >
-          <box flexDirection="column" width="100%" paddingX={4}>
-            <For each={lines()}>
-              {(line, index) => (
-                <box flexDirection="row" width="100%">
-                  <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                    {`${String(index() + 1).padStart(lineNoWidth())}  `}
-                  </text>
-                  <text
-                    wrapMode={wrapEnabled() ? "word" : "none"}
-                    fg={(viewMode() === "log" ? logError() : objectError()) ? t().error : t().foreground}
-                  >
-                    {line}
-                  </text>
-                </box>
-              )}
-            </For>
+          <box flexDirection="column" width="100%" paddingX={viewState()?.kind === "error" ? 0 : 4}>
+            <Show
+              when={viewState()}
+              fallback={
+                <For each={lines()}>
+                  {(line, index) => (
+                    <box flexDirection="row" width="100%">
+                      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                        {`${String(index() + 1).padStart(lineNoWidth())}  `}
+                      </text>
+                      <text wrapMode={wrapEnabled() ? "word" : "none"} fg={t().foreground}>
+                        {line}
+                      </text>
+                    </box>
+                  )}
+                </For>
+              }
+            >
+              {state => <LogViewStatus state={state()} />}
+            </Show>
           </box>
         </scrollbox>
         <DialogFooter>
+          {/* Same words and order as the CI log dialog: scroll · view · wrap · refresh. */}
           <KeyHint key="↑/↓" desc=" scroll" />
-          <KeyHintSeparator />
-          <KeyHint key="w" desc={wrapEnabled() ? " disable wrap" : " enable wrap"} onClick={toggleWrap} />
           {canLog() ? (
             <>
               <KeyHintSeparator />
-              <KeyHint key="c" desc=" cycle view mode" disabled={!canLog()} onClick={cycleViewMode} />
+              <KeyHint key="c" desc=" view" onClick={cycleViewMode} />
+            </>
+          ) : null}
+          <KeyHintSeparator />
+          <KeyHint key="w" desc={wrapEnabled() ? " nowrap" : " wrap"} onClick={toggleWrap} />
+          {canLog() ? (
+            <>
               <KeyHintSeparator />
-              <KeyHint key="r" desc=" refresh log" disabled={!canLog()} onClick={refreshLog} />
+              <KeyHint key="r" desc=" refresh" onClick={refreshLog} />
             </>
           ) : null}
         </DialogFooter>

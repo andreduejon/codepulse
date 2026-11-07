@@ -4,6 +4,7 @@ import { MouseButtons } from "@opentui/core/testing";
 import { testRender } from "@opentui/solid";
 import { createSignal, Show } from "solid-js";
 import { createThemeState, ThemeContext } from "../../context/theme";
+import { BANNER } from "../../debug/banner";
 import OpenShiftResourceDialog from "./resource-dialog";
 import type { OpenShiftResource } from "./types";
 
@@ -119,11 +120,11 @@ for (const kind of ["Pod", "Build"] as const) {
       const hints = descendants(d.renderer.root).filter(
         node =>
           node instanceof TextRenderable &&
-          (/wrap|cycle view mode|refresh log|esc close|scroll/.test(node.plainText) || node.plainText === " · "),
+          (/wrap|view|refresh|esc close|scroll/.test(node.plainText) || node.plainText === " · "),
       ) as TextRenderable[];
       expect(hints.length).toBeGreaterThanOrEqual(5);
       expect(hints.filter(node => node.selectable).map(node => node.plainText)).toEqual([]);
-      for (const label of ["enable wrap", "cycle view mode", "refresh log", "close"]) {
+      for (const label of ["w wrap", "c view", "r refresh", "close"]) {
         await d.move();
         const bg = d.cell(label)?.bg;
         const before = d.frame();
@@ -139,24 +140,24 @@ for (const kind of ["Pod", "Build"] as const) {
       expect(d.close).not.toHaveBeenCalled();
       expect(d.loadLog).toHaveBeenCalledTimes(1);
       expect(d.loadObject).not.toHaveBeenCalled();
-      await d.click("enable wrap");
+      await d.click("w wrap");
       expect(d.frame()).toContain("WRAP-END");
-      expect(d.frame()).toContain("disable wrap");
+      expect(d.frame()).toContain("w nowrap");
       await d.key("w");
       expect(d.frame()).not.toContain("WRAP-END");
-      await d.click("refresh log");
+      await d.click("r refresh");
       await d.key("r");
       expect(d.loadLog.mock.calls).toEqual([
         [d.resource, false],
         [d.resource, true],
         [d.resource, true],
       ]);
-      await d.click("cycle view mode");
+      await d.click("c view");
       expect(d.frame()).toContain("fake-object");
       expect(d.scrollbox().stickyScroll).toBe(false);
       expect(d.loadObject.mock.calls).toEqual([[d.resource]]);
       // Existing snapshot refresh in object view reloads the log, not the object.
-      await d.click("refresh log");
+      await d.click("r refresh");
       await d.key("r");
       expect(d.loadObject).toHaveBeenCalledTimes(1);
       expect(d.loadLog.mock.calls.slice(-2)).toEqual([
@@ -189,8 +190,8 @@ test("non-log resources and missing log loader expose no log controls", async ()
   ] as const) {
     const d = await renderResource(kind, false, hasLoader);
     try {
-      expect(d.frame()).not.toContain("cycle view mode");
-      expect(d.frame()).not.toContain("refresh log");
+      expect(d.frame()).not.toContain("c view");
+      expect(d.frame()).not.toContain("r refresh");
       const before = d.frame();
       await d.key("c");
       await d.key("r");
@@ -201,8 +202,8 @@ test("non-log resources and missing log loader expose no log controls", async ()
         expect(d.frame()).toContain("fake-object");
         expect(d.loadObject.mock.calls).toEqual([[d.resource]]);
       }
-      await d.click("enable wrap");
-      expect(d.frame()).toContain("disable wrap");
+      await d.click("w wrap");
+      expect(d.frame()).toContain("w nowrap");
       await d.click("esc close");
       expect(d.open()).toBe(false);
     } finally {
@@ -220,9 +221,9 @@ for (const kind of ["Pod", "Build"] as const) {
       d.streams[0].emit("live-output");
       await d.flush();
       expect(d.frame()).toContain("live-output");
-      await d.click("refresh log", MouseButtons.RIGHT);
+      await d.click("r refresh", MouseButtons.RIGHT);
       expect(d.streams[0].signal.aborted).toBe(false);
-      await d.click("refresh log");
+      await d.click("r refresh");
       expect(d.streams[0].signal.aborted).toBe(true);
       expect(d.followLog).toHaveBeenCalledTimes(2);
       d.streams[0].end();
@@ -232,11 +233,11 @@ for (const kind of ["Pod", "Build"] as const) {
       await d.key("r");
       expect(d.streams[1].signal.aborted).toBe(true);
       expect(d.followLog).toHaveBeenCalledTimes(3);
-      await d.click("cycle view mode");
+      await d.click("c view");
       expect(d.streams[2].signal.aborted).toBe(true);
       expect(d.frame()).toContain("fake-object");
       // Existing follow refresh in object view reruns the object effect.
-      await d.click("refresh log");
+      await d.click("r refresh");
       await d.key("r");
       expect(d.loadObject).toHaveBeenCalledTimes(3);
       expect(d.followLog).toHaveBeenCalledTimes(3);
@@ -247,7 +248,7 @@ for (const kind of ["Pod", "Build"] as const) {
       await d.flush();
       expect(d.frame()).toContain("log ended");
       expect(d.loadLog.mock.calls).toEqual(kind === "Build" ? [[d.resource, false]] : []);
-      await d.click("refresh log");
+      await d.click("r refresh");
       expect(d.frame()).not.toContain("log ended");
       expect(d.streams[4].signal.aborted).toBe(false);
       await d.click("esc close");
@@ -301,13 +302,32 @@ test("native wheel and keyboard share scroll position and suspend/resume sticky 
     d.streams[0].emit(logRows(130));
     await d.flush();
     expect(d.frame()).toContain("row-130");
-    await d.click("cycle view mode");
+    await d.click("c view");
     expect(sb.stickyScroll).toBe(false);
     await d.key("c");
     d.streams[1].emit(logRows(140));
     await d.flush();
     expect(sb.stickyScroll).toBe(true);
     expect(d.frame()).toContain("row-140");
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("a failed log shows its reason in an error box, and an empty log says so, neither as numbered lines", async () => {
+  const d = await renderResource("Build");
+  try {
+    d.loadLog.mockRejectedValueOnce(new Error(BANNER.openshift.tokenExpired));
+    await d.key("r");
+    await d.flush();
+    expect(d.frame()).toContain("Failed to load log");
+    expect(d.frame()).toContain("OpenShift token expired.");
+    expect(d.frame()).not.toMatch(/\b1 {2}OpenShift token expired/);
+    d.loadLog.mockResolvedValueOnce("");
+    await d.key("r");
+    await d.flush();
+    expect(d.frame()).toContain("No log output.");
+    expect(d.frame()).not.toMatch(/^\s+1 {2}\s*$/m);
   } finally {
     await d.dispose();
   }
