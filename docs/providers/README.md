@@ -64,7 +64,8 @@ Messages go to one of two places:
 - **Banner** over the graph, for problems that stop a provider from working:
   missing setup or token, authentication, timeouts, failed requests, Git errors.
   It shows a bold headline and its source (`Git` or the provider), with any
-  detail in muted lines below.
+  detail in muted lines below. A Snyk scan that fails while another view is open
+  shows here too, after that view's own problems.
 - **Tab notice**, pinned under the detail tabs, for results that work but are
   incomplete: provider warnings (OpenShift watch denied or partial inventory,
   Jenkins branch-job limit) and per-commit gaps (Snyk partial scans, Snyk projects

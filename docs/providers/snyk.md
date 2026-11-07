@@ -24,6 +24,10 @@ Enable Snyk in **Menu → Providers**. Configure concrete local branch names for
   Manual **Scan commit** / **Rescan commit** still run from details.
 - Scans include development dependencies (`--dev`) and run sequentially in
   detached temporary Git worktrees. Current checkout remains unchanged.
+- Scans keep running when you switch to another view; only switching repository or
+  opening `:cache` stops them. The footer shows **Snyk scanning** while they run, in
+  every view. A scan that fails outside the Snyk view shows its error in the
+  banner; close it with `✕` or `:clear`, or open the Snyk view.
 - For Bun, Codepulse needs a local Bun executable. It runs
   `bun install --yarn --frozen-lockfile --ignore-scripts` in the temporary
   project directory, then scans the generated Yarn lockfile. It verifies that
@@ -45,7 +49,12 @@ Each result is a snapshot of that commit against Snyk vulnerability data at disp
 - **No supported project** — Snyk found no supported dependency project. This
   is not a clean result.
 - **Failed scan** — authentication, dependency resolution, repository setup, or
-  Snyk execution failed.
+  Snyk execution failed. When Snyk could not resolve any project, the banner names
+  each manifest with Snyk's reason (**Could not resolve any project**).
+
+Python projects (`requirements.txt`, `Pipfile`, `pyproject.toml`) need their
+packages installed for Snyk to resolve them. Scans run on a clean checkout, so they
+usually fail with Snyk's *Something went wrong getting dependencies*.
 
 A partial scan shows a notice under **Vulnerabilities** naming the projects that
 failed (**Partial scan · N projects failed**). It does not replace an existing
@@ -174,19 +183,26 @@ error in the banner above the command bar.
   managers do. npm's `$name` references take the project's own range for `name`.
   A package is marked when its name matches and, for a version range, its version is
   in range. A parent selector (`express>path-to-regexp`, a nested npm object, or
-  Yarn's `express/path-to-regexp`) marks every matching version of the target. Type `override` in the filter to list them with their paths.
+  Yarn's `express/path-to-regexp`) marks every matching version of the target. A
+  selector's own range (pnpm's `lodash@<4.17.21`) is not checked, so a package that
+  already resolved to the forced version is marked too. Type `override` in the filter
+  to list them with their paths.
   Snapshots scanned before this change need a rescan.
 - **removable** follows **override** when the override could go: every package that
   asks for the target (or the project's own `package.json`, for a direct dependency)
   would, without it, already resolve to a version the override allows, taking the
-  highest published version in that parent's range. Parents' ranges come from the
+  highest published version in that parent's range. Packages that only list the
+  target as a peer dependency accept what the others resolve, so they count only
+  when every parent is a peer. An exact override version
+  (`0.1.12`) counts as allowing only that version, so it stays removable only until a
+  newer version in a parent's range is published. Parents' ranges come from the
   registry through `pnpm view` (or `npm view`, whichever is on PATH, for every
-  package manager), so `.npmrc` registries and
-  credentials apply; answers are cached (a version's dependencies for good, version
-  lists for a day). Exact pins, aliases (`npm:`), `workspace:` ranges, or an
-  unreachable registry keep the override without **removable**. Type `removable` in
-  the filter to list them. On Windows, where pnpm and npm are `.cmd` shims, the check
-  is skipped.
+  package manager), run from the repository root, so its `.npmrc` registries and
+  credentials apply; answers are cached per repository (a version's dependencies for
+  good, version lists for a day). Aliases (`npm:`), `workspace:` and other non-range
+  versions, or an unreachable registry keep the override without **removable**. Type
+  `removable` in the filter to list them. On Windows, where pnpm and npm are `.cmd`
+  shims, the check is skipped.
 - Maven packages pulled in through another dependency carry a muted **managed**
   keyword when the POM's effective `<dependencyManagement>` pins them: its own
   entries, then those of its parents found in the repository (at `relativePath`,
@@ -194,9 +210,14 @@ error in the banner above the command bar.
   `<scope>import</scope>`. `${property}` versions resolve with the POM's own and
   inherited properties and `project.version`; a known version must match the one
   Snyk resolved, while one set outside the repository (a Spring Boot parent, say)
-  marks by name. Direct dependencies are not marked, since their own declaration
-  already decides the version. Parents and BOMs outside the repository are not
-  read, so their pins are not marked. Type `managed` in the filter to list them.
+  marks by name. Only packages that some other dependency pulls in are marked; a
+  package that is only declared directly is not, even when `<dependencyManagement>`
+  supplies its version. A package declared directly and also pulled in by another
+  dependency is marked, since the marker belongs to the package, not to one path.
+  Parents and BOMs outside the repository are not
+  read, so their pins are not marked: **managed** shows the pins your repository
+  declares, not everything a platform BOM (Spring Boot, Quarkus) manages, which is
+  often most of the tree. Type `managed` in the filter to list them.
 - Type `pinned` in the filter to list **override** and **managed** packages
   together; the rows keep their own keyword.
 - Filter hits are highlighted in the package name in the Snyk colour (both tabs
@@ -226,7 +247,7 @@ version such as `lodash@4.17` matches nothing; anything else is a substring.
 Vulnerabilities match substrings in package/version, title, CVE, Snyk ID, fix tag
 (`upgrade`, `override`, `no fix`), exploit maturity (e.g. `mature`), manifest path,
 and the direct dependency it comes through; Dependencies match package names and
-the `override` keyword, and
+the `override`, `managed`, `removable` and `pinned` keywords, and
 matching paths expand through collapsed/repeated nodes. Filtering affects detail trees, not the Git
 commit graph. No-match results retain failed/skipped-project coverage warnings.
 **Copy scan as JSON** (below the scan action, when the scan has findings) copies the
@@ -253,12 +274,14 @@ Closing any node closes everything below it: reopening shows its children closed
 
 Vulnerabilities use compact sections after one blank line: a bold `▾ HIGH` header
 per severity with its count right-aligned (`12`, or `3/12` while filtering), and
-one entry per vulnerability, manifest and package underneath. Each entry row
-shows the CVE (or Snyk ID without a CVE) and, right-aligned, a red `!` for a mature
+one entry per Snyk advisory, manifest and package underneath. Each entry row
+shows the CVE (several, comma-separated, when one advisory covers more than one; the
+Snyk ID without a CVE) and, right-aligned, a red `!` for a mature
 exploit, the CVSS base score in its severity color, and a fix dot colored like CI status:
 green when bumping a dependency you declare fixes it, yellow when only the
 transitive package has a fix (override), muted when no fix exists. Graph C/H/M/L
-chips count the same unit as the tab: one per vulnerability, manifest and package. A legend
+chips count the same unit as the tab: one per Snyk advisory, manifest and package, so
+they can be lower than a per-CVE count. A legend
 (`● upgrade ● override ● no fix ! mature exploit`) stays pinned below the scrolling
 list, one blank row above it, while the Vulnerabilities tab shows findings. The score is CVSS base
 severity (shown in the severity color); exploit maturity is separate and not part
@@ -320,6 +343,12 @@ Snyk stores normalized
 snapshots only, not log artifacts. Tokens and raw Snyk output are not stored.
 Old snapshots without development-dependency and graph-coverage metadata are
 discarded and rescanned; there is no cache migration.
+
+The **removable** check also keeps registry answers (published version lists and
+each version's dependency ranges) in its own table of the same database, per
+repository and capped at 20,000 entries. They are not snapshots: the Cache screen
+neither counts nor evicts them. Deleting `cache.sqlite` while Codepulse is closed
+clears them with everything else.
 
 ## Security
 
