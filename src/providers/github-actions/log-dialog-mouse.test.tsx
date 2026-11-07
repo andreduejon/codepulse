@@ -10,7 +10,7 @@ import JobLogDialog from "./log-dialog";
 const descendants = (node: Renderable): Renderable[] =>
   node.getChildren().flatMap(child => [child, ...descendants(child)]);
 
-async function renderLog(provider: "github-actions" | "jenkins", long = false) {
+async function renderLog(provider: "github-actions" | "jenkins", long: boolean | "wrapped" = false) {
   const jobs = [
     { id: 1, name: "first-job" },
     { id: 2, name: "empty-job" },
@@ -18,11 +18,14 @@ async function renderLog(provider: "github-actions" | "jenkins", long = false) {
   ];
   let resolveLog!: (text: string) => void;
   const pending = new Promise<string>(resolve => (resolveLog = resolve));
-  const raw = long
-    ? Array.from({ length: 200 }, (_, i) => `row-${String(i + 1).padStart(3, "0")}`).join("\n")
-    : [`normal ${"x".repeat(100)} WRAP-END`, "##[warning]warning-line", "##[error]error-line", "##[endgroup]"].join(
-        "\n",
-      );
+  const raw =
+    long === "wrapped"
+      ? Array.from({ length: 40 }, (_, i) => `line-${i + 1} ${"word ".repeat(40)}END-${i + 1}`).join("\n")
+      : long
+        ? Array.from({ length: 200 }, (_, i) => `row-${String(i + 1).padStart(3, "0")}`).join("\n")
+        : [`normal ${"x".repeat(100)} WRAP-END`, "##[warning]warning-line", "##[error]error-line", "##[endgroup]"].join(
+            "\n",
+          );
   const fetchLog = mock(async (job: { id: string | number; name: string }) => {
     if (job.id === 1) return long ? raw : pending;
     if (job.id === 2) return "";
@@ -277,6 +280,21 @@ test("native wheel and keyboard use the same scroll position, including jumps an
     expect(sb.scrollTop).toBe(0);
     expect(d.frame()).toContain("row-001");
     expect(d.fetchLog.mock.calls.map(([job]) => job.id)).toEqual([1, 2]);
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("with wrap on, G and repeated down reach the last wrapped row", async () => {
+  const d = await renderLog("github-actions", "wrapped");
+  try {
+    await d.key("w");
+    await d.key("g", { shift: true });
+    expect(d.frame()).toContain("END-40");
+    await d.key("g");
+    expect(d.frame()).not.toContain("END-40");
+    for (let i = 0; i < 20; i++) await d.key("ARROW_DOWN", { shift: true });
+    expect(d.frame()).toContain("END-40");
   } finally {
     await d.dispose();
   }

@@ -182,11 +182,8 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
 
   const maxLineNoWidth = createMemo(() => Math.max(1, ...filteredLines().map(line => line.lineNo.toString().length)));
 
-  const clampedScroll = (next: number) => {
-    const max = Math.max(0, filteredLines().length - 1);
-    return Math.max(0, Math.min(next, max));
-  };
-  const scroll = (delta: number) => scrollboxRef?.scrollTo(clampedScroll(scrollboxRef.scrollTop + delta));
+  // Scroll by rendered rows and let the scrollbox clamp: wrapped lines take several rows each.
+  const scroll = (delta: number) => scrollboxRef?.scrollBy(delta, "absolute");
 
   createEffect(() => {
     currentJob().id;
@@ -243,7 +240,7 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
         break;
       case "g":
         e.preventDefault();
-        scrollboxRef?.scrollTo(e.shift ? clampedScroll(filteredLines().length) : 0);
+        scrollboxRef?.scrollTo(e.shift ? Infinity : 0);
         break;
       case "c":
         e.preventDefault();
