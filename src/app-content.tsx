@@ -767,7 +767,6 @@ export function AppContent(props: Readonly<AppContentProps>) {
                         onLoadMore={loadMoreData}
                         snykGetCommitData={snyk.getCommitData}
                         snykIsScanning={snyk.isScanning}
-                        openshiftIsLoading={openShift.isLoading}
                         scrollboxRef={el => (graphScrollboxRef = el)}
                         suppressAutoScroll={() => pendingGraphScrollTop() != null}
                       />

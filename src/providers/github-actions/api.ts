@@ -291,6 +291,7 @@ export function aggregateRunsToGraphBadge(sha: string, runs: GitHubWorkflowRun[]
     passCount,
     failCount,
     runningCount,
+    unknownCount,
     latestRunAt: latestRun?.updatedAt ?? "",
     latestStatus,
   };

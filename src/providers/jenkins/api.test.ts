@@ -229,6 +229,15 @@ describe("buildJenkinsGraphBadges", () => {
     expect(badge.passCount).toBe(2);
     expect(badge.failCount).toBe(1);
   });
+  test("cancelled and skipped builds count as neutral, so a cancelled-only commit still shows a chip", () => {
+    const runs = [
+      { ...makeRun("sha1", "1"), conclusion: "cancelled" },
+      { ...makeRun("sha1", "2"), conclusion: "skipped" },
+    ];
+    const badge = buildJenkinsGraphBadges(runs).get("sha1");
+    expect(badge?.unknownCount).toBe(2);
+    expect(badge?.badge).toBe("unknown");
+  });
 });
 
 // ---------------------------------------------------------------------------

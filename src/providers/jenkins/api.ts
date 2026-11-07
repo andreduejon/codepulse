@@ -638,6 +638,7 @@ export function buildJenkinsGraphBadges(runs: JenkinsRun[]): Map<string, GraphBa
     if (category === "running") badge.runningCount++;
     else if (category === "pass") badge.passCount++;
     else if (category === "fail") badge.failCount++;
+    else badge.unknownCount = (badge.unknownCount ?? 0) + 1;
     if (run.updatedAt >= badge.latestRunAt) {
       badge.latestRunAt = run.updatedAt;
       badge.latestStatus = category === "pass" || category === "fail" || category === "running" ? category : "unknown";

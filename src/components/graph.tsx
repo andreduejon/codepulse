@@ -39,6 +39,7 @@ import {
   ActionsCountsColumn,
   ActionsDateColumn,
 } from "../providers/github-actions/graph-columns";
+import { graphColumnWidths } from "../providers/graph-column-widths";
 import {
   lookupOpenShiftBadge,
   OpenShiftColumnHeaders,
@@ -64,6 +65,7 @@ export function ColumnHeader() {
   const { state } = useAppState();
   const leftPanelFocused = () => !state.detailFocused();
   const isProviderView = () => state.activeProviderView() !== "git";
+  const columnWidths = () => graphColumnWidths(state.activeProviderView(), state.graphBadges());
 
   const { graphWidth } = useGraphDimensions(() => state.maxGraphColumns());
 
@@ -110,11 +112,11 @@ export function ColumnHeader() {
         {/* Author / Date columns — swapped for provider headers when in provider view */}
         {isProviderView() ? (
           state.activeProviderView() === "openshift" ? (
-            <OpenShiftColumnHeaders />
+            <OpenShiftColumnHeaders {...columnWidths()} />
           ) : state.activeProviderView() === "snyk" ? (
-            <SnykColumnHeaders />
+            <SnykColumnHeaders {...columnWidths()} />
           ) : (
-            <ActionsColumnHeaders />
+            <ActionsColumnHeaders {...columnWidths()} />
           )
         ) : (
           <>
@@ -194,13 +196,14 @@ function GraphLine(
     brightCommitHorizontals: () => Set<number> | undefined;
     snykGetCommitData?: (sha: string) => SnykScanResult | null;
     snykIsScanning?: (sha: string) => boolean;
-    openshiftIsLoading?: (sha: string) => boolean;
   }>,
 ) {
   const t = useT();
   const { state } = useAppState();
 
   const [hovered, setHovered] = createSignal(false);
+  /** Provider columns grow to fit their widest chips; header, row and subject width share these. */
+  const columnWidths = () => graphColumnWidths(state.activeProviderView(), state.graphBadges());
 
   const commit = () => props.row.commit;
   const padCols = () => state.maxGraphColumns();
@@ -411,8 +414,8 @@ function GraphLine(
       1 + // desc box paddingLeft
       2 + // desc box paddingRight
       refBadgesWidth() +
-      AUTHOR_COL_WIDTH + // author box (width=15, internal paddingRight is inside that 15)
-      DATE_COL_WIDTH; // date box (width=15)
+      columnWidths().first + // author / provider status box (internal paddingRight is inside its width)
+      columnWidths().second; // date / provider time box
     return Math.max(0, graphPanelWidth - fixedCols);
   });
 
@@ -504,22 +507,47 @@ function GraphLine(
               badge={lookupOpenShiftBadge(state.graphBadges(), commit().hash)}
               lane="live"
               active={props.active}
+              dimmed={isDimmed()}
+              width={columnWidths().first}
             />
             <OpenShiftCountsColumn
               badge={lookupOpenShiftBadge(state.graphBadges(), commit().hash)}
               lane="cache"
               active={props.active}
+              dimmed={isDimmed()}
+              width={columnWidths().second}
             />
           </>
         ) : state.activeProviderView() === "snyk" ? (
           <>
-            <SnykCountsColumn scan={props.snykGetCommitData?.(commit().hash) ?? null} active={props.active} />
-            <SnykScanColumn scan={props.snykGetCommitData?.(commit().hash) ?? null} active={props.active} />
+            <SnykCountsColumn
+              scan={props.snykGetCommitData?.(commit().hash) ?? null}
+              active={props.active}
+              dimmed={isDimmed()}
+              width={columnWidths().first}
+            />
+            <SnykScanColumn
+              scan={props.snykGetCommitData?.(commit().hash) ?? null}
+              scanning={!isUncommitted() && (props.snykIsScanning?.(commit().hash) ?? false)}
+              active={props.active}
+              dimmed={isDimmed()}
+              width={columnWidths().second}
+            />
           </>
         ) : state.activeProviderView() !== "git" ? (
           <>
-            <ActionsCountsColumn badge={state.graphBadges().get(commit().hash)} active={props.active} />
-            <ActionsDateColumn badge={state.graphBadges().get(commit().hash)} active={props.active} />
+            <ActionsCountsColumn
+              badge={state.graphBadges().get(commit().hash)}
+              active={props.active}
+              dimmed={isDimmed()}
+              width={columnWidths().first}
+            />
+            <ActionsDateColumn
+              badge={state.graphBadges().get(commit().hash)}
+              active={props.active}
+              dimmed={isDimmed()}
+              width={columnWidths().second}
+            />
           </>
         ) : (
           <>
@@ -648,7 +676,6 @@ export default function GraphView(
     onSelectRow?: (index: number) => void;
     snykGetCommitData?: (sha: string) => SnykScanResult | null;
     snykIsScanning?: (sha: string) => boolean;
-    openshiftIsLoading?: (sha: string) => boolean;
   }>,
 ) {
   const { state, actions } = useAppState();
@@ -841,7 +868,6 @@ export default function GraphView(
                   brightCommitHorizontals={() => brightColumnsByHash()?.commitHorizontal.get(row.commit.hash)}
                   snykGetCommitData={props.snykGetCommitData}
                   snykIsScanning={props.snykIsScanning}
-                  openshiftIsLoading={props.openshiftIsLoading}
                   rowRef={el => {
                     elRef = el;
                     rowRefs[index()] = el;
