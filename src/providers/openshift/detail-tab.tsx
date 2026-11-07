@@ -353,34 +353,41 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
                   </box>
 
                   <Show when={namespaceIsExpanded()}>
-                    <For each={RESOURCE_GROUPS}>
-                      {group => (
-                        <Show when={ns[group.key].length > 0}>
-                          <box flexDirection="row" width="100%">
-                            <text flexShrink={0} wrapMode="none" fg={t().border}>
-                              {childLead()}├─{" "}
-                            </text>
-                            <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
-                              {group.label}
-                            </text>
-                          </box>
-                          <For each={ns[group.key]}>
-                            {(resource, resourceIdx) =>
-                              renderResourceRow(
-                                resource,
-                                `${childLead()}│  `,
-                                resourceIdx() === ns[group.key].length - 1 ? "└─ " : "├─ ",
-                              )
-                            }
-                          </For>
-                        </Show>
-                      )}
+                    {/* Kind groups, then ImageStreams; the last one closes the tree with └─ like CI runs do. */}
+                    <For each={RESOURCE_GROUPS.filter(group => ns[group.key].length > 0)}>
+                      {(group, groupIdx) => {
+                        const groupIsLast = () =>
+                          ns.imageStreamTags.length === 0 &&
+                          groupIdx() === RESOURCE_GROUPS.filter(entry => ns[entry.key].length > 0).length - 1;
+                        return (
+                          <>
+                            <box flexDirection="row" width="100%">
+                              <text flexShrink={0} wrapMode="none" fg={t().border}>
+                                {childLead()}
+                                {groupIsLast() ? "└─ " : "├─ "}
+                              </text>
+                              <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
+                                {group.label}
+                              </text>
+                            </box>
+                            <For each={ns[group.key]}>
+                              {(resource, resourceIdx) =>
+                                renderResourceRow(
+                                  resource,
+                                  `${childLead()}${groupIsLast() ? "   " : "│  "}`,
+                                  resourceIdx() === ns[group.key].length - 1 ? "└─ " : "├─ ",
+                                )
+                              }
+                            </For>
+                          </>
+                        );
+                      }}
                     </For>
 
                     <Show when={ns.imageStreamTags.length > 0}>
                       <box flexDirection="row" width="100%">
                         <text flexShrink={0} wrapMode="none" fg={t().border}>
-                          {childLead()}├─{" "}
+                          {childLead()}└─{" "}
                         </text>
                         <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
                           ImageStreams
@@ -388,14 +395,15 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
                       </box>
                       <For each={groupedImageStreams(ns.imageStreamTags)}>
                         {(stream, streamIdx) => {
-                          const streamLead = () =>
-                            childLead() +
-                            (streamIdx() === groupedImageStreams(ns.imageStreamTags).length - 1 ? "   " : "│  ");
+                          const streamIsLast = () => streamIdx() === groupedImageStreams(ns.imageStreamTags).length - 1;
+                          // ImageStreams is always the last group, so its children hang off blank space.
+                          const streamLead = () => `${childLead()}   `;
                           return (
                             <box flexDirection="column" width="100%">
                               <box flexDirection="row" width="100%">
                                 <text flexShrink={0} wrapMode="none" fg={t().border}>
-                                  {streamLead()}├─{" "}
+                                  {streamLead()}
+                                  {streamIsLast() ? "└─ " : "├─ "}
                                 </text>
                                 <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
                                   {stream.stream}
@@ -405,7 +413,7 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
                                 {(tag, tagIdx) =>
                                   renderResourceRow(
                                     tag,
-                                    `${streamLead()}│  `,
+                                    `${streamLead()}${streamIsLast() ? "   " : "│  "}`,
                                     tagIdx() === stream.tags.length - 1 ? "└─ " : "├─ ",
                                   )
                                 }

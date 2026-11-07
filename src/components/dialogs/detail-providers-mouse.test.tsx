@@ -549,6 +549,21 @@ for (const [provider, label] of [
   });
 }
 
+test("OpenShift tree lines close on the last group and the last stream", async () => {
+  const d = await renderProvider("openshift");
+  try {
+    const rows = d.frame().split("\n");
+    const line = (text: string) => rows.find(row => row.includes(text)) ?? "";
+    expect(line("ImageStreams")).toContain("└─ ImageStreams");
+    expect(line("Pods")).toContain("├─ Pods");
+    // The single stream is last: its header and tags hang off blank space, not a dangling │.
+    expect(line("app")).toMatch(/└─ app/);
+    expect(line("z-tag")).toMatch(/^\s*│? {4,}\s*└─ z-tag/);
+  } finally {
+    await d.dispose();
+  }
+});
+
 test("Snyk severity/finding/scan actions ignore empty severities and loading scans", async () => {
   const d = await renderProvider("snyk");
   try {
