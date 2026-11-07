@@ -622,3 +622,24 @@ test("menu native wheel scrolls without selecting or activating; keyboard naviga
     await m.dispose();
   }
 });
+
+test("typing q into a menu field edits it instead of quitting; q quits again once editing ends", async () => {
+  const m = await renderMenu();
+  const destroy = spyOn(m.renderer, "destroy").mockImplementation(() => {});
+  try {
+    await m.click("Group");
+    expect(m.input()?.focused).toBe(true);
+    await m.mockInput.typeText("quality");
+    await m.flush();
+    expect(m.input()?.value).toBe("quality");
+    expect(destroy).not.toHaveBeenCalled();
+    await m.key("RETURN");
+    expect(m.write).toHaveBeenLastCalledWith(expect.objectContaining({ group: "quality" }), "/repo/menu-mouse");
+    await m.mockInput.typeText("q");
+    await m.flush();
+    expect(destroy).toHaveBeenCalledTimes(1);
+  } finally {
+    destroy.mockRestore();
+    await m.dispose();
+  }
+});

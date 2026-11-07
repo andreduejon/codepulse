@@ -29,10 +29,9 @@ export interface MenuKeyDecision {
 export function routeMenuKey(input: MenuKeyInput): MenuKeyDecision {
   const { mode, keyName, selectedKind } = input;
 
+  // `q` quits from the dialog itself, never while a field is being edited (it is a letter there).
   if (mode === "token-edit") {
     switch (keyName) {
-      case "q":
-        return { action: "close", consume: true };
       case "escape":
         return { action: "cancel-edit", consume: true };
       case "return":
@@ -46,8 +45,6 @@ export function routeMenuKey(input: MenuKeyInput): MenuKeyDecision {
   }
 
   switch (keyName) {
-    case "q":
-      return { action: "close", consume: true };
     case "escape":
       return { action: "close", consume: true };
     case "down":

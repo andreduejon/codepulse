@@ -299,7 +299,8 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
       }
     }
 
-    if (e.name === "q") {
+    // Quit, unless a field is being edited: there `q` is typed like any other letter.
+    if (e.name === "q" && editingIdx() == null) {
       e.preventDefault();
       e.stopPropagation();
       renderer.destroy();
