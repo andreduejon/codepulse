@@ -916,7 +916,13 @@ export function AppContent(props: Readonly<AppContentProps>) {
                     searchFocused={searchFocused()}
                     onJumpToCommit={handleJumpToCommit}
                     onOpenDiff={handleOpenDiff}
-                    onClose={() => setDialog(null)}
+                    onClose={() => {
+                      // Same as Esc (handle-cascade-close): leaving compact details also leaves detail focus.
+                      batch(() => {
+                        actions.setDetailFocused(false);
+                        setDialog(null);
+                      });
+                    }}
                     {...providerDetailProps}
                   />
                 </Show>
