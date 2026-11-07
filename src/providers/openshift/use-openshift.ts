@@ -208,7 +208,8 @@ export function useOpenShift(opts: {
   const seeds = new Map<string, OpenShiftCommitData>();
   const queriedSHAs = new Set<string>();
   const [version, setVersion] = createSignal(0);
-  const [liveLabel, setLiveLabel] = createSignal("");
+  /** Live list/watch state: `loading` while a live list is requested, `live` while watches stream. */
+  const [liveState, setLiveState] = createSignal<"idle" | "loading" | "live">("idle");
   const [watchEpoch, setWatchEpoch] = createSignal(0);
   let watchGen = 0;
   const live = {
@@ -263,7 +264,7 @@ export function useOpenShift(opts: {
       commits.clear();
       seeds.clear();
       live.listed = null;
-      setLiveLabel("");
+      setLiveState("idle");
       setWatchEpoch(value => value + 1);
       queriedSHAs.clear();
       setVersion(v => v + 1);
@@ -414,11 +415,11 @@ export function useOpenShift(opts: {
     if (!token) return;
     const gen = ++watchGen;
     let delayMs = 1000;
-    setLiveLabel("loading...");
+    setLiveState("loading");
     try {
       while (!signal.aborted && lifecycle.isCurrent(epoch, repoPath)) {
         try {
-          setLiveLabel("loading...");
+          setLiveState("loading");
           const listed = await fetchOpenShiftResources(config, token, signal, "live", { commitShas: [] });
           if (signal.aborted || !lifecycle.isCurrent(epoch, repoPath)) return;
           if (listed.error === BANNER.openshift.tokenExpired) {
@@ -467,9 +468,9 @@ export function useOpenShift(opts: {
             }),
           );
           const running = watches.filter((job): job is NonNullable<typeof job> => job !== null);
-          setLiveLabel(running.length > 0 ? "live" : "");
+          setLiveState(running.length > 0 ? "live" : "idle");
           const results = running.length > 0 ? await Promise.all(running) : [];
-          if (!signal.aborted && lifecycle.isCurrent(epoch, repoPath)) setLiveLabel("loading...");
+          if (!signal.aborted && lifecycle.isCurrent(epoch, repoPath)) setLiveState("loading");
           signal.removeEventListener("abort", onAbort);
           if (signal.aborted || !lifecycle.isCurrent(epoch, repoPath)) return;
           if (results.includes("auth")) {
@@ -485,7 +486,7 @@ export function useOpenShift(opts: {
         } catch (err) {
           if (signal.aborted || !lifecycle.isCurrent(epoch, repoPath)) return;
           debugError("OpenShift", err);
-          setLiveLabel("loading...");
+          setLiveState("loading");
           try {
             await sleep(delayMs, signal);
             delayMs = Math.min(delayMs * 2, 10_000);
@@ -495,13 +496,13 @@ export function useOpenShift(opts: {
         }
       }
     } finally {
-      if (gen === watchGen) setLiveLabel("");
+      if (gen === watchGen) setLiveState("idle");
     }
   }
 
   createEffect(() => {
     if (opts.suspended?.()) {
-      setLiveLabel("");
+      setLiveState("idle");
       return;
     }
     configAccessor();
@@ -527,7 +528,7 @@ export function useOpenShift(opts: {
       try {
         if (!adoptCommit(sha) && !force) return;
         if (force) {
-          setLiveLabel("loading...");
+          setLiveState("loading");
           setWatchEpoch(value => value + 1);
           return;
         }
@@ -536,8 +537,8 @@ export function useOpenShift(opts: {
         debugError("OpenShift", err);
       }
     },
-    isLoading: () => liveLabel() === "loading...",
-    liveAge: () => liveLabel(),
+    isLoading: () => liveState() === "loading",
+    liveAge: () => (liveState() === "live" ? "live" : ""),
     isAvailable,
     invalidate: lifecycle.resetCaches,
     loadBuildLog: async (resource, force = false) => {

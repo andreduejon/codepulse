@@ -50,6 +50,20 @@ export function useProviderFetchLifecycle(opts: {
   let consecutiveErrors = 0;
   let backoffUntil = 0;
   const [identityVersion, setIdentityVersion] = createSignal(0);
+  const [activeFetches, setActiveFetches] = createSignal(0);
+
+  /**
+   * Count provider data work while it runs. Provider activity (the footer's `… fetching`) reads this instead of the
+   * provider status, which can stay `loading`; the count always drops in `finally`, so it cannot get stuck.
+   */
+  async function trackFetch<T>(work: () => Promise<T>): Promise<T> {
+    setActiveFetches(count => count + 1);
+    try {
+      return await work();
+    } finally {
+      setActiveFetches(count => Math.max(0, count - 1));
+    }
+  }
 
   function getEpoch() {
     return cacheEpoch;
@@ -123,7 +137,7 @@ export function useProviderFetchLifecycle(opts: {
     }
     fetchInFlight = true;
     try {
-      await runRequest(signal => opts.runInitialFetch({ signal, shas, showStatus, epoch }), signal);
+      await trackFetch(() => runRequest(signal => opts.runInitialFetch({ signal, shas, showStatus, epoch }), signal));
     } catch (err) {
       if (epoch === cacheEpoch && !isAbortError(err, signal)) throw err;
     } finally {
@@ -142,7 +156,7 @@ export function useProviderFetchLifecycle(opts: {
     if (!opts.isAvailable()) return;
     fetchInFlight = true;
     try {
-      await runRequest(signal => opts.runRefresh({ signal, showStatus, epoch }), signal);
+      await trackFetch(() => runRequest(signal => opts.runRefresh({ signal, showStatus, epoch }), signal));
     } catch (err) {
       if (epoch === cacheEpoch && !isAbortError(err, signal)) throw err;
     } finally {
@@ -300,5 +314,8 @@ export function useProviderFetchLifecycle(opts: {
     fetchInitial,
     fetchRefresh,
     runRequest,
+    trackFetch,
+    /** True while a graph fetch, refresh or tracked reload runs. */
+    isFetching: () => activeFetches() > 0,
   };
 }

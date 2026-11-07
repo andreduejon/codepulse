@@ -373,7 +373,9 @@ export function useJenkinsCI(opts: {
       authFrozen = false;
       let firstError: string | null;
       try {
-        const result = await lifecycle.runRequest(signal => fetchForSHAs([sha], "full", signal));
+        const result = await lifecycle.trackFetch(() =>
+          lifecycle.runRequest(signal => fetchForSHAs([sha], "full", signal)),
+        );
         if (result.stale || !lifecycle.isCurrent(epoch, repoPath)) return;
         firstError = result.firstError ?? null;
       } catch (err) {
