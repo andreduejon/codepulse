@@ -188,8 +188,18 @@ test("switching from Git stashes to a provider selects its detail tab and resets
 
     expect(state.detailActiveTab()).toBe(provider);
     expect(state.detailCursorIndex()).toBe(0);
-    expect(state.detailLoading()).toBe(false);
   }
+});
+
+test("provider views still load the commit detail, so Info shows the body", async () => {
+  const { root, git } = await makeRepo(["base"]);
+  await writeFile(join(root, "file.txt"), "next\n");
+  await git("commit", "-am", "with body", "-m", "Extended explanation.");
+  const { state, actions } = mount(root, 50, true);
+  actions.setActiveProviderView("github-actions");
+  await until(() => state.commitDetail()?.subject === "with body", "provider-view detail");
+  expect(state.commitDetail()?.body).toContain("Extended explanation.");
+  expect(state.detailActiveTab()).toBe("github-actions");
 });
 
 test("Dependencies stays available without cached coverage and falls back only when leaving Snyk", async () => {
