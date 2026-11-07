@@ -8,7 +8,7 @@ import {
   providerUnavailable,
   providerWarning,
 } from "../../context/state";
-import { BANNER } from "../../debug/banner";
+import { BANNER, bannerOrFallback } from "../../debug/banner";
 import { collectRunningSHAs, collectTopSHAs } from "../github-actions/sha-selection";
 import { DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS } from "../shared/auto-refresh";
 import { persistMergedSnapshots } from "../shared/sha-sqlite-cache";
@@ -304,6 +304,14 @@ export function useJenkinsCI(opts: {
     return commitDataCache.get(sha) ?? null;
   };
 
+  /** Manual Reload / Fetch: re-query the whole graph window (like GitHub), not only running builds. */
+  async function refreshWindow(): Promise<void> {
+    if (opts.suspended?.()) return;
+    const window = collectTopSHAs(state.graphRows(), config.fetchDepth);
+    for (const sha of window) queriedSHAs.delete(sha);
+    await lifecycle.fetchInitial(undefined, window, true);
+    if (state.activeProviderView() === "jenkins") lifecycle.startAutoRefresh();
+  }
   return {
     getCommitData,
     fetchJobsForRun: async (run, signal) => {
@@ -361,11 +369,26 @@ export function useJenkinsCI(opts: {
       if (!lifecycle.isCurrent(epoch, repoPath)) return;
       if (!force) return;
       queriedSHAs.delete(sha);
-      await lifecycle.runRequest(signal => fetchForSHAs([sha], "full", signal));
+      // Reload commit is an explicit retry: it clears an auth freeze and reports its own outcome.
+      authFrozen = false;
+      let firstError: string | null;
+      try {
+        const result = await lifecycle.runRequest(signal => fetchForSHAs([sha], "full", signal));
+        if (result.stale || !lifecycle.isCurrent(epoch, repoPath)) return;
+        firstError = result.firstError ?? null;
+      } catch (err) {
+        if (!lifecycle.isCurrent(epoch, repoPath) || (err instanceof Error && err.name === "AbortError")) return;
+        firstError = bannerOrFallback(err, BANNER.jenkins.fetchFailed, "Jenkins");
+      }
+      rememberAuthError(firstError);
+      if (firstError) {
+        actions.setProviderStatus("jenkins", providerError(firstError));
+        return;
+      }
+      if (!discoveryTruncated) actions.setProviderLastSuccessfulRefresh("jenkins", new Date());
+      if (state.providerStatusFor("jenkins").kind === "error") actions.setProviderStatus("jenkins", settledStatus());
     },
-    refresh: async () => {
-      await lifecycle.fetchRefresh(undefined, true);
-    },
+    refresh: refreshWindow,
     isAvailable,
     invalidate: lifecycle.resetCaches,
   };
