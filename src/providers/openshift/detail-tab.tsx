@@ -1,5 +1,5 @@
 import { MouseButton, type MouseEvent, type Renderable } from "@opentui/core";
-import { createEffect, createMemo, createSignal, For, Show, untrack } from "solid-js";
+import { createEffect, createMemo, createSignal, For, on, Show, untrack } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
 import { useT } from "../../hooks/use-t";
 import { type StatusCategory, statusIcon } from "../shared/status";
@@ -171,12 +171,41 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
     void props.fetchCommitData?.(sha);
   });
 
+  // A new commit opens every namespace with the cursor on top. Live updates for the same commit keep the
+  // user's open/closed choices (new namespaces open) and keep the cursor on the same row.
+  let expansionSha: string | null = null;
+  let knownNamespaces = new Set<string>();
   createEffect(() => {
-    props.sha;
+    const sha = props.sha;
     const names = namespaces().map(ns => ns.namespace);
-    setExpandedNamespaces(new Set(names));
-    props.setDetailCursorIndex(0);
+    if (sha !== expansionSha) {
+      expansionSha = sha;
+      knownNamespaces = new Set(names);
+      setExpandedNamespaces(new Set(names));
+      props.setDetailCursorIndex(0);
+      return;
+    }
+    const added = names.filter(name => !knownNamespaces.has(name));
+    knownNamespaces = new Set(names);
+    if (added.length > 0) setExpandedNamespaces(prev => new Set([...prev, ...added]));
   });
+
+  let cursorSha: string | null = null;
+  createEffect(
+    on(flatItems, (items, previous) => {
+      const sha = untrack(() => props.sha);
+      if (sha !== cursorSha || !previous) {
+        cursorSha = sha;
+        return;
+      }
+      const index = untrack(() => props.detailCursorIndex());
+      const before = previous[index];
+      if (!before) return;
+      const key = flatItemKey(before);
+      const next = items.findIndex(item => flatItemKey(item) === key);
+      if (next >= 0 && next !== index) props.setDetailCursorIndex(next);
+    }),
+  );
 
   createEffect(() => {
     const count = flatItems().length;

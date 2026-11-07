@@ -147,6 +147,12 @@ async function renderProvider(provider: Provider, compact = true, deferredJobs =
   const [unavailable, setUnavailable] = createSignal(false);
   const [hasData, setHasData] = createSignal(true);
   const [snykScan, setSnykScan] = createSignal(scan);
+  /** Bumping it hands out a fresh copy of the same OpenShift data, like a live update does. */
+  const [openshiftVersion, setOpenshiftVersion] = createSignal(0);
+  const openshiftSnapshot = () =>
+    openshiftVersion() === 0
+      ? openshiftData
+      : { ...openshiftData, namespaces: openshiftData.namespaces.map(ns => ({ ...ns, pods: [...ns.pods] })) };
   let resolveJobs!: () => void;
   const pendingJobs = new Promise<void>(resolve => (resolveJobs = resolve));
   let resolveReload!: () => void;
@@ -212,7 +218,7 @@ async function renderProvider(provider: Provider, compact = true, deferredJobs =
           return status();
         },
         onOpenJenkinsJobLog: openJenkins,
-        openshiftGetCommitData: () => (hasData() ? openshiftData : null),
+        openshiftGetCommitData: () => (hasData() ? openshiftSnapshot() : null),
         openshiftFetchCommitData: reload,
         openshiftIsLoading: loading,
         openshiftLiveAge: () => "live fixture",
@@ -316,6 +322,7 @@ async function renderProvider(provider: Provider, compact = true, deferredJobs =
     setUnavailable,
     setHasData,
     setSnykScan,
+    bumpOpenShift: () => setOpenshiftVersion(version => version + 1),
     setHoldReload,
     resolveJobs,
     resolveReload,
@@ -484,6 +491,25 @@ test("OpenShift namespace/resource/reload routing follows grouped and sorted res
     await d.click("team-a-pod");
     expect(d.state.detailCursorIndex()).toBe(1);
     expect(d.openResource).toHaveBeenLastCalledWith(resources[0]);
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("OpenShift live updates keep collapsed namespaces collapsed and the cursor on the same row", async () => {
+  const d = await renderProvider("openshift");
+  try {
+    await d.click("team-a");
+    expect(d.state.detailCursorAction()).toBe("expand");
+    await d.click("team-b-pod");
+    const cursor = d.state.detailCursorIndex();
+    const count = d.navRef.itemCount;
+    d.bumpOpenShift();
+    await d.flush();
+    expect(d.navRef.itemCount).toBe(count);
+    expect(d.frame()).not.toContain("team-a-pod");
+    expect(d.state.detailCursorIndex()).toBe(cursor);
+    expect(d.state.detailCursorAction()).toBe("open");
   } finally {
     await d.dispose();
   }
