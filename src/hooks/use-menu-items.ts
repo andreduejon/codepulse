@@ -328,11 +328,13 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
     // ── Showing filter (always shown) ──────────────────────────────
     result.push({ kind: "header", label: "Showing" });
     const viewing = state.viewingBranch();
-    if (viewing) {
+    // Without an explicit view, the log follows Show all branches: off means the current branch only.
+    const shown = viewing ?? (state.showAllBranches() ? null : state.currentBranch() || null);
+    if (shown) {
       result.push({
         kind: "badge",
-        name: viewing,
-        colorIndex: branchColorIndex(viewing),
+        name: shown,
+        colorIndex: branchColorIndex(shown),
       });
     } else {
       result.push({

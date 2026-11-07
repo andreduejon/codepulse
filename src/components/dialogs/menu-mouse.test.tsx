@@ -668,3 +668,22 @@ test("Last fetch says fetching only during a remote fetch, not while paging in h
     await m.dispose();
   }
 });
+
+test("Showing names the current branch when all branches are off, and (all branches) when on", async () => {
+  const m = await renderMenu();
+  try {
+    m.app.actions.setShowAllBranches(false);
+    await m.click("Branches");
+    const showing = () => {
+      const lines = m.captureCharFrame().split("\n");
+      return lines[lines.findIndex(line => line.includes("Showing")) + 1] ?? "";
+    };
+    expect(showing()).toContain("main");
+    expect(m.captureCharFrame()).not.toContain("(all branches)");
+    m.app.actions.setShowAllBranches(true);
+    await m.flush();
+    expect(showing()).toContain("(all branches)");
+  } finally {
+    await m.dispose();
+  }
+});
