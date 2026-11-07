@@ -155,6 +155,8 @@ export function useGitHubCI(opts: {
         id: "github-actions",
         displayName: "GitHub Actions",
         isAvailable,
+        // Runs in every view: graph fetches, auto refresh and Reload commit all go through the lifecycle.
+        activity: () => (lifecycle.isFetching() ? "fetching" : null),
       });
     } else {
       state.providers.unregister("github-actions");

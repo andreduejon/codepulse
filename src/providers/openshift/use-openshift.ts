@@ -197,7 +197,13 @@ export function useOpenShift(opts: {
 
   createEffect(() => {
     if (configAccessor().enabled === true)
-      state.providers.register({ id: "openshift", displayName: "OpenShift", isAvailable });
+      state.providers.register({
+        id: "openshift",
+        displayName: "OpenShift",
+        isAvailable,
+        // Build inventory (lifecycle) or the live list before watches start; streaming watches are not "fetching".
+        activity: () => (lifecycle.isFetching() || liveState() === "loading" ? "fetching" : null),
+      });
     else {
       state.providers.unregister("openshift");
       if (untrack(state.activeProviderView) === "openshift") actions.setActiveProviderView("git");

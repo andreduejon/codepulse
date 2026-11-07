@@ -19,3 +19,11 @@ export function truncateName(name: string, maxLen: number): string {
   if (maxLen <= 3) return name.slice(0, maxLen);
   return `${name.slice(0, maxLen - 3)}...`;
 }
+
+/** Cut `text` to `width` columns, ending in `…` when anything was cut (the single-character truncation marker). */
+export function endTruncate(text: string, width: number): string {
+  if (width <= 0) return "";
+  if (text.length <= width) return text;
+  if (width === 1) return "…";
+  return `${text.slice(0, width - 1).trimEnd()}…`;
+}

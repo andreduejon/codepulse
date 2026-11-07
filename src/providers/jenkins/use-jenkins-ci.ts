@@ -67,7 +67,12 @@ export function useJenkinsCI(opts: {
 
   createEffect(() => {
     if (configAccessor().enabled === true) {
-      state.providers.register({ id: "jenkins", displayName: "Jenkins", isAvailable });
+      state.providers.register({
+        id: "jenkins",
+        displayName: "Jenkins",
+        isAvailable,
+        activity: () => (lifecycle.isFetching() ? "fetching" : null),
+      });
     } else {
       state.providers.unregister("jenkins");
       if (untrack(state.activeProviderView) === "jenkins") actions.setActiveProviderView("git");

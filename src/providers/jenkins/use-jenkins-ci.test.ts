@@ -129,3 +129,20 @@ test("a per-commit reload reports its error instead of finishing silently", asyn
   await jenkins.fetchCommitDataForSHA(SHA, true);
   expect(state.providerStatusFor("jenkins").kind).not.toBe("error");
 });
+
+test("the footer activity says fetching only while a Jenkins fetch runs", async () => {
+  const { jenkins, state, graph } = await mountJenkins();
+  await jenkins.refresh();
+  await settle();
+  const activity = () => state.providers.get("jenkins")?.activity?.() ?? null;
+  expect(activity()).toBeNull();
+  let release!: () => void;
+  graph.mockImplementationOnce(() => new Promise(resolve => (release = () => resolve(result([run()])))));
+  const pending = jenkins.refresh();
+  await settle(() => activity() === "fetching");
+  expect(activity()).toBe("fetching");
+  release();
+  await pending;
+  await settle(() => activity() === null);
+  expect(activity()).toBeNull();
+});

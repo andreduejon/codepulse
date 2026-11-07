@@ -1,8 +1,10 @@
+import type { BoxRenderable } from "@opentui/core";
 import { createEffect, createSignal, onCleanup, Show } from "solid-js";
 import { useAppState } from "../context/state";
 import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
 import { useT } from "../hooks/use-t";
 import { providerDisplayName } from "../providers/provider";
+import { endTruncate } from "../utils/truncate";
 import { KeyHint, KeyHintSeparator } from "./key-hint";
 
 /** Full braille rotation spinner — 8 frames, smooth circular motion. */
@@ -41,9 +43,9 @@ export default function Footer(
       return provider && activity ? [`${provider.displayName} ${activity}`] : [];
     });
   };
-  /** Generic `loading` for provider work without its own label; a provider that names its work says it instead. */
+  /** Generic `loading` only for a provider that cannot name its work; the others say `fetching` or `scanning`. */
   const genericLoading = () =>
-    providerStatus().kind === "loading" && !state.providers.get(state.activeProviderView())?.activity?.();
+    providerStatus().kind === "loading" && !state.providers.get(state.activeProviderView())?.activity;
   const busy = () =>
     state.loading() ||
     state.fetching() ||
@@ -51,6 +53,7 @@ export default function Footer(
     providerStatus().kind === "loading" ||
     activities().length > 0;
 
+  const [labelWidth, setLabelWidth] = createSignal(Number.POSITIVE_INFINITY);
   const loadingLabel = () => {
     const git = gitActivity();
     const parts = [...(git ? [git] : []), ...(genericLoading() ? ["loading"] : []), ...activities()];
@@ -109,12 +112,20 @@ export default function Footer(
         <text flexShrink={0} wrapMode="none" fg={spinnerColor()}>
           {spinnerChar()}
         </text>
-        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-          {loadingLabel()}
-        </text>
-
-        {/* Spacer pushes hints right */}
-        <box flexGrow={1} />
+        {/* Takes the space left of the hints (pushing them right) and cuts its label at the end to fit, so several
+            providers at once never push the key hints off a narrow footer. */}
+        <box
+          flexGrow={1}
+          flexShrink={1}
+          minWidth={0}
+          onSizeChange={function (this: BoxRenderable) {
+            setLabelWidth(this.width);
+          }}
+        >
+          <text wrapMode="none" fg={t().foregroundMuted}>
+            {endTruncate(loadingLabel(), Math.max(0, labelWidth() - 1))}
+          </text>
+        </box>
 
         {/* ── Detail focused ───────────────────────────────────────────────── */}
         <Show when={state.detailFocused()}>
