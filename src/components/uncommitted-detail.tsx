@@ -7,6 +7,7 @@ import type { DiffSource } from "../git/types";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
 import { useFileTree } from "../hooks/use-file-tree";
 import { useT } from "../hooks/use-t";
+import { BUSY } from "../utils/busy-text";
 import { isCursored as _isCursored, itemHighlightBg as _itemHighlightBg } from "../utils/detail-cursor";
 import { buildDiffTarget } from "../utils/diff-target";
 import { getUncommittedProviderNotice } from "../utils/tab-utils";
@@ -229,7 +230,9 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
         when={activeFiles().length > 0}
         fallback={
           <box flexGrow={1} alignItems="center" justifyContent="center">
-            <text fg={t().foregroundMuted}>{state.detailLoading() ? "loading..." : `No ${activeTab()} files`}</text>
+            <text fg={t().foregroundMuted}>
+              {state.detailLoading() ? BUSY.readingFiles : `No ${activeTab()} files`}
+            </text>
           </box>
         }
       >

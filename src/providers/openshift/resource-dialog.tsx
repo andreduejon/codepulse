@@ -11,6 +11,7 @@ import {
 import { getDialogTitleContentWidth, middleTruncate, TITLE_SEP } from "../../components/dialogs/title-utils";
 import { KeyHint, KeyHintSeparator } from "../../components/key-hint";
 import { useT } from "../../hooks/use-t";
+import { BUSY } from "../../utils/busy-text";
 import { stripTerminalControls } from "../../utils/terminal-text";
 import type { OpenShiftResource } from "./types";
 import { shouldFollowOpenShiftLog } from "./watch";
@@ -120,11 +121,11 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
 
   const lines = createMemo(() => {
     if (viewMode() === "log") {
-      if (logLoading()) return ["loading..."];
+      if (logLoading()) return [BUSY.fetchingLog];
       if (logError()) return [logError() ?? ""];
       return stripTerminalControls(logText() ?? "").split("\n");
     }
-    if (objectLoading()) return ["loading..."];
+    if (objectLoading()) return [BUSY.fetchingObject];
     if (objectError()) return [objectError() ?? ""];
     return (objectText() ?? "").split("\n");
   });

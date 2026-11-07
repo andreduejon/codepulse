@@ -420,6 +420,7 @@ for (const provider of ["github-actions", "jenkins"] as const) {
     try {
       d.setLoading(true);
       await d.flush();
+      expect(d.frame()).toContain(provider === "jenkins" ? "fetching builds..." : "fetching runs...");
       await d.click("Reload commit");
       expect(d.reload).not.toHaveBeenCalled();
       d.setLoading(false);
@@ -429,7 +430,7 @@ for (const provider of ["github-actions", "jenkins"] as const) {
       expect(d.reload).not.toHaveBeenCalled();
       d.setUnavailable(false);
       await d.click(runs[0].name);
-      expect(d.frame()).toContain("loading jobs...");
+      expect(d.frame()).toContain(provider === "jenkins" ? "fetching stages..." : "fetching jobs...");
       expect(d.navRef.itemCount).toBe(3);
       expect(fetchJobs).toHaveBeenCalledTimes(1);
       d.resolveJobs();

@@ -6,6 +6,7 @@ import { BANNER } from "../../debug/banner";
 import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useClipboard } from "../../hooks/use-clipboard";
 import { useT } from "../../hooks/use-t";
+import { BUSY } from "../../utils/busy-text";
 import {
   type DependencyGroupBy,
   type DependencyScopeFilter,
@@ -347,7 +348,7 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
         id="scan"
         index={0}
         label={props.scan ? "Rescan commit" : "Scan commit"}
-        status={props.loading ? "scanning..." : undefined}
+        status={props.loading ? BUSY.scanning : undefined}
         mouseEnabled={props.mouseEnabled}
         rowRef={controlRef("scan", 0)}
       />

@@ -2,6 +2,7 @@ import { MouseButton, type MouseEvent, type Renderable } from "@opentui/core";
 import { createEffect, createMemo, createSignal, For, on, Show, untrack } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
 import { useT } from "../../hooks/use-t";
+import { BUSY } from "../../utils/busy-text";
 import { type StatusCategory, statusIcon } from "../shared/status";
 import { openShiftStatusColor } from "./graph-columns";
 import {
@@ -284,7 +285,7 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
   const isReloadCursored = () => reloadIdx() >= 0 && props.detailFocused() && props.detailCursorIndex() === reloadIdx();
   const reloadStatus = () => {
     if (liveUnavailable()) return "";
-    if (reloadBusy()) return "loading...";
+    if (reloadBusy()) return BUSY.fetchingResources;
     return liveAge();
   };
 

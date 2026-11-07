@@ -131,7 +131,7 @@ for (const provider of ["github-actions", "jenkins"] as const) {
     const d = await renderLog(provider);
     try {
       expect(d.frame()).toContain(provider === "jenkins" ? "Jenkins" : "GitHub Actions");
-      expect(d.frame()).toContain("loading...");
+      expect(d.frame()).toContain("fetching log...");
       expect(d.fetchLog.mock.calls.map(([job]) => job.id)).toEqual([1]);
       const footer = descendants(d.renderer.root).filter(
         node => node instanceof TextRenderable && ["c view", "w wrap", "o open", " · ", "↑/↓"].includes(node.plainText),
@@ -172,7 +172,7 @@ for (const provider of ["github-actions", "jenkins"] as const) {
       await d.click("→ next");
       expect(d.frame()).toContain("No log output available.");
       await d.key("h");
-      expect(d.frame()).toContain("loading...");
+      expect(d.frame()).toContain("fetching log...");
       expect(d.fetchLog.mock.calls.map(([job]) => job.id)).toEqual([1, 2]);
       d.resolve();
       await d.flush();

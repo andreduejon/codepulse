@@ -15,6 +15,7 @@ import { KeyHint, KeyHintSeparator } from "../../components/key-hint";
 import MessageBox from "../../components/message-box";
 import { useTheme } from "../../context/theme";
 import { useT } from "../../hooks/use-t";
+import { BUSY } from "../../utils/busy-text";
 import { openUrl } from "../../utils/open-url";
 import { stripTerminalControls } from "../../utils/terminal-text";
 
@@ -350,7 +351,7 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
           <box flexDirection="column" width="100%" paddingX={4}>
             <Show when={currentLoadedLog().loading}>
               <box flexGrow={1} alignItems="center" justifyContent="center" paddingY={2}>
-                <text fg={t().foregroundMuted}>loading...</text>
+                <text fg={t().foregroundMuted}>{BUSY.fetchingLog}</text>
               </box>
             </Show>
             <Show when={!currentLoadedLog().loading && currentLoadedLog().error}>

@@ -5,6 +5,7 @@ import { DETAIL_PANEL_WIDTH_FRACTION } from "../../constants";
 import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useClipboard } from "../../hooks/use-clipboard";
 import { useT } from "../../hooks/use-t";
+import { BUSY } from "../../utils/busy-text";
 import { filterSnykFindings, SnykFilterRow, useSnykFilter } from "./filter";
 import { countUniqueFindings, groupSnykFixes, groupSnykVulnerabilities, type SnykVulnerabilityEntry } from "./parser";
 import { SnykControlRow, type SnykDetailTabProps, snykScanIdentity, useSnykRows } from "./tab-shared";
@@ -371,7 +372,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
         id="scan"
         index={0}
         label={props.scan ? "Rescan commit" : "Scan commit"}
-        status={props.loading ? "scanning..." : undefined}
+        status={props.loading ? BUSY.scanning : undefined}
         mouseEnabled={props.mouseEnabled}
         rowRef={element => {
           refsByKey.set("scan", element);

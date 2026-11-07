@@ -3,6 +3,7 @@ import { createEffect, createMemo, createSignal, For, onCleanup, Show, untrack }
 import type { DetailNavRef } from "../../components/detail-types";
 import type { DebugEventSource } from "../../debug/events";
 import { useT } from "../../hooks/use-t";
+import { BUSY } from "../../utils/busy-text";
 import { formatDuration, formatRelativeDate } from "../../utils/date";
 import { fetchProviderJobs } from "./provider-job-fetch";
 import { categorize, statusColor, statusIcon } from "./status";
@@ -75,6 +76,8 @@ export interface ProviderRunTreeProps<TRaw, TJobRaw> {
   onReloadCommit?: () => void | Promise<void>;
   reloadLabel?: string;
   reloadBusy?: boolean;
+  /** Muted text after the reload label while it is busy (`fetching runs...`). */
+  reloadBusyText?: string;
   reloadEnabled?: boolean;
   /** When false, hide the count row. Unknown must not look like zero. */
   showSummary?: boolean;
@@ -401,7 +404,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
   const reloadIdx = () => flatItems().findIndex(item => item.kind === "reload");
   const isReloadCursored = () => reloadIdx() >= 0 && props.detailFocused() && props.detailCursorIndex() === reloadIdx();
   const reloadStatus = () => {
-    if (reloadBusy()) return "loading...";
+    if (reloadBusy()) return props.reloadBusyText ?? BUSY.fetchingRuns;
     return "";
   };
 
@@ -519,7 +522,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                       {placeholderTreeLead()}└─
                     </text>
                     <text> </text>
-                    <text fg={t().foregroundMuted}>{props.jobsLoadingText ?? "loading jobs..."}</text>
+                    <text fg={t().foregroundMuted}>{props.jobsLoadingText ?? BUSY.fetchingJobs}</text>
                   </box>
                 </Show>
                 <Show when={!isLoading() && jobError()}>
@@ -558,7 +561,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                         ? (props.childCountLabel?.(job.steps.length) ??
                           `${job.steps.length} step${job.steps.length === 1 ? "" : "s"}`)
                         : isLoading()
-                          ? (props.jobsLoadingText ?? "loading jobs...")
+                          ? (props.jobsLoadingText ?? BUSY.fetchingJobs)
                           : "";
                     const jobTextColor = () => (isJobCursored() ? t().accent : t().foreground);
                     const jobTreeLead = () => (runIsLast() ? "   " : "│  ");

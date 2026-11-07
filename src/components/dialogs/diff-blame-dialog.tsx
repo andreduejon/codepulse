@@ -12,6 +12,7 @@ import {
   isActiveAbortableRequest,
   startAbortableRequest,
 } from "../../utils/abortable-request";
+import { BUSY } from "../../utils/busy-text";
 import { KeyHint, KeyHintSeparator } from "../key-hint";
 import MessageBox from "../message-box";
 import { DialogFooter, DialogOverlay, DialogTitle, DialogTitleBar, getStandardDialogFrame } from "./dialog-chrome";
@@ -540,7 +541,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
         </Show>
         <Show when={loading() || (fullFileMode() && fileLoading())}>
           <box flexGrow={1} alignItems="center" justifyContent="center">
-            <text fg={t().foregroundMuted}>loading...</text>
+            <text fg={t().foregroundMuted}>{loading() ? BUSY.readingDiff : BUSY.readingFile}</text>
           </box>
         </Show>
 
@@ -651,7 +652,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
                   {SPINNER_FRAMES[spinnerFrame()]}
                 </text>
                 <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                  {" loading..."}
+                  {` ${BUSY.readingBlame}`}
                 </text>
               </Show>
               <Show when={!!blameError()}>
