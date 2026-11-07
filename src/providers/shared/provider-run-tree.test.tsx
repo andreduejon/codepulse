@@ -136,3 +136,64 @@ test("an expanded run whose status changes on auto refresh reloads its jobs", as
     t.renderer.destroy();
   }
 });
+
+test("failure first: focusing the tab opens the first failed run with the cursor on its failed job", async () => {
+  const [runs] = createSignal([
+    { ...run("completed", "success", "2026-01-01T00:01:00Z"), id: "ok", label: "Lint" },
+    { ...run("completed", "failure", "2026-01-01T00:02:00Z"), id: "bad", label: "Tests" },
+  ]);
+  const [cursor, setCursor] = createSignal(0);
+  const [focused, setFocused] = createSignal(false);
+  const fetchJobs = mock(async () => ({
+    jobs: [
+      { ...job("completed", "success", "completed"), id: "unit", name: "unit" },
+      { ...job("completed", "failure", "completed"), id: "e2e", name: "e2e" },
+    ],
+    error: null,
+  }));
+  const navRef: DetailNavRef = {
+    itemCount: 0,
+    itemRefs: [],
+    activateCurrentItem: () => false,
+    lastJumpFrom: null,
+    pendingJumpDirection: null,
+    scrollToFile: () => {},
+  };
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={createThemeState()}>
+        <box width={70} flexDirection="column">
+          <ProviderRunTree
+            runs={runs()}
+            navRef={navRef}
+            detailCursorIndex={cursor}
+            detailFocused={focused}
+            setDetailCursorAction={() => {}}
+            setDetailCursorIndex={setCursor}
+            fetchJobsForRun={fetchJobs}
+            debugSource="GitHub"
+            dataKey="sha"
+            summaryLabel="total workflow runs"
+          />
+        </box>
+      </ThemeContext.Provider>
+    ),
+    { width: 80, height: 20 },
+  );
+  try {
+    await setup.flush();
+    // Browsing commits in the graph (no detail focus) fetches nothing.
+    expect(fetchJobs).not.toHaveBeenCalled();
+    setFocused(true);
+    for (let i = 0; i < 5; i++) {
+      await Bun.sleep(0);
+      await setup.flush();
+    }
+    expect(fetchJobs).toHaveBeenCalledTimes(1);
+    expect(fetchJobs.mock.calls[0]?.[0]).toMatchObject({ id: "bad" });
+    // Runs: Lint (0), Tests (1), then Tests' jobs unit (2), e2e (3).
+    expect(cursor()).toBe(3);
+  } finally {
+    setup.renderer.destroy();
+  }
+});

@@ -82,6 +82,8 @@ export interface ProviderRunTreeProps<TRaw, TJobRaw> {
   reloadEnabled?: boolean;
   /** When false, hide the count row. Unknown must not look like zero. */
   showSummary?: boolean;
+  /** Open the first failed run when the tab gets focus (default true). */
+  openFailedRun?: boolean;
 }
 
 export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreeProps<TRaw, TJobRaw>>) {
@@ -331,11 +333,29 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
   createEffect(() => {
     const runId = pendingFocusRunId();
     if (!runId) return;
-    flatItems();
-    const jobIdx = flatItems().findIndex(item => item.kind === "job" && item.run.id === runId);
+    const items = flatItems();
+    // Failure first: an opened run puts the cursor on its first failed job, else on its first job.
+    const failedIdx = items.findIndex(
+      item =>
+        item.kind === "job" && item.run.id === runId && categorize(item.job.status, item.job.conclusion) === "fail",
+    );
+    const jobIdx = failedIdx >= 0 ? failedIdx : items.findIndex(item => item.kind === "job" && item.run.id === runId);
     if (jobIdx < 0) return;
     props.setDetailCursorIndex(jobIdx);
     setPendingFocusRunId(null);
+  });
+
+  // Failure first: entering a commit's tab (detail focus) opens its first failed run once, unless the user already
+  // opened one. Only on focus, so browsing commits in the graph never fetches jobs.
+  let failureOpenedKey: string | null = null;
+  createEffect(() => {
+    if (props.openFailedRun === false || !props.detailFocused() || props.runs.length === 0) return;
+    const key = props.dataKey;
+    if (failureOpenedKey === key) return;
+    failureOpenedKey = key;
+    const failed = props.runs.find(run => categorize(run.status, run.conclusion) === "fail");
+    if (!failed || untrack(expandedRuns).size > 0) return;
+    untrack(() => toggleRun(failed));
   });
 
   createEffect(() => {
