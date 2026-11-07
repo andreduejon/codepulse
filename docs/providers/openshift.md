@@ -69,10 +69,11 @@ prune does not drop Builds already cached. Least-recently-accessed snapshots
 evict at the limit, cascading to their log artifacts. Pods, workloads, and
 ImageStreamTags are not written to disk.
 
-An expired token (401) stops further requests. The banner reads **Token expired** ·
-OpenShift with `Live data unavailable.` below. Graph and details keep the last Live
-and Cache data. Provider reload and live requests are disabled. Cached Build
-JSON and logs remain viewable.
+An expired token (401) stops automatic requests: polls, watches, and fetches on
+view switches or selection. The banner reads **Token expired** · OpenShift with
+`Live data unavailable. Reload to retry.` below. Graph and details keep the last
+Live and Cache data, and cached Build JSON and logs remain viewable. **Reload
+commit**, `:reload`, or `f` retries explicitly, like GitHub Actions and Jenkins.
 
 ## Matching
 

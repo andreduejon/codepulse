@@ -98,7 +98,8 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
   const commitLoading = () => props.isLoading?.(props.sha) ?? false;
   const reloadBusy = () => commitLoading() || !!props.loading;
   const liveUnavailable = () => !!props.liveUnavailable;
-  const reloadEnabled = () => !liveUnavailable() && !props.unavailableReason;
+  // An expired token only stops automatic fetches (below); Reload commit stays available as the explicit retry.
+  const reloadEnabled = () => !props.unavailableReason;
   const liveAge = () => props.liveAge?.() ?? "";
   const [expandedNamespaces, setExpandedNamespaces] = createSignal<Set<string>>(new Set());
   const itemRefs: Renderable[] = [];

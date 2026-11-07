@@ -85,6 +85,7 @@ function mountOpenShift(suspendedInitially = false) {
   });
   let mounted!: {
     state: ReturnType<typeof createAppState>["state"];
+    actions: ReturnType<typeof createAppState>["actions"];
     openShift: ReturnType<typeof useOpenShift>;
     setSuspended: (value: boolean) => void;
   };
@@ -124,7 +125,7 @@ function mountOpenShift(suspendedInitially = false) {
         autoRefreshSeconds: 0,
       },
     });
-    mounted = { state, openShift, setSuspended };
+    mounted = { state, actions, openShift, setSuspended };
   });
   return { ...mounted, cacheList, cacheRead, cacheWrite, logRead, logWrite, inventory, live, watches };
 }
@@ -280,6 +281,34 @@ describe("OpenShift live list failures", () => {
       message: BANNER.openshift.inventoryPartial,
     });
     expect(pods(mounted)).toHaveLength(1);
+  });
+});
+
+describe("OpenShift expired token", () => {
+  test("a 401 stops automatic live requests until Reload commit retries", async () => {
+    const mounted = mountOpenShift();
+    await Bun.sleep(0);
+    const expired: api.OpenShiftListedInventory = {
+      resources: [],
+      controllers: [],
+      failures: [],
+      successfulRequests: 0,
+      error: BANNER.openshift.tokenExpired,
+      resourceVersions: new Map(),
+    };
+    mounted.live.mockResolvedValueOnce(expired);
+    await mounted.openShift.fetchCommitDataForSHA(SHA, true);
+    for (let i = 0; i < 20 && mounted.state.providerStatusFor("openshift").kind !== "error"; i++) await Bun.sleep(5);
+    expect(mounted.state.providerStatusFor("openshift").kind).toBe("error");
+    const calls = mounted.live.mock.calls.length;
+    // Leaving and re-entering the view is automatic: no new live list while frozen.
+    mounted.actions.setActiveProviderView("git");
+    mounted.actions.setActiveProviderView("openshift");
+    await Bun.sleep(10);
+    expect(mounted.live.mock.calls.length).toBe(calls);
+    await mounted.openShift.fetchCommitDataForSHA(SHA, true);
+    for (let i = 0; i < 20 && mounted.live.mock.calls.length === calls; i++) await Bun.sleep(5);
+    expect(mounted.live.mock.calls.length).toBe(calls + 1);
   });
 });
 

@@ -234,6 +234,12 @@ export function useOpenShift(opts: {
     return BANNER.openshift.unavailable;
   }
 
+  /**
+   * After a 401, automatic requests (polls, watches, view switches, selections) stop until an explicit Reload or
+   * Fetch retries, like GitHub and Jenkins. Cached data stays visible meanwhile.
+   */
+  let authFrozen = false;
+
   const lifecycle = useProviderFetchLifecycle({
     state,
     suspended: opts.suspended,
@@ -260,13 +266,18 @@ export function useOpenShift(opts: {
       if (showStatus) actions.setProviderStatus("openshift", providerUnavailable(unavailableMessage()));
     },
     runInitialFetch: async ({ signal, showStatus, epoch }) => {
+      if (authFrozen && !showStatus) return;
+      if (showStatus) authFrozen = false;
       await runBuildInventory({ signal, showStatus, epoch });
     },
     runRefresh: async ({ signal, showStatus, epoch }) => {
+      if (authFrozen && !showStatus) return;
+      if (showStatus) authFrozen = false;
       await runBuildInventory({ signal, showStatus, epoch });
       if (showStatus && !signal?.aborted && epoch === lifecycle.getEpoch()) setWatchEpoch(value => value + 1);
     },
     onResetCaches: () => {
+      authFrozen = false;
       commits.clear();
       seeds.clear();
       live.listed = null;
@@ -346,6 +357,7 @@ export function useOpenShift(opts: {
       });
       if (args.signal?.aborted || !lifecycle.isCurrent(args.epoch, repoPath)) return;
       if (result.error === BANNER.openshift.tokenExpired) {
+        authFrozen = true;
         publish();
         actions.setProviderStatus("openshift", providerError(BANNER.openshift.tokenExpired));
         return;
@@ -388,6 +400,7 @@ export function useOpenShift(opts: {
         err instanceof Error && err.message === BANNER.openshift.tokenExpired
           ? BANNER.openshift.tokenExpired
           : BANNER.openshift.inventoryFailed;
+      if (message === BANNER.openshift.tokenExpired) authFrozen = true;
       publish();
       actions.setProviderStatus("openshift", providerError(message));
     }
@@ -429,6 +442,7 @@ export function useOpenShift(opts: {
           const listed = await fetchOpenShiftResources(config, token, signal, "live", { commitShas: [] });
           if (signal.aborted || !lifecycle.isCurrent(epoch, repoPath)) return;
           if (listed.error === BANNER.openshift.tokenExpired) {
+            authFrozen = true;
             actions.setProviderStatus("openshift", providerError(BANNER.openshift.tokenExpired));
             return;
           }
@@ -480,6 +494,7 @@ export function useOpenShift(opts: {
           signal.removeEventListener("abort", onAbort);
           if (signal.aborted || !lifecycle.isCurrent(epoch, repoPath)) return;
           if (results.includes("auth")) {
+            authFrozen = true;
             actions.setProviderStatus("openshift", providerError(BANNER.openshift.tokenExpired));
             return;
           }
@@ -514,7 +529,7 @@ export function useOpenShift(opts: {
     configAccessor();
     state.repoPath();
     watchEpoch();
-    if (state.activeProviderView() !== "openshift" || !isAvailable()) return;
+    if (state.activeProviderView() !== "openshift" || !isAvailable() || authFrozen) return;
     const epoch = lifecycle.getEpoch();
     const ctrl = new AbortController();
     void runWatchSession(ctrl.signal, epoch);
@@ -534,6 +549,8 @@ export function useOpenShift(opts: {
       try {
         if (!adoptCommit(sha) && !force) return;
         if (force) {
+          // Reload commit is an explicit retry: it lifts an auth freeze.
+          authFrozen = false;
           setLiveState("loading");
           setWatchEpoch(value => value + 1);
           return;
