@@ -654,3 +654,17 @@ test("f runs the Fetch remote hotkey on rows that cannot be forgotten", async ()
     await m.dispose();
   }
 });
+
+test("Last fetch says fetching only during a remote fetch, not while paging in history", async () => {
+  const m = await renderMenu();
+  try {
+    m.app.actions.setFetching(true, true);
+    await m.flush();
+    expect(m.captureCharFrame()).not.toContain("fetching...");
+    m.app.actions.setFetching(true);
+    await m.flush();
+    expect(m.captureCharFrame()).toContain("fetching...");
+  } finally {
+    await m.dispose();
+  }
+});

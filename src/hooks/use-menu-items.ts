@@ -162,7 +162,8 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
 
   // ── Repository tab items ──────────────────────────────────────────
   const lastFetchLabel = (): string => {
-    if (state.fetching()) return "fetching...";
+    // Paging in more history also sets `fetching`; only a remote fetch (`f`) counts here.
+    if (state.fetching() && !state.fetchingHistory()) return "fetching...";
     const time = state.lastFetchTime();
     if (!time) return "never";
     return relativeAgeLabel(time);
