@@ -25,11 +25,34 @@ import type {
 
 const isValidEnvVarName = (value: string): boolean => /^[A-Za-z_][A-Za-z0-9_]*$/.test(value);
 
+/**
+ * The `Token` row every provider shares. It holds the name of an environment variable (never the secret): the
+ * draft must be a valid name, an empty value falls back to the provider's default (`GITHUB_TOKEN`, …), and the row
+ * is valid once that variable is set.
+ */
+function tokenVariableItem(opts: {
+  current: string;
+  fallback: string;
+  save: (name: string) => void;
+  isSet?: () => boolean;
+}): SettingItem {
+  return {
+    kind: "editable",
+    label: "Token",
+    placeholder: "Enter variable name...",
+    get: () => opts.current,
+    set: value => opts.save(value.trim() || opts.fallback),
+    valid: () => isValidEnvVarName(opts.current) && (opts.isSet?.() ?? !!process.env[opts.current]?.trim()),
+    isDraftValid: value => isValidEnvVarName(value.trim() || opts.fallback),
+  };
+}
+
 export function buildSnykProviderItems(
   cfg: SnykMenuConfig,
   branches: Accessor<{ name: string; isRemote: boolean }[]>,
   onChange?: (cfg: SnykMenuConfig) => void,
   persist?: (cfg: SnykMenuConfig) => void,
+  lastScan: () => string = () => "never",
 ): SettingItem[] {
   const update = (next: SnykMenuConfig) => {
     onChange?.(next);
@@ -46,19 +69,17 @@ export function buildSnykProviderItems(
   const items: SettingItem[] = [
     { kind: "header", label: "Snyk" },
     { kind: "toggle", label: "Enabled", get: () => cfg.enabled, set: enabled => update({ ...cfg, enabled }) },
+    { kind: "info", label: "Last scan", get: lastScan },
   ];
 
   if (!cfg.enabled) return items;
 
   items.push(
-    {
-      kind: "editable",
-      label: "Token",
-      get: () => cfg.tokenEnvVar,
-      set: value => update({ ...cfg, tokenEnvVar: value.trim() || "SNYK_TOKEN" }),
-      valid: () => isValidEnvVarName(cfg.tokenEnvVar) && !!process.env[cfg.tokenEnvVar]?.trim(),
-      isDraftValid: value => isValidEnvVarName(value.trim() || "SNYK_TOKEN"),
-    },
+    tokenVariableItem({
+      current: cfg.tokenEnvVar,
+      fallback: "SNYK_TOKEN",
+      save: tokenEnvVar => update({ ...cfg, tokenEnvVar }),
+    }),
     {
       kind: "cycle",
       label: "Cache count",
@@ -104,6 +125,8 @@ export function buildOpenShiftProviderItems(
     onChange?.(next);
     persist?.(next);
   };
+  const isNewNamespace = (value: string) =>
+    isValidOpenShiftNamespace(value.trim()) && !cfg.namespaces.includes(value.trim());
   const items: SettingItem[] = [
     { kind: "header", label: "OpenShift" },
     { kind: "toggle", label: "Enabled", get: () => cfg.enabled, set: v => update({ ...cfg, enabled: v }) },
@@ -119,14 +142,11 @@ export function buildOpenShiftProviderItems(
       valid: () => isValidOpenShiftServerUrl(cfg.serverUrl),
       isDraftValid: isValidOpenShiftServerUrl,
     },
-    {
-      kind: "editable",
-      label: "Token",
-      get: () => cfg.tokenEnvVar,
-      set: v => update({ ...cfg, tokenEnvVar: v.trim() || "OPENSHIFT_TOKEN" }),
-      valid: () => isValidOpenShiftText(cfg.tokenEnvVar) && !!process.env[cfg.tokenEnvVar],
-      isDraftValid: v => isValidOpenShiftText(v.trim() || "OPENSHIFT_TOKEN"),
-    },
+    tokenVariableItem({
+      current: cfg.tokenEnvVar,
+      fallback: "OPENSHIFT_TOKEN",
+      save: tokenEnvVar => update({ ...cfg, tokenEnvVar }),
+    }),
     {
       kind: "cycle",
       label: "Cache count",
@@ -163,12 +183,13 @@ export function buildOpenShiftProviderItems(
       get: () => "",
       set: v => {
         const namespace = v.trim();
-        if (!isValidOpenShiftNamespace(namespace) || cfg.namespaces.includes(namespace)) return;
+        if (!isNewNamespace(namespace)) return;
         update({ ...cfg, namespaces: [...cfg.namespaces, namespace] });
       },
       valid: () => cfg.namespaces.length > 0,
       showValidity: false,
-      isDraftValid: isValidOpenShiftNamespace,
+      // Like Snyk branches: a duplicate is an invalid draft, not a silent no-op.
+      isDraftValid: isNewNamespace,
       staySelectedOnSave: true,
     },
     ...cfg.namespaces.map((namespace, idx) => ({
@@ -212,18 +233,16 @@ export function buildGitHubProviderItems(
   if (!ghCfg.enabled) return items;
 
   items.push(
-    {
-      kind: "editable",
-      label: "Token",
-      placeholder: "Enter token...",
-      get: () => ghCfg.tokenEnvVar,
-      set: (v: string) => {
-        const newCfg = { ...ghCfg, tokenEnvVar: v.trim() };
+    tokenVariableItem({
+      current: ghCfg.tokenEnvVar,
+      fallback: "GITHUB_TOKEN",
+      save: tokenEnvVar => {
+        const newCfg = { ...ghCfg, tokenEnvVar };
         onChange?.(newCfg);
         persist?.(newCfg);
       },
-      valid: () => !!ghCfg.tokenEnvVar.trim() && tokenSource === "env",
-    },
+      isSet: () => tokenSource === "env",
+    }),
     {
       kind: "info",
       label: "Host",
@@ -285,6 +304,9 @@ export function buildJenkinsProviderItems(
   persist?: (cfg: JenkinsMenuConfig) => void,
   lastRefresh: () => string = () => "never",
 ): SettingItem[] {
+  const sameJob = (url: string) => url.trim().replace(/\/+$/, "");
+  const isNewJob = (value: string) =>
+    isValidJenkinsJobUrl(value.trim()) && !jenkinsCfg.jobs.some(job => sameJob(job.url) === sameJob(value));
   const items: SettingItem[] = [
     { kind: "header", label: "Jenkins" },
     {
@@ -316,18 +338,15 @@ export function buildJenkinsProviderItems(
       },
       valid: () => !!jenkinsCfg.username?.trim(),
     },
-    {
-      kind: "editable",
-      label: "Token",
-      placeholder: "Enter token...",
-      get: () => jenkinsCfg.tokenEnvVar,
-      set: v => {
-        const newCfg = { ...jenkinsCfg, tokenEnvVar: v.trim() || "JENKINS_TOKEN" };
+    tokenVariableItem({
+      current: jenkinsCfg.tokenEnvVar,
+      fallback: "JENKINS_TOKEN",
+      save: tokenEnvVar => {
+        const newCfg = { ...jenkinsCfg, tokenEnvVar };
         onChange?.(newCfg);
         persist?.(newCfg);
       },
-      valid: () => !!jenkinsCfg.tokenEnvVar.trim() && !!process.env[jenkinsCfg.tokenEnvVar],
-    },
+    }),
     {
       kind: "cycle",
       label: "Cache count",
@@ -368,14 +387,15 @@ export function buildJenkinsProviderItems(
       get: () => "",
       set: v => {
         const url = v.trim();
-        if (!isValidJenkinsJobUrl(url)) return;
+        if (!isNewJob(url)) return;
         const newCfg = { ...jenkinsCfg, jobs: [...jenkinsCfg.jobs, { url }] };
         onChange?.(newCfg);
         persist?.(newCfg);
       },
       valid: () => jenkinsCfg.jobs.length > 0,
       showValidity: false,
-      isDraftValid: isValidJenkinsJobUrl,
+      // A job already in the list (same URL, ignoring a trailing slash) is an invalid draft, like a duplicate branch.
+      isDraftValid: isNewJob,
       staySelectedOnSave: true,
     },
   );

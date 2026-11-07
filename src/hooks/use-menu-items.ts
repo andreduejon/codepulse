@@ -471,8 +471,12 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
         newCfg => persistFullConfig({ providers: { openshift: newCfg } }),
         () => providerRefreshLabel("openshift"),
       ),
-      ...buildSnykProviderItems(snykCfg, state.branches, opts.onSnykConfigChange, newCfg =>
-        persistFullConfig({ providers: { snyk: newCfg } }),
+      ...buildSnykProviderItems(
+        snykCfg,
+        state.branches,
+        opts.onSnykConfigChange,
+        newCfg => persistFullConfig({ providers: { snyk: newCfg } }),
+        () => providerRefreshLabel("snyk"),
       ),
     ];
   });

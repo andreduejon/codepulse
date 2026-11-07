@@ -353,3 +353,87 @@ describe("repo metadata menu validation", () => {
     expect(optionalRepoMetadataValue("  platform  ")).toBe("platform");
   });
 });
+
+describe("provider menu consistency", () => {
+  const github: GitHubMenuConfig = {
+    enabled: true,
+    tokenEnvVar: "GITHUB_TOKEN",
+    trustedEnterpriseHost: null,
+    fetchDepth: 20,
+    cacheLimit: 20,
+    autoRefreshSeconds: 120,
+  };
+  const jenkins: JenkinsMenuConfig = {
+    enabled: true,
+    tokenEnvVar: "JENKINS_TOKEN",
+    fetchDepth: 20,
+    cacheLimit: 20,
+    autoRefreshSeconds: 120,
+    jobs: [{ url: "https://jenkins.example.com/job/app/" }],
+  };
+  const openshift: OpenShiftMenuConfig = {
+    enabled: true,
+    serverUrl: "https://api.example.com:6443",
+    tokenEnvVar: "OPENSHIFT_TOKEN",
+    namespaces: ["team-a"],
+    commitShaAnnotation: "dev/commit-sha",
+    cacheLimit: 20,
+    fetchDepth: 20,
+    autoRefreshSeconds: 120,
+  };
+  const snyk: SnykMenuConfig = { enabled: true, tokenEnvVar: "SNYK_TOKEN", autoScanBranches: [], maxCachedScans: 20 };
+  const editable = (items: ReturnType<typeof buildGitHubProviderItems>, label: string) => {
+    const item = items.find(entry => entry.kind === "editable" && entry.label === label);
+    if (item?.kind !== "editable") throw new Error(`Missing editable ${label}`);
+    return item;
+  };
+
+  it("every Token row asks for a variable name, rejects invalid names and falls back to its default", () => {
+    const saved: string[] = [];
+    const cases = [
+      [
+        buildGitHubProviderItems(github, "https://github.com/o/r.git", "env", c => saved.push(c.tokenEnvVar)),
+        "GITHUB_TOKEN",
+      ],
+      [buildJenkinsProviderItems(jenkins, c => saved.push(c.tokenEnvVar)), "JENKINS_TOKEN"],
+      [buildOpenShiftProviderItems(openshift, c => saved.push(c.tokenEnvVar)), "OPENSHIFT_TOKEN"],
+      [
+        buildSnykProviderItems(
+          snyk,
+          () => [],
+          c => saved.push(c.tokenEnvVar),
+        ),
+        "SNYK_TOKEN",
+      ],
+    ] as const;
+    for (const [items, fallback] of cases) {
+      const token = editable(items, "Token");
+      expect(token.placeholder).toBe("Enter variable name...");
+      expect(token.isDraftValid?.("MY TOKEN")).toBe(false);
+      expect(token.isDraftValid?.("MY_TOKEN")).toBe(true);
+      token.set("  ");
+      expect(saved.at(-1)).toBe(fallback);
+    }
+  });
+
+  it("duplicate namespaces and job URLs are invalid drafts, like duplicate Snyk branches", () => {
+    const namespace = editable(buildOpenShiftProviderItems(openshift), "New namespace");
+    expect(namespace.isDraftValid?.("team-a")).toBe(false);
+    expect(namespace.isDraftValid?.("team-b")).toBe(true);
+    const job = editable(buildJenkinsProviderItems(jenkins), "New job");
+    expect(job.isDraftValid?.("https://jenkins.example.com/job/app")).toBe(false);
+    expect(job.isDraftValid?.("https://jenkins.example.com/job/other/")).toBe(true);
+  });
+
+  it("Snyk shows when it last scanned, like the other providers' Last refresh", () => {
+    const items = buildSnykProviderItems(
+      snyk,
+      () => [],
+      undefined,
+      undefined,
+      () => "2m ago",
+    );
+    const lastScan = items.find(item => item.kind === "info" && item.label === "Last scan");
+    expect(lastScan?.kind === "info" && lastScan.get()).toBe("2m ago");
+  });
+});
