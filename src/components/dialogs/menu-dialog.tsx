@@ -126,13 +126,20 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     return text.substring(off, off + width);
   };
 
-  const forgetSelected = () => {
+  const forgetSelected = (): boolean => {
     const idx = selectedItemIndex();
-    if (idx == null) return;
+    if (idx == null) return false;
     const item = activeItems()[idx];
-    if (item?.kind !== "copyable" || !item.onForget) return;
+    if (item?.kind !== "copyable" || !item.onForget) return false;
     item.onForget();
     moveCursor(0);
+    return true;
+  };
+  /** Run the action row that shows `key` in its hotkey column (`f` Fetch remote), when the tab has one. */
+  const runHotkey = (key: string) => {
+    const item = activeItems().find(entry => entry.kind === "action" && entry.hotkey === key);
+    if (item?.kind !== "action" || item.disabled?.()) return;
+    item.run();
   };
 
   // ── Token edit mode (native OpenTUI input only while explicitly editing) ──
@@ -251,7 +258,8 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
         activateItem();
         break;
       case "forget":
-        forgetSelected();
+        // `f` forgets a removable row; anywhere else it is the Fetch remote hotkey the menu shows.
+        if (!forgetSelected()) runHotkey("f");
         break;
       case "start-edit":
         startEdit();

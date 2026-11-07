@@ -643,3 +643,14 @@ test("typing q into a menu field edits it instead of quitting; q quits again onc
     await m.dispose();
   }
 });
+
+test("f runs the Fetch remote hotkey on rows that cannot be forgotten", async () => {
+  const m = await renderMenu();
+  try {
+    expect(m.captureCharFrame()).toContain("Fetch remote");
+    await m.key("f");
+    expect(m.fetch).toHaveBeenCalledTimes(1);
+  } finally {
+    await m.dispose();
+  }
+});
