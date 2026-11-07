@@ -52,7 +52,7 @@ jobs:
           - target: darwin-arm64
             os: darwin
             arch: arm64
-            runner: macos-14
+            runner: macos-15
           - target: darwin-x64
             os: darwin
             arch: x64
