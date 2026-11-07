@@ -45,14 +45,14 @@ export function severityColor(theme: Theme, severity: SnykSeverity): string {
 /** Coloured markers (space-separated), then a muted label. */
 export type SnykLegendItem = [markers: [string, (theme: Theme) => string][], label: string];
 
-/** Tab legend; DetailPanel renders it sticky below the scroll area. */
+/** Tab legend; DetailPanel renders it sticky below the scroll area. Items wrap whole in narrow panels. */
 export function SnykLegend(props: { items: readonly SnykLegendItem[] }) {
   const t = useT();
   return (
-    <box flexDirection="row" width="100%" flexShrink={0} justifyContent="flex-end">
+    <box flexDirection="row" flexWrap="wrap" width="100%" flexShrink={0} justifyContent="flex-end">
       <For each={props.items}>
         {([markers, label], index) => (
-          <>
+          <box flexDirection="row" flexShrink={0}>
             <Show when={index() > 0}>
               <text selectable={false} flexShrink={0} wrapMode="none">
                 {"  "}
@@ -68,7 +68,7 @@ export function SnykLegend(props: { items: readonly SnykLegendItem[] }) {
             <text selectable={false} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
               {label}
             </text>
-          </>
+          </box>
         )}
       </For>
     </box>
