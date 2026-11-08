@@ -33,6 +33,7 @@ export const BANNER = {
     incomplete: "Jenkins data incomplete. Branch-job limit reached.",
     invalidJobUrl: "Jenkins job URL invalid.",
     logFailed: "Jenkins log failed.",
+    stagesFailed: "Jenkins stages failed.",
     timeout: "Jenkins request timed out.",
   },
   openshift: {

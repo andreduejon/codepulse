@@ -887,3 +887,30 @@ describe("fetchJenkinsConsoleLog failures", () => {
     }
   });
 });
+
+describe("fetchJenkinsRunJobs failures", () => {
+  test("a failed stage request says stages failed, not a generic fetch failure", async () => {
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = (async () => {
+        throw new Error("socket hang up");
+      }) as unknown as typeof fetch;
+      const run = {
+        id: "1",
+        name: "app",
+        status: "completed",
+        conclusion: "success",
+        headSha: "a".repeat(40),
+        runNumber: 1,
+        startedAt: null,
+        updatedAt: "2026-01-01T00:00:00.000Z",
+        url: "https://jenkins.example.com/job/app/1/",
+        jobLabel: "app",
+        jobUrl: "https://jenkins.example.com/job/app",
+      };
+      expect((await fetchJenkinsRunJobs(run, "user", "token")).error).toBe(BANNER.jenkins.stagesFailed);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});

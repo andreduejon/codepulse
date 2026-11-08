@@ -696,7 +696,8 @@ export async function fetchJenkinsRunJobs(
     return { jobs: [job], error: null };
   } catch (err) {
     if (isAbortError(err, signal)) throw err;
-    return { jobs: [], error: bannerOrFallback(err, BANNER.jenkins.fetchFailed, "Jenkins") };
+    // Like GitHub's "jobs failed": say which part failed, not a generic fetch failure.
+    return { jobs: [], error: bannerOrFallback(err, BANNER.jenkins.stagesFailed, "Jenkins") };
   }
 }
 
