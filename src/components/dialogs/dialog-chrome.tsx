@@ -127,6 +127,7 @@ export function DialogTitle(props: Readonly<{ segments: DialogTitleSegment[] }>)
 
 /**
  * Shared footer for dialogs: right-aligned keybind hints after one empty row, like the one under the title bar.
+ * The dialog's paddingY leaves one row below the hints, as it does above the title.
  * Wrap keybind hint pairs (key + description `<text>` elements) as children.
  */
 export function DialogFooter(props: Readonly<{ children: JSX.Element; left?: JSX.Element }>) {
@@ -138,7 +139,6 @@ export function DialogFooter(props: Readonly<{ children: JSX.Element; left?: JSX
         <box flexGrow={1} />
         {props.children}
       </box>
-      <box height={1} flexShrink={0} />
     </>
   );
 }

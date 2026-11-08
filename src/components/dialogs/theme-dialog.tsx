@@ -264,7 +264,8 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void; onSel
         </Show>
 
         <Show when={showDetails()}>
-          <box flexDirection="column" flexGrow={1} flexShrink={1} minHeight={0} paddingX={4}>
+          {/* Clipped, so details that do not fit a small terminal never draw over the footer */}
+          <box flexDirection="column" flexGrow={1} flexShrink={1} minHeight={0} paddingX={4} overflow="hidden">
             <box flexDirection="row" width="100%" flexShrink={0}>
               <box flexDirection="row" flexGrow={1} minWidth={0}>
                 <text flexShrink={1} wrapMode="none" truncate fg={t().accent}>

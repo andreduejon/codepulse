@@ -45,7 +45,9 @@ All notable changes to this project will be documented in this file.
   menu's names; `shift ↑/↓` jumps 10 rows everywhere and the theme list takes `j/k`.
 - Theme Details mark a changed color with `old → new` and normal text instead of an
   asterisk, and only colors that differ from the base (one changed graph color no
-  longer marks them all).
+  longer marks them all). In a very small terminal they are cut off instead of
+  drawing over the footer.
+- Dialogs leave one empty row around the footer hints, like the title (was two).
 - Long selected names scroll in Files, CI, and OpenShift rows; a commit body taller
   than the panel scrolls with `↑/↓` before the cursor moves past it.
 - The cache card uses the 1+4 inset, keeps the repository switcher's height (16

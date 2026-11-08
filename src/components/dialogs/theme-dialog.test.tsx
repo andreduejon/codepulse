@@ -4,6 +4,7 @@ import { MouseButtons } from "@opentui/core/testing";
 import { testRender } from "@opentui/solid";
 import { createSignal, Show } from "solid-js";
 import { type CustomTheme, createThemeState, ThemeContext, themeNames, themes } from "../../context/theme";
+import { getStandardDialogFrame } from "./dialog-chrome";
 import ThemeDialog from "./theme-dialog";
 
 const derivedTheme: CustomTheme = {
@@ -633,6 +634,11 @@ test("picker and details share capped terminal-clamped dimensions and preserve p
       await setup.flush();
       expect(bounds()).toEqual(pickerBounds);
       expect(setup.captureCharFrame()).toContain("d themes");
+      // Details that do not fit are clipped: the hints row holds only the hints, after one empty row.
+      const detailLines = setup.captureCharFrame().split("\n");
+      const hintsY = detailLines.findIndex(line => line.includes("d themes"));
+      expect(detailLines[hintsY].trim()).toBe("enter select · ↑/↓ scroll · d themes");
+      expect(detailLines[hintsY - 1].trim()).toBe("");
       if (height >= 22) expect(setup.captureCharFrame()).toContain(themes[preview].name);
       expect(theme.themeName()).toBe(preview);
       setup.mockInput.pressKey("d");
@@ -846,7 +852,7 @@ test("details replace theme list without resizing, pin predefined metadata, and 
   }
 });
 
-test("one empty row separates the last color from the footer, like the title above", async () => {
+test("one empty row separates the last color from the footer, and the footer sits one row above the bottom edge like the title below the top", async () => {
   const theme = createThemeState(derivedTheme.id, [derivedTheme]);
   const setup = await testRender(
     () => (
@@ -869,6 +875,10 @@ test("one empty row separates the last color from the footer, like the title abo
     expect(lines[title + 2].trim()).not.toBe("");
     expect(lines[footer - 1].trim()).toBe("");
     expect(lines[footer - 2].trim()).not.toBe("");
+    // One padding row above the title and one below the footer: title and footer are height - 3 rows apart.
+    // The theme dialog caps its height at 32 rows.
+    const height = Math.min(32, getStandardDialogFrame({ width: 100, height: 40 }).height);
+    expect(footer - title).toBe(height - 3);
   } finally {
     await setup.dispose();
   }
