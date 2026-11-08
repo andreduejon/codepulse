@@ -19,6 +19,7 @@ import {
 import { DEFAULT_PROVIDER_CACHE_ROOT } from "../providers/shared/sha-sqlite-cache";
 import { formatGraphDate } from "../utils/date";
 import { repoDisplayName } from "../utils/group-repos";
+import { duplicateNameDetails } from "../utils/project-selector-rows";
 import { scrollIndexedItemIntoView } from "../utils/scroll";
 import { KeyHint, KeyHintSeparator } from "./key-hint";
 import LogoBanner, { LOGO_HEIGHT, LOGO_WIDTH } from "./logo-banner";
@@ -86,6 +87,13 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
         a.lastAccessed - b.lastAccessed || name(a).localeCompare(name(b)) || a.repoPath.localeCompare(b.repoPath),
     );
   });
+  /** Same-named repositories get the path part that tells them apart, like in the repository selector. */
+  const nameDetails = createMemo(() =>
+    duplicateNameDetails(
+      repositories().map(repo => ({ path: repo.repoPath, repo })),
+      entry => name(entry.repo),
+    ),
+  );
   const rows = createMemo(() => {
     const path = summary()?.path ?? join(resolve(props.cacheRoot ?? DEFAULT_PROVIDER_CACHE_ROOT), "cache.sqlite");
     const rows: CacheRow[] = [
@@ -327,7 +335,6 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
             flexGrow={1}
             flexShrink={1}
             minHeight={0}
-            paddingRight={2}
             scrollY
             scrollX={false}
             verticalScrollbarOptions={{ visible: false }}
@@ -346,6 +353,7 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
                     height={1}
                     flexShrink={0}
                     flexDirection="row"
+                    paddingX={4}
                     backgroundColor={
                       selectable(row) && (cursor() === index() || hovered() === row.id)
                         ? t().backgroundElement
@@ -386,6 +394,9 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
                               >
                                 {repoRow().label}
                                 {props.currentRepo === repoRow().repo.repoPath ? " (current)" : ""}
+                                <Show when={nameDetails().get(repoRow().repo.repoPath)}>
+                                  {detail => <span style={{ fg: t().foregroundMuted }}>{` ${detail()}`}</span>}
+                                </Show>
                               </text>
                               <text selectable={false} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
                                 {` ${(repoRow().repo.bytes / 1024).toFixed(1)} KB · ${cleanupDate(repoRow().repo.cleanupAt)}`}
@@ -453,7 +464,7 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
             <CardMessage text={result()} color={t().success} maxHeight={3} />
           </Show>
           <box height={1} flexShrink={0} />
-          <box flexDirection="row" height={1} flexShrink={0} paddingRight={2}>
+          <box flexDirection="row" height={1} flexShrink={0} paddingX={4}>
             <box flexGrow={1} />
             <text selectable={false} wrapMode="none" fg={t().foregroundMuted}>
               {`v${packageJson.version}`}
@@ -510,7 +521,7 @@ function CardMessage(props: Readonly<{ text: string; color: string; maxHeight: n
   const t = useT();
   const lines = () => props.text.split("\n");
   return (
-    <box flexDirection="column" flexShrink={0} maxHeight={props.maxHeight} overflow="hidden">
+    <box flexDirection="column" flexShrink={0} maxHeight={props.maxHeight} overflow="hidden" paddingX={4}>
       <text flexShrink={0} wrapMode="word" fg={props.color}>
         <strong>{lines()[0]}</strong>
       </text>

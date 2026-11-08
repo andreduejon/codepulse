@@ -331,7 +331,8 @@ test("repo info is muted and right-aligned; KB includes all provider payloads an
       expect(label.fg).toEqual(RGBA.fromHex(setup.theme.theme().accent));
       expect(metadata.fg).toEqual(RGBA.fromHex(setup.theme.theme().foregroundMuted));
       expect(metadata.plainText.trim()).toBe(info);
-      expect(metadata.x + metadata.width).toBe(row.x + row.width);
+      // Rows keep the card's 4-column inner inset, like the selector and setup cards.
+      expect(metadata.x + metadata.width).toBe(row.x + row.width - 4);
       expect(metadata.x + metadata.width).toBe(
         setup.point(`v${packageJson.version}`).x - 1 + `v${packageJson.version}`.length,
       );
@@ -810,6 +811,30 @@ test("long lists scroll by wheel, pages, arrows, j/k and g/G; resize keeps scope
     setup.expectSelected("cache-scroll-00");
     expect(data.contents()).toEqual(before);
   } finally {
+    await setup.dispose();
+    await data.dispose();
+  }
+});
+
+test("same-named repositories show the path part that tells them apart, like in the repository selector", async () => {
+  const data = await fixture();
+  const now = Date.now();
+  await data.seed(ALPHA, "github-actions", now - 4000);
+  await data.seed(BETA, "github-actions", now - 2000);
+  const known = spyOn(config, "getKnownRepoInfos").mockReturnValue([
+    { path: ALPHA, appName: "service" },
+    { path: BETA, appName: "service" },
+  ]);
+  const setup = await screen(data.root);
+  try {
+    const rows = setup
+      .frame()
+      .split("\n")
+      .filter(line => line.includes("service"));
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).not.toBe(rows[1]);
+  } finally {
+    known.mockRestore();
     await setup.dispose();
     await data.dispose();
   }

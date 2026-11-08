@@ -8,22 +8,34 @@ export type ProjectSelectorRow =
   | { kind: "repo"; label: string; detail?: string; repo: KnownRepoInfo; current: boolean }
   | { kind: "path-input"; label: "" };
 
-export function buildProjectSelectorRows(repos: KnownRepoInfo[], currentRepo?: string): ProjectSelectorRow[] {
+/**
+ * For repositories that share a display name, the part of each path that tells them apart, keyed by path. The
+ * repository selector and the cache screen both show it, so same-named repositories never look identical.
+ */
+export function duplicateNameDetails<T extends { path: string }>(
+  repos: readonly T[],
+  name: (repo: T) => string,
+): Map<string, string> {
   const labelCounts = new Map<string, number>();
-  const parentDetailsByPath = new Map<string, string>();
+  const details = new Map<string, string>();
   for (const repo of repos) {
-    const label = displayName(repo);
+    const label = name(repo);
     labelCounts.set(label, (labelCounts.get(label) ?? 0) + 1);
   }
-  for (const [label] of labelCounts) {
-    const duplicates = repos.filter(repo => displayName(repo) === label);
-    if (duplicates.length <= 1) continue;
+  for (const [label, count] of labelCounts) {
+    if (count <= 1) continue;
+    const duplicates = repos.filter(repo => name(repo) === label);
     const paths = duplicates.map(repo => shortPath(repo.path));
     const common = commonPathPrefix(paths);
     duplicates.forEach((repo, idx) => {
-      parentDetailsByPath.set(repo.path, uniquePathSuffix(paths[idx], common));
+      details.set(repo.path, uniquePathSuffix(paths[idx], common));
     });
   }
+  return details;
+}
+
+export function buildProjectSelectorRows(repos: KnownRepoInfo[], currentRepo?: string): ProjectSelectorRow[] {
+  const parentDetailsByPath = duplicateNameDetails(repos, displayName);
 
   const buckets = new Map<string, KnownRepoInfo[]>();
   repos.forEach(repo => {
