@@ -235,6 +235,22 @@ export function useOpenShift(opts: {
   }
 
   /**
+   * The status message the live list itself set (a failed or partial list). A later good list clears only that one,
+   * never a build-inventory or other error it does not own.
+   */
+  let liveStatusMessage: string | null = null;
+  const setLiveStatus = (kind: "error" | "warning", message: string) => {
+    liveStatusMessage = message;
+    actions.setProviderStatus("openshift", kind === "error" ? providerError(message) : providerWarning(message));
+  };
+  const clearLiveStatus = () => {
+    const current = state.providerStatusFor("openshift");
+    if (liveStatusMessage && "message" in current && current.message === liveStatusMessage)
+      actions.setProviderStatus("openshift", providerIdle());
+    liveStatusMessage = null;
+  };
+
+  /**
    * After a 401, automatic requests (polls, watches, view switches, selections) stop until an explicit Reload or
    * Fetch retries, like GitHub and Jenkins. Cached data stays visible meanwhile.
    */
@@ -448,7 +464,7 @@ export function useOpenShift(opts: {
           }
           // Every request failed: keep the last live data visible, report, and retry with backoff.
           if (listed.successfulRequests === 0 && listed.error) {
-            actions.setProviderStatus("openshift", providerError(listed.error));
+            setLiveStatus("error", listed.error);
             await sleep(delayMs, signal);
             delayMs = Math.min(delayMs * 2, 10_000);
             continue;
@@ -456,9 +472,8 @@ export function useOpenShift(opts: {
           const merged = keepFailedLiveSlices(live.listed, listed);
           live.listed = merged;
           applyLive(merged);
-          if (listed.error) actions.setProviderStatus("openshift", providerWarning(listed.error));
-          else if (state.providerStatusFor("openshift").kind === "error")
-            actions.setProviderStatus("openshift", providerIdle());
+          if (listed.error) setLiveStatus("warning", listed.error);
+          else clearLiveStatus();
           const child = new AbortController();
           const onAbort = () => child.abort();
           signal.addEventListener("abort", onAbort, { once: true });

@@ -285,6 +285,41 @@ describe("OpenShift live list failures", () => {
   });
 });
 
+describe("OpenShift live list recovery", () => {
+  test("a later successful live list clears the warning its own partial failure set", async () => {
+    const mounted = mountOpenShift();
+    // Let the mount's build inventory settle first, so only live lists change the status below.
+    await Bun.sleep(30);
+    await mounted.openShift.fetchCommitDataForSHA(SHA);
+    mounted.live.mockResolvedValueOnce({
+      resources: [],
+      controllers: [],
+      failures: [{ namespace: "ns", kind: "Pod", path: "/api/v1/namespaces/ns/pods", error: "boom" }],
+      successfulRequests: 2,
+      error: BANNER.openshift.inventoryPartial,
+      resourceVersions: new Map(),
+    });
+    await mounted.openShift.fetchCommitDataForSHA(SHA, true);
+    for (let i = 0; i < 20 && mounted.state.providerStatusFor("openshift").kind !== "warning"; i++) await Bun.sleep(5);
+    expect(mounted.state.providerStatusFor("openshift").kind).toBe("warning");
+    await mounted.openShift.fetchCommitDataForSHA(SHA, true);
+    await Bun.sleep(30);
+    expect(mounted.state.providerStatusFor("openshift").kind).toBe("idle");
+  });
+
+  test("a successful live list does not clear an error from the build inventory", async () => {
+    const mounted = mountOpenShift();
+    await Bun.sleep(30);
+    mounted.actions.setProviderStatus("openshift", { kind: "error", message: BANNER.openshift.inventoryFailed });
+    await mounted.openShift.fetchCommitDataForSHA(SHA, true);
+    await Bun.sleep(30);
+    expect(mounted.state.providerStatusFor("openshift")).toEqual({
+      kind: "error",
+      message: BANNER.openshift.inventoryFailed,
+    });
+  });
+});
+
 describe("OpenShift expired token", () => {
   test("a 401 stops automatic live requests until Reload commit retries", async () => {
     const mounted = mountOpenShift();
