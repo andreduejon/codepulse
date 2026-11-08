@@ -431,6 +431,69 @@ describe("OpenShift auth recovery", () => {
   });
 });
 
+describe("OpenShift auth recovery across inventory and live list", () => {
+  const expiredList: api.OpenShiftListedInventory = {
+    resources: [],
+    controllers: [],
+    failures: [],
+    successfulRequests: 0,
+    error: BANNER.openshift.tokenExpired,
+    resourceVersions: new Map(),
+  };
+  const fine = { data: new Map(), error: null, failures: [], successfulRequests: 1 };
+
+  test("a build inventory that succeeds after a live 401 keeps the expired-token banner", async () => {
+    const mounted = mountOpenShift();
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => (release = resolve));
+    mounted.inventory.mockImplementationOnce(async () => {
+      await gate;
+      return fine;
+    });
+    await Bun.sleep(30);
+    expect(mounted.watches.length).toBeGreaterThan(0);
+    // The live watches hit a 401 while the first inventory is still out.
+    for (const watch of mounted.watches) watch.resolve("auth");
+    await Bun.sleep(10);
+    expect(mounted.state.providerStatusFor("openshift")).toEqual({
+      kind: "error",
+      message: BANNER.openshift.tokenExpired,
+    });
+    release();
+    await Bun.sleep(30);
+    // Live requests stay frozen, so the banner must stay until a retry.
+    expect(mounted.state.providerStatusFor("openshift")).toEqual({
+      kind: "error",
+      message: BANNER.openshift.tokenExpired,
+    });
+  });
+
+  test("a Reload that the queue merges into a waiting first fetch still restarts the stopped live list", async () => {
+    const mounted = mountOpenShift();
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => (release = resolve));
+    mounted.inventory.mockImplementationOnce(async () => {
+      await gate;
+      return fine;
+    });
+    await Bun.sleep(30);
+    // Leave and come back while the first inventory is out: the view entry queues another first fetch, and the
+    // live list it restarts answers 401.
+    mounted.live.mockResolvedValueOnce(expiredList);
+    mounted.actions.setActiveProviderView("git");
+    mounted.actions.setActiveProviderView("openshift");
+    await Bun.sleep(20);
+    expect(mounted.state.providerStatusFor("openshift").kind).toBe("error");
+    const liveCalls = mounted.live.mock.calls.length;
+    const reload = mounted.openShift.fetchCommitDataForSHA(SHA, true);
+    release();
+    await reload;
+    await Bun.sleep(40);
+    expect(mounted.live.mock.calls.length).toBeGreaterThan(liveCalls);
+    expect(mounted.openShift.liveAge()).toBe("live");
+  });
+});
+
 describe("OpenShift object refresh", () => {
   test("a forced object load asks the API instead of returning the embedded snapshot", async () => {
     const mounted = mountOpenShift();

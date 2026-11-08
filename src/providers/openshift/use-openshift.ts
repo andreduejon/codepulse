@@ -261,6 +261,10 @@ export function useOpenShift(opts: {
     authFrozen = true;
     setWatchEpoch(value => value + 1);
   };
+  /** Start the live list again after a retry or a status-showing refresh: it may have stopped on a 401. */
+  const restartLive = (signal: AbortSignal | undefined, epoch: number) => {
+    if (!signal?.aborted && epoch === lifecycle.getEpoch() && !authFrozen) setWatchEpoch(value => value + 1);
+  };
 
   const lifecycle = useProviderFetchLifecycle({
     state,
@@ -295,12 +299,14 @@ export function useOpenShift(opts: {
       if (authFrozen && !retry) return;
       if (retry) authFrozen = false;
       await runBuildInventory({ signal, showStatus, epoch });
+      // A retry the queue merged into a first fetch restarts the live list too.
+      if (retry) restartLive(signal, epoch);
     },
     runRefresh: async ({ signal, showStatus, retry, epoch }) => {
       if (authFrozen && !retry) return;
       if (retry) authFrozen = false;
       await runBuildInventory({ signal, showStatus, epoch });
-      if (showStatus && !signal?.aborted && epoch === lifecycle.getEpoch()) setWatchEpoch(value => value + 1);
+      if (showStatus || retry) restartLive(signal, epoch);
     },
     onResetCaches: () => {
       authFrozen = false;
@@ -413,10 +419,12 @@ export function useOpenShift(opts: {
       }
       publish();
       lifecycle.noteFetchStarted();
+      // A status the live list set (a live 401 that froze requests, a failed list) is the live list's to clear.
+      const liveOwned = liveStatus !== null && state.providerStatusFor("openshift") === liveStatus;
       if (result.error) {
-        actions.setProviderStatus("openshift", providerWarning(result.error));
+        if (!liveOwned) actions.setProviderStatus("openshift", providerWarning(result.error));
       } else {
-        actions.setProviderStatus("openshift", providerIdle());
+        if (!liveOwned) actions.setProviderStatus("openshift", providerIdle());
         actions.setProviderLastSuccessfulRefresh("openshift", new Date());
       }
     } catch (err) {
