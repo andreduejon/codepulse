@@ -107,3 +107,20 @@ test("Snyk's Last Scan fits an absolute same-year date with the partial marker",
     setup.renderer.destroy();
   }
 });
+
+test("a tight column shows compact chips, then a … instead of silently dropping a count", async () => {
+  const many: GraphBadge = { ...badge, failCount: 12, runningCount: 12, unknownCount: 12, passCount: 12 };
+  // Full chips need 4×4 + 3 = 19 columns; compact needs 4×2 + 3 = 11.
+  const compact = await render(() => <ActionsCountsColumn badge={many} active={false} dimmed={false} width={13} />);
+  try {
+    expect(compact.captureCharFrame()).toMatch(/12 12 12 12/);
+  } finally {
+    compact.renderer.destroy();
+  }
+  const clipped = await render(() => <ActionsCountsColumn badge={many} active={false} dimmed={false} width={10} />);
+  try {
+    expect(clipped.captureCharFrame()).toContain("…");
+  } finally {
+    clipped.renderer.destroy();
+  }
+});

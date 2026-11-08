@@ -63,6 +63,8 @@ function useGraphDimensions(maxGraphColumns: () => number) {
 
 /** The subject keeps at least this many columns before provider columns or ref badges take more. */
 const MIN_SUBJECT_WIDTH = 20;
+/** Provider columns also leave room for one shortened ref badge and a `+N` badge (8 + 3 and `+N` + 3). */
+const MIN_REFS_WIDTH = 16;
 const NO_BADGES = new Map<string, GraphBadge>();
 
 /** Columns the graph panel gets: the terminal minus the sidebar (wide layout) and the panel's own padding. */
@@ -93,7 +95,10 @@ function budgetedColumnWidths(
 ): GraphColumnWidths {
   const wanted = graphColumnWidths(view, badges);
   const base = graphColumnWidths(view, NO_BADGES);
-  const room = Math.max(base.first + base.second, rowTextRoom(terminalWidth, graphWidth) - MIN_SUBJECT_WIDTH);
+  const room = Math.max(
+    base.first + base.second,
+    rowTextRoom(terminalWidth, graphWidth) - MIN_SUBJECT_WIDTH - MIN_REFS_WIDTH,
+  );
   let excess = wanted.first + wanted.second - room;
   if (excess <= 0) return wanted;
   const first = Math.max(base.first, wanted.first - excess);
@@ -428,24 +433,35 @@ function GraphLine(
   // and 1 paddingRight after the badge box. Returns 0 when no refs are visible.
   // Ref badge names are capped at 30 characters, and shorter when the row is tight, so the subject keeps
   // MIN_SUBJECT_WIDTH (each badge takes name + 2, one gap between badges and one after them).
-  const refMaxLength = createMemo(() => {
+  // When even 8-character badges do not fit, the refs that do not fit collapse into one muted `+N` badge.
+  const refLayout = createMemo(() => {
     const refs = visibleRefs();
-    if (refs.length === 0) return 30;
+    if (refs.length === 0) return { shown: refs, hidden: 0, maxLength: 30 };
     const room =
       rowTextRoom(props.terminalWidth(), graphWidth()) -
       columnWidths().first -
       columnWidths().second -
       MIN_SUBJECT_WIDTH;
-    const perBadge = Math.floor((room - refs.length) / refs.length) - 2;
-    return Math.max(8, Math.min(30, perBadge));
+    for (let shown = refs.length; shown >= 1; shown--) {
+      const hidden = refs.length - shown;
+      // `+N` badge: its text + 2, plus one gap.
+      const overflow = hidden > 0 ? `+${hidden}`.length + 3 : 0;
+      // Each shown badge: name + 2, one gap between badges and one after them.
+      const perBadge = Math.floor((room - overflow) / shown) - 3;
+      if (perBadge >= 8 || shown === 1) {
+        return { shown: refs.slice(0, shown), hidden, maxLength: Math.max(8, Math.min(30, perBadge)) };
+      }
+    }
+    return { shown: refs.slice(0, 1), hidden: refs.length - 1, maxLength: 8 };
   });
+  const refMaxLength = () => refLayout().maxLength;
 
   const refBadgesWidth = createMemo(() => {
-    const refs = visibleRefs();
-    if (refs.length === 0) return 0;
-    // sum of (displayName + 2) for each badge + (refs.length - 1) gaps + 1 paddingRight
-    // Use truncateName to match the actual rendered width.
-    return refs.reduce((acc, r) => acc + truncateName(r.name, refMaxLength()).length + 2, 0) + (refs.length - 1) + 1;
+    const { shown, hidden } = refLayout();
+    if (shown.length === 0) return 0;
+    const badges = [...shown.map(r => truncateName(r.name, refMaxLength())), ...(hidden > 0 ? [`+${hidden}`] : [])];
+    // sum of (displayName + 2) for each badge + gaps between badges + 1 paddingRight
+    return badges.reduce((acc, name) => acc + name.length + 2, 0) + (badges.length - 1) + 1;
   });
 
   // Approximate available width for the subject text in the graph panel.
@@ -522,7 +538,7 @@ function GraphLine(
         <box flexDirection="row" flexGrow={1} flexShrink={1} paddingLeft={1} paddingRight={2}>
           <Show when={visibleRefs().length > 0}>
             <box flexDirection="row" flexShrink={0} gap={1} paddingRight={1}>
-              <For each={visibleRefs()}>
+              <For each={refLayout().shown}>
                 {ri => (
                   <Badge
                     name={ri.name}
@@ -533,6 +549,9 @@ function GraphLine(
                   />
                 )}
               </For>
+              <Show when={refLayout().hidden > 0}>
+                <Badge name={`+${refLayout().hidden}`} dimmed noShrink />
+              </Show>
             </box>
           </Show>
           <text flexGrow={1} flexShrink={1} fg={effectiveTextColor()} wrapMode="none" truncate={bannerOverflow() === 0}>

@@ -308,3 +308,77 @@ test("wide provider chips never squeeze the commit subject out at narrow widths"
     setup.renderer.destroy();
   }
 });
+test("many long refs collapse into +N instead of squeezing the commit subject out", async () => {
+  let app!: ReturnType<typeof createAppState>;
+  const sha = "f".repeat(40);
+  const setup = await testRender(
+    () => {
+      app = createAppState(100, 0, 0);
+      const commits: Commit[] = [
+        {
+          hash: sha,
+          shortHash: sha.slice(0, 7),
+          parents: [],
+          subject: "Visible subject words",
+          body: "",
+          author: "Author",
+          authorEmail: "author@example.com",
+          authorDate: "2026-01-01T00:00:00Z",
+          committer: "Author",
+          committerEmail: "author@example.com",
+          commitDate: "2026-01-01T00:00:00Z",
+          refs: [
+            { name: "feature/a-rather-long-branch-nm", type: "branch", isCurrent: true },
+            { name: "origin/feature/a-rather-long-branch", type: "remote", isCurrent: false },
+            { name: "release/2026.11-candidate-one", type: "branch", isCurrent: false },
+            { name: "v2026.11.0-rc.1-long-tag-name", type: "tag", isCurrent: false },
+          ],
+        },
+      ];
+      app.actions.setGraphRows(buildGraph(commits));
+      app.actions.setCommits(commits);
+      app.actions.setLoading(false);
+      app.actions.setHasMore(false);
+      app.actions.setActiveProviderView("openshift");
+      const lane = { failCount: 123, runningCount: 456, unknownCount: 789, passCount: 321 };
+      app.actions.setGraphBadges(
+        "openshift",
+        new Map([
+          [
+            sha,
+            {
+              sha,
+              badge: "fail",
+              passCount: 0,
+              failCount: 0,
+              runningCount: 0,
+              lanes: { live: lane, cache: lane },
+              latestRunAt: "",
+              latestStatus: "fail",
+            },
+          ],
+        ]),
+      );
+      return createComponent(ThemeContext.Provider, {
+        value: createThemeState(),
+        get children() {
+          return createComponent(AppStateContext.Provider, {
+            value: app,
+            get children() {
+              return createComponent(GraphView, {});
+            },
+          });
+        },
+      });
+    },
+    // Compact layout (no sidebar): the graph has the full 90 columns.
+    { width: 90, height: 10 },
+  );
+  try {
+    await setup.renderOnce();
+    expect(setup.captureCharFrame()).toMatch(/Visible/);
+    expect(setup.captureCharFrame()).toMatch(/\+\d/);
+  } finally {
+    setup.renderer.destroy();
+  }
+});

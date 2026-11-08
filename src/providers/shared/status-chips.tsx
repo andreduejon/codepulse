@@ -1,4 +1,4 @@
-import { For } from "solid-js";
+import { createMemo, For } from "solid-js";
 import { UNCOMMITTED_PLACEHOLDER } from "../../constants";
 import type { Theme } from "../../context/theme";
 import { useT } from "../../hooks/use-t";
@@ -59,6 +59,25 @@ export function StatusChips(
   }>,
 ) {
   const t = useT();
+  // Full chips (` 12 `) when they fit; otherwise compact (`12`); otherwise as many as fit and a muted `…`, so a
+  // tight column never drops a count without saying so.
+  const layout = createMemo(() => {
+    const available = props.width - (props.paddingRight ?? 0);
+    const texts = props.chips.map(chip => chip.text);
+    const total = (padding: number) =>
+      texts.reduce((sum, text) => sum + text.length + padding, 0) + Math.max(0, texts.length - 1);
+    if (total(2) <= available) return { padded: true, count: texts.length };
+    if (total(0) <= available) return { padded: false, count: texts.length };
+    let used = 2; // " …"
+    let count = 0;
+    for (const text of texts) {
+      const next = text.length + (count > 0 ? 1 : 0);
+      if (used + next > available) break;
+      used += next;
+      count++;
+    }
+    return { padded: false, count };
+  });
   return (
     <box
       flexShrink={0}
@@ -73,20 +92,27 @@ export function StatusChips(
           {props.placeholder ?? UNCOMMITTED_PLACEHOLDER}
         </text>
       ) : (
-        <For each={props.chips}>
-          {chip => {
-            const fg = () => (props.dimmed ? t().foregroundMuted : chip.fg);
-            const bg = () => (props.dimmed ? t().backgroundElementActive : chip.bg);
-            const label = ` ${chip.text} `;
-            return (
-              <box flexShrink={0} height={1} backgroundColor={bg()}>
-                <text flexShrink={0} wrapMode="none" fg={fg()} bg={bg()}>
-                  {props.active ? <strong>{label}</strong> : label}
-                </text>
-              </box>
-            );
-          }}
-        </For>
+        <>
+          <For each={props.chips.slice(0, layout().count)}>
+            {chip => {
+              const fg = () => (props.dimmed ? t().foregroundMuted : chip.fg);
+              const bg = () => (props.dimmed ? t().backgroundElementActive : chip.bg);
+              const label = () => (layout().padded ? ` ${chip.text} ` : chip.text);
+              return (
+                <box flexShrink={0} height={1} backgroundColor={bg()}>
+                  <text flexShrink={0} wrapMode="none" fg={fg()} bg={bg()}>
+                    {props.active ? <strong>{label()}</strong> : label()}
+                  </text>
+                </box>
+              );
+            }}
+          </For>
+          {layout().count < props.chips.length ? (
+            <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+              …
+            </text>
+          ) : null}
+        </>
       )}
     </box>
   );
