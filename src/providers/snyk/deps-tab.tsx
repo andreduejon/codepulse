@@ -238,9 +238,12 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
         filter.suppressAutoEdit();
         props.setDetailCursorIndex(saved.cursor);
       } else {
+        // Another commit or a rescan starts fresh, like Vulnerabilities: default Scope and Group by too.
         filter.reset();
-        previousView = JSON.stringify(["", scope(), groupBy()]);
-        setExpanded(defaultDependencyExpansion(projects(), "", scope(), groupBy()));
+        setScope("all");
+        setGroupBy("tree");
+        previousView = JSON.stringify(["", "all", "tree"]);
+        setExpanded(defaultDependencyExpansion(projects(), "", "all", "tree"));
         props.setDetailCursorIndex(0);
       }
       props.navRef?.scrollToCursor?.();

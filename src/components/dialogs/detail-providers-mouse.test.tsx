@@ -1206,6 +1206,25 @@ test("Snyk tabs keep their view across tab switches for the same scan, and start
   }
 });
 
+test("a rescan while Dependencies stays open also resets its Scope and Group by", async () => {
+  const d = await renderProvider("snyk");
+  try {
+    d.setSnykScan(dependencyScan);
+    d.actions.setDetailActiveTab("snyk-deps");
+    await d.flush();
+    await d.click("Group by");
+    await d.click("Scope");
+    expect(d.frame()).toContain("[package]");
+    expect(d.frame()).toContain("[prod]");
+    d.setSnykScan({ ...dependencyScan, scannedAt: "2026-08-26T10:00:00.000Z" });
+    await d.flush();
+    expect(d.frame()).toContain("[tree]");
+    expect(d.frame()).toContain("[all]");
+  } finally {
+    await d.dispose();
+  }
+});
+
 test("Vulnerabilities highlights filter hits in row text", async () => {
   const d = await renderProvider("snyk");
   try {
