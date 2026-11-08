@@ -114,6 +114,12 @@ that produced them.
 - `c` cycles view mode (log / JSON) for Builds and Pods. Terminal Build JSON
   uses the cached object when present; otherwise JSON is a live snapshot.
   Leave the log view or close the dialog to abort follow.
+- `/` searches the log or JSON (`n` / `N` next and previous hit), like CI logs.
+  A failed request shows its reason; an empty log says *No log output.*
+
+Live updates keep the namespaces you collapsed and the cursor on the same row.
+When a live list fails, the last workloads stay visible and the banner (every
+request failed) or a tab notice (some failed) says so.
 
 ## Status
 

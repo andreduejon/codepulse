@@ -56,6 +56,20 @@ Normal clears highlighting without changing branch perspective.
 | `g` / `G` | Top / bottom |
 | `enter` | Activate selected item |
 
+### Logs (CI jobs and OpenShift resources)
+
+| Key | Action |
+|-----|--------|
+| `/` | Search; Enter keeps the query, Esc clears it |
+| `n` / `N` | Next / previous search hit |
+| `c` | Cycle view mode (CI: all, issues, errors, raw; OpenShift: log, JSON) |
+| `w` | Toggle line wrap |
+| `r` | Fetch the log again (OpenShift: restart following) |
+| `o` | Open the CI run in the browser |
+| `←` / `→` or `h` / `l` | Previous / next CI job |
+| `↑` / `↓` or `j` / `k`, `shift ↑` / `shift ↓`, space, `g` / `G` | Scroll |
+| `esc` | Clear search / close |
+
 Theme controls and custom configuration are in the [theme guide](themes.md).
 
 ## Commands

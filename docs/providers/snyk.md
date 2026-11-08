@@ -73,7 +73,9 @@ Graph shows four severity counts for exact scanned commits:
 C0 H2 M0 L4
 ```
 
-Zero counts remain visible in muted color. Unscanned commits show placeholders. The **Vulnerabilities** tab lists findings by severity, dependency, installed version, and fixed version when available. Stashes appear only in the Git view.
+Zero counts remain visible in muted color. Unscanned commits show placeholders.
+A partial scan adds a `?` in the warning colour after its scan time (zero findings
+there is not a clean result), and a commit being scanned says `scanning...`. The **Vulnerabilities** tab lists findings by severity, dependency, installed version, and fixed version when available. Stashes appear only in the Git view.
 
 For multi-project repositories, Codepulse keeps successful project results when
 another project fails and labels the result with the failed project count. Snyk
