@@ -8,6 +8,7 @@ import { useClipboard } from "../hooks/use-clipboard";
 import { useT } from "../hooks/use-t";
 import type { KeyboardScope } from "../keyboard/scope";
 import {
+  CACHE_INACTIVITY_MS,
   type CacheEvictionResult,
   type CacheRepositorySummary,
   evictRepositoryCache,
@@ -23,6 +24,11 @@ import { duplicateNameDetails } from "../utils/project-selector-rows";
 import { scrollIndexedItemIntoView } from "../utils/scroll";
 import { KeyHint, KeyHintSeparator } from "./key-hint";
 import LogoBanner, { LOGO_HEIGHT, LOGO_WIDTH } from "./logo-banner";
+import MessageBox, { type UIMessageKind } from "./message-box";
+
+/** The list shows at most this many rows, like the repository switcher; the rest scrolls. */
+const MAX_LIST_ROWS = 16;
+const INACTIVITY_DAYS = Math.round(CACHE_INACTIVITY_MS / (24 * 60 * 60 * 1_000));
 
 interface CacheScreenProps {
   onClose: () => void;
@@ -129,31 +135,45 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
   const selectableIndexes = createMemo(() => rows().flatMap((row, index) => (selectable(row) ? [index] : [])));
   const selected = () => rows()[cursor()];
   const blocked = () => busy() || confirmation() !== null;
-  const confirmationText = () => {
+  /** One message at a time, above the card like the repository switcher's: a confirmation, an error, or a result. */
+  const notice = (): { kind: UIMessageKind; title: string; lines: string[] } | null => {
     const action = confirmation();
-    if (!action) return "";
-    return action.kind === "reset-all"
-      ? `Reset timers for ${action.count} repositories?`
-      : `Evict only ${action.label} (all providers)?\n${action.repo.repoPath}`;
+    if (action?.kind === "reset-all") {
+      const repos = action.count === 1 ? "1 repository starts" : `${action.count} repositories start`;
+      return {
+        kind: "warning",
+        title: "Reset all inactivity timers?",
+        lines: [`${repos} a new ${INACTIVITY_DAYS}-day period.`, "Nothing is deleted."],
+      };
+    }
+    if (action?.kind === "evict") {
+      return {
+        kind: "warning",
+        title: `Evict ${action.label}?`,
+        lines: ["Deletes its cached data from every provider; other repositories keep theirs.", action.repo.repoPath],
+      };
+    }
+    if (error()) {
+      const [title = "", ...lines] = error().split("\n");
+      return { kind: "error", title, lines };
+    }
+    if (result()) return { kind: "info", title: result(), lines: [] };
+    return null;
   };
   const showLogo = () => dimensions().height >= 26;
   const cardWidth = () => Math.max(1, Math.min(LOGO_WIDTH, dimensions().width - 2));
-  const messageHeight = (message: string, limit = 3) =>
-    message
-      ? Math.min(
-          limit,
-          message
-            .split("\n")
-            .reduce((height, line) => height + Math.ceil(line.length / Math.max(1, cardWidth() - 3)), 0),
-        )
-      : 0;
-  const availableCardHeight = () => Math.max(1, dimensions().height - (showLogo() ? LOGO_HEIGHT + 2 : 0) - 2);
-  const confirmationHeight = () => messageHeight(confirmationText(), Math.max(1, availableCardHeight() - 5));
-  const cardHeight = () =>
-    Math.min(
-      rows().length + 4 + confirmationHeight() + messageHeight(error()) + messageHeight(result()),
-      availableCardHeight(),
-    );
+  /** Rows the notice takes: its padding, wrapped title and lines, and the gap below it. */
+  const noticeHeight = () => {
+    const current = notice();
+    if (!current) return 0;
+    // Text width inside the message box: border, its padding and the 4-column inset on both sides.
+    const width = Math.max(1, cardWidth() - 11);
+    const wrapped = (text: string) => Math.max(1, Math.ceil(text.length / width));
+    return 2 + [current.title, ...current.lines].reduce((height, line) => height + wrapped(line), 0) + 1;
+  };
+  const availableCardHeight = () =>
+    Math.max(1, dimensions().height - (showLogo() ? LOGO_HEIGHT + 2 : 0) - 2 - noticeHeight());
+  const cardHeight = () => Math.min(Math.min(rows().length, MAX_LIST_ROWS) + 4, availableCardHeight());
 
   const refresh = () => {
     const key = selected()?.id;
@@ -299,8 +319,11 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
         break;
       case "r":
         event.preventDefault();
-        if (event.shift) requestResetAll();
-        else resetRepository();
+        if (!event.shift) resetRepository();
+        break;
+      case "a":
+        event.preventDefault();
+        requestResetAll();
         break;
       case "e":
         event.preventDefault();
@@ -315,6 +338,21 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
         <Show when={showLogo()}>
           <LogoBanner />
           <box height={2} flexShrink={0} />
+        </Show>
+        <Show when={notice()}>
+          {current => (
+            <>
+              <box width={cardWidth()} flexShrink={0}>
+                <MessageBox
+                  id="cache-message"
+                  kind={current().kind}
+                  title={current().title}
+                  message={current().lines.join("\n")}
+                />
+              </box>
+              <box height={1} flexShrink={0} />
+            </>
+          )}
         </Show>
         <box
           id="cache-card"
@@ -454,15 +492,6 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
               </For>
             </box>
           </scrollbox>
-          <Show when={confirmation()}>
-            <CardMessage text={confirmationText()} color={t().warning} maxHeight={Math.max(1, cardHeight() - 5)} />
-          </Show>
-          <Show when={error()}>
-            <CardMessage text={error()} color={t().error} maxHeight={3} />
-          </Show>
-          <Show when={result()}>
-            <CardMessage text={result()} color={t().success} maxHeight={3} />
-          </Show>
           <box height={1} flexShrink={0} />
           <box flexDirection="row" height={1} flexShrink={0} paddingX={4}>
             <box flexGrow={1} />
@@ -491,7 +520,7 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
                     <KeyHintSeparator />
                   </Show>
                   <KeyHint
-                    key="R"
+                    key="a"
                     desc=" reset all"
                     onClick={requestResetAll}
                     disabled={busy() || repositories().length === 0}
@@ -512,26 +541,6 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
           </box>
         </box>
       </box>
-    </box>
-  );
-}
-
-/** Like a banner inside the card: the first line is a bold headline in the message's colour, the rest is muted. */
-function CardMessage(props: Readonly<{ text: string; color: string; maxHeight: number }>) {
-  const t = useT();
-  const lines = () => props.text.split("\n");
-  return (
-    <box flexDirection="column" flexShrink={0} maxHeight={props.maxHeight} overflow="hidden" paddingX={4}>
-      <text flexShrink={0} wrapMode="word" fg={props.color}>
-        <strong>{lines()[0]}</strong>
-      </text>
-      <For each={lines().slice(1)}>
-        {line => (
-          <text flexShrink={0} wrapMode="word" fg={t().foregroundMuted}>
-            {line}
-          </text>
-        )}
-      </For>
     </box>
   );
 }

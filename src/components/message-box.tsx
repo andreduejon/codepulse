@@ -16,6 +16,8 @@ export interface UIMessage {
 }
 
 interface MessageBoxProps {
+  /** Renderable id of the framed box. */
+  id?: string;
   kind: UIMessageKind;
   /** Shown muted after the headline. Without a title, the message's first sentence becomes the headline. */
   source?: string;
@@ -51,6 +53,7 @@ export default function MessageBox(props: Readonly<MessageBoxProps>) {
 
   return (
     <box
+      id={props.id}
       width="100%"
       flexDirection="column"
       backgroundColor={backgroundColor()}

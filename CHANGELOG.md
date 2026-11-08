@@ -45,8 +45,10 @@ All notable changes to this project will be documented in this file.
   menu's names; `shift ↑/↓` jumps 10 rows everywhere and the theme list takes `j/k`.
 - Long selected names scroll in Files, CI, and OpenShift rows; a commit body taller
   than the panel scrolls with `↑/↓` before the cursor moves past it.
-- The cache card uses the 1+4 inset and tells same-named repositories apart;
-  `shift+r` shows as `R`.
+- The cache card uses the 1+4 inset, keeps the repository switcher's height (16
+  rows, the rest scrolls), and tells same-named repositories apart. Confirmations
+  and errors show as message boxes above it, and `a` resets all timers (was
+  `shift+r`).
 
 ### Fixed
 

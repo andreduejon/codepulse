@@ -128,7 +128,7 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     { kind: "binding", key: "enter", desc: "Copy selected cache file path / confirm action", indent: 1 },
     { kind: "binding", key: "e", desc: "Evict selected repository across providers with confirmation", indent: 1 },
     { kind: "binding", key: "r", desc: "Reset selected repository's inactivity timer to 90 days", indent: 1 },
-    { kind: "binding", key: "R", desc: "Reset all inactivity timers with confirmation", indent: 1 },
+    { kind: "binding", key: "a", desc: "Reset all inactivity timers with confirmation", indent: 1 },
     { kind: "binding", key: "q", desc: "Quit application", indent: 1 },
     { kind: "binding", key: "esc", desc: "Cancel confirmation / back", indent: 1 },
     { kind: "binding", key: "g/G", desc: "First / last repository", indent: 1 },
