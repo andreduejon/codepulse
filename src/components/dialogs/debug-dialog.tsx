@@ -3,7 +3,13 @@ import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { For } from "solid-js";
 import { SHIFT_JUMP } from "../../constants";
 import { getDebugEvents } from "../../debug/events";
-import { formatDebugDuration, formatDebugMessage, formatDebugStatus, formatDebugTimestamp } from "../../debug/format";
+import {
+  formatDebugDuration,
+  formatDebugMessage,
+  formatDebugStatus,
+  formatDebugTimestamp,
+  isFailedDebugStatus,
+} from "../../debug/format";
 import { useT } from "../../hooks/use-t";
 import { debugSourceColor } from "../../providers/colors";
 import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
@@ -99,7 +105,12 @@ export default function DebugDialog(props: Readonly<{ onClose: () => void; gitCo
                   <text width={10} flexShrink={0} wrapMode="none" fg={sourceColor(event.source)}>
                     {event.source}
                   </text>
-                  <text width={10} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                  <text
+                    width={10}
+                    flexShrink={0}
+                    wrapMode="none"
+                    fg={isFailedDebugStatus(event) ? t().error : t().foregroundMuted}
+                  >
                     {formatDebugStatus(event.status)}
                   </text>
                   <text width={10} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
