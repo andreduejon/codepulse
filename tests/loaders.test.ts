@@ -248,3 +248,32 @@ test("a fresh load clears an earlier history failure", async () => {
   await loader.loadData();
   expect(state.historyError()).toBe(false);
 });
+
+test("a history page that finishes after a branch switch does not merge into the new branch", async () => {
+  const { root, git } = await makeRepo(["c1", "c2", "c3", "c4"]);
+  await git("switch", "-c", "feature");
+  await writeFile(join(root, "file.txt"), "feature\n");
+  await git("commit", "-am", "feature commit");
+  await git("switch", "main");
+  const { state, actions, loader } = mount(root, 2);
+  await until(() => !state.loading() && state.commits().length > 0, "first page");
+  const repoModule = await import("../src/git/repo");
+  const real = repoModule.getCommits;
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => (release = resolve));
+  const spy = spyOn(repoModule, "getCommits").mockImplementationOnce(async (...args) => {
+    await gate;
+    return real(...args);
+  });
+  try {
+    const page = loader.loadMoreData();
+    actions.setViewingBranch("feature");
+    await loader.loadData();
+    const featureSubjects = subjects(state.commits());
+    release();
+    await page;
+    expect(subjects(state.commits())).toEqual(featureSubjects);
+  } finally {
+    spy.mockRestore();
+  }
+});

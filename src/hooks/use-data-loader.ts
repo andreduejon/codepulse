@@ -63,11 +63,18 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
   const initialRepoPath = repoPath();
   // ── loadData ──────────────────────────────────────────────────────
   let loadAbortCtrl: AbortController | null = null;
+  let loadMoreAbortCtrl: AbortController | null = null;
 
   async function loadData(branch?: string, stickyHash?: string, silent = false, preserveLoaded = false) {
     const path = repoPath();
-    // Cancel any in-flight load — user-initiated actions take priority
+    // Cancel any in-flight load — user-initiated actions take priority. A page of older history belongs to the
+    // previous load (another branch or view), so it must not merge into this one.
     if (loadAbortCtrl) loadAbortCtrl.abort();
+    if (loadMoreAbortCtrl) {
+      loadMoreAbortCtrl.abort();
+      loadMoreAbortCtrl = null;
+      actions.setFetching(false);
+    }
     const ctrl = new AbortController();
     loadAbortCtrl = ctrl;
 
@@ -169,7 +176,6 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
   }
 
   // ── loadMoreData ──────────────────────────────────────────────────
-  let loadMoreAbortCtrl: AbortController | null = null;
 
   async function loadMoreData() {
     const path = repoPath();
