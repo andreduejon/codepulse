@@ -363,7 +363,8 @@ export function useGitHubCI(opts: {
       const repoPath = state.repoPath();
       await hydrateCachedCandidates(repoPath, allSHAs, epoch);
       if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return;
-      const unqueried = allSHAs.filter(sha => !queriedSHAs.has(sha));
+      // An explicit retry asks again for every target, also when a fetch it waited behind just marked them queried.
+      const unqueried = retry ? allSHAs : allSHAs.filter(sha => !queriedSHAs.has(sha));
       if (unqueried.length === 0) {
         lifecycle.noteFetchStarted();
         return;
@@ -432,7 +433,6 @@ export function useGitHubCI(opts: {
   async function refreshWindow(): Promise<void> {
     if (opts.suspended?.()) return;
     const window = collectTopSHAs(state.graphRows(), config.fetchDepth);
-    for (const sha of window) queriedSHAs.delete(sha);
     await lifecycle.fetchInitial(undefined, window, true, true);
     if (state.activeProviderView() === "github-actions") lifecycle.startAutoRefresh();
   }
@@ -443,7 +443,6 @@ export function useGitHubCI(opts: {
     await hydrateCachedCandidates(repoPath, [sha], epoch);
     if (!lifecycle.isCurrent(epoch, repoPath)) return;
     if (!force) return;
-    queriedSHAs.delete(sha);
     await lifecycle.fetchInitial(undefined, [sha], true, true);
   }
 

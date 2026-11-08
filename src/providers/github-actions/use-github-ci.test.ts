@@ -222,3 +222,23 @@ test("a fetch cancelled by a repository switch leaves the new repository's loadi
   releaseNew();
   await settle(() => state.providerStatusFor("github-actions").kind !== "loading");
 });
+
+test("a Reload queued behind a fetch of the same commit still asks GitHub again", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => (release = resolve));
+  const { github, ci } = await mountGitHub();
+  ci.mockImplementationOnce(async () => {
+    await gate;
+    return { data: [run()], jobs: new Map(), error: null };
+  });
+  await settle(() => ci.mock.calls.length === 1);
+  // The view-entry fetch covers SHA; Reload of SHA waits behind it.
+  const reload = github.fetchCommitDataForSHA(SHA, true);
+  // Let the Reload read its disk cache and queue behind the running fetch before that fetch answers.
+  await settle();
+  release();
+  await reload;
+  await settle(() => ci.mock.calls.length > 1);
+  expect(ci.mock.calls.length).toBe(2);
+  expect(ci.mock.calls[1]?.[2]).toContain(SHA);
+});

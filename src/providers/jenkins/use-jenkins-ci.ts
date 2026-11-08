@@ -241,7 +241,8 @@ export function useJenkinsCI(opts: {
       const repoPath = state.repoPath();
       await hydrateCachedCandidates(repoPath, window, epoch);
       if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return;
-      const target = window.filter(sha => !queriedSHAs.has(sha));
+      // An explicit retry asks again for every target, also when a fetch it waited behind just marked them queried.
+      const target = retry ? window : window.filter(sha => !queriedSHAs.has(sha));
       if (target.length === 0) {
         if (showStatus) actions.setProviderStatus("jenkins", settledStatus());
         lifecycle.noteFetchStarted();
@@ -322,7 +323,6 @@ export function useJenkinsCI(opts: {
   async function refreshWindow(): Promise<void> {
     if (opts.suspended?.()) return;
     const window = collectTopSHAs(state.graphRows(), config.fetchDepth);
-    for (const sha of window) queriedSHAs.delete(sha);
     await lifecycle.fetchInitial(undefined, window, true, true);
     if (state.activeProviderView() === "jenkins") lifecycle.startAutoRefresh();
   }

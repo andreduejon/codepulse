@@ -209,3 +209,22 @@ test("stages of a finished build are cached only once every stage has finished",
   await jenkins.fetchJobsForRun(run(), undefined);
   expect(stages).toHaveBeenCalledTimes(2);
 });
+
+test("a Reload queued behind a fetch of the same window still asks Jenkins again", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => (release = resolve));
+  const { jenkins, graph } = await mountJenkins();
+  graph.mockImplementationOnce(async () => {
+    await gate;
+    return result([run()]);
+  });
+  await settle(() => graph.mock.calls.length === 1);
+  // The view-entry fetch covers the window; Reload waits behind it.
+  const reload = jenkins.refresh();
+  await settle();
+  release();
+  await reload;
+  await settle(() => graph.mock.calls.length > 1);
+  expect(graph.mock.calls.length).toBe(2);
+  expect(graph.mock.calls[1]?.[3]).toContain(SHA);
+});
