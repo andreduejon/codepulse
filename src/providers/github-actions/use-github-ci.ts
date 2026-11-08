@@ -401,9 +401,9 @@ export function useGitHubCI(opts: {
         rememberAuthError(firstError);
         lifecycle.noteFetchResult(!firstError);
         if (!firstError) actions.setProviderLastSuccessfulRefresh("github-actions", new Date());
-        if (firstError === BANNER.github.tokenExpired)
-          actions.setProviderStatus("github-actions", providerError(firstError));
-        else if (!firstError && state.providerStatusFor("github-actions").kind === "error")
+        // Like Jenkins: a failed refresh is visible (cached runs stay), not only in Debug.
+        if (firstError) actions.setProviderStatus("github-actions", providerError(firstError));
+        else if (state.providerStatusFor("github-actions").kind === "error")
           actions.setProviderStatus("github-actions", providerIdle());
         if (firstError) debugError("GitHub", firstError);
       } catch (err) {
