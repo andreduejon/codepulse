@@ -89,12 +89,17 @@ export function useJenkinsCI(opts: {
   let discoveredJobs: { url: string }[] | null = null;
   const lastBuildByJob = new Map<string, number>();
   let authFrozen = false;
+  /** The auth banner that froze requests (token expired or authentication failed). */
+  let authError: string | null = null;
   let discoveryTruncated = false;
 
   const settledStatus = () => (discoveryTruncated ? providerWarning(BANNER.jenkins.incomplete) : providerIdle());
 
   function rememberAuthError(error: string | null): void {
-    if (error === BANNER.jenkins.tokenExpired || error === BANNER.jenkins.authFailed) authFrozen = true;
+    if (error === BANNER.jenkins.tokenExpired || error === BANNER.jenkins.authFailed) {
+      authFrozen = true;
+      authError = error;
+    }
   }
 
   function rebuildCaches() {
@@ -224,9 +229,9 @@ export function useJenkinsCI(opts: {
         actions.setProviderStatus("jenkins", providerUnavailable(BANNER.jenkins.noUsername));
       else actions.setProviderStatus("jenkins", providerUnavailable(BANNER.jenkins.missingToken(config.tokenEnvVar)));
     },
-    runInitialFetch: async ({ signal, shas, showStatus, epoch }) => {
-      if (authFrozen && !showStatus) return;
-      if (showStatus) authFrozen = false;
+    runInitialFetch: async ({ signal, shas, showStatus, retry, epoch }) => {
+      if (authFrozen && !retry) return;
+      if (retry) authFrozen = false;
       if (showStatus) actions.setProviderStatus("jenkins", providerLoading());
       const window = shas ?? collectTopSHAs(state.graphRows(), config.fetchDepth);
       const repoPath = state.repoPath();
@@ -247,10 +252,10 @@ export function useJenkinsCI(opts: {
       if (firstError) actions.setProviderStatus("jenkins", providerError(firstError));
       else actions.setProviderStatus("jenkins", settledStatus());
     },
-    runRefresh: async ({ signal, showStatus, epoch }) => {
+    runRefresh: async ({ signal, showStatus, retry, epoch }) => {
       const repoPath = state.repoPath();
-      if (authFrozen && !showStatus) return;
-      if (showStatus) authFrozen = false;
+      if (authFrozen && !retry) return;
+      if (retry) authFrozen = false;
       const target = collectRunningSHAs(state.graphBadges());
       if (target.length === 0) {
         lifecycle.noteRefreshSettled();
@@ -314,7 +319,7 @@ export function useJenkinsCI(opts: {
     if (opts.suspended?.()) return;
     const window = collectTopSHAs(state.graphRows(), config.fetchDepth);
     for (const sha of window) queriedSHAs.delete(sha);
-    await lifecycle.fetchInitial(undefined, window, true);
+    await lifecycle.fetchInitial(undefined, window, true, true);
     if (state.activeProviderView() === "jenkins") lifecycle.startAutoRefresh();
   }
   return {
@@ -325,6 +330,8 @@ export function useJenkinsCI(opts: {
       const cached = jobsCache.get(run.id);
       if (cached) return cached;
       if (!lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
+      // Frozen after an auth failure: no requests until Reload; say why instead of asking Jenkins again.
+      if (authFrozen) return { jobs: [], error: authError ?? BANNER.jenkins.tokenExpired };
       const token = getJenkinsToken(config.tokenEnvVar);
       if (!token) return { jobs: [], error: BANNER.jenkins.missingToken(config.tokenEnvVar) };
       const result = await lifecycle.runRequest(

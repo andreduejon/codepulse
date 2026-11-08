@@ -302,3 +302,54 @@ test("jobs that fail to load show the reason under the run", async () => {
     setup.renderer.destroy();
   }
 });
+
+test("a run that changes while its jobs are loading loads them again once that request settles", async () => {
+  const t = await renderTree();
+  try {
+    let release!: () => void;
+    t.fetchJobs.mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          release = () => resolve({ jobs: [job("in_progress", null, "in_progress")], error: null });
+        }),
+    );
+    t.setCursor(1);
+    t.navRef.activateCurrentItem();
+    await t.settle();
+    expect(t.fetchJobs).toHaveBeenCalledTimes(1);
+    // The run completes while its first job request is still pending.
+    t.setJobs([job("completed", "success", "completed")]);
+    t.setRuns([run("completed", "success", "2026-01-01T00:05:00Z")]);
+    await t.settle();
+    release();
+    await t.settle();
+    expect(t.fetchJobs).toHaveBeenCalledTimes(2);
+    const childRows = t
+      .captureCharFrame()
+      .split("\n")
+      .filter(line => line.includes("build") || line.includes("compile"));
+    for (const line of childRows) expect(line).toContain("✓");
+  } finally {
+    t.renderer.destroy();
+  }
+});
+
+test("Reload refreshes a completed job whose step was still running", async () => {
+  const t = await renderTree();
+  try {
+    t.setRuns([run("completed", "success", "2026-01-01T00:05:00Z")]);
+    t.setJobs([job("completed", "success", "in_progress")]);
+    await t.settle();
+    t.setCursor(1);
+    t.navRef.activateCurrentItem();
+    await t.settle();
+    expect(t.fetchJobs).toHaveBeenCalledTimes(1);
+    t.setJobs([job("completed", "success", "completed")]);
+    t.setCursor(0);
+    t.navRef.activateCurrentItem();
+    await t.settle();
+    expect(t.fetchJobs).toHaveBeenCalledTimes(2);
+  } finally {
+    t.renderer.destroy();
+  }
+});

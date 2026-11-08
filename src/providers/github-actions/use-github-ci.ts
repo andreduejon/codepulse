@@ -351,9 +351,9 @@ export function useGitHubCI(opts: {
         );
       }
     },
-    runInitialFetch: async ({ signal, shas, showStatus, epoch }) => {
-      if (authFrozen && !showStatus) return;
-      if (showStatus) authFrozen = false;
+    runInitialFetch: async ({ signal, shas, showStatus, retry, epoch }) => {
+      if (authFrozen && !retry) return;
+      if (retry) authFrozen = false;
       const allSHAs = shas ?? collectTopSHAs(state.graphRows(), config.fetchDepth);
       const repoPath = state.repoPath();
       await hydrateCachedCandidates(repoPath, allSHAs, epoch);
@@ -388,10 +388,10 @@ export function useGitHubCI(opts: {
         for (const sha of unqueried) queriedSHAs.delete(sha);
       }
     },
-    runRefresh: async ({ signal, epoch, showStatus }) => {
+    runRefresh: async ({ signal, retry, epoch }) => {
       const repoPath = state.repoPath();
-      if (authFrozen && !showStatus) return;
-      if (showStatus) authFrozen = false;
+      if (authFrozen && !retry) return;
+      if (retry) authFrozen = false;
       lifecycle.noteRefreshSettled();
       const runningSHAs = collectRunningSHAs(state.graphBadges());
       if (runningSHAs.length === 0) return;
@@ -428,7 +428,7 @@ export function useGitHubCI(opts: {
     if (opts.suspended?.()) return;
     const window = collectTopSHAs(state.graphRows(), config.fetchDepth);
     for (const sha of window) queriedSHAs.delete(sha);
-    await lifecycle.fetchInitial(undefined, window, true);
+    await lifecycle.fetchInitial(undefined, window, true, true);
     if (state.activeProviderView() === "github-actions") lifecycle.startAutoRefresh();
   }
 
@@ -439,7 +439,7 @@ export function useGitHubCI(opts: {
     if (!lifecycle.isCurrent(epoch, repoPath)) return;
     if (!force) return;
     queriedSHAs.delete(sha);
-    await lifecycle.fetchInitial(undefined, [sha], true);
+    await lifecycle.fetchInitial(undefined, [sha], true, true);
   }
 
   // ── On-demand job fetching ────────────────────────────────────────────
@@ -449,6 +449,8 @@ export function useGitHubCI(opts: {
     const cached = jobsCache.get(run.id);
     if (cached) return { jobs: cached, error: null };
     if (!lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
+    // Frozen after a 401: no requests until Reload; say why instead of asking GitHub again.
+    if (authFrozen) return { jobs: [], error: BANNER.github.tokenExpired };
 
     const repo = cachedGitHubRepo();
     const token = getGitHubToken(config.tokenEnvVar);

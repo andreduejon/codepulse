@@ -60,7 +60,11 @@ async function mountJenkins() {
   const full = spyOn(api, "fetchJenkinsDataForSHAs").mockResolvedValue(result([run()]));
   cleanup.push(() => graph.mockRestore());
   cleanup.push(() => full.mockRestore());
-  let mounted!: { state: ReturnType<typeof createAppState>["state"]; jenkins: ReturnType<typeof useJenkinsCI> };
+  let mounted!: {
+    state: ReturnType<typeof createAppState>["state"];
+    actions: ReturnType<typeof createAppState>["actions"];
+    jenkins: ReturnType<typeof useJenkinsCI>;
+  };
   createRoot(dispose => {
     cleanup.push(dispose);
     const { state, actions } = createAppState();
@@ -96,7 +100,7 @@ async function mountJenkins() {
         jobs: [{ url: JOB_URL }],
       },
     });
-    mounted = { state, jenkins };
+    mounted = { state, actions, jenkins };
   });
   return { ...mounted, graph, full };
 }
@@ -145,4 +149,33 @@ test("the footer activity says fetching only while a Jenkins fetch runs", async 
   await pending;
   await settle(() => activity() === null);
   expect(activity()).toBeNull();
+});
+
+test("after a 401, entering the view again stays frozen; only Reload retries", async () => {
+  const { jenkins, state, actions, graph } = await mountJenkins();
+  const running = spyOn(api, "fetchJenkinsRunsForBuilds").mockResolvedValue({ data: [], error: null });
+  cleanup.push(() => running.mockRestore());
+  // A running build arrives with the 401, so re-entering the view would normally re-check it.
+  graph.mockResolvedValue(result([run({ status: "running", conclusion: null })], BANNER.jenkins.tokenExpired));
+  await jenkins.refresh();
+  await settle();
+  expect(state.providerStatusFor("jenkins")).toEqual({ kind: "error", message: BANNER.jenkins.tokenExpired });
+  const calls = graph.mock.calls.length;
+  // Come back after the stale threshold: an automatic fetch, which must not lift the freeze.
+  const clock = spyOn(Date, "now").mockReturnValue(Date.now() + 120_000);
+  try {
+    actions.setActiveProviderView("git");
+    actions.setActiveProviderView("jenkins");
+    await settle();
+    expect(graph.mock.calls.length).toBe(calls);
+    expect(running).not.toHaveBeenCalled();
+    // Jobs are not requested while frozen either; the reason is shown instead.
+    expect(await jenkins.fetchJobsForRun(run(), undefined)).toEqual({ jobs: [], error: BANNER.jenkins.tokenExpired });
+  } finally {
+    clock.mockRestore();
+  }
+  graph.mockResolvedValue(result([run()]));
+  await jenkins.refresh();
+  await settle(() => graph.mock.calls.length > calls);
+  expect(graph.mock.calls.length).toBeGreaterThan(calls);
 });

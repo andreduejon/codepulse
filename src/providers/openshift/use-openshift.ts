@@ -265,14 +265,14 @@ export function useOpenShift(opts: {
     reportUnavailable: showStatus => {
       if (showStatus) actions.setProviderStatus("openshift", providerUnavailable(unavailableMessage()));
     },
-    runInitialFetch: async ({ signal, showStatus, epoch }) => {
-      if (authFrozen && !showStatus) return;
-      if (showStatus) authFrozen = false;
+    runInitialFetch: async ({ signal, showStatus, retry, epoch }) => {
+      if (authFrozen && !retry) return;
+      if (retry) authFrozen = false;
       await runBuildInventory({ signal, showStatus, epoch });
     },
-    runRefresh: async ({ signal, showStatus, epoch }) => {
-      if (authFrozen && !showStatus) return;
-      if (showStatus) authFrozen = false;
+    runRefresh: async ({ signal, showStatus, retry, epoch }) => {
+      if (authFrozen && !retry) return;
+      if (retry) authFrozen = false;
       await runBuildInventory({ signal, showStatus, epoch });
       if (showStatus && !signal?.aborted && epoch === lifecycle.getEpoch()) setWatchEpoch(value => value + 1);
     },
@@ -487,7 +487,15 @@ export function useOpenShift(opts: {
               );
             }),
           );
-          const running = watches.filter((job): job is NonNullable<typeof job> => job !== null);
+          // An auth failure on one watch ends the others too, so the freeze does not wait on long-lived streams.
+          const running = watches
+            .filter((job): job is NonNullable<typeof job> => job !== null)
+            .map(job =>
+              job.then(result => {
+                if (result === "auth") child.abort();
+                return result;
+              }),
+            );
           setLiveState(running.length > 0 ? "live" : "idle");
           const results = running.length > 0 ? await Promise.all(running) : [];
           if (!signal.aborted && lifecycle.isCurrent(epoch, repoPath)) setLiveState("loading");
@@ -543,12 +551,14 @@ export function useOpenShift(opts: {
       version();
       return commits.get(sha.toLowerCase()) ?? null;
     },
-    refresh: async () => lifecycle.fetchRefresh(undefined, true),
+    refresh: async () => lifecycle.fetchRefresh(undefined, true, true),
     fetchCommitDataForSHA: async (sha, force) => {
       if (opts.suspended?.()) return;
       try {
         if (!adoptCommit(sha) && !force) return;
         if (force) {
+          // Setup missing: nothing can load, so do not look busy (the row is disabled; guard the direct call too).
+          if (!isAvailable()) return;
           // Reload commit is an explicit retry: it lifts an auth freeze.
           authFrozen = false;
           setLiveState("loading");

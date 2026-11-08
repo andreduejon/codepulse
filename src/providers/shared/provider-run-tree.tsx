@@ -96,6 +96,8 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
   const [loadedRuns, setLoadedRuns] = createSignal<Set<string>>(new Set());
   const [pendingFocusRunId, setPendingFocusRunId] = createSignal<string | null>(null);
   const fetchControllers = new Map<string, AbortController>();
+  /** Runs whose status changed while their jobs were loading; they load again when that request settles. */
+  const reloadAfterLoad = new Set<string>();
   let autoExpandedSignature: string | null = null;
   let previousDataKey = props.dataKey;
   const itemRefs: Renderable[] = [];
@@ -242,6 +244,11 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
       if (fetchControllers.get(run.id) === ctrl) {
         fetchControllers.delete(run.id);
         clearLoadingRun(run.id);
+        // The run changed while this request ran: load once more with the current run.
+        if (reloadAfterLoad.delete(run.id) && expandedRuns().has(run.id)) {
+          const current = props.runs.find(entry => entry.id === run.id);
+          if (current) void loadJobsForRun(current);
+        }
       }
     }
   };
@@ -277,9 +284,12 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     }
   };
 
-  /** Completed, with every loaded job completed: its jobs and steps cannot change any more. */
+  /** Completed, with every loaded job and step completed: its jobs and steps cannot change any more. */
   const isSettled = (run: ProviderTreeRun<TRaw>) =>
-    run.status === "completed" && (fetchedJobs().get(run.id) ?? []).every(job => job.status === "completed");
+    run.status === "completed" &&
+    (fetchedJobs().get(run.id) ?? []).every(
+      job => job.status === "completed" && job.steps.every(step => step.status === "completed"),
+    );
 
   const reloadCommit = async () => {
     // Expanded runs that failed to load or were still running get fresh jobs and steps too.
@@ -290,7 +300,8 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     );
   };
 
-  // Auto refresh replaces the runs: an expanded run whose status moved reloads its jobs and steps.
+  // Auto refresh replaces the runs: an expanded run whose status moved reloads its jobs and steps. If its jobs are
+  // still loading, they load again once that request settles (its answer may predate the change).
   const runSignatures = new Map<string, string>();
   createEffect(() => {
     const runs = props.runs;
@@ -299,8 +310,9 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
         const signature = `${run.status}:${run.conclusion}:${run.updatedAt}`;
         const previous = runSignatures.get(run.id);
         runSignatures.set(run.id, signature);
-        if (previous === undefined || previous === signature) continue;
-        if (expandedRuns().has(run.id) && loadedRuns().has(run.id)) void loadJobsForRun(run);
+        if (previous === undefined || previous === signature || !expandedRuns().has(run.id)) continue;
+        if (loadingRuns().has(run.id)) reloadAfterLoad.add(run.id);
+        else if (loadedRuns().has(run.id)) void loadJobsForRun(run);
       }
     });
   });
@@ -316,6 +328,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     setPendingFocusRunId(null);
     autoExpandedSignature = null;
     runSignatures.clear();
+    reloadAfterLoad.clear();
     itemRefs.length = 0;
     refsByKey.clear();
     rows.clearHover();

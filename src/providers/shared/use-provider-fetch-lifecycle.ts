@@ -9,6 +9,11 @@ export interface ProviderFetchArgs {
   signal?: AbortSignal;
   shas?: string[];
   showStatus: boolean;
+  /**
+   * An explicit user retry (Reload commit, `:reload`, `f`): the only thing that lifts an auth freeze. Automatic
+   * fetches (view entry, polling) may show status but never count as a retry.
+   */
+  retry: boolean;
   epoch: number;
 }
 
@@ -123,7 +128,7 @@ export function useProviderFetchLifecycle(opts: {
     void fetchInitial(ctrl.signal, undefined, false);
   }
 
-  async function fetchInitial(signal?: AbortSignal, shas?: string[], showStatus = false) {
+  async function fetchInitial(signal?: AbortSignal, shas?: string[], showStatus = false, retry = false) {
     if (opts.suspended?.()) return;
     const epoch = cacheEpoch;
     if (!showStatus && inBackoff()) return;
@@ -137,7 +142,9 @@ export function useProviderFetchLifecycle(opts: {
     }
     fetchInFlight = true;
     try {
-      await trackFetch(() => runRequest(signal => opts.runInitialFetch({ signal, shas, showStatus, epoch }), signal));
+      await trackFetch(() =>
+        runRequest(signal => opts.runInitialFetch({ signal, shas, showStatus, retry, epoch }), signal),
+      );
     } catch (err) {
       if (epoch === cacheEpoch && !isAbortError(err, signal)) throw err;
     } finally {
@@ -145,7 +152,7 @@ export function useProviderFetchLifecycle(opts: {
     }
   }
 
-  async function fetchRefresh(signal?: AbortSignal, showStatus = false) {
+  async function fetchRefresh(signal?: AbortSignal, showStatus = false, retry = false) {
     if (opts.suspended?.()) return;
     const epoch = cacheEpoch;
     if (!showStatus && inBackoff()) return;
@@ -156,7 +163,7 @@ export function useProviderFetchLifecycle(opts: {
     if (!opts.isAvailable()) return;
     fetchInFlight = true;
     try {
-      await trackFetch(() => runRequest(signal => opts.runRefresh({ signal, showStatus, epoch }), signal));
+      await trackFetch(() => runRequest(signal => opts.runRefresh({ signal, showStatus, retry, epoch }), signal));
     } catch (err) {
       if (epoch === cacheEpoch && !isAbortError(err, signal)) throw err;
     } finally {
