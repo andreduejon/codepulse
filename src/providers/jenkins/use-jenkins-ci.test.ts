@@ -179,3 +179,33 @@ test("after a 401, entering the view again stays frozen; only Reload retries", a
   await settle(() => graph.mock.calls.length > calls);
   expect(graph.mock.calls.length).toBeGreaterThan(calls);
 });
+
+test("stages of a finished build are cached only once every stage has finished", async () => {
+  const { jenkins } = await mountJenkins();
+  const stage = (status: string) => ({
+    id: "s",
+    name: "build",
+    status,
+    conclusion: status === "completed" ? "success" : null,
+    startedAt: null,
+    completedAt: null,
+  });
+  const job = (stageStatus: string) => ({
+    id: "j",
+    name: "app",
+    status: "completed",
+    conclusion: "success",
+    startedAt: null,
+    completedAt: null,
+    steps: [stage(stageStatus)],
+  });
+  const stages = spyOn(api, "fetchJenkinsRunJobs")
+    .mockResolvedValueOnce({ jobs: [job("running")], error: null })
+    .mockResolvedValue({ jobs: [job("completed")], error: null });
+  cleanup.push(() => stages.mockRestore());
+  await jenkins.fetchJobsForRun(run(), undefined);
+  await jenkins.fetchJobsForRun(run(), undefined);
+  expect(stages).toHaveBeenCalledTimes(2);
+  await jenkins.fetchJobsForRun(run(), undefined);
+  expect(stages).toHaveBeenCalledTimes(2);
+});

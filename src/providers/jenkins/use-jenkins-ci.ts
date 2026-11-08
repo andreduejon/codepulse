@@ -12,6 +12,7 @@ import { BANNER, bannerOrFallback } from "../../debug/banner";
 import { collectRunningSHAs, collectTopSHAs } from "../github-actions/sha-selection";
 import { DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS } from "../shared/auto-refresh";
 import { persistMergedSnapshots } from "../shared/sha-sqlite-cache";
+import { jobsSettled } from "../shared/status";
 import { useProviderFetchLifecycle } from "../shared/use-provider-fetch-lifecycle";
 import {
   buildJenkinsCommitDataMap,
@@ -330,8 +331,9 @@ export function useJenkinsCI(opts: {
     fetchJobsForRun: async (run, signal) => {
       const epoch = lifecycle.getEpoch();
       const repoPath = state.repoPath();
+      // Only finished stages are final; a cached snapshot with a running job or stage is fetched again.
       const cached = jobsCache.get(run.id);
-      if (cached) return cached;
+      if (cached && jobsSettled(cached.jobs)) return cached;
       if (!lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
       // Frozen after an auth failure: no requests until Reload; say why instead of asking Jenkins again.
       if (authFrozen) return { jobs: [], error: authError ?? BANNER.jenkins.tokenExpired };
@@ -342,7 +344,7 @@ export function useJenkinsCI(opts: {
         signal,
       );
       if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
-      if (run.status === "completed" && result.error === null) {
+      if (run.status === "completed" && result.error === null && jobsSettled(result.jobs)) {
         if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
         jobsCache.set(run.id, result);
         await persistTerminalRuns(repoPath, [run.headSha], epoch);

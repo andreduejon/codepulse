@@ -165,3 +165,34 @@ test("a Reload queued behind a running fetch still reloads its commit, even outs
   await settle(() => ci.mock.calls.some(call => call[2].includes(outside)));
   expect(ci.mock.calls.some(call => call[2].includes(outside))).toBe(true);
 });
+
+test("jobs of a finished run are cached only once every job and step has finished", async () => {
+  const { github } = await mountGitHub();
+  const step = (status: string) => ({
+    name: "build",
+    number: 1,
+    status,
+    conclusion: status === "completed" ? "success" : null,
+    startedAt: null,
+    completedAt: null,
+  });
+  const job = (stepStatus: string) => ({
+    id: 5,
+    name: "build",
+    status: "completed",
+    conclusion: "success",
+    startedAt: null,
+    completedAt: null,
+    steps: [step(stepStatus)],
+  });
+  const jobs = spyOn(api, "fetchRunJobs")
+    .mockResolvedValueOnce({ jobs: [job("in_progress")], error: null })
+    .mockResolvedValue({ jobs: [job("completed")], error: null });
+  cleanup.push(() => jobs.mockRestore());
+  const finished = run({ status: "completed", conclusion: "success" });
+  await github.fetchJobsForRun(finished);
+  await github.fetchJobsForRun(finished);
+  expect(jobs).toHaveBeenCalledTimes(2);
+  await github.fetchJobsForRun(finished);
+  expect(jobs).toHaveBeenCalledTimes(2);
+});

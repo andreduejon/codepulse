@@ -35,6 +35,7 @@ import { addDebugEvent } from "../../debug/events";
 
 import { DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS } from "../shared/auto-refresh";
 import { persistMergedSnapshots } from "../shared/sha-sqlite-cache";
+import { jobsSettled } from "../shared/status";
 import { useProviderFetchLifecycle } from "../shared/use-provider-fetch-lifecycle";
 import {
   buildCommitDataMap,
@@ -450,8 +451,9 @@ export function useGitHubCI(opts: {
   async function fetchJobsForRun(run: GitHubWorkflowRun, signal?: AbortSignal): Promise<GitHubJobFetchResult> {
     const epoch = lifecycle.getEpoch();
     const repoPath = state.repoPath();
+    // Only finished jobs are final; a cached snapshot with a running job or step is fetched again.
     const cached = jobsCache.get(run.id);
-    if (cached) return { jobs: cached, error: null };
+    if (cached && jobsSettled(cached)) return { jobs: cached, error: null };
     if (!lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
     // Frozen after a 401: no requests until Reload; say why instead of asking GitHub again.
     if (authFrozen) return { jobs: [], error: BANNER.github.tokenExpired };
@@ -463,7 +465,7 @@ export function useGitHubCI(opts: {
     const { jobs, error } = await lifecycle.runRequest(signal => fetchRunJobs(repo, token, run.id, signal), signal);
     if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
     if (error) return { jobs, error };
-    if (run.status === "completed") {
+    if (run.status === "completed" && jobsSettled(jobs)) {
       if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
       jobsCache.set(run.id, jobs);
       await persistTerminalRuns(repoPath, [run.headSha], epoch);
