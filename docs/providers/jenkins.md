@@ -59,7 +59,7 @@ the selected SHA; a failed reload shows its error in the banner.
 
 Aborted builds show as cancelled (`○`, a grey chip in the graph) like aborted
 stages, and not-built builds as skipped. Entering a commit's **Jenkins** tab opens
-its first failed build. In the console log, `r` fetches it again.
+its first failed build. In the console log, `r` reloads it (a finished build's cached log does not change).
 
 Fetch size controls both the graph commit window and recent builds inspected per
 job. It is independent from cache retention.

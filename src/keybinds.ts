@@ -108,7 +108,7 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     {
       kind: "binding",
       key: "r",
-      desc: "Refresh what is shown: the log (restarting a follow) or the JSON object",
+      desc: "Refresh what is shown: the log (restarting a follow; finished CI logs reload from cache) or the JSON object",
       indent: 1,
     },
     { kind: "binding", key: "space", desc: "Half a page down", indent: 1 },

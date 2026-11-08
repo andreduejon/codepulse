@@ -48,8 +48,8 @@ of runs that were still running.
 
 Entering a commit's **Actions** tab opens its first failed run and puts the
 cursor on its first failed job. Cancelled and skipped runs show as a grey chip in
-the graph. In the job log, `r` fetches the log again (newer output of a running
-job, or a retry after a failure) and `o` opens the run in the browser.
+the graph. In the job log, `r` reloads the log (newer output of a running job, or a retry
+after a failure; a finished job's cached log does not change) and `o` opens the run in the browser.
 
 ## Errors and limits
 

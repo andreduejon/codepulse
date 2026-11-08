@@ -64,7 +64,7 @@ Normal clears highlighting without changing branch perspective.
 | `n` / `N` | Next / previous search hit |
 | `c` | Cycle view mode (CI: all, issues, errors, raw; OpenShift: log, JSON) |
 | `w` | Toggle line wrap |
-| `r` | Refresh what is shown: the log (restarting a follow) or the JSON object |
+| `r` | Refresh what is shown: the log (restarting a follow; a finished CI job's log reloads from cache) or the JSON object |
 | `o` | Open the CI run in the browser |
 | `←` / `→` or `h` / `l` | Previous / next CI job |
 | `↑` / `↓` or `j` / `k`, `shift ↑` / `shift ↓`, space, `g` / `G` | Scroll |
