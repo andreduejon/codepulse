@@ -1,9 +1,10 @@
 import { Show } from "solid-js";
-import { useAppState } from "../context/state";
+import { type ProviderStatus, useAppState } from "../context/state";
 import { BANNER } from "../debug/banner";
 import { ActionsDetailTab } from "../providers/github-actions/detail-tab";
 import { JenkinsDetailTab } from "../providers/jenkins/detail-tab";
 import { OpenShiftDetailTab } from "../providers/openshift/detail-tab";
+import type { ProviderDetailView } from "../providers/provider";
 import { SnykDependenciesTab } from "../providers/snyk/deps-tab";
 import { SnykDetailTab } from "../providers/snyk/detail-tab";
 import type { SnykViewMemory } from "../providers/snyk/view-memory";
@@ -27,8 +28,17 @@ export function ProviderDetailTabs(
     setDetailCursorAction: actions.setDetailCursorAction,
     setDetailCursorIndex: actions.setDetailCursorIndex,
   };
+  /**
+   * Why a provider cannot load: its status reason or, once that banner was dismissed, its own readiness check, so
+   * closing a message never re-enables an action that cannot work.
+   */
+  const unavailable = (view: ProviderDetailView, status: ProviderStatus | undefined): string | null => {
+    if (status?.kind === "unavailable") return status.message;
+    state.providers.getVersion();
+    return state.providers.get(view)?.isAvailable() === false ? "Setup incomplete." : null;
+  };
   /** Like the CI and OpenShift Reload rows, Scan is muted and skipped while Snyk cannot work. */
-  const snykUnavailable = () => props.view.snykProviderStatus?.kind === "unavailable";
+  const snykUnavailable = () => unavailable("snyk", props.view.snykProviderStatus) !== null;
   const snykScan = async () => {
     await props.view.snykScanCommit?.(props.sha, !!props.view.snykGetCommitData?.(props.sha));
   };
@@ -49,9 +59,7 @@ export function ProviderDetailTabs(
           // biome-ignore lint/style/noNonNullAssertion: guarded by Show when condition above
           fetchJobsForRun={props.view.githubFetchJobsForRun!}
           fetchCommitData={props.view.githubFetchCommitData}
-          unavailableReason={
-            props.view.githubProviderStatus?.kind === "unavailable" ? props.view.githubProviderStatus.message : null
-          }
+          unavailableReason={unavailable("github-actions", props.view.githubProviderStatus)}
           loading={props.view.githubProviderStatus?.kind === "loading"}
           {...cursor}
           onOpenJobLog={props.view.onOpenJobLog}
@@ -70,9 +78,7 @@ export function ProviderDetailTabs(
           // biome-ignore lint/style/noNonNullAssertion: guarded by Show when condition above
           fetchJobsForRun={props.view.jenkinsFetchJobsForRun!}
           fetchCommitData={props.view.jenkinsFetchCommitData}
-          unavailableReason={
-            props.view.jenkinsProviderStatus?.kind === "unavailable" ? props.view.jenkinsProviderStatus.message : null
-          }
+          unavailableReason={unavailable("jenkins", props.view.jenkinsProviderStatus)}
           loading={props.view.jenkinsProviderStatus?.kind === "loading"}
           {...cursor}
           onOpenJobLog={props.view.onOpenJenkinsJobLog}
@@ -90,11 +96,7 @@ export function ProviderDetailTabs(
             isLoading={props.view.openshiftIsLoading}
             liveAge={props.view.openshiftLiveAge}
             onOpenResource={props.view.onOpenOpenShiftResource}
-            unavailableReason={
-              props.view.openshiftProviderStatus?.kind === "unavailable"
-                ? props.view.openshiftProviderStatus.message
-                : null
-            }
+            unavailableReason={unavailable("openshift", props.view.openshiftProviderStatus)}
             liveUnavailable={
               props.view.openshiftProviderStatus?.kind === "error" &&
               props.view.openshiftProviderStatus.message === BANNER.openshift.tokenExpired

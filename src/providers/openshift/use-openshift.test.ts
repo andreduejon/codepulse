@@ -40,10 +40,11 @@ afterEach(() => {
   for (const finish of cleanup.splice(0).reverse()) finish();
 });
 
-function mountOpenShift(suspendedInitially = false) {
+function mountOpenShift(suspendedInitially = false, withToken = true) {
   const tokenEnvVar = "CODEPULSE_TEST_OPENSHIFT_TOKEN";
   const original = process.env[tokenEnvVar];
-  process.env[tokenEnvVar] = "test-token";
+  if (withToken) process.env[tokenEnvVar] = "test-token";
+  else delete process.env[tokenEnvVar];
   cleanup.push(() => {
     if (original === undefined) delete process.env[tokenEnvVar];
     else process.env[tokenEnvVar] = original;
@@ -309,6 +310,17 @@ describe("OpenShift expired token", () => {
     await mounted.openShift.fetchCommitDataForSHA(SHA, true);
     for (let i = 0; i < 20 && mounted.live.mock.calls.length === calls; i++) await Bun.sleep(5);
     expect(mounted.live.mock.calls.length).toBe(calls + 1);
+  });
+});
+
+describe("OpenShift without setup", () => {
+  test("a forced Reload without a token does not look busy forever", async () => {
+    const mounted = mountOpenShift(false, false);
+    await Bun.sleep(0);
+    await mounted.openShift.fetchCommitDataForSHA(SHA, true);
+    await Bun.sleep(10);
+    expect(mounted.openShift.isLoading(SHA)).toBe(false);
+    expect(mounted.state.providers.get("openshift")?.activity?.() ?? null).toBeNull();
   });
 });
 

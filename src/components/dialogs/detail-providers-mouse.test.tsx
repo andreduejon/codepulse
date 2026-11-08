@@ -580,6 +580,21 @@ test("Jenkins runs keep the duration column so their time lines up with the stag
   }
 });
 
+for (const provider of ["github-actions", "jenkins", "openshift", "snyk"] as const) {
+  test(`${provider}: dismissing the setup banner does not re-enable an action that cannot work`, async () => {
+    const d = await renderProvider(provider);
+    try {
+      const count = d.navRef.itemCount;
+      // Status is idle (the banner was closed), but the provider still is not set up.
+      d.state.providers.register({ id: provider, displayName: provider, isAvailable: () => false });
+      await d.flush();
+      expect(d.navRef.itemCount).toBe(count - 1);
+    } finally {
+      await d.dispose();
+    }
+  });
+}
+
 test("Snyk severity/finding/scan actions ignore empty severities and loading scans", async () => {
   const d = await renderProvider("snyk");
   try {
