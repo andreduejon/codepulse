@@ -12,7 +12,7 @@ import {
 } from "../../components/dialogs/dialog-chrome";
 import { highlightHits, LogSearchRow, useLogSearch } from "../../components/dialogs/log-search";
 import { handleLogScrollKey, type LogViewState, LogViewStatus } from "../../components/dialogs/log-view";
-import { getDialogTitleContentWidth, middleTruncate, TITLE_SEP } from "../../components/dialogs/title-utils";
+import { fitTitleSegments } from "../../components/dialogs/title-utils";
 import { KeyHint, KeyHintSeparator } from "../../components/key-hint";
 import { useTheme } from "../../context/theme";
 import { BUSY } from "../../utils/busy-text";
@@ -272,27 +272,18 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
   });
 
   const titleElement = createMemo((): JSX.Element => {
-    const providerLabel = props.provider === "jenkins" ? "Jenkins" : "GitHub Actions";
-    const runLabel = `${props.run.name} #${props.run.runNumber}`;
-    const showJob = props.provider !== "jenkins";
-    const modeLabel = VIEW_MODE_TITLE_LABEL[viewMode()];
-    const fixedWidth = [providerLabel, runLabel, modeLabel].filter(Boolean).join(TITLE_SEP).length;
-    const jobLabel = showJob
-      ? middleTruncate(
-          currentJob().name,
-          Math.max(8, getDialogTitleContentWidth(dialogWidth()) - fixedWidth - TITLE_SEP.length),
-        )
-      : "";
-    return (
-      <DialogTitle
-        segments={[
-          { text: providerLabel },
-          { text: runLabel, emphasis: props.provider === "jenkins" },
-          { text: jobLabel, emphasis: true },
-          { text: modeLabel },
-        ]}
-      />
+    const isJenkins = props.provider === "jenkins";
+    // Like the diff title: context (mode, then provider) goes first; the run and job shrink last.
+    const segments = fitTitleSegments(
+      [
+        { text: isJenkins ? "Jenkins" : "GitHub Actions", drop: 2 },
+        { text: `${props.run.name} #${props.run.runNumber}`, emphasis: isJenkins, primary: isJenkins, drop: 3 },
+        { text: isJenkins ? "" : currentJob().name, emphasis: true, primary: true },
+        { text: VIEW_MODE_TITLE_LABEL[viewMode()], drop: 1 },
+      ],
+      dialogWidth(),
     );
+    return <DialogTitle segments={segments} />;
   });
 
   const renderLine = (line: LogLine, index: () => number) => {

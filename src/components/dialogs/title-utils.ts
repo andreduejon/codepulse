@@ -186,3 +186,39 @@ export function buildDiffTitleParts(
     mode: "",
   };
 }
+
+/** One segment of a provider dialog title. Lower `drop` values are dropped first when the title does not fit. */
+export interface TitleSegmentInput {
+  text: string;
+  emphasis?: boolean;
+  /** Never dropped; middle-truncated as the last resort (the identity: job, resource, run). */
+  primary?: boolean;
+  /** Drop order for context segments (1 goes first). */
+  drop?: number;
+}
+
+/**
+ * Fit a segmented title to the dialog like the diff title: drop context segments in their `drop` order until the
+ * title fits, then middle-truncate the primary segment(s), longest first. Empty segments are ignored.
+ */
+export function fitTitleSegments(segments: readonly TitleSegmentInput[], dialogWidth: number): TitleSegmentInput[] {
+  const usable = getDialogTitleContentWidth(dialogWidth);
+  const width = (list: readonly TitleSegmentInput[]) =>
+    list.reduce((sum, segment) => sum + segment.text.length, 0) + Math.max(0, list.length - 1) * SEP_LEN;
+  let kept = segments.filter(segment => segment.text.length > 0);
+  const order = kept
+    .filter(segment => !segment.primary && segment.drop !== undefined)
+    .sort((a, b) => (a.drop ?? 0) - (b.drop ?? 0));
+  for (const segment of order) {
+    if (width(kept) <= usable) break;
+    kept = kept.filter(entry => entry !== segment);
+  }
+  let excess = width(kept) - usable;
+  if (excess <= 0) return kept;
+  return kept.map(segment => {
+    if (!segment.primary || excess <= 0) return segment;
+    const target = Math.max(MIN_BASENAME_LEN, segment.text.length - excess);
+    excess -= segment.text.length - target;
+    return { ...segment, text: middleTruncate(segment.text, target) };
+  });
+}

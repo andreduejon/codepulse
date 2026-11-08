@@ -10,7 +10,7 @@ import {
 } from "../../components/dialogs/dialog-chrome";
 import { highlightHits, LogSearchRow, useLogSearch } from "../../components/dialogs/log-search";
 import { handleLogScrollKey, type LogViewState, LogViewStatus } from "../../components/dialogs/log-view";
-import { getDialogTitleContentWidth, middleTruncate, TITLE_SEP } from "../../components/dialogs/title-utils";
+import { fitTitleSegments } from "../../components/dialogs/title-utils";
 import { KeyHint, KeyHintSeparator } from "../../components/key-hint";
 import { useT } from "../../hooks/use-t";
 import { BUSY } from "../../utils/busy-text";
@@ -142,19 +142,18 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
   const search = useLogSearch({ texts: lines, rowAt: index => lineRefs[index], scrollbox: () => scrollboxRef });
   const title = createMemo(() => {
     const mode = viewMode() === "log" ? (followEnded() ? "log ended" : "log") : "object";
-    const fixed = ["OpenShift", props.resource.kind, props.resource.namespace, mode].join(TITLE_SEP);
-    const available = Math.max(8, getDialogTitleContentWidth(dialogFrame().width) - fixed.length - TITLE_SEP.length);
-    return (
-      <DialogTitle
-        segments={[
-          { text: "OpenShift" },
-          { text: props.resource.kind },
-          { text: props.resource.namespace },
-          { text: middleTruncate(props.resource.name, available), emphasis: true },
-          { text: mode },
-        ]}
-      />
+    // Like the diff title: context (provider, then namespace, kind) goes first; the resource name shrinks last.
+    const segments = fitTitleSegments(
+      [
+        { text: "OpenShift", drop: 1 },
+        { text: props.resource.kind, drop: 3 },
+        { text: props.resource.namespace, drop: 2 },
+        { text: props.resource.name, emphasis: true, primary: true },
+        { text: mode },
+      ],
+      dialogFrame().width,
     );
+    return <DialogTitle segments={segments} />;
   });
 
   const toggleWrap = () => setWrapEnabled(value => !value);

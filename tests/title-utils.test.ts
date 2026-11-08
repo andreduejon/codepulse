@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   buildDiffTitleParts,
   type DiffTitleParts,
+  fitTitleSegments,
   getDialogTitleContentWidth,
   middleTruncate,
   splitPath,
@@ -196,5 +197,24 @@ describe("buildDiffTitleParts", () => {
   test("reserves width for a shared leading segment", () => {
     const result = buildDiffTitleParts("src/app.ts", "abc1234", "[1/2]", "unified", 57, 7);
     expect(partsWidth(result)).toBeLessThanOrEqual(32);
+  });
+});
+
+describe("fitTitleSegments", () => {
+  const segments = [
+    { text: "GitHub Actions", drop: 2 },
+    { text: "Release pipeline for every platform #42", drop: 3 },
+    { text: "build-and-sign-macos-universal-binary", emphasis: true, primary: true },
+    { text: "issues only", drop: 1 },
+  ];
+  test("keeps every segment when it fits", () => {
+    expect(fitTitleSegments(segments, 200).map(segment => segment.text)).toEqual(segments.map(s => s.text));
+  });
+  test("drops context in order, then shrinks the primary, never past the close hint", () => {
+    const fitted = fitTitleSegments(segments, 72);
+    const width = fitted.reduce((sum, s) => sum + s.text.length, 0) + (fitted.length - 1) * 3;
+    expect(width).toBeLessThanOrEqual(getDialogTitleContentWidth(72));
+    expect(fitted.map(s => s.text)).not.toContain("issues only");
+    expect(fitted.some(s => s.primary)).toBe(true);
   });
 });
