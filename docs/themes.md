@@ -53,6 +53,10 @@ A base must be a predefined ID. Custom-to-custom inheritance is not supported.
 }
 ```
 
+`accent` is the highlight colour in the Git view (selected rows, focused borders);
+provider views use their badge background (`githubActionsBg`, …) instead. `gitBg`
+colours the Git badge. Built-in themes set `accent` and `gitBg` to the same colour.
+
 Omitted colors inherit from the base. Overrides use the exact configuration
 keys below, not the user-friendly labels displayed in Details. Scalar colors must
 be `#RRGGBB`. Loaded values are normalized to lowercase. `graphColors` must be
