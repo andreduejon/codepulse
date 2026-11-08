@@ -257,3 +257,48 @@ test("a cursored run whose name does not fit banner-scrolls instead of truncatin
     setup.renderer.destroy();
   }
 });
+
+test("jobs that fail to load show the reason under the run", async () => {
+  const [cursor, setCursor] = createSignal(0);
+  const navRef: DetailNavRef = {
+    itemCount: 0,
+    itemRefs: [],
+    activateCurrentItem: () => false,
+    lastJumpFrom: null,
+    pendingJumpDirection: null,
+    scrollToFile: () => {},
+  };
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={createThemeState()}>
+        <box width={70} flexDirection="column">
+          <ProviderRunTree
+            runs={[run("completed", "success", "2026-01-01T00:01:00Z")]}
+            navRef={navRef}
+            detailCursorIndex={cursor}
+            detailFocused={() => true}
+            setDetailCursorAction={() => {}}
+            setDetailCursorIndex={setCursor}
+            fetchJobsForRun={async () => ({ jobs: [], error: "GitHub jobs failed." })}
+            debugSource="GitHub"
+            dataKey="sha"
+            summaryLabel="total workflow runs"
+          />
+        </box>
+      </ThemeContext.Provider>
+    ),
+    { width: 80, height: 10 },
+  );
+  try {
+    await setup.flush();
+    navRef.activateCurrentItem();
+    for (let i = 0; i < 5; i++) {
+      await Bun.sleep(0);
+      await setup.flush();
+    }
+    expect(setup.captureCharFrame()).toContain("└─ GitHub jobs failed.");
+    expect(setup.captureCharFrame()).not.toContain("Unavailable");
+  } finally {
+    setup.renderer.destroy();
+  }
+});

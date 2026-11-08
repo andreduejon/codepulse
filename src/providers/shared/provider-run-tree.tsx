@@ -515,18 +515,18 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                   </box>
                 </Show>
                 <Show when={!isLoading() && jobError()}>
-                  <box flexDirection="row" width="100%">
-                    <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                      {placeholderTreeLead()}└─
-                    </text>
-                    <text fg={t().foregroundMuted}> </text>
-                    <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
-                      Unavailable
-                    </text>
-                    <text flexShrink={0} width={STATUS_COL_WIDTH} wrapMode="none" fg={t().foregroundMuted}>
-                      {"!".padStart(STATUS_COL_WIDTH)}
-                    </text>
-                  </box>
+                  {error => (
+                    // The reason the jobs did not load (Reload commit retries), like the other placeholders.
+                    <box flexDirection="row" width="100%">
+                      <text flexShrink={0} wrapMode="none" fg={t().border}>
+                        {placeholderTreeLead()}└─
+                      </text>
+                      <text> </text>
+                      <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().error}>
+                        {error()}
+                      </text>
+                    </box>
+                  )}
                 </Show>
                 <Show when={!isLoading() && !jobError() && jobs().length === 0 && (props.noJobsText ?? "")}>
                   <box flexDirection="row" width="100%">
