@@ -34,7 +34,7 @@ the full shortcut and provider setup reference.
 | `enter` | Focus details / open compact dialog |
 | `a` | Enter ancestry mode |
 | `p` | Enter path mode |
-| `shift ←` / `shift →` | Switch project within the current group |
+| `shift ←` / `shift →` | Switch repository within the current group |
 
 In the compact layout (narrower than 180 columns) details open as a dialog: use
 `enter` to open it and `esc` to close it; `→` / `l` do not open it and `←` / `h`

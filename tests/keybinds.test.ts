@@ -17,7 +17,7 @@ function sectionKeys(label: string): string[] {
 
 describe("help reference", () => {
   test("the Logs section lists every key the CI and OpenShift log footers advertise", () => {
-    const keys = sectionKeys("Logs (CI job, OpenShift resource)");
+    const keys = sectionKeys("Logs");
     for (const key of [
       "/",
       "n/N",
@@ -34,6 +34,13 @@ describe("help reference", () => {
     ]) {
       expect(keys).toContain(key);
     }
+  });
+
+  test("help text stays short: no semicolons or long dashes", () => {
+    const texts = Object.values(KEYBINDS)
+      .flat()
+      .flatMap(row => (row.kind === "binding" ? [row.desc] : row.kind === "section" ? [row.label] : []));
+    for (const text of texts) expect(text).not.toMatch(/[;—–]/);
   });
 
   test("shift keys are written one way everywhere (`shift ↑/↓`)", () => {
