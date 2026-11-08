@@ -2,7 +2,7 @@ import { type BoxRenderable, MouseButton, type MouseEvent, type Renderable } fro
 import { createSignal, Show } from "solid-js";
 import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useT } from "../../hooks/use-t";
-import { endTruncate } from "../../utils/truncate";
+import { cellWidth, sliceCells, truncateCells } from "../../utils/terminal-text";
 
 /**
  * Hover and left-click handling shared by provider detail rows (CI runs/jobs, OpenShift namespaces/resources, action
@@ -108,7 +108,8 @@ export function ScrollingLabel(
   props: Readonly<{ text: string; active: boolean; fg: string; selectable?: boolean; grow?: boolean }>,
 ) {
   const [width, setWidth] = createSignal(0);
-  const overflow = () => (props.active && width() > 0 ? Math.max(0, props.text.length - width()) : 0);
+  // Measured in terminal columns, so wide (CJK) characters and emoji scroll and cut correctly.
+  const overflow = () => (props.active && width() > 0 ? Math.max(0, cellWidth(props.text) - width()) : 0);
   const offset = useBannerScroll(overflow);
   // The text is positioned absolutely so only the flex layout sizes the box: measuring a box that the text
   // itself stretches would feed back into the visible width.
@@ -116,7 +117,7 @@ export function ScrollingLabel(
     <box
       flexGrow={props.grow === false ? 0 : 1}
       flexShrink={1}
-      flexBasis={props.grow === false ? props.text.length : 0}
+      flexBasis={props.grow === false ? cellWidth(props.text) : 0}
       minWidth={0}
       height={1}
       overflow="hidden"
@@ -134,9 +135,9 @@ export function ScrollingLabel(
         fg={props.fg}
       >
         {overflow() > 0
-          ? props.text.substring(offset(), offset() + width())
+          ? sliceCells(props.text, offset(), width())
           : width() > 0
-            ? endTruncate(props.text, width())
+            ? truncateCells(props.text, width())
             : props.text}
       </text>
     </box>

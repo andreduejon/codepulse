@@ -7,3 +7,30 @@ const TERMINAL_CONTROLS =
 export function stripTerminalControls(text: string): string {
   return text.replace(TERMINAL_CONTROLS, "");
 }
+
+const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+
+/** Terminal columns `text` takes (wide CJK characters take two, combining marks none). */
+export function cellWidth(text: string): number {
+  return Bun.stringWidth(text);
+}
+
+/** The part of `text` that starts `start` columns in and fits in `width` columns, cut at whole characters. */
+export function sliceCells(text: string, start: number, width: number): string {
+  let column = 0;
+  let out = "";
+  for (const { segment } of graphemes.segment(text)) {
+    const w = Bun.stringWidth(segment);
+    if (column >= start && column + w <= start + width) out += segment;
+    column += w;
+    if (column >= start + width) break;
+  }
+  return out;
+}
+
+/** `text` cut to `width` columns, ending in `…` when anything was cut. */
+export function truncateCells(text: string, width: number): string {
+  if (width <= 0) return "";
+  if (cellWidth(text) <= width) return text;
+  return `${sliceCells(text, 0, width - 1)}…`;
+}

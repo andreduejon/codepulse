@@ -353,3 +353,51 @@ test("Reload refreshes a completed job whose step was still running", async () =
     t.renderer.destroy();
   }
 });
+
+test("wide-character run names are cut by terminal columns, keeping the ellipsis visible", async () => {
+  const [cursor, setCursor] = createSignal(0);
+  const navRef: DetailNavRef = {
+    itemCount: 0,
+    itemRefs: [],
+    activateCurrentItem: () => false,
+    lastJumpFrom: null,
+    pendingJumpDirection: null,
+    scrollToFile: () => {},
+  };
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={createThemeState()}>
+        <box width={40} flexDirection="column">
+          <ProviderRunTree
+            runs={[{ ...run("completed", "success", "2026-01-01T00:01:00Z"), label: `${"界".repeat(30)}END` }]}
+            navRef={navRef}
+            detailCursorIndex={cursor}
+            detailFocused={() => false}
+            setDetailCursorAction={() => {}}
+            setDetailCursorIndex={setCursor}
+            fetchJobsForRun={async () => ({ jobs: [], error: null })}
+            debugSource="GitHub"
+            dataKey="sha"
+            summaryLabel="total workflow runs"
+          />
+        </box>
+      </ThemeContext.Provider>
+    ),
+    { width: 50, height: 8 },
+  );
+  try {
+    for (let i = 0; i < 3; i++) {
+      await Bun.sleep(0);
+      await setup.flush();
+    }
+    const row =
+      setup
+        .captureCharFrame()
+        .split("\n")
+        .find(line => line.includes("▸")) ?? "";
+    expect(row).toContain("…");
+    expect(row).toContain("✓");
+  } finally {
+    setup.renderer.destroy();
+  }
+});
