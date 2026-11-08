@@ -35,8 +35,9 @@ All notable changes to this project will be documented in this file.
 - CI and OpenShift log dialogs share loading, empty, and error states (with the real
   reason), scrolling keys, and footer words (`search · view · wrap · refresh`).
 - Provider graph columns widen to fit their counts without squeezing out the
-  subject, dim with search, path, and ancestry, and bold the selected row; ref badges
-  shorten in tight rows.
+  subject, dim with search, path, and ancestry, and bold the selected row. In tight
+  rows ref badges shorten and collapse into `+N`, and counts go compact before the
+  ones that do not fit give way to `…`.
 - Every provider's **Token** row asks for a variable name, rejects invalid names, and
   falls back to its default. Duplicate namespaces and job URLs are rejected while
   typing. Jenkins job rows read **Job #1**.
@@ -56,16 +57,19 @@ All notable changes to this project will be documented in this file.
 - OpenShift: a failed live list emptied the workloads, live updates re-expanded
   namespaces and moved the cursor, a recovered list kept its old warning, and empty
   namespaces left invisible cursor stops.
-- Reload and auto refresh left expanded jobs and steps of running runs stale.
+- Reload and auto refresh left expanded jobs and steps of running runs stale, and a
+  job or step still running when its run finished stayed running from the cache.
 - Wrapped CI logs could not scroll to the bottom; CI log failures showed as empty
   logs.
 - View-entry provider refreshes were cancelled by their own results, which hid a
-  failed GitHub refresh.
+  failed GitHub refresh. A request made while a fetch ran lost what it asked for (its
+  commits, status, retry), and leaving a view during its first fetch left it loading.
 - The uncommitted node in provider views showed file counts but no files; Info lost
   the commit body in provider views.
-- A failed history page retried in a loop; future dates showed as "just now"; the
-  Branches menu said "all branches" when it was not; the commit count included the
-  working-tree node.
+- A failed history page retried in a loop, and a page still loading during a branch
+  switch merged the old branch's commits into the new graph.
+- Future dates showed as "just now"; the Branches menu said "all branches" when it
+  was not; the commit count included the working-tree node.
 - A custom theme `accent` had no effect in the Git view.
 
 ## [0.15.0] - 2026-11-07
