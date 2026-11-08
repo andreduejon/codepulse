@@ -6,6 +6,7 @@ import { BUSY } from "../../utils/busy-text";
 import { formatRelativeDate } from "../../utils/date";
 import type { GraphBadge } from "../provider";
 import { providerTextColor, type StatusChip, StatusChips } from "../shared/status-chips";
+import { severityColor } from "./tab-shared";
 import type { SnykScanResult, SnykSeverity } from "./types";
 
 export interface SnykGraphColumnProps {
@@ -42,19 +43,6 @@ export function severityColumnWidth(badges: Iterable<GraphBadge>): number {
     width = Math.max(width, SEVERITY_CHIPS_WIDTH + extraDigits);
   }
   return width;
-}
-
-function severityColor(theme: Theme, severity: SnykSeverity): string {
-  switch (severity) {
-    case "critical":
-      return theme.severityCritical;
-    case "high":
-      return theme.severityHigh;
-    case "medium":
-      return theme.severityMedium;
-    case "low":
-      return theme.severityLow;
-  }
 }
 
 function severityChips(theme: Theme, scan: SnykScanResult): StatusChip[] {

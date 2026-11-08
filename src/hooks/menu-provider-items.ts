@@ -403,7 +403,7 @@ export function buildJenkinsProviderItems(
   items.push(
     ...jenkinsCfg.jobs.map((job, idx) => ({
       kind: "copyable" as const,
-      label: `Job #${idx + 1} URL`,
+      label: `Job #${idx + 1}`,
       get: () => job.url,
       visualPrefix: "· ",
       onForget: () => {
