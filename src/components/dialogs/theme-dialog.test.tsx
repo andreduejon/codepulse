@@ -189,8 +189,9 @@ test("selected custom details show metadata, mark explicit overrides, and use ef
     metadata();
     expect(row("background").y).toBe(row("Custom Nord *").y + 4);
     expect(setup.captureCharFrame().split("\n")[row("base").y + 1].trim()).toBe("");
-    expect(row("accent *").text).toMatch(new RegExp(`accent \\*\\s+${themes.nord.accent} → #abcdef █`));
-    expect(row("accent *").spans.find(span => span.text.includes("█"))?.fg).toEqual(RGBA.fromHex("#abcdef"));
+    // Details show the stored theme, not the app's provider-aware accent (#abcdef here).
+    expect(row("accent *").text).toMatch(new RegExp(`accent \\*\\s+${themes.nord.accent} → #123456 █`));
+    expect(row("accent *").spans.find(span => span.text.includes("█"))?.fg).toEqual(RGBA.fromHex("#123456"));
     expect(row("warning *").text).toMatch(
       new RegExp(`warning \\*\\s+${themes.nord.warning} → ${themes.nord.warning} █`),
     );
@@ -241,7 +242,7 @@ test("selected custom details show metadata, mark explicit overrides, and use ef
     }
     expect(setup.captureCharFrame()).not.toContain("*");
     expect(setup.captureCharFrame()).not.toContain("→");
-    expect(row("accent").text).toMatch(/accent\s+#abcdef █/);
+    expect(row("accent").text).toMatch(new RegExp(`accent\\s+${themes["catppuccin-mocha"].accent} █`, "i"));
   } finally {
     await setup.dispose();
   }
@@ -741,10 +742,10 @@ test("details replace theme list without resizing, pin predefined metadata, and 
     await setup.flush();
     const accentLine = frame()
       .split("\n")
-      .findIndex(line => /accent\s+#abcdef █/.test(line));
+      .findIndex(line => line.includes("accent") && line.includes(`${theme.theme().accent} █`));
     expect(accentLine).toBeGreaterThanOrEqual(0);
     expect(setup.captureSpans().lines[accentLine].spans.find(s => s.text.includes("█"))?.fg).toEqual(
-      RGBA.fromHex("#abcdef"),
+      RGBA.fromHex(theme.theme().accent),
     );
 
     expect(open()).toBe(true);
@@ -784,7 +785,7 @@ test("details replace theme list without resizing, pin predefined metadata, and 
           expect(seen).toMatch(new RegExp(`graph color ${index + 1}\\s+${hex} █`));
         });
       } else {
-        expect(seen).toContain(field === "accent" ? "#abcdef" : value);
+        expect(seen).toContain(value);
       }
     }
     const bottom = palette.scrollTop;

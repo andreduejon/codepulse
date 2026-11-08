@@ -65,7 +65,8 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void; onSel
   const palette = createMemo(() => {
     const custom = customTheme();
     const base = custom?.base ? predefinedThemes[custom.base] : undefined;
-    return Object.entries(theme()).flatMap(([field, value]) => {
+    // The stored theme, not the app's provider-aware view of it (which swaps `accent` for the provider colour).
+    return Object.entries(themes[themeName()] ?? theme()).flatMap(([field, value]) => {
       if (field === "name") return [];
       const overridden = base !== undefined && custom?.overrides.includes(field as Exclude<keyof Theme, "name">);
       const baseValue = base?.[field as keyof Theme];

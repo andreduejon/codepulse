@@ -678,7 +678,8 @@ export function AppContent(props: Readonly<AppContentProps>) {
   const providerTheme = createMemo(() => {
     const base = themeState.theme();
     const view = state.activeProviderView();
-    return { ...base, accent: providerAccent(base, view) };
+    // Git view keeps the theme's own accent (built-in themes set it equal to gitBg), so a custom accent applies.
+    return view === "git" ? base : { ...base, accent: providerAccent(base, view) };
   });
 
   return (
