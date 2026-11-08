@@ -221,3 +221,21 @@ test("Dependencies stays available without cached coverage and falls back only w
   actions.setActiveProviderView("jenkins");
   expect(state.detailActiveTab()).toBe("jenkins");
 });
+
+test("a failed page of older history says so, and the next page attempt clears it", async () => {
+  const { root } = await makeRepo(["c1", "c2", "c3"]);
+  const { state, loader } = mount(root, 2);
+  await until(() => !state.loading() && state.commits().length > 0, "first page");
+  const repoModule = await import("../src/git/repo");
+  const fail = spyOn(repoModule, "getCommits").mockRejectedValueOnce(new Error("fatal: bad object"));
+  try {
+    await loader.loadMoreData();
+    expect(state.historyError()).toBe(true);
+    expect(state.commits()).toHaveLength(2);
+    await loader.loadMoreData();
+    expect(state.historyError()).toBe(false);
+    expect(state.commits()).toHaveLength(3);
+  } finally {
+    fail.mockRestore();
+  }
+});

@@ -181,6 +181,7 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
     const ctrl = new AbortController();
     loadMoreAbortCtrl = ctrl;
     actions.setFetching(true, true);
+    actions.setHistoryError(false);
 
     try {
       const pageSize = state.maxCount();
@@ -232,8 +233,9 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
       });
     } catch (err) {
       if (ctrl.signal.aborted) return;
-      // Non-fatal: debug only. Partial data stays valid.
+      // Non-fatal: the loaded graph stays valid; the graph's last row says so and scrolling to the end retries.
       debugError("Git", err);
+      if (repoPath() === path) actions.setHistoryError(true);
     } finally {
       if (loadMoreAbortCtrl === ctrl) {
         loadMoreAbortCtrl = null;

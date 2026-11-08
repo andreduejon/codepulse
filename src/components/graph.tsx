@@ -679,6 +679,7 @@ export default function GraphView(
   }>,
 ) {
   const { state, actions } = useAppState();
+  const t = useT();
   const dimensions = useTerminalDimensions();
 
   // For each row, compute which columns stay bright when ancestry highlighting
@@ -876,6 +877,13 @@ export default function GraphView(
               );
             }}
           </For>
+          <Show when={state.historyError()}>
+            <box paddingLeft={2} height={1} flexShrink={0}>
+              <text wrapMode="none" truncate fg={t().warning}>
+                Could not load more history. Scroll to the end to retry.
+              </text>
+            </box>
+          </Show>
         </Show>
       </box>
     </scrollbox>
