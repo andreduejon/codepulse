@@ -126,3 +126,42 @@ test("entering the GitHub view before the remote is known fetches once the remot
   await settle(() => state.providerStatusFor("github-actions").kind !== "unavailable");
   expect(state.providerStatusFor("github-actions").kind).not.toBe("unavailable");
 });
+
+test("leaving the view while its first fetch runs does not leave GitHub loading forever", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => (release = resolve));
+  const { state, actions, ci } = await mountGitHub();
+  // The view-entry fetch reaches the API only after reading the disk cache, so this replaces it in time.
+  ci.mockImplementation(async () => {
+    await gate;
+    return { data: [run({ status: "completed", conclusion: "success" })], jobs: new Map(), error: null };
+  });
+  await settle(() => state.providerStatusFor("github-actions").kind === "loading");
+  expect(state.providerStatusFor("github-actions").kind).toBe("loading");
+  actions.setActiveProviderView("git");
+  release();
+  await settle();
+  actions.setActiveProviderView("github-actions");
+  await settle(() => state.providerStatusFor("github-actions").kind !== "loading");
+  expect(state.providerStatusFor("github-actions").kind).not.toBe("loading");
+});
+
+test("a Reload queued behind a running fetch still reloads its commit, even outside the graph window", async () => {
+  const { github, state, ci } = await mountGitHub();
+  await settle(() => ci.mock.calls.length > 0 && state.providerStatusFor("github-actions").kind !== "loading");
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => (release = resolve));
+  ci.mockImplementationOnce(async () => {
+    await gate;
+    return { data: [run({ status: "completed", conclusion: "success" })], jobs: new Map(), error: null };
+  });
+  const outside = "d".repeat(40);
+  const running = github.refresh();
+  await settle(() => ci.mock.calls.length > 1);
+  const queued = github.fetchCommitDataForSHA(outside, true);
+  release();
+  await running;
+  await queued;
+  await settle(() => ci.mock.calls.some(call => call[2].includes(outside)));
+  expect(ci.mock.calls.some(call => call[2].includes(outside))).toBe(true);
+});

@@ -281,6 +281,10 @@ export function useOpenShift(opts: {
     reportUnavailable: showStatus => {
       if (showStatus) actions.setProviderStatus("openshift", providerUnavailable(unavailableMessage()));
     },
+    onCancelledStatus: () => {
+      if (state.providerStatusFor("openshift").kind === "loading")
+        actions.setProviderStatus("openshift", providerIdle());
+    },
     runInitialFetch: async ({ signal, showStatus, retry, epoch }) => {
       if (authFrozen && !retry) return;
       if (retry) authFrozen = false;

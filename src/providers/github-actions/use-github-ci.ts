@@ -351,6 +351,10 @@ export function useGitHubCI(opts: {
         );
       }
     },
+    onCancelledStatus: () => {
+      if (state.providerStatusFor("github-actions").kind === "loading")
+        actions.setProviderStatus("github-actions", providerIdle());
+    },
     runInitialFetch: async ({ signal, shas, showStatus, retry, epoch }) => {
       if (authFrozen && !retry) return;
       if (retry) authFrozen = false;

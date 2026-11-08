@@ -229,6 +229,9 @@ export function useJenkinsCI(opts: {
         actions.setProviderStatus("jenkins", providerUnavailable(BANNER.jenkins.noUsername));
       else actions.setProviderStatus("jenkins", providerUnavailable(BANNER.jenkins.missingToken(config.tokenEnvVar)));
     },
+    onCancelledStatus: () => {
+      if (state.providerStatusFor("jenkins").kind === "loading") actions.setProviderStatus("jenkins", settledStatus());
+    },
     runInitialFetch: async ({ signal, shas, showStatus, retry, epoch }) => {
       if (authFrozen && !retry) return;
       if (retry) authFrozen = false;
