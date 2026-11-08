@@ -2,7 +2,7 @@ import { afterEach, expect, spyOn, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createRoot, createSignal } from "solid-js";
+import { createEffect, createRoot, createSignal, untrack } from "solid-js";
 import type { DetailNavRef } from "../src/components/detail-types";
 import { isUncommittedHash } from "../src/constants";
 import { createAppState } from "../src/context/state";
@@ -273,6 +273,58 @@ test("a history page that finishes after a branch switch does not merge into the
     release();
     await page;
     expect(subjects(state.commits())).toEqual(featureSubjects);
+  } finally {
+    spy.mockRestore();
+  }
+});
+
+test("cancelling a history page for a branch switch does not let the graph start a page at the old offset", async () => {
+  const { root, git } = await makeRepo(["c1", "c2", "c3", "c4", "c5", "c6"]);
+  await git("switch", "-c", "feature");
+  for (const subject of ["f1", "f2", "f3", "f4"]) {
+    await writeFile(join(root, "file.txt"), `${subject}\n`);
+    await git("commit", "-am", subject);
+  }
+  await git("switch", "main");
+  const { state, actions, loader } = mount(root, 2);
+  await until(() => !state.loading() && state.commits().length > 0, "first page");
+  actions.setViewingBranch("main");
+  await loader.loadData();
+  await loader.loadMoreData();
+  expect(subjects(state.commits())).toEqual(["c6", "c5", "c4", "c3"]);
+  // Like the graph: whenever no page is loading and more history exists, ask for the next page.
+  let armed = false;
+  createRoot(dispose => {
+    disposers.push(dispose);
+    createEffect(() => {
+      const fetching = state.fetching();
+      const more = state.hasMore();
+      if (!armed || fetching || !more) return;
+      untrack(() => void loader.loadMoreData());
+    });
+  });
+  const repoModule = await import("../src/git/repo");
+  const real = repoModule.getCommits;
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => (release = resolve));
+  const pages: Promise<unknown>[] = [];
+  // Pages of older history answer only after the fresh load, so a stray one would merge last.
+  const spy = spyOn(repoModule, "getCommits").mockImplementation(async (...args) => {
+    if ((args[1]?.skip ?? 0) > 0) await gate;
+    return real(...args);
+  });
+  try {
+    pages.push(loader.loadMoreData());
+    actions.setViewingBranch("feature");
+    armed = true;
+    const fresh = loader.loadData();
+    armed = false;
+    await fresh;
+    release();
+    await Promise.all(pages);
+    await until(() => !state.loading() && !state.fetching(), "loads settle");
+    const history = (await git("log", "--format=%s", "feature")).split("\n");
+    expect(subjects(state.commits())).toEqual(history.slice(0, state.commits().length));
   } finally {
     spy.mockRestore();
   }

@@ -70,13 +70,15 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
     // Cancel any in-flight load — user-initiated actions take priority. A page of older history belongs to the
     // previous load (another branch or view), so it must not merge into this one.
     if (loadAbortCtrl) loadAbortCtrl.abort();
+    const ctrl = new AbortController();
+    loadAbortCtrl = ctrl;
+    // Installed first: clearing `fetching` lets the graph ask for a page right away, and `loadAbortCtrl` is what
+    // turns that request down (it would use the old graph's offset on the new branch).
     if (loadMoreAbortCtrl) {
       loadMoreAbortCtrl.abort();
       loadMoreAbortCtrl = null;
       actions.setFetching(false);
     }
-    const ctrl = new AbortController();
-    loadAbortCtrl = ctrl;
 
     if (!silent) actions.setLoading(true);
     // Reset pagination on every fresh load, including a failed older page from before (or another repository)
