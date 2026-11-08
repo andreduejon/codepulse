@@ -41,7 +41,12 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     { kind: "binding", key: "G", desc: "Bottom", indent: 1 },
     { kind: "binding", key: "shift ↑/↓", desc: "Jump 10 items", indent: 1 },
     { kind: "binding", key: "v", desc: "Snyk Dependencies: show a vulnerable package's findings", indent: 1 },
-    { kind: "binding", key: "↑/↓  or  j/k", desc: "Navigate items", indent: 1 },
+    {
+      kind: "binding",
+      key: "↑/↓  or  j/k",
+      desc: "Navigate items (an item taller than the panel scrolls first)",
+      indent: 1,
+    },
     { kind: "binding", key: "←  or  h", desc: "Previous tab / exit details on first tab", indent: 1 },
     { kind: "binding", key: "→  or  l", desc: "Next tab", indent: 1 },
     { kind: "spacer" },

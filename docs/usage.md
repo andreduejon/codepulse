@@ -48,7 +48,7 @@ Normal clears highlighting without changing branch perspective.
 
 | Key | Action |
 |-----|--------|
-| `↑` / `↓` or `j` / `k` | Navigate items |
+| `↑` / `↓` or `j` / `k` | Navigate items (an item taller than the panel, like a long commit body, scrolls first) |
 | `shift ↑` / `shift ↓` | Jump 10 items |
 | `←` / `h` | Previous tab / exit details on the first tab (wide layout) |
 | `→` / `l` | Next tab |
