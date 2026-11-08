@@ -149,10 +149,13 @@ async function renderProvider(provider: Provider, compact = true, deferredJobs =
   const [snykScan, setSnykScan] = createSignal(scan);
   /** Bumping it hands out a fresh copy of the same OpenShift data, like a live update does. */
   const [openshiftVersion, setOpenshiftVersion] = createSignal(0);
+  const [openshiftEmpty, setOpenshiftEmpty] = createSignal(false);
   const openshiftSnapshot = () =>
-    openshiftVersion() === 0
-      ? openshiftData
-      : { ...openshiftData, namespaces: openshiftData.namespaces.map(ns => ({ ...ns, pods: [...ns.pods] })) };
+    openshiftEmpty()
+      ? { ...openshiftData, namespaces: openshiftData.namespaces.map(ns => ({ ...ns, pods: [], imageStreamTags: [] })) }
+      : openshiftVersion() === 0
+        ? openshiftData
+        : { ...openshiftData, namespaces: openshiftData.namespaces.map(ns => ({ ...ns, pods: [...ns.pods] })) };
   let resolveJobs!: () => void;
   const pendingJobs = new Promise<void>(resolve => (resolveJobs = resolve));
   let resolveReload!: () => void;
@@ -326,6 +329,7 @@ async function renderProvider(provider: Provider, compact = true, deferredJobs =
     setHasData,
     setSnykScan,
     bumpOpenShift: () => setOpenshiftVersion(version => version + 1),
+    setOpenshiftEmpty,
     setHoldReload,
     resolveJobs,
     resolveReload,
@@ -594,6 +598,19 @@ for (const provider of ["github-actions", "jenkins", "openshift", "snyk"] as con
     }
   });
 }
+
+test("OpenShift namespaces without resources are neither cursor stops nor hidden rows", async () => {
+  const d = await renderProvider("openshift");
+  try {
+    d.setOpenshiftEmpty(true);
+    await d.flush();
+    // Only Reload remains: every cursor stop has a row on screen.
+    expect(d.navRef.itemCount).toBe(1);
+    expect(d.frame()).toContain("total resources");
+  } finally {
+    await d.dispose();
+  }
+});
 
 test("Snyk severity/finding/scan actions ignore empty severities and loading scans", async () => {
   const d = await renderProvider("snyk");

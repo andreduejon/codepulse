@@ -127,7 +127,8 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
     if (props.navRef) props.navRef.itemRefs = itemRefs;
   };
 
-  const namespaces = createMemo(() => data()?.namespaces ?? []);
+  // Namespaces without matched resources are left out of both the tree and the cursor order (no invisible stops).
+  const namespaces = createMemo(() => (data()?.namespaces ?? []).filter(ns => namespaceResources(ns).length > 0));
   const resources = createMemo(() => namespaces().flatMap(namespaceResources));
   // Same wording as the CI tabs: the row (re)loads this commit's resources.
   const reloadLabel = () => (data() ? "Reload commit" : "Load commit");
