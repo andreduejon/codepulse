@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { chmod, copyFile, mkdir, mkdtemp, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
+import { BANNER } from "../../debug/banner";
 import { closeProviderCaches } from "../shared/sha-sqlite-cache";
 import { SnykCache } from "./cache";
 import {
@@ -288,6 +289,18 @@ process.exit(1);
     ).rejects.toThrow("Snyk scan failed.");
     expect(commands.some(command => command.slice(0, 4).join(" ") === "git worktree remove --force")).toBe(true);
     expect(await cache.read("/repo", SHA)).toEqual(old);
+  });
+
+  test("no supported project fails with the same words as the Dependencies tab", async () => {
+    const cacheRoot = await root();
+    const runner: SnykCommandRunner = async command => {
+      if (command[1] === "rev-parse") return { stdout: SHA, exitCode: 0 };
+      if (command[0] === "snyk") return { stdout: "", exitCode: 3 };
+      return { stdout: "", exitCode: 0 };
+    };
+    await expect(
+      scanSnykCommit({ repoPath: "/repo", sha: SHA, force: true }, { cacheRoot, runCommand: runner }),
+    ).rejects.toThrow(BANNER.snyk.noDependencyProject);
   });
 
   test("a scan where every project failed names each manifest with Snyk's reason", async () => {
