@@ -310,9 +310,16 @@ describe("OpenShift live list recovery", () => {
   test("a successful live list does not clear an error from the build inventory", async () => {
     const mounted = mountOpenShift();
     await Bun.sleep(30);
-    mounted.actions.setProviderStatus("openshift", { kind: "error", message: BANNER.openshift.inventoryFailed });
+    // Reload: the inventory fails, then the live list (restarted by the same reload) succeeds.
+    mounted.inventory.mockResolvedValueOnce({
+      data: new Map(),
+      error: BANNER.openshift.inventoryFailed,
+      failures: [],
+      successfulRequests: 0,
+    });
     await mounted.openShift.fetchCommitDataForSHA(SHA, true);
-    await Bun.sleep(30);
+    await Bun.sleep(40);
+    expect(mounted.live.mock.calls.length).toBeGreaterThan(1);
     expect(mounted.state.providerStatusFor("openshift")).toEqual({
       kind: "error",
       message: BANNER.openshift.inventoryFailed,
@@ -356,6 +363,71 @@ describe("OpenShift without setup", () => {
     await Bun.sleep(10);
     expect(mounted.openShift.isLoading(SHA)).toBe(false);
     expect(mounted.state.providers.get("openshift")?.activity?.() ?? null).toBeNull();
+  });
+});
+
+describe("OpenShift auth recovery", () => {
+  const expiredList: api.OpenShiftListedInventory = {
+    resources: [],
+    controllers: [],
+    failures: [],
+    successfulRequests: 0,
+    error: BANNER.openshift.tokenExpired,
+    resourceVersions: new Map(),
+  };
+
+  test("Reload commit after a live 401 also reloads the build inventory and clears the expired banner", async () => {
+    const mounted = mountOpenShift();
+    await Bun.sleep(30);
+    mounted.live.mockResolvedValueOnce(expiredList);
+    await mounted.openShift.fetchCommitDataForSHA(SHA, true);
+    for (let i = 0; i < 20 && mounted.state.providerStatusFor("openshift").kind !== "error"; i++) await Bun.sleep(5);
+    expect(mounted.state.providerStatusFor("openshift").kind).toBe("error");
+    const inventoryCalls = mounted.inventory.mock.calls.length;
+    await mounted.openShift.fetchCommitDataForSHA(SHA, true);
+    await Bun.sleep(40);
+    expect(mounted.inventory.mock.calls.length).toBeGreaterThan(inventoryCalls);
+    expect(mounted.state.providerStatusFor("openshift").kind).toBe("idle");
+  });
+
+  test("a 401 from the first build inventory also stops the live watches that started beside it", async () => {
+    const mounted = mountOpenShift();
+    // The view-entry inventory reaches the API after reading the disk cache, so this answer is the first one.
+    mounted.inventory.mockResolvedValueOnce({
+      data: new Map(),
+      error: BANNER.openshift.tokenExpired,
+      failures: [],
+      successfulRequests: 0,
+    });
+    await Bun.sleep(40);
+    expect(mounted.state.providerStatusFor("openshift")).toEqual({
+      kind: "error",
+      message: BANNER.openshift.tokenExpired,
+    });
+    expect(mounted.watches.length).toBeGreaterThan(0);
+    expect(mounted.watches.every(watch => watch.signal.aborted)).toBe(true);
+  });
+
+  test("a recovered live list does not clear an inventory error that happens to use the same words", async () => {
+    const mounted = mountOpenShift();
+    await Bun.sleep(30);
+    // 1. The live list fails with inventoryFailed: that status is the live list's own.
+    mounted.live.mockResolvedValueOnce({ ...expiredList, error: BANNER.openshift.inventoryFailed });
+    await mounted.openShift.fetchCommitDataForSHA(SHA, true);
+    await Bun.sleep(40);
+    // 2. Reload: the inventory fails with the same words, then the live list recovers.
+    mounted.inventory.mockResolvedValueOnce({
+      data: new Map(),
+      error: BANNER.openshift.inventoryFailed,
+      failures: [],
+      successfulRequests: 0,
+    });
+    await mounted.openShift.fetchCommitDataForSHA(SHA, true);
+    await Bun.sleep(40);
+    expect(mounted.state.providerStatusFor("openshift")).toEqual({
+      kind: "error",
+      message: BANNER.openshift.inventoryFailed,
+    });
   });
 });
 

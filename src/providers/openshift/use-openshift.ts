@@ -238,16 +238,16 @@ export function useOpenShift(opts: {
    * The status message the live list itself set (a failed or partial list). A later good list clears only that one,
    * never a build-inventory or other error it does not own.
    */
-  let liveStatusMessage: string | null = null;
+  // Owned by identity, not wording: the build inventory can report the very same banner text.
+  let liveStatus: ReturnType<typeof providerError> | null = null;
   const setLiveStatus = (kind: "error" | "warning", message: string) => {
-    liveStatusMessage = message;
-    actions.setProviderStatus("openshift", kind === "error" ? providerError(message) : providerWarning(message));
+    liveStatus = kind === "error" ? providerError(message) : providerWarning(message);
+    actions.setProviderStatus("openshift", liveStatus);
   };
   const clearLiveStatus = () => {
-    const current = state.providerStatusFor("openshift");
-    if (liveStatusMessage && "message" in current && current.message === liveStatusMessage)
+    if (liveStatus && state.providerStatusFor("openshift") === liveStatus)
       actions.setProviderStatus("openshift", providerIdle());
-    liveStatusMessage = null;
+    liveStatus = null;
   };
 
   /**
@@ -255,6 +255,11 @@ export function useOpenShift(opts: {
    * Fetch retries, like GitHub and Jenkins. Cached data stays visible meanwhile.
    */
   let authFrozen = false;
+  /** Enter the freeze from any path: running watches stop now instead of streaming on. */
+  const freezeAuth = () => {
+    authFrozen = true;
+    setWatchEpoch(value => value + 1);
+  };
 
   const lifecycle = useProviderFetchLifecycle({
     state,
@@ -377,7 +382,7 @@ export function useOpenShift(opts: {
       });
       if (args.signal?.aborted || !lifecycle.isCurrent(args.epoch, repoPath)) return;
       if (result.error === BANNER.openshift.tokenExpired) {
-        authFrozen = true;
+        freezeAuth();
         publish();
         actions.setProviderStatus("openshift", providerError(BANNER.openshift.tokenExpired));
         return;
@@ -420,7 +425,7 @@ export function useOpenShift(opts: {
         err instanceof Error && err.message === BANNER.openshift.tokenExpired
           ? BANNER.openshift.tokenExpired
           : BANNER.openshift.inventoryFailed;
-      if (message === BANNER.openshift.tokenExpired) authFrozen = true;
+      if (message === BANNER.openshift.tokenExpired) freezeAuth();
       publish();
       actions.setProviderStatus("openshift", providerError(message));
     }
@@ -463,7 +468,7 @@ export function useOpenShift(opts: {
           if (signal.aborted || !lifecycle.isCurrent(epoch, repoPath)) return;
           if (listed.error === BANNER.openshift.tokenExpired) {
             authFrozen = true;
-            actions.setProviderStatus("openshift", providerError(BANNER.openshift.tokenExpired));
+            setLiveStatus("error", BANNER.openshift.tokenExpired);
             return;
           }
           // Every request failed: keep the last live data visible, report, and retry with backoff.
@@ -522,7 +527,7 @@ export function useOpenShift(opts: {
           if (signal.aborted || !lifecycle.isCurrent(epoch, repoPath)) return;
           if (results.includes("auth")) {
             authFrozen = true;
-            actions.setProviderStatus("openshift", providerError(BANNER.openshift.tokenExpired));
+            setLiveStatus("error", BANNER.openshift.tokenExpired);
             return;
           }
           if (results.length > 0 && results.every(result => result === "forbidden")) {
@@ -578,10 +583,9 @@ export function useOpenShift(opts: {
         if (force) {
           // Setup missing: nothing can load, so do not look busy (the row is disabled; guard the direct call too).
           if (!isAvailable()) return;
-          // Reload commit is an explicit retry: it lifts an auth freeze.
-          authFrozen = false;
-          setLiveState("loading");
-          setWatchEpoch(value => value + 1);
+          // Reload commit is an explicit retry: it lifts an auth freeze and reloads the build inventory as well as
+          // the live list (OpenShift matches by window, so this is the same as :reload).
+          await lifecycle.fetchRefresh(undefined, true, true);
           return;
         }
         if (live.listed) applyLive(live.listed, new Set([sha.toLowerCase()]));
