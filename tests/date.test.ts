@@ -135,3 +135,28 @@ describe("formatRelativeDate", () => {
     expect(result).toMatch(/^\d{2}\. \w{3} /);
   });
 });
+
+describe("formatRelativeDate edge cases", () => {
+  test("a future date shows as a date, not 'just now'", () => {
+    const clock = spyOn(Date, "now").mockReturnValue(new Date(2026, 5, 10, 12).getTime());
+    try {
+      expect(formatRelativeDate(new Date(2026, 5, 12, 9, 30).toISOString())).toBe("12. Jun 09:30");
+      // A few seconds of clock skew is still "just now".
+      expect(formatRelativeDate(new Date(2026, 5, 10, 12, 0, 20).toISOString())).toBe("just now");
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  test("a cached absolute date picks up its year once the year changes", () => {
+    const clock = spyOn(Date, "now").mockReturnValue(new Date(2026, 11, 31, 12).getTime());
+    const date = new Date(2026, 5, 15, 10, 30).toISOString();
+    try {
+      expect(formatRelativeDate(date)).toBe("15. Jun 10:30");
+      clock.mockReturnValue(new Date(2027, 0, 1, 12).getTime());
+      expect(formatRelativeDate(date)).toBe("15. Jun 2026");
+    } finally {
+      clock.mockRestore();
+    }
+  });
+});

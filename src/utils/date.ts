@@ -17,7 +17,7 @@ export function formatGraphDate(dateStr: string): string {
 // Entries are keyed by date string. When the cache exceeds MAX entries,
 // the oldest half is evicted (Map preserves insertion order) to avoid
 // cliff-eviction where the entire cache is lost at once.
-const dateFormatCache = new Map<string, { result: string; cachedAt: number; isStable: boolean }>();
+const dateFormatCache = new Map<string, { result: string; cachedAt: number; isStable: boolean; year: number }>();
 const DATE_CACHE_MAX = 1000;
 // Recent dates (< 7 days) produce relative text ("5m ago") that needs periodic refresh
 const DATE_CACHE_RECENT_TTL = 60_000;
@@ -40,17 +40,20 @@ function evictDateCache(): void {
  * Older dates (same year): "15. Jun 10:30"
  * Older dates (different year): "15. Jun 2023"
  *
- * Results are cached; stable dates (>7 days) are cached permanently,
- * recent dates are refreshed every 60 seconds.
+ * Future dates (clock skew, a future-dated commit) show as absolute dates instead of "just now".
+ *
+ * Results are cached; stable (absolute) dates are cached until the year changes, since the absolute format
+ * depends on the current year; recent dates are refreshed every 60 seconds.
  */
 export function formatRelativeDate(dateStr: string): string {
   if (!dateStr) return "";
 
   const now = Date.now();
+  const year = new Date(now).getFullYear();
   const cached = dateFormatCache.get(dateStr);
   if (cached) {
-    // Stable dates (>7 days old) never change — always return cached
-    if (cached.isStable) return cached.result;
+    // Absolute dates only change with the current year (`15. Jun 10:30` → `15. Jun 2026`)
+    if (cached.isStable && cached.year === year) return cached.result;
     // Recent dates need periodic refresh for relative text accuracy
     if (now - cached.cachedAt < DATE_CACHE_RECENT_TTL) return cached.result;
   }
@@ -64,7 +67,11 @@ export function formatRelativeDate(dateStr: string): string {
   let result: string;
   let isStable = false;
 
-  if (diffMins < 1) result = "just now";
+  if (diffMs < -60_000) {
+    // In the future by more than a minute: say when, not "just now".
+    isStable = true;
+    result = formatGraphDate(dateStr);
+  } else if (diffMins < 1) result = "just now";
   else if (diffHours < 1) result = `${diffMins}m ago`;
   else if (diffDays < 1) result = `${diffHours}h ago`;
   else if (diffDays === 1) result = "Yesterday";
@@ -78,7 +85,7 @@ export function formatRelativeDate(dateStr: string): string {
   if (dateFormatCache.size >= DATE_CACHE_MAX) {
     evictDateCache();
   }
-  dateFormatCache.set(dateStr, { result, cachedAt: now, isStable });
+  dateFormatCache.set(dateStr, { result, cachedAt: now, isStable, year });
   return result;
 }
 
