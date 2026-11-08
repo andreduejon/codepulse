@@ -64,8 +64,10 @@ export function useLogSearch(opts: {
     on(
       matches,
       hits => {
+        if (!untrack(term)) return;
         const at = untrack(current);
-        if (at === null || hits.includes(at)) return;
+        if (at !== null && hits.includes(at)) return;
+        // No current hit (or it stopped matching): take the first one as soon as one exists.
         if (hits.length > 0) reveal(hits[0]);
         else setCurrent(null);
       },
