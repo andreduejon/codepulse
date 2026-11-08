@@ -134,3 +134,33 @@ test("Help tabs hover and click. Help and Debug support wheel and clickable clos
     }
   }
 });
+
+test("Debug colours an error red whatever its source", async () => {
+  const theme = createThemeState();
+  clearDebugEvents();
+  addDebugEvent({ source: "GitHub", message: "provider request failed", status: "error" });
+  addDebugEvent({ source: "Git", message: "plain git event" });
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={theme}>
+        <DebugDialog gitColor={theme.theme().gitBg} onClose={() => {}} />
+      </ThemeContext.Provider>
+    ),
+    { width: 110, height: 30 },
+  );
+  try {
+    await setup.flush();
+    const spanOf = (text: string) => {
+      const y = setup
+        .captureCharFrame()
+        .split("\n")
+        .findIndex(line => line.includes(text));
+      return setup.captureSpans().lines[y]?.spans.find(span => span.text.includes(text));
+    };
+    expect(spanOf("provider request failed")?.fg).toEqual(RGBA.fromHex(theme.theme().error));
+    expect(spanOf("plain git event")?.fg).toEqual(RGBA.fromHex(theme.theme().foreground));
+  } finally {
+    clearDebugEvents();
+    setup.renderer.destroy();
+  }
+});

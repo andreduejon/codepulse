@@ -20,8 +20,9 @@ export default function DebugDialog(props: Readonly<{ onClose: () => void; gitCo
   const sourceColor = (source: ReturnType<typeof events>[number]["source"]) =>
     debugSourceColor(t(), source, props.gitColor);
 
-  const messageColor = (source: ReturnType<typeof events>[number]["source"]) =>
-    source === "error" ? t().error : t().foreground;
+  /** Errors are red whatever their source (a GitHub request error as much as a Git one). */
+  const messageColor = (event: ReturnType<typeof events>[number]) =>
+    event.status === "error" || event.source === "error" ? t().error : t().foreground;
 
   useKeyboard(e => {
     if (e.eventType === "release") return;
@@ -85,7 +86,14 @@ export default function DebugDialog(props: Readonly<{ onClose: () => void; gitCo
           verticalScrollbarOptions={{ visible: false }}
         >
           <box flexDirection="column">
-            <For each={events()} fallback={<text fg={t().foregroundMuted}>No debug events yet</text>}>
+            <For
+              each={events()}
+              fallback={
+                <box paddingX={4}>
+                  <text fg={t().foregroundMuted}>No debug events yet</text>
+                </box>
+              }
+            >
               {event => (
                 <box flexDirection="row" width="100%" paddingX={4} alignItems="flex-start">
                   <text width={10} flexShrink={0} wrapMode="none" fg={sourceColor(event.source)}>
@@ -100,7 +108,7 @@ export default function DebugDialog(props: Readonly<{ onClose: () => void; gitCo
                   <text width={10} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
                     {formatDebugTimestamp(event.timestamp)}
                   </text>
-                  <text flexGrow={1} wrapMode="word" fg={messageColor(event.source)}>
+                  <text flexGrow={1} wrapMode="word" fg={messageColor(event)}>
                     {formatDebugMessage(event)}
                   </text>
                 </box>
