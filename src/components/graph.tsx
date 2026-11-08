@@ -7,7 +7,7 @@ import {
   type TextRenderable,
 } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/solid";
-import { createEffect, createMemo, createSelector, createSignal, For, onCleanup, Show } from "solid-js";
+import { createEffect, createMemo, createSelector, createSignal, For, onCleanup, Show, untrack } from "solid-js";
 import {
   AUTHOR_COL_WIDTH,
   COMPACT_THRESHOLD_WIDTH,
@@ -778,6 +778,12 @@ export default function GraphView(
   // Trigger pagination when cursor approaches the end of loaded rows.
   // Only fires when there are more commits to load and no load is in progress.
   const LOAD_MORE_THRESHOLD = 5;
+  /** Cursor position when a history page failed: no automatic retry until the cursor moves (or the wheel scrolls). */
+  let failedAtCursor: number | null = null;
+  createEffect(() => {
+    if (state.historyError()) failedAtCursor = untrack(() => state.cursorIndex());
+    else failedAtCursor = null;
+  });
   createEffect(() => {
     const idx = state.cursorIndex();
     const rows = state.graphRows();
@@ -785,6 +791,7 @@ export default function GraphView(
     if (total === 0) return;
     if (!state.hasMore()) return;
     if (state.fetching()) return;
+    if (state.historyError() && idx === failedAtCursor) return;
     if (idx >= total - LOAD_MORE_THRESHOLD) {
       props.onLoadMore?.();
     }

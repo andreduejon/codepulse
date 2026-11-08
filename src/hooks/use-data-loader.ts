@@ -72,8 +72,9 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
     loadAbortCtrl = ctrl;
 
     if (!silent) actions.setLoading(true);
-    // Reset pagination on every fresh load
+    // Reset pagination on every fresh load, including a failed older page from before (or another repository)
     actions.setHasMore(true);
+    actions.setHistoryError(false);
     try {
       actions.setRepoPath(path);
 

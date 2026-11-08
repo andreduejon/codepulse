@@ -239,3 +239,12 @@ test("a failed page of older history says so, and the next page attempt clears i
     fail.mockRestore();
   }
 });
+
+test("a fresh load clears an earlier history failure", async () => {
+  const { root } = await makeRepo(["c1", "c2", "c3"]);
+  const { state, actions, loader } = mount(root, 2);
+  await until(() => !state.loading() && state.commits().length > 0, "first page");
+  actions.setHistoryError(true);
+  await loader.loadData();
+  expect(state.historyError()).toBe(false);
+});

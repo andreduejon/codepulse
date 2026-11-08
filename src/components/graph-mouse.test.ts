@@ -171,3 +171,71 @@ test("graph wheel preserves selection; left click selects; modal blocks mouse", 
     await setup.dispose();
   }
 });
+
+test("a failed history page waits for the cursor to move before trying again", async () => {
+  let app!: ReturnType<typeof createAppState>;
+  let loads = 0;
+  const setup = await testRender(
+    () => {
+      app = createAppState(100, 0, 0);
+      const commits: Commit[] = Array.from({ length: 12 }, (_, index) => ({
+        hash: `${index}`,
+        shortHash: `${index}`,
+        parents: index < 11 ? [`${index + 1}`] : [],
+        subject: `Commit ${index}`,
+        body: "",
+        author: "Author",
+        authorEmail: "author@example.com",
+        authorDate: "2026-01-01T00:00:00Z",
+        committer: "Author",
+        committerEmail: "author@example.com",
+        commitDate: "2026-01-01T00:00:00Z",
+        refs: [],
+      }));
+      app.actions.setGraphRows(buildGraph(commits));
+      app.actions.setCommits(commits);
+      app.actions.setLoading(false);
+      app.actions.setHasMore(true);
+      app.actions.setCursorIndex(10);
+      return createComponent(ThemeContext.Provider, {
+        value: createThemeState(),
+        get children() {
+          return createComponent(AppStateContext.Provider, {
+            value: app,
+            get children() {
+              return createComponent(GraphView, {
+                // Like useDataLoader: start, then fail.
+                onLoadMore: () => {
+                  loads++;
+                  app.actions.setHistoryError(false);
+                  app.actions.setFetching(true, true);
+                  queueMicrotask(() => {
+                    app.actions.setHistoryError(true);
+                    app.actions.setFetching(false);
+                  });
+                },
+              });
+            },
+          });
+        },
+      });
+    },
+    { width: 200, height: 40 },
+  );
+  try {
+    for (let i = 0; i < 5; i++) {
+      await Bun.sleep(0);
+      await setup.renderOnce();
+    }
+    expect(loads).toBe(1);
+    expect(setup.captureCharFrame()).toContain("Could not load more history");
+    app.actions.setCursorIndex(11);
+    for (let i = 0; i < 5; i++) {
+      await Bun.sleep(0);
+      await setup.renderOnce();
+    }
+    expect(loads).toBe(2);
+  } finally {
+    setup.renderer.destroy();
+  }
+});
