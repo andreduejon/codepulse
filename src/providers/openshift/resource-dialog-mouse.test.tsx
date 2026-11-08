@@ -24,7 +24,7 @@ async function renderResource(kind: OpenShiftResource["kind"], follow = false, h
   };
   const raw = `normal ${"x".repeat(180)} WRAP-END`;
   const loadLog = mock(async (_resource: OpenShiftResource, _force?: boolean) => raw);
-  const loadObject = mock(async (_resource: OpenShiftResource) => ({ objectMarker: "fake-object" }));
+  const loadObject = mock(async (_resource: OpenShiftResource, _force?: boolean) => ({ objectMarker: "fake-object" }));
   const streams: { signal: AbortSignal; emit: (text: string) => void; end: () => void }[] = [];
   const followLog = mock(
     (_resource: OpenShiftResource, signal: AbortSignal, emit: (text: string) => void) =>
@@ -155,12 +155,15 @@ for (const kind of ["Pod", "Build"] as const) {
       await d.click("c view");
       expect(d.frame()).toContain("fake-object");
       expect(d.scrollbox().stickyScroll).toBe(false);
-      expect(d.loadObject.mock.calls).toEqual([[d.resource]]);
-      // Refresh acts on what is shown: in object view it reloads the object, not the hidden log.
+      expect(d.loadObject.mock.calls).toEqual([[d.resource, false]]);
+      // Refresh acts on what is shown: in object view it reloads the object from the API, not the hidden log.
       const logCalls = d.loadLog.mock.calls.length;
       await d.click("r refresh");
       await d.key("r");
-      expect(d.loadObject).toHaveBeenCalledTimes(3);
+      expect(d.loadObject.mock.calls.slice(1)).toEqual([
+        [d.resource, true],
+        [d.resource, true],
+      ]);
       expect(d.loadLog.mock.calls.length).toBe(logCalls);
       expect(d.frame()).toContain("fake-object");
       await d.key("c");
@@ -199,7 +202,10 @@ test("non-log resources and missing log loader expose no log controls; object vi
       expect(d.followLog).not.toHaveBeenCalled();
       if (kind === "Deployment") {
         expect(d.frame()).toContain("fake-object");
-        expect(d.loadObject.mock.calls).toEqual([[d.resource], [d.resource]]);
+        expect(d.loadObject.mock.calls).toEqual([
+          [d.resource, false],
+          [d.resource, true],
+        ]);
       }
       await d.click("w wrap");
       expect(d.frame()).toContain("w nowrap");

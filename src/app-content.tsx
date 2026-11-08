@@ -953,7 +953,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                         item.kind === "Pod" ? openShift.loadPodLog(item) : openShift.loadBuildLog(item, force)
                       }
                       followLog={openShift.followLog}
-                      loadObject={item => openShift.loadResourceObject(item)}
+                      loadObject={(item, force) => openShift.loadResourceObject(item, force)}
                       onClose={closeToDetail}
                       onSearchActive={setLogSearchScope}
                     />

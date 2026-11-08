@@ -431,6 +431,20 @@ describe("OpenShift auth recovery", () => {
   });
 });
 
+describe("OpenShift object refresh", () => {
+  test("a forced object load asks the API instead of returning the embedded snapshot", async () => {
+    const mounted = mountOpenShift();
+    await Bun.sleep(30);
+    const fetchObject = spyOn(api, "fetchOpenShiftObject").mockResolvedValue({ fresh: true });
+    cleanup.push(() => fetchObject.mockRestore());
+    const resource = { ...pod, object: { old: true } };
+    expect(await mounted.openShift.loadResourceObject(resource)).toEqual({ old: true });
+    expect(fetchObject).not.toHaveBeenCalled();
+    expect(await mounted.openShift.loadResourceObject(resource, true)).toEqual({ fresh: true });
+    expect(fetchObject).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("selectOpenShiftCandidateSHAs", () => {
   test("keeps only annotated SHAs that sit in the graph window", () => {
     const graph = ["aa".repeat(20), "bb".repeat(20), "cc".repeat(20)];

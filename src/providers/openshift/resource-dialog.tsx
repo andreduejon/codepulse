@@ -23,7 +23,7 @@ interface OpenShiftResourceDialogProps {
   onClose: () => void;
   loadLog?: (resource: OpenShiftResource, force?: boolean) => Promise<string>;
   followLog?: (resource: OpenShiftResource, signal: AbortSignal, onText: (text: string) => void) => Promise<void>;
-  loadObject?: (resource: OpenShiftResource) => Promise<unknown>;
+  loadObject?: (resource: OpenShiftResource, force?: boolean) => Promise<unknown>;
   /** The search row starts or stops owning Esc (see `useLogSearch`). */
   onSearchActive?: (active: boolean) => void;
 }
@@ -66,12 +66,12 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
     }
   };
 
-  const loadObject = async () => {
+  const loadObject = async (force = false) => {
     if (!props.loadObject) return;
     setObjectLoading(true);
     setObjectError(null);
     try {
-      setObjectText(JSON.stringify(await props.loadObject(props.resource), null, 2));
+      setObjectText(JSON.stringify(await props.loadObject(props.resource, force), null, 2));
     } catch (error) {
       setObjectError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -168,7 +168,8 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
   const canRefresh = () => (viewMode() === "json" ? !!props.loadObject : canLog());
   const refresh = () => {
     if (viewMode() === "json") {
-      if (props.loadObject) void loadObject();
+      // `r` asks the API: the embedded object is the snapshot from when the resource was listed.
+      if (props.loadObject) void loadObject(true);
       return;
     }
     if (!canLog()) return;

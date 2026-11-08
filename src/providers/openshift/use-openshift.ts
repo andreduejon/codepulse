@@ -47,7 +47,8 @@ export interface UseOpenShiftResult {
   loadBuildLog: (resource: OpenShiftResource, force?: boolean) => Promise<string>;
   loadPodLog: (resource: OpenShiftResource, container?: string) => Promise<string>;
   followLog: (resource: OpenShiftResource, signal: AbortSignal, onText: (text: string) => void) => Promise<void>;
-  loadResourceObject: (resource: OpenShiftResource) => Promise<unknown>;
+  /** The resource's object; `force` (refresh) asks the API instead of using the embedded or cached copy. */
+  loadResourceObject: (resource: OpenShiftResource, force?: boolean) => Promise<unknown>;
 }
 
 function emptyNamespace(namespace: string): OpenShiftNamespaceData {
@@ -650,12 +651,12 @@ export function useOpenShift(opts: {
         signal,
       );
     },
-    loadResourceObject: async resource => {
+    loadResourceObject: async (resource, force = false) => {
       const epoch = lifecycle.getEpoch();
       const repoPath = state.repoPath();
-      if (resource.object !== undefined) return resource.object;
+      if (!force && resource.object !== undefined) return resource.object;
       if (!lifecycle.isCurrent(epoch, repoPath)) return null;
-      if (resource.kind === "Build" && resource.commitSha && isTerminalBuildStatus(resource.status)) {
+      if (!force && resource.kind === "Build" && resource.commitSha && isTerminalBuildStatus(resource.status)) {
         const entry = await disk.read(repoPath, resource.commitSha);
         if (!lifecycle.isCurrent(epoch, repoPath)) return null;
         const cached = entry?.builds.find(
