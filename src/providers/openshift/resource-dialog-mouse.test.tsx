@@ -156,14 +156,12 @@ for (const kind of ["Pod", "Build"] as const) {
       expect(d.frame()).toContain("fake-object");
       expect(d.scrollbox().stickyScroll).toBe(false);
       expect(d.loadObject.mock.calls).toEqual([[d.resource]]);
-      // Existing snapshot refresh in object view reloads the log, not the object.
+      // Refresh acts on what is shown: in object view it reloads the object, not the hidden log.
+      const logCalls = d.loadLog.mock.calls.length;
       await d.click("r refresh");
       await d.key("r");
-      expect(d.loadObject).toHaveBeenCalledTimes(1);
-      expect(d.loadLog.mock.calls.slice(-2)).toEqual([
-        [d.resource, true],
-        [d.resource, true],
-      ]);
+      expect(d.loadObject).toHaveBeenCalledTimes(3);
+      expect(d.loadLog.mock.calls.length).toBe(logCalls);
       expect(d.frame()).toContain("fake-object");
       await d.key("c");
       expect(d.frame()).toContain("normal");
@@ -182,7 +180,7 @@ for (const kind of ["Pod", "Build"] as const) {
   });
 }
 
-test("non-log resources and missing log loader expose no log controls", async () => {
+test("non-log resources and missing log loader expose no log controls; object views can still refresh", async () => {
   for (const [kind, hasLoader] of [
     ["Deployment", true],
     ["Pod", false],
@@ -191,7 +189,8 @@ test("non-log resources and missing log loader expose no log controls", async ()
     const d = await renderResource(kind, false, hasLoader);
     try {
       expect(d.frame()).not.toContain("c view");
-      expect(d.frame()).not.toContain("r refresh");
+      if (kind === "Deployment") expect(d.frame()).toContain("r refresh");
+      else expect(d.frame()).not.toContain("r refresh");
       const before = d.frame();
       await d.key("c");
       await d.key("r");
@@ -200,7 +199,7 @@ test("non-log resources and missing log loader expose no log controls", async ()
       expect(d.followLog).not.toHaveBeenCalled();
       if (kind === "Deployment") {
         expect(d.frame()).toContain("fake-object");
-        expect(d.loadObject.mock.calls).toEqual([[d.resource]]);
+        expect(d.loadObject.mock.calls).toEqual([[d.resource], [d.resource]]);
       }
       await d.click("w wrap");
       expect(d.frame()).toContain("w nowrap");

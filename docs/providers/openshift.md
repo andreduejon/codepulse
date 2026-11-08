@@ -114,6 +114,8 @@ that produced them.
 - `c` cycles view mode (log / JSON) for Builds and Pods. Terminal Build JSON
   uses the cached object when present; otherwise JSON is a live snapshot.
   Leave the log view or close the dialog to abort follow.
+- `r` refreshes what is shown: the log (restarting a follow) or, in JSON view, the
+  object. Workloads without logs open in JSON and refresh the same way.
 - `/` searches the log or JSON (`n` / `N` next and previous hit), like CI logs.
   A failed request shows its reason; an empty log says *No log output.*
 

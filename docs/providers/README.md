@@ -37,7 +37,7 @@ All providers follow the same rules in the graph, details, and logs:
   switches); the banner ends in *Reload to retry*, and **Reload commit**, `:reload`,
   or `f` retries.
 - **Logs** (CI jobs and OpenShift resources) share one viewer: `/` searches
-  (`n` / `N` move between hits), `c` cycles the view, `w` wraps, `r` fetches again,
+  (`n` / `N` move between hits), `c` cycles the view, `w` wraps, `r` refreshes what is shown,
   `g` / `G`, space, and shift arrows scroll. A failed log shows its reason; an empty
   one says *No log output.*
 

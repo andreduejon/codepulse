@@ -89,7 +89,12 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     { kind: "binding", key: "esc", desc: "Clear search / close", indent: 1 },
     { kind: "binding", key: "g/G", desc: "Top / bottom", indent: 1 },
     { kind: "binding", key: "o", desc: "Open the CI run in the browser", indent: 1 },
-    { kind: "binding", key: "r", desc: "Fetch the log again (OpenShift: restart following)", indent: 1 },
+    {
+      kind: "binding",
+      key: "r",
+      desc: "Refresh what is shown: the log (restarting a follow) or the JSON object",
+      indent: 1,
+    },
     { kind: "binding", key: "space", desc: "Half a page down", indent: 1 },
     { kind: "binding", key: "shift ↑/↓", desc: "Scroll 10 lines", indent: 1 },
     { kind: "binding", key: "w", desc: "Toggle line wrap", indent: 1 },

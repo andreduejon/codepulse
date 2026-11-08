@@ -164,7 +164,13 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
   });
 
   const toggleWrap = () => setWrapEnabled(value => !value);
-  const refreshLog = () => {
+  /** `r` refreshes what is on screen: the object in JSON view, the log (restarting a follow) in log view. */
+  const canRefresh = () => (viewMode() === "json" ? !!props.loadObject : canLog());
+  const refresh = () => {
+    if (viewMode() === "json") {
+      if (props.loadObject) void loadObject();
+      return;
+    }
     if (!canLog()) return;
     if (shouldFollowOpenShiftLog(props.resource) && props.followLog) setFollowNonce(value => value + 1);
     else void loadLog(true);
@@ -190,9 +196,9 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
     } else if (e.name === "w") {
       e.preventDefault();
       toggleWrap();
-    } else if (e.name === "r" && canLog()) {
+    } else if (e.name === "r" && canRefresh()) {
       e.preventDefault();
-      refreshLog();
+      refresh();
     } else if (e.name === "c" && canLog()) {
       e.preventDefault();
       cycleViewMode();
@@ -270,10 +276,10 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
           ) : null}
           <KeyHintSeparator />
           <KeyHint key="w" desc={wrapEnabled() ? " nowrap" : " wrap"} onClick={toggleWrap} />
-          {canLog() ? (
+          {canRefresh() ? (
             <>
               <KeyHintSeparator />
-              <KeyHint key="r" desc=" refresh" onClick={refreshLog} />
+              <KeyHint key="r" desc=" refresh" onClick={refresh} />
             </>
           ) : null}
         </DialogFooter>
