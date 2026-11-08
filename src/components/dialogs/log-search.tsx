@@ -1,5 +1,5 @@
 import type { KeyEvent, Renderable, ScrollBoxRenderable } from "@opentui/core";
-import { createEffect, createMemo, createSignal, type JSX, on, onCleanup, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, type JSX, on, onCleanup, Show, untrack } from "solid-js";
 import { useT } from "../../hooks/use-t";
 import { scheduleScrollIntoView, scrollElementIntoView } from "../../utils/scroll";
 
@@ -52,6 +52,20 @@ export function useLogSearch(opts: {
       term,
       () => {
         const hits = matches();
+        if (hits.length > 0) reveal(hits[0]);
+        else setCurrent(null);
+      },
+      { defer: true },
+    ),
+  );
+  // The text changed under a kept query (other job, view or refresh): keep the hit if it still matches, else
+  // move to the first hit, so the position never points at a line that no longer matches.
+  createEffect(
+    on(
+      matches,
+      hits => {
+        const at = untrack(current);
+        if (at === null || hits.includes(at)) return;
         if (hits.length > 0) reveal(hits[0]);
         else setCurrent(null);
       },

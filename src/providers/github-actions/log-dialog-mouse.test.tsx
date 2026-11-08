@@ -380,3 +380,50 @@ test("the log search tells the app while it owns Esc, so Esc clears it instead o
     await d.dispose();
   }
 });
+
+test("a kept search follows the text when the view changes, never pointing at a line that no longer matches", async () => {
+  const d = await renderLog("github-actions");
+  try {
+    d.resolve();
+    await d.flush();
+    await d.key("/");
+    await d.mockInput.typeText("-line");
+    await d.key("RETURN");
+    await d.key("n");
+    expect(d.frame()).toContain("2/2");
+    // Errors only: only error-line still matches; the position follows it.
+    await d.key("c");
+    await d.key("c");
+    expect(d.frame()).toContain("1/1");
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("raw view shows the log as received, with timestamps", async () => {
+  const fetchLog = async () => "2026-01-01T00:00:00.1234567Z first\n\n2026-01-01T00:00:01.0000000Z second";
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={createThemeState()}>
+        <JobLogDialog
+          provider="github-actions"
+          job={{ id: 1, name: "job" }}
+          jobs={[{ id: 1, name: "job" }]}
+          run={{ name: "Build", runNumber: 1 }}
+          fetchLog={fetchLog}
+          onClose={() => {}}
+        />
+      </ThemeContext.Provider>
+    ),
+    { width: 100, height: 30, kittyKeyboard: true },
+  );
+  try {
+    await setup.flush();
+    expect(setup.captureCharFrame()).not.toContain("2026-01-01T00:00:00.1234567Z");
+    for (let i = 0; i < 3; i++) setup.mockInput.pressKey("c");
+    await setup.flush();
+    expect(setup.captureCharFrame()).toContain("2026-01-01T00:00:00.1234567Z first");
+  } finally {
+    await setup.dispose();
+  }
+});

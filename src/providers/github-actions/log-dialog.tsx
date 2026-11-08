@@ -190,10 +190,10 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
     if (mode === "raw") {
       const raw = currentLoadedLog().raw;
       if (!raw) return [] as LogLine[];
+      // Raw is the log as received: timestamps and blank lines stay; only terminal control codes are removed.
       return raw
         .split("\n")
-        .map((text, i) => ({ kind: "normal" as LogLineKind, text: stripTimestamp(text), lineNo: i + 1 }))
-        .filter(line => line.text.trim() !== "");
+        .map((text, i) => ({ kind: "normal" as LogLineKind, text: stripTerminalControls(text), lineNo: i + 1 }));
     }
     if (mode === "all") return parsedLines();
     if (mode === "issues") return parsedLines().filter(line => line.kind === "warning" || line.kind === "error");
