@@ -255,7 +255,8 @@ export function useProviderFetchLifecycle(opts: {
     if (!hasFetchedOnce) {
       const controller = new AbortController();
       fetchAbortCtrl = controller;
-      void fetchInitial(controller.signal, undefined, true);
+      // Untracked: signals the fetch reads (badges, repo) must not re-run this effect, whose cleanup would abort it.
+      untrack(() => void fetchInitial(controller.signal, undefined, true));
       onCleanup(() => {
         controller.abort();
         if (fetchAbortCtrl === controller) fetchAbortCtrl = null;
@@ -266,7 +267,7 @@ export function useProviderFetchLifecycle(opts: {
       if (Date.now() - lastFetchedAt > staleThreshold) {
         const controller = new AbortController();
         fetchAbortCtrl = controller;
-        void fetchRefresh(controller.signal, true);
+        untrack(() => void fetchRefresh(controller.signal, true));
         onCleanup(() => {
           controller.abort();
           if (fetchAbortCtrl === controller) fetchAbortCtrl = null;
@@ -295,7 +296,7 @@ export function useProviderFetchLifecycle(opts: {
     }
     const ctrl = new AbortController();
     backgroundFetchAbortCtrl = ctrl;
-    void fetchInitial(ctrl.signal, allSHAs, false);
+    untrack(() => void fetchInitial(ctrl.signal, allSHAs, false));
   });
 
   createEffect(() => {
