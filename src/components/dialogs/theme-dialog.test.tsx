@@ -142,7 +142,7 @@ test.each(["escape", "click"])(
   },
 );
 
-test("selected custom details show metadata, mark explicit overrides, and use effective scalar and graph swatches", async () => {
+test("selected custom details show metadata, mark only colors that differ from the base, and use effective swatches", async () => {
   const theme = createThemeState(derivedTheme.id, [derivedTheme, standaloneTheme]);
   const setup = await testRender(
     () => (
@@ -166,11 +166,11 @@ test("selected custom details show metadata, mark explicit overrides, and use ef
     );
     setup.mockInput.pressKey("d");
     await setup.flush();
-    expect(row("Custom Nord *").spans.find(span => span.text.includes("✓"))?.bg).toEqual(
+    expect(row("Custom Nord").spans.find(span => span.text.includes("✓"))?.bg).toEqual(
       RGBA.fromHex(derivedTheme.theme.accent),
     );
     const metadata = () => {
-      const heading = row("Custom Nord *");
+      const heading = row("Custom Nord");
       const valueEnd = heading.text.indexOf("✓") - 1;
       expect(row("id").y).toBe(heading.y + 1);
       expect(row("id").text.trim()).toMatch(/^id\s+custom-nord$/);
@@ -187,16 +187,25 @@ test("selected custom details show metadata, mark explicit overrides, and use ef
       }
     };
     metadata();
-    expect(row("background").y).toBe(row("Custom Nord *").y + 4);
+    expect(row("background").y).toBe(row("Custom Nord").y + 4);
     expect(setup.captureCharFrame().split("\n")[row("base").y + 1].trim()).toBe("");
     // Details show the stored theme, not the app's provider-aware accent (#abcdef here).
-    expect(row("accent *").text).toMatch(new RegExp(`accent \\*\\s+${themes.nord.accent} → #123456 █`));
-    expect(row("accent *").spans.find(span => span.text.includes("█"))?.fg).toEqual(RGBA.fromHex("#123456"));
-    expect(row("warning *").text).toMatch(
-      new RegExp(`warning \\*\\s+${themes.nord.warning} → ${themes.nord.warning} █`),
-    );
+    // No asterisks: a changed color shows old → new, with its label and new value in normal text.
+    expect(row("Custom Nord").text).not.toContain("*");
+    const fgOf = (label: string, text: string) => row(label).spans.find(span => span.text.includes(text))?.fg;
+    const foreground = RGBA.fromHex(theme.theme().foreground);
+    const muted = RGBA.fromHex(theme.theme().foregroundMuted);
+    expect(row("accent").text).toMatch(new RegExp(`accent\\s+${themes.nord.accent} → #123456 █`));
+    expect(row("accent").spans.find(span => span.text.includes("█"))?.fg).toEqual(RGBA.fromHex("#123456"));
+    expect(fgOf("accent", "accent")).toEqual(foreground);
+    expect(fgOf("accent", "#123456")).toEqual(foreground);
+    expect(fgOf("accent", themes.nord.accent)).toEqual(muted);
+    // Listed as an override, but the same value as the base: not a change.
+    expect(row("warning").text).toMatch(new RegExp(`warning\\s+${themes.nord.warning} █`));
+    expect(row("warning").text).not.toContain("→");
+    expect(fgOf("warning", "warning")).toEqual(muted);
     expect(row("background").text).toMatch(new RegExp(`background\\s+${themes.nord.background} █`));
-    expect(row("background").text).not.toContain("*");
+    expect(fgOf("background", "background")).toEqual(muted);
     expect(row("background").text).not.toContain("→");
     expect(row("background").spans.find(span => span.text.includes("█"))?.fg).toEqual(
       RGBA.fromHex(themes.nord.background),
@@ -210,13 +219,22 @@ test("selected custom details show metadata, mark explicit overrides, and use ef
       seen += `\n${setup.captureCharFrame()}`;
       metadata();
     }
+    expect(seen).not.toContain("*");
+    expect(seen).not.toContain("—");
     derivedTheme.theme.graphColors.forEach((hex, index) => {
-      const label = `graph color ${index + 1} *`;
-      const baseHex = themes.nord.graphColors[index] ?? "—";
-      expect(seen).toMatch(new RegExp(`graph color ${index + 1} \\*\\s+${baseHex} → ${hex} █`));
+      const label = `graph color ${index + 1}`;
+      const baseHex = themes.nord.graphColors[index];
+      // Changed: old → new. Same as the base: just the value. Added beyond the base: just the new value.
+      const value = baseHex !== undefined && baseHex !== hex ? `${baseHex} → ${hex}` : hex;
+      expect(seen).toMatch(new RegExp(`graph color ${index + 1}\\s+${value} █`));
+      const labelSpan = captures
+        .flatMap(capture => capture.lines)
+        .find(line => line.spans.some(span => span.text.trim() === label))
+        ?.spans.find(span => span.text.trim() === label);
+      expect(labelSpan?.fg).toEqual(baseHex !== hex ? foreground : muted);
       const graphRow = captures
         .flatMap(capture => capture.lines)
-        .find(line => line.spans.some(span => span.text.includes(label)));
+        .find(line => line.spans.some(span => span.text.trim() === label));
       expect(graphRow?.spans.find(span => span.text.includes("█"))?.fg).toEqual(RGBA.fromHex(hex));
     });
     setup.mockInput.pressKey("d");
@@ -274,7 +292,7 @@ test("long custom names preserve markers and long IDs wrap within details metada
     expect(appliedRow()).not.toContain(custom.theme.name);
     setup.mockInput.pressKey("d");
     await setup.flush();
-    expect(appliedRow()).toContain("*");
+    expect(appliedRow()).not.toContain("*");
     expect(appliedRow()).not.toContain(custom.theme.name);
     const lines = setup.captureCharFrame().split("\n");
     const idY = lines.findIndex(line => line.trim().startsWith("id "));

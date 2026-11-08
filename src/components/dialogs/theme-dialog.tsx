@@ -51,7 +51,6 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void; onSel
     })),
   ];
   const customTheme = () => customThemes.find(custom => custom.id === themeName());
-  const hasOverrides = () => customTheme()?.base !== undefined && (customTheme()?.overrides.length ?? 0) > 0;
   const baseLabel = () => {
     const base = customTheme()?.base;
     return base ? `${predefinedThemes[base].name} (${base})` : "none (standalone)";
@@ -70,18 +69,22 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void; onSel
       if (field === "name") return [];
       const overridden = base !== undefined && custom?.overrides.includes(field as Exclude<keyof Theme, "name">);
       const baseValue = base?.[field as keyof Theme];
+      // A color is changed only when it differs from the base: graph colors are one override but compare one by one,
+      // and an override that repeats the base value changes nothing. `baseHex` is the old value, when there is one.
+      const entry = (label: string, hex: string, old: string | undefined) => {
+        const changed = !!overridden && old?.toLowerCase() !== hex.toLowerCase();
+        return { label, hex, changed, baseHex: changed ? old : undefined };
+      };
       return Array.isArray(value)
-        ? value.map((hex, index) => ({
-            label: `Graph color ${index + 1}`,
-            hex,
-            baseHex: overridden && Array.isArray(baseValue) ? (baseValue[index] ?? "—") : undefined,
-          }))
+        ? value.map((hex, index) =>
+            entry(`Graph color ${index + 1}`, hex, Array.isArray(baseValue) ? baseValue[index] : undefined),
+          )
         : [
-            {
-              label: colorLabels[field as keyof typeof colorLabels],
-              hex: value,
-              baseHex: overridden && typeof baseValue === "string" ? baseValue : undefined,
-            },
+            entry(
+              colorLabels[field as keyof typeof colorLabels],
+              value,
+              typeof baseValue === "string" ? baseValue : undefined,
+            ),
           ];
     });
   });
@@ -267,11 +270,6 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void; onSel
                 <text flexShrink={1} wrapMode="none" truncate fg={t().accent}>
                   <strong>{t().name}</strong>
                 </text>
-                <Show when={hasOverrides()}>
-                  <text flexShrink={0} wrapMode="none" fg={t().accent}>
-                    <strong>{" *"}</strong>
-                  </text>
-                </Show>
               </box>
               <text flexShrink={0} wrapMode="none" fg={themes[themeName()].accent}>
                 {"  "}
@@ -317,11 +315,13 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void; onSel
                 <For each={palette()}>
                   {entry => (
                     <box flexDirection="row" width="100%">
-                      <text flexGrow={1} wrapMode="none" fg={t().foregroundMuted}>
-                        {`${entry.label.toLowerCase()}${entry.baseHex !== undefined ? " *" : ""}`}
+                      {/* A changed color: label and new value in normal text, the old value muted before → */}
+                      <text flexGrow={1} wrapMode="none" fg={entry.changed ? t().foreground : t().foregroundMuted}>
+                        {entry.label.toLowerCase()}
                       </text>
                       <text flexShrink={0} wrapMode="none" selectable fg={t().foregroundMuted}>
-                        {`${entry.baseHex !== undefined ? `${entry.baseHex} → ` : ""}${entry.hex} `}
+                        {entry.baseHex !== undefined ? `${entry.baseHex} → ` : ""}
+                        <span style={{ fg: entry.changed ? t().foreground : t().foregroundMuted }}>{entry.hex}</span>{" "}
                         <span style={{ fg: entry.hex }}>█</span>
                       </text>
                     </box>
