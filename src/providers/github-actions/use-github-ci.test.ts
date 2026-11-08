@@ -242,3 +242,67 @@ test("a Reload queued behind a fetch of the same commit still asks GitHub again"
   expect(ci.mock.calls.length).toBe(2);
   expect(ci.mock.calls[1]?.[2]).toContain(SHA);
 });
+
+test("awaiting a Reload queued behind a fetch waits until the Reload itself has run", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => (release = resolve));
+  const { github, ci } = await mountGitHub();
+  ci.mockImplementationOnce(async () => {
+    await gate;
+    return { data: [run()], jobs: new Map(), error: null };
+  });
+  await settle(() => ci.mock.calls.length === 1);
+  let done = false;
+  const reload = github.fetchCommitDataForSHA(SHA, true).then(() => (done = true));
+  await settle();
+  // Still waiting behind the running fetch: the Reload has not asked GitHub yet.
+  expect(done).toBe(false);
+  release();
+  await reload;
+  expect(ci.mock.calls.length).toBe(2);
+});
+
+test("a window refresh queued after a Reload keeps the Reload's commit outside the window", async () => {
+  const { github, state, actions, ci } = await mountGitHub();
+  await settle(() => ci.mock.calls.length > 0 && state.providerStatusFor("github-actions").kind !== "loading");
+  // A background catch-up fetch for a new commit is running (leaving the view does not cancel it).
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => (release = resolve));
+  ci.mockImplementationOnce(async () => {
+    await gate;
+    return { data: [], jobs: new Map(), error: null };
+  });
+  const NEW = "a".repeat(40);
+  const commit = (hash: string, parents: string[]) => ({
+    hash,
+    shortHash: hash.slice(0, 7),
+    parents,
+    subject: hash.slice(0, 1),
+    body: "",
+    author: "Author",
+    authorEmail: "author@example.com",
+    authorDate: "2026-01-01T00:00:00Z",
+    committer: "Author",
+    committerEmail: "author@example.com",
+    commitDate: "2026-01-01T00:00:00Z",
+    refs: [],
+  });
+  actions.setGraphRows(buildGraph([commit(NEW, [SHA]), commit(SHA, [])]));
+  await settle(() => ci.mock.calls.some(call => call[2].includes(NEW)));
+  const calls = ci.mock.calls.length;
+  const outside = "d".repeat(40);
+  const reload = github.fetchCommitDataForSHA(outside, true);
+  await settle();
+  // Coming back to the view after a while queues a refresh of the whole window behind it.
+  const clock = spyOn(Date, "now").mockReturnValue(Date.now() + 10 * 60_000);
+  try {
+    actions.setActiveProviderView("git");
+    actions.setActiveProviderView("github-actions");
+    release();
+    await reload;
+    await settle(() => ci.mock.calls.length > calls);
+  } finally {
+    clock.mockRestore();
+  }
+  expect(ci.mock.calls.slice(calls).some(call => call[2].includes(outside))).toBe(true);
+});

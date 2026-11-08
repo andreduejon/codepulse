@@ -19,9 +19,14 @@ export interface ProviderFetchArgs {
 
 interface PendingFetch {
   kind: "initial" | "refresh";
-  shas?: string[];
+  /** Commits a caller named (a Reload of one commit, background catch-up). */
+  shas: string[];
+  /** A caller asked for the whole graph window; the named commits are fetched alongside it. */
+  window: boolean;
   showStatus: boolean;
   retry: boolean;
+  /** Callers awaiting the request: settled once it has run, or when a cancel drops it. */
+  waiters: (() => void)[];
 }
 
 export function useProviderFetchLifecycle(opts: {
@@ -133,17 +138,25 @@ export function useProviderFetchLifecycle(opts: {
     return Date.now() < backoffUntil;
   }
 
-  function queueFetch(next: PendingFetch) {
-    const current = pendingFetch;
-    pendingFetch = current
-      ? {
-          kind: current.kind === "initial" || next.kind === "initial" ? "initial" : "refresh",
-          // No SHAs means the whole window; otherwise both callers' SHAs.
-          shas: current.shas && next.shas ? [...new Set([...current.shas, ...next.shas])] : undefined,
-          showStatus: current.showStatus || next.showStatus,
-          retry: current.retry || next.retry,
-        }
-      : next;
+  /** Queue a request behind the running fetch; the promise settles once the queued request has run (or is dropped). */
+  function queueFetch(next: Omit<PendingFetch, "waiters">): Promise<void> {
+    return new Promise(resolve => {
+      const current = pendingFetch;
+      pendingFetch = current
+        ? {
+            kind: current.kind === "initial" || next.kind === "initial" ? "initial" : "refresh",
+            shas: [...new Set([...current.shas, ...next.shas])],
+            window: current.window || next.window,
+            showStatus: current.showStatus || next.showStatus,
+            retry: current.retry || next.retry,
+            waiters: [...current.waiters, resolve],
+          }
+        : { ...next, waiters: [resolve] };
+    });
+  }
+
+  function settleWaiters(request: PendingFetch | null) {
+    for (const resolve of request?.waiters ?? []) resolve();
   }
 
   function finishFetch(epoch: number) {
@@ -154,8 +167,18 @@ export function useProviderFetchLifecycle(opts: {
     pendingFetch = null;
     const ctrl = new AbortController();
     backgroundFetchAbortCtrl = ctrl;
-    if (next.kind === "refresh") void fetchRefresh(ctrl.signal, next.showStatus, next.retry);
-    else void fetchInitial(ctrl.signal, next.shas, next.showStatus, next.retry);
+    let run: Promise<void>;
+    if (next.kind === "refresh") run = fetchRefresh(ctrl.signal, next.showStatus, next.retry);
+    else {
+      // The window and the commits callers named; no named commits means the provider's own window (undefined).
+      const shas = !next.window
+        ? next.shas
+        : next.shas.length > 0
+          ? [...new Set([...collectTopSHAs(state.graphRows(), currentShaLimit()), ...next.shas])]
+          : undefined;
+      run = fetchInitial(ctrl.signal, shas, next.showStatus, next.retry);
+    }
+    void run.finally(() => settleWaiters(next));
   }
 
   /**
@@ -170,10 +193,7 @@ export function useProviderFetchLifecycle(opts: {
     if (opts.suspended?.()) return;
     const epoch = cacheEpoch;
     if (!showStatus && inBackoff()) return;
-    if (fetchInFlight) {
-      queueFetch({ kind: "initial", shas, showStatus, retry });
-      return;
-    }
+    if (fetchInFlight) return queueFetch({ kind: "initial", shas: shas ?? [], window: !shas, showStatus, retry });
     if (!opts.isAvailable()) {
       opts.reportUnavailable(showStatus);
       return;
@@ -196,10 +216,7 @@ export function useProviderFetchLifecycle(opts: {
     if (opts.suspended?.()) return;
     const epoch = cacheEpoch;
     if (!showStatus && inBackoff()) return;
-    if (fetchInFlight) {
-      queueFetch({ kind: "refresh", showStatus, retry });
-      return;
-    }
+    if (fetchInFlight) return queueFetch({ kind: "refresh", shas: [], window: true, showStatus, retry });
     if (!opts.isAvailable()) return;
     fetchInFlight = true;
     const seq = showStatus ? ++statusFetchSeq : null;
@@ -257,7 +274,9 @@ export function useProviderFetchLifecycle(opts: {
     for (const ctrl of activeRequestControllers) ctrl.abort();
     activeRequestControllers.clear();
     fetchInFlight = false;
+    const dropped = pendingFetch;
     pendingFetch = null;
+    settleWaiters(dropped);
   }
 
   function resetCaches() {
@@ -333,7 +352,7 @@ export function useProviderFetchLifecycle(opts: {
     if (newSHAs.length === 0) return;
 
     if (fetchInFlight) {
-      queueFetch({ kind: "initial", shas: allSHAs, showStatus: false, retry: false });
+      void queueFetch({ kind: "initial", shas: allSHAs, window: false, showStatus: false, retry: false });
       return;
     }
     const ctrl = new AbortController();
