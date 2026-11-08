@@ -21,21 +21,24 @@ Provider-specific guides describe any additional live updates or automatic work.
 
 ## Shared behavior
 
-All providers follow the same rules in the graph, details, and logs:
+GitHub Actions, Jenkins, and OpenShift follow the same rules in the graph,
+details, and logs; Snyk shares the busy text, dimming, and action-row rules, and
+differs where noted:
 
 - **Busy text** says what kind of work runs: `fetching` is network (Git remote,
   GitHub Actions, Jenkins, OpenShift), `reading` is local Git, `scanning` is Snyk.
   The footer names it (`GitHub Actions fetching`, `Snyk scanning`), including auto
   refresh, and cuts the label with `…` before the key hints when space runs out.
 - **Graph columns** use the same chips: fail, running, neutral (grey: cancelled,
-  skipped, or unknown), pass. Columns widen to fit the counts, dim with search,
-  path, and ancestry like the Git columns, and the selected row is bold.
+  skipped, or unknown), pass (Snyk: four severity chips). Columns widen to fit the
+  counts while the subject keeps room, dim with search, path, and ancestry like the
+  Git columns, and the selected row is bold.
 - **Detail tabs** start with **Load commit** / **Reload commit** (Snyk: **Scan** /
   **Rescan commit**). While a provider is unavailable the row is muted and the
   cursor skips it; compact details show the reason above the tabs.
 - **Expired credentials** (401) stop automatic requests (polls, watches, view
   switches); the banner ends in *Reload to retry*, and **Reload commit**, `:reload`,
-  or `f` retries.
+  or `f` retries. Snyk runs the CLI per scan and retries with **Rescan commit**.
 - **Logs** (CI jobs and OpenShift resources) share one viewer: `/` searches
   (`n` / `N` move between hits), `c` cycles the view, `w` wraps, `r` refreshes what is shown,
   `g` / `G`, space, and shift arrows scroll. A failed log shows its reason; an empty
