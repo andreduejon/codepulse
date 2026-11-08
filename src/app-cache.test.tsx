@@ -159,6 +159,7 @@ test(":cache groups apps, resets and evicts only selected repository, then resto
       throw new Error("database is locked");
     });
     setup.mockInput.pressKey("r");
+    setup.mockInput.pressKey("RETURN");
     await setup.flush();
     expect(setup.captureCharFrame()).toMatch(/Reset failed\s*\n.*database is locked/);
     expect(invalidate).not.toHaveBeenCalled();
@@ -166,6 +167,7 @@ test(":cache groups apps, resets and evicts only selected repository, then resto
     resetTimer.mockClear();
     const started = Date.now();
     setup.mockInput.pressKey("r");
+    setup.mockInput.pressKey("RETURN");
     await setup.flush();
     expect(invalidate).not.toHaveBeenCalled();
     expect(resetTimer).toHaveBeenCalledTimes(1);

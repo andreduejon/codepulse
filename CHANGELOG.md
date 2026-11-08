@@ -46,9 +46,9 @@ All notable changes to this project will be documented in this file.
 - Long selected names scroll in Files, CI, and OpenShift rows; a commit body taller
   than the panel scrolls with `↑/↓` before the cursor moves past it.
 - The cache card uses the 1+4 inset, keeps the repository switcher's height (16
-  rows, the rest scrolls), and tells same-named repositories apart. Confirmations
-  and errors show as message boxes above it, and `a` resets all timers (was
-  `shift+r`).
+  rows, the rest scrolls), and tells same-named repositories apart. Every reset and
+  eviction asks first in a message box above it (errors show there too), a reset
+  keeps the list where it was scrolled, and `a` resets all timers (was `shift+r`).
 
 ### Fixed
 

@@ -255,6 +255,8 @@ test("compact app rows aggregate all providers; selected reset reaches every pro
     expect(data.contents()).toEqual(contents);
     const started = Date.now();
     await setup.click("r reset");
+    expect(setup.frame()).toContain("Reset cache-alpha?");
+    await setup.click("enter confirm");
     const after = management.getProviderCacheSummary(data.root);
     for (const group of after.groups.filter(group => group.repoPath === ALPHA)) {
       expect(group.cleanupAt).toBeGreaterThanOrEqual(started + management.CACHE_INACTIVITY_MS);
@@ -272,6 +274,7 @@ test("compact app rows aggregate all providers; selected reset reaches every pro
       formatGraphDate(new Date(after.groups.find(group => group.provider === "jenkins")?.cleanupAt ?? 0).toISOString()),
     );
     await setup.key("r");
+    await setup.key("RETURN");
     setup.expectSelected("cache-alpha");
     expect(card.height).toBe(10);
     const beforeEviction = data.contents();
@@ -691,6 +694,7 @@ test("repository and reset-all errors stay visible without success or deletion",
   try {
     await setup.clickRow(ALPHA);
     await setup.key("r");
+    await setup.key("RETURN");
     expect(setup.frame()).toMatch(/Reset failed\s*\n.*database is locked/);
     const spanAt = (text: string) =>
       setup.captureSpans().lines[setup.point(text).y].spans.find(span => span.text.includes(text));
@@ -882,6 +886,51 @@ test("the card keeps the repository switcher's height, and a confirmation is a m
     expect(card.height).toBe(16 + 4);
     await setup.key("ESCAPE");
     expect(setup.frame()).not.toContain("Reset all inactivity timers?");
+  } finally {
+    await setup.dispose();
+    await data.dispose();
+  }
+});
+
+test("r asks before resetting one repository, and a reset keeps the list scrolled where it was", async () => {
+  const data = await fixture();
+  const now = Date.now();
+  for (let index = 0; index < 20; index++) {
+    await data.seed(
+      resolve(`/repo/many-${String(index).padStart(2, "0")}`),
+      "github-actions",
+      now - 1000 - index,
+      index + 1,
+    );
+  }
+  const setup = await screen(data.root);
+  try {
+    setup.resize(90, 60);
+    await setup.flush();
+    const list = descendants(setup.renderer.root).find(node => node.id === "cache-list") as ScrollBoxRenderable;
+    // Go to the last repository: the list scrolls down to it.
+    await setup.key("g", true);
+    const scrolled = list.scrollTop;
+    expect(scrolled).toBeGreaterThan(0);
+    const last = setup.frame().match(/many-\d\d(?=[^\n]*Feb|[^\n]*Due|[^\n]*KB)/g) ?? [];
+    const selectedName = last.at(-1) ?? "";
+    expect(selectedName).not.toBe("");
+    // r asks first, like a and e; Esc keeps the timer.
+    const before = management.getProviderCacheSummary(data.root).groups;
+    await setup.key("r");
+    expect(setup.frame()).toContain(`Reset ${selectedName}?`);
+    expect(setup.frame()).toContain("enter confirm");
+    await setup.key("ESCAPE");
+    expect(management.getProviderCacheSummary(data.root).groups).toEqual(before);
+    // Confirmed, the reset keeps the scroll position and the selected row.
+    await setup.key("r");
+    await setup.key("RETURN");
+    expect(list.scrollTop).toBe(scrolled);
+    setup.expectSelected(selectedName);
+    await setup.key("a");
+    await setup.key("RETURN");
+    expect(list.scrollTop).toBe(scrolled);
+    setup.expectSelected(selectedName);
   } finally {
     await setup.dispose();
     await data.dispose();

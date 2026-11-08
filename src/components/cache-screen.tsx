@@ -1,7 +1,7 @@
 import { join, resolve } from "node:path";
 import { MouseButton, type Renderable, type ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
-import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, Index, onCleanup, Show } from "solid-js";
 import packageJson from "../../package.json";
 import { getKnownRepoInfos } from "../config";
 import { useClipboard } from "../hooks/use-clipboard";
@@ -44,12 +44,16 @@ type CacheRow =
   | { kind: "file"; id: string; name: string; path: string }
   | { kind: "repo"; id: string; label: string; repo: CacheRepository };
 type Confirmation =
+  | { kind: "reset"; label: string; repo: CacheRepositorySummary }
   | { kind: "reset-all"; count: number }
   | { kind: "evict"; label: string; repo: CacheRepositorySummary };
 
 const graphDate = (timestamp: number) => formatGraphDate(new Date(timestamp).toISOString());
 const cleanupDate = (timestamp: number) => (timestamp <= Date.now() ? "Due now" : graphDate(timestamp));
 const selectable = (row: CacheRow) => row.kind === "file" || row.kind === "repo";
+const asFile = (row: CacheRow) => (row.kind === "file" ? row : undefined);
+const asRepo = (row: CacheRow) => (row.kind === "repo" ? row : undefined);
+const headerLabel = (row: CacheRow) => (row.kind === "header" ? row.label : "");
 
 export default function CacheScreen(props: Readonly<CacheScreenProps>) {
   const t = useT();
@@ -138,6 +142,13 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
   /** One message at a time, above the card like the repository switcher's: a confirmation, an error, or a result. */
   const notice = (): { kind: UIMessageKind; title: string; lines: string[] } | null => {
     const action = confirmation();
+    if (action?.kind === "reset") {
+      return {
+        kind: "warning",
+        title: `Reset ${action.label}?`,
+        lines: [`Starts a new ${INACTIVITY_DAYS}-day period across all providers.`, "Nothing is deleted."],
+      };
+    }
     if (action?.kind === "reset-all") {
       const repos = action.count === 1 ? "1 repository starts" : `${action.count} repositories start`;
       return {
@@ -217,17 +228,12 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
     const row = selected();
     if (!blocked() && row?.kind === "file") copyToClipboard(row.path, row.id);
   };
-  const resetRepository = () => {
+  const requestReset = () => {
     const row = selected();
     if (blocked() || row?.kind !== "repo") return;
     setResult("");
     setError("");
-    try {
-      resetRepositoryCacheTimer(row.repo.repoHash, props.cacheRoot);
-      refresh();
-    } catch (cause) {
-      setError(`Reset failed\n${cause instanceof Error ? cause.message : String(cause)}`);
-    }
+    setConfirmation({ kind: "reset", label: row.label, repo: { ...row.repo } });
   };
   const requestResetAll = () => {
     if (blocked() || repositories().length === 0) return;
@@ -249,7 +255,10 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
     setResult("");
     setError("");
     try {
-      if (action.kind === "evict") {
+      if (action.kind === "reset") {
+        resetRepositoryCacheTimer(action.repo.repoHash, props.cacheRoot);
+        refresh();
+      } else if (action.kind === "evict") {
         const counts = props.onEvict
           ? await props.onEvict(action.repo)
           : evictRepositoryCache(action.repo.repoHash, props.cacheRoot);
@@ -262,9 +271,8 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
       }
     } catch (cause) {
       if (disposed) return;
-      setError(
-        `${action.kind === "evict" ? "Eviction" : "Action"} failed\n${cause instanceof Error ? cause.message : String(cause)}`,
-      );
+      const failed = action.kind === "evict" ? "Eviction" : action.kind === "reset" ? "Reset" : "Action";
+      setError(`${failed} failed\n${cause instanceof Error ? cause.message : String(cause)}`);
     } finally {
       if (!disposed) {
         setConfirmation(null);
@@ -319,7 +327,7 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
         break;
       case "r":
         event.preventDefault();
-        if (!event.shift) resetRepository();
+        if (!event.shift) requestReset();
         break;
       case "a":
         event.preventDefault();
@@ -378,14 +386,14 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
             verticalScrollbarOptions={{ visible: false }}
           >
             <box flexDirection="column">
-              <For each={rows()}>
+              <Index each={rows()}>
                 {(row, index) => (
                   // biome-ignore lint/a11y/noStaticElementInteractions: TUI rows support keyboard navigation and Enter.
                   // biome-ignore lint/a11y/useKeyWithMouseEvents: Keyboard invokes the same actions.
                   <box
-                    id={row.id}
+                    id={row().id}
                     ref={(el: Renderable) => {
-                      rowRefs[index()] = el;
+                      rowRefs[index] = el;
                     }}
                     width="100%"
                     height={1}
@@ -393,29 +401,29 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
                     flexDirection="row"
                     paddingX={4}
                     backgroundColor={
-                      selectable(row) && (cursor() === index() || hovered() === row.id)
+                      selectable(row()) && (cursor() === index || hovered() === row().id)
                         ? t().backgroundElement
                         : undefined
                     }
                     onMouseOver={() => {
-                      if (!blocked() && selectable(row)) setHovered(row.id);
+                      if (!blocked() && selectable(row())) setHovered(row().id);
                     }}
                     onMouseOut={() => setHovered(null)}
                     onMouseDown={event => {
-                      if (event.button !== MouseButton.LEFT || blocked() || !selectable(row)) return;
-                      if (row.kind !== "file") event.preventDefault();
+                      if (event.button !== MouseButton.LEFT || blocked() || !selectable(row())) return;
+                      if (row().kind !== "file") event.preventDefault();
                       event.stopPropagation();
-                      setCursor(index());
+                      setCursor(index);
                     }}
                   >
                     <Show
-                      when={row.kind === "file" ? row : undefined}
+                      when={asFile(row())}
                       fallback={
                         <Show
-                          when={row.kind === "repo" ? row : undefined}
+                          when={asRepo(row())}
                           fallback={
                             <text selectable={false} width="100%" wrapMode="none" truncate fg={t().accent}>
-                              <strong>{row.kind === "header" ? row.label : ""}</strong>
+                              <strong>{headerLabel(row())}</strong>
                             </text>
                           }
                         >
@@ -428,7 +436,7 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
                                 minWidth={0}
                                 wrapMode="none"
                                 truncate
-                                fg={cursor() === index() ? t().accent : t().foreground}
+                                fg={cursor() === index ? t().accent : t().foreground}
                               >
                                 {repoRow().label}
                                 {props.currentRepo === repoRow().repo.repoPath ? " (current)" : ""}
@@ -451,13 +459,13 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
                             width={17}
                             flexShrink={0}
                             wrapMode="none"
-                            fg={cursor() === index() ? t().accent : t().foreground}
+                            fg={cursor() === index ? t().accent : t().foreground}
                           >
                             {file().name}
                           </text>
                           {/* biome-ignore lint/a11y/noStaticElementInteractions: Enter copies the selected file path. */}
                           <text
-                            id={`${row.id}-path`}
+                            id={`${row().id}-path`}
                             selectable
                             flexGrow={1}
                             minWidth={0}
@@ -467,13 +475,13 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
                             onMouseDown={event => {
                               if (event.button !== MouseButton.LEFT || blocked()) return;
                               event.stopPropagation();
-                              setCursor(index());
-                              copyToClipboard(file().path, row.id);
+                              setCursor(index);
+                              copyToClipboard(file().path, row().id);
                             }}
                           >
                             {file().path}
                           </text>
-                          <Show when={copiedId() === row.id}>
+                          <Show when={copiedId() === row().id}>
                             <text
                               selectable={false}
                               flexShrink={0}
@@ -489,7 +497,7 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
                     </Show>
                   </box>
                 )}
-              </For>
+              </Index>
             </box>
           </scrollbox>
           <box height={1} flexShrink={0} />
@@ -511,7 +519,7 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
                     when={selected()?.kind === "file"}
                     fallback={
                       <>
-                        <KeyHint key="r" desc=" reset" onClick={resetRepository} disabled={busy()} />
+                        <KeyHint key="r" desc=" reset" onClick={requestReset} disabled={busy()} />
                         <KeyHintSeparator />
                       </>
                     }

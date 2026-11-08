@@ -43,7 +43,7 @@ Closing it returns to the previous repository view and resumes normal work.
 | Key | Action |
 |-----|--------|
 | `↑` / `↓`, `j` / `k` | Select an app |
-| `r` | Reset selected repository's inactivity timer, across all providers |
+| `r` | Reset selected repository's inactivity timer, across all providers, with confirmation |
 | `a` | Reset all repository timers, with confirmation |
 | `e` | Evict selected repository across all providers, with confirmation |
 | `Enter` | Copy selected file path or confirm pending action |
