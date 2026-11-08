@@ -6,7 +6,7 @@ import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
 import { useT } from "../hooks/use-t";
 import { providerColors } from "../providers/colors";
 import { type ProviderView, providerDisplayName } from "../providers/provider";
-import { commandBarPlaceholder, commitCountText, filterBadgeLabel } from "../utils/command-bar-utils";
+import { commandBarPlaceholder, commitCountText, filterBadgeLabel, realCommitCount } from "../utils/command-bar-utils";
 import { groupMembersForRepo, repoDisplayName } from "../utils/group-repos";
 import Badge from "./badge";
 
@@ -54,7 +54,7 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
 
   // "1 commit", "12 commits", "1 / 201 commits": the noun follows the total.
   const countText = () => {
-    const total = state.graphRows().length;
+    const total = realCommitCount(state.graphRows());
     return `${commitCountText(state.highlightSet(), total)} ${total === 1 ? "commit" : "commits"}`;
   };
 

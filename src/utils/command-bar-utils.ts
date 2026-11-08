@@ -1,3 +1,4 @@
+import { isUncommittedHash } from "../constants";
 /**
  * Pure helper functions extracted from command-bar.tsx.
  *
@@ -32,6 +33,11 @@ export function commandBarPlaceholder(mode: CommandBarMode): string {
  * - When a highlight is active: "matchCount / totalCount"
  * - Otherwise: "totalCount"
  */
+/** Real commits among the graph rows: the working-tree changes node is a row, not a commit. */
+export function realCommitCount(rows: readonly { commit: { hash: string } }[]): number {
+  return rows.filter(row => !isUncommittedHash(row.commit.hash)).length;
+}
+
 export function commitCountText(highlightSet: Set<string> | null, totalRows: number): string {
   return highlightSet !== null ? `${highlightSet.size} / ${totalRows}` : `${totalRows}`;
 }
