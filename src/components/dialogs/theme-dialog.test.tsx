@@ -845,3 +845,31 @@ test("details replace theme list without resizing, pin predefined metadata, and 
     await setup.dispose();
   }
 });
+
+test("one empty row separates the last color from the footer, like the title above", async () => {
+  const theme = createThemeState(derivedTheme.id, [derivedTheme]);
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={theme}>
+        <ThemeDialog onClose={() => {}} />
+      </ThemeContext.Provider>
+    ),
+    { width: 100, height: 40 },
+  );
+  try {
+    await setup.flush();
+    setup.mockInput.pressKey("d");
+    await setup.flush();
+    const lines = setup.captureCharFrame().split("\n");
+    const footer = lines.findIndex(line => line.includes("enter select"));
+    const title = lines.findIndex(line => line.includes("Color Theme"));
+    expect(footer).toBeGreaterThan(0);
+    // Title, one empty row, content ... content, one empty row, footer.
+    expect(lines[title + 1].trim()).toBe("");
+    expect(lines[title + 2].trim()).not.toBe("");
+    expect(lines[footer - 1].trim()).toBe("");
+    expect(lines[footer - 2].trim()).not.toBe("");
+  } finally {
+    await setup.dispose();
+  }
+});
