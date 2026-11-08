@@ -36,6 +36,7 @@ async function renderLog(provider: "github-actions" | "jenkins", long: boolean |
   const [open, setOpen] = createSignal(true);
   const [url, setUrl] = createSignal<string | undefined>("https://example.com/run/42");
   const close = mock(() => setOpen(false));
+  const searchActive = mock((_active: boolean) => {});
   let setup: Awaited<ReturnType<typeof testRender>>;
   try {
     setup = await testRender(
@@ -49,6 +50,7 @@ async function renderLog(provider: "github-actions" | "jenkins", long: boolean |
               run={{ name: "Build", runNumber: 42, url: url() }}
               fetchLog={fetchLog}
               onClose={close}
+              onSearchActive={searchActive}
             />
           </Show>
         </ThemeContext.Provider>
@@ -111,6 +113,7 @@ async function renderLog(provider: "github-actions" | "jenkins", long: boolean |
     fetchLog,
     openUrl,
     close,
+    searchActive,
     open,
     setOpen,
     setUrl,
@@ -355,6 +358,24 @@ test("/ searches the log: typing jumps to hits, n/N cycle them, q types, Esc cle
     expect(d.close).not.toHaveBeenCalled();
     await d.key("ESCAPE");
     expect(d.close).toHaveBeenCalledTimes(1);
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("the log search tells the app while it owns Esc, so Esc clears it instead of closing the dialog", async () => {
+  const d = await renderLog("github-actions");
+  try {
+    d.resolve();
+    await d.flush();
+    await d.key("/");
+    expect(d.searchActive.mock.calls.at(-1)).toEqual([true]);
+    await d.mockInput.typeText("line");
+    await d.key("RETURN");
+    expect(d.searchActive.mock.calls.at(-1)).toEqual([true]);
+    await d.key("ESCAPE");
+    expect(d.searchActive.mock.calls.at(-1)).toEqual([false]);
+    expect(d.close).not.toHaveBeenCalled();
   } finally {
     await d.dispose();
   }

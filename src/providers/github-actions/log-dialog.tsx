@@ -41,6 +41,8 @@ interface JobLogDialogProps {
   run: { name: string; runNumber: number; url?: string };
   fetchLog: (job: { id: string | number; name: string }) => Promise<string>;
   onClose: () => void;
+  /** The search row starts or stops owning Esc (see `useLogSearch`). */
+  onSearchActive?: (active: boolean) => void;
 }
 
 const VIEW_MODE_CYCLE: LogViewMode[] = ["all", "issues", "errors", "raw"];
@@ -205,6 +207,7 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
     texts: () => filteredLines().map(line => line.text),
     rowAt: index => lineRefs[index],
     scrollbox: () => scrollboxRef,
+    onActiveChange: active => props.onSearchActive?.(active),
   });
 
   createEffect(() => {

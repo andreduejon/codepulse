@@ -661,6 +661,9 @@ export function AppContent(props: Readonly<AppContentProps>) {
     onDismissTabNotice: dismissTabNotice,
   };
 
+  /** While a log dialog's search owns Esc, the app's Esc (cascade close) must not close the dialog. */
+  const setLogSearchScope = (active: boolean) => actions.setKeyboardScopeOverride(active ? "log-search" : null);
+
   /** Dialogs opened from the details return to the compact detail dialog when they close. */
   const closeToDetail = () => {
     if (layoutMode() === "compact" && state.detailFocused()) setDialog("detail");
@@ -938,6 +941,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                       run={target().run}
                       fetchLog={target().fetchLog}
                       onClose={closeToDetail}
+                      onSearchActive={setLogSearchScope}
                     />
                   )}
                 </Show>
@@ -951,6 +955,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                       followLog={openShift.followLog}
                       loadObject={item => openShift.loadResourceObject(item)}
                       onClose={closeToDetail}
+                      onSearchActive={setLogSearchScope}
                     />
                   )}
                 </Show>

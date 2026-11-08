@@ -64,3 +64,14 @@ describe("keyboard scope routing", () => {
     });
   });
 });
+
+describe("log search scope", () => {
+  it("Esc goes to an active log search, not to the app's dialog close", () => {
+    expect(routeGlobalKey({ dialog: "job-log" }, "escape").runCascadeClose).toBe(true);
+    expect(routeGlobalKey({ dialog: "job-log", overrideScope: "log-search" }, "escape")).toEqual({
+      scope: "log-search",
+      runAppHandler: false,
+      runCascadeClose: false,
+    });
+  });
+});

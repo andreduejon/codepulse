@@ -24,6 +24,8 @@ interface OpenShiftResourceDialogProps {
   loadLog?: (resource: OpenShiftResource, force?: boolean) => Promise<string>;
   followLog?: (resource: OpenShiftResource, signal: AbortSignal, onText: (text: string) => void) => Promise<void>;
   loadObject?: (resource: OpenShiftResource) => Promise<unknown>;
+  /** The search row starts or stops owning Esc (see `useLogSearch`). */
+  onSearchActive?: (active: boolean) => void;
 }
 
 type ViewMode = "log" | "json";
@@ -139,7 +141,12 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
   };
   const lineNoWidth = createMemo(() => lines().length.toString().length);
   const lineRefs: Renderable[] = [];
-  const search = useLogSearch({ texts: lines, rowAt: index => lineRefs[index], scrollbox: () => scrollboxRef });
+  const search = useLogSearch({
+    texts: lines,
+    rowAt: index => lineRefs[index],
+    scrollbox: () => scrollboxRef,
+    onActiveChange: active => props.onSearchActive?.(active),
+  });
   const title = createMemo(() => {
     const mode = viewMode() === "log" ? (followEnded() ? "log ended" : "log") : "object";
     // Like the diff title: context (provider, then namespace, kind) goes first; the resource name shrinks last.
