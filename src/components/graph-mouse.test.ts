@@ -308,12 +308,12 @@ test("wide provider chips never squeeze the commit subject out at narrow widths"
     setup.renderer.destroy();
   }
 });
-test("many long refs collapse into +N instead of squeezing the commit subject out", async () => {
-  let app!: ReturnType<typeof createAppState>;
+/** One commit with these refs in a tight OpenShift row (wide provider counts, compact layout of 90 columns). */
+async function renderRefRow(refs: Commit["refs"]) {
   const sha = "f".repeat(40);
   const setup = await testRender(
     () => {
-      app = createAppState(100, 0, 0);
+      const app = createAppState(100, 0, 0);
       const commits: Commit[] = [
         {
           hash: sha,
@@ -327,12 +327,7 @@ test("many long refs collapse into +N instead of squeezing the commit subject ou
           committer: "Author",
           committerEmail: "author@example.com",
           commitDate: "2026-01-01T00:00:00Z",
-          refs: [
-            { name: "feature/a-rather-long-branch-nm", type: "branch", isCurrent: true },
-            { name: "origin/feature/a-rather-long-branch", type: "remote", isCurrent: false },
-            { name: "release/2026.11-candidate-one", type: "branch", isCurrent: false },
-            { name: "v2026.11.0-rc.1-long-tag-name", type: "tag", isCurrent: false },
-          ],
+          refs,
         },
       ];
       app.actions.setGraphRows(buildGraph(commits));
@@ -374,10 +369,36 @@ test("many long refs collapse into +N instead of squeezing the commit subject ou
     // Compact layout (no sidebar): the graph has the full 90 columns.
     { width: 90, height: 10 },
   );
+  await setup.renderOnce();
+  return setup;
+}
+
+test("many long refs collapse into +N instead of squeezing the commit subject out", async () => {
+  const setup = await renderRefRow([
+    { name: "feature/a-rather-long-branch-nm", type: "branch", isCurrent: true },
+    { name: "origin/feature/a-rather-long-branch", type: "remote", isCurrent: false },
+    { name: "release/2026.11-candidate-one", type: "branch", isCurrent: false },
+    { name: "v2026.11.0-rc.1-long-tag-name", type: "tag", isCurrent: false },
+  ]);
   try {
-    await setup.renderOnce();
     expect(setup.captureCharFrame()).toMatch(/Visible/);
     expect(setup.captureCharFrame()).toMatch(/\+\d/);
+  } finally {
+    setup.renderer.destroy();
+  }
+});
+
+test("the checked-out branch stays visible when refs collapse into +N, even behind tags", async () => {
+  const setup = await renderRefRow([
+    { name: "v2026.11.0-release-tag", type: "tag", isCurrent: false },
+    { name: "latest-stable-tag-name", type: "tag", isCurrent: false },
+    { name: "zz-current", type: "branch", isCurrent: true },
+    { name: "origin/zz-current", type: "remote", isCurrent: false },
+  ]);
+  try {
+    const frame = setup.captureCharFrame();
+    expect(frame).toMatch(/\+\d/);
+    expect(frame).toMatch(/(?<![/\w])zz-curr/);
   } finally {
     setup.renderer.destroy();
   }

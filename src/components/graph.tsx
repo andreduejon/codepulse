@@ -442,6 +442,13 @@ function GraphLine(
       columnWidths().first -
       columnWidths().second -
       MIN_SUBJECT_WIDTH;
+    // The checked-out branch (or a detached HEAD) keeps its badge first; the others in display order. Kept badges
+    // still render in display order.
+    const byPriority = [...refs].sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent));
+    const keep = (count: number) => {
+      const kept = new Set(byPriority.slice(0, count));
+      return refs.filter(ref => kept.has(ref));
+    };
     for (let shown = refs.length; shown >= 1; shown--) {
       const hidden = refs.length - shown;
       // `+N` badge: its text + 2, plus one gap.
@@ -449,10 +456,10 @@ function GraphLine(
       // Each shown badge: name + 2, one gap between badges and one after them.
       const perBadge = Math.floor((room - overflow) / shown) - 3;
       if (perBadge >= 8 || shown === 1) {
-        return { shown: refs.slice(0, shown), hidden, maxLength: Math.max(8, Math.min(30, perBadge)) };
+        return { shown: keep(shown), hidden, maxLength: Math.max(8, Math.min(30, perBadge)) };
       }
     }
-    return { shown: refs.slice(0, 1), hidden: refs.length - 1, maxLength: 8 };
+    return { shown: keep(1), hidden: refs.length - 1, maxLength: 8 };
   });
   const refMaxLength = () => refLayout().maxLength;
 
