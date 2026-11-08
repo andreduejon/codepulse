@@ -160,3 +160,30 @@ describe("formatRelativeDate edge cases", () => {
     }
   });
 });
+
+describe("formatRelativeDate cache lifecycle", () => {
+  test("a future date turns relative once it has passed", () => {
+    const start = new Date(2026, 5, 10, 12).getTime();
+    const clock = spyOn(Date, "now").mockReturnValue(start);
+    const date = new Date(start + 5 * 60_000).toISOString();
+    try {
+      expect(formatRelativeDate(date)).toBe("10. Jun 12:05");
+      clock.mockReturnValue(start + 10 * 60_000);
+      expect(formatRelativeDate(date)).toBe("5m ago");
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  test("a recent entry from last year is not reused right after New Year", () => {
+    const clock = spyOn(Date, "now").mockReturnValue(new Date(2026, 11, 31, 23, 59, 40).getTime());
+    const date = new Date(2026, 11, 31, 23, 50).toISOString();
+    try {
+      expect(formatRelativeDate(date)).toBe("9m ago");
+      clock.mockReturnValue(new Date(2027, 0, 1, 0, 0, 10).getTime());
+      expect(formatRelativeDate(date)).toBe("10m ago");
+    } finally {
+      clock.mockRestore();
+    }
+  });
+});

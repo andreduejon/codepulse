@@ -54,8 +54,8 @@ export function formatRelativeDate(dateStr: string): string {
   if (cached) {
     // Absolute dates only change with the current year (`15. Jun 10:30` → `15. Jun 2026`)
     if (cached.isStable && cached.year === year) return cached.result;
-    // Recent dates need periodic refresh for relative text accuracy
-    if (now - cached.cachedAt < DATE_CACHE_RECENT_TTL) return cached.result;
+    // Recent (and future) dates need periodic refresh for relative text accuracy, within the same year
+    if (!cached.isStable && cached.year === year && now - cached.cachedAt < DATE_CACHE_RECENT_TTL) return cached.result;
   }
 
   const date = new Date(dateStr);
@@ -68,8 +68,8 @@ export function formatRelativeDate(dateStr: string): string {
   let isStable = false;
 
   if (diffMs < -60_000) {
-    // In the future by more than a minute: say when, not "just now".
-    isStable = true;
+    // In the future by more than a minute: say when, not "just now". Not stable: once it has passed it becomes
+    // "5m ago" like any recent date.
     result = formatGraphDate(dateStr);
   } else if (diffMins < 1) result = "just now";
   else if (diffHours < 1) result = `${diffMins}m ago`;
