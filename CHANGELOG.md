@@ -2,6 +2,72 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.16.0] - Unreleased
+
+### Added
+
+- Search CI job logs and OpenShift resource logs and JSON with `/`; `n` / `N` move
+  between hits, Esc clears the search before a second Esc closes the dialog.
+- `r` fetches a CI job log again (newer output of a running job, or a retry after
+  a failure). In the OpenShift dialog `r` refreshes what is shown: the log, or the
+  object in JSON view.
+- Failure first: entering a commit's Actions or Jenkins tab opens its first failed
+  run and puts the cursor on its first failed job.
+- The footer names every provider's work, including auto refresh: `GitHub Actions
+  fetching`, `Jenkins fetching`, `OpenShift fetching`, `Snyk scanning`.
+- Graph chips show cancelled, skipped, and unknown CI runs as a grey chip; a partial
+  Snyk scan adds a warning `?` after its scan time, and a commit being scanned says
+  `scanning...`.
+- Compact details show why a provider cannot work, since the banner is behind the
+  dialog.
+- A notice at the end of the graph when an older page of history fails to load.
+- Snyk's menu shows **Last scan**.
+
+### Changed
+
+- One busy vocabulary: `fetching` (network), `reading` (local Git), `scanning`
+  (Snyk). Standalone busy text ends in `...`; truncation uses `…`.
+- Providers share their detail rows: OpenShift says **Load commit** / **Reload
+  commit** like the CI tabs; an unavailable provider's action row (Reload or Scan) is
+  muted and skipped by the cursor, also after its banner is closed.
+- After an expired token (401), automatic requests stop for every provider until
+  **Reload commit**, `:reload`, or `f` retries; auth banners end in *Reload to retry*.
+- CI and OpenShift log dialogs share loading, empty, and error states (with the real
+  reason), scrolling keys, and footer words (`search · view · wrap · refresh`).
+- Provider graph columns widen to fit their counts without squeezing out the
+  subject, dim with search, path, and ancestry, and bold the selected row; ref badges
+  shorten in tight rows.
+- Every provider's **Token** row asks for a variable name, rejects invalid names, and
+  falls back to its default. Duplicate namespaces and job URLs are rejected while
+  typing. Jenkins job rows read **Job #1**.
+- Help merges the CI and OpenShift log sections, lists the missing keys, and uses the
+  menu's names; `shift ↑/↓` jumps 10 rows everywhere and the theme list takes `j/k`.
+- Long selected names scroll in Files, CI, and OpenShift rows; a commit body taller
+  than the panel scrolls with `↑/↓` before the cursor moves past it.
+- The cache card uses the 1+4 inset and tells same-named repositories apart;
+  `shift+r` shows as `R`.
+
+### Fixed
+
+- Typing `q` in a menu field quit Codepulse; `f` on Fetch remote did nothing.
+- Closing compact details with the mouse left keyboard focus on the hidden panel.
+- Jenkins Reload and Fetch missed new builds on finished commits, per-commit reloads
+  hid their errors, and aborted builds showed as unknown.
+- OpenShift: a failed live list emptied the workloads, live updates re-expanded
+  namespaces and moved the cursor, a recovered list kept its old warning, and empty
+  namespaces left invisible cursor stops.
+- Reload and auto refresh left expanded jobs and steps of running runs stale.
+- Wrapped CI logs could not scroll to the bottom; CI log failures showed as empty
+  logs.
+- View-entry provider refreshes were cancelled by their own results, which hid a
+  failed GitHub refresh.
+- The uncommitted node in provider views showed file counts but no files; Info lost
+  the commit body in provider views.
+- A failed history page retried in a loop; future dates showed as "just now"; the
+  Branches menu said "all branches" when it was not; the commit count included the
+  working-tree node.
+- A custom theme `accent` had no effect in the Git view.
+
 ## [0.15.0] - 2026-11-07
 
 ### Added
