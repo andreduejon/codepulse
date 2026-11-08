@@ -1,7 +1,6 @@
 import type { Renderable } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, For, Show } from "solid-js";
-import { DETAIL_PANEL_WIDTH_FRACTION } from "../constants";
 import { useAppState } from "../context/state";
 import type { DiffSource } from "../git/types";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
@@ -12,19 +11,11 @@ import { isCursored as _isCursored, itemHighlightBg as _itemHighlightBg } from "
 import { buildDiffTarget } from "../utils/diff-target";
 import { getUncommittedProviderNotice } from "../utils/tab-utils";
 import type { DetailViewProps } from "./detail-types";
-import {
-  computeFileWidths,
-  DIR_INDICATOR_WIDTH,
-  PANEL_PADDING_X,
-  STAT_GAP,
-  STAT_PADDING_LEFT,
-  STATUS_COL_WIDTH,
-} from "./detail-types";
+import { computeFileWidths, detailUsableWidth, fileRowOverflow } from "./detail-types";
 import { FileTreeEntry } from "./file-tree-entry";
 import { TotalLinesChangedRow } from "./total-lines-changed-row";
 
 // ── Layout constants ────────────────────────────────────────────────
-const MIN_PANEL_WIDTH = 60;
 
 /** Interactive item types for the uncommitted detail panel (file trees only) */
 type UncommittedItem =
@@ -36,8 +27,7 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
   const t = useT();
   const dimensions = useTerminalDimensions();
 
-  const panelUsableWidth = () =>
-    Math.max(Math.floor(dimensions().width * DETAIL_PANEL_WIDTH_FRACTION), MIN_PANEL_WIDTH) - PANEL_PADDING_X;
+  const panelUsableWidth = () => detailUsableWidth(props.contentWidth, dimensions().width);
 
   // Active tab for uncommitted node: "staged" | "unstaged" | "untracked"
   const activeTab = () => state.detailActiveTab();
@@ -184,26 +174,7 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
     const treeRow = rows[item.index];
     if (!treeRow) return null;
 
-    if (item.type === "file-dir") {
-      const fixedChars = treeRow.prefix.length + treeRow.connector.length + DIR_INDICATOR_WIDTH;
-      const available = pw - fixedChars;
-      if (treeRow.name.length <= available) return null;
-      return { text: treeRow.name, visibleWidth: available };
-    }
-
-    if (item.type === "file") {
-      const fw = fileWidths();
-      const statWidth =
-        activeTab() === "untracked"
-          ? STAT_PADDING_LEFT + STATUS_COL_WIDTH
-          : STAT_PADDING_LEFT + STATUS_COL_WIDTH + STAT_GAP + fw.addColWidth + STAT_GAP + fw.delColWidth;
-      const fixedChars = treeRow.prefix.length + treeRow.connector.length + statWidth;
-      const available = pw - fixedChars;
-      if (treeRow.name.length <= available) return null;
-      return { text: treeRow.name, visibleWidth: available };
-    }
-
-    return null;
+    return fileRowOverflow(treeRow, pw, fileWidths(), activeTab() === "untracked");
   });
 
   // Must be after cursoredTextInfo (TDZ safety)

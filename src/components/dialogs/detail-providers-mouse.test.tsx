@@ -378,7 +378,7 @@ for (const provider of ["github-actions", "jenkins"] as const) {
       expect(d.state.detailCursorIndex()).toBe(3);
       expect(d.state.detailCursorAction()).toBe("view log");
       expect(open).toHaveBeenLastCalledWith(jobs[1], runs[0], jobs);
-      expect(d.navRef.itemRefs[3] === d.text(jobs[1].name).parent).toBe(true);
+      expect(d.navRef.itemRefs[3] === d.text(jobs[1].name).parent?.parent).toBe(true);
       d.mockInput.pressKey("RETURN");
       await d.flush();
       expect(open).toHaveBeenCalledTimes(2);
@@ -463,7 +463,7 @@ test("OpenShift namespace/resource/reload routing follows grouped and sorted res
     await d.click("a-tag");
     expect(d.state.detailCursorIndex()).toBe(3);
     expect(d.openResource).toHaveBeenLastCalledWith(resources[2]);
-    expect(d.navRef.itemRefs[3] === d.text("a-tag").parent).toBe(true);
+    expect(d.navRef.itemRefs[3] === d.text("a-tag").parent?.parent).toBe(true);
     await d.click("team-a");
     expect(d.navRef.itemCount).toBe(6);
     expect(d.state.detailCursorIndex()).toBe(1);

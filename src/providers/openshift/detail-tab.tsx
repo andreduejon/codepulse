@@ -3,7 +3,7 @@ import { createEffect, createMemo, createSignal, For, on, Show, untrack } from "
 import type { DetailNavRef } from "../../components/detail-types";
 import { useT } from "../../hooks/use-t";
 import { BUSY } from "../../utils/busy-text";
-import { ProviderActionRow, ProviderSummaryRow, useDetailRowMouse } from "../shared/detail-rows";
+import { ProviderActionRow, ProviderSummaryRow, ScrollingLabel, useDetailRowMouse } from "../shared/detail-rows";
 import { type StatusCategory, statusIcon } from "../shared/status";
 import { openShiftStatusColor } from "./graph-columns";
 import {
@@ -257,9 +257,13 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
           {lead}
           {connector}
         </text>
-        <text selectable={!props.mouseEnabled} flexShrink={1} wrapMode="none" truncate fg={textColor()}>
-          {compactResourceName(resource)}
-        </text>
+        <ScrollingLabel
+          selectable={!props.mouseEnabled}
+          text={compactResourceName(resource)}
+          active={isCursored()}
+          fg={textColor()}
+          grow={false}
+        />
         <Show when={isCachedOpenShiftResource(resource)}>
           <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
             {" (cached)"}
@@ -337,16 +341,12 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
                     >
                       {namespaceIsExpanded() ? "▾ " : "▸ "}
                     </text>
-                    <text
+                    <ScrollingLabel
                       selectable={!props.mouseEnabled}
-                      flexGrow={1}
-                      flexShrink={1}
-                      wrapMode="none"
-                      truncate
+                      text={ns.namespace}
+                      active={isNamespaceCursored()}
                       fg={isNamespaceCursored() ? t().accent : t().foreground}
-                    >
-                      {ns.namespace}
-                    </text>
+                    />
                     <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
                       {String(nsResources().length).padStart(3)}
                     </text>

@@ -1,4 +1,5 @@
 import type { KeyEvent, Renderable } from "@opentui/core";
+import { DETAIL_PANEL_WIDTH_FRACTION } from "../constants";
 import type { ProviderStatus } from "../context/state";
 import type { DiffTarget } from "../git/types";
 import type {
@@ -10,6 +11,7 @@ import type {
 import type { JenkinsCommitData, JenkinsJob, JenkinsJobFetchResult, JenkinsRun } from "../providers/jenkins/types";
 import type { OpenShiftCommitData, OpenShiftResource } from "../providers/openshift/types";
 import type { SnykScanResult } from "../providers/snyk/types";
+import type { FileTreeRow } from "../utils/file-tree";
 
 /** Mutable ref populated by a detail view for app.tsx to call */
 export interface DetailNavRef {
@@ -96,6 +98,38 @@ export const STAT_PADDING_LEFT = 1;
 export const STATUS_COL_WIDTH = 2;
 /** Padding between the stat columns (status→+, +→-). */
 export const STAT_GAP = 1;
+
+const MIN_DETAIL_PANEL_WIDTH = 60;
+
+/**
+ * Usable columns inside the detail panel: the compact dialog passes its exact content width; the sidebar is a share
+ * of the terminal. Every detail tab uses this, so selected text scrolls within the same width in both layouts.
+ */
+export function detailUsableWidth(contentWidth: number | undefined, terminalWidth: number): number {
+  return (
+    contentWidth ??
+    Math.max(Math.floor(terminalWidth * DETAIL_PANEL_WIDTH_FRACTION), MIN_DETAIL_PANEL_WIDTH) - PANEL_PADDING_X
+  );
+}
+
+/**
+ * The cursored file-tree row's name and visible width when the name does not fit (it then banner-scrolls), else
+ * null. Shared by the committed Files tab and the working-tree tabs.
+ */
+export function fileRowOverflow(
+  row: FileTreeRow,
+  panelWidth: number,
+  widths: { addColWidth: number; delColWidth: number },
+  hideStats = false,
+): { text: string; visibleWidth: number } | null {
+  const statWidth = row.isDir
+    ? DIR_INDICATOR_WIDTH
+    : hideStats
+      ? STAT_PADDING_LEFT + STATUS_COL_WIDTH
+      : STAT_PADDING_LEFT + STATUS_COL_WIDTH + STAT_GAP + widths.addColWidth + STAT_GAP + widths.delColWidth;
+  const available = panelWidth - row.prefix.length - row.connector.length - statWidth;
+  return row.name.length <= available ? null : { text: row.name, visibleWidth: available };
+}
 
 /** Compute column widths for file change stats (total determines column width). */
 export function computeFileWidths(files: readonly { additions: number; deletions: number }[]) {

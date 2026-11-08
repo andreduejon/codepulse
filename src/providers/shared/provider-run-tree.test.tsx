@@ -197,3 +197,63 @@ test("failure first: focusing the tab opens the first failed run with the cursor
     setup.renderer.destroy();
   }
 });
+
+test("a cursored run whose name does not fit banner-scrolls instead of truncating", async () => {
+  const long = "Workflow-with-a-name-far-too-long-for-this-panel-END";
+  const [cursor, setCursor] = createSignal(0);
+  const [focused, setFocused] = createSignal(false);
+  const navRef: DetailNavRef = {
+    itemCount: 0,
+    itemRefs: [],
+    activateCurrentItem: () => false,
+    lastJumpFrom: null,
+    pendingJumpDirection: null,
+    scrollToFile: () => {},
+  };
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={createThemeState()}>
+        <box width={40} flexDirection="column">
+          <ProviderRunTree
+            runs={[{ ...run("completed", "success", "2026-01-01T00:01:00Z"), label: long }]}
+            navRef={navRef}
+            detailCursorIndex={cursor}
+            detailFocused={focused}
+            setDetailCursorAction={() => {}}
+            setDetailCursorIndex={setCursor}
+            fetchJobsForRun={async () => ({ jobs: [], error: null })}
+            debugSource="GitHub"
+            dataKey="sha"
+            summaryLabel="total workflow runs"
+            openFailedRun={false}
+          />
+        </box>
+      </ThemeContext.Provider>
+    ),
+    { width: 50, height: 8 },
+  );
+  try {
+    // Without detail focus nothing is cursored: the name is cut with …
+    // (the label measures its box after the first layout, so let a second pass draw it).
+    await setup.flush();
+    await Bun.sleep(0);
+    await setup.flush();
+    const row = () =>
+      setup
+        .captureCharFrame()
+        .split("\n")
+        .find(line => line.includes("▸")) ?? "";
+    expect(row()).toContain("…");
+    const width = row().length;
+    setFocused(true);
+    await setup.flush();
+    await Bun.sleep(700);
+    await setup.flush();
+    // Cursored: the label scrolls within the same width; the row never grows past the panel.
+    expect(row()).not.toContain("…");
+    expect(row()).not.toContain("Workflow-with-a-name-far");
+    expect(row().trimEnd().length).toBeLessThanOrEqual(width);
+  } finally {
+    setup.renderer.destroy();
+  }
+});

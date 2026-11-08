@@ -1,6 +1,8 @@
-import { MouseButton, type MouseEvent, type Renderable } from "@opentui/core";
+import { type BoxRenderable, MouseButton, type MouseEvent, type Renderable } from "@opentui/core";
 import { createSignal, Show } from "solid-js";
+import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useT } from "../../hooks/use-t";
+import { endTruncate } from "../../utils/truncate";
 
 /**
  * Hover and left-click handling shared by provider detail rows (CI runs/jobs, OpenShift namespaces/resources, action
@@ -93,6 +95,49 @@ export function ProviderSummaryRow(props: Readonly<{ label: string; count: numbe
       <box flexShrink={0} width={2} />
       <text fg={t().foregroundMuted} wrapMode="none">
         {props.count}
+      </text>
+    </box>
+  );
+}
+
+/**
+ * A row label that banner-scrolls while its row is cursored and the text does not fit, like Info fields and Snyk
+ * dependencies; otherwise it ends in `…` when cut. `grow: false` keeps it at its text width (for labels followed by a tag).
+ */
+export function ScrollingLabel(
+  props: Readonly<{ text: string; active: boolean; fg: string; selectable?: boolean; grow?: boolean }>,
+) {
+  const [width, setWidth] = createSignal(0);
+  const overflow = () => (props.active && width() > 0 ? Math.max(0, props.text.length - width()) : 0);
+  const offset = useBannerScroll(overflow);
+  // The text is positioned absolutely so only the flex layout sizes the box: measuring a box that the text
+  // itself stretches would feed back into the visible width.
+  return (
+    <box
+      flexGrow={props.grow === false ? 0 : 1}
+      flexShrink={1}
+      flexBasis={props.grow === false ? props.text.length : 0}
+      minWidth={0}
+      height={1}
+      overflow="hidden"
+      onSizeChange={function (this: BoxRenderable) {
+        setWidth(this.width);
+      }}
+    >
+      <text
+        position="absolute"
+        left={0}
+        top={0}
+        width={Math.max(1, width())}
+        selectable={props.selectable}
+        wrapMode="none"
+        fg={props.fg}
+      >
+        {overflow() > 0
+          ? props.text.substring(offset(), offset() + width())
+          : width() > 0
+            ? endTruncate(props.text, width())
+            : props.text}
       </text>
     </box>
   );

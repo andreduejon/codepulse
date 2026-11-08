@@ -302,6 +302,7 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
           when={!isUncommittedHash(state.selectedCommit()?.hash ?? "")}
           fallback={
             <UncommittedDetailView
+              contentWidth={props.contentWidth}
               mouseEnabled={props.mouseEnabled}
               onMouseFocus={props.onMouseFocus}
               onJumpToCommit={props.onJumpToCommit}

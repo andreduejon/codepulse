@@ -5,7 +5,7 @@ import type { DebugEventSource } from "../../debug/events";
 import { useT } from "../../hooks/use-t";
 import { BUSY } from "../../utils/busy-text";
 import { formatDuration, formatRelativeDate } from "../../utils/date";
-import { ProviderActionRow, ProviderSummaryRow, useDetailRowMouse } from "./detail-rows";
+import { ProviderActionRow, ProviderSummaryRow, ScrollingLabel, useDetailRowMouse } from "./detail-rows";
 import { fetchProviderJobs } from "./provider-job-fetch";
 import { categorize, statusColor, statusIcon } from "./status";
 
@@ -477,16 +477,12 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                 <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={runIndicatorColor()}>
                   {isExpanded() ? "▾ " : "▸ "}
                 </text>
-                <text
+                <ScrollingLabel
                   selectable={!props.mouseEnabled}
-                  flexGrow={1}
-                  flexShrink={1}
-                  wrapMode="none"
-                  truncate
+                  text={`${run.label} #${run.runNumber}`}
+                  active={isCursored()}
                   fg={runTextColor()}
-                >
-                  {`${run.label} #${run.runNumber}`}
-                </text>
+                />
                 <box flexShrink={0} width={1} />
                 <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
                   {relTime().padStart(rightInfoWidth())}
@@ -579,16 +575,12 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                             {jobTreeLead()}
                             {jobTreePrefix()}
                           </text>
-                          <text
+                          <ScrollingLabel
                             selectable={!props.mouseEnabled}
-                            flexGrow={1}
-                            flexShrink={1}
-                            wrapMode="none"
-                            truncate
+                            text={job.name}
+                            active={isJobCursored()}
                             fg={jobTextColor()}
-                          >
-                            {job.name}
-                          </text>
+                          />
                           <text
                             selectable={!props.mouseEnabled}
                             flexShrink={0}
