@@ -1,6 +1,7 @@
 import { type BoxRenderable, MouseButton } from "@opentui/core";
 import { createMemo, createSignal, For, Show } from "solid-js";
 import type { KnownRepoInfo } from "../config";
+import { isUncommittedHash } from "../constants";
 import { useAppState } from "../context/state";
 import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
 import { useT } from "../hooks/use-t";
@@ -55,7 +56,10 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
   // "1 commit", "12 commits", "1 / 201 commits": the noun follows the total.
   const countText = () => {
     const total = realCommitCount(state.graphRows());
-    return `${commitCountText(state.highlightSet(), total)} ${total === 1 ? "commit" : "commits"}`;
+    // The highlighted count leaves out the working-tree node too, so it can never exceed the total.
+    const highlight = state.highlightSet();
+    const matched = highlight ? new Set([...highlight].filter(hash => !isUncommittedHash(hash))) : null;
+    return `${commitCountText(matched, total)} ${total === 1 ? "commit" : "commits"}`;
   };
 
   const borderColor = () => (props.detailFocused() ? t().border : t().accent);
