@@ -58,6 +58,8 @@ export function useProviderFetchLifecycle(opts: {
    * selected SHAs, refresh vs initial) and runs once the current fetch settles; requests merge while waiting.
    */
   let pendingFetch: PendingFetch | null = null;
+  /** Counts status-showing fetches as they start: only the latest may settle a `loading` it was cancelled under. */
+  let statusFetchSeq = 0;
   let hasFetchedOnce = false;
   let lastFetchedAt = 0;
   let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
@@ -156,9 +158,12 @@ export function useProviderFetchLifecycle(opts: {
     else void fetchInitial(ctrl.signal, next.shas, next.showStatus, next.retry);
   }
 
-  /** A fetch that showed `loading` was cancelled (view switch): let the provider settle that status. */
-  function settleIfCancelled(signal: AbortSignal | undefined, showStatus: boolean) {
-    if (showStatus && signal?.aborted) opts.onCancelledStatus?.();
+  /**
+   * A fetch that showed `loading` was cancelled (view switch): let the provider settle that status, unless a newer
+   * status-showing fetch (e.g. after a repository switch) has started and owns it now.
+   */
+  function settleIfCancelled(signal: AbortSignal | undefined, seq: number | null) {
+    if (seq !== null && seq === statusFetchSeq && signal?.aborted) opts.onCancelledStatus?.();
   }
 
   async function fetchInitial(signal?: AbortSignal, shas?: string[], showStatus = false, retry = false) {
@@ -174,6 +179,7 @@ export function useProviderFetchLifecycle(opts: {
       return;
     }
     fetchInFlight = true;
+    const seq = showStatus ? ++statusFetchSeq : null;
     try {
       await trackFetch(() =>
         runRequest(signal => opts.runInitialFetch({ signal, shas, showStatus, retry, epoch }), signal),
@@ -181,7 +187,7 @@ export function useProviderFetchLifecycle(opts: {
     } catch (err) {
       if (epoch === cacheEpoch && !isAbortError(err, signal)) throw err;
     } finally {
-      settleIfCancelled(signal, showStatus);
+      settleIfCancelled(signal, seq);
       finishFetch(epoch);
     }
   }
@@ -196,12 +202,13 @@ export function useProviderFetchLifecycle(opts: {
     }
     if (!opts.isAvailable()) return;
     fetchInFlight = true;
+    const seq = showStatus ? ++statusFetchSeq : null;
     try {
       await trackFetch(() => runRequest(signal => opts.runRefresh({ signal, showStatus, retry, epoch }), signal));
     } catch (err) {
       if (epoch === cacheEpoch && !isAbortError(err, signal)) throw err;
     } finally {
-      settleIfCancelled(signal, showStatus);
+      settleIfCancelled(signal, seq);
       finishFetch(epoch);
     }
   }

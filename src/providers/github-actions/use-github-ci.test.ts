@@ -196,3 +196,29 @@ test("jobs of a finished run are cached only once every job and step has finishe
   await github.fetchJobsForRun(finished);
   expect(jobs).toHaveBeenCalledTimes(2);
 });
+
+test("a fetch cancelled by a repository switch leaves the new repository's loading status alone", async () => {
+  let releaseOld!: () => void;
+  const oldGate = new Promise<void>(resolve => (releaseOld = resolve));
+  let releaseNew!: () => void;
+  const newGate = new Promise<void>(resolve => (releaseNew = resolve));
+  const { state, actions, ci } = await mountGitHub();
+  ci.mockImplementationOnce(async () => {
+    await oldGate;
+    return { data: [run()], jobs: new Map(), error: null };
+  }).mockImplementationOnce(async () => {
+    await newGate;
+    return { data: [run()], jobs: new Map(), error: null };
+  });
+  await settle(() => ci.mock.calls.length === 1);
+  // A repository switch resets the provider and starts the new repository's view-entry fetch.
+  actions.setRepoPath("/repo/github-hook-2");
+  await settle(() => ci.mock.calls.length === 2);
+  expect(state.providerStatusFor("github-actions").kind).toBe("loading");
+  // The old repository's request answers late; its cancelled fetch must not settle the new one's status.
+  releaseOld();
+  await settle();
+  expect(state.providerStatusFor("github-actions").kind).toBe("loading");
+  releaseNew();
+  await settle(() => state.providerStatusFor("github-actions").kind !== "loading");
+});
