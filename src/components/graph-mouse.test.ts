@@ -6,6 +6,7 @@ import { createComponent } from "solid-js";
 import { AppStateContext, createAppState } from "../context/state";
 import { createThemeState, ThemeContext, themes } from "../context/theme";
 import { buildGraph } from "../git/graph";
+import { getMaxGraphColumns } from "../git/graph-viewport";
 import type { Commit } from "../git/types";
 import GraphView from "./graph";
 
@@ -399,6 +400,70 @@ test("the checked-out branch stays visible when refs collapse into +N, even behi
     const frame = setup.captureCharFrame();
     expect(frame).toMatch(/\+\d/);
     expect(frame).toMatch(/(?<![/\w])zz-curr/);
+  } finally {
+    setup.renderer.destroy();
+  }
+});
+
+test("when not even one shortened ref fits, the refs collapse into +N alone and the subject stays", async () => {
+  const commit = (hash: string, parents: string[], subject: string, refs: Commit["refs"] = []): Commit => ({
+    hash,
+    shortHash: hash.slice(0, 7),
+    parents,
+    subject,
+    body: "",
+    author: "Author",
+    authorEmail: "author@example.com",
+    authorDate: "2026-01-01T00:00:00Z",
+    committer: "Author",
+    committerEmail: "author@example.com",
+    commitDate: "2026-01-01T00:00:00Z",
+    refs,
+  });
+  // Twelve branches off one root: a 12-lane graph.
+  const root = "0".repeat(40);
+  const tips = Array.from({ length: 12 }, (_, index) => (index + 1).toString(16).padStart(40, "a"));
+  const refs: Commit["refs"] = [
+    { name: "feature/first", type: "branch", isCurrent: true },
+    { name: "origin/feature/first", type: "remote", isCurrent: false },
+    { name: "release/next", type: "branch", isCurrent: false },
+    { name: "v1.2.3", type: "tag", isCurrent: false },
+  ];
+  const commits = [
+    ...tips.map((hash, index) =>
+      commit(hash, [root], index === 0 ? "VISIBLE SUBJECT" : `tip ${index}`, index === 0 ? refs : []),
+    ),
+    commit(root, [], "root"),
+  ];
+  const setup = await testRender(
+    () => {
+      const app = createAppState(100, 0, 0);
+      const rows = buildGraph(commits);
+      app.actions.setGraphRows(rows);
+      app.actions.setCommits(commits);
+      app.actions.setMaxGraphColumns(getMaxGraphColumns(rows));
+      app.actions.setLoading(false);
+      app.actions.setHasMore(false);
+      app.actions.setActiveProviderView("snyk");
+      return createComponent(ThemeContext.Provider, {
+        value: createThemeState(),
+        get children() {
+          return createComponent(AppStateContext.Provider, {
+            value: app,
+            get children() {
+              return createComponent(GraphView, {});
+            },
+          });
+        },
+      });
+    },
+    { width: 90, height: 16 },
+  );
+  try {
+    await setup.renderOnce();
+    const frame = setup.captureCharFrame();
+    expect(frame).toMatch(/\+4/);
+    expect(frame).toMatch(/VISIB/);
   } finally {
     setup.renderer.destroy();
   }

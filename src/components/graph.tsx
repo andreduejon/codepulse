@@ -433,7 +433,8 @@ function GraphLine(
   // and 1 paddingRight after the badge box. Returns 0 when no refs are visible.
   // Ref badge names are capped at 30 characters, and shorter when the row is tight, so the subject keeps
   // MIN_SUBJECT_WIDTH (each badge takes name + 2, one gap between badges and one after them).
-  // When even 8-character badges do not fit, the refs that do not fit collapse into one muted `+N` badge.
+  // When even 8-character badges do not fit, the refs that do not fit collapse into one muted `+N` badge; when not
+  // even one fits beside it, `+N` stands for all of them.
   const refLayout = createMemo(() => {
     const refs = visibleRefs();
     if (refs.length === 0) return { shown: refs, hidden: 0, maxLength: 30 };
@@ -455,17 +456,16 @@ function GraphLine(
       const overflow = hidden > 0 ? `+${hidden}`.length + 3 : 0;
       // Each shown badge: name + 2, one gap between badges and one after them.
       const perBadge = Math.floor((room - overflow) / shown) - 3;
-      if (perBadge >= 8 || shown === 1) {
-        return { shown: keep(shown), hidden, maxLength: Math.max(8, Math.min(30, perBadge)) };
-      }
+      if (perBadge >= 8) return { shown: keep(shown), hidden, maxLength: Math.min(30, perBadge) };
     }
-    return { shown: keep(1), hidden: refs.length - 1, maxLength: 8 };
+    // Not even one shortened badge fits beside `+N`: all refs collapse into it, so the subject keeps its room.
+    return { shown: [], hidden: refs.length, maxLength: 8 };
   });
   const refMaxLength = () => refLayout().maxLength;
 
   const refBadgesWidth = createMemo(() => {
     const { shown, hidden } = refLayout();
-    if (shown.length === 0) return 0;
+    if (shown.length === 0 && hidden === 0) return 0;
     const badges = [...shown.map(r => truncateName(r.name, refMaxLength())), ...(hidden > 0 ? [`+${hidden}`] : [])];
     // sum of (displayName + 2) for each badge + gaps between badges + 1 paddingRight
     return badges.reduce((acc, name) => acc + name.length + 2, 0) + (badges.length - 1) + 1;
