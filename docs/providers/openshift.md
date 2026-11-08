@@ -117,13 +117,16 @@ that produced them.
 
 ## Status
 
-- `PASS`: successful Build, Ready Pod, or fully converged workload.
-- `RUN`: active Build, Pending/not-ready Pod, or incomplete workload rollout.
-- `FAIL`: failed Build, fatal container state, replica failure, or failed
-  workload progression.
-- `?`: insufficient or indeterminate status.
+Resources show the same status symbols as CI runs; graph chips use the same
+colours.
 
-Aggregate precedence is `FAIL`, `RUN`, `?`, then `PASS`.
+- `✓` pass: successful Build, Ready Pod, or fully converged workload.
+- `●` running: active Build, Pending/not-ready Pod, or incomplete workload rollout.
+- `✗` fail: failed Build, fatal container state, replica failure, or failed
+  workload progression.
+- `?` unknown: insufficient or indeterminate status (a grey chip in the graph).
+
+Aggregate precedence is fail, running, unknown, then pass.
 
 ## Required read permissions
 

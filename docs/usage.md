@@ -30,11 +30,15 @@ the full shortcut and provider setup reference.
 | `↑` / `↓` or `j` / `k` | Navigate commits |
 | `shift ↑` / `shift ↓` | Jump 10 commits |
 | `g` / `G` | First / last commit |
-| `→` / `l` | Focus detail panel |
+| `→` / `l` | Focus detail panel (wide layout) |
 | `enter` | Focus details / open compact dialog |
 | `a` | Enter ancestry mode |
 | `p` | Enter path mode |
 | `shift ←` / `shift →` | Switch project within the current group |
+
+In the compact layout (narrower than 180 columns) details open as a dialog: use
+`enter` to open it and `esc` to close it; `→` / `l` do not open it and `←` / `h`
+on the first tab does not close it.
 
 Search (`/`) and path filtering (`p`) apply on Enter. Esc cancels without
 changing the current filter. Badge clicks offer the same filtering controls.
@@ -46,7 +50,7 @@ Normal clears highlighting without changing branch perspective.
 |-----|--------|
 | `↑` / `↓` or `j` / `k` | Navigate items |
 | `shift ↑` / `shift ↓` | Jump 10 items |
-| `←` / `h` | Previous tab / exit details on the first tab |
+| `←` / `h` | Previous tab / exit details on the first tab (wide layout) |
 | `→` / `l` | Next tab |
 | `v` | Snyk Dependencies: show a vulnerable package's findings |
 | `g` / `G` | Top / bottom |

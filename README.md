@@ -63,8 +63,8 @@ codepulse [path]
 
 If no path is given, the current directory is used.
 
-Navigate commits with `↑`/`↓` or `j`/`k`, inspect details with `→`, and press `?`
-for help. Use `codepulse --help` for CLI help or `--version` for the version.
+Navigate commits with `↑`/`↓` or `j`/`k`, inspect details with `→` (or `enter`
+in narrow terminals, where details open as a dialog), and press `?` for help. Use `codepulse --help` for CLI help or `--version` for the version.
 
 Settings are saved per repository. Remote fetching is manual by default.
 See the [usage guide](docs/usage.md) for shortcuts, commands, configuration,
