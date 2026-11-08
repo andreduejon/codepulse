@@ -111,3 +111,18 @@ test("a failed refresh of running runs shows its error, like Jenkins, instead of
     clock.mockRestore();
   }
 });
+
+test("entering the GitHub view before the remote is known fetches once the remote arrives, without a stale banner", async () => {
+  const { state, actions, ci } = await mountGitHub();
+  await settle(() => ci.mock.calls.length > 0);
+  const calls = ci.mock.calls.length;
+  // Like a repository switch while in the GitHub view: no remote yet, then the loader sets it.
+  actions.setRemoteUrl("");
+  actions.setRepoPath("/repo/github-hook-2");
+  await settle();
+  actions.setRemoteUrl("https://github.com/o/r2.git");
+  await settle(() => ci.mock.calls.length > calls);
+  expect(ci.mock.calls.length).toBeGreaterThan(calls);
+  await settle(() => state.providerStatusFor("github-actions").kind !== "unavailable");
+  expect(state.providerStatusFor("github-actions").kind).not.toBe("unavailable");
+});
