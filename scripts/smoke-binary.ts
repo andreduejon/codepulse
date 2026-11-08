@@ -50,7 +50,7 @@ async function waitForExit(): Promise<void> {
 
 function cacheScreenVisible(): boolean {
   const text = stripVTControlCharacters(output).toLowerCase();
-  return text.includes("shift+r") && text.includes("reset all");
+  return text.includes("r reset all"); // `R reset all`, lowercased
 }
 
 try {
