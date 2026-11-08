@@ -8,9 +8,9 @@ All notable changes to this project will be documented in this file.
 
 - Search CI job logs and OpenShift resource logs and JSON with `/`; `n` / `N` move
   between hits, Esc clears the search before a second Esc closes the dialog.
-- `r` fetches a CI job log again (newer output of a running job, or a retry after
-  a failure). In the OpenShift dialog `r` refreshes what is shown: the log, or the
-  object in JSON view.
+- `r` reloads a CI job log (newer output of a running job, or a retry after a
+  failure; a finished job's log comes from the cache). In the OpenShift dialog `r`
+  refreshes what is shown: the log, or the object in JSON view.
 - Failure first: entering a commit's Actions or Jenkins tab opens its first failed
   run and puts the cursor on its first failed job.
 - The footer names every provider's work, including auto refresh: `GitHub Actions
@@ -36,8 +36,8 @@ All notable changes to this project will be documented in this file.
   reason), scrolling keys, and footer words (`search · view · wrap · refresh`).
 - Provider graph columns widen to fit their counts without squeezing out the
   subject, dim with search, path, and ancestry, and bold the selected row. In tight
-  rows ref badges shorten and collapse into `+N`, and counts go compact before the
-  ones that do not fit give way to `…`.
+  rows ref badges shorten and collapse into `+N` (the checked-out branch keeps its
+  badge), and counts go compact before the ones that do not fit give way to `…`.
 - Every provider's **Token** row asks for a variable name, rejects invalid names, and
   falls back to its default. Duplicate namespaces and job URLs are rejected while
   typing. Jenkins job rows read **Job #1**.
@@ -63,7 +63,8 @@ All notable changes to this project will be documented in this file.
   logs.
 - View-entry provider refreshes were cancelled by their own results, which hid a
   failed GitHub refresh. A request made while a fetch ran lost what it asked for (its
-  commits, status, retry), and leaving a view during its first fetch left it loading.
+  commits, status, retry) and counted as done before it had run, and leaving a view
+  during its first fetch left it loading.
 - The uncommitted node in provider views showed file counts but no files; Info lost
   the commit body in provider views.
 - A failed history page retried in a loop, and a page still loading during a branch
