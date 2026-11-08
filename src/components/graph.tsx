@@ -39,12 +39,13 @@ import {
   ActionsCountsColumn,
   ActionsDateColumn,
 } from "../providers/github-actions/graph-columns";
-import { graphColumnWidths } from "../providers/graph-column-widths";
+import { type GraphColumnWidths, graphColumnWidths } from "../providers/graph-column-widths";
 import {
   lookupOpenShiftBadge,
   OpenShiftColumnHeaders,
   OpenShiftCountsColumn,
 } from "../providers/openshift/graph-columns";
+import type { GraphBadge, ProviderView } from "../providers/provider";
 import { SnykColumnHeaders, SnykCountsColumn, SnykScanColumn } from "../providers/snyk/graph-columns";
 import type { SnykScanResult } from "../providers/snyk/types";
 import { formatRelativeDate } from "../utils/date";
@@ -60,14 +61,56 @@ function useGraphDimensions(maxGraphColumns: () => number) {
   return { effectiveGraphColumns, viewportActive, graphWidth };
 }
 
+/** The subject keeps at least this many columns before provider columns or ref badges take more. */
+const MIN_SUBJECT_WIDTH = 20;
+const NO_BADGES = new Map<string, GraphBadge>();
+
+/** Columns the graph panel gets: the terminal minus the sidebar (wide layout) and the panel's own padding. */
+function graphPanelWidth(terminalWidth: number): number {
+  // Detail panel box width = 25% of W (minWidth=60). Its paddingX=2 is internal, so it does NOT reduce the left
+  // panel's allocated width. 4 = left panel paddingX=2 each side.
+  const detailPanelWidth =
+    terminalWidth >= COMPACT_THRESHOLD_WIDTH
+      ? Math.max(Math.floor(terminalWidth * DETAIL_PANEL_WIDTH_FRACTION), 60)
+      : 0;
+  return terminalWidth - detailPanelWidth - 4;
+}
+
+/** Room for a row's refs, subject and the two right columns: after the graph, hash and description padding. */
+function rowTextRoom(terminalWidth: number, graphWidth: number): number {
+  return graphPanelWidth(terminalWidth) - graphWidth - HASH_COL_WIDTH - 3;
+}
+
+/**
+ * Provider columns grow to fit their chips (`graphColumnWidths`), but only into room beyond the subject's minimum;
+ * past that they keep their base widths (chips then clip) rather than squeezing the subject out.
+ */
+function budgetedColumnWidths(
+  view: ProviderView,
+  badges: ReadonlyMap<string, GraphBadge>,
+  terminalWidth: number,
+  graphWidth: number,
+): GraphColumnWidths {
+  const wanted = graphColumnWidths(view, badges);
+  const base = graphColumnWidths(view, NO_BADGES);
+  const room = Math.max(base.first + base.second, rowTextRoom(terminalWidth, graphWidth) - MIN_SUBJECT_WIDTH);
+  let excess = wanted.first + wanted.second - room;
+  if (excess <= 0) return wanted;
+  const first = Math.max(base.first, wanted.first - excess);
+  excess -= wanted.first - first;
+  return { first, second: Math.max(base.second, wanted.second - excess) };
+}
+
 export function ColumnHeader() {
   const t = useT();
   const { state } = useAppState();
   const leftPanelFocused = () => !state.detailFocused();
   const isProviderView = () => state.activeProviderView() !== "git";
-  const columnWidths = () => graphColumnWidths(state.activeProviderView(), state.graphBadges());
+  const dimensions = useTerminalDimensions();
 
   const { graphWidth } = useGraphDimensions(() => state.maxGraphColumns());
+  const columnWidths = () =>
+    budgetedColumnWidths(state.activeProviderView(), state.graphBadges(), dimensions().width, graphWidth());
 
   return (
     <box flexDirection="column" width="100%" flexShrink={0}>
@@ -202,8 +245,9 @@ function GraphLine(
   const { state } = useAppState();
 
   const [hovered, setHovered] = createSignal(false);
-  /** Provider columns grow to fit their widest chips; header, row and subject width share these. */
-  const columnWidths = () => graphColumnWidths(state.activeProviderView(), state.graphBadges());
+  /** Provider columns grow to fit their widest chips (within budget); header, row and subject width share these. */
+  const columnWidths = () =>
+    budgetedColumnWidths(state.activeProviderView(), state.graphBadges(), props.terminalWidth(), graphWidth());
 
   const commit = () => props.row.commit;
   const padCols = () => state.maxGraphColumns();
@@ -382,12 +426,26 @@ function GraphLine(
   // Width of the ref badges area for this row (variable per row).
   // Each badge renders as " name " (name + 2 spaces), with a gap of 1 between badges
   // and 1 paddingRight after the badge box. Returns 0 when no refs are visible.
+  // Ref badge names are capped at 30 characters, and shorter when the row is tight, so the subject keeps
+  // MIN_SUBJECT_WIDTH (each badge takes name + 2, one gap between badges and one after them).
+  const refMaxLength = createMemo(() => {
+    const refs = visibleRefs();
+    if (refs.length === 0) return 30;
+    const room =
+      rowTextRoom(props.terminalWidth(), graphWidth()) -
+      columnWidths().first -
+      columnWidths().second -
+      MIN_SUBJECT_WIDTH;
+    const perBadge = Math.floor((room - refs.length) / refs.length) - 2;
+    return Math.max(8, Math.min(30, perBadge));
+  });
+
   const refBadgesWidth = createMemo(() => {
     const refs = visibleRefs();
     if (refs.length === 0) return 0;
     // sum of (displayName + 2) for each badge + (refs.length - 1) gaps + 1 paddingRight
-    // Use truncateName to match the actual rendered width (capped at 30 chars).
-    return refs.reduce((acc, r) => acc + truncateName(r.name, 30).length + 2, 0) + (refs.length - 1) + 1;
+    // Use truncateName to match the actual rendered width.
+    return refs.reduce((acc, r) => acc + truncateName(r.name, refMaxLength()).length + 2, 0) + (refs.length - 1) + 1;
   });
 
   // Approximate available width for the subject text in the graph panel.
@@ -398,12 +456,7 @@ function GraphLine(
   //   + refBadgesWidth + AUTHOR_COL_WIDTH + 2 (author paddingRight) + DATE_COL_WIDTH
   //   + 4 (left panel paddingX=2 each side)
   const subjectAvailableWidth = createMemo(() => {
-    const W = props.terminalWidth();
-    // Detail panel box width = 25% of W (minWidth=60). Its paddingX=2 is internal,
-    // so it does NOT reduce the left panel's allocated width.
-    const detailPanelWidth =
-      W >= COMPACT_THRESHOLD_WIDTH ? Math.max(Math.floor(W * DETAIL_PANEL_WIDTH_FRACTION), 60) : 0;
-    const graphPanelWidth = W - detailPanelWidth - 4; // 4 = left panel paddingX=2 each side
+    const panelWidth = graphPanelWidth(props.terminalWidth());
     // Hash box: width=HASH_COL_WIDTH (internal paddingLeft NOT added separately — it's inside the fixed width).
     // Author box: width=AUTHOR_COL_WIDTH (internal paddingRight NOT added separately — same reason).
     // Date box: width=DATE_COL_WIDTH (no internal padding).
@@ -416,7 +469,7 @@ function GraphLine(
       refBadgesWidth() +
       columnWidths().first + // author / provider status box (internal paddingRight is inside its width)
       columnWidths().second; // date / provider time box
-    return Math.max(0, graphPanelWidth - fixedCols);
+    return Math.max(0, panelWidth - fixedCols);
   });
 
   const subjectText = () => (isUncommitted() ? "Staged and unstaged changes in working tree" : commit().subject);
@@ -475,7 +528,7 @@ function GraphLine(
                     name={ri.name}
                     color={laneColor()}
                     dimmed={ri.type === "stash" || ri.type === "uncommitted" || isDimmed()}
-                    maxLength={30}
+                    maxLength={refMaxLength()}
                     noShrink
                   />
                 )}

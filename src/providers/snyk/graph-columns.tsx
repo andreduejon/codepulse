@@ -1,4 +1,4 @@
-import { UNCOMMITTED_PLACEHOLDER } from "../../constants";
+import { DATE_COL_WIDTH, UNCOMMITTED_PLACEHOLDER } from "../../constants";
 import { useAppState } from "../../context/state";
 import type { Theme } from "../../context/theme";
 import { useT } from "../../hooks/use-t";
@@ -24,8 +24,8 @@ const SEVERITIES: { severity: SnykSeverity; label: string }[] = [
   { severity: "low", label: "L" },
 ];
 
-/** Fits `scanning...`, the widest label (`12mo ago ?` fits too). */
-export const LAST_SCAN_COL_WIDTH = 11;
+/** The date column's width, like CI's Last Run: fits absolute dates with the partial marker (`16. Jun 12:30 ?`). */
+export const LAST_SCAN_COL_WIDTH = DATE_COL_WIDTH;
 /** Four ` C0 ` chips (16) + three `gap={1}` (3) + padding before the date (2). */
 const SEVERITY_CHIPS_WIDTH = 21;
 

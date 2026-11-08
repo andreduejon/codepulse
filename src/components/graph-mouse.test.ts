@@ -239,3 +239,72 @@ test("a failed history page waits for the cursor to move before trying again", a
     setup.renderer.destroy();
   }
 });
+
+test("wide provider chips never squeeze the commit subject out at narrow widths", async () => {
+  let app!: ReturnType<typeof createAppState>;
+  const sha = "f".repeat(40);
+  const setup = await testRender(
+    () => {
+      app = createAppState(100, 0, 0);
+      const commits: Commit[] = [
+        {
+          hash: sha,
+          shortHash: sha.slice(0, 7),
+          parents: [],
+          subject: "Visible subject words",
+          body: "",
+          author: "Author",
+          authorEmail: "author@example.com",
+          authorDate: "2026-01-01T00:00:00Z",
+          committer: "Author",
+          committerEmail: "author@example.com",
+          commitDate: "2026-01-01T00:00:00Z",
+          refs: [{ name: "feature/a-rather-long-branch-nm", type: "branch", isCurrent: true }],
+        },
+      ];
+      app.actions.setGraphRows(buildGraph(commits));
+      app.actions.setCommits(commits);
+      app.actions.setLoading(false);
+      app.actions.setHasMore(false);
+      app.actions.setActiveProviderView("openshift");
+      const lane = { failCount: 123, runningCount: 456, unknownCount: 789, passCount: 321 };
+      app.actions.setGraphBadges(
+        "openshift",
+        new Map([
+          [
+            sha,
+            {
+              sha,
+              badge: "fail",
+              passCount: 0,
+              failCount: 0,
+              runningCount: 0,
+              lanes: { live: lane, cache: lane },
+              latestRunAt: "",
+              latestStatus: "fail",
+            },
+          ],
+        ]),
+      );
+      return createComponent(ThemeContext.Provider, {
+        value: createThemeState(),
+        get children() {
+          return createComponent(AppStateContext.Provider, {
+            value: app,
+            get children() {
+              return createComponent(GraphView, {});
+            },
+          });
+        },
+      });
+    },
+    // Compact layout (no sidebar): the graph has the full 90 columns.
+    { width: 90, height: 10 },
+  );
+  try {
+    await setup.renderOnce();
+    expect(setup.captureCharFrame()).toMatch(/Visible/);
+  } finally {
+    setup.renderer.destroy();
+  }
+});

@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { RGBA } from "@opentui/core";
 import { testRender } from "@opentui/solid";
 import type { JSX } from "solid-js";
@@ -91,5 +91,19 @@ test("a partial Snyk scan adds a warning ? after its time; a scan in progress sa
     expect(scanning.captureCharFrame()).toContain("scanning...");
   } finally {
     scanning.renderer.destroy();
+  }
+});
+
+test("Snyk's Last Scan fits an absolute same-year date with the partial marker", async () => {
+  const clock = spyOn(Date, "now").mockReturnValue(new Date(2026, 5, 30, 12).getTime());
+  const old: SnykScanResult = { ...scan(true), scannedAt: new Date(2026, 5, 16, 12, 30).toISOString() };
+  const setup = await render(() => (
+    <SnykScanColumn scan={old} scanning={false} active={false} dimmed={false} width={15} />
+  ));
+  try {
+    expect(setup.captureCharFrame()).toContain("16. Jun 12:30 ?");
+  } finally {
+    clock.mockRestore();
+    setup.renderer.destroy();
   }
 });
