@@ -19,7 +19,7 @@ the full shortcut and provider setup reference.
 | `:` | Open command mode |
 | `/` | Open search mode |
 | `m` | Open menu dialog |
-| `f` | Fetch from remote |
+| `f` | Fetch Git and the open provider |
 | `?` | Open help dialog |
 | `q` | Quit |
 
@@ -81,7 +81,7 @@ Theme controls and custom configuration are in the [theme guide](themes.md).
 | `:cache` | Open global cache screen |
 | `:clear` | Dismiss the current status message (or click its `✕`) and clear Debug |
 | `:debug` | Toggle debug dialog |
-| `:fetch` | Fetch from remote |
+| `:fetch` | Fetch Git and the open provider |
 | `:help` | Open help dialog |
 | `:menu` | Open menu dialog |
 | `:path` | Switch to path mode |

@@ -47,6 +47,7 @@ All notable changes to this project will be documented in this file.
   typing. Jenkins job rows read **Job #1**.
 - Help merges the CI and OpenShift log sections, lists the missing keys, and uses the
   menu's names; `shift ↑/↓` jumps 10 rows everywhere and the theme list takes `j/k`.
+  `f` and `:fetch` read "Fetch Git and the open provider", which is what they do.
 - Theme Details mark a changed color with `old → new` and normal text instead of an
   asterisk, and only colors that differ from the base (one changed graph color no
   longer marks them all). In a very small terminal they are cut off instead of
