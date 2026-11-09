@@ -4,7 +4,7 @@ import { createAppState } from "../../context/state";
 import { BANNER } from "../../debug/banner";
 import { buildGraph } from "../../git/graph";
 import * as api from "./api";
-import { OpenShiftCache } from "./cache";
+import { OpenShiftCache, type OpenShiftCacheEntry } from "./cache";
 import type { OpenShiftCommitData, OpenShiftResource } from "./types";
 import {
   commitDataFromCacheEntry,
@@ -40,7 +40,15 @@ afterEach(() => {
   for (const finish of cleanup.splice(0).reverse()) finish();
 });
 
-function mountOpenShift(suspendedInitially = false, withToken = true) {
+function mountOpenShift(
+  suspendedInitially = false,
+  withToken = true,
+  options: {
+    fetchDepth?: 10 | 20 | 50;
+    older?: string[];
+    cached?: OpenShiftCacheEntry[];
+  } = {},
+) {
   const tokenEnvVar = "CODEPULSE_TEST_OPENSHIFT_TOKEN";
   const original = process.env[tokenEnvVar];
   if (withToken) process.env[tokenEnvVar] = "test-token";
@@ -60,6 +68,7 @@ function mountOpenShift(suspendedInitially = false, withToken = true) {
   };
   const cacheList = spyOn(OpenShiftCache.prototype, "list").mockResolvedValue([SHA]);
   const cacheRead = spyOn(OpenShiftCache.prototype, "read").mockResolvedValue(entry);
+  const cachePeek = spyOn(OpenShiftCache.prototype, "peekAll").mockResolvedValue([entry, ...(options.cached ?? [])]);
   const cacheWrite = spyOn(OpenShiftCache.prototype, "write").mockResolvedValue(undefined);
   const logRead = spyOn(OpenShiftCache.prototype, "readLog").mockResolvedValue(null);
   const logWrite = spyOn(OpenShiftCache.prototype, "writeLog").mockResolvedValue(undefined);
@@ -78,7 +87,7 @@ function mountOpenShift(suspendedInitially = false, withToken = true) {
   const watch = spyOn(api, "watchOpenShiftStream").mockImplementation(
     (...args) => new Promise(resolve => watches.push({ signal: args[4], onEvent: args[5], resolve })),
   );
-  for (const mock of [cacheList, cacheRead, cacheWrite, logRead, logWrite, inventory, live, watch]) {
+  for (const mock of [cacheList, cacheRead, cachePeek, cacheWrite, logRead, logWrite, inventory, live, watch]) {
     cleanup.push(() => mock.mockRestore());
   }
   cleanup.push(() => {
@@ -95,12 +104,13 @@ function mountOpenShift(suspendedInitially = false, withToken = true) {
     const { state, actions } = createAppState();
     actions.setRepoPath("/repo");
     actions.setActiveProviderView("openshift");
+    const hashes = [SHA, ...(options.older ?? [])];
     actions.setGraphRows(
-      buildGraph([
-        {
-          hash: SHA,
-          shortHash: SHA.slice(0, 7),
-          parents: [],
+      buildGraph(
+        hashes.map((hash, index) => ({
+          hash,
+          shortHash: hash.slice(0, 7),
+          parents: hashes[index + 1] ? [hashes[index + 1]] : [],
           subject: "build",
           body: "",
           author: "Author",
@@ -110,8 +120,8 @@ function mountOpenShift(suspendedInitially = false, withToken = true) {
           committerEmail: "author@example.com",
           commitDate: "2026-01-01T00:00:00Z",
           refs: [],
-        },
-      ]),
+        })),
+      ),
     );
     const [suspended, setSuspended] = createSignal(suspendedInitially);
     const openShift = useOpenShift({
@@ -124,11 +134,12 @@ function mountOpenShift(suspendedInitially = false, withToken = true) {
         serverUrl: "https://cluster.example",
         namespaces: ["ns"],
         autoRefreshSeconds: 0,
+        ...(options.fetchDepth && { fetchDepth: options.fetchDepth }),
       },
     });
     mounted = { state, actions, openShift, setSuspended };
   });
-  return { ...mounted, cacheList, cacheRead, cacheWrite, logRead, logWrite, inventory, live, watches };
+  return { ...mounted, cacheList, cacheRead, cachePeek, cacheWrite, logRead, logWrite, inventory, live, watches };
 }
 
 describe("OpenShift suspension", () => {
@@ -175,14 +186,14 @@ describe("OpenShift suspension", () => {
     await openShift.refresh();
     await openShift.fetchCommitDataForSHA(SHA, true);
     await Bun.sleep(0);
-    expect(mounted.cacheList).not.toHaveBeenCalled();
+    expect(mounted.cachePeek).not.toHaveBeenCalled();
     expect(mounted.cacheRead).not.toHaveBeenCalled();
     expect(mounted.cacheWrite).not.toHaveBeenCalled();
     expect(mounted.inventory).not.toHaveBeenCalled();
     expect(mounted.live).not.toHaveBeenCalled();
     setSuspended(false);
     await Bun.sleep(0);
-    expect(mounted.cacheList).toHaveBeenCalledTimes(1);
+    expect(mounted.cachePeek).toHaveBeenCalledTimes(1);
     expect(mounted.inventory).toHaveBeenCalledTimes(1);
     expect(openShift.getCommitData(SHA)).not.toBeNull();
   });
@@ -239,6 +250,33 @@ describe("OpenShift suspension", () => {
     expect(mounted.openShift.getCommitData(SHA)?.namespaces[0].builds[0].status).toBe("pass");
     expect(mounted.cacheWrite.mock.calls.length).toBe(writes);
     expect(mounted.live.mock.calls.length).toBe(watches);
+  });
+});
+
+describe("OpenShift cache below the fetch depth", () => {
+  test("cached builds of older commits show in the graph and stay through a refresh", async () => {
+    // Ten newer commits fill the fetch depth of 10; the cached one sits below it.
+    const newer = Array.from({ length: 9 }, (_, i) => String(i + 1).repeat(40));
+    const older = "b".repeat(40);
+    const olderBuild = { ...build, id: "Build:ns:app-0", name: "app-0", commitSha: older };
+    const mounted = mountOpenShift(false, true, {
+      fetchDepth: 10,
+      older: [...newer, older],
+      cached: [{ sha: older, builds: [olderBuild] }],
+    });
+    const settle = async () => {
+      for (let i = 0; i < 100 && !mounted.state.graphBadges().has(older); i++) await Bun.sleep(5);
+    };
+    await settle();
+    expect(mounted.state.graphBadges().has(older)).toBe(true);
+    expect(mounted.openShift.getCommitData(older)?.namespaces[0].builds.map(b => b.name)).toEqual(["app-0"]);
+    // Shown, not read: showing an older commit does not count as a use for eviction.
+    expect(mounted.cacheRead.mock.calls.some(call => call[1] === older)).toBe(false);
+    // The build inventory covers only the window; a refresh keeps the older commit.
+    await mounted.openShift.refresh();
+    await Bun.sleep(5);
+    expect(mounted.state.graphBadges().has(older)).toBe(true);
+    expect(mounted.openShift.getCommitData(older)?.namespaces[0].builds.map(b => b.name)).toEqual(["app-0"]);
   });
 });
 

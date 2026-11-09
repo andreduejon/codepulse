@@ -626,3 +626,20 @@ describe("peekAll", () => {
     expect(accessed).toEqual([1_000, 1_000, 2_000]);
   });
 });
+
+describe("read without touch", () => {
+  test("returns the snapshot and leaves its last access alone", async () => {
+    const root = await cacheRoot();
+    const disk = cache(root);
+    const sha = "c".repeat(40);
+    await disk.write("/repo", { sha, value: "c" });
+    setAccess(root, sha, 1_000);
+    expect((await disk.read("/repo", sha, { touch: false }))?.value).toBe("c");
+    const accessed = () =>
+      providerCacheDatabase(root).query<{ accessed_at: number }, []>("SELECT accessed_at FROM snapshots").get()
+        ?.accessed_at;
+    expect(accessed()).toBe(1_000);
+    await disk.read("/repo", sha);
+    expect(accessed()).not.toBe(1_000);
+  });
+});

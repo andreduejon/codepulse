@@ -65,8 +65,9 @@ persisted and does not recreate the snapshot.
 Each snapshot is one commit SHA. Limits `10`, `20`, `50`, `100`, `200`, and `500`
 count snapshots, not Builds. Live terminal Builds merge into the existing
 snapshot by Build id, preserving its snapshot ID and logs. OpenShift history
-prune does not drop Builds already cached. Least-recently-accessed snapshots
-evict at the limit, cascading to their log artifacts. Pods, workloads, and
+prune does not drop Builds already cached. Every cached commit shows its Builds,
+also below the fetch size, and keeps them through refreshes. Least-recently-accessed
+snapshots evict at the limit, cascading to their log artifacts. Pods, workloads, and
 ImageStreamTags are not written to disk.
 
 An expired token (401) stops automatic requests: polls, watches, and fetches on

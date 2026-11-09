@@ -213,6 +213,8 @@ export function useOpenShift(opts: {
 
   const commits = new Map<string, OpenShiftCommitData>();
   const seeds = new Map<string, OpenShiftCommitData>();
+  /** Commits in the disk cache at the last hydration: a refresh keeps them, also below the fetch depth. */
+  const cachedSHAs = new Set<string>();
   const queriedSHAs = new Set<string>();
   const [version, setVersion] = createSignal(0);
   /** Live list/watch state: `loading` while a live list is requested, `live` while watches stream. */
@@ -312,6 +314,7 @@ export function useOpenShift(opts: {
       authFrozen = false;
       commits.clear();
       seeds.clear();
+      cachedSHAs.clear();
       live.listed = null;
       setLiveState("idle");
       setWatchEpoch(value => value + 1);
@@ -322,17 +325,23 @@ export function useOpenShift(opts: {
     },
   });
 
+  /**
+   * Every cached commit shows its builds, also below the fetch depth (the cache limit decides how many commits keep
+   * builds, the fetch depth only which ones the inventory asks about). Commits in the fetch window are read, which
+   * counts as a use for eviction; older ones are only peeked.
+   */
   async function hydrateCachedCandidates(repoPath: string, epoch: number): Promise<void> {
     if (!lifecycle.isCurrent(epoch, repoPath)) return;
-    const cached = await disk.list(repoPath);
+    const peeked = await disk.peekAll(repoPath);
     if (!lifecycle.isCurrent(epoch, repoPath)) return;
-    if (cached.length === 0) return;
-    const hints = selectOpenShiftCandidateSHAs(collectTopSHAs(state.graphRows(), config.fetchDepth), cached);
+    cachedSHAs.clear();
+    for (const entry of peeked) cachedSHAs.add(entry.sha.toLowerCase());
+    const window = new Set(collectTopSHAs(state.graphRows(), config.fetchDepth).map(sha => sha.toLowerCase()));
     let changed = false;
-    for (const sha of hints) {
-      if (!lifecycle.isCurrent(epoch, repoPath)) return;
+    for (const cached of peeked) {
+      const sha = cached.sha.toLowerCase();
       if (commits.has(sha)) continue;
-      const entry = await disk.read(repoPath, sha);
+      const entry = window.has(sha) ? await disk.read(repoPath, sha) : cached;
       if (!lifecycle.isCurrent(epoch, repoPath)) return;
       if (!entry) continue;
       commits.set(sha, commitDataFromCacheEntry(entry));
@@ -401,8 +410,9 @@ export function useOpenShift(opts: {
       }
       seeds.clear();
       for (const [sha, commit] of result.data) seeds.set(sha.toLowerCase(), commit);
+      // Window commits and cached older ones take the builds the cluster still lists for them.
       const candidates = selectOpenShiftCandidateSHAs(
-        collectTopSHAs(state.graphRows(), config.fetchDepth),
+        [...collectTopSHAs(state.graphRows(), config.fetchDepth), ...cachedSHAs],
         seeds.keys(),
       );
       const forDisk = filterToEligible(result.data);
@@ -411,6 +421,7 @@ export function useOpenShift(opts: {
       const allowed = eligibleSHAs();
       for (const sha of [...commits.keys()]) {
         if (allowed.has(sha.toLowerCase()) || candidates.has(sha) || seeds.has(sha)) continue;
+        if (cachedSHAs.has(sha.toLowerCase())) continue;
         commits.delete(sha);
       }
       for (const sha of candidates) {

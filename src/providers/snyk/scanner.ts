@@ -752,7 +752,9 @@ export async function scanSnykCommit(
 export async function getCachedSnykScan(
   repoPath: string,
   sha: string,
-  options: { cacheRoot?: string; maxCachedScans?: SnykCacheLimit } = {},
+  options: { cacheRoot?: string; maxCachedScans?: SnykCacheLimit; touch?: boolean } = {},
 ): Promise<SnykScanResult | null> {
-  return new SnykCache({ root: options.cacheRoot, maxEntries: options.maxCachedScans }).read(repoPath, sha);
+  return new SnykCache({ root: options.cacheRoot, maxEntries: options.maxCachedScans }).read(repoPath, sha, {
+    touch: options.touch,
+  });
 }

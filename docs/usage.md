@@ -23,6 +23,10 @@ the full shortcut and provider setup reference.
 | `?` | Open help dialog |
 | `q` | Quit |
 
+In the GitHub Actions, Jenkins, and OpenShift views, `f` fetches Git and then
+refreshes that provider. In the Snyk view only Git is fetched: Snyk has no server
+data to refetch, and scans run when started or when an auto-scan branch moves.
+
 ### Graph
 
 | Key | Action |
