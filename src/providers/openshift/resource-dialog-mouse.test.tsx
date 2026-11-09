@@ -479,7 +479,7 @@ test("a Deployment cycles object and events; events that cannot load, or none, s
   try {
     await empty.key("c");
     await empty.flush();
-    expect(empty.frame()).toContain("No recent events. OpenShift keeps them for about an hour.");
+    expect(empty.frame()).toContain("No recent events. OpenShift keeps them for 3 hours by default.");
   } finally {
     empty.renderer.destroy();
   }

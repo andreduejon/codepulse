@@ -136,9 +136,9 @@ that produced them.
   dialog to abort follow.
 - **Events** lists what OpenShift reported about the resource, newest first:
   `LAST SEEN  TYPE  REASON  COUNT  MESSAGE`, warnings in the warning colour. They
-  are read when the view opens and are not stored. OpenShift keeps events for about
-  an hour, so an older resource says *No recent events*. Without permission to list
-  events the view says so.
+  are read when the view opens and are not stored. OpenShift keeps events for 3 hours
+  by default (plain Kubernetes for 1), so an older resource says *No recent events*.
+  Without permission to list events the view says so.
 - `r` refreshes what is shown: the log (restarting a follow), the object, or the
   events. Workloads without logs open in JSON and refresh the same way.
 - `/` searches the log, JSON or events (`n` / `N` next and previous hit), like CI logs.

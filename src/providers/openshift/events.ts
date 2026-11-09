@@ -9,7 +9,7 @@ export const OPENSHIFT_EVENT_KINDS: ReadonlySet<OpenShiftResourceKind> = new Set
   "DeploymentConfig",
 ]);
 
-export const OPENSHIFT_NO_EVENTS = "No recent events. OpenShift keeps them for about an hour.";
+export const OPENSHIFT_NO_EVENTS = "No recent events. OpenShift keeps them for 3 hours by default.";
 
 export interface OpenShiftEventLine {
   text: string;
