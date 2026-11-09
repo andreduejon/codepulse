@@ -314,6 +314,24 @@ test("the line number column fits the largest number on screen, so the widest on
   }
 });
 
+test("the current hit's number is inverted across the whole column width", async () => {
+  const d = await renderLog("github-actions", true);
+  try {
+    await d.flush();
+    await d.key("/");
+    await d.mockInput.typeText("row-005");
+    await d.flush();
+    const rows = d.frame().split("\n");
+    const spans = d.captureSpans().lines[rows.findIndex(row => row.includes("row-005"))]?.spans ?? [];
+    // Two-digit column: the padding cell before 5 is inverted too.
+    const number = spans.find(span => span.text.trim() === "5");
+    expect(number?.text).toBe(" 5");
+    expect(number?.bg).toEqual(RGBA.fromHex(d.theme.accent));
+  } finally {
+    await d.dispose();
+  }
+});
+
 test("with wrap on, the line number column fits the screen too and settles", async () => {
   const d = await renderLog("github-actions", "wrapped");
   try {
@@ -431,10 +449,24 @@ test("the search bar sits between empty rows at the same dialog height, is one i
     const barY = rows().findIndex(row => row.includes("/ -line"));
     expect(rows()[barY - 1].trim()).toBe("");
     expect(rows()[barY + 1].trim()).toBe("");
-    // While typing, the slash, the input and the count share the input background.
+    // While typing, the slash, the input and the count share the input background, inside the text inset.
     const element = RGBA.fromHex(d.theme.backgroundElement);
     expect(d.cell("/ -line")?.bg).toEqual(element);
     expect(d.cell("1/2")?.bg).toEqual(element);
+    const bgAt = (x: number) => {
+      let column = 0;
+      for (const span of d.captureSpans().lines[barY]?.spans ?? []) {
+        if (x < column + span.text.length) return span.bg;
+        column += span.text.length;
+      }
+    };
+    const slashX = rows()[barY].indexOf("/ -line");
+    const countEnd = rows()[barY].indexOf("1/2") + "1/2".length;
+    const dialog = RGBA.fromHex(d.theme.background);
+    expect(bgAt(slashX - 1)).toEqual(dialog);
+    expect(bgAt(slashX)).toEqual(element);
+    expect(bgAt(countEnd - 1)).toEqual(element);
+    expect(bgAt(countEnd)).toEqual(dialog);
     // The current hit's line number is inverted in the hit color; the other hit's number stays muted.
     const numberSpan = (label: string) =>
       d

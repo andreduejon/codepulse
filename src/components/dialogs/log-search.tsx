@@ -217,20 +217,15 @@ export function useVisibleNumberWidth(opts: {
 }
 
 /**
- * A log line's number column (number plus two spaces). The current hit's number is inverted in the hit color, so
- * its line stands out from the other hits.
+ * A log line's number column (the padded number plus two spaces). The current hit's number is inverted in the hit
+ * color across the whole column width, so its line stands out from the other hits.
  */
 export function LineNumber(props: Readonly<{ text: string; current: boolean }>) {
   const t = useT();
-  const digits = () => props.text.trimStart();
   return (
     <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
       {props.current
-        ? [
-            " ".repeat(props.text.length - digits().length),
-            <span style={{ fg: t().background, bg: t().accent }}>{digits()}</span>,
-            "  ",
-          ]
+        ? [<span style={{ fg: t().background, bg: t().accent }}>{props.text}</span>, "  "]
         : `${props.text}  `}
     </text>
   );
@@ -239,7 +234,7 @@ export function LineNumber(props: Readonly<{ text: string; current: boolean }>) 
 /**
  * The `/` search bar above the dialog footer, while searching or while a query is kept. An empty row separates it
  * from the text like the one before the footer; the text gives up both rows, so the dialog keeps its height. While
- * typing, the slash, the input and the hit count share the input background.
+ * typing, the slash, the input and the hit count share the input background, inside the text inset.
  */
 export function LogSearchRow(props: Readonly<{ search: LogSearch; placeholder: string }>) {
   const t = useT();
@@ -247,27 +242,29 @@ export function LogSearchRow(props: Readonly<{ search: LogSearch; placeholder: s
   return (
     <Show when={props.search.editing() || props.search.term()}>
       <box height={1} flexShrink={0} />
-      <box flexDirection="row" width="100%" paddingX={4} flexShrink={0} height={1} backgroundColor={background()}>
-        <text flexShrink={0} wrapMode="none" fg={t().accent}>
-          {"/ "}
-        </text>
-        <input
-          focused={props.search.editing()}
-          flexGrow={1}
-          flexShrink={1}
-          value={props.search.query()}
-          onInput={value => props.search.setQuery(value)}
-          placeholder={props.placeholder}
-          textColor={t().foreground}
-          focusedTextColor={t().foreground}
-          placeholderColor={t().foregroundMuted}
-          cursorColor={t().accent}
-          backgroundColor={background()}
-          focusedBackgroundColor={background()}
-        />
-        <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-          {` ${props.search.position()}`}
-        </text>
+      <box flexDirection="row" width="100%" paddingX={4} flexShrink={0} height={1}>
+        <box flexDirection="row" flexGrow={1} height={1} backgroundColor={background()}>
+          <text flexShrink={0} wrapMode="none" fg={t().accent}>
+            {"/ "}
+          </text>
+          <input
+            focused={props.search.editing()}
+            flexGrow={1}
+            flexShrink={1}
+            value={props.search.query()}
+            onInput={value => props.search.setQuery(value)}
+            placeholder={props.placeholder}
+            textColor={t().foreground}
+            focusedTextColor={t().foreground}
+            placeholderColor={t().foregroundMuted}
+            cursorColor={t().accent}
+            backgroundColor={background()}
+            focusedBackgroundColor={background()}
+          />
+          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+            {` ${props.search.position()}`}
+          </text>
+        </box>
       </box>
     </Show>
   );
