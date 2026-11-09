@@ -25,12 +25,14 @@ export interface ProviderMetadata {
   displayName: string;
   /** Label for detail panel tab. Defaults to displayName. */
   detailLabel?: string;
+  /** Short name in the footer's `tab` hint, like the detail tab. Defaults to displayName. */
+  shortName?: string;
   category: "source" | "ci" | "runtime" | "scan-quality";
 }
 
 export const PROVIDER_METADATA: Record<ProviderView, ProviderMetadata> = {
   git: { displayName: "Git", category: "source" },
-  "github-actions": { displayName: "GitHub Actions", detailLabel: "Actions", category: "ci" },
+  "github-actions": { displayName: "GitHub Actions", detailLabel: "Actions", shortName: "Actions", category: "ci" },
   jenkins: { displayName: "Jenkins", category: "ci" },
   openshift: { displayName: "OpenShift", category: "runtime" },
   snyk: { displayName: "Snyk", detailLabel: "Vulnerabilities", category: "scan-quality" },
@@ -143,6 +145,11 @@ export function createProviderRegistry(): ProviderRegistry {
 
 export function providerDisplayName(view: ProviderView): string {
   return PROVIDER_METADATA[view]?.displayName ?? view;
+}
+
+/** The footer's name for a view: `Actions` like its detail tab, the display name otherwise. */
+export function providerShortName(view: ProviderView): string {
+  return PROVIDER_METADATA[view]?.shortName ?? providerDisplayName(view);
 }
 
 export function isProviderView(view: string): view is ProviderView {

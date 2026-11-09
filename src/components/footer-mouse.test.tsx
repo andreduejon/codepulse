@@ -639,7 +639,7 @@ test("footer says which CI provider is fetching, and long labels truncate before
         .split("\n")
         .find(row => row.includes("navigate")) ?? "";
     // Too long for a 100-column footer: the label is cut at the end and every hint stays whole.
-    expect(line()).toMatch(/Git fetching · GitH\S*… tab GitHub Actions/);
+    expect(line()).toMatch(/Git fetching · GitH[^·]*… tab Actions/);
     expect(line()).toContain("↑/↓ navigate");
     expect(line()).toContain("shift ←/→ switch project");
     setGithub(null);

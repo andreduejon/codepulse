@@ -3,7 +3,7 @@ import { createEffect, createSignal, onCleanup, Show } from "solid-js";
 import { useAppState } from "../context/state";
 import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
 import { useT } from "../hooks/use-t";
-import { providerDisplayName } from "../providers/provider";
+import { providerShortName } from "../providers/provider";
 import { endTruncate } from "../utils/truncate";
 import { KeyHint, KeyHintSeparator } from "./key-hint";
 
@@ -98,7 +98,7 @@ export default function Footer(
     if (views.length <= 1) return null;
     const next = state.providers.nextView(state.activeProviderView());
     if (next === state.activeProviderView()) return null;
-    return providerDisplayName(next);
+    return providerShortName(next);
   };
 
   const mode = () => props.commandBarMode();
