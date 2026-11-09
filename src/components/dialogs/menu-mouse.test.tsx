@@ -622,3 +622,68 @@ test("menu native wheel scrolls without selecting or activating; keyboard naviga
     await m.dispose();
   }
 });
+
+test("typing q into a menu field edits it instead of quitting; q quits again once editing ends", async () => {
+  const m = await renderMenu();
+  const destroy = spyOn(m.renderer, "destroy").mockImplementation(() => {});
+  try {
+    await m.click("Group");
+    expect(m.input()?.focused).toBe(true);
+    await m.mockInput.typeText("quality");
+    await m.flush();
+    expect(m.input()?.value).toBe("quality");
+    expect(destroy).not.toHaveBeenCalled();
+    await m.key("RETURN");
+    expect(m.write).toHaveBeenLastCalledWith(expect.objectContaining({ group: "quality" }), "/repo/menu-mouse");
+    await m.mockInput.typeText("q");
+    await m.flush();
+    expect(destroy).toHaveBeenCalledTimes(1);
+  } finally {
+    destroy.mockRestore();
+    await m.dispose();
+  }
+});
+
+test("f runs the Fetch remote hotkey on rows that cannot be forgotten", async () => {
+  const m = await renderMenu();
+  try {
+    expect(m.captureCharFrame()).toContain("Fetch remote");
+    await m.key("f");
+    expect(m.fetch).toHaveBeenCalledTimes(1);
+  } finally {
+    await m.dispose();
+  }
+});
+
+test("Last fetch says fetching only during a remote fetch, not while paging in history", async () => {
+  const m = await renderMenu();
+  try {
+    m.app.actions.setFetching(true, true);
+    await m.flush();
+    expect(m.captureCharFrame()).not.toContain("fetching...");
+    m.app.actions.setFetching(true);
+    await m.flush();
+    expect(m.captureCharFrame()).toContain("fetching...");
+  } finally {
+    await m.dispose();
+  }
+});
+
+test("Showing names the current branch when all branches are off, and (all branches) when on", async () => {
+  const m = await renderMenu();
+  try {
+    m.app.actions.setShowAllBranches(false);
+    await m.click("Branches");
+    const showing = () => {
+      const lines = m.captureCharFrame().split("\n");
+      return lines[lines.findIndex(line => line.includes("Showing")) + 1] ?? "";
+    };
+    expect(showing()).toContain("main");
+    expect(m.captureCharFrame()).not.toContain("(all branches)");
+    m.app.actions.setShowAllBranches(true);
+    await m.flush();
+    expect(showing()).toContain("(all branches)");
+  } finally {
+    await m.dispose();
+  }
+});

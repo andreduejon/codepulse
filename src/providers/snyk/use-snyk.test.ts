@@ -453,6 +453,22 @@ describe("useSnyk", () => {
     expect(scans).toBe(0);
   });
 
+  test("cached scans shown for the graph are read without marking them as used", async () => {
+    const touches: (boolean | undefined)[] = [];
+    const { snyk } = mountSnyk({
+      setup: actions => actions.setGraphRows(graphRows([SHA_A])),
+      readCache: async (_repo, sha, options) => {
+        touches.push(options?.touch);
+        return result(sha);
+      },
+      scan: async options => result(options.sha),
+    });
+    const deadline = Date.now() + 2_000;
+    while (!snyk.getCommitData(SHA_A) && Date.now() < deadline) await Bun.sleep(1);
+    expect(snyk.getCommitData(SHA_A)).toEqual(result(SHA_A));
+    expect(touches).toEqual([false]);
+  });
+
   test("stops queued hydration batches after disposal", async () => {
     const shas = Array.from({ length: 80 }, (_, index) => index.toString(16).padStart(40, "0"));
     const reads: string[] = [];

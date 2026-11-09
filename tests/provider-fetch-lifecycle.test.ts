@@ -43,8 +43,10 @@ describe("useProviderFetchLifecycle", () => {
       });
     });
     const oldEpoch = lifecycle.getEpoch();
-    await lifecycle.fetchInitial(); // Queue catch-up behind the active request.
+    // Queue catch-up behind the active request: awaiting it waits until it has run, or a cancel drops it.
+    const queued = lifecycle.fetchInitial();
     setSuspended(true);
+    await queued;
     expect(requests[0].signal?.aborted).toBe(true);
     expect(lifecycle.isCurrent(oldEpoch, "/repo")).toBe(false);
     expect(memory).toBe("cached");

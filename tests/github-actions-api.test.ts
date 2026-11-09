@@ -6,6 +6,7 @@ import {
   buildCommitDataMap,
   buildGraphBadges,
   fetchCIDataForSHAs,
+  fetchJobLog,
   fetchRunJobs,
   GQL_BATCH_SIZE,
   getGitHubToken,
@@ -1021,5 +1022,33 @@ describe("fetchCIDataForSHAs", () => {
   it("exports GQL_BATCH_SIZE as a positive integer", () => {
     expect(typeof GQL_BATCH_SIZE).toBe("number");
     expect(GQL_BATCH_SIZE).toBeGreaterThan(0);
+  });
+});
+
+describe("fetchJobLog", () => {
+  afterEach(() => {
+    globalThis.fetch = fetch;
+  });
+
+  it("returns the log text, and an empty string for a job without output", async () => {
+    mockFetch(mock(async () => new Response("line 1\nline 2", { status: 200 })));
+    expect(await fetchJobLog(TEST_REPO, TEST_TOKEN, 7)).toBe("line 1\nline 2");
+    mockFetch(mock(async () => new Response("", { status: 200 })));
+    expect(await fetchJobLog(TEST_REPO, TEST_TOKEN, 7)).toBe("");
+  });
+
+  it("throws the reason for a failed request instead of looking empty", async () => {
+    mockFetch(mock(async () => new Response(null, { status: 401 })));
+    await expect(fetchJobLog(TEST_REPO, TEST_TOKEN, 7)).rejects.toThrow(BANNER.github.tokenExpired);
+    mockFetch(mock(async () => new Response(null, { status: 403, headers: { "x-ratelimit-remaining": "0" } })));
+    await expect(fetchJobLog(TEST_REPO, TEST_TOKEN, 7)).rejects.toThrow(BANNER.github.rateLimit);
+    mockFetch(mock(async () => new Response(null, { status: 404 })));
+    await expect(fetchJobLog(TEST_REPO, TEST_TOKEN, 7)).rejects.toThrow(BANNER.github.logFailed);
+    mockFetch(
+      mock(async () => {
+        throw new Error("socket hang up");
+      }),
+    );
+    await expect(fetchJobLog(TEST_REPO, TEST_TOKEN, 7)).rejects.toThrow(BANNER.github.logFailed);
   });
 });

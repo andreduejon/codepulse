@@ -2,6 +2,7 @@ import { MouseButton, type ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { createSignal, For } from "solid-js";
 import packageJson from "../../../package.json";
+import { SHIFT_JUMP } from "../../constants";
 import { useT } from "../../hooks/use-t";
 import { HELP_TABS, type HelpTab, KEYBINDS } from "../../keybinds";
 import { KeyHint, KeyHintSeparator } from "../key-hint";
@@ -52,10 +53,10 @@ export default function HelpDialog(_props: Readonly<{ onClose: () => void }>) {
       nextTab();
     } else if (e.name === "up" || e.name === "k") {
       e.preventDefault();
-      scrollboxRef?.scrollBy(e.shift ? -5 : -1, "absolute");
+      scrollboxRef?.scrollBy(e.shift ? -SHIFT_JUMP : -1, "absolute");
     } else if (e.name === "down" || e.name === "j") {
       e.preventDefault();
-      scrollboxRef?.scrollBy(e.shift ? 5 : 1, "absolute");
+      scrollboxRef?.scrollBy(e.shift ? SHIFT_JUMP : 1, "absolute");
     } else if (e.name === "g") {
       e.preventDefault();
       scrollboxRef?.scrollTo(e.shift ? Infinity : 0);

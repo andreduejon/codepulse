@@ -11,9 +11,19 @@ import { useAppState } from "../../context/state";
 import { useT } from "../../hooks/use-t";
 import DetailPanel, { type DetailPanelProps } from "../detail-panel";
 import { KeyHint, KeyHintSeparator } from "../key-hint";
+import MessageBox, { type UIMessage } from "../message-box";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
-export function DetailDialog(props: Readonly<DetailPanelProps & { onClose: () => void }>) {
+export function DetailDialog(
+  props: Readonly<
+    DetailPanelProps & {
+      onClose: () => void;
+      /** The banner over the graph is hidden behind this overlay, so its message (why a provider cannot work) shows here. */
+      message?: UIMessage | null;
+      onDismissMessage?: () => void;
+    }
+  >,
+) {
   const dimensions = useTerminalDimensions();
   const t = useT();
   const { state } = useAppState();
@@ -34,6 +44,23 @@ export function DetailDialog(props: Readonly<DetailPanelProps & { onClose: () =>
         paddingY={1}
       >
         <DialogTitleBar title="Details" onClose={props.onClose} />
+        <Show when={props.message}>
+          {message => (
+            <box flexDirection="column" width="100%" flexShrink={0}>
+              <MessageBox
+                kind={message().kind}
+                source={message().source}
+                title={message().title}
+                message={message().message}
+                detail={message().detail}
+                variant="dialog"
+                onDismiss={props.onDismissMessage}
+                mouseEnabled
+              />
+              <box height={1} flexShrink={0} />
+            </box>
+          )}
+        </Show>
         {/* paddingX=4 matches other dialogs' inner content padding (outer box already has paddingX=1) */}
         <box flexDirection="column" flexGrow={1} paddingX={4}>
           <DetailPanel {...props} mouseEnabled contentWidth={dialogWidth() - 10} />

@@ -1,8 +1,15 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { For } from "solid-js";
+import { SHIFT_JUMP } from "../../constants";
 import { getDebugEvents } from "../../debug/events";
-import { formatDebugDuration, formatDebugMessage, formatDebugStatus, formatDebugTimestamp } from "../../debug/format";
+import {
+  formatDebugDuration,
+  formatDebugMessage,
+  formatDebugStatus,
+  formatDebugTimestamp,
+  isFailedDebugStatus,
+} from "../../debug/format";
 import { useT } from "../../hooks/use-t";
 import { debugSourceColor } from "../../providers/colors";
 import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
@@ -19,8 +26,9 @@ export default function DebugDialog(props: Readonly<{ onClose: () => void; gitCo
   const sourceColor = (source: ReturnType<typeof events>[number]["source"]) =>
     debugSourceColor(t(), source, props.gitColor);
 
-  const messageColor = (source: ReturnType<typeof events>[number]["source"]) =>
-    source === "error" ? t().error : t().foreground;
+  /** Errors are red whatever their source (a GitHub request error as much as a Git one). */
+  const messageColor = (event: ReturnType<typeof events>[number]) =>
+    event.status === "error" || event.source === "error" ? t().error : t().foreground;
 
   useKeyboard(e => {
     if (e.eventType === "release") return;
@@ -32,10 +40,10 @@ export default function DebugDialog(props: Readonly<{ onClose: () => void; gitCo
       props.onClose();
     } else if (e.name === "up" || e.name === "k") {
       e.preventDefault();
-      scrollboxRef?.scrollBy(e.shift ? -5 : -1, "absolute");
+      scrollboxRef?.scrollBy(e.shift ? -SHIFT_JUMP : -1, "absolute");
     } else if (e.name === "down" || e.name === "j") {
       e.preventDefault();
-      scrollboxRef?.scrollBy(e.shift ? 5 : 1, "absolute");
+      scrollboxRef?.scrollBy(e.shift ? SHIFT_JUMP : 1, "absolute");
     } else if (e.name === "g") {
       e.preventDefault();
       scrollboxRef?.scrollTo(e.shift ? Infinity : 0);
@@ -84,13 +92,25 @@ export default function DebugDialog(props: Readonly<{ onClose: () => void; gitCo
           verticalScrollbarOptions={{ visible: false }}
         >
           <box flexDirection="column">
-            <For each={events()} fallback={<text fg={t().foregroundMuted}>No debug events yet</text>}>
+            <For
+              each={events()}
+              fallback={
+                <box paddingX={4}>
+                  <text fg={t().foregroundMuted}>No debug events yet</text>
+                </box>
+              }
+            >
               {event => (
                 <box flexDirection="row" width="100%" paddingX={4} alignItems="flex-start">
                   <text width={10} flexShrink={0} wrapMode="none" fg={sourceColor(event.source)}>
                     {event.source}
                   </text>
-                  <text width={10} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                  <text
+                    width={10}
+                    flexShrink={0}
+                    wrapMode="none"
+                    fg={isFailedDebugStatus(event) ? t().error : t().foregroundMuted}
+                  >
                     {formatDebugStatus(event.status)}
                   </text>
                   <text width={10} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
@@ -99,7 +119,7 @@ export default function DebugDialog(props: Readonly<{ onClose: () => void; gitCo
                   <text width={10} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
                     {formatDebugTimestamp(event.timestamp)}
                   </text>
-                  <text flexGrow={1} wrapMode="word" fg={messageColor(event.source)}>
+                  <text flexGrow={1} wrapMode="word" fg={messageColor(event)}>
                     {formatDebugMessage(event)}
                   </text>
                 </box>

@@ -75,7 +75,6 @@ export function useDetailLoader({
     // Read activeProviderView reactively so this effect re-fires when the user
     // switches between git and provider views (lazy load on view change).
     const activeProvider = state.activeProviderView();
-    const isProviderMode = isProviderDetailView(activeProvider);
 
     // Cancel any pending debounce and abort in-flight git subprocesses
     cancelPending(detailDebounceTimer, detailAbortCtrl);
@@ -109,12 +108,7 @@ export function useDetailLoader({
     actions.setCommitDetail(null);
     actions.setUncommittedDetail(null);
 
-    // In provider mode there is no files tab. In this case skip the git subprocess entirely.
-
-    if (isProviderMode && !isUncommitted) {
-      actions.setDetailLoading(false);
-      return;
-    }
+    // Provider views have no Files tab, but Info still shows the commit body from this detail, so load it too.
 
     actions.setDetailLoading(true);
 

@@ -2,7 +2,7 @@ import { afterEach, expect, spyOn, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createRoot, createSignal } from "solid-js";
+import { createEffect, createRoot, createSignal, untrack } from "solid-js";
 import type { DetailNavRef } from "../src/components/detail-types";
 import { isUncommittedHash } from "../src/constants";
 import { createAppState } from "../src/context/state";
@@ -188,8 +188,18 @@ test("switching from Git stashes to a provider selects its detail tab and resets
 
     expect(state.detailActiveTab()).toBe(provider);
     expect(state.detailCursorIndex()).toBe(0);
-    expect(state.detailLoading()).toBe(false);
   }
+});
+
+test("provider views still load the commit detail, so Info shows the body", async () => {
+  const { root, git } = await makeRepo(["base"]);
+  await writeFile(join(root, "file.txt"), "next\n");
+  await git("commit", "-am", "with body", "-m", "Extended explanation.");
+  const { state, actions } = mount(root, 50, true);
+  actions.setActiveProviderView("github-actions");
+  await until(() => state.commitDetail()?.subject === "with body", "provider-view detail");
+  expect(state.commitDetail()?.body).toContain("Extended explanation.");
+  expect(state.detailActiveTab()).toBe("github-actions");
 });
 
 test("Dependencies stays available without cached coverage and falls back only when leaving Snyk", async () => {
@@ -210,4 +220,112 @@ test("Dependencies stays available without cached coverage and falls back only w
   expect(state.detailActiveTab()).toBe("snyk-deps");
   actions.setActiveProviderView("jenkins");
   expect(state.detailActiveTab()).toBe("jenkins");
+});
+
+test("a failed page of older history says so, and the next page attempt clears it", async () => {
+  const { root } = await makeRepo(["c1", "c2", "c3"]);
+  const { state, loader } = mount(root, 2);
+  await until(() => !state.loading() && state.commits().length > 0, "first page");
+  const repoModule = await import("../src/git/repo");
+  const fail = spyOn(repoModule, "getCommits").mockRejectedValueOnce(new Error("fatal: bad object"));
+  try {
+    await loader.loadMoreData();
+    expect(state.historyError()).toBe(true);
+    expect(state.commits()).toHaveLength(2);
+    await loader.loadMoreData();
+    expect(state.historyError()).toBe(false);
+    expect(state.commits()).toHaveLength(3);
+  } finally {
+    fail.mockRestore();
+  }
+});
+
+test("a fresh load clears an earlier history failure", async () => {
+  const { root } = await makeRepo(["c1", "c2", "c3"]);
+  const { state, actions, loader } = mount(root, 2);
+  await until(() => !state.loading() && state.commits().length > 0, "first page");
+  actions.setHistoryError(true);
+  await loader.loadData();
+  expect(state.historyError()).toBe(false);
+});
+
+test("a history page that finishes after a branch switch does not merge into the new branch", async () => {
+  const { root, git } = await makeRepo(["c1", "c2", "c3", "c4"]);
+  await git("switch", "-c", "feature");
+  await writeFile(join(root, "file.txt"), "feature\n");
+  await git("commit", "-am", "feature commit");
+  await git("switch", "main");
+  const { state, actions, loader } = mount(root, 2);
+  await until(() => !state.loading() && state.commits().length > 0, "first page");
+  const repoModule = await import("../src/git/repo");
+  const real = repoModule.getCommits;
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => (release = resolve));
+  const spy = spyOn(repoModule, "getCommits").mockImplementationOnce(async (...args) => {
+    await gate;
+    return real(...args);
+  });
+  try {
+    const page = loader.loadMoreData();
+    actions.setViewingBranch("feature");
+    await loader.loadData();
+    const featureSubjects = subjects(state.commits());
+    release();
+    await page;
+    expect(subjects(state.commits())).toEqual(featureSubjects);
+  } finally {
+    spy.mockRestore();
+  }
+});
+
+test("cancelling a history page for a branch switch does not let the graph start a page at the old offset", async () => {
+  const { root, git } = await makeRepo(["c1", "c2", "c3", "c4", "c5", "c6"]);
+  await git("switch", "-c", "feature");
+  for (const subject of ["f1", "f2", "f3", "f4"]) {
+    await writeFile(join(root, "file.txt"), `${subject}\n`);
+    await git("commit", "-am", subject);
+  }
+  await git("switch", "main");
+  const { state, actions, loader } = mount(root, 2);
+  await until(() => !state.loading() && state.commits().length > 0, "first page");
+  actions.setViewingBranch("main");
+  await loader.loadData();
+  await loader.loadMoreData();
+  expect(subjects(state.commits())).toEqual(["c6", "c5", "c4", "c3"]);
+  // Like the graph: whenever no page is loading and more history exists, ask for the next page.
+  let armed = false;
+  createRoot(dispose => {
+    disposers.push(dispose);
+    createEffect(() => {
+      const fetching = state.fetching();
+      const more = state.hasMore();
+      if (!armed || fetching || !more) return;
+      untrack(() => void loader.loadMoreData());
+    });
+  });
+  const repoModule = await import("../src/git/repo");
+  const real = repoModule.getCommits;
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => (release = resolve));
+  const pages: Promise<unknown>[] = [];
+  // Pages of older history answer only after the fresh load, so a stray one would merge last.
+  const spy = spyOn(repoModule, "getCommits").mockImplementation(async (...args) => {
+    if ((args[1]?.skip ?? 0) > 0) await gate;
+    return real(...args);
+  });
+  try {
+    pages.push(loader.loadMoreData());
+    actions.setViewingBranch("feature");
+    armed = true;
+    const fresh = loader.loadData();
+    armed = false;
+    await fresh;
+    release();
+    await Promise.all(pages);
+    await until(() => !state.loading() && !state.fetching(), "loads settle");
+    const history = (await git("log", "--format=%s", "feature")).split("\n");
+    expect(subjects(state.commits())).toEqual(history.slice(0, state.commits().length));
+  } finally {
+    spy.mockRestore();
+  }
 });

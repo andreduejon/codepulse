@@ -4,6 +4,7 @@ import { MouseButtons } from "@opentui/core/testing";
 import { testRender } from "@opentui/solid";
 import { createSignal } from "solid-js";
 import type { KnownRepoInfo } from "../config";
+import { UNCOMMITTED_HASH } from "../constants";
 import { AppStateContext, createAppState } from "../context/state";
 import { createThemeState, ThemeContext, themes } from "../context/theme";
 import { buildGraph } from "../git/graph";
@@ -543,5 +544,57 @@ test("all non-idle modes add a focused inline input above the spaced rows; group
     expect(lines()[lineWith("charlie")]).toContain("1▸");
   } finally {
     await setup.dispose();
+  }
+});
+
+test("the highlighted count leaves out the working-tree node, like the total", async () => {
+  let app!: ReturnType<typeof createAppState>;
+  const commit = (hash: string, subject: string) => ({
+    hash,
+    shortHash: hash.slice(0, 7),
+    parents: [],
+    subject,
+    body: "",
+    author: "Author",
+    authorEmail: "author@example.com",
+    authorDate: "2026-01-01T00:00:00Z",
+    committer: "Author",
+    committerEmail: "author@example.com",
+    commitDate: "2026-01-01T00:00:00Z",
+    refs: [],
+  });
+  const setup = await testRender(
+    () => {
+      app = createAppState(100, 0, 0);
+      app.actions.setGraphRows(
+        buildGraph([commit(UNCOMMITTED_HASH, "Uncommitted changes"), commit("a".repeat(40), "Record changes")]),
+      );
+      app.actions.setSearchQuery("changes");
+      return (
+        <ThemeContext.Provider value={createThemeState()}>
+          <AppStateContext.Provider value={app}>
+            <CommandBar
+              commandBarMode={() => "idle"}
+              commandBarValue={() => ""}
+              searchInputValue={() => ""}
+              searchFocused={() => false}
+              detailFocused={() => false}
+              onInput={() => {}}
+              onSelectMode={() => {}}
+              mouseEnabled={() => true}
+              knownRepos={[]}
+              currentRepo="/repo/codepulse"
+            />
+          </AppStateContext.Provider>
+        </ThemeContext.Provider>
+      );
+    },
+    { width: 140, height: 12 },
+  );
+  try {
+    await setup.flush();
+    expect(setup.captureCharFrame()).toContain("1 / 1 commit");
+  } finally {
+    setup.renderer.destroy();
   }
 });

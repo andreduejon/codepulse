@@ -8,10 +8,11 @@ import {
   providerUnavailable,
   providerWarning,
 } from "../../context/state";
-import { BANNER } from "../../debug/banner";
+import { BANNER, bannerOrFallback } from "../../debug/banner";
 import { collectRunningSHAs, collectTopSHAs } from "../github-actions/sha-selection";
 import { DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS } from "../shared/auto-refresh";
 import { persistMergedSnapshots } from "../shared/sha-sqlite-cache";
+import { jobsSettled } from "../shared/status";
 import { useProviderFetchLifecycle } from "../shared/use-provider-fetch-lifecycle";
 import {
   buildJenkinsCommitDataMap,
@@ -67,7 +68,12 @@ export function useJenkinsCI(opts: {
 
   createEffect(() => {
     if (configAccessor().enabled === true) {
-      state.providers.register({ id: "jenkins", displayName: "Jenkins", isAvailable });
+      state.providers.register({
+        id: "jenkins",
+        displayName: "Jenkins",
+        isAvailable,
+        activity: () => (lifecycle.isFetching() ? "fetching" : null),
+      });
     } else {
       state.providers.unregister("jenkins");
       if (untrack(state.activeProviderView) === "jenkins") actions.setActiveProviderView("git");
@@ -84,12 +90,17 @@ export function useJenkinsCI(opts: {
   let discoveredJobs: { url: string }[] | null = null;
   const lastBuildByJob = new Map<string, number>();
   let authFrozen = false;
+  /** The auth banner that froze requests (token expired or authentication failed). */
+  let authError: string | null = null;
   let discoveryTruncated = false;
 
   const settledStatus = () => (discoveryTruncated ? providerWarning(BANNER.jenkins.incomplete) : providerIdle());
 
   function rememberAuthError(error: string | null): void {
-    if (error === BANNER.jenkins.tokenExpired || error === BANNER.jenkins.authFailed) authFrozen = true;
+    if (error === BANNER.jenkins.tokenExpired || error === BANNER.jenkins.authFailed) {
+      authFrozen = true;
+      authError = error;
+    }
   }
 
   function rebuildCaches() {
@@ -151,10 +162,29 @@ export function useJenkinsCI(opts: {
     return { firstError: result.error, stale: false };
   }
 
-  async function hydrateCachedCandidates(repoPath: string, shas: readonly string[], epoch: number): Promise<void> {
+  /**
+   * Read cached commits from disk (no network). With `everyCached`, also the commits below the fetch depth that are
+   * not in memory yet: the cache limit decides how many commits keep their builds, the fetch depth only how many
+   * Jenkins is asked about. Those are peeked, not read, so showing them does not count as a use for eviction.
+   */
+  async function hydrateCachedCandidates(
+    repoPath: string,
+    shas: readonly string[],
+    epoch: number,
+    everyCached = false,
+  ): Promise<void> {
     if (!lifecycle.isCurrent(epoch, repoPath)) return;
-    const entries = await Promise.all(shas.map(sha => disk.read(repoPath, sha)));
+    const [read, peeked] = await Promise.all([
+      Promise.all(shas.map(sha => disk.read(repoPath, sha))),
+      everyCached ? disk.peekAll(repoPath) : Promise.resolve([]),
+    ]);
     if (!lifecycle.isCurrent(epoch, repoPath)) return;
+    const targets = new Set(shas.map(sha => sha.toLowerCase()));
+    const known = new Set([...runCache.values()].map(run => run.headSha.toLowerCase()));
+    const entries = [
+      ...read,
+      ...peeked.filter(entry => !targets.has(entry.sha.toLowerCase()) && !known.has(entry.sha.toLowerCase())),
+    ];
     let changed = false;
     for (const entry of entries) {
       if (!entry) continue;
@@ -219,15 +249,19 @@ export function useJenkinsCI(opts: {
         actions.setProviderStatus("jenkins", providerUnavailable(BANNER.jenkins.noUsername));
       else actions.setProviderStatus("jenkins", providerUnavailable(BANNER.jenkins.missingToken(config.tokenEnvVar)));
     },
-    runInitialFetch: async ({ signal, shas, showStatus, epoch }) => {
-      if (authFrozen && !showStatus) return;
-      if (showStatus) authFrozen = false;
+    onCancelledStatus: () => {
+      if (state.providerStatusFor("jenkins").kind === "loading") actions.setProviderStatus("jenkins", settledStatus());
+    },
+    runInitialFetch: async ({ signal, shas, showStatus, retry, epoch }) => {
+      if (authFrozen && !retry) return;
+      if (retry) authFrozen = false;
       if (showStatus) actions.setProviderStatus("jenkins", providerLoading());
       const window = shas ?? collectTopSHAs(state.graphRows(), config.fetchDepth);
       const repoPath = state.repoPath();
-      await hydrateCachedCandidates(repoPath, window, epoch);
+      await hydrateCachedCandidates(repoPath, window, epoch, true);
       if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return;
-      const target = window.filter(sha => !queriedSHAs.has(sha));
+      // An explicit retry asks again for every target, also when a fetch it waited behind just marked them queried.
+      const target = retry ? window : window.filter(sha => !queriedSHAs.has(sha));
       if (target.length === 0) {
         if (showStatus) actions.setProviderStatus("jenkins", settledStatus());
         lifecycle.noteFetchStarted();
@@ -242,10 +276,10 @@ export function useJenkinsCI(opts: {
       if (firstError) actions.setProviderStatus("jenkins", providerError(firstError));
       else actions.setProviderStatus("jenkins", settledStatus());
     },
-    runRefresh: async ({ signal, showStatus, epoch }) => {
+    runRefresh: async ({ signal, showStatus, retry, epoch }) => {
       const repoPath = state.repoPath();
-      if (authFrozen && !showStatus) return;
-      if (showStatus) authFrozen = false;
+      if (authFrozen && !retry) return;
+      if (retry) authFrozen = false;
       const target = collectRunningSHAs(state.graphBadges());
       if (target.length === 0) {
         lifecycle.noteRefreshSettled();
@@ -304,14 +338,24 @@ export function useJenkinsCI(opts: {
     return commitDataCache.get(sha) ?? null;
   };
 
+  /** Manual Reload / Fetch: re-query the whole graph window (like GitHub), not only running builds. */
+  async function refreshWindow(): Promise<void> {
+    if (opts.suspended?.()) return;
+    const window = collectTopSHAs(state.graphRows(), config.fetchDepth);
+    await lifecycle.fetchInitial(undefined, window, true, true);
+    if (state.activeProviderView() === "jenkins") lifecycle.startAutoRefresh();
+  }
   return {
     getCommitData,
     fetchJobsForRun: async (run, signal) => {
       const epoch = lifecycle.getEpoch();
       const repoPath = state.repoPath();
+      // Only finished stages are final; a cached snapshot with a running job or stage is fetched again.
       const cached = jobsCache.get(run.id);
-      if (cached) return cached;
+      if (cached && jobsSettled(cached.jobs)) return cached;
       if (!lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
+      // Frozen after an auth failure: no requests until Reload; say why instead of asking Jenkins again.
+      if (authFrozen) return { jobs: [], error: authError ?? BANNER.jenkins.tokenExpired };
       const token = getJenkinsToken(config.tokenEnvVar);
       if (!token) return { jobs: [], error: BANNER.jenkins.missingToken(config.tokenEnvVar) };
       const result = await lifecycle.runRequest(
@@ -319,7 +363,7 @@ export function useJenkinsCI(opts: {
         signal,
       );
       if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
-      if (run.status === "completed" && result.error === null) {
+      if (run.status === "completed" && result.error === null && jobsSettled(result.jobs)) {
         if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
         jobsCache.set(run.id, result);
         await persistTerminalRuns(repoPath, [run.headSha], epoch);
@@ -341,7 +385,7 @@ export function useJenkinsCI(opts: {
         }
       }
       const token = getJenkinsToken(config.tokenEnvVar);
-      if (!token) return "";
+      if (!token) throw new Error(BANNER.jenkins.missingToken(config.tokenEnvVar));
       const log = await lifecycle.runRequest(
         signal => fetchJenkinsConsoleLog(run, config.username, token, signal),
         signal,
@@ -361,11 +405,28 @@ export function useJenkinsCI(opts: {
       if (!lifecycle.isCurrent(epoch, repoPath)) return;
       if (!force) return;
       queriedSHAs.delete(sha);
-      await lifecycle.runRequest(signal => fetchForSHAs([sha], "full", signal));
+      // Reload commit is an explicit retry: it clears an auth freeze and reports its own outcome.
+      authFrozen = false;
+      let firstError: string | null;
+      try {
+        const result = await lifecycle.trackFetch(() =>
+          lifecycle.runRequest(signal => fetchForSHAs([sha], "full", signal)),
+        );
+        if (result.stale || !lifecycle.isCurrent(epoch, repoPath)) return;
+        firstError = result.firstError ?? null;
+      } catch (err) {
+        if (!lifecycle.isCurrent(epoch, repoPath) || (err instanceof Error && err.name === "AbortError")) return;
+        firstError = bannerOrFallback(err, BANNER.jenkins.fetchFailed, "Jenkins");
+      }
+      rememberAuthError(firstError);
+      if (firstError) {
+        actions.setProviderStatus("jenkins", providerError(firstError));
+        return;
+      }
+      if (!discoveryTruncated) actions.setProviderLastSuccessfulRefresh("jenkins", new Date());
+      if (state.providerStatusFor("jenkins").kind === "error") actions.setProviderStatus("jenkins", settledStatus());
     },
-    refresh: async () => {
-      await lifecycle.fetchRefresh(undefined, true);
-    },
+    refresh: refreshWindow,
     isAvailable,
     invalidate: lifecycle.resetCaches,
   };

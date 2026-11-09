@@ -1,7 +1,9 @@
-import { MouseButton, type MouseEvent, type Renderable } from "@opentui/core";
-import { createEffect, createMemo, createSignal, For, Show, untrack } from "solid-js";
+import type { Renderable } from "@opentui/core";
+import { createEffect, createMemo, createSignal, For, on, Show, untrack } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
 import { useT } from "../../hooks/use-t";
+import { BUSY } from "../../utils/busy-text";
+import { ProviderActionRow, ProviderSummaryRow, ScrollingLabel, useDetailRowMouse } from "../shared/detail-rows";
 import { type StatusCategory, statusIcon } from "../shared/status";
 import { openShiftStatusColor } from "./graph-columns";
 import {
@@ -96,30 +98,20 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
   const commitLoading = () => props.isLoading?.(props.sha) ?? false;
   const reloadBusy = () => commitLoading() || !!props.loading;
   const liveUnavailable = () => !!props.liveUnavailable;
-  const reloadEnabled = () => !liveUnavailable() && !props.unavailableReason;
+  // An expired token only stops automatic fetches (below); Reload commit stays available as the explicit retry.
+  const reloadEnabled = () => !props.unavailableReason;
   const liveAge = () => props.liveAge?.() ?? "";
   const [expandedNamespaces, setExpandedNamespaces] = createSignal<Set<string>>(new Set());
   const itemRefs: Renderable[] = [];
   const refsByKey = new Map<string, Renderable>();
-  const [hoveredKey, setHoveredKey] = createSignal<string | null>(null);
-  const mouseRow = (key: string, index: () => number) => ({
-    onMouseOver: () => setHoveredKey(key),
-    onMouseOut: () => setHoveredKey(null),
-    onMouseDown: (event: MouseEvent) => {
-      if (!props.mouseEnabled || event.button !== MouseButton.LEFT) return;
-      event.preventDefault();
-      event.stopPropagation();
-      if (index() < 0) return;
-      if (key === "reload" && (!reloadEnabled() || reloadBusy())) return;
-      props.onMouseFocus?.();
-      props.setDetailCursorIndex(index());
-      activateCurrentItem();
-    },
+  const rows = useDetailRowMouse({
+    mouseEnabled: () => props.mouseEnabled,
+    onMouseFocus: props.onMouseFocus,
+    setDetailCursorIndex: props.setDetailCursorIndex,
+    activate: () => activateCurrentItem(),
+    inert: key => key === "reload" && (!reloadEnabled() || reloadBusy()),
   });
-  const hoverBg = (key: string) =>
-    props.mouseEnabled && hoveredKey() === key && (key !== "reload" || (reloadEnabled() && !reloadBusy()))
-      ? t().backgroundElement
-      : undefined;
+  const { mouseRow, hoverBg } = rows;
 
   const flatItemKey = (item: FlatItem) => {
     if (item.kind === "reload") return "reload";
@@ -135,10 +127,12 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
     if (props.navRef) props.navRef.itemRefs = itemRefs;
   };
 
-  const namespaces = createMemo(() => data()?.namespaces ?? []);
+  // Namespaces without matched resources are left out of both the tree and the cursor order (no invisible stops).
+  const namespaces = createMemo(() => (data()?.namespaces ?? []).filter(ns => namespaceResources(ns).length > 0));
   const resources = createMemo(() => namespaces().flatMap(namespaceResources));
-  const reloadLabel = () => (data() ? "Reload resources" : "Load resources");
-  const reloadHint = () => (reloadLabel() === "Load resources" ? "load" : "reload");
+  // Same wording as the CI tabs: the row (re)loads this commit's resources.
+  const reloadLabel = () => (data() ? "Reload commit" : "Load commit");
+  const reloadHint = () => (data() ? "reload" : "load");
 
   const flatItems = createMemo<FlatItem[]>(() => [
     ...(reloadEnabled() ? [{ kind: "reload" as const }] : []),
@@ -171,12 +165,41 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
     void props.fetchCommitData?.(sha);
   });
 
+  // A new commit opens every namespace with the cursor on top. Live updates for the same commit keep the
+  // user's open/closed choices (new namespaces open) and keep the cursor on the same row.
+  let expansionSha: string | null = null;
+  let knownNamespaces = new Set<string>();
   createEffect(() => {
-    props.sha;
+    const sha = props.sha;
     const names = namespaces().map(ns => ns.namespace);
-    setExpandedNamespaces(new Set(names));
-    props.setDetailCursorIndex(0);
+    if (sha !== expansionSha) {
+      expansionSha = sha;
+      knownNamespaces = new Set(names);
+      setExpandedNamespaces(new Set(names));
+      props.setDetailCursorIndex(0);
+      return;
+    }
+    const added = names.filter(name => !knownNamespaces.has(name));
+    knownNamespaces = new Set(names);
+    if (added.length > 0) setExpandedNamespaces(prev => new Set([...prev, ...added]));
   });
+
+  let cursorSha: string | null = null;
+  createEffect(
+    on(flatItems, (items, previous) => {
+      const sha = untrack(() => props.sha);
+      if (sha !== cursorSha || !previous) {
+        cursorSha = sha;
+        return;
+      }
+      const index = untrack(() => props.detailCursorIndex());
+      const before = previous[index];
+      if (!before) return;
+      const key = flatItemKey(before);
+      const next = items.findIndex(item => flatItemKey(item) === key);
+      if (next >= 0 && next !== index) props.setDetailCursorIndex(next);
+    }),
+  );
 
   createEffect(() => {
     const count = flatItems().length;
@@ -235,9 +258,13 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
           {lead}
           {connector}
         </text>
-        <text selectable={!props.mouseEnabled} flexShrink={1} wrapMode="none" truncate fg={textColor()}>
-          {compactResourceName(resource)}
-        </text>
+        <ScrollingLabel
+          selectable={!props.mouseEnabled}
+          text={compactResourceName(resource)}
+          active={isCursored()}
+          fg={textColor()}
+          grow={false}
+        />
         <Show when={isCachedOpenShiftResource(resource)}>
           <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
             {" (cached)"}
@@ -255,48 +282,28 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
   const isReloadCursored = () => reloadIdx() >= 0 && props.detailFocused() && props.detailCursorIndex() === reloadIdx();
   const reloadStatus = () => {
     if (liveUnavailable()) return "";
-    if (reloadBusy()) return "loading...";
+    if (reloadBusy()) return BUSY.fetchingResources;
     return liveAge();
   };
 
   return (
     <box flexDirection="column" width="100%">
-      <box
-        {...mouseRow("reload", reloadIdx)}
-        ref={(el: Renderable) => {
+      <ProviderActionRow
+        label={reloadLabel()}
+        status={reloadStatus()}
+        disabled={!reloadEnabled()}
+        cursored={isReloadCursored()}
+        mouseEnabled={props.mouseEnabled}
+        rows={rows}
+        rowKey="reload"
+        index={reloadIdx}
+        rowRef={el => {
           refsByKey.set("reload", el);
           syncItemRefs();
         }}
-        flexDirection="row"
-        width="100%"
-        backgroundColor={isReloadCursored() ? t().backgroundElementActive : hoverBg("reload")}
-      >
-        <text
-          selectable={!props.mouseEnabled}
-          flexGrow={1}
-          fg={!reloadEnabled() ? t().foregroundMuted : isReloadCursored() ? t().accent : t().foreground}
-          wrapMode="none"
-        >
-          {reloadLabel()}
-        </text>
-        <Show when={reloadStatus()}>
-          <text selectable={!props.mouseEnabled} flexShrink={0} fg={t().foregroundMuted} wrapMode="none">
-            {reloadStatus()}
-          </text>
-        </Show>
-      </box>
+      />
       <Show when={!!data()}>
-        <box flexDirection="row" width="100%">
-          <box flexGrow={1}>
-            <text fg={t().foregroundMuted} wrapMode="none">
-              total resources
-            </text>
-          </box>
-          <box flexShrink={0} width={2} />
-          <text fg={t().foregroundMuted} wrapMode="none">
-            {resources().length}
-          </text>
-        </box>
+        <ProviderSummaryRow label="total resources" count={resources().length} />
       </Show>
       <Show when={resources().length > 0}>
         <box flexDirection="column" width="100%">
@@ -335,50 +342,53 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
                     >
                       {namespaceIsExpanded() ? "▾ " : "▸ "}
                     </text>
-                    <text
+                    <ScrollingLabel
                       selectable={!props.mouseEnabled}
-                      flexGrow={1}
-                      flexShrink={1}
-                      wrapMode="none"
-                      truncate
+                      text={ns.namespace}
+                      active={isNamespaceCursored()}
                       fg={isNamespaceCursored() ? t().accent : t().foreground}
-                    >
-                      {ns.namespace}
-                    </text>
+                    />
                     <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
                       {String(nsResources().length).padStart(3)}
                     </text>
                   </box>
 
                   <Show when={namespaceIsExpanded()}>
-                    <For each={RESOURCE_GROUPS}>
-                      {group => (
-                        <Show when={ns[group.key].length > 0}>
-                          <box flexDirection="row" width="100%">
-                            <text flexShrink={0} wrapMode="none" fg={t().border}>
-                              {childLead()}├─{" "}
-                            </text>
-                            <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
-                              {group.label}
-                            </text>
-                          </box>
-                          <For each={ns[group.key]}>
-                            {(resource, resourceIdx) =>
-                              renderResourceRow(
-                                resource,
-                                `${childLead()}│  `,
-                                resourceIdx() === ns[group.key].length - 1 ? "└─ " : "├─ ",
-                              )
-                            }
-                          </For>
-                        </Show>
-                      )}
+                    {/* Kind groups, then ImageStreams; the last one closes the tree with └─ like CI runs do. */}
+                    <For each={RESOURCE_GROUPS.filter(group => ns[group.key].length > 0)}>
+                      {(group, groupIdx) => {
+                        const groupIsLast = () =>
+                          ns.imageStreamTags.length === 0 &&
+                          groupIdx() === RESOURCE_GROUPS.filter(entry => ns[entry.key].length > 0).length - 1;
+                        return (
+                          <>
+                            <box flexDirection="row" width="100%">
+                              <text flexShrink={0} wrapMode="none" fg={t().border}>
+                                {childLead()}
+                                {groupIsLast() ? "└─ " : "├─ "}
+                              </text>
+                              <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
+                                {group.label}
+                              </text>
+                            </box>
+                            <For each={ns[group.key]}>
+                              {(resource, resourceIdx) =>
+                                renderResourceRow(
+                                  resource,
+                                  `${childLead()}${groupIsLast() ? "   " : "│  "}`,
+                                  resourceIdx() === ns[group.key].length - 1 ? "└─ " : "├─ ",
+                                )
+                              }
+                            </For>
+                          </>
+                        );
+                      }}
                     </For>
 
                     <Show when={ns.imageStreamTags.length > 0}>
                       <box flexDirection="row" width="100%">
                         <text flexShrink={0} wrapMode="none" fg={t().border}>
-                          {childLead()}├─{" "}
+                          {childLead()}└─{" "}
                         </text>
                         <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
                           ImageStreams
@@ -386,14 +396,15 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
                       </box>
                       <For each={groupedImageStreams(ns.imageStreamTags)}>
                         {(stream, streamIdx) => {
-                          const streamLead = () =>
-                            childLead() +
-                            (streamIdx() === groupedImageStreams(ns.imageStreamTags).length - 1 ? "   " : "│  ");
+                          const streamIsLast = () => streamIdx() === groupedImageStreams(ns.imageStreamTags).length - 1;
+                          // ImageStreams is always the last group, so its children hang off blank space.
+                          const streamLead = () => `${childLead()}   `;
                           return (
                             <box flexDirection="column" width="100%">
                               <box flexDirection="row" width="100%">
                                 <text flexShrink={0} wrapMode="none" fg={t().border}>
-                                  {streamLead()}├─{" "}
+                                  {streamLead()}
+                                  {streamIsLast() ? "└─ " : "├─ "}
                                 </text>
                                 <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
                                   {stream.stream}
@@ -403,7 +414,7 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
                                 {(tag, tagIdx) =>
                                   renderResourceRow(
                                     tag,
-                                    `${streamLead()}│  `,
+                                    `${streamLead()}${streamIsLast() ? "   " : "│  "}`,
                                     tagIdx() === stream.tags.length - 1 ? "└─ " : "├─ ",
                                   )
                                 }

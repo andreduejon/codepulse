@@ -209,7 +209,38 @@ export class ShaSqliteCache<T extends { sha: string }> {
     }
   }
 
-  async read(repoPath: string, revision: string): Promise<T | null> {
+  /**
+   * Every valid snapshot of one repository, in one query and without marking any as used, so showing the whole
+   * cache does not change which snapshots are evicted first. Invalid rows are skipped (`read` deletes them).
+   */
+  async peekAll(repoPath: string): Promise<T[]> {
+    const { hash } = await repositoryIdentity(repoPath);
+    try {
+      return providerCacheDatabase(this.root)
+        .query<{ sha: string; payload: string }, [string, string]>(
+          "SELECT sha, payload FROM snapshots WHERE provider = ? AND repo_hash = ?",
+        )
+        .all(this.provider, hash)
+        .flatMap(row => {
+          let value: unknown;
+          try {
+            value = JSON.parse(row.payload);
+          } catch {
+            return [];
+          }
+          return this.isEntry(value) && value.sha.toLowerCase() === row.sha ? [value] : [];
+        });
+    } catch (error) {
+      reportCacheError(this.root, error);
+      return [];
+    }
+  }
+
+  /**
+   * One commit's snapshot. A read marks it as used for eviction; `touch: false` only shows it, for commits that are
+   * displayed but not worked with (cached history below a provider's fetch depth).
+   */
+  async read(repoPath: string, revision: string, options?: { touch?: boolean }): Promise<T | null> {
     const epoch = writeEpochs.get(this.root) ?? 0;
     const sha = assertExactSha(revision);
     const { hash } = await repositoryIdentity(repoPath);
@@ -238,7 +269,7 @@ export class ShaSqliteCache<T extends { sha: string }> {
         }
         return null;
       }
-      this.touch(db, hash, sha, epoch);
+      if (options?.touch !== false) this.touch(db, hash, sha, epoch);
       return value;
     } catch (error) {
       reportCacheError(this.root, error);

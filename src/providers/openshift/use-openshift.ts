@@ -47,7 +47,8 @@ export interface UseOpenShiftResult {
   loadBuildLog: (resource: OpenShiftResource, force?: boolean) => Promise<string>;
   loadPodLog: (resource: OpenShiftResource, container?: string) => Promise<string>;
   followLog: (resource: OpenShiftResource, signal: AbortSignal, onText: (text: string) => void) => Promise<void>;
-  loadResourceObject: (resource: OpenShiftResource) => Promise<unknown>;
+  /** The resource's object; `force` (refresh) asks the API instead of using the embedded or cached copy. */
+  loadResourceObject: (resource: OpenShiftResource, force?: boolean) => Promise<unknown>;
 }
 
 function emptyNamespace(namespace: string): OpenShiftNamespaceData {
@@ -58,6 +59,24 @@ function emptyNamespace(namespace: string): OpenShiftNamespaceData {
     deployments: [],
     deploymentConfigs: [],
     pods: [],
+  };
+}
+
+/**
+ * A live list that failed for some namespace/kind keeps that slice of the previous list, so a failed request does not
+ * look like the workloads went away. Successful slices replace their previous contents as usual.
+ */
+export function keepFailedLiveSlices(
+  previous: OpenShiftListedInventory | null | undefined,
+  next: OpenShiftListedInventory,
+): OpenShiftListedInventory {
+  if (!previous || next.failures.length === 0) return next;
+  const failed = new Set(next.failures.map(failure => `${failure.namespace}:${failure.kind}`));
+  const keep = (item: { namespace: string; kind: string }) => failed.has(`${item.namespace}:${item.kind}`);
+  return {
+    ...next,
+    resources: [...next.resources, ...previous.resources.filter(keep)],
+    controllers: [...next.controllers, ...previous.controllers.filter(keep)],
   };
 }
 
@@ -179,7 +198,13 @@ export function useOpenShift(opts: {
 
   createEffect(() => {
     if (configAccessor().enabled === true)
-      state.providers.register({ id: "openshift", displayName: "OpenShift", isAvailable });
+      state.providers.register({
+        id: "openshift",
+        displayName: "OpenShift",
+        isAvailable,
+        // Build inventory (lifecycle) or the live list before watches start; streaming watches are not "fetching".
+        activity: () => (lifecycle.isFetching() || liveState() === "loading" ? "fetching" : null),
+      });
     else {
       state.providers.unregister("openshift");
       if (untrack(state.activeProviderView) === "openshift") actions.setActiveProviderView("git");
@@ -188,9 +213,17 @@ export function useOpenShift(opts: {
 
   const commits = new Map<string, OpenShiftCommitData>();
   const seeds = new Map<string, OpenShiftCommitData>();
+  /** Commits in the disk cache at the last hydration: a refresh keeps them, also below the fetch depth. */
+  const cachedSHAs = new Set<string>();
+  /**
+   * Older commits only shown from the cache. A refresh does not save them again (that would mark every one as used
+   * for eviction); opening one makes it a commit the user works with, saved like before.
+   */
+  const shownFromCache = new Set<string>();
   const queriedSHAs = new Set<string>();
   const [version, setVersion] = createSignal(0);
-  const [liveLabel, setLiveLabel] = createSignal("");
+  /** Live list/watch state: `loading` while a live list is requested, `live` while watches stream. */
+  const [liveState, setLiveState] = createSignal<"idle" | "loading" | "live">("idle");
   const [watchEpoch, setWatchEpoch] = createSignal(0);
   let watchGen = 0;
   const live = {
@@ -208,6 +241,37 @@ export function useOpenShift(opts: {
     if (!getOpenShiftToken(config.tokenEnvVar)) return BANNER.openshift.missingToken(config.tokenEnvVar);
     return BANNER.openshift.unavailable;
   }
+
+  /**
+   * The status message the live list itself set (a failed or partial list). A later good list clears only that one,
+   * never a build-inventory or other error it does not own.
+   */
+  // Owned by identity, not wording: the build inventory can report the very same banner text.
+  let liveStatus: ReturnType<typeof providerError> | null = null;
+  const setLiveStatus = (kind: "error" | "warning", message: string) => {
+    liveStatus = kind === "error" ? providerError(message) : providerWarning(message);
+    actions.setProviderStatus("openshift", liveStatus);
+  };
+  const clearLiveStatus = () => {
+    if (liveStatus && state.providerStatusFor("openshift") === liveStatus)
+      actions.setProviderStatus("openshift", providerIdle());
+    liveStatus = null;
+  };
+
+  /**
+   * After a 401, automatic requests (polls, watches, view switches, selections) stop until an explicit Reload or
+   * Fetch retries, like GitHub and Jenkins. Cached data stays visible meanwhile.
+   */
+  let authFrozen = false;
+  /** Enter the freeze from any path: running watches stop now instead of streaming on. */
+  const freezeAuth = () => {
+    authFrozen = true;
+    setWatchEpoch(value => value + 1);
+  };
+  /** Start the live list again after a retry or a status-showing refresh: it may have stopped on a 401. */
+  const restartLive = (signal: AbortSignal | undefined, epoch: number) => {
+    if (!signal?.aborted && epoch === lifecycle.getEpoch() && !authFrozen) setWatchEpoch(value => value + 1);
+  };
 
   const lifecycle = useProviderFetchLifecycle({
     state,
@@ -234,18 +298,31 @@ export function useOpenShift(opts: {
     reportUnavailable: showStatus => {
       if (showStatus) actions.setProviderStatus("openshift", providerUnavailable(unavailableMessage()));
     },
-    runInitialFetch: async ({ signal, showStatus, epoch }) => {
-      await runBuildInventory({ signal, showStatus, epoch });
+    onCancelledStatus: () => {
+      if (state.providerStatusFor("openshift").kind === "loading")
+        actions.setProviderStatus("openshift", providerIdle());
     },
-    runRefresh: async ({ signal, showStatus, epoch }) => {
+    runInitialFetch: async ({ signal, showStatus, retry, epoch }) => {
+      if (authFrozen && !retry) return;
+      if (retry) authFrozen = false;
       await runBuildInventory({ signal, showStatus, epoch });
-      if (showStatus && !signal?.aborted && epoch === lifecycle.getEpoch()) setWatchEpoch(value => value + 1);
+      // A retry the queue merged into a first fetch restarts the live list too.
+      if (retry) restartLive(signal, epoch);
+    },
+    runRefresh: async ({ signal, showStatus, retry, epoch }) => {
+      if (authFrozen && !retry) return;
+      if (retry) authFrozen = false;
+      await runBuildInventory({ signal, showStatus, epoch });
+      if (showStatus || retry) restartLive(signal, epoch);
     },
     onResetCaches: () => {
+      authFrozen = false;
       commits.clear();
       seeds.clear();
+      cachedSHAs.clear();
+      shownFromCache.clear();
       live.listed = null;
-      setLiveLabel("");
+      setLiveState("idle");
       setWatchEpoch(value => value + 1);
       queriedSHAs.clear();
       setVersion(v => v + 1);
@@ -254,20 +331,27 @@ export function useOpenShift(opts: {
     },
   });
 
+  /**
+   * Every cached commit shows its builds, also below the fetch depth (the cache limit decides how many commits keep
+   * builds, the fetch depth only which ones the inventory asks about). Commits in the fetch window are read, which
+   * counts as a use for eviction; older ones are only peeked.
+   */
   async function hydrateCachedCandidates(repoPath: string, epoch: number): Promise<void> {
     if (!lifecycle.isCurrent(epoch, repoPath)) return;
-    const cached = await disk.list(repoPath);
+    const peeked = await disk.peekAll(repoPath);
     if (!lifecycle.isCurrent(epoch, repoPath)) return;
-    if (cached.length === 0) return;
-    const hints = selectOpenShiftCandidateSHAs(collectTopSHAs(state.graphRows(), config.fetchDepth), cached);
+    cachedSHAs.clear();
+    for (const entry of peeked) cachedSHAs.add(entry.sha.toLowerCase());
+    const window = new Set(collectTopSHAs(state.graphRows(), config.fetchDepth).map(sha => sha.toLowerCase()));
     let changed = false;
-    for (const sha of hints) {
-      if (!lifecycle.isCurrent(epoch, repoPath)) return;
+    for (const cached of peeked) {
+      const sha = cached.sha.toLowerCase();
       if (commits.has(sha)) continue;
-      const entry = await disk.read(repoPath, sha);
+      const entry = window.has(sha) ? await disk.read(repoPath, sha) : cached;
       if (!lifecycle.isCurrent(epoch, repoPath)) return;
       if (!entry) continue;
       commits.set(sha, commitDataFromCacheEntry(entry));
+      if (!window.has(sha)) shownFromCache.add(sha);
       changed = true;
     }
     if (changed) setVersion(v => v + 1);
@@ -301,7 +385,9 @@ export function useOpenShift(opts: {
     const allowed = eligibleSHAs();
     const next = new Map<string, OpenShiftCommitData>();
     for (const [sha, commit] of data) {
-      if (allowed.has(sha.toLowerCase()) || commits.has(sha) || commits.has(sha.toLowerCase())) next.set(sha, commit);
+      const key = sha.toLowerCase();
+      if (allowed.has(key) || ((commits.has(sha) || commits.has(key)) && !shownFromCache.has(key)))
+        next.set(sha, commit);
     }
     return next.size > 0 ? next : data;
   }
@@ -321,6 +407,7 @@ export function useOpenShift(opts: {
       });
       if (args.signal?.aborted || !lifecycle.isCurrent(args.epoch, repoPath)) return;
       if (result.error === BANNER.openshift.tokenExpired) {
+        freezeAuth();
         publish();
         actions.setProviderStatus("openshift", providerError(BANNER.openshift.tokenExpired));
         return;
@@ -332,8 +419,9 @@ export function useOpenShift(opts: {
       }
       seeds.clear();
       for (const [sha, commit] of result.data) seeds.set(sha.toLowerCase(), commit);
+      // Window commits and cached older ones take the builds the cluster still lists for them.
       const candidates = selectOpenShiftCandidateSHAs(
-        collectTopSHAs(state.graphRows(), config.fetchDepth),
+        [...collectTopSHAs(state.graphRows(), config.fetchDepth), ...cachedSHAs],
         seeds.keys(),
       );
       const forDisk = filterToEligible(result.data);
@@ -342,6 +430,7 @@ export function useOpenShift(opts: {
       const allowed = eligibleSHAs();
       for (const sha of [...commits.keys()]) {
         if (allowed.has(sha.toLowerCase()) || candidates.has(sha) || seeds.has(sha)) continue;
+        if (cachedSHAs.has(sha.toLowerCase())) continue;
         commits.delete(sha);
       }
       for (const sha of candidates) {
@@ -350,10 +439,12 @@ export function useOpenShift(opts: {
       }
       publish();
       lifecycle.noteFetchStarted();
+      // A status the live list set (a live 401 that froze requests, a failed list) is the live list's to clear.
+      const liveOwned = liveStatus !== null && state.providerStatusFor("openshift") === liveStatus;
       if (result.error) {
-        actions.setProviderStatus("openshift", providerWarning(result.error));
+        if (!liveOwned) actions.setProviderStatus("openshift", providerWarning(result.error));
       } else {
-        actions.setProviderStatus("openshift", providerIdle());
+        if (!liveOwned) actions.setProviderStatus("openshift", providerIdle());
         actions.setProviderLastSuccessfulRefresh("openshift", new Date());
       }
     } catch (err) {
@@ -363,6 +454,7 @@ export function useOpenShift(opts: {
         err instanceof Error && err.message === BANNER.openshift.tokenExpired
           ? BANNER.openshift.tokenExpired
           : BANNER.openshift.inventoryFailed;
+      if (message === BANNER.openshift.tokenExpired) freezeAuth();
       publish();
       actions.setProviderStatus("openshift", providerError(message));
     }
@@ -396,19 +488,30 @@ export function useOpenShift(opts: {
     if (!token) return;
     const gen = ++watchGen;
     let delayMs = 1000;
-    setLiveLabel("loading...");
+    setLiveState("loading");
     try {
       while (!signal.aborted && lifecycle.isCurrent(epoch, repoPath)) {
         try {
-          setLiveLabel("loading...");
+          setLiveState("loading");
           const listed = await fetchOpenShiftResources(config, token, signal, "live", { commitShas: [] });
           if (signal.aborted || !lifecycle.isCurrent(epoch, repoPath)) return;
           if (listed.error === BANNER.openshift.tokenExpired) {
-            actions.setProviderStatus("openshift", providerError(BANNER.openshift.tokenExpired));
+            authFrozen = true;
+            setLiveStatus("error", BANNER.openshift.tokenExpired);
             return;
           }
-          live.listed = listed;
-          applyLive(listed);
+          // Every request failed: keep the last live data visible, report, and retry with backoff.
+          if (listed.successfulRequests === 0 && listed.error) {
+            setLiveStatus("error", listed.error);
+            await sleep(delayMs, signal);
+            delayMs = Math.min(delayMs * 2, 10_000);
+            continue;
+          }
+          const merged = keepFailedLiveSlices(live.listed, listed);
+          live.listed = merged;
+          applyLive(merged);
+          if (listed.error) setLiveStatus("warning", listed.error);
+          else clearLiveStatus();
           const child = new AbortController();
           const onAbort = () => child.abort();
           signal.addEventListener("abort", onAbort, { once: true });
@@ -437,14 +540,23 @@ export function useOpenShift(opts: {
               );
             }),
           );
-          const running = watches.filter((job): job is NonNullable<typeof job> => job !== null);
-          setLiveLabel(running.length > 0 ? "live" : "");
+          // An auth failure on one watch ends the others too, so the freeze does not wait on long-lived streams.
+          const running = watches
+            .filter((job): job is NonNullable<typeof job> => job !== null)
+            .map(job =>
+              job.then(result => {
+                if (result === "auth") child.abort();
+                return result;
+              }),
+            );
+          setLiveState(running.length > 0 ? "live" : "idle");
           const results = running.length > 0 ? await Promise.all(running) : [];
-          if (!signal.aborted && lifecycle.isCurrent(epoch, repoPath)) setLiveLabel("loading...");
+          if (!signal.aborted && lifecycle.isCurrent(epoch, repoPath)) setLiveState("loading");
           signal.removeEventListener("abort", onAbort);
           if (signal.aborted || !lifecycle.isCurrent(epoch, repoPath)) return;
           if (results.includes("auth")) {
-            actions.setProviderStatus("openshift", providerError(BANNER.openshift.tokenExpired));
+            authFrozen = true;
+            setLiveStatus("error", BANNER.openshift.tokenExpired);
             return;
           }
           if (results.length > 0 && results.every(result => result === "forbidden")) {
@@ -456,7 +568,7 @@ export function useOpenShift(opts: {
         } catch (err) {
           if (signal.aborted || !lifecycle.isCurrent(epoch, repoPath)) return;
           debugError("OpenShift", err);
-          setLiveLabel("loading...");
+          setLiveState("loading");
           try {
             await sleep(delayMs, signal);
             delayMs = Math.min(delayMs * 2, 10_000);
@@ -466,19 +578,19 @@ export function useOpenShift(opts: {
         }
       }
     } finally {
-      if (gen === watchGen) setLiveLabel("");
+      if (gen === watchGen) setLiveState("idle");
     }
   }
 
   createEffect(() => {
     if (opts.suspended?.()) {
-      setLiveLabel("");
+      setLiveState("idle");
       return;
     }
     configAccessor();
     state.repoPath();
     watchEpoch();
-    if (state.activeProviderView() !== "openshift" || !isAvailable()) return;
+    if (state.activeProviderView() !== "openshift" || !isAvailable() || authFrozen) return;
     const epoch = lifecycle.getEpoch();
     const ctrl = new AbortController();
     void runWatchSession(ctrl.signal, epoch);
@@ -492,14 +604,18 @@ export function useOpenShift(opts: {
       version();
       return commits.get(sha.toLowerCase()) ?? null;
     },
-    refresh: async () => lifecycle.fetchRefresh(undefined, true),
+    refresh: async () => lifecycle.fetchRefresh(undefined, true, true),
     fetchCommitDataForSHA: async (sha, force) => {
       if (opts.suspended?.()) return;
       try {
+        shownFromCache.delete(sha.toLowerCase());
         if (!adoptCommit(sha) && !force) return;
         if (force) {
-          setLiveLabel("loading...");
-          setWatchEpoch(value => value + 1);
+          // Setup missing: nothing can load, so do not look busy (the row is disabled; guard the direct call too).
+          if (!isAvailable()) return;
+          // Reload commit is an explicit retry: it lifts an auth freeze and reloads the build inventory as well as
+          // the live list (OpenShift matches by window, so this is the same as :reload).
+          await lifecycle.fetchRefresh(undefined, true, true);
           return;
         }
         if (live.listed) applyLive(live.listed, new Set([sha.toLowerCase()]));
@@ -507,8 +623,8 @@ export function useOpenShift(opts: {
         debugError("OpenShift", err);
       }
     },
-    isLoading: () => liveLabel() === "loading...",
-    liveAge: () => liveLabel(),
+    isLoading: () => liveState() === "loading",
+    liveAge: () => (liveState() === "live" ? "live" : ""),
     isAvailable,
     invalidate: lifecycle.resetCaches,
     loadBuildLog: async (resource, force = false) => {
@@ -564,12 +680,12 @@ export function useOpenShift(opts: {
         signal,
       );
     },
-    loadResourceObject: async resource => {
+    loadResourceObject: async (resource, force = false) => {
       const epoch = lifecycle.getEpoch();
       const repoPath = state.repoPath();
-      if (resource.object !== undefined) return resource.object;
+      if (!force && resource.object !== undefined) return resource.object;
       if (!lifecycle.isCurrent(epoch, repoPath)) return null;
-      if (resource.kind === "Build" && resource.commitSha && isTerminalBuildStatus(resource.status)) {
+      if (!force && resource.kind === "Build" && resource.commitSha && isTerminalBuildStatus(resource.status)) {
         const entry = await disk.read(repoPath, resource.commitSha);
         if (!lifecycle.isCurrent(epoch, repoPath)) return null;
         const cached = entry?.builds.find(

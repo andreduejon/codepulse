@@ -52,3 +52,8 @@ export function statusColor(t: Theme, category: StatusCategory): string {
       return t.foregroundMuted;
   }
 }
+
+/** Every job and step has finished: only then can a run's jobs be cached as final. */
+export function jobsSettled(jobs: readonly { status: string; steps: readonly { status: string }[] }[]): boolean {
+  return jobs.every(job => job.status === "completed" && job.steps.every(step => step.status === "completed"));
+}

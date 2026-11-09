@@ -706,8 +706,7 @@ test("provider rows focus on the first click, retain focus after leave, and busy
       d.actions.setDetailFocused(false);
       d.setBusy(true);
       await d.flush();
-      const reloadLabel =
-        provider === "snyk" ? "Rescan commit" : provider === "openshift" ? "Reload resources" : "Reload commit";
+      const reloadLabel = provider === "snyk" ? "Rescan commit" : "Reload commit";
       const reloadPoint = d.point(reloadLabel);
       const bg = d.cell(reloadPoint.x, reloadPoint.y)?.bg;
       await d.move(reloadPoint.x, reloadPoint.y);

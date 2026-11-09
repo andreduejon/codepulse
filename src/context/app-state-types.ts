@@ -81,6 +81,7 @@ export interface SettingsState {
   /** `fetching` is loading more local history (scrolling), not a remote fetch. */
   fetchingHistory: Accessor<boolean>;
   hasMore: Accessor<boolean>;
+  historyError: Accessor<boolean>;
   keyboardScopeOverride: Accessor<KeyboardScope | null>;
 }
 
@@ -146,6 +147,7 @@ export interface SettingsActions {
   /** `history` marks loading more local history rather than a remote fetch; both block each other. */
   setFetching: (fetching: boolean, history?: boolean) => void;
   setHasMore: (hasMore: boolean) => void;
+  setHistoryError: (failed: boolean) => void;
   setKeyboardScopeOverride: (scope: KeyboardScope | null) => void;
 }
 

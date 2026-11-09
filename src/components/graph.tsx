@@ -7,7 +7,7 @@ import {
   type TextRenderable,
 } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/solid";
-import { createEffect, createMemo, createSelector, createSignal, For, onCleanup, Show } from "solid-js";
+import { createEffect, createMemo, createSelector, createSignal, For, onCleanup, Show, untrack } from "solid-js";
 import {
   AUTHOR_COL_WIDTH,
   COMPACT_THRESHOLD_WIDTH,
@@ -39,11 +39,13 @@ import {
   ActionsCountsColumn,
   ActionsDateColumn,
 } from "../providers/github-actions/graph-columns";
+import { type GraphColumnWidths, graphColumnWidths } from "../providers/graph-column-widths";
 import {
   lookupOpenShiftBadge,
   OpenShiftColumnHeaders,
   OpenShiftCountsColumn,
 } from "../providers/openshift/graph-columns";
+import type { GraphBadge, ProviderView } from "../providers/provider";
 import { SnykColumnHeaders, SnykCountsColumn, SnykScanColumn } from "../providers/snyk/graph-columns";
 import type { SnykScanResult } from "../providers/snyk/types";
 import { formatRelativeDate } from "../utils/date";
@@ -59,13 +61,61 @@ function useGraphDimensions(maxGraphColumns: () => number) {
   return { effectiveGraphColumns, viewportActive, graphWidth };
 }
 
+/** The subject keeps at least this many columns before provider columns or ref badges take more. */
+const MIN_SUBJECT_WIDTH = 20;
+/** Provider columns also leave room for one shortened ref badge and a `+N` badge (8 + 3 and `+N` + 3). */
+const MIN_REFS_WIDTH = 16;
+const NO_BADGES = new Map<string, GraphBadge>();
+
+/** Columns the graph panel gets: the terminal minus the sidebar (wide layout) and the panel's own padding. */
+function graphPanelWidth(terminalWidth: number): number {
+  // Detail panel box width = 25% of W (minWidth=60). Its paddingX=2 is internal, so it does NOT reduce the left
+  // panel's allocated width. 4 = left panel paddingX=2 each side.
+  const detailPanelWidth =
+    terminalWidth >= COMPACT_THRESHOLD_WIDTH
+      ? Math.max(Math.floor(terminalWidth * DETAIL_PANEL_WIDTH_FRACTION), 60)
+      : 0;
+  return terminalWidth - detailPanelWidth - 4;
+}
+
+/** Room for a row's refs, subject and the two right columns: after the graph, hash and description padding. */
+function rowTextRoom(terminalWidth: number, graphWidth: number): number {
+  return graphPanelWidth(terminalWidth) - graphWidth - HASH_COL_WIDTH - 3;
+}
+
+/**
+ * Provider columns grow to fit their chips (`graphColumnWidths`), but only into room beyond the subject's minimum;
+ * past that they keep their base widths (chips then clip) rather than squeezing the subject out.
+ */
+function budgetedColumnWidths(
+  view: ProviderView,
+  badges: ReadonlyMap<string, GraphBadge>,
+  terminalWidth: number,
+  graphWidth: number,
+): GraphColumnWidths {
+  const wanted = graphColumnWidths(view, badges);
+  const base = graphColumnWidths(view, NO_BADGES);
+  const room = Math.max(
+    base.first + base.second,
+    rowTextRoom(terminalWidth, graphWidth) - MIN_SUBJECT_WIDTH - MIN_REFS_WIDTH,
+  );
+  let excess = wanted.first + wanted.second - room;
+  if (excess <= 0) return wanted;
+  const first = Math.max(base.first, wanted.first - excess);
+  excess -= wanted.first - first;
+  return { first, second: Math.max(base.second, wanted.second - excess) };
+}
+
 export function ColumnHeader() {
   const t = useT();
   const { state } = useAppState();
   const leftPanelFocused = () => !state.detailFocused();
   const isProviderView = () => state.activeProviderView() !== "git";
+  const dimensions = useTerminalDimensions();
 
   const { graphWidth } = useGraphDimensions(() => state.maxGraphColumns());
+  const columnWidths = () =>
+    budgetedColumnWidths(state.activeProviderView(), state.graphBadges(), dimensions().width, graphWidth());
 
   return (
     <box flexDirection="column" width="100%" flexShrink={0}>
@@ -110,11 +160,11 @@ export function ColumnHeader() {
         {/* Author / Date columns — swapped for provider headers when in provider view */}
         {isProviderView() ? (
           state.activeProviderView() === "openshift" ? (
-            <OpenShiftColumnHeaders />
+            <OpenShiftColumnHeaders {...columnWidths()} />
           ) : state.activeProviderView() === "snyk" ? (
-            <SnykColumnHeaders />
+            <SnykColumnHeaders {...columnWidths()} />
           ) : (
-            <ActionsColumnHeaders />
+            <ActionsColumnHeaders {...columnWidths()} />
           )
         ) : (
           <>
@@ -194,13 +244,15 @@ function GraphLine(
     brightCommitHorizontals: () => Set<number> | undefined;
     snykGetCommitData?: (sha: string) => SnykScanResult | null;
     snykIsScanning?: (sha: string) => boolean;
-    openshiftIsLoading?: (sha: string) => boolean;
   }>,
 ) {
   const t = useT();
   const { state } = useAppState();
 
   const [hovered, setHovered] = createSignal(false);
+  /** Provider columns grow to fit their widest chips (within budget); header, row and subject width share these. */
+  const columnWidths = () =>
+    budgetedColumnWidths(state.activeProviderView(), state.graphBadges(), props.terminalWidth(), graphWidth());
 
   const commit = () => props.row.commit;
   const padCols = () => state.maxGraphColumns();
@@ -379,12 +431,44 @@ function GraphLine(
   // Width of the ref badges area for this row (variable per row).
   // Each badge renders as " name " (name + 2 spaces), with a gap of 1 between badges
   // and 1 paddingRight after the badge box. Returns 0 when no refs are visible.
-  const refBadgesWidth = createMemo(() => {
+  // Ref badge names are capped at 30 characters, and shorter when the row is tight, so the subject keeps
+  // MIN_SUBJECT_WIDTH (each badge takes name + 2, one gap between badges and one after them).
+  // When even 8-character badges do not fit, the refs that do not fit collapse into one muted `+N` badge; when not
+  // even one fits beside it, `+N` stands for all of them.
+  const refLayout = createMemo(() => {
     const refs = visibleRefs();
-    if (refs.length === 0) return 0;
-    // sum of (displayName + 2) for each badge + (refs.length - 1) gaps + 1 paddingRight
-    // Use truncateName to match the actual rendered width (capped at 30 chars).
-    return refs.reduce((acc, r) => acc + truncateName(r.name, 30).length + 2, 0) + (refs.length - 1) + 1;
+    if (refs.length === 0) return { shown: refs, hidden: 0, maxLength: 30 };
+    const room =
+      rowTextRoom(props.terminalWidth(), graphWidth()) -
+      columnWidths().first -
+      columnWidths().second -
+      MIN_SUBJECT_WIDTH;
+    // The checked-out branch (or a detached HEAD) keeps its badge first; the others in display order. Kept badges
+    // still render in display order.
+    const byPriority = [...refs].sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent));
+    const keep = (count: number) => {
+      const kept = new Set(byPriority.slice(0, count));
+      return refs.filter(ref => kept.has(ref));
+    };
+    for (let shown = refs.length; shown >= 1; shown--) {
+      const hidden = refs.length - shown;
+      // `+N` badge: its text + 2, plus one gap.
+      const overflow = hidden > 0 ? `+${hidden}`.length + 3 : 0;
+      // Each shown badge: name + 2, one gap between badges and one after them.
+      const perBadge = Math.floor((room - overflow) / shown) - 3;
+      if (perBadge >= 8) return { shown: keep(shown), hidden, maxLength: Math.min(30, perBadge) };
+    }
+    // Not even one shortened badge fits beside `+N`: all refs collapse into it, so the subject keeps its room.
+    return { shown: [], hidden: refs.length, maxLength: 8 };
+  });
+  const refMaxLength = () => refLayout().maxLength;
+
+  const refBadgesWidth = createMemo(() => {
+    const { shown, hidden } = refLayout();
+    if (shown.length === 0 && hidden === 0) return 0;
+    const badges = [...shown.map(r => truncateName(r.name, refMaxLength())), ...(hidden > 0 ? [`+${hidden}`] : [])];
+    // sum of (displayName + 2) for each badge + gaps between badges + 1 paddingRight
+    return badges.reduce((acc, name) => acc + name.length + 2, 0) + (badges.length - 1) + 1;
   });
 
   // Approximate available width for the subject text in the graph panel.
@@ -395,12 +479,7 @@ function GraphLine(
   //   + refBadgesWidth + AUTHOR_COL_WIDTH + 2 (author paddingRight) + DATE_COL_WIDTH
   //   + 4 (left panel paddingX=2 each side)
   const subjectAvailableWidth = createMemo(() => {
-    const W = props.terminalWidth();
-    // Detail panel box width = 25% of W (minWidth=60). Its paddingX=2 is internal,
-    // so it does NOT reduce the left panel's allocated width.
-    const detailPanelWidth =
-      W >= COMPACT_THRESHOLD_WIDTH ? Math.max(Math.floor(W * DETAIL_PANEL_WIDTH_FRACTION), 60) : 0;
-    const graphPanelWidth = W - detailPanelWidth - 4; // 4 = left panel paddingX=2 each side
+    const panelWidth = graphPanelWidth(props.terminalWidth());
     // Hash box: width=HASH_COL_WIDTH (internal paddingLeft NOT added separately — it's inside the fixed width).
     // Author box: width=AUTHOR_COL_WIDTH (internal paddingRight NOT added separately — same reason).
     // Date box: width=DATE_COL_WIDTH (no internal padding).
@@ -411,9 +490,9 @@ function GraphLine(
       1 + // desc box paddingLeft
       2 + // desc box paddingRight
       refBadgesWidth() +
-      AUTHOR_COL_WIDTH + // author box (width=15, internal paddingRight is inside that 15)
-      DATE_COL_WIDTH; // date box (width=15)
-    return Math.max(0, graphPanelWidth - fixedCols);
+      columnWidths().first + // author / provider status box (internal paddingRight is inside its width)
+      columnWidths().second; // date / provider time box
+    return Math.max(0, panelWidth - fixedCols);
   });
 
   const subjectText = () => (isUncommitted() ? "Staged and unstaged changes in working tree" : commit().subject);
@@ -466,17 +545,20 @@ function GraphLine(
         <box flexDirection="row" flexGrow={1} flexShrink={1} paddingLeft={1} paddingRight={2}>
           <Show when={visibleRefs().length > 0}>
             <box flexDirection="row" flexShrink={0} gap={1} paddingRight={1}>
-              <For each={visibleRefs()}>
+              <For each={refLayout().shown}>
                 {ri => (
                   <Badge
                     name={ri.name}
                     color={laneColor()}
                     dimmed={ri.type === "stash" || ri.type === "uncommitted" || isDimmed()}
-                    maxLength={30}
+                    maxLength={refMaxLength()}
                     noShrink
                   />
                 )}
               </For>
+              <Show when={refLayout().hidden > 0}>
+                <Badge name={`+${refLayout().hidden}`} dimmed noShrink />
+              </Show>
             </box>
           </Show>
           <text flexGrow={1} flexShrink={1} fg={effectiveTextColor()} wrapMode="none" truncate={bannerOverflow() === 0}>
@@ -504,22 +586,47 @@ function GraphLine(
               badge={lookupOpenShiftBadge(state.graphBadges(), commit().hash)}
               lane="live"
               active={props.active}
+              dimmed={isDimmed()}
+              width={columnWidths().first}
             />
             <OpenShiftCountsColumn
               badge={lookupOpenShiftBadge(state.graphBadges(), commit().hash)}
               lane="cache"
               active={props.active}
+              dimmed={isDimmed()}
+              width={columnWidths().second}
             />
           </>
         ) : state.activeProviderView() === "snyk" ? (
           <>
-            <SnykCountsColumn scan={props.snykGetCommitData?.(commit().hash) ?? null} active={props.active} />
-            <SnykScanColumn scan={props.snykGetCommitData?.(commit().hash) ?? null} active={props.active} />
+            <SnykCountsColumn
+              scan={props.snykGetCommitData?.(commit().hash) ?? null}
+              active={props.active}
+              dimmed={isDimmed()}
+              width={columnWidths().first}
+            />
+            <SnykScanColumn
+              scan={props.snykGetCommitData?.(commit().hash) ?? null}
+              scanning={!isUncommitted() && (props.snykIsScanning?.(commit().hash) ?? false)}
+              active={props.active}
+              dimmed={isDimmed()}
+              width={columnWidths().second}
+            />
           </>
         ) : state.activeProviderView() !== "git" ? (
           <>
-            <ActionsCountsColumn badge={state.graphBadges().get(commit().hash)} active={props.active} />
-            <ActionsDateColumn badge={state.graphBadges().get(commit().hash)} active={props.active} />
+            <ActionsCountsColumn
+              badge={state.graphBadges().get(commit().hash)}
+              active={props.active}
+              dimmed={isDimmed()}
+              width={columnWidths().first}
+            />
+            <ActionsDateColumn
+              badge={state.graphBadges().get(commit().hash)}
+              active={props.active}
+              dimmed={isDimmed()}
+              width={columnWidths().second}
+            />
           </>
         ) : (
           <>
@@ -648,10 +755,10 @@ export default function GraphView(
     onSelectRow?: (index: number) => void;
     snykGetCommitData?: (sha: string) => SnykScanResult | null;
     snykIsScanning?: (sha: string) => boolean;
-    openshiftIsLoading?: (sha: string) => boolean;
   }>,
 ) {
   const { state, actions } = useAppState();
+  const t = useT();
   const dimensions = useTerminalDimensions();
 
   // For each row, compute which columns stay bright when ancestry highlighting
@@ -750,6 +857,12 @@ export default function GraphView(
   // Trigger pagination when cursor approaches the end of loaded rows.
   // Only fires when there are more commits to load and no load is in progress.
   const LOAD_MORE_THRESHOLD = 5;
+  /** Cursor position when a history page failed: no automatic retry until the cursor moves (or the wheel scrolls). */
+  let failedAtCursor: number | null = null;
+  createEffect(() => {
+    if (state.historyError()) failedAtCursor = untrack(() => state.cursorIndex());
+    else failedAtCursor = null;
+  });
   createEffect(() => {
     const idx = state.cursorIndex();
     const rows = state.graphRows();
@@ -757,6 +870,7 @@ export default function GraphView(
     if (total === 0) return;
     if (!state.hasMore()) return;
     if (state.fetching()) return;
+    if (state.historyError() && idx === failedAtCursor) return;
     if (idx >= total - LOAD_MORE_THRESHOLD) {
       props.onLoadMore?.();
     }
@@ -841,7 +955,6 @@ export default function GraphView(
                   brightCommitHorizontals={() => brightColumnsByHash()?.commitHorizontal.get(row.commit.hash)}
                   snykGetCommitData={props.snykGetCommitData}
                   snykIsScanning={props.snykIsScanning}
-                  openshiftIsLoading={props.openshiftIsLoading}
                   rowRef={el => {
                     elRef = el;
                     rowRefs[index()] = el;
@@ -850,6 +963,13 @@ export default function GraphView(
               );
             }}
           </For>
+          <Show when={state.historyError()}>
+            <box paddingLeft={2} height={1} flexShrink={0}>
+              <text wrapMode="none" truncate fg={t().warning}>
+                Could not load more history. Scroll to the end to retry.
+              </text>
+            </box>
+          </Show>
         </Show>
       </box>
     </scrollbox>

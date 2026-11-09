@@ -107,6 +107,8 @@ export function createAppState(
       setFetchingHistory(value && history);
     });
   const [hasMore, setHasMore] = createSignal(true);
+  /** The last page of older history failed to load; scrolling to the end retries. */
+  const [historyError, setHistoryError] = createSignal(false);
 
   // ── Provider / CI ─────────────────────────────────────────────────
   const [activeProviderView, setActiveProviderView] = createSignal<ProviderView>("git");
@@ -239,6 +241,7 @@ export function createAppState(
     fetching,
     fetchingHistory,
     hasMore,
+    historyError,
     detailLoading,
     detailCursorAction,
     detailActiveTab,
@@ -288,6 +291,7 @@ export function createAppState(
     setLastFetchTime,
     setFetching,
     setHasMore,
+    setHistoryError,
     setAncestrySet,
     setDetailLoading,
     setDetailCursorAction,

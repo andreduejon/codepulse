@@ -17,6 +17,7 @@
 
 import { createMemo, createSignal } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
+import { BUSY } from "../../utils/busy-text";
 import {
   ProviderRunTree,
   type ProviderTreeJob,
@@ -127,7 +128,8 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
       dataKey={props.sha}
       onOpenJobAction={(job, run, jobs) => props.onOpenJobLog?.(job.raw, run.raw, jobs?.map(entry => entry.raw) ?? [])}
       summaryLabel="total workflow runs"
-      jobsLoadingText="loading jobs..."
+      jobsLoadingText={BUSY.fetchingJobs}
+      reloadBusyText={BUSY.fetchingRuns}
       noJobsText=""
       onReloadCommit={async () => {
         if (reloadBusy() || props.unavailableReason) return;

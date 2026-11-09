@@ -51,10 +51,15 @@ and does not recreate the snapshot. The cache limit caps commit snapshots.
 Deleting or evicting a snapshot cascades to its logs. Snapshot updates preserve
 existing logs.
 A build deleted in Jenkins stays in the local cache.
-Auto refresh only re-queries SHAs that still show as running.
-Scrolling outside fetch size reads disk cache only — it does not query Jenkins.
-Details include **Reload commit** (Enter hint: `reload`) to query the selected
-SHA.
+Auto refresh only re-queries SHAs that still show as running; Reload and Fetch
+(`:reload`, `f`) re-query the whole graph window, so new builds on finished
+commits appear. Scrolling outside fetch size reads disk cache only — it does not
+query Jenkins. Details include **Reload commit** (Enter hint: `reload`) to query
+the selected SHA; a failed reload shows its error in the banner.
+
+Aborted builds show as cancelled (`○`, a grey chip in the graph) like aborted
+stages, and not-built builds as skipped. Entering a commit's **Jenkins** tab opens
+its first failed build. In the console log, `r` reloads it (a finished build's cached log does not change).
 
 Fetch size controls both the graph commit window and recent builds inspected per
 job. It is independent from cache retention.

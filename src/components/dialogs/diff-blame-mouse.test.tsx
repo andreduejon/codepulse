@@ -261,7 +261,7 @@ test("file arrows respect boundaries and lazy blame follows reactive targets, ca
     let resolveBlame!: (lines: BlameLine[]) => void;
     d.blameSpy.mockImplementationOnce(() => new Promise(resolve => (resolveBlame = resolve)));
     await d.click("b blame");
-    expect(d.frame()).toContain("loading...");
+    expect(d.frame()).toContain("reading blame");
     const signal = d.blameSpy.mock.calls[0][4];
     await d.click("b hide");
     await d.click("b blame");

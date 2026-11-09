@@ -1,20 +1,23 @@
 import type { Renderable } from "@opentui/core";
+import { useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, For, Show } from "solid-js";
 import { useAppState } from "../context/state";
 import type { DiffSource, DiffTarget, FileChange } from "../git/types";
+import { useBannerScroll } from "../hooks/use-banner-scroll";
 import { useFileTree } from "../hooks/use-file-tree";
 import { useT } from "../hooks/use-t";
+import { BUSY } from "../utils/busy-text";
 import { isCursored as _isCursored, itemHighlightBg as _itemHighlightBg } from "../utils/detail-cursor";
 import { buildDiffTarget } from "../utils/diff-target";
 import type { DetailNavRef } from "./detail-types";
-import { computeFileWidths } from "./detail-types";
+import { computeFileWidths, detailUsableWidth, fileRowOverflow } from "./detail-types";
 import { FileTreeEntry } from "./file-tree-entry";
 import { TotalLinesChangedRow } from "./total-lines-changed-row";
 
 export interface FileListViewProps {
   /** Reactive accessor returning the file list to display. */
   files: () => FileChange[];
-  /** When true, show "loading..." instead of "No modified files". */
+  /** When true, show `reading files...` instead of "No modified files". */
   loading?: () => boolean;
   /** Commit hash (newer side) for building diff targets. */
   commitHash: () => string;
@@ -28,6 +31,8 @@ export interface FileListViewProps {
   onOpenDiff?: (target: DiffTarget) => void;
   /** Opt-in for Files-tab row mouse controls. */
   mouseEnabled?: boolean;
+  /** Usable panel width (compact dialog); the sidebar width otherwise. */
+  contentWidth?: number;
   onMouseFocus?: () => void;
 }
 
@@ -67,6 +72,19 @@ export default function FileListView(props: Readonly<FileListViewProps>) {
       }
     }
     return items;
+  });
+
+  // A cursored name that does not fit banner-scrolls, like working-tree and stash file names.
+  const dimensions = useTerminalDimensions();
+  const cursoredOverflow = createMemo(() => {
+    if (!state.detailFocused()) return null;
+    const item = interactiveItems()[state.detailCursorIndex()];
+    const row = item ? fileTreeRows()[item.index] : undefined;
+    return row ? fileRowOverflow(row, detailUsableWidth(props.contentWidth, dimensions().width), fileWidths()) : null;
+  });
+  const bannerOffset = useBannerScroll(() => {
+    const info = cursoredOverflow();
+    return info ? info.text.length - info.visibleWidth : 0;
   });
 
   // Cursor helpers
@@ -165,7 +183,7 @@ export default function FileListView(props: Readonly<FileListViewProps>) {
       when={props.files().length > 0}
       fallback={
         <box flexGrow={1} alignItems="center" justifyContent="center">
-          <text fg={t().foregroundMuted}>{props.loading?.() ? "loading..." : "No modified files"}</text>
+          <text fg={t().foregroundMuted}>{props.loading?.() ? BUSY.readingFiles : "No modified files"}</text>
         </box>
       }
     >
@@ -185,7 +203,11 @@ export default function FileListView(props: Readonly<FileListViewProps>) {
               cursored={cursored()}
               collapsed={collapsed()}
               highlightBg={itemHighlightBg(itemIdx())}
-              scrolledName={null}
+              scrolledName={(() => {
+                const info = cursoredOverflow();
+                if (!cursored() || !info || info.text !== treeRow.name) return null;
+                return treeRow.name.substring(bannerOffset(), bannerOffset() + info.visibleWidth);
+              })()}
               addColWidth={fileWidths().addColWidth}
               delColWidth={fileWidths().delColWidth}
               ref={(el: Renderable) => {

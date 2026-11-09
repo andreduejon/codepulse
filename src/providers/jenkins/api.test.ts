@@ -14,6 +14,7 @@ import {
   fetchJenkinsRunJobs,
   fetchJenkinsRunsForBuilds,
   jenkinsApiUrl,
+  mapStatus,
   normalizeJenkinsJobUrl,
   resolveJenkinsJobs,
 } from "./api";
@@ -227,6 +228,15 @@ describe("buildJenkinsGraphBadges", () => {
     const badge = map.get("sha1") ?? { passCount: -1, failCount: -1 };
     expect(badge.passCount).toBe(2);
     expect(badge.failCount).toBe(1);
+  });
+  test("cancelled and skipped builds count as neutral, so a cancelled-only commit still shows a chip", () => {
+    const runs = [
+      { ...makeRun("sha1", "1"), conclusion: "cancelled" },
+      { ...makeRun("sha1", "2"), conclusion: "skipped" },
+    ];
+    const badge = buildJenkinsGraphBadges(runs).get("sha1");
+    expect(badge?.unknownCount).toBe(2);
+    expect(badge?.badge).toBe("unknown");
   });
 });
 
@@ -838,4 +848,69 @@ test("cached run requests stay on the job origin even when the stored run URL na
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+describe("mapStatus", () => {
+  test("aborted builds are cancelled and not-built builds skipped, matching their stages", () => {
+    expect(mapStatus({ building: false, result: "ABORTED" })).toEqual({ status: "completed", conclusion: "cancelled" });
+    expect(mapStatus({ building: false, result: "NOT_BUILT" })).toEqual({ status: "completed", conclusion: "skipped" });
+    expect(mapStatus({ building: false, result: "UNSTABLE" })).toEqual({ status: "completed", conclusion: "unstable" });
+    expect(mapStatus({ building: true, result: null })).toEqual({ status: "running", conclusion: null });
+  });
+});
+
+describe("fetchJenkinsConsoleLog failures", () => {
+  const run = {
+    id: "1",
+    name: "app",
+    status: "completed",
+    conclusion: "success",
+    headSha: "a".repeat(40),
+    runNumber: 1,
+    startedAt: null,
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    url: "https://jenkins.example.com/job/app/1/",
+    jobLabel: "app",
+    jobUrl: "https://jenkins.example.com/job/app",
+  };
+  test("a failed request throws its reason instead of looking like an empty log", async () => {
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = (async () => new Response("nope", { status: 401 })) as unknown as typeof fetch;
+      await expect(fetchJenkinsConsoleLog(run, "user", "token")).rejects.toThrow(BANNER.jenkins.tokenExpired);
+      globalThis.fetch = (async () => new Response("boom", { status: 500 })) as unknown as typeof fetch;
+      await expect(fetchJenkinsConsoleLog(run, "user", "token")).rejects.toThrow(BANNER.jenkins.logFailed);
+      globalThis.fetch = (async () => new Response("", { status: 200 })) as unknown as typeof fetch;
+      expect(await fetchJenkinsConsoleLog(run, "user", "token")).toBe("");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe("fetchJenkinsRunJobs failures", () => {
+  test("a failed stage request says stages failed, not a generic fetch failure", async () => {
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = (async () => {
+        throw new Error("socket hang up");
+      }) as unknown as typeof fetch;
+      const run = {
+        id: "1",
+        name: "app",
+        status: "completed",
+        conclusion: "success",
+        headSha: "a".repeat(40),
+        runNumber: 1,
+        startedAt: null,
+        updatedAt: "2026-01-01T00:00:00.000Z",
+        url: "https://jenkins.example.com/job/app/1/",
+        jobLabel: "app",
+        jobUrl: "https://jenkins.example.com/job/app",
+      };
+      expect((await fetchJenkinsRunJobs(run, "user", "token")).error).toBe(BANNER.jenkins.stagesFailed);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

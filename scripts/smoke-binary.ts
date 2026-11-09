@@ -48,9 +48,14 @@ async function waitForExit(): Promise<void> {
     throw new Error(`Smoke failed on exit: ${child?.exitCode}\n${stripVTControlCharacters(output)}`);
 }
 
+/** The graph's commit count: "1 commit" in a one-commit (shallow CI) clone, "12 commits" otherwise. */
+function graphVisible(): boolean {
+  return /\b\d+ commits?\b/.test(stripVTControlCharacters(output));
+}
+
 function cacheScreenVisible(): boolean {
   const text = stripVTControlCharacters(output).toLowerCase();
-  return text.includes("shift+r") && text.includes("reset all");
+  return text.includes("a reset all");
 }
 
 try {
@@ -76,13 +81,13 @@ try {
   );
   output = "";
   terminal.write("\r");
-  await waitFor("repository graph", () => stripVTControlCharacters(output).includes("commits"));
+  await waitFor("repository graph", graphVisible);
   terminal.write("q");
   await waitForExit();
   output = "";
   // Re-exec leaves a waiting parent, so resize tests need a directly owned app process.
   child = Bun.spawn([resolve(binary), resolve(repository)], { terminal, env });
-  await waitFor("direct repository graph", () => stripVTControlCharacters(output).includes("commits"));
+  await waitFor("direct repository graph", graphVisible);
   output = "";
   terminal.write(":cache\r");
   await waitFor("global cache screen", cacheScreenVisible);
@@ -96,7 +101,7 @@ try {
   await waitFor("cache screen resize recovery", cacheScreenVisible);
   output = "";
   terminal.write("\x1b");
-  await waitFor("cache screen return", () => stripVTControlCharacters(output).includes("commits"));
+  await waitFor("cache screen return", graphVisible);
   output = "";
   terminal.write(":cache\r");
   await waitFor("cache screen reopen", cacheScreenVisible);

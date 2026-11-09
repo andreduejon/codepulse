@@ -661,6 +661,9 @@ export function AppContent(props: Readonly<AppContentProps>) {
     onDismissTabNotice: dismissTabNotice,
   };
 
+  /** While a log dialog's search owns Esc, the app's Esc (cascade close) must not close the dialog. */
+  const setLogSearchScope = (active: boolean) => actions.setKeyboardScopeOverride(active ? "log-search" : null);
+
   /** Dialogs opened from the details return to the compact detail dialog when they close. */
   const closeToDetail = () => {
     if (layoutMode() === "compact" && state.detailFocused()) setDialog("detail");
@@ -678,7 +681,8 @@ export function AppContent(props: Readonly<AppContentProps>) {
   const providerTheme = createMemo(() => {
     const base = themeState.theme();
     const view = state.activeProviderView();
-    return { ...base, accent: providerAccent(base, view) };
+    // Git view keeps the theme's own accent (built-in themes set it equal to gitBg), so a custom accent applies.
+    return view === "git" ? base : { ...base, accent: providerAccent(base, view) };
   });
 
   return (
@@ -767,7 +771,6 @@ export function AppContent(props: Readonly<AppContentProps>) {
                         onLoadMore={loadMoreData}
                         snykGetCommitData={snyk.getCommitData}
                         snykIsScanning={snyk.isScanning}
-                        openshiftIsLoading={openShift.isLoading}
                         scrollboxRef={el => (graphScrollboxRef = el)}
                         suppressAutoScroll={() => pendingGraphScrollTop() != null}
                       />
@@ -916,8 +919,16 @@ export function AppContent(props: Readonly<AppContentProps>) {
                     searchFocused={searchFocused()}
                     onJumpToCommit={handleJumpToCommit}
                     onOpenDiff={handleOpenDiff}
-                    onClose={() => setDialog(null)}
+                    onClose={() => {
+                      // Same as Esc (handle-cascade-close): leaving compact details also leaves detail focus.
+                      batch(() => {
+                        actions.setDetailFocused(false);
+                        setDialog(null);
+                      });
+                    }}
                     {...providerDetailProps}
+                    message={screenMessage()}
+                    onDismissMessage={clearScreenMessage}
                   />
                 </Show>
                 {/* Job log dialog */}
@@ -930,6 +941,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                       run={target().run}
                       fetchLog={target().fetchLog}
                       onClose={closeToDetail}
+                      onSearchActive={setLogSearchScope}
                     />
                   )}
                 </Show>
@@ -941,8 +953,9 @@ export function AppContent(props: Readonly<AppContentProps>) {
                         item.kind === "Pod" ? openShift.loadPodLog(item) : openShift.loadBuildLog(item, force)
                       }
                       followLog={openShift.followLog}
-                      loadObject={item => openShift.loadResourceObject(item)}
+                      loadObject={(item, force) => openShift.loadResourceObject(item, force)}
                       onClose={closeToDetail}
+                      onSearchActive={setLogSearchScope}
                     />
                   )}
                 </Show>
