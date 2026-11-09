@@ -39,19 +39,20 @@ export function highlightMatch(text: string, query: string, color: string): JSX.
   ];
 }
 
-/** `index` is the filter row's cursor position in the owning tab. */
-export function useSnykFilter(props: Readonly<SnykDetailTabProps>, index = 1) {
+/** `position` is the filter row's cursor position in the owning tab (it moves when Scan leaves the cursor order). */
+export function useSnykFilter(props: Readonly<SnykDetailTabProps>, position: number | (() => number) = 1) {
+  const at = () => (typeof position === "function" ? position() : position);
   const [query, setQuery] = createSignal("");
   const [editing, setEditing] = createSignal(false);
   let autoEditSuppressed = false;
   const stop = () => {
-    autoEditSuppressed = props.detailCursorIndex() === index;
+    autoEditSuppressed = props.detailCursorIndex() === at();
     setEditing(false);
   };
   const start = () => {
     autoEditSuppressed = false;
     props.onMouseFocus?.();
-    props.setDetailCursorIndex(index);
+    props.setDetailCursorIndex(at());
     setEditing(true);
     props.navRef?.scrollToCursor?.();
   };
@@ -77,14 +78,14 @@ export function useSnykFilter(props: Readonly<SnykDetailTabProps>, index = 1) {
       event.preventDefault();
       event.stopPropagation();
       stop();
-      if (event.name === "up" || (event.name === "tab" && event.shift)) props.setDetailCursorIndex(index - 1);
+      if (event.name === "up" || (event.name === "tab" && event.shift)) props.setDetailCursorIndex(at() - 1);
       else if (event.name === "down" || event.name === "tab")
-        props.setDetailCursorIndex(Math.min(index + 1, (props.navRef?.itemCount ?? index + 1) - 1));
+        props.setDetailCursorIndex(Math.min(at() + 1, (props.navRef?.itemCount ?? at() + 1) - 1));
     }
     return true;
   };
   createEffect(() => {
-    if (!props.detailFocused() || props.detailCursorIndex() !== index || !props.scan) {
+    if (!props.detailFocused() || props.detailCursorIndex() !== at() || !props.scan) {
       autoEditSuppressed = false;
       setEditing(false);
     } else if (!autoEditSuppressed) setEditing(true);

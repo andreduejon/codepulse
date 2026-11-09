@@ -63,17 +63,27 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
   const initialRepoPath = repoPath();
   // ── loadData ──────────────────────────────────────────────────────
   let loadAbortCtrl: AbortController | null = null;
+  let loadMoreAbortCtrl: AbortController | null = null;
 
   async function loadData(branch?: string, stickyHash?: string, silent = false, preserveLoaded = false) {
     const path = repoPath();
-    // Cancel any in-flight load — user-initiated actions take priority
+    // Cancel any in-flight load — user-initiated actions take priority. A page of older history belongs to the
+    // previous load (another branch or view), so it must not merge into this one.
     if (loadAbortCtrl) loadAbortCtrl.abort();
     const ctrl = new AbortController();
     loadAbortCtrl = ctrl;
+    // Installed first: clearing `fetching` lets the graph ask for a page right away, and `loadAbortCtrl` is what
+    // turns that request down (it would use the old graph's offset on the new branch).
+    if (loadMoreAbortCtrl) {
+      loadMoreAbortCtrl.abort();
+      loadMoreAbortCtrl = null;
+      actions.setFetching(false);
+    }
 
     if (!silent) actions.setLoading(true);
-    // Reset pagination on every fresh load
+    // Reset pagination on every fresh load, including a failed older page from before (or another repository)
     actions.setHasMore(true);
+    actions.setHistoryError(false);
     try {
       actions.setRepoPath(path);
 
@@ -168,7 +178,6 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
   }
 
   // ── loadMoreData ──────────────────────────────────────────────────
-  let loadMoreAbortCtrl: AbortController | null = null;
 
   async function loadMoreData() {
     const path = repoPath();
@@ -181,6 +190,7 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
     const ctrl = new AbortController();
     loadMoreAbortCtrl = ctrl;
     actions.setFetching(true, true);
+    actions.setHistoryError(false);
 
     try {
       const pageSize = state.maxCount();
@@ -232,8 +242,9 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
       });
     } catch (err) {
       if (ctrl.signal.aborted) return;
-      // Non-fatal: debug only. Partial data stays valid.
+      // Non-fatal: the loaded graph stays valid; the graph's last row says so and scrolling to the end retries.
       debugError("Git", err);
+      if (repoPath() === path) actions.setHistoryError(true);
     } finally {
       if (loadMoreAbortCtrl === ctrl) {
         loadMoreAbortCtrl = null;

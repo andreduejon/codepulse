@@ -7,6 +7,7 @@ import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "so
 import packageJson from "../../package.json";
 import type { KnownRepoInfo } from "../config";
 import { removeRepoConfig } from "../config-write";
+import { SHIFT_JUMP } from "../constants";
 import { useT } from "../hooks/use-t";
 import type { KeyboardScope } from "../keyboard/scope";
 import {
@@ -128,7 +129,7 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
     setSavedRepos(prev => prev.filter(repo => repo.path !== row.repo.path));
   };
 
-  const moveCursor = (delta: 1 | -1) => {
+  const moveCursor = (delta: number) => {
     const selectable = selectableIndexes();
     const pos = selectable.indexOf(cursor());
     const nextPos = Math.max(0, Math.min(selectable.length - 1, pos + delta));
@@ -181,12 +182,12 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
       case "up":
       case "k":
         e.preventDefault();
-        moveCursor(-1);
+        moveCursor(e.shift ? -SHIFT_JUMP : -1);
         break;
       case "down":
       case "j":
         e.preventDefault();
-        moveCursor(1);
+        moveCursor(e.shift ? SHIFT_JUMP : 1);
         break;
       case "return": {
         e.preventDefault();

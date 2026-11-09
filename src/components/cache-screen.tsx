@@ -1,13 +1,14 @@
 import { join, resolve } from "node:path";
 import { MouseButton, type Renderable, type ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
-import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, Index, onCleanup, Show } from "solid-js";
 import packageJson from "../../package.json";
 import { getKnownRepoInfos } from "../config";
 import { useClipboard } from "../hooks/use-clipboard";
 import { useT } from "../hooks/use-t";
 import type { KeyboardScope } from "../keyboard/scope";
 import {
+  CACHE_INACTIVITY_MS,
   type CacheEvictionResult,
   type CacheRepositorySummary,
   evictRepositoryCache,
@@ -19,9 +20,15 @@ import {
 import { DEFAULT_PROVIDER_CACHE_ROOT } from "../providers/shared/sha-sqlite-cache";
 import { formatGraphDate } from "../utils/date";
 import { repoDisplayName } from "../utils/group-repos";
+import { duplicateNameDetails } from "../utils/project-selector-rows";
 import { scrollIndexedItemIntoView } from "../utils/scroll";
 import { KeyHint, KeyHintSeparator } from "./key-hint";
 import LogoBanner, { LOGO_HEIGHT, LOGO_WIDTH } from "./logo-banner";
+import MessageBox, { type UIMessageKind } from "./message-box";
+
+/** The list shows at most this many rows, like the repository switcher; the rest scrolls. */
+const MAX_LIST_ROWS = 16;
+const INACTIVITY_DAYS = Math.round(CACHE_INACTIVITY_MS / (24 * 60 * 60 * 1_000));
 
 interface CacheScreenProps {
   onClose: () => void;
@@ -37,12 +44,16 @@ type CacheRow =
   | { kind: "file"; id: string; name: string; path: string }
   | { kind: "repo"; id: string; label: string; repo: CacheRepository };
 type Confirmation =
+  | { kind: "reset"; label: string; repo: CacheRepositorySummary }
   | { kind: "reset-all"; count: number }
   | { kind: "evict"; label: string; repo: CacheRepositorySummary };
 
 const graphDate = (timestamp: number) => formatGraphDate(new Date(timestamp).toISOString());
 const cleanupDate = (timestamp: number) => (timestamp <= Date.now() ? "Due now" : graphDate(timestamp));
 const selectable = (row: CacheRow) => row.kind === "file" || row.kind === "repo";
+const asFile = (row: CacheRow) => (row.kind === "file" ? row : undefined);
+const asRepo = (row: CacheRow) => (row.kind === "repo" ? row : undefined);
+const headerLabel = (row: CacheRow) => (row.kind === "header" ? row.label : "");
 
 export default function CacheScreen(props: Readonly<CacheScreenProps>) {
   const t = useT();
@@ -86,6 +97,13 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
         a.lastAccessed - b.lastAccessed || name(a).localeCompare(name(b)) || a.repoPath.localeCompare(b.repoPath),
     );
   });
+  /** Same-named repositories get the path part that tells them apart, like in the repository selector. */
+  const nameDetails = createMemo(() =>
+    duplicateNameDetails(
+      repositories().map(repo => ({ path: repo.repoPath, repo })),
+      entry => name(entry.repo),
+    ),
+  );
   const rows = createMemo(() => {
     const path = summary()?.path ?? join(resolve(props.cacheRoot ?? DEFAULT_PROVIDER_CACHE_ROOT), "cache.sqlite");
     const rows: CacheRow[] = [
@@ -121,31 +139,52 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
   const selectableIndexes = createMemo(() => rows().flatMap((row, index) => (selectable(row) ? [index] : [])));
   const selected = () => rows()[cursor()];
   const blocked = () => busy() || confirmation() !== null;
-  const confirmationText = () => {
+  /** One message at a time, above the card like the repository switcher's: a confirmation, an error, or a result. */
+  const notice = (): { kind: UIMessageKind; title: string; lines: string[] } | null => {
     const action = confirmation();
-    if (!action) return "";
-    return action.kind === "reset-all"
-      ? `Reset timers for ${action.count} repositories?`
-      : `Evict only ${action.label} (all providers)?\n${action.repo.repoPath}`;
+    if (action?.kind === "reset") {
+      return {
+        kind: "warning",
+        title: `Reset ${action.label}?`,
+        lines: [`Starts a new ${INACTIVITY_DAYS}-day period across all providers.`, "Nothing is deleted."],
+      };
+    }
+    if (action?.kind === "reset-all") {
+      const repos = action.count === 1 ? "1 repository starts" : `${action.count} repositories start`;
+      return {
+        kind: "warning",
+        title: "Reset all inactivity timers?",
+        lines: [`${repos} a new ${INACTIVITY_DAYS}-day period.`, "Nothing is deleted."],
+      };
+    }
+    if (action?.kind === "evict") {
+      return {
+        kind: "warning",
+        title: `Evict ${action.label}?`,
+        lines: ["Deletes its cached data from every provider; other repositories keep theirs.", action.repo.repoPath],
+      };
+    }
+    if (error()) {
+      const [title = "", ...lines] = error().split("\n");
+      return { kind: "error", title, lines };
+    }
+    if (result()) return { kind: "info", title: result(), lines: [] };
+    return null;
   };
   const showLogo = () => dimensions().height >= 26;
   const cardWidth = () => Math.max(1, Math.min(LOGO_WIDTH, dimensions().width - 2));
-  const messageHeight = (message: string, limit = 3) =>
-    message
-      ? Math.min(
-          limit,
-          message
-            .split("\n")
-            .reduce((height, line) => height + Math.ceil(line.length / Math.max(1, cardWidth() - 3)), 0),
-        )
-      : 0;
-  const availableCardHeight = () => Math.max(1, dimensions().height - (showLogo() ? LOGO_HEIGHT + 2 : 0) - 2);
-  const confirmationHeight = () => messageHeight(confirmationText(), Math.max(1, availableCardHeight() - 5));
-  const cardHeight = () =>
-    Math.min(
-      rows().length + 4 + confirmationHeight() + messageHeight(error()) + messageHeight(result()),
-      availableCardHeight(),
-    );
+  /** Rows the notice takes: its padding, wrapped title and lines, and the gap below it. */
+  const noticeHeight = () => {
+    const current = notice();
+    if (!current) return 0;
+    // Text width inside the message box: border, its padding and the 4-column inset on both sides.
+    const width = Math.max(1, cardWidth() - 11);
+    const wrapped = (text: string) => Math.max(1, Math.ceil(text.length / width));
+    return 2 + [current.title, ...current.lines].reduce((height, line) => height + wrapped(line), 0) + 1;
+  };
+  const availableCardHeight = () =>
+    Math.max(1, dimensions().height - (showLogo() ? LOGO_HEIGHT + 2 : 0) - 2 - noticeHeight());
+  const cardHeight = () => Math.min(Math.min(rows().length, MAX_LIST_ROWS) + 4, availableCardHeight());
 
   const refresh = () => {
     const key = selected()?.id;
@@ -189,17 +228,12 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
     const row = selected();
     if (!blocked() && row?.kind === "file") copyToClipboard(row.path, row.id);
   };
-  const resetRepository = () => {
+  const requestReset = () => {
     const row = selected();
     if (blocked() || row?.kind !== "repo") return;
     setResult("");
     setError("");
-    try {
-      resetRepositoryCacheTimer(row.repo.repoHash, props.cacheRoot);
-      refresh();
-    } catch (cause) {
-      setError(`Reset failed\n${cause instanceof Error ? cause.message : String(cause)}`);
-    }
+    setConfirmation({ kind: "reset", label: row.label, repo: { ...row.repo } });
   };
   const requestResetAll = () => {
     if (blocked() || repositories().length === 0) return;
@@ -221,7 +255,10 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
     setResult("");
     setError("");
     try {
-      if (action.kind === "evict") {
+      if (action.kind === "reset") {
+        resetRepositoryCacheTimer(action.repo.repoHash, props.cacheRoot);
+        refresh();
+      } else if (action.kind === "evict") {
         const counts = props.onEvict
           ? await props.onEvict(action.repo)
           : evictRepositoryCache(action.repo.repoHash, props.cacheRoot);
@@ -234,9 +271,8 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
       }
     } catch (cause) {
       if (disposed) return;
-      setError(
-        `${action.kind === "evict" ? "Eviction" : "Action"} failed\n${cause instanceof Error ? cause.message : String(cause)}`,
-      );
+      const failed = action.kind === "evict" ? "Eviction" : action.kind === "reset" ? "Reset" : "Action";
+      setError(`${failed} failed\n${cause instanceof Error ? cause.message : String(cause)}`);
     } finally {
       if (!disposed) {
         setConfirmation(null);
@@ -291,8 +327,11 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
         break;
       case "r":
         event.preventDefault();
-        if (event.shift) requestResetAll();
-        else resetRepository();
+        if (!event.shift) requestReset();
+        break;
+      case "a":
+        event.preventDefault();
+        requestResetAll();
         break;
       case "e":
         event.preventDefault();
@@ -307,6 +346,21 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
         <Show when={showLogo()}>
           <LogoBanner />
           <box height={2} flexShrink={0} />
+        </Show>
+        <Show when={notice()}>
+          {current => (
+            <>
+              <box width={cardWidth()} flexShrink={0}>
+                <MessageBox
+                  id="cache-message"
+                  kind={current().kind}
+                  title={current().title}
+                  message={current().lines.join("\n")}
+                />
+              </box>
+              <box height={1} flexShrink={0} />
+            </>
+          )}
         </Show>
         <box
           id="cache-card"
@@ -327,49 +381,49 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
             flexGrow={1}
             flexShrink={1}
             minHeight={0}
-            paddingRight={2}
             scrollY
             scrollX={false}
             verticalScrollbarOptions={{ visible: false }}
           >
             <box flexDirection="column">
-              <For each={rows()}>
+              <Index each={rows()}>
                 {(row, index) => (
                   // biome-ignore lint/a11y/noStaticElementInteractions: TUI rows support keyboard navigation and Enter.
                   // biome-ignore lint/a11y/useKeyWithMouseEvents: Keyboard invokes the same actions.
                   <box
-                    id={row.id}
+                    id={row().id}
                     ref={(el: Renderable) => {
-                      rowRefs[index()] = el;
+                      rowRefs[index] = el;
                     }}
                     width="100%"
                     height={1}
                     flexShrink={0}
                     flexDirection="row"
+                    paddingX={4}
                     backgroundColor={
-                      selectable(row) && (cursor() === index() || hovered() === row.id)
+                      selectable(row()) && (cursor() === index || hovered() === row().id)
                         ? t().backgroundElement
                         : undefined
                     }
                     onMouseOver={() => {
-                      if (!blocked() && selectable(row)) setHovered(row.id);
+                      if (!blocked() && selectable(row())) setHovered(row().id);
                     }}
                     onMouseOut={() => setHovered(null)}
                     onMouseDown={event => {
-                      if (event.button !== MouseButton.LEFT || blocked() || !selectable(row)) return;
-                      if (row.kind !== "file") event.preventDefault();
+                      if (event.button !== MouseButton.LEFT || blocked() || !selectable(row())) return;
+                      if (row().kind !== "file") event.preventDefault();
                       event.stopPropagation();
-                      setCursor(index());
+                      setCursor(index);
                     }}
                   >
                     <Show
-                      when={row.kind === "file" ? row : undefined}
+                      when={asFile(row())}
                       fallback={
                         <Show
-                          when={row.kind === "repo" ? row : undefined}
+                          when={asRepo(row())}
                           fallback={
                             <text selectable={false} width="100%" wrapMode="none" truncate fg={t().accent}>
-                              <strong>{row.kind === "header" ? row.label : ""}</strong>
+                              <strong>{headerLabel(row())}</strong>
                             </text>
                           }
                         >
@@ -382,10 +436,13 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
                                 minWidth={0}
                                 wrapMode="none"
                                 truncate
-                                fg={cursor() === index() ? t().accent : t().foreground}
+                                fg={cursor() === index ? t().accent : t().foreground}
                               >
                                 {repoRow().label}
                                 {props.currentRepo === repoRow().repo.repoPath ? " (current)" : ""}
+                                <Show when={nameDetails().get(repoRow().repo.repoPath)}>
+                                  {detail => <span style={{ fg: t().foregroundMuted }}>{` ${detail()}`}</span>}
+                                </Show>
                               </text>
                               <text selectable={false} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
                                 {` ${(repoRow().repo.bytes / 1024).toFixed(1)} KB · ${cleanupDate(repoRow().repo.cleanupAt)}`}
@@ -402,13 +459,13 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
                             width={17}
                             flexShrink={0}
                             wrapMode="none"
-                            fg={cursor() === index() ? t().accent : t().foreground}
+                            fg={cursor() === index ? t().accent : t().foreground}
                           >
                             {file().name}
                           </text>
                           {/* biome-ignore lint/a11y/noStaticElementInteractions: Enter copies the selected file path. */}
                           <text
-                            id={`${row.id}-path`}
+                            id={`${row().id}-path`}
                             selectable
                             flexGrow={1}
                             minWidth={0}
@@ -418,13 +475,13 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
                             onMouseDown={event => {
                               if (event.button !== MouseButton.LEFT || blocked()) return;
                               event.stopPropagation();
-                              setCursor(index());
-                              copyToClipboard(file().path, row.id);
+                              setCursor(index);
+                              copyToClipboard(file().path, row().id);
                             }}
                           >
                             {file().path}
                           </text>
-                          <Show when={copiedId() === row.id}>
+                          <Show when={copiedId() === row().id}>
                             <text
                               selectable={false}
                               flexShrink={0}
@@ -440,20 +497,11 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
                     </Show>
                   </box>
                 )}
-              </For>
+              </Index>
             </box>
           </scrollbox>
-          <Show when={confirmation()}>
-            <CardMessage text={confirmationText()} color={t().warning} maxHeight={Math.max(1, cardHeight() - 5)} />
-          </Show>
-          <Show when={error()}>
-            <CardMessage text={error()} color={t().error} maxHeight={3} />
-          </Show>
-          <Show when={result()}>
-            <CardMessage text={result()} color={t().success} maxHeight={3} />
-          </Show>
           <box height={1} flexShrink={0} />
-          <box flexDirection="row" height={1} flexShrink={0} paddingRight={2}>
+          <box flexDirection="row" height={1} flexShrink={0} paddingX={4}>
             <box flexGrow={1} />
             <text selectable={false} wrapMode="none" fg={t().foregroundMuted}>
               {`v${packageJson.version}`}
@@ -471,7 +519,7 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
                     when={selected()?.kind === "file"}
                     fallback={
                       <>
-                        <KeyHint key="r" desc=" reset" onClick={resetRepository} disabled={busy()} />
+                        <KeyHint key="r" desc=" reset" onClick={requestReset} disabled={busy()} />
                         <KeyHintSeparator />
                       </>
                     }
@@ -480,7 +528,7 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
                     <KeyHintSeparator />
                   </Show>
                   <KeyHint
-                    key="shift+r"
+                    key="a"
                     desc=" reset all"
                     onClick={requestResetAll}
                     disabled={busy() || repositories().length === 0}
@@ -501,26 +549,6 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
           </box>
         </box>
       </box>
-    </box>
-  );
-}
-
-/** Like a banner inside the card: the first line is a bold headline in the message's colour, the rest is muted. */
-function CardMessage(props: Readonly<{ text: string; color: string; maxHeight: number }>) {
-  const t = useT();
-  const lines = () => props.text.split("\n");
-  return (
-    <box flexDirection="column" flexShrink={0} maxHeight={props.maxHeight} overflow="hidden">
-      <text flexShrink={0} wrapMode="word" fg={props.color}>
-        <strong>{lines()[0]}</strong>
-      </text>
-      <For each={lines().slice(1)}>
-        {line => (
-          <text flexShrink={0} wrapMode="word" fg={t().foregroundMuted}>
-            {line}
-          </text>
-        )}
-      </For>
     </box>
   );
 }

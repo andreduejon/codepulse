@@ -43,7 +43,13 @@ while the provider view is active. Fetch size is the GraphQL window only.
 commits loaded on demand stay in memory. Scrolling outside that window reads
 disk cache only — it does not query GitHub. Reload / Auto refresh re-query the
 window without dropping other SHAs. Details include **Reload commit** (Enter
-hint: `reload`) to query the selected SHA.
+hint: `reload`) to query the selected SHA; it also refreshes expanded jobs and steps
+of runs that were still running.
+
+Entering a commit's **Actions** tab opens its first failed run and puts the
+cursor on its first failed job. Cancelled and skipped runs show as a grey chip in
+the graph. In the job log, `r` reloads the log (newer output of a running job, or a retry
+after a failure; a finished job's cached log does not change) and `o` opens the run in the browser.
 
 ## Errors and limits
 

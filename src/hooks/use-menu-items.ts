@@ -162,7 +162,8 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
 
   // ── Repository tab items ──────────────────────────────────────────
   const lastFetchLabel = (): string => {
-    if (state.fetching()) return "fetching...";
+    // Paging in more history also sets `fetching`; only a remote fetch (`f`) counts here.
+    if (state.fetching() && !state.fetchingHistory()) return "fetching...";
     const time = state.lastFetchTime();
     if (!time) return "never";
     return relativeAgeLabel(time);
@@ -327,11 +328,13 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
     // ── Showing filter (always shown) ──────────────────────────────
     result.push({ kind: "header", label: "Showing" });
     const viewing = state.viewingBranch();
-    if (viewing) {
+    // Without an explicit view, the log follows Show all branches: off means the current branch only.
+    const shown = viewing ?? (state.showAllBranches() ? null : state.currentBranch() || null);
+    if (shown) {
       result.push({
         kind: "badge",
-        name: viewing,
-        colorIndex: branchColorIndex(viewing),
+        name: shown,
+        colorIndex: branchColorIndex(shown),
       });
     } else {
       result.push({
@@ -468,8 +471,12 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
         newCfg => persistFullConfig({ providers: { openshift: newCfg } }),
         () => providerRefreshLabel("openshift"),
       ),
-      ...buildSnykProviderItems(snykCfg, state.branches, opts.onSnykConfigChange, newCfg =>
-        persistFullConfig({ providers: { snyk: newCfg } }),
+      ...buildSnykProviderItems(
+        snykCfg,
+        state.branches,
+        opts.onSnykConfigChange,
+        newCfg => persistFullConfig({ providers: { snyk: newCfg } }),
+        () => providerRefreshLabel("snyk"),
       ),
     ];
   });

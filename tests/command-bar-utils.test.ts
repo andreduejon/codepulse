@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { commandBarPlaceholder, commitCountText, filterBadgeLabel } from "../src/utils/command-bar-utils";
+import { UNCOMMITTED_HASH } from "../src/constants";
+import {
+  commandBarPlaceholder,
+  commitCountText,
+  filterBadgeLabel,
+  realCommitCount,
+} from "../src/utils/command-bar-utils";
 
 describe("filterBadgeLabel", () => {
   test("omits empty and unapplied terms", () => {
@@ -39,5 +45,11 @@ describe("commitCountText", () => {
     ["'0' for empty repo with no highlight", null, 0, "0"],
   ])("shows %s", (_label, highlightSet, total, expected) => {
     expect(commitCountText(highlightSet, total)).toBe(expected);
+  });
+});
+
+describe("realCommitCount", () => {
+  test("does not count the working-tree changes node as a commit", () => {
+    expect(realCommitCount([{ commit: { hash: UNCOMMITTED_HASH } }, { commit: { hash: "a".repeat(40) } }])).toBe(1);
   });
 });

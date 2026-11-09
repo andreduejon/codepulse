@@ -9,7 +9,24 @@ export interface ProviderFetchArgs {
   signal?: AbortSignal;
   shas?: string[];
   showStatus: boolean;
+  /**
+   * An explicit user retry (Reload commit, `:reload`, `f`): the only thing that lifts an auth freeze. Automatic
+   * fetches (view entry, polling) may show status but never count as a retry.
+   */
+  retry: boolean;
   epoch: number;
+}
+
+interface PendingFetch {
+  kind: "initial" | "refresh";
+  /** Commits a caller named (a Reload of one commit, background catch-up). */
+  shas: string[];
+  /** A caller asked for the whole graph window; the named commits are fetched alongside it. */
+  window: boolean;
+  showStatus: boolean;
+  retry: boolean;
+  /** Callers awaiting the request: settled once it has run, or when a cancel drops it. */
+  waiters: (() => void)[];
 }
 
 export function useProviderFetchLifecycle(opts: {
@@ -29,6 +46,8 @@ export function useProviderFetchLifecycle(opts: {
   onResetCaches: () => void;
   /** Override auto-refresh period. 0 or omit uses `state.autoRefreshInterval()`. */
   refreshInterval?: () => number;
+  /** A status-showing fetch was cancelled before it could settle the status: clear a leftover `loading`. */
+  onCancelledStatus?: () => void;
 }) {
   const { state, providerId } = opts;
 
@@ -39,7 +58,13 @@ export function useProviderFetchLifecycle(opts: {
   }
 
   let fetchInFlight = false;
-  let pendingBackgroundFetch = false;
+  /**
+   * A request that arrived while another fetch ran. It keeps what the caller asked for (explicit retry, status,
+   * selected SHAs, refresh vs initial) and runs once the current fetch settles; requests merge while waiting.
+   */
+  let pendingFetch: PendingFetch | null = null;
+  /** Counts status-showing fetches as they start: only the latest may settle a `loading` it was cancelled under. */
+  let statusFetchSeq = 0;
   let hasFetchedOnce = false;
   let lastFetchedAt = 0;
   let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
@@ -50,6 +75,20 @@ export function useProviderFetchLifecycle(opts: {
   let consecutiveErrors = 0;
   let backoffUntil = 0;
   const [identityVersion, setIdentityVersion] = createSignal(0);
+  const [activeFetches, setActiveFetches] = createSignal(0);
+
+  /**
+   * Count provider data work while it runs. Provider activity (the footer's `… fetching`) reads this instead of the
+   * provider status, which can stay `loading`; the count always drops in `finally`, so it cannot get stuck.
+   */
+  async function trackFetch<T>(work: () => Promise<T>): Promise<T> {
+    setActiveFetches(count => count + 1);
+    try {
+      return await work();
+    } finally {
+      setActiveFetches(count => Math.max(0, count - 1));
+    }
+  }
 
   function getEpoch() {
     return cacheEpoch;
@@ -99,53 +138,94 @@ export function useProviderFetchLifecycle(opts: {
     return Date.now() < backoffUntil;
   }
 
+  /** Queue a request behind the running fetch; the promise settles once the queued request has run (or is dropped). */
+  function queueFetch(next: Omit<PendingFetch, "waiters">): Promise<void> {
+    return new Promise(resolve => {
+      const current = pendingFetch;
+      pendingFetch = current
+        ? {
+            kind: current.kind === "initial" || next.kind === "initial" ? "initial" : "refresh",
+            shas: [...new Set([...current.shas, ...next.shas])],
+            window: current.window || next.window,
+            showStatus: current.showStatus || next.showStatus,
+            retry: current.retry || next.retry,
+            waiters: [...current.waiters, resolve],
+          }
+        : { ...next, waiters: [resolve] };
+    });
+  }
+
+  function settleWaiters(request: PendingFetch | null) {
+    for (const resolve of request?.waiters ?? []) resolve();
+  }
+
   function finishFetch(epoch: number) {
     if (opts.suspended?.() || epoch !== cacheEpoch) return;
     fetchInFlight = false;
-    if (!pendingBackgroundFetch) return;
-    pendingBackgroundFetch = false;
+    const next = pendingFetch;
+    if (!next) return;
+    pendingFetch = null;
     const ctrl = new AbortController();
     backgroundFetchAbortCtrl = ctrl;
-    void fetchInitial(ctrl.signal, undefined, false);
+    let run: Promise<void>;
+    if (next.kind === "refresh") run = fetchRefresh(ctrl.signal, next.showStatus, next.retry);
+    else {
+      // The window and the commits callers named; no named commits means the provider's own window (undefined).
+      const shas = !next.window
+        ? next.shas
+        : next.shas.length > 0
+          ? [...new Set([...collectTopSHAs(state.graphRows(), currentShaLimit()), ...next.shas])]
+          : undefined;
+      run = fetchInitial(ctrl.signal, shas, next.showStatus, next.retry);
+    }
+    void run.finally(() => settleWaiters(next));
   }
 
-  async function fetchInitial(signal?: AbortSignal, shas?: string[], showStatus = false) {
+  /**
+   * A fetch that showed `loading` was cancelled (view switch): let the provider settle that status, unless a newer
+   * status-showing fetch (e.g. after a repository switch) has started and owns it now.
+   */
+  function settleIfCancelled(signal: AbortSignal | undefined, seq: number | null) {
+    if (seq !== null && seq === statusFetchSeq && signal?.aborted) opts.onCancelledStatus?.();
+  }
+
+  async function fetchInitial(signal?: AbortSignal, shas?: string[], showStatus = false, retry = false) {
     if (opts.suspended?.()) return;
     const epoch = cacheEpoch;
     if (!showStatus && inBackoff()) return;
-    if (fetchInFlight) {
-      pendingBackgroundFetch = true;
-      return;
-    }
+    if (fetchInFlight) return queueFetch({ kind: "initial", shas: shas ?? [], window: !shas, showStatus, retry });
     if (!opts.isAvailable()) {
       opts.reportUnavailable(showStatus);
       return;
     }
     fetchInFlight = true;
+    const seq = showStatus ? ++statusFetchSeq : null;
     try {
-      await runRequest(signal => opts.runInitialFetch({ signal, shas, showStatus, epoch }), signal);
+      await trackFetch(() =>
+        runRequest(signal => opts.runInitialFetch({ signal, shas, showStatus, retry, epoch }), signal),
+      );
     } catch (err) {
       if (epoch === cacheEpoch && !isAbortError(err, signal)) throw err;
     } finally {
+      settleIfCancelled(signal, seq);
       finishFetch(epoch);
     }
   }
 
-  async function fetchRefresh(signal?: AbortSignal, showStatus = false) {
+  async function fetchRefresh(signal?: AbortSignal, showStatus = false, retry = false) {
     if (opts.suspended?.()) return;
     const epoch = cacheEpoch;
     if (!showStatus && inBackoff()) return;
-    if (fetchInFlight) {
-      pendingBackgroundFetch = true;
-      return;
-    }
+    if (fetchInFlight) return queueFetch({ kind: "refresh", shas: [], window: true, showStatus, retry });
     if (!opts.isAvailable()) return;
     fetchInFlight = true;
+    const seq = showStatus ? ++statusFetchSeq : null;
     try {
-      await runRequest(signal => opts.runRefresh({ signal, showStatus, epoch }), signal);
+      await trackFetch(() => runRequest(signal => opts.runRefresh({ signal, showStatus, retry, epoch }), signal));
     } catch (err) {
       if (epoch === cacheEpoch && !isAbortError(err, signal)) throw err;
     } finally {
+      settleIfCancelled(signal, seq);
       finishFetch(epoch);
     }
   }
@@ -194,7 +274,9 @@ export function useProviderFetchLifecycle(opts: {
     for (const ctrl of activeRequestControllers) ctrl.abort();
     activeRequestControllers.clear();
     fetchInFlight = false;
-    pendingBackgroundFetch = false;
+    const dropped = pendingFetch;
+    pendingFetch = null;
+    settleWaiters(dropped);
   }
 
   function resetCaches() {
@@ -234,7 +316,8 @@ export function useProviderFetchLifecycle(opts: {
     if (!hasFetchedOnce) {
       const controller = new AbortController();
       fetchAbortCtrl = controller;
-      void fetchInitial(controller.signal, undefined, true);
+      // Untracked: signals the fetch reads (badges, repo) must not re-run this effect, whose cleanup would abort it.
+      untrack(() => void fetchInitial(controller.signal, undefined, true));
       onCleanup(() => {
         controller.abort();
         if (fetchAbortCtrl === controller) fetchAbortCtrl = null;
@@ -245,7 +328,7 @@ export function useProviderFetchLifecycle(opts: {
       if (Date.now() - lastFetchedAt > staleThreshold) {
         const controller = new AbortController();
         fetchAbortCtrl = controller;
-        void fetchRefresh(controller.signal, true);
+        untrack(() => void fetchRefresh(controller.signal, true));
         onCleanup(() => {
           controller.abort();
           if (fetchAbortCtrl === controller) fetchAbortCtrl = null;
@@ -269,12 +352,12 @@ export function useProviderFetchLifecycle(opts: {
     if (newSHAs.length === 0) return;
 
     if (fetchInFlight) {
-      pendingBackgroundFetch = true;
+      void queueFetch({ kind: "initial", shas: allSHAs, window: false, showStatus: false, retry: false });
       return;
     }
     const ctrl = new AbortController();
     backgroundFetchAbortCtrl = ctrl;
-    void fetchInitial(ctrl.signal, allSHAs, false);
+    untrack(() => void fetchInitial(ctrl.signal, allSHAs, false));
   });
 
   createEffect(() => {
@@ -300,5 +383,8 @@ export function useProviderFetchLifecycle(opts: {
     fetchInitial,
     fetchRefresh,
     runRequest,
+    trackFetch,
+    /** True while a graph fetch, refresh or tracked reload runs. */
+    isFetching: () => activeFetches() > 0,
   };
 }

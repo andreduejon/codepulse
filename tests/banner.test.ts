@@ -19,8 +19,10 @@ describe("banner catalog", () => {
     expect(isBanner("raw stderr dump")).toBe(false);
   });
 
-  test("OpenShift token expiry keeps cause and live-data effect", () => {
-    expect(BANNER.openshift.tokenExpired).toBe("OpenShift token expired. Live data unavailable.");
+  test("token expiry names cause, live-data effect and the retry, for every provider", () => {
+    expect(BANNER.openshift.tokenExpired).toBe("OpenShift token expired. Live data unavailable. Reload to retry.");
+    expect(BANNER.github.tokenExpired).toBe("GitHub token expired. Live data unavailable. Reload to retry.");
+    expect(BANNER.jenkins.tokenExpired).toBe("Jenkins token expired. Live data unavailable. Reload to retry.");
     expect(isBanner(BANNER.openshift.tokenExpired)).toBe(true);
   });
 

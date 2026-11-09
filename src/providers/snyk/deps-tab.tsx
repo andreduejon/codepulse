@@ -6,6 +6,7 @@ import { BANNER } from "../../debug/banner";
 import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useClipboard } from "../../hooks/use-clipboard";
 import { useT } from "../../hooks/use-t";
+import { BUSY } from "../../utils/busy-text";
 import {
   type DependencyGroupBy,
   type DependencyScopeFilter,
@@ -43,17 +44,20 @@ const VULNERABILITY_SHORTCUT = { key: "v", desc: "vulnerabilities" };
 
 const GROUP_BY_OPTIONS: DependencyGroupBy[] = ["tree", "package"];
 const SCOPE_OPTIONS: DependencyScopeFilter[] = ["all", "prod", "dev"];
-const COPY_INDEX = 1;
-const GROUP_BY_INDEX = 2;
-const SCOPE_INDEX = 3;
-const FILTER_INDEX = 4;
-/** Cursor index of the first tree row (after scan, copy, group by, scope, filter). */
-const ROW_BASE = 5;
 
 export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
   const t = useT();
   const dimensions = useTerminalDimensions();
-  const filter = useSnykFilter(props, FILTER_INDEX);
+  // Cursor order: Scan (left out while Snyk is unavailable), Copy, Group by, Scope, filter, then the tree rows.
+  const scanIndex = () => (props.unavailable ? -1 : 0);
+  const base = () => (props.unavailable ? 0 : 1);
+  const copyIndex = () => base();
+  const groupByIndex = () => base() + 1;
+  const scopeIndex = () => base() + 2;
+  const filterIndex = () => base() + 3;
+  /** Cursor index of the first tree row (after the controls). */
+  const rowBase = () => base() + 4;
+  const filter = useSnykFilter(props, filterIndex);
   const [scope, setScope] = createSignal<DependencyScopeFilter>("all");
   /** Each package's own findings (manifest + `name@version`): triangles and the JSON copy. */
   const vulnerabilities = createMemo(() => dependencyVulnerabilities(props.scan?.findings ?? []));
@@ -80,7 +84,7 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
   });
   const filtering = () => !!filter.query().trim();
   const navRows = createMemo(() => rows().filter(row => !isEmptyHeader(row)));
-  const navIndexes = createMemo(() => new Map(navRows().map((row, index) => [row.key, index + ROW_BASE])));
+  const navIndexes = createMemo(() => new Map(navRows().map((row, index) => [row.key, index + rowBase()])));
   const packageTotals = createMemo(() =>
     rows()
       .filter(row => row.kind === "project")
@@ -92,7 +96,7 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
   const { copiedId, copyToClipboard } = useClipboard();
   /** Copy, Group by, Scope and filter only when there is something to browse (like Vulnerabilities without findings). */
   const controls = () => !!props.scan && projects().length > 0;
-  const itemCount = () => (controls() ? ROW_BASE + navRows().length : 1);
+  const itemCount = () => (controls() ? rowBase() + navRows().length : base());
   const refsByKey = new Map<string, Renderable>();
   const itemRefs: Renderable[] = [];
   let disposed = false;
@@ -127,7 +131,7 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
   const labelWidth = (row: DependencyTreeRow) => dependencyLabelWidth(row, layout(row));
   const bannerOverflow = createMemo(() => {
     if (!props.detailFocused()) return 0;
-    const row = navRows()[props.detailCursorIndex() - ROW_BASE];
+    const row = navRows()[props.detailCursorIndex() - rowBase()];
     return row?.kind === "dependency" ? Math.max(0, label(row, true).length - labelWidth(row)) : 0;
   });
   const bannerOffset = useBannerScroll(bannerOverflow);
@@ -151,7 +155,7 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
   const syncRefs = () => {
     itemRefs.length = 0;
     for (const key of [
-      "scan",
+      ...(props.unavailable ? [] : ["scan"]),
       ...(controls() ? ["copyJson", "groupBy", "scope", "filter"] : []),
       ...navRows().map(row => row.key),
     ]) {
@@ -162,29 +166,29 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
   const activateCurrentItem = () => {
     if (disposed) return false;
     const index = props.detailCursorIndex();
-    if (controls() && index === FILTER_INDEX) {
+    if (controls() && index === filterIndex()) {
       if (filter.editing()) filter.stop();
       else filter.start();
       return false;
     }
     filter.stop();
-    if (controls() && index === SCOPE_INDEX) {
+    if (controls() && index === scopeIndex()) {
       setScope(SCOPE_OPTIONS[(SCOPE_OPTIONS.indexOf(scope()) + 1) % SCOPE_OPTIONS.length]);
       return false;
     }
-    if (controls() && index === COPY_INDEX) {
+    if (controls() && index === copyIndex()) {
       copyToClipboard(dependenciesJson(), "copyJson");
       return false;
     }
-    if (controls() && index === GROUP_BY_INDEX) {
+    if (controls() && index === groupByIndex()) {
       setGroupBy(GROUP_BY_OPTIONS[(GROUP_BY_OPTIONS.indexOf(groupBy()) + 1) % GROUP_BY_OPTIONS.length]);
       return false;
     }
-    if (index === 0) {
+    if (index === scanIndex()) {
       if (!props.loading) void props.onScan();
       return false;
     }
-    const row = navRows()[index - ROW_BASE];
+    const row = navRows()[index - rowBase()];
     if (!row) return false;
     if (!row.expandable) {
       // Leaves copy the full `name@version`, like copy rows in Vulnerabilities.
@@ -216,7 +220,7 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
   const cursored = rowsUi.cursored;
   const controlRef = (key: string, index: number) => (element: Renderable) => {
     refsByKey.set(key, element);
-    itemRefs[index] = element;
+    if (index >= 0) itemRefs[index] = element;
   };
 
   createEffect(() => {
@@ -234,9 +238,12 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
         filter.suppressAutoEdit();
         props.setDetailCursorIndex(saved.cursor);
       } else {
+        // Another commit or a rescan starts fresh, like Vulnerabilities: default Scope and Group by too.
         filter.reset();
-        previousView = JSON.stringify(["", scope(), groupBy()]);
-        setExpanded(defaultDependencyExpansion(projects(), "", scope(), groupBy()));
+        setScope("all");
+        setGroupBy("tree");
+        previousView = JSON.stringify(["", "all", "tree"]);
+        setExpanded(defaultDependencyExpansion(projects(), "", "all", "tree"));
         props.setDetailCursorIndex(0);
       }
       props.navRef?.scrollToCursor?.();
@@ -262,7 +269,7 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
       setExpanded(defaultDependencyExpansion(projects(), query, scope(), groupBy()));
       // Switching Scope or Group by keeps the cursor on its row.
       if (!queryChanged) return;
-      props.setDetailCursorIndex(FILTER_INDEX);
+      props.setDetailCursorIndex(filterIndex());
       props.navRef?.scrollToCursor?.();
     });
   });
@@ -276,7 +283,7 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
   /** The cursored vulnerable package, if any: `v` and the footer hint act on it. */
   const cursorVulnerable = () => {
     if (!props.detailFocused()) return null;
-    const row = navRows()[props.detailCursorIndex() - ROW_BASE];
+    const row = navRows()[props.detailCursorIndex() - rowBase()];
     return row?.kind === "dependency" && row.vulnerability ? row : null;
   };
   const handleKey = (event: KeyEvent) => {
@@ -298,24 +305,24 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
 
   createEffect(() => {
     const index = props.detailCursorIndex();
-    const row = navRows()[index - ROW_BASE];
+    const row = navRows()[index - rowBase()];
     if (!props.detailFocused()) {
       props.setDetailCursorAction(null);
       return;
     }
-    if (index === 0) {
+    if (index === scanIndex()) {
       props.setDetailCursorAction(props.loading ? null : props.scan ? "rescan" : "scan");
       return;
     }
-    if (controls() && index === COPY_INDEX) {
+    if (controls() && index === copyIndex()) {
       props.setDetailCursorAction("copy");
       return;
     }
-    if (controls() && (index === SCOPE_INDEX || index === GROUP_BY_INDEX)) {
+    if (controls() && (index === scopeIndex() || index === groupByIndex())) {
       props.setDetailCursorAction("switch");
       return;
     }
-    if (controls() && index === FILTER_INDEX) {
+    if (controls() && index === filterIndex()) {
       props.setDetailCursorAction(filter.editing() ? "done" : "filter");
       return;
     }
@@ -345,11 +352,12 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
       <SnykControlRow
         rows={rowsUi}
         id="scan"
-        index={0}
+        index={scanIndex()}
         label={props.scan ? "Rescan commit" : "Scan commit"}
-        status={props.loading ? "scanning..." : undefined}
+        status={props.loading ? BUSY.scanning : undefined}
+        disabled={props.unavailable}
         mouseEnabled={props.mouseEnabled}
-        rowRef={controlRef("scan", 0)}
+        rowRef={controlRef("scan", scanIndex())}
       />
 
       {/* Copy, Group by, Scope and filter only when there is something to browse (like Vulnerabilities). */}
@@ -357,37 +365,37 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
         <SnykControlRow
           rows={rowsUi}
           id="copyJson"
-          index={COPY_INDEX}
+          index={copyIndex()}
           label="Copy dependencies as JSON"
           copied={copiedId() === "copyJson"}
           mouseEnabled={props.mouseEnabled}
-          rowRef={controlRef("copyJson", COPY_INDEX)}
+          rowRef={controlRef("copyJson", copyIndex())}
         />
         <box height={1} flexShrink={0} />
         {/* Group by and Scope cycle like Group by in Vulnerabilities. */}
         <SnykControlRow
           rows={rowsUi}
           id="groupBy"
-          index={GROUP_BY_INDEX}
+          index={groupByIndex()}
           label="Group by"
           value={groupBy()}
           mouseEnabled={props.mouseEnabled}
-          rowRef={controlRef("groupBy", GROUP_BY_INDEX)}
+          rowRef={controlRef("groupBy", groupByIndex())}
         />
         <SnykControlRow
           rows={rowsUi}
           id="scope"
-          index={SCOPE_INDEX}
+          index={scopeIndex()}
           label="Scope"
           value={scope()}
           mouseEnabled={props.mouseEnabled}
-          rowRef={controlRef("scope", SCOPE_INDEX)}
+          rowRef={controlRef("scope", scopeIndex())}
         />
         <SnykFilterRow
           filter={filter}
-          selected={cursored(FILTER_INDEX)}
+          selected={cursored(filterIndex())}
           mouseEnabled={props.mouseEnabled}
-          rowRef={controlRef("filter", FILTER_INDEX)}
+          rowRef={controlRef("filter", filterIndex())}
           placeholder="Enter dependency filter..."
         >
           <text flexShrink={0} selectable={false} fg={t().foregroundMuted} wrapMode="none">

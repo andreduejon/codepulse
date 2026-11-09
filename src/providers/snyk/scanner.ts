@@ -139,7 +139,8 @@ function throwScanFailure(
 ): never {
   const detail = outputError(stdout, stderr);
   if (detail) addDebugEvent({ source: "Snyk", message: detail, status: "error" });
-  if (exitCode === 3) throw new Error("Snyk found no supported dependency project.");
+  // Same words as the Dependencies tab, with the supported managers, so the banner says what would work.
+  if (exitCode === 3) throw new Error(BANNER.snyk.noDependencyProject);
   // Every project failed: name them with Snyk's reasons, as a partial scan does.
   const failures = parseSnykProjectFailures(detail, roots);
   if (failures.targets.length > 0)
@@ -751,7 +752,9 @@ export async function scanSnykCommit(
 export async function getCachedSnykScan(
   repoPath: string,
   sha: string,
-  options: { cacheRoot?: string; maxCachedScans?: SnykCacheLimit } = {},
+  options: { cacheRoot?: string; maxCachedScans?: SnykCacheLimit; touch?: boolean } = {},
 ): Promise<SnykScanResult | null> {
-  return new SnykCache({ root: options.cacheRoot, maxEntries: options.maxCachedScans }).read(repoPath, sha);
+  return new SnykCache({ root: options.cacheRoot, maxEntries: options.maxCachedScans }).read(repoPath, sha, {
+    touch: options.touch,
+  });
 }

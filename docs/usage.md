@@ -19,22 +19,30 @@ the full shortcut and provider setup reference.
 | `:` | Open command mode |
 | `/` | Open search mode |
 | `m` | Open menu dialog |
-| `f` | Fetch from remote |
+| `f` | Fetch Git and the open provider |
 | `?` | Open help dialog |
 | `q` | Quit |
+
+In the GitHub Actions, Jenkins, and OpenShift views, `f` fetches Git and then
+refreshes that provider. In the Snyk view only Git is fetched: Snyk has no server
+data to refetch, and scans run when started or when an auto-scan branch moves.
 
 ### Graph
 
 | Key | Action |
 |-----|--------|
 | `↑` / `↓` or `j` / `k` | Navigate commits |
-| `shift + ↑` / `shift + ↓` | Jump 10 commits |
+| `shift ↑` / `shift ↓` | Jump 10 commits |
 | `g` / `G` | First / last commit |
-| `→` / `l` | Focus detail panel |
+| `→` / `l` | Focus detail panel (wide layout) |
 | `enter` | Focus details / open compact dialog |
 | `a` | Enter ancestry mode |
 | `p` | Enter path mode |
-| `shift + ←` / `shift + →` | Switch project within the current group |
+| `shift ←` / `shift →` | Switch repository within the current group |
+
+In the compact layout (narrower than 180 columns) details open as a dialog: use
+`enter` to open it and `esc` to close it; `→` / `l` do not open it and `←` / `h`
+on the first tab does not close it.
 
 Search (`/`) and path filtering (`p`) apply on Enter. Esc cancels without
 changing the current filter. Badge clicks offer the same filtering controls.
@@ -44,13 +52,27 @@ Normal clears highlighting without changing branch perspective.
 
 | Key | Action |
 |-----|--------|
-| `↑` / `↓` or `j` / `k` | Navigate items |
-| `shift + ↑` / `shift + ↓` | Jump 10 items |
-| `←` / `h` | Previous tab / exit details on the first tab |
+| `↑` / `↓` or `j` / `k` | Navigate items (an item taller than the panel, like a long commit body, scrolls first) |
+| `shift ↑` / `shift ↓` | Jump 10 items |
+| `←` / `h` | Previous tab / exit details on the first tab (wide layout) |
 | `→` / `l` | Next tab |
 | `v` | Snyk Dependencies: show a vulnerable package's findings |
 | `g` / `G` | Top / bottom |
 | `enter` | Activate selected item |
+
+### Logs (CI jobs and OpenShift resources)
+
+| Key | Action |
+|-----|--------|
+| `/` | Search; Enter keeps the query, Esc clears it |
+| `n` / `N` | Next / previous search hit |
+| `c` | Cycle view mode (CI: all, issues, errors, raw; OpenShift: log, JSON) |
+| `w` | Toggle line wrap |
+| `r` | Refresh what is shown: the log (restarting a follow; a finished CI job's log reloads from cache) or the JSON object |
+| `o` | Open the CI run in the browser |
+| `←` / `→` or `h` / `l` | Previous / next CI job |
+| `↑` / `↓` or `j` / `k`, `shift ↑` / `shift ↓`, space, `g` / `G` | Scroll |
+| `esc` | Clear search / close |
 
 Theme controls and custom configuration are in the [theme guide](themes.md).
 
@@ -63,7 +85,7 @@ Theme controls and custom configuration are in the [theme guide](themes.md).
 | `:cache` | Open global cache screen |
 | `:clear` | Dismiss the current status message (or click its `✕`) and clear Debug |
 | `:debug` | Toggle debug dialog |
-| `:fetch` | Fetch from remote |
+| `:fetch` | Fetch Git and the open provider |
 | `:help` | Open help dialog |
 | `:menu` | Open menu dialog |
 | `:path` | Switch to path mode |

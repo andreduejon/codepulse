@@ -386,10 +386,15 @@ function matchingHeadShas(raw: unknown, wanted: Set<string>): string[] {
   return [...new Set(matches)];
 }
 
-function mapStatus(build: JenkinsBuildApi): Pick<JenkinsRun, "status" | "conclusion"> {
+/** Jenkins build results in the shared vocabulary, so builds and their stages (`mapWfapiStatus`) agree. */
+const BUILD_CONCLUSIONS: Record<string, string> = { aborted: "cancelled", not_built: "skipped" };
+
+export function mapStatus(
+  build: Pick<JenkinsBuildApi, "building" | "result">,
+): Pick<JenkinsRun, "status" | "conclusion"> {
   if (build.building) return { status: "running", conclusion: null };
   const result = (build.result ?? "UNKNOWN").toLowerCase();
-  return { status: "completed", conclusion: result };
+  return { status: "completed", conclusion: BUILD_CONCLUSIONS[result] ?? result };
 }
 
 function mapWfapiStatus(status: string | undefined): { status: string; conclusion: string | null } {
@@ -633,6 +638,7 @@ export function buildJenkinsGraphBadges(runs: JenkinsRun[]): Map<string, GraphBa
     if (category === "running") badge.runningCount++;
     else if (category === "pass") badge.passCount++;
     else if (category === "fail") badge.failCount++;
+    else badge.unknownCount = (badge.unknownCount ?? 0) + 1;
     if (run.updatedAt >= badge.latestRunAt) {
       badge.latestRunAt = run.updatedAt;
       badge.latestStatus = category === "pass" || category === "fail" || category === "running" ? category : "unknown";
@@ -690,7 +696,8 @@ export async function fetchJenkinsRunJobs(
     return { jobs: [job], error: null };
   } catch (err) {
     if (isAbortError(err, signal)) throw err;
-    return { jobs: [], error: bannerOrFallback(err, BANNER.jenkins.fetchFailed, "Jenkins") };
+    // Like GitHub's "jobs failed": say which part failed, not a generic fetch failure.
+    return { jobs: [], error: bannerOrFallback(err, BANNER.jenkins.stagesFailed, "Jenkins") };
   }
 }
 
@@ -701,14 +708,16 @@ export async function fetchJenkinsConsoleLog(
   signal?: AbortSignal,
 ): Promise<string> {
   const url = `${normalizeJenkinsJobUrl(onOrigin(run.url, run.jobUrl))}/consoleText`;
-  if (!isSafeJenkinsRequestUrl(url)) return "";
+  // A failed request throws its banner so the log dialog can say why; "" is a build without output.
+  if (!isSafeJenkinsRequestUrl(url)) throw new Error(BANNER.jenkins.invalidJobUrl);
   const res = await fetchWithRetry(url, {
     headers: authHeaders(username, token),
     signal,
   });
+  if (res.status === 401) throw new Error(BANNER.jenkins.tokenExpired);
   if (!res.ok) {
     debugError("Jenkins", `${res.status} ${res.statusText} ${url}`);
-    return "";
+    throw new Error(BANNER.jenkins.logFailed);
   }
   return res.text();
 }

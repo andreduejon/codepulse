@@ -1,9 +1,11 @@
-import { MouseButton, type MouseEvent, type Renderable } from "@opentui/core";
+import type { Renderable } from "@opentui/core";
 import { createEffect, createMemo, createSignal, For, onCleanup, Show, untrack } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
 import type { DebugEventSource } from "../../debug/events";
 import { useT } from "../../hooks/use-t";
+import { BUSY } from "../../utils/busy-text";
 import { formatDuration, formatRelativeDate } from "../../utils/date";
+import { ProviderActionRow, ProviderSummaryRow, ScrollingLabel, useDetailRowMouse } from "./detail-rows";
 import { fetchProviderJobs } from "./provider-job-fetch";
 import { categorize, statusColor, statusIcon } from "./status";
 
@@ -75,9 +77,13 @@ export interface ProviderRunTreeProps<TRaw, TJobRaw> {
   onReloadCommit?: () => void | Promise<void>;
   reloadLabel?: string;
   reloadBusy?: boolean;
+  /** Muted text after the reload label while it is busy (`fetching runs...`). */
+  reloadBusyText?: string;
   reloadEnabled?: boolean;
   /** When false, hide the count row. Unknown must not look like zero. */
   showSummary?: boolean;
+  /** Open the first failed run when the tab gets focus (default true). */
+  openFailedRun?: boolean;
 }
 
 export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreeProps<TRaw, TJobRaw>>) {
@@ -90,10 +96,11 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
   const [loadedRuns, setLoadedRuns] = createSignal<Set<string>>(new Set());
   const [pendingFocusRunId, setPendingFocusRunId] = createSignal<string | null>(null);
   const fetchControllers = new Map<string, AbortController>();
+  /** Runs whose status changed while their jobs were loading; they load again when that request settles. */
+  const reloadAfterLoad = new Set<string>();
   let autoExpandedSignature: string | null = null;
   let previousDataKey = props.dataKey;
   const itemRefs: Renderable[] = [];
-  const [hoveredKey, setHoveredKey] = createSignal<string | null>(null);
   const refsByKey = new Map<string, Renderable>();
   const itemKey = (item: FlatItem<TRaw, TJobRaw>) =>
     item.kind === "reload"
@@ -108,23 +115,14 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
       itemRefs[index] = refsByKey.get(itemKey(item)) as Renderable;
     });
   };
-  const mouseRow = (key: string, index: () => number) => ({
-    onMouseOver: () => setHoveredKey(key),
-    onMouseOut: () => setHoveredKey(null),
-    onMouseDown: (event: MouseEvent) => {
-      if (!props.mouseEnabled || event.button !== MouseButton.LEFT || index() < 0) return;
-      event.preventDefault();
-      event.stopPropagation();
-      if (key === "reload" && (!reloadEnabled() || reloadBusy())) return;
-      props.onMouseFocus?.();
-      props.setDetailCursorIndex(index());
-      activateCurrentItem();
-    },
+  const rows = useDetailRowMouse({
+    mouseEnabled: () => props.mouseEnabled,
+    onMouseFocus: props.onMouseFocus,
+    setDetailCursorIndex: props.setDetailCursorIndex,
+    activate: () => activateCurrentItem(),
+    inert: key => key === "reload" && (!reloadEnabled() || reloadBusy()),
   });
-  const hoverBg = (key: string) =>
-    props.mouseEnabled && hoveredKey() === key && (key !== "reload" || (reloadEnabled() && !reloadBusy()))
-      ? t().backgroundElement
-      : undefined;
+  const { mouseRow, hoverBg } = rows;
 
   const formatStepDuration = (step: ProviderTreeStep) => formatDuration(step.startedAt, step.completedAt);
   const formatRunDuration = (run: ProviderTreeRun<TRaw>) => {
@@ -178,7 +176,8 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     const jobs = fetchedJobs();
     const items: FlatItem<TRaw, TJobRaw>[] = [];
     let idx = 0;
-    if (props.onReloadCommit) items.push({ kind: "reload", flatIndex: idx++ });
+    // A disabled reload row stays visible (muted) but leaves the cursor order.
+    if (props.onReloadCommit && reloadEnabled()) items.push({ kind: "reload", flatIndex: idx++ });
     for (const run of props.runs) {
       items.push({ kind: "run", run, flatIndex: idx++ });
       if (expanded.has(run.id)) {
@@ -245,6 +244,11 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
       if (fetchControllers.get(run.id) === ctrl) {
         fetchControllers.delete(run.id);
         clearLoadingRun(run.id);
+        // The run changed while this request ran: load once more with the current run.
+        if (reloadAfterLoad.delete(run.id) && expandedRuns().has(run.id)) {
+          const current = props.runs.find(entry => entry.id === run.id);
+          if (current) void loadJobsForRun(current);
+        }
       }
     }
   };
@@ -280,13 +284,38 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     }
   };
 
+  /** Completed, with every loaded job and step completed: its jobs and steps cannot change any more. */
+  const isSettled = (run: ProviderTreeRun<TRaw>) =>
+    run.status === "completed" &&
+    (fetchedJobs().get(run.id) ?? []).every(
+      job => job.status === "completed" && job.steps.every(step => step.status === "completed"),
+    );
+
   const reloadCommit = async () => {
-    const failedRunIds = new Set(jobErrors().keys());
+    // Expanded runs that failed to load or were still running get fresh jobs and steps too.
+    const stale = new Set(props.runs.filter(run => jobErrors().has(run.id) || !isSettled(run)).map(run => run.id));
     await props.onReloadCommit?.();
     await Promise.all(
-      props.runs.filter(run => failedRunIds.has(run.id) && expandedRuns().has(run.id)).map(run => loadJobsForRun(run)),
+      props.runs.filter(run => stale.has(run.id) && expandedRuns().has(run.id)).map(run => loadJobsForRun(run)),
     );
   };
+
+  // Auto refresh replaces the runs: an expanded run whose status moved reloads its jobs and steps. If its jobs are
+  // still loading, they load again once that request settles (its answer may predate the change).
+  const runSignatures = new Map<string, string>();
+  createEffect(() => {
+    const runs = props.runs;
+    untrack(() => {
+      for (const run of runs) {
+        const signature = `${run.status}:${run.conclusion}:${run.updatedAt}`;
+        const previous = runSignatures.get(run.id);
+        runSignatures.set(run.id, signature);
+        if (previous === undefined || previous === signature || !expandedRuns().has(run.id)) continue;
+        if (loadingRuns().has(run.id)) reloadAfterLoad.add(run.id);
+        else if (loadedRuns().has(run.id)) void loadJobsForRun(run);
+      }
+    });
+  });
 
   const resetRunState = () => {
     for (const ctrl of fetchControllers.values()) ctrl.abort();
@@ -298,9 +327,11 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     setLoadedRuns(new Set<string>());
     setPendingFocusRunId(null);
     autoExpandedSignature = null;
+    runSignatures.clear();
+    reloadAfterLoad.clear();
     itemRefs.length = 0;
     refsByKey.clear();
-    setHoveredKey(null);
+    rows.clearHover();
   };
 
   createEffect(() => {
@@ -315,11 +346,29 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
   createEffect(() => {
     const runId = pendingFocusRunId();
     if (!runId) return;
-    flatItems();
-    const jobIdx = flatItems().findIndex(item => item.kind === "job" && item.run.id === runId);
+    const items = flatItems();
+    // Failure first: an opened run puts the cursor on its first failed job, else on its first job.
+    const failedIdx = items.findIndex(
+      item =>
+        item.kind === "job" && item.run.id === runId && categorize(item.job.status, item.job.conclusion) === "fail",
+    );
+    const jobIdx = failedIdx >= 0 ? failedIdx : items.findIndex(item => item.kind === "job" && item.run.id === runId);
     if (jobIdx < 0) return;
     props.setDetailCursorIndex(jobIdx);
     setPendingFocusRunId(null);
+  });
+
+  // Failure first: entering a commit's tab (detail focus) opens its first failed run once, unless the user already
+  // opened one. Only on focus, so browsing commits in the graph never fetches jobs.
+  let failureOpenedKey: string | null = null;
+  createEffect(() => {
+    if (props.openFailedRun === false || !props.detailFocused() || props.runs.length === 0) return;
+    const key = props.dataKey;
+    if (failureOpenedKey === key) return;
+    failureOpenedKey = key;
+    const failed = props.runs.find(run => categorize(run.status, run.conclusion) === "fail");
+    if (!failed || untrack(expandedRuns).size > 0) return;
+    untrack(() => toggleRun(failed));
   });
 
   createEffect(() => {
@@ -380,50 +429,30 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
   const reloadIdx = () => flatItems().findIndex(item => item.kind === "reload");
   const isReloadCursored = () => reloadIdx() >= 0 && props.detailFocused() && props.detailCursorIndex() === reloadIdx();
   const reloadStatus = () => {
-    if (reloadBusy()) return "loading...";
+    if (reloadBusy()) return props.reloadBusyText ?? BUSY.fetchingRuns;
     return "";
   };
 
   return (
     <box flexDirection="column" width="100%" flexGrow={1}>
       <Show when={!!props.onReloadCommit}>
-        <box
-          ref={(el: Renderable) => {
+        <ProviderActionRow
+          label={reloadLabel()}
+          status={reloadStatus()}
+          disabled={!reloadEnabled()}
+          cursored={isReloadCursored()}
+          mouseEnabled={props.mouseEnabled}
+          rows={rows}
+          rowKey="reload"
+          index={reloadIdx}
+          rowRef={el => {
             refsByKey.set("reload", el);
             syncItemRefs();
           }}
-          {...mouseRow("reload", reloadIdx)}
-          flexDirection="row"
-          width="100%"
-          backgroundColor={isReloadCursored() ? t().backgroundElementActive : hoverBg("reload")}
-        >
-          <text
-            selectable={!props.mouseEnabled}
-            flexGrow={1}
-            fg={!reloadEnabled() ? t().foregroundMuted : isReloadCursored() ? t().accent : t().foreground}
-            wrapMode="none"
-          >
-            {reloadLabel()}
-          </text>
-          <Show when={reloadStatus()}>
-            <text selectable={!props.mouseEnabled} flexShrink={0} fg={t().foregroundMuted} wrapMode="none">
-              {reloadStatus()}
-            </text>
-          </Show>
-        </box>
+        />
       </Show>
       <Show when={props.showSummary !== false}>
-        <box flexDirection="row" width="100%">
-          <box flexGrow={1}>
-            <text fg={t().foregroundMuted} wrapMode="none">
-              {props.summaryLabel}
-            </text>
-          </box>
-          <box flexShrink={0} width={2} />
-          <text fg={t().foregroundMuted} wrapMode="none">
-            {props.runs.length}
-          </text>
-        </box>
+        <ProviderSummaryRow label={props.summaryLabel} count={props.runs.length} />
       </Show>
       <For each={props.runs}>
         {(run, runIndexFn) => {
@@ -461,21 +490,18 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                 <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={runIndicatorColor()}>
                   {isExpanded() ? "▾ " : "▸ "}
                 </text>
-                <text
+                <ScrollingLabel
                   selectable={!props.mouseEnabled}
-                  flexGrow={1}
-                  flexShrink={1}
-                  wrapMode="none"
-                  truncate
+                  text={`${run.label} #${run.runNumber}`}
+                  active={isCursored()}
                   fg={runTextColor()}
-                >
-                  {`${run.label}  #${run.runNumber}`}
-                </text>
+                />
                 <box flexShrink={0} width={1} />
                 <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
                   {relTime().padStart(rightInfoWidth())}
                 </text>
-                <Show when={props.showRunDuration !== false && durationWidth() > 0}>
+                {/* Keep the duration column even when runs hide theirs (Jenkins), so runs and jobs line up. */}
+                <Show when={durationWidth() > 0}>
                   <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
                     {runDuration() ? ` ${runDuration().padStart(durationWidth())}` : " ".repeat(durationWidth() + 1)}
                   </text>
@@ -498,22 +524,22 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                       {placeholderTreeLead()}└─
                     </text>
                     <text> </text>
-                    <text fg={t().foregroundMuted}>{props.jobsLoadingText ?? "loading jobs..."}</text>
+                    <text fg={t().foregroundMuted}>{props.jobsLoadingText ?? BUSY.fetchingJobs}</text>
                   </box>
                 </Show>
                 <Show when={!isLoading() && jobError()}>
-                  <box flexDirection="row" width="100%">
-                    <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                      {placeholderTreeLead()}└─
-                    </text>
-                    <text fg={t().foregroundMuted}> </text>
-                    <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
-                      Unavailable
-                    </text>
-                    <text flexShrink={0} width={STATUS_COL_WIDTH} wrapMode="none" fg={t().foregroundMuted}>
-                      {"!".padStart(STATUS_COL_WIDTH)}
-                    </text>
-                  </box>
+                  {error => (
+                    // The reason the jobs did not load (Reload commit retries), like the other placeholders.
+                    <box flexDirection="row" width="100%">
+                      <text flexShrink={0} wrapMode="none" fg={t().border}>
+                        {placeholderTreeLead()}└─
+                      </text>
+                      <text> </text>
+                      <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().error}>
+                        {error()}
+                      </text>
+                    </box>
+                  )}
                 </Show>
                 <Show when={!isLoading() && !jobError() && jobs().length === 0 && (props.noJobsText ?? "")}>
                   <box flexDirection="row" width="100%">
@@ -537,7 +563,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                         ? (props.childCountLabel?.(job.steps.length) ??
                           `${job.steps.length} step${job.steps.length === 1 ? "" : "s"}`)
                         : isLoading()
-                          ? (props.jobsLoadingText ?? "loading jobs...")
+                          ? (props.jobsLoadingText ?? BUSY.fetchingJobs)
                           : "";
                     const jobTextColor = () => (isJobCursored() ? t().accent : t().foreground);
                     const jobTreeLead = () => (runIsLast() ? "   " : "│  ");
@@ -562,16 +588,12 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                             {jobTreeLead()}
                             {jobTreePrefix()}
                           </text>
-                          <text
+                          <ScrollingLabel
                             selectable={!props.mouseEnabled}
-                            flexGrow={1}
-                            flexShrink={1}
-                            wrapMode="none"
-                            truncate
+                            text={job.name}
+                            active={isJobCursored()}
                             fg={jobTextColor()}
-                          >
-                            {job.name}
-                          </text>
+                          />
                           <text
                             selectable={!props.mouseEnabled}
                             flexShrink={0}

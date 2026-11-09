@@ -30,7 +30,7 @@ const commit: Commit = {
   refs: [],
 };
 
-async function renderFooter() {
+async function renderFooter(width = 100) {
   const theme = createThemeState();
   const [layoutMode, setLayoutMode] = createSignal<ReturnType<GraphKeyOptions["layoutMode"]>>("compact");
   const [mouseEnabled, setMouseEnabled] = createSignal(true);
@@ -110,7 +110,7 @@ async function renderFooter() {
         </ThemeContext.Provider>
       );
     },
-    { width: 100, height: 6, useMouse: true, enableMouseMovement: true, kittyKeyboard: true },
+    { width, height: 6, useMouse: true, enableMouseMovement: true, kittyKeyboard: true },
   );
   const point = (label: string) => {
     const lines = setup.captureCharFrame().split("\n");
@@ -534,7 +534,7 @@ test("mouseEnabled false blocks confirm, cancel, back, and clear hover and click
 });
 
 test("footer names provider work in every view; generic loading only covers work without a label", async () => {
-  const d = await renderFooter();
+  const d = await renderFooter(160);
   try {
     const [scanning, setScanning] = createSignal<string | null>("scanning");
     d.state.providers.register({ id: "snyk", displayName: "Snyk", isAvailable: () => true, activity: scanning });
@@ -598,6 +598,79 @@ test("footer names Git's own work; reading commit details only spins", async () 
     });
     await d.flush();
     expect(label()).toContain("Git fetching · Snyk scanning");
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("footer says which CI provider is fetching, and long labels truncate before the key hints", async () => {
+  const d = await renderFooter();
+  try {
+    const [github, setGithub] = createSignal<string | null>("fetching");
+    d.state.providers.register({
+      id: "github-actions",
+      displayName: "GitHub Actions",
+      isAvailable: () => true,
+      activity: github,
+    });
+    d.state.providers.register({
+      id: "jenkins",
+      displayName: "Jenkins",
+      isAvailable: () => true,
+      activity: () => "fetching",
+    });
+    d.state.providers.register({
+      id: "openshift",
+      displayName: "OpenShift",
+      isAvailable: () => true,
+      activity: () => "fetching",
+    });
+    d.state.providers.register({
+      id: "snyk",
+      displayName: "Snyk",
+      isAvailable: () => true,
+      activity: () => "scanning",
+    });
+    d.actions.setFetching(true);
+    await d.flush();
+    const line = () =>
+      d
+        .captureCharFrame()
+        .split("\n")
+        .find(row => row.includes("navigate")) ?? "";
+    // Too long for a 100-column footer: the label is cut at the end and every hint stays whole.
+    expect(line()).toMatch(/Git fetching · GitH\S*… tab GitHub Actions/);
+    expect(line()).toContain("↑/↓ navigate");
+    expect(line()).toContain("shift ←/→ switch project");
+    setGithub(null);
+    d.actions.setFetching(false);
+    await d.flush();
+    expect(line()).toContain("Jenkins fetching · O");
+    expect(line()).not.toContain("GitHub Actions fetching");
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("a wide footer shows every provider's activity in full", async () => {
+  const d = await renderFooter(180);
+  try {
+    d.state.providers.register({
+      id: "github-actions",
+      displayName: "GitHub Actions",
+      isAvailable: () => true,
+      activity: () => "fetching",
+    });
+    d.state.providers.register({
+      id: "snyk",
+      displayName: "Snyk",
+      isAvailable: () => true,
+      activity: () => "scanning",
+    });
+    d.actions.setFetching(true);
+    await d.flush();
+    expect(d.captureCharFrame()).toContain("Git fetching · GitHub Actions fetching · Snyk scanning");
+    expect(d.captureCharFrame()).not.toContain("…");
   } finally {
     await d.dispose();
   }

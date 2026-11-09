@@ -1,7 +1,7 @@
 import { MouseButton, type MouseEvent, type Renderable } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
-import { DETAIL_PANEL_WIDTH_FRACTION, isUncommittedHash, UNCOMMITTED_PLACEHOLDER } from "../constants";
+import { isUncommittedHash, UNCOMMITTED_PLACEHOLDER } from "../constants";
 import { useAppState } from "../context/state";
 import type { Commit, GraphRow } from "../git/types";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
@@ -17,14 +17,10 @@ import { DetailRefs } from "./detail-refs";
 import { CopyableRow, type DetailRowsView, InteractiveCommitEntry, InteractiveSectionHeader } from "./detail-rows";
 import { cursoredItemText } from "./detail-scroll";
 import type { DetailNavRef, DetailViewProps } from "./detail-types";
-import { PANEL_PADDING_X } from "./detail-types";
+import { detailUsableWidth } from "./detail-types";
 import FileListView from "./file-list-view";
 import type { StashFileRowData } from "./stash-entry";
 import { StashEntry } from "./stash-entry";
-
-// ── Layout constants ────────────────────────────────────────────────
-/** Minimum panel width in characters before padding is subtracted. */
-const MIN_PANEL_WIDTH = 60;
 
 export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   const { state, actions } = useAppState();
@@ -58,8 +54,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
 
   // ── Cursor-aware banner scroll for long text ──────────────────────
   // Only the currently-cursored item scrolls when its text overflows.
-  const panelUsableWidth = () =>
-    Math.max(Math.floor(dimensions().width * DETAIL_PANEL_WIDTH_FRACTION), MIN_PANEL_WIDTH) - PANEL_PADDING_X;
+  const panelUsableWidth = () => detailUsableWidth(props.contentWidth, dimensions().width);
 
   // Collapsible section state — reset to expanded when commit changes
   const [childrenExpanded, setChildrenExpanded] = createSignal(true);
@@ -486,6 +481,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
             {/* ══════════════ Files tab ══════════════ */}
             <Show when={activeTab() === "files"}>
               <FileListView
+                contentWidth={props.contentWidth}
                 mouseEnabled={props.mouseEnabled}
                 onMouseFocus={props.onMouseFocus}
                 files={() => detail()?.files ?? []}

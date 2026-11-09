@@ -12,6 +12,8 @@ export type KeyboardScope =
   | "detail-dialog"
   | "job-log"
   | "openshift-resource"
+  /** A log dialog's search row is open or holds a query: Esc clears the search, it must not close the dialog. */
+  | "log-search"
   | "debug";
 
 export function dialogToKeyboardScope(dialog: DialogId): KeyboardScope {

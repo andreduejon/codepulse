@@ -4,6 +4,7 @@ import { MouseButtons } from "@opentui/core/testing";
 import { testRender } from "@opentui/solid";
 import { createSignal, Show } from "solid-js";
 import { type CustomTheme, createThemeState, ThemeContext, themeNames, themes } from "../../context/theme";
+import { getStandardDialogFrame } from "./dialog-chrome";
 import ThemeDialog from "./theme-dialog";
 
 const derivedTheme: CustomTheme = {
@@ -95,6 +96,13 @@ test.each(["escape", "click"])(
       setup.mockInput.pressKey("ARROW_UP");
       await setup.flush();
       expect(theme.themeName()).toBe("olive-garden");
+      // j / k move like the arrows, as in every other list.
+      setup.mockInput.pressKey("j");
+      await setup.flush();
+      expect(theme.themeName()).toBe(derivedTheme.id);
+      setup.mockInput.pressKey("k");
+      await setup.flush();
+      expect(theme.themeName()).toBe("olive-garden");
       setup.mockInput.pressKey("ARROW_DOWN");
       await setup.flush();
       if (close === "escape") setup.mockInput.pressEnter();
@@ -135,7 +143,7 @@ test.each(["escape", "click"])(
   },
 );
 
-test("selected custom details show metadata, mark explicit overrides, and use effective scalar and graph swatches", async () => {
+test("selected custom details show metadata, mark only colors that differ from the base, and use effective swatches", async () => {
   const theme = createThemeState(derivedTheme.id, [derivedTheme, standaloneTheme]);
   const setup = await testRender(
     () => (
@@ -159,11 +167,11 @@ test("selected custom details show metadata, mark explicit overrides, and use ef
     );
     setup.mockInput.pressKey("d");
     await setup.flush();
-    expect(row("Custom Nord *").spans.find(span => span.text.includes("✓"))?.bg).toEqual(
+    expect(row("Custom Nord").spans.find(span => span.text.includes("✓"))?.bg).toEqual(
       RGBA.fromHex(derivedTheme.theme.accent),
     );
     const metadata = () => {
-      const heading = row("Custom Nord *");
+      const heading = row("Custom Nord");
       const valueEnd = heading.text.indexOf("✓") - 1;
       expect(row("id").y).toBe(heading.y + 1);
       expect(row("id").text.trim()).toMatch(/^id\s+custom-nord$/);
@@ -180,15 +188,25 @@ test("selected custom details show metadata, mark explicit overrides, and use ef
       }
     };
     metadata();
-    expect(row("background").y).toBe(row("Custom Nord *").y + 4);
+    expect(row("background").y).toBe(row("Custom Nord").y + 4);
     expect(setup.captureCharFrame().split("\n")[row("base").y + 1].trim()).toBe("");
-    expect(row("accent *").text).toMatch(new RegExp(`accent \\*\\s+${themes.nord.accent} → #abcdef █`));
-    expect(row("accent *").spans.find(span => span.text.includes("█"))?.fg).toEqual(RGBA.fromHex("#abcdef"));
-    expect(row("warning *").text).toMatch(
-      new RegExp(`warning \\*\\s+${themes.nord.warning} → ${themes.nord.warning} █`),
-    );
+    // Details show the stored theme, not the app's provider-aware accent (#abcdef here).
+    // No asterisks: a changed color shows old → new, with its label and new value in normal text.
+    expect(row("Custom Nord").text).not.toContain("*");
+    const fgOf = (label: string, text: string) => row(label).spans.find(span => span.text.includes(text))?.fg;
+    const foreground = RGBA.fromHex(theme.theme().foreground);
+    const muted = RGBA.fromHex(theme.theme().foregroundMuted);
+    expect(row("accent").text).toMatch(new RegExp(`accent\\s+${themes.nord.accent} → #123456 █`));
+    expect(row("accent").spans.find(span => span.text.includes("█"))?.fg).toEqual(RGBA.fromHex("#123456"));
+    expect(fgOf("accent", "accent")).toEqual(foreground);
+    expect(fgOf("accent", "#123456")).toEqual(foreground);
+    expect(fgOf("accent", themes.nord.accent)).toEqual(muted);
+    // Listed as an override, but the same value as the base: not a change.
+    expect(row("warning").text).toMatch(new RegExp(`warning\\s+${themes.nord.warning} █`));
+    expect(row("warning").text).not.toContain("→");
+    expect(fgOf("warning", "warning")).toEqual(muted);
     expect(row("background").text).toMatch(new RegExp(`background\\s+${themes.nord.background} █`));
-    expect(row("background").text).not.toContain("*");
+    expect(fgOf("background", "background")).toEqual(muted);
     expect(row("background").text).not.toContain("→");
     expect(row("background").spans.find(span => span.text.includes("█"))?.fg).toEqual(
       RGBA.fromHex(themes.nord.background),
@@ -202,13 +220,22 @@ test("selected custom details show metadata, mark explicit overrides, and use ef
       seen += `\n${setup.captureCharFrame()}`;
       metadata();
     }
+    expect(seen).not.toContain("*");
+    expect(seen).not.toContain("—");
     derivedTheme.theme.graphColors.forEach((hex, index) => {
-      const label = `graph color ${index + 1} *`;
-      const baseHex = themes.nord.graphColors[index] ?? "—";
-      expect(seen).toMatch(new RegExp(`graph color ${index + 1} \\*\\s+${baseHex} → ${hex} █`));
+      const label = `graph color ${index + 1}`;
+      const baseHex = themes.nord.graphColors[index];
+      // Changed: old → new. Same as the base: just the value. Added beyond the base: just the new value.
+      const value = baseHex !== undefined && baseHex !== hex ? `${baseHex} → ${hex}` : hex;
+      expect(seen).toMatch(new RegExp(`graph color ${index + 1}\\s+${value} █`));
+      const labelSpan = captures
+        .flatMap(capture => capture.lines)
+        .find(line => line.spans.some(span => span.text.trim() === label))
+        ?.spans.find(span => span.text.trim() === label);
+      expect(labelSpan?.fg).toEqual(baseHex !== hex ? foreground : muted);
       const graphRow = captures
         .flatMap(capture => capture.lines)
-        .find(line => line.spans.some(span => span.text.includes(label)));
+        .find(line => line.spans.some(span => span.text.trim() === label));
       expect(graphRow?.spans.find(span => span.text.includes("█"))?.fg).toEqual(RGBA.fromHex(hex));
     });
     setup.mockInput.pressKey("d");
@@ -234,7 +261,7 @@ test("selected custom details show metadata, mark explicit overrides, and use ef
     }
     expect(setup.captureCharFrame()).not.toContain("*");
     expect(setup.captureCharFrame()).not.toContain("→");
-    expect(row("accent").text).toMatch(/accent\s+#abcdef █/);
+    expect(row("accent").text).toMatch(new RegExp(`accent\\s+${themes["catppuccin-mocha"].accent} █`, "i"));
   } finally {
     await setup.dispose();
   }
@@ -266,7 +293,7 @@ test("long custom names preserve markers and long IDs wrap within details metada
     expect(appliedRow()).not.toContain(custom.theme.name);
     setup.mockInput.pressKey("d");
     await setup.flush();
-    expect(appliedRow()).toContain("*");
+    expect(appliedRow()).not.toContain("*");
     expect(appliedRow()).not.toContain(custom.theme.name);
     const lines = setup.captureCharFrame().split("\n");
     const idY = lines.findIndex(line => line.trim().startsWith("id "));
@@ -607,6 +634,11 @@ test("picker and details share capped terminal-clamped dimensions and preserve p
       await setup.flush();
       expect(bounds()).toEqual(pickerBounds);
       expect(setup.captureCharFrame()).toContain("d themes");
+      // Details that do not fit are clipped: the hints row holds only the hints, after one empty row.
+      const detailLines = setup.captureCharFrame().split("\n");
+      const hintsY = detailLines.findIndex(line => line.includes("d themes"));
+      expect(detailLines[hintsY].trim()).toBe("enter select · ↑/↓ scroll · d themes");
+      expect(detailLines[hintsY - 1].trim()).toBe("");
       if (height >= 22) expect(setup.captureCharFrame()).toContain(themes[preview].name);
       expect(theme.themeName()).toBe(preview);
       setup.mockInput.pressKey("d");
@@ -734,10 +766,10 @@ test("details replace theme list without resizing, pin predefined metadata, and 
     await setup.flush();
     const accentLine = frame()
       .split("\n")
-      .findIndex(line => /accent\s+#abcdef █/.test(line));
+      .findIndex(line => line.includes("accent") && line.includes(`${theme.theme().accent} █`));
     expect(accentLine).toBeGreaterThanOrEqual(0);
     expect(setup.captureSpans().lines[accentLine].spans.find(s => s.text.includes("█"))?.fg).toEqual(
-      RGBA.fromHex("#abcdef"),
+      RGBA.fromHex(theme.theme().accent),
     );
 
     expect(open()).toBe(true);
@@ -777,7 +809,7 @@ test("details replace theme list without resizing, pin predefined metadata, and 
           expect(seen).toMatch(new RegExp(`graph color ${index + 1}\\s+${hex} █`));
         });
       } else {
-        expect(seen).toContain(field === "accent" ? "#abcdef" : value);
+        expect(seen).toContain(value);
       }
     }
     const bottom = palette.scrollTop;
@@ -815,6 +847,38 @@ test("details replace theme list without resizing, pin predefined metadata, and 
     expect(open()).toBe(false);
     expect(theme.themeName()).toBe("nord");
     expect(onSelect).toHaveBeenCalledTimes(1);
+  } finally {
+    await setup.dispose();
+  }
+});
+
+test("one empty row separates the last color from the footer, and the footer sits one row above the bottom edge like the title below the top", async () => {
+  const theme = createThemeState(derivedTheme.id, [derivedTheme]);
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={theme}>
+        <ThemeDialog onClose={() => {}} />
+      </ThemeContext.Provider>
+    ),
+    { width: 100, height: 40 },
+  );
+  try {
+    await setup.flush();
+    setup.mockInput.pressKey("d");
+    await setup.flush();
+    const lines = setup.captureCharFrame().split("\n");
+    const footer = lines.findIndex(line => line.includes("enter select"));
+    const title = lines.findIndex(line => line.includes("Color Theme"));
+    expect(footer).toBeGreaterThan(0);
+    // Title, one empty row, content ... content, one empty row, footer.
+    expect(lines[title + 1].trim()).toBe("");
+    expect(lines[title + 2].trim()).not.toBe("");
+    expect(lines[footer - 1].trim()).toBe("");
+    expect(lines[footer - 2].trim()).not.toBe("");
+    // One padding row above the title and one below the footer: title and footer are height - 3 rows apart.
+    // The theme dialog caps its height at 32 rows.
+    const height = Math.min(32, getStandardDialogFrame({ width: 100, height: 40 }).height);
+    expect(footer - title).toBe(height - 3);
   } finally {
     await setup.dispose();
   }

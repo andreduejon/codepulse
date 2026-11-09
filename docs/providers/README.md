@@ -10,12 +10,39 @@ Provider **Auto refresh** controls provider requests while that provider view is
 focused. Git **Auto refresh** and **Auto fetch** apply only to repository data.
 
 **Fetch size** is the graph commit window considered by a provider. It is not a
-cache-retention setting and does not limit resources returned by provider APIs.
+cache-retention setting and does not limit resources returned by provider APIs,
+with one exception: Jenkins also inspects only that many recent builds per job
+(see the [Jenkins guide](jenkins.md)).
 Scrolling outside the fetched window does not start a remote request, but
 available disk-cached data may still appear.
 
 Reload requests the selected commit or current provider inventory again.
 Provider-specific guides describe any additional live updates or automatic work.
+
+## Shared behavior
+
+GitHub Actions, Jenkins, and OpenShift follow the same rules in the graph,
+details, and logs; Snyk shares the busy text, dimming, and action-row rules, and
+differs where noted:
+
+- **Busy text** says what kind of work runs: `fetching` is network (Git remote,
+  GitHub Actions, Jenkins, OpenShift), `reading` is local Git, `scanning` is Snyk.
+  The footer names it (`GitHub Actions fetching`, `Snyk scanning`), including auto
+  refresh, and cuts the label with `…` before the key hints when space runs out.
+- **Graph columns** use the same chips: fail, running, neutral (grey: cancelled,
+  skipped, or unknown), pass (Snyk: four severity chips). Columns widen to fit the
+  counts while the subject keeps room, dim with search, path, and ancestry like the
+  Git columns, and the selected row is bold.
+- **Detail tabs** start with **Load commit** / **Reload commit** (Snyk: **Scan** /
+  **Rescan commit**). While a provider is unavailable the row is muted and the
+  cursor skips it; compact details show the reason above the tabs.
+- **Expired credentials** (401) stop automatic requests (polls, watches, view
+  switches); the banner ends in *Reload to retry*, and **Reload commit**, `:reload`,
+  or `f` retries. Snyk runs the CLI per scan and retries with **Rescan commit**.
+- **Logs** (CI jobs and OpenShift resources) share one viewer: `/` searches
+  (`n` / `N` move between hits), `c` cycles the view, `w` wraps, `r` refreshes what is shown,
+  `g` / `G`, space, and shift arrows scroll. A failed log shows its reason; an empty
+  one says *No log output.*
 
 ## Cache
 
@@ -33,6 +60,9 @@ Missing environment variables fall back to the user's `AppData\Local` and
 **Cache limit** is the number of commit snapshots retained on disk, not the
 number of runs, builds, jobs, resources, or findings. Supported values are 10,
 20, 50, 100, 200, and 500. The default is 20. Fetch size remains 10, 20, or 50.
+Every cached commit shows when a provider loads, also below the fetch size, without
+asking the server about it. Snyk has no fetch size and shows the cached scans of all
+loaded commits. Showing a cached commit does not count as an access for eviction.
 
 Least-recently-accessed snapshots leave when the limit is exceeded, along with
 associated artifacts through a foreign-key cascade. Foreign keys are enabled on

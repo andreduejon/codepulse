@@ -1,129 +1,77 @@
 /**
- * GitHub Actions graph columns.
+ * CI graph columns (GitHub Actions and Jenkins).
  *
- * When `activeProviderView === "github-actions"` these two components replace
- * the Author and Date columns in the graph row / column header:
+ * In a CI view these replace the Author and Date columns:
  *
- *   Column 1 (AUTHOR_COL_WIDTH = 15 chars): CI run count blocks
- *     Fail count with error bg, running with info bg, pass with success bg.
- *     Zero counts are skipped.
- *
- *   Column 2 (DATE_COL_WIDTH = 15 chars): Latest run relative time / status
- *     Relative time is muted. The "running" label uses info.
+ *   Column 1 (Status): run-count chips — fail, running, neutral (cancelled, skipped, unknown), pass. Zero counts are
+ *     skipped. The column grows to fit the widest chips (see `graphColumnWidths`).
+ *   Column 2 (Last Run): relative time of the latest run, or `running` in the running colour.
  */
 
-import { For } from "solid-js";
-import { AUTHOR_COL_WIDTH, DATE_COL_WIDTH, UNCOMMITTED_PLACEHOLDER } from "../../constants";
+import { UNCOMMITTED_PLACEHOLDER } from "../../constants";
 import { useAppState } from "../../context/state";
 import { useT } from "../../hooks/use-t";
 import { formatRelativeDate } from "../../utils/date";
+import { ciBadgeCounts } from "../graph-column-widths";
 import type { GraphBadge } from "../provider";
 import { statusColor } from "../shared/status";
+import { providerTextColor, StatusChips, statusCountChips } from "../shared/status-chips";
 
-interface ActionsCountsProps {
+interface ActionsColumnProps {
   badge: GraphBadge | undefined;
   active: boolean;
+  dimmed: boolean;
+  width: number;
 }
 
-/** Render coloured run-count blocks in the author column. */
-export function ActionsCountsColumn(props: Readonly<ActionsCountsProps>) {
+/** Coloured run-count chips in the author column. */
+export function ActionsCountsColumn(props: Readonly<ActionsColumnProps>) {
   const t = useT();
-
   return (
-    <box flexShrink={0} width={AUTHOR_COL_WIDTH} paddingRight={2} overflow="hidden" flexDirection="row" gap={1}>
-      {(() => {
-        const b = props.badge;
-        if (!b) {
-          return (
-            <text fg={t().foregroundMuted} wrapMode="none">
-              {UNCOMMITTED_PLACEHOLDER}
-            </text>
-          );
-        }
+    <StatusChips
+      chips={statusCountChips(t(), ciBadgeCounts(props.badge))}
+      width={props.width}
+      paddingRight={2}
+      active={props.active}
+      dimmed={props.dimmed}
+    />
+  );
+}
 
-        const blocks: { count: number; fg: string; bg: string }[] = [];
-        if (b.failCount > 0) blocks.push({ count: b.failCount, fg: t().background, bg: statusColor(t(), "fail") });
-        if (b.runningCount > 0)
-          blocks.push({ count: b.runningCount, fg: t().background, bg: statusColor(t(), "running") });
-        if (b.passCount > 0) blocks.push({ count: b.passCount, fg: t().background, bg: statusColor(t(), "pass") });
-
-        if (blocks.length === 0) {
-          return (
-            <text fg={t().foregroundMuted} wrapMode="none">
-              {UNCOMMITTED_PLACEHOLDER}
-            </text>
-          );
-        }
-
-        return (
-          <For each={blocks}>
-            {block => (
-              <text flexShrink={0} wrapMode="none" fg={block.fg} bg={block.bg}>
-                {` ${block.count} `}
-              </text>
-            )}
-          </For>
-        );
-      })()}
+/** The latest run's relative time (or `running`) in the date column. */
+export function ActionsDateColumn(props: Readonly<ActionsColumnProps>) {
+  const t = useT();
+  const running = () => props.badge?.latestStatus === "running";
+  const label = () => {
+    const b = props.badge;
+    if (!b?.latestRunAt) return UNCOMMITTED_PLACEHOLDER;
+    return running() ? "running" : formatRelativeDate(b.latestRunAt);
+  };
+  const fg = () =>
+    running() && !props.dimmed ? statusColor(t(), "running") : providerTextColor(t(), props.active, props.dimmed);
+  return (
+    <box flexShrink={0} width={props.width} overflow="hidden">
+      <text fg={fg()} wrapMode="none" truncate>
+        {props.active ? <strong>{label()}</strong> : label()}
+      </text>
     </box>
   );
 }
 
-interface ActionsDateProps {
-  badge: GraphBadge | undefined;
-  active: boolean;
-}
-
-/** Render the latest-run date in the date column, in muted color. */
-export function ActionsDateColumn(props: Readonly<ActionsDateProps>) {
-  const t = useT();
-
-  return (
-    <box flexShrink={0} width={DATE_COL_WIDTH} overflow="hidden">
-      {(() => {
-        const b = props.badge;
-        if (!b?.latestRunAt) {
-          return (
-            <text fg={t().foregroundMuted} wrapMode="none" truncate>
-              {UNCOMMITTED_PLACEHOLDER}
-            </text>
-          );
-        }
-        const running = b.latestStatus === "running";
-        const label = running ? "running" : formatRelativeDate(b.latestRunAt);
-        const fg = running ? statusColor(t(), "running") : t().foregroundMuted;
-        if (props.active) {
-          return (
-            <text fg={fg} wrapMode="none" truncate>
-              <strong>{label}</strong>
-            </text>
-          );
-        }
-        return (
-          <text fg={fg} wrapMode="none" truncate>
-            {label}
-          </text>
-        );
-      })()}
-    </box>
-  );
-}
-
-/** Column headers for provider mode (replaces Author / Date headers). */
-export function ActionsColumnHeaders() {
+/** Column headers for CI views (replace Author / Date). */
+export function ActionsColumnHeaders(props: Readonly<{ first: number; second: number }>) {
   const { state } = useAppState();
   const t = useT();
-  const leftPanelFocused = () => !state.detailFocused();
-  const color = () => (leftPanelFocused() ? t().accent : t().foregroundMuted);
+  const color = () => (!state.detailFocused() ? t().accent : t().foregroundMuted);
 
   return (
     <>
-      <box flexShrink={0} width={AUTHOR_COL_WIDTH} paddingRight={2}>
+      <box flexShrink={0} width={props.first} paddingRight={2}>
         <text wrapMode="none" truncate fg={color()}>
           <strong>Status</strong>
         </text>
       </box>
-      <box flexShrink={0} width={DATE_COL_WIDTH}>
+      <box flexShrink={0} width={props.second}>
         <text wrapMode="none" truncate fg={color()}>
           <strong>Last Run</strong>
         </text>

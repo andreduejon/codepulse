@@ -54,6 +54,29 @@ export function handleDetailKey(e: KeyEvent, opts: DetailKeyOptions): boolean {
     });
   };
 
+  /**
+   * The cursored item is taller than the viewport (a long commit body) and part of it is still hidden in `direction`:
+   * scroll the viewport through it instead of moving the cursor past it. Returns true when it scrolled.
+   */
+  const scrollWithinTallItem = (direction: -1 | 1, rows: number): boolean => {
+    const box = getDetailScrollboxRef();
+    const el = detailNavRef.itemRefs[state.detailCursorIndex()];
+    if (!box || !el || !Number.isFinite(box.viewport.height) || el.height <= box.viewport.height) return false;
+    const top = el.screenY;
+    const bottom = top + el.height;
+    const viewTop = box.viewport.screenY;
+    const viewBottom = viewTop + box.viewport.height;
+    if (direction > 0 && bottom > viewBottom) {
+      box.scrollBy(Math.min(rows, bottom - viewBottom), "absolute");
+      return true;
+    }
+    if (direction < 0 && top < viewTop) {
+      box.scrollBy(-Math.min(rows, viewTop - top), "absolute");
+      return true;
+    }
+    return false;
+  };
+
   switch (e.name) {
     case "left":
     case "h": {
@@ -114,6 +137,7 @@ export function handleDetailKey(e: KeyEvent, opts: DetailKeyOptions): boolean {
       e.preventDefault();
       if (!allowRepeatNav()) return true;
       const delta = e.shift ? -SHIFT_JUMP : -1;
+      if (scrollWithinTallItem(-1, -delta)) return true;
       actions.moveDetailCursor(delta, detailNavRef.itemCount);
       scrollCursorIntoView(-1);
       return true;
@@ -123,6 +147,7 @@ export function handleDetailKey(e: KeyEvent, opts: DetailKeyOptions): boolean {
       e.preventDefault();
       if (!allowRepeatNav()) return true;
       const delta = e.shift ? SHIFT_JUMP : 1;
+      if (scrollWithinTallItem(1, delta)) return true;
       actions.moveDetailCursor(delta, detailNavRef.itemCount);
       scrollCursorIntoView(1);
       return true;

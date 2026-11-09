@@ -1,16 +1,20 @@
-import { For } from "solid-js";
-import { UNCOMMITTED_PLACEHOLDER } from "../../constants";
+import { DATE_COL_WIDTH, UNCOMMITTED_PLACEHOLDER } from "../../constants";
 import { useAppState } from "../../context/state";
 import type { Theme } from "../../context/theme";
 import { useT } from "../../hooks/use-t";
+import { BUSY } from "../../utils/busy-text";
 import { formatRelativeDate } from "../../utils/date";
 import type { GraphBadge } from "../provider";
+import { providerTextColor, type StatusChip, StatusChips } from "../shared/status-chips";
+import { severityColor } from "./tab-shared";
 import type { SnykScanResult, SnykSeverity } from "./types";
 
 export interface SnykGraphColumnProps {
   /** Exact scan for the row's commit, or null when that commit has not been scanned. */
   scan: SnykScanResult | null;
   active: boolean;
+  dimmed: boolean;
+  width: number;
 }
 
 const SEVERITIES: { severity: SnykSeverity; label: string }[] = [
@@ -20,7 +24,8 @@ const SEVERITIES: { severity: SnykSeverity; label: string }[] = [
   { severity: "low", label: "L" },
 ];
 
-const LAST_SCAN_COL_WIDTH = 11;
+/** The date column's width, like CI's Last Run: fits absolute dates with the partial marker (`16. Jun 12:30 ?`). */
+export const LAST_SCAN_COL_WIDTH = DATE_COL_WIDTH;
 /** Four ` C0 ` chips (16) + three `gap={1}` (3) + padding before the date (2). */
 const SEVERITY_CHIPS_WIDTH = 21;
 
@@ -40,49 +45,28 @@ export function severityColumnWidth(badges: Iterable<GraphBadge>): number {
   return width;
 }
 
-function severityColor(theme: Theme, severity: SnykSeverity): string {
-  switch (severity) {
-    case "critical":
-      return theme.severityCritical;
-    case "high":
-      return theme.severityHigh;
-    case "medium":
-      return theme.severityMedium;
-    case "low":
-      return theme.severityLow;
-  }
+function severityChips(theme: Theme, scan: SnykScanResult): StatusChip[] {
+  return SEVERITIES.map(({ severity, label }) => {
+    const count = scan.counts[severity];
+    return {
+      text: `${label}${count}`,
+      fg: count === 0 ? theme.foregroundMuted : theme.background,
+      bg: count === 0 ? theme.backgroundElementActive : severityColor(theme, severity),
+    };
+  });
 }
 
-/** Four compact severity counts occupying the existing author column. */
+/** Four compact severity counts occupying the author column. */
 export function SnykCountsColumn(props: Readonly<SnykGraphColumnProps>) {
   const t = useT();
-  const { state } = useAppState();
-  const columnWidth = () => severityColumnWidth(state.graphBadges().values());
-
   return (
-    <box flexShrink={0} width={columnWidth()} paddingRight={2} overflow="hidden" flexDirection="row" gap={1}>
-      {props.scan ? (
-        <For each={SEVERITIES}>
-          {item => {
-            const count = () => props.scan?.counts[item.severity] ?? 0;
-            const background = () => (count() === 0 ? t().backgroundElementActive : severityColor(t(), item.severity));
-            const foreground = () => (count() === 0 ? t().foregroundMuted : t().background);
-            const label = () => ` ${item.label}${count()} `;
-            return (
-              <box flexShrink={0} height={1} backgroundColor={background()}>
-                <text flexShrink={0} wrapMode="none" fg={foreground()} bg={background()}>
-                  {props.active ? <strong>{label()}</strong> : label()}
-                </text>
-              </box>
-            );
-          }}
-        </For>
-      ) : (
-        <text fg={t().foregroundMuted} wrapMode="none">
-          {UNCOMMITTED_PLACEHOLDER}
-        </text>
-      )}
-    </box>
+    <StatusChips
+      chips={props.scan ? severityChips(t(), props.scan) : []}
+      width={props.width}
+      paddingRight={2}
+      active={props.active}
+      dimmed={props.dimmed}
+    />
   );
 }
 
@@ -91,34 +75,43 @@ export function snykScanLabel(scan: SnykScanResult | null): string {
   return formatRelativeDate(scan.scannedAt);
 }
 
-/** Relative scan time in the existing date column. */
-export function SnykScanColumn(props: Readonly<SnykGraphColumnProps>) {
+/**
+ * Relative scan time in the date column. A partial scan adds a `?` in the warning colour (some projects failed, so
+ * zero findings is not a clean result); a scan in progress for this commit says `scanning...`.
+ */
+export function SnykScanColumn(props: Readonly<SnykGraphColumnProps & { scanning: boolean }>) {
   const t = useT();
-  const label = () => snykScanLabel(props.scan);
+  const label = () => (props.scanning ? BUSY.scanning : snykScanLabel(props.scan));
+  const partial = () => !props.scanning && !!props.scan?.partial;
+  const fg = () => providerTextColor(t(), props.active, props.dimmed);
 
   return (
-    <box flexShrink={0} width={LAST_SCAN_COL_WIDTH} overflow="hidden">
-      <text fg={t().foregroundMuted} wrapMode="none" truncate>
+    <box flexShrink={0} width={props.width} overflow="hidden" flexDirection="row">
+      <text fg={fg()} wrapMode="none" flexShrink={1} truncate>
         {props.active ? <strong>{label()}</strong> : label()}
       </text>
+      {partial() ? (
+        <text flexShrink={0} wrapMode="none" fg={props.dimmed ? t().foregroundMuted : t().warning}>
+          {props.active ? <strong>{" ?"}</strong> : " ?"}
+        </text>
+      ) : null}
     </box>
   );
 }
 
-export function SnykColumnHeaders() {
+export function SnykColumnHeaders(props: Readonly<{ first: number; second: number }>) {
   const { state } = useAppState();
   const t = useT();
   const color = () => (!state.detailFocused() ? t().accent : t().foregroundMuted);
-  const columnWidth = () => severityColumnWidth(state.graphBadges().values());
 
   return (
     <>
-      <box flexShrink={0} width={columnWidth()} paddingRight={2}>
+      <box flexShrink={0} width={props.first} paddingRight={2}>
         <text wrapMode="none" truncate fg={color()}>
           <strong>Severity</strong>
         </text>
       </box>
-      <box flexShrink={0} width={LAST_SCAN_COL_WIDTH}>
+      <box flexShrink={0} width={props.second}>
         <text wrapMode="none" truncate fg={color()}>
           <strong>Last Scan</strong>
         </text>

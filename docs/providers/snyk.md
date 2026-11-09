@@ -46,8 +46,9 @@ Each result is a snapshot of that commit against Snyk vulnerability data at disp
 - **Complete scan** — all supported discovered projects produced a result.
 - **Partial scan** — some projects produced results while others failed. The
   result can under-report vulnerabilities.
-- **No supported project** — Snyk found no supported dependency project. This
-  is not a clean result.
+- **No supported project** — Snyk found no supported dependency project. The
+  banner reads **No supported dependency project** · Snyk with the supported
+  managers below. Nothing is cached, and this is not a clean result.
 - **Failed scan** — authentication, dependency resolution, repository setup, or
   Snyk execution failed. When Snyk could not resolve any project, the banner names
   each manifest with Snyk's reason (**Could not resolve any project**).
@@ -72,7 +73,9 @@ Graph shows four severity counts for exact scanned commits:
 C0 H2 M0 L4
 ```
 
-Zero counts remain visible in muted color. Unscanned commits show placeholders. The **Vulnerabilities** tab lists findings by severity, dependency, installed version, and fixed version when available. Stashes appear only in the Git view.
+Zero counts remain visible in muted color. Unscanned commits show placeholders.
+A partial scan adds a `?` in the warning colour after its scan time (zero findings
+there is not a clean result), and a commit being scanned says `scanning...`. The **Vulnerabilities** tab lists findings by severity, dependency, installed version, and fixed version when available. Stashes appear only in the Git view.
 
 For multi-project repositories, Codepulse keeps successful project results when
 another project fails and labels the result with the failed project count. Snyk
@@ -129,10 +132,11 @@ the Snyk view, including before the first scan. Use **Scan commit** in either ta
 When a project has no graph, its header stays in the tree and a notice pinned at
 the bottom of Dependencies explains why: **N projects failed, M skipped**, then each
 manifest path with its reason (for example, Bun missing). The notice belongs to the
-selected commit; close it with `✕` until the next scan of that commit. A repository
-without a supported project says so inside the tab. Findings are retained either
-way; only a failed scan (Snyk missing, authentication, unusable output) shows a red
-error in the banner above the command bar.
+selected commit; close it with `✕` until the next scan of that commit. A scan with
+findings but no dependency graph says so inside the tab. Findings are retained either
+way; a scan that cannot run at all (no supported project, Snyk missing,
+authentication, unusable output) shows a red error in the banner above the command
+bar.
 
 - Scanned files/projects are bold root headers (like severity headers), with
   direct dependencies visible and a right-aligned package count: `N`, or

@@ -291,6 +291,7 @@ export function aggregateRunsToGraphBadge(sha: string, runs: GitHubWorkflowRun[]
     passCount,
     failCount,
     runningCount,
+    unknownCount,
     latestRunAt: latestRun?.updatedAt ?? "",
     latestStatus,
   };
@@ -786,7 +787,8 @@ export async function fetchRunJobs(
  * The GitHub API returns a redirect to a temporary pre-signed URL for the log
  * content.  We follow the redirect and return the raw text.
  *
- * Returns an empty string (never throws) on any error.
+ * An empty string is a job without output. A failed request throws its banner (`GitHub token expired. …`,
+ * `GitHub log failed.`), so the log dialog can say why instead of showing an empty log.
  */
 export async function fetchJobLog(
   repo: GitHubRepo,
@@ -802,12 +804,11 @@ export async function fetchJobLog(
     const res = await fetchWithRetry(url, { headers, signal, redirect: "follow" });
     if (!res.ok) {
       debugGitHubHttp(res, "logs", `Logs HTTP ${res.status} for job ${jobId}`);
-      return "";
+      throw new Error(githubHttpBanner(res, "logs"));
     }
     return await res.text();
   } catch (err) {
     if (signal?.aborted) throw err;
-    debugError("GitHub", err);
-    return "";
+    throw new Error(bannerOrFallback(err, BANNER.github.logFailed, "GitHub"));
   }
 }

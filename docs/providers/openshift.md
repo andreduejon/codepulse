@@ -65,14 +65,16 @@ persisted and does not recreate the snapshot.
 Each snapshot is one commit SHA. Limits `10`, `20`, `50`, `100`, `200`, and `500`
 count snapshots, not Builds. Live terminal Builds merge into the existing
 snapshot by Build id, preserving its snapshot ID and logs. OpenShift history
-prune does not drop Builds already cached. Least-recently-accessed snapshots
-evict at the limit, cascading to their log artifacts. Pods, workloads, and
+prune does not drop Builds already cached. Every cached commit shows its Builds,
+also below the fetch size, and keeps them through refreshes. Least-recently-accessed
+snapshots evict at the limit, cascading to their log artifacts. Pods, workloads, and
 ImageStreamTags are not written to disk.
 
-An expired token (401) stops further requests. The banner reads **Token expired** ·
-OpenShift with `Live data unavailable.` below. Graph and details keep the last Live
-and Cache data. Provider reload and live requests are disabled. Cached Build
-JSON and logs remain viewable.
+An expired token (401) stops automatic requests: polls, watches, and fetches on
+view switches or selection. The banner reads **Token expired** · OpenShift with
+`Live data unavailable. Reload to retry.` below. Graph and details keep the last
+Live and Cache data, and cached Build JSON and logs remain viewable. **Reload
+commit**, `:reload`, or `f` retries explicitly, like GitHub Actions and Jenkins.
 
 ## Matching
 
@@ -113,16 +115,27 @@ that produced them.
 - `c` cycles view mode (log / JSON) for Builds and Pods. Terminal Build JSON
   uses the cached object when present; otherwise JSON is a live snapshot.
   Leave the log view or close the dialog to abort follow.
+- `r` refreshes what is shown: the log (restarting a follow) or, in JSON view, the
+  object. Workloads without logs open in JSON and refresh the same way.
+- `/` searches the log or JSON (`n` / `N` next and previous hit), like CI logs.
+  A failed request shows its reason; an empty log says *No log output.*
+
+Live updates keep the namespaces you collapsed and the cursor on the same row.
+When a live list fails, the last workloads stay visible and the banner (every
+request failed) or a tab notice (some failed) says so.
 
 ## Status
 
-- `PASS`: successful Build, Ready Pod, or fully converged workload.
-- `RUN`: active Build, Pending/not-ready Pod, or incomplete workload rollout.
-- `FAIL`: failed Build, fatal container state, replica failure, or failed
-  workload progression.
-- `?`: insufficient or indeterminate status.
+Resources show the same status symbols as CI runs; graph chips use the same
+colours.
 
-Aggregate precedence is `FAIL`, `RUN`, `?`, then `PASS`.
+- `✓` pass: successful Build, Ready Pod, or fully converged workload.
+- `●` running: active Build, Pending/not-ready Pod, or incomplete workload rollout.
+- `✗` fail: failed Build, fatal container state, replica failure, or failed
+  workload progression.
+- `?` unknown: insufficient or indeterminate status (a grey chip in the graph).
+
+Aggregate precedence is fail, running, unknown, then pass.
 
 ## Required read permissions
 

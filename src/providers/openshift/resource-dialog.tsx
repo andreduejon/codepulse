@@ -1,6 +1,6 @@
-import type { ScrollBoxRenderable } from "@opentui/core";
+import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
-import { createEffect, createMemo, createSignal, For, onCleanup } from "solid-js";
+import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import {
   DialogFooter,
   DialogOverlay,
@@ -8,9 +8,18 @@ import {
   DialogTitleBar,
   getStandardDialogFrame,
 } from "../../components/dialogs/dialog-chrome";
-import { getDialogTitleContentWidth, middleTruncate, TITLE_SEP } from "../../components/dialogs/title-utils";
+import {
+  highlightHits,
+  LineNumber,
+  LogSearchRow,
+  useLogSearch,
+  useVisibleNumberWidth,
+} from "../../components/dialogs/log-search";
+import { handleLogScrollKey, type LogViewState, LogViewStatus } from "../../components/dialogs/log-view";
+import { fitTitleSegments } from "../../components/dialogs/title-utils";
 import { KeyHint, KeyHintSeparator } from "../../components/key-hint";
 import { useT } from "../../hooks/use-t";
+import { BUSY } from "../../utils/busy-text";
 import { stripTerminalControls } from "../../utils/terminal-text";
 import type { OpenShiftResource } from "./types";
 import { shouldFollowOpenShiftLog } from "./watch";
@@ -20,10 +29,11 @@ interface OpenShiftResourceDialogProps {
   onClose: () => void;
   loadLog?: (resource: OpenShiftResource, force?: boolean) => Promise<string>;
   followLog?: (resource: OpenShiftResource, signal: AbortSignal, onText: (text: string) => void) => Promise<void>;
-  loadObject?: (resource: OpenShiftResource) => Promise<unknown>;
+  loadObject?: (resource: OpenShiftResource, force?: boolean) => Promise<unknown>;
+  /** The search row starts or stops owning Esc (see `useLogSearch`). */
+  onSearchActive?: (active: boolean) => void;
 }
 
-const SCROLL_JUMP = 10;
 type ViewMode = "log" | "json";
 
 function resourceHasLog(resource: OpenShiftResource): boolean {
@@ -62,12 +72,12 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
     }
   };
 
-  const loadObject = async () => {
+  const loadObject = async (force = false) => {
     if (!props.loadObject) return;
     setObjectLoading(true);
     setObjectError(null);
     try {
-      setObjectText(JSON.stringify(await props.loadObject(props.resource), null, 2));
+      setObjectText(JSON.stringify(await props.loadObject(props.resource, force), null, 2));
     } catch (error) {
       setObjectError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -118,36 +128,62 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
     queueMicrotask(() => scrollboxRef?.scrollTo(Infinity));
   });
 
-  const lines = createMemo(() => {
+  const lines = createMemo(() =>
+    viewMode() === "log" ? stripTerminalControls(logText() ?? "").split("\n") : (objectText() ?? "").split("\n"),
+  );
+  /** Loading, failed or empty: shown instead of numbered lines, the same way as the CI log dialog. */
+  const viewState = (): LogViewState | null => {
     if (viewMode() === "log") {
-      if (logLoading()) return ["loading..."];
-      if (logError()) return [logError() ?? ""];
-      return stripTerminalControls(logText() ?? "").split("\n");
+      if (logLoading()) return { kind: "loading", text: BUSY.fetchingLog };
+      const error = logError();
+      if (error) return { kind: "error", title: "Failed to load log", message: error };
+      if (!logText()?.trim()) return { kind: "empty", text: "No log output." };
+      return null;
     }
-    if (objectLoading()) return ["loading..."];
-    if (objectError()) return [objectError() ?? ""];
-    return (objectText() ?? "").split("\n");
+    if (objectLoading()) return { kind: "loading", text: BUSY.fetchingObject };
+    const error = objectError();
+    if (error) return { kind: "error", title: "Failed to load object", message: error };
+    return null;
+  };
+  const lineRefs: Renderable[] = [];
+  const lineNoWidth = useVisibleNumberWidth({
+    scrollbox: () => scrollboxRef,
+    rowAt: index => lineRefs[index],
+    lines,
+    numberAt: index => index + 1,
+    layoutKey: wrapEnabled,
   });
-  const lineNoWidth = createMemo(() => lines().length.toString().length);
+  const search = useLogSearch({
+    texts: lines,
+    rowAt: index => lineRefs[index],
+    scrollbox: () => scrollboxRef,
+    onActiveChange: active => props.onSearchActive?.(active),
+  });
   const title = createMemo(() => {
     const mode = viewMode() === "log" ? (followEnded() ? "log ended" : "log") : "object";
-    const fixed = ["OpenShift", props.resource.kind, props.resource.namespace, mode].join(TITLE_SEP);
-    const available = Math.max(8, getDialogTitleContentWidth(dialogFrame().width) - fixed.length - TITLE_SEP.length);
-    return (
-      <DialogTitle
-        segments={[
-          { text: "OpenShift" },
-          { text: props.resource.kind },
-          { text: props.resource.namespace },
-          { text: middleTruncate(props.resource.name, available), emphasis: true },
-          { text: mode },
-        ]}
-      />
+    // Like the diff title: context (provider, then namespace, kind) goes first; the resource name shrinks last.
+    const segments = fitTitleSegments(
+      [
+        { text: "OpenShift", drop: 1 },
+        { text: props.resource.kind, drop: 3 },
+        { text: props.resource.namespace, drop: 2 },
+        { text: props.resource.name, emphasis: true, primary: true },
+        { text: mode },
+      ],
+      dialogFrame().width,
     );
+    return <DialogTitle segments={segments} />;
   });
 
   const toggleWrap = () => setWrapEnabled(value => !value);
-  const refreshLog = () => {
+  /** `r` refreshes what is on screen: the object in JSON view, the log (restarting a follow) in log view. */
+  const canRefresh = () => (viewMode() === "json" ? !!props.loadObject : canLog());
+  const refresh = () => {
+    if (viewMode() === "json") {
+      // `r` asks the API: the embedded object is the snapshot from when the resource was listed.
+      if (props.loadObject) void loadObject(true);
+      return;
+    }
     if (!canLog()) return;
     if (shouldFollowOpenShiftLog(props.resource) && props.followLog) setFollowNonce(value => value + 1);
     else void loadLog(true);
@@ -159,27 +195,23 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
 
   useKeyboard(e => {
     if (e.eventType === "release") return;
+    if (search.handleKey(e)) return;
+    if (handleLogScrollKey(e, scrollboxRef, dialogFrame().height - 6)) {
+      e.preventDefault();
+      return;
+    }
     if (e.name === "q") {
       e.preventDefault();
       renderer.destroy();
     } else if (e.name === "escape") {
       e.preventDefault();
       props.onClose();
-    } else if (e.name === "up" || e.name === "k") {
-      e.preventDefault();
-      scrollboxRef?.scrollBy(e.shift ? -SCROLL_JUMP : -1, "absolute");
-    } else if (e.name === "down" || e.name === "j") {
-      e.preventDefault();
-      scrollboxRef?.scrollBy(e.shift ? SCROLL_JUMP : 1, "absolute");
-    } else if (e.name === "g") {
-      e.preventDefault();
-      scrollboxRef?.scrollTo(e.shift ? Infinity : 0);
     } else if (e.name === "w") {
       e.preventDefault();
       toggleWrap();
-    } else if (e.name === "r" && canLog()) {
+    } else if (e.name === "r" && canRefresh()) {
       e.preventDefault();
-      refreshLog();
+      refresh();
     } else if (e.name === "c" && canLog()) {
       e.preventDefault();
       cycleViewMode();
@@ -208,34 +240,56 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
           stickyStart={viewMode() === "log" ? "bottom" : undefined}
           verticalScrollbarOptions={{ visible: false }}
         >
-          <box flexDirection="column" width="100%" paddingX={4}>
-            <For each={lines()}>
-              {(line, index) => (
-                <box flexDirection="row" width="100%">
-                  <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                    {`${String(index() + 1).padStart(lineNoWidth())}  `}
-                  </text>
-                  <text
-                    wrapMode={wrapEnabled() ? "word" : "none"}
-                    fg={(viewMode() === "log" ? logError() : objectError()) ? t().error : t().foreground}
-                  >
-                    {line}
-                  </text>
-                </box>
-              )}
-            </For>
+          <box flexDirection="column" width="100%" paddingX={viewState()?.kind === "error" ? 0 : 4}>
+            <Show
+              when={viewState()}
+              fallback={
+                <For each={lines()}>
+                  {(line, index) => (
+                    <box
+                      ref={(element: Renderable) => {
+                        lineRefs[index()] = element;
+                      }}
+                      flexDirection="row"
+                      width="100%"
+                    >
+                      <LineNumber
+                        text={String(index() + 1).padStart(lineNoWidth())}
+                        current={search.current() === index()}
+                      />
+                      <text wrapMode={wrapEnabled() ? "word" : "none"} fg={t().foreground}>
+                        {highlightHits(line, search.term(), { fg: t().background, bg: t().accent })}
+                      </text>
+                    </box>
+                  )}
+                </For>
+              }
+            >
+              {state => <LogViewStatus state={state()} />}
+            </Show>
           </box>
         </scrollbox>
+        <LogSearchRow search={search} placeholder={viewMode() === "log" ? "Search log..." : "Search object..."} />
         <DialogFooter>
-          <KeyHint key="↑/↓" desc=" scroll" />
-          <KeyHintSeparator />
-          <KeyHint key="w" desc={wrapEnabled() ? " disable wrap" : " enable wrap"} onClick={toggleWrap} />
+          {/* Same words and order as the CI log and diff dialogs: search · view · wrap · refresh. */}
+          <Show
+            when={search.term()}
+            fallback={<KeyHint key="/" desc=" search" onClick={() => search.setEditing(true)} />}
+          >
+            <KeyHint key="n/N" desc=" next/prev" onClick={() => search.step(1)} />
+          </Show>
           {canLog() ? (
             <>
               <KeyHintSeparator />
-              <KeyHint key="c" desc=" cycle view mode" disabled={!canLog()} onClick={cycleViewMode} />
+              <KeyHint key="c" desc=" view" onClick={cycleViewMode} />
+            </>
+          ) : null}
+          <KeyHintSeparator />
+          <KeyHint key="w" desc={wrapEnabled() ? " nowrap" : " wrap"} onClick={toggleWrap} />
+          {canRefresh() ? (
+            <>
               <KeyHintSeparator />
-              <KeyHint key="r" desc=" refresh log" disabled={!canLog()} onClick={refreshLog} />
+              <KeyHint key="r" desc=" refresh" onClick={refresh} />
             </>
           ) : null}
         </DialogFooter>

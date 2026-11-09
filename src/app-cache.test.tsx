@@ -126,7 +126,7 @@ test(":cache groups apps, resets and evicts only selected repository, then resto
     await setup.mockInput.typeText("cache");
     setup.mockInput.pressKey("RETURN");
     await setup.flush();
-    expect(setup.captureCharFrame()).toContain("shift+r");
+    expect(setup.captureCharFrame()).toContain("a reset all");
     expect(setup.captureCharFrame()).toContain("other-cache");
     expect(app.state.keyboardScopeOverride()).toBe("cache");
     setup.mockInput.pressKey("g");
@@ -137,7 +137,7 @@ test(":cache groups apps, resets and evicts only selected repository, then resto
     await setup.flush();
     expect(app.state.cursorIndex()).toBe(count);
     setup.mockInput.pressKey("ARROW_UP");
-    setup.mockInput.pressKey("r", { shift: true });
+    setup.mockInput.pressKey("a");
     await setup.flush();
     setup.resize(80, 24);
     await setup.flush();
@@ -151,7 +151,7 @@ test(":cache groups apps, resets and evicts only selected repository, then resto
     setup.mockInput.pressKey("ESCAPE");
     await setup.flush();
     expect(app.state.searchQuery()).toBe(original.search);
-    expect(setup.captureCharFrame()).toContain("shift+r");
+    expect(setup.captureCharFrame()).toContain("a reset all");
     expect(resetTimer).not.toHaveBeenCalled();
     setup.resize(110, 40);
     await setup.flush();
@@ -159,6 +159,7 @@ test(":cache groups apps, resets and evicts only selected repository, then resto
       throw new Error("database is locked");
     });
     setup.mockInput.pressKey("r");
+    setup.mockInput.pressKey("RETURN");
     await setup.flush();
     expect(setup.captureCharFrame()).toMatch(/Reset failed\s*\n.*database is locked/);
     expect(invalidate).not.toHaveBeenCalled();
@@ -166,6 +167,7 @@ test(":cache groups apps, resets and evicts only selected repository, then resto
     resetTimer.mockClear();
     const started = Date.now();
     setup.mockInput.pressKey("r");
+    setup.mockInput.pressKey("RETURN");
     await setup.flush();
     expect(invalidate).not.toHaveBeenCalled();
     expect(resetTimer).toHaveBeenCalledTimes(1);
@@ -199,7 +201,7 @@ test(":cache groups apps, resets and evicts only selected repository, then resto
     expect(realSummary(root).groups.map(group => group.repoPath)).toEqual([other]);
     setup.mockInput.pressKey("ESCAPE");
     await setup.flush();
-    expect(setup.captureCharFrame()).not.toContain("shift+r");
+    expect(setup.captureCharFrame()).not.toContain("a reset all");
     expect(app.state.keyboardScopeOverride()).toBeNull();
     expect({
       path: app.state.repoPath(),

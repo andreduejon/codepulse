@@ -10,7 +10,7 @@ import JobLogDialog from "./log-dialog";
 const descendants = (node: Renderable): Renderable[] =>
   node.getChildren().flatMap(child => [child, ...descendants(child)]);
 
-async function renderLog(provider: "github-actions" | "jenkins", long = false) {
+async function renderLog(provider: "github-actions" | "jenkins", long: boolean | "wrapped" = false) {
   const jobs = [
     { id: 1, name: "first-job" },
     { id: 2, name: "empty-job" },
@@ -18,11 +18,14 @@ async function renderLog(provider: "github-actions" | "jenkins", long = false) {
   ];
   let resolveLog!: (text: string) => void;
   const pending = new Promise<string>(resolve => (resolveLog = resolve));
-  const raw = long
-    ? Array.from({ length: 200 }, (_, i) => `row-${String(i + 1).padStart(3, "0")}`).join("\n")
-    : [`normal ${"x".repeat(100)} WRAP-END`, "##[warning]warning-line", "##[error]error-line", "##[endgroup]"].join(
-        "\n",
-      );
+  const raw =
+    long === "wrapped"
+      ? Array.from({ length: 40 }, (_, i) => `line-${i + 1} ${"word ".repeat(40)}END-${i + 1}`).join("\n")
+      : long
+        ? Array.from({ length: 200 }, (_, i) => `row-${String(i + 1).padStart(3, "0")}`).join("\n")
+        : [`normal ${"x".repeat(100)} WRAP-END`, "##[warning]warning-line", "##[error]error-line", "##[endgroup]"].join(
+            "\n",
+          );
   const fetchLog = mock(async (job: { id: string | number; name: string }) => {
     if (job.id === 1) return long ? raw : pending;
     if (job.id === 2) return "";
@@ -33,6 +36,7 @@ async function renderLog(provider: "github-actions" | "jenkins", long = false) {
   const [open, setOpen] = createSignal(true);
   const [url, setUrl] = createSignal<string | undefined>("https://example.com/run/42");
   const close = mock(() => setOpen(false));
+  const searchActive = mock((_active: boolean) => {});
   let setup: Awaited<ReturnType<typeof testRender>>;
   try {
     setup = await testRender(
@@ -46,6 +50,7 @@ async function renderLog(provider: "github-actions" | "jenkins", long = false) {
               run={{ name: "Build", runNumber: 42, url: url() }}
               fetchLog={fetchLog}
               onClose={close}
+              onSearchActive={searchActive}
             />
           </Show>
         </ThemeContext.Provider>
@@ -108,6 +113,7 @@ async function renderLog(provider: "github-actions" | "jenkins", long = false) {
     fetchLog,
     openUrl,
     close,
+    searchActive,
     open,
     setOpen,
     setUrl,
@@ -128,7 +134,7 @@ for (const provider of ["github-actions", "jenkins"] as const) {
     const d = await renderLog(provider);
     try {
       expect(d.frame()).toContain(provider === "jenkins" ? "Jenkins" : "GitHub Actions");
-      expect(d.frame()).toContain("loading...");
+      expect(d.frame()).toContain("fetching log...");
       expect(d.fetchLog.mock.calls.map(([job]) => job.id)).toEqual([1]);
       const footer = descendants(d.renderer.root).filter(
         node => node instanceof TextRenderable && ["c view", "w wrap", "o open", " · ", "↑/↓"].includes(node.plainText),
@@ -167,9 +173,9 @@ for (const provider of ["github-actions", "jenkins"] as const) {
       };
       await boundary("prev", "ARROW_LEFT", "h");
       await d.click("→ next");
-      expect(d.frame()).toContain("No log output available.");
+      expect(d.frame()).toContain("No log output.");
       await d.key("h");
-      expect(d.frame()).toContain("loading...");
+      expect(d.frame()).toContain("fetching log...");
       expect(d.fetchLog.mock.calls.map(([job]) => job.id)).toEqual([1, 2]);
       d.resolve();
       await d.flush();
@@ -206,9 +212,10 @@ for (const provider of ["github-actions", "jenkins"] as const) {
       await d.key("o");
       expect(d.openUrl).toHaveBeenCalledTimes(2);
       await d.key("l");
-      expect(d.frame()).toContain("No log output available.");
+      expect(d.frame()).toContain("No log output.");
       await d.key("ARROW_RIGHT");
-      expect(d.frame()).toContain("Failed to load log.");
+      expect(d.frame()).toContain("Failed to load log");
+      expect(d.frame()).toContain("fake failure");
       await boundary("next", "ARROW_RIGHT", "l");
       await d.click("← prev");
       await d.key("ARROW_LEFT");
@@ -279,5 +286,267 @@ test("native wheel and keyboard use the same scroll position, including jumps an
     expect(d.fetchLog.mock.calls.map(([job]) => job.id)).toEqual([1, 2]);
   } finally {
     await d.dispose();
+  }
+});
+
+test("the line number column fits the largest number on screen, so the widest one starts at the text inset", async () => {
+  const d = await renderLog("github-actions", true);
+  try {
+    await d.flush();
+    const rows = () => d.frame().split("\n");
+    const titleX = rows()[rows().findIndex(row => row.includes("GitHub Actions"))].indexOf("GitHub Actions");
+    const numberAt = (label: string) => {
+      const row = rows().find(line => line.includes(label)) ?? "";
+      return row.slice(titleX, row.indexOf(label)).trimEnd();
+    };
+    // Rows 1 to 2x are on screen: two digits, though the log has 200 lines.
+    expect(numberAt("row-010")).toBe("10");
+    expect(numberAt("row-001")).toBe(" 1");
+    await d.key("g", { shift: true });
+    await d.flush();
+    expect(numberAt("row-200")).toBe("200");
+    expect(numberAt("row-199")).toBe("199");
+    await d.key("g");
+    await d.flush();
+    expect(numberAt("row-010")).toBe("10");
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("the current hit's number is inverted across the whole column width", async () => {
+  const d = await renderLog("github-actions", true);
+  try {
+    await d.flush();
+    await d.key("/");
+    await d.mockInput.typeText("row-005");
+    await d.flush();
+    const rows = d.frame().split("\n");
+    const spans = d.captureSpans().lines[rows.findIndex(row => row.includes("row-005"))]?.spans ?? [];
+    // Two-digit column: the padding cell before 5 is inverted too.
+    const number = spans.find(span => span.text.trim() === "5");
+    expect(number?.text).toBe(" 5");
+    expect(number?.bg).toEqual(RGBA.fromHex(d.theme.accent));
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("with wrap on, the line number column fits the screen too and settles", async () => {
+  const d = await renderLog("github-actions", "wrapped");
+  try {
+    await d.key("w");
+    await d.flush();
+    const rows = () => d.frame().split("\n");
+    const titleX = rows()[rows().findIndex(row => row.includes("GitHub Actions"))].indexOf("GitHub Actions");
+    const numberAt = (label: string) => {
+      const row = rows().find(line => line.includes(label)) ?? "";
+      return row.slice(titleX, row.indexOf(label)).trimEnd();
+    };
+    // Only the first wrapped lines fit: one digit, though the log has 40 lines.
+    expect(numberAt("line-1 ")).toBe("1");
+    await d.key("g", { shift: true });
+    await d.flush();
+    expect(numberAt("line-40 ")).toBe("40");
+    // A wider column wraps lines taller; the column must not flip back and forth.
+    const settled = d.frame();
+    await d.flush();
+    await d.flush();
+    expect(d.frame()).toBe(settled);
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("with wrap on, G and repeated down reach the last wrapped row", async () => {
+  const d = await renderLog("github-actions", "wrapped");
+  try {
+    await d.key("w");
+    await d.key("g", { shift: true });
+    expect(d.frame()).toContain("END-40");
+    await d.key("g");
+    expect(d.frame()).not.toContain("END-40");
+    for (let i = 0; i < 20; i++) await d.key("ARROW_DOWN", { shift: true });
+    expect(d.frame()).toContain("END-40");
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("r fetches the current log again, retrying a failure, and warnings use the warning colour", async () => {
+  const d = await renderLog("github-actions");
+  try {
+    await d.key("l");
+    await d.key("l");
+    expect(d.frame()).toContain("fake failure");
+    const calls = d.fetchLog.mock.calls.length;
+    await d.key("r");
+    expect(d.fetchLog.mock.calls.length).toBe(calls + 1);
+    expect(d.frame()).toContain("fake failure");
+    await d.click("r refresh");
+    expect(d.fetchLog.mock.calls.length).toBe(calls + 2);
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("warning lines use the theme's warning colour, not the provider accent", async () => {
+  const d = await renderLog("github-actions");
+  try {
+    d.resolve();
+    await d.flush();
+    expect(d.cell("warning-line")?.fg).toEqual(RGBA.fromHex(d.theme.warning));
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("/ searches the log: typing jumps to hits, n/N cycle them, q types, Esc clears then closes", async () => {
+  const d = await renderLog("github-actions");
+  try {
+    d.resolve();
+    await d.flush();
+    await d.key("/");
+    await d.mockInput.typeText("quiet");
+    await d.flush();
+    expect(d.close).not.toHaveBeenCalled();
+    expect(d.frame()).toContain("/ quiet");
+    expect(d.frame()).toContain("0/0");
+    for (let i = 0; i < "quiet".length; i++) await d.key("BACKSPACE");
+    await d.mockInput.typeText("-line");
+    await d.flush();
+    expect(d.frame()).toContain("1/2");
+    await d.key("RETURN");
+    await d.key("n");
+    expect(d.frame()).toContain("2/2");
+    await d.key("n", { shift: true });
+    expect(d.frame()).toContain("1/2");
+    expect(d.cell("-line")?.bg).toEqual(RGBA.fromHex(d.theme.accent));
+    await d.key("ESCAPE");
+    expect(d.frame()).not.toContain("1/2");
+    expect(d.close).not.toHaveBeenCalled();
+    await d.key("ESCAPE");
+    expect(d.close).toHaveBeenCalledTimes(1);
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("the search bar sits between empty rows at the same dialog height, is one input bar with its count, and the current hit's number is inverted", async () => {
+  const d = await renderLog("github-actions");
+  try {
+    d.resolve();
+    await d.flush();
+    const rows = () => d.frame().split("\n");
+    const footerY = rows().findIndex(row => row.includes("n/N") || row.includes("c view"));
+    const viewport = d.scrollbox().height;
+    await d.key("/");
+    await d.mockInput.typeText("-line");
+    await d.flush();
+    // Same dialog height: the footer stays put and the log gives up the bar and the empty row above it.
+    expect(rows().findIndex(row => row.includes("c view"))).toBe(footerY);
+    expect(d.scrollbox().height).toBe(viewport - 2);
+    const barY = rows().findIndex(row => row.includes("/ -line"));
+    expect(rows()[barY - 1].trim()).toBe("");
+    expect(rows()[barY + 1].trim()).toBe("");
+    // While typing, the slash, the input and the count share the input background, inside the text inset.
+    const element = RGBA.fromHex(d.theme.backgroundElement);
+    expect(d.cell("/ -line")?.bg).toEqual(element);
+    expect(d.cell("1/2")?.bg).toEqual(element);
+    const bgAt = (x: number) => {
+      let column = 0;
+      for (const span of d.captureSpans().lines[barY]?.spans ?? []) {
+        if (x < column + span.text.length) return span.bg;
+        column += span.text.length;
+      }
+    };
+    const slashX = rows()[barY].indexOf("/ -line");
+    const countEnd = rows()[barY].indexOf("1/2") + "1/2".length;
+    const dialog = RGBA.fromHex(d.theme.background);
+    expect(bgAt(slashX - 1)).toEqual(dialog);
+    expect(bgAt(slashX)).toEqual(element);
+    expect(bgAt(countEnd - 1)).toEqual(element);
+    expect(bgAt(countEnd)).toEqual(dialog);
+    // The current hit's line number is inverted in the hit color; the other hit's number stays muted.
+    const numberSpan = (label: string) =>
+      d
+        .captureSpans()
+        .lines[rows().findIndex(row => row.includes(label))]?.spans.find(
+          span => /^\s*\d+\s*$/.test(span.text) && span.text.trim() !== "",
+        );
+    expect(numberSpan("warning-line")?.text.trim()).toBe("2");
+    expect(numberSpan("warning-line")?.bg).toEqual(RGBA.fromHex(d.theme.accent));
+    expect(numberSpan("warning-line")?.fg).toEqual(RGBA.fromHex(d.theme.background));
+    expect(numberSpan("error-line")?.fg).toEqual(RGBA.fromHex(d.theme.foregroundMuted));
+    // Enter keeps the query: the bar loses the input background.
+    await d.key("RETURN");
+    expect(d.cell("1/2")?.bg).not.toEqual(element);
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("the log search tells the app while it owns Esc, so Esc clears it instead of closing the dialog", async () => {
+  const d = await renderLog("github-actions");
+  try {
+    d.resolve();
+    await d.flush();
+    await d.key("/");
+    expect(d.searchActive.mock.calls.at(-1)).toEqual([true]);
+    await d.mockInput.typeText("line");
+    await d.key("RETURN");
+    expect(d.searchActive.mock.calls.at(-1)).toEqual([true]);
+    await d.key("ESCAPE");
+    expect(d.searchActive.mock.calls.at(-1)).toEqual([false]);
+    expect(d.close).not.toHaveBeenCalled();
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("a kept search follows the text when the view changes, never pointing at a line that no longer matches", async () => {
+  const d = await renderLog("github-actions");
+  try {
+    d.resolve();
+    await d.flush();
+    await d.key("/");
+    await d.mockInput.typeText("-line");
+    await d.key("RETURN");
+    await d.key("n");
+    expect(d.frame()).toContain("2/2");
+    // Errors only: only error-line still matches; the position follows it.
+    await d.key("c");
+    await d.key("c");
+    expect(d.frame()).toContain("1/1");
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("raw view shows the log as received, with timestamps", async () => {
+  const fetchLog = async () => "2026-01-01T00:00:00.1234567Z first\n\n2026-01-01T00:00:01.0000000Z second";
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={createThemeState()}>
+        <JobLogDialog
+          provider="github-actions"
+          job={{ id: 1, name: "job" }}
+          jobs={[{ id: 1, name: "job" }]}
+          run={{ name: "Build", runNumber: 1 }}
+          fetchLog={fetchLog}
+          onClose={() => {}}
+        />
+      </ThemeContext.Provider>
+    ),
+    { width: 100, height: 30, kittyKeyboard: true },
+  );
+  try {
+    await setup.flush();
+    expect(setup.captureCharFrame()).not.toContain("2026-01-01T00:00:00.1234567Z");
+    for (let i = 0; i < 3; i++) setup.mockInput.pressKey("c");
+    await setup.flush();
+    expect(setup.captureCharFrame()).toContain("2026-01-01T00:00:00.1234567Z first");
+  } finally {
+    await setup.dispose();
   }
 });

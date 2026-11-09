@@ -1,5 +1,6 @@
 import { createMemo, createSignal } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
+import { BUSY } from "../../utils/busy-text";
 import { ProviderRunTree, type ProviderTreeJob, type ProviderTreeRun } from "../shared/provider-run-tree";
 import type { JenkinsCommitData, JenkinsJob, JenkinsJobFetchResult, JenkinsRun } from "./types";
 
@@ -73,7 +74,8 @@ export function JenkinsDetailTab(props: Readonly<JenkinsDetailTabProps>) {
       dataKey={props.sha}
       onOpenJobAction={(job, run, jobs) => props.onOpenJobLog?.(job.raw, run.raw, jobs?.map(entry => entry.raw) ?? [])}
       summaryLabel="total builds"
-      jobsLoadingText="loading jobs..."
+      jobsLoadingText={BUSY.fetchingStages}
+      reloadBusyText={BUSY.fetchingBuilds}
       noJobsText=""
       showRunDuration={false}
       childCountLabel={count => `${count} stage${count === 1 ? "" : "s"}`}

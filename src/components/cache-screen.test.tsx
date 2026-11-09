@@ -146,8 +146,14 @@ async function screen(
     await rowPoint(repoPath);
     return (row(repoPath).getChildren() as TextRenderable[]).map(text => text.plainText.trim());
   };
+  /** The row inside the card, not a message above it that names the same repository. */
   const expectSelected = (label: string) => {
-    const span = setup.captureSpans().lines[point(label).y].spans.find(span => span.text.includes(label));
+    const card = descendants(setup.renderer.root).find(node => node.id === "cache-card") as BoxRenderable;
+    const y = frame()
+      .split("\n")
+      .findIndex((line, index) => index >= card.y && line.includes(label));
+    expect(y).toBeGreaterThanOrEqual(0);
+    const span = setup.captureSpans().lines[y].spans.find(span => span.text.includes(label));
     expect(span?.fg).toEqual(RGBA.fromHex(theme.theme().accent));
   };
   return { ...setup, theme, scopes, close, frame, point, click, key, row, rowPoint, clickRow, cells, expectSelected };
@@ -221,7 +227,7 @@ test("compact app rows aggregate all providers; selected reset reaches every pro
     await setup.clickRow(BETA);
     expect(setup.frame()).toContain("r reset");
     expect(setup.frame()).not.toContain("reset 90 days");
-    expect(setup.frame()).toContain("shift+r reset all");
+    expect(setup.frame()).toContain("a reset all");
     expect(setup.frame()).not.toContain("Shift+r");
     expect(setup.frame()).toContain("e evict");
     expect(setup.frame()).toContain("q quit");
@@ -249,6 +255,8 @@ test("compact app rows aggregate all providers; selected reset reaches every pro
     expect(data.contents()).toEqual(contents);
     const started = Date.now();
     await setup.click("r reset");
+    expect(setup.frame()).toContain("Reset cache-alpha?");
+    await setup.click("enter confirm");
     const after = management.getProviderCacheSummary(data.root);
     for (const group of after.groups.filter(group => group.repoPath === ALPHA)) {
       expect(group.cleanupAt).toBeGreaterThanOrEqual(started + management.CACHE_INACTIVITY_MS);
@@ -266,13 +274,14 @@ test("compact app rows aggregate all providers; selected reset reaches every pro
       formatGraphDate(new Date(after.groups.find(group => group.provider === "jenkins")?.cleanupAt ?? 0).toISOString()),
     );
     await setup.key("r");
+    await setup.key("RETURN");
     setup.expectSelected("cache-alpha");
     expect(card.height).toBe(10);
     const beforeEviction = data.contents();
     await setup.key("e");
-    expect(setup.frame()).toContain("Evict only cache-alpha (all providers)?");
+    expect(setup.frame()).toContain("Evict cache-alpha?");
     expect(setup.frame()).toContain(ALPHA);
-    expect(setup.frame()).not.toContain("shift+r reset all");
+    expect(setup.frame()).not.toContain("a reset all");
     for (const key of ["j", "g", "r", "e"]) await setup.key(key);
     await setup.clickRow(BETA);
     setup.expectSelected("cache-alpha");
@@ -331,7 +340,8 @@ test("repo info is muted and right-aligned; KB includes all provider payloads an
       expect(label.fg).toEqual(RGBA.fromHex(setup.theme.theme().accent));
       expect(metadata.fg).toEqual(RGBA.fromHex(setup.theme.theme().foregroundMuted));
       expect(metadata.plainText.trim()).toBe(info);
-      expect(metadata.x + metadata.width).toBe(row.x + row.width);
+      // Rows keep the card's 4-column inner inset, like the selector and setup cards.
+      expect(metadata.x + metadata.width).toBe(row.x + row.width - 4);
       expect(metadata.x + metadata.width).toBe(
         setup.point(`v${packageJson.version}`).x - 1 + `v${packageJson.version}`.length,
       );
@@ -366,7 +376,7 @@ test("General shows only Cache data, selectable and copyable even when its path 
     expect(header.fg).toEqual(RGBA.fromHex(setup.theme.theme().accent));
     expect(setup.frame()).toContain("General");
     expect(setup.frame()).toContain("enter copy");
-    expect(setup.frame()).toContain("shift+r reset all");
+    expect(setup.frame()).toContain("a reset all");
     expect(setup.frame()).not.toContain("e evict");
     expect(setup.frame()).not.toMatch(/(?:^|\s)r reset(?:\s|$)/);
     expect(nodes.filter(node => node.id.startsWith("cache-file-") && !node.id.endsWith("-path"))).toHaveLength(1);
@@ -444,7 +454,7 @@ test("async selected-repo eviction freezes the clone identity, blocks duplicate 
   try {
     await setup.clickRow(alphaPath);
     await setup.key("e");
-    expect(setup.frame()).toContain("Evict only Shared app (all providers)?");
+    expect(setup.frame()).toContain("Evict Shared app?");
     expect(withoutWhitespace(setup.frame())).toContain(withoutWhitespace(alphaPath));
     expect(withoutWhitespace(setup.frame())).not.toContain(withoutWhitespace(betaPath));
     for (const [width, height] of [
@@ -569,7 +579,7 @@ test("actual groups sort alphabetically, ungrouped last; app names break access 
   }
 });
 
-test("shift+r confirms repository count, cancels safely, survives resize, and resets without deleting data", async () => {
+test("a confirms repository count, cancels safely, survives resize, and resets without deleting data", async () => {
   const data = await fixture();
   await data.seed(ALPHA, "github-actions", Date.now() - 6000);
   await data.seed(ALPHA, "jenkins", Date.now() - 4000);
@@ -579,11 +589,14 @@ test("shift+r confirms repository count, cancels safely, survives resize, and re
   const setup = await screen(data.root);
   try {
     await setup.clickRow(ALPHA);
-    await setup.key("r", true);
-    expect(setup.frame()).toContain("Reset timers for 2 repositories?");
+    await setup.key("a");
+    expect(setup.frame()).toContain("Reset all inactivity timers?");
+    expect(setup.frame()).toContain("2 repositories start a new 90-day period.");
+    expect(setup.frame()).toContain("Nothing is deleted.");
     expect(setup.frame()).toContain("enter confirm");
+    // The confirmation sits above the card, so the card keeps its height.
     const card = descendants(setup.renderer.root).find(node => node.id === "cache-card") as BoxRenderable;
-    expect(card.height).toBe(11);
+    expect(card.height).toBe(10);
     for (const key of ["e", "TAB", "j", "r", "g"]) await setup.key(key);
     await setup.clickRow(BETA);
     setup.expectSelected("cache-alpha");
@@ -594,7 +607,7 @@ test("shift+r confirms repository count, cancels safely, survives resize, and re
     ]) {
       setup.resize(width, height);
       await setup.flush();
-      expect(setup.frame()).toContain("Reset timers for 2 repositories?");
+      expect(setup.frame()).toContain("Reset all inactivity timers?");
       expect(setup.frame()).toContain("q quit");
       expect(setup.scopes).toEqual(["cache"]);
     }
@@ -602,10 +615,10 @@ test("shift+r confirms repository count, cancels safely, survives resize, and re
     expect(setup.close).not.toHaveBeenCalled();
     expect(card.height).toBe(10);
     expect(data.contents()).toEqual(contents);
-    await setup.click("shift+r reset all");
+    await setup.click("a reset all");
     await setup.click("esc cancel");
     expect(data.contents()).toEqual(contents);
-    await setup.click("shift+r reset all");
+    await setup.click("a reset all");
     await setup.click("enter confirm", MouseButtons.RIGHT);
     expect(data.contents()).toEqual(contents);
     const started = Date.now();
@@ -627,7 +640,7 @@ test("shift+r confirms repository count, cancels safely, survives resize, and re
     await setup.key("RETURN");
     expect(management.getProviderCacheSummary(data.root).groups).toEqual(after.groups);
     await setup.click("Cache data");
-    await setup.click("shift+r reset all");
+    await setup.click("a reset all");
     await setup.click("enter confirm");
     expect(setup.frame()).not.toContain("enter confirm");
     setup.expectSelected("Cache data");
@@ -652,7 +665,7 @@ test("q and its mouse footer quit normally and during confirmation without reset
     expect(destroy).toHaveBeenCalledTimes(1);
     await setup.click("q quit");
     expect(destroy).toHaveBeenCalledTimes(2);
-    await setup.key("r", true);
+    await setup.key("a");
     await setup.key("q");
     expect(destroy).toHaveBeenCalledTimes(3);
     expect(setup.frame()).toContain("enter confirm");
@@ -681,13 +694,17 @@ test("repository and reset-all errors stay visible without success or deletion",
   try {
     await setup.clickRow(ALPHA);
     await setup.key("r");
+    await setup.key("RETURN");
     expect(setup.frame()).toMatch(/Reset failed\s*\n.*database is locked/);
     const spanAt = (text: string) =>
       setup.captureSpans().lines[setup.point(text).y].spans.find(span => span.text.includes(text));
-    expect(spanAt("Reset failed")?.fg).toEqual(RGBA.fromHex(setup.theme.theme().error));
+    // A message box like the app's banners: red frame, bold headline, muted detail.
+    const message = descendants(setup.renderer.root).find(node => node.id === "cache-message") as BoxRenderable;
+    expect(message.borderColor).toEqual(RGBA.fromHex(setup.theme.theme().error));
+    expect(spanAt("Reset failed")?.fg).toEqual(RGBA.fromHex(setup.theme.theme().foreground));
     expect(spanAt("database is locked")?.fg).toEqual(RGBA.fromHex(setup.theme.theme().foregroundMuted));
     expect(setup.frame()).not.toContain("Repository timer reset");
-    await setup.key("r", true);
+    await setup.key("a");
     await setup.key("RETURN");
     expect(setup.frame()).toContain("Action failed");
     expect(setup.frame()).not.toContain("Nothing deleted");
@@ -711,7 +728,7 @@ test("empty and corrupt databases are safe; an injected root never inspects or c
     const card = descendants(setup.renderer.root).find(node => node.id === "cache-card") as BoxRenderable;
     expect(card.height).toBe(7);
     for (const key of ["j", "k", "r", "e", "TAB"]) await setup.key(key);
-    await setup.key("r", true);
+    await setup.key("a");
     expect(setup.frame()).not.toContain("confirm");
     expect(setup.frame()).not.toContain("not-visible");
     expect(other.contents()).toEqual(before);
@@ -809,6 +826,111 @@ test("long lists scroll by wheel, pages, arrows, j/k and g/G; resize keeps scope
     await setup.flush();
     setup.expectSelected("cache-scroll-00");
     expect(data.contents()).toEqual(before);
+  } finally {
+    await setup.dispose();
+    await data.dispose();
+  }
+});
+
+test("same-named repositories show the path part that tells them apart, like in the repository selector", async () => {
+  const data = await fixture();
+  const now = Date.now();
+  await data.seed(ALPHA, "github-actions", now - 4000);
+  await data.seed(BETA, "github-actions", now - 2000);
+  const known = spyOn(config, "getKnownRepoInfos").mockReturnValue([
+    { path: ALPHA, appName: "service" },
+    { path: BETA, appName: "service" },
+  ]);
+  const setup = await screen(data.root);
+  try {
+    const rows = setup
+      .frame()
+      .split("\n")
+      .filter(line => line.includes("service"));
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).not.toBe(rows[1]);
+  } finally {
+    known.mockRestore();
+    await setup.dispose();
+    await data.dispose();
+  }
+});
+
+test("the card keeps the repository switcher's height, and a confirmation is a message box above it", async () => {
+  const data = await fixture();
+  const now = Date.now();
+  for (let index = 0; index < 20; index++) {
+    await data.seed(
+      resolve(`/repo/many-${String(index).padStart(2, "0")}`),
+      "github-actions",
+      now - 1000 - index,
+      index + 1,
+    );
+  }
+  const setup = await screen(data.root);
+  try {
+    setup.resize(90, 60);
+    await setup.flush();
+    const card = descendants(setup.renderer.root).find(node => node.id === "cache-card") as BoxRenderable;
+    // At most 16 list rows like the repository switcher; the rest scrolls.
+    expect(card.height).toBe(16 + 4);
+    // One key, no shift: `a` resets all.
+    expect(setup.frame()).toContain("a reset all");
+    await setup.key("a");
+    expect(setup.frame()).toContain("Reset all inactivity timers?");
+    const message = descendants(setup.renderer.root).find(node => node.id === "cache-message") as BoxRenderable;
+    expect(message).toBeDefined();
+    expect(message.border).toEqual(["left"]);
+    expect(message.borderColor).toEqual(RGBA.fromHex(setup.theme.theme().warning));
+    expect(message.y + message.height).toBeLessThanOrEqual(card.y);
+    expect(card.height).toBe(16 + 4);
+    await setup.key("ESCAPE");
+    expect(setup.frame()).not.toContain("Reset all inactivity timers?");
+  } finally {
+    await setup.dispose();
+    await data.dispose();
+  }
+});
+
+test("r asks before resetting one repository, and a reset keeps the list scrolled where it was", async () => {
+  const data = await fixture();
+  const now = Date.now();
+  for (let index = 0; index < 20; index++) {
+    await data.seed(
+      resolve(`/repo/many-${String(index).padStart(2, "0")}`),
+      "github-actions",
+      now - 1000 - index,
+      index + 1,
+    );
+  }
+  const setup = await screen(data.root);
+  try {
+    setup.resize(90, 60);
+    await setup.flush();
+    const list = descendants(setup.renderer.root).find(node => node.id === "cache-list") as ScrollBoxRenderable;
+    // Go to the last repository: the list scrolls down to it.
+    await setup.key("g", true);
+    const scrolled = list.scrollTop;
+    expect(scrolled).toBeGreaterThan(0);
+    const last = setup.frame().match(/many-\d\d(?=[^\n]*Feb|[^\n]*Due|[^\n]*KB)/g) ?? [];
+    const selectedName = last.at(-1) ?? "";
+    expect(selectedName).not.toBe("");
+    // r asks first, like a and e; Esc keeps the timer.
+    const before = management.getProviderCacheSummary(data.root).groups;
+    await setup.key("r");
+    expect(setup.frame()).toContain(`Reset ${selectedName}?`);
+    expect(setup.frame()).toContain("enter confirm");
+    await setup.key("ESCAPE");
+    expect(management.getProviderCacheSummary(data.root).groups).toEqual(before);
+    // Confirmed, the reset keeps the scroll position and the selected row.
+    await setup.key("r");
+    await setup.key("RETURN");
+    expect(list.scrollTop).toBe(scrolled);
+    setup.expectSelected(selectedName);
+    await setup.key("a");
+    await setup.key("RETURN");
+    expect(list.scrollTop).toBe(scrolled);
+    setup.expectSelected(selectedName);
   } finally {
     await setup.dispose();
     await data.dispose();

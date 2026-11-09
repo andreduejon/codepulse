@@ -56,11 +56,11 @@ export interface GraphBadge {
   badge: "pass" | "fail" | "running" | "unknown";
   /** Total pass count across all runs for this SHA. */
   passCount: number;
-  /** Total fail count (failure + cancelled + timed_out) across all runs. */
+  /** Total fail count (failure, timed_out, startup_failure, unstable) across all runs. */
   failCount: number;
   /** Total in-progress / queued count across all runs. */
   runningCount: number;
-  /** Total unknown resources/statuses. Used by runtime providers. */
+  /** Total neutral count: cancelled, skipped and unknown runs (CI) or unknown resources (runtime). */
   unknownCount?: number;
   /** Total matched resources. Used by runtime providers. */
   resourceCount?: number;

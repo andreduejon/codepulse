@@ -35,6 +35,7 @@ import { addDebugEvent } from "../../debug/events";
 
 import { DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS } from "../shared/auto-refresh";
 import { persistMergedSnapshots } from "../shared/sha-sqlite-cache";
+import { jobsSettled } from "../shared/status";
 import { useProviderFetchLifecycle } from "../shared/use-provider-fetch-lifecycle";
 import {
   buildCommitDataMap,
@@ -155,6 +156,8 @@ export function useGitHubCI(opts: {
         id: "github-actions",
         displayName: "GitHub Actions",
         isAvailable,
+        // Runs in every view: graph fetches, auto refresh and Reload commit all go through the lifecycle.
+        activity: () => (lifecycle.isFetching() ? "fetching" : null),
       });
     } else {
       state.providers.unregister("github-actions");
@@ -265,11 +268,31 @@ export function useGitHubCI(opts: {
     return { firstError, failedSHAs };
   }
 
-  async function hydrateCachedCandidates(repoPath: string, shas: readonly string[], epoch: number): Promise<void> {
+  /**
+   * Read cached commits from disk (no network). With `everyCached`, also the commits below the fetch depth: the
+   * cache limit decides how many commits keep their runs, the fetch depth only how many GitHub is asked about.
+   * Those are peeked, not read, so showing them does not count as a use for eviction.
+   */
+  async function hydrateCachedCandidates(
+    repoPath: string,
+    shas: readonly string[],
+    epoch: number,
+    everyCached = false,
+  ): Promise<void> {
     if (!lifecycle.isCurrent(epoch, repoPath)) return;
     const pending = shas.filter(sha => !commitDataCache.has(sha));
-    const entries = await Promise.all(pending.map(async sha => ({ sha, entry: await disk.read(repoPath, sha) })));
+    const [read, peeked] = await Promise.all([
+      Promise.all(pending.map(async sha => ({ sha, entry: await disk.read(repoPath, sha) }))),
+      everyCached ? disk.peekAll(repoPath) : Promise.resolve([]),
+    ]);
     if (!lifecycle.isCurrent(epoch, repoPath)) return;
+    const targets = new Set(pending);
+    const entries = [
+      ...read,
+      ...peeked
+        .map(entry => ({ sha: entry.sha.toLowerCase(), entry }))
+        .filter(({ sha }) => !targets.has(sha) && !commitDataCache.has(sha)),
+    ];
     let changed = false;
     for (const { sha, entry } of entries) {
       if (!entry) continue;
@@ -349,14 +372,19 @@ export function useGitHubCI(opts: {
         );
       }
     },
-    runInitialFetch: async ({ signal, shas, showStatus, epoch }) => {
-      if (authFrozen && !showStatus) return;
-      if (showStatus) authFrozen = false;
+    onCancelledStatus: () => {
+      if (state.providerStatusFor("github-actions").kind === "loading")
+        actions.setProviderStatus("github-actions", providerIdle());
+    },
+    runInitialFetch: async ({ signal, shas, showStatus, retry, epoch }) => {
+      if (authFrozen && !retry) return;
+      if (retry) authFrozen = false;
       const allSHAs = shas ?? collectTopSHAs(state.graphRows(), config.fetchDepth);
       const repoPath = state.repoPath();
-      await hydrateCachedCandidates(repoPath, allSHAs, epoch);
+      await hydrateCachedCandidates(repoPath, allSHAs, epoch, true);
       if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return;
-      const unqueried = allSHAs.filter(sha => !queriedSHAs.has(sha));
+      // An explicit retry asks again for every target, also when a fetch it waited behind just marked them queried.
+      const unqueried = retry ? allSHAs : allSHAs.filter(sha => !queriedSHAs.has(sha));
       if (unqueried.length === 0) {
         lifecycle.noteFetchStarted();
         return;
@@ -386,10 +414,10 @@ export function useGitHubCI(opts: {
         for (const sha of unqueried) queriedSHAs.delete(sha);
       }
     },
-    runRefresh: async ({ signal, epoch, showStatus }) => {
+    runRefresh: async ({ signal, retry, epoch }) => {
       const repoPath = state.repoPath();
-      if (authFrozen && !showStatus) return;
-      if (showStatus) authFrozen = false;
+      if (authFrozen && !retry) return;
+      if (retry) authFrozen = false;
       lifecycle.noteRefreshSettled();
       const runningSHAs = collectRunningSHAs(state.graphBadges());
       if (runningSHAs.length === 0) return;
@@ -399,9 +427,9 @@ export function useGitHubCI(opts: {
         rememberAuthError(firstError);
         lifecycle.noteFetchResult(!firstError);
         if (!firstError) actions.setProviderLastSuccessfulRefresh("github-actions", new Date());
-        if (firstError === BANNER.github.tokenExpired)
-          actions.setProviderStatus("github-actions", providerError(firstError));
-        else if (!firstError && state.providerStatusFor("github-actions").kind === "error")
+        // Like Jenkins: a failed refresh is visible (cached runs stay), not only in Debug.
+        if (firstError) actions.setProviderStatus("github-actions", providerError(firstError));
+        else if (state.providerStatusFor("github-actions").kind === "error")
           actions.setProviderStatus("github-actions", providerIdle());
         if (firstError) debugError("GitHub", firstError);
       } catch (err) {
@@ -425,8 +453,7 @@ export function useGitHubCI(opts: {
   async function refreshWindow(): Promise<void> {
     if (opts.suspended?.()) return;
     const window = collectTopSHAs(state.graphRows(), config.fetchDepth);
-    for (const sha of window) queriedSHAs.delete(sha);
-    await lifecycle.fetchInitial(undefined, window, true);
+    await lifecycle.fetchInitial(undefined, window, true, true);
     if (state.activeProviderView() === "github-actions") lifecycle.startAutoRefresh();
   }
 
@@ -436,17 +463,19 @@ export function useGitHubCI(opts: {
     await hydrateCachedCandidates(repoPath, [sha], epoch);
     if (!lifecycle.isCurrent(epoch, repoPath)) return;
     if (!force) return;
-    queriedSHAs.delete(sha);
-    await lifecycle.fetchInitial(undefined, [sha], true);
+    await lifecycle.fetchInitial(undefined, [sha], true, true);
   }
 
   // ── On-demand job fetching ────────────────────────────────────────────
   async function fetchJobsForRun(run: GitHubWorkflowRun, signal?: AbortSignal): Promise<GitHubJobFetchResult> {
     const epoch = lifecycle.getEpoch();
     const repoPath = state.repoPath();
+    // Only finished jobs are final; a cached snapshot with a running job or step is fetched again.
     const cached = jobsCache.get(run.id);
-    if (cached) return { jobs: cached, error: null };
+    if (cached && jobsSettled(cached)) return { jobs: cached, error: null };
     if (!lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
+    // Frozen after a 401: no requests until Reload; say why instead of asking GitHub again.
+    if (authFrozen) return { jobs: [], error: BANNER.github.tokenExpired };
 
     const repo = cachedGitHubRepo();
     const token = getGitHubToken(config.tokenEnvVar);
@@ -455,7 +484,7 @@ export function useGitHubCI(opts: {
     const { jobs, error } = await lifecycle.runRequest(signal => fetchRunJobs(repo, token, run.id, signal), signal);
     if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
     if (error) return { jobs, error };
-    if (run.status === "completed") {
+    if (run.status === "completed" && jobsSettled(jobs)) {
       if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
       jobsCache.set(run.id, jobs);
       await persistTerminalRuns(repoPath, [run.headSha], epoch);
@@ -486,7 +515,8 @@ export function useGitHubCI(opts: {
       }
       const repo = cachedGitHubRepo();
       const token = getGitHubToken(config.tokenEnvVar);
-      if (!repo || !token) return "";
+      if (!repo || !token)
+        throw new Error(token ? BANNER.github.noRemote : BANNER.github.missingToken(config.tokenEnvVar));
       const log = await lifecycle.runRequest(signal => fetchJobLog(repo, token, jobId, signal), signal);
       if (!lifecycle.isCurrent(epoch, repoPath)) return "";
       if (isTerminalGitHubRun(run) && log && lifecycle.isCurrent(epoch, repoPath))

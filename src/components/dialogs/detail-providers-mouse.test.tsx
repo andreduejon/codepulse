@@ -147,6 +147,15 @@ async function renderProvider(provider: Provider, compact = true, deferredJobs =
   const [unavailable, setUnavailable] = createSignal(false);
   const [hasData, setHasData] = createSignal(true);
   const [snykScan, setSnykScan] = createSignal(scan);
+  /** Bumping it hands out a fresh copy of the same OpenShift data, like a live update does. */
+  const [openshiftVersion, setOpenshiftVersion] = createSignal(0);
+  const [openshiftEmpty, setOpenshiftEmpty] = createSignal(false);
+  const openshiftSnapshot = () =>
+    openshiftEmpty()
+      ? { ...openshiftData, namespaces: openshiftData.namespaces.map(ns => ({ ...ns, pods: [], imageStreamTags: [] })) }
+      : openshiftVersion() === 0
+        ? openshiftData
+        : { ...openshiftData, namespaces: openshiftData.namespaces.map(ns => ({ ...ns, pods: [...ns.pods] })) };
   let resolveJobs!: () => void;
   const pendingJobs = new Promise<void>(resolve => (resolveJobs = resolve));
   let resolveReload!: () => void;
@@ -212,7 +221,7 @@ async function renderProvider(provider: Provider, compact = true, deferredJobs =
           return status();
         },
         onOpenJenkinsJobLog: openJenkins,
-        openshiftGetCommitData: () => (hasData() ? openshiftData : null),
+        openshiftGetCommitData: () => (hasData() ? openshiftSnapshot() : null),
         openshiftFetchCommitData: reload,
         openshiftIsLoading: loading,
         openshiftLiveAge: () => "live fixture",
@@ -223,6 +232,9 @@ async function renderProvider(provider: Provider, compact = true, deferredJobs =
         snykGetCommitData: () => (hasData() ? snykScan() : null),
         snykScanCommit: scanCommit,
         snykIsScanning: loading,
+        get snykProviderStatus() {
+          return status();
+        },
       };
       return (
         <ThemeContext.Provider value={theme}>
@@ -316,6 +328,8 @@ async function renderProvider(provider: Provider, compact = true, deferredJobs =
     setUnavailable,
     setHasData,
     setSnykScan,
+    bumpOpenShift: () => setOpenshiftVersion(version => version + 1),
+    setOpenshiftEmpty,
     setHoldReload,
     resolveJobs,
     resolveReload,
@@ -368,7 +382,7 @@ for (const provider of ["github-actions", "jenkins"] as const) {
       expect(d.state.detailCursorIndex()).toBe(3);
       expect(d.state.detailCursorAction()).toBe("view log");
       expect(open).toHaveBeenLastCalledWith(jobs[1], runs[0], jobs);
-      expect(d.navRef.itemRefs[3] === d.text(jobs[1].name).parent).toBe(true);
+      expect(d.navRef.itemRefs[3] === d.text(jobs[1].name).parent?.parent).toBe(true);
       d.mockInput.pressKey("RETURN");
       await d.flush();
       expect(open).toHaveBeenCalledTimes(2);
@@ -413,6 +427,7 @@ for (const provider of ["github-actions", "jenkins"] as const) {
     try {
       d.setLoading(true);
       await d.flush();
+      expect(d.frame()).toContain(provider === "jenkins" ? "fetching builds..." : "fetching runs...");
       await d.click("Reload commit");
       expect(d.reload).not.toHaveBeenCalled();
       d.setLoading(false);
@@ -422,7 +437,7 @@ for (const provider of ["github-actions", "jenkins"] as const) {
       expect(d.reload).not.toHaveBeenCalled();
       d.setUnavailable(false);
       await d.click(runs[0].name);
-      expect(d.frame()).toContain("loading jobs...");
+      expect(d.frame()).toContain(provider === "jenkins" ? "fetching stages..." : "fetching jobs...");
       expect(d.navRef.itemCount).toBe(3);
       expect(fetchJobs).toHaveBeenCalledTimes(1);
       d.resolveJobs();
@@ -452,7 +467,7 @@ test("OpenShift namespace/resource/reload routing follows grouped and sorted res
     await d.click("a-tag");
     expect(d.state.detailCursorIndex()).toBe(3);
     expect(d.openResource).toHaveBeenLastCalledWith(resources[2]);
-    expect(d.navRef.itemRefs[3] === d.text("a-tag").parent).toBe(true);
+    expect(d.navRef.itemRefs[3] === d.text("a-tag").parent?.parent).toBe(true);
     await d.click("team-a");
     expect(d.navRef.itemCount).toBe(6);
     expect(d.state.detailCursorIndex()).toBe(1);
@@ -467,23 +482,131 @@ test("OpenShift namespace/resource/reload routing follows grouped and sorted res
     await d.click("z-tag");
     expect(d.state.detailCursorIndex()).toBe(4);
     expect(d.openResource).toHaveBeenLastCalledWith(resources[1]);
-    await hoverAndRightClick(d, "Reload resources");
-    await d.click("Reload resources");
+    await hoverAndRightClick(d, "Reload commit");
+    await d.click("Reload commit");
     expect(d.reload).toHaveBeenLastCalledWith(sha, true);
     d.setLoading(true);
     await d.flush();
-    await d.click("Reload resources");
+    await d.click("Reload commit");
     expect(d.reload).toHaveBeenCalledTimes(1);
     d.setLoading(false);
     d.setUnavailable(true);
     await d.flush();
     const cursor = d.state.detailCursorIndex();
-    await d.click("Reload resources");
+    await d.click("Reload commit");
     expect(d.state.detailCursorIndex()).toBe(cursor);
     expect(d.reload).toHaveBeenCalledTimes(1);
     await d.click("team-a-pod");
     expect(d.state.detailCursorIndex()).toBe(1);
     expect(d.openResource).toHaveBeenLastCalledWith(resources[0]);
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("OpenShift live updates keep collapsed namespaces collapsed and the cursor on the same row", async () => {
+  const d = await renderProvider("openshift");
+  try {
+    await d.click("team-a");
+    expect(d.state.detailCursorAction()).toBe("expand");
+    await d.click("team-b-pod");
+    const cursor = d.state.detailCursorIndex();
+    const count = d.navRef.itemCount;
+    d.bumpOpenShift();
+    await d.flush();
+    expect(d.navRef.itemCount).toBe(count);
+    expect(d.frame()).not.toContain("team-a-pod");
+    expect(d.state.detailCursorIndex()).toBe(cursor);
+    expect(d.state.detailCursorAction()).toBe("open");
+  } finally {
+    await d.dispose();
+  }
+});
+
+for (const [provider, label] of [
+  ["github-actions", "Reload commit"],
+  ["jenkins", "Reload commit"],
+  ["openshift", "Reload commit"],
+  ["snyk", "Rescan commit"],
+] as const) {
+  test(`${provider}: an unavailable provider mutes its action row and leaves it out of the cursor order`, async () => {
+    const d = await renderProvider(provider);
+    try {
+      const count = d.navRef.itemCount;
+      d.setUnavailable(true);
+      await d.flush();
+      expect(d.navRef.itemCount).toBe(count - 1);
+      const { x, y } = d.point(label);
+      expect(d.cell(x, y)?.fg).toEqual(RGBA.fromHex(d.theme.foregroundMuted));
+      d.state.detailCursorIndex() !== 0 && d.actions.setDetailCursorIndex(0);
+      await d.flush();
+      expect(d.state.detailCursorAction()).not.toMatch(/^(re)?(load|scan)$/);
+      await d.click(label);
+      expect(d.reload).not.toHaveBeenCalled();
+      expect(d.scanCommit).not.toHaveBeenCalled();
+      d.setUnavailable(false);
+      await d.flush();
+      expect(d.navRef.itemCount).toBe(count);
+    } finally {
+      await d.dispose();
+    }
+  });
+}
+
+test("OpenShift tree lines close on the last group and the last stream", async () => {
+  const d = await renderProvider("openshift");
+  try {
+    const rows = d.frame().split("\n");
+    const line = (text: string) => rows.find(row => row.includes(text)) ?? "";
+    expect(line("ImageStreams")).toContain("└─ ImageStreams");
+    expect(line("Pods")).toContain("├─ Pods");
+    // The single stream is last: its header and tags hang off blank space, not a dangling │.
+    expect(line("app")).toMatch(/└─ app/);
+    expect(line("z-tag")).toMatch(/^\s*│? {4,}\s*└─ z-tag/);
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("Jenkins runs keep the duration column so their time lines up with the stage counts below", async () => {
+  const d = await renderProvider("jenkins");
+  try {
+    await d.click(jenkinsRuns[0].name);
+    await d.flush();
+    const rows = d.frame().split("\n");
+    const run = rows.find(row => row.includes(jenkinsRuns[0].name)) ?? "";
+    const job = rows.find(row => row.includes("Jenkins job")) ?? "";
+    const runInfoEnd = /\S(?=\s+\S\s*$)/.exec(run)?.index;
+    expect(job).toContain("1 stage");
+    expect(runInfoEnd).toBe(job.indexOf("1 stage") + "1 stage".length - 1);
+  } finally {
+    await d.dispose();
+  }
+});
+
+for (const provider of ["github-actions", "jenkins", "openshift", "snyk"] as const) {
+  test(`${provider}: dismissing the setup banner does not re-enable an action that cannot work`, async () => {
+    const d = await renderProvider(provider);
+    try {
+      const count = d.navRef.itemCount;
+      // Status is idle (the banner was closed), but the provider still is not set up.
+      d.state.providers.register({ id: provider, displayName: provider, isAvailable: () => false });
+      await d.flush();
+      expect(d.navRef.itemCount).toBe(count - 1);
+    } finally {
+      await d.dispose();
+    }
+  });
+}
+
+test("OpenShift namespaces without resources are neither cursor stops nor hidden rows", async () => {
+  const d = await renderProvider("openshift");
+  try {
+    d.setOpenshiftEmpty(true);
+    await d.flush();
+    // Only Reload remains: every cursor stop has a row on screen.
+    expect(d.navRef.itemCount).toBe(1);
+    expect(d.frame()).toContain("total resources");
   } finally {
     await d.dispose();
   }
@@ -960,7 +1083,7 @@ for (const provider of ["github-actions", "jenkins", "openshift", "snyk"] as con
           : provider === "jenkins"
             ? ["Reload commit", "Build 1", "Jenkins job 1"]
             : provider === "openshift"
-              ? ["Reload resources", "team-a", "team-a-pod", "a-tag"]
+              ? ["Reload commit", "team-a", "team-a-pod", "a-tag"]
               : ["Rescan commit", "HIGH", "CVE-2026-0001"];
       const cursor = d.state.detailCursorIndex();
       const action = d.state.detailCursorAction();
@@ -1110,6 +1233,25 @@ test("Snyk tabs keep their view across tab switches for the same scan, and start
     await d.flush();
     for (const text of ["[tree]", "[all]", "Enter dependency filter..."]) expect(d.frame()).toContain(text);
     expect(d.state.detailCursorIndex()).toBe(0);
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("a rescan while Dependencies stays open also resets its Scope and Group by", async () => {
+  const d = await renderProvider("snyk");
+  try {
+    d.setSnykScan(dependencyScan);
+    d.actions.setDetailActiveTab("snyk-deps");
+    await d.flush();
+    await d.click("Group by");
+    await d.click("Scope");
+    expect(d.frame()).toContain("[package]");
+    expect(d.frame()).toContain("[prod]");
+    d.setSnykScan({ ...dependencyScan, scannedAt: "2026-08-26T10:00:00.000Z" });
+    await d.flush();
+    expect(d.frame()).toContain("[tree]");
+    expect(d.frame()).toContain("[all]");
   } finally {
     await d.dispose();
   }

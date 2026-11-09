@@ -337,13 +337,14 @@ export function useSnyk(opts: {
     for (const sha of toRead) cacheProbeAttempted.add(sha);
     const expectedEpoch = epoch;
     void (async () => {
-      // SQLite reads are synchronous, so yield between batches on large graphs.
+      // SQLite reads are synchronous, so yield between batches on large graphs. Showing a cached scan in the graph
+      // is not a use: the reads leave the eviction order alone (auto-scan tips below are read as usual).
       for (let offset = 0; offset < toRead.length; offset += 20) {
         if (expectedEpoch !== epoch || repoPath !== state.repoPath() || disposed || opts.suspended?.()) return;
         const cached = await Promise.all(
           toRead
             .slice(offset, offset + 20)
-            .map(sha => readCache(repoPath, sha, { maxCachedScans: current.maxCachedScans })),
+            .map(sha => readCache(repoPath, sha, { maxCachedScans: current.maxCachedScans, touch: false })),
         );
         if (expectedEpoch !== epoch || repoPath !== state.repoPath() || disposed || opts.suspended?.()) return;
         for (const result of cached) {

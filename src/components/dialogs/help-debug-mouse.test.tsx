@@ -55,7 +55,7 @@ test("Help tabs hover and click. Help and Debug support wheel and clickable clos
       .slice(themeStart + 1, themeEnd)
       .filter(row => row.kind === "binding")
       .map(row => row.key);
-    expect(themeKeys).toEqual(["↑/↓", "shift + ↑/↓", "enter", "esc", "d", "PgUp/PgDn"]);
+    expect(themeKeys).toEqual(["↑/↓  or  j/k", "shift ↑/↓", "enter", "esc", "d", "PgUp/PgDn"]);
     const header = lines().find(line => line.includes("esc close"));
     expect(header).toContain("Help");
     expect(header).not.toContain("codepulse");
@@ -132,5 +132,85 @@ test("Help tabs hover and click. Help and Debug support wheel and clickable clos
     } finally {
       clearDebugEvents();
     }
+  }
+});
+
+test("Debug colours an error red whatever its source", async () => {
+  const theme = createThemeState();
+  clearDebugEvents();
+  addDebugEvent({ source: "GitHub", message: "provider request failed", status: "error" });
+  addDebugEvent({ source: "Git", message: "plain git event" });
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={theme}>
+        <DebugDialog gitColor={theme.theme().gitBg} onClose={() => {}} />
+      </ThemeContext.Provider>
+    ),
+    { width: 110, height: 30 },
+  );
+  try {
+    await setup.flush();
+    const spanOf = (text: string) => {
+      const y = setup
+        .captureCharFrame()
+        .split("\n")
+        .findIndex(line => line.includes(text));
+      return setup.captureSpans().lines[y]?.spans.find(span => span.text.includes(text));
+    };
+    expect(spanOf("provider request failed")?.fg).toEqual(RGBA.fromHex(theme.theme().error));
+    expect(spanOf("plain git event")?.fg).toEqual(RGBA.fromHex(theme.theme().foreground));
+  } finally {
+    clearDebugEvents();
+    setup.renderer.destroy();
+  }
+});
+
+test("Debug marks a failed command or request in the status column", async () => {
+  const theme = createThemeState();
+  clearDebugEvents();
+  addDebugEvent({ source: "Git", message: "git fetch --all --prune", status: "exit 128" });
+  addDebugEvent({ source: "GitHub", message: "GET /runs", status: "401" });
+  addDebugEvent({ source: "Snyk", message: "snyk test (failed)", status: "2" });
+  addDebugEvent({ source: "Snyk", message: "snyk test (vulnerable)", status: "1" });
+  addDebugEvent({ source: "GitHub", message: "POST /graphql", status: "200" });
+  addDebugEvent({ source: "Git", message: "git status", status: "ok" });
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={theme}>
+        <DebugDialog gitColor={theme.theme().gitBg} onClose={() => {}} />
+      </ThemeContext.Provider>
+    ),
+    { width: 110, height: 30 },
+  );
+  try {
+    await setup.flush();
+    const statusOf = (message: string, status: string) => {
+      const y = setup
+        .captureCharFrame()
+        .split("\n")
+        .findIndex(line => line.includes(message));
+      return setup.captureSpans().lines[y]?.spans.find(span => span.text.trim() === status);
+    };
+    const error = RGBA.fromHex(theme.theme().error);
+    const muted = RGBA.fromHex(theme.theme().foregroundMuted);
+    expect(statusOf("git fetch --all --prune", "exit 128")?.fg).toEqual(error);
+    expect(statusOf("GET /runs", "401")?.fg).toEqual(error);
+    expect(statusOf("snyk test (failed)", "2")?.fg).toEqual(error);
+    // Snyk exits 1 when it finds vulnerabilities: a result, not a failure.
+    expect(statusOf("snyk test (vulnerable)", "1")?.fg).toEqual(muted);
+    expect(statusOf("POST /graphql", "200")?.fg).toEqual(muted);
+    expect(statusOf("git status", "ok")?.fg).toEqual(muted);
+    // The command line itself stays readable; only error events turn the message red.
+    expect(
+      setup.captureSpans().lines[
+        setup
+          .captureCharFrame()
+          .split("\n")
+          .findIndex(line => line.includes("git fetch --all --prune"))
+      ]?.spans.find(span => span.text.includes("git fetch"))?.fg,
+    ).toEqual(RGBA.fromHex(theme.theme().foreground));
+  } finally {
+    clearDebugEvents();
+    setup.renderer.destroy();
   }
 });
