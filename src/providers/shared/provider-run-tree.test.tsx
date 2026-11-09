@@ -10,6 +10,7 @@ import {
   type ProviderTreeJob,
   type ProviderTreeNote,
   type ProviderTreeRun,
+  type ProviderTreeStep,
 } from "./provider-run-tree";
 
 const date = "2026-01-01T00:00:00Z";
@@ -49,7 +50,9 @@ const job = (status: string, conclusion: string | null, stepStatus: string): Pro
   raw: null,
 });
 
-async function renderTree(options: { onOpenNote?: (note: ProviderTreeNote) => void } = {}) {
+async function renderTree(
+  options: { onOpenNote?: (note: ProviderTreeNote) => void; onOpenStep?: (step: ProviderTreeStep) => void } = {},
+) {
   const [runs, setRuns] = createSignal([run("in_progress", null, "2026-01-01T00:01:00Z")]);
   const [cursor, setCursor] = createSignal(0);
   let jobs = [job("in_progress", null, "in_progress")];
@@ -83,6 +86,7 @@ async function renderTree(options: { onOpenNote?: (note: ProviderTreeNote) => vo
             onReloadCommit={reload}
             onOpenNote={options.onOpenNote}
             noteAction="view in log"
+            onOpenStep={options.onOpenStep}
           />
         </box>
       </ThemeContext.Provider>
@@ -255,6 +259,27 @@ test("a re-run shows its latest attempt's jobs; earlier attempts fold into rows 
     );
   } finally {
     openUrl.mockRestore();
+    t.renderer.destroy();
+  }
+});
+
+test("with onOpenStep, steps are rows the cursor stops on, and Enter opens one", async () => {
+  const opened = mock((_step: ProviderTreeStep) => {});
+  const actions: (string | null)[] = [];
+  const t = await renderTree({ onOpenStep: opened });
+  try {
+    t.setCursor(1);
+    await t.settle();
+    t.navRef.activateCurrentItem();
+    await t.settle();
+    // Reload, run, job, then its step.
+    expect(t.navRef.itemCount).toBe(4);
+    t.setCursor(3);
+    await t.settle();
+    t.navRef.activateCurrentItem();
+    expect(opened.mock.calls.at(-1)?.[0]).toMatchObject({ name: "compile" });
+    actions.push(null);
+  } finally {
     t.renderer.destroy();
   }
 });

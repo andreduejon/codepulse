@@ -61,6 +61,12 @@ Aborted builds show as cancelled (`○`, a grey chip in the graph) like aborted
 stages, and not-built builds as skipped. Entering a commit's **Jenkins** tab opens
 its first failed build. In the console log, `r` reloads it (a finished build's cached log does not change).
 
+Stages are rows the cursor stops on. Enter on a stage opens only its part of the
+console log (from `[Pipeline] { (Stage)` to the end of that block), and `←` / `→`
+move to the previous and next stage. It is cut from the same console log, so it
+needs no extra requests and works for cached builds. Enter on **Pipeline** still
+opens the whole console; a stage the log does not mark shows the whole log too.
+
 Fetch size controls both the graph commit window and recent builds inspected per
 job. It is independent from cache retention.
 

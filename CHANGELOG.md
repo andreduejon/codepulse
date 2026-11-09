@@ -28,6 +28,8 @@ All notable changes to this project will be documented in this file.
 - GitHub Actions re-runs: the run row names its attempt (`attempt 2`), and earlier attempts are folded rows at the
   end of the run that expand to their jobs and logs.
 
+- Jenkins stages are selectable: Enter opens only that stage's part of the console log, `←` / `→` move between
+  stages. It is cut from the cached console log, so no extra requests.
 - Jenkins: a finished build with a JUnit report shows a **Tests** row with its counts and its failed tests. Enter
   opens a failure's error and stack trace in the log viewer, `←` / `→` move between failed tests.
 

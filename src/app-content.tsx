@@ -45,8 +45,9 @@ import { providerAccent } from "./providers/colors";
 import JobLogDialog from "./providers/github-actions/log-dialog";
 import type { GitHubJob, GitHubWorkflowRun } from "./providers/github-actions/types";
 import { useGitHubCI } from "./providers/github-actions/use-github-ci";
+import { sliceStageLog } from "./providers/jenkins/stage-log";
 import { testFailureText, testLabel } from "./providers/jenkins/tests";
-import type { JenkinsFailedTest, JenkinsJob, JenkinsRun } from "./providers/jenkins/types";
+import type { JenkinsFailedTest, JenkinsJob, JenkinsRun, JenkinsStage } from "./providers/jenkins/types";
 import { useJenkinsCI } from "./providers/jenkins/use-jenkins-ci";
 import OpenShiftResourceDialog from "./providers/openshift/resource-dialog";
 import type { OpenShiftResource } from "./providers/openshift/types";
@@ -303,6 +304,24 @@ export function AppContent(props: Readonly<AppContentProps>) {
       run,
       jobs: jobs.length > 0 ? jobs : [job],
       fetchLog: () => jenkinsCI.fetchRunLog(run),
+    });
+    setDialog("job-log");
+  };
+
+  /** A Jenkins stage's part of the console log (the whole log when it has no such stage), ←/→ to the other stages. */
+  const handleOpenJenkinsStageLog = (run: JenkinsRun, stages: JenkinsStage[], index: number) => {
+    const entries = stages.map(stage => ({ id: stage.id, name: stage.name }));
+    const entry = entries[index] ?? entries[0];
+    if (!entry) return;
+    setJobLogTarget({
+      provider: "jenkins",
+      job: entry,
+      run,
+      jobs: entries,
+      fetchLog: async current => {
+        const full = await jenkinsCI.fetchRunLog(run);
+        return sliceStageLog(full, current.name) ?? full;
+      },
     });
     setDialog("job-log");
   };
@@ -662,6 +681,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     jenkinsFetchCommitData: jenkinsCI.fetchCommitDataForSHA,
     onOpenJenkinsJobLog: handleOpenJenkinsJobLog,
     onOpenJenkinsTestFailure: handleOpenJenkinsTestFailure,
+    onOpenJenkinsStageLog: handleOpenJenkinsStageLog,
     get jenkinsProviderStatus() {
       return state.providerStatus();
     },

@@ -365,6 +365,8 @@ for (const provider of ["github-actions", "jenkins"] as const) {
     const jobs = github ? githubJobs : jenkinsJobs;
     const fetchJobs = github ? d.githubFetchJobs : d.jenkinsFetchJobs;
     const open = github ? d.openGithub : d.openJenkins;
+    // A Jenkins job's stages are rows too: each fixture job brings one.
+    const perJob = github ? 1 : 2;
     try {
       expect(d.frame()).toContain("Details");
       expect(d.navRef.itemCount).toBe(3);
@@ -372,26 +374,26 @@ for (const provider of ["github-actions", "jenkins"] as const) {
       expect(fetchJobs).not.toHaveBeenCalled();
       await d.click(runs[0].name);
       expect(fetchJobs).toHaveBeenLastCalledWith(runs[0], expect.any(AbortSignal));
-      expect(d.navRef.itemCount).toBe(5);
+      expect(d.navRef.itemCount).toBe(3 + 2 * perJob);
       expect(d.state.detailCursorIndex()).toBe(2);
       d.actions.setDetailCursorIndex(1);
       await d.flush();
       await hoverAndRightClick(d, jobs[1].name);
       expect(open).not.toHaveBeenCalled();
       await d.click(jobs[1].name);
-      expect(d.state.detailCursorIndex()).toBe(3);
+      expect(d.state.detailCursorIndex()).toBe(2 + perJob);
       expect(d.state.detailCursorAction()).toBe("view log");
       expect(open).toHaveBeenLastCalledWith(jobs[1], runs[0], jobs);
-      expect(d.navRef.itemRefs[3] === d.text(jobs[1].name).parent?.parent).toBe(true);
+      expect(d.navRef.itemRefs[2 + perJob] === d.text(jobs[1].name).parent?.parent).toBe(true);
       d.mockInput.pressKey("RETURN");
       await d.flush();
       expect(open).toHaveBeenCalledTimes(2);
       await d.click("enter view log");
       expect(open).toHaveBeenCalledTimes(3);
       await d.click(runs[1].name);
-      expect(d.navRef.itemCount).toBe(7);
+      expect(d.navRef.itemCount).toBe(3 + 4 * perJob);
       await d.click(runs[0].name);
-      expect(d.navRef.itemCount).toBe(5);
+      expect(d.navRef.itemCount).toBe(3 + 2 * perJob);
       expect(d.state.detailCursorIndex()).toBe(1);
       await d.click(runs[1].name);
       expect(d.state.detailCursorIndex()).toBe(2);
@@ -424,6 +426,7 @@ for (const provider of ["github-actions", "jenkins"] as const) {
     const d = await renderProvider(provider, true, true);
     const runs = provider === "github-actions" ? githubRuns : jenkinsRuns;
     const fetchJobs = provider === "github-actions" ? d.githubFetchJobs : d.jenkinsFetchJobs;
+    const perJob = provider === "github-actions" ? 1 : 2;
     try {
       d.setLoading(true);
       await d.flush();
@@ -442,7 +445,7 @@ for (const provider of ["github-actions", "jenkins"] as const) {
       expect(fetchJobs).toHaveBeenCalledTimes(1);
       d.resolveJobs();
       await d.flush();
-      expect(d.navRef.itemCount).toBe(5);
+      expect(d.navRef.itemCount).toBe(3 + 2 * perJob);
       expect(d.state.detailCursorIndex()).toBe(2);
       d.setHasData(false);
       await d.flush();

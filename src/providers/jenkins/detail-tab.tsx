@@ -4,7 +4,14 @@ import { BUSY } from "../../utils/busy-text";
 import type { RowShortcut } from "../shared/open-row";
 import { ProviderRunTree, type ProviderTreeJob, type ProviderTreeRun } from "../shared/provider-run-tree";
 import { jenkinsTestsJob } from "./tests";
-import type { JenkinsCommitData, JenkinsFailedTest, JenkinsJob, JenkinsJobFetchResult, JenkinsRun } from "./types";
+import type {
+  JenkinsCommitData,
+  JenkinsFailedTest,
+  JenkinsJob,
+  JenkinsJobFetchResult,
+  JenkinsRun,
+  JenkinsStage,
+} from "./types";
 
 export interface JenkinsDetailTabProps {
   mouseEnabled?: boolean;
@@ -22,6 +29,8 @@ export interface JenkinsDetailTabProps {
   setDetailCursorIndex: (idx: number) => void;
   setDetailCursorShortcut?: (shortcut: RowShortcut | null) => void;
   onOpenJobLog?: (job: JenkinsJob, run: JenkinsRun, jobs?: JenkinsJob[]) => void;
+  /** Enter on a stage: its part of the console log, ←/→ to the other stages. */
+  onOpenStageLog?: (run: JenkinsRun, stages: JenkinsStage[], index: number) => void;
   /** Enter on a failed test: its error and stack in the log viewer, ←/→ to the other failed tests. */
   onOpenTestFailure?: (run: JenkinsRun, failed: JenkinsFailedTest[], index: number) => void;
 }
@@ -102,6 +111,10 @@ export function JenkinsDetailTab(props: Readonly<JenkinsDetailTabProps>) {
         props.onOpenTestFailure?.(run.raw, failed, Number(note.id));
       }}
       noteAction="view failure"
+      onOpenStep={(step, job, run, steps) => {
+        const index = steps.indexOf(step);
+        props.onOpenStageLog?.(run.raw, job.raw.steps, Math.max(0, index));
+      }}
       summaryLabel="total builds"
       jobsLoadingText={BUSY.fetchingStages}
       reloadBusyText={BUSY.fetchingBuilds}

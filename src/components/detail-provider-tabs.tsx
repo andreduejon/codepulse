@@ -84,6 +84,7 @@ export function ProviderDetailTabs(
           {...cursor}
           onOpenJobLog={props.view.onOpenJenkinsJobLog}
           onOpenTestFailure={props.view.onOpenJenkinsTestFailure}
+          onOpenStageLog={props.view.onOpenJenkinsStageLog}
         />
       </Show>
 

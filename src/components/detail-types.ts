@@ -14,6 +14,7 @@ import type {
   JenkinsJob,
   JenkinsJobFetchResult,
   JenkinsRun,
+  JenkinsStage,
 } from "../providers/jenkins/types";
 import type { OpenShiftCommitData, OpenShiftResource } from "../providers/openshift/types";
 import type { SnykScanResult } from "../providers/snyk/types";
@@ -73,6 +74,7 @@ export interface DetailViewProps {
   jenkinsFetchCommitData?: (sha: string, force?: boolean) => Promise<void>;
   onOpenJenkinsJobLog?: (job: JenkinsJob, run: JenkinsRun, jobs?: JenkinsJob[]) => void;
   onOpenJenkinsTestFailure?: (run: JenkinsRun, failed: JenkinsFailedTest[], index: number) => void;
+  onOpenJenkinsStageLog?: (run: JenkinsRun, stages: JenkinsStage[], index: number) => void;
   jenkinsProviderStatus?: ProviderStatus;
   openshiftGetCommitData?: (sha: string) => OpenShiftCommitData | null;
   openshiftFetchCommitData?: (sha: string, force?: boolean) => Promise<void>;
