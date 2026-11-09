@@ -7,7 +7,9 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Search CI job logs and OpenShift resource logs and JSON with `/`; `n` / `N` move
-  between hits, Esc clears the search before a second Esc closes the dialog.
+  between hits, Esc clears the search before a second Esc closes the dialog. While
+  typing, the search bar is one highlighted row with its hit count, and the current
+  hit's line number is shown in the hit color.
 - `r` reloads a CI job log (newer output of a running job, or a retry after a
   failure; a finished job's log comes from the cache). In the OpenShift dialog `r`
   refreshes what is shown: the log, or the object in JSON view.

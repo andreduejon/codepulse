@@ -10,7 +10,7 @@ import {
   DialogTitleBar,
   getStandardDialogFrame,
 } from "../../components/dialogs/dialog-chrome";
-import { highlightHits, LogSearchRow, useLogSearch } from "../../components/dialogs/log-search";
+import { highlightHits, LineNumber, LogSearchRow, useLogSearch } from "../../components/dialogs/log-search";
 import { handleLogScrollKey, type LogViewState, LogViewStatus } from "../../components/dialogs/log-view";
 import { fitTitleSegments } from "../../components/dialogs/title-utils";
 import { KeyHint, KeyHintSeparator } from "../../components/key-hint";
@@ -294,14 +294,14 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
     const lineNo = line.lineNo.toString().padStart(maxLineNoWidth());
     const contentWrapMode = () => (wrapEnabled() ? "word" : "none");
     const text = (value: string) => highlightHits(value, search.term(), { fg: th.background, bg: th.accent });
-    const lineNoColor = () => (search.current() === index() ? th.accent : th.foregroundMuted);
+    const isCurrentHit = () => search.current() === index();
     const ref = (element: Renderable) => {
       lineRefs[index()] = element;
     };
     if (line.kind === "group") {
       return (
         <box ref={ref} flexDirection="row" width="100%">
-          <text flexShrink={0} wrapMode="none" fg={lineNoColor()}>{`${lineNo}  `}</text>
+          <LineNumber text={lineNo} current={isCurrentHit()} />
           <text wrapMode={contentWrapMode()} fg={th.accent}>
             <strong>
               {"▸ "}
@@ -314,7 +314,7 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
     if (line.kind === "error") {
       return (
         <box ref={ref} flexDirection="row" width="100%" backgroundColor={th.diffRemovedBg}>
-          <text flexShrink={0} wrapMode="none" fg={lineNoColor()}>{`${lineNo}  `}</text>
+          <LineNumber text={lineNo} current={isCurrentHit()} />
           <text wrapMode={contentWrapMode()} fg={th.error}>
             {text(line.text)}
           </text>
@@ -324,7 +324,7 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
     if (line.kind === "warning") {
       return (
         <box ref={ref} flexDirection="row" width="100%">
-          <text flexShrink={0} wrapMode="none" fg={lineNoColor()}>{`${lineNo}  `}</text>
+          <LineNumber text={lineNo} current={isCurrentHit()} />
           <text wrapMode={contentWrapMode()} fg={th.warning}>
             {text(line.text)}
           </text>
@@ -333,7 +333,7 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
     }
     return (
       <box ref={ref} flexDirection="row" width="100%">
-        <text flexShrink={0} wrapMode="none" fg={lineNoColor()}>{`${lineNo}  `}</text>
+        <LineNumber text={lineNo} current={isCurrentHit()} />
         <text wrapMode={contentWrapMode()} fg={th.foreground}>
           {text(line.text)}
         </text>

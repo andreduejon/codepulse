@@ -363,6 +363,46 @@ test("/ searches the log: typing jumps to hits, n/N cycle them, q types, Esc cle
   }
 });
 
+test("the search bar sits between empty rows at the same dialog height, is one input bar with its count, and the current hit's number is inverted", async () => {
+  const d = await renderLog("github-actions");
+  try {
+    d.resolve();
+    await d.flush();
+    const rows = () => d.frame().split("\n");
+    const footerY = rows().findIndex(row => row.includes("n/N") || row.includes("c view"));
+    const viewport = d.scrollbox().height;
+    await d.key("/");
+    await d.mockInput.typeText("-line");
+    await d.flush();
+    // Same dialog height: the footer stays put and the log gives up the bar and the empty row above it.
+    expect(rows().findIndex(row => row.includes("c view"))).toBe(footerY);
+    expect(d.scrollbox().height).toBe(viewport - 2);
+    const barY = rows().findIndex(row => row.includes("/ -line"));
+    expect(rows()[barY - 1].trim()).toBe("");
+    expect(rows()[barY + 1].trim()).toBe("");
+    // While typing, the slash, the input and the count share the input background.
+    const element = RGBA.fromHex(d.theme.backgroundElement);
+    expect(d.cell("/ -line")?.bg).toEqual(element);
+    expect(d.cell("1/2")?.bg).toEqual(element);
+    // The current hit's line number is inverted in the hit color; the other hit's number stays muted.
+    const numberSpan = (label: string) =>
+      d
+        .captureSpans()
+        .lines[rows().findIndex(row => row.includes(label))]?.spans.find(
+          span => /^\s*\d+\s*$/.test(span.text) && span.text.trim() !== "",
+        );
+    expect(numberSpan("warning-line")?.text.trim()).toBe("2");
+    expect(numberSpan("warning-line")?.bg).toEqual(RGBA.fromHex(d.theme.accent));
+    expect(numberSpan("warning-line")?.fg).toEqual(RGBA.fromHex(d.theme.background));
+    expect(numberSpan("error-line")?.fg).toEqual(RGBA.fromHex(d.theme.foregroundMuted));
+    // Enter keeps the query: the bar loses the input background.
+    await d.key("RETURN");
+    expect(d.cell("1/2")?.bg).not.toEqual(element);
+  } finally {
+    await d.dispose();
+  }
+});
+
 test("the log search tells the app while it owns Esc, so Esc clears it instead of closing the dialog", async () => {
   const d = await renderLog("github-actions");
   try {

@@ -345,6 +345,14 @@ test("/ searches the resource log and object like the CI log", async () => {
     await d.mockInput.typeText("wrap-end");
     await d.flush();
     expect(d.frame()).toContain("1/1");
+    // One input bar between empty rows; the current hit's number is inverted like the CI log.
+    const rows = d.frame().split("\n");
+    const barY = rows.findIndex(row => row.includes("/ wrap-end"));
+    expect(rows[barY - 1].trim()).toBe("");
+    expect(d.cell("1/1")?.bg).toEqual(RGBA.fromHex(d.theme.backgroundElement));
+    const hitY = rows.findIndex(row => /^\s+1 {2}/.test(row));
+    const number = d.captureSpans().lines[hitY]?.spans.find(span => span.text.trim() === "1");
+    expect(number?.bg).toEqual(RGBA.fromHex(d.theme.accent));
     await d.key("RETURN");
     expect(d.frame()).toContain("n/N next/prev");
     await d.key("ESCAPE");

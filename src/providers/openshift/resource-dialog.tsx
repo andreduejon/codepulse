@@ -8,7 +8,7 @@ import {
   DialogTitleBar,
   getStandardDialogFrame,
 } from "../../components/dialogs/dialog-chrome";
-import { highlightHits, LogSearchRow, useLogSearch } from "../../components/dialogs/log-search";
+import { highlightHits, LineNumber, LogSearchRow, useLogSearch } from "../../components/dialogs/log-search";
 import { handleLogScrollKey, type LogViewState, LogViewStatus } from "../../components/dialogs/log-view";
 import { fitTitleSegments } from "../../components/dialogs/title-utils";
 import { KeyHint, KeyHintSeparator } from "../../components/key-hint";
@@ -241,13 +241,10 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
                       flexDirection="row"
                       width="100%"
                     >
-                      <text
-                        flexShrink={0}
-                        wrapMode="none"
-                        fg={search.current() === index() ? t().accent : t().foregroundMuted}
-                      >
-                        {`${String(index() + 1).padStart(lineNoWidth())}  `}
-                      </text>
+                      <LineNumber
+                        text={String(index() + 1).padStart(lineNoWidth())}
+                        current={search.current() === index()}
+                      />
                       <text wrapMode={wrapEnabled() ? "word" : "none"} fg={t().foreground}>
                         {highlightHits(line, search.term(), { fg: t().background, bg: t().accent })}
                       </text>
