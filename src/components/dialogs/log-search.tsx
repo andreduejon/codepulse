@@ -305,3 +305,31 @@ export function LogSearchRow(props: Readonly<{ search: LogSearch; placeholder: s
     </Show>
   );
 }
+
+/** Columns kept free after a hit moved into view from the right. */
+const REVEAL_MARGIN = 4;
+
+/**
+ * With wrap off, a hit past the right edge would stay out of sight: the lines move sideways so the current hit shows,
+ * each starting with `…` while moved. Returns the function that cuts a line for display (unchanged otherwise).
+ */
+export function useSidewaysReveal(opts: {
+  search: Pick<ReturnType<typeof useLogSearch>, "current" | "term">;
+  texts: () => readonly string[];
+  wrap: () => boolean;
+  /** Columns for the line text (the dialog's inner width without the line numbers). */
+  width: () => number;
+}): (text: string) => string {
+  const offset = createMemo(() => {
+    const at = opts.search.current();
+    const term = opts.search.term();
+    if (opts.wrap() || at === null || !term) return 0;
+    const start = (opts.texts()[at] ?? "").toLowerCase().indexOf(term);
+    const end = start + term.length;
+    const width = opts.width();
+    if (start < 0 || width <= 0 || end <= width) return 0;
+    // Shown: `…`, then the text from offset + 1. The hit ends inside the width and starts right of the `…`.
+    return Math.max(1, Math.min(start - 1, end - width + REVEAL_MARGIN));
+  });
+  return text => (offset() > 0 ? `…${text.slice(offset() + 1)}` : text);
+}

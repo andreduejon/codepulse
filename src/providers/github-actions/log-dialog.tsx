@@ -15,6 +15,7 @@ import {
   LineNumber,
   LogSearchRow,
   useLogSearch,
+  useSidewaysReveal,
   useVisibleNumberWidth,
 } from "../../components/dialogs/log-search";
 import { handleLogScrollKey, type LogViewState, LogViewStatus } from "../../components/dialogs/log-view";
@@ -222,6 +223,13 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
     scrollbox: () => scrollboxRef,
     onActiveChange: active => props.onSearchActive?.(active),
   });
+  // Inner width: the dialog's frame (1) and padding (4) on both sides, then the line numbers and their gap.
+  const reveal = useSidewaysReveal({
+    search,
+    texts: () => filteredLines().map(line => line.text),
+    wrap: wrapEnabled,
+    width: () => dialogWidth() - 10 - (maxLineNoWidth() + 2),
+  });
   // After mount, so the app hears that the search owns Esc (the first hit shows once the log has loaded).
   onMount(() => {
     if (props.initialSearch) search.setQuery(props.initialSearch);
@@ -310,7 +318,7 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
     const th = theme();
     const lineNo = () => line.lineNo.toString().padStart(maxLineNoWidth());
     const contentWrapMode = () => (wrapEnabled() ? "word" : "none");
-    const text = (value: string) => highlightHits(value, search.term(), { fg: th.background, bg: th.accent });
+    const text = (value: string) => highlightHits(reveal(value), search.term(), { fg: th.background, bg: th.accent });
     const isCurrentHit = () => search.current() === index();
     const ref = (element: Renderable) => {
       lineRefs[index()] = element;

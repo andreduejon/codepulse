@@ -569,3 +569,28 @@ test("opened from an annotation, the log starts with its message searched and th
     d.renderer.destroy();
   }
 });
+
+test("with wrap off, a hit past the right edge moves the lines sideways so it shows", async () => {
+  const d = await renderLog("github-actions");
+  try {
+    d.resolve();
+    await d.flush();
+    expect(d.frame()).not.toContain("WRAP-END");
+    await d.key("/");
+    await d.mockInput.typeText("wrap-end");
+    await d.flush();
+    const row =
+      d
+        .frame()
+        .split("\n")
+        .find(line => line.includes("WRAP-END")) ?? "";
+    expect(row).toMatch(/1 {2}…x+ WRAP-END/);
+    // Without the search (Esc while typing clears it) the lines start at the left again.
+    await d.key("ESCAPE");
+    await d.flush();
+    expect(d.frame()).not.toContain("WRAP-END");
+    expect(d.frame()).toContain("normal x");
+  } finally {
+    await d.dispose();
+  }
+});

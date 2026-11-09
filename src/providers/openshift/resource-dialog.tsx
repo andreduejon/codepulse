@@ -13,6 +13,7 @@ import {
   LineNumber,
   LogSearchRow,
   useLogSearch,
+  useSidewaysReveal,
   useVisibleNumberWidth,
 } from "../../components/dialogs/log-search";
 import { handleLogScrollKey, type LogViewState, LogViewStatus } from "../../components/dialogs/log-view";
@@ -210,6 +211,13 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
     scrollbox: () => scrollboxRef,
     onActiveChange: active => props.onSearchActive?.(active),
   });
+  // Inner width: the dialog's frame (1) and padding (4) on both sides, then the line numbers and their gap.
+  const reveal = useSidewaysReveal({
+    search,
+    texts: lines,
+    wrap: wrapEnabled,
+    width: () => dialogFrame().width - 10 - (lineNoWidth() + 2),
+  });
   const title = createMemo(() => {
     const mode =
       viewMode() === "log" ? (followEnded() ? "log ended" : "log") : viewMode() === "events" ? "events" : "object";
@@ -323,7 +331,7 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
                         current={search.current() === index()}
                       />
                       <text wrapMode={wrapEnabled() ? "word" : "none"} fg={lineColor(index())}>
-                        {highlightHits(line, search.term(), { fg: t().background, bg: t().accent })}
+                        {highlightHits(reveal(line), search.term(), { fg: t().background, bg: t().accent })}
                       </text>
                     </box>
                   )}
