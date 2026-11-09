@@ -21,6 +21,8 @@ export interface SnykDetailTabProps {
   detailFocused: () => boolean;
   setDetailCursorAction: (action: string | null) => void;
   setDetailCursorIndex: (idx: number) => void;
+  /** The first parent's scan, to mark what this commit changed (`null` while it has none, `onScan` to scan it). */
+  parent?: { sha: string; scan: SnykScanResult | null; onScan?: () => void };
   /** Footer row shortcut (`o open` on a finding). */
   setDetailCursorShortcut?: (shortcut: RowShortcut | null) => void;
   /** Vulnerabilities: a filter handed over by the Dependencies jump, read once when the tab opens. */

@@ -33,6 +33,10 @@ All notable changes to this project will be documented in this file.
 - Jenkins: a finished build with a JUnit report shows a **Tests** row with its counts and its failed tests. Enter
   opens a failure's error and stack trace in the log viewer, `←` / `→` move between failed tests.
 
+- Snyk Vulnerabilities compare with the first parent's scan: a `vs parent` row (`2 new · 1 fixed`), a muted
+  `new` on added findings, and a folded FIXED section with the parent's findings this commit fixed. `new` and
+  `fixed` work as filter words. Without a parent scan, Enter on the row scans the parent.
+
 ### Changed
 
 - Jenkins multibranch: over the 25 branch-job limit, the branches in the graph are read first, then the most

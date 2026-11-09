@@ -30,6 +30,8 @@ export interface VulnerabilityRowsView {
   findingLabelWidth: () => number;
   sectionLabelWidth: (section: Section) => number;
   findingExpanded: (key: string) => boolean;
+  /** A finding the parent's scan did not have: marked with a muted `new`. */
+  isNew: (entry: SnykVulnerabilityEntry) => boolean;
   sectionExpanded: (section: Section) => boolean;
   packageExpanded: (pkg: PackageRow) => boolean;
 }
@@ -147,6 +149,11 @@ function Entry(entryProps: {
             ? v.scrolled(entry.label, true, v.findingLabelWidth())
             : highlightMatch(entry.label, v.query(), t().snykBg)}
         </text>
+        <Show when={v.isNew(entry)}>
+          <text selectable={!v.mouseEnabled()} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+            {" new"}
+          </text>
+        </Show>
         {/* "!" sits right before the score: padding + marker + space, then the score (7 columns total). */}
         <text selectable={!v.mouseEnabled()} flexShrink={0} wrapMode="none" fg={t().error}>
           {`${" ".repeat(5 - scoreText(entry.finding.cvssScore).length)}${isMatureExploit(entry.finding) ? "!" : " "} `}
@@ -301,7 +308,7 @@ export function SectionView(sectionProps: { view: VulnerabilityRowsView; section
           wrapMode="none"
           truncate={v.bannerOverflow() === 0 || !cursored()}
           fg={
-            isEmpty()
+            isEmpty() || (section.muted && !cursored())
               ? t().foregroundMuted
               : severity
                 ? severityColor(t(), severity)

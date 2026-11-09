@@ -43,6 +43,17 @@ export function ProviderDetailTabs(
   const snykScan = async () => {
     await props.view.snykScanCommit?.(props.sha, !!props.view.snykGetCommitData?.(props.sha));
   };
+  /** The first parent's scan, so Vulnerabilities can say what this commit added and fixed. */
+  const snykParent = () => {
+    const commit = state.selectedCommit();
+    const sha = commit?.hash === props.sha ? commit.parents[0] : undefined;
+    if (!sha) return undefined;
+    return {
+      sha,
+      scan: props.view.snykGetCommitData?.(sha) ?? null,
+      onScan: snykUnavailable() ? undefined : () => void props.view.snykScanCommit?.(sha, false),
+    };
+  };
 
   return (
     <>
@@ -123,6 +134,7 @@ export function ProviderDetailTabs(
           mouseEnabled={props.view.mouseEnabled}
           onMouseFocus={props.view.onMouseFocus}
           scan={props.view.snykGetCommitData?.(props.sha) ?? null}
+          parent={snykParent()}
           contentWidth={props.view.contentWidth}
           onScan={snykScan}
           loading={props.view.snykIsScanning?.(props.sha) ?? false}
