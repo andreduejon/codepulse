@@ -47,6 +47,14 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - A long OpenShift resource name no longer pushes its status mark out of a narrow detail panel.
+- Log search with wrap off: a hit past the right edge moves the lines sideways (they start with `…`) so it shows.
+- A followed OpenShift log that drops its oldest lines keeps the selected search hit (`2/2` stays `2/2`).
+- A narrow footer leaves out whole key hints, least needed first, instead of cutting the last one mid-word.
+- Graph subjects that do not fit end in `…` (opentui cut them in the middle with `...`), counted in terminal
+  columns so wide characters (CJK, emoji) no longer shift columns; ref badges too. Run tree, OpenShift group and
+  stash rows end in `…` the same way.
+- A selected Snyk package row (Vulnerabilities grouped by dependency) shows its full coordinate and scrolls.
+- The footer's `tab` hint says `Actions` for the GitHub view, like its detail tab.
 
 ## [0.16.0] - 2026-11-09
 
