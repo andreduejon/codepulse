@@ -338,6 +338,27 @@ test("a failed log shows its reason in an error box, and an empty log says so, n
   }
 });
 
+test("the line number column fits the largest number on screen, like the CI log", async () => {
+  const d = await renderResource("Pod", true);
+  try {
+    d.streams[0].emit(logRows(120));
+    await d.flush();
+    const rows = () => d.frame().split("\n");
+    const row = (label: string) => rows().find(line => line.includes(label)) ?? "";
+    const insetX = row("OpenShift").indexOf("OpenShift");
+    const numberOf = (label: string) => row(label).slice(insetX, row(label).indexOf(label)).trimEnd();
+    // Following the end: three digits, starting at the text inset like the title.
+    expect(numberOf("row-120")).toBe("120");
+    await d.key("g");
+    await d.flush();
+    // At the top only one- and two-digit numbers are on screen.
+    expect(numberOf("row-010")).toBe("10");
+    expect(numberOf("row-001")).toBe(" 1");
+  } finally {
+    await d.dispose();
+  }
+});
+
 test("/ searches the resource log and object like the CI log", async () => {
   const d = await renderResource("Build");
   try {

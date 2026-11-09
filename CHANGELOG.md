@@ -35,7 +35,9 @@ All notable changes to this project will be documented in this file.
 - After an expired token (401), automatic requests stop for every provider until
   **Reload commit**, `:reload`, or `f` retries; auth banners end in *Reload to retry*.
 - CI and OpenShift log dialogs share loading, empty, and error states (with the real
-  reason), scrolling keys, and footer words (`search · view · wrap · refresh`).
+  reason), scrolling keys, and footer words (`search · view · wrap · refresh`). The
+  line number column is as wide as the largest number on screen, so it starts at the
+  text inset instead of leaving room for the last line of a long log.
 - Provider graph columns widen to fit their counts without squeezing out the
   subject, dim with search, path, and ancestry, and bold the selected row. In tight
   rows ref badges shorten and collapse into `+N` (the checked-out branch keeps its

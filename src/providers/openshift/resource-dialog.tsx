@@ -8,7 +8,13 @@ import {
   DialogTitleBar,
   getStandardDialogFrame,
 } from "../../components/dialogs/dialog-chrome";
-import { highlightHits, LineNumber, LogSearchRow, useLogSearch } from "../../components/dialogs/log-search";
+import {
+  highlightHits,
+  LineNumber,
+  LogSearchRow,
+  useLogSearch,
+  useVisibleNumberWidth,
+} from "../../components/dialogs/log-search";
 import { handleLogScrollKey, type LogViewState, LogViewStatus } from "../../components/dialogs/log-view";
 import { fitTitleSegments } from "../../components/dialogs/title-utils";
 import { KeyHint, KeyHintSeparator } from "../../components/key-hint";
@@ -139,8 +145,14 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
     if (error) return { kind: "error", title: "Failed to load object", message: error };
     return null;
   };
-  const lineNoWidth = createMemo(() => lines().length.toString().length);
   const lineRefs: Renderable[] = [];
+  const lineNoWidth = useVisibleNumberWidth({
+    scrollbox: () => scrollboxRef,
+    rowAt: index => lineRefs[index],
+    lines,
+    numberAt: index => index + 1,
+    layoutKey: wrapEnabled,
+  });
   const search = useLogSearch({
     texts: lines,
     rowAt: index => lineRefs[index],

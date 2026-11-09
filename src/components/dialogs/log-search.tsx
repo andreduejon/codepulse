@@ -1,7 +1,8 @@
 import type { KeyEvent, Renderable, ScrollBoxRenderable } from "@opentui/core";
+import { useRenderer } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, type JSX, on, onCleanup, Show, untrack } from "solid-js";
 import { useT } from "../../hooks/use-t";
-import { scheduleScrollIntoView, scrollElementIntoView } from "../../utils/scroll";
+import { hasScrollLayout, scheduleScrollIntoView, scrollElementIntoView } from "../../utils/scroll";
 
 /**
  * Search inside a log or object viewer: `/` opens the search row, typing jumps to the first hit, Enter keeps the
@@ -136,6 +137,83 @@ export function highlightHits(text: string, term: string, colors: { fg: string; 
   if (parts.length === 0) return text;
   if (from < text.length) parts.push(text.slice(from));
   return parts;
+}
+
+/**
+ * Width of the line number column: the largest number on screen, not the largest in the log, so the widest visible
+ * number starts at the text inset. Numbers grow down the log, so the last visible row holds the widest one.
+ *
+ * Measured before each paint, from the layout of the frame before. After the scroll position, viewport height,
+ * lines or `layoutKey` (wrap) change, two frames measure exactly (the first may still see the old layout). Then
+ * the width may only grow: a wider column wraps long lines taller, which can push the widest number out of view,
+ * and shrinking again would flip between two widths.
+ */
+export function useVisibleNumberWidth(opts: {
+  scrollbox: () => ScrollBoxRenderable | undefined;
+  rowAt: (index: number) => Renderable | undefined;
+  lines: () => readonly unknown[];
+  numberAt: (index: number) => number;
+  layoutKey?: () => unknown;
+}): () => number {
+  const renderer = useRenderer();
+  const digits = (index: number) => String(opts.numberAt(index)).length;
+  const total = () => (opts.lines().length === 0 ? 1 : digits(opts.lines().length - 1));
+  const [measured, setMeasured] = createSignal<number | null>(null);
+  const last: {
+    scrollTop: number;
+    viewport: number;
+    lines: readonly unknown[] | null;
+    layout: unknown;
+    retried: readonly unknown[] | null;
+    exactFrames: number;
+  } = { scrollTop: -1, viewport: -1, lines: null, layout: undefined, retried: null, exactFrames: 0 };
+  const measure = async () => {
+    const scrollbox = opts.scrollbox();
+    const lines = untrack(opts.lines);
+    if (!scrollbox || lines.length === 0) return;
+    const origin = scrollbox.content.screenY;
+    const bottom = scrollbox.scrollTop + scrollbox.viewport.height;
+    let low = 0;
+    let high = lines.length - 1;
+    let lastVisible = 0;
+    while (low <= high) {
+      const mid = (low + high) >> 1;
+      const row = opts.rowAt(mid);
+      if (!hasScrollLayout(row)) {
+        // New rows get their layout in this frame's paint: measure once more in the next frame.
+        if (last.retried !== lines) {
+          last.retried = lines;
+          renderer.requestRender();
+        }
+        return;
+      }
+      if ((row as Renderable).screenY - origin < bottom) {
+        lastVisible = mid;
+        low = mid + 1;
+      } else high = mid - 1;
+    }
+    const width = digits(lastVisible);
+    const layout = untrack(() => opts.layoutKey?.());
+    const same =
+      last.scrollTop === scrollbox.scrollTop &&
+      last.viewport === scrollbox.viewport.height &&
+      last.lines === lines &&
+      last.layout === layout;
+    last.scrollTop = scrollbox.scrollTop;
+    last.viewport = scrollbox.viewport.height;
+    last.lines = lines;
+    last.layout = layout;
+    if (!same) {
+      last.exactFrames = 2;
+      renderer.requestRender();
+    }
+    const exact = last.exactFrames > 0;
+    if (exact) last.exactFrames--;
+    setMeasured(previous => (exact || previous === null ? width : Math.max(previous, width)));
+  };
+  renderer.setFrameCallback(measure);
+  onCleanup(() => renderer.removeFrameCallback(measure));
+  return () => Math.min(measured() ?? total(), total());
 }
 
 /**

@@ -289,6 +289,57 @@ test("native wheel and keyboard use the same scroll position, including jumps an
   }
 });
 
+test("the line number column fits the largest number on screen, so the widest one starts at the text inset", async () => {
+  const d = await renderLog("github-actions", true);
+  try {
+    await d.flush();
+    const rows = () => d.frame().split("\n");
+    const titleX = rows()[rows().findIndex(row => row.includes("GitHub Actions"))].indexOf("GitHub Actions");
+    const numberAt = (label: string) => {
+      const row = rows().find(line => line.includes(label)) ?? "";
+      return row.slice(titleX, row.indexOf(label)).trimEnd();
+    };
+    // Rows 1 to 2x are on screen: two digits, though the log has 200 lines.
+    expect(numberAt("row-010")).toBe("10");
+    expect(numberAt("row-001")).toBe(" 1");
+    await d.key("g", { shift: true });
+    await d.flush();
+    expect(numberAt("row-200")).toBe("200");
+    expect(numberAt("row-199")).toBe("199");
+    await d.key("g");
+    await d.flush();
+    expect(numberAt("row-010")).toBe("10");
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("with wrap on, the line number column fits the screen too and settles", async () => {
+  const d = await renderLog("github-actions", "wrapped");
+  try {
+    await d.key("w");
+    await d.flush();
+    const rows = () => d.frame().split("\n");
+    const titleX = rows()[rows().findIndex(row => row.includes("GitHub Actions"))].indexOf("GitHub Actions");
+    const numberAt = (label: string) => {
+      const row = rows().find(line => line.includes(label)) ?? "";
+      return row.slice(titleX, row.indexOf(label)).trimEnd();
+    };
+    // Only the first wrapped lines fit: one digit, though the log has 40 lines.
+    expect(numberAt("line-1 ")).toBe("1");
+    await d.key("g", { shift: true });
+    await d.flush();
+    expect(numberAt("line-40 ")).toBe("40");
+    // A wider column wraps lines taller; the column must not flip back and forth.
+    const settled = d.frame();
+    await d.flush();
+    await d.flush();
+    expect(d.frame()).toBe(settled);
+  } finally {
+    await d.dispose();
+  }
+});
+
 test("with wrap on, G and repeated down reach the last wrapped row", async () => {
   const d = await renderLog("github-actions", "wrapped");
   try {
