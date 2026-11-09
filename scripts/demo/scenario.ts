@@ -497,7 +497,9 @@ export interface OpenShiftWorld {
   logs: Map<string, string>;
 }
 
-const DIGEST = "sha256:4f1c2a9be3d7c8a1f0e5b6d4c3a2918f7e6d5c4b3a29180f7e6d5c4b3a2918f7";
+// Each commit's build makes its own image: codepulse links Deployments and Pods to a commit by image digest.
+const digestOf = (sha: string) => `sha256:${sha}${sha.slice(0, 24)}`;
+const imageOf = (sha: string) => `image-registry.openshift-image-registry.svc:5000/shop/shop-api@${digestOf(sha)}`;
 
 export function openShiftWorld(state: DemoState, now: number): OpenShiftWorld {
   const s = state.shas;
@@ -510,7 +512,6 @@ export function openShiftWorld(state: DemoState, now: number): OpenShiftWorld {
   let uid = 0;
   const nextUid = () => `uid-${++uid}`;
   const created = (agoMin: number) => iso(now - agoMin * MIN);
-  const image = `image-registry.openshift-image-registry.svc:5000/shop/shop-api@${DIGEST}`;
 
   const deployment = (
     ns: string,
@@ -529,7 +530,7 @@ export function openShiftWorld(state: DemoState, now: number): OpenShiftWorld {
       spec: {
         replicas,
         selector: kind === "Deployment" ? { matchLabels: { app: name } } : { app: name },
-        template: { metadata: { labels: { app: name } }, spec: { containers: [{ name: "api", image }] } },
+        template: { metadata: { labels: { app: name } }, spec: { containers: [{ name: "api", image: imageOf(sha) }] } },
       },
       status: { observedGeneration: 2, ...status },
     });
@@ -554,7 +555,12 @@ export function openShiftWorld(state: DemoState, now: number): OpenShiftWorld {
       },
       status,
     });
-  const container = (extra: Record<string, unknown>) => ({ name: "api", image, imageID: image, ...extra });
+  const container = (sha: string, extra: Record<string, unknown>) => ({
+    name: "api",
+    image: imageOf(sha),
+    imageID: imageOf(sha),
+    ...extra,
+  });
   const ready = { phase: "Running", conditions: [{ type: "Ready", status: "True" }] };
   const notReady = { phase: "Running", conditions: [{ type: "Ready", status: "False" }] };
 
@@ -569,33 +575,41 @@ export function openShiftWorld(state: DemoState, now: number): OpenShiftWorld {
   });
   pod("shop-dev", "shop-api-7d9f8-r2m4p", devRs, "shop-api", {
     ...ready,
-    containerStatuses: [container({ ready: true, restartCount: 0, state: { running: {} } })],
+    containerStatuses: [container(s.metrics, { ready: true, restartCount: 0, state: { running: {} } })],
   });
   pod("shop-dev", "shop-api-7d9f8-pull9", devRs, "shop-api", {
     phase: "Pending",
     containerStatuses: [
-      container({
+      container(s.metrics, {
+        imageID: "",
         restartCount: 0,
         state: { waiting: { reason: "ImagePullBackOff", message: 'Back-off pulling image "shop-api:metrics"' } },
       }),
     ],
   });
+  // OpenShift only matches commits that have a Build (or ImageStreamTag), so every deployed commit gets one.
+  const completeBuild = (name: string, sha: string) =>
+    add("shop-dev", "Build", {
+      kind: "Build",
+      metadata: { name, namespace: "shop-dev", uid: nextUid(), labels: { [COMMIT_KEY]: sha } },
+      spec: { output: { to: { kind: "ImageStreamTag", name: `shop-api:${name.split("-").pop()}` } } },
+      status: { phase: "Complete", outputDockerImageReference: imageOf(sha) },
+    });
+  completeBuild("shop-api-40", s.rounding);
   add("shop-dev", "Build", {
     kind: "Build",
     metadata: { name: "shop-api-41", namespace: "shop-dev", uid: nextUid(), labels: { [COMMIT_KEY]: s.payments } },
     spec: { output: { to: { kind: "ImageStreamTag", name: "shop-api:41" } } },
     status: { phase: "Failed", reason: "DockerBuildFailed", message: "Docker build strategy has failed." },
   });
-  add("shop-dev", "Build", {
-    kind: "Build",
-    metadata: { name: "shop-api-42", namespace: "shop-dev", uid: nextUid(), labels: { [COMMIT_KEY]: s.readme } },
-    spec: { output: { to: { kind: "ImageStreamTag", name: "shop-api:42" } } },
-    status: { phase: "Complete", outputDockerImageReference: image },
-  });
+  // 41 failed, its re-run 42 made the image shop-test runs.
+  completeBuild("shop-api-42", s.payments);
+  completeBuild("shop-api-43", s.readme);
+  completeBuild("shop-api-44", s.metrics);
   add("shop-dev", "ImageStreamTag", {
     kind: "ImageStreamTag",
-    metadata: { name: "shop-api:42", namespace: "shop-dev", uid: nextUid(), annotations: { [COMMIT_KEY]: s.readme } },
-    image: { metadata: { name: DIGEST }, dockerImageReference: image },
+    metadata: { name: "shop-api:43", namespace: "shop-dev", uid: nextUid(), annotations: { [COMMIT_KEY]: s.readme } },
+    image: { metadata: { name: digestOf(s.readme) }, dockerImageReference: imageOf(s.readme) },
   });
 
   // shop-test: `payments` fails (crash loop, OOM, eviction); a batch job scaled to 0 keeps `rounding` "live".
@@ -613,7 +627,7 @@ export function openShiftWorld(state: DemoState, now: number): OpenShiftWorld {
   pod("shop-test", "shop-api-7d9f8-x2k4q", testRs, "shop-api", {
     ...notReady,
     containerStatuses: [
-      container({
+      container(s.payments, {
         restartCount: 14,
         state: { waiting: { reason: "CrashLoopBackOff", message: "back-off 5m0s restarting failed container" } },
         lastState: { terminated: { reason: "Error", exitCode: 1 } },
@@ -622,12 +636,14 @@ export function openShiftWorld(state: DemoState, now: number): OpenShiftWorld {
   });
   pod("shop-test", "shop-api-7d9f8-oom7k", testRs, "shop-api", {
     ...notReady,
-    containerStatuses: [container({ restartCount: 0, state: { terminated: { reason: "OOMKilled", exitCode: 137 } } })],
+    containerStatuses: [
+      container(s.payments, { restartCount: 0, state: { terminated: { reason: "OOMKilled", exitCode: 137 } } }),
+    ],
   });
   pod("shop-test", "shop-api-7d9f8-ev1ct", testRs, "shop-api", { phase: "Failed", reason: "Evicted" });
   pod("shop-test", "shop-api-7d9f8-ok3zz", testRs, "shop-api", {
     ...ready,
-    containerStatuses: [container({ ready: true, restartCount: 0, state: { running: {} } })],
+    containerStatuses: [container(s.payments, { ready: true, restartCount: 0, state: { running: {} } })],
   });
   deployment("shop-test", "shop-batch", s.rounding, 0, {});
 
@@ -642,7 +658,7 @@ export function openShiftWorld(state: DemoState, now: number): OpenShiftWorld {
   for (const name of ["shop-api-5c6b7-a1b2c", "shop-api-5c6b7-d3e4f"])
     pod("shop-prod", name, prodRs, "shop-api", {
       ...ready,
-      containerStatuses: [container({ ready: true, restartCount: 0, state: { running: {} } })],
+      containerStatuses: [container(s.readme, { ready: true, restartCount: 0, state: { running: {} } })],
     });
   deployment(
     "shop-prod",
@@ -666,7 +682,13 @@ export function openShiftWorld(state: DemoState, now: number): OpenShiftWorld {
       "shop-test/Pod/shop-api-7d9f8-x2k4q",
       [
         event("Normal", "Scheduled", "Successfully assigned shop-test/shop-api-7d9f8-x2k4q to worker-2", 1, 44),
-        event("Normal", "Pulled", 'Container image "shop-api@sha256:4f1c…" already present on machine', 15, 2),
+        event(
+          "Normal",
+          "Pulled",
+          `Container image "shop-api@${digestOf(s.payments).slice(0, 11)}…" already present on machine`,
+          15,
+          2,
+        ),
         event("Normal", "Started", "Started container api", 15, 2),
         event(
           "Warning",

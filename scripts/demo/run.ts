@@ -4,8 +4,11 @@
  *
  * Everything lives in a fresh folder under the system temp directory (repository, config, cache), so the real
  * config and cache stay untouched. Nothing goes over the network: see fake-fetch.ts and fake-snyk.ts.
+ *
+ * Each run gets its own folder and removes it on quit. Commit hashes change with every run (the dates are relative
+ * to now), so a second run must never rebuild the repository a first one is still showing.
  */
-import { chmodSync, mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -18,13 +21,12 @@ import {
   OPENSHIFT_SERVER,
 } from "./scenario";
 
-const root = join(realpathSync(tmpdir()), "codepulse-demo");
+const root = mkdtempSync(join(realpathSync(tmpdir()), "codepulse-demo-"));
 const repo = join(root, "shop");
 const home = join(root, "home");
 const statePath = join(root, "state.json");
 const here = import.meta.dir;
 
-rmSync(root, { recursive: true, force: true });
 mkdirSync(repo, { recursive: true });
 mkdirSync(join(home, ".config", "codepulse"), { recursive: true });
 
@@ -158,4 +160,6 @@ const app = Bun.spawn(
     },
   },
 );
-process.exit(await app.exited);
+const exitCode = await app.exited;
+rmSync(root, { recursive: true, force: true });
+process.exit(exitCode);
