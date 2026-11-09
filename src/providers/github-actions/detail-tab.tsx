@@ -25,6 +25,7 @@ import {
   type ProviderTreeRun,
   type ProviderTreeStep,
 } from "../shared/provider-run-tree";
+import { annotationNotes } from "./annotations";
 import type { GitHubCommitData, GitHubJob, GitHubJobFetchResult, GitHubStep, GitHubWorkflowRun } from "./types";
 
 // ── Props ─────────────────────────────────────────────────────────────────
@@ -70,8 +71,8 @@ export interface ActionsDetailTabProps {
   setDetailCursorIndex: (idx: number) => void;
   /** Footer row shortcut (`o open` on rows with a web page). */
   setDetailCursorShortcut?: (shortcut: RowShortcut | null) => void;
-  /** Called when Enter is pressed on a job — opens the log dialog. */
-  onOpenJobLog?: (job: GitHubJob, run: GitHubWorkflowRun, jobs?: GitHubJob[]) => void;
+  /** Called when Enter is pressed on a job (or an annotation, with its message to search) — opens the log dialog. */
+  onOpenJobLog?: (job: GitHubJob, run: GitHubWorkflowRun, jobs?: GitHubJob[], search?: string) => void;
 }
 
 // ── Top-level component ───────────────────────────────────────────────────
@@ -113,6 +114,8 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
     completedAt: job.completedAt,
     steps: job.steps.map(mapStep),
     url: runUrl ? `${runUrl}/job/${job.id}` : undefined,
+    notes: annotationNotes(job.annotations ?? []),
+    notesLabel: "Annotations",
     raw: job,
   });
 
@@ -134,6 +137,15 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
       debugSource="GitHub"
       dataKey={props.sha}
       onOpenJobAction={(job, run, jobs) => props.onOpenJobLog?.(job.raw, run.raw, jobs?.map(entry => entry.raw) ?? [])}
+      onOpenNote={(note, job, run, jobs) =>
+        props.onOpenJobLog?.(
+          job.raw,
+          run.raw,
+          jobs.map(entry => entry.raw),
+          note.search,
+        )
+      }
+      noteAction="view in log"
       summaryLabel="total workflow runs"
       jobsLoadingText={BUSY.fetchingJobs}
       reloadBusyText={BUSY.fetchingRuns}

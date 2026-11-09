@@ -2,7 +2,7 @@
 
 import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
-import { createEffect, createMemo, createSignal, For, type JSX, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, For, type JSX, onMount, Show } from "solid-js";
 import {
   DialogFooter,
   DialogOverlay,
@@ -49,6 +49,8 @@ interface JobLogDialogProps {
   onClose: () => void;
   /** The search row starts or stops owning Esc (see `useLogSearch`). */
   onSearchActive?: (active: boolean) => void;
+  /** Opened from an annotation: its message, searched from the start so the log shows where it happened. */
+  initialSearch?: string;
 }
 
 const VIEW_MODE_CYCLE: LogViewMode[] = ["all", "issues", "errors", "raw"];
@@ -219,6 +221,10 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
     rowAt: index => lineRefs[index],
     scrollbox: () => scrollboxRef,
     onActiveChange: active => props.onSearchActive?.(active),
+  });
+  // After mount, so the app hears that the search owns Esc (the first hit shows once the log has loaded).
+  onMount(() => {
+    if (props.initialSearch) search.setQuery(props.initialSearch);
   });
 
   createEffect(() => {

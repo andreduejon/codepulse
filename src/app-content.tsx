@@ -191,6 +191,8 @@ export function AppContent(props: Readonly<AppContentProps>) {
     run: { name: string; runNumber: number; url?: string };
     jobs: { id: string | number; name: string }[];
     fetchLog: (job: { id: string | number; name: string }) => Promise<string>;
+    /** Searched when the log opens (an annotation's message). */
+    search?: string;
   } | null>(null);
   const [openShiftResourceTarget, setOpenShiftResourceTarget] = createSignal<OpenShiftResource | null>(null);
 
@@ -281,11 +283,12 @@ export function AppContent(props: Readonly<AppContentProps>) {
     setDialog("diff-blame");
   };
 
-  const handleOpenJobLog = (job: GitHubJob, run: GitHubWorkflowRun, jobs: GitHubJob[] = [job]) => {
+  const handleOpenJobLog = (job: GitHubJob, run: GitHubWorkflowRun, jobs: GitHubJob[] = [job], search?: string) => {
     setJobLogTarget({
       provider: "github-actions",
       job,
       run,
+      search,
       jobs: jobs.length > 0 ? jobs : [job],
       fetchLog: currentJob => gitHubCI.fetchJobLogForJob(Number(currentJob.id), run),
     });
@@ -941,6 +944,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                       jobs={target().jobs}
                       run={target().run}
                       fetchLog={target().fetchLog}
+                      initialSearch={target().search}
                       onClose={closeToDetail}
                       onSearchActive={setLogSearchScope}
                     />

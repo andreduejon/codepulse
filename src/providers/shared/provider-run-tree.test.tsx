@@ -5,7 +5,12 @@ import { createSignal } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
 import { createThemeState, ThemeContext } from "../../context/theme";
 import * as browser from "../../utils/open-url";
-import { ProviderRunTree, type ProviderTreeJob, type ProviderTreeRun } from "./provider-run-tree";
+import {
+  ProviderRunTree,
+  type ProviderTreeJob,
+  type ProviderTreeNote,
+  type ProviderTreeRun,
+} from "./provider-run-tree";
 
 const date = "2026-01-01T00:00:00Z";
 const RUN_URL = "https://github.com/o/r/actions/runs/1";
@@ -44,7 +49,7 @@ const job = (status: string, conclusion: string | null, stepStatus: string): Pro
   raw: null,
 });
 
-async function renderTree() {
+async function renderTree(options: { onOpenNote?: (note: ProviderTreeNote) => void } = {}) {
   const [runs, setRuns] = createSignal([run("in_progress", null, "2026-01-01T00:01:00Z")]);
   const [cursor, setCursor] = createSignal(0);
   let jobs = [job("in_progress", null, "in_progress")];
@@ -76,6 +81,8 @@ async function renderTree() {
             dataKey="sha"
             summaryLabel="total workflow runs"
             onReloadCommit={reload}
+            onOpenNote={options.onOpenNote}
+            noteAction="view in log"
           />
         </box>
       </ThemeContext.Provider>
@@ -153,6 +160,51 @@ test("o opens the selected run or job page, and the footer offers it only on row
     expect(t.shortcut).toHaveBeenLastCalledWith(null);
     expect(press("o")).toBe(false);
     expect(openUrl).toHaveBeenCalledTimes(2);
+  } finally {
+    openUrl.mockRestore();
+    t.renderer.destroy();
+  }
+});
+
+test("a job's notes follow its steps under their label; Enter opens one and o opens its page", async () => {
+  const openUrl = spyOn(browser, "openUrl").mockImplementation(() => {});
+  const opened = mock((_note: ProviderTreeNote) => {});
+  const t = await renderTree({ onOpenNote: opened });
+  const press = (name: string) => t.navRef.handleKey?.({ name, ctrl: false, meta: false } as KeyEvent) ?? false;
+  try {
+    t.setJobs([
+      {
+        ...job("completed", "failure", "completed"),
+        notesLabel: "Annotations",
+        notes: [
+          { id: "a1", mark: "fail", text: "src/auth.test.ts:42  Expected 200, received 401" },
+          { id: "a2", mark: "warning", text: "src/api.ts:17  'token' is deprecated", url: "https://example.com/a2" },
+        ],
+      },
+    ]);
+    t.setRuns([run("completed", "failure", "2026-01-01T00:05:00Z")]);
+    t.setCursor(1);
+    await t.settle();
+    t.navRef.activateCurrentItem();
+    await t.settle();
+    const rows = t.captureCharFrame().split("\n");
+    const at = (text: string) => rows.findIndex(row => row.includes(text));
+    expect(at("compile")).toBeLessThan(at("Annotations"));
+    expect(rows[at("compile")]).toContain("├─ compile");
+    expect(rows[at("Annotations")]).toMatch(/└─ Annotations\s+2/);
+    expect(rows[at("Expected 200")]).toContain("├─ ✗ src/auth.test.ts:42  Expected 200, received 401");
+    expect(rows[at("deprecated")]).toContain("└─ ! src/api.ts:17");
+    // Reload, run, job, then the two notes.
+    t.setCursor(3);
+    await t.settle();
+    t.navRef.activateCurrentItem();
+    expect(opened.mock.calls.at(-1)?.[0]).toMatchObject({ id: "a1" });
+    expect(press("o")).toBe(true);
+    expect(openUrl).toHaveBeenLastCalledWith(JOB_URL);
+    t.setCursor(4);
+    await t.settle();
+    expect(press("o")).toBe(true);
+    expect(openUrl).toHaveBeenLastCalledWith("https://example.com/a2");
   } finally {
     openUrl.mockRestore();
     t.renderer.destroy();

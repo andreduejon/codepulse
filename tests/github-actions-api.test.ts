@@ -6,6 +6,7 @@ import {
   buildCommitDataMap,
   buildGraphBadges,
   fetchCIDataForSHAs,
+  fetchJobAnnotations,
   fetchJobLog,
   fetchRunJobs,
   GQL_BATCH_SIZE,
@@ -1050,5 +1051,46 @@ describe("fetchJobLog", () => {
       }),
     );
     await expect(fetchJobLog(TEST_REPO, TEST_TOKEN, 7)).rejects.toThrow(BANNER.github.logFailed);
+  });
+});
+
+// ── fetchJobAnnotations (mocked fetch) ────────────────────────────────────
+
+describe("fetchJobAnnotations", () => {
+  afterEach(() => {
+    globalThis.fetch = fetch;
+  });
+
+  it("reads the job's check run annotations: level, place and message", async () => {
+    let url = "";
+    mockFetch(
+      mock(async (input: RequestInfo | URL) => {
+        url = String(input);
+        return new Response(
+          JSON.stringify([
+            {
+              path: "src/auth.test.ts",
+              start_line: 42,
+              annotation_level: "failure",
+              message: "Expected 200, received 401\n  at line 42",
+              title: "auth test",
+            },
+            { path: ".github", start_line: 0, annotation_level: "warning", message: "Node 16 is deprecated" },
+          ]),
+          { status: 200 },
+        );
+      }),
+    );
+    const annotations = await fetchJobAnnotations(TEST_REPO, TEST_TOKEN, 5);
+    expect(url).toEndWith("/repos/owner/repo/check-runs/5/annotations?per_page=50");
+    expect(annotations).toEqual([
+      { level: "failure", path: "src/auth.test.ts", line: 42, message: "Expected 200, received 401\n  at line 42" },
+      { level: "warning", path: ".github", line: null, message: "Node 16 is deprecated" },
+    ]);
+  });
+
+  it("a failed request gives no annotations rather than an error", async () => {
+    mockFetch(mock(async () => new Response(null, { status: 403 })));
+    expect(await fetchJobAnnotations(TEST_REPO, TEST_TOKEN, 5)).toBeNull();
   });
 });

@@ -41,6 +41,7 @@ import {
   buildCommitDataMap,
   buildGraphBadges,
   fetchCIDataForSHAs,
+  fetchJobAnnotations,
   fetchJobLog,
   fetchRunJobs,
   GQL_BATCH_SIZE,
@@ -467,12 +468,40 @@ export function useGitHubCI(opts: {
   }
 
   // ── On-demand job fetching ────────────────────────────────────────────
+  /** Failed jobs say why: their annotations are read once (a job is a check run) and kept with the job. */
+  const needsAnnotations = (job: GitHubJob) => job.conclusion === "failure" && job.annotations === undefined;
+  async function withAnnotations(jobs: GitHubJob[], signal?: AbortSignal): Promise<GitHubJob[]> {
+    if (!jobs.some(needsAnnotations)) return jobs;
+    const repo = cachedGitHubRepo();
+    const token = getGitHubToken(config.tokenEnvVar);
+    if (!repo || !token || authFrozen) return jobs;
+    return Promise.all(
+      jobs.map(async job => {
+        if (!needsAnnotations(job)) return job;
+        const annotations = await lifecycle.runRequest(
+          requestSignal => fetchJobAnnotations(repo, token, job.id, requestSignal),
+          signal,
+        );
+        return annotations ? { ...job, annotations } : job;
+      }),
+    );
+  }
+
   async function fetchJobsForRun(run: GitHubWorkflowRun, signal?: AbortSignal): Promise<GitHubJobFetchResult> {
     const epoch = lifecycle.getEpoch();
     const repoPath = state.repoPath();
     // Only finished jobs are final; a cached snapshot with a running job or step is fetched again.
     const cached = jobsCache.get(run.id);
-    if (cached && jobsSettled(cached)) return { jobs: cached, error: null };
+    if (cached && jobsSettled(cached)) {
+      if (!cached.some(needsAnnotations)) return { jobs: cached, error: null };
+      const annotated = await withAnnotations(cached, signal);
+      if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
+      if (annotated.some((job, index) => job !== cached[index])) {
+        jobsCache.set(run.id, annotated);
+        await persistTerminalRuns(repoPath, [run.headSha], epoch);
+      }
+      return { jobs: annotated, error: null };
+    }
     if (!lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
     // Frozen after a 401: no requests until Reload; say why instead of asking GitHub again.
     if (authFrozen) return { jobs: [], error: BANNER.github.tokenExpired };
@@ -481,9 +510,11 @@ export function useGitHubCI(opts: {
     const token = getGitHubToken(config.tokenEnvVar);
     if (!repo || !token) return { jobs: [], error: BANNER.github.unavailable };
 
-    const { jobs, error } = await lifecycle.runRequest(signal => fetchRunJobs(repo, token, run.id, signal), signal);
+    const fetched = await lifecycle.runRequest(signal => fetchRunJobs(repo, token, run.id, signal), signal);
     if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
-    if (error) return { jobs, error };
+    if (fetched.error) return fetched;
+    const jobs = await withAnnotations(fetched.jobs, signal);
+    if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
     if (run.status === "completed" && jobsSettled(jobs)) {
       if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
       jobsCache.set(run.id, jobs);

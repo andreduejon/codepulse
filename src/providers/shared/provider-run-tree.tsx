@@ -42,7 +42,23 @@ export interface ProviderTreeJob<TJobRaw> {
   steps: ProviderTreeStep[];
   /** The job's web page, opened with `o`. */
   url?: string;
+  /** Why it failed, one selectable row each after the steps (GitHub annotations, Jenkins failed tests). */
+  notes?: ProviderTreeNote[];
+  /** A row above the notes with their count (`Annotations`); without it the notes follow the steps directly. */
+  notesLabel?: string;
   raw: TJobRaw;
+}
+
+/** A selectable row under a job that says why it failed: `✗ src/auth.test.ts:42  Expected 200, received 401`. */
+export interface ProviderTreeNote {
+  id: string;
+  /** `✗` in the error colour for a failure, `!` in the warning colour for a warning. */
+  mark: "fail" | "warning";
+  text: string;
+  /** Its web page for `o`; the job's page otherwise. */
+  url?: string;
+  /** Text to find in the job's log when the note is opened (an annotation's message). */
+  search?: string;
 }
 
 export interface ProviderTreeJobFetchResult<TJobRaw> {
@@ -53,7 +69,14 @@ export interface ProviderTreeJobFetchResult<TJobRaw> {
 type FlatItem<TRaw, TJobRaw> =
   | { kind: "reload"; flatIndex: number }
   | { kind: "run"; run: ProviderTreeRun<TRaw>; flatIndex: number }
-  | { kind: "job"; job: ProviderTreeJob<TJobRaw>; run: ProviderTreeRun<TRaw>; flatIndex: number };
+  | { kind: "job"; job: ProviderTreeJob<TJobRaw>; run: ProviderTreeRun<TRaw>; flatIndex: number }
+  | {
+      kind: "note";
+      note: ProviderTreeNote;
+      job: ProviderTreeJob<TJobRaw>;
+      run: ProviderTreeRun<TRaw>;
+      flatIndex: number;
+    };
 
 export interface ProviderRunTreeProps<TRaw, TJobRaw> {
   mouseEnabled?: boolean;
@@ -74,6 +97,15 @@ export interface ProviderRunTreeProps<TRaw, TJobRaw> {
     run: ProviderTreeRun<TRaw>,
     jobs?: ProviderTreeJob<TJobRaw>[],
   ) => void;
+  /** Enter on a note (an annotation, a failed test). */
+  onOpenNote?: (
+    note: ProviderTreeNote,
+    job: ProviderTreeJob<TJobRaw>,
+    run: ProviderTreeRun<TRaw>,
+    jobs: ProviderTreeJob<TJobRaw>[],
+  ) => void;
+  /** Footer verb for Enter on a note (`view in log`). */
+  noteAction?: string;
   summaryLabel: string;
   jobsLoadingText?: string;
   noJobsText?: string;
@@ -113,7 +145,9 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
       ? "reload"
       : item.kind === "run"
         ? `run:${item.run.id}`
-        : `job:${item.run.id}:${item.job.id}`;
+        : item.kind === "job"
+          ? `job:${item.run.id}:${item.job.id}`
+          : `note:${item.run.id}:${item.job.id}:${item.note.id}`;
   const syncItemRefs = () => {
     const items = flatItems();
     itemRefs.length = items.length;
@@ -187,7 +221,10 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     for (const run of props.runs) {
       items.push({ kind: "run", run, flatIndex: idx++ });
       if (expanded.has(run.id)) {
-        for (const job of jobs.get(run.id) ?? []) items.push({ kind: "job", job, run, flatIndex: idx++ });
+        for (const job of jobs.get(run.id) ?? []) {
+          items.push({ kind: "job", job, run, flatIndex: idx++ });
+          for (const note of job.notes ?? []) items.push({ kind: "note", note, job, run, flatIndex: idx++ });
+        }
       }
     }
     return items;
@@ -406,6 +443,10 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
       toggleRun(item.run);
       return false;
     }
+    if (item.kind === "note") {
+      props.onOpenNote?.(item.note, item.job, item.run, fetchedJobs().get(item.run.id) ?? []);
+      return false;
+    }
     props.onOpenJobAction?.(item.job, item.run, fetchedJobs().get(item.run.id) ?? []);
     return false;
   };
@@ -429,6 +470,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     const item = items[idx];
     if (item.kind === "reload") props.setDetailCursorAction(reloadEnabled() && !reloadBusy() ? reloadHint() : null);
     else if (item.kind === "run") props.setDetailCursorAction(expandedRuns().has(item.run.id) ? "collapse" : "expand");
+    else if (item.kind === "note") props.setDetailCursorAction(props.onOpenNote ? (props.noteAction ?? "open") : null);
     else props.setDetailCursorAction(props.onOpenJobAction ? "view log" : null);
   });
 
@@ -437,6 +479,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     detailFocused: props.detailFocused,
     url: () => {
       const item = flatItems()[props.detailCursorIndex()];
+      if (item?.kind === "note") return item.note.url ?? item.job.url;
       return item?.kind === "run" ? item.run.url : item?.kind === "job" ? item.job.url : null;
     },
     setDetailCursorShortcut: props.setDetailCursorShortcut,
@@ -585,6 +628,9 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                     const jobTreeLead = () => (runIsLast() ? "   " : "│  ");
                     const jobTreePrefix = () => (jobIndexFn() === jobs().length - 1 ? "└─ " : "├─ ");
                     const jobIsLast = () => jobIndexFn() === jobs().length - 1;
+                    const notes = () => job.notes ?? [];
+                    /** The lead of the job's children: steps, the notes row, and the notes without one. */
+                    const childLead = () => jobTreeLead() + (jobIsLast() ? "   " : "│  ");
 
                     return (
                       <box flexDirection="column" width="100%">
@@ -646,7 +692,8 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                               const stepColor = () => statusColor(t(), stepCat);
                               const stepDuration = () => formatStepDuration(step);
                               const stepTreePrefix = () => jobTreeLead() + (jobIsLast() ? "   " : "│  ");
-                              const stepConnector = () => (stepIndexFn() === job.steps.length - 1 ? "└─ " : "├─ ");
+                              const stepConnector = () =>
+                                stepIndexFn() === job.steps.length - 1 && notes().length === 0 ? "└─ " : "├─ ";
 
                               return (
                                 <box flexDirection="row" width="100%">
@@ -664,6 +711,78 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                                   </Show>
                                   <text flexShrink={0} width={STATUS_COL_WIDTH} wrapMode="none" fg={stepColor()}>
                                     {statusMark(step.status, step.conclusion).padStart(STATUS_COL_WIDTH)}
+                                  </text>
+                                </box>
+                              );
+                            }}
+                          </For>
+                        </Show>
+
+                        <Show when={notes().length > 0}>
+                          <Show when={job.notesLabel}>
+                            {label => (
+                              <box flexDirection="row" width="100%">
+                                <text flexShrink={0} wrapMode="none" fg={t().border}>
+                                  {childLead()}└─{" "}
+                                </text>
+                                <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
+                                  {label()}
+                                </text>
+                                <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                                  {String(notes().length)}
+                                </text>
+                                <text flexShrink={0} width={STATUS_COL_WIDTH} wrapMode="none">
+                                  {" ".repeat(STATUS_COL_WIDTH)}
+                                </text>
+                              </box>
+                            )}
+                          </Show>
+                          <For each={notes()}>
+                            {(note, noteIndexFn) => {
+                              const key = `note:${run.id}:${job.id}:${note.id}`;
+                              const noteFlatIndex = () =>
+                                flatItems().findIndex(
+                                  it =>
+                                    it.kind === "note" &&
+                                    it.note.id === note.id &&
+                                    it.job.id === job.id &&
+                                    it.run.id === run.id,
+                                );
+                              const isNoteCursored = () =>
+                                props.detailFocused() && props.detailCursorIndex() === noteFlatIndex();
+                              const noteLead = () => childLead() + (job.notesLabel ? "   " : "");
+                              const noteConnector = () => (noteIndexFn() === notes().length - 1 ? "└─ " : "├─ ");
+                              return (
+                                <box
+                                  ref={(el: Renderable) => {
+                                    refsByKey.set(key, el);
+                                    syncItemRefs();
+                                  }}
+                                  {...mouseRow(key, noteFlatIndex)}
+                                  flexDirection="row"
+                                  width="100%"
+                                  backgroundColor={isNoteCursored() ? t().backgroundElementActive : hoverBg(key)}
+                                >
+                                  <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().border}>
+                                    {noteLead()}
+                                    {noteConnector()}
+                                  </text>
+                                  <text
+                                    selectable={!props.mouseEnabled}
+                                    flexShrink={0}
+                                    wrapMode="none"
+                                    fg={note.mark === "fail" ? t().error : t().warning}
+                                  >
+                                    {note.mark === "fail" ? "✗ " : "! "}
+                                  </text>
+                                  <ScrollingLabel
+                                    selectable={!props.mouseEnabled}
+                                    text={note.text}
+                                    active={isNoteCursored()}
+                                    fg={isNoteCursored() ? t().accent : t().foreground}
+                                  />
+                                  <text flexShrink={0} width={STATUS_COL_WIDTH} wrapMode="none">
+                                    {" ".repeat(STATUS_COL_WIDTH)}
                                   </text>
                                 </box>
                               );

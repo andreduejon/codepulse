@@ -56,6 +56,15 @@ export interface GitHubWorkflowRun {
   updatedAt: string;
 }
 
+/** A check run annotation: what failed (or warns) and where. */
+export interface GitHubAnnotation {
+  level: "failure" | "warning" | "notice";
+  path: string;
+  /** Start line, or null when it names no line. */
+  line: number | null;
+  message: string;
+}
+
 /** Mapped job within a workflow run. */
 export interface GitHubJob {
   id: number;
@@ -65,6 +74,8 @@ export interface GitHubJob {
   startedAt: string | null;
   completedAt: string | null;
   steps: GitHubStep[];
+  /** A failed job's annotations, once read (an Actions job is a check run with the same id). */
+  annotations?: GitHubAnnotation[];
 }
 
 export interface GitHubJobFetchResult {

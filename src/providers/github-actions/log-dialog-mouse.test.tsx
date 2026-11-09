@@ -10,7 +10,11 @@ import JobLogDialog from "./log-dialog";
 const descendants = (node: Renderable): Renderable[] =>
   node.getChildren().flatMap(child => [child, ...descendants(child)]);
 
-async function renderLog(provider: "github-actions" | "jenkins", long: boolean | "wrapped" = false) {
+async function renderLog(
+  provider: "github-actions" | "jenkins",
+  long: boolean | "wrapped" = false,
+  initialSearch?: string,
+) {
   const jobs = [
     { id: 1, name: "first-job" },
     { id: 2, name: "empty-job" },
@@ -51,6 +55,7 @@ async function renderLog(provider: "github-actions" | "jenkins", long: boolean |
               fetchLog={fetchLog}
               onClose={close}
               onSearchActive={searchActive}
+              initialSearch={initialSearch}
             />
           </Show>
         </ThemeContext.Provider>
@@ -548,5 +553,19 @@ test("raw view shows the log as received, with timestamps", async () => {
     expect(setup.captureCharFrame()).toContain("2026-01-01T00:00:00.1234567Z first");
   } finally {
     await setup.dispose();
+  }
+});
+
+test("opened from an annotation, the log starts with its message searched and the first hit shown", async () => {
+  const d = await renderLog("github-actions", false, "error-line");
+  try {
+    d.resolve();
+    await d.flush();
+    await d.flush();
+    expect(d.frame()).toContain("/ error-line");
+    expect(d.frame()).toContain("1/1");
+    expect(d.frame()).toContain("n/N next/prev");
+  } finally {
+    d.renderer.destroy();
   }
 });

@@ -51,6 +51,16 @@ cursor on its first failed job. Cancelled and skipped runs show as a grey chip i
 the graph. In the job log, `r` reloads the log (newer output of a running job, or a retry
 after a failure; a finished job's cached log does not change) and `o` opens the run in the browser.
 
+### Annotations
+
+A failed job lists its annotations after its steps, under **Annotations**:
+failures (`✗`) and warnings (`!`) with their file and line, and the first line of
+the message (`✗ src/auth.test.ts:42  Expected 200, received 401`). Notices are
+left out. They are read once per failed job when its run is expanded (one request
+per failed job) and cached with the job. Enter opens the job log with the message
+searched, so the first hit is where it happened and `n` / `N` find repeats; `o`
+opens the job page.
+
 ## Errors and limits
 
 Expired credentials stop live requests until a valid token is available.
@@ -65,3 +75,5 @@ diagnostics.
 ## Permissions
 
 Token needs repository metadata and Actions read access for private repos.
+Annotations also need Checks read access (a fine-grained token's **Checks: Read**);
+without it a failed job simply shows no annotations.

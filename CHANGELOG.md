@@ -22,6 +22,9 @@ All notable changes to this project will be documented in this file.
   rolling out, `✗ prod` while failing), also below the fetch size. A namespace running a commit the graph does
   not show is named at the end of the graph.
 
+- GitHub Actions: a failed job lists its annotations after its steps (failures and warnings, with file and line).
+  Enter opens the job log with the message searched; they are read once per failed job and cached.
+
 ### Changed
 
 - Graph ref badges take only their own width, so short names (`main`, `dev`) are no longer folded into `+N` for

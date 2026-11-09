@@ -55,7 +55,7 @@ export interface DetailViewProps {
   /** Fetch CI data for one selected SHA on demand. Optional. */
   githubFetchCommitData?: (sha: string, force?: boolean) => Promise<void>;
   /** Open the job log dialog for a specific job. */
-  onOpenJobLog?: (job: GitHubJob, run: GitHubWorkflowRun, jobs?: GitHubJob[]) => void;
+  onOpenJobLog?: (job: GitHubJob, run: GitHubWorkflowRun, jobs?: GitHubJob[], search?: string) => void;
   /**
    * Current provider status string (from state.providerStatus).
    * Non-null when the provider is unavailable (e.g. missing token / remote).

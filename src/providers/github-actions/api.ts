@@ -11,6 +11,7 @@ import type { GraphBadge } from "../../providers/provider";
 import { fetchWithRetry as fetchWithRetryPolicy } from "../shared/http";
 import { categorize } from "./status";
 import type {
+  GitHubAnnotation,
   GitHubApiJob,
   GitHubCommitData,
   GitHubJob,
@@ -778,6 +779,48 @@ export async function fetchRunJobs(
   } catch (err) {
     if (signal?.aborted) throw err;
     return { jobs: [], error: bannerOrFallback(err, BANNER.github.jobsFailed, "GitHub") };
+  }
+}
+
+/**
+ * A job's annotations (an Actions job is a check run with the same id). Null when they could not be read, so the
+ * caller asks again later; a failed job still shows without them.
+ */
+export async function fetchJobAnnotations(
+  repo: GitHubRepo,
+  token: string,
+  jobId: number,
+  signal?: AbortSignal,
+): Promise<GitHubAnnotation[] | null> {
+  try {
+    const res = await fetchWithRetry(`${apiBase(repo)}/check-runs/${jobId}/annotations?per_page=50`, {
+      headers: createHeaders(token),
+      signal,
+    });
+    if (!res.ok) {
+      debugGitHubHttp(res, "jobs", `Annotations HTTP ${res.status} for job ${jobId}`);
+      return null;
+    }
+    const json = (await res.json()) as unknown;
+    if (!Array.isArray(json)) return null;
+    return json.flatMap((raw): GitHubAnnotation[] => {
+      const item = raw as Record<string, unknown>;
+      const level = item.annotation_level;
+      if (level !== "failure" && level !== "warning" && level !== "notice") return [];
+      const line = typeof item.start_line === "number" && item.start_line > 0 ? item.start_line : null;
+      return [
+        {
+          level,
+          path: typeof item.path === "string" ? item.path : "",
+          line,
+          message: typeof item.message === "string" ? item.message : "",
+        },
+      ];
+    });
+  } catch (err) {
+    if (signal?.aborted) throw err;
+    debugError("GitHub", `Annotations for job ${jobId} failed: ${err instanceof Error ? err.message : String(err)}`);
+    return null;
   }
 }
 

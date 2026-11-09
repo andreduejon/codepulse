@@ -205,6 +205,60 @@ test("jobs of a finished run are cached only once every job and step has finishe
   expect(jobs).toHaveBeenCalledTimes(2);
 });
 
+test("a failed job gets its annotations once; a passing job asks for none", async () => {
+  const { github } = await mountGitHub();
+  const job = (id: number, conclusion: string) => ({
+    id,
+    name: `job-${id}`,
+    status: "completed",
+    conclusion,
+    startedAt: null,
+    completedAt: null,
+    steps: [],
+  });
+  const jobs = spyOn(api, "fetchRunJobs").mockResolvedValue({
+    jobs: [job(5, "failure"), job(6, "success")],
+    error: null,
+  });
+  const annotation = { level: "failure" as const, path: "src/a.ts", line: 3, message: "boom" };
+  const annotations = spyOn(api, "fetchJobAnnotations").mockResolvedValue([annotation]);
+  cleanup.push(() => {
+    jobs.mockRestore();
+    annotations.mockRestore();
+  });
+  const finished = run({ status: "completed", conclusion: "failure" });
+  const first = await github.fetchJobsForRun(finished);
+  expect(first.jobs.map(entry => entry.annotations)).toEqual([[annotation], undefined]);
+  expect(annotations.mock.calls.map(call => call[2])).toEqual([5]);
+  const again = await github.fetchJobsForRun(finished);
+  expect(again.jobs[0].annotations).toEqual([annotation]);
+  expect(annotations).toHaveBeenCalledTimes(1);
+});
+
+test("annotations that could not be read are asked for again next time", async () => {
+  const { github } = await mountGitHub();
+  const failed = {
+    id: 5,
+    name: "test",
+    status: "completed",
+    conclusion: "failure",
+    startedAt: null,
+    completedAt: null,
+    steps: [],
+  };
+  const jobs = spyOn(api, "fetchRunJobs").mockResolvedValue({ jobs: [failed], error: null });
+  const annotations = spyOn(api, "fetchJobAnnotations")
+    .mockResolvedValueOnce(null)
+    .mockResolvedValue([{ level: "failure", path: "src/a.ts", line: 3, message: "boom" }]);
+  cleanup.push(() => {
+    jobs.mockRestore();
+    annotations.mockRestore();
+  });
+  const finished = run({ status: "completed", conclusion: "failure" });
+  expect((await github.fetchJobsForRun(finished)).jobs[0].annotations).toBeUndefined();
+  expect((await github.fetchJobsForRun(finished)).jobs[0].annotations).toHaveLength(1);
+});
+
 test("a fetch cancelled by a repository switch leaves the new repository's loading status alone", async () => {
   let releaseOld!: () => void;
   const oldGate = new Promise<void>(resolve => (releaseOld = resolve));

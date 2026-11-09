@@ -53,7 +53,7 @@ export interface DetailPanelProps {
    */
   githubProviderStatus?: ProviderStatus;
   /** Open the job log dialog for a specific job. */
-  onOpenJobLog?: (job: GitHubJob, run: GitHubWorkflowRun, jobs?: GitHubJob[]) => void;
+  onOpenJobLog?: (job: GitHubJob, run: GitHubWorkflowRun, jobs?: GitHubJob[], search?: string) => void;
   jenkinsGetCommitData?: (sha: string) => JenkinsCommitData | null;
   jenkinsFetchJobsForRun?: (run: JenkinsRun) => Promise<JenkinsJobFetchResult>;
   jenkinsFetchCommitData?: (sha: string) => Promise<void>;

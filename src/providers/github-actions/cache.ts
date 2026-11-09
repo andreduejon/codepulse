@@ -1,6 +1,6 @@
 import { DEFAULT_PROVIDER_CACHE_LIMIT, type ProviderCacheLimit } from "../shared/auto-refresh";
 import { DEFAULT_PROVIDER_CACHE_ROOT, mergeById, ShaSqliteCache } from "../shared/sha-sqlite-cache";
-import type { GitHubJob, GitHubStep, GitHubWorkflowRun } from "./types";
+import type { GitHubAnnotation, GitHubJob, GitHubStep, GitHubWorkflowRun } from "./types";
 
 export const DEFAULT_GITHUB_CACHE_ROOT = DEFAULT_PROVIDER_CACHE_ROOT;
 
@@ -54,7 +54,19 @@ function isGitHubJob(value: unknown): value is GitHubJob {
     (job.startedAt === null || typeof job.startedAt === "string") &&
     (job.completedAt === null || typeof job.completedAt === "string") &&
     Array.isArray(job.steps) &&
-    job.steps.every(isGitHubStep)
+    job.steps.every(isGitHubStep) &&
+    (job.annotations === undefined || (Array.isArray(job.annotations) && job.annotations.every(isGitHubAnnotation)))
+  );
+}
+
+function isGitHubAnnotation(value: unknown): value is GitHubAnnotation {
+  if (typeof value !== "object" || value === null) return false;
+  const annotation = value as GitHubAnnotation;
+  return (
+    (annotation.level === "failure" || annotation.level === "warning" || annotation.level === "notice") &&
+    typeof annotation.path === "string" &&
+    (annotation.line === null || typeof annotation.line === "number") &&
+    typeof annotation.message === "string"
   );
 }
 
