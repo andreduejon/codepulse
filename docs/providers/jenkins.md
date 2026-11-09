@@ -29,13 +29,15 @@ authentication errors instead of build failures.
 ## Multibranch pipelines
 
 Job URLs are detected through the Jenkins API. Multibranch pipeline URLs load
-enabled, buildable Workflow jobs automatically. Discovery includes the first 25
-valid, unique branch jobs in Jenkins API order. This is one global limit across
-all configured multibranch parents, not 25 jobs per parent.
+enabled, buildable Workflow jobs automatically. Discovery includes 25 valid,
+unique branch jobs: first the branches in the graph (local branches, and remote
+ones without the remote's name), then the most recently built, then Jenkins API
+order. This is one global limit across all configured multibranch parents, not 25
+jobs per parent.
 
 If more jobs are available, existing runs and badges from included jobs remain
-visible and a notice under the Jenkins tab reads **Data incomplete** with
-`Branch-job limit reached.` below.
+visible and a notice under the Jenkins tab gives the counts:
+`Jenkins reads 25 of 61 branch jobs: branches in the graph first.`
 Remaining branch jobs are not queried. The Debug dialog records the affected
 parent URL and limit. Truncated discovery is not stored as an authoritative
 cache refresh.

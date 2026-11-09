@@ -6,6 +6,7 @@ import { createRoot } from "solid-js";
 import { createAppState } from "../../context/state";
 import { BANNER } from "../../debug/banner";
 import { buildGraph } from "../../git/graph";
+import type { Commit } from "../../git/types";
 import { closeProviderCaches } from "../shared/sha-sqlite-cache";
 import * as api from "./api";
 import { JenkinsCache } from "./cache";
@@ -37,6 +38,7 @@ const result = (data: JenkinsRun[], error: string | null = null) => ({
   jobUrls: [JOB_URL],
   discoveryComplete: true,
   discoveryTruncated: false,
+  branchJobs: { shown: 1, total: 1 },
   lastBuilds: new Map([[JOB_URL, data.length]]),
 });
 
@@ -61,7 +63,13 @@ const commit = (hash: string, parent?: string) => ({
 });
 
 async function mountJenkins(
-  options: { fetchDepth?: 10 | 20 | 50; older?: string[]; seed?: (root: string) => Promise<void> } = {},
+  options: {
+    fetchDepth?: 10 | 20 | 50;
+    older?: string[];
+    seed?: (root: string) => Promise<void>;
+    refs?: Commit["refs"];
+    truncated?: boolean;
+  } = {},
 ) {
   const original = process.env[TOKEN_ENV];
   process.env[TOKEN_ENV] = "test-token";
@@ -75,8 +83,11 @@ async function mountJenkins(
     await rm(root, { recursive: true, force: true });
   });
   await options.seed?.(root);
-  const graph = spyOn(api, "fetchJenkinsGraphDataForSHAs").mockResolvedValue(result([run()]));
-  const full = spyOn(api, "fetchJenkinsDataForSHAs").mockResolvedValue(result([run()]));
+  const answer = options.truncated
+    ? { ...result([run()]), discoveryComplete: false, discoveryTruncated: true, branchJobs: { shown: 25, total: 61 } }
+    : result([run()]);
+  const graph = spyOn(api, "fetchJenkinsGraphDataForSHAs").mockResolvedValue(answer);
+  const full = spyOn(api, "fetchJenkinsDataForSHAs").mockResolvedValue(answer);
   cleanup.push(() => graph.mockRestore());
   cleanup.push(() => full.mockRestore());
   let mounted!: {
@@ -90,7 +101,14 @@ async function mountJenkins(
     actions.setRepoPath("/repo/jenkins-hook");
     actions.setActiveProviderView("jenkins");
     const hashes = [SHA, ...(options.older ?? [])];
-    actions.setGraphRows(buildGraph(hashes.map((hash, index) => commit(hash, hashes[index + 1]))));
+    actions.setGraphRows(
+      buildGraph(
+        hashes.map((hash, index) => ({
+          ...commit(hash, hashes[index + 1]),
+          refs: index === 0 ? (options.refs ?? []) : [],
+        })),
+      ),
+    );
     const jenkins = useJenkinsCI({
       state,
       actions,
@@ -114,6 +132,24 @@ const settle = async (until: () => boolean = () => true) => {
   for (let i = 0; i < 100 && !until(); i++) await Bun.sleep(5);
   await Bun.sleep(5);
 };
+
+test("over the branch-job limit, the graph's branches are asked for first and the notice gives the counts", async () => {
+  const { state, graph, full } = await mountJenkins({
+    truncated: true,
+    refs: [
+      { name: "feature/refunds", type: "branch", isCurrent: true },
+      { name: "origin/release/2.4", type: "remote", isCurrent: false },
+    ],
+  });
+  await settle(() => graph.mock.calls.length + full.mock.calls.length > 0);
+  await settle(() => state.providerStatusFor("jenkins").kind === "warning");
+  const call = [...graph.mock.calls, ...full.mock.calls][0];
+  expect([...(call?.[4]?.preferredBranches ?? [])].sort()).toEqual(["feature/refunds", "release/2.4"]);
+  expect(state.providerStatusFor("jenkins")).toEqual({
+    kind: "warning",
+    message: "Jenkins reads 25 of 61 branch jobs: branches in the graph first.",
+  });
+});
 
 test("manual refresh re-queries the whole graph window even when no build is running", async () => {
   const { jenkins, graph } = await mountJenkins();

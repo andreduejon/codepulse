@@ -42,6 +42,7 @@ interface JenkinsMultibranchChildApi {
   url?: string;
   buildable?: boolean;
   disabled?: boolean;
+  lastBuild?: { timestamp?: number } | null;
 }
 
 interface JenkinsWfapiStage {
@@ -107,7 +108,7 @@ function buildDetailTree(): string {
 }
 
 function multibranchJobsTree(): string {
-  return "_class,jobs[_class,name,displayName,url,buildable,disabled]";
+  return "_class,jobs[_class,name,displayName,url,buildable,disabled,lastBuild[timestamp]]";
 }
 
 function autoDetectTree(jobTree?: string): string {
@@ -199,17 +200,22 @@ export async function resolveJenkinsJobs(
   token: string,
   signal?: AbortSignal,
   jobTree?: string,
+  /** Branch names in the graph: over the limit, their jobs are kept first. */
+  preferredBranches: ReadonlySet<string> = new Set(),
 ): Promise<{
   jobs: JenkinsJobConfig[];
   rootData: Map<string, JenkinsJobApi>;
   error: string | null;
   complete: boolean;
   truncated: boolean;
+  /** Branch jobs of multibranch projects: how many are read, out of how many enabled ones. */
+  branchJobs: { shown: number; total: number };
 }> {
   const resolved = new Map<string, JenkinsJobConfig>();
   const rootData = new Map<string, JenkinsJobApi>();
   let firstError: string | null = null;
   let discoveredCount = 0;
+  let branchJobTotal = 0;
   let truncated = false;
   const discoveries: ({ job: JenkinsJobConfig; api: JenkinsJobApi } | null)[] = jobs.map(() => null);
   await runLimited(
@@ -248,7 +254,18 @@ export async function resolveJenkinsJobs(
       firstError ??= BANNER.jenkins.invalidJobUrl;
       continue;
     }
-    for (const child of (discovery.api.jobs ?? []).filter(isEnabledMultibranchJob)) {
+    // Over the limit, the branches in the graph are read first, then the most recently built (stable otherwise).
+    const inGraph = (child: JenkinsMultibranchChildApi) => {
+      const name = child.name ? safeDecode(child.name) : "";
+      return preferredBranches.has(name) || (!!child.displayName && preferredBranches.has(child.displayName));
+    };
+    const children = (discovery.api.jobs ?? [])
+      .filter(isEnabledMultibranchJob)
+      .map((child, order) => ({ child, order, preferred: inGraph(child), built: child.lastBuild?.timestamp ?? -1 }))
+      .sort((a, b) => Number(b.preferred) - Number(a.preferred) || b.built - a.built || a.order - b.order)
+      .map(entry => entry.child);
+    branchJobTotal += children.length;
+    for (const child of children) {
       let url: string;
       try {
         url = normalizeJenkinsJobUrl(onOrigin(child.url ?? "", parentOrigin));
@@ -264,12 +281,13 @@ export async function resolveJenkinsJobs(
         continue;
       }
       if (discoveredCount >= JENKINS_MULTIBRANCH_JOB_LIMIT) {
+        if (!truncated)
+          debugError(
+            "Jenkins",
+            `Multibranch discovery limited to ${JENKINS_MULTIBRANCH_JOB_LIMIT} jobs for ${discovery.job.url}`,
+          );
         truncated = true;
-        debugError(
-          "Jenkins",
-          `Multibranch discovery limited to ${JENKINS_MULTIBRANCH_JOB_LIMIT} jobs for ${discovery.job.url}`,
-        );
-        break;
+        continue;
       }
       const childLabel = child.displayName?.trim() || child.name?.trim() || deriveJenkinsJobLabel({ url });
       resolved.set(url, { url, label: childLabel });
@@ -283,7 +301,16 @@ export async function resolveJenkinsJobs(
     error: firstError,
     complete: discoveries.every(Boolean) && !truncated,
     truncated,
+    branchJobs: { shown: discoveredCount, total: branchJobTotal },
   };
+}
+
+function safeDecode(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 export function extractSha(raw: unknown): string | null {
@@ -475,19 +502,27 @@ export async function fetchJenkinsDataForSHAs(
   username: string | undefined,
   token: string,
   shas: string[],
-  opts: { signal?: AbortSignal; buildLimit?: number } = {},
+  opts: { signal?: AbortSignal; buildLimit?: number; preferredBranches?: ReadonlySet<string> } = {},
 ): Promise<{
   data: JenkinsRun[];
   error: string | null;
   jobUrls: string[];
   discoveryComplete: boolean;
   discoveryTruncated: boolean;
+  branchJobs: { shown: number; total: number };
   lastBuilds: Map<string, number>;
 }> {
   const buildLimit = opts.buildLimit ?? 20;
   const wanted = new Set(shas.map(s => s.toLowerCase()));
   const runs: JenkinsRun[] = [];
-  const resolved = await resolveJenkinsJobs(jobs, username, token, opts.signal, buildRefsTree(buildLimit));
+  const resolved = await resolveJenkinsJobs(
+    jobs,
+    username,
+    token,
+    opts.signal,
+    buildRefsTree(buildLimit),
+    opts.preferredBranches,
+  );
   let firstError = resolved.error;
   await runLimited(
     resolved.jobs,
@@ -535,6 +570,7 @@ export async function fetchJenkinsDataForSHAs(
     jobUrls: resolved.jobs.map(job => normalizeJenkinsJobUrl(job.url)),
     discoveryComplete: resolved.complete,
     discoveryTruncated: resolved.truncated,
+    branchJobs: resolved.branchJobs,
     lastBuilds: new Map<string, number>(),
   };
 }
@@ -548,6 +584,7 @@ export async function fetchJenkinsGraphDataForSHAs(
     signal?: AbortSignal;
     buildLimit?: number;
     knownLastBuilds?: ReadonlyMap<string, number>;
+    preferredBranches?: ReadonlySet<string>;
   } = {},
 ): Promise<{
   data: JenkinsRun[];
@@ -555,6 +592,7 @@ export async function fetchJenkinsGraphDataForSHAs(
   jobUrls: string[];
   discoveryComplete: boolean;
   discoveryTruncated: boolean;
+  branchJobs: { shown: number; total: number };
   lastBuilds: Map<string, number>;
 }> {
   const buildLimit = opts.buildLimit ?? 20;
@@ -568,6 +606,7 @@ export async function fetchJenkinsGraphDataForSHAs(
     token,
     opts.signal,
     probeOnly ? lastBuildTree() : shallowGraphTree(buildLimit),
+    opts.preferredBranches,
   );
   let firstError = resolved.error;
   await runLimited(
@@ -608,6 +647,7 @@ export async function fetchJenkinsGraphDataForSHAs(
     jobUrls: resolved.jobs.map(job => normalizeJenkinsJobUrl(job.url)),
     discoveryComplete: resolved.complete,
     discoveryTruncated: resolved.truncated,
+    branchJobs: resolved.branchJobs,
     lastBuilds,
   };
 }

@@ -93,8 +93,23 @@ export function useJenkinsCI(opts: {
   /** The auth banner that froze requests (token expired or authentication failed). */
   let authError: string | null = null;
   let discoveryTruncated = false;
+  let branchJobs = { shown: 0, total: 0 };
 
-  const settledStatus = () => (discoveryTruncated ? providerWarning(BANNER.jenkins.incomplete) : providerIdle());
+  const settledStatus = () =>
+    discoveryTruncated
+      ? providerWarning(BANNER.jenkins.branchLimit(branchJobs.shown, branchJobs.total))
+      : providerIdle();
+  /** Branch names in the loaded graph (local, and remote without the remote's name): their jobs are read first. */
+  const graphBranches = () => {
+    const names = new Set<string>();
+    for (const row of state.graphRows()) {
+      for (const ref of row.commit.refs) {
+        if (ref.type === "branch") names.add(ref.name);
+        else if (ref.type === "remote") names.add(ref.name.slice(ref.name.indexOf("/") + 1));
+      }
+    }
+    return names;
+  };
 
   function rememberAuthError(error: string | null): void {
     if (error === BANNER.jenkins.tokenExpired || error === BANNER.jenkins.authFailed) {
@@ -133,10 +148,12 @@ export function useJenkinsCI(opts: {
             signal,
             buildLimit: config.fetchDepth,
             knownLastBuilds: lastBuildByJob,
+            preferredBranches: graphBranches(),
           })
         : await fetchJenkinsDataForSHAs(jobs, config.username, token, shas, {
             signal,
             buildLimit: config.fetchDepth,
+            preferredBranches: graphBranches(),
           });
     if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { firstError: null, stale: true };
     if (result.error === null) {
@@ -153,6 +170,7 @@ export function useJenkinsCI(opts: {
       }
     }
     discoveryTruncated = result.discoveryTruncated;
+    branchJobs = result.branchJobs;
     for (const [url, number] of result.lastBuilds) lastBuildByJob.set(url, number);
     for (const run of result.data) {
       runCache.set(`${run.id}:${run.headSha}`, run);

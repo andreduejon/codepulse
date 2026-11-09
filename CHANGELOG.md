@@ -35,6 +35,8 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Jenkins multibranch: over the 25 branch-job limit, the branches in the graph are read first, then the most
+  recently built. The notice gives the counts (`Jenkins reads 25 of 61 branch jobs`).
 - Graph ref badges take only their own width, so short names (`main`, `dev`) are no longer folded into `+N` for
   the room a long name would need.
 

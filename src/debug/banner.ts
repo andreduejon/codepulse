@@ -31,6 +31,8 @@ export const BANNER = {
     tokenExpired: "Jenkins token expired. Live data unavailable. Reload to retry.",
     fetchFailed: "Jenkins fetch failed.",
     incomplete: "Jenkins data incomplete. Branch-job limit reached.",
+    branchLimit: (shown: number, total: number) =>
+      `Jenkins reads ${shown} of ${total} branch jobs: branches in the graph first.`,
     invalidJobUrl: "Jenkins job URL invalid.",
     logFailed: "Jenkins log failed.",
     stagesFailed: "Jenkins stages failed.",

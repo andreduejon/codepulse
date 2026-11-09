@@ -598,7 +598,46 @@ describe("resolveJenkinsJobs", () => {
           label: "main",
         },
       ]);
-      expect(decodeURIComponent(requestedUrl)).toContain("jobs[_class,name,displayName,url,buildable,disabled]");
+      expect(decodeURIComponent(requestedUrl)).toContain(
+        "jobs[_class,name,displayName,url,buildable,disabled,lastBuild[timestamp]]",
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("over the limit, branches in the graph come first, then the most recently built", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      Response.json({
+        _class: "org.jenkinsci.plugins.workflow.multibranch.WorkflowMultiBranchProject",
+        jobs: Array.from({ length: 30 }, (_, idx) => ({
+          _class: "org.jenkinsci.plugins.workflow.job.WorkflowJob",
+          // Jenkins encodes the slash of a branch name in the job name.
+          name: idx === 29 ? "feature%2Frefunds" : `branch-${idx}`,
+          url: `https://jenkins.example.com/job/service/job/b${idx}/`,
+          buildable: true,
+          disabled: false,
+          // branch-0 was built longest ago, branch-28 most recently; branch-1 never.
+          lastBuild: idx === 1 ? null : { timestamp: 1_000 + idx },
+        })),
+      })) as unknown as typeof fetch;
+    try {
+      const result = await resolveJenkinsJobs(
+        [{ url: "https://jenkins.example.com/job/service" }],
+        "user",
+        "token",
+        undefined,
+        undefined,
+        new Set(["feature/refunds"]),
+      );
+      expect(result.truncated).toBe(true);
+      expect(result.branchJobs).toEqual({ shown: 25, total: 30 });
+      const labels = result.jobs.map(job => job.label);
+      expect(labels[0]).toBe("feature%2Frefunds");
+      expect(labels.slice(1, 4)).toEqual(["branch-28", "branch-27", "branch-26"]);
+      expect(labels).not.toContain("branch-1");
+      expect(labels).not.toContain("branch-0");
     } finally {
       globalThis.fetch = originalFetch;
     }
