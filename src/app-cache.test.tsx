@@ -14,6 +14,7 @@ import * as dataLoader from "./hooks/use-data-loader";
 import * as detailLoader from "./hooks/use-detail-loader";
 import * as githubHook from "./providers/github-actions/use-github-ci";
 import * as management from "./providers/shared/cache-management";
+import * as sqliteCache from "./providers/shared/sha-sqlite-cache";
 import { closeProviderCaches, providerCacheDatabase, ShaSqliteCache } from "./providers/shared/sha-sqlite-cache";
 
 test(":cache groups apps, resets and evicts only selected repository, then restores repository view", async () => {
@@ -65,6 +66,12 @@ test(":cache groups apps, resets and evicts only selected repository, then resto
   const known = spyOn(config, "getKnownRepoInfos").mockReturnValue([]);
   const detail = spyOn(detailLoader, "useDetailLoader").mockImplementation(() => {});
   const title = spyOn(CliRenderer.prototype, "setTerminalTitle").mockImplementation(() => {});
+  // Eviction first resolves the open repository's path on disk, which can take a while on a busy runner.
+  const realIdentity = sqliteCache.repositoryIdentity;
+  const identity = spyOn(sqliteCache, "repositoryIdentity").mockImplementation(async path => {
+    await Bun.sleep(20);
+    return realIdentity(path);
+  });
   let app: { state: AppState; actions: AppActions } | undefined;
   const loader = spyOn(dataLoader, "useDataLoader").mockImplementation(options => {
     app = { state: options.state, actions: options.actions };
@@ -177,12 +184,19 @@ test(":cache groups apps, resets and evicts only selected repository, then resto
         .every(group => group.cleanupAt >= started + management.CACHE_INACTIVITY_MS),
     ).toBe(true);
     expect(realSummary(root).groups).toHaveLength(3);
+    /** An eviction first awaits the repository's path on disk: render until it has run, not just once. */
+    const settle = async (done: () => boolean) => {
+      for (let i = 0; i < 200 && !done(); i++) {
+        await Bun.sleep(5);
+        await setup?.flush();
+      }
+    };
     evict.mockImplementationOnce(() => {
       throw new Error("database is locked");
     });
     setup.mockInput.pressKey("e");
     setup.mockInput.pressKey("RETURN");
-    await setup.flush();
+    await settle(() => /Eviction failed/.test(setup?.captureCharFrame() ?? ""));
     expect(setup.captureCharFrame()).toMatch(/Eviction failed\s*\n.*database is locked/);
     expect(invalidate).not.toHaveBeenCalled();
     expect(realSummary(root).groups).toHaveLength(3);
@@ -195,7 +209,7 @@ test(":cache groups apps, resets and evicts only selected repository, then resto
     expect(app.state.keyboardScopeOverride()).toBe("cache");
     setup.mockInput.pressKey("e");
     setup.mockInput.pressKey("RETURN");
-    await setup.flush();
+    await settle(() => invalidate.mock.calls.length > 0);
     expect(invalidate).toHaveBeenCalledTimes(1);
     expect(evict).toHaveBeenCalledTimes(1);
     expect(realSummary(root).groups.map(group => group.repoPath)).toEqual([other]);
@@ -246,6 +260,7 @@ test(":cache groups apps, resets and evicts only selected repository, then resto
       known,
       detail,
       title,
+      identity,
       loader,
     ])
       spy.mockRestore();
