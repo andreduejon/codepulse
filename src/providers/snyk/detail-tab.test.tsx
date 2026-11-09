@@ -117,3 +117,74 @@ test("a parent without a scan says so, and Enter scans it", async () => {
     t.renderer.destroy();
   }
 });
+
+test("a selected package row shows its full coordinate, scrolling when it does not fit", async () => {
+  const transitive = finding(
+    "SNYK-JAVA-X-1",
+    "org.example.very.long.groupname:vulnerable-artifact-with-a-long-name",
+    "1.0",
+    {
+      dependencyType: "transitive",
+      dependencyPath: [
+        "org.example:app@1.0",
+        "org.example.parent:direct-lib@2.0",
+        "org.example.very.long.groupname:vulnerable-artifact-with-a-long-name@1.0",
+      ],
+    },
+  );
+  const [cursor, setCursor] = createSignal(0);
+  const navRef: DetailNavRef = {
+    itemCount: 0,
+    itemRefs: [],
+    activateCurrentItem: () => false,
+    lastJumpFrom: null,
+    pendingJumpDirection: null,
+    scrollToFile: () => {},
+  };
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={createThemeState()}>
+        <box width={50} flexDirection="column">
+          <SnykDetailTab
+            scan={scanOf("a".repeat(40), [transitive])}
+            onScan={() => {}}
+            contentWidth={50}
+            navRef={navRef}
+            detailCursorIndex={cursor}
+            detailFocused={() => true}
+            setDetailCursorAction={() => {}}
+            setDetailCursorIndex={setCursor}
+          />
+        </box>
+      </ThemeContext.Provider>
+    ),
+    { width: 54, height: 16 },
+  );
+  const settle = async () => {
+    for (let i = 0; i < 4; i++) {
+      await Bun.sleep(0);
+      await setup.flush();
+    }
+  };
+  const row = () =>
+    setup
+      .captureCharFrame()
+      .split("\n")
+      .find(line => line.includes("└─ ▾")) ?? "";
+  try {
+    await settle();
+    // Group by dependency (Rescan, Copy, Group by).
+    setCursor(2);
+    await settle();
+    navRef.activateCurrentItem();
+    await settle();
+    expect(row()).toContain("vulnerable-artifact-with-a-long-name");
+    expect(row()).not.toContain("org.example");
+    // Rescan, Copy, Group by, filter, the group, then its package.
+    setCursor(5);
+    await settle();
+    expect(row()).toContain("org.example.very.long.groupname:");
+  } finally {
+    setup.renderer.destroy();
+  }
+});

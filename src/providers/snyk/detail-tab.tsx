@@ -189,12 +189,18 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
   const sectionLabelWidth = (section: Section) =>
     Math.max(1, panelUsableWidth() - 2 - String(section.entries.length).length - 1);
   const metadataWidth = () => Math.max(10, panelUsableWidth() - METADATA_PREFIX_WIDTH - nesting());
+  /** A package row: its branch and marker (5 columns), then the name, a gap and its count. */
+  const packageLabelWidth = (pkg: PackageRow) =>
+    Math.max(1, panelUsableWidth() - 5 - 1 - String(pkg.entries.length).length);
   const cursorItem = () => (props.detailFocused() ? flatItems()[props.detailCursorIndex()] : undefined);
   const bannerOverflow = createMemo(() => {
     const item = cursorItem();
     if (item?.kind === "finding") return Math.max(0, item.entry.label.length - findingLabelWidth());
     if (item?.kind === "section" && !item.section.severity)
       return Math.max(0, item.section.label.length - sectionLabelWidth(item.section));
+    // The selected package shows its full coordinate (`org.example:artifact`), scrolling when it does not fit.
+    if (item?.kind === "package" && !item.pkg.self)
+      return Math.max(0, item.pkg.name.length - packageLabelWidth(item.pkg));
     if (item?.kind === "field" && !item.line.wrap)
       return Math.max(0, (item.line.full ?? item.line.text).length - metadataWidth());
     return 0;
@@ -430,6 +436,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
     metadataWidth,
     findingLabelWidth,
     sectionLabelWidth,
+    packageLabelWidth,
     findingExpanded: key => expandedFindings().has(key),
     isNew: entry => addedKeys().has(diffKey(entry.finding)),
     sectionExpanded: isSectionExpanded,

@@ -29,6 +29,7 @@ export interface VulnerabilityRowsView {
   metadataWidth: () => number;
   findingLabelWidth: () => number;
   sectionLabelWidth: (section: Section) => number;
+  packageLabelWidth: (pkg: PackageRow) => number;
   findingExpanded: (key: string) => boolean;
   /** A finding the parent's scan did not have: marked with a muted `new`. */
   isNew: (entry: SnykVulnerabilityEntry) => boolean;
@@ -237,14 +238,14 @@ function PackageView(packageProps: { view: VulnerabilityRowsView; pkg: PackageRo
           flexGrow={1}
           flexShrink={1}
           wrapMode="none"
-          truncate
+          truncate={v.bannerOverflow() === 0 || !cursored()}
           fg={cursored() ? t().accent : pkg.self || isEmpty() ? t().foregroundMuted : t().foreground}
         >
-          {pkg.self || cursored()
-            ? pkg.self
-              ? "self"
-              : shortCoordinate(pkg.name)
-            : highlightMatch(shortCoordinate(pkg.name), v.query(), t().snykBg)}
+          {pkg.self
+            ? "self"
+            : cursored()
+              ? v.scrolled(pkg.name, true, v.packageLabelWidth(pkg))
+              : highlightMatch(shortCoordinate(pkg.name), v.query(), t().snykBg)}
         </text>
         <Count
           view={v}
