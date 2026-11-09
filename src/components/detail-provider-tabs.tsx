@@ -27,6 +27,7 @@ export function ProviderDetailTabs(
     detailFocused: () => state.detailFocused(),
     setDetailCursorAction: actions.setDetailCursorAction,
     setDetailCursorIndex: actions.setDetailCursorIndex,
+    setDetailCursorShortcut: actions.setDetailCursorShortcut,
   };
   /**
    * Why a provider cannot load: its status reason or, once that banner was dismissed, its own readiness check, so
@@ -95,6 +96,7 @@ export function ProviderDetailTabs(
             fetchCommitData={props.view.openshiftFetchCommitData}
             isLoading={props.view.openshiftIsLoading}
             liveAge={props.view.openshiftLiveAge}
+            consoleUrl={props.view.openshiftConsoleUrl}
             onOpenResource={props.view.onOpenOpenShiftResource}
             unavailableReason={unavailable("openshift", props.view.openshiftProviderStatus)}
             liveUnavailable={
@@ -131,7 +133,6 @@ export function ProviderDetailTabs(
         <SnykDependenciesTab
           memory={props.snykMemory}
           active={() => activeTab() === "snyk-deps"}
-          setDetailCursorShortcut={actions.setDetailCursorShortcut}
           onShowVulnerabilities={query => {
             actions.setSnykPendingFilter(query);
             actions.setDetailCursorAction(null);

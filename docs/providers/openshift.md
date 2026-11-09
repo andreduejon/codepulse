@@ -26,6 +26,10 @@ Configure the provider per repository from `:providers`:
 
 - Enable the provider.
 - Set an HTTPS OpenShift API server URL.
+- Optionally set the web console URL (**Console**, for example
+  `https://console-openshift-console.apps.example.com`). With it, `o` opens the selected namespace or
+  resource in the console, from the detail panel and from the resource dialog. Without it, `o` is not offered
+  for OpenShift.
 - Set the environment variable containing an API token. Default:
   `OPENSHIFT_TOKEN`. Prefer a long-lived service-account token over
   `oc whoami -t` (env is fixed until Codepulse restarts).

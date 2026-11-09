@@ -20,7 +20,9 @@ import { fitTitleSegments } from "../../components/dialogs/title-utils";
 import { KeyHint, KeyHintSeparator } from "../../components/key-hint";
 import { useT } from "../../hooks/use-t";
 import { BUSY } from "../../utils/busy-text";
+import { openUrl } from "../../utils/open-url";
 import { stripTerminalControls } from "../../utils/terminal-text";
+import { openShiftConsoleUrl } from "./console";
 import type { OpenShiftResource } from "./types";
 import { shouldFollowOpenShiftLog } from "./watch";
 
@@ -32,6 +34,8 @@ interface OpenShiftResourceDialogProps {
   loadObject?: (resource: OpenShiftResource, force?: boolean) => Promise<unknown>;
   /** The search row starts or stops owning Esc (see `useLogSearch`). */
   onSearchActive?: (active: boolean) => void;
+  /** Web console URL from the settings; `o` opens the resource there when it is set. */
+  consoleUrl?: string;
 }
 
 type ViewMode = "log" | "json";
@@ -193,6 +197,10 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
     setViewMode(current => (current === "log" ? "json" : "log"));
   };
 
+  const consolePage = () =>
+    openShiftConsoleUrl(props.consoleUrl ?? "", { namespace: props.resource.namespace, resource: props.resource });
+  const openConsole = () => openUrl(consolePage() ?? undefined);
+
   useKeyboard(e => {
     if (e.eventType === "release") return;
     if (search.handleKey(e)) return;
@@ -215,6 +223,9 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
     } else if (e.name === "c" && canLog()) {
       e.preventDefault();
       cycleViewMode();
+    } else if (e.name === "o" && consolePage()) {
+      e.preventDefault();
+      openConsole();
     }
   });
 
@@ -292,6 +303,10 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
               <KeyHint key="r" desc=" refresh" onClick={refresh} />
             </>
           ) : null}
+          <Show when={consolePage()}>
+            <KeyHintSeparator />
+            <KeyHint key="o" desc=" open" onClick={openConsole} />
+          </Show>
         </DialogFooter>
       </box>
     </DialogOverlay>

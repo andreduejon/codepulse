@@ -56,6 +56,7 @@ Normal clears highlighting without changing branch perspective.
 | `shift ↑` / `shift ↓` | Jump 10 items |
 | `←` / `h` | Previous tab / exit details on the first tab (wide layout) |
 | `→` / `l` | Next tab |
+| `o` | Open the selected row in the browser: a CI run, job or build, an OpenShift namespace or resource, a Snyk finding |
 | `v` | Snyk Dependencies: show a vulnerable package's findings |
 | `g` / `G` | Top / bottom |
 | `enter` | Activate selected item |

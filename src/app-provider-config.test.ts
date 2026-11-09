@@ -11,6 +11,7 @@ test("missing provider settings get their defaults", () => {
     autoRefreshSeconds: 120,
   });
   expect(openShiftSettings({ namespaces: ["dev"] })).toMatchObject({
+    consoleUrl: "",
     tokenEnvVar: "OPENSHIFT_TOKEN",
     namespaces: ["dev"],
     commitShaAnnotation: "dev/commit-sha",

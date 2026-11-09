@@ -24,6 +24,8 @@ export type OpenShiftWatchKind = (typeof OPENSHIFT_WATCH_KINDS)[number];
 export interface OpenShiftProviderConfig {
   enabled: boolean;
   serverUrl: string;
+  /** Web console, for `o`. Not part of the fetch identity: it changes no data. */
+  consoleUrl: string;
   tokenEnvVar: string;
   namespaces: string[];
   commitShaAnnotation: string;
@@ -36,6 +38,7 @@ export interface OpenShiftProviderConfig {
 export const DEFAULT_OPENSHIFT_CONFIG: OpenShiftProviderConfig = {
   enabled: false,
   serverUrl: "",
+  consoleUrl: "",
   tokenEnvVar: "OPENSHIFT_TOKEN",
   namespaces: [],
   commitShaAnnotation: "dev/commit-sha",

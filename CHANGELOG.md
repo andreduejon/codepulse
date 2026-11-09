@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- `o` opens the selected row in the browser from the detail panel: a GitHub run or job, a Jenkins build, an
+  OpenShift namespace or resource, or a Snyk finding (its security.snyk.io page). The footer offers `o` only on
+  rows that have a page.
+- OpenShift **Console** setting (optional): the web console URL that `o` uses for namespaces and resources, in the
+  detail panel and the resource dialog. It cannot be worked out from the API server URL.
+
 ## [0.16.0] - 2026-11-09
 
 ### Added

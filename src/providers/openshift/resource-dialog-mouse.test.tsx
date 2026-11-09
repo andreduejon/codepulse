@@ -1,10 +1,11 @@
-import { expect, mock, test } from "bun:test";
+import { expect, mock, spyOn, test } from "bun:test";
 import { type Renderable, RGBA, ScrollBoxRenderable, TextRenderable } from "@opentui/core";
 import { MouseButtons } from "@opentui/core/testing";
 import { testRender } from "@opentui/solid";
 import { createSignal, Show } from "solid-js";
 import { createThemeState, ThemeContext } from "../../context/theme";
 import { BANNER } from "../../debug/banner";
+import * as browser from "../../utils/open-url";
 import OpenShiftResourceDialog from "./resource-dialog";
 import type { OpenShiftResource } from "./types";
 
@@ -13,7 +14,7 @@ const descendants = (node: Renderable): Renderable[] =>
 const logRows = (count: number) =>
   Array.from({ length: count }, (_, i) => `row-${String(i + 1).padStart(3, "0")}`).join("\n");
 
-async function renderResource(kind: OpenShiftResource["kind"], follow = false, hasLoader = true) {
+async function renderResource(kind: OpenShiftResource["kind"], follow = false, hasLoader = true, consoleUrl?: string) {
   const resource: OpenShiftResource = {
     id: `${kind}/resource`,
     kind,
@@ -42,6 +43,7 @@ async function renderResource(kind: OpenShiftResource["kind"], follow = false, h
             loadLog={hasLoader ? loadLog : undefined}
             loadObject={loadObject}
             followLog={follow ? followLog : undefined}
+            consoleUrl={consoleUrl}
             onClose={close}
           />
         </Show>
@@ -381,5 +383,28 @@ test("/ searches the resource log and object like the CI log", async () => {
     expect(d.open()).toBe(true);
   } finally {
     await d.dispose();
+  }
+});
+
+test("o opens the resource in the web console when its URL is set, and the footer says so", async () => {
+  const openUrl = spyOn(browser, "openUrl").mockImplementation(() => {});
+  const without = await renderResource("Pod");
+  try {
+    expect(without.frame()).not.toContain("o open");
+    await without.key("o");
+    expect(openUrl).not.toHaveBeenCalled();
+  } finally {
+    without.renderer.destroy();
+  }
+  const d = await renderResource("Pod", false, true, "https://console.example.com");
+  try {
+    expect(d.frame()).toContain("o open");
+    await d.key("o");
+    expect(openUrl).toHaveBeenLastCalledWith("https://console.example.com/k8s/ns/test-ns/pods/test-resource");
+    await d.click("o open");
+    expect(openUrl).toHaveBeenCalledTimes(2);
+  } finally {
+    openUrl.mockRestore();
+    d.renderer.destroy();
   }
 });

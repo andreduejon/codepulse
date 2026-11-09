@@ -36,6 +36,7 @@ export function openShiftSettings(raw: ProviderSettings["openshift"] = {}): Open
   return {
     enabled: raw.enabled ?? false,
     serverUrl: raw.serverUrl ?? "",
+    consoleUrl: raw.consoleUrl ?? "",
     tokenEnvVar: raw.tokenEnvVar ?? "OPENSHIFT_TOKEN",
     namespaces: raw.namespaces ?? [],
     commitShaAnnotation: raw.commitShaAnnotation ?? "dev/commit-sha",

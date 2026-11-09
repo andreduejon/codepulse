@@ -73,6 +73,8 @@ export interface JenkinsMenuConfig {
 export interface OpenShiftMenuConfig {
   enabled: boolean;
   serverUrl: string;
+  /** Web console URL; empty when not set (then `o` is not offered for OpenShift). */
+  consoleUrl: string;
   tokenEnvVar: string;
   namespaces: string[];
   commitShaAnnotation: string;

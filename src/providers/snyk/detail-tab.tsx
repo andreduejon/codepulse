@@ -6,6 +6,7 @@ import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useClipboard } from "../../hooks/use-clipboard";
 import { useT } from "../../hooks/use-t";
 import { BUSY } from "../../utils/busy-text";
+import { useOpenRowShortcut } from "../shared/open-row";
 import { filterSnykFindings, SnykFilterRow, useSnykFilter } from "./filter";
 import { countUniqueFindings, groupSnykFixes, groupSnykVulnerabilities, type SnykVulnerabilityEntry } from "./parser";
 import { SnykControlRow, type SnykDetailTabProps, snykScanIdentity, useSnykRows } from "./tab-shared";
@@ -20,6 +21,7 @@ import {
   ROW_TAIL_WIDTH,
   type Section,
   shortCoordinate,
+  snykVulnerabilityUrl,
 } from "./vulnerabilities-model";
 import { SectionView, type VulnerabilityRowsView } from "./vulnerabilities-rows";
 
@@ -327,6 +329,16 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
     props.navRef.itemCount = items.length;
     syncRefs();
     props.navRef.activateCurrentItem = activateCurrentItem;
+  });
+
+  useOpenRowShortcut({
+    navRef: props.navRef,
+    detailFocused: props.detailFocused,
+    url: () => {
+      const item = flatItems()[props.detailCursorIndex()];
+      return item?.kind === "finding" ? snykVulnerabilityUrl(item.entry.finding.id) : null;
+    },
+    setDetailCursorShortcut: props.setDetailCursorShortcut,
   });
 
   createEffect(() => {

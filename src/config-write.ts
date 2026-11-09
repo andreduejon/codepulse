@@ -341,6 +341,8 @@ function applyConfigFields(target: Record<string, unknown>, config: CodepulseCon
         existingOpenShift.enabled = config.providers.openshift.enabled;
       if (config.providers.openshift.serverUrl !== undefined)
         existingOpenShift.serverUrl = config.providers.openshift.serverUrl;
+      if (config.providers.openshift.consoleUrl !== undefined)
+        existingOpenShift.consoleUrl = config.providers.openshift.consoleUrl;
       if (config.providers.openshift.tokenEnvVar !== undefined)
         existingOpenShift.tokenEnvVar = config.providers.openshift.tokenEnvVar;
       if (config.providers.openshift.namespaces !== undefined)

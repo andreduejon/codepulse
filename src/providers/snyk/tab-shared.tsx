@@ -3,6 +3,7 @@ import { createSignal, For, Show } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
 import type { Theme } from "../../context/theme";
 import { useT } from "../../hooks/use-t";
+import type { RowShortcut } from "../shared/open-row";
 import type { SnykScanResult, SnykSeverity } from "./types";
 import type { SnykViewMemory } from "./view-memory";
 
@@ -20,6 +21,8 @@ export interface SnykDetailTabProps {
   detailFocused: () => boolean;
   setDetailCursorAction: (action: string | null) => void;
   setDetailCursorIndex: (idx: number) => void;
+  /** Footer row shortcut (`o open` on a finding). */
+  setDetailCursorShortcut?: (shortcut: RowShortcut | null) => void;
   /** Vulnerabilities: a filter handed over by the Dependencies jump, read once when the tab opens. */
   takePendingFilter?: () => string | null;
   /** Survives tab switches; each tab restores its state from it for the same scan. */

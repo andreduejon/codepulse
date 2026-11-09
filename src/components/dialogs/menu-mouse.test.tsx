@@ -57,6 +57,7 @@ async function renderMenu(height = 60, configInfo?: config.ConfigInfo) {
   const [openshift, setOpenShift] = createSignal<OpenShiftMenuConfig>({
     enabled: false,
     serverUrl: "",
+    consoleUrl: "",
     tokenEnvVar: "OPENSHIFT_TOKEN",
     namespaces: [],
     commitShaAnnotation: "dev/commit-sha",

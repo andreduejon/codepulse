@@ -1,6 +1,7 @@
 import { createMemo, createSignal } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
 import { BUSY } from "../../utils/busy-text";
+import type { RowShortcut } from "../shared/open-row";
 import { ProviderRunTree, type ProviderTreeJob, type ProviderTreeRun } from "../shared/provider-run-tree";
 import type { JenkinsCommitData, JenkinsJob, JenkinsJobFetchResult, JenkinsRun } from "./types";
 
@@ -18,6 +19,7 @@ export interface JenkinsDetailTabProps {
   detailFocused: () => boolean;
   setDetailCursorAction: (action: string | null) => void;
   setDetailCursorIndex: (idx: number) => void;
+  setDetailCursorShortcut?: (shortcut: RowShortcut | null) => void;
   onOpenJobLog?: (job: JenkinsJob, run: JenkinsRun, jobs?: JenkinsJob[]) => void;
 }
 
@@ -34,11 +36,13 @@ export function JenkinsDetailTab(props: Readonly<JenkinsDetailTabProps>) {
       runNumber: run.runNumber,
       startedAt: run.startedAt,
       updatedAt: run.updatedAt,
+      url: run.url,
       raw: run,
     })),
   );
 
-  const mapJob = (job: JenkinsJob): ProviderTreeJob<JenkinsJob> => ({
+  /** The Pipeline job is the build itself, so it opens the build page. */
+  const mapJob = (job: JenkinsJob, buildUrl: string): ProviderTreeJob<JenkinsJob> => ({
     id: job.id,
     name: job.name,
     status: job.status,
@@ -53,6 +57,7 @@ export function JenkinsDetailTab(props: Readonly<JenkinsDetailTabProps>) {
       startedAt: step.startedAt,
       completedAt: step.completedAt,
     })),
+    url: buildUrl,
     raw: job,
   });
 
@@ -66,9 +71,10 @@ export function JenkinsDetailTab(props: Readonly<JenkinsDetailTabProps>) {
       detailFocused={props.detailFocused}
       setDetailCursorAction={props.setDetailCursorAction}
       setDetailCursorIndex={props.setDetailCursorIndex}
+      setDetailCursorShortcut={props.setDetailCursorShortcut}
       fetchJobsForRun={async (run, signal) => {
         const { jobs, error } = await props.fetchJobsForRun(run.raw, signal);
-        return { jobs: jobs.map(mapJob), error };
+        return { jobs: jobs.map(job => mapJob(job, run.raw.url)), error };
       }}
       debugSource="Jenkins"
       dataKey={props.sha}

@@ -4,7 +4,9 @@ import type { DetailNavRef } from "../../components/detail-types";
 import { useT } from "../../hooks/use-t";
 import { BUSY } from "../../utils/busy-text";
 import { ProviderActionRow, ProviderSummaryRow, ScrollingLabel, useDetailRowMouse } from "../shared/detail-rows";
+import { type RowShortcut, useOpenRowShortcut } from "../shared/open-row";
 import { type StatusCategory, statusIcon } from "../shared/status";
+import { openShiftConsoleUrl } from "./console";
 import { openShiftStatusColor } from "./graph-columns";
 import {
   isCachedOpenShiftResource,
@@ -30,6 +32,9 @@ export interface OpenShiftDetailTabProps {
   detailFocused: () => boolean;
   setDetailCursorAction: (action: string | null) => void;
   setDetailCursorIndex: (idx: number) => void;
+  setDetailCursorShortcut?: (shortcut: RowShortcut | null) => void;
+  /** Web console URL from the settings; `o` opens the namespace or resource there when it is set. */
+  consoleUrl?: () => string;
 }
 
 type NamespaceData = OpenShiftCommitData["namespaces"][number];
@@ -224,6 +229,20 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
     props.navRef.itemCount = items.length;
     syncItemRefs();
     props.navRef.activateCurrentItem = activateCurrentItem;
+  });
+
+  useOpenRowShortcut({
+    navRef: props.navRef,
+    detailFocused: props.detailFocused,
+    url: () => {
+      const item = flatItems()[props.detailCursorIndex()];
+      const consoleUrl = props.consoleUrl?.() ?? "";
+      if (item?.kind === "namespace") return openShiftConsoleUrl(consoleUrl, { namespace: item.namespace });
+      if (item?.kind === "resource")
+        return openShiftConsoleUrl(consoleUrl, { namespace: item.resource.namespace, resource: item.resource });
+      return null;
+    },
+    setDetailCursorShortcut: props.setDetailCursorShortcut,
   });
 
   createEffect(() => {

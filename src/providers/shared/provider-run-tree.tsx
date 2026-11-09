@@ -6,6 +6,7 @@ import { useT } from "../../hooks/use-t";
 import { BUSY } from "../../utils/busy-text";
 import { formatDuration, formatRelativeDate } from "../../utils/date";
 import { ProviderActionRow, ProviderSummaryRow, ScrollingLabel, useDetailRowMouse } from "./detail-rows";
+import { type RowShortcut, useOpenRowShortcut } from "./open-row";
 import { fetchProviderJobs } from "./provider-job-fetch";
 import { categorize, statusColor, statusIcon } from "./status";
 
@@ -26,6 +27,8 @@ export interface ProviderTreeRun<TRaw> {
   runNumber: number;
   startedAt?: string | null;
   updatedAt: string;
+  /** The run's web page, opened with `o`. */
+  url?: string;
   raw: TRaw;
 }
 
@@ -37,6 +40,8 @@ export interface ProviderTreeJob<TJobRaw> {
   startedAt: string | null;
   completedAt: string | null;
   steps: ProviderTreeStep[];
+  /** The job's web page, opened with `o`. */
+  url?: string;
   raw: TJobRaw;
 }
 
@@ -59,6 +64,7 @@ export interface ProviderRunTreeProps<TRaw, TJobRaw> {
   detailFocused: () => boolean;
   setDetailCursorAction: (action: string | null) => void;
   setDetailCursorIndex: (idx: number) => void;
+  setDetailCursorShortcut?: (shortcut: RowShortcut | null) => void;
   fetchJobsForRun: (run: ProviderTreeRun<TRaw>, signal?: AbortSignal) => Promise<ProviderTreeJobFetchResult<TJobRaw>>;
   debugSource: DebugEventSource;
   dataKey: string;
@@ -424,6 +430,16 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     if (item.kind === "reload") props.setDetailCursorAction(reloadEnabled() && !reloadBusy() ? reloadHint() : null);
     else if (item.kind === "run") props.setDetailCursorAction(expandedRuns().has(item.run.id) ? "collapse" : "expand");
     else props.setDetailCursorAction(props.onOpenJobAction ? "view log" : null);
+  });
+
+  useOpenRowShortcut({
+    navRef: props.navRef,
+    detailFocused: props.detailFocused,
+    url: () => {
+      const item = flatItems()[props.detailCursorIndex()];
+      return item?.kind === "run" ? item.run.url : item?.kind === "job" ? item.job.url : null;
+    },
+    setDetailCursorShortcut: props.setDetailCursorShortcut,
   });
 
   const reloadIdx = () => flatItems().findIndex(item => item.kind === "reload");

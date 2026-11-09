@@ -71,6 +71,8 @@ export interface DetailViewProps {
   openshiftFetchCommitData?: (sha: string, force?: boolean) => Promise<void>;
   openshiftIsLoading?: (sha: string) => boolean;
   openshiftLiveAge?: () => string;
+  /** Web console URL from the settings, for `o`. */
+  openshiftConsoleUrl?: () => string;
   onOpenOpenShiftResource?: (resource: OpenShiftResource) => void;
   openshiftProviderStatus?: ProviderStatus;
   snykGetCommitData?: (sha: string) => SnykScanResult | null;

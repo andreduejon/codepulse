@@ -69,6 +69,11 @@ export function toneColor(theme: Theme, tone: DetailLine["tone"]): string {
 }
 
 /** `group:artifact@version` → `artifact@version`; npm names have no group and stay as they are. */
+/** A Snyk vulnerability's public page; license and custom issues have none. */
+export function snykVulnerabilityUrl(id: string): string | null {
+  return /^SNYK-[A-Z0-9][A-Z0-9-]*$/i.test(id) ? `https://security.snyk.io/vuln/${id}` : null;
+}
+
 export function shortCoordinate(value: string): string {
   return value.slice(value.lastIndexOf(":") + 1);
 }

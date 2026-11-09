@@ -1,11 +1,15 @@
-import { expect, mock, test } from "bun:test";
+import { expect, mock, spyOn, test } from "bun:test";
+import type { KeyEvent } from "@opentui/core";
 import { testRender } from "@opentui/solid";
 import { createSignal } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
 import { createThemeState, ThemeContext } from "../../context/theme";
+import * as browser from "../../utils/open-url";
 import { ProviderRunTree, type ProviderTreeJob, type ProviderTreeRun } from "./provider-run-tree";
 
 const date = "2026-01-01T00:00:00Z";
+const RUN_URL = "https://github.com/o/r/actions/runs/1";
+const JOB_URL = "https://github.com/o/r/actions/runs/1/job/2";
 
 const run = (status: string, conclusion: string | null, updatedAt: string): ProviderTreeRun<null> => ({
   id: "run-1",
@@ -15,6 +19,7 @@ const run = (status: string, conclusion: string | null, updatedAt: string): Prov
   runNumber: 7,
   startedAt: date,
   updatedAt,
+  url: RUN_URL,
   raw: null,
 });
 
@@ -25,6 +30,7 @@ const job = (status: string, conclusion: string | null, stepStatus: string): Pro
   conclusion,
   startedAt: date,
   completedAt: status === "completed" ? date : null,
+  url: JOB_URL,
   steps: [
     {
       id: "step-1",
@@ -44,6 +50,7 @@ async function renderTree() {
   let jobs = [job("in_progress", null, "in_progress")];
   const fetchJobs = mock(async () => ({ jobs, error: null }));
   const reload = mock(async () => {});
+  const shortcut = mock((_shortcut: { key: string; desc: string } | null) => {});
   const navRef: DetailNavRef = {
     itemCount: 0,
     itemRefs: [],
@@ -63,6 +70,7 @@ async function renderTree() {
             detailFocused={() => true}
             setDetailCursorAction={() => {}}
             setDetailCursorIndex={setCursor}
+            setDetailCursorShortcut={shortcut}
             fetchJobsForRun={fetchJobs}
             debugSource="GitHub"
             dataKey="sha"
@@ -86,6 +94,7 @@ async function renderTree() {
     navRef,
     fetchJobs,
     reload,
+    shortcut,
     setRuns,
     setCursor,
     settle,
@@ -116,6 +125,36 @@ test("Reload commit refreshes the jobs and steps of an expanded run that was sti
     expect(childRows).toHaveLength(2);
     for (const line of childRows) expect(line).toContain("✓");
   } finally {
+    t.renderer.destroy();
+  }
+});
+
+test("o opens the selected run or job page, and the footer offers it only on rows that have one", async () => {
+  const openUrl = spyOn(browser, "openUrl").mockImplementation(() => {});
+  const t = await renderTree();
+  const press = (name: string) => t.navRef.handleKey?.({ name, ctrl: false, meta: false } as KeyEvent) ?? false;
+  try {
+    expect(t.shortcut).toHaveBeenLastCalledWith(null);
+    expect(press("o")).toBe(false);
+    t.setCursor(1);
+    await t.settle();
+    expect(t.shortcut).toHaveBeenLastCalledWith({ key: "o", desc: "open" });
+    expect(press("o")).toBe(true);
+    expect(openUrl).toHaveBeenLastCalledWith(RUN_URL);
+    t.navRef.activateCurrentItem();
+    await t.settle();
+    t.setCursor(2);
+    await t.settle();
+    expect(press("o")).toBe(true);
+    expect(openUrl).toHaveBeenLastCalledWith(JOB_URL);
+    t.setRuns([{ ...run("completed", "success", "2026-01-01T00:05:00Z"), url: undefined }]);
+    t.setCursor(1);
+    await t.settle();
+    expect(t.shortcut).toHaveBeenLastCalledWith(null);
+    expect(press("o")).toBe(false);
+    expect(openUrl).toHaveBeenCalledTimes(2);
+  } finally {
+    openUrl.mockRestore();
     t.renderer.destroy();
   }
 });

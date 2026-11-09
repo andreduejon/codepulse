@@ -645,6 +645,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     openshiftFetchCommitData: openShift.fetchCommitDataForSHA,
     openshiftIsLoading: openShift.isLoading,
     openshiftLiveAge: openShift.liveAge,
+    openshiftConsoleUrl: () => openShiftConfig().consoleUrl,
     onOpenOpenShiftResource: handleOpenOpenShiftResource,
     get openshiftProviderStatus() {
       return state.providerStatus();
@@ -953,6 +954,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                         item.kind === "Pod" ? openShift.loadPodLog(item) : openShift.loadBuildLog(item, force)
                       }
                       followLog={openShift.followLog}
+                      consoleUrl={openShiftConfig().consoleUrl}
                       loadObject={(item, force) => openShift.loadResourceObject(item, force)}
                       onClose={closeToDetail}
                       onSearchActive={setLogSearchScope}

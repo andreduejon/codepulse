@@ -18,6 +18,7 @@
 import { createMemo, createSignal } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
 import { BUSY } from "../../utils/busy-text";
+import type { RowShortcut } from "../shared/open-row";
 import {
   ProviderRunTree,
   type ProviderTreeJob,
@@ -67,6 +68,8 @@ export interface ActionsDetailTabProps {
   setDetailCursorAction: (action: string | null) => void;
   /** Move the detail cursor to a specific index. */
   setDetailCursorIndex: (idx: number) => void;
+  /** Footer row shortcut (`o open` on rows with a web page). */
+  setDetailCursorShortcut?: (shortcut: RowShortcut | null) => void;
   /** Called when Enter is pressed on a job — opens the log dialog. */
   onOpenJobLog?: (job: GitHubJob, run: GitHubWorkflowRun, jobs?: GitHubJob[]) => void;
 }
@@ -86,6 +89,7 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
       runNumber: run.runNumber,
       startedAt: run.startedAt ?? null,
       updatedAt: run.updatedAt,
+      url: run.url,
       raw: run,
     })),
   );
@@ -99,7 +103,8 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
     completedAt: step.completedAt,
   });
 
-  const mapJob = (job: GitHubJob): ProviderTreeJob<GitHubJob> => ({
+  /** GitHub's job page hangs off its run's page, here and on GitHub Enterprise. */
+  const mapJob = (job: GitHubJob, runUrl: string | undefined): ProviderTreeJob<GitHubJob> => ({
     id: String(job.id),
     name: job.name,
     status: job.status,
@@ -107,6 +112,7 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
     startedAt: job.startedAt,
     completedAt: job.completedAt,
     steps: job.steps.map(mapStep),
+    url: runUrl ? `${runUrl}/job/${job.id}` : undefined,
     raw: job,
   });
 
@@ -120,9 +126,10 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
       detailFocused={props.detailFocused}
       setDetailCursorAction={props.setDetailCursorAction}
       setDetailCursorIndex={props.setDetailCursorIndex}
+      setDetailCursorShortcut={props.setDetailCursorShortcut}
       fetchJobsForRun={async (run, signal) => {
         const { jobs, error } = await props.fetchJobsForRun(run.raw, signal);
-        return { jobs: jobs.map(mapJob), error };
+        return { jobs: jobs.map(job => mapJob(job, run.url)), error };
       }}
       debugSource="GitHub"
       dataKey={props.sha}

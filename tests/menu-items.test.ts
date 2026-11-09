@@ -136,6 +136,7 @@ describe("buildOpenShiftProviderItems", () => {
     const cfg: OpenShiftMenuConfig = {
       enabled: true,
       serverUrl: "https://api.example.com:6443",
+      consoleUrl: "",
       tokenEnvVar: "OPENSHIFT_TOKEN",
       namespaces: [],
       commitShaAnnotation: "dev/commit-sha",
@@ -165,10 +166,41 @@ describe("buildOpenShiftProviderItems", () => {
     }
   });
 
+  it("Console takes an HTTPS console URL or nothing, after Server", () => {
+    const cfg: OpenShiftMenuConfig = {
+      enabled: true,
+      serverUrl: "https://api.example.com:6443",
+      consoleUrl: "",
+      tokenEnvVar: "OPENSHIFT_TOKEN",
+      namespaces: [],
+      commitShaAnnotation: "dev/commit-sha",
+      cacheLimit: 20,
+      fetchDepth: 20,
+      autoRefreshSeconds: 120,
+    };
+    let changed = cfg;
+    const items = buildOpenShiftProviderItems(cfg, next => {
+      changed = next;
+    });
+    const labels = items.map(item => ("label" in item ? item.label : ""));
+    expect(labels.indexOf("Console")).toBe(labels.indexOf("Server") + 1);
+    const console = items.find(item => item.kind === "editable" && item.label === "Console");
+    if (console?.kind !== "editable") throw new Error("Expected the Console field");
+    expect(console.valid?.()).toBe(true);
+    expect(console.isDraftValid?.("")).toBe(true);
+    expect(console.isDraftValid?.("https://console-openshift-console.apps.example.com")).toBe(true);
+    expect(console.isDraftValid?.("http://console.example.com")).toBe(false);
+    console.set(" https://console.example.com ");
+    expect(changed.consoleUrl).toBe("https://console.example.com");
+    console.set("");
+    expect(changed.consoleUrl).toBe("");
+  });
+
   it("cycles Auto refresh through off/2m/5m/10m", () => {
     const cfg: OpenShiftMenuConfig = {
       enabled: true,
       serverUrl: "https://api.example.com:6443",
+      consoleUrl: "",
       tokenEnvVar: "OPENSHIFT_TOKEN",
       namespaces: ["ns"],
       commitShaAnnotation: "dev/commit-sha",
@@ -195,6 +227,7 @@ describe("buildOpenShiftProviderItems", () => {
     const cfg: OpenShiftMenuConfig = {
       enabled: true,
       serverUrl: "https://api.example.com:6443",
+      consoleUrl: "",
       tokenEnvVar: "OPENSHIFT_TOKEN",
       namespaces: [],
       commitShaAnnotation: "dev/commit-sha",
@@ -374,6 +407,7 @@ describe("provider menu consistency", () => {
   const openshift: OpenShiftMenuConfig = {
     enabled: true,
     serverUrl: "https://api.example.com:6443",
+    consoleUrl: "",
     tokenEnvVar: "OPENSHIFT_TOKEN",
     namespaces: ["team-a"],
     commitShaAnnotation: "dev/commit-sha",
