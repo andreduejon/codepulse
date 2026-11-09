@@ -60,6 +60,9 @@ Missing environment variables fall back to the user's `AppData\Local` and
 **Cache limit** is the number of commit snapshots retained on disk, not the
 number of runs, builds, jobs, resources, or findings. Supported values are 10,
 20, 50, 100, 200, and 500. The default is 20. Fetch size remains 10, 20, or 50.
+GitHub Actions and Jenkins show every cached commit when they load, also below the
+fetch size, without asking the server about them. Showing a commit this way does
+not count as an access for eviction.
 
 Least-recently-accessed snapshots leave when the limit is exceeded, along with
 associated artifacts through a foreign-key cascade. Foreign keys are enabled on

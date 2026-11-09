@@ -268,11 +268,31 @@ export function useGitHubCI(opts: {
     return { firstError, failedSHAs };
   }
 
-  async function hydrateCachedCandidates(repoPath: string, shas: readonly string[], epoch: number): Promise<void> {
+  /**
+   * Read cached commits from disk (no network). With `everyCached`, also the commits below the fetch depth: the
+   * cache limit decides how many commits keep their runs, the fetch depth only how many GitHub is asked about.
+   * Those are peeked, not read, so showing them does not count as a use for eviction.
+   */
+  async function hydrateCachedCandidates(
+    repoPath: string,
+    shas: readonly string[],
+    epoch: number,
+    everyCached = false,
+  ): Promise<void> {
     if (!lifecycle.isCurrent(epoch, repoPath)) return;
     const pending = shas.filter(sha => !commitDataCache.has(sha));
-    const entries = await Promise.all(pending.map(async sha => ({ sha, entry: await disk.read(repoPath, sha) })));
+    const [read, peeked] = await Promise.all([
+      Promise.all(pending.map(async sha => ({ sha, entry: await disk.read(repoPath, sha) }))),
+      everyCached ? disk.peekAll(repoPath) : Promise.resolve([]),
+    ]);
     if (!lifecycle.isCurrent(epoch, repoPath)) return;
+    const targets = new Set(pending);
+    const entries = [
+      ...read,
+      ...peeked
+        .map(entry => ({ sha: entry.sha.toLowerCase(), entry }))
+        .filter(({ sha }) => !targets.has(sha) && !commitDataCache.has(sha)),
+    ];
     let changed = false;
     for (const { sha, entry } of entries) {
       if (!entry) continue;
@@ -361,7 +381,7 @@ export function useGitHubCI(opts: {
       if (retry) authFrozen = false;
       const allSHAs = shas ?? collectTopSHAs(state.graphRows(), config.fetchDepth);
       const repoPath = state.repoPath();
-      await hydrateCachedCandidates(repoPath, allSHAs, epoch);
+      await hydrateCachedCandidates(repoPath, allSHAs, epoch, true);
       if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return;
       // An explicit retry asks again for every target, also when a fetch it waited behind just marked them queried.
       const unqueried = retry ? allSHAs : allSHAs.filter(sha => !queriedSHAs.has(sha));

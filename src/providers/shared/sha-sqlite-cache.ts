@@ -209,6 +209,33 @@ export class ShaSqliteCache<T extends { sha: string }> {
     }
   }
 
+  /**
+   * Every valid snapshot of one repository, in one query and without marking any as used, so showing the whole
+   * cache does not change which snapshots are evicted first. Invalid rows are skipped (`read` deletes them).
+   */
+  async peekAll(repoPath: string): Promise<T[]> {
+    const { hash } = await repositoryIdentity(repoPath);
+    try {
+      return providerCacheDatabase(this.root)
+        .query<{ sha: string; payload: string }, [string, string]>(
+          "SELECT sha, payload FROM snapshots WHERE provider = ? AND repo_hash = ?",
+        )
+        .all(this.provider, hash)
+        .flatMap(row => {
+          let value: unknown;
+          try {
+            value = JSON.parse(row.payload);
+          } catch {
+            return [];
+          }
+          return this.isEntry(value) && value.sha.toLowerCase() === row.sha ? [value] : [];
+        });
+    } catch (error) {
+      reportCacheError(this.root, error);
+      return [];
+    }
+  }
+
   async read(repoPath: string, revision: string): Promise<T | null> {
     const epoch = writeEpochs.get(this.root) ?? 0;
     const sha = assertExactSha(revision);

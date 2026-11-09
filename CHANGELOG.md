@@ -61,6 +61,9 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- GitHub Actions and Jenkins showed cached commits only within the fetch size, so
+  with a larger cache limit older cached commits stayed empty until **Load commit**.
+  They now show every cached commit from disk, without extra requests.
 - Typing `q` in a menu field quit Codepulse; `f` on Fetch remote did nothing.
 - Closing compact details with the mouse left keyboard focus on the hidden panel.
 - Jenkins Reload and Fetch missed new builds on finished commits, per-commit reloads

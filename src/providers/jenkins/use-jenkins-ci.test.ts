@@ -8,6 +8,7 @@ import { BANNER } from "../../debug/banner";
 import { buildGraph } from "../../git/graph";
 import { closeProviderCaches } from "../shared/sha-sqlite-cache";
 import * as api from "./api";
+import { JenkinsCache } from "./cache";
 import type { JenkinsRun } from "./types";
 import { useJenkinsCI } from "./use-jenkins-ci";
 
@@ -44,7 +45,24 @@ afterEach(async () => {
   for (const finish of cleanup.splice(0).reverse()) await finish();
 });
 
-async function mountJenkins() {
+const commit = (hash: string, parent?: string) => ({
+  hash,
+  shortHash: hash.slice(0, 7),
+  parents: parent ? [parent] : [],
+  subject: "build",
+  body: "",
+  author: "Author",
+  authorEmail: "author@example.com",
+  authorDate: "2026-01-01T00:00:00Z",
+  committer: "Author",
+  committerEmail: "author@example.com",
+  commitDate: "2026-01-01T00:00:00Z",
+  refs: [],
+});
+
+async function mountJenkins(
+  options: { fetchDepth?: 10 | 20 | 50; older?: string[]; seed?: (root: string) => Promise<void> } = {},
+) {
   const original = process.env[TOKEN_ENV];
   process.env[TOKEN_ENV] = "test-token";
   cleanup.push(() => {
@@ -56,6 +74,7 @@ async function mountJenkins() {
     closeProviderCaches();
     await rm(root, { recursive: true, force: true });
   });
+  await options.seed?.(root);
   const graph = spyOn(api, "fetchJenkinsGraphDataForSHAs").mockResolvedValue(result([run()]));
   const full = spyOn(api, "fetchJenkinsDataForSHAs").mockResolvedValue(result([run()]));
   cleanup.push(() => graph.mockRestore());
@@ -70,24 +89,8 @@ async function mountJenkins() {
     const { state, actions } = createAppState();
     actions.setRepoPath("/repo/jenkins-hook");
     actions.setActiveProviderView("jenkins");
-    actions.setGraphRows(
-      buildGraph([
-        {
-          hash: SHA,
-          shortHash: SHA.slice(0, 7),
-          parents: [],
-          subject: "build",
-          body: "",
-          author: "Author",
-          authorEmail: "author@example.com",
-          authorDate: "2026-01-01T00:00:00Z",
-          committer: "Author",
-          committerEmail: "author@example.com",
-          commitDate: "2026-01-01T00:00:00Z",
-          refs: [],
-        },
-      ]),
-    );
+    const hashes = [SHA, ...(options.older ?? [])];
+    actions.setGraphRows(buildGraph(hashes.map((hash, index) => commit(hash, hashes[index + 1]))));
     const jenkins = useJenkinsCI({
       state,
       actions,
@@ -97,6 +100,7 @@ async function mountJenkins() {
         username: "user",
         tokenEnvVar: TOKEN_ENV,
         autoRefreshSeconds: 0,
+        ...(options.fetchDepth && { fetchDepth: options.fetchDepth }),
         jobs: [{ url: JOB_URL }],
       },
     });
@@ -227,4 +231,23 @@ test("a Reload queued behind a fetch of the same window still asks Jenkins again
   await settle(() => graph.mock.calls.length > 1);
   expect(graph.mock.calls.length).toBe(2);
   expect(graph.mock.calls[1]?.[3]).toContain(SHA);
+});
+
+test("loading shows every cached commit, also below the fetch depth, and asks Jenkins only for the depth", async () => {
+  // Ten newer commits fill the fetch depth of 10; the cached one sits below it.
+  const newer = Array.from({ length: 9 }, (_, i) => String(i + 1).repeat(40));
+  const older = "a".repeat(40);
+  const { state, graph } = await mountJenkins({
+    fetchDepth: 10,
+    older: [...newer, older],
+    seed: root =>
+      new JenkinsCache({ root, maxEntries: 200 }).write("/repo/jenkins-hook", {
+        sha: older,
+        runs: [run({ id: `${JOB_URL}#2`, headSha: older, runNumber: 2, url: `${JOB_URL}2/` })],
+      }),
+  });
+  await settle(() => state.graphBadges().has(older));
+  expect(state.graphBadges().has(older)).toBe(true);
+  expect(graph.mock.calls.length).toBeGreaterThan(0);
+  expect(graph.mock.calls.some(call => call[3].includes(older))).toBe(false);
 });

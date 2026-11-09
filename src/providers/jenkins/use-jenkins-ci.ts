@@ -162,10 +162,29 @@ export function useJenkinsCI(opts: {
     return { firstError: result.error, stale: false };
   }
 
-  async function hydrateCachedCandidates(repoPath: string, shas: readonly string[], epoch: number): Promise<void> {
+  /**
+   * Read cached commits from disk (no network). With `everyCached`, also the commits below the fetch depth that are
+   * not in memory yet: the cache limit decides how many commits keep their builds, the fetch depth only how many
+   * Jenkins is asked about. Those are peeked, not read, so showing them does not count as a use for eviction.
+   */
+  async function hydrateCachedCandidates(
+    repoPath: string,
+    shas: readonly string[],
+    epoch: number,
+    everyCached = false,
+  ): Promise<void> {
     if (!lifecycle.isCurrent(epoch, repoPath)) return;
-    const entries = await Promise.all(shas.map(sha => disk.read(repoPath, sha)));
+    const [read, peeked] = await Promise.all([
+      Promise.all(shas.map(sha => disk.read(repoPath, sha))),
+      everyCached ? disk.peekAll(repoPath) : Promise.resolve([]),
+    ]);
     if (!lifecycle.isCurrent(epoch, repoPath)) return;
+    const targets = new Set(shas.map(sha => sha.toLowerCase()));
+    const known = new Set([...runCache.values()].map(run => run.headSha.toLowerCase()));
+    const entries = [
+      ...read,
+      ...peeked.filter(entry => !targets.has(entry.sha.toLowerCase()) && !known.has(entry.sha.toLowerCase())),
+    ];
     let changed = false;
     for (const entry of entries) {
       if (!entry) continue;
@@ -239,7 +258,7 @@ export function useJenkinsCI(opts: {
       if (showStatus) actions.setProviderStatus("jenkins", providerLoading());
       const window = shas ?? collectTopSHAs(state.graphRows(), config.fetchDepth);
       const repoPath = state.repoPath();
-      await hydrateCachedCandidates(repoPath, window, epoch);
+      await hydrateCachedCandidates(repoPath, window, epoch, true);
       if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return;
       // An explicit retry asks again for every target, also when a fetch it waited behind just marked them queried.
       const target = retry ? window : window.filter(sha => !queriedSHAs.has(sha));

@@ -8,6 +8,7 @@ import { BANNER } from "../../debug/banner";
 import { buildGraph } from "../../git/graph";
 import { closeProviderCaches } from "../shared/sha-sqlite-cache";
 import * as api from "./api";
+import { GitHubCache } from "./cache";
 import type { GitHubWorkflowRun } from "./types";
 import { useGitHubCI } from "./use-github-ci";
 
@@ -38,7 +39,24 @@ const settle = async (until: () => boolean = () => true) => {
   await Bun.sleep(5);
 };
 
-async function mountGitHub() {
+const commit = (hash: string, parent?: string) => ({
+  hash,
+  shortHash: hash.slice(0, 7),
+  parents: parent ? [parent] : [],
+  subject: "ci",
+  body: "",
+  author: "Author",
+  authorEmail: "author@example.com",
+  authorDate: "2026-01-01T00:00:00Z",
+  committer: "Author",
+  committerEmail: "author@example.com",
+  commitDate: "2026-01-01T00:00:00Z",
+  refs: [],
+});
+
+async function mountGitHub(
+  options: { fetchDepth?: 10 | 20 | 50; older?: string[]; seed?: (root: string) => Promise<void> } = {},
+) {
   const original = process.env[TOKEN_ENV];
   process.env[TOKEN_ENV] = "test-token";
   cleanup.push(() => {
@@ -50,6 +68,7 @@ async function mountGitHub() {
     closeProviderCaches();
     await rm(root, { recursive: true, force: true });
   });
+  await options.seed?.(root);
   const ci = spyOn(api, "fetchCIDataForSHAs").mockResolvedValue({ data: [run()], jobs: new Map(), error: null });
   cleanup.push(() => ci.mockRestore());
   let mounted!: {
@@ -63,29 +82,18 @@ async function mountGitHub() {
     actions.setRepoPath("/repo/github-hook");
     actions.setRemoteUrl("https://github.com/o/r.git");
     actions.setActiveProviderView("github-actions");
-    actions.setGraphRows(
-      buildGraph([
-        {
-          hash: SHA,
-          shortHash: SHA.slice(0, 7),
-          parents: [],
-          subject: "ci",
-          body: "",
-          author: "Author",
-          authorEmail: "author@example.com",
-          authorDate: "2026-01-01T00:00:00Z",
-          committer: "Author",
-          committerEmail: "author@example.com",
-          commitDate: "2026-01-01T00:00:00Z",
-          refs: [],
-        },
-      ]),
-    );
+    const hashes = [SHA, ...(options.older ?? [])];
+    actions.setGraphRows(buildGraph(hashes.map((hash, index) => commit(hash, hashes[index + 1]))));
     const github = useGitHubCI({
       state,
       actions,
       cacheRoot: root,
-      config: { enabled: true, tokenEnvVar: TOKEN_ENV, autoRefreshSeconds: 0 },
+      config: {
+        enabled: true,
+        tokenEnvVar: TOKEN_ENV,
+        autoRefreshSeconds: 0,
+        ...(options.fetchDepth && { fetchDepth: options.fetchDepth }),
+      },
     });
     mounted = { state, actions, github };
   });
@@ -305,4 +313,23 @@ test("a window refresh queued after a Reload keeps the Reload's commit outside t
     clock.mockRestore();
   }
   expect(ci.mock.calls.slice(calls).some(call => call[2].includes(outside))).toBe(true);
+});
+
+test("loading shows every cached commit, also below the fetch depth, and asks GitHub only for the depth", async () => {
+  // Ten newer commits fill the fetch depth of 10; the cached one sits below it.
+  const newer = Array.from({ length: 9 }, (_, i) => String(i + 1).repeat(40));
+  const older = "a".repeat(40);
+  const { state, ci } = await mountGitHub({
+    fetchDepth: 10,
+    older: [...newer, older],
+    seed: root =>
+      new GitHubCache({ root, maxEntries: 200 }).write("/repo/github-hook", {
+        sha: older,
+        runs: [run({ id: 22, headSha: older, status: "completed", conclusion: "success", event: "push" })],
+      }),
+  });
+  await settle(() => state.graphBadges().has(older));
+  expect(state.graphBadges().has(older)).toBe(true);
+  expect(ci.mock.calls.length).toBeGreaterThan(0);
+  expect(ci.mock.calls.some(call => call[2].includes(older))).toBe(false);
 });

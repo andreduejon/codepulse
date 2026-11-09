@@ -604,3 +604,25 @@ test("mergeById lets incoming values win without dropping other IDs", () => {
     { id: "b", n: 3 },
   ]);
 });
+
+describe("peekAll", () => {
+  test("returns every snapshot of one repository without marking any as used", async () => {
+    const root = await cacheRoot();
+    const disk = cache(root);
+    const a = "a".repeat(40);
+    const b = "b".repeat(40);
+    await disk.write("/repo", { sha: a, value: "a" });
+    await disk.write("/repo", { sha: b, value: "b" });
+    await disk.write("/other", { sha: a, value: "other" });
+    setAccess(root, a, 1_000);
+    setAccess(root, b, 2_000);
+    const entries = await disk.peekAll("/repo");
+    expect(entries.map(entry => entry.value).sort()).toEqual(["a", "b"]);
+    // Eviction order stays as it was: peeking is not a use.
+    const accessed = providerCacheDatabase(root)
+      .query<{ accessed_at: number }, []>("SELECT accessed_at FROM snapshots ORDER BY accessed_at")
+      .all()
+      .map(row => row.accessed_at);
+    expect(accessed).toEqual([1_000, 1_000, 2_000]);
+  });
+});
