@@ -402,6 +402,22 @@ describe("fetchRunJobs", () => {
     expect(jobs[0].steps[1].number).toBe(2);
   });
 
+  it("asks for the jobs of every attempt and keeps each job's attempt", async () => {
+    let url = "";
+    mockFetch(
+      mock(async (input: RequestInfo | URL) => {
+        url = String(input);
+        return new Response(
+          JSON.stringify({ jobs: [makeApiJob({ id: 1, run_attempt: 1 }), makeApiJob({ id: 2, run_attempt: 2 })] }),
+          { status: 200 },
+        );
+      }),
+    );
+    const { jobs } = await fetchRunJobs(TEST_REPO, TEST_TOKEN, 123);
+    expect(url).toContain("/actions/runs/123/jobs?per_page=100&filter=all");
+    expect(jobs.map(job => job.runAttempt)).toEqual([1, 2]);
+  });
+
   it("returns explicit error (no throw) on 404", async () => {
     mockFetch(mock(async () => new Response(null, { status: 404 })));
     const { jobs, error } = await fetchRunJobs(TEST_REPO, TEST_TOKEN, 999);

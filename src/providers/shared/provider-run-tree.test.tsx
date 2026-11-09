@@ -211,6 +211,54 @@ test("a job's notes follow its steps under their label; Enter opens one and o op
   }
 });
 
+test("a re-run shows its latest attempt's jobs; earlier attempts fold into rows at the end", async () => {
+  const openUrl = spyOn(browser, "openUrl").mockImplementation(() => {});
+  const t = await renderTree();
+  const press = (name: string) => t.navRef.handleKey?.({ name, ctrl: false, meta: false } as KeyEvent) ?? false;
+  const attemptJob = (id: string, name: string, attempt: number, conclusion: string) => ({
+    ...job("completed", conclusion, "completed"),
+    id,
+    name,
+    attempt,
+  });
+  try {
+    t.setJobs([
+      attemptJob("j1", "lint", 1, "success"),
+      attemptJob("j2", "test-first", 1, "failure"),
+      attemptJob("j3", "lint", 2, "success"),
+      attemptJob("j4", "test-again", 2, "success"),
+    ]);
+    t.setRuns([run("completed", "success", "2026-01-01T00:05:00Z")]);
+    t.setCursor(1);
+    await t.settle();
+    t.navRef.activateCurrentItem();
+    await t.settle();
+    let rows = t.captureCharFrame().split("\n");
+    expect(rows.find(row => row.includes("CI #7"))).toContain("CI #7  attempt 2");
+    expect(rows.some(row => row.includes("test-again"))).toBe(true);
+    expect(rows.some(row => row.includes("test-first"))).toBe(false);
+    const attemptRow = rows.find(row => row.includes("attempt 1")) ?? "";
+    expect(attemptRow).toMatch(/└─ ▸ attempt 1/);
+    expect(attemptRow).toContain("✗");
+    // Reload, run, two jobs, then the attempt row.
+    t.setCursor(4);
+    await t.settle();
+    expect(press("o")).toBe(true);
+    expect(openUrl).toHaveBeenLastCalledWith(`${RUN_URL}/attempts/1`);
+    t.navRef.activateCurrentItem();
+    await t.settle();
+    rows = t.captureCharFrame().split("\n");
+    expect(rows.find(row => row.includes("attempt 1"))).toMatch(/└─ ▾ attempt 1/);
+    expect(rows.find(row => row.includes("test-first"))).toMatch(/ {6}└─ test-first/);
+    expect(rows.findIndex(row => row.includes("test-again"))).toBeLessThan(
+      rows.findIndex(row => row.includes("attempt 1")),
+    );
+  } finally {
+    openUrl.mockRestore();
+    t.renderer.destroy();
+  }
+});
+
 test("an expanded run whose status changes on auto refresh reloads its jobs", async () => {
   const t = await renderTree();
   try {

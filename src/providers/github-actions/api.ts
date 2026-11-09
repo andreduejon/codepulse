@@ -218,6 +218,8 @@ function mapApiJob(j: GitHubApiJob): GitHubJob {
     conclusion: j.conclusion,
     startedAt: j.started_at ?? null,
     completedAt: j.completed_at ?? null,
+    // Hosts that do not report attempts have one attempt per run.
+    runAttempt: typeof j.run_attempt === "number" ? j.run_attempt : 1,
     steps: (j.steps ?? []).map(
       (s): GitHubStep => ({
         name: s.name,
@@ -758,7 +760,8 @@ export async function fetchRunJobs(
 ): Promise<GitHubJobFetchResult> {
   const headers = createHeaders(token);
   const origin = apiBase(repo);
-  let url: string | null = `${origin}/actions/runs/${runId}/jobs?per_page=100`;
+  // Every attempt's jobs, so a re-run can show what the earlier attempts did.
+  let url: string | null = `${origin}/actions/runs/${runId}/jobs?per_page=100&filter=all`;
   const jobs: GitHubJob[] = [];
 
   try {

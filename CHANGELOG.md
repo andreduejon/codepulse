@@ -25,6 +25,9 @@ All notable changes to this project will be documented in this file.
 - GitHub Actions: a failed job lists its annotations after its steps (failures and warnings, with file and line).
   Enter opens the job log with the message searched; they are read once per failed job and cached.
 
+- GitHub Actions re-runs: the run row names its attempt (`attempt 2`), and earlier attempts are folded rows at the
+  end of the run that expand to their jobs and logs.
+
 ### Changed
 
 - Graph ref badges take only their own width, so short names (`main`, `dev`) are no longer folded into `+N` for

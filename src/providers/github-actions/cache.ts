@@ -55,7 +55,8 @@ function isGitHubJob(value: unknown): value is GitHubJob {
     (job.completedAt === null || typeof job.completedAt === "string") &&
     Array.isArray(job.steps) &&
     job.steps.every(isGitHubStep) &&
-    (job.annotations === undefined || (Array.isArray(job.annotations) && job.annotations.every(isGitHubAnnotation)))
+    (job.annotations === undefined || (Array.isArray(job.annotations) && job.annotations.every(isGitHubAnnotation))) &&
+    (job.runAttempt === undefined || typeof job.runAttempt === "number")
   );
 }
 

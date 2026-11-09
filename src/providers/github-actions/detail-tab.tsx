@@ -116,6 +116,7 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
     url: runUrl ? `${runUrl}/job/${job.id}` : undefined,
     notes: annotationNotes(job.annotations ?? []),
     notesLabel: "Annotations",
+    attempt: job.runAttempt,
     raw: job,
   });
 

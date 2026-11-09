@@ -51,6 +51,16 @@ cursor on its first failed job. Cancelled and skipped runs show as a grey chip i
 the graph. In the job log, `r` reloads the log (newer output of a running job, or a retry
 after a failure; a finished job's cached log does not change) and `o` opens the run in the browser.
 
+### Re-runs
+
+After a re-run, the run row says which attempt its jobs are from (`CI #812  attempt 2`).
+Its jobs are the latest attempt's; earlier attempts are the last rows of the run,
+newest first (`▸ attempt 1` with its status), and expand to their jobs and logs.
+`o` on an attempt opens that attempt's page. The jobs of every attempt come from
+one REST request (`filter=all`); jobs that GraphQL listed carry no attempt, so the
+first expand of such a run asks REST once and caches the answer. The graph chip
+keeps showing the latest attempt.
+
 ### Annotations
 
 A failed job lists its annotations after its steps, under **Annotations**:

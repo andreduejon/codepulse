@@ -9,7 +9,7 @@ import { buildGraph } from "../../git/graph";
 import { closeProviderCaches } from "../shared/sha-sqlite-cache";
 import * as api from "./api";
 import { GitHubCache } from "./cache";
-import type { GitHubWorkflowRun } from "./types";
+import type { GitHubJob, GitHubWorkflowRun } from "./types";
 import { useGitHubCI } from "./use-github-ci";
 
 const SHA = "e".repeat(40);
@@ -55,7 +55,13 @@ const commit = (hash: string, parent?: string) => ({
 });
 
 async function mountGitHub(
-  options: { fetchDepth?: 10 | 20 | 50; older?: string[]; seed?: (root: string) => Promise<void> } = {},
+  options: {
+    fetchDepth?: 10 | 20 | 50;
+    older?: string[];
+    seed?: (root: string) => Promise<void>;
+    runs?: GitHubWorkflowRun[];
+    jobs?: Map<number, GitHubJob[]>;
+  } = {},
 ) {
   const original = process.env[TOKEN_ENV];
   process.env[TOKEN_ENV] = "test-token";
@@ -69,7 +75,11 @@ async function mountGitHub(
     await rm(root, { recursive: true, force: true });
   });
   await options.seed?.(root);
-  const ci = spyOn(api, "fetchCIDataForSHAs").mockResolvedValue({ data: [run()], jobs: new Map(), error: null });
+  const ci = spyOn(api, "fetchCIDataForSHAs").mockResolvedValue({
+    data: options.runs ?? [run()],
+    jobs: options.jobs ?? new Map(),
+    error: null,
+  });
   cleanup.push(() => ci.mockRestore());
   let mounted!: {
     state: ReturnType<typeof createAppState>["state"];
@@ -257,6 +267,33 @@ test("annotations that could not be read are asked for again next time", async (
   const finished = run({ status: "completed", conclusion: "failure" });
   expect((await github.fetchJobsForRun(finished)).jobs[0].annotations).toBeUndefined();
   expect((await github.fetchJobsForRun(finished)).jobs[0].annotations).toHaveLength(1);
+});
+
+test("jobs from GraphQL (no attempt numbers) are asked of REST once, to learn about re-runs", async () => {
+  const graphqlJob: GitHubJob = {
+    id: 7,
+    name: "build",
+    status: "completed",
+    conclusion: "success",
+    startedAt: null,
+    completedAt: null,
+    steps: [],
+  };
+  const finished = run({ status: "completed", conclusion: "success", event: "push" });
+  const { github } = await mountGitHub({ runs: [finished], jobs: new Map([[finished.id, [graphqlJob]]]) });
+  const rest = spyOn(api, "fetchRunJobs").mockResolvedValue({
+    jobs: [
+      { ...graphqlJob, id: 6, runAttempt: 1 },
+      { ...graphqlJob, runAttempt: 2 },
+    ],
+    error: null,
+  });
+  cleanup.push(() => rest.mockRestore());
+  await settle();
+  const first = await github.fetchJobsForRun(finished);
+  expect(first.jobs.map(job => job.runAttempt)).toEqual([1, 2]);
+  await github.fetchJobsForRun(finished);
+  expect(rest).toHaveBeenCalledTimes(1);
 });
 
 test("a fetch cancelled by a repository switch leaves the new repository's loading status alone", async () => {

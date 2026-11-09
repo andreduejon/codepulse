@@ -469,8 +469,16 @@ export function useGitHubCI(opts: {
 
   // ── On-demand job fetching ────────────────────────────────────────────
   /** Failed jobs say why: their annotations are read once (a job is a check run) and kept with the job. */
-  const needsAnnotations = (job: GitHubJob) => job.conclusion === "failure" && job.annotations === undefined;
+  const latestAttempt = (jobs: readonly GitHubJob[]) =>
+    jobs.reduce((max, job) => Math.max(max, job.runAttempt ?? 1), 1);
+  /** Only the latest attempt's failed jobs: earlier attempts are history, folded away in the tree. */
+  const annotationsMissing = (jobs: readonly GitHubJob[]) => {
+    const latest = latestAttempt(jobs);
+    return (job: GitHubJob) =>
+      job.conclusion === "failure" && job.annotations === undefined && (job.runAttempt ?? 1) === latest;
+  };
   async function withAnnotations(jobs: GitHubJob[], signal?: AbortSignal): Promise<GitHubJob[]> {
+    const needsAnnotations = annotationsMissing(jobs);
     if (!jobs.some(needsAnnotations)) return jobs;
     const repo = cachedGitHubRepo();
     const token = getGitHubToken(config.tokenEnvVar);
@@ -492,8 +500,10 @@ export function useGitHubCI(opts: {
     const repoPath = state.repoPath();
     // Only finished jobs are final; a cached snapshot with a running job or step is fetched again.
     const cached = jobsCache.get(run.id);
-    if (cached && jobsSettled(cached)) {
-      if (!cached.some(needsAnnotations)) return { jobs: cached, error: null };
+    // Jobs listed by GraphQL (or cached before v0.17) carry no attempt: REST is asked once, to learn about re-runs.
+    const attemptsKnown = !!cached && cached.every(job => job.runAttempt !== undefined);
+    if (cached && jobsSettled(cached) && attemptsKnown) {
+      if (!cached.some(annotationsMissing(cached))) return { jobs: cached, error: null };
       const annotated = await withAnnotations(cached, signal);
       if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
       if (annotated.some((job, index) => job !== cached[index])) {
@@ -503,17 +513,21 @@ export function useGitHubCI(opts: {
       return { jobs: annotated, error: null };
     }
     if (!lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
+    // Finished GraphQL jobs still show when REST cannot be asked about attempts.
+    const fallback = cached && jobsSettled(cached) ? { jobs: cached, error: null } : null;
     // Frozen after a 401: no requests until Reload; say why instead of asking GitHub again.
-    if (authFrozen) return { jobs: [], error: BANNER.github.tokenExpired };
+    if (authFrozen) return fallback ?? { jobs: [], error: BANNER.github.tokenExpired };
 
     const repo = cachedGitHubRepo();
     const token = getGitHubToken(config.tokenEnvVar);
-    if (!repo || !token) return { jobs: [], error: BANNER.github.unavailable };
+    if (!repo || !token) return fallback ?? { jobs: [], error: BANNER.github.unavailable };
 
     const fetched = await lifecycle.runRequest(signal => fetchRunJobs(repo, token, run.id, signal), signal);
     if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
-    if (fetched.error) return fetched;
-    const jobs = await withAnnotations(fetched.jobs, signal);
+    if (fetched.error) return fallback ?? fetched;
+    // REST lists every attempt, so its jobs know theirs (1 where the host does not say).
+    const listed = fetched.jobs.map(job => (job.runAttempt === undefined ? { ...job, runAttempt: 1 } : job));
+    const jobs = await withAnnotations(listed, signal);
     if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
     if (run.status === "completed" && jobsSettled(jobs)) {
       if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };

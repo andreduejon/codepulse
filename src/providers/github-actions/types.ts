@@ -24,6 +24,8 @@ export interface GitHubApiJob {
   started_at: string | null;
   completed_at: string | null;
   steps: GitHubApiStep[];
+  /** Which attempt of the run the job belongs to (re-runs). */
+  run_attempt?: number;
 }
 
 /** Raw step within a job. */
@@ -76,6 +78,8 @@ export interface GitHubJob {
   steps: GitHubStep[];
   /** A failed job's annotations, once read (an Actions job is a check run with the same id). */
   annotations?: GitHubAnnotation[];
+  /** The run attempt (1 for the first run). Unknown for jobs listed by GraphQL, which lists the latest only. */
+  runAttempt?: number;
 }
 
 export interface GitHubJobFetchResult {
