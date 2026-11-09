@@ -20,6 +20,7 @@
 	"type": "module",
 	"scripts": {
 		"start": "bun run src/index.tsx",
+		"demo": "bun run scripts/demo/run.ts",
 		"build": "bun run scripts/build.ts",
 		"test": "bun test",
 		"lint": "biome lint src/ tests/ scripts/",
