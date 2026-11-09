@@ -484,3 +484,29 @@ test("a Deployment cycles object and events; events that cannot load, or none, s
     empty.renderer.destroy();
   }
 });
+
+test("a followed log that drops its oldest lines keeps the selected hit", async () => {
+  const d = await renderResource("Pod", true);
+  const lines = (from: number, to: number) =>
+    Array.from({ length: to - from + 1 }, (_, i) => {
+      const n = from + i;
+      return n === 3 || n === 7 ? `line ${n} hit` : `line ${n}`;
+    }).join("\n");
+  try {
+    d.streams[0].emit(lines(1, 10));
+    await d.flush();
+    await d.key("/");
+    await d.mockInput.typeText("hit");
+    await d.flush();
+    await d.key("RETURN");
+    await d.key("n");
+    expect(d.frame()).toContain("2/2");
+    // The follow keeps the last lines: the oldest one goes, a new one arrives.
+    d.streams[0].emit(lines(2, 11));
+    await d.flush();
+    await d.flush();
+    expect(d.frame()).toContain("2/2");
+  } finally {
+    d.renderer.destroy();
+  }
+});

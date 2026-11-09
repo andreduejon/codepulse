@@ -9,6 +9,26 @@ import { hasScrollLayout, scheduleScrollIntoView, scrollElementIntoView } from "
  * query and returns to the keys, `n` / `N` move to the next / previous hit, Esc clears the search (a second Esc
  * then closes the dialog as usual). Hits are case-insensitive.
  */
+/**
+ * How many lines a text lost at its start: `after` begins where `before` continued (checked on a few lines). 0 when it
+ * did not simply drop lines (another log, a refresh).
+ */
+export function linesDropped(before: readonly string[], after: readonly string[]): number {
+  if (before.length === 0 || after.length === 0 || before[0] === after[0]) return 0;
+  const probe = Math.min(3, after.length);
+  for (let shift = 1; shift < before.length; shift++) {
+    let same = true;
+    for (let i = 0; i < probe && shift + i < before.length; i++) {
+      if (before[shift + i] !== after[i]) {
+        same = false;
+        break;
+      }
+    }
+    if (same) return shift;
+  }
+  return 0;
+}
+
 export function useLogSearch(opts: {
   texts: () => readonly string[];
   rowAt: (index: number) => Renderable | undefined;
@@ -60,12 +80,28 @@ export function useLogSearch(opts: {
     ),
   );
   // The text changed under a kept query (other job, view or refresh): keep the hit if it still matches, else
-  // move to the first hit, so the position never points at a line that no longer matches.
+  // move to the first hit, so the position never points at a line that no longer matches. A followed log drops its
+  // oldest lines as new ones arrive: the selected hit moves up with its line.
+  let previousTexts: readonly string[] = untrack(opts.texts);
   createEffect(
     on(
       matches,
       hits => {
+        const before = previousTexts;
+        const now = untrack(opts.texts);
+        previousTexts = now;
         if (!untrack(term)) return;
+        const selected = untrack(current);
+        const shift = linesDropped(before, now);
+        if (
+          shift > 0 &&
+          selected !== null &&
+          hits.includes(selected - shift) &&
+          now[selected - shift] === before[selected]
+        ) {
+          setCurrent(selected - shift);
+          return;
+        }
         const at = untrack(current);
         if (at !== null && hits.includes(at)) return;
         // No current hit (or it stopped matching): take the first one as soon as one exists.
