@@ -215,6 +215,11 @@ export function useOpenShift(opts: {
   const seeds = new Map<string, OpenShiftCommitData>();
   /** Commits in the disk cache at the last hydration: a refresh keeps them, also below the fetch depth. */
   const cachedSHAs = new Set<string>();
+  /**
+   * Older commits only shown from the cache. A refresh does not save them again (that would mark every one as used
+   * for eviction); opening one makes it a commit the user works with, saved like before.
+   */
+  const shownFromCache = new Set<string>();
   const queriedSHAs = new Set<string>();
   const [version, setVersion] = createSignal(0);
   /** Live list/watch state: `loading` while a live list is requested, `live` while watches stream. */
@@ -315,6 +320,7 @@ export function useOpenShift(opts: {
       commits.clear();
       seeds.clear();
       cachedSHAs.clear();
+      shownFromCache.clear();
       live.listed = null;
       setLiveState("idle");
       setWatchEpoch(value => value + 1);
@@ -345,6 +351,7 @@ export function useOpenShift(opts: {
       if (!lifecycle.isCurrent(epoch, repoPath)) return;
       if (!entry) continue;
       commits.set(sha, commitDataFromCacheEntry(entry));
+      if (!window.has(sha)) shownFromCache.add(sha);
       changed = true;
     }
     if (changed) setVersion(v => v + 1);
@@ -378,7 +385,9 @@ export function useOpenShift(opts: {
     const allowed = eligibleSHAs();
     const next = new Map<string, OpenShiftCommitData>();
     for (const [sha, commit] of data) {
-      if (allowed.has(sha.toLowerCase()) || commits.has(sha) || commits.has(sha.toLowerCase())) next.set(sha, commit);
+      const key = sha.toLowerCase();
+      if (allowed.has(key) || ((commits.has(sha) || commits.has(key)) && !shownFromCache.has(key)))
+        next.set(sha, commit);
     }
     return next.size > 0 ? next : data;
   }
@@ -599,6 +608,7 @@ export function useOpenShift(opts: {
     fetchCommitDataForSHA: async (sha, force) => {
       if (opts.suspended?.()) return;
       try {
+        shownFromCache.delete(sha.toLowerCase());
         if (!adoptCommit(sha) && !force) return;
         if (force) {
           // Setup missing: nothing can load, so do not look busy (the row is disabled; guard the direct call too).

@@ -280,6 +280,39 @@ describe("OpenShift cache below the fetch depth", () => {
   });
 });
 
+describe("OpenShift cache below the fetch depth, saving", () => {
+  test("a refresh does not save cached older commits again; one the user opened is saved like before", async () => {
+    const newer = Array.from({ length: 9 }, (_, i) => String(i + 1).repeat(40));
+    const older = "b".repeat(40);
+    const olderBuild = { ...build, id: "Build:ns:app-0", name: "app-0", commitSha: older };
+    const mounted = mountOpenShift(false, true, {
+      fetchDepth: 10,
+      older: [...newer, older],
+      cached: [{ sha: older, builds: [olderBuild] }],
+    });
+    // The cluster still lists the older commit's Build: the inventory returns it beside the window's.
+    mounted.inventory.mockResolvedValue({
+      data: new Map([
+        [SHA, commitDataFromCacheEntry({ sha: SHA, builds: [{ ...build, commitSha: SHA }] })],
+        [older, commitDataFromCacheEntry({ sha: older, builds: [olderBuild] })],
+      ]),
+      error: null,
+      failures: [],
+      successfulRequests: 1,
+    });
+    for (let i = 0; i < 100 && !mounted.state.graphBadges().has(older); i++) await Bun.sleep(5);
+    const savedOlder = () => mounted.cacheWrite.mock.calls.some(call => call[1].sha === older);
+    await mounted.openShift.refresh();
+    await Bun.sleep(5);
+    // Only shown: saving it again on every refresh would mark it as used.
+    expect(savedOlder()).toBe(false);
+    await mounted.openShift.fetchCommitDataForSHA(older);
+    await mounted.openShift.refresh();
+    await Bun.sleep(5);
+    expect(savedOlder()).toBe(true);
+  });
+});
+
 describe("OpenShift live list failures", () => {
   const failedList = (successfulRequests: number, error: string): api.OpenShiftListedInventory => ({
     resources: [],
