@@ -11,6 +11,14 @@ All notable changes to this project will be documented in this file.
   rows that have a page.
 - OpenShift **Console** setting (optional): the web console URL that `o` uses for namespaces and resources, in the
   detail panel and the resource dialog. It cannot be worked out from the API server URL.
+- OpenShift rows say why they fail, muted after the name: a Pod's container state, last exit and restarts
+  (`CrashLoopBackOff · exit 1 · 14 restarts`), a workload's ready count and failing condition
+  (`1/3 ready · ProgressDeadlineExceeded`), a Build's reason (`DockerBuildFailed`). In a narrow panel the reason
+  is cut before the name, and the selected row scrolls to show it.
+
+### Fixed
+
+- A long OpenShift resource name no longer pushes its status mark out of a narrow detail panel.
 
 ## [0.16.0] - 2026-11-09
 

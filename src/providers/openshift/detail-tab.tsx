@@ -6,6 +6,7 @@ import { BUSY } from "../../utils/busy-text";
 import { ProviderActionRow, ProviderSummaryRow, ScrollingLabel, useDetailRowMouse } from "../shared/detail-rows";
 import { type RowShortcut, useOpenRowShortcut } from "../shared/open-row";
 import { type StatusCategory, statusIcon } from "../shared/status";
+import { openShiftFailureReason } from "./api";
 import { openShiftConsoleUrl } from "./console";
 import { openShiftStatusColor } from "./graph-columns";
 import {
@@ -88,6 +89,12 @@ function groupedImageStreams(resources: OpenShiftResource[]): { stream: string; 
 function compactResourceName(resource: OpenShiftResource): string {
   if (resource.kind === "ImageStreamTag") return imageStreamParts(resource).tag;
   return resource.name;
+}
+
+/** Muted text after a resource's name: whether it comes from the cache and why it fails. */
+function resourceTail(resource: OpenShiftResource): string {
+  const reason = openShiftFailureReason(resource);
+  return `${isCachedOpenShiftResource(resource) ? " (cached)" : ""}${reason ? `  ${reason}` : ""}`;
 }
 
 function resourcesForFlatItems(ns: NamespaceData): OpenShiftResource[] {
@@ -280,15 +287,12 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
         <ScrollingLabel
           selectable={!props.mouseEnabled}
           text={compactResourceName(resource)}
+          tail={resourceTail(resource)}
+          tailFg={t().foregroundMuted}
           active={isCursored()}
           fg={textColor()}
           grow={false}
         />
-        <Show when={isCachedOpenShiftResource(resource)}>
-          <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {" (cached)"}
-          </text>
-        </Show>
         <box flexGrow={1} />
         <text selectable={!props.mouseEnabled} flexShrink={0} width={2} wrapMode="none" fg={color()}>
           {statusMark(resource.status).padStart(2)}

@@ -188,30 +188,37 @@ function workloadStatus(item: unknown): OpenShiftStatus {
   return "unknown";
 }
 
+const FATAL_WAITING_REASONS = new Set([
+  "CrashLoopBackOff",
+  "ImagePullBackOff",
+  "ErrImagePull",
+  "CreateContainerError",
+  "CreateContainerConfigError",
+  "InvalidImageName",
+  "RunContainerError",
+]);
+
+/** A container that makes its Pod fail: waiting on a fatal reason, or ended with a non-zero exit code. */
+function isFatalContainer(container: unknown): boolean {
+  const state = obj(obj(container)?.state) ?? {};
+  const waitingReason = str(obj(state.waiting)?.reason);
+  const terminated = obj(state.terminated);
+  return (
+    (waitingReason !== undefined && FATAL_WAITING_REASONS.has(waitingReason)) ||
+    (terminated?.reason !== "Completed" && typeof terminated?.exitCode === "number" && terminated.exitCode !== 0)
+  );
+}
+
+function podContainerStatuses(pod: unknown): unknown[] {
+  const status = obj(obj(pod)?.status) ?? {};
+  return [...arr(status.initContainerStatuses), ...arr(status.containerStatuses)];
+}
+
 function podStatus(pod: unknown): OpenShiftStatus {
   const phase = str(obj(pod)?.status && obj(obj(pod)?.status)?.phase);
   if (str(metadata(pod).deletionTimestamp)) return "unknown";
   const status = obj(obj(pod)?.status) ?? {};
-  const statuses = [...arr(status.initContainerStatuses), ...arr(status.containerStatuses)];
-  const fatalReasons = new Set([
-    "CrashLoopBackOff",
-    "ImagePullBackOff",
-    "ErrImagePull",
-    "CreateContainerError",
-    "CreateContainerConfigError",
-    "InvalidImageName",
-    "RunContainerError",
-  ]);
-  const hasFatalContainer = statuses.some(container => {
-    const state = obj(obj(container)?.state) ?? {};
-    const waitingReason = str(obj(state.waiting)?.reason);
-    const terminated = obj(state.terminated);
-    return (
-      (waitingReason !== undefined && fatalReasons.has(waitingReason)) ||
-      (terminated?.reason !== "Completed" && typeof terminated?.exitCode === "number" && terminated.exitCode !== 0)
-    );
-  });
-  if (hasFatalContainer) return "fail";
+  if (podContainerStatuses(pod).some(isFatalContainer)) return "fail";
   if (phase === "Failed") return "fail";
   if (phase === "Succeeded") return "pass";
   if (phase === "Pending") return "running";
@@ -220,6 +227,73 @@ function podStatus(pod: unknown): OpenShiftStatus {
     return obj(ready)?.status === "True" ? "pass" : "running";
   }
   return "unknown";
+}
+
+const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
+
+/** How a container ended: its reason when it says more than "Error", otherwise its exit code. */
+function terminatedText(terminated: Record<string, unknown> | null | undefined): string | undefined {
+  if (!terminated) return undefined;
+  const reason = str(terminated.reason);
+  if (reason && reason !== "Error" && reason !== "Completed") return reason;
+  return typeof terminated.exitCode === "number" && terminated.exitCode !== 0
+    ? `exit ${terminated.exitCode}`
+    : undefined;
+}
+
+/** `CrashLoopBackOff · exit 1 · 14 restarts`, `OOMKilled · exit 137`, `Evicted`: why a failing Pod fails. */
+function podFailureReason(pod: unknown): string | undefined {
+  const container = podContainerStatuses(pod).find(isFatalContainer);
+  if (container) {
+    const state = obj(obj(container)?.state) ?? {};
+    const restarts = obj(container)?.restartCount;
+    const waiting = str(obj(state.waiting)?.reason);
+    const terminated = obj(state.terminated);
+    const parts = waiting
+      ? [waiting, terminatedText(obj(obj(obj(container)?.lastState)?.terminated))]
+      : [
+          str(terminated?.reason) ?? "Error",
+          typeof terminated?.exitCode === "number" ? `exit ${terminated.exitCode}` : undefined,
+        ];
+    if (typeof restarts === "number" && restarts > 0) parts.push(plural(restarts, "restart"));
+    return parts.filter(Boolean).join(" · ");
+  }
+  const status = obj(obj(pod)?.status) ?? {};
+  return status.phase === "Failed" ? (str(status.reason) ?? "Failed") : undefined;
+}
+
+/** `1/3 ready · ProgressDeadlineExceeded`: why a failing Deployment or DeploymentConfig fails. */
+function workloadFailureReason(item: unknown): string | undefined {
+  const status = obj(obj(item)?.status) ?? {};
+  const spec = obj(obj(item)?.spec) ?? {};
+  const conditions = arr(status.conditions).map(condition => obj(condition) ?? {});
+  const failing = conditions.find(
+    condition =>
+      (["Failed", "Degraded", "ReplicaFailure"].includes(String(condition.type)) && condition.status === "True") ||
+      (condition.type === "Progressing" && condition.status === "False"),
+  );
+  const desired = typeof spec.replicas === "number" ? spec.replicas : 1;
+  const ready =
+    typeof status.readyReplicas === "number"
+      ? status.readyReplicas
+      : typeof status.availableReplicas === "number"
+        ? status.availableReplicas
+        : 0;
+  return [`${ready}/${desired} ready`, str(failing?.reason)].filter(Boolean).join(" · ");
+}
+
+/** Why a Build failed: its reason (`DockerBuildFailed`), or its phase (`Cancelled`, `Error`). */
+export function buildFailureReason(build: unknown): string | undefined {
+  if (buildStatus(build) !== "fail") return undefined;
+  const status = obj(obj(build)?.status) ?? {};
+  return str(status.reason) ?? str(status.phase);
+}
+
+/** The reason shown on a failing row. Cached Builds saved before reasons existed still have their object. */
+export function openShiftFailureReason(resource: OpenShiftResource): string | undefined {
+  if (resource.status !== "fail") return undefined;
+  if (resource.reason) return resource.reason;
+  return resource.kind === "Build" && resource.object ? buildFailureReason(resource.object) : undefined;
 }
 
 function buildStatus(build: unknown): OpenShiftStatus {
@@ -287,6 +361,7 @@ function extractBuild(namespace: string, item: unknown, annotationKey: string): 
   return {
     ...baseResource("Build", namespace, item),
     status: buildStatus(item),
+    reason: buildFailureReason(item),
     imageRefs: imageTokens(ref),
     commitSha,
     object: item,
@@ -319,9 +394,11 @@ function extractWorkload(
   item: unknown,
   annotationKey: string,
 ): OpenShiftResource {
+  const status = workloadStatus(item);
   return {
     ...baseResource(kind, namespace, item),
-    status: workloadStatus(item),
+    status,
+    reason: status === "fail" ? workloadFailureReason(item) : undefined,
     imageRefs: containerImages(obj(item)?.spec),
     commitSha: commitShaFromItem(item, annotationKey),
     podSelector: podSelectorFrom(item),
@@ -331,7 +408,13 @@ function extractWorkload(
 function extractPod(namespace: string, item: unknown): OpenShiftResource {
   const statuses = arr(obj(obj(item)?.status)?.containerStatuses);
   const imageRefs = statuses.flatMap(s => [...imageTokens(str(obj(s)?.image)), ...imageTokens(str(obj(s)?.imageID))]);
-  return { ...baseResource("Pod", namespace, item), status: podStatus(item), imageRefs };
+  const status = podStatus(item);
+  return {
+    ...baseResource("Pod", namespace, item),
+    status,
+    reason: status === "fail" ? podFailureReason(item) : undefined,
+    imageRefs,
+  };
 }
 
 export function resourceFromWatchObject(object: unknown, annotationKey: string): OpenShiftResource | null {

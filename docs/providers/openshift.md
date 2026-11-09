@@ -137,6 +137,17 @@ colours.
 - `●` running: active Build, Pending/not-ready Pod, or incomplete workload rollout.
 - `✗` fail: failed Build, fatal container state, replica failure, or failed
   workload progression.
+
+A failing row says why after its name, muted:
+
+- Pods: the container's state, how it last ended, and restarts
+  (`CrashLoopBackOff · exit 1 · 14 restarts`, `OOMKilled · exit 137`, `Evicted`).
+- Deployments and DeploymentConfigs: ready replicas and the failing condition
+  (`1/3 ready · ProgressDeadlineExceeded`).
+- Builds: the build's reason (`DockerBuildFailed`), or `Cancelled` / `Error`.
+
+When the panel is narrow the reason is cut first, so the name keeps its room; the
+selected row scrolls to show all of it.
 - `?` unknown: insufficient or indeterminate status (a grey chip in the graph).
 
 Aggregate precedence is fail, running, unknown, then pass.

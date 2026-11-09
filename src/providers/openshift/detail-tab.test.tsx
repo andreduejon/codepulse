@@ -1,5 +1,6 @@
 import { expect, mock, spyOn, test } from "bun:test";
 import type { KeyEvent } from "@opentui/core";
+import { RGBA } from "@opentui/core";
 import { testRender } from "@opentui/solid";
 import { createSignal } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
@@ -54,9 +55,10 @@ export async function renderOpenShiftTab(
     scrollToFile: () => {},
   };
   const width = opts.width ?? 70;
+  const theme = createThemeState();
   const setup = await testRender(
     () => (
-      <ThemeContext.Provider value={createThemeState()}>
+      <ThemeContext.Provider value={theme}>
         <box width={width} flexDirection="column">
           <OpenShiftDetailTab
             sha={SHA}
@@ -82,7 +84,12 @@ export async function renderOpenShiftTab(
   };
   await settle();
   const press = (name: string) => navRef.handleKey?.({ name, ctrl: false, meta: false } as KeyEvent) ?? false;
-  return { ...setup, navRef, shortcut, setCursor, setConsoleUrl, settle, press };
+  const row = (text: string) =>
+    setup
+      .captureCharFrame()
+      .split("\n")
+      .find(line => line.includes(text)) ?? "";
+  return { ...setup, navRef, shortcut, setCursor, setConsoleUrl, settle, press, row, theme: theme.theme() };
 }
 
 test("o opens the selected namespace or resource in the web console, only when its URL is set", async () => {
@@ -106,6 +113,52 @@ test("o opens the selected namespace or resource in the web console, only when i
     expect(openUrl).toHaveBeenCalledTimes(2);
   } finally {
     openUrl.mockRestore();
+    t.renderer.destroy();
+  }
+});
+
+const crashing = resource("Pod", "payments-api-7f9c-x2k4", {
+  status: "fail",
+  reason: "CrashLoopBackOff · 14 restarts",
+});
+
+test("a failing row says why after its name, muted, and the reason gives way before the name", async () => {
+  const wide = await renderOpenShiftTab({ pods: [crashing], width: 70 });
+  try {
+    expect(wide.row("payments-api")).toContain("payments-api-7f9c-x2k4  CrashLoopBackOff · 14 restarts");
+    const y = wide
+      .captureCharFrame()
+      .split("\n")
+      .findIndex(line => line.includes("CrashLoop"));
+    const reason = wide.captureSpans().lines[y]?.spans.find(span => span.text.includes("CrashLoop"));
+    expect(reason?.fg).toEqual(RGBA.fromHex(wide.theme.foregroundMuted));
+  } finally {
+    wide.renderer.destroy();
+  }
+  // Narrow: the name stays whole and the reason is cut.
+  const narrow = await renderOpenShiftTab({ pods: [crashing], width: 44 });
+  try {
+    expect(narrow.row("payments-api")).toContain("payments-api-7f9c-x2k4  Crash");
+    expect(narrow.row("payments-api")).toContain("…");
+    expect(narrow.row("payments-api")).toContain("✗");
+  } finally {
+    narrow.renderer.destroy();
+  }
+  // Narrower than the name: only the name, cut.
+  const tiny = await renderOpenShiftTab({ pods: [crashing], width: 28 });
+  try {
+    expect(tiny.row("payments-api")).not.toContain("Crash");
+    expect(tiny.row("payments-api")).toContain("✗");
+  } finally {
+    tiny.renderer.destroy();
+  }
+});
+
+test("a healthy row has no reason", async () => {
+  const t = await renderOpenShiftTab({ pods: [resource("Pod", "payments-api-6d2b-m9w3")] });
+  try {
+    expect(t.row("payments-api").replace(/\s+/g, " ")).toMatch(/payments-api-6d2b-m9w3 ✓/);
+  } finally {
     t.renderer.destroy();
   }
 });
