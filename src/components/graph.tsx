@@ -51,7 +51,6 @@ import type { SnykScanResult } from "../providers/snyk/types";
 import { formatRelativeDate } from "../utils/date";
 import { scheduleScrollIntoView, scrollElementIntoView } from "../utils/scroll";
 import { cellWidth } from "../utils/terminal-text";
-import { truncateName } from "../utils/truncate";
 import Badge from "./badge";
 
 /** Shared graph dimension computations used by ColumnHeader and GraphLine. */
@@ -476,14 +475,6 @@ function GraphLine(
     return { shown: [], hidden: refs.length, maxLength: 8 };
   });
   const refMaxLength = () => refLayout().maxLength;
-
-  const refBadgesWidth = createMemo(() => {
-    const { shown, hidden } = refLayout();
-    if (shown.length === 0 && hidden === 0) return 0;
-    const badges = [...shown.map(r => truncateName(r.name, refMaxLength())), ...(hidden > 0 ? [`+${hidden}`] : [])];
-    // sum of (displayName + 2) for each badge + gaps between badges + 1 paddingRight
-    return badges.reduce((acc, name) => acc + cellWidth(name) + 2, 0) + (badges.length - 1) + 1;
-  });
 
   const subjectText = () => (isUncommitted() ? "Staged and unstaged changes in working tree" : commit().subject);
 
