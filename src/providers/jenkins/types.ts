@@ -57,6 +57,22 @@ export interface JenkinsStage {
   completedAt: string | null;
 }
 
+/** A failed JUnit test: where it is, and why it failed. */
+export interface JenkinsFailedTest {
+  className: string;
+  name: string;
+  details: string | null;
+  stackTrace: string | null;
+}
+
+/** A finished build's JUnit test report: its counts and (up to 50) failed tests. */
+export interface JenkinsTestReport {
+  passCount: number;
+  failCount: number;
+  skipCount: number;
+  failed: JenkinsFailedTest[];
+}
+
 export interface JenkinsJob {
   id: string;
   name: string;
@@ -65,6 +81,8 @@ export interface JenkinsJob {
   startedAt: string | null;
   completedAt: string | null;
   steps: JenkinsStage[];
+  /** The build's test report, when it has one (read once the build has finished). */
+  tests?: JenkinsTestReport;
 }
 
 export interface JenkinsCommitData {

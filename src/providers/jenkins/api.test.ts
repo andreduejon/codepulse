@@ -843,7 +843,8 @@ test("cached run requests stay on the job origin even when the stored run URL na
     await fetchJenkinsRunsForBuilds([run], "user", "token");
     await fetchJenkinsRunJobs(run, "user", "token");
     await fetchJenkinsConsoleLog(run, "user", "token");
-    expect(calls).toHaveLength(3);
+    // Builds, stages, the test report of the finished build, and the console log.
+    expect(calls).toHaveLength(4);
     expect(calls.every(url => url.startsWith("https://jenkins.example.com/job/foo/12/"))).toBe(true);
   } finally {
     globalThis.fetch = originalFetch;
@@ -912,5 +913,116 @@ describe("fetchJenkinsRunJobs failures", () => {
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+});
+
+describe("Jenkins test reports", () => {
+  const run: JenkinsRun = {
+    id: "1",
+    name: "app",
+    status: "completed",
+    conclusion: "unstable",
+    headSha: "a".repeat(40),
+    runNumber: 412,
+    startedAt: null,
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    url: "https://jenkins.example.com/job/app/412/",
+    jobLabel: "app",
+    jobUrl: "https://jenkins.example.com/job/app",
+  };
+  const withFetch = async (report: Response, check: (calls: string[]) => Promise<void>) => {
+    const originalFetch = globalThis.fetch;
+    const calls: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      calls.push(url);
+      if (url.includes("/wfapi/describe"))
+        return Response.json({ stages: [{ id: "6", name: "Test", status: "UNSTABLE" }] });
+      if (url.includes("/testReport/")) return report;
+      throw new Error(`Unexpected request ${url}`);
+    }) as typeof fetch;
+    try {
+      await check(calls);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  };
+
+  test("a finished build's test report gives its counts and its failed tests", async () => {
+    const report = Response.json({
+      failCount: 2,
+      passCount: 1204,
+      skipCount: 12,
+      suites: [
+        {
+          cases: [
+            {
+              className: "com.example.PaymentServiceTest",
+              name: "refundsTwice",
+              status: "FAILED",
+              errorDetails: "expected: <1> but was: <2>",
+              errorStackTrace:
+                "org.opentest4j.AssertionFailedError: expected: <1> but was: <2>\n\tat PaymentServiceTest.refundsTwice(PaymentServiceTest.java:88)",
+            },
+            {
+              className: "com.example.PaymentServiceTest",
+              name: "pays",
+              status: "PASSED",
+              errorDetails: null,
+              errorStackTrace: null,
+            },
+          ],
+        },
+        {
+          cases: [
+            {
+              className: "OrderMapperTest",
+              name: "mapsCurrency",
+              status: "REGRESSION",
+              errorDetails: null,
+              errorStackTrace: "boom",
+            },
+          ],
+        },
+      ],
+    });
+    await withFetch(report, async calls => {
+      const { jobs, error } = await fetchJenkinsRunJobs(run, "user", "token");
+      expect(error).toBeNull();
+      expect(
+        calls.some(url => url.startsWith("https://jenkins.example.com/job/app/412/testReport/api/json?tree=")),
+      ).toBe(true);
+      expect(jobs[0].tests).toEqual({
+        passCount: 1204,
+        failCount: 2,
+        skipCount: 12,
+        failed: [
+          {
+            className: "com.example.PaymentServiceTest",
+            name: "refundsTwice",
+            details: "expected: <1> but was: <2>",
+            stackTrace:
+              "org.opentest4j.AssertionFailedError: expected: <1> but was: <2>\n\tat PaymentServiceTest.refundsTwice(PaymentServiceTest.java:88)",
+          },
+          { className: "OrderMapperTest", name: "mapsCurrency", details: null, stackTrace: "boom" },
+        ],
+      });
+    });
+  });
+
+  test("a build without a test report has no tests, and still has its stages", async () => {
+    await withFetch(new Response("not found", { status: 404 }), async () => {
+      const { jobs, error } = await fetchJenkinsRunJobs(run, "user", "token");
+      expect(error).toBeNull();
+      expect(jobs[0].steps.map(stage => stage.name)).toEqual(["Test"]);
+      expect(jobs[0].tests).toBeUndefined();
+    });
+  });
+
+  test("a running build does not ask for a test report", async () => {
+    await withFetch(Response.json({}), async calls => {
+      await fetchJenkinsRunJobs({ ...run, status: "running", conclusion: null }, "user", "token");
+      expect(calls.some(url => url.includes("/testReport/"))).toBe(false);
+    });
   });
 });

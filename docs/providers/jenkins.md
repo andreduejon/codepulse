@@ -63,3 +63,13 @@ its first failed build. In the console log, `r` reloads it (a finished build's c
 
 Fetch size controls both the graph commit window and recent builds inspected per
 job. It is independent from cache retention.
+
+## Tests
+
+A finished build with a JUnit test report shows a **Tests** row beside its
+Pipeline, with the counts after the name (`Tests  3 failed · 1,204 passed · 12
+skipped`) and each failed test under it (`PaymentServiceTest › refundsTwice`, up
+to 50). The report is read once the build has finished, together with its stages,
+and cached with the build. Enter on a failed test opens its error and stack trace
+in the log viewer (search, wrap), and `←` / `→` move between the failed tests;
+`o` opens the build's test report. A build without a report has no Tests row.

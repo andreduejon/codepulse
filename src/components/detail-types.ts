@@ -8,7 +8,13 @@ import type {
   GitHubJobFetchResult,
   GitHubWorkflowRun,
 } from "../providers/github-actions/types";
-import type { JenkinsCommitData, JenkinsJob, JenkinsJobFetchResult, JenkinsRun } from "../providers/jenkins/types";
+import type {
+  JenkinsCommitData,
+  JenkinsFailedTest,
+  JenkinsJob,
+  JenkinsJobFetchResult,
+  JenkinsRun,
+} from "../providers/jenkins/types";
 import type { OpenShiftCommitData, OpenShiftResource } from "../providers/openshift/types";
 import type { SnykScanResult } from "../providers/snyk/types";
 import type { FileTreeRow } from "../utils/file-tree";
@@ -66,6 +72,7 @@ export interface DetailViewProps {
   jenkinsFetchJobsForRun?: (run: JenkinsRun) => Promise<JenkinsJobFetchResult>;
   jenkinsFetchCommitData?: (sha: string, force?: boolean) => Promise<void>;
   onOpenJenkinsJobLog?: (job: JenkinsJob, run: JenkinsRun, jobs?: JenkinsJob[]) => void;
+  onOpenJenkinsTestFailure?: (run: JenkinsRun, failed: JenkinsFailedTest[], index: number) => void;
   jenkinsProviderStatus?: ProviderStatus;
   openshiftGetCommitData?: (sha: string) => OpenShiftCommitData | null;
   openshiftFetchCommitData?: (sha: string, force?: boolean) => Promise<void>;

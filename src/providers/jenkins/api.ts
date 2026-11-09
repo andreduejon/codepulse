@@ -5,10 +5,12 @@ import { categorize } from "../shared/status";
 import {
   JENKINS_MULTIBRANCH_JOB_LIMIT,
   type JenkinsCommitData,
+  type JenkinsFailedTest,
   type JenkinsJob,
   type JenkinsJobConfig,
   type JenkinsRun,
   type JenkinsStage,
+  type JenkinsTestReport,
 } from "./types";
 import { isSafeJenkinsRequestUrl } from "./validation";
 
@@ -650,6 +652,58 @@ export function buildJenkinsGraphBadges(runs: JenkinsRun[]): Map<string, GraphBa
   return map;
 }
 
+/** At most this many failed tests are kept and listed; the counts still say how many failed. */
+const MAX_FAILED_TESTS = 50;
+const TEST_REPORT_TREE =
+  "failCount,passCount,skipCount,suites[cases[className,name,status,errorDetails,errorStackTrace]]";
+
+/**
+ * A finished build's JUnit test report. Null when the build has none (404) or it could not be read: the build still
+ * shows, only without a Tests row.
+ */
+export async function fetchJenkinsTestReport(
+  run: JenkinsRun,
+  username: string | undefined,
+  token: string,
+  signal?: AbortSignal,
+): Promise<JenkinsTestReport | null> {
+  try {
+    const report = await fetchJson<{
+      failCount?: number;
+      passCount?: number;
+      skipCount?: number;
+      suites?: { cases?: Record<string, unknown>[] }[];
+    }>(
+      jenkinsApiUrl(onOrigin(run.url, run.jobUrl), `testReport/api/json?tree=${encodeURIComponent(TEST_REPORT_TREE)}`),
+      username,
+      token,
+      signal,
+    );
+    const text = (value: unknown) => (typeof value === "string" && value.trim() ? value : null);
+    const failed = (report.suites ?? [])
+      .flatMap(suite => suite.cases ?? [])
+      .filter(test => test.status === "FAILED" || test.status === "REGRESSION")
+      .slice(0, MAX_FAILED_TESTS)
+      .map(
+        (test): JenkinsFailedTest => ({
+          className: typeof test.className === "string" ? test.className : "",
+          name: typeof test.name === "string" ? test.name : "test",
+          details: text(test.errorDetails),
+          stackTrace: text(test.errorStackTrace),
+        }),
+      );
+    return {
+      passCount: report.passCount ?? 0,
+      failCount: report.failCount ?? failed.length,
+      skipCount: report.skipCount ?? 0,
+      failed,
+    };
+  } catch (err) {
+    if (isAbortError(err, signal)) throw err;
+    return null;
+  }
+}
+
 export async function fetchJenkinsRunJobs(
   run: JenkinsRun,
   username: string | undefined,
@@ -693,7 +747,9 @@ export async function fetchJenkinsRunJobs(
       completedAt: wfapiCompletedAt,
       steps: stages,
     };
-    return { jobs: [job], error: null };
+    // Reports are written when the build ends, so only a finished build is asked for one.
+    const tests = run.status === "completed" ? await fetchJenkinsTestReport(run, username, token, signal) : null;
+    return { jobs: [tests ? { ...job, tests } : job], error: null };
   } catch (err) {
     if (isAbortError(err, signal)) throw err;
     // Like GitHub's "jobs failed": say which part failed, not a generic fetch failure.

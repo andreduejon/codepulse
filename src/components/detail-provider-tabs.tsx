@@ -83,6 +83,7 @@ export function ProviderDetailTabs(
           loading={props.view.jenkinsProviderStatus?.kind === "loading"}
           {...cursor}
           onOpenJobLog={props.view.onOpenJenkinsJobLog}
+          onOpenTestFailure={props.view.onOpenJenkinsTestFailure}
         />
       </Show>
 

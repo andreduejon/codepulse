@@ -45,7 +45,8 @@ import { providerAccent } from "./providers/colors";
 import JobLogDialog from "./providers/github-actions/log-dialog";
 import type { GitHubJob, GitHubWorkflowRun } from "./providers/github-actions/types";
 import { useGitHubCI } from "./providers/github-actions/use-github-ci";
-import type { JenkinsJob, JenkinsRun } from "./providers/jenkins/types";
+import { testFailureText, testLabel } from "./providers/jenkins/tests";
+import type { JenkinsFailedTest, JenkinsJob, JenkinsRun } from "./providers/jenkins/types";
 import { useJenkinsCI } from "./providers/jenkins/use-jenkins-ci";
 import OpenShiftResourceDialog from "./providers/openshift/resource-dialog";
 import type { OpenShiftResource } from "./providers/openshift/types";
@@ -302,6 +303,25 @@ export function AppContent(props: Readonly<AppContentProps>) {
       run,
       jobs: jobs.length > 0 ? jobs : [job],
       fetchLog: () => jenkinsCI.fetchRunLog(run),
+    });
+    setDialog("job-log");
+  };
+
+  /** A failed Jenkins test in the log viewer: its error and stack, ←/→ to the build's other failed tests. */
+  const handleOpenJenkinsTestFailure = (run: JenkinsRun, failed: JenkinsFailedTest[], index: number) => {
+    const entries = failed.map((test, at) => ({ id: `test-${at}`, name: testLabel(test) }));
+    const entry = entries[index] ?? entries[0];
+    if (!entry) return;
+    setJobLogTarget({
+      provider: "jenkins",
+      job: entry,
+      // `o` opens the build's test report.
+      run: { name: run.name, runNumber: run.runNumber, url: `${run.url.replace(/\/+$/, "")}/testReport/` },
+      jobs: entries,
+      fetchLog: async current => {
+        const test = failed[entries.findIndex(candidate => candidate.id === current.id)];
+        return test ? testFailureText(test) : "";
+      },
     });
     setDialog("job-log");
   };
@@ -641,6 +661,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     jenkinsFetchJobsForRun: jenkinsCI.fetchJobsForRun,
     jenkinsFetchCommitData: jenkinsCI.fetchCommitDataForSHA,
     onOpenJenkinsJobLog: handleOpenJenkinsJobLog,
+    onOpenJenkinsTestFailure: handleOpenJenkinsTestFailure,
     get jenkinsProviderStatus() {
       return state.providerStatus();
     },

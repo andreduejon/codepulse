@@ -12,7 +12,13 @@ import type {
   GitHubJobFetchResult,
   GitHubWorkflowRun,
 } from "../providers/github-actions/types";
-import type { JenkinsCommitData, JenkinsJob, JenkinsJobFetchResult, JenkinsRun } from "../providers/jenkins/types";
+import type {
+  JenkinsCommitData,
+  JenkinsFailedTest,
+  JenkinsJob,
+  JenkinsJobFetchResult,
+  JenkinsRun,
+} from "../providers/jenkins/types";
 import type { OpenShiftCommitData, OpenShiftResource } from "../providers/openshift/types";
 import { providerDetailTab } from "../providers/provider";
 import { DEPENDENCY_LEGEND } from "../providers/snyk/deps-tab";
@@ -58,6 +64,7 @@ export interface DetailPanelProps {
   jenkinsFetchJobsForRun?: (run: JenkinsRun) => Promise<JenkinsJobFetchResult>;
   jenkinsFetchCommitData?: (sha: string) => Promise<void>;
   onOpenJenkinsJobLog?: (job: JenkinsJob, run: JenkinsRun, jobs?: JenkinsJob[]) => void;
+  onOpenJenkinsTestFailure?: (run: JenkinsRun, failed: JenkinsFailedTest[], index: number) => void;
   jenkinsProviderStatus?: ProviderStatus;
   openshiftGetCommitData?: (sha: string) => OpenShiftCommitData | null;
   openshiftFetchCommitData?: (sha: string, force?: boolean) => Promise<void>;
@@ -328,6 +335,7 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
             jenkinsFetchJobsForRun={props.jenkinsFetchJobsForRun}
             jenkinsFetchCommitData={props.jenkinsFetchCommitData}
             onOpenJenkinsJobLog={props.onOpenJenkinsJobLog}
+            onOpenJenkinsTestFailure={props.onOpenJenkinsTestFailure}
             jenkinsProviderStatus={props.jenkinsProviderStatus}
             openshiftGetCommitData={props.openshiftGetCommitData}
             openshiftFetchCommitData={props.openshiftFetchCommitData}

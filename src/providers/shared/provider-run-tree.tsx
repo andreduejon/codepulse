@@ -48,6 +48,8 @@ export interface ProviderTreeJob<TJobRaw> {
   notesLabel?: string;
   /** The run attempt it belongs to (GitHub re-runs). The latest attempt's jobs show; earlier ones fold away. */
   attempt?: number;
+  /** Muted text after the name (`  3 failed · 1,204 passed`), cut before the name when space is short. */
+  tail?: string;
   raw: TJobRaw;
 }
 
@@ -735,6 +737,8 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                           <ScrollingLabel
                             selectable={!props.mouseEnabled}
                             text={job.name}
+                            tail={job.tail}
+                            tailFg={t().foregroundMuted}
                             active={isJobCursored()}
                             fg={jobTextColor()}
                           />

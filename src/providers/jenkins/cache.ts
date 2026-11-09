@@ -1,6 +1,6 @@
 import { DEFAULT_PROVIDER_CACHE_LIMIT, type ProviderCacheLimit } from "../shared/auto-refresh";
 import { DEFAULT_PROVIDER_CACHE_ROOT, mergeById, ShaSqliteCache } from "../shared/sha-sqlite-cache";
-import type { JenkinsJob, JenkinsJobFetchResult, JenkinsRun, JenkinsStage } from "./types";
+import type { JenkinsJob, JenkinsJobFetchResult, JenkinsRun, JenkinsStage, JenkinsTestReport } from "./types";
 
 export const DEFAULT_JENKINS_CACHE_ROOT = DEFAULT_PROVIDER_CACHE_ROOT;
 
@@ -57,7 +57,29 @@ function isJenkinsJob(value: unknown): value is JenkinsJob {
     (job.startedAt === null || typeof job.startedAt === "string") &&
     (job.completedAt === null || typeof job.completedAt === "string") &&
     Array.isArray(job.steps) &&
-    job.steps.every(isJenkinsStage)
+    job.steps.every(isJenkinsStage) &&
+    (job.tests === undefined || isJenkinsTestReport(job.tests))
+  );
+}
+
+function isJenkinsTestReport(value: unknown): value is JenkinsTestReport {
+  if (typeof value !== "object" || value === null) return false;
+  const report = value as JenkinsTestReport;
+  const text = (field: unknown) => field === null || typeof field === "string";
+  return (
+    typeof report.passCount === "number" &&
+    typeof report.failCount === "number" &&
+    typeof report.skipCount === "number" &&
+    Array.isArray(report.failed) &&
+    report.failed.every(
+      test =>
+        typeof test === "object" &&
+        test !== null &&
+        typeof test.className === "string" &&
+        typeof test.name === "string" &&
+        text(test.details) &&
+        text(test.stackTrace),
+    )
   );
 }
 
