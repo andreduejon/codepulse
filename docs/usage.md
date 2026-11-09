@@ -67,7 +67,7 @@ Normal clears highlighting without changing branch perspective.
 |-----|--------|
 | `/` | Search; Enter keeps the query, Esc clears it |
 | `n` / `N` | Next / previous search hit |
-| `c` | Cycle view mode (CI: all, issues, errors, raw; OpenShift: log, JSON) |
+| `c` | Cycle view mode (CI: all, issues, errors, raw; OpenShift: log, JSON, events) |
 | `w` | Toggle line wrap |
 | `r` | Refresh what is shown: the log (restarting a follow; a finished CI job's log reloads from cache) or the JSON object |
 | `o` | Open the CI run in the browser |

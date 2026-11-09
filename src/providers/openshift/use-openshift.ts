@@ -18,6 +18,7 @@ import {
   buildOpenShiftCommitMap,
   buildOpenShiftGraphBadges,
   fetchOpenShiftBuildLog,
+  fetchOpenShiftEvents,
   fetchOpenShiftInventory,
   fetchOpenShiftObject,
   fetchOpenShiftPodLog,
@@ -32,7 +33,13 @@ import {
   watchOpenShiftStream,
 } from "./api";
 import { cachedBuildToResource, mergeById, OpenShiftCache, type OpenShiftCacheEntry, toCachedBuild } from "./cache";
-import type { OpenShiftCommitData, OpenShiftNamespaceData, OpenShiftProviderConfig, OpenShiftResource } from "./types";
+import type {
+  OpenShiftCommitData,
+  OpenShiftEvent,
+  OpenShiftNamespaceData,
+  OpenShiftProviderConfig,
+  OpenShiftResource,
+} from "./types";
 import { DEFAULT_OPENSHIFT_AUTO_REFRESH_SECONDS, DEFAULT_OPENSHIFT_CONFIG, OPENSHIFT_WATCH_KINDS } from "./types";
 import { appendOpenShiftLogFollow } from "./watch";
 
@@ -49,6 +56,8 @@ export interface UseOpenShiftResult {
   followLog: (resource: OpenShiftResource, signal: AbortSignal, onText: (text: string) => void) => Promise<void>;
   /** The resource's object; `force` (refresh) asks the API instead of using the embedded or cached copy. */
   loadResourceObject: (resource: OpenShiftResource, force?: boolean) => Promise<unknown>;
+  /** The events about the resource, always from the API (they change by the minute and are not cached). */
+  loadResourceEvents: (resource: OpenShiftResource) => Promise<OpenShiftEvent[]>;
 }
 
 function emptyNamespace(namespace: string): OpenShiftNamespaceData {
@@ -699,6 +708,16 @@ export function useOpenShift(opts: {
         fetchOpenShiftObject(config.serverUrl, token, resource, signal),
       );
       return lifecycle.isCurrent(epoch, repoPath) ? object : null;
+    },
+    loadResourceEvents: async resource => {
+      const epoch = lifecycle.getEpoch();
+      const repoPath = state.repoPath();
+      const token = getOpenShiftToken(config.tokenEnvVar);
+      if (!token) throw new Error(unavailableMessage());
+      const events = await lifecycle.runRequest(signal =>
+        fetchOpenShiftEvents(config.serverUrl, token, resource, signal),
+      );
+      return lifecycle.isCurrent(epoch, repoPath) ? events : [];
     },
   };
 }

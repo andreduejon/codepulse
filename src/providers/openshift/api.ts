@@ -4,6 +4,7 @@ import { fetchWithRetry, isAbortError } from "../shared/http";
 import type {
   OpenShiftCommitData,
   OpenShiftControllerReference,
+  OpenShiftEvent,
   OpenShiftInventoryFailure,
   OpenShiftInventoryKind,
   OpenShiftInventoryResult,
@@ -1067,6 +1068,48 @@ export async function fetchOpenShiftObject(
   if (isOpenShiftAuthStatus(res.status)) throw new Error(BANNER.openshift.tokenExpired);
   if (!res.ok) throw new Error(`OpenShift ${path} failed: ${res.status}`);
   return await res.json();
+}
+
+function parseOpenShiftEvent(item: unknown): OpenShiftEvent {
+  const event = obj(item) ?? {};
+  const series = obj(event.series);
+  const count = typeof series?.count === "number" ? series.count : typeof event.count === "number" ? event.count : 1;
+  return {
+    type: str(event.type) ?? "Normal",
+    reason: str(event.reason) ?? "",
+    message: (str(event.note) ?? str(event.message) ?? "").replace(/\s*\n\s*/g, " ").trim(),
+    count,
+    lastSeen:
+      str(series?.lastObservedTime) ??
+      str(event.lastTimestamp) ??
+      str(event.eventTime) ??
+      str(event.firstTimestamp) ??
+      str(metadata(item).creationTimestamp) ??
+      null,
+  };
+}
+
+/** The events about one resource (by kind and name in its namespace), newest first. */
+export async function fetchOpenShiftEvents(
+  serverUrl: string,
+  token: string,
+  resource: OpenShiftResource,
+  signal?: AbortSignal,
+): Promise<OpenShiftEvent[]> {
+  const selector = `involvedObject.kind=${resource.kind},involvedObject.name=${resource.name}`;
+  const path = `/api/v1/namespaces/${encodeURIComponent(resource.namespace)}/events?fieldSelector=${encodeURIComponent(selector)}`;
+  const res = await fetchWithRetry(
+    openShiftApiUrl(serverUrl, path),
+    { signal, headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } },
+    FETCH_OPTS,
+    "OpenShift",
+  );
+  if (isOpenShiftAuthStatus(res.status)) throw new Error(BANNER.openshift.tokenExpired);
+  if (res.status === 403)
+    throw new Error(`No permission to list events in ${resource.namespace}. The token needs list on events.`);
+  if (!res.ok) throw new Error(`OpenShift events failed: ${res.status}`);
+  const events = arr(obj(await res.json())?.items).map(parseOpenShiftEvent);
+  return events.sort((a, b) => (b.lastSeen ?? "").localeCompare(a.lastSeen ?? ""));
 }
 
 export async function fetchOpenShiftResources(

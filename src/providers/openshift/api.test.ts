@@ -7,6 +7,7 @@ import {
   buildOpenShiftGraphBadges,
   commitLabelSelector,
   commitShaFromItem,
+  fetchOpenShiftEvents,
   fetchOpenShiftInventory,
   fetchOpenShiftResources,
   MAX_LIST_ITEMS,
@@ -1095,5 +1096,76 @@ describe("failure reasons", () => {
       reasonOf(pod({ phase: "Pending", containerStatuses: [{ state: { waiting: { reason: "ContainerCreating" } } }] })),
     ).toBeUndefined();
     expect(buildFailureReason({ status: { phase: "Complete" } })).toBeUndefined();
+  });
+});
+
+describe("fetchOpenShiftEvents", () => {
+  const pod: OpenShiftResource = {
+    id: "Pod:dev:api-7f9c",
+    kind: "Pod",
+    namespace: "dev",
+    name: "api-7f9c",
+    status: "fail",
+    imageRefs: [],
+  };
+  const withFetch = async (response: Response, run: (url: () => string) => Promise<void>) => {
+    const originalFetch = globalThis.fetch;
+    let url = "";
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      url = String(input);
+      return response;
+    }) as typeof fetch;
+    try {
+      await run(() => url);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  };
+
+  test("lists the events about the resource, by kind and name, newest first", async () => {
+    const items = [
+      {
+        type: "Normal",
+        reason: "Scheduled",
+        message: "Successfully assigned",
+        count: 1,
+        lastTimestamp: "2026-01-01T00:00:00Z",
+      },
+      {
+        type: "Warning",
+        reason: "BackOff",
+        message: "Back-off restarting",
+        count: 31,
+        lastTimestamp: "2026-01-01T00:10:00Z",
+      },
+      {
+        type: "Warning",
+        reason: "Unhealthy",
+        message: "Readiness probe failed",
+        series: { count: 6, lastObservedTime: "2026-01-01T00:05:00Z" },
+        eventTime: "2026-01-01T00:01:00Z",
+      },
+    ];
+    await withFetch(new Response(JSON.stringify({ items }), { status: 200 }), async url => {
+      const events = await fetchOpenShiftEvents("https://api.example.com:6443", "token", pod);
+      expect(url()).toBe(
+        `https://api.example.com:6443/api/v1/namespaces/dev/events?fieldSelector=${encodeURIComponent(
+          "involvedObject.kind=Pod,involvedObject.name=api-7f9c",
+        )}`,
+      );
+      expect(events.map(event => [event.reason, event.count, event.lastSeen])).toEqual([
+        ["BackOff", 31, "2026-01-01T00:10:00Z"],
+        ["Unhealthy", 6, "2026-01-01T00:05:00Z"],
+        ["Scheduled", 1, "2026-01-01T00:00:00Z"],
+      ]);
+    });
+  });
+
+  test("a missing events permission says which permission", async () => {
+    await withFetch(new Response("forbidden", { status: 403 }), async () => {
+      await expect(fetchOpenShiftEvents("https://api.example.com:6443", "token", pod)).rejects.toThrow(
+        "No permission to list events",
+      );
+    });
   });
 });

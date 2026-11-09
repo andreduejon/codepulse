@@ -955,6 +955,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                       }
                       followLog={openShift.followLog}
                       consoleUrl={openShiftConfig().consoleUrl}
+                      loadEvents={item => openShift.loadResourceEvents(item)}
                       loadObject={(item, force) => openShift.loadResourceObject(item, force)}
                       onClose={closeToDetail}
                       onSearchActive={setLogSearchScope}

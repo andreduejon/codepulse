@@ -116,12 +116,18 @@ that produced them.
   1000 lines. Open at the bottom; stay pinned only if you are already at the
   bottom. When the stream closes the title shows `log ended`. Press `r` to
   restart. They are not stored.
-- `c` cycles view mode (log / JSON) for Builds and Pods. Terminal Build JSON
-  uses the cached object when present; otherwise JSON is a live snapshot.
-  Leave the log view or close the dialog to abort follow.
-- `r` refreshes what is shown: the log (restarting a follow) or, in JSON view, the
-  object. Workloads without logs open in JSON and refresh the same way.
-- `/` searches the log or JSON (`n` / `N` next and previous hit), like CI logs.
+- `c` cycles the view: log (Builds and Pods), JSON, and events (Pods, Builds,
+  Deployments, DeploymentConfigs). Terminal Build JSON uses the cached object when
+  present; otherwise JSON is a live snapshot. Leave the log view or close the
+  dialog to abort follow.
+- **Events** lists what OpenShift reported about the resource, newest first:
+  `LAST SEEN  TYPE  REASON  COUNT  MESSAGE`, warnings in the warning colour. They
+  are read when the view opens and are not stored. OpenShift keeps events for about
+  an hour, so an older resource says *No recent events*. Without permission to list
+  events the view says so.
+- `r` refreshes what is shown: the log (restarting a follow), the object, or the
+  events. Workloads without logs open in JSON and refresh the same way.
+- `/` searches the log, JSON or events (`n` / `N` next and previous hit), like CI logs.
   A failed request shows its reason; an empty log says *No log output.*
 
 Live updates keep the namespaces you collapsed and the cursor on the same row.
@@ -163,6 +169,7 @@ Configured token needs `list` access for:
 - `deploymentconfigs.apps.openshift.io`
 - `replicationcontrollers`
 - `pods`
+- `events` (only for the events view in the resource dialog)
 
 Live freshness also needs `watch` on Deployments, DeploymentConfigs, and Pods
 in each configured namespace. OpenShift/`kubernetes` `view` already has

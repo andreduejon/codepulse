@@ -23,7 +23,8 @@ import { BUSY } from "../../utils/busy-text";
 import { openUrl } from "../../utils/open-url";
 import { stripTerminalControls } from "../../utils/terminal-text";
 import { openShiftConsoleUrl } from "./console";
-import type { OpenShiftResource } from "./types";
+import { formatOpenShiftEvents, OPENSHIFT_EVENT_KINDS, OPENSHIFT_NO_EVENTS } from "./events";
+import type { OpenShiftEvent, OpenShiftResource } from "./types";
 import { shouldFollowOpenShiftLog } from "./watch";
 
 interface OpenShiftResourceDialogProps {
@@ -36,9 +37,11 @@ interface OpenShiftResourceDialogProps {
   onSearchActive?: (active: boolean) => void;
   /** Web console URL from the settings; `o` opens the resource there when it is set. */
   consoleUrl?: string;
+  /** The events about the resource, for the events view (`c`). */
+  loadEvents?: (resource: OpenShiftResource) => Promise<OpenShiftEvent[]>;
 }
 
-type ViewMode = "log" | "json";
+type ViewMode = "log" | "json" | "events";
 
 function resourceHasLog(resource: OpenShiftResource): boolean {
   return resource.kind === "Build" || resource.kind === "Pod";
@@ -58,10 +61,33 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
   const [objectText, setObjectText] = createSignal<string | null>(null);
   const [objectError, setObjectError] = createSignal<string | null>(null);
   const [objectLoading, setObjectLoading] = createSignal(false);
+  const [events, setEvents] = createSignal<OpenShiftEvent[] | null>(null);
+  const [eventsError, setEventsError] = createSignal<string | null>(null);
+  const [eventsLoading, setEventsLoading] = createSignal(false);
   let scrollboxRef: ScrollBoxRenderable | undefined;
 
   const dialogFrame = createMemo(() => getStandardDialogFrame(dimensions()));
   const canLog = () => resourceHasLog(props.resource) && !!props.loadLog;
+  const canEvents = () => !!props.loadEvents && OPENSHIFT_EVENT_KINDS.has(props.resource.kind);
+  /** The views `c` cycles through, in order: log, object, events. */
+  const viewModes = createMemo((): ViewMode[] => [
+    ...(canLog() ? (["log"] as const) : []),
+    "json",
+    ...(canEvents() ? (["events"] as const) : []),
+  ]);
+
+  const loadEvents = async () => {
+    if (!props.loadEvents) return;
+    setEventsLoading(true);
+    setEventsError(null);
+    try {
+      setEvents(await props.loadEvents(props.resource));
+    } catch (error) {
+      setEventsError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setEventsLoading(false);
+    }
+  };
 
   const loadLog = async (force = false) => {
     if (!props.loadLog || !resourceHasLog(props.resource)) return;
@@ -95,6 +121,10 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
     followNonce();
     if (mode === "json") {
       void loadObject();
+      return;
+    }
+    if (mode === "events") {
+      void loadEvents();
       return;
     }
     if (!canLog()) return;
@@ -132,9 +162,19 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
     queueMicrotask(() => scrollboxRef?.scrollTo(Infinity));
   });
 
-  const lines = createMemo(() =>
-    viewMode() === "log" ? stripTerminalControls(logText() ?? "").split("\n") : (objectText() ?? "").split("\n"),
-  );
+  const eventLines = createMemo(() => formatOpenShiftEvents(events() ?? []));
+  const lines = createMemo(() => {
+    const mode = viewMode();
+    if (mode === "log") return stripTerminalControls(logText() ?? "").split("\n");
+    if (mode === "events") return eventLines().map(line => line.text);
+    return (objectText() ?? "").split("\n");
+  });
+  /** Events show warnings in the warning color and the header muted; log and object lines are plain. */
+  const lineColor = (index: number) => {
+    if (viewMode() !== "events") return t().foreground;
+    const kind = eventLines()[index]?.kind;
+    return kind === "warning" ? t().warning : kind === "header" ? t().foregroundMuted : t().foreground;
+  };
   /** Loading, failed or empty: shown instead of numbered lines, the same way as the CI log dialog. */
   const viewState = (): LogViewState | null => {
     if (viewMode() === "log") {
@@ -142,6 +182,13 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
       const error = logError();
       if (error) return { kind: "error", title: "Failed to load log", message: error };
       if (!logText()?.trim()) return { kind: "empty", text: "No log output." };
+      return null;
+    }
+    if (viewMode() === "events") {
+      if (eventsLoading()) return { kind: "loading", text: BUSY.fetchingEvents };
+      const error = eventsError();
+      if (error) return { kind: "error", title: "Failed to load events", message: error };
+      if ((events() ?? []).length === 0) return { kind: "empty", text: OPENSHIFT_NO_EVENTS };
       return null;
     }
     if (objectLoading()) return { kind: "loading", text: BUSY.fetchingObject };
@@ -164,7 +211,8 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
     onActiveChange: active => props.onSearchActive?.(active),
   });
   const title = createMemo(() => {
-    const mode = viewMode() === "log" ? (followEnded() ? "log ended" : "log") : "object";
+    const mode =
+      viewMode() === "log" ? (followEnded() ? "log ended" : "log") : viewMode() === "events" ? "events" : "object";
     // Like the diff title: context (provider, then namespace, kind) goes first; the resource name shrinks last.
     const segments = fitTitleSegments(
       [
@@ -181,8 +229,13 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
 
   const toggleWrap = () => setWrapEnabled(value => !value);
   /** `r` refreshes what is on screen: the object in JSON view, the log (restarting a follow) in log view. */
-  const canRefresh = () => (viewMode() === "json" ? !!props.loadObject : canLog());
+  const canRefresh = () =>
+    viewMode() === "json" ? !!props.loadObject : viewMode() === "events" ? canEvents() : canLog();
   const refresh = () => {
+    if (viewMode() === "events") {
+      void loadEvents();
+      return;
+    }
     if (viewMode() === "json") {
       // `r` asks the API: the embedded object is the snapshot from when the resource was listed.
       if (props.loadObject) void loadObject(true);
@@ -193,8 +246,9 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
     else void loadLog(true);
   };
   const cycleViewMode = () => {
-    if (!canLog()) return;
-    setViewMode(current => (current === "log" ? "json" : "log"));
+    const modes = viewModes();
+    if (modes.length < 2) return;
+    setViewMode(current => modes[(modes.indexOf(current) + 1) % modes.length] ?? modes[0]);
   };
 
   const consolePage = () =>
@@ -220,7 +274,7 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
     } else if (e.name === "r" && canRefresh()) {
       e.preventDefault();
       refresh();
-    } else if (e.name === "c" && canLog()) {
+    } else if (e.name === "c" && viewModes().length > 1) {
       e.preventDefault();
       cycleViewMode();
     } else if (e.name === "o" && consolePage()) {
@@ -268,7 +322,7 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
                         text={String(index() + 1).padStart(lineNoWidth())}
                         current={search.current() === index()}
                       />
-                      <text wrapMode={wrapEnabled() ? "word" : "none"} fg={t().foreground}>
+                      <text wrapMode={wrapEnabled() ? "word" : "none"} fg={lineColor(index())}>
                         {highlightHits(line, search.term(), { fg: t().background, bg: t().accent })}
                       </text>
                     </box>
@@ -280,7 +334,12 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
             </Show>
           </box>
         </scrollbox>
-        <LogSearchRow search={search} placeholder={viewMode() === "log" ? "Search log..." : "Search object..."} />
+        <LogSearchRow
+          search={search}
+          placeholder={
+            viewMode() === "log" ? "Search log..." : viewMode() === "events" ? "Search events..." : "Search object..."
+          }
+        />
         <DialogFooter>
           {/* Same words and order as the CI log and diff dialogs: search · view · wrap · refresh. */}
           <Show
@@ -289,7 +348,7 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
           >
             <KeyHint key="n/N" desc=" next/prev" onClick={() => search.step(1)} />
           </Show>
-          {canLog() ? (
+          {viewModes().length > 1 ? (
             <>
               <KeyHintSeparator />
               <KeyHint key="c" desc=" view" onClick={cycleViewMode} />

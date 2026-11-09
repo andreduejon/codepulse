@@ -7,14 +7,20 @@ import { createThemeState, ThemeContext } from "../../context/theme";
 import { BANNER } from "../../debug/banner";
 import * as browser from "../../utils/open-url";
 import OpenShiftResourceDialog from "./resource-dialog";
-import type { OpenShiftResource } from "./types";
+import type { OpenShiftEvent, OpenShiftResource } from "./types";
 
 const descendants = (node: Renderable): Renderable[] =>
   node.getChildren().flatMap(child => [child, ...descendants(child)]);
 const logRows = (count: number) =>
   Array.from({ length: count }, (_, i) => `row-${String(i + 1).padStart(3, "0")}`).join("\n");
 
-async function renderResource(kind: OpenShiftResource["kind"], follow = false, hasLoader = true, consoleUrl?: string) {
+async function renderResource(
+  kind: OpenShiftResource["kind"],
+  follow = false,
+  hasLoader = true,
+  consoleUrl?: string,
+  loadEvents?: (resource: OpenShiftResource) => Promise<OpenShiftEvent[]>,
+) {
   const resource: OpenShiftResource = {
     id: `${kind}/resource`,
     kind,
@@ -44,6 +50,7 @@ async function renderResource(kind: OpenShiftResource["kind"], follow = false, h
             loadObject={loadObject}
             followLog={follow ? followLog : undefined}
             consoleUrl={consoleUrl}
+            loadEvents={loadEvents}
             onClose={close}
           />
         </Show>
@@ -406,5 +413,74 @@ test("o opens the resource in the web console when its URL is set, and the foote
   } finally {
     openUrl.mockRestore();
     d.renderer.destroy();
+  }
+});
+
+const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+
+test("c cycles log, object and events; events are newest first, warnings in the warning color, r refetches", async () => {
+  const loadEvents = mock(
+    async (_resource: OpenShiftResource): Promise<OpenShiftEvent[]> => [
+      {
+        type: "Warning",
+        reason: "BackOff",
+        message: "Back-off restarting failed container api",
+        count: 31,
+        lastSeen: minutesAgo(2),
+      },
+      {
+        type: "Normal",
+        reason: "Scheduled",
+        message: "Successfully assigned test-ns/test-resource",
+        count: 1,
+        lastSeen: minutesAgo(16),
+      },
+    ],
+  );
+  const d = await renderResource("Pod", false, true, undefined, loadEvents);
+  try {
+    expect(d.frame()).toContain("c view");
+    await d.key("c");
+    expect(d.frame()).toContain("objectMarker");
+    await d.key("c");
+    await d.flush();
+    const frame = d.frame();
+    expect(frame).toMatch(/test-resource · events/);
+    expect(frame).toMatch(/LAST SEEN\s+TYPE\s+REASON\s+COUNT\s+MESSAGE/);
+    expect(frame.indexOf("BackOff")).toBeLessThan(frame.indexOf("Scheduled"));
+    expect(frame).toMatch(/2m ago\s+Warning\s+BackOff\s+31\s+Back-off restarting failed container api/);
+    expect(d.cell("Back-off")?.fg).toEqual(RGBA.fromHex(d.theme.warning));
+    expect(loadEvents).toHaveBeenCalledTimes(1);
+    await d.key("r");
+    await d.flush();
+    expect(loadEvents).toHaveBeenCalledTimes(2);
+    await d.key("c");
+    expect(d.frame()).toContain("normal");
+  } finally {
+    d.renderer.destroy();
+  }
+});
+
+test("a Deployment cycles object and events; events that cannot load, or none, say so", async () => {
+  const failing = mock(async (_resource: OpenShiftResource): Promise<OpenShiftEvent[]> => {
+    throw new Error("No permission to list events in test-ns.");
+  });
+  const d = await renderResource("Deployment", false, false, undefined, failing);
+  try {
+    expect(d.frame()).toContain("c view");
+    await d.key("c");
+    await d.flush();
+    expect(d.frame()).toContain("Failed to load events");
+    expect(d.frame()).toContain("No permission to list events in test-ns.");
+  } finally {
+    d.renderer.destroy();
+  }
+  const empty = await renderResource("Deployment", false, false, undefined, async () => []);
+  try {
+    await empty.key("c");
+    await empty.flush();
+    expect(empty.frame()).toContain("No recent events. OpenShift keeps them for about an hour.");
+  } finally {
+    empty.renderer.destroy();
   }
 });

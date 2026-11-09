@@ -85,6 +85,17 @@ export interface OpenShiftResource {
   object?: unknown;
 }
 
+/** One Kubernetes event about a resource, as the events view lists it. */
+export interface OpenShiftEvent {
+  /** `Normal` or `Warning`. */
+  type: string;
+  reason: string;
+  message: string;
+  count: number;
+  /** When it last happened (ISO), or null when the event has no time. */
+  lastSeen: string | null;
+}
+
 export interface OpenShiftNamespaceData {
   namespace: string;
   builds: OpenShiftResource[];
