@@ -708,17 +708,24 @@ export async function fetchJenkinsTestReport(
   signal?: AbortSignal,
 ): Promise<JenkinsTestReport | null> {
   try {
-    const report = await fetchJson<{
+    const url = jenkinsApiUrl(
+      onOrigin(run.url, run.jobUrl),
+      `testReport/api/json?tree=${encodeURIComponent(TEST_REPORT_TREE)}`,
+    );
+    if (!isSafeJenkinsRequestUrl(url)) return null;
+    const res = await fetchWithRetry(url, { headers: authHeaders(username, token), signal, redirect: "manual" });
+    // Most builds have no report: that is no error, so Debug stays quiet about it.
+    if (res.status === 404) return null;
+    if (!res.ok || /text\/html/i.test(res.headers.get("content-type") ?? "")) {
+      debugError("Jenkins", `${res.status} ${res.statusText} ${url}`);
+      return null;
+    }
+    const report = (await res.json()) as {
       failCount?: number;
       passCount?: number;
       skipCount?: number;
       suites?: { cases?: Record<string, unknown>[] }[];
-    }>(
-      jenkinsApiUrl(onOrigin(run.url, run.jobUrl), `testReport/api/json?tree=${encodeURIComponent(TEST_REPORT_TREE)}`),
-      username,
-      token,
-      signal,
-    );
+    };
     const text = (value: unknown) => (typeof value === "string" && value.trim() ? value : null);
     const failed = (report.suites ?? [])
       .flatMap(suite => suite.cases ?? [])

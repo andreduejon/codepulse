@@ -1051,8 +1051,11 @@ describe("Jenkins test reports", () => {
 
   test("a build without a test report has no tests, and still has its stages", async () => {
     await withFetch(new Response("not found", { status: 404 }), async () => {
+      clearDebugEvents();
       const { jobs, error } = await fetchJenkinsRunJobs(run, "user", "token");
       expect(error).toBeNull();
+      // A missing report is no error: Debug only lists the request, it reports no failure.
+      expect(getDebugEvents().some(event => event.message.startsWith("404"))).toBe(false);
       expect(jobs[0].steps.map(stage => stage.name)).toEqual(["Test"]);
       expect(jobs[0].tests).toBeUndefined();
     });
