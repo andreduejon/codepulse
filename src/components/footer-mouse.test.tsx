@@ -675,3 +675,24 @@ test("a wide footer shows every provider's activity in full", async () => {
     await d.dispose();
   }
 });
+
+test("a narrow footer leaves out whole hints, least needed first, instead of cutting one", async () => {
+  const d = await renderFooter(70);
+  try {
+    d.state.providers.register({ id: "github-actions", displayName: "GitHub Actions", isAvailable: () => true });
+    d.actions.setSearchQuery("fix");
+    await d.flush();
+    const line =
+      d
+        .captureCharFrame()
+        .split("\n")
+        .find(row => row.includes("navigate")) ?? "";
+    // Every shown hint is whole; switching project and views gives way first.
+    expect(line).toMatch(/↑\/↓ navigate\s*$/);
+    expect(line).toContain("esc clear");
+    expect(line).toContain("enter details");
+    expect(line).not.toContain("switch project");
+  } finally {
+    await d.dispose();
+  }
+});

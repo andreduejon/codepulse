@@ -1,11 +1,20 @@
 import type { BoxRenderable } from "@opentui/core";
-import { createEffect, createSignal, onCleanup, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import { useAppState } from "../context/state";
 import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
 import { useT } from "../hooks/use-t";
 import { providerShortName } from "../providers/provider";
+import { cellWidth } from "../utils/terminal-text";
 import { endTruncate } from "../utils/truncate";
 import { KeyHint, KeyHintSeparator } from "./key-hint";
+
+interface FooterHint {
+  key: string;
+  desc: string;
+  rank: number;
+  disabled?: boolean;
+  onClick?: () => void;
+}
 
 /** Full braille rotation spinner — 8 frames, smooth circular motion. */
 const SPINNER_FRAMES = ["\u28FE", "\u28FD", "\u28FB", "\u28BF", "\u287F", "\u283F", "\u28EF", "\u28F7"];
@@ -105,9 +114,84 @@ export default function Footer(
 
   const ancestryMode = () => state.ancestrySet() !== null;
 
+  const [footerWidth, setFooterWidth] = createSignal(Number.POSITIVE_INFINITY);
+  const click = (handler?: () => void) => (props.mouseEnabled === false ? undefined : handler);
+  /** The hints of the current mode, in display order. `rank`: 1 is needed most, 6 least. */
+  const hints = (): FooterHint[] => {
+    const next = nextProviderLabel();
+    const viewHint = next ? [{ key: "tab", desc: ` ${next}`, rank: 5 }] : [];
+    if (state.detailFocused()) {
+      const action = enterAction();
+      const shortcut = state.detailCursorShortcut();
+      return [
+        ...viewHint,
+        ...(action
+          ? [
+              {
+                key: "enter",
+                desc: ` ${action}`,
+                rank: 1,
+                disabled: !state.selectedCommit() || !action,
+                onClick: click(props.onConfirm),
+              },
+            ]
+          : []),
+        ...(shortcut ? [{ key: shortcut.key, desc: ` ${shortcut.desc}`, rank: 2 }] : []),
+        { key: "esc", desc: " back", rank: 2, onClick: click(props.onClose) },
+        { key: "←/→", desc: " switch tab", rank: 4 },
+        { key: "↑/↓", desc: " navigate", rank: 3 },
+      ];
+    }
+    if (mode() !== "idle")
+      return [
+        { key: "enter", desc: " confirm", rank: 1, onClick: click(props.onConfirm) },
+        { key: "esc", desc: " cancel", rank: 1, onClick: click(props.onClose) },
+        { key: "shift ←/→", desc: " switch project", rank: 6 },
+      ];
+    const action = enterAction();
+    return [
+      ...(action ? [{ key: "enter", desc: ` ${action}`, rank: 2 }] : []),
+      ...(ancestryMode() || props.filterActive
+        ? [{ key: "esc", desc: " clear", rank: 2, onClick: click(props.onClose) }]
+        : []),
+      ...viewHint,
+      {
+        key: props.compact ? "enter" : "enter/→",
+        desc: props.compact ? " details" : " show details",
+        rank: 1,
+        disabled: !state.selectedCommit(),
+        onClick: click(props.onOpenDetails),
+      },
+      { key: "shift ←/→", desc: " switch project", rank: 6 },
+      { key: "↑/↓", desc: " navigate", rank: 3 },
+    ];
+  };
+  /** Hints that fit beside the spinner: the least needed (highest rank, the later one first) go until the rest fit. */
+  const shownHints = createMemo(() => {
+    const room = footerWidth() - 1;
+    const width = (list: FooterHint[]) =>
+      list.reduce((sum, hint) => sum + cellWidth(hint.key + hint.desc), 0) + Math.max(0, list.length - 1) * 3;
+    let kept = hints();
+    while (kept.length > 1 && width(kept) > room) {
+      let drop = 0;
+      kept.forEach((hint, index) => {
+        if (hint.rank >= (kept[drop]?.rank ?? 0)) drop = index;
+      });
+      kept = kept.filter((_, index) => index !== drop);
+    }
+    return kept;
+  });
+
   return (
     <>
-      <box flexDirection="row" width="100%" height={1}>
+      <box
+        flexDirection="row"
+        width="100%"
+        height={1}
+        onSizeChange={function (this: BoxRenderable) {
+          setFooterWidth(this.width);
+        }}
+      >
         {/* Loading indicator — always present to avoid layout shift, left-aligned */}
         <text flexShrink={0} wrapMode="none" fg={spinnerColor()}>
           {spinnerChar()}
@@ -127,92 +211,17 @@ export default function Footer(
           </text>
         </box>
 
-        {/* ── Detail focused ───────────────────────────────────────────────── */}
-        <Show when={state.detailFocused()}>
-          <Show when={nextProviderLabel()}>
-            <KeyHint key="tab" desc={` ${nextProviderLabel()}`} />
-          </Show>
-          <Show when={nextProviderLabel()}>
-            <KeyHintSeparator />
-          </Show>
-          <Show when={enterAction()}>
-            <KeyHint
-              key="enter"
-              desc={` ${enterAction()}`}
-              disabled={!state.selectedCommit() || !enterAction()}
-              onClick={props.mouseEnabled === false ? undefined : props.onConfirm}
-            />
-          </Show>
-          <Show when={enterAction()}>
-            <KeyHintSeparator />
-          </Show>
-          <Show when={state.detailCursorShortcut()}>
-            {shortcut => (
-              <>
-                <KeyHint key={shortcut().key} desc={` ${shortcut().desc}`} />
+        {/* Key hints: whole hints only, the least needed left out first when the footer is narrow. */}
+        <For each={shownHints()}>
+          {(hint, index) => (
+            <>
+              <Show when={index() > 0}>
                 <KeyHintSeparator />
-              </>
-            )}
-          </Show>
-          <KeyHint key="esc" desc=" back" onClick={props.mouseEnabled === false ? undefined : props.onClose} />
-          <KeyHintSeparator />
-          <KeyHint key="←/→" desc=" switch tab" />
-          <KeyHintSeparator />
-          <KeyHint key="↑/↓" desc=" navigate" />
-        </Show>
-
-        {/* ── Input modes (command / search / path) ────────────────────────── */}
-        <Show when={!state.detailFocused() && mode() !== "idle"}>
-          <KeyHint key="enter" desc=" confirm" onClick={props.mouseEnabled === false ? undefined : props.onConfirm} />
-          <KeyHintSeparator />
-          <KeyHint key="esc" desc=" cancel" onClick={props.mouseEnabled === false ? undefined : props.onClose} />
-          <KeyHintSeparator />
-          <KeyHint key="shift ←/→" desc=" switch project" />
-        </Show>
-
-        {/* ── Graph idle ───────────────────────────────────────────────────── */}
-        <Show when={!state.detailFocused() && mode() === "idle"}>
-          <Show when={enterAction()}>
-            <KeyHint key="enter" desc={` ${enterAction()}`} />
-            <KeyHintSeparator />
-          </Show>
-          {/* Ancestry mode active */}
-          <Show when={ancestryMode()}>
-            <KeyHint key="esc" desc=" clear" onClick={props.mouseEnabled === false ? undefined : props.onClose} />
-          </Show>
-          <Show when={ancestryMode()}>
-            <KeyHintSeparator />
-          </Show>
-
-          {/* No ancestry active */}
-          <Show when={!ancestryMode()}>
-            <Show when={props.filterActive}>
-              <KeyHint key="esc" desc=" clear" onClick={props.mouseEnabled === false ? undefined : props.onClose} />
-            </Show>
-            <Show when={props.filterActive}>
-              <KeyHintSeparator />
-            </Show>
-          </Show>
-
-          {/* Switch tab / show details — always shown in graph idle */}
-          <Show when={nextProviderLabel()}>
-            <KeyHint key="tab" desc={` ${nextProviderLabel()}`} />
-          </Show>
-          <Show when={nextProviderLabel()}>
-            <KeyHintSeparator />
-          </Show>
-          <KeyHint
-            key={props.compact ? "enter" : "enter/→"}
-            desc={props.compact ? " details" : " show details"}
-            disabled={!state.selectedCommit()}
-            onClick={props.mouseEnabled === false ? undefined : props.onOpenDetails}
-          />
-          <KeyHintSeparator />
-          <KeyHint key="shift ←/→" desc=" switch project" />
-          <KeyHintSeparator />
-
-          <KeyHint key="↑/↓" desc=" navigate" />
-        </Show>
+              </Show>
+              <KeyHint key={hint.key} desc={hint.desc} disabled={hint.disabled} onClick={hint.onClick} />
+            </>
+          )}
+        </For>
       </box>
       <box height={1} />
     </>
