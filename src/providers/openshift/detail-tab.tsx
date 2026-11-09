@@ -390,9 +390,7 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
                                 {childLead()}
                                 {groupIsLast() ? "└─ " : "├─ "}
                               </text>
-                              <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
-                                {group.label}
-                              </text>
+                              <ScrollingLabel text={group.label} active={false} fg={t().foregroundMuted} />
                             </box>
                             <For each={ns[group.key]}>
                               {(resource, resourceIdx) =>
@@ -413,9 +411,7 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
                         <text flexShrink={0} wrapMode="none" fg={t().border}>
                           {childLead()}└─{" "}
                         </text>
-                        <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
-                          ImageStreams
-                        </text>
+                        <ScrollingLabel text="ImageStreams" active={false} fg={t().foregroundMuted} />
                       </box>
                       <For each={groupedImageStreams(ns.imageStreamTags)}>
                         {(stream, streamIdx) => {
@@ -429,9 +425,7 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
                                   {streamLead()}
                                   {streamIsLast() ? "└─ " : "├─ "}
                                 </text>
-                                <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
-                                  {stream.stream}
-                                </text>
+                                <ScrollingLabel text={stream.stream} active={false} fg={t().foregroundMuted} />
                               </box>
                               <For each={stream.tags}>
                                 {(tag, tagIdx) =>

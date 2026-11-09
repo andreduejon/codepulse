@@ -32,7 +32,6 @@ import {
   sliceGraphToViewport,
 } from "../git/graph";
 import type { GraphRow, RefInfo } from "../git/types";
-import { useBannerScroll } from "../hooks/use-banner-scroll";
 import { useT } from "../hooks/use-t";
 import {
   ActionsColumnHeaders,
@@ -46,10 +45,12 @@ import {
   OpenShiftCountsColumn,
 } from "../providers/openshift/graph-columns";
 import type { GraphBadge, NamespaceMarker, ProviderView } from "../providers/provider";
+import { ScrollingLabel } from "../providers/shared/detail-rows";
 import { SnykColumnHeaders, SnykCountsColumn, SnykScanColumn } from "../providers/snyk/graph-columns";
 import type { SnykScanResult } from "../providers/snyk/types";
 import { formatRelativeDate } from "../utils/date";
 import { scheduleScrollIntoView, scrollElementIntoView } from "../utils/scroll";
+import { cellWidth } from "../utils/terminal-text";
 import { truncateName } from "../utils/truncate";
 import Badge from "./badge";
 
@@ -465,7 +466,8 @@ function GraphLine(
       const kept = keep(shown);
       // Each shown badge: its name (cut at `cap`) + 2, one gap between badges and one after them. Short names
       // (`dev`) take only their own width, so they are not folded into `+N` for the room a long name would need.
-      const needed = (cap: number) => kept.reduce((sum, ref) => sum + Math.min(ref.name.length, cap) + 3, 0) + overflow;
+      const needed = (cap: number) =>
+        kept.reduce((sum, ref) => sum + Math.min(cellWidth(ref.name), cap) + 3, 0) + overflow;
       for (let cap = 30; cap >= 8; cap--) {
         if (needed(cap) <= room) return { shown: kept, hidden, maxLength: cap };
       }
@@ -480,40 +482,10 @@ function GraphLine(
     if (shown.length === 0 && hidden === 0) return 0;
     const badges = [...shown.map(r => truncateName(r.name, refMaxLength())), ...(hidden > 0 ? [`+${hidden}`] : [])];
     // sum of (displayName + 2) for each badge + gaps between badges + 1 paddingRight
-    return badges.reduce((acc, name) => acc + name.length + 2, 0) + (badges.length - 1) + 1;
-  });
-
-  // Approximate available width for the subject text in the graph panel.
-  // Graph panel takes the remaining width after the detail panel (normal mode)
-  // or the full width minus outer padding (compact mode).
-  // Fixed consumed columns: graphWidth + 1 (hash paddingLeft) + HASH_COL_WIDTH
-  //   + 1 (desc box paddingLeft) + 2 (desc box paddingRight)
-  //   + refBadgesWidth + AUTHOR_COL_WIDTH + 2 (author paddingRight) + DATE_COL_WIDTH
-  //   + 4 (left panel paddingX=2 each side)
-  const subjectAvailableWidth = createMemo(() => {
-    const panelWidth = graphPanelWidth(props.terminalWidth());
-    // Hash box: width=HASH_COL_WIDTH (internal paddingLeft NOT added separately — it's inside the fixed width).
-    // Author box: width=AUTHOR_COL_WIDTH (internal paddingRight NOT added separately — same reason).
-    // Date box: width=DATE_COL_WIDTH (no internal padding).
-    // Desc box: paddingLeft=1 + paddingRight=2 are layout padding on a flex-grow box (no fixed width), so they DO consume space.
-    const fixedCols =
-      graphWidth() +
-      HASH_COL_WIDTH + // hash box (width=9, internal paddingLeft is inside that 9)
-      1 + // desc box paddingLeft
-      2 + // desc box paddingRight
-      refBadgesWidth() +
-      columnWidths().first + // author / provider status box (internal paddingRight is inside its width)
-      columnWidths().second; // date / provider time box
-    return Math.max(0, panelWidth - fixedCols);
+    return badges.reduce((acc, name) => acc + cellWidth(name) + 2, 0) + (badges.length - 1) + 1;
   });
 
   const subjectText = () => (isUncommitted() ? "Staged and unstaged changes in working tree" : commit().subject);
-
-  const bannerOverflow = () => {
-    if (!props.active) return 0;
-    return Math.max(0, subjectText().length - subjectAvailableWidth());
-  };
-  const bannerOffset = useBannerScroll(bannerOverflow);
 
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: TUI block uses existing keyboard graph navigation, not DOM roles.
@@ -573,22 +545,13 @@ function GraphLine(
               </Show>
             </box>
           </Show>
-          <text flexGrow={1} flexShrink={1} fg={effectiveTextColor()} wrapMode="none" truncate={bannerOverflow() === 0}>
-            {(() => {
-              const v = subjectText();
-              if (props.active) {
-                const off = bannerOffset();
-                const ov = bannerOverflow();
-                const rendered = ov > 0 ? v.substring(off, off + subjectAvailableWidth()) : v;
-                return (
-                  <strong>
-                    <span>{rendered}</span>
-                  </strong>
-                );
-              }
-              return v;
-            })()}
-          </text>
+          {/* Measured like the detail rows: cut with … in terminal columns, and the active subject scrolls. */}
+          <ScrollingLabel
+            text={subjectText()}
+            active={!!props.active}
+            bold={!!props.active}
+            fg={effectiveTextColor()}
+          />
         </box>
 
         {/* Author / Date — replaced by CI columns when in CI view */}

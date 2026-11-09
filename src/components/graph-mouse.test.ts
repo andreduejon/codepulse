@@ -542,3 +542,62 @@ test("when not even one shortened ref fits, the refs collapse into +N alone and 
     setup.renderer.destroy();
   }
 });
+
+test("a subject that does not fit ends in …, measured in terminal columns (wide characters too)", async () => {
+  const commit = (hash: string, parents: string[], subject: string): Commit => ({
+    hash,
+    shortHash: hash.slice(0, 7),
+    parents,
+    subject,
+    body: "",
+    author: "Author",
+    authorEmail: "author@example.com",
+    authorDate: "2026-01-01T00:00:00Z",
+    committer: "Author",
+    committerEmail: "author@example.com",
+    commitDate: "2026-01-01T00:00:00Z",
+    refs: [],
+  });
+  const first = "a".repeat(40);
+  const second = "b".repeat(40);
+  const setup = await testRender(
+    () => {
+      const app = createAppState(100, 0, 0);
+      const commits = [
+        commit(first, [second], "short"),
+        commit(second, [], `支持退款 ${"wide characters and a subject far too long for the row ".repeat(3)}END`),
+      ];
+      app.actions.setGraphRows(buildGraph(commits));
+      app.actions.setCommits(commits);
+      app.actions.setLoading(false);
+      app.actions.setHasMore(false);
+      return createComponent(ThemeContext.Provider, {
+        value: createThemeState(),
+        get children() {
+          return createComponent(AppStateContext.Provider, {
+            value: app,
+            get children() {
+              return createComponent(GraphView, {});
+            },
+          });
+        },
+      });
+    },
+    { width: 90, height: 10 },
+  );
+  try {
+    // The label measures its width on the first frame and cuts to it on the next.
+    await setup.renderOnce();
+    await setup.renderOnce();
+    const row =
+      setup
+        .captureCharFrame()
+        .split("\n")
+        .find(line => line.includes("支持退款")) ?? "";
+    expect(row).not.toContain("...");
+    expect(row).not.toContain("END");
+    expect(row).toMatch(/…\s+Author/);
+  } finally {
+    setup.renderer.destroy();
+  }
+});

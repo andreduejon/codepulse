@@ -114,6 +114,8 @@ export function ScrollingLabel(
     fg: string;
     selectable?: boolean;
     grow?: boolean;
+    /** Bold text (the graph's active subject). */
+    bold?: boolean;
     /**
      * Extra text after the name in its own color (a failure reason, a count): cut first when space is short, so the
      * name keeps its room, and scrolled into view with the name on the selected row. Starts with its own separator.
@@ -168,7 +170,11 @@ export function ScrollingLabel(
         wrapMode="none"
         fg={props.fg}
       >
-        {parts()[0]}
+        <Show when={props.bold} fallback={parts()[0]}>
+          <strong>
+            <span>{parts()[0]}</span>
+          </strong>
+        </Show>
         <Show when={parts()[1]}>{visible => <span style={{ fg: props.tailFg ?? props.fg }}>{visible()}</span>}</Show>
       </text>
     </box>

@@ -701,9 +701,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                         {placeholderTreeLead()}└─
                       </text>
                       <text> </text>
-                      <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().error}>
-                        {error()}
-                      </text>
+                      <ScrollingLabel text={error()} active={false} fg={t().error} />
                     </box>
                   )}
                 </Show>
@@ -845,15 +843,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                                   <Show
                                     when={props.onOpenStep}
                                     fallback={
-                                      <text
-                                        flexGrow={1}
-                                        flexShrink={1}
-                                        wrapMode="none"
-                                        truncate
-                                        fg={t().foregroundMuted}
-                                      >
-                                        {step.name}
-                                      </text>
+                                      <ScrollingLabel text={step.name} active={false} fg={t().foregroundMuted} />
                                     }
                                   >
                                     <ScrollingLabel
@@ -884,9 +874,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                                 <text flexShrink={0} wrapMode="none" fg={t().border}>
                                   {childLead()}└─{" "}
                                 </text>
-                                <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
-                                  {label()}
-                                </text>
+                                <ScrollingLabel text={label()} active={false} fg={t().foregroundMuted} />
                                 <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
                                   {String(notes().length)}
                                 </text>

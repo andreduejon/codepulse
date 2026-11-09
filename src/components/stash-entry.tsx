@@ -2,6 +2,7 @@ import { MouseButton, type Renderable } from "@opentui/core";
 import { createSignal, For, Show } from "solid-js";
 import type { Commit } from "../git/types";
 import { useT } from "../hooks/use-t";
+import { ScrollingLabel } from "../providers/shared/detail-rows";
 import type { FileTreeRow } from "../utils/file-tree";
 import { ENTRY_PADDING_LEFT } from "./detail-types";
 import { FileTreeEntry } from "./file-tree-entry";
@@ -101,10 +102,8 @@ export function StashEntry(props: Readonly<StashEntryProps>) {
       {/* Expanded area: description + total lines changed + file tree */}
       <Show when={props.expanded}>
         {/* Stash description (subject line) */}
-        <box paddingLeft={ENTRY_PADDING_LEFT}>
-          <text fg={t().foregroundMuted} wrapMode="none" truncate>
-            {props.stash.subject}
-          </text>
+        <box flexDirection="row" paddingLeft={ENTRY_PADDING_LEFT}>
+          <ScrollingLabel text={props.stash.subject} active={false} fg={t().foregroundMuted} />
         </box>
         <box height={1} />
 
