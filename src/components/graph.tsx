@@ -31,7 +31,7 @@ import {
   renderGraphRow,
   sliceGraphToViewport,
 } from "../git/graph";
-import type { GraphRow } from "../git/types";
+import type { GraphRow, RefInfo } from "../git/types";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
 import { useT } from "../hooks/use-t";
 import {
@@ -45,7 +45,7 @@ import {
   OpenShiftColumnHeaders,
   OpenShiftCountsColumn,
 } from "../providers/openshift/graph-columns";
-import type { GraphBadge, ProviderView } from "../providers/provider";
+import type { GraphBadge, NamespaceMarker, ProviderView } from "../providers/provider";
 import { SnykColumnHeaders, SnykCountsColumn, SnykScanColumn } from "../providers/snyk/graph-columns";
 import type { SnykScanResult } from "../providers/snyk/types";
 import { formatRelativeDate } from "../utils/date";
@@ -402,10 +402,17 @@ function GraphLine(
     if (graphTextRef) graphTextRef.content = commitRowGraphContent();
   });
 
-  // Ref sort order: tag=0, branch=1, remote=2, head=3 (hoisted to module scope)
-  const visibleRefs = createMemo(() => {
+  // Ref sort order: tag=0, branch=1, remote=2, head=3 (hoisted to module scope). In the OpenShift view the
+  // namespaces running this commit follow the refs, in the OpenShift colour.
+  const visibleRefs = createMemo((): RowBadge[] => {
     const allRefs = commit().refs;
-    return [...allRefs].sort((a, b) => (REF_SORT_ORDER[a.type] ?? 9) - (REF_SORT_ORDER[b.type] ?? 9));
+    const refs: RowBadge[] = [...allRefs].sort((a, b) => (REF_SORT_ORDER[a.type] ?? 9) - (REF_SORT_ORDER[b.type] ?? 9));
+    if (state.activeProviderView() !== "openshift") return refs;
+    const markers = lookupOpenShiftBadge(state.graphBadges(), commit().hash)?.namespaces ?? [];
+    return [
+      ...refs,
+      ...markers.map(marker => ({ name: namespaceMarkerLabel(marker), isCurrent: false, namespace: true })),
+    ];
   });
 
   // Effective text color for the commit subject (primary column).
@@ -443,9 +450,10 @@ function GraphLine(
       columnWidths().first -
       columnWidths().second -
       MIN_SUBJECT_WIDTH;
-    // The checked-out branch (or a detached HEAD) keeps its badge first; the others in display order. Kept badges
-    // still render in display order.
-    const byPriority = [...refs].sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent));
+    // The checked-out branch (or a detached HEAD) keeps its badge first, then the namespaces (what the OpenShift view
+    // is about), then the others in display order. Kept badges still render in display order.
+    const rank = (badge: RowBadge) => (badge.isCurrent ? 0 : badge.namespace ? 1 : 2);
+    const byPriority = [...refs].sort((a, b) => rank(a) - rank(b));
     const keep = (count: number) => {
       const kept = new Set(byPriority.slice(0, count));
       return refs.filter(ref => kept.has(ref));
@@ -454,9 +462,13 @@ function GraphLine(
       const hidden = refs.length - shown;
       // `+N` badge: its text + 2, plus one gap.
       const overflow = hidden > 0 ? `+${hidden}`.length + 3 : 0;
-      // Each shown badge: name + 2, one gap between badges and one after them.
-      const perBadge = Math.floor((room - overflow) / shown) - 3;
-      if (perBadge >= 8) return { shown: keep(shown), hidden, maxLength: Math.min(30, perBadge) };
+      const kept = keep(shown);
+      // Each shown badge: its name (cut at `cap`) + 2, one gap between badges and one after them. Short names
+      // (`dev`) take only their own width, so they are not folded into `+N` for the room a long name would need.
+      const needed = (cap: number) => kept.reduce((sum, ref) => sum + Math.min(ref.name.length, cap) + 3, 0) + overflow;
+      for (let cap = 30; cap >= 8; cap--) {
+        if (needed(cap) <= room) return { shown: kept, hidden, maxLength: cap };
+      }
     }
     // Not even one shortened badge fits beside `+N`: all refs collapse into it, so the subject keeps its room.
     return { shown: [], hidden: refs.length, maxLength: 8 };
@@ -549,7 +561,7 @@ function GraphLine(
                 {ri => (
                   <Badge
                     name={ri.name}
-                    color={laneColor()}
+                    color={ri.namespace ? t().openShiftBg : laneColor()}
                     dimmed={ri.type === "stash" || ri.type === "uncommitted" || isDimmed()}
                     maxLength={refMaxLength()}
                     noShrink
@@ -674,6 +686,18 @@ function GraphLine(
 }
 
 /** Sort order for ref badges: tags first, then branches, remotes, HEAD last. */
+/** A badge before the subject: a Git ref, or (OpenShift view) a namespace that runs the commit. */
+type RowBadge = { name: string; type?: RefInfo["type"]; isCurrent: boolean; namespace?: boolean };
+
+/** `dev`, `● test` while rolling out, `✗ prod` while failing. */
+function namespaceMarkerLabel(marker: NamespaceMarker): string {
+  return marker.state === "rolling"
+    ? `● ${marker.namespace}`
+    : marker.state === "fail"
+      ? `✗ ${marker.namespace}`
+      : marker.namespace;
+}
+
 const REF_SORT_ORDER: Record<string, number> = { tag: 0, branch: 1, remote: 2, stash: 3, uncommitted: 4, head: 5 };
 
 /**
@@ -881,6 +905,21 @@ export default function GraphView(
   // re-evaluations from N (every row) down to exactly 2.
   const isActive = createSelector(() => state.cursorIndex());
 
+  /**
+   * OpenShift: namespaces that run a commit the graph does not show (older than the loaded history, or filtered out),
+   * named at the end of the graph since they have no row to carry the badge.
+   */
+  const unseenDeployments = createMemo(() => {
+    if (state.activeProviderView() !== "openshift") return null;
+    const shown = new Set(state.commits().map(commit => commit.hash.toLowerCase()));
+    const parts: string[] = [];
+    for (const [sha, badge] of state.graphBadges()) {
+      if (!badge.namespaces || shown.has(sha.toLowerCase())) continue;
+      for (const marker of badge.namespaces) parts.push(`${marker.namespace} runs ${sha.slice(0, 7)}`);
+    }
+    return parts.length > 0 ? `Not in the graph: ${parts.join(", ")}` : null;
+  });
+
   return (
     <scrollbox
       ref={el => {
@@ -969,6 +1008,15 @@ export default function GraphView(
                 Could not load more history. Scroll to the end to retry.
               </text>
             </box>
+          </Show>
+          <Show when={unseenDeployments()}>
+            {text => (
+              <box paddingLeft={2} height={1} flexShrink={0}>
+                <text wrapMode="none" truncate fg={t().foregroundMuted}>
+                  {text()}
+                </text>
+              </box>
+            )}
           </Show>
         </Show>
       </box>

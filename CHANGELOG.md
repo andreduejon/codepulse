@@ -18,6 +18,14 @@ All notable changes to this project will be documented in this file.
 - OpenShift resource dialog: an events view. `c` cycles log, JSON and events for Pods, Builds, Deployments and
   DeploymentConfigs. Events are newest first (`LAST SEEN  TYPE  REASON  COUNT  MESSAGE`), warnings in the warning
   colour, searchable, and `r` refetches them. It needs `list` on `events`; without it the view says so.
+- OpenShift view: each namespace that runs a commit shows as a badge next to its refs (`dev`, `● test` while
+  rolling out, `✗ prod` while failing), also below the fetch size. A namespace running a commit the graph does
+  not show is named at the end of the graph.
+
+### Changed
+
+- Graph ref badges take only their own width, so short names (`main`, `dev`) are no longer folded into `+N` for
+  the room a long name would need.
 
 ### Fixed
 

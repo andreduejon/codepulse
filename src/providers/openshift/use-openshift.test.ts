@@ -47,6 +47,7 @@ function mountOpenShift(
     fetchDepth?: 10 | 20 | 50;
     older?: string[];
     cached?: OpenShiftCacheEntry[];
+    listedResources?: OpenShiftResource[];
   } = {},
 ) {
   const tokenEnvVar = "CODEPULSE_TEST_OPENSHIFT_TOKEN";
@@ -59,7 +60,7 @@ function mountOpenShift(
   });
   const entry = { sha: SHA, builds: [{ ...build, commitSha: SHA }] };
   const listed: api.OpenShiftListedInventory = {
-    resources: [{ ...pod, commitSha: SHA }],
+    resources: options.listedResources ?? [{ ...pod, commitSha: SHA }],
     controllers: [],
     failures: [],
     successfulRequests: 1,
@@ -277,6 +278,30 @@ describe("OpenShift cache below the fetch depth", () => {
     await Bun.sleep(5);
     expect(mounted.state.graphBadges().has(older)).toBe(true);
     expect(mounted.openShift.getCommitData(older)?.namespaces[0].builds.map(b => b.name)).toEqual(["app-0"]);
+  });
+});
+
+describe("OpenShift live in namespace", () => {
+  test("the commit each namespace runs is marked in the graph, also below the fetch window", async () => {
+    const newer = Array.from({ length: 9 }, (_, i) => String(i + 1).repeat(40));
+    const older = "b".repeat(40);
+    const deployment = (name: string, commitSha: string, status: OpenShiftResource["status"]): OpenShiftResource => ({
+      id: `Deployment:ns:${name}`,
+      kind: "Deployment",
+      namespace: "ns",
+      name,
+      status,
+      imageRefs: [],
+      commitSha,
+    });
+    const mounted = mountOpenShift(false, true, {
+      fetchDepth: 10,
+      older: [...newer, older],
+      listedResources: [deployment("api", older, "pass"), deployment("api-next", SHA, "running")],
+    });
+    for (let i = 0; i < 100 && !mounted.state.graphBadges().get(older)?.namespaces; i++) await Bun.sleep(5);
+    expect(mounted.state.graphBadges().get(older)?.namespaces).toEqual([{ namespace: "ns", state: "live" }]);
+    expect(mounted.state.graphBadges().get(SHA)?.namespaces).toEqual([{ namespace: "ns", state: "rolling" }]);
   });
 });
 

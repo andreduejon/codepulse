@@ -20,6 +20,20 @@ Both lanes show fail, running, pass, and unknown counts. Empty lanes show
 ImageStreamTags poll while the OpenShift view is focused. Deployments,
 DeploymentConfigs, and Pods are listed and watched until you leave the view.
 
+### Live in namespace
+
+Next to a commit's refs, a badge in the OpenShift colour names each namespace
+that runs that commit now: its Deployments or DeploymentConfigs carry the
+commit's SHA label. `dev` is ready, `● test` is rolling out, `✗ prod` is
+failing. During a rollout the new commit shows `●` until it is ready. Badges
+come from the live list of the whole namespace, so a commit below the fetch size
+is marked too, with no extra requests. A namespace that runs a commit the graph
+does not show (older than the loaded history, or filtered out) is named at the
+end of the graph: `Not in the graph: prod runs 4c5d6e7`.
+
+When the row is narrow, the checked-out branch keeps its badge first, then the
+namespaces; the rest fold into `+N`.
+
 ## Configuration
 
 Configure the provider per repository from `:providers`:

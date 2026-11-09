@@ -1,5 +1,5 @@
 import { BANNER, debugError } from "../../debug/banner";
-import type { GraphBadge, GraphStatusCounts } from "../provider";
+import type { GraphBadge, GraphStatusCounts, NamespaceMarker } from "../provider";
 import { fetchWithRetry, isAbortError } from "../shared/http";
 import type {
   OpenShiftCommitData,
@@ -1213,6 +1213,43 @@ function worstStatus(counts: GraphStatusCounts): GraphBadge["badge"] {
   if (counts.runningCount > 0) return "running";
   if (counts.unknownCount > 0) return "unknown";
   return "pass";
+}
+
+const MARKER_RANK: Record<NamespaceMarker["state"], number> = { live: 0, rolling: 1, fail: 2 };
+
+/**
+ * The namespaces each commit runs in now, from the listed Deployments and DeploymentConfigs (every one in the
+ * namespace, not only the fetch window): ready is `live`, a rollout in progress `rolling`, a failing one `fail`.
+ * One marker per namespace and commit, the most telling state winning; in the configured namespace order.
+ */
+export function buildOpenShiftNamespaceMarkers(
+  resources: readonly OpenShiftResource[],
+  namespaces: readonly string[],
+): Map<string, NamespaceMarker[]> {
+  const byCommit = new Map<string, Map<string, NamespaceMarker["state"]>>();
+  for (const resource of resources) {
+    if (resource.kind !== "Deployment" && resource.kind !== "DeploymentConfig") continue;
+    if (!resource.commitSha || resource.terminating) continue;
+    const state = resource.status === "pass" ? "live" : resource.status === "running" ? "rolling" : resource.status;
+    if (state === "unknown") continue;
+    const sha = resource.commitSha.toLowerCase();
+    const states = byCommit.get(sha) ?? new Map<string, NamespaceMarker["state"]>();
+    const previous = states.get(resource.namespace);
+    if (!previous || MARKER_RANK[state] > MARKER_RANK[previous]) states.set(resource.namespace, state);
+    byCommit.set(sha, states);
+  }
+  const order = (namespace: string) => {
+    const index = namespaces.indexOf(namespace);
+    return index < 0 ? namespaces.length : index;
+  };
+  return new Map(
+    [...byCommit].map(([sha, states]) => [
+      sha,
+      [...states]
+        .map(([namespace, state]) => ({ namespace, state }))
+        .sort((a, b) => order(a.namespace) - order(b.namespace) || a.namespace.localeCompare(b.namespace)),
+    ]),
+  );
 }
 
 export function buildOpenShiftGraphBadges(data: Map<string, OpenShiftCommitData>): Map<string, GraphBadge> {

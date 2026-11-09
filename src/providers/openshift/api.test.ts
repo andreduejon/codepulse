@@ -5,6 +5,7 @@ import {
   buildFailureReason,
   buildOpenShiftCommitMap,
   buildOpenShiftGraphBadges,
+  buildOpenShiftNamespaceMarkers,
   commitLabelSelector,
   commitShaFromItem,
   fetchOpenShiftEvents,
@@ -1167,5 +1168,70 @@ describe("fetchOpenShiftEvents", () => {
         "No permission to list events",
       );
     });
+  });
+});
+
+describe("buildOpenShiftNamespaceMarkers", () => {
+  const workload = (
+    kind: "Deployment" | "DeploymentConfig",
+    namespace: string,
+    name: string,
+    commitSha: string | undefined,
+    status: OpenShiftResource["status"],
+  ): OpenShiftResource => ({
+    id: `${kind}:${namespace}:${name}`,
+    kind,
+    namespace,
+    name,
+    status,
+    imageRefs: [],
+    commitSha,
+  });
+
+  test("each namespace marks the commits its workloads run, in the configured namespace order", () => {
+    const a = "a".repeat(40);
+    const b = "b".repeat(40);
+    const markers = buildOpenShiftNamespaceMarkers(
+      [
+        workload("Deployment", "test", "api", a, "running"),
+        workload("Deployment", "dev", "api", a, "pass"),
+        workload("DeploymentConfig", "dev", "worker", a, "pass"),
+        workload("Deployment", "prod", "api", b.toUpperCase(), "pass"),
+        workload("Deployment", "dev", "web", undefined, "pass"),
+        // A Pod says nothing about what a namespace was deployed with.
+        {
+          id: "Pod:dev:api-1",
+          kind: "Pod",
+          namespace: "dev",
+          name: "api-1",
+          status: "fail",
+          imageRefs: [],
+          commitSha: b,
+        },
+      ],
+      ["dev", "test", "prod"],
+    );
+    expect(markers.get(a)).toEqual([
+      { namespace: "dev", state: "live" },
+      { namespace: "test", state: "rolling" },
+    ]);
+    expect(markers.get(b)).toEqual([{ namespace: "prod", state: "live" }]);
+  });
+
+  test("a failing workload wins over a rolling one, which wins over a live one, per namespace", () => {
+    const a = "a".repeat(40);
+    const markers = buildOpenShiftNamespaceMarkers(
+      [
+        workload("Deployment", "dev", "api", a, "pass"),
+        workload("Deployment", "dev", "worker", a, "running"),
+        workload("Deployment", "test", "api", a, "running"),
+        workload("Deployment", "test", "worker", a, "fail"),
+      ],
+      ["dev", "test"],
+    );
+    expect(markers.get(a)).toEqual([
+      { namespace: "dev", state: "rolling" },
+      { namespace: "test", state: "fail" },
+    ]);
   });
 });

@@ -50,6 +50,12 @@ export interface GraphStatusCounts {
  * Nothing more specific lives here — provider-specific detail is in
  * the per-provider types.
  */
+/** A namespace that runs a commit now: ready (`live`), rolling out, or failing to. */
+export interface NamespaceMarker {
+  namespace: string;
+  state: "live" | "rolling" | "fail";
+}
+
 export interface GraphBadge {
   sha: string;
   /** Aggregated status across all runs for this SHA (worst-status wins). */
@@ -66,6 +72,8 @@ export interface GraphBadge {
   resourceCount?: number;
   /** Named status-count lanes (e.g. OpenShift `live` / `cache`). */
   lanes?: Record<string, GraphStatusCounts>;
+  /** OpenShift: the namespaces whose workloads run this commit now, shown with the refs in the graph. */
+  namespaces?: NamespaceMarker[];
   /** Severity counts used by scan/quality providers. */
   severityCounts?: { critical: number; high: number; medium: number; low: number };
   /** Relative time string for the most recently updated run (e.g. "2h ago"). */

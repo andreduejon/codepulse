@@ -10,6 +10,7 @@ import {
 } from "../../context/state";
 import { BANNER, debugError } from "../../debug/banner";
 import { collectTopSHAs } from "../github-actions/sha-selection";
+import type { GraphBadge } from "../provider";
 import { sleep } from "../shared/http";
 import { persistMergedSnapshots } from "../shared/sha-sqlite-cache";
 import { useProviderFetchLifecycle } from "../shared/use-provider-fetch-lifecycle";
@@ -17,6 +18,7 @@ import {
   applyOpenShiftWatchEvent,
   buildOpenShiftCommitMap,
   buildOpenShiftGraphBadges,
+  buildOpenShiftNamespaceMarkers,
   fetchOpenShiftBuildLog,
   fetchOpenShiftEvents,
   fetchOpenShiftInventory,
@@ -58,6 +60,20 @@ export interface UseOpenShiftResult {
   loadResourceObject: (resource: OpenShiftResource, force?: boolean) => Promise<unknown>;
   /** The events about the resource, always from the API (they change by the minute and are not cached). */
   loadResourceEvents: (resource: OpenShiftResource) => Promise<OpenShiftEvent[]>;
+}
+
+/** A graph badge with no resources, for a commit that only carries namespace markers. */
+function emptyGraphBadge(sha: string): GraphBadge {
+  const none = { passCount: 0, failCount: 0, runningCount: 0, unknownCount: 0 };
+  return {
+    sha,
+    badge: "unknown",
+    ...none,
+    resourceCount: 0,
+    lanes: { live: { ...none }, cache: { ...none } },
+    latestRunAt: "",
+    latestStatus: "unknown",
+  };
 }
 
 function emptyNamespace(namespace: string): OpenShiftNamespaceData {
@@ -241,7 +257,15 @@ export function useOpenShift(opts: {
 
   function publish(): void {
     setVersion(v => v + 1);
-    actions.setGraphBadges("openshift", buildOpenShiftGraphBadges(commits));
+    const badges = buildOpenShiftGraphBadges(commits);
+    // What each namespace runs comes from the whole live list, so a deployed commit below the window is marked too.
+    const markers = live.listed ? buildOpenShiftNamespaceMarkers(live.listed.resources, config.namespaces) : new Map();
+    for (const [sha, namespaces] of markers) {
+      const badge = badges.get(sha);
+      if (badge) badges.set(sha, { ...badge, namespaces });
+      else badges.set(sha, { ...emptyGraphBadge(sha), namespaces });
+    }
+    actions.setGraphBadges("openshift", badges);
   }
 
   function unavailableMessage(): string {
