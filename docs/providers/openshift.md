@@ -139,7 +139,7 @@ that produced them.
   dialog to abort follow.
 - **Events** starts with what the resource's status says is wrong
   (`STATUS  REASON  MESSAGE`): what a Pod's containers wait on, how their last run
-  ended and its conditions that are False, a workload's failing conditions, a
+  ended and how often they restarted, its conditions that are False, a workload's failing conditions, a
   Build's failure. The status comes with the object, so it stays after OpenShift
   deletes the events and where events are forbidden. Below it, the events newest
   first: `LAST SEEN  TYPE  REASON  COUNT  MESSAGE`, warnings in the warning colour.
@@ -166,16 +166,16 @@ colours. A legend below the tree explains them: `✓ ok  ● in progress  ✗ fa
 - `✗` fail: failed Build, fatal container state, replica failure, or failed
   workload progression.
 
-A failing row says why after its name, muted:
+A failing row says why after its name in one muted word:
 
-- Pods: the container's state, how it last ended, and restarts
-  (`CrashLoopBackOff · exit 1 · 14 restarts`, `OOMKilled · exit 137`, `Evicted`).
-- Deployments and DeploymentConfigs: ready replicas and the failing condition
-  (`1/3 ready · ProgressDeadlineExceeded`).
+- Pods: what the container waits on or how it ended (`CrashLoopBackOff`,
+  `OOMKilled`), or why the Pod failed (`Evicted`).
+- Deployments and DeploymentConfigs: ready replicas (`1/3 ready`).
 - Builds: the build's reason (`DockerBuildFailed`), or `Cancelled` / `Error`.
 
-When the panel is narrow the reason is cut first, so the name keeps its room; the
-selected row scrolls to show all of it.
+Exit codes, restarts, failing conditions and their messages are in the resource
+dialog's events view. When the panel is narrow the reason is cut first, so the
+name keeps its room. The selected row scrolls to show all of it.
 - `?` unknown: insufficient or indeterminate status (a grey chip in the graph).
 
 Aggregate precedence is fail, running, unknown, then pass.

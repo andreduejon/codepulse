@@ -4,7 +4,7 @@ import { formatOpenShiftStatus } from "./events";
 const texts = (kind: Parameters<typeof formatOpenShiftStatus>[0], object: unknown) =>
   formatOpenShiftStatus(kind, object).map(line => line.text.trimEnd());
 
-test("a crash-looping Pod says why: what it waits on, how its last run ended, and its False conditions", () => {
+test("a crash-looping Pod says why: what it waits on, how its last run ended, its restarts, and its False conditions", () => {
   const lines = formatOpenShiftStatus("Pod", {
     status: {
       phase: "Running",
@@ -20,6 +20,7 @@ test("a crash-looping Pod says why: what it waits on, how its last run ended, an
       containerStatuses: [
         {
           name: "api",
+          restartCount: 61,
           state: { waiting: { reason: "CrashLoopBackOff", message: "back-off 5m0s restarting failed container" } },
           lastState: { terminated: { reason: "Error", exitCode: 1 } },
         },
@@ -30,7 +31,7 @@ test("a crash-looping Pod says why: what it waits on, how its last run ended, an
   const [header, waiting, lastRun, ready] = lines.map(line => line.text.trimEnd());
   expect(header).toMatch(/^STATUS\s+REASON\s+MESSAGE$/);
   expect(waiting).toMatch(/^waiting\s+CrashLoopBackOff\s+back-off 5m0s restarting failed container$/);
-  expect(lastRun).toMatch(/^last run\s+Error · exit 1$/);
+  expect(lastRun).toMatch(/^last run\s+Error · exit 1 · 61 restarts$/);
   expect(ready).toMatch(/^Ready False\s+ContainersNotReady\s+containers with unready status: \[api\]$/);
   // Aligned columns, like the events below them.
   expect(waiting.indexOf("CrashLoopBackOff")).toBe(header.indexOf("REASON"));
@@ -44,7 +45,7 @@ test("an evicted or OOM-killed Pod says so; with several containers each row nam
   const lines = texts("Pod", {
     status: {
       containerStatuses: [
-        { name: "api", state: { terminated: { reason: "OOMKilled", exitCode: 137 } } },
+        { name: "api", restartCount: 0, state: { terminated: { reason: "OOMKilled", exitCode: 137 } } },
         { name: "proxy", state: { waiting: { reason: "ContainerCreating" } } },
       ],
     },

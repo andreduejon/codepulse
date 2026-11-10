@@ -71,7 +71,7 @@ export interface OpenShiftResource {
   namespace: string;
   name: string;
   status: OpenShiftStatus;
-  /** Why a failing resource fails (`CrashLoopBackOff · 14 restarts`); absent while it is fine. */
+  /** Why a failing resource fails, short (`CrashLoopBackOff`, `1/3 ready`); absent while it is fine. */
   reason?: string;
   imageRefs: string[];
   commitSha?: string;

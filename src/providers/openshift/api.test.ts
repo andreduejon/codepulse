@@ -1012,7 +1012,7 @@ describe("failure reasons", () => {
   });
   const reasonOf = (object: unknown) => resourceFromWatchObject(object, "dev/commit-sha")?.reason;
 
-  test("a failing Pod names its container's state, exit code and restarts", () => {
+  test("a failing Pod names one reason: its container's state, how it ended, or why the Pod failed", () => {
     expect(
       reasonOf(
         pod({
@@ -1026,7 +1026,7 @@ describe("failure reasons", () => {
           ],
         }),
       ),
-    ).toBe("CrashLoopBackOff · exit 1 · 14 restarts");
+    ).toBe("CrashLoopBackOff");
     expect(
       reasonOf(
         pod({
@@ -1040,7 +1040,7 @@ describe("failure reasons", () => {
           ],
         }),
       ),
-    ).toBe("CrashLoopBackOff · OOMKilled · 1 restart");
+    ).toBe("CrashLoopBackOff");
     expect(
       reasonOf(
         pod({
@@ -1048,14 +1048,19 @@ describe("failure reasons", () => {
           containerStatuses: [{ restartCount: 0, state: { terminated: { reason: "OOMKilled", exitCode: 137 } } }],
         }),
       ),
-    ).toBe("OOMKilled · exit 137");
+    ).toBe("OOMKilled");
+    expect(
+      reasonOf(
+        pod({ phase: "Failed", containerStatuses: [{ state: { terminated: { reason: "Error", exitCode: 1 } } }] }),
+      ),
+    ).toBe("Error");
     expect(
       reasonOf(pod({ phase: "Pending", containerStatuses: [{ state: { waiting: { reason: "ImagePullBackOff" } } }] })),
     ).toBe("ImagePullBackOff");
     expect(reasonOf(pod({ phase: "Failed", reason: "Evicted" }))).toBe("Evicted");
   });
 
-  test("a failing Deployment names its ready count and failing condition", () => {
+  test("a failing Deployment names its ready count; the failing condition is in the dialog", () => {
     const deployment = (status: Record<string, unknown>, replicas = 3) => ({
       kind: "Deployment",
       metadata: { name: "api", namespace: "dev", generation: 2 },
@@ -1069,10 +1074,10 @@ describe("failure reasons", () => {
           conditions: [{ type: "Progressing", status: "False", reason: "ProgressDeadlineExceeded" }],
         }),
       ),
-    ).toBe("1/3 ready · ProgressDeadlineExceeded");
+    ).toBe("1/3 ready");
     expect(
       reasonOf(deployment({ conditions: [{ type: "ReplicaFailure", status: "True", reason: "FailedCreate" }] }, 2)),
-    ).toBe("0/2 ready · FailedCreate");
+    ).toBe("0/2 ready");
   });
 
   test("a failed Build names its reason, also for a cached Build saved before reasons existed", () => {

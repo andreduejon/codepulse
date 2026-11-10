@@ -125,13 +125,13 @@ test("o opens the selected namespace or resource in the web console, only when i
 
 const crashing = resource("Pod", "payments-api-7f9c-x2k4", {
   status: "fail",
-  reason: "CrashLoopBackOff · 14 restarts",
+  reason: "CrashLoopBackOff",
 });
 
 test("a failing row says why after its name, muted, and the reason gives way before the name", async () => {
   const wide = await renderOpenShiftTab({ pods: [crashing], width: 70 });
   try {
-    expect(wide.row("payments-api")).toContain("payments-api-7f9c-x2k4  CrashLoopBackOff · 14 restarts");
+    expect(wide.row("payments-api")).toContain("payments-api-7f9c-x2k4  CrashLoopBackOff");
     const y = wide
       .captureCharFrame()
       .split("\n")

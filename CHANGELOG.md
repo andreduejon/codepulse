@@ -11,13 +11,12 @@ All notable changes to this project will be documented in this file.
   rows that have a page.
 - OpenShift **Console** setting (optional): the web console URL that `o` uses for namespaces and resources, in the
   detail panel and the resource dialog. It cannot be worked out from the API server URL.
-- OpenShift rows say why they fail, muted after the name: a Pod's container state, last exit and restarts
-  (`CrashLoopBackOff · exit 1 · 14 restarts`), a workload's ready count and failing condition
-  (`1/3 ready · ProgressDeadlineExceeded`), a Build's reason (`DockerBuildFailed`). In a narrow panel the reason
-  is cut before the name, and the selected row scrolls to show it.
+- OpenShift rows say why they fail in one muted word after the name: a Pod's container state (`CrashLoopBackOff`,
+  `OOMKilled`, `Evicted`), a workload's ready count (`1/3 ready`), a Build's reason (`DockerBuildFailed`). In a
+  narrow panel the reason is cut before the name, and the selected row scrolls to show it.
 - OpenShift resource dialog: an events view. `c` cycles log, JSON and events for Pods, Builds, Deployments and
   DeploymentConfigs. It starts with what the status says is wrong (a container waiting on `CrashLoopBackOff`, its
-  last run's exit code, failing conditions with their messages), which stays after OpenShift deletes the events
+  last run's exit code and restarts, failing conditions with their messages), which stays after OpenShift deletes the events
   and where they are forbidden. Then the events, newest first (`LAST SEEN  TYPE  REASON  COUNT  MESSAGE`),
   warnings in the warning colour, searchable, and `r` refetches them. The dialog title counts the warnings. It
   needs `list` on `events`; without it the view says so.

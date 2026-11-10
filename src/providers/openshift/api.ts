@@ -238,47 +238,24 @@ function podStatus(pod: unknown): OpenShiftStatus {
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
 
-/** How a container ended: its reason when it says more than "Error", otherwise its exit code. */
-function terminatedText(terminated: Record<string, unknown> | null | undefined): string | undefined {
-  if (!terminated) return undefined;
-  const reason = str(terminated.reason);
-  if (reason && reason !== "Error" && reason !== "Completed") return reason;
-  return typeof terminated.exitCode === "number" && terminated.exitCode !== 0
-    ? `exit ${terminated.exitCode}`
-    : undefined;
-}
-
-/** `CrashLoopBackOff · exit 1 · 14 restarts`, `OOMKilled · exit 137`, `Evicted`: why a failing Pod fails. */
+/**
+ * `CrashLoopBackOff`, `OOMKilled`, `Evicted`: why a failing Pod fails, one word for its row. Exit codes, restarts and
+ * messages are in the resource dialog.
+ */
 function podFailureReason(pod: unknown): string | undefined {
   const container = podContainerStatuses(pod).find(isFatalContainer);
   if (container) {
     const state = obj(obj(container)?.state) ?? {};
-    const restarts = obj(container)?.restartCount;
-    const waiting = str(obj(state.waiting)?.reason);
-    const terminated = obj(state.terminated);
-    const parts = waiting
-      ? [waiting, terminatedText(obj(obj(obj(container)?.lastState)?.terminated))]
-      : [
-          str(terminated?.reason) ?? "Error",
-          typeof terminated?.exitCode === "number" ? `exit ${terminated.exitCode}` : undefined,
-        ];
-    if (typeof restarts === "number" && restarts > 0) parts.push(plural(restarts, "restart"));
-    return parts.filter(Boolean).join(" · ");
+    return str(obj(state.waiting)?.reason) ?? str(obj(state.terminated)?.reason) ?? "Error";
   }
   const status = obj(obj(pod)?.status) ?? {};
   return status.phase === "Failed" ? (str(status.reason) ?? "Failed") : undefined;
 }
 
-/** `1/3 ready · ProgressDeadlineExceeded`: why a failing Deployment or DeploymentConfig fails. */
-function workloadFailureReason(item: unknown): string | undefined {
+/** `1/3 ready`: how far a failing Deployment or DeploymentConfig got. Its failing condition is in the dialog. */
+function workloadFailureReason(item: unknown): string {
   const status = obj(obj(item)?.status) ?? {};
   const spec = obj(obj(item)?.spec) ?? {};
-  const conditions = arr(status.conditions).map(condition => obj(condition) ?? {});
-  const failing = conditions.find(
-    condition =>
-      (["Failed", "Degraded", "ReplicaFailure"].includes(String(condition.type)) && condition.status === "True") ||
-      (condition.type === "Progressing" && condition.status === "False"),
-  );
   const desired = typeof spec.replicas === "number" ? spec.replicas : 1;
   const ready =
     typeof status.readyReplicas === "number"
@@ -286,7 +263,7 @@ function workloadFailureReason(item: unknown): string | undefined {
       : typeof status.availableReplicas === "number"
         ? status.availableReplicas
         : 0;
-  return [`${ready}/${desired} ready`, str(failing?.reason)].filter(Boolean).join(" · ");
+  return `${ready}/${desired} ready`;
 }
 
 /** One thing a resource's status says is wrong: `waiting  CrashLoopBackOff  back-off 5m0s restarting…`. */
@@ -340,7 +317,15 @@ export function openShiftStatusRows(kind: OpenShiftResourceKind, object: unknown
       const ended = obj(state.terminated);
       if (ended) rows.push(row(label("ended", container), endedText(ended), ended.message));
       const lastRun = obj(obj(container.lastState)?.terminated);
-      if (lastRun) rows.push(row(label("last run", container), endedText(lastRun), lastRun.message));
+      const restarts = typeof container.restartCount === "number" ? container.restartCount : 0;
+      if (lastRun)
+        rows.push(
+          row(
+            label("last run", container),
+            [endedText(lastRun), restarts > 0 ? plural(restarts, "restart") : ""].filter(Boolean).join(" · "),
+            lastRun.message,
+          ),
+        );
     }
     for (const condition of arr(status.conditions).map(value => obj(value) ?? {}))
       if (condition.status === "False")
