@@ -470,7 +470,10 @@ export function useOpenShift(opts: {
         const commit = seeds.get(sha);
         if (commit) commits.set(sha, mergeLiveIntoCommit(commit, commits.get(sha), sha));
       }
-      publish();
+      // The live list may have landed first: commits this build list adds get their live resources now, not on the
+      // next watch event or selection.
+      if (live.listed) applyLive(live.listed);
+      else publish();
       lifecycle.noteFetchStarted();
       // A status the live list set (a live 401 that froze requests, a failed list) is the live list's to clear.
       const liveOwned = liveStatus !== null && state.providerStatusFor("openshift") === liveStatus;

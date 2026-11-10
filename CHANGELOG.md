@@ -46,6 +46,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- OpenShift Live counts show for every running commit at once. When the live list came before the Build list,
+  a commit only got them once selected.
 - A long OpenShift resource name no longer pushes its status mark out of a narrow detail panel.
 - Log search with wrap off: a hit past the right edge moves the lines sideways (they start with `…`) so it shows.
 - A followed OpenShift log that drops its oldest lines keeps the selected search hit (`2/2` stays `2/2`).
