@@ -335,7 +335,10 @@ function openshift(url: URL, signal: AbortSignal | null | undefined): Response {
   if (!item) return notFound();
   if (!log) return json(item);
   const saved = world.logs.get(`${ns}/${name}`) ?? `${name} started\n${followLine(0)}\n`;
-  if (url.searchParams.get("follow") === "true")
+  // Like a cluster: only a running container keeps the followed log open. A crashed one ends with its crash.
+  const statuses = (item.status as { containerStatuses?: { state?: { running?: unknown } }[] } | undefined)
+    ?.containerStatuses;
+  if (url.searchParams.get("follow") === "true" && statuses?.some(status => status.state?.running))
     return stream(signal, `${saved}\n`, () =>
       Array.from({ length: 40 }, () => followLine(++followCount))
         .join("\n")
