@@ -105,6 +105,16 @@ and save selections per repository.
 See the [theme guide](docs/themes.md) for controls, available themes, and custom
 configuration examples.
 
+## Development
+
+```sh
+bun install
+bun run demo    # codepulse on made-up data: no accounts, no network
+bun test
+```
+
+The [demo guide](docs/demo.md) covers its options and the headless mode for checking UI changes.
+
 ## Roadmap
 
 Codepulse is working toward `1.0.0` by stabilizing provider behavior,

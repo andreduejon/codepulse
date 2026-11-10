@@ -1,30 +1,69 @@
 /**
- * Made-up provider data for the demo repository (`bun run demo`): every v0.17 row, label and message has a commit
- * that shows it. Shared by the fake fetch (GitHub, Jenkins, OpenShift) and the fake Snyk CLI.
+ * Made-up provider data for the demo repositories (`bun run demo`): every row, label and message has a commit that
+ * shows it. Shared by the fake servers (GitHub, Jenkins, OpenShift) and the fake CLIs.
+ *
+ * The world has phases. Phase 0 is the start; `--live` or the `advance` step moves it on:
+ * 1. The running work finishes: the GitHub run on `metrics` passes, its Jenkins build fails, the shop-dev rollout
+ *    fails to pull its image.
+ * 2. A new commit lands on origin/dev, with a queued GitHub run and a running Jenkins build.
  */
 import { readFileSync } from "node:fs";
+import type { ProviderMode, ProviderName } from "./options";
 
 export interface DemoState {
+  root: string;
   repoPath: string;
+  /** The second repository in the group. */
+  webRepoPath: string;
+  /** Where the local stand-ins for github.com live (see fake-ssh.ts). */
+  remotes: string;
   shas: Record<string, string>;
+  webShas: Record<string, string>;
   /** Local branch names, the ones Jenkins reads first. */
   branches: string[];
   /** A commit no branch points at: OpenShift runs it, the graph does not show it. */
   unseenSha: string;
+  providers: Record<ProviderName, ProviderMode>;
+  latency: number;
+  live: number | null;
+  headless: boolean;
 }
 
 export const DEMO_STATE_ENV = "CODEPULSE_DEMO_STATE";
-export const GITHUB_REPO = { owner: "demo", repo: "shop" };
+/** The headless play, for the app process (play.ts). */
+export const PLAY_ENV = "CODEPULSE_DEMO_PLAY";
+
+export interface PlayConfig {
+  steps: string;
+  width: number;
+  height: number;
+  repoPath: string;
+}
+
+export const REMOTES_ENV = "CODEPULSE_DEMO_REMOTES";
+export const GITHUB_REPOS = [
+  { owner: "demo", repo: "shop" },
+  { owner: "demo", repo: "shop-web" },
+] as const;
 export const JENKINS_ROOT = "https://jenkins.demo.invalid/job/shop";
 export const OPENSHIFT_SERVER = "https://api.demo.invalid:6443";
 export const OPENSHIFT_CONSOLE = "https://console.demo.invalid";
 export const NAMESPACES = ["shop-dev", "shop-test", "shop-prod"] as const;
 export const COMMIT_KEY = "dev/commit-sha";
+/** The headless demo's clock starts here, so `--play` prints the same dates every run. */
+export const FIXED_NOW = Date.parse("2026-03-02T09:30:00.000Z");
+export const LAST_PHASE = 2;
 
 export function loadDemoState(): DemoState {
   const path = process.env[DEMO_STATE_ENV];
   if (!path) throw new Error(`${DEMO_STATE_ENV} is not set. Start the demo with: bun run demo`);
   return JSON.parse(readFileSync(path, "utf8")) as DemoState;
+}
+
+/** Where the world is: its phase, and when each phase so far began (index 0 is the demo's start). */
+export interface Phase {
+  index: number;
+  at: readonly number[];
 }
 
 const MIN = 60_000;
@@ -34,27 +73,30 @@ const iso = (ms: number) => new Date(ms).toISOString();
 
 export interface FakeStep {
   name: string;
-  conclusion: "success" | "failure" | "skipped" | null;
+  conclusion: "success" | "failure" | "skipped" | "cancelled" | null;
 }
 export interface FakeJob {
   id: number;
   name: string;
   attempt: number;
-  status: "completed" | "in_progress";
-  conclusion: "success" | "failure" | null;
+  status: "completed" | "in_progress" | "queued";
+  conclusion: "success" | "failure" | "cancelled" | "timed_out" | "skipped" | null;
   startedAgoMin: number;
   minutes: number;
+  /** When it ended, for a job that finished as the world moved on (overrides `minutes`). */
+  endsAt?: number;
   steps: FakeStep[];
   annotations?: { annotation_level: string; path: string; start_line: number; message: string }[];
   log?: string;
 }
 export interface FakeRun {
   id: number;
+  repo: (typeof GITHUB_REPOS)[number]["repo"];
   sha: string;
   name: string;
   runNumber: number;
-  status: "completed" | "in_progress";
-  conclusion: "success" | "failure" | null;
+  status: "completed" | "in_progress" | "queued";
+  conclusion: "success" | "failure" | "cancelled" | "timed_out" | null;
   startedAgoMin: number;
   jobs: FakeJob[];
 }
@@ -85,12 +127,15 @@ function testLog(lines: string[]): string {
 const LONG_LINE =
   "error: request to https://payments.internal.example/v2/charge failed after 3 retries (attempt=3, backoff=4000ms, idempotency-key=7f3a9c1e-2b4d-4e8a-9c6f-1a2b3c4d5e6f): PaymentGateway timed out after 30000ms and refused the request";
 
-export function githubRuns(state: DemoState): FakeRun[] {
+export function githubRuns(state: DemoState, phase: Phase): FakeRun[] {
   const s = state.shas;
+  const w = state.webShas;
+  const finished = phase.index >= 1;
   return [
     {
       // Re-run: attempt 2 failed again; attempt 1 is folded at the end of the run.
       id: 9001,
+      repo: "shop",
       sha: s.payments,
       name: "CI",
       runNumber: 812,
@@ -198,10 +243,22 @@ export function githubRuns(state: DemoState): FakeRun[] {
             "src/payments/retry.ts:17:9 warning: 'delay' is assigned a value but never used",
           ]),
         },
+        {
+          // Needs test: skipped once it failed.
+          id: 70023,
+          name: "deploy",
+          attempt: 2,
+          status: "completed",
+          conclusion: "skipped",
+          startedAgoMin: 52,
+          minutes: 0,
+          steps: [],
+        },
       ],
     },
     {
       id: 9002,
+      repo: "shop",
       sha: s.readme,
       name: "CI",
       runNumber: 813,
@@ -234,6 +291,7 @@ export function githubRuns(state: DemoState): FakeRun[] {
     },
     {
       id: 9003,
+      repo: "shop",
       sha: s.readme,
       name: "Deploy to shop-prod with a long workflow name",
       runNumber: 77,
@@ -257,28 +315,129 @@ export function githubRuns(state: DemoState): FakeRun[] {
       ],
     },
     {
+      // Running at the start; passes once the world moves on.
       id: 9004,
+      repo: "shop",
       sha: s.metrics,
       name: "CI",
       runNumber: 814,
-      status: "in_progress",
-      conclusion: null,
+      status: finished ? "completed" : "in_progress",
+      conclusion: finished ? "success" : null,
       startedAgoMin: 3,
       jobs: [
         {
           id: 70051,
           name: "test",
           attempt: 1,
-          status: "in_progress",
-          conclusion: null,
+          status: finished ? "completed" : "in_progress",
+          conclusion: finished ? "success" : null,
           startedAgoMin: 3,
           minutes: 0,
-          steps: [...setupSteps(null), { name: "Run tests", conclusion: null }],
+          endsAt: phase.at[1],
+          steps: [
+            ...setupSteps(finished ? "success" : null),
+            { name: "Run tests", conclusion: finished ? "success" : null },
+          ],
+          log: finished ? testLog([]) : undefined,
         },
       ],
     },
     {
+      // Queued behind CI at the start, deploying once CI passed.
+      id: 9006,
+      repo: "shop",
+      sha: s.metrics,
+      name: "Deploy preview",
+      runNumber: 78,
+      status: finished ? "in_progress" : "queued",
+      conclusion: null,
+      startedAgoMin: 3,
+      jobs: [
+        {
+          id: 70052,
+          name: "deploy",
+          attempt: 1,
+          status: finished ? "in_progress" : "queued",
+          conclusion: null,
+          startedAgoMin: 3,
+          minutes: 0,
+          steps: finished
+            ? [
+                { name: "Set up job", conclusion: "success" },
+                { name: "oc apply", conclusion: null },
+              ]
+            : [],
+        },
+      ],
+    },
+    {
+      // Cancelled by hand while its tests ran.
+      id: 9007,
+      repo: "shop",
+      sha: s.health,
+      name: "CI",
+      runNumber: 811,
+      status: "completed",
+      conclusion: "cancelled",
+      startedAgoMin: 48,
+      jobs: [
+        {
+          id: 70071,
+          name: "test",
+          attempt: 1,
+          status: "completed",
+          conclusion: "cancelled",
+          startedAgoMin: 48,
+          minutes: 2,
+          steps: [...setupSteps(), { name: "Run tests", conclusion: "cancelled" }],
+          log: testLog(["##[error]The operation was canceled."]),
+        },
+      ],
+    },
+    {
+      // The nightly end-to-end run hit its time limit.
+      id: 9008,
+      repo: "shop",
+      sha: s.rounding,
+      name: "Nightly e2e",
+      runNumber: 203,
+      status: "completed",
+      conclusion: "timed_out",
+      startedAgoMin: 60 * 24 * 8,
+      jobs: [
+        {
+          id: 70081,
+          name: "e2e",
+          attempt: 1,
+          status: "completed",
+          conclusion: "timed_out",
+          startedAgoMin: 60 * 24 * 8,
+          minutes: 60,
+          steps: [...setupSteps(), { name: "Run e2e", conclusion: "cancelled" }],
+          log: testLog([
+            "##[error]The job running on runner demo-2 has exceeded the maximum execution time of 60 minutes.",
+          ]),
+        },
+      ],
+    },
+    ...(phase.index >= 2
+      ? [
+          {
+            id: 9009,
+            repo: "shop" as const,
+            sha: s.next,
+            name: "CI",
+            runNumber: 816,
+            status: "queued" as const,
+            conclusion: null,
+            startedAgoMin: 0,
+            jobs: [],
+          },
+        ]
+      : []),
+    {
       id: 9005,
+      repo: "shop",
       sha: s.retry,
       name: "CI",
       runNumber: 815,
@@ -310,12 +469,62 @@ export function githubRuns(state: DemoState): FakeRun[] {
         },
       ],
     },
+    // shop-web, the second repository in the group.
+    {
+      id: 9101,
+      repo: "shop-web",
+      sha: w.gallery,
+      name: "CI",
+      runNumber: 51,
+      status: "completed",
+      conclusion: "success",
+      startedAgoMin: 60 * 47,
+      jobs: [
+        {
+          id: 71011,
+          name: "build",
+          attempt: 1,
+          status: "completed",
+          conclusion: "success",
+          startedAgoMin: 60 * 47,
+          minutes: 3,
+          steps: [...setupSteps(), { name: "Build", conclusion: "success" }],
+        },
+      ],
+    },
+    {
+      id: 9102,
+      repo: "shop-web",
+      sha: w.prices,
+      name: "CI",
+      runNumber: 52,
+      status: "completed",
+      conclusion: "failure",
+      startedAgoMin: 170,
+      jobs: [
+        {
+          id: 71021,
+          name: "build",
+          attempt: 1,
+          status: "completed",
+          conclusion: "failure",
+          startedAgoMin: 170,
+          minutes: 2,
+          steps: [...setupSteps(), { name: "Build", conclusion: "failure" }],
+          log: testLog([
+            "src/price.test.ts:",
+            "(fail) price > shows two decimals [1.2ms]",
+            '  Expected "9.90", received "9.9"',
+          ]),
+        },
+      ],
+    },
   ];
 }
 
-export function githubTimes(now: number, job: { startedAgoMin: number; minutes: number }) {
+export function githubTimes(now: number, job: Pick<FakeJob, "startedAgoMin" | "minutes" | "endsAt">) {
   const started = now - job.startedAgoMin * MIN;
-  return { started: iso(started), completed: iso(started + job.minutes * MIN + 17_000) };
+  return { started: iso(started), completed: iso(job.endsAt ?? started + job.minutes * MIN + 17_000) };
 }
 
 // ── Jenkins ──────────────────────────────────────────────────────────────────
@@ -324,9 +533,13 @@ export interface FakeBuild {
   branch: string;
   number: number;
   sha: string;
-  result: "SUCCESS" | "FAILURE" | null;
+  result: "SUCCESS" | "FAILURE" | "ABORTED" | "UNSTABLE" | null;
   agoMin: number;
-  stages: { name: string; status: "SUCCESS" | "FAILED" | "IN_PROGRESS" | "NOT_EXECUTED"; seconds: number }[];
+  stages: {
+    name: string;
+    status: "SUCCESS" | "FAILED" | "IN_PROGRESS" | "NOT_EXECUTED" | "ABORTED" | "UNSTABLE";
+    seconds: number;
+  }[];
   tests?: { pass: number; skip: number; failed: { className: string; name: string; details: string; stack: string }[] };
   console: string;
 }
@@ -350,9 +563,161 @@ function pipelineConsole(stages: { name: string; lines: string[]; nested?: strin
   return out.join("\n");
 }
 
-export function jenkinsBuilds(state: DemoState): FakeBuild[] {
+/** A build's console while it runs: the stages so far, the last one still open. */
+function runningConsole(sha: string, stages: { name: string; lines: string[] }[]): string {
+  const out = ["Started by an SCM change", "[Pipeline] Start of Pipeline", "[Pipeline] node", "[Pipeline] {"];
+  stages.forEach((stage, index) => {
+    out.push("[Pipeline] stage", `[Pipeline] { (${stage.name})`, ...stage.lines);
+    if (index < stages.length - 1) out.push("[Pipeline] }", "[Pipeline] // stage");
+  });
+  return out.join("\n").replaceAll("{sha}", sha.slice(0, 7));
+}
+
+export function jenkinsBuilds(state: DemoState, phase: Phase): FakeBuild[] {
   const s = state.shas;
+  const started = phase.at[0];
+  // dev #7 runs at the start and fails its tests once the world moves on.
+  const metricsAgoMin = 2;
+  const metricsTestSeconds = phase.at[1]
+    ? Math.max(5, Math.round((phase.at[1] - (started - metricsAgoMin * MIN)) / 1000) - 63)
+    : 0;
+  const metricsBuild: FakeBuild =
+    phase.index >= 1
+      ? {
+          branch: "dev",
+          number: 7,
+          sha: s.metrics,
+          result: "FAILURE",
+          agoMin: metricsAgoMin,
+          stages: [
+            { name: "Checkout", status: "SUCCESS", seconds: 3 },
+            { name: "Build", status: "SUCCESS", seconds: 60 },
+            { name: "Unit tests", status: "FAILED", seconds: metricsTestSeconds },
+          ],
+          tests: {
+            pass: 1205,
+            skip: 12,
+            failed: [
+              {
+                className: "com.demo.shop.api.MetricsExporterTest",
+                name: "exportsRequestCounts",
+                details: "expected: <42> but was: <0>",
+                stack:
+                  "org.opentest4j.AssertionFailedError: expected: <42> but was: <0>\n\tat com.demo.shop.api.MetricsExporterTest.exportsRequestCounts(MetricsExporterTest.java:31)",
+              },
+              {
+                className: "com.demo.shop.api.MetricsExporterTest",
+                name: "labelsRequestsByRoute",
+                details: "Missing label: route",
+                stack:
+                  "java.lang.IllegalStateException: Missing label: route\n\tat com.demo.shop.api.Metrics.label(Metrics.java:57)",
+              },
+            ],
+          },
+          console: pipelineConsole([
+            { name: "Checkout", lines: ["+ git checkout -f metrics"] },
+            { name: "Build", lines: ["+ ./gradlew assemble", "BUILD SUCCESSFUL in 1m 0s"] },
+            {
+              name: "Unit tests",
+              lines: [
+                "+ ./gradlew test",
+                "MetricsExporterTest > exportsRequestCounts() FAILED",
+                "    org.opentest4j.AssertionFailedError: expected: <42> but was: <0>",
+                "MetricsExporterTest > labelsRequestsByRoute() FAILED",
+                "    java.lang.IllegalStateException: Missing label: route",
+                "1219 tests completed, 2 failed, 12 skipped",
+                "ERROR: script returned exit code 1",
+              ],
+            },
+          ]),
+        }
+      : {
+          branch: "dev",
+          number: 7,
+          sha: s.metrics,
+          result: null,
+          agoMin: metricsAgoMin,
+          stages: [
+            { name: "Checkout", status: "SUCCESS", seconds: 3 },
+            { name: "Build", status: "IN_PROGRESS", seconds: 60 },
+          ],
+          // Still running: the Build stage is not closed yet.
+          console: runningConsole(s.metrics, [
+            { name: "Checkout", lines: ["+ git checkout -f metrics"] },
+            { name: "Build", lines: ["+ ./gradlew assemble", "> Task :compileJava"] },
+          ]),
+        };
   return [
+    metricsBuild,
+    {
+      // Aborted by hand during its build.
+      branch: "dev",
+      number: 6,
+      sha: s.health,
+      result: "ABORTED",
+      agoMin: 47,
+      stages: [
+        { name: "Checkout", status: "SUCCESS", seconds: 3 },
+        { name: "Build", status: "ABORTED", seconds: 41 },
+        { name: "Unit tests", status: "NOT_EXECUTED", seconds: 0 },
+      ],
+      console: pipelineConsole([
+        { name: "Checkout", lines: ["+ git checkout -f health"] },
+        { name: "Build", lines: ["+ ./gradlew assemble", "Aborted by Ana Lima"] },
+        { name: "Unit tests", lines: ["Stage skipped due to earlier failure(s)"] },
+      ]),
+    },
+    {
+      // Unstable: it built, one test failed.
+      branch: "feature/payments-retry-with-a-really-long-branch-name",
+      number: 3,
+      sha: s.retry,
+      result: "UNSTABLE",
+      agoMin: 340,
+      stages: [
+        { name: "Checkout", status: "SUCCESS", seconds: 4 },
+        { name: "Build", status: "SUCCESS", seconds: 88 },
+        { name: "Unit tests", status: "UNSTABLE", seconds: 190 },
+      ],
+      tests: {
+        pass: 1206,
+        skip: 12,
+        failed: [
+          {
+            className: "com.demo.shop.payments.RetryPolicyTest",
+            name: "waitsLongerAfterEachAttempt",
+            details: "expected: <4000> but was: <2000>",
+            stack: "org.opentest4j.AssertionFailedError: expected: <4000> but was: <2000>",
+          },
+        ],
+      },
+      console: pipelineConsole([
+        { name: "Checkout", lines: ["+ git checkout -f retry"] },
+        { name: "Build", lines: ["+ ./gradlew assemble", "BUILD SUCCESSFUL in 1m 28s"] },
+        {
+          name: "Unit tests",
+          lines: [
+            "+ ./gradlew test",
+            "RetryPolicyTest > waitsLongerAfterEachAttempt() FAILED",
+            "1207 tests completed, 1 failed, 12 skipped",
+            "Build step 'Publish JUnit test result report' changed build result to UNSTABLE",
+          ],
+        },
+      ]),
+    },
+    ...(phase.index >= 2
+      ? [
+          {
+            branch: "dev",
+            number: 8,
+            sha: s.next,
+            result: null,
+            agoMin: 0,
+            stages: [{ name: "Checkout", status: "IN_PROGRESS" as const, seconds: 2 }],
+            console: runningConsole(s.next, [{ name: "Checkout", lines: ["+ git checkout -f {sha}"] }]),
+          },
+        ]
+      : []),
     {
       branch: "main",
       number: 41,
@@ -443,33 +808,6 @@ export function jenkinsBuilds(state: DemoState): FakeBuild[] {
         { name: "Build", lines: ["+ ./gradlew assemble", "BUILD SUCCESSFUL in 1m 20s"] },
       ]),
     },
-    {
-      branch: "dev",
-      number: 7,
-      sha: s.metrics,
-      result: null,
-      agoMin: 2,
-      stages: [
-        { name: "Checkout", status: "SUCCESS", seconds: 3 },
-        { name: "Build", status: "IN_PROGRESS", seconds: 60 },
-      ],
-      // Still running: the Build stage is not closed yet.
-      console: [
-        "Started by an SCM change",
-        "[Pipeline] Start of Pipeline",
-        "[Pipeline] node",
-        "[Pipeline] {",
-        "[Pipeline] stage",
-        "[Pipeline] { (Checkout)",
-        "+ git checkout -f metrics",
-        "[Pipeline] }",
-        "[Pipeline] // stage",
-        "[Pipeline] stage",
-        "[Pipeline] { (Build)",
-        "+ ./gradlew assemble",
-        "> Task :compileJava",
-      ].join("\n"),
-    },
   ];
 }
 
@@ -490,8 +828,10 @@ export interface OpenShiftWorld {
 const digestOf = (sha: string) => `sha256:${sha}${sha.slice(0, 24)}`;
 const imageOf = (sha: string) => `image-registry.openshift-image-registry.svc:5000/shop/shop-api@${digestOf(sha)}`;
 
-export function openShiftWorld(state: DemoState, now: number): OpenShiftWorld {
+export function openShiftWorld(state: DemoState, phase: Phase): OpenShiftWorld {
   const s = state.shas;
+  const now = phase.at[0];
+  const failed = phase.index >= 1;
   const lists = new Map<string, Map<string, Record<string, unknown>[]>>();
   const add = (ns: string, kind: string, item: Record<string, unknown>) => {
     const byKind = lists.get(ns) ?? new Map<string, Record<string, unknown>[]>();
@@ -563,14 +903,23 @@ export function openShiftWorld(state: DemoState, now: number): OpenShiftWorld {
     ],
   };
 
-  // shop-dev: rolling out `metrics`, one pod cannot pull its image. A failed and a finished Build, an image tag.
+  // shop-dev: rolling out `metrics`. One pod is still pulling its image, and fails to once the world moves on.
   const devRs = deployment("shop-dev", "shop-api", s.metrics, 2, {
     replicas: 2,
     updatedReplicas: 1,
     readyReplicas: 1,
     availableReplicas: 1,
     unavailableReplicas: 1,
-    conditions: [{ type: "Progressing", status: "True", reason: "ReplicaSetUpdated" }],
+    conditions: failed
+      ? [
+          {
+            type: "Progressing",
+            status: "False",
+            reason: "ProgressDeadlineExceeded",
+            message: 'ReplicaSet "shop-api-7d9f8" has timed out progressing.',
+          },
+        ]
+      : [{ type: "Progressing", status: "True", reason: "ReplicaSetUpdated" }],
   });
   pod("shop-dev", "shop-api-7d9f8-r2m4p", devRs, "shop-api", {
     ...ready,
@@ -583,7 +932,11 @@ export function openShiftWorld(state: DemoState, now: number): OpenShiftWorld {
       container(s.metrics, {
         imageID: "",
         restartCount: 0,
-        state: { waiting: { reason: "ImagePullBackOff", message: 'Back-off pulling image "shop-api:metrics"' } },
+        state: {
+          waiting: failed
+            ? { reason: "ImagePullBackOff", message: 'Back-off pulling image "shop-api:metrics"' }
+            : { reason: "ContainerCreating" },
+        },
       }),
     ],
   });
@@ -606,6 +959,13 @@ export function openShiftWorld(state: DemoState, now: number): OpenShiftWorld {
   completeBuild("shop-api-42", s.payments);
   completeBuild("shop-api-43", s.readme);
   completeBuild("shop-api-44", s.metrics);
+  if (phase.index >= 2)
+    add("shop-dev", "Build", {
+      kind: "Build",
+      metadata: { name: "shop-api-45", namespace: "shop-dev", uid: nextUid(), labels: { [COMMIT_KEY]: s.next } },
+      spec: { output: { to: { kind: "ImageStreamTag", name: "shop-api:45" } } },
+      status: { phase: "Running" },
+    });
   add("shop-dev", "ImageStreamTag", {
     kind: "ImageStreamTag",
     metadata: { name: "shop-api:43", namespace: "shop-dev", uid: nextUid(), annotations: { [COMMIT_KEY]: s.readme } },
@@ -737,9 +1097,20 @@ export function openShiftWorld(state: DemoState, now: number): OpenShiftWorld {
     [
       "shop-dev/Pod/shop-api-7d9f8-pull9",
       [
-        event("Normal", "Pulling", 'Pulling image "shop-api:metrics"', 6, 1),
-        event("Warning", "Failed", 'Failed to pull image "shop-api:metrics": manifest unknown: manifest unknown', 6, 1),
-        event("Warning", "BackOff", 'Back-off pulling image "shop-api:metrics"', 20, 0),
+        event("Normal", "Scheduled", "Successfully assigned shop-dev/shop-api-7d9f8-pull9 to worker-1", 1, 2),
+        event("Normal", "Pulling", 'Pulling image "shop-api:metrics"', failed ? 6 : 1, failed ? 1 : 0),
+        ...(failed
+          ? [
+              event(
+                "Warning",
+                "Failed",
+                'Failed to pull image "shop-api:metrics": manifest unknown: manifest unknown',
+                6,
+                1,
+              ),
+              event("Warning", "BackOff", 'Back-off pulling image "shop-api:metrics"', 20, 0),
+            ]
+          : []),
       ],
     ],
     [
@@ -765,105 +1136,18 @@ export function openShiftWorld(state: DemoState, now: number): OpenShiftWorld {
     ["shop-dev/shop-api-41", "Step 4/9 : RUN ./gradlew assemble\nerror: build failed: DockerBuildFailed\n"],
   ]);
 
+  // Every object carries the phase's resource version, so a watch picks up where its list left off.
+  for (const byKind of lists.values())
+    for (const items of byKind.values())
+      for (const item of items) (item.metadata as Record<string, unknown>).resourceVersion = resourceVersion(phase);
+
   return { lists, events, logs };
 }
+
+export const resourceVersion = (phase: Phase) => String(1000 + phase.index);
 
 /** Lines a followed Pod log keeps adding, so the viewer drops its oldest ones. */
 export function followLine(n: number): string {
   const level = n % 17 === 0 ? "WARN" : "INFO";
   return `2026-11-09T08:${String(Math.floor(n / 60) % 60).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}Z ${level} request ${n} GET /api/cart 200 ${(n * 7) % 90}ms${n % 50 === 0 ? " PaymentGateway slow" : ""}`;
-}
-
-// ── Snyk ─────────────────────────────────────────────────────────────────────
-
-interface Vuln {
-  id: string;
-  title: string;
-  severity: "critical" | "high" | "medium" | "low";
-  packageName: string;
-  version: string;
-  from: string[];
-  upgradePath: (string | false)[];
-  fixedIn: string[];
-  cvssScore: number;
-  identifiers: { CVE: string[] };
-}
-
-const vuln = (
-  id: string,
-  title: string,
-  severity: Vuln["severity"],
-  pkg: string,
-  version: string,
-  fixed: string,
-  score: number,
-  cve: string,
-  via?: string,
-): Vuln => ({
-  id,
-  title,
-  severity,
-  packageName: pkg,
-  version,
-  from: via ? ["shop@1.0.0", via, `${pkg}@${version}`] : ["shop@1.0.0", `${pkg}@${version}`],
-  upgradePath: via ? [false, via, `${pkg}@${fixed}`] : [false, `${pkg}@${fixed}`],
-  fixedIn: [fixed],
-  cvssScore: score,
-  identifiers: { CVE: [cve] },
-});
-
-const LODASH = (version: string) =>
-  vuln("SNYK-JS-LODASH-1040724", "Prototype Pollution", "high", "lodash", version, "4.17.21", 7.5, "CVE-2020-8203");
-const AXIOS = vuln(
-  "SNYK-JS-AXIOS-6032459",
-  "Cross-site Request Forgery",
-  "medium",
-  "axios",
-  "1.5.1",
-  "1.6.0",
-  6.5,
-  "CVE-2023-45857",
-);
-const MINIMIST = vuln(
-  "SNYK-JS-MINIMIST-2429795",
-  "Prototype Pollution",
-  "low",
-  "minimist",
-  "1.2.5",
-  "1.2.6",
-  3.7,
-  "CVE-2021-44906",
-  "mkdirp@0.5.5",
-);
-const JWT = vuln(
-  "SNYK-JS-JSONWEBTOKEN-3180022",
-  "Improper Authentication",
-  "critical",
-  "jsonwebtoken",
-  "8.5.1",
-  "9.0.0",
-  9.1,
-  "CVE-2022-23540",
-);
-const LONG_PACKAGE = vuln(
-  "SNYK-JS-COMPANYPAYMENTSGATEWAYCLIENT-7001234",
-  "Server-side Request Forgery (SSRF)",
-  "high",
-  "@company/payments-gateway-client-with-a-very-long-package-name",
-  "2.14.0-beta.3",
-  "2.14.1",
-  8.2,
-  "CVE-2026-10001",
-);
-
-/**
- * What the fake Snyk CLI finds per commit. `rounding` against `cart`: lodash bumped but still vulnerable (no change),
- * axios fixed, jsonwebtoken new. `payments` against `rounding`: the long-named package is new.
- */
-export function snykVulnerabilities(state: DemoState, sha: string): Vuln[] {
-  const s = state.shas;
-  if (sha === s.initial) return [];
-  if (sha === s.cart) return [LODASH("4.17.15"), AXIOS, MINIMIST];
-  if (sha === s.rounding) return [LODASH("4.17.20"), MINIMIST, JWT];
-  return [LODASH("4.17.20"), MINIMIST, JWT, LONG_PACKAGE];
 }

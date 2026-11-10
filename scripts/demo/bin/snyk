@@ -1,3 +1,0 @@
-#!/bin/sh
-# The demo's Snyk CLI: see scripts/demo/fake-snyk.ts.
-exec bun "$(dirname "$0")/../fake-snyk.ts" "$@"

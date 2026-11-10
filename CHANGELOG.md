@@ -43,6 +43,12 @@ All notable changes to this project will be documented in this file.
   nearest scanned commit stands in). Added findings also keep a muted `new` under their severity. `new` and
   `fixed` work as filter words.
 
+- `bun run demo` (from a source checkout): codepulse on two made-up repositories with GitHub Actions, Jenkins,
+  OpenShift and Snyk data, offline and without touching your config or cache, on macOS, Linux and Windows. Every
+  provider can start normal, empty, off or failing (`--github error:rate-limit`), `--live` moves the world on
+  (runs finish, a rollout fails, a new commit arrives), and `--play "STEPS"` runs it headless and prints the
+  screens as text, the same every run. See [docs/demo.md](docs/demo.md).
+
 ### Changed
 
 - Jenkins rows are as quiet as the OpenShift tree: a build lists its stages straight under it (no **Pipeline**

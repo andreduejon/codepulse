@@ -1,74 +1,138 @@
 /**
- * Preloaded by `bun run demo`: answers GitHub, Jenkins and OpenShift requests with the made-up data in scenario.ts,
- * so every v0.17 row can be looked at without a real server. Nothing reaches the network; unknown requests get a 404
- * and are listed in requests.log next to the demo state.
+ * Preloaded into the demo's app process: answers GitHub, Jenkins and OpenShift requests with the made-up data in
+ * scenario.ts. Nothing reaches the network; unknown requests get a 404. Every request is listed in requests.log in
+ * the demo folder.
+ *
+ * Each provider answers as its `--github`, `--jenkins` or `--openshift` mode says: the normal world, nothing, or one
+ * failure. When the world moves on (phase.ts), the answers change and open OpenShift watches hear about it.
  */
 import { appendFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
+import type { ProviderName } from "./options";
+import { advancePhase, currentPhase, onPhase } from "./phase";
 import {
-  DEMO_STATE_ENV,
+  type FakeBuild,
   type FakeJob,
   type FakeRun,
   followLine,
-  GITHUB_REPO,
   githubRuns,
   githubTimes,
   JENKINS_ROOT,
   jenkinsBuilds,
+  LAST_PHASE,
   loadDemoState,
   OLD_BRANCHES,
   OPENSHIFT_SERVER,
+  type OpenShiftWorld,
   openShiftWorld,
+  resourceVersion,
 } from "./scenario";
 
 const state = loadDemoState();
-const started = Date.now();
-const requestLog = join(dirname(process.env[DEMO_STATE_ENV] ?? "."), "requests.log");
-const runs = githubRuns(state);
-const builds = jenkinsBuilds(state);
-const world = openShiftWorld(state, started);
+let phase = currentPhase();
+const started = phase.at[0];
+const requestLog = join(state.root, "requests.log");
+let runs = githubRuns(state, phase);
+let builds = jenkinsBuilds(state, phase);
+let world = openShiftWorld(state, phase);
 
-const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
+  new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
 const text = (body: string, status = 200) =>
   new Response(body, { status, headers: { "content-type": "text/plain; charset=utf-8" } });
 const notFound = () => json({ message: "Not Found" }, 404);
 
-/** A response that stays open until the request is aborted, feeding `next()` every 250 ms when given. */
-function stream(signal: AbortSignal | null | undefined, first: string, next?: () => string): Response {
+/**
+ * A response that stays open until the request is aborted. `next` feeds it every 250 ms; `listen` gets a function
+ * that writes to it whenever the caller wants and returns how to stop listening.
+ */
+function stream(
+  signal: AbortSignal | null | undefined,
+  first: string,
+  options: { next?: () => string; listen?: (write: (text: string) => void) => () => void } = {},
+): Response {
   const encoder = new TextEncoder();
   let timer: ReturnType<typeof setInterval> | undefined;
+  let unlisten: (() => void) | undefined;
   const body = new ReadableStream<Uint8Array>({
     start(controller) {
       const stop = () => {
         clearInterval(timer);
+        unlisten?.();
         try {
           controller.close();
         } catch {}
       };
       if (signal?.aborted) return stop();
       signal?.addEventListener("abort", stop, { once: true });
-      if (first) controller.enqueue(encoder.encode(first));
-      if (next)
-        timer = setInterval(() => {
-          try {
-            controller.enqueue(encoder.encode(next()));
-          } catch {
-            clearInterval(timer);
-          }
-        }, 250);
+      const write = (value: string) => {
+        try {
+          controller.enqueue(encoder.encode(value));
+        } catch {
+          stop();
+        }
+      };
+      if (first) write(first);
+      if (options.next) timer = setInterval(() => write(options.next?.() ?? ""), 250);
+      unlisten = options.listen?.(write);
     },
     cancel() {
       clearInterval(timer);
+      unlisten?.();
     },
   });
   return new Response(body, { status: 200, headers: { "content-type": "text/plain; charset=utf-8" } });
 }
 
+// ── Provider modes ───────────────────────────────────────────────────────────
+
+const errorOf = (provider: ProviderName) => {
+  const mode = state.providers[provider];
+  return mode.startsWith("error:") ? mode.slice("error:".length) : null;
+};
+const isEmpty = (provider: ProviderName) => state.providers[provider] === "empty";
+
+function abortError(signal: AbortSignal): unknown {
+  return signal.reason ?? new DOMException("The operation was aborted.", "AbortError");
+}
+
+/** The failure a provider was started with, for every one of its requests; null when it answers normally. */
+function failure(provider: ProviderName, signal: AbortSignal | null | undefined): Promise<Response> | null {
+  switch (errorOf(provider)) {
+    case "401":
+      return Promise.resolve(
+        provider === "openshift"
+          ? json({ kind: "Status", status: "Failure", message: "Unauthorized", reason: "Unauthorized", code: 401 }, 401)
+          : json({ message: "Bad credentials" }, 401),
+      );
+    case "rate-limit":
+      return Promise.resolve(
+        json({ message: "API rate limit exceeded for user ID 1." }, 403, {
+          "x-ratelimit-remaining": "0",
+          "x-ratelimit-reset": String(Math.floor(Date.now() / 1000) + 15 * 60),
+        }),
+      );
+    case "offline":
+      return Promise.reject(
+        Object.assign(new TypeError("Unable to connect. Is the computer able to access the url?"), {
+          code: "ConnectionRefused",
+        }),
+      );
+    case "timeout":
+      // Never answers; the app gives up on its own timeout.
+      return new Promise((_, reject) => {
+        if (signal?.aborted) reject(abortError(signal));
+        signal?.addEventListener("abort", () => reject(abortError(signal)), { once: true });
+      });
+    default:
+      return null;
+  }
+}
+
 // ── GitHub ───────────────────────────────────────────────────────────────────
 
 const upper = (value: string | null) => (value ? value.toUpperCase() : null);
-const latestAttempt = (run: FakeRun) => Math.max(...run.jobs.map(job => job.attempt));
+const latestAttempt = (run: FakeRun) => Math.max(1, ...run.jobs.map(job => job.attempt));
 
 /** Steps share the job's time, the last ones taking longest (tests, builds), so durations differ. */
 function stepTime(job: FakeJob, index: number): string {
@@ -87,10 +151,13 @@ const stepEnd = (job: FakeJob, step: FakeJob["steps"][number], index: number) =>
 
 /** When GitHub last changed a run: its last job's end, or now while it runs. */
 function runUpdatedAt(run: FakeRun): string {
-  if (run.status !== "completed") return new Date(started).toISOString();
   const jobs = run.jobs.filter(job => job.attempt === latestAttempt(run));
+  if (run.status !== "completed" || jobs.length === 0) return new Date().toISOString();
   return new Date(Math.max(...jobs.map(job => Date.parse(githubTimes(started, job).completed)))).toISOString();
 }
+
+const stepStatus = (job: FakeJob, step: FakeJob["steps"][number]) =>
+  step.conclusion ? "completed" : job.status === "queued" ? "queued" : "in_progress";
 
 function gqlJob(job: FakeJob) {
   const times = githubTimes(started, job);
@@ -99,12 +166,12 @@ function gqlJob(job: FakeJob) {
     name: job.name,
     status: upper(job.status),
     conclusion: upper(job.conclusion),
-    startedAt: times.started,
+    startedAt: job.status === "queued" ? null : times.started,
     completedAt: job.status === "completed" ? times.completed : null,
     steps: job.steps.map((step, index) => ({
       name: step.name,
       number: index + 1,
-      status: step.conclusion ? "COMPLETED" : "IN_PROGRESS",
+      status: upper(stepStatus(job, step)),
       conclusion: upper(step.conclusion),
       startedAt: stepTime(job, index),
       completedAt: stepEnd(job, step, index),
@@ -119,13 +186,13 @@ function restJob(job: FakeJob) {
     name: job.name,
     status: job.status,
     conclusion: job.conclusion,
-    started_at: times.started,
+    started_at: job.status === "queued" ? null : times.started,
     completed_at: job.status === "completed" ? times.completed : null,
     run_attempt: job.attempt,
     steps: job.steps.map((step, index) => ({
       name: step.name,
       number: index + 1,
-      status: step.conclusion ? "completed" : "in_progress",
+      status: stepStatus(job, step),
       conclusion: step.conclusion,
       started_at: stepTime(job, index),
       completed_at: stepEnd(job, step, index),
@@ -133,14 +200,17 @@ function restJob(job: FakeJob) {
   };
 }
 
+const runsOf = (repo: string) => (isEmpty("github") ? [] : runs.filter(run => run.repo === repo));
+
 function graphql(body: string): Response {
   const parsed = JSON.parse(body) as { query: string; variables?: Record<string, string> };
+  const repoRuns = runsOf(parsed.variables?.repo ?? "");
   const repository: Record<string, unknown> = {};
   const withJobs = parsed.query.includes("jobs(first");
   const aliases = [...parsed.query.matchAll(/c(\d+): object\(oid: (?:"([0-9a-f]+)"|\$oid\d+)\)/g)];
   for (const [, index, literal] of aliases) {
     const oid = literal ?? parsed.variables?.[`oid${index}`] ?? "";
-    const nodes = runs
+    const nodes = repoRuns
       .filter(run => run.sha === oid)
       .map(run => {
         const startedAt = new Date(started - run.startedAgoMin * 60_000).toISOString();
@@ -153,7 +223,7 @@ function graphql(body: string): Response {
             event: "push",
             createdAt: startedAt,
             updatedAt: runUpdatedAt(run),
-            url: `https://github.com/${GITHUB_REPO.owner}/${GITHUB_REPO.repo}/actions/runs/${run.id}`,
+            url: `https://github.com/demo/${run.repo}/actions/runs/${run.id}`,
             workflow: { name: run.name },
             // GraphQL has no attempts: it lists the latest attempt's jobs, so the first expand asks REST once.
             ...(withJobs
@@ -169,15 +239,16 @@ function graphql(body: string): Response {
 
 function github(url: URL, method: string, body: string): Response {
   if (url.pathname === "/graphql" && method === "POST") return graphql(body);
-  const base = `/repos/${GITHUB_REPO.owner}/${GITHUB_REPO.repo}`;
-  if (!url.pathname.startsWith(base)) return notFound();
-  const path = url.pathname.slice(base.length);
+  const match = url.pathname.match(/^\/repos\/demo\/([^/]+)(\/.*)$/);
+  if (!match) return notFound();
+  const [, repo, path] = match;
+  const repoRuns = runsOf(repo);
   const runJobs = path.match(/^\/actions\/runs\/(\d+)\/jobs$/);
   if (runJobs) {
-    const run = runs.find(item => item.id === Number(runJobs[1]));
+    const run = repoRuns.find(item => item.id === Number(runJobs[1]));
     return run ? json({ total_count: run.jobs.length, jobs: run.jobs.map(restJob) }) : notFound();
   }
-  const allJobs = runs.flatMap(run => run.jobs);
+  const allJobs = repoRuns.flatMap(run => run.jobs);
   const annotations = path.match(/^\/check-runs\/(\d+)\/annotations$/);
   if (annotations) return json(allJobs.find(job => job.id === Number(annotations[1]))?.annotations ?? []);
   const logs = path.match(/^\/actions\/jobs\/(\d+)\/logs$/);
@@ -192,10 +263,9 @@ function github(url: URL, method: string, body: string): Response {
 
 const WORKFLOW_JOB = "org.jenkinsci.plugins.workflow.job.WorkflowJob";
 const branchUrl = (branch: string) => `${JENKINS_ROOT}/job/${encodeURIComponent(branch)}/`;
+const buildDuration = (build: FakeBuild) => build.stages.reduce((sum, stage) => sum + stage.seconds * 1000, 0);
 
-function jenkinsBuild(build: (typeof builds)[number]) {
-  const timestamp = started - build.agoMin * 60_000;
-  const duration = build.stages.reduce((sum, stage) => sum + stage.seconds * 1000, 0);
+function jenkinsBuild(build: FakeBuild) {
   return {
     _class: "org.jenkinsci.plugins.workflow.job.WorkflowRun",
     number: build.number,
@@ -203,8 +273,8 @@ function jenkinsBuild(build: (typeof builds)[number]) {
     url: `${branchUrl(build.branch)}${build.number}/`,
     result: build.result,
     building: build.result === null,
-    timestamp,
-    duration: build.result === null ? 0 : duration,
+    timestamp: started - build.agoMin * 60_000,
+    duration: build.result === null ? 0 : buildDuration(build),
     actions: [{ _class: "hudson.plugins.git.util.BuildData", lastBuiltRevision: { SHA1: build.sha } }],
     changeSets: [],
   };
@@ -225,7 +295,7 @@ function jenkins(url: URL): Response {
         displayName: name,
         url: branchUrl(name),
         buildable: true,
-        lastBuild: { timestamp: built },
+        lastBuild: isEmpty("jenkins") ? null : { timestamp: built },
       })),
     });
   }
@@ -234,7 +304,9 @@ function jenkins(url: URL): Response {
   const branch = decodeURIComponent(match[1]);
   const number = match[2] ? Number(match[2]) : null;
   const tail = match[3];
-  const ofBranch = builds.filter(build => build.branch === branch).sort((a, b) => b.number - a.number);
+  const ofBranch = isEmpty("jenkins")
+    ? []
+    : builds.filter(build => build.branch === branch).sort((a, b) => b.number - a.number);
   if (number === null) {
     if (tail !== "api/json") return notFound();
     return json({
@@ -253,7 +325,7 @@ function jenkins(url: URL): Response {
       id: String(build.number),
       status: build.result ?? "IN_PROGRESS",
       startTimeMillis: at,
-      durationMillis: build.stages.reduce((sum, stage) => sum + stage.seconds * 1000, 0),
+      durationMillis: buildDuration(build),
       stages: build.stages.map((stage, index) => {
         const item = {
           id: String(index + 1),
@@ -305,6 +377,8 @@ type Item = Record<string, unknown>;
 const labelsOf = (item: Item) =>
   ((item.metadata as Item | undefined)?.labels as Record<string, string> | undefined) ?? {};
 const nameOf = (item: Item) => String((item.metadata as Item | undefined)?.name ?? "");
+const forbidden = (message: string) =>
+  json({ kind: "Status", status: "Failure", message, reason: "Forbidden", code: 403 }, 403);
 
 function matchesSelector(item: Item, selector: string | null): boolean {
   if (!selector) return true;
@@ -317,6 +391,12 @@ function matchesSelector(item: Item, selector: string | null): boolean {
   });
 }
 
+/** Open watches, each with its namespace and kind; the phase listener writes their events. */
+const watches = new Set<{ ns: string; kind: string; selector: string | null; write: (text: string) => void }>();
+
+const itemsOf = (target: OpenShiftWorld, ns: string, kind: string) =>
+  isEmpty("openshift") ? [] : (target.lists.get(ns)?.get(kind) ?? []);
+
 let followCount = 0;
 
 function openshift(url: URL, signal: AbortSignal | null | undefined): Response {
@@ -324,7 +404,7 @@ function openshift(url: URL, signal: AbortSignal | null | undefined): Response {
   if (!match) return notFound();
   const [, ns, plural, name, log] = match;
   if (plural === "events") {
-    if (ns === "shop-prod") return json({ kind: "Status", message: "events is forbidden", code: 403 }, 403);
+    if (ns === "shop-prod") return forbidden("events is forbidden");
     const selector = url.searchParams.get("fieldSelector") ?? "";
     const kind = selector.match(/involvedObject\.kind=([^,]+)/)?.[1];
     const object = selector.match(/involvedObject\.name=([^,]+)/)?.[1];
@@ -332,13 +412,25 @@ function openshift(url: URL, signal: AbortSignal | null | undefined): Response {
   }
   const kind = PLURALS[plural];
   if (!kind) return notFound();
-  const items = world.lists.get(ns)?.get(kind) ?? [];
-  if (url.searchParams.get("watch") === "true") return stream(signal, "");
+  // --openshift error:partial: shop-prod's lists are forbidden, the other namespaces answer.
+  if (errorOf("openshift") === "partial" && ns === "shop-prod")
+    return forbidden(`${plural} is forbidden: User "demo" cannot list resource "${plural}" in namespace "${ns}"`);
+  const items = itemsOf(world, ns, kind);
+  const selector = url.searchParams.get("labelSelector");
+  if (url.searchParams.get("watch") === "true") {
+    if (errorOf("openshift") === "watch-denied") return forbidden(`${plural} is forbidden: watch is not allowed`);
+    return stream(signal, "", {
+      listen: write => {
+        const watch = { ns, kind, selector, write };
+        watches.add(watch);
+        return () => watches.delete(watch);
+      },
+    });
+  }
   if (!name) {
-    const selector = url.searchParams.get("labelSelector");
     return json({
       kind: `${kind}List`,
-      metadata: { resourceVersion: "1000" },
+      metadata: { resourceVersion: resourceVersion(phase) },
       items: items.filter(item => matchesSelector(item, selector)),
     });
   }
@@ -350,17 +442,111 @@ function openshift(url: URL, signal: AbortSignal | null | undefined): Response {
   const statuses = (item.status as { containerStatuses?: { state?: { running?: unknown } }[] } | undefined)
     ?.containerStatuses;
   if (url.searchParams.get("follow") === "true" && statuses?.some(status => status.state?.running))
-    return stream(signal, `${saved}\n`, () =>
-      Array.from({ length: 40 }, () => followLine(++followCount))
-        .join("\n")
-        .concat("\n"),
-    );
+    return stream(signal, `${saved}\n`, {
+      next: () =>
+        Array.from({ length: 40 }, () => followLine(++followCount))
+          .join("\n")
+          .concat("\n"),
+    });
   return text(saved);
+}
+
+/** What changed in OpenShift between two phases, as watch events per namespace and kind. */
+function watchEvents(before: OpenShiftWorld, after: OpenShiftWorld) {
+  const events: { ns: string; kind: string; type: string; object: Item }[] = [];
+  const namespaces = new Set([...before.lists.keys(), ...after.lists.keys()]);
+  for (const ns of namespaces) {
+    for (const kind of Object.values(PLURALS)) {
+      const old = new Map(itemsOf(before, ns, kind).map(item => [nameOf(item), item]));
+      const next = itemsOf(after, ns, kind);
+      for (const item of next) {
+        const previous = old.get(nameOf(item));
+        const strip = (value: Item) =>
+          JSON.stringify({ ...value, metadata: { ...(value.metadata as Item), resourceVersion: "" } });
+        if (!previous) events.push({ ns, kind, type: "ADDED", object: item });
+        else if (strip(previous) !== strip(item)) events.push({ ns, kind, type: "MODIFIED", object: item });
+        old.delete(nameOf(item));
+      }
+      for (const item of old.values()) events.push({ ns, kind, type: "DELETED", object: item });
+    }
+  }
+  return events;
+}
+
+// ── The world moves on ───────────────────────────────────────────────────────
+
+onPhase(next => {
+  const before = world;
+  phase = next;
+  runs = githubRuns(state, next);
+  builds = jenkinsBuilds(state, next);
+  world = openShiftWorld(state, next);
+  for (const event of watchEvents(before, world))
+    for (const watch of watches)
+      if (watch.ns === event.ns && watch.kind === event.kind && matchesSelector(event.object, watch.selector))
+        watch.write(`${JSON.stringify({ type: event.type, object: event.object })}\n`);
+  // Phase 2: the new commit lands on origin/dev, for the next `git fetch` to find.
+  if (next.index === 2) {
+    const result = Bun.spawnSync([
+      "git",
+      "--git-dir",
+      join(state.remotes, "demo", "shop.git"),
+      "update-ref",
+      "refs/heads/dev",
+      state.shas.next,
+    ]);
+    if (result.exitCode !== 0) log(`git update-ref failed: ${result.stderr.toString().trim()}`);
+  }
+  log(`world moved to phase ${next.index} of ${LAST_PHASE}`);
+});
+
+// --live: the interactive demo moves on by itself, one phase per interval.
+if (state.live !== null) {
+  const timer = setInterval(() => {
+    if (!advancePhase() || currentPhase().index >= LAST_PHASE) clearInterval(timer);
+  }, state.live * 1000);
 }
 
 // ── Router ───────────────────────────────────────────────────────────────────
 
+function log(line: string) {
+  try {
+    appendFileSync(requestLog, `${new Date().toISOString()} ${line}\n`);
+  } catch {}
+}
+
 const realFetch = globalThis.fetch;
+const sleep = (ms: number, signal: AbortSignal | null | undefined) =>
+  new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) return reject(abortError(signal));
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        reject(abortError(signal));
+      },
+      { once: true },
+    );
+  });
+
+async function route(url: URL, method: string, body: string, signal: AbortSignal | null | undefined) {
+  const origin = `${url.protocol}//${url.host}`;
+  const provider: ProviderName | null =
+    origin === "https://api.github.com"
+      ? "github"
+      : origin === new URL(JENKINS_ROOT).origin
+        ? "jenkins"
+        : origin === new URL(OPENSHIFT_SERVER).origin
+          ? "openshift"
+          : null;
+  if (!provider) return notFound();
+  const failed = failure(provider, signal);
+  if (failed) return failed;
+  if (provider === "github") return github(url, method, body);
+  if (provider === "jenkins") return jenkins(url);
+  return openshift(url, signal);
+}
 
 async function fakeFetch(input: string | URL | Request, init?: RequestInit): Promise<Response> {
   const request = input instanceof Request ? input : null;
@@ -368,18 +554,19 @@ async function fakeFetch(input: string | URL | Request, init?: RequestInit): Pro
   const method = (init?.method ?? request?.method ?? "GET").toUpperCase();
   const body = typeof init?.body === "string" ? init.body : request ? await request.text() : "";
   const signal = init?.signal ?? request?.signal;
-  const origin = `${url.protocol}//${url.host}`;
-  let response: Response;
-  if (origin === "https://api.github.com") response = github(url, method, body);
-  else if (origin === new URL(JENKINS_ROOT).origin) response = jenkins(url);
-  else if (origin === new URL(OPENSHIFT_SERVER).origin) response = openshift(url, signal);
-  else response = notFound();
+  let outcome = "failed";
   try {
-    appendFileSync(requestLog, `${new Date().toISOString()} ${method} ${url.href} -> ${response.status}\n`);
-  } catch {}
-  // A short pause, so the fetching states show for a moment.
-  await new Promise(resolve => setTimeout(resolve, 150));
-  return response;
+    // A short pause, so the fetching states show for a moment.
+    await sleep(state.latency, signal);
+    const response = await route(url, method, body, signal);
+    outcome = String(response.status);
+    return response;
+  } catch (error) {
+    if (signal?.aborted) outcome = "aborted";
+    throw error;
+  } finally {
+    log(`${method} ${url.href} -> ${outcome}`);
+  }
 }
 
 globalThis.fetch = Object.assign(fakeFetch, { preconnect: realFetch.preconnect }) as typeof fetch;
