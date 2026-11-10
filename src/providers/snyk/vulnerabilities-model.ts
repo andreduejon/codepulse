@@ -20,8 +20,10 @@ export type Section = {
   entries: SnykVulnerabilityEntry[];
   /** Unfiltered entry count, shown as `/M` while filtering. */
   original: number;
-  /** FIXED: the parent's findings this commit no longer has. Its own tree, headed in the success colour. */
-  fixed?: boolean;
+  /** NEW or FIXED: what changed against an earlier scan. Its own tree with a muted heading. */
+  change?: "new" | "fixed";
+  /** Muted text after the label: the scan NEW and FIXED compare with (`vs parent 4c5d6e7`). */
+  note?: string;
 };
 export type PackageRow = {
   key: string;
@@ -45,7 +47,6 @@ export type DetailLine = {
 };
 export type FlatItem =
   | { kind: "scan" }
-  | { kind: "parent" }
   | { kind: "copyJson" }
   | { kind: "groupBy" }
   | { kind: "filter" }
@@ -129,13 +130,7 @@ export function detailLines(entry: SnykVulnerabilityEntry): DetailLine[] {
 }
 
 export function itemKey(item: FlatItem): string {
-  if (
-    item.kind === "scan" ||
-    item.kind === "parent" ||
-    item.kind === "copyJson" ||
-    item.kind === "groupBy" ||
-    item.kind === "filter"
-  )
+  if (item.kind === "scan" || item.kind === "copyJson" || item.kind === "groupBy" || item.kind === "filter")
     return item.kind;
   if (item.kind === "section") return `section:${item.section.key}`;
   if (item.kind === "package") return item.pkg.key;

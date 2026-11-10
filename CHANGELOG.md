@@ -33,10 +33,10 @@ All notable changes to this project will be documented in this file.
 - Jenkins: a finished build with a JUnit report shows a **Tests** row with its counts and its failed tests. Enter
   opens a failure's error and stack trace in the log viewer, `←` / `→` move between failed tests.
 
-- Snyk Vulnerabilities compare with the first parent's scan: a `vs parent` row (`2 new · 1 fixed`), a muted
-  `new` on added findings, and a folded FIXED section in green, set apart by a blank line, with the parent's
-  findings this commit fixed. `new` and `fixed` work as filter words. Without a parent scan, Enter on the row
-  scans the parent.
+- Snyk Vulnerabilities compare with an earlier scan: folded NEW and FIXED trees at the end, their muted headings
+  naming the scan (`vs parent 4c5d6e7`, or `vs 1a2b3c4, 3 commits back` when the parent has no scan and the
+  nearest scanned commit stands in). Added findings also keep a muted `new` under their severity. `new` and
+  `fixed` work as filter words.
 
 ### Changed
 

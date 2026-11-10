@@ -1,4 +1,4 @@
-import { expect, mock, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { RGBA } from "@opentui/core";
 import { testRender } from "@opentui/solid";
 import { createSignal } from "solid-js";
@@ -22,10 +22,9 @@ const added = finding("SNYK-JS-LODASH-1", "lodash", "4.17.20");
 const gone = finding("SNYK-JS-AXIOS-1", "axios", "0.21.0");
 const PARENT = "b".repeat(40);
 
-async function renderSnyk(parentScan: SnykScanResult | null, filter?: string) {
+async function renderSnyk(baselineScan: SnykScanResult | null, filter?: string, stepsBack = 1) {
   const [cursor, setCursor] = createSignal(0);
   const actions: (string | null)[] = [];
-  const scanParent = mock(() => {});
   const navRef: DetailNavRef = {
     itemCount: 0,
     itemRefs: [],
@@ -41,7 +40,7 @@ async function renderSnyk(parentScan: SnykScanResult | null, filter?: string) {
         <box width={76} flexDirection="column">
           <SnykDetailTab
             scan={scanOf("a".repeat(40), [kept, added])}
-            parent={{ sha: PARENT, scan: parentScan, onScan: scanParent }}
+            baseline={baselineScan ? { sha: PARENT, scan: baselineScan, stepsBack } : null}
             onScan={() => {}}
             takePendingFilter={() => filter ?? null}
             contentWidth={76}
@@ -73,19 +72,30 @@ async function renderSnyk(parentScan: SnykScanResult | null, filter?: string) {
       .lines[indexOf(text)]?.spans.find(span => span.text.includes(text))
       ?.fg.toString();
   const color = (token: "success" | "foregroundMuted") => RGBA.fromHex(theme.theme()[token]).toString();
-  return { ...setup, navRef, setCursor, settle, actions, scanParent, row, rows, indexOf, fgOf, color };
+  return { ...setup, navRef, setCursor, settle, actions, row, rows, indexOf, fgOf, color };
 }
 
-test("vs parent: counts, new findings marked, and the parent's fixed ones in a folded FIXED section", async () => {
+test("NEW and FIXED: folded trees after a blank line, compared with the parent; new findings keep their mark", async () => {
   const t = await renderSnyk(scanOf(PARENT, [kept, gone]));
   try {
-    expect(t.row("vs parent")).toMatch(/vs parent bbbbbbb\s+1 new · 1 fixed/);
+    expect(t.row("NEW")).toMatch(/▸ NEW\s+vs parent bbbbbbb\s+1\s*$/);
+    expect(t.row("FIXED")).toMatch(/▸ FIXED\s+vs parent bbbbbbb\s+1\s*$/);
+    expect(t.rows()[t.indexOf("NEW") - 1]?.trim()).toBe("");
+    expect(t.indexOf("FIXED")).toBe(t.indexOf("NEW") + 1);
+    // The comparison lives in the two headings: no row of its own.
+    expect(t.rows().filter(line => line.includes("vs parent"))).toHaveLength(2);
     expect(t.row("LODASH")).toMatch(/SNYK-JS-LODASH-1\s+new\s+7\.5/);
     expect(t.row("MINIMIST")).not.toMatch(/\bnew\b/);
-    expect(t.row("FIXED")).toMatch(/▸ FIXED\s+1/);
     expect(t.indexOf("AXIOS")).toBe(-1);
-    // Scan, vs parent, Copy, Group by, filter, HIGH, two findings, FIXED.
-    t.setCursor(8);
+    // Scan, Copy, Group by, filter, HIGH, two findings, NEW, FIXED.
+    t.setCursor(7);
+    await t.settle();
+    t.navRef.activateCurrentItem();
+    await t.settle();
+    const underNew = t.rows().findIndex((line, index) => index > t.indexOf("NEW") && line.includes("LODASH"));
+    expect(underNew).toBe(t.indexOf("NEW") + 1);
+    expect(t.rows()[underNew]).not.toMatch(/\bnew\b/);
+    t.setCursor(9);
     await t.settle();
     t.navRef.activateCurrentItem();
     await t.settle();
@@ -95,17 +105,15 @@ test("vs parent: counts, new findings marked, and the parent's fixed ones in a f
   }
 });
 
-test("FIXED is green while it lists fixes, also under the cursor, and starts its own tree after a blank line", async () => {
+test("NEW and FIXED stay muted, also under the cursor, so the severities keep the attention", async () => {
   const t = await renderSnyk(scanOf(PARENT, [kept, gone]));
   try {
-    expect(t.rows()[t.indexOf("FIXED") - 1]?.trim()).toBe("");
-    expect(t.fgOf("FIXED")).toBe(t.color("success"));
-    expect(t.fgOf("1 fixed")).toBe(t.color("success"));
-    expect(t.fgOf("1 new")).toBe(t.color("foregroundMuted"));
-    // Scan, vs parent, Copy, Group by, filter, HIGH, two findings, FIXED.
+    expect(t.fgOf("NEW")).toBe(t.color("foregroundMuted"));
+    expect(t.fgOf("FIXED")).toBe(t.color("foregroundMuted"));
+    expect(t.fgOf("vs parent")).toBe(t.color("foregroundMuted"));
     t.setCursor(8);
     await t.settle();
-    expect(t.fgOf("FIXED")).toBe(t.color("success"));
+    expect(t.fgOf("FIXED")).toBe(t.color("foregroundMuted"));
   } finally {
     t.renderer.destroy();
   }
@@ -121,10 +129,11 @@ test("FIXED is muted when the filter leaves none of its fixes", async () => {
   }
 });
 
-test("the filter words new and fixed pick by the diff", async () => {
+test("the filter words new and fixed show only that tree", async () => {
   const onlyNew = await renderSnyk(scanOf(PARENT, [kept, gone]), "new");
   try {
-    expect(onlyNew.indexOf("LODASH")).toBeGreaterThan(-1);
+    expect(onlyNew.indexOf("LODASH")).toBeGreaterThan(onlyNew.indexOf("NEW"));
+    expect(onlyNew.rows().filter(line => line.includes("LODASH"))).toHaveLength(1);
     expect(onlyNew.indexOf("MINIMIST")).toBe(-1);
     expect(onlyNew.indexOf("AXIOS")).toBe(-1);
   } finally {
@@ -139,15 +148,34 @@ test("the filter words new and fixed pick by the diff", async () => {
   }
 });
 
-test("a parent without a scan says so, and Enter scans it", async () => {
+test("an older scanned commit stands in for an unscanned parent, and the headings say how far back", async () => {
+  const t = await renderSnyk(scanOf(PARENT, [kept, gone]), undefined, 3);
+  try {
+    expect(t.row("NEW")).toMatch(/▸ NEW\s+vs bbbbbbb, 3 commits back\s+1\s*$/);
+    expect(t.row("FIXED")).toMatch(/▸ FIXED\s+vs bbbbbbb, 3 commits back\s+1\s*$/);
+  } finally {
+    t.renderer.destroy();
+  }
+});
+
+test("nothing changed still names the compared scan, with NEW and FIXED at 0", async () => {
+  const t = await renderSnyk(scanOf(PARENT, [kept, added]));
+  try {
+    expect(t.row("NEW")).toMatch(/· NEW\s+vs parent bbbbbbb\s+0\s*$/);
+    expect(t.row("FIXED")).toMatch(/· FIXED\s+vs parent bbbbbbb\s+0\s*$/);
+    expect(t.rows()[t.indexOf("NEW") - 1]?.trim()).toBe("");
+  } finally {
+    t.renderer.destroy();
+  }
+});
+
+test("without a scanned commit to compare with there is no NEW, no FIXED and no parent row", async () => {
   const t = await renderSnyk(null);
   try {
-    expect(t.row("parent bbbbbbb")).toContain("parent bbbbbbb not scanned");
-    t.setCursor(1);
-    await t.settle();
-    expect(t.actions.at(-1)).toBe("scan parent");
-    t.navRef.activateCurrentItem();
-    expect(t.scanParent).toHaveBeenCalledTimes(1);
+    expect(t.indexOf("NEW")).toBe(-1);
+    expect(t.indexOf("FIXED")).toBe(-1);
+    expect(t.indexOf("parent")).toBe(-1);
+    expect(t.row("LODASH")).not.toMatch(/\bnew\b/);
   } finally {
     t.renderer.destroy();
   }

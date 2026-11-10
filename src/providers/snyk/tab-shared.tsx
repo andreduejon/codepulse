@@ -1,9 +1,10 @@
 import { MouseButton, type MouseEvent, type Renderable } from "@opentui/core";
-import { createSignal, For, type JSX, Show } from "solid-js";
+import { createSignal, For, Show } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
 import type { Theme } from "../../context/theme";
 import { useT } from "../../hooks/use-t";
 import type { RowShortcut } from "../shared/open-row";
+import type { SnykBaseline } from "./scan-diff";
 import type { SnykScanResult, SnykSeverity } from "./types";
 import type { SnykViewMemory } from "./view-memory";
 
@@ -21,8 +22,8 @@ export interface SnykDetailTabProps {
   detailFocused: () => boolean;
   setDetailCursorAction: (action: string | null) => void;
   setDetailCursorIndex: (idx: number) => void;
-  /** The first parent's scan, to mark what this commit changed (`null` while it has none, `onScan` to scan it). */
-  parent?: { sha: string; scan: SnykScanResult | null; onScan?: () => void };
+  /** The earlier scan NEW and FIXED compare with (see findSnykBaseline); none, no NEW or FIXED. */
+  baseline?: SnykBaseline | null;
   /** Footer row shortcut (`o open` on a finding). */
   setDetailCursorShortcut?: (shortcut: RowShortcut | null) => void;
   /** Vulnerabilities: a filter handed over by the Dependencies jump, read once when the tab opens. */
@@ -125,8 +126,8 @@ export function SnykControlRow(props: {
   label: string;
   /** Switches: the current option, shown as `[value]`. */
   value?: string;
-  /** Muted status after the label, e.g. `scanning...`; parts may carry their own colour. */
-  status?: JSX.Element;
+  /** Muted status after the label, e.g. `scanning...`. */
+  status?: string;
   copied?: boolean;
   /** Muted, like a provider's disabled Reload row. */
   disabled?: boolean;

@@ -1,4 +1,4 @@
-import { Show } from "solid-js";
+import { createMemo, Show } from "solid-js";
 import { type ProviderStatus, useAppState } from "../context/state";
 import { BANNER } from "../debug/banner";
 import { ActionsDetailTab } from "../providers/github-actions/detail-tab";
@@ -7,6 +7,7 @@ import { OpenShiftDetailTab } from "../providers/openshift/detail-tab";
 import type { ProviderDetailView } from "../providers/provider";
 import { SnykDependenciesTab } from "../providers/snyk/deps-tab";
 import { SnykDetailTab } from "../providers/snyk/detail-tab";
+import { findSnykBaseline } from "../providers/snyk/scan-diff";
 import type { SnykViewMemory } from "../providers/snyk/view-memory";
 import type { DetailViewProps } from "./detail-types";
 
@@ -43,16 +44,19 @@ export function ProviderDetailTabs(
   const snykScan = async () => {
     await props.view.snykScanCommit?.(props.sha, !!props.view.snykGetCommitData?.(props.sha));
   };
-  /** The first parent's scan, so Vulnerabilities can say what this commit added and fixed. */
-  const snykParent = () => {
-    const commit = state.selectedCommit();
-    const sha = commit?.hash === props.sha ? commit.parents[0] : undefined;
-    if (!sha) return undefined;
-    return {
-      sha,
-      scan: props.view.snykGetCommitData?.(sha) ?? null,
-      onScan: snykUnavailable() ? undefined : () => void props.view.snykScanCommit?.(sha, false),
-    };
+  /** First parent of each loaded commit, to walk back to the nearest scanned one. */
+  const firstParents = createMemo(
+    () => new Map(state.graphRows().map(row => [row.commit.hash, row.commit.parents[0]] as const)),
+  );
+  /** The scan Vulnerabilities compares with: the first parent's, or the nearest scanned commit further back. */
+  const snykBaseline = () => {
+    const getScan = props.view.snykGetCommitData;
+    if (!getScan) return null;
+    return findSnykBaseline(
+      props.sha,
+      sha => firstParents().get(sha),
+      sha => getScan(sha),
+    );
   };
 
   return (
@@ -134,7 +138,7 @@ export function ProviderDetailTabs(
           mouseEnabled={props.view.mouseEnabled}
           onMouseFocus={props.view.onMouseFocus}
           scan={props.view.snykGetCommitData?.(props.sha) ?? null}
-          parent={snykParent()}
+          baseline={snykBaseline()}
           contentWidth={props.view.contentWidth}
           onScan={snykScan}
           loading={props.view.snykIsScanning?.(props.sha) ?? false}

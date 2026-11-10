@@ -31,7 +31,7 @@ export interface VulnerabilityRowsView {
   sectionLabelWidth: (section: Section) => number;
   packageLabelWidth: (pkg: PackageRow) => number;
   findingExpanded: (key: string) => boolean;
-  /** A finding the parent's scan did not have: marked with a muted `new`. */
+  /** A finding the compared scan did not have: marked with a muted `new`. */
   isNew: (entry: SnykVulnerabilityEntry) => boolean;
   sectionExpanded: (section: Section) => boolean;
   packageExpanded: (pkg: PackageRow) => boolean;
@@ -106,6 +106,8 @@ function Entry(entryProps: {
   entry: SnykVulnerabilityEntry;
   last: boolean;
   indent?: string;
+  /** The `new` mark; left out under NEW, where every finding is new. */
+  markNew?: boolean;
 }) {
   const t = useT();
   const v = entryProps.view;
@@ -150,7 +152,7 @@ function Entry(entryProps: {
             ? v.scrolled(entry.label, true, v.findingLabelWidth())
             : highlightMatch(entry.label, v.query(), t().snykBg)}
         </text>
-        <Show when={v.isNew(entry)}>
+        <Show when={entryProps.markNew !== false && v.isNew(entry)}>
           <text selectable={!v.mouseEnabled()} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
             {" new"}
           </text>
@@ -285,10 +287,6 @@ export function SectionView(sectionProps: { view: VulnerabilityRowsView; section
   const label = () => (severity ? section.label : v.scrolled(section.label, cursored(), v.sectionLabelWidth(section)));
   return (
     <box flexDirection="column" width="100%">
-      {/* FIXED starts its own tree: the findings above are this commit's, these the parent's. */}
-      <Show when={section.fixed}>
-        <box height={1} flexShrink={0} />
-      </Show>
       <box
         {...v.rows.mouseRow(key, index)}
         ref={element => {
@@ -308,24 +306,37 @@ export function SectionView(sectionProps: { view: VulnerabilityRowsView; section
         </text>
         <text
           selectable={!v.mouseEnabled() || isEmpty()}
-          flexGrow={1}
-          flexShrink={1}
+          flexGrow={section.note ? 0 : 1}
+          flexShrink={section.note ? 0 : 1}
           wrapMode="none"
           truncate={v.bannerOverflow() === 0 || !cursored()}
           fg={
-            isEmpty()
+            // NEW and FIXED stay muted, also under the cursor: the severities above keep the attention.
+            isEmpty() || section.change
               ? t().foregroundMuted
               : severity
                 ? severityColor(t(), severity)
-                : section.fixed
-                  ? t().success
-                  : cursored()
-                    ? t().accent
-                    : t().foreground
+                : cursored()
+                  ? t().accent
+                  : t().foreground
           }
         >
           {!isEmpty() ? <strong>{label()}</strong> : label()}
         </text>
+        <Show when={section.note}>
+          {note => (
+            <text
+              selectable={!v.mouseEnabled() || isEmpty()}
+              flexGrow={1}
+              flexShrink={1}
+              wrapMode="none"
+              truncate
+              fg={t().foregroundMuted}
+            >
+              {`  ${note()}`}
+            </text>
+          )}
+        </Show>
         <Count
           view={v}
           current={section.entries.length}
@@ -339,7 +350,12 @@ export function SectionView(sectionProps: { view: VulnerabilityRowsView; section
           fallback={
             <For each={section.entries}>
               {(entry, entryIndex) => (
-                <Entry view={v} entry={entry} last={entryIndex() === section.entries.length - 1} />
+                <Entry
+                  view={v}
+                  entry={entry}
+                  last={entryIndex() === section.entries.length - 1}
+                  markNew={!section.change}
+                />
               )}
             </For>
           }

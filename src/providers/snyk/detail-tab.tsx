@@ -9,9 +9,9 @@ import { BUSY } from "../../utils/busy-text";
 import { useOpenRowShortcut } from "../shared/open-row";
 import { filterSnykFindings, SnykFilterRow, useSnykFilter } from "./filter";
 import { countUniqueFindings, groupSnykFixes, groupSnykVulnerabilities, type SnykVulnerabilityEntry } from "./parser";
-import { diffKey, diffSnykScans } from "./scan-diff";
+import { diffKey, diffSnykScans, snykBaselineNote } from "./scan-diff";
 import { SnykControlRow, type SnykDetailTabProps, snykScanIdentity, useSnykRows } from "./tab-shared";
-import type { SnykSeverity } from "./types";
+import type { SnykFinding, SnykSeverity } from "./types";
 import { useSnykTabMemory } from "./view-memory";
 import {
   detailLines,
@@ -45,17 +45,14 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
   /** Dependency groups and packages start open (CVEs closed); track the ones closed. */
   const [collapsedGroups, setCollapsedGroups] = createSignal<Set<string>>(new Set());
   const isSectionExpanded = (section: Section) =>
-    section.fixed
-      ? expandedSections().has(section.key) || diffWord() === "fixed"
+    section.change
+      ? expandedSections().has(section.key) || diffWord() === section.change
       : section.severity
         ? expandedSections().has(section.key)
         : !collapsedGroups().has(section.key);
   const isPackageExpanded = (pkg: PackageRow) => !collapsedGroups().has(pkg.key);
-  // Cursor order: Scan (left out while Snyk is unavailable), vs parent, Copy, Group by, filter, then the findings.
-  const scanRows = () => (props.unavailable ? 0 : 1);
-  const hasParentRow = () => !!props.parent && !!props.scan;
-  const parentIndex = () => (hasParentRow() ? scanRows() : -1);
-  const base = () => scanRows() + (hasParentRow() ? 1 : 0);
+  // Cursor order: Scan (left out while Snyk is unavailable), Copy, Group by, filter, the findings, then NEW and FIXED.
+  const base = () => (props.unavailable ? 0 : 1);
   const copyIndex = () => base();
   const groupByIndex = () => base() + 1;
   const filterIndex = () => base() + 2;
@@ -66,12 +63,12 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
   const itemRefs: Renderable[] = [];
   const rowsUi = useSnykRows(props, () => activateCurrentItem());
 
-  /** Against the parent's scan, when there is one: findings added (marked `new`) and fixed (the FIXED section). */
+  /** Against an earlier scan, when there is one: findings added (NEW, and marked `new`) and fixed (FIXED). */
   const diff = createMemo(() =>
-    props.scan && props.parent?.scan ? diffSnykScans(props.scan.findings, props.parent.scan.findings) : null,
+    props.scan && props.baseline ? diffSnykScans(props.scan.findings, props.baseline.scan.findings) : null,
   );
   const addedKeys = createMemo(() => new Set([...(diff()?.added ?? [])].map(diffKey)));
-  /** `new` and `fixed` in the filter pick by the diff, like `pinned` in Dependencies. */
+  /** `new` and `fixed` in the filter show only that tree, like `pinned` in Dependencies. */
   const diffWord = () => {
     const word = filter.query().trim().toLowerCase();
     return diff() && (word === "new" || word === "fixed") ? word : null;
@@ -79,23 +76,32 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
   const filteredFindings = createMemo(() => {
     const findings = props.scan?.findings ?? [];
     const word = diffWord();
-    if (word === "new") return findings.filter(finding => addedKeys().has(diffKey(finding)));
-    if (word === "fixed") return [];
+    if (word) return [];
     return filterSnykFindings(findings, filter.query());
   });
-  const fixedSection = createMemo((): Section | null => {
-    const fixed = diff()?.fixed ?? [];
-    if (fixed.length === 0) return null;
+  /** NEW repeats the added findings (they stay under their severity too); FIXED lists the earlier scan's gone ones. */
+  const changeSection = (change: "new" | "fixed", findings: readonly SnykFinding[]): Section | null => {
+    const baseline = props.baseline;
+    // Shown at 0 when nothing changed: the heading still says what was compared.
+    if (!baseline) return null;
     const word = diffWord();
-    const shown = word === "new" ? [] : word === "fixed" ? fixed : filterSnykFindings(fixed, filter.query());
+    const shown = word === change ? findings : word ? [] : filterSnykFindings(findings, filter.query());
+    // Own keys: a finding under its severity and under NEW opens and takes the cursor in each on its own.
+    const entries = groupSnykVulnerabilities(shown).map(entry => ({ ...entry, key: `${change}:${entry.key}` }));
     return {
-      key: "fixed",
-      label: "FIXED",
-      fixed: true,
-      entries: groupSnykVulnerabilities(shown),
-      original: groupSnykVulnerabilities(fixed).length,
+      key: change,
+      label: change.toUpperCase(),
+      change,
+      note: snykBaselineNote(baseline),
+      entries,
+      original: groupSnykVulnerabilities(findings).length,
     };
-  });
+  };
+  const changeSections = createMemo(() =>
+    [changeSection("new", [...(diff()?.added ?? [])]), changeSection("fixed", diff()?.fixed ?? [])].filter(
+      (section): section is Section => section !== null,
+    ),
+  );
   const entries = createMemo(() => groupSnykVulnerabilities(filteredFindings()));
   const originalCounts = createMemo(() => {
     const counts = { critical: 0, high: 0, medium: 0, low: 0 } as Record<SnykSeverity, number>;
@@ -106,10 +112,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
   const uniqueTotal = createMemo(() => entries().length);
   // Unfiltered groups fix the list and its order, so filtering only changes counts (like severities).
   const originalGroups = createMemo(() => groupSnykFixes(groupSnykVulnerabilities(props.scan?.findings ?? [])));
-  const sections = createMemo<Section[]>(() => {
-    const fixed = fixedSection();
-    return fixed ? [...currentSections(), fixed] : currentSections();
-  });
+  const sections = createMemo<Section[]>(() => [...currentSections(), ...changeSections()]);
   function currentSections(): Section[] {
     if (!props.scan) return [];
     if (groupBy() === "dependency") {
@@ -152,7 +155,6 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
   ];
   const flatItems = createMemo<FlatItem[]>(() => [
     ...(props.unavailable ? [] : [{ kind: "scan" as const }]),
-    ...(hasParentRow() ? [{ kind: "parent" as const }] : []),
     // Copy, Group by and filter only when the scan has findings to show.
     ...(originalTotal() > 0
       ? [{ kind: "copyJson" as const }, { kind: "groupBy" as const }, { kind: "filter" as const }]
@@ -276,7 +278,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
   const toggleSection = (section: Section) => {
     const open = isSectionExpanded(section);
     if (open) closeEntries(section.entries);
-    if (section.severity || section.fixed) toggle(setExpandedSections, section.key);
+    if (section.severity || section.change) toggle(setExpandedSections, section.key);
     else
       update(setCollapsedGroups, next => {
         if (!open) next.delete(section.key);
@@ -359,9 +361,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
       return false;
     }
     filter.stop();
-    if (item.kind === "parent") {
-      if (!props.parent?.scan) props.parent?.onScan?.();
-    } else if (item.kind === "scan") {
+    if (item.kind === "scan") {
       if (!props.loading) void props.onScan();
     } else if (item.kind === "copyJson") copyToClipboard(scanJson(), "copyJson");
     else if (item.kind === "groupBy")
@@ -399,8 +399,6 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
     }
     if (item.kind === "filter") props.setDetailCursorAction(filter.editing() ? "done" : "filter");
     else if (item.kind === "scan") props.setDetailCursorAction(props.loading ? null : props.scan ? "rescan" : "scan");
-    else if (item.kind === "parent")
-      props.setDetailCursorAction(!props.parent?.scan && props.parent?.onScan ? "scan parent" : null);
     else if (item.kind === "groupBy") props.setDetailCursorAction("switch");
     else if (item.kind === "field" || item.kind === "copyJson") props.setDetailCursorAction("copy");
     else {
@@ -413,22 +411,6 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
       props.setDetailCursorAction(expanded ? "collapse" : "expand");
     }
   });
-
-  /** `2 new · 1 fixed`, or `no change`, after `vs parent`. */
-  const diffSummary = () => {
-    const current = diff();
-    if (!current) return undefined;
-    const added = groupSnykVulnerabilities([...current.added]).length;
-    const fixed = groupSnykVulnerabilities(current.fixed).length;
-    if (added === 0 && fixed === 0) return "no change";
-    return (
-      <>
-        {added > 0 ? `${added} new` : ""}
-        {added > 0 && fixed > 0 ? " · " : ""}
-        {fixed > 0 ? <span style={{ fg: t().success }}>{`${fixed} fixed`}</span> : ""}
-      </>
-    );
-  };
 
   const view: VulnerabilityRowsView = {
     rows: rowsUi,
@@ -464,22 +446,6 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
           syncRefs();
         }}
       />
-      <Show when={hasParentRow() && props.parent}>
-        {parent => (
-          <SnykControlRow
-            rows={rowsUi}
-            id="parent"
-            index={parentIndex()}
-            label={
-              parent().scan ? `vs parent ${parent().sha.slice(0, 7)}` : `parent ${parent().sha.slice(0, 7)} not scanned`
-            }
-            status={diffSummary()}
-            disabled={!parent().scan && !parent().onScan}
-            mouseEnabled={props.mouseEnabled}
-            rowRef={rowRef({ kind: "parent" })}
-          />
-        )}
-      </Show>
 
       <Show when={props.scan}>
         <Show when={originalTotal() > 0}>
@@ -515,7 +481,14 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
         </Show>
 
         <box height={1} flexShrink={0} />
-        <For each={sections()}>{section => <SectionView view={view} section={section} />}</For>
+        <For each={sections().filter(section => !section.change)}>
+          {section => <SectionView view={view} section={section} />}
+        </For>
+        {/* NEW and FIXED start their own trees: what changed against the earlier scan. */}
+        <Show when={changeSections().length > 0}>
+          <box height={1} flexShrink={0} />
+          <For each={changeSections()}>{section => <SectionView view={view} section={section} />}</For>
+        </Show>
       </Show>
     </box>
   );

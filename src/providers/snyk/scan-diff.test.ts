@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { diffSnykScans } from "./scan-diff";
-import type { SnykFinding } from "./types";
+import { diffSnykScans, findSnykBaseline, snykBaselineNote } from "./scan-diff";
+import type { SnykFinding, SnykScanResult } from "./types";
 
 export const finding = (id: string, dependency: string, installedVersion: string, extra: Partial<SnykFinding> = {}) =>
   ({
@@ -33,4 +33,28 @@ test("a dependency bump that keeps the same vulnerability is neither new nor fix
   const diff = diffSnykScans([after], [before]);
   expect(diff.added.size).toBe(0);
   expect(diff.fixed).toEqual([]);
+});
+
+test("compares with the first parent's scan, or else the nearest scanned commit down the first-parent line", () => {
+  const firstParent: Record<string, string> = { d: "c", c: "b", b: "a" };
+  const scans = new Map<string, SnykScanResult>([["a", { sha: "a" } as SnykScanResult]]);
+  const baseline = (sha: string) =>
+    findSnykBaseline(
+      sha,
+      commit => firstParent[commit],
+      commit => scans.get(commit),
+    );
+  expect(baseline("d")).toEqual({ sha: "a", scan: scans.get("a") as SnykScanResult, stepsBack: 3 });
+  scans.set("c", { sha: "c" } as SnykScanResult);
+  expect(baseline("d")).toEqual({ sha: "c", scan: scans.get("c") as SnykScanResult, stepsBack: 1 });
+  // The root has no parent; nothing scanned below means nothing to compare with.
+  expect(baseline("a")).toBeNull();
+  scans.clear();
+  expect(baseline("d")).toBeNull();
+});
+
+test("the note names the parent, or how far back the compared commit is", () => {
+  const scan = { sha: "x" } as SnykScanResult;
+  expect(snykBaselineNote({ sha: "4c5d6e7f".repeat(5), scan, stepsBack: 1 })).toBe("vs parent 4c5d6e7");
+  expect(snykBaselineNote({ sha: "1a2b3c4d".repeat(5), scan, stepsBack: 3 })).toBe("vs 1a2b3c4, 3 commits back");
 });
