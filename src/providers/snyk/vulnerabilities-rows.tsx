@@ -285,6 +285,16 @@ export function SectionView(sectionProps: { view: VulnerabilityRowsView; section
   const severity = section.severity;
   // Always the short name: swapping to full coordinates on the cursor made the header jump.
   const label = () => (severity ? section.label : v.scrolled(section.label, cursored(), v.sectionLabelWidth(section)));
+  // Severities keep their colour and NEW and FIXED stay muted, also under the cursor: the severities above keep the
+  // attention. The row shade marks the cursor, and the arrow takes the label's colour.
+  const labelColor = () =>
+    isEmpty() || section.change
+      ? t().foregroundMuted
+      : severity
+        ? severityColor(t(), severity)
+        : cursored()
+          ? t().accent
+          : t().foreground;
   return (
     <box flexDirection="column" width="100%">
       <box
@@ -300,7 +310,7 @@ export function SectionView(sectionProps: { view: VulnerabilityRowsView; section
           selectable={!v.mouseEnabled() || isEmpty()}
           flexShrink={0}
           wrapMode="none"
-          fg={cursored() ? t().accent : t().foregroundMuted}
+          fg={cursored() ? labelColor() : t().foregroundMuted}
         >
           {isEmpty() ? "· " : expanded() ? "▾ " : "▸ "}
         </text>
@@ -310,16 +320,7 @@ export function SectionView(sectionProps: { view: VulnerabilityRowsView; section
           flexShrink={section.note ? 0 : 1}
           wrapMode="none"
           truncate={v.bannerOverflow() === 0 || !cursored()}
-          fg={
-            // NEW and FIXED stay muted, also under the cursor: the severities above keep the attention.
-            isEmpty() || section.change
-              ? t().foregroundMuted
-              : severity
-                ? severityColor(t(), severity)
-                : cursored()
-                  ? t().accent
-                  : t().foreground
-          }
+          fg={labelColor()}
         >
           {!isEmpty() ? <strong>{label()}</strong> : label()}
         </text>

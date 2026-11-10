@@ -44,6 +44,8 @@ All notable changes to this project will be documented in this file.
   recently built. The notice gives the counts (`Jenkins reads 25 of 61 branch jobs`).
 - Graph ref badges take only their own width, so short names (`main`, `dev`) are no longer folded into `+N` for
   the room a long name would need.
+- A selected Snyk severity, NEW or FIXED heading keeps its colour on the arrow too. The row shade marks the
+  cursor.
 
 ### Fixed
 

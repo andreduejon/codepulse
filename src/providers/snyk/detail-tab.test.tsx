@@ -71,8 +71,14 @@ async function renderSnyk(baselineScan: SnykScanResult | null, filter?: string, 
       .captureSpans()
       .lines[indexOf(text)]?.spans.find(span => span.text.includes(text))
       ?.fg.toString();
-  const color = (token: "success" | "foregroundMuted") => RGBA.fromHex(theme.theme()[token]).toString();
-  return { ...setup, navRef, setCursor, settle, actions, row, rows, indexOf, fgOf, color };
+  const color = (token: "foregroundMuted" | "severityHigh" | "backgroundElementActive") =>
+    RGBA.fromHex(theme.theme()[token]).toString();
+  /** The cell run holding `text` on the row that contains `rowText`. */
+  const spanIn = (rowText: string, text: string) =>
+    setup.captureSpans().lines[indexOf(rowText)]?.spans.find(span => span.text.includes(text));
+  const fgIn = (rowText: string, text: string) => spanIn(rowText, text)?.fg.toString();
+  const bgIn = (rowText: string, text: string) => spanIn(rowText, text)?.bg.toString();
+  return { ...setup, navRef, setCursor, settle, actions, row, rows, indexOf, fgOf, color, fgIn, bgIn };
 }
 
 test("NEW and FIXED: folded trees after a blank line, compared with the parent; new findings keep their mark", async () => {
@@ -114,6 +120,24 @@ test("NEW and FIXED stay muted, also under the cursor, so the severities keep th
     t.setCursor(8);
     await t.settle();
     expect(t.fgOf("FIXED")).toBe(t.color("foregroundMuted"));
+  } finally {
+    t.renderer.destroy();
+  }
+});
+
+test("under the cursor a severity, NEW or FIXED arrow takes its heading's colour; the row shade marks the cursor", async () => {
+  const t = await renderSnyk(scanOf(PARENT, [kept, gone]));
+  try {
+    // Scan, Copy, Group by, filter, HIGH.
+    t.setCursor(4);
+    await t.settle();
+    expect(t.fgIn("HIGH", "▾")).toBe(t.color("severityHigh"));
+    expect(t.bgIn("HIGH", "HIGH")).toBe(t.color("backgroundElementActive"));
+    // HIGH, two findings, NEW, FIXED.
+    t.setCursor(8);
+    await t.settle();
+    expect(t.fgIn("FIXED", "▸")).toBe(t.color("foregroundMuted"));
+    expect(t.bgIn("FIXED", "FIXED")).toBe(t.color("backgroundElementActive"));
   } finally {
     t.renderer.destroy();
   }
