@@ -1,25 +1,6 @@
-import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
-import { createEffect, createMemo, createSignal, For, onCleanup, Show, untrack } from "solid-js";
-import {
-  DialogFooter,
-  DialogOverlay,
-  DialogTitle,
-  DialogTitleBar,
-  getStandardDialogFrame,
-} from "../../components/dialogs/dialog-chrome";
-import {
-  highlightHits,
-  LineNumber,
-  LogSearchRow,
-  useLogSearch,
-  useSidewaysReveal,
-  useVisibleNumberWidth,
-} from "../../components/dialogs/log-search";
-import { handleLogScrollKey, type LogViewState, LogViewStatus } from "../../components/dialogs/log-view";
-import { fitTitleSegments } from "../../components/dialogs/title-utils";
-import { KeyHint, KeyHintSeparator } from "../../components/key-hint";
-import { useT } from "../../hooks/use-t";
+import { createEffect, createMemo, createSignal, onCleanup, untrack } from "solid-js";
+import type { LogViewState } from "../../components/dialogs/log-view";
+import { LogViewer, type LogViewerLine } from "../../components/dialogs/log-viewer";
 import { BUSY } from "../../utils/busy-text";
 import { openUrl } from "../../utils/open-url";
 import { stripTerminalControls } from "../../utils/terminal-text";
@@ -55,10 +36,6 @@ function resourceHasLog(resource: OpenShiftResource): boolean {
 }
 
 export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourceDialogProps>) {
-  const t = useT();
-  const renderer = useRenderer();
-  const dimensions = useTerminalDimensions();
-  const [wrapEnabled, setWrapEnabled] = createSignal(false);
   const [viewMode, setViewMode] = createSignal<ViewMode>(resourceHasLog(props.resource) ? "log" : "json");
   const [logText, setLogText] = createSignal<string | null>(null);
   const [logError, setLogError] = createSignal<string | null>(null);
@@ -73,9 +50,6 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
   const [events, setEvents] = createSignal<OpenShiftEvent[] | null>(null);
   const [eventsError, setEventsError] = createSignal<string | null>(null);
   const [eventsLoading, setEventsLoading] = createSignal(false);
-  let scrollboxRef: ScrollBoxRenderable | undefined;
-
-  const dialogFrame = createMemo(() => getStandardDialogFrame(dimensions()));
   const canLog = () => resourceHasLog(props.resource) && !!props.loadLog;
   const canEvents = () => !!props.loadEvents && OPENSHIFT_EVENT_KINDS.has(props.resource.kind);
   /** The views `c` cycles through, in order: log, object, events. */
@@ -177,12 +151,6 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
     if (canEvents()) untrack(() => void loadEvents());
   });
 
-  createEffect(() => {
-    props.resource.id;
-    if (viewMode() !== "log") return;
-    queueMicrotask(() => scrollboxRef?.scrollTo(Infinity));
-  });
-
   const statusLines = createMemo(() => formatOpenShiftStatus(props.resource.kind, objectValue()));
   /**
    * What the status says is wrong, then the events. With a status to show, events that failed to load or are gone
@@ -201,18 +169,18 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
     return [...status, { text: "", kind: "normal" }, ...below];
   });
   const warningCount = () => (events() ?? []).filter(event => event.type === "Warning").length;
-  const lines = createMemo(() => {
-    const mode = viewMode();
-    if (mode === "log") return stripTerminalControls(logText() ?? "").split("\n");
-    if (mode === "events") return eventLines().map(line => line.text);
-    return (objectText() ?? "").split("\n");
-  });
   /** Events show warnings in the warning color and the header muted; log and object lines are plain. */
-  const lineColor = (index: number) => {
-    if (viewMode() !== "events") return t().foreground;
-    const kind = eventLines()[index]?.kind;
-    return kind === "warning" ? t().warning : kind === "header" ? t().foregroundMuted : t().foreground;
-  };
+  const lines = createMemo((): LogViewerLine[] => {
+    const mode = viewMode();
+    if (mode === "events")
+      return eventLines().map((line, index) => ({
+        text: line.text,
+        lineNo: index + 1,
+        kind: line.kind === "warning" ? "warning" : line.kind === "header" ? "muted" : "normal",
+      }));
+    const text = mode === "log" ? stripTerminalControls(logText() ?? "") : (objectText() ?? "");
+    return text.split("\n").map((line, index) => ({ text: line, lineNo: index + 1 }));
+  });
   /** Loading, failed or empty: shown instead of numbered lines, the same way as the CI log dialog. */
   const viewState = (): LogViewState | null => {
     if (viewMode() === "log") {
@@ -235,46 +203,7 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
     if (error) return { kind: "error", title: "Failed to load object", message: error };
     return null;
   };
-  const lineRefs: Renderable[] = [];
-  const lineNoWidth = useVisibleNumberWidth({
-    scrollbox: () => scrollboxRef,
-    rowAt: index => lineRefs[index],
-    lines,
-    numberAt: index => index + 1,
-    layoutKey: wrapEnabled,
-  });
-  const search = useLogSearch({
-    texts: lines,
-    rowAt: index => lineRefs[index],
-    scrollbox: () => scrollboxRef,
-    onActiveChange: active => props.onSearchActive?.(active),
-  });
-  // Inner width: the dialog's frame (1) and padding (4) on both sides, then the line numbers and their gap.
-  const reveal = useSidewaysReveal({
-    search,
-    texts: lines,
-    wrap: wrapEnabled,
-    width: () => dialogFrame().width - 10 - (lineNoWidth() + 2),
-  });
-  const title = createMemo(() => {
-    const mode =
-      viewMode() === "log" ? (followEnded() ? "log ended" : "log") : viewMode() === "events" ? "events" : "object";
-    // Like the diff title: context (provider, then namespace, kind) goes first; the resource name shrinks last.
-    const segments = fitTitleSegments(
-      [
-        { text: "OpenShift", drop: 1 },
-        { text: props.resource.kind, drop: 3 },
-        { text: props.resource.namespace, drop: 2 },
-        { text: props.resource.name, emphasis: true, primary: true },
-        { text: mode },
-        { text: warningCount() > 0 ? `${warningCount()} warning${warningCount() === 1 ? "" : "s"}` : "", drop: 4 },
-      ],
-      dialogFrame().width,
-    );
-    return <DialogTitle segments={segments} />;
-  });
 
-  const toggleWrap = () => setWrapEnabled(value => !value);
   /** `r` refreshes what is on screen: the object in JSON view, the log (restarting a follow) in log view. */
   const canRefresh = () =>
     viewMode() === "json" ? !!props.loadObject : viewMode() === "events" ? canEvents() : canLog();
@@ -303,119 +232,43 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
     openShiftConsoleUrl(props.consoleUrl ?? "", { namespace: props.resource.namespace, resource: props.resource });
   const openConsole = () => openUrl(consolePage() ?? undefined);
 
-  useKeyboard(e => {
-    if (e.eventType === "release") return;
-    if (search.handleKey(e)) return;
-    if (handleLogScrollKey(e, scrollboxRef, dialogFrame().height - 6)) {
-      e.preventDefault();
-      return;
-    }
-    if (e.name === "q") {
-      e.preventDefault();
-      renderer.destroy();
-    } else if (e.name === "escape") {
-      e.preventDefault();
-      props.onClose();
-    } else if (e.name === "w") {
-      e.preventDefault();
-      toggleWrap();
-    } else if (e.name === "r" && canRefresh()) {
-      e.preventDefault();
-      refresh();
-    } else if (e.name === "c" && viewModes().length > 1) {
-      e.preventDefault();
-      cycleViewMode();
-    } else if (e.name === "o" && consolePage()) {
-      e.preventDefault();
-      openConsole();
-    }
-  });
-
   return (
-    <DialogOverlay align="top" topOffset={2}>
-      <box
-        width={dialogFrame().width}
-        height={dialogFrame().height}
-        backgroundColor={t().background}
-        flexDirection="column"
-        paddingX={1}
-        paddingY={1}
-      >
-        <DialogTitleBar title={title()} onClose={props.onClose} />
-        <scrollbox
-          ref={scrollboxRef}
-          flexGrow={1}
-          flexShrink={1}
-          minHeight={0}
-          scrollY
-          scrollX={false}
-          stickyScroll={viewMode() === "log"}
-          stickyStart={viewMode() === "log" ? "bottom" : undefined}
-          verticalScrollbarOptions={{ visible: false }}
-        >
-          <box flexDirection="column" width="100%" paddingX={viewState()?.kind === "error" ? 0 : 4}>
-            <Show
-              when={viewState()}
-              fallback={
-                <For each={lines()}>
-                  {(line, index) => (
-                    <box
-                      ref={(element: Renderable) => {
-                        lineRefs[index()] = element;
-                      }}
-                      flexDirection="row"
-                      width="100%"
-                    >
-                      <LineNumber
-                        text={String(index() + 1).padStart(lineNoWidth())}
-                        current={search.current() === index()}
-                      />
-                      <text wrapMode={wrapEnabled() ? "word" : "none"} fg={lineColor(index())}>
-                        {highlightHits(reveal(line), search.term(), { fg: t().background, bg: t().accent })}
-                      </text>
-                    </box>
-                  )}
-                </For>
-              }
-            >
-              {state => <LogViewStatus state={state()} />}
-            </Show>
-          </box>
-        </scrollbox>
-        <LogSearchRow
-          search={search}
-          placeholder={
-            viewMode() === "log" ? "Search log..." : viewMode() === "events" ? "Search events..." : "Search object..."
-          }
-        />
-        <DialogFooter>
-          {/* Same words and order as the CI log and diff dialogs: search · view · wrap · refresh. */}
-          <Show
-            when={search.term()}
-            fallback={<KeyHint key="/" desc=" search" onClick={() => search.setEditing(true)} />}
-          >
-            <KeyHint key="n/N" desc=" next/previous" onClick={() => search.step(1)} />
-          </Show>
-          {viewModes().length > 1 ? (
-            <>
-              <KeyHintSeparator />
-              <KeyHint key="c" desc=" view" onClick={cycleViewMode} />
-            </>
-          ) : null}
-          <KeyHintSeparator />
-          <KeyHint key="w" desc={wrapEnabled() ? " nowrap" : " wrap"} onClick={toggleWrap} />
-          {canRefresh() ? (
-            <>
-              <KeyHintSeparator />
-              <KeyHint key="r" desc=" refresh" onClick={refresh} />
-            </>
-          ) : null}
-          <Show when={consolePage()}>
-            <KeyHintSeparator />
-            <KeyHint key="o" desc=" open" onClick={openConsole} />
-          </Show>
-        </DialogFooter>
-      </box>
-    </DialogOverlay>
+    <LogViewer
+      // Like the diff title: context (provider, then namespace, kind) goes first; the resource name shrinks last.
+      title={() => [
+        { text: "OpenShift", drop: 1 },
+        { text: props.resource.kind, drop: 3 },
+        { text: props.resource.namespace, drop: 2 },
+        { text: props.resource.name, emphasis: true, primary: true },
+        {
+          text:
+            viewMode() === "log"
+              ? followEnded()
+                ? "log ended"
+                : "log"
+              : viewMode() === "events"
+                ? "events"
+                : "object",
+        },
+        { text: warningCount() > 0 ? `${warningCount()} warning${warningCount() === 1 ? "" : "s"}` : "", drop: 4 },
+      ]}
+      lines={lines}
+      state={viewState}
+      searchPlaceholder={() =>
+        viewMode() === "log" ? "Search log..." : viewMode() === "events" ? "Search events..." : "Search object..."
+      }
+      // Same words and order as the CI log and diff dialogs: search · view · wrap · refresh · open.
+      actions={() => ({
+        view: viewModes().length > 1 ? cycleViewMode : undefined,
+        refresh: canRefresh() ? refresh : undefined,
+        open: consolePage() ? openConsole : undefined,
+      })}
+      stickToBottom={() => viewMode() === "log"}
+      // A log starts at its end; the other views stay where they are.
+      scrollKey={() => [props.resource.id, viewMode()]}
+      scrollStart={() => (viewMode() === "log" ? "bottom" : null)}
+      onClose={props.onClose}
+      onSearchActive={props.onSearchActive}
+    />
   );
 }

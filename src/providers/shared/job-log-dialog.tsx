@@ -1,31 +1,12 @@
 /** JobLogDialog: CI logs (GitHub jobs, Jenkins builds, stages and failed tests), styled like the diff dialog. */
 
-import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
-import { createEffect, createMemo, createSignal, For, type JSX, onMount, Show } from "solid-js";
-import {
-  DialogFooter,
-  DialogOverlay,
-  DialogTitle,
-  DialogTitleBar,
-  getStandardDialogFrame,
-} from "../../components/dialogs/dialog-chrome";
-import {
-  highlightHits,
-  LineNumber,
-  LogSearchRow,
-  useLogSearch,
-  useSidewaysReveal,
-  useVisibleNumberWidth,
-} from "../../components/dialogs/log-search";
-import { handleLogScrollKey, type LogViewState, LogViewStatus } from "../../components/dialogs/log-view";
-import { fitTitleSegments } from "../../components/dialogs/title-utils";
-import { KeyHint, KeyHintSeparator } from "../../components/key-hint";
-import { useTheme } from "../../context/theme";
+import { createEffect, createMemo, createSignal } from "solid-js";
+import type { LogViewState } from "../../components/dialogs/log-view";
+import { LogViewer, type LogViewerNavigation } from "../../components/dialogs/log-viewer";
 import { BUSY } from "../../utils/busy-text";
 import { openUrl } from "../../utils/open-url";
 import { stripTerminalControls } from "../../utils/terminal-text";
-import { type StatusCategory, statusColor, statusIcon } from "./status";
+import type { StatusCategory } from "./status";
 
 type LogLineKind = "group" | "error" | "warning" | "normal" | "muted";
 type LogViewMode = "all" | "issues" | "errors" | "raw";
@@ -143,14 +124,6 @@ export function parseLogLines(raw: string): LogLine[] {
 }
 
 export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
-  const renderer = useRenderer();
-  const { theme } = useTheme();
-  const dimensions = useTerminalDimensions();
-
-  const dialogFrame = createMemo(() => getStandardDialogFrame(dimensions()));
-  const dialogWidth = () => dialogFrame().width;
-  const dialogHeight = () => dialogFrame().height;
-
   const orderedJobs = createMemo(() => {
     const seen = new Set<string>();
     const result: JobLogEntry[] = [];
@@ -172,9 +145,6 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
   const [jobIndex, setJobIndex] = createSignal(initialIndex());
   const [logs, setLogs] = createSignal<Map<string, LoadedLog>>(new Map());
   const [viewMode, setViewMode] = createSignal<LogViewMode>("all");
-  const [wrapEnabled, setWrapEnabled] = createSignal(false);
-
-  let scrollboxRef: ScrollBoxRenderable | undefined;
 
   const currentJob = () => orderedJobs()[jobIndex()] ?? props.job;
   const currentLoadedLog = (): LoadedLog =>
@@ -222,14 +192,6 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
       return next;
     });
   };
-  const viewState = (): LogViewState | null => {
-    const loaded = currentLoadedLog();
-    if (loaded.loading) return { kind: "loading", text: BUSY.fetchingLog };
-    if (loaded.error) return { kind: "error", title: "Failed to load log", message: loaded.error };
-    if (!loaded.raw?.trim()) return { kind: "empty", text: "No log output." };
-    if (filteredLines().length === 0) return { kind: "empty", text: "No log lines in this view." };
-    return null;
-  };
 
   createEffect(() => {
     orderedJobs();
@@ -248,11 +210,11 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
     return parseLogLines(raw);
   });
 
-  const filteredLines = createMemo(() => {
+  const filteredLines = createMemo((): LogLine[] => {
     const mode = viewMode();
     if (mode === "raw") {
       const raw = currentLoadedLog().raw;
-      if (!raw) return [] as LogLine[];
+      if (!raw) return [];
       // Raw is the log as received: timestamps and blank lines stay; only terminal control codes are removed.
       return raw
         .split("\n")
@@ -272,268 +234,56 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
     return parsedLines().filter(line => line.kind === "error");
   });
 
-  const lineRefs: Renderable[] = [];
-  const maxLineNoWidth = useVisibleNumberWidth({
-    scrollbox: () => scrollboxRef,
-    rowAt: index => lineRefs[index],
-    lines: filteredLines,
-    numberAt: index => filteredLines()[index].lineNo,
-    layoutKey: wrapEnabled,
-  });
-  const search = useLogSearch({
-    texts: () => filteredLines().map(line => line.text),
-    rowAt: index => lineRefs[index],
-    scrollbox: () => scrollboxRef,
-    onActiveChange: active => props.onSearchActive?.(active),
-  });
-  // Inner width: the dialog's frame (1) and padding (4) on both sides, then the line numbers and their gap.
-  const reveal = useSidewaysReveal({
-    search,
-    texts: () => filteredLines().map(line => line.text),
-    wrap: wrapEnabled,
-    width: () => dialogWidth() - 10 - (maxLineNoWidth() + 2),
-  });
-  // After mount, so the app hears that the search owns Esc (the first hit shows once the log has loaded).
-  onMount(() => {
-    if (props.initialSearch) search.setQuery(props.initialSearch);
-  });
-
-  createEffect(() => {
-    currentJob().id;
-    viewMode();
-    scrollboxRef?.scrollTo(0);
-  });
-
-  const navigateJob = (direction: -1 | 1) => {
-    const next = jobIndex() + direction;
-    if (next < 0 || next >= orderedJobs().length) return;
-    setJobIndex(next);
+  const viewState = (): LogViewState | null => {
+    const loaded = currentLoadedLog();
+    if (loaded.loading) return { kind: "loading", text: BUSY.fetchingLog };
+    if (loaded.error) return { kind: "error", title: "Failed to load log", message: loaded.error };
+    if (!loaded.raw?.trim()) return { kind: "empty", text: "No log output." };
+    if (filteredLines().length === 0) return { kind: "empty", text: "No log lines in this view." };
+    return null;
   };
+
   const noun = () => props.entryNoun ?? "job";
-  /** Where ← goes (`previous stage`, `full log`); null at the first, so the footer leaves the arrow out. */
-  const previousLabel = () => {
-    const previous = orderedJobs()[jobIndex() - 1];
-    return previous ? (previous.navLabel ?? `previous ${noun()}`) : null;
-  };
-  /** Where → goes: from a named first entry (the full log) to the `first stage`, else the `next stage`. */
-  const nextLabel = () => {
-    if (jobIndex() >= orderedJobs().length - 1) return null;
-    return jobIndex() === 0 && currentJob().navLabel ? `first ${noun()}` : `next ${noun()}`;
+  /** ←/→: where each goes (`previous stage`, `full log`, `first stage`); null at the ends, so the footer leaves it out. */
+  const navigation = (): LogViewerNavigation => {
+    const index = jobIndex();
+    const previous = orderedJobs()[index - 1];
+    const hasNext = index < orderedJobs().length - 1;
+    return {
+      previous: previous ? (previous.navLabel ?? `previous ${noun()}`) : null,
+      // From a named first entry (the full log) to the `first stage`, else the `next stage`.
+      next: !hasNext ? null : index === 0 && currentJob().navLabel ? `first ${noun()}` : `next ${noun()}`,
+      go: direction => {
+        const next = jobIndex() + direction;
+        if (next >= 0 && next < orderedJobs().length) setJobIndex(next);
+      },
+    };
   };
   const cycleViewMode = () =>
     setViewMode(prev => VIEW_MODE_CYCLE[(VIEW_MODE_CYCLE.indexOf(prev) + 1) % VIEW_MODE_CYCLE.length]);
-  const toggleWrap = () => setWrapEnabled(prev => !prev);
   const openRun = () => {
     if (props.run.url) openUrl(props.run.url);
   };
 
-  useKeyboard(e => {
-    if (e.eventType === "release") return;
-    if (search.handleKey(e)) return;
-    if (handleLogScrollKey(e, scrollboxRef, dialogHeight() - 6)) {
-      e.preventDefault();
-      return;
-    }
-    switch (e.name) {
-      case "q":
-        e.preventDefault();
-        renderer.destroy();
-        break;
-      case "escape":
-        e.preventDefault();
-        props.onClose();
-        break;
-      case "left":
-      case "h":
-        e.preventDefault();
-        navigateJob(-1);
-        break;
-      case "right":
-      case "l":
-        e.preventDefault();
-        navigateJob(1);
-        break;
-      case "r":
-        e.preventDefault();
-        refreshLog();
-        break;
-      case "c":
-        e.preventDefault();
-        cycleViewMode();
-        break;
-      case "w":
-        e.preventDefault();
-        toggleWrap();
-        break;
-      case "o":
-        if (!props.run.url) break;
-        e.preventDefault();
-        openRun();
-        break;
-    }
-  });
-
-  const titleElement = createMemo((): JSX.Element => {
-    const isJenkins = props.provider === "jenkins";
-    // Like the diff title: context (time, mode, then provider) goes first; the run and job shrink last.
-    const segments = fitTitleSegments(
-      [
-        { text: isJenkins ? "Jenkins" : "GitHub Actions", drop: 3 },
+  return (
+    <LogViewer
+      // Like the diff title: context (time, mode, then provider) goes first; the run and job shrink last.
+      title={() => [
+        { text: props.provider === "jenkins" ? "Jenkins" : "GitHub Actions", drop: 3 },
         { text: `${props.run.name} #${props.run.runNumber}`, drop: 4 },
         { text: currentJob().name, emphasis: true, primary: true },
         { text: currentJob().detail ?? "", drop: 1 },
         { text: VIEW_MODE_TITLE_LABEL[viewMode()], drop: 2 },
-      ],
-      dialogWidth(),
-    );
-    return <DialogTitle segments={segments} />;
-  });
-
-  const renderLine = (line: LogLine, index: () => number) => {
-    const th = theme();
-    const lineNo = () => (line.lineNo > 0 ? line.lineNo.toString() : "").padStart(maxLineNoWidth());
-    const contentWrapMode = () => (wrapEnabled() ? "word" : "none");
-    const text = (value: string) => highlightHits(reveal(value), search.term(), { fg: th.background, bg: th.accent });
-    const isCurrentHit = () => search.current() === index();
-    const ref = (element: Renderable) => {
-      lineRefs[index()] = element;
-    };
-    if (line.kind === "group") {
-      return (
-        <box ref={ref} flexDirection="row" width="100%">
-          <LineNumber text={lineNo()} current={isCurrentHit()} />
-          <text wrapMode={contentWrapMode()} fg={th.accent}>
-            <strong>
-              {"▸ "}
-              {text(line.text)}
-            </strong>
-          </text>
-        </box>
-      );
-    }
-    if (line.kind === "error") {
-      return (
-        <box ref={ref} flexDirection="row" width="100%" backgroundColor={th.diffRemovedBg}>
-          <LineNumber text={lineNo()} current={isCurrentHit()} />
-          <text wrapMode={contentWrapMode()} fg={th.error}>
-            {text(line.text)}
-          </text>
-        </box>
-      );
-    }
-    if (line.kind === "warning") {
-      return (
-        <box ref={ref} flexDirection="row" width="100%">
-          <LineNumber text={lineNo()} current={isCurrentHit()} />
-          <text wrapMode={contentWrapMode()} fg={th.warning}>
-            {text(line.text)}
-          </text>
-        </box>
-      );
-    }
-    if (line.kind === "muted") {
-      return (
-        <box ref={ref} flexDirection="row" width="100%">
-          <LineNumber text={lineNo()} current={isCurrentHit()} />
-          <text wrapMode={contentWrapMode()} fg={th.foregroundMuted}>
-            {text(line.text)}
-          </text>
-        </box>
-      );
-    }
-    return (
-      <box ref={ref} flexDirection="row" width="100%">
-        {/* A summary row's mark takes its line number's place, right-aligned, so the text starts with the log's. */}
-        <Show
-          when={!isCurrentHit() && line.mark}
-          fallback={
-            <LineNumber
-              text={line.mark ? statusIcon(line.mark).padStart(maxLineNoWidth()) : lineNo()}
-              current={isCurrentHit()}
-            />
-          }
-        >
-          {mark => (
-            <text flexShrink={0} wrapMode="none" fg={statusColor(th, mark())}>
-              {`${statusIcon(mark()).padStart(maxLineNoWidth())}  `}
-            </text>
-          )}
-        </Show>
-        <text wrapMode={contentWrapMode()} fg={th.foreground}>
-          {text(line.text)}
-        </text>
-      </box>
-    );
-  };
-
-  return (
-    <DialogOverlay align="top" topOffset={2}>
-      <box
-        width={dialogWidth()}
-        height={dialogHeight()}
-        backgroundColor={theme().background}
-        flexDirection="column"
-        paddingX={1}
-        paddingY={1}
-      >
-        <DialogTitleBar title={titleElement()} onClose={props.onClose} />
-
-        <scrollbox
-          ref={scrollboxRef}
-          flexGrow={1}
-          flexShrink={1}
-          minHeight={0}
-          scrollY
-          scrollX={false}
-          verticalScrollbarOptions={{ visible: false }}
-        >
-          {/* An error box brings its own frame and inset, so it skips the text inset (like the diff dialog). */}
-          <box flexDirection="column" width="100%" paddingX={viewState()?.kind === "error" ? 0 : 4}>
-            <Show
-              when={viewState()}
-              fallback={<For each={filteredLines()}>{(line, index) => renderLine(line, index)}</For>}
-            >
-              {state => <LogViewStatus state={state()} />}
-            </Show>
-          </box>
-        </scrollbox>
-
-        <LogSearchRow search={search} placeholder="Search log..." />
-        <DialogFooter>
-          <Show when={previousLabel()}>
-            {label => (
-              <>
-                <KeyHint key="←" desc={` ${label()}`} onClick={() => navigateJob(-1)} />
-                <KeyHintSeparator />
-              </>
-            )}
-          </Show>
-          <Show when={nextLabel()}>
-            {label => (
-              <>
-                <KeyHint key="→" desc={` ${label()}`} onClick={() => navigateJob(1)} />
-                <KeyHintSeparator />
-              </>
-            )}
-          </Show>
-          <Show
-            when={search.term()}
-            fallback={<KeyHint key="/" desc=" search" onClick={() => search.setEditing(true)} />}
-          >
-            <KeyHint key="n/N" desc=" next/previous" onClick={() => search.step(1)} />
-          </Show>
-          <KeyHintSeparator />
-          <KeyHint key="c" desc=" view" onClick={cycleViewMode} />
-          <KeyHintSeparator />
-          <KeyHint key="w" desc={wrapEnabled() ? " nowrap" : " wrap"} onClick={toggleWrap} />
-          <KeyHintSeparator />
-          <KeyHint key="r" desc=" refresh" onClick={refreshLog} />
-          <Show when={props.run.url}>
-            <KeyHintSeparator />
-            <KeyHint key="o" desc=" open" onClick={openRun} />
-          </Show>
-        </DialogFooter>
-      </box>
-    </DialogOverlay>
+      ]}
+      lines={filteredLines}
+      state={viewState}
+      searchPlaceholder={() => "Search log..."}
+      actions={() => ({ view: cycleViewMode, refresh: refreshLog, open: props.run.url ? openRun : undefined })}
+      navigation={navigation}
+      scrollKey={() => [currentJob().id, viewMode()]}
+      onClose={props.onClose}
+      onSearchActive={props.onSearchActive}
+      initialSearch={props.initialSearch}
+    />
   );
 }
