@@ -13,7 +13,7 @@ import type {
   OpenShiftResourceKind,
   OpenShiftStatus,
 } from "./types";
-import { isCachedOpenShiftResource, OPENSHIFT_TERMINAL_PHASES, OPENSHIFT_WATCH_KINDS } from "./types";
+import { isCachedOpenShiftResource, OPENSHIFT_WATCH_KINDS } from "./types";
 import { isValidOpenShiftNamespace } from "./validation";
 import { isOpenShiftWatchGone, type OpenShiftWatchEvent, parseOpenShiftWatchBuffer } from "./watch";
 
@@ -42,10 +42,6 @@ export function getOpenShiftToken(envVar: string): string | null {
 
 export function isTerminalBuildStatus(status: OpenShiftStatus): boolean {
   return status === "pass" || status === "fail";
-}
-
-export function isTerminalBuildPhase(phase: string | undefined): boolean {
-  return phase !== undefined && OPENSHIFT_TERMINAL_PHASES.has(phase);
 }
 
 export function normalizeOpenShiftServerUrl(value: string): string {

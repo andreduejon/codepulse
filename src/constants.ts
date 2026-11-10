@@ -6,9 +6,8 @@ export const HASH_COL_WIDTH = 9;
 export const AUTHOR_COL_WIDTH = 15;
 export const DATE_COL_WIDTH = 15;
 
-/** Keyboard navigation jump distances (number of entries). */
+/** Keyboard navigation jump distance with Shift (number of entries). */
 export const SHIFT_JUMP = 10;
-export const PAGE_JUMP = 20;
 
 /** Minimum time between held j/k moves so the cursor cannot outrun scroll. */
 export const NAV_REPEAT_MIN_MS = 16;

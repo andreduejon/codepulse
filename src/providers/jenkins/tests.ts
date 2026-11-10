@@ -27,7 +27,6 @@ export function jenkinsTestsJob(report: JenkinsTestReport, buildUrl: string): Pr
     name: "Tests",
     status: "completed",
     conclusion: report.failCount > 0 ? "failure" : "success",
-    startedAt: null,
     completedAt: null,
     steps: [],
     url: `${buildUrl.replace(/\/+$/, "")}/testReport/`,

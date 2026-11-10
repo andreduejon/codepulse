@@ -1,9 +1,5 @@
 import {
   DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS,
-  PROVIDER_AUTO_REFRESH_MS,
-  PROVIDER_AUTO_REFRESH_OPTIONS,
-  PROVIDER_AUTO_REFRESH_SECONDS,
-  PROVIDER_MS_TO_LABEL,
   type ProviderAutoRefreshSeconds,
   type ProviderCacheLimit,
   type ProviderLimit,
@@ -11,15 +7,10 @@ import {
 
 export type OpenShiftCacheLimit = ProviderCacheLimit;
 
-export const OPENSHIFT_AUTO_REFRESH_OPTIONS = PROVIDER_AUTO_REFRESH_OPTIONS;
-export const OPENSHIFT_AUTO_REFRESH_SECONDS = PROVIDER_AUTO_REFRESH_SECONDS;
 export type OpenShiftAutoRefreshSeconds = ProviderAutoRefreshSeconds;
 export const DEFAULT_OPENSHIFT_AUTO_REFRESH_SECONDS = DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS;
-export const OPENSHIFT_AUTO_REFRESH_MS = PROVIDER_AUTO_REFRESH_MS;
-export const OPENSHIFT_MS_TO_LABEL = PROVIDER_MS_TO_LABEL;
 export const OPENSHIFT_LOG_FOLLOW_MAX_LINES = 1000;
 export const OPENSHIFT_WATCH_KINDS = ["Deployment", "DeploymentConfig", "Pod"] as const;
-export type OpenShiftWatchKind = (typeof OPENSHIFT_WATCH_KINDS)[number];
 
 export interface OpenShiftProviderConfig {
   enabled: boolean;
@@ -46,8 +37,6 @@ export const DEFAULT_OPENSHIFT_CONFIG: OpenShiftProviderConfig = {
   fetchDepth: 20,
   autoRefreshSeconds: DEFAULT_OPENSHIFT_AUTO_REFRESH_SECONDS,
 };
-
-export const OPENSHIFT_TERMINAL_PHASES = new Set(["Complete", "Failed", "Error", "Cancelled"]);
 
 export type OpenShiftResourceKind = "Build" | "ImageStreamTag" | "Deployment" | "DeploymentConfig" | "Pod";
 export type OpenShiftInventoryKind = OpenShiftResourceKind | "ReplicaSet" | "ReplicationController";

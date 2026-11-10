@@ -1,15 +1,8 @@
 /**
- * GitHub Actions CI detail tab.
- *
- * Layout:
- *   - Each run header shows: status icon, workflow name, run number, time, event
- *   - Expanding a run (Enter key) fetches its jobs via REST and shows them inline
- *   - Enter on a job will open the log dialog (wired in a later commit)
- *
- * Cursor system:
- *   - Builds a flat `FlatItem[]` list from runs + expanded jobs
- *   - Writes itemCount / activateCurrentItem / itemRefs to navRef on every change
- *   - Highlights the row matching state.detailCursorIndex()
+ * GitHub Actions detail tab, on the shared run tree (`ProviderRunTree`):
+ *   - A run row: its workflow, number, attempt, age and mark. Enter expands it and reads its jobs.
+ *   - A job that passed is one row; a failed or running one lists its steps and annotations.
+ *   - Enter on a job opens its log; on an annotation, the log with its message searched.
  *
  * Receives props directly (not via useContext) because this component may be
  * rendered during setup before the AppStateContext.Provider mounts (AGENTS.md rule 5).
@@ -92,7 +85,6 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
       status: run.status,
       conclusion: run.conclusion,
       runNumber: run.runNumber,
-      startedAt: run.startedAt ?? null,
       updatedAt: run.updatedAt,
       url: run.url,
       raw: run,
@@ -104,8 +96,6 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
     name: step.name,
     status: step.status,
     conclusion: step.conclusion,
-    startedAt: step.startedAt,
-    completedAt: step.completedAt,
   });
 
   /** GitHub's job page hangs off its run's page, here and on GitHub Enterprise. */
@@ -114,7 +104,6 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
     name: job.name,
     status: job.status,
     conclusion: job.conclusion,
-    startedAt: job.startedAt,
     completedAt: job.completedAt,
     steps: job.steps.map(mapStep),
     url: runUrl ? `${runUrl}/job/${job.id}` : undefined,

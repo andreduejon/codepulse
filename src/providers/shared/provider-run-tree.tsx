@@ -15,8 +15,6 @@ export interface ProviderTreeStep {
   name: string;
   status: string;
   conclusion: string | null;
-  startedAt: string | null;
-  completedAt: string | null;
 }
 
 export interface ProviderTreeRun<TRaw> {
@@ -25,7 +23,7 @@ export interface ProviderTreeRun<TRaw> {
   status: string;
   conclusion: string | null;
   runNumber: number;
-  startedAt?: string | null;
+  /** When it last changed: its age. */
   updatedAt: string;
   /** The run's web page, opened with `o`. */
   url?: string;
@@ -37,7 +35,7 @@ export interface ProviderTreeJob<TJobRaw> {
   name: string;
   status: string;
   conclusion: string | null;
-  startedAt: string | null;
+  /** When it ended: an earlier attempt's age. */
   completedAt: string | null;
   steps: ProviderTreeStep[];
   /** The job's web page, opened with `o`. */

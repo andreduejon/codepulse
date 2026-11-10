@@ -4,17 +4,6 @@
  */
 import { readFileSync } from "node:fs";
 
-export type DemoCommit =
-  | "initial"
-  | "cart"
-  | "rounding"
-  | "payments"
-  | "readme"
-  | "health"
-  | "metrics"
-  | "retry"
-  | `lane${number}`;
-
 export interface DemoState {
   repoPath: string;
   shas: Record<string, string>;

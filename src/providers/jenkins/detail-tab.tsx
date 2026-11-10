@@ -49,13 +49,12 @@ function buildRows(pipeline: JenkinsJob, buildUrl: string): ProviderTreeJob<Jenk
   const logRow = (
     entry: number,
     name: string,
-    state: Pick<JenkinsJob, "status" | "conclusion" | "startedAt" | "completedAt">,
+    state: Pick<JenkinsJob, "status" | "conclusion" | "completedAt">,
   ): ProviderTreeJob<JenkinsTreeRow> => ({
     id: entry === 0 ? "console" : `stage:${entry}`,
     name,
     status: state.status,
     conclusion: state.conclusion,
-    startedAt: state.startedAt,
     completedAt: state.completedAt,
     steps: [],
     url: buildUrl,
