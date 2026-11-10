@@ -11,9 +11,6 @@ All notable changes to this project will be documented in this file.
   rows that have a page.
 - OpenShift **Console** setting (optional): the web console URL that `o` uses for namespaces and resources, in the
   detail panel and the resource dialog. It cannot be worked out from the API server URL.
-- OpenShift rows say why they fail in one muted word after the name: a Pod's container state (`CrashLoopBackOff`,
-  `OOMKilled`, `Evicted`), a workload's ready count (`1/3 ready`), a Build's reason (`DockerBuildFailed`). In a
-  narrow panel the reason is cut before the name, and the selected row scrolls to show it.
 - OpenShift resource dialog: an events view. `c` cycles log, JSON and events for Pods, Builds, Deployments and
   DeploymentConfigs. It starts with what the status says is wrong (a container waiting on `CrashLoopBackOff`, its
   last run's exit code and restarts, failing conditions with their messages), which stays after OpenShift deletes the events

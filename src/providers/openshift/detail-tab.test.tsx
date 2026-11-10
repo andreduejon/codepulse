@@ -6,6 +6,7 @@ import { createSignal } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
 import { createThemeState, ThemeContext } from "../../context/theme";
 import * as browser from "../../utils/open-url";
+import { resourceFromWatchObject } from "./api";
 import { OpenShiftDetailTab } from "./detail-tab";
 import type { OpenShiftCommitData, OpenShiftResource } from "./types";
 
@@ -123,40 +124,58 @@ test("o opens the selected namespace or resource in the web console, only when i
   }
 });
 
-const crashing = resource("Pod", "payments-api-7f9c-x2k4", {
-  status: "fail",
-  reason: "CrashLoopBackOff",
+// A crash-looping Pod read the way the live list reads it.
+const crashing = resourceFromWatchObject(
+  {
+    kind: "Pod",
+    metadata: { name: "payments-api-7f9c-x2k4", namespace: "payments-dev" },
+    status: {
+      phase: "Running",
+      containerStatuses: [
+        {
+          name: "api",
+          restartCount: 14,
+          state: { waiting: { reason: "CrashLoopBackOff" } },
+          lastState: { terminated: { reason: "Error", exitCode: 1 } },
+        },
+      ],
+    },
+  },
+  "payments-dev/commit-sha",
+) as OpenShiftResource;
+
+test("a failing row shows only its name and ✗; why it fails is in the resource dialog", async () => {
+  expect(crashing.status).toBe("fail");
+  const t = await renderOpenShiftTab({ pods: [crashing], width: 70 });
+  try {
+    expect(t.row("payments-api").replace(/\s+/g, " ")).toMatch(/payments-api-7f9c-x2k4 ✗/);
+    expect(t.captureCharFrame()).not.toMatch(/CrashLoop|exit 1|restart/);
+  } finally {
+    t.renderer.destroy();
+  }
 });
 
-test("a failing row says why after its name, muted, and the reason gives way before the name", async () => {
-  const wide = await renderOpenShiftTab({ pods: [crashing], width: 70 });
+test("a row's muted note gives way before its name", async () => {
+  const batch = resource("Deployment", "payments-api-batch-worker", { scaledToZero: true });
+  const wide = await renderOpenShiftTab({ pods: [], deployments: [batch], width: 70 });
   try {
-    expect(wide.row("payments-api")).toContain("payments-api-7f9c-x2k4  CrashLoopBackOff");
+    expect(wide.row("payments-api-batch")).toContain("payments-api-batch-worker  0 replicas");
     const y = wide
       .captureCharFrame()
       .split("\n")
-      .findIndex(line => line.includes("CrashLoop"));
-    const reason = wide.captureSpans().lines[y]?.spans.find(span => span.text.includes("CrashLoop"));
-    expect(reason?.fg).toEqual(RGBA.fromHex(wide.theme.foregroundMuted));
+      .findIndex(line => line.includes("0 replicas"));
+    const note = wide.captureSpans().lines[y]?.spans.find(span => span.text.includes("0 replicas"));
+    expect(note?.fg).toEqual(RGBA.fromHex(wide.theme.foregroundMuted));
   } finally {
     wide.renderer.destroy();
   }
-  // Narrow: the name stays whole and the reason is cut.
-  const narrow = await renderOpenShiftTab({ pods: [crashing], width: 44 });
+  // Narrow: the name stays whole and the note is cut.
+  const narrow = await renderOpenShiftTab({ pods: [], deployments: [batch], width: 44 });
   try {
-    expect(narrow.row("payments-api")).toContain("payments-api-7f9c-x2k4  Crash");
-    expect(narrow.row("payments-api")).toContain("…");
-    expect(narrow.row("payments-api")).toContain("✗");
+    expect(narrow.row("payments-api-batch")).toContain("payments-api-batch-worker  0");
+    expect(narrow.row("payments-api-batch")).toContain("…");
   } finally {
     narrow.renderer.destroy();
-  }
-  // Narrower than the name: only the name, cut.
-  const tiny = await renderOpenShiftTab({ pods: [crashing], width: 28 });
-  try {
-    expect(tiny.row("payments-api")).not.toContain("Crash");
-    expect(tiny.row("payments-api")).toContain("✗");
-  } finally {
-    tiny.renderer.destroy();
   }
 });
 
@@ -164,14 +183,13 @@ test("(cached) marks only a Build the cluster no longer lists; a Deployment scal
   const t = await renderOpenShiftTab({
     pods: [],
     builds: [
-      resource("Build", "payments-api-41", { status: "fail", reason: "DockerBuildFailed" }),
+      resource("Build", "payments-api-41", { status: "fail" }),
       resource("Build", "payments-api-40", { cacheOnly: true }),
     ],
     deployments: [resource("Deployment", "payments-batch", { scaledToZero: true })],
   });
   try {
-    expect(t.row("payments-api-41")).toContain("payments-api-41  DockerBuildFailed");
-    expect(t.row("payments-api-41")).not.toContain("(cached)");
+    expect(t.row("payments-api-41").replace(/\s+/g, " ")).toMatch(/payments-api-41 ✗/);
     expect(t.row("payments-api-40")).toContain("payments-api-40 (cached)");
     expect(t.row("payments-batch")).toContain("payments-batch  0 replicas");
   } finally {
@@ -179,7 +197,7 @@ test("(cached) marks only a Build the cluster no longer lists; a Deployment scal
   }
 });
 
-test("a healthy row has no reason", async () => {
+test("a healthy row has no note", async () => {
   const t = await renderOpenShiftTab({ pods: [resource("Pod", "payments-api-6d2b-m9w3")] });
   try {
     expect(t.row("payments-api").replace(/\s+/g, " ")).toMatch(/payments-api-6d2b-m9w3 ✓/);

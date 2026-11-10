@@ -165,20 +165,13 @@ colours. A legend below the tree explains them: `✓ ok  ● in progress  ✗ fa
 - `●` running: active Build, Pending/not-ready Pod, or incomplete workload rollout.
 - `✗` fail: failed Build, fatal container state, replica failure, or failed
   workload progression.
-
-A failing row says why after its name in one muted word:
-
-- Pods: what the container waits on or how it ended (`CrashLoopBackOff`,
-  `OOMKilled`), or why the Pod failed (`Evicted`).
-- Deployments and DeploymentConfigs: ready replicas (`1/3 ready`).
-- Builds: the build's reason (`DockerBuildFailed`), or `Cancelled` / `Error`.
-
-Exit codes, restarts, failing conditions and their messages are in the resource
-dialog's events view. When the panel is narrow the reason is cut first, so the
-name keeps its room. The selected row scrolls to show all of it.
 - `?` unknown: insufficient or indeterminate status (a grey chip in the graph).
 
 Aggregate precedence is fail, running, unknown, then pass.
+
+A failing row shows only its name and `✗`, to keep the tree quiet. Why it fails
+is in the resource dialog's events view: what its containers wait on, exit codes,
+restarts, failing conditions and their messages.
 
 ## Required read permissions
 

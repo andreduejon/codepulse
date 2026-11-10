@@ -238,34 +238,6 @@ function podStatus(pod: unknown): OpenShiftStatus {
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
 
-/**
- * `CrashLoopBackOff`, `OOMKilled`, `Evicted`: why a failing Pod fails, one word for its row. Exit codes, restarts and
- * messages are in the resource dialog.
- */
-function podFailureReason(pod: unknown): string | undefined {
-  const container = podContainerStatuses(pod).find(isFatalContainer);
-  if (container) {
-    const state = obj(obj(container)?.state) ?? {};
-    return str(obj(state.waiting)?.reason) ?? str(obj(state.terminated)?.reason) ?? "Error";
-  }
-  const status = obj(obj(pod)?.status) ?? {};
-  return status.phase === "Failed" ? (str(status.reason) ?? "Failed") : undefined;
-}
-
-/** `1/3 ready`: how far a failing Deployment or DeploymentConfig got. Its failing condition is in the dialog. */
-function workloadFailureReason(item: unknown): string {
-  const status = obj(obj(item)?.status) ?? {};
-  const spec = obj(obj(item)?.spec) ?? {};
-  const desired = typeof spec.replicas === "number" ? spec.replicas : 1;
-  const ready =
-    typeof status.readyReplicas === "number"
-      ? status.readyReplicas
-      : typeof status.availableReplicas === "number"
-        ? status.availableReplicas
-        : 0;
-  return `${ready}/${desired} ready`;
-}
-
 /** One thing a resource's status says is wrong: `waiting  CrashLoopBackOff  back-off 5m0s restarting…`. */
 export interface OpenShiftStatusRow {
   status: string;
@@ -342,20 +314,6 @@ export function openShiftStatusRows(kind: OpenShiftResourceKind, object: unknown
   return [];
 }
 
-/** Why a Build failed: its reason (`DockerBuildFailed`), or its phase (`Cancelled`, `Error`). */
-export function buildFailureReason(build: unknown): string | undefined {
-  if (buildStatus(build) !== "fail") return undefined;
-  const status = obj(obj(build)?.status) ?? {};
-  return str(status.reason) ?? str(status.phase);
-}
-
-/** The reason shown on a failing row. Cached Builds saved before reasons existed still have their object. */
-export function openShiftFailureReason(resource: OpenShiftResource): string | undefined {
-  if (resource.status !== "fail") return undefined;
-  if (resource.reason) return resource.reason;
-  return resource.kind === "Build" && resource.object ? buildFailureReason(resource.object) : undefined;
-}
-
 function buildStatus(build: unknown): OpenShiftStatus {
   const phase = str(obj(build)?.status && obj(obj(build)?.status)?.phase);
   switch (phase) {
@@ -421,7 +379,6 @@ function extractBuild(namespace: string, item: unknown, annotationKey: string): 
   return {
     ...baseResource("Build", namespace, item),
     status: buildStatus(item),
-    reason: buildFailureReason(item),
     imageRefs: imageTokens(ref),
     commitSha,
     object: item,
@@ -458,7 +415,6 @@ function extractWorkload(
   return {
     ...baseResource(kind, namespace, item),
     status,
-    reason: status === "fail" ? workloadFailureReason(item) : undefined,
     scaledToZero: desiredReplicas(obj(obj(item)?.spec) ?? {}) === 0 || undefined,
     imageRefs: containerImages(obj(item)?.spec),
     commitSha: commitShaFromItem(item, annotationKey),
@@ -473,7 +429,6 @@ function extractPod(namespace: string, item: unknown): OpenShiftResource {
   return {
     ...baseResource("Pod", namespace, item),
     status,
-    reason: status === "fail" ? podFailureReason(item) : undefined,
     imageRefs,
   };
 }

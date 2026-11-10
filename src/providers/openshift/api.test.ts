@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { BANNER } from "../../debug/banner";
 import { clearDebugEvents, getDebugEvents } from "../../debug/events";
 import {
-  buildFailureReason,
   buildOpenShiftCommitMap,
   buildOpenShiftGraphBadges,
   buildOpenShiftNamespaceMarkers,
@@ -13,7 +12,6 @@ import {
   fetchOpenShiftResources,
   MAX_LIST_ITEMS,
   MAX_LIST_PAGES,
-  openShiftFailureReason,
   resourceFromWatchObject,
 } from "./api";
 import type { OpenShiftCommitData, OpenShiftResource } from "./types";
@@ -1004,17 +1002,17 @@ describe("fetchOpenShiftInventory modes", () => {
   });
 });
 
-describe("failure reasons", () => {
+describe("failing status", () => {
   const pod = (status: Record<string, unknown>) => ({
     kind: "Pod",
     metadata: { name: "api-7f9c", namespace: "dev" },
     status,
   });
-  const reasonOf = (object: unknown) => resourceFromWatchObject(object, "dev/commit-sha")?.reason;
+  const statusOf = (object: unknown) => resourceFromWatchObject(object, "dev/commit-sha")?.status;
 
-  test("a failing Pod names one reason: its container's state, how it ended, or why the Pod failed", () => {
+  test("a Pod fails on a crash loop, a bad exit, a failed image pull or an eviction", () => {
     expect(
-      reasonOf(
+      statusOf(
         pod({
           phase: "Running",
           containerStatuses: [
@@ -1026,41 +1024,22 @@ describe("failure reasons", () => {
           ],
         }),
       ),
-    ).toBe("CrashLoopBackOff");
+    ).toBe("fail");
     expect(
-      reasonOf(
-        pod({
-          phase: "Running",
-          containerStatuses: [
-            {
-              restartCount: 1,
-              state: { waiting: { reason: "CrashLoopBackOff" } },
-              lastState: { terminated: { reason: "OOMKilled", exitCode: 137 } },
-            },
-          ],
-        }),
-      ),
-    ).toBe("CrashLoopBackOff");
-    expect(
-      reasonOf(
+      statusOf(
         pod({
           phase: "Running",
           containerStatuses: [{ restartCount: 0, state: { terminated: { reason: "OOMKilled", exitCode: 137 } } }],
         }),
       ),
-    ).toBe("OOMKilled");
+    ).toBe("fail");
     expect(
-      reasonOf(
-        pod({ phase: "Failed", containerStatuses: [{ state: { terminated: { reason: "Error", exitCode: 1 } } }] }),
-      ),
-    ).toBe("Error");
-    expect(
-      reasonOf(pod({ phase: "Pending", containerStatuses: [{ state: { waiting: { reason: "ImagePullBackOff" } } }] })),
-    ).toBe("ImagePullBackOff");
-    expect(reasonOf(pod({ phase: "Failed", reason: "Evicted" }))).toBe("Evicted");
+      statusOf(pod({ phase: "Pending", containerStatuses: [{ state: { waiting: { reason: "ImagePullBackOff" } } }] })),
+    ).toBe("fail");
+    expect(statusOf(pod({ phase: "Failed", reason: "Evicted" }))).toBe("fail");
   });
 
-  test("a failing Deployment names its ready count; the failing condition is in the dialog", () => {
+  test("a Deployment fails past its progress deadline or when it cannot create replicas", () => {
     const deployment = (status: Record<string, unknown>, replicas = 3) => ({
       kind: "Deployment",
       metadata: { name: "api", namespace: "dev", generation: 2 },
@@ -1068,40 +1047,23 @@ describe("failure reasons", () => {
       status: { observedGeneration: 2, ...status },
     });
     expect(
-      reasonOf(
+      statusOf(
         deployment({
           readyReplicas: 1,
           conditions: [{ type: "Progressing", status: "False", reason: "ProgressDeadlineExceeded" }],
         }),
       ),
-    ).toBe("1/3 ready");
+    ).toBe("fail");
     expect(
-      reasonOf(deployment({ conditions: [{ type: "ReplicaFailure", status: "True", reason: "FailedCreate" }] }, 2)),
-    ).toBe("0/2 ready");
+      statusOf(deployment({ conditions: [{ type: "ReplicaFailure", status: "True", reason: "FailedCreate" }] }, 2)),
+    ).toBe("fail");
   });
 
-  test("a failed Build names its reason, also for a cached Build saved before reasons existed", () => {
-    expect(buildFailureReason({ status: { phase: "Failed", reason: "DockerBuildFailed" } })).toBe("DockerBuildFailed");
-    expect(buildFailureReason({ status: { phase: "Cancelled" } })).toBe("Cancelled");
-    expect(buildFailureReason({ status: { phase: "Error" } })).toBe("Error");
-    const cached: OpenShiftResource = {
-      id: "Build:dev:api-41",
-      kind: "Build",
-      namespace: "dev",
-      name: "api-41",
-      status: "fail",
-      imageRefs: [],
-      object: { status: { phase: "Failed", reason: "GenericBuildFailed" } },
-    };
-    expect(openShiftFailureReason(cached)).toBe("GenericBuildFailed");
-  });
-
-  test("healthy and running resources have no reason", () => {
-    expect(reasonOf(pod({ phase: "Running", conditions: [{ type: "Ready", status: "True" }] }))).toBeUndefined();
+  test("a ready Pod passes and a starting one is in progress", () => {
+    expect(statusOf(pod({ phase: "Running", conditions: [{ type: "Ready", status: "True" }] }))).toBe("pass");
     expect(
-      reasonOf(pod({ phase: "Pending", containerStatuses: [{ state: { waiting: { reason: "ContainerCreating" } } }] })),
-    ).toBeUndefined();
-    expect(buildFailureReason({ status: { phase: "Complete" } })).toBeUndefined();
+      statusOf(pod({ phase: "Pending", containerStatuses: [{ state: { waiting: { reason: "ContainerCreating" } } }] })),
+    ).toBe("running");
   });
 });
 

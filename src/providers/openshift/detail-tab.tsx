@@ -7,7 +7,6 @@ import type { LegendItem } from "../shared/detail-legend";
 import { ProviderActionRow, ProviderSummaryRow, ScrollingLabel, useDetailRowMouse } from "../shared/detail-rows";
 import { type RowShortcut, useOpenRowShortcut } from "../shared/open-row";
 import { type StatusCategory, statusColor, statusIcon } from "../shared/status";
-import { openShiftFailureReason } from "./api";
 import { openShiftConsoleUrl } from "./console";
 import { openShiftStatusColor } from "./graph-columns";
 import type { OpenShiftCommitData, OpenShiftResource, OpenShiftStatus } from "./types";
@@ -93,10 +92,12 @@ function compactResourceName(resource: OpenShiftResource): string {
   return resource.name;
 }
 
-/** Muted text after a resource's name: shown only from the cache, why it fails, or that it runs nothing. */
+/**
+ * Muted text after a resource's name: shown only from the cache, or that it runs nothing. Why a resource fails is
+ * left to its ✗ and the resource dialog, which keeps the tree quiet.
+ */
 function resourceTail(resource: OpenShiftResource): string {
-  const reason = openShiftFailureReason(resource) ?? (resource.scaledToZero ? "0 replicas" : undefined);
-  return `${resource.cacheOnly ? " (cached)" : ""}${reason ? `  ${reason}` : ""}`;
+  return `${resource.cacheOnly ? " (cached)" : ""}${resource.scaledToZero ? "  0 replicas" : ""}`;
 }
 
 function resourcesForFlatItems(ns: NamespaceData): OpenShiftResource[] {
