@@ -49,6 +49,10 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- OpenShift `(cached)` marks only a Build the cluster no longer lists. A Build it still lists is fresh, also once
+  it is saved.
+- A Deployment scaled to 0 no longer marks its commit as running in a namespace. Details list it with
+  `0 replicas`.
 - OpenShift Live counts show for every running commit at once. When the live list came before the Build list,
   a commit only got them once selected.
 - A long OpenShift resource name no longer pushes its status mark out of a narrow detail panel.

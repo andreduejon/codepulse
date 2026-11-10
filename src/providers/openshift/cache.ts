@@ -80,6 +80,8 @@ export function cachedBuildToResource(build: OpenShiftCachedBuild): OpenShiftRes
     uid: build.uid,
     updatedAt: build.updatedAt ?? null,
     object: build.object,
+    // Until the cluster lists it again: a fresh Build from the API replaces this one.
+    cacheOnly: true,
   };
 }
 

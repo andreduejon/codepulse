@@ -144,6 +144,11 @@ export function imageTokens(ref: string | undefined): string[] {
   return [...out];
 }
 
+/** Replicas a Deployment or DeploymentConfig asks for: 1 when unset, 0 for a DeploymentConfig in test mode. */
+function desiredReplicas(spec: Record<string, unknown>): number {
+  return spec.test === true ? 0 : typeof spec.replicas === "number" ? spec.replicas : 1;
+}
+
 function workloadStatus(item: unknown): OpenShiftStatus {
   const md = metadata(item);
   const spec = obj(obj(item)?.spec) ?? {};
@@ -165,7 +170,7 @@ function workloadStatus(item: unknown): OpenShiftStatus {
 
   const replicaFields = ["replicas", "updatedReplicas", "availableReplicas", "unavailableReplicas"] as const;
   const hasReplicaStatus = replicaFields.some(field => typeof status[field] === "number");
-  const desired = spec.test === true ? 0 : typeof spec.replicas === "number" ? spec.replicas : 1;
+  const desired = desiredReplicas(spec);
   if (desired === 0) {
     const replicas = typeof status.replicas === "number" ? status.replicas : 0;
     const updated = typeof status.updatedReplicas === "number" ? status.updatedReplicas : 0;
@@ -400,6 +405,7 @@ function extractWorkload(
     ...baseResource(kind, namespace, item),
     status,
     reason: status === "fail" ? workloadFailureReason(item) : undefined,
+    scaledToZero: desiredReplicas(obj(obj(item)?.spec) ?? {}) === 0 || undefined,
     imageRefs: containerImages(obj(item)?.spec),
     commitSha: commitShaFromItem(item, annotationKey),
     podSelector: podSelectorFrom(item),
@@ -1229,7 +1235,8 @@ export function buildOpenShiftNamespaceMarkers(
   const byCommit = new Map<string, Map<string, NamespaceMarker["state"]>>();
   for (const resource of resources) {
     if (resource.kind !== "Deployment" && resource.kind !== "DeploymentConfig") continue;
-    if (!resource.commitSha || resource.terminating) continue;
+    // Scaled to 0, it runs nothing: no badge (the detail panel still lists it, `0 replicas`).
+    if (!resource.commitSha || resource.terminating || resource.scaledToZero) continue;
     const state = resource.status === "pass" ? "live" : resource.status === "running" ? "rolling" : resource.status;
     if (state === "unknown") continue;
     const sha = resource.commitSha.toLowerCase();

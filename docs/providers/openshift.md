@@ -16,7 +16,8 @@ The graph has two lanes:
 - **Cache** — terminal Builds persisted locally by commit.
 
 Both lanes show fail, running, pass, and unknown counts. Empty lanes show
-`·······`; details append `(cached)` to terminal Build names. Builds and
+`·······`. In details, a terminal Build the cluster no longer lists (pruned, or
+older than the fetch size) shows from the cache with `(cached)` after its name. Builds and
 ImageStreamTags poll while the OpenShift view is focused. Deployments,
 DeploymentConfigs, and Pods are listed and watched until you leave the view.
 
@@ -25,7 +26,9 @@ DeploymentConfigs, and Pods are listed and watched until you leave the view.
 Next to a commit's refs, a badge in the OpenShift colour names each namespace
 that runs that commit now: its Deployments or DeploymentConfigs carry the
 commit's SHA label. `dev` is ready, `● test` is rolling out, `✗ prod` is
-failing. During a rollout the new commit shows `●` until it is ready. Badges
+failing. During a rollout the new commit shows `●` until it is ready. A
+Deployment scaled to 0 runs nothing, so it marks no namespace; details still
+list it with `0 replicas`. Badges
 come from the live list of the whole namespace, so a commit below the fetch size
 is marked too, with no extra requests. A namespace that runs a commit the graph
 does not show (older than the loaded history, or filtered out) is named at the

@@ -1234,4 +1234,32 @@ describe("buildOpenShiftNamespaceMarkers", () => {
       { namespace: "test", state: "fail" },
     ]);
   });
+
+  test("a Deployment scaled to 0 runs nothing, so it marks no namespace", () => {
+    const a = "a".repeat(40);
+    const b = "b".repeat(40);
+    const markers = buildOpenShiftNamespaceMarkers(
+      [
+        { ...workload("Deployment", "test", "batch", a, "pass"), scaledToZero: true },
+        { ...workload("DeploymentConfig", "test", "worker", b, "running"), scaledToZero: true },
+        workload("Deployment", "dev", "batch", a, "pass"),
+      ],
+      ["dev", "test"],
+    );
+    expect(markers.get(a)).toEqual([{ namespace: "dev", state: "live" }]);
+    expect(markers.has(b)).toBe(false);
+  });
+
+  test("Deployments and DeploymentConfigs with 0 replicas are scaled to 0", () => {
+    const workloadObject = (kind: string, spec: Record<string, unknown>) =>
+      resourceFromWatchObject(
+        { kind, metadata: { name: "batch", namespace: "test" }, spec, status: { observedGeneration: 1 } },
+        "dev/commit-sha",
+      );
+    expect(workloadObject("Deployment", { replicas: 0 })?.scaledToZero).toBe(true);
+    expect(workloadObject("DeploymentConfig", { replicas: 0 })?.scaledToZero).toBe(true);
+    expect(workloadObject("Deployment", { replicas: 2 })?.scaledToZero).toBeUndefined();
+    // No replicas field means 1.
+    expect(workloadObject("Deployment", {})?.scaledToZero).toBeUndefined();
+  });
 });

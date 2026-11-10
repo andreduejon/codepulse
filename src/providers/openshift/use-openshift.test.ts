@@ -77,10 +77,21 @@ function mountOpenShift(
   const cacheWrite = spyOn(OpenShiftCache.prototype, "write").mockResolvedValue(undefined);
   const logRead = spyOn(OpenShiftCache.prototype, "readLog").mockResolvedValue(null);
   const logWrite = spyOn(OpenShiftCache.prototype, "writeLog").mockResolvedValue(undefined);
+  // What the cluster lists: the entries' builds, fresh from the API (not marked as cache-only).
+  const listedCommit = (seed: OpenShiftCacheEntry): OpenShiftCommitData => {
+    const data = commitDataFromCacheEntry(seed);
+    return {
+      ...data,
+      namespaces: data.namespaces.map(ns => ({
+        ...ns,
+        builds: ns.builds.map(({ cacheOnly: _cacheOnly, ...listed }) => listed),
+      })),
+    };
+  };
   const inventory = spyOn(api, "fetchOpenShiftInventory").mockImplementation(async () => {
     await options.inventoryGate;
     return {
-      data: new Map([entry, ...(options.seeds ?? [])].map(seed => [seed.sha, commitDataFromCacheEntry(seed)])),
+      data: new Map([entry, ...(options.seeds ?? [])].map(seed => [seed.sha, listedCommit(seed)])),
       error: null,
       failures: [],
       successfulRequests: 1,
@@ -278,6 +289,12 @@ describe("OpenShift cache below the fetch depth", () => {
     await settle();
     expect(mounted.state.graphBadges().has(older)).toBe(true);
     expect(mounted.openShift.getCommitData(older)?.namespaces[0].builds.map(b => b.name)).toEqual(["app-0"]);
+    // The cluster did not list it (the inventory asks for the window only): shown as `(cached)`.
+    expect(mounted.openShift.getCommitData(older)?.namespaces[0].builds[0].cacheOnly).toBe(true);
+    // A cached Build the cluster lists again is fresh, not `(cached)`.
+    for (let i = 0; i < 100 && mounted.openShift.getCommitData(SHA)?.namespaces[0].builds[0].cacheOnly; i++)
+      await Bun.sleep(5);
+    expect(mounted.openShift.getCommitData(SHA)?.namespaces[0].builds[0].cacheOnly).toBeUndefined();
     // Shown, not read: showing an older commit does not count as a use for eviction.
     expect(mounted.cacheRead.mock.calls.some(call => call[1] === older)).toBe(false);
     // The build inventory covers only the window; a refresh keeps the older commit.

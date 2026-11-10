@@ -9,12 +9,7 @@ import { type StatusCategory, statusIcon } from "../shared/status";
 import { openShiftFailureReason } from "./api";
 import { openShiftConsoleUrl } from "./console";
 import { openShiftStatusColor } from "./graph-columns";
-import {
-  isCachedOpenShiftResource,
-  type OpenShiftCommitData,
-  type OpenShiftResource,
-  type OpenShiftStatus,
-} from "./types";
+import type { OpenShiftCommitData, OpenShiftResource, OpenShiftStatus } from "./types";
 
 export interface OpenShiftDetailTabProps {
   mouseEnabled?: boolean;
@@ -91,10 +86,10 @@ function compactResourceName(resource: OpenShiftResource): string {
   return resource.name;
 }
 
-/** Muted text after a resource's name: whether it comes from the cache and why it fails. */
+/** Muted text after a resource's name: shown only from the cache, why it fails, or that it runs nothing. */
 function resourceTail(resource: OpenShiftResource): string {
-  const reason = openShiftFailureReason(resource);
-  return `${isCachedOpenShiftResource(resource) ? " (cached)" : ""}${reason ? `  ${reason}` : ""}`;
+  const reason = openShiftFailureReason(resource) ?? (resource.scaledToZero ? "0 replicas" : undefined);
+  return `${resource.cacheOnly ? " (cached)" : ""}${reason ? `  ${reason}` : ""}`;
 }
 
 function resourcesForFlatItems(ns: NamespaceData): OpenShiftResource[] {

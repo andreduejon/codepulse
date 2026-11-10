@@ -83,6 +83,10 @@ export interface OpenShiftResource {
   labels?: Record<string, string>;
   /** Full API object. Kept for Build JSON dialog / disk cache. */
   object?: unknown;
+  /** A finished Build shown from Codepulse's cache that the cluster has not listed since: `(cached)`. */
+  cacheOnly?: boolean;
+  /** A Deployment or DeploymentConfig with 0 replicas: it runs nothing, so it marks no namespace. */
+  scaledToZero?: boolean;
 }
 
 /** One Kubernetes event about a resource, as the events view lists it. */

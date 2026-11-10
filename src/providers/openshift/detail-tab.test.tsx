@@ -27,7 +27,13 @@ export const resource = (
 });
 
 export async function renderOpenShiftTab(
-  opts: Readonly<{ pods?: OpenShiftResource[]; consoleUrl?: string; width?: number }> = {},
+  opts: Readonly<{
+    pods?: OpenShiftResource[];
+    builds?: OpenShiftResource[];
+    deployments?: OpenShiftResource[];
+    consoleUrl?: string;
+    width?: number;
+  }> = {},
 ) {
   const data: OpenShiftCommitData = {
     sha: SHA,
@@ -35,9 +41,9 @@ export async function renderOpenShiftTab(
     namespaces: [
       {
         namespace: "payments-dev",
-        builds: [],
+        builds: opts.builds ?? [],
         imageStreamTags: [],
-        deployments: [],
+        deployments: opts.deployments ?? [],
         deploymentConfigs: [],
         pods: opts.pods ?? [resource("Pod", "payments-api-7f9c-x2k4")],
       },
@@ -151,6 +157,25 @@ test("a failing row says why after its name, muted, and the reason gives way bef
     expect(tiny.row("payments-api")).toContain("✗");
   } finally {
     tiny.renderer.destroy();
+  }
+});
+
+test("(cached) marks only a Build the cluster no longer lists; a Deployment scaled to 0 says so", async () => {
+  const t = await renderOpenShiftTab({
+    pods: [],
+    builds: [
+      resource("Build", "payments-api-41", { status: "fail", reason: "DockerBuildFailed" }),
+      resource("Build", "payments-api-40", { cacheOnly: true }),
+    ],
+    deployments: [resource("Deployment", "payments-batch", { scaledToZero: true })],
+  });
+  try {
+    expect(t.row("payments-api-41")).toContain("payments-api-41  DockerBuildFailed");
+    expect(t.row("payments-api-41")).not.toContain("(cached)");
+    expect(t.row("payments-api-40")).toContain("payments-api-40 (cached)");
+    expect(t.row("payments-batch")).toContain("payments-batch  0 replicas");
+  } finally {
+    t.renderer.destroy();
   }
 });
 
