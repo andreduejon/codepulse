@@ -1,4 +1,5 @@
 import { formatRelativeDate } from "../../utils/date";
+import { openShiftStatusRows } from "./api";
 import type { OpenShiftEvent, OpenShiftResourceKind } from "./types";
 
 /** Kinds whose events say something about a failure. An ImageStreamTag has hardly any. */
@@ -50,5 +51,22 @@ export function formatOpenShiftEvents(events: readonly OpenShiftEvent[]): OpenSh
       text: line(row.age, row.type, row.reason, row.count, row.message),
       kind: row.type === "Warning" ? ("warning" as const) : ("normal" as const),
     })),
+  ];
+}
+
+/**
+ * Above the events: what the resource's status says is wrong, a header and one aligned row per problem,
+ * `STATUS  REASON  MESSAGE`. Nothing when it is fine (or its object is not loaded).
+ */
+export function formatOpenShiftStatus(kind: OpenShiftResourceKind, object: unknown): OpenShiftEventLine[] {
+  const rows = openShiftStatusRows(kind, object);
+  if (rows.length === 0) return [];
+  const statusWidth = Math.max("STATUS".length, ...rows.map(row => row.status.length));
+  const reasonWidth = Math.max("REASON".length, ...rows.map(row => row.reason.length));
+  const line = (status: string, reason: string, message: string) =>
+    `${status.padEnd(statusWidth)}  ${reason.padEnd(reasonWidth)}  ${message}`.trimEnd();
+  return [
+    { text: line("STATUS", "REASON", "MESSAGE"), kind: "header" },
+    ...rows.map(row => ({ text: line(row.status, row.reason, row.message), kind: "warning" as const })),
   ];
 }

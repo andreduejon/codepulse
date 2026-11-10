@@ -20,10 +20,11 @@ import type {
   JenkinsRun,
   JenkinsStage,
 } from "../providers/jenkins/types";
+import { OPENSHIFT_LEGEND } from "../providers/openshift/detail-tab";
 import type { OpenShiftCommitData, OpenShiftResource } from "../providers/openshift/types";
 import { providerDetailTab } from "../providers/provider";
+import { DetailLegend } from "../providers/shared/detail-legend";
 import { DEPENDENCY_LEGEND } from "../providers/snyk/deps-tab";
-import { SnykLegend } from "../providers/snyk/tab-shared";
 import type { SnykScanResult } from "../providers/snyk/types";
 import { VULNERABILITY_LEGEND } from "../providers/snyk/vulnerabilities-model";
 import { scheduleScrollIntoView, scrollElementIntoView } from "../utils/scroll";
@@ -208,11 +209,25 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
     ];
   };
 
-  /** Vulnerabilities: fix and exploit markers; Dependencies: severity triangles. Only when the scan has findings. */
-  const snykLegend = () => {
+  /**
+   * Snyk Vulnerabilities: fix and exploit markers; Dependencies: severity triangles; OpenShift: status marks. Only
+   * when there is something to explain (findings, resources).
+   */
+  const legend = () => {
     const hash = state.selectedCommit()?.hash ?? "";
     const tab = state.detailActiveTab();
-    if ((tab !== "snyk" && tab !== "snyk-deps") || isUncommittedHash(hash)) return null;
+    if (isUncommittedHash(hash)) return null;
+    if (tab === "openshift") {
+      const lists = (props.openshiftGetCommitData?.(hash)?.namespaces ?? []).flatMap(ns => [
+        ns.deployments,
+        ns.deploymentConfigs,
+        ns.pods,
+        ns.builds,
+        ns.imageStreamTags,
+      ]);
+      return lists.some(list => list.length > 0) ? { items: OPENSHIFT_LEGEND } : null;
+    }
+    if (tab !== "snyk" && tab !== "snyk-deps") return null;
     const findings = props.snykGetCommitData?.(hash)?.findings ?? [];
     if (findings.length === 0) return null;
     return tab === "snyk" ? { items: VULNERABILITY_LEGEND } : { items: DEPENDENCY_LEGEND };
@@ -373,11 +388,11 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
           </>
         )}
       </Show>
-      <Show when={snykLegend()}>
+      <Show when={legend()}>
         {legend => (
           <>
             <box height={1} flexShrink={0} />
-            <SnykLegend items={legend().items} />
+            <DetailLegend items={legend().items} />
           </>
         )}
       </Show>

@@ -44,7 +44,7 @@ import {
   OpenShiftColumnHeaders,
   OpenShiftCountsColumn,
 } from "../providers/openshift/graph-columns";
-import type { GraphBadge, NamespaceMarker, ProviderView } from "../providers/provider";
+import type { GraphBadge, ProviderView } from "../providers/provider";
 import { ScrollingLabel } from "../providers/shared/detail-rows";
 import { SnykColumnHeaders, SnykCountsColumn, SnykScanColumn } from "../providers/snyk/graph-columns";
 import type { SnykScanResult } from "../providers/snyk/types";
@@ -411,7 +411,8 @@ function GraphLine(
     const markers = lookupOpenShiftBadge(state.graphBadges(), commit().hash)?.namespaces ?? [];
     return [
       ...refs,
-      ...markers.map(marker => ({ name: namespaceMarkerLabel(marker), isCurrent: false, namespace: true })),
+      // By name only: whether it is ready, rolling out or failing shows in the Live counts and the details.
+      ...markers.map(marker => ({ name: marker.namespace, isCurrent: false, namespace: true })),
     ];
   });
 
@@ -642,15 +643,6 @@ function GraphLine(
 /** Sort order for ref badges: tags first, then branches, remotes, HEAD last. */
 /** A badge before the subject: a Git ref, or (OpenShift view) a namespace that runs the commit. */
 type RowBadge = { name: string; type?: RefInfo["type"]; isCurrent: boolean; namespace?: boolean };
-
-/** `dev`, `● test` while rolling out, `✗ prod` while failing. */
-function namespaceMarkerLabel(marker: NamespaceMarker): string {
-  return marker.state === "rolling"
-    ? `● ${marker.namespace}`
-    : marker.state === "fail"
-      ? `✗ ${marker.namespace}`
-      : marker.namespace;
-}
 
 const REF_SORT_ORDER: Record<string, number> = { tag: 0, branch: 1, remote: 2, stash: 3, uncommitted: 4, head: 5 };
 

@@ -1,5 +1,5 @@
 import { MouseButton, type MouseEvent, type Renderable } from "@opentui/core";
-import { createSignal, For, Show } from "solid-js";
+import { createSignal, Show } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
 import type { Theme } from "../../context/theme";
 import { useT } from "../../hooks/use-t";
@@ -48,39 +48,6 @@ export function severityColor(theme: Theme, severity: SnykSeverity): string {
     case "low":
       return theme.severityLow;
   }
-}
-
-/** Coloured markers (space-separated), then a muted label. */
-export type SnykLegendItem = [markers: [string, (theme: Theme) => string][], label: string];
-
-/** Tab legend; DetailPanel renders it sticky below the scroll area. Items wrap whole in narrow panels. */
-export function SnykLegend(props: { items: readonly SnykLegendItem[] }) {
-  const t = useT();
-  return (
-    <box flexDirection="row" flexWrap="wrap" width="100%" flexShrink={0} justifyContent="flex-end">
-      <For each={props.items}>
-        {([markers, label], index) => (
-          <box flexDirection="row" flexShrink={0}>
-            <Show when={index() > 0}>
-              <text selectable={false} flexShrink={0} wrapMode="none">
-                {"  "}
-              </text>
-            </Show>
-            <For each={markers}>
-              {([marker, color]) => (
-                <text selectable={false} flexShrink={0} wrapMode="none" fg={color(t())}>
-                  {`${marker} `}
-                </text>
-              )}
-            </For>
-            <text selectable={false} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-              {label}
-            </text>
-          </box>
-        )}
-      </For>
-    </box>
-  );
 }
 
 /**

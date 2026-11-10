@@ -20,6 +20,7 @@ async function renderResource(
   hasLoader = true,
   consoleUrl?: string,
   loadEvents?: (resource: OpenShiftResource) => Promise<OpenShiftEvent[]>,
+  object: unknown = { objectMarker: "fake-object" },
 ) {
   const resource: OpenShiftResource = {
     id: `${kind}/resource`,
@@ -31,7 +32,7 @@ async function renderResource(
   };
   const raw = `normal ${"x".repeat(180)} WRAP-END`;
   const loadLog = mock(async (_resource: OpenShiftResource, _force?: boolean) => raw);
-  const loadObject = mock(async (_resource: OpenShiftResource, _force?: boolean) => ({ objectMarker: "fake-object" }));
+  const loadObject = mock(async (_resource: OpenShiftResource, _force?: boolean) => object);
   const streams: { signal: AbortSignal; emit: (text: string) => void; end: () => void }[] = [];
   const followLog = mock(
     (_resource: OpenShiftResource, signal: AbortSignal, emit: (text: string) => void) =>
@@ -458,6 +459,102 @@ test("c cycles log, object and events; events are newest first, warnings in the 
     expect(d.frame()).toContain("normal");
   } finally {
     d.renderer.destroy();
+  }
+});
+
+const CRASHING_POD = {
+  kind: "Pod",
+  status: {
+    phase: "Running",
+    containerStatuses: [
+      {
+        name: "api",
+        state: { waiting: { reason: "CrashLoopBackOff", message: "back-off 5m0s restarting failed container" } },
+        lastState: { terminated: { reason: "Error", exitCode: 1 } },
+      },
+    ],
+  },
+};
+const FAILING_DEPLOYMENT = {
+  kind: "Deployment",
+  status: {
+    conditions: [
+      {
+        type: "Progressing",
+        status: "False",
+        reason: "ProgressDeadlineExceeded",
+        message: 'ReplicaSet "test-resource-7d9f8" has timed out progressing.',
+      },
+    ],
+  },
+};
+const warning = (reason: string, minutes: number): OpenShiftEvent => ({
+  type: "Warning",
+  reason,
+  message: `${reason} message`,
+  count: 3,
+  lastSeen: minutesAgo(minutes),
+});
+
+test("the events view starts with what the status says is wrong; the title counts the warnings", async () => {
+  const loadEvents = mock(
+    async (_resource: OpenShiftResource): Promise<OpenShiftEvent[]> => [
+      warning("BackOff", 2),
+      warning("Unhealthy", 3),
+      { type: "Normal", reason: "Scheduled", message: "Successfully assigned", count: 1, lastSeen: minutesAgo(16) },
+    ],
+  );
+  const d = await renderResource("Pod", false, true, undefined, loadEvents, CRASHING_POD);
+  try {
+    await d.flush();
+    // Counted when the dialog opens, so the log view already says there is more to see.
+    expect(d.frame()).toMatch(/test-resource · log · 2 warnings/);
+    await d.key("c");
+    await d.key("c");
+    await d.flush();
+    const frame = d.frame();
+    expect(frame).toMatch(/test-resource · events · 2 warnings/);
+    expect(frame).toMatch(/waiting\s+CrashLoopBackOff\s+back-off 5m0s restarting failed container/);
+    expect(frame).toMatch(/last run\s+Error · exit 1/);
+    expect(frame.indexOf("STATUS")).toBeLessThan(frame.indexOf("LAST SEEN"));
+    expect(d.cell("CrashLoopBackOff")?.fg).toEqual(RGBA.fromHex(d.theme.warning));
+    // Loaded once when the dialog opened; the events view reuses them (r refetches).
+    expect(loadEvents).toHaveBeenCalledTimes(1);
+  } finally {
+    d.renderer.destroy();
+  }
+});
+
+test("when events cannot load or are gone, the status still says what is wrong", async () => {
+  const forbidden = async (_resource: OpenShiftResource): Promise<OpenShiftEvent[]> => {
+    throw new Error("No permission to list events in test-ns.");
+  };
+  const d = await renderResource("Deployment", false, false, undefined, forbidden, FAILING_DEPLOYMENT);
+  try {
+    await d.key("c");
+    await d.flush();
+    expect(d.frame()).toMatch(/Progressing False\s+ProgressDeadlineExceeded\s+ReplicaSet "test-resource-7d9f8"/);
+    expect(d.frame()).toContain("No permission to list events in test-ns.");
+    expect(d.frame()).not.toContain("Failed to load events");
+    expect(d.frame()).not.toMatch(/· \d+ warnings?/);
+  } finally {
+    d.renderer.destroy();
+  }
+  const gone = await renderResource("Deployment", false, false, undefined, async () => [], FAILING_DEPLOYMENT);
+  try {
+    await gone.key("c");
+    await gone.flush();
+    expect(gone.frame()).toMatch(/Progressing False\s+ProgressDeadlineExceeded/);
+    expect(gone.frame()).toContain("No recent events. OpenShift keeps them for 3 hours by default.");
+  } finally {
+    gone.renderer.destroy();
+  }
+  const one = await renderResource("Deployment", false, false, undefined, async () => [warning("BackOff", 1)]);
+  try {
+    await one.flush();
+    expect(one.frame()).toMatch(/test-resource · object · 1 warning(?!s)/);
+  } finally {
+    one.renderer.destroy();
   }
 });
 

@@ -556,6 +556,26 @@ for (const [provider, label] of [
   });
 }
 
+test("OpenShift explains its row marks in a legend below the tree, only while it lists resources", async () => {
+  const d = await renderProvider("openshift");
+  try {
+    const rows = d.frame().split("\n");
+    const legend = rows.findIndex(line => line.includes("in progress"));
+    expect(rows[legend]).toMatch(/✓ ok {2}● in progress {2}✗ failing/);
+    for (const [marker, label, color] of [
+      ["✓", "ok", d.theme.success],
+      ["●", "in progress", d.theme.info],
+      ["✗", "failing", d.theme.error],
+    ])
+      expect(d.cell(rows[legend].indexOf(`${marker} ${label}`), legend)?.fg).toEqual(RGBA.fromHex(color));
+    d.setOpenshiftEmpty(true);
+    await d.flush();
+    expect(d.frame()).not.toContain("in progress");
+  } finally {
+    await d.dispose();
+  }
+});
+
 test("OpenShift tree lines close on the last group and the last stream", async () => {
   const d = await renderProvider("openshift");
   try {

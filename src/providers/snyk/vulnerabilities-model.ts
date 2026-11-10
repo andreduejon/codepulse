@@ -1,4 +1,5 @@
 import type { Theme } from "../../context/theme";
+import type { LegendItem } from "../shared/detail-legend";
 import {
   isMatureExploit,
   type SnykFixGroup,
@@ -7,7 +8,6 @@ import {
   type SnykVulnerabilityEntry,
   snykUpgrade,
 } from "./parser";
-import type { SnykLegendItem } from "./tab-shared";
 import type { SnykSeverity } from "./types";
 
 export type Section = {
@@ -56,7 +56,7 @@ export type FlatItem =
   | { kind: "field"; owner: string; line: DetailLine };
 
 /** Pinned below the tab when the scan has findings. */
-export const VULNERABILITY_LEGEND: SnykLegendItem[] = [
+export const VULNERABILITY_LEGEND: LegendItem[] = [
   [[["●", theme => toneColor(theme, "upgrade")]], "upgrade"],
   [[["●", theme => toneColor(theme, "override")]], "override"],
   [[["●", theme => toneColor(theme, "no fix")]], "no fix"],

@@ -16,11 +16,15 @@ All notable changes to this project will be documented in this file.
   (`1/3 ready · ProgressDeadlineExceeded`), a Build's reason (`DockerBuildFailed`). In a narrow panel the reason
   is cut before the name, and the selected row scrolls to show it.
 - OpenShift resource dialog: an events view. `c` cycles log, JSON and events for Pods, Builds, Deployments and
-  DeploymentConfigs. Events are newest first (`LAST SEEN  TYPE  REASON  COUNT  MESSAGE`), warnings in the warning
-  colour, searchable, and `r` refetches them. It needs `list` on `events`; without it the view says so.
-- OpenShift view: each namespace that runs a commit shows as a badge next to its refs (`dev`, `● test` while
-  rolling out, `✗ prod` while failing), also below the fetch size. A namespace running a commit the graph does
-  not show is named at the end of the graph.
+  DeploymentConfigs. It starts with what the status says is wrong (a container waiting on `CrashLoopBackOff`, its
+  last run's exit code, failing conditions with their messages), which stays after OpenShift deletes the events
+  and where they are forbidden. Then the events, newest first (`LAST SEEN  TYPE  REASON  COUNT  MESSAGE`),
+  warnings in the warning colour, searchable, and `r` refetches them. The dialog title counts the warnings. It
+  needs `list` on `events`; without it the view says so.
+- OpenShift view: each namespace that runs a commit shows as a badge next to its refs, also below the fetch size.
+  The badge only names the namespace; the Live counts and the details show whether it is ready, rolling out or
+  failing, and a legend below the tree explains the row marks. A namespace running a commit the graph does not
+  show is named at the end of the graph.
 
 - GitHub Actions: a failed job lists its annotations after its steps (failures and warnings, with file and line).
   Enter opens the job log with the message searched; they are read once per failed job and cached.

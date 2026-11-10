@@ -25,8 +25,8 @@ DeploymentConfigs, and Pods are listed and watched until you leave the view.
 
 Next to a commit's refs, a badge in the OpenShift colour names each namespace
 that runs that commit now: its Deployments or DeploymentConfigs carry the
-commit's SHA label. `dev` is ready, `● test` is rolling out, `✗ prod` is
-failing. During a rollout the new commit shows `●` until it is ready. A
+commit's SHA label. The badge only names the namespace: whether it is ready,
+rolling out or failing shows in the Live counts and the details. A
 Deployment scaled to 0 runs nothing, so it marks no namespace; details still
 list it with `0 replicas`. Badges
 come from the live list of the whole namespace, so a commit below the fetch size
@@ -137,11 +137,16 @@ that produced them.
   Deployments, DeploymentConfigs). Terminal Build JSON uses the cached object when
   present; otherwise JSON is a live snapshot. Leave the log view or close the
   dialog to abort follow.
-- **Events** lists what OpenShift reported about the resource, newest first:
-  `LAST SEEN  TYPE  REASON  COUNT  MESSAGE`, warnings in the warning colour. They
-  are read when the view opens and are not stored. OpenShift keeps events for 3 hours
-  by default (plain Kubernetes for 1), so an older resource says *No recent events*.
-  Without permission to list events the view says so.
+- **Events** starts with what the resource's status says is wrong
+  (`STATUS  REASON  MESSAGE`): what a Pod's containers wait on, how their last run
+  ended and its conditions that are False, a workload's failing conditions, a
+  Build's failure. The status comes with the object, so it stays after OpenShift
+  deletes the events and where events are forbidden. Below it, the events newest
+  first: `LAST SEEN  TYPE  REASON  COUNT  MESSAGE`, warnings in the warning colour.
+  Events are read when the dialog opens and are not stored; the title counts the
+  warnings (`2 warnings`). OpenShift keeps events for 3 hours by default (plain
+  Kubernetes for 1), so an older resource says *No recent events*. Without
+  permission to list events the view says so.
 - `r` refreshes what is shown: the log (restarting a follow), the object, or the
   events. Workloads without logs open in JSON and refresh the same way.
 - `/` searches the log, JSON or events (`n` / `N` next and previous hit), like CI logs.
@@ -154,7 +159,7 @@ request failed) or a tab notice (some failed) says so.
 ## Status
 
 Resources show the same status symbols as CI runs; graph chips use the same
-colours.
+colours. A legend below the tree explains them: `✓ ok  ● in progress  ✗ failing`.
 
 - `✓` pass: successful Build, Ready Pod, or fully converged workload.
 - `●` running: active Build, Pending/not-ready Pod, or incomplete workload rollout.
@@ -186,7 +191,7 @@ Configured token needs `list` access for:
 - `deploymentconfigs.apps.openshift.io`
 - `replicationcontrollers`
 - `pods`
-- `events` (only for the events view in the resource dialog)
+- `events` (only for the resource dialog: its events view and warning count)
 
 Live freshness also needs `watch` on Deployments, DeploymentConfigs, and Pods
 in each configured namespace. OpenShift/`kubernetes` `view` already has

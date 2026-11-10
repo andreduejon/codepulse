@@ -1,6 +1,6 @@
 import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
-import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, For, onCleanup, Show, untrack } from "solid-js";
 import {
   DialogFooter,
   DialogOverlay,
@@ -24,7 +24,13 @@ import { BUSY } from "../../utils/busy-text";
 import { openUrl } from "../../utils/open-url";
 import { stripTerminalControls } from "../../utils/terminal-text";
 import { openShiftConsoleUrl } from "./console";
-import { formatOpenShiftEvents, OPENSHIFT_EVENT_KINDS, OPENSHIFT_NO_EVENTS } from "./events";
+import {
+  formatOpenShiftEvents,
+  formatOpenShiftStatus,
+  OPENSHIFT_EVENT_KINDS,
+  OPENSHIFT_NO_EVENTS,
+  type OpenShiftEventLine,
+} from "./events";
 import type { OpenShiftEvent, OpenShiftResource } from "./types";
 import { shouldFollowOpenShiftLog } from "./watch";
 
@@ -60,6 +66,8 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
   const [followNonce, setFollowNonce] = createSignal(0);
   const [followEnded, setFollowEnded] = createSignal(false);
   const [objectText, setObjectText] = createSignal<string | null>(null);
+  /** The loaded object itself: the events view reads what its status says is wrong. */
+  const [objectValue, setObjectValue] = createSignal<unknown>(null);
   const [objectError, setObjectError] = createSignal<string | null>(null);
   const [objectLoading, setObjectLoading] = createSignal(false);
   const [events, setEvents] = createSignal<OpenShiftEvent[] | null>(null);
@@ -108,7 +116,9 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
     setObjectLoading(true);
     setObjectError(null);
     try {
-      setObjectText(JSON.stringify(await props.loadObject(props.resource, force), null, 2));
+      const object = await props.loadObject(props.resource, force);
+      setObjectValue(object);
+      setObjectText(JSON.stringify(object, null, 2));
     } catch (error) {
       setObjectError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -125,7 +135,11 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
       return;
     }
     if (mode === "events") {
-      void loadEvents();
+      // The events came when the dialog opened (for the title's count); the status above them is in the object.
+      untrack(() => {
+        if (events() === null && !eventsLoading() && !eventsError()) void loadEvents();
+        if (objectText() === null && !objectLoading()) void loadObject();
+      });
       return;
     }
     if (!canLog()) return;
@@ -157,13 +171,36 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
     void loadLog(false);
   });
 
+  // Events load as the dialog opens, so the title can say there are warnings before you switch to them.
+  createEffect(() => {
+    props.resource.id;
+    if (canEvents()) untrack(() => void loadEvents());
+  });
+
   createEffect(() => {
     props.resource.id;
     if (viewMode() !== "log") return;
     queueMicrotask(() => scrollboxRef?.scrollTo(Infinity));
   });
 
-  const eventLines = createMemo(() => formatOpenShiftEvents(events() ?? []));
+  const statusLines = createMemo(() => formatOpenShiftStatus(props.resource.kind, objectValue()));
+  /**
+   * What the status says is wrong, then the events. With a status to show, events that failed to load or are gone
+   * become a muted line below it instead of replacing the view.
+   */
+  const eventLines = createMemo((): OpenShiftEventLine[] => {
+    const list = formatOpenShiftEvents(events() ?? []);
+    const status = statusLines();
+    if (status.length === 0) return list;
+    const error = eventsError();
+    const below: OpenShiftEventLine[] = error
+      ? [{ text: error, kind: "header" }]
+      : (events() ?? []).length === 0
+        ? [{ text: OPENSHIFT_NO_EVENTS, kind: "header" }]
+        : list;
+    return [...status, { text: "", kind: "normal" }, ...below];
+  });
+  const warningCount = () => (events() ?? []).filter(event => event.type === "Warning").length;
   const lines = createMemo(() => {
     const mode = viewMode();
     if (mode === "log") return stripTerminalControls(logText() ?? "").split("\n");
@@ -186,7 +223,8 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
       return null;
     }
     if (viewMode() === "events") {
-      if (eventsLoading()) return { kind: "loading", text: BUSY.fetchingEvents };
+      if (eventsLoading() || objectLoading()) return { kind: "loading", text: BUSY.fetchingEvents };
+      if (statusLines().length > 0) return null;
       const error = eventsError();
       if (error) return { kind: "error", title: "Failed to load events", message: error };
       if ((events() ?? []).length === 0) return { kind: "empty", text: OPENSHIFT_NO_EVENTS };
@@ -229,6 +267,7 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
         { text: props.resource.namespace, drop: 2 },
         { text: props.resource.name, emphasis: true, primary: true },
         { text: mode },
+        { text: warningCount() > 0 ? `${warningCount()} warning${warningCount() === 1 ? "" : "s"}` : "", drop: 4 },
       ],
       dialogFrame().width,
     );
@@ -242,6 +281,7 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
   const refresh = () => {
     if (viewMode() === "events") {
       void loadEvents();
+      if (props.loadObject) void loadObject(true);
       return;
     }
     if (viewMode() === "json") {

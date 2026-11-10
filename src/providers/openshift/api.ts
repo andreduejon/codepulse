@@ -10,6 +10,7 @@ import type {
   OpenShiftInventoryResult,
   OpenShiftOwnerReference,
   OpenShiftResource,
+  OpenShiftResourceKind,
   OpenShiftStatus,
 } from "./types";
 import { isCachedOpenShiftResource, OPENSHIFT_TERMINAL_PHASES, OPENSHIFT_WATCH_KINDS } from "./types";
@@ -286,6 +287,74 @@ function workloadFailureReason(item: unknown): string | undefined {
         ? status.availableReplicas
         : 0;
   return [`${ready}/${desired} ready`, str(failing?.reason)].filter(Boolean).join(" · ");
+}
+
+/** One thing a resource's status says is wrong: `waiting  CrashLoopBackOff  back-off 5m0s restarting…`. */
+export interface OpenShiftStatusRow {
+  status: string;
+  reason: string;
+  message: string;
+}
+
+/** Workload conditions in the state that says something is wrong; the healthy ones are left out. */
+const PROBLEM_CONDITIONS: Record<string, string> = {
+  Available: "False",
+  Progressing: "False",
+  ReplicaFailure: "True",
+  Failed: "True",
+  Degraded: "True",
+};
+
+/** `OOMKilled · exit 137`, `Error · exit 1`: how a container run ended. */
+function endedText(terminated: AnyObj): string {
+  const code = typeof terminated.exitCode === "number" ? ` · exit ${terminated.exitCode}` : "";
+  return `${str(terminated.reason) ?? "Error"}${code}`;
+}
+
+/**
+ * Why a resource is unhealthy, from its status, which outlives its events (3 hours): what a Pod's containers wait on
+ * or how they ended, its conditions that are False, a workload's failing conditions, a Build's failure.
+ */
+export function openShiftStatusRows(kind: OpenShiftResourceKind, object: unknown): OpenShiftStatusRow[] {
+  const status = obj(obj(object)?.status);
+  if (!status) return [];
+  const row = (label: string, reason: string | undefined, message: unknown): OpenShiftStatusRow => ({
+    status: label,
+    reason: reason ?? "",
+    message: str(message) ?? "",
+  });
+  if (kind === "Pod") {
+    const rows: OpenShiftStatusRow[] = [];
+    const podReason = str(status.reason);
+    if (podReason) rows.push(row(str(status.phase) ?? "Pod", podReason, status.message));
+    const containers = [...arr(status.initContainerStatuses), ...arr(status.containerStatuses)].map(
+      container => obj(container) ?? {},
+    );
+    // With several containers each row names its own.
+    const label = (text: string, container: AnyObj) =>
+      containers.length > 1 && str(container.name) ? `${text} ${container.name}` : text;
+    for (const container of containers) {
+      const state = obj(container.state) ?? {};
+      const waiting = obj(state.waiting);
+      if (waiting) rows.push(row(label("waiting", container), str(waiting.reason), waiting.message));
+      const ended = obj(state.terminated);
+      if (ended) rows.push(row(label("ended", container), endedText(ended), ended.message));
+      const lastRun = obj(obj(container.lastState)?.terminated);
+      if (lastRun) rows.push(row(label("last run", container), endedText(lastRun), lastRun.message));
+    }
+    for (const condition of arr(status.conditions).map(value => obj(value) ?? {}))
+      if (condition.status === "False")
+        rows.push(row(`${condition.type} False`, str(condition.reason), condition.message));
+    return rows;
+  }
+  if (kind === "Deployment" || kind === "DeploymentConfig")
+    return arr(status.conditions)
+      .map(value => obj(value) ?? {})
+      .filter(condition => PROBLEM_CONDITIONS[String(condition.type)] === condition.status)
+      .map(condition => row(`${condition.type} ${condition.status}`, str(condition.reason), condition.message));
+  if (kind === "Build" && buildStatus(object) === "fail")
+    return [row(str(status.phase) ?? "Failed", str(status.reason), status.message)];
+  return [];
 }
 
 /** Why a Build failed: its reason (`DockerBuildFailed`), or its phase (`Cancelled`, `Error`). */

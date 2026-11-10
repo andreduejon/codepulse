@@ -413,7 +413,7 @@ test("a namespace that runs a commit the graph does not show is named at the end
   }
 });
 
-test("namespaces show next to the refs of the commit they run, in the OpenShift colour, marked while rolling out", async () => {
+test("namespaces show next to the refs of the commit they run, in the OpenShift colour, by name only", async () => {
   // Narrow: short badges keep their own width, so the current branch and a namespace still show before +N.
   const narrow = await renderRefRow([{ name: "main", type: "branch", isCurrent: true }], {
     lane: { failCount: 0, runningCount: 0, unknownCount: 0, passCount: 1 },
@@ -439,7 +439,8 @@ test("namespaces show next to the refs of the commit they run, in the OpenShift 
   });
   try {
     const frame = setup.captureCharFrame();
-    expect(frame).toMatch(/ main {3}dev {3}● test {3}✗ prod {2}Visible subject/);
+    // Ready, rolling out or failing: the Live counts and the details say which, the badge only where.
+    expect(frame).toMatch(/ main {3}dev {3}test {3}prod {2}Visible subject/);
     const y = frame.split("\n").findIndex(row => row.includes("Visible"));
     const dev = setup.captureSpans().lines[y]?.spans.find(span => span.text === " dev ");
     expect(dev?.bg).toEqual(RGBA.fromHex(createThemeState().theme().openShiftBg));
