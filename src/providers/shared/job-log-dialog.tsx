@@ -1,4 +1,4 @@
-/** JobLogDialog — paged GitHub Actions job logs, styled like the diff dialog. */
+/** JobLogDialog: CI logs (GitHub jobs, Jenkins builds, stages and failed tests), styled like the diff dialog. */
 
 import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
@@ -25,7 +25,7 @@ import { useTheme } from "../../context/theme";
 import { BUSY } from "../../utils/busy-text";
 import { openUrl } from "../../utils/open-url";
 import { stripTerminalControls } from "../../utils/terminal-text";
-import { type StatusCategory, statusColor, statusIcon } from "../shared/status";
+import { type StatusCategory, statusColor, statusIcon } from "./status";
 
 type LogLineKind = "group" | "error" | "warning" | "normal" | "muted";
 type LogViewMode = "all" | "issues" | "errors" | "raw";

@@ -43,7 +43,6 @@ import { type CommandBarMode, type DialogId, useKeyboardNavigation } from "./hoo
 import { usePathFilter } from "./hooks/use-path-filter";
 import { providerAccent } from "./providers/colors";
 import { githubJobLogEntries, githubJobSummary } from "./providers/github-actions/job-summary";
-import JobLogDialog, { type JobLogContent, type JobLogEntry } from "./providers/github-actions/log-dialog";
 import type { GitHubJob, GitHubWorkflowRun } from "./providers/github-actions/types";
 import { useGitHubCI } from "./providers/github-actions/use-github-ci";
 import { isWholeBuildEntry, jenkinsBuildSummary, jenkinsLogEntries } from "./providers/jenkins/build-summary";
@@ -56,6 +55,7 @@ import type { OpenShiftResource } from "./providers/openshift/types";
 import { useOpenShift } from "./providers/openshift/use-openshift";
 import { providerDisplayName } from "./providers/provider";
 import { type CacheRepositorySummary, evictRepositoryCache } from "./providers/shared/cache-management";
+import JobLogDialog, { type JobLogContent, type JobLogEntry } from "./providers/shared/job-log-dialog";
 import { repositoryIdentity, setProviderCacheSuspended } from "./providers/shared/sha-sqlite-cache";
 import { type SnykProviderConfig, useSnyk } from "./providers/snyk/use-snyk";
 import { nextGroupRepoPath } from "./utils/group-repos";

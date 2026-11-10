@@ -1,5 +1,5 @@
 import { formatDuration } from "../../utils/date";
-import type { JobLogSummaryLine } from "../github-actions/log-dialog";
+import type { JobLogSummaryLine } from "../shared/job-log-dialog";
 import { stepsSummary, stepTime } from "../shared/log-summary";
 import type { JenkinsJob, JenkinsTestReport } from "./types";
 

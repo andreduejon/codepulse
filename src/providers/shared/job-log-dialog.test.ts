@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { parseLogLines } from "./log-dialog";
+import { parseLogLines } from "./job-log-dialog";
 
 const kinds = (raw: string) => parseLogLines(raw).map(line => line.kind);
 
