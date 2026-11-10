@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createRoot } from "solid-js";
+import { tabNoticeFor } from "../../app-tab-notice";
 import { createAppState } from "../../context/state";
 import { BANNER } from "../../debug/banner";
 import { buildGraph } from "../../git/graph";
@@ -145,9 +146,17 @@ test("over the branch-job limit, the graph's branches are asked for first and th
   await settle(() => state.providerStatusFor("jenkins").kind === "warning");
   const call = [...graph.mock.calls, ...full.mock.calls][0];
   expect([...(call?.[4]?.preferredBranches ?? [])].sort()).toEqual(["feature/refunds", "release/2.4"]);
-  expect(state.providerStatusFor("jenkins")).toEqual({
+  const status = state.providerStatusFor("jenkins");
+  expect(status).toEqual({
     kind: "warning",
-    message: "Jenkins reads 25 of 61 branch jobs: branches in the graph first.",
+    message:
+      "Jenkins branch jobs · 25 of 61 read. Branches in the graph come first. Builds on the other 36 do not show.",
+  });
+  // Like the other tab notices: a short headline, then a muted line on what it means.
+  expect(tabNoticeFor({ view: "jenkins", source: "Jenkins", status, tab: "jenkins", snykScan: null })).toMatchObject({
+    kind: "warning",
+    title: "Branch jobs · 25 of 61 read",
+    detail: ["Branches in the graph come first. Builds on the other 36 do not show."],
   });
 });
 

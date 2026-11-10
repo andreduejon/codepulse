@@ -36,9 +36,10 @@ order. This is one global limit across all configured multibranch parents, not 2
 jobs per parent.
 
 If more jobs are available, existing runs and badges from included jobs remain
-visible and a notice under the Jenkins tab gives the counts:
-`Jenkins reads 25 of 61 branch jobs: branches in the graph first.`
-Remaining branch jobs are not queried. The Debug dialog records the affected
+visible, and a notice at the bottom of the Jenkins details gives the counts
+(`Branch jobs · 25 of 61 read`) and says what they mean (`Branches in the graph
+come first. Builds on the other 36 do not show.`). Remaining branch jobs are not
+queried. The Debug dialog records the affected
 parent URL and limit. Truncated discovery is not stored as an authoritative
 cache refresh.
 

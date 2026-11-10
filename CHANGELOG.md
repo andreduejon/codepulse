@@ -52,7 +52,8 @@ All notable changes to this project will be documented in this file.
   `← full log`, `→ first stage`, `previous test`, `previous job`, `previous file`. The arrow that goes nowhere is
   left out of a log footer. Search reads `n/N next/previous`.
 - Jenkins multibranch: over the 25 branch-job limit, the branches in the graph are read first, then the most
-  recently built. The notice gives the counts (`Jenkins reads 25 of 61 branch jobs`).
+  recently built. The notice gives the counts and what they mean (`Branch jobs · 25 of 61 read`, then
+  `Builds on the other 36 do not show.`).
 - Graph ref badges take only their own width, so short names (`main`, `dev`) are no longer folded into `+N` for
   the room a long name would need.
 - A selected Snyk severity, NEW or FIXED heading keeps its colour on the arrow too. The row shade marks the
