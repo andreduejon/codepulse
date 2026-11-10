@@ -45,7 +45,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
   /** Dependency groups and packages start open (CVEs closed); track the ones closed. */
   const [collapsedGroups, setCollapsedGroups] = createSignal<Set<string>>(new Set());
   const isSectionExpanded = (section: Section) =>
-    section.muted
+    section.fixed
       ? expandedSections().has(section.key) || diffWord() === "fixed"
       : section.severity
         ? expandedSections().has(section.key)
@@ -91,7 +91,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
     return {
       key: "fixed",
       label: "FIXED",
-      muted: true,
+      fixed: true,
       entries: groupSnykVulnerabilities(shown),
       original: groupSnykVulnerabilities(fixed).length,
     };
@@ -276,7 +276,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
   const toggleSection = (section: Section) => {
     const open = isSectionExpanded(section);
     if (open) closeEntries(section.entries);
-    if (section.severity || section.muted) toggle(setExpandedSections, section.key);
+    if (section.severity || section.fixed) toggle(setExpandedSections, section.key);
     else
       update(setCollapsedGroups, next => {
         if (!open) next.delete(section.key);
@@ -421,7 +421,13 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
     const added = groupSnykVulnerabilities([...current.added]).length;
     const fixed = groupSnykVulnerabilities(current.fixed).length;
     if (added === 0 && fixed === 0) return "no change";
-    return [added > 0 ? `${added} new` : "", fixed > 0 ? `${fixed} fixed` : ""].filter(Boolean).join(" · ");
+    return (
+      <>
+        {added > 0 ? `${added} new` : ""}
+        {added > 0 && fixed > 0 ? " · " : ""}
+        {fixed > 0 ? <span style={{ fg: t().success }}>{`${fixed} fixed`}</span> : ""}
+      </>
+    );
   };
 
   const view: VulnerabilityRowsView = {

@@ -97,7 +97,8 @@ When the commit's first parent has a scan, a **vs parent** row under Rescan says
 what this commit changed: `vs parent 4c5d6e7  2 new · 1 fixed` (or `no change`).
 Findings the parent did not have carry a muted **new** before their score, and the
 parent's findings this commit no longer has are listed in a folded **FIXED**
-section at the end. A vulnerability stays the same finding across a version bump of
+section at the end, its own tree after a blank line. FIXED and the fixed count are
+green while there are fixes, and muted when the filter leaves none. A vulnerability stays the same finding across a version bump of
 its package, so a bump that keeps it vulnerable is neither new nor fixed. Type `new`
 or `fixed` in the filter to list only those. Nothing is scanned for the parent on
 its own: without its scan the row says `parent 4c5d6e7 not scanned`, and Enter

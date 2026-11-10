@@ -1,5 +1,5 @@
 import { MouseButton, type MouseEvent, type Renderable } from "@opentui/core";
-import { createSignal, For, Show } from "solid-js";
+import { createSignal, For, type JSX, Show } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
 import type { Theme } from "../../context/theme";
 import { useT } from "../../hooks/use-t";
@@ -125,8 +125,8 @@ export function SnykControlRow(props: {
   label: string;
   /** Switches: the current option, shown as `[value]`. */
   value?: string;
-  /** Muted status after the label, e.g. `scanning...`. */
-  status?: string;
+  /** Muted status after the label, e.g. `scanning...`; parts may carry their own colour. */
+  status?: JSX.Element;
   copied?: boolean;
   /** Muted, like a provider's disabled Reload row. */
   disabled?: boolean;

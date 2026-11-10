@@ -285,6 +285,10 @@ export function SectionView(sectionProps: { view: VulnerabilityRowsView; section
   const label = () => (severity ? section.label : v.scrolled(section.label, cursored(), v.sectionLabelWidth(section)));
   return (
     <box flexDirection="column" width="100%">
+      {/* FIXED starts its own tree: the findings above are this commit's, these the parent's. */}
+      <Show when={section.fixed}>
+        <box height={1} flexShrink={0} />
+      </Show>
       <box
         {...v.rows.mouseRow(key, index)}
         ref={element => {
@@ -309,13 +313,15 @@ export function SectionView(sectionProps: { view: VulnerabilityRowsView; section
           wrapMode="none"
           truncate={v.bannerOverflow() === 0 || !cursored()}
           fg={
-            isEmpty() || (section.muted && !cursored())
+            isEmpty()
               ? t().foregroundMuted
               : severity
                 ? severityColor(t(), severity)
-                : cursored()
-                  ? t().accent
-                  : t().foreground
+                : section.fixed
+                  ? t().success
+                  : cursored()
+                    ? t().accent
+                    : t().foreground
           }
         >
           {!isEmpty() ? <strong>{label()}</strong> : label()}

@@ -20,8 +20,8 @@ export type Section = {
   entries: SnykVulnerabilityEntry[];
   /** Unfiltered entry count, shown as `/M` while filtering. */
   original: number;
-  /** FIXED: the parent's findings this commit no longer has, shown muted. */
-  muted?: boolean;
+  /** FIXED: the parent's findings this commit no longer has. Its own tree, headed in the success colour. */
+  fixed?: boolean;
 };
 export type PackageRow = {
   key: string;

@@ -1,4 +1,5 @@
 import { expect, mock, test } from "bun:test";
+import { RGBA } from "@opentui/core";
 import { testRender } from "@opentui/solid";
 import { createSignal } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
@@ -33,9 +34,10 @@ async function renderSnyk(parentScan: SnykScanResult | null, filter?: string) {
     pendingJumpDirection: null,
     scrollToFile: () => {},
   };
+  const theme = createThemeState();
   const setup = await testRender(
     () => (
-      <ThemeContext.Provider value={createThemeState()}>
+      <ThemeContext.Provider value={theme}>
         <box width={76} flexDirection="column">
           <SnykDetailTab
             scan={scanOf("a".repeat(40), [kept, added])}
@@ -64,7 +66,14 @@ async function renderSnyk(parentScan: SnykScanResult | null, filter?: string) {
   const rows = () => setup.captureCharFrame().split("\n");
   const row = (text: string) => rows().find(line => line.includes(text)) ?? "";
   const indexOf = (text: string) => rows().findIndex(line => line.includes(text));
-  return { ...setup, navRef, setCursor, settle, actions, scanParent, row, rows, indexOf };
+  /** Colour of the first cell run that contains `text`. */
+  const fgOf = (text: string) =>
+    setup
+      .captureSpans()
+      .lines[indexOf(text)]?.spans.find(span => span.text.includes(text))
+      ?.fg.toString();
+  const color = (token: "success" | "foregroundMuted") => RGBA.fromHex(theme.theme()[token]).toString();
+  return { ...setup, navRef, setCursor, settle, actions, scanParent, row, rows, indexOf, fgOf, color };
 }
 
 test("vs parent: counts, new findings marked, and the parent's fixed ones in a folded FIXED section", async () => {
@@ -81,6 +90,32 @@ test("vs parent: counts, new findings marked, and the parent's fixed ones in a f
     t.navRef.activateCurrentItem();
     await t.settle();
     expect(t.indexOf("AXIOS")).toBeGreaterThan(t.indexOf("FIXED"));
+  } finally {
+    t.renderer.destroy();
+  }
+});
+
+test("FIXED is green while it lists fixes, also under the cursor, and starts its own tree after a blank line", async () => {
+  const t = await renderSnyk(scanOf(PARENT, [kept, gone]));
+  try {
+    expect(t.rows()[t.indexOf("FIXED") - 1]?.trim()).toBe("");
+    expect(t.fgOf("FIXED")).toBe(t.color("success"));
+    expect(t.fgOf("1 fixed")).toBe(t.color("success"));
+    expect(t.fgOf("1 new")).toBe(t.color("foregroundMuted"));
+    // Scan, vs parent, Copy, Group by, filter, HIGH, two findings, FIXED.
+    t.setCursor(8);
+    await t.settle();
+    expect(t.fgOf("FIXED")).toBe(t.color("success"));
+  } finally {
+    t.renderer.destroy();
+  }
+});
+
+test("FIXED is muted when the filter leaves none of its fixes", async () => {
+  const t = await renderSnyk(scanOf(PARENT, [kept, gone]), "minimist");
+  try {
+    expect(t.row("FIXED")).toMatch(/· FIXED/);
+    expect(t.fgOf("FIXED")).toBe(t.color("foregroundMuted"));
   } finally {
     t.renderer.destroy();
   }
