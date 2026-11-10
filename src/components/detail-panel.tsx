@@ -12,13 +12,13 @@ import type {
   GitHubJobFetchResult,
   GitHubWorkflowRun,
 } from "../providers/github-actions/types";
+import { JENKINS_LEGEND } from "../providers/jenkins/detail-tab";
 import type {
   JenkinsCommitData,
   JenkinsFailedTest,
   JenkinsJob,
   JenkinsJobFetchResult,
   JenkinsRun,
-  JenkinsStage,
 } from "../providers/jenkins/types";
 import { OPENSHIFT_LEGEND } from "../providers/openshift/detail-tab";
 import type { OpenShiftCommitData, OpenShiftResource } from "../providers/openshift/types";
@@ -65,9 +65,9 @@ export interface DetailPanelProps {
   jenkinsGetCommitData?: (sha: string) => JenkinsCommitData | null;
   jenkinsFetchJobsForRun?: (run: JenkinsRun) => Promise<JenkinsJobFetchResult>;
   jenkinsFetchCommitData?: (sha: string) => Promise<void>;
-  onOpenJenkinsJobLog?: (job: JenkinsJob, run: JenkinsRun, jobs?: JenkinsJob[]) => void;
+  /** A Jenkins build in the log viewer at an entry: 0 is the whole build, stage `i` is `i + 1`. */
+  onOpenJenkinsBuild?: (run: JenkinsRun, pipeline: JenkinsJob, entry: number) => void;
   onOpenJenkinsTestFailure?: (run: JenkinsRun, failed: JenkinsFailedTest[], index: number) => void;
-  onOpenJenkinsStageLog?: (run: JenkinsRun, stages: JenkinsStage[], index: number) => void;
   jenkinsProviderStatus?: ProviderStatus;
   openshiftGetCommitData?: (sha: string) => OpenShiftCommitData | null;
   openshiftFetchCommitData?: (sha: string, force?: boolean) => Promise<void>;
@@ -210,13 +210,15 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
   };
 
   /**
-   * Snyk Vulnerabilities: fix and exploit markers; Dependencies: severity triangles; OpenShift: status marks. Only
-   * when there is something to explain (findings, resources).
+   * Snyk Vulnerabilities: fix and exploit markers; Dependencies: severity triangles; OpenShift and Jenkins: status
+   * marks. Only when there is something to explain (findings, resources, builds).
    */
   const legend = () => {
     const hash = state.selectedCommit()?.hash ?? "";
     const tab = state.detailActiveTab();
     if (isUncommittedHash(hash)) return null;
+    if (tab === "jenkins")
+      return (props.jenkinsGetCommitData?.(hash)?.runs.length ?? 0) > 0 ? { items: JENKINS_LEGEND } : null;
     if (tab === "openshift") {
       const lists = (props.openshiftGetCommitData?.(hash)?.namespaces ?? []).flatMap(ns => [
         ns.deployments,
@@ -351,9 +353,8 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
             jenkinsGetCommitData={props.jenkinsGetCommitData}
             jenkinsFetchJobsForRun={props.jenkinsFetchJobsForRun}
             jenkinsFetchCommitData={props.jenkinsFetchCommitData}
-            onOpenJenkinsJobLog={props.onOpenJenkinsJobLog}
+            onOpenJenkinsBuild={props.onOpenJenkinsBuild}
             onOpenJenkinsTestFailure={props.onOpenJenkinsTestFailure}
-            onOpenJenkinsStageLog={props.onOpenJenkinsStageLog}
             jenkinsProviderStatus={props.jenkinsProviderStatus}
             openshiftGetCommitData={props.openshiftGetCommitData}
             openshiftFetchCommitData={props.openshiftFetchCommitData}

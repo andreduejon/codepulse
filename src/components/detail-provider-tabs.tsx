@@ -97,9 +97,8 @@ export function ProviderDetailTabs(
           unavailableReason={unavailable("jenkins", props.view.jenkinsProviderStatus)}
           loading={props.view.jenkinsProviderStatus?.kind === "loading"}
           {...cursor}
-          onOpenJobLog={props.view.onOpenJenkinsJobLog}
+          onOpenBuild={props.view.onOpenJenkinsBuild}
           onOpenTestFailure={props.view.onOpenJenkinsTestFailure}
-          onOpenStageLog={props.view.onOpenJenkinsStageLog}
         />
       </Show>
 

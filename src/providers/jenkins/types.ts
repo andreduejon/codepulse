@@ -85,6 +85,14 @@ export interface JenkinsJob {
   tests?: JenkinsTestReport;
 }
 
+/**
+ * What a row under a build stands for: an entry of its log (the whole build when it has no stages, or one stage), or
+ * its test report.
+ */
+export type JenkinsTreeRow =
+  | { kind: "log"; pipeline: JenkinsJob; entry: number }
+  | { kind: "tests"; report: JenkinsTestReport };
+
 export interface JenkinsCommitData {
   sha: string;
   runs: JenkinsRun[];

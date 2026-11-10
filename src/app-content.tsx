@@ -42,12 +42,13 @@ import { useDetailLoader } from "./hooks/use-detail-loader";
 import { type CommandBarMode, type DialogId, useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
 import { usePathFilter } from "./hooks/use-path-filter";
 import { providerAccent } from "./providers/colors";
-import JobLogDialog from "./providers/github-actions/log-dialog";
+import JobLogDialog, { type JobLogContent, type JobLogEntry } from "./providers/github-actions/log-dialog";
 import type { GitHubJob, GitHubWorkflowRun } from "./providers/github-actions/types";
 import { useGitHubCI } from "./providers/github-actions/use-github-ci";
+import { isWholeBuildEntry, jenkinsBuildSummary, jenkinsLogEntries } from "./providers/jenkins/build-summary";
 import { sliceStageLog } from "./providers/jenkins/stage-log";
 import { testFailureText, testLabel } from "./providers/jenkins/tests";
-import type { JenkinsFailedTest, JenkinsJob, JenkinsRun, JenkinsStage } from "./providers/jenkins/types";
+import type { JenkinsFailedTest, JenkinsJob, JenkinsRun } from "./providers/jenkins/types";
 import { useJenkinsCI } from "./providers/jenkins/use-jenkins-ci";
 import OpenShiftResourceDialog from "./providers/openshift/resource-dialog";
 import type { OpenShiftResource } from "./providers/openshift/types";
@@ -189,10 +190,10 @@ export function AppContent(props: Readonly<AppContentProps>) {
   /** Target for the job log dialog (set when user opens a job log). */
   const [jobLogTarget, setJobLogTarget] = createSignal<{
     provider: "github-actions" | "jenkins";
-    job: { id: string | number; name: string };
+    job: JobLogEntry;
     run: { name: string; runNumber: number; url?: string };
-    jobs: { id: string | number; name: string }[];
-    fetchLog: (job: { id: string | number; name: string }) => Promise<string>;
+    jobs: JobLogEntry[];
+    fetchLog: (job: JobLogEntry) => Promise<string | JobLogContent>;
     /** Searched when the log opens (an annotation's message). */
     search?: string;
   } | null>(null);
@@ -297,30 +298,22 @@ export function AppContent(props: Readonly<AppContentProps>) {
     setDialog("job-log");
   };
 
-  const handleOpenJenkinsJobLog = (job: JenkinsJob, run: JenkinsRun, jobs: JenkinsJob[] = [job]) => {
+  /**
+   * A Jenkins build in the log viewer at an entry: the whole build (its summary, then the console) and each stage's
+   * part of the console, ←/→ between them. The summary is read again with the log, so `r` updates a running build.
+   */
+  const handleOpenJenkinsBuild = (run: JenkinsRun, pipeline: JenkinsJob, entry: number) => {
+    const entries = jenkinsLogEntries(pipeline);
     setJobLogTarget({
       provider: "jenkins",
-      job,
-      run,
-      jobs: jobs.length > 0 ? jobs : [job],
-      fetchLog: () => jenkinsCI.fetchRunLog(run),
-    });
-    setDialog("job-log");
-  };
-
-  /** A Jenkins stage's part of the console log (the whole log when it has no such stage), ←/→ to the other stages. */
-  const handleOpenJenkinsStageLog = (run: JenkinsRun, stages: JenkinsStage[], index: number) => {
-    const entries = stages.map(stage => ({ id: stage.id, name: stage.name }));
-    const entry = entries[index] ?? entries[0];
-    if (!entry) return;
-    setJobLogTarget({
-      provider: "jenkins",
-      job: entry,
+      job: entries[entry] ?? entries[0],
       run,
       jobs: entries,
       fetchLog: async current => {
         const full = await jenkinsCI.fetchRunLog(run);
-        return sliceStageLog(full, current.name) ?? full;
+        if (!isWholeBuildEntry(current)) return sliceStageLog(full, current.name) ?? full;
+        const latest = await jenkinsCI.fetchJobsForRun(run).catch(() => null);
+        return { log: full, summary: jenkinsBuildSummary(latest?.jobs[0] ?? pipeline) };
       },
     });
     setDialog("job-log");
@@ -679,9 +672,8 @@ export function AppContent(props: Readonly<AppContentProps>) {
     jenkinsGetCommitData: jenkinsCI.getCommitData,
     jenkinsFetchJobsForRun: jenkinsCI.fetchJobsForRun,
     jenkinsFetchCommitData: jenkinsCI.fetchCommitDataForSHA,
-    onOpenJenkinsJobLog: handleOpenJenkinsJobLog,
+    onOpenJenkinsBuild: handleOpenJenkinsBuild,
     onOpenJenkinsTestFailure: handleOpenJenkinsTestFailure,
-    onOpenJenkinsStageLog: handleOpenJenkinsStageLog,
     get jenkinsProviderStatus() {
       return state.providerStatus();
     },

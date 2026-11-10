@@ -1,5 +1,5 @@
 import type { ProviderTreeJob } from "../shared/provider-run-tree";
-import type { JenkinsFailedTest, JenkinsJob, JenkinsTestReport } from "./types";
+import type { JenkinsFailedTest, JenkinsTestReport, JenkinsTreeRow } from "./types";
 
 /** The test's class without its package: `PaymentServiceTest`. */
 function shortClassName(className: string): string {
@@ -17,40 +17,21 @@ export function testFailureText(test: JenkinsFailedTest): string {
   return [`${name}\n${test.details ?? "No error details."}`, test.stackTrace ?? ""].filter(Boolean).join("\n\n");
 }
 
-const count = (value: number) => value.toLocaleString("en-US");
-
 /**
- * The build's test report as a `Tests` row beside the Pipeline: its counts after the name, muted, and each failed
- * test as a row under it. `o` opens the report page.
+ * The build's test report as a `Tests` row after the stages, and each failed test as a row under it. Its counts are
+ * in the build's summary in the log viewer. `o` opens the report page.
  */
-export function jenkinsTestsJob(report: JenkinsTestReport, buildUrl: string): ProviderTreeJob<JenkinsJob> {
-  const counts = [
-    report.failCount > 0 ? `${count(report.failCount)} failed` : "",
-    report.passCount > 0 ? `${count(report.passCount)} passed` : "",
-    report.skipCount > 0 ? `${count(report.skipCount)} skipped` : "",
-  ].filter(Boolean);
-  const conclusion = report.failCount > 0 ? "failure" : "success";
-  const raw: JenkinsJob = {
-    id: "tests",
-    name: "Tests",
-    status: "completed",
-    conclusion,
-    startedAt: null,
-    completedAt: null,
-    steps: [],
-    tests: report,
-  };
+export function jenkinsTestsJob(report: JenkinsTestReport, buildUrl: string): ProviderTreeJob<JenkinsTreeRow> {
   return {
     id: "tests",
     name: "Tests",
-    tail: counts.length > 0 ? `  ${counts.join(" · ")}` : undefined,
     status: "completed",
-    conclusion,
+    conclusion: report.failCount > 0 ? "failure" : "success",
     startedAt: null,
     completedAt: null,
     steps: [],
     url: `${buildUrl.replace(/\/+$/, "")}/testReport/`,
     notes: report.failed.map((test, index) => ({ id: String(index), mark: "fail" as const, text: testLabel(test) })),
-    raw,
+    raw: { kind: "tests", report },
   };
 }

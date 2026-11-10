@@ -28,10 +28,13 @@ All notable changes to this project will be documented in this file.
 - GitHub Actions re-runs: the run row names its attempt (`attempt 2`), and earlier attempts are folded rows at the
   end of the run that expand to their jobs and logs.
 
-- Jenkins stages are selectable: Enter opens only that stage's part of the console log, `←` / `→` move between
-  stages. It is cut from the cached console log, so no extra requests.
-- Jenkins: a finished build with a JUnit report shows a **Tests** row with its counts and its failed tests. Enter
-  opens a failure's error and stack trace in the log viewer, `←` / `→` move between failed tests.
+- Jenkins stages are selectable: Enter opens only that stage's part of the console log, titled with the stage and
+  its time, and `←` / `→` move between stages. `←` from the first stage shows the whole build: a summary (each
+  stage with its mark and time, the test counts), then the whole console. It is cut from the cached console log,
+  so no extra requests.
+- Jenkins: a finished build with a JUnit report shows a **Tests** row with its failed tests. Enter opens a
+  failure's error and stack trace in the log viewer, titled with the test, `←` / `→` move between failed tests.
+- Jenkins: a legend below the tree explains the marks (`✓ passed  ● running  ✗ failed  – skipped  ○ aborted`).
 
 - Snyk Vulnerabilities compare with an earlier scan: folded NEW and FIXED trees at the end, their muted headings
   naming the scan (`vs parent 4c5d6e7`, or `vs 1a2b3c4, 3 commits back` when the parent has no scan and the
@@ -40,6 +43,11 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Jenkins rows are as quiet as the OpenShift tree: a build lists its stages straight under it (no **Pipeline**
+  row) with their marks only. Times and test counts moved to the log viewer, so the build's age no longer shifts
+  when its stages load. A build without stages has one **Console** row.
+- Jenkins logs show `[Pipeline] { (Unit tests)` as the heading `▸ Unit tests` and mute the rest of the Pipeline
+  markup.
 - Jenkins multibranch: over the 25 branch-job limit, the branches in the graph are read first, then the most
   recently built. The notice gives the counts (`Jenkins reads 25 of 61 branch jobs`).
 - Graph ref badges take only their own width, so short names (`main`, `dev`) are no longer folded into `+N` for
@@ -49,6 +57,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Log views `issues only` and `errors only` keep test failures: a line ending in `FAILED` and an error or
+  exception with its message (`AssertionFailedError: expected …`). `0 failed` is not an error.
 - OpenShift `(cached)` marks only a Build the cluster no longer lists. A Build it still lists is fresh, also once
   it is saved.
 - A Deployment scaled to 0 no longer marks its commit as running in a namespace. Details list it with

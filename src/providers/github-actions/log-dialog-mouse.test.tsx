@@ -594,3 +594,86 @@ test("with wrap off, a hit past the right edge moves the lines sideways so it sh
     await d.dispose();
   }
 });
+
+test("Jenkins names the stage and its time in the title; the whole build starts with its summary", async () => {
+  const entries = [
+    { id: "build", name: "whole build", detail: "5m 09s" },
+    { id: "stage-3", name: "Unit tests", detail: "3m 30s" },
+  ];
+  const stageLog = ["[Pipeline] { (Unit tests)", "+ ./gradlew test", "[Pipeline] }"].join("\n");
+  const fetchLog = mock(async (entry: { id: string | number; name: string }) =>
+    entry.id === "build"
+      ? {
+          log: ["Started by an SCM change", stageLog.replace("+ ./gradlew test", "refundsTwice() FAILED")].join("\n"),
+          summary: [
+            { text: "STAGE       DURATION", kind: "muted" as const },
+            { text: "Checkout          4s", kind: "normal" as const, mark: "pass" as const },
+            { text: "Unit tests    3m 30s", kind: "normal" as const, mark: "fail" as const },
+          ],
+        }
+      : stageLog,
+  );
+  const theme = createThemeState();
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={theme}>
+        <JobLogDialog
+          provider="jenkins"
+          job={entries[1]}
+          jobs={entries}
+          run={{ name: "main", runNumber: 41 }}
+          fetchLog={fetchLog}
+          onClose={() => {}}
+        />
+      </ThemeContext.Provider>
+    ),
+    { width: 90, height: 30, kittyKeyboard: true },
+  );
+  const fg = (label: string) => {
+    const rows = setup.captureCharFrame().split("\n");
+    const y = rows.findIndex(row => row.includes(label));
+    const x = rows[y]?.indexOf(label) ?? -1;
+    let column = 0;
+    return setup.captureSpans().lines[y]?.spans.find(span => {
+      column += span.text.length;
+      return column > x;
+    })?.fg;
+  };
+  const key = async (name: Parameters<typeof setup.mockInput.pressKey>[0]) => {
+    setup.mockInput.pressKey(name);
+    await setup.flush();
+  };
+  const colors = theme.theme();
+  try {
+    await setup.flush();
+    await setup.flush();
+    let frame = setup.captureCharFrame();
+    expect(frame).toContain("Jenkins · main #41 · Unit tests · 3m 30s");
+    // The stage heading without its markup; the closing markup muted.
+    expect(frame).toContain("▸ Unit tests");
+    expect(frame).not.toContain("[Pipeline] {");
+    expect(fg("[Pipeline] }")).toEqual(RGBA.fromHex(colors.foregroundMuted));
+
+    await key("ARROW_LEFT");
+    await setup.flush();
+    frame = setup.captureCharFrame();
+    expect(frame).toContain("Jenkins · main #41 · whole build · 5m 09s");
+    const rows = frame.split("\n");
+    const summaryY = rows.findIndex(row => row.includes("STAGE"));
+    expect(summaryY).toBeLessThan(rows.findIndex(row => row.includes("Started by an SCM change")));
+    // The summary has no line numbers; the log keeps its own.
+    expect(rows[summaryY]).toMatch(/^\s*│?\s*STAGE/);
+    expect(rows.find(row => row.includes("Started by an SCM change"))).toMatch(/\s1 {2}Started by/);
+    expect(fg("✓ Checkout")).toEqual(RGBA.fromHex(colors.success));
+    expect(fg("✗ Unit tests")).toEqual(RGBA.fromHex(colors.error));
+    expect(fg("Unit tests    3m 30s")).toEqual(RGBA.fromHex(colors.foreground));
+
+    // Issues only: the failure, not the summary.
+    await key("c");
+    frame = setup.captureCharFrame();
+    expect(frame).not.toContain("STAGE");
+    expect(frame).toContain("refundsTwice() FAILED");
+  } finally {
+    setup.renderer.destroy();
+  }
+});

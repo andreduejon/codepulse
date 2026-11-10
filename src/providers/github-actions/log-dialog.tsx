@@ -25,28 +25,54 @@ import { useTheme } from "../../context/theme";
 import { BUSY } from "../../utils/busy-text";
 import { openUrl } from "../../utils/open-url";
 import { stripTerminalControls } from "../../utils/terminal-text";
+import { type StatusCategory, statusColor, statusIcon } from "../shared/status";
 
-type LogLineKind = "group" | "error" | "warning" | "normal";
+type LogLineKind = "group" | "error" | "warning" | "normal" | "muted";
 type LogViewMode = "all" | "issues" | "errors" | "raw";
 
 interface LogLine {
   kind: LogLineKind;
   text: string;
+  /** The line in the log as received; 0 for a summary line, which has no number. */
   lineNo: number;
+  /** A status mark before the text (a summary row). */
+  mark?: StatusCategory;
+}
+
+/** A line above the log in the "all" view (a Jenkins build's summary): no line number, an optional status mark. */
+export interface JobLogSummaryLine {
+  text: string;
+  kind: "muted" | "normal";
+  mark?: StatusCategory;
+}
+
+/** A log with lines to show above it. */
+export interface JobLogContent {
+  log: string;
+  summary?: JobLogSummaryLine[];
+}
+
+/** One log the dialog moves between with ←/→: a GitHub job, a Jenkins build or stage, a failed test. */
+export interface JobLogEntry {
+  id: string | number;
+  name: string;
+  /** After the name in the title (a Jenkins stage's time). */
+  detail?: string;
 }
 
 interface LoadedLog {
   raw: string | null;
+  summary: JobLogSummaryLine[];
   loading: boolean;
   error: string | null;
 }
 
 interface JobLogDialogProps {
   provider: "github-actions" | "jenkins";
-  job: { id: string | number; name: string };
-  jobs: { id: string | number; name: string }[];
+  job: JobLogEntry;
+  jobs: JobLogEntry[];
   run: { name: string; runNumber: number; url?: string };
-  fetchLog: (job: { id: string | number; name: string }) => Promise<string>;
+  fetchLog: (job: JobLogEntry) => Promise<string | JobLogContent>;
   onClose: () => void;
   /** The search row starts or stops owning Esc (see `useLogSearch`). */
   onSearchActive?: (active: boolean) => void;
@@ -68,15 +94,24 @@ function stripTimestamp(line: string): string {
     .replace(/^\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z\]\s?/, "");
 }
 
+/** A Jenkins Pipeline block's opening, `[Pipeline] { (Unit tests)`: a heading with the block's name. */
+const PIPELINE_BLOCK = /^\[Pipeline\]\s+\{\s+\((.+)\)\s*$/i;
+/** `failed`, `error:`, `FAILED` at the end of a line; not `0 failed`. */
+const FAILURE_WORD = /(?<!\b0 )\b(error|exception|failed|failure)\b(?:[: ]|$)/i;
+/** An error or exception class with its message: `AssertionFailedError: expected…`, `TimeoutException: …`. */
+const THROWABLE = /\b\w*(?:Error|Exception):/;
+
 function classifyLine(line: string): { kind: LogLineKind; text: string } | null {
   if (line.startsWith("##[endgroup]") || line.trim() === "") return null;
   if (line.startsWith("##[group]")) return { kind: "group", text: line.slice("##[group]".length) };
-  if (/^\[Pipeline\]\s+stage$/i.test(line)) return { kind: "group", text: line };
-  if (/^\[Pipeline\]\s+\{\s+\(.+\)\s*$/i.test(line)) return { kind: "group", text: line };
+  const block = PIPELINE_BLOCK.exec(line);
+  if (block) return { kind: "group", text: block[1] };
+  // The rest of the Pipeline markup is Jenkins plumbing: shown, but quiet.
+  if (/^\[Pipeline\]/i.test(line)) return { kind: "muted", text: line };
   if (line.startsWith("##[error]")) return { kind: "error", text: line.slice("##[error]".length) };
   if (line.startsWith("##[warning]")) return { kind: "warning", text: line.slice("##[warning]".length) };
   if (/\bwarning\b[: ]/i.test(line)) return { kind: "warning", text: line };
-  if (/^error:/i.test(line) || /^\s+at\s/.test(line) || /\b(error|exception|failed|failure)\b[: ]/i.test(line))
+  if (/^error:/i.test(line) || /^\s+at\s/.test(line) || FAILURE_WORD.test(line) || THROWABLE.test(line))
     return { kind: "error", text: line };
   return { kind: "normal", text: line };
 }
@@ -103,7 +138,7 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
 
   const orderedJobs = createMemo(() => {
     const seen = new Set<string>();
-    const result: { id: string | number; name: string }[] = [];
+    const result: JobLogEntry[] = [];
     for (const job of props.jobs.length > 0 ? props.jobs : [props.job]) {
       const key = String(job.id);
       if (seen.has(key)) continue;
@@ -128,7 +163,8 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
 
   const currentJob = () => orderedJobs()[jobIndex()] ?? props.job;
   const hasMultipleJobs = () => orderedJobs().length > 1;
-  const currentLoadedLog = () => logs().get(String(currentJob().id)) ?? { raw: null, loading: true, error: null };
+  const currentLoadedLog = (): LoadedLog =>
+    logs().get(String(currentJob().id)) ?? { raw: null, summary: [], loading: true, error: null };
 
   const setLoadedLog = (jobId: string | number, loaded: LoadedLog) => {
     setLogs(prev => {
@@ -145,14 +181,18 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
     // re-enters after setting `{ loading: false, error: ... }` and refetches
     // the same failed/empty log forever.
     if (cached) return;
-    setLoadedLog(job.id, { raw: null, loading: true, error: null });
+    setLoadedLog(job.id, { raw: null, summary: [], loading: true, error: null });
     props
       .fetchLog(job)
       // An empty log is a successful, neutral result; only a failed request is an error (with its reason).
-      .then(text => setLoadedLog(job.id, { raw: text, loading: false, error: null }))
+      .then(result => {
+        const content = typeof result === "string" ? { log: result } : result;
+        setLoadedLog(job.id, { raw: content.log, summary: content.summary ?? [], loading: false, error: null });
+      })
       .catch(error =>
         setLoadedLog(job.id, {
           raw: null,
+          summary: [],
           loading: false,
           error: error instanceof Error && error.message ? error.message : String(error),
         }),
@@ -204,7 +244,16 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
         .split("\n")
         .map((text, i) => ({ kind: "normal" as LogLineKind, text: stripTerminalControls(text), lineNo: i + 1 }));
     }
-    if (mode === "all") return parsedLines();
+    if (mode === "all") {
+      // A summary goes first, without line numbers, then an empty line.
+      const summary = currentLoadedLog().summary;
+      if (summary.length === 0) return parsedLines();
+      return [
+        ...summary.map(line => ({ ...line, lineNo: 0 })),
+        { kind: "normal" as LogLineKind, text: "", lineNo: 0 },
+        ...parsedLines(),
+      ];
+    }
     if (mode === "issues") return parsedLines().filter(line => line.kind === "warning" || line.kind === "error");
     return parsedLines().filter(line => line.kind === "error");
   });
@@ -301,13 +350,14 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
 
   const titleElement = createMemo((): JSX.Element => {
     const isJenkins = props.provider === "jenkins";
-    // Like the diff title: context (mode, then provider) goes first; the run and job shrink last.
+    // Like the diff title: context (time, mode, then provider) goes first; the run and job shrink last.
     const segments = fitTitleSegments(
       [
-        { text: isJenkins ? "Jenkins" : "GitHub Actions", drop: 2 },
-        { text: `${props.run.name} #${props.run.runNumber}`, emphasis: isJenkins, primary: isJenkins, drop: 3 },
-        { text: isJenkins ? "" : currentJob().name, emphasis: true, primary: true },
-        { text: VIEW_MODE_TITLE_LABEL[viewMode()], drop: 1 },
+        { text: isJenkins ? "Jenkins" : "GitHub Actions", drop: 3 },
+        { text: `${props.run.name} #${props.run.runNumber}`, drop: 4 },
+        { text: currentJob().name, emphasis: true, primary: true },
+        { text: currentJob().detail ?? "", drop: 1 },
+        { text: VIEW_MODE_TITLE_LABEL[viewMode()], drop: 2 },
       ],
       dialogWidth(),
     );
@@ -316,7 +366,7 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
 
   const renderLine = (line: LogLine, index: () => number) => {
     const th = theme();
-    const lineNo = () => line.lineNo.toString().padStart(maxLineNoWidth());
+    const lineNo = () => (line.lineNo > 0 ? line.lineNo.toString() : "").padStart(maxLineNoWidth());
     const contentWrapMode = () => (wrapEnabled() ? "word" : "none");
     const text = (value: string) => highlightHits(reveal(value), search.term(), { fg: th.background, bg: th.accent });
     const isCurrentHit = () => search.current() === index();
@@ -356,9 +406,26 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
         </box>
       );
     }
+    if (line.kind === "muted") {
+      return (
+        <box ref={ref} flexDirection="row" width="100%">
+          <LineNumber text={lineNo()} current={isCurrentHit()} />
+          <text wrapMode={contentWrapMode()} fg={th.foregroundMuted}>
+            {text(line.text)}
+          </text>
+        </box>
+      );
+    }
     return (
       <box ref={ref} flexDirection="row" width="100%">
         <LineNumber text={lineNo()} current={isCurrentHit()} />
+        <Show when={line.mark}>
+          {mark => (
+            <text flexShrink={0} wrapMode="none" fg={statusColor(th, mark())}>
+              {`${statusIcon(mark())} `}
+            </text>
+          )}
+        </Show>
         <text wrapMode={contentWrapMode()} fg={th.foreground}>
           {text(line.text)}
         </text>

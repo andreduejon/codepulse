@@ -63,21 +63,33 @@ Aborted builds show as cancelled (`○`, a grey chip in the graph) like aborted
 stages, and not-built builds as skipped. Entering a commit's **Jenkins** tab opens
 its first failed build. In the console log, `r` reloads it (a finished build's cached log does not change).
 
-Stages are rows the cursor stops on. Enter on a stage opens only its part of the
-console log (from `[Pipeline] { (Stage)` to the end of that block), and `←` / `→`
-move to the previous and next stage. It is cut from the same console log, so it
-needs no extra requests and works for cached builds. Enter on **Pipeline** still
-opens the whole console; a stage the log does not mark shows the whole log too.
+A build lists its stages straight under it, each with its mark and nothing else,
+like the OpenShift tree. A legend below the tree explains the marks:
+`✓ passed  ● running  ✗ failed  – skipped  ○ aborted`. Times and test counts are
+in the log viewer.
+
+Enter on a stage opens only its part of the console log (from
+`[Pipeline] { (Stage)` to the end of that block). The title names the stage and
+its time (`Jenkins · main #41 · Unit tests · 3m 30s`). `←` / `→` move to the
+previous and next stage, and `←` from the first stage shows the **whole build**:
+a summary first (each stage with its mark and time, then the test counts), then
+the whole console. A build without stages has one **Console** row that opens the
+whole build. A stage the log does not mark shows the whole log too. Stage logs
+are cut from the same console log, so they need no extra requests and work for
+cached builds.
+
+In the log, `[Pipeline] { (Unit tests)` shows as the heading `▸ Unit tests`, and
+the rest of the Pipeline markup (`[Pipeline] }`, `[Pipeline] // stage`) is muted.
 
 Fetch size controls both the graph commit window and recent builds inspected per
 job. It is independent from cache retention.
 
 ## Tests
 
-A finished build with a JUnit test report shows a **Tests** row beside its
-Pipeline, with the counts after the name (`Tests  3 failed · 1,204 passed · 12
-skipped`) and each failed test under it (`PaymentServiceTest › refundsTwice`, up
-to 50). The report is read once the build has finished, together with its stages,
-and cached with the build. Enter on a failed test opens its error and stack trace
-in the log viewer (search, wrap), and `←` / `→` move between the failed tests;
-`o` opens the build's test report. A build without a report has no Tests row.
+A finished build with a JUnit test report shows a **Tests** row after its
+stages, with each failed test under it (`PaymentServiceTest › refundsTwice`, up
+to 50). Its counts (`3 failed · 1,204 passed · 12 skipped`) are in the whole
+build's summary. The report is read once the build has finished, together with
+its stages, and cached with the build. Enter on a failed test opens its error and
+stack trace in the log viewer (search, wrap), titled with the test, and `←` / `→`
+move between the failed tests; `o` opens the build's test report. A build without a report has no Tests row.

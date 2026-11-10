@@ -109,13 +109,6 @@ type FlatItem<TRaw, TJobRaw> =
   | { kind: "job"; job: ProviderTreeJob<TJobRaw>; run: ProviderTreeRun<TRaw>; flatIndex: number }
   | { kind: "attempt"; attempt: AttemptGroup<TJobRaw>; run: ProviderTreeRun<TRaw>; flatIndex: number }
   | {
-      kind: "step";
-      step: ProviderTreeStep;
-      job: ProviderTreeJob<TJobRaw>;
-      run: ProviderTreeRun<TRaw>;
-      flatIndex: number;
-    }
-  | {
       kind: "note";
       note: ProviderTreeNote;
       job: ProviderTreeJob<TJobRaw>;
@@ -151,19 +144,16 @@ export interface ProviderRunTreeProps<TRaw, TJobRaw> {
   ) => void;
   /** Footer verb for Enter on a note (`view in log`). */
   noteAction?: string;
-  /** Steps become rows the cursor stops on, and Enter opens one (Jenkins stages: the stage's log). */
-  onOpenStep?: (
-    step: ProviderTreeStep,
-    job: ProviderTreeJob<TJobRaw>,
-    run: ProviderTreeRun<TRaw>,
-    steps: ProviderTreeStep[],
-  ) => void;
   summaryLabel: string;
   jobsLoadingText?: string;
   noJobsText?: string;
   autoExpandSingleRun?: boolean;
   childCountLabel?: (count: number) => string;
   showRunDuration?: boolean;
+  /** When false, job rows leave out their time (Jenkins stages: it is in the log's summary). */
+  showJobDuration?: boolean;
+  /** When false, notes leave out their `✗`/`!` (Jenkins: every listed test failed). */
+  noteMarks?: boolean;
   onReloadCommit?: () => void | Promise<void>;
   reloadLabel?: string;
   reloadBusy?: boolean;
@@ -203,9 +193,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
           ? `job:${item.run.id}:${item.job.id}`
           : item.kind === "attempt"
             ? `attempt:${item.run.id}:${item.attempt.number}`
-            : item.kind === "step"
-              ? `step:${item.run.id}:${item.job.id}:${item.step.id}`
-              : `note:${item.run.id}:${item.job.id}:${item.note.id}`;
+            : `note:${item.run.id}:${item.job.id}:${item.note.id}`;
   const syncItemRefs = () => {
     const items = flatItems();
     itemRefs.length = items.length;
@@ -246,6 +234,8 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     return duration ? `~${duration}` : "";
   };
   const statusMark = (status: string, conclusion: string | null) => statusIcon(categorize(status, conclusion));
+  const formatJobDuration = (job: ProviderTreeJob<TJobRaw>) =>
+    props.showJobDuration === false ? "" : formatDuration(job.startedAt, job.completedAt);
 
   const rightInfoWidth = createMemo(() => {
     let max = 0;
@@ -272,7 +262,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     }
     for (const jobs of fetchedJobs().values()) {
       for (const job of jobs) {
-        max = Math.max(max, formatDuration(job.startedAt, job.completedAt).length);
+        max = Math.max(max, formatJobDuration(job).length);
       }
     }
     return max;
@@ -296,8 +286,6 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
         const { current, attempts } = jobsOf(run.id);
         for (const job of current) {
           items.push({ kind: "job", job, run, flatIndex: idx++ });
-          if (props.onOpenStep)
-            for (const step of job.steps) items.push({ kind: "step", step, job, run, flatIndex: idx++ });
           for (const note of job.notes ?? []) items.push({ kind: "note", note, job, run, flatIndex: idx++ });
         }
         for (const attempt of attempts) {
@@ -528,10 +516,6 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
       toggleAttempt(item.run.id, item.attempt.number);
       return false;
     }
-    if (item.kind === "step") {
-      props.onOpenStep?.(item.step, item.job, item.run, item.job.steps);
-      return false;
-    }
     if (item.kind === "note") {
       props.onOpenNote?.(item.note, item.job, item.run, jobsOf(item.run.id).current);
       return false;
@@ -566,7 +550,6 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     if (item.kind === "reload") props.setDetailCursorAction(reloadEnabled() && !reloadBusy() ? reloadHint() : null);
     else if (item.kind === "run") props.setDetailCursorAction(expandedRuns().has(item.run.id) ? "collapse" : "expand");
     else if (item.kind === "note") props.setDetailCursorAction(props.onOpenNote ? (props.noteAction ?? "open") : null);
-    else if (item.kind === "step") props.setDetailCursorAction("view log");
     else if (item.kind === "attempt")
       props.setDetailCursorAction(
         expandedAttempts().has(attemptKey(item.run.id, item.attempt.number)) ? "collapse" : "expand",
@@ -580,7 +563,6 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     url: () => {
       const item = flatItems()[props.detailCursorIndex()];
       if (item?.kind === "note") return item.note.url ?? item.job.url;
-      if (item?.kind === "step") return item.job.url;
       if (item?.kind === "attempt") return item.run.url ? `${item.run.url}/attempts/${item.attempt.number}` : null;
       return item?.kind === "run" ? item.run.url : item?.kind === "job" ? item.job.url : null;
     },
@@ -721,7 +703,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                     const isJobCursored = () => props.detailFocused() && props.detailCursorIndex() === jobFlatIndex();
                     const jobCat = categorize(job.status, job.conclusion);
                     const jobColor = () => statusColor(t(), jobCat);
-                    const duration = formatDuration(job.startedAt, job.completedAt);
+                    const duration = formatJobDuration(job);
                     const stepCountLabel = () =>
                       job.steps.length > 0
                         ? (props.childCountLabel?.(job.steps.length) ??
@@ -803,56 +785,13 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                               const stepConnector = () =>
                                 stepIndexFn() === job.steps.length - 1 && notes().length === 0 ? "└─ " : "├─ ";
 
-                              const stepKey = `step:${run.id}:${job.id}:${step.id}`;
-                              const stepFlatIndex = () =>
-                                flatItems().findIndex(
-                                  it =>
-                                    it.kind === "step" &&
-                                    it.step.id === step.id &&
-                                    it.job.id === job.id &&
-                                    it.run.id === run.id,
-                                );
-                              const isStepCursored = () =>
-                                !!props.onOpenStep &&
-                                props.detailFocused() &&
-                                props.detailCursorIndex() === stepFlatIndex();
-
                               return (
-                                // Selectable steps (Jenkins stages) look like jobs; others stay muted detail.
-                                <box
-                                  ref={(el: Renderable) => {
-                                    if (!props.onOpenStep) return;
-                                    refsByKey.set(stepKey, el);
-                                    syncItemRefs();
-                                  }}
-                                  {...(props.onOpenStep ? mouseRow(stepKey, stepFlatIndex) : {})}
-                                  flexDirection="row"
-                                  width="100%"
-                                  backgroundColor={
-                                    isStepCursored()
-                                      ? t().backgroundElementActive
-                                      : props.onOpenStep
-                                        ? hoverBg(stepKey)
-                                        : undefined
-                                  }
-                                >
+                                <box flexDirection="row" width="100%">
                                   <text flexShrink={0} wrapMode="none" fg={t().border}>
                                     {stepTreePrefix()}
                                     {stepConnector()}
                                   </text>
-                                  <Show
-                                    when={props.onOpenStep}
-                                    fallback={
-                                      <ScrollingLabel text={step.name} active={false} fg={t().foregroundMuted} />
-                                    }
-                                  >
-                                    <ScrollingLabel
-                                      selectable={!props.mouseEnabled}
-                                      text={step.name}
-                                      active={isStepCursored()}
-                                      fg={isStepCursored() ? t().accent : t().foreground}
-                                    />
-                                  </Show>
+                                  <ScrollingLabel text={step.name} active={false} fg={t().foregroundMuted} />
                                   <Show when={stepDuration()}>
                                     <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
                                       {stepDuration()}
@@ -914,14 +853,16 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                                     {noteLead()}
                                     {noteConnector()}
                                   </text>
-                                  <text
-                                    selectable={!props.mouseEnabled}
-                                    flexShrink={0}
-                                    wrapMode="none"
-                                    fg={note.mark === "fail" ? t().error : t().warning}
-                                  >
-                                    {note.mark === "fail" ? "✗ " : "! "}
-                                  </text>
+                                  <Show when={props.noteMarks !== false}>
+                                    <text
+                                      selectable={!props.mouseEnabled}
+                                      flexShrink={0}
+                                      wrapMode="none"
+                                      fg={note.mark === "fail" ? t().error : t().warning}
+                                    >
+                                      {note.mark === "fail" ? "✗ " : "! "}
+                                    </text>
+                                  </Show>
                                   <ScrollingLabel
                                     selectable={!props.mouseEnabled}
                                     text={note.text}

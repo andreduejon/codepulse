@@ -70,7 +70,15 @@ const jenkinsRun: JenkinsRun = {
   jobLabel: "pipeline",
   jobUrl: "https://jenkins.invalid/job",
 };
-const jenkinsJob: JenkinsJob = { ...job, id: "1", steps: [] };
+// Its one stage is the row under the build, named like the GitHub job so both click the same label.
+const jenkinsJob: JenkinsJob = {
+  ...job,
+  id: "1",
+  name: "Pipeline",
+  steps: [
+    { id: "stage", name: job.name, status: "completed", conclusion: "success", startedAt: date, completedAt: date },
+  ],
+};
 const resource: OpenShiftResource = {
   id: "pod",
   kind: "Pod",
@@ -179,7 +187,7 @@ async function renderSidebar(provider: ProviderView = "git", snykScan: SnykScanR
                   jenkinsFetchJobsForRun={async () => ({ jobs: [jenkinsJob], error: null })}
                   jenkinsFetchCommitData={reload}
                   jenkinsProviderStatus={busy() ? { kind: "loading" } : { kind: "idle" }}
-                  onOpenJenkinsJobLog={openJob}
+                  onOpenJenkinsBuild={openJob}
                   openshiftGetCommitData={() => ({
                     sha: detail.hash,
                     liveFetched: true,

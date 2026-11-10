@@ -12,16 +12,16 @@ const report: JenkinsTestReport = {
   ],
 };
 
-test("a test report becomes a Tests row: counts after the name, failed tests under it", () => {
+test("a test report becomes a Tests row: the failed tests under it, its counts left to the build's summary", () => {
   const job = jenkinsTestsJob(report, "https://jenkins.example.com/job/app/412/");
   expect(job).toMatchObject({
     id: "tests",
     name: "Tests",
-    tail: "  3 failed · 1,204 passed · 12 skipped",
     status: "completed",
     conclusion: "failure",
     url: "https://jenkins.example.com/job/app/412/testReport/",
   });
+  expect(job.tail).toBeUndefined();
   expect(job.notes).toEqual([
     { id: "0", mark: "fail", text: "PaymentServiceTest › refundsTwice" },
     { id: "1", mark: "fail", text: "OrderMapperTest › mapsCurrency" },
@@ -30,7 +30,7 @@ test("a test report becomes a Tests row: counts after the name, failed tests und
 
 test("a passing report is a green Tests row without failures", () => {
   const job = jenkinsTestsJob({ passCount: 10, failCount: 0, skipCount: 0, failed: [] }, "https://j/job/app/1/");
-  expect(job.tail).toBe("  10 passed");
+  expect(job.tail).toBeUndefined();
   expect(job.conclusion).toBe("success");
   expect(job.notes).toEqual([]);
 });
