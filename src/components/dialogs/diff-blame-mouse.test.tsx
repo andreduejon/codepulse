@@ -166,12 +166,12 @@ test("diff footer mouse actions share keyboard toggles, text-only hover and clos
     expect(d.frame()).toContain("added-line");
     expect(d.rowTexts()).toContain("  ↵ ");
     for (const label of ["blame", "file", "view", "nowrap", "next", "close"]) {
-      // Match the footer file action rather than the title path.
+      // Match the footer file action rather than the title path or the `previous file` / `next file` arrows.
       const hint = label === "file" ? "v file" : label;
+      const description = hint === "v file" ? " file · c" : hint;
       await d.move();
-      const bg = d.cell(hint === "v file" ? " file" : hint)?.bg;
+      const bg = d.cell(description)?.bg;
       await d.move(hint);
-      const description = hint === "v file" ? " file" : hint;
       expect(d.cell(description)?.fg).toEqual(RGBA.fromHex(d.theme.foreground));
       expect(d.cell(description)?.bg).toEqual(bg);
       await d.move();
@@ -249,6 +249,7 @@ test("file arrows respect boundaries and lazy blame follows reactive targets, ca
       await d.key(key);
       expect(d.navigate).toHaveBeenCalledTimes(count);
     };
+    expect(d.frame()).toContain("← previous file · → next file");
     await boundary("prev", "ARROW_LEFT");
     await d.click("→ next");
     expect(d.target().fileIndex).toBe(1);

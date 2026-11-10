@@ -160,24 +160,19 @@ for (const provider of ["github-actions", "jenkins"] as const) {
       }
       expect(d.openUrl).not.toHaveBeenCalled();
       expect(d.close).not.toHaveBeenCalled();
-      const boundary = async (label: string, key: "ARROW_LEFT" | "ARROW_RIGHT", alias: "h" | "l") => {
+      // The footer names where the arrows go, and leaves out the one that goes nowhere; its keys do nothing.
+      const boundary = async (arrow: "←" | "→", key: "ARROW_LEFT" | "ARROW_RIGHT", alias: "h" | "l") => {
         await d.move();
+        expect(d.frame()).not.toContain(arrow);
         const before = d.frame();
-        const bg = d.cell(label)?.bg;
-        const arrow = descendants(d.renderer.root).find(
-          node => node instanceof TextRenderable && node.plainText === (label === "prev" ? "←" : "→"),
-        ) as TextRenderable;
-        expect(arrow.fg).toEqual(RGBA.fromHex(d.theme.foregroundMuted));
-        await d.move(label);
-        expect(d.cell(label)?.fg).toEqual(RGBA.fromHex(d.theme.foregroundMuted));
-        expect(d.cell(label)?.bg).toEqual(bg);
-        await d.click(label);
         await d.key(key);
         await d.key(alias);
         expect(d.frame()).toBe(before);
       };
-      await boundary("prev", "ARROW_LEFT", "h");
+      expect(d.frame()).toContain("→ next job");
+      await boundary("←", "ARROW_LEFT", "h");
       await d.click("→ next");
+      expect(d.frame()).toContain("← previous job · → next job");
       expect(d.frame()).toContain("No log output.");
       await d.key("h");
       expect(d.frame()).toContain("fetching log...");
@@ -221,8 +216,9 @@ for (const provider of ["github-actions", "jenkins"] as const) {
       await d.key("ARROW_RIGHT");
       expect(d.frame()).toContain("Failed to load log");
       expect(d.frame()).toContain("fake failure");
-      await boundary("next", "ARROW_RIGHT", "l");
-      await d.click("← prev");
+      await boundary("→", "ARROW_RIGHT", "l");
+      expect(d.frame()).toContain("← previous job");
+      await d.click("← previous");
       await d.key("ARROW_LEFT");
       expect(d.frame()).toContain("normal");
       await d.click("→ next");
@@ -285,7 +281,7 @@ test("native wheel and keyboard use the same scroll position, including jumps an
     await d.key("j");
     await d.click("→ next");
     expect(sb.scrollTop).toBe(0);
-    await d.click("← prev");
+    await d.click("← previous");
     expect(sb.scrollTop).toBe(0);
     expect(d.frame()).toContain("row-001");
     expect(d.fetchLog.mock.calls.map(([job]) => job.id)).toEqual([1, 2]);
@@ -564,7 +560,7 @@ test("opened from an annotation, the log starts with its message searched and th
     await d.flush();
     expect(d.frame()).toContain("/ error-line");
     expect(d.frame()).toContain("1/1");
-    expect(d.frame()).toContain("n/N next/prev");
+    expect(d.frame()).toContain("n/N next/previous");
   } finally {
     d.renderer.destroy();
   }
@@ -595,9 +591,9 @@ test("with wrap off, a hit past the right edge moves the lines sideways so it sh
   }
 });
 
-test("Jenkins names the stage and its time in the title; the whole build starts with its summary", async () => {
+test("Jenkins names the stage and its time in the title, the footer where the arrows go; the full log starts with its summary", async () => {
   const entries = [
-    { id: "build", name: "whole build", detail: "5m 09s" },
+    { id: "build", name: "full log", detail: "5m 09s", navLabel: "full log" },
     { id: "stage-3", name: "Unit tests", detail: "3m 30s" },
   ];
   const stageLog = ["[Pipeline] { (Unit tests)", "+ ./gradlew test", "[Pipeline] }"].join("\n");
@@ -606,7 +602,7 @@ test("Jenkins names the stage and its time in the title; the whole build starts 
       ? {
           log: ["Started by an SCM change", stageLog.replace("+ ./gradlew test", "refundsTwice() FAILED")].join("\n"),
           summary: [
-            { text: "STAGE       DURATION", kind: "muted" as const },
+            { text: "STAGE         DURATION", kind: "muted" as const },
             { text: "Checkout          4s", kind: "normal" as const, mark: "pass" as const },
             { text: "Unit tests    3m 30s", kind: "normal" as const, mark: "fail" as const },
           ],
@@ -623,6 +619,7 @@ test("Jenkins names the stage and its time in the title; the whole build starts 
           jobs={entries}
           run={{ name: "main", runNumber: 41 }}
           fetchLog={fetchLog}
+          entryNoun="stage"
           onClose={() => {}}
         />
       </ThemeContext.Provider>
@@ -653,19 +650,28 @@ test("Jenkins names the stage and its time in the title; the whole build starts 
     expect(frame).toContain("▸ Unit tests");
     expect(frame).not.toContain("[Pipeline] {");
     expect(fg("[Pipeline] }")).toEqual(RGBA.fromHex(colors.foregroundMuted));
+    // The last stage: left goes to the full log, nothing to the right.
+    expect(frame).toContain("← full log");
+    expect(frame).not.toContain("→");
 
     await key("ARROW_LEFT");
     await setup.flush();
     frame = setup.captureCharFrame();
-    expect(frame).toContain("Jenkins · main #41 · whole build · 5m 09s");
+    expect(frame).toContain("Jenkins · main #41 · full log · 5m 09s");
+    expect(frame).toContain("→ first stage");
+    expect(frame).not.toContain("←");
     const rows = frame.split("\n");
     const summaryY = rows.findIndex(row => row.includes("STAGE"));
-    expect(summaryY).toBeLessThan(rows.findIndex(row => row.includes("Started by an SCM change")));
-    // The summary has no line numbers; the log keeps its own.
-    expect(rows[summaryY]).toMatch(/^\s*│?\s*STAGE/);
-    expect(rows.find(row => row.includes("Started by an SCM change"))).toMatch(/\s1 {2}Started by/);
-    expect(fg("✓ Checkout")).toEqual(RGBA.fromHex(colors.success));
-    expect(fg("✗ Unit tests")).toEqual(RGBA.fromHex(colors.error));
+    const logY = rows.findIndex(row => row.includes("Started by an SCM change"));
+    const checkoutY = rows.findIndex(row => row.includes("Checkout"));
+    expect(summaryY).toBeLessThan(logY);
+    // The marks sit in the line number column, right-aligned; names start where the log text does.
+    expect(rows[logY]).toMatch(/\s1 {2}Started by/);
+    expect(rows[checkoutY].indexOf("✓")).toBe(rows[logY].indexOf("1  Started"));
+    expect(rows[checkoutY].indexOf("Checkout")).toBe(rows[logY].indexOf("Started"));
+    expect(rows[summaryY].indexOf("STAGE")).toBe(rows[logY].indexOf("Started"));
+    expect(fg("✓")).toEqual(RGBA.fromHex(colors.success));
+    expect(fg("✗")).toEqual(RGBA.fromHex(colors.error));
     expect(fg("Unit tests    3m 30s")).toEqual(RGBA.fromHex(colors.foreground));
 
     // Issues only: the failure, not the summary.

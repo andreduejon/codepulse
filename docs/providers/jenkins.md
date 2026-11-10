@@ -71,15 +71,19 @@ in the log viewer.
 Enter on a stage opens only its part of the console log (from
 `[Pipeline] { (Stage)` to the end of that block). The title names the stage and
 its time (`Jenkins · main #41 · Unit tests · 3m 30s`). `←` / `→` move to the
-previous and next stage, and `←` from the first stage shows the **whole build**:
-a summary first (each stage with its mark and time, then the test counts), then
-the whole console. A build without stages has one **Console** row that opens the
-whole build. A stage the log does not mark shows the whole log too. Stage logs
-are cut from the same console log, so they need no extra requests and work for
-cached builds.
+previous and next stage, and `←` from the first stage shows the **full log**: a
+summary first (each stage with its mark and time, then the test counts), then the
+whole console. The marks sit in the line number column, so the stage names start
+where the log text does. The footer says where the arrows go (`← previous stage`,
+`← full log`, `→ first stage`) and leaves out the one that goes nowhere. A build
+without stages has one **Console** row that opens the full log. A stage the log
+does not mark shows the whole log too. Stage logs are cut from the same console
+log, so they need no extra requests and work for cached builds.
 
 In the log, `[Pipeline] { (Unit tests)` shows as the heading `▸ Unit tests`, and
-the rest of the Pipeline markup (`[Pipeline] }`, `[Pipeline] // stage`) is muted.
+the rest of the Pipeline markup (`[Pipeline] }`, `[Pipeline] // stage`) is muted,
+also a parallel branch's opening (`[Pipeline] { (Branch: Unit tests)`), so only
+its stage is a heading.
 
 Fetch size controls both the graph commit window and recent builds inspected per
 job. It is independent from cache retention.

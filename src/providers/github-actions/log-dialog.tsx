@@ -58,6 +58,8 @@ export interface JobLogEntry {
   name: string;
   /** After the name in the title (a Jenkins stage's time). */
   detail?: string;
+  /** How the footer names it as an arrow's target (`← full log`); otherwise `previous stage`, `next stage`. */
+  navLabel?: string;
 }
 
 interface LoadedLog {
@@ -73,6 +75,8 @@ interface JobLogDialogProps {
   jobs: JobLogEntry[];
   run: { name: string; runNumber: number; url?: string };
   fetchLog: (job: JobLogEntry) => Promise<string | JobLogContent>;
+  /** What ←/→ move between, for the footer (`previous stage`): `job` by default. */
+  entryNoun?: string;
   onClose: () => void;
   /** The search row starts or stops owning Esc (see `useLogSearch`). */
   onSearchActive?: (active: boolean) => void;
@@ -94,8 +98,11 @@ function stripTimestamp(line: string): string {
     .replace(/^\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z\]\s?/, "");
 }
 
-/** A Jenkins Pipeline block's opening, `[Pipeline] { (Unit tests)`: a heading with the block's name. */
-const PIPELINE_BLOCK = /^\[Pipeline\]\s+\{\s+\((.+)\)\s*$/i;
+/**
+ * A Jenkins Pipeline block's opening, `[Pipeline] { (Unit tests)`: a heading with the block's name. A parallel branch
+ * (`Branch: Unit tests`) opens its stage right after, so only the stage is a heading.
+ */
+const PIPELINE_BLOCK = /^\[Pipeline\]\s+\{\s+\((?!Branch: )(.+)\)\s*$/i;
 /** `failed`, `error:`, `FAILED` at the end of a line; not `0 failed`. */
 const FAILURE_WORD = /(?<!\b0 )\b(error|exception|failed|failure)\b(?:[: ]|$)/i;
 /** An error or exception class with its message: `AssertionFailedError: expected…`, `TimeoutException: …`. */
@@ -162,7 +169,6 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
   let scrollboxRef: ScrollBoxRenderable | undefined;
 
   const currentJob = () => orderedJobs()[jobIndex()] ?? props.job;
-  const hasMultipleJobs = () => orderedJobs().length > 1;
   const currentLoadedLog = (): LoadedLog =>
     logs().get(String(currentJob().id)) ?? { raw: null, summary: [], loading: true, error: null };
 
@@ -295,6 +301,17 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
     if (next < 0 || next >= orderedJobs().length) return;
     setJobIndex(next);
   };
+  const noun = () => props.entryNoun ?? "job";
+  /** Where ← goes (`previous stage`, `full log`); null at the first, so the footer leaves the arrow out. */
+  const previousLabel = () => {
+    const previous = orderedJobs()[jobIndex() - 1];
+    return previous ? (previous.navLabel ?? `previous ${noun()}`) : null;
+  };
+  /** Where → goes: from a named first entry (the full log) to the `first stage`, else the `next stage`. */
+  const nextLabel = () => {
+    if (jobIndex() >= orderedJobs().length - 1) return null;
+    return jobIndex() === 0 && currentJob().navLabel ? `first ${noun()}` : `next ${noun()}`;
+  };
   const cycleViewMode = () =>
     setViewMode(prev => VIEW_MODE_CYCLE[(VIEW_MODE_CYCLE.indexOf(prev) + 1) % VIEW_MODE_CYCLE.length]);
   const toggleWrap = () => setWrapEnabled(prev => !prev);
@@ -418,11 +435,19 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
     }
     return (
       <box ref={ref} flexDirection="row" width="100%">
-        <LineNumber text={lineNo()} current={isCurrentHit()} />
-        <Show when={line.mark}>
+        {/* A summary row's mark takes its line number's place, right-aligned, so the text starts with the log's. */}
+        <Show
+          when={!isCurrentHit() && line.mark}
+          fallback={
+            <LineNumber
+              text={line.mark ? statusIcon(line.mark).padStart(maxLineNoWidth()) : lineNo()}
+              current={isCurrentHit()}
+            />
+          }
+        >
           {mark => (
             <text flexShrink={0} wrapMode="none" fg={statusColor(th, mark())}>
-              {`${statusIcon(mark())} `}
+              {`${statusIcon(mark()).padStart(maxLineNoWidth())}  `}
             </text>
           )}
         </Show>
@@ -467,22 +492,27 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
 
         <LogSearchRow search={search} placeholder="Search log..." />
         <DialogFooter>
-          <Show when={hasMultipleJobs()}>
-            <KeyHint key="←" desc=" prev" disabled={jobIndex() === 0} onClick={() => navigateJob(-1)} />
-            <KeyHintSeparator />
-            <KeyHint
-              key="→"
-              desc=" next"
-              disabled={jobIndex() === orderedJobs().length - 1}
-              onClick={() => navigateJob(1)}
-            />
-            <KeyHintSeparator />
+          <Show when={previousLabel()}>
+            {label => (
+              <>
+                <KeyHint key="←" desc={` ${label()}`} onClick={() => navigateJob(-1)} />
+                <KeyHintSeparator />
+              </>
+            )}
+          </Show>
+          <Show when={nextLabel()}>
+            {label => (
+              <>
+                <KeyHint key="→" desc={` ${label()}`} onClick={() => navigateJob(1)} />
+                <KeyHintSeparator />
+              </>
+            )}
           </Show>
           <Show
             when={search.term()}
             fallback={<KeyHint key="/" desc=" search" onClick={() => search.setEditing(true)} />}
           >
-            <KeyHint key="n/N" desc=" next/prev" onClick={() => search.step(1)} />
+            <KeyHint key="n/N" desc=" next/previous" onClick={() => search.step(1)} />
           </Show>
           <KeyHintSeparator />
           <KeyHint key="c" desc=" view" onClick={cycleViewMode} />

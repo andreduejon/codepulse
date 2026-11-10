@@ -196,6 +196,8 @@ export function AppContent(props: Readonly<AppContentProps>) {
     fetchLog: (job: JobLogEntry) => Promise<string | JobLogContent>;
     /** Searched when the log opens (an annotation's message). */
     search?: string;
+    /** What ←/→ move between, for the footer: `job` by default. */
+    noun?: string;
   } | null>(null);
   const [openShiftResourceTarget, setOpenShiftResourceTarget] = createSignal<OpenShiftResource | null>(null);
 
@@ -309,6 +311,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
       job: entries[entry] ?? entries[0],
       run,
       jobs: entries,
+      noun: "stage",
       fetchLog: async current => {
         const full = await jenkinsCI.fetchRunLog(run);
         if (!isWholeBuildEntry(current)) return sliceStageLog(full, current.name) ?? full;
@@ -330,6 +333,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
       // `o` opens the build's test report.
       run: { name: run.name, runNumber: run.runNumber, url: `${run.url.replace(/\/+$/, "")}/testReport/` },
       jobs: entries,
+      noun: "test",
       fetchLog: async current => {
         const test = failed[entries.findIndex(candidate => candidate.id === current.id)];
         return test ? testFailureText(test) : "";
@@ -977,6 +981,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                       jobs={target().jobs}
                       run={target().run}
                       fetchLog={target().fetchLog}
+                      entryNoun={target().noun}
                       initialSearch={target().search}
                       onClose={closeToDetail}
                       onSearchActive={setLogSearchScope}

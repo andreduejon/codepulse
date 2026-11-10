@@ -4,7 +4,7 @@ import { categorize } from "../shared/status";
 import type { JenkinsJob, JenkinsStage, JenkinsTestReport } from "./types";
 
 /** The log viewer's first entry for a build, before its stages: the summary, then the whole console. */
-export const JENKINS_WHOLE_BUILD = "whole build";
+export const JENKINS_FULL_LOG = "full log";
 const WHOLE_BUILD_ID = "build";
 
 export interface JenkinsLogEntry {
@@ -12,6 +12,8 @@ export interface JenkinsLogEntry {
   name: string;
   /** Its time, after the name in the dialog title. */
   detail?: string;
+  /** How the footer names it as the arrow's target (`← full log`). */
+  navLabel?: string;
 }
 
 export const isWholeBuildEntry = (entry: { id: string | number }) => entry.id === WHOLE_BUILD_ID;
@@ -40,8 +42,9 @@ export function jenkinsLogEntries(pipeline: JenkinsJob): JenkinsLogEntry[] {
   return [
     {
       id: WHOLE_BUILD_ID,
-      name: JENKINS_WHOLE_BUILD,
+      name: JENKINS_FULL_LOG,
       detail: formatDuration(pipeline.startedAt, pipeline.completedAt) || undefined,
+      navLabel: JENKINS_FULL_LOG,
     },
     ...pipeline.steps.map(stage => ({
       id: `stage:${stage.id}`,
@@ -66,8 +69,8 @@ export function jenkinsBuildSummary(pipeline: JenkinsJob): JobLogSummaryLine[] {
   const line = (name: string, time: string) => `${name.padEnd(nameWidth)}  ${time.padStart(timeWidth)}`;
   const lines: JobLogSummaryLine[] = [];
   if (rows.length > 0) {
-    // The marks take the first two columns of the rows below.
-    lines.push({ text: `  ${line("STAGE", "DURATION")}`, kind: "muted" });
+    // The marks go in the line number column, so the names start where the log text does.
+    lines.push({ text: line("STAGE", "DURATION"), kind: "muted" });
     for (const row of rows)
       lines.push({ text: row.time ? line(row.name, row.time) : row.name, kind: "normal", mark: row.mark });
   }

@@ -22,6 +22,7 @@ test("Jenkins Pipeline markup: a block's opening is a heading with its name, the
       "[Pipeline] }",
       "[Pipeline] // stage",
       "[Pipeline] error",
+      "[Pipeline] { (Branch: Lint)",
     ].join("\n"),
   );
   expect(lines.map(line => [line.kind, line.text])).toEqual([
@@ -31,5 +32,7 @@ test("Jenkins Pipeline markup: a block's opening is a heading with its name, the
     ["muted", "[Pipeline] }"],
     ["muted", "[Pipeline] // stage"],
     ["muted", "[Pipeline] error"],
+    // A parallel branch opens its stage right after: only the stage is a heading.
+    ["muted", "[Pipeline] { (Branch: Lint)"],
   ]);
 });

@@ -29,9 +29,9 @@ All notable changes to this project will be documented in this file.
   end of the run that expand to their jobs and logs.
 
 - Jenkins stages are selectable: Enter opens only that stage's part of the console log, titled with the stage and
-  its time, and `←` / `→` move between stages. `←` from the first stage shows the whole build: a summary (each
-  stage with its mark and time, the test counts), then the whole console. It is cut from the cached console log,
-  so no extra requests.
+  its time, and `←` / `→` move between stages. `←` from the first stage shows the full log: a summary (each stage
+  with its mark and time, the test counts), then the whole console. It is cut from the cached console log, so no
+  extra requests.
 - Jenkins: a finished build with a JUnit report shows a **Tests** row with its failed tests. Enter opens a
   failure's error and stack trace in the log viewer, titled with the test, `←` / `→` move between failed tests.
 - Jenkins: a legend below the tree explains the marks (`✓ passed  ● running  ✗ failed  – skipped  ○ aborted`).
@@ -47,7 +47,10 @@ All notable changes to this project will be documented in this file.
   row) with their marks only. Times and test counts moved to the log viewer, so the build's age no longer shifts
   when its stages load. A build without stages has one **Console** row.
 - Jenkins logs show `[Pipeline] { (Unit tests)` as the heading `▸ Unit tests` and mute the rest of the Pipeline
-  markup.
+  markup, a parallel branch's opening too.
+- Log and diff footers say where the arrows go, without abbreviations: `← previous stage · → next stage`,
+  `← full log`, `→ first stage`, `previous test`, `previous job`, `previous file`. The arrow that goes nowhere is
+  left out of a log footer. Search reads `n/N next/previous`.
 - Jenkins multibranch: over the 25 branch-job limit, the branches in the graph are read first, then the most
   recently built. The notice gives the counts (`Jenkins reads 25 of 61 branch jobs`).
 - Graph ref badges take only their own width, so short names (`main`, `dev`) are no longer folded into `+N` for

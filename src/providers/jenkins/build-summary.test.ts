@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { JENKINS_WHOLE_BUILD, jenkinsBuildSummary, jenkinsLogEntries } from "./build-summary";
+import { jenkinsBuildSummary, jenkinsLogEntries } from "./build-summary";
 import type { JenkinsJob, JenkinsStage } from "./types";
 
 const START = Date.parse("2026-11-10T10:00:00.000Z");
@@ -32,7 +32,7 @@ const pipeline: JenkinsJob = {
 test("the whole build's summary: each stage with its mark and time, then the test counts", () => {
   const lines = jenkinsBuildSummary(pipeline);
   expect(lines.map(line => line.text.trimEnd())).toEqual([
-    expect.stringMatching(/^ {2}STAGE\s+DURATION$/),
+    expect.stringMatching(/^STAGE\s+DURATION$/),
     expect.stringMatching(/^Checkout\s+4s$/),
     expect.stringMatching(/^Unit tests\s+3m 30s$/),
     // Skipped: no time.
@@ -41,10 +41,10 @@ test("the whole build's summary: each stage with its mark and time, then the tes
   ]);
   expect(lines.map(line => line.mark)).toEqual([undefined, "pass", "fail", "skipped", "fail"]);
   expect(lines.map(line => line.kind)).toEqual(["muted", "normal", "normal", "normal", "normal"]);
-  // Times end under DURATION; names line up under STAGE (the mark takes the first two columns).
+  // Times end under DURATION; names line up under STAGE (the marks go in the line number column).
   const [header, checkout, unit] = lines.map(line => line.text);
-  expect(checkout.length + 2).toBe(header.length);
-  expect(unit.length + 2).toBe(header.length);
+  expect(checkout.length).toBe(header.length);
+  expect(unit.length).toBe(header.length);
 });
 
 test("a running build's summary marks the running stage; a build without stages or report has none", () => {
@@ -63,7 +63,7 @@ test("a running build's summary marks the running stage; a build without stages 
 
 test("the log entries: the whole build first, then each stage, each with its time", () => {
   expect(jenkinsLogEntries(pipeline)).toEqual([
-    { id: "build", name: JENKINS_WHOLE_BUILD, detail: "5m 09s" },
+    { id: "build", name: "full log", detail: "5m 09s", navLabel: "full log" },
     { id: "stage:1", name: "Checkout", detail: "4s" },
     { id: "stage:2", name: "Unit tests", detail: "3m 30s" },
     { id: "stage:3", name: "Publish image to the internal registry", detail: undefined },

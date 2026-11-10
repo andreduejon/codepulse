@@ -394,7 +394,7 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
             when={search.term()}
             fallback={<KeyHint key="/" desc=" search" onClick={() => search.setEditing(true)} />}
           >
-            <KeyHint key="n/N" desc=" next/prev" onClick={() => search.step(1)} />
+            <KeyHint key="n/N" desc=" next/previous" onClick={() => search.step(1)} />
           </Show>
           {viewModes().length > 1 ? (
             <>

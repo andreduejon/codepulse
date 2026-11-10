@@ -385,7 +385,7 @@ test("/ searches the resource log and object like the CI log", async () => {
     const number = d.captureSpans().lines[hitY]?.spans.find(span => span.text.trim() === "1");
     expect(number?.bg).toEqual(RGBA.fromHex(d.theme.accent));
     await d.key("RETURN");
-    expect(d.frame()).toContain("n/N next/prev");
+    expect(d.frame()).toContain("n/N next/previous");
     await d.key("ESCAPE");
     expect(d.frame()).not.toContain("1/1");
     expect(d.open()).toBe(true);
