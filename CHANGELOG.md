@@ -66,6 +66,9 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- OpenShift: when the cluster lists but does not allow watching, the **Watch denied** notice no longer disappears
+  as soon as the next build list arrives. The data can go stale while the watches are stopped, so the notice stays
+  until a Reload.
 - Log views `issues only` and `errors only` keep test failures: a line ending in `FAILED`, an error or exception
   with its message (`AssertionFailedError: expected …`), Bun's `(fail)`, Jest's `✕`, Vitest's `×` and `FAIL src/…`.
   `0 failed` is not an error.

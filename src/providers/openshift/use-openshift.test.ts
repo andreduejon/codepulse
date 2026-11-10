@@ -613,6 +613,32 @@ describe("OpenShift auth recovery across inventory and live list", () => {
     });
   });
 
+  test("a build inventory that succeeds after the watches were denied keeps the watch warning", async () => {
+    const mounted = mountOpenShift();
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => (release = resolve));
+    mounted.inventory.mockImplementationOnce(async () => {
+      await gate;
+      return fine;
+    });
+    await Bun.sleep(30);
+    expect(mounted.watches.length).toBeGreaterThan(0);
+    // The cluster lists but does not watch, while the first inventory is still out.
+    for (const watch of mounted.watches) watch.resolve("forbidden");
+    await Bun.sleep(10);
+    expect(mounted.state.providerStatusFor("openshift")).toEqual({
+      kind: "warning",
+      message: BANNER.openshift.watchDenied,
+    });
+    release();
+    await Bun.sleep(30);
+    // The watches stay stopped, so the data can go stale: the warning must stay until a reload.
+    expect(mounted.state.providerStatusFor("openshift")).toEqual({
+      kind: "warning",
+      message: BANNER.openshift.watchDenied,
+    });
+  });
+
   test("a Reload that the queue merges into a waiting first fetch still restarts the stopped live list", async () => {
     const mounted = mountOpenShift();
     let release!: () => void;

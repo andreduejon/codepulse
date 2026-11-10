@@ -596,7 +596,9 @@ export function useOpenShift(opts: {
             return;
           }
           if (results.length > 0 && results.every(result => result === "forbidden")) {
-            actions.setProviderStatus("openshift", providerWarning(BANNER.openshift.watchDenied));
+            // The live list's own warning: a build inventory that lands later must not clear it, a good list after
+            // Reload does.
+            setLiveStatus("warning", BANNER.openshift.watchDenied);
             return;
           }
           delayMs = 1000;
