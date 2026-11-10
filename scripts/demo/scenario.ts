@@ -562,7 +562,17 @@ export function openShiftWorld(state: DemoState, now: number): OpenShiftWorld {
     ...extra,
   });
   const ready = { phase: "Running", conditions: [{ type: "Ready", status: "True" }] };
-  const notReady = { phase: "Running", conditions: [{ type: "Ready", status: "False" }] };
+  const notReady = {
+    phase: "Running",
+    conditions: [
+      {
+        type: "Ready",
+        status: "False",
+        reason: "ContainersNotReady",
+        message: "containers with unready status: [api]",
+      },
+    ],
+  };
 
   // shop-dev: rolling out `metrics`, one pod cannot pull its image. A failed and a finished Build, an image tag.
   const devRs = deployment("shop-dev", "shop-api", s.metrics, 2, {
@@ -578,6 +588,7 @@ export function openShiftWorld(state: DemoState, now: number): OpenShiftWorld {
     containerStatuses: [container(s.metrics, { ready: true, restartCount: 0, state: { running: {} } })],
   });
   pod("shop-dev", "shop-api-7d9f8-pull9", devRs, "shop-api", {
+    ...notReady,
     phase: "Pending",
     containerStatuses: [
       container(s.metrics, {
@@ -620,8 +631,18 @@ export function openShiftWorld(state: DemoState, now: number): OpenShiftWorld {
     availableReplicas: 1,
     unavailableReplicas: 2,
     conditions: [
-      { type: "Available", status: "False", reason: "MinimumReplicasUnavailable" },
-      { type: "Progressing", status: "False", reason: "ProgressDeadlineExceeded" },
+      {
+        type: "Available",
+        status: "False",
+        reason: "MinimumReplicasUnavailable",
+        message: "Deployment does not have minimum availability.",
+      },
+      {
+        type: "Progressing",
+        status: "False",
+        reason: "ProgressDeadlineExceeded",
+        message: 'ReplicaSet "shop-api-7d9f8" has timed out progressing.',
+      },
     ],
   });
   pod("shop-test", "shop-api-7d9f8-x2k4q", testRs, "shop-api", {
@@ -640,7 +661,11 @@ export function openShiftWorld(state: DemoState, now: number): OpenShiftWorld {
       container(s.payments, { restartCount: 0, state: { terminated: { reason: "OOMKilled", exitCode: 137 } } }),
     ],
   });
-  pod("shop-test", "shop-api-7d9f8-ev1ct", testRs, "shop-api", { phase: "Failed", reason: "Evicted" });
+  pod("shop-test", "shop-api-7d9f8-ev1ct", testRs, "shop-api", {
+    phase: "Failed",
+    reason: "Evicted",
+    message: "The node was low on resource: memory. Threshold quantity: 100Mi, available: 61Mi.",
+  });
   pod("shop-test", "shop-api-7d9f8-ok3zz", testRs, "shop-api", {
     ...ready,
     containerStatuses: [container(s.payments, { ready: true, restartCount: 0, state: { running: {} } })],
