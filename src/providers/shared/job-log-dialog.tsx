@@ -43,6 +43,19 @@ export interface JobLogEntry {
   navLabel?: string;
 }
 
+/** What the app opens the dialog with: a provider builds it (`githubJobLogTarget`, `jenkinsBuildLogTarget`, …). */
+export interface JobLogTarget {
+  provider: "github-actions" | "jenkins";
+  job: JobLogEntry;
+  run: { name: string; runNumber: number; url?: string };
+  jobs: JobLogEntry[];
+  fetchLog: (job: JobLogEntry) => Promise<string | JobLogContent>;
+  /** Searched when the log opens (an annotation's message). */
+  search?: string;
+  /** What ←/→ move between, for the footer: `job` by default. */
+  noun?: string;
+}
+
 interface LoadedLog {
   raw: string | null;
   summary: JobLogSummaryLine[];

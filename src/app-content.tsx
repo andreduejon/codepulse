@@ -43,12 +43,10 @@ import { type CommandBarMode, type DialogId, useKeyboardNavigation } from "./hoo
 import { usePathFilter } from "./hooks/use-path-filter";
 import { providerAccent } from "./providers/colors";
 import type { ProviderDetailSources } from "./providers/detail-entries";
-import { githubJobLogEntries, githubJobSummary } from "./providers/github-actions/job-summary";
+import { githubJobLogTarget } from "./providers/github-actions/log-target";
 import type { GitHubJob, GitHubWorkflowRun } from "./providers/github-actions/types";
 import { useGitHubCI } from "./providers/github-actions/use-github-ci";
-import { isWholeBuildEntry, jenkinsBuildSummary, jenkinsLogEntries } from "./providers/jenkins/build-summary";
-import { sliceStageLog } from "./providers/jenkins/stage-log";
-import { testFailureText, testLabel } from "./providers/jenkins/tests";
+import { jenkinsBuildLogTarget, jenkinsTestFailureTarget } from "./providers/jenkins/log-target";
 import type { JenkinsFailedTest, JenkinsJob, JenkinsRun } from "./providers/jenkins/types";
 import { useJenkinsCI } from "./providers/jenkins/use-jenkins-ci";
 import OpenShiftResourceDialog from "./providers/openshift/resource-dialog";
@@ -56,7 +54,7 @@ import type { OpenShiftResource } from "./providers/openshift/types";
 import { useOpenShift } from "./providers/openshift/use-openshift";
 import { providerDisplayName } from "./providers/provider";
 import { type CacheRepositorySummary, evictRepositoryCache } from "./providers/shared/cache-management";
-import JobLogDialog, { type JobLogContent, type JobLogEntry } from "./providers/shared/job-log-dialog";
+import JobLogDialog, { type JobLogTarget } from "./providers/shared/job-log-dialog";
 import { repositoryIdentity, setProviderCacheSuspended } from "./providers/shared/sha-sqlite-cache";
 import { type SnykProviderConfig, useSnyk } from "./providers/snyk/use-snyk";
 import { nextGroupRepoPath } from "./utils/group-repos";
@@ -190,17 +188,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
   /** Target for the diff+blame dialog (set when user activates a file). */
   const [diffTarget, setDiffTarget] = createSignal<DiffTarget | null>(null);
   /** Target for the job log dialog (set when user opens a job log). */
-  const [jobLogTarget, setJobLogTarget] = createSignal<{
-    provider: "github-actions" | "jenkins";
-    job: JobLogEntry;
-    run: { name: string; runNumber: number; url?: string };
-    jobs: JobLogEntry[];
-    fetchLog: (job: JobLogEntry) => Promise<string | JobLogContent>;
-    /** Searched when the log opens (an annotation's message). */
-    search?: string;
-    /** What ←/→ move between, for the footer: `job` by default. */
-    noun?: string;
-  } | null>(null);
+  const [jobLogTarget, setJobLogTarget] = createSignal<JobLogTarget | null>(null);
   const [openShiftResourceTarget, setOpenShiftResourceTarget] = createSignal<OpenShiftResource | null>(null);
 
   /** Command bar mode — drives placeholder text and key routing. */
@@ -290,68 +278,10 @@ export function AppContent(props: Readonly<AppContentProps>) {
     setDialog("diff-blame");
   };
 
-  /**
-   * A GitHub job in the log viewer, ←/→ to the run's other jobs. The title gives the job's time and the log starts
-   * with its steps (marks and times); they are read again with the log, so `r` updates a running job.
-   */
-  const handleOpenJobLog = (job: GitHubJob, run: GitHubWorkflowRun, jobs: GitHubJob[] = [job], search?: string) => {
-    const known = jobs.length > 0 ? jobs : [job];
-    const entries = githubJobLogEntries(known);
-    setJobLogTarget({
-      provider: "github-actions",
-      job: entries.find(entry => entry.id === job.id) ?? entries[0],
-      run,
-      search,
-      jobs: entries,
-      fetchLog: async current => {
-        const log = await gitHubCI.fetchJobLogForJob(Number(current.id), run);
-        const latest = await gitHubCI.fetchJobsForRun(run).catch(() => null);
-        const shown = [...(latest?.jobs ?? []), ...known].find(candidate => candidate.id === current.id);
-        return { log, summary: shown ? githubJobSummary(shown) : [] };
-      },
-    });
-    setDialog("job-log");
-  };
-
-  /**
-   * A Jenkins build in the log viewer at an entry: the whole build (its summary, then the console) and each stage's
-   * part of the console, ←/→ between them. The summary is read again with the log, so `r` updates a running build.
-   */
-  const handleOpenJenkinsBuild = (run: JenkinsRun, pipeline: JenkinsJob, entry: number) => {
-    const entries = jenkinsLogEntries(pipeline);
-    setJobLogTarget({
-      provider: "jenkins",
-      job: entries[entry] ?? entries[0],
-      run,
-      jobs: entries,
-      noun: "stage",
-      fetchLog: async current => {
-        const full = await jenkinsCI.fetchRunLog(run);
-        if (!isWholeBuildEntry(current)) return sliceStageLog(full, current.name) ?? full;
-        const latest = await jenkinsCI.fetchJobsForRun(run).catch(() => null);
-        return { log: full, summary: jenkinsBuildSummary(latest?.jobs[0] ?? pipeline) };
-      },
-    });
-    setDialog("job-log");
-  };
-
-  /** A failed Jenkins test in the log viewer: its error and stack, ←/→ to the build's other failed tests. */
-  const handleOpenJenkinsTestFailure = (run: JenkinsRun, failed: JenkinsFailedTest[], index: number) => {
-    const entries = failed.map((test, at) => ({ id: `test-${at}`, name: testLabel(test) }));
-    const entry = entries[index] ?? entries[0];
-    if (!entry) return;
-    setJobLogTarget({
-      provider: "jenkins",
-      job: entry,
-      // `o` opens the build's test report.
-      run: { name: run.name, runNumber: run.runNumber, url: `${run.url.replace(/\/+$/, "")}/testReport/` },
-      jobs: entries,
-      noun: "test",
-      fetchLog: async current => {
-        const test = failed[entries.findIndex(candidate => candidate.id === current.id)];
-        return test ? testFailureText(test) : "";
-      },
-    });
+  /** The log viewer with what a provider built for it (a job, a build at an entry, a failed test). */
+  const openJobLog = (target: JobLogTarget | null) => {
+    if (!target) return;
+    setJobLogTarget(target);
     setDialog("job-log");
   };
 
@@ -687,7 +617,8 @@ export function AppContent(props: Readonly<AppContentProps>) {
         get status() {
           return state.providerStatus();
         },
-        onOpenJobLog: handleOpenJobLog,
+        onOpenJobLog: (job: GitHubJob, run: GitHubWorkflowRun, jobs?: GitHubJob[], search?: string) =>
+          openJobLog(githubJobLogTarget(gitHubCI, job, run, jobs ?? [job], search)),
       },
       jenkins: {
         getCommitData: jenkinsCI.getCommitData,
@@ -696,8 +627,10 @@ export function AppContent(props: Readonly<AppContentProps>) {
         get status() {
           return state.providerStatus();
         },
-        onOpenBuild: handleOpenJenkinsBuild,
-        onOpenTestFailure: handleOpenJenkinsTestFailure,
+        onOpenBuild: (run: JenkinsRun, pipeline: JenkinsJob, entry: number) =>
+          openJobLog(jenkinsBuildLogTarget(jenkinsCI, run, pipeline, entry)),
+        onOpenTestFailure: (run: JenkinsRun, failed: JenkinsFailedTest[], index: number) =>
+          openJobLog(jenkinsTestFailureTarget(run, failed, index)),
       },
       openshift: {
         getCommitData: openShift.getCommitData,
