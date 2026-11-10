@@ -2,32 +2,13 @@ import { MouseButton, type ScrollBoxRenderable } from "@opentui/core";
 import { batch, createSignal, For, onCleanup, Show } from "solid-js";
 import type { TabNotice } from "../app-tab-notice";
 import { isUncommittedHash } from "../constants";
-import type { DetailTab, ProviderStatus } from "../context/state";
+import type { DetailTab } from "../context/state";
 import { useAppState } from "../context/state";
 import type { DiffTarget } from "../git/types";
 import { useT } from "../hooks/use-t";
-import { GITHUB_LEGEND } from "../providers/github-actions/detail-tab";
-import type {
-  GitHubCommitData,
-  GitHubJob,
-  GitHubJobFetchResult,
-  GitHubWorkflowRun,
-} from "../providers/github-actions/types";
-import { JENKINS_LEGEND } from "../providers/jenkins/detail-tab";
-import type {
-  JenkinsCommitData,
-  JenkinsFailedTest,
-  JenkinsJob,
-  JenkinsJobFetchResult,
-  JenkinsRun,
-} from "../providers/jenkins/types";
-import { OPENSHIFT_LEGEND } from "../providers/openshift/detail-tab";
-import type { OpenShiftCommitData, OpenShiftResource } from "../providers/openshift/types";
+import { detailEntryFor, type ProviderDetailSources } from "../providers/detail-entries";
 import { providerDetailTab } from "../providers/provider";
 import { DetailLegend } from "../providers/shared/detail-legend";
-import { DEPENDENCY_LEGEND } from "../providers/snyk/deps-tab";
-import type { SnykScanResult } from "../providers/snyk/types";
-import { VULNERABILITY_LEGEND } from "../providers/snyk/vulnerabilities-model";
 import { scheduleScrollIntoView, scrollElementIntoView } from "../utils/scroll";
 import { getAvailableTabs } from "../utils/tab-utils";
 import CommitDetailView from "./detail";
@@ -49,38 +30,8 @@ export interface DetailPanelProps {
   searchFocused: boolean;
   onJumpToCommit: (hash: string, from: "child" | "parent") => void;
   onOpenDiff: (target: DiffTarget) => void;
-  /** CI data getter from the GitHub Actions provider (optional). */
-  githubGetCommitData?: (sha: string) => GitHubCommitData | null;
-  /** CI job fetcher from the GitHub Actions provider (optional). */
-  githubFetchJobsForRun?: (run: GitHubWorkflowRun) => Promise<GitHubJobFetchResult>;
-  /** CI data fetcher for one selected SHA (optional). */
-  githubFetchCommitData?: (sha: string) => Promise<void>;
-  /**
-   * Current provider status string.  Non-null when the provider is unavailable
-   * (e.g. missing token / remote) — forwarded to CommitDetailView for setup
-   * guidance in the Actions tab.
-   */
-  githubProviderStatus?: ProviderStatus;
-  /** Open the job log dialog for a specific job. */
-  onOpenJobLog?: (job: GitHubJob, run: GitHubWorkflowRun, jobs?: GitHubJob[], search?: string) => void;
-  jenkinsGetCommitData?: (sha: string) => JenkinsCommitData | null;
-  jenkinsFetchJobsForRun?: (run: JenkinsRun) => Promise<JenkinsJobFetchResult>;
-  jenkinsFetchCommitData?: (sha: string) => Promise<void>;
-  /** A Jenkins build in the log viewer at an entry: 0 is the whole build, stage `i` is `i + 1`. */
-  onOpenJenkinsBuild?: (run: JenkinsRun, pipeline: JenkinsJob, entry: number) => void;
-  onOpenJenkinsTestFailure?: (run: JenkinsRun, failed: JenkinsFailedTest[], index: number) => void;
-  jenkinsProviderStatus?: ProviderStatus;
-  openshiftGetCommitData?: (sha: string) => OpenShiftCommitData | null;
-  openshiftFetchCommitData?: (sha: string, force?: boolean) => Promise<void>;
-  openshiftIsLoading?: (sha: string) => boolean;
-  openshiftLiveAge?: () => string;
-  openshiftConsoleUrl?: () => string;
-  onOpenOpenShiftResource?: (resource: OpenShiftResource) => void;
-  openshiftProviderStatus?: ProviderStatus;
-  snykGetCommitData?: (sha: string) => SnykScanResult | null;
-  snykIsScanning?: (sha: string) => boolean;
-  snykScanCommit?: (sha: string, force?: boolean) => Promise<SnykScanResult | null>;
-  snykProviderStatus?: ProviderStatus;
+  /** What each provider hands its detail tabs (see `providers/detail-entries.ts`). */
+  providers?: Partial<ProviderDetailSources>;
   /** Notice pinned under the tab content ("works, but incomplete"); see `tabNoticeFor`. */
   tabNotice?: TabNotice | null;
   onDismissTabNotice?: () => void;
@@ -110,6 +61,12 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
     }
   });
 
+  /** The active provider's source, if it has one (not in the Git view). */
+  const providerSource = () => {
+    const view = state.activeProviderView();
+    return view === "git" ? undefined : props.providers?.[view];
+  };
+
   const tabs = (): { id: DetailTab; label: string; disabled: boolean }[] => {
     const commit = state.selectedCommit();
     const commitHash = commit?.hash ?? "";
@@ -127,34 +84,8 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
         commitDetail: cd,
         stashByParent: stashMap,
         activeProviderView: providerView,
-        getCommitData: (() => {
-          switch (providerView) {
-            case "github-actions":
-              return props.githubGetCommitData;
-            case "jenkins":
-              return props.jenkinsGetCommitData;
-            case "openshift":
-              return props.openshiftGetCommitData;
-            case "snyk":
-              return props.snykGetCommitData;
-            case "git":
-              return undefined;
-          }
-        })(),
-        providerLoading: (() => {
-          switch (providerView) {
-            case "github-actions":
-              return props.githubProviderStatus?.kind === "loading";
-            case "jenkins":
-              return props.jenkinsProviderStatus?.kind === "loading";
-            case "openshift":
-              return props.openshiftProviderStatus?.kind === "loading";
-            case "snyk":
-              return props.snykProviderStatus?.kind === "loading";
-            case "git":
-              return false;
-          }
-        })(),
+        getCommitData: providerSource()?.getCommitData,
+        providerLoading: providerSource()?.status?.kind === "loading",
       }),
     );
     if (isUncommitted) {
@@ -216,26 +147,9 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
    */
   const legend = () => {
     const hash = state.selectedCommit()?.hash ?? "";
-    const tab = state.detailActiveTab();
     if (isUncommittedHash(hash)) return null;
-    if (tab === "github-actions")
-      return (props.githubGetCommitData?.(hash)?.runs.length ?? 0) > 0 ? { items: GITHUB_LEGEND } : null;
-    if (tab === "jenkins")
-      return (props.jenkinsGetCommitData?.(hash)?.runs.length ?? 0) > 0 ? { items: JENKINS_LEGEND } : null;
-    if (tab === "openshift") {
-      const lists = (props.openshiftGetCommitData?.(hash)?.namespaces ?? []).flatMap(ns => [
-        ns.deployments,
-        ns.deploymentConfigs,
-        ns.pods,
-        ns.builds,
-        ns.imageStreamTags,
-      ]);
-      return lists.some(list => list.length > 0) ? { items: OPENSHIFT_LEGEND } : null;
-    }
-    if (tab !== "snyk" && tab !== "snyk-deps") return null;
-    const findings = props.snykGetCommitData?.(hash)?.findings ?? [];
-    if (findings.length === 0) return null;
-    return tab === "snyk" ? { items: VULNERABILITY_LEGEND } : { items: DEPENDENCY_LEGEND };
+    const items = detailEntryFor(state.detailActiveTab())?.legend(props.providers ?? {}, hash);
+    return items ? { items } : null;
   };
 
   return (
@@ -348,28 +262,7 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
             onJumpToCommit={props.onJumpToCommit}
             onOpenDiff={props.onOpenDiff}
             navRef={props.navRef}
-            githubGetCommitData={props.githubGetCommitData}
-            githubFetchJobsForRun={props.githubFetchJobsForRun}
-            githubFetchCommitData={props.githubFetchCommitData}
-            githubProviderStatus={props.githubProviderStatus}
-            onOpenJobLog={props.onOpenJobLog}
-            jenkinsGetCommitData={props.jenkinsGetCommitData}
-            jenkinsFetchJobsForRun={props.jenkinsFetchJobsForRun}
-            jenkinsFetchCommitData={props.jenkinsFetchCommitData}
-            onOpenJenkinsBuild={props.onOpenJenkinsBuild}
-            onOpenJenkinsTestFailure={props.onOpenJenkinsTestFailure}
-            jenkinsProviderStatus={props.jenkinsProviderStatus}
-            openshiftGetCommitData={props.openshiftGetCommitData}
-            openshiftFetchCommitData={props.openshiftFetchCommitData}
-            openshiftIsLoading={props.openshiftIsLoading}
-            openshiftLiveAge={props.openshiftLiveAge}
-            openshiftConsoleUrl={props.openshiftConsoleUrl}
-            onOpenOpenShiftResource={props.onOpenOpenShiftResource}
-            openshiftProviderStatus={props.openshiftProviderStatus}
-            snykGetCommitData={props.snykGetCommitData}
-            snykIsScanning={props.snykIsScanning}
-            snykScanCommit={props.snykScanCommit}
-            snykProviderStatus={props.snykProviderStatus}
+            providers={props.providers}
           />
         </Show>
       </scrollbox>

@@ -1,22 +1,7 @@
 import type { KeyEvent, Renderable } from "@opentui/core";
 import { DETAIL_PANEL_WIDTH_FRACTION } from "../constants";
-import type { ProviderStatus } from "../context/state";
 import type { DiffTarget } from "../git/types";
-import type {
-  GitHubCommitData,
-  GitHubJob,
-  GitHubJobFetchResult,
-  GitHubWorkflowRun,
-} from "../providers/github-actions/types";
-import type {
-  JenkinsCommitData,
-  JenkinsFailedTest,
-  JenkinsJob,
-  JenkinsJobFetchResult,
-  JenkinsRun,
-} from "../providers/jenkins/types";
-import type { OpenShiftCommitData, OpenShiftResource } from "../providers/openshift/types";
-import type { SnykScanResult } from "../providers/snyk/types";
+import type { ProviderDetailSources } from "../providers/detail-entries";
 import type { FileTreeRow } from "../utils/file-tree";
 
 /** Mutable ref populated by a detail view for app.tsx to call */
@@ -54,39 +39,8 @@ export interface DetailViewProps {
   onOpenDiff?: (target: DiffTarget) => void;
   /** Mutable ref object populated by the detail view with navigation callbacks */
   navRef?: DetailNavRef;
-  /** Get CI data for a commit SHA (from the GitHub Actions provider). Optional. */
-  githubGetCommitData?: (sha: string) => GitHubCommitData | null;
-  /** Fetch full job details (with steps) for a CI run on demand. Optional. */
-  githubFetchJobsForRun?: (run: GitHubWorkflowRun) => Promise<GitHubJobFetchResult>;
-  /** Fetch CI data for one selected SHA on demand. Optional. */
-  githubFetchCommitData?: (sha: string, force?: boolean) => Promise<void>;
-  /** Open the job log dialog for a specific job. */
-  onOpenJobLog?: (job: GitHubJob, run: GitHubWorkflowRun, jobs?: GitHubJob[], search?: string) => void;
-  /**
-   * Current provider status string (from state.providerStatus).
-   * Non-null when the provider is unavailable (e.g. missing token / remote).
-   * Passed to ActionsDetailTab to show setup guidance.
-   */
-  githubProviderStatus?: ProviderStatus;
-  jenkinsGetCommitData?: (sha: string) => JenkinsCommitData | null;
-  jenkinsFetchJobsForRun?: (run: JenkinsRun) => Promise<JenkinsJobFetchResult>;
-  jenkinsFetchCommitData?: (sha: string, force?: boolean) => Promise<void>;
-  /** A Jenkins build in the log viewer at an entry: 0 is the whole build, stage `i` is `i + 1`. */
-  onOpenJenkinsBuild?: (run: JenkinsRun, pipeline: JenkinsJob, entry: number) => void;
-  onOpenJenkinsTestFailure?: (run: JenkinsRun, failed: JenkinsFailedTest[], index: number) => void;
-  jenkinsProviderStatus?: ProviderStatus;
-  openshiftGetCommitData?: (sha: string) => OpenShiftCommitData | null;
-  openshiftFetchCommitData?: (sha: string, force?: boolean) => Promise<void>;
-  openshiftIsLoading?: (sha: string) => boolean;
-  openshiftLiveAge?: () => string;
-  /** Web console URL from the settings, for `o`. */
-  openshiftConsoleUrl?: () => string;
-  onOpenOpenShiftResource?: (resource: OpenShiftResource) => void;
-  openshiftProviderStatus?: ProviderStatus;
-  snykGetCommitData?: (sha: string) => SnykScanResult | null;
-  snykIsScanning?: (sha: string) => boolean;
-  snykScanCommit?: (sha: string, force?: boolean) => Promise<SnykScanResult | null>;
-  snykProviderStatus?: ProviderStatus;
+  /** What each provider hands its detail tabs (see `providers/detail-entries.ts`). */
+  providers?: Partial<ProviderDetailSources>;
 }
 
 /** Layout constants shared between committed and uncommitted detail views */

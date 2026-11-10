@@ -211,33 +211,43 @@ async function renderProvider(provider: Provider, compact = true, deferredJobs =
         onOpenDiff: () => {},
         onJumpToCommit: () => {},
         scrollboxRef: el => (scrollbox = el),
-        githubGetCommitData: () => (hasData() ? { sha, runs: githubRuns } : null),
-        githubFetchJobsForRun: githubFetchJobs,
-        githubFetchCommitData: reload,
-        get githubProviderStatus() {
-          return status();
-        },
-        onOpenJobLog: openGithub,
-        jenkinsGetCommitData: () => (hasData() ? { sha, runs: jenkinsRuns, resolved: true } : null),
-        jenkinsFetchJobsForRun: jenkinsFetchJobs,
-        jenkinsFetchCommitData: reload,
-        get jenkinsProviderStatus() {
-          return status();
-        },
-        onOpenJenkinsBuild: openJenkins,
-        openshiftGetCommitData: () => (hasData() ? openshiftSnapshot() : null),
-        openshiftFetchCommitData: reload,
-        openshiftIsLoading: loading,
-        openshiftLiveAge: () => "live fixture",
-        get openshiftProviderStatus() {
-          return status();
-        },
-        onOpenOpenShiftResource: openResource,
-        snykGetCommitData: () => (hasData() ? snykScan() : null),
-        snykScanCommit: scanCommit,
-        snykIsScanning: loading,
-        get snykProviderStatus() {
-          return status();
+        providers: {
+          "github-actions": {
+            getCommitData: () => (hasData() ? { sha, runs: githubRuns } : null),
+            fetchJobsForRun: githubFetchJobs,
+            fetchCommitData: reload,
+            get status() {
+              return status();
+            },
+            onOpenJobLog: openGithub,
+          },
+          jenkins: {
+            getCommitData: () => (hasData() ? { sha, runs: jenkinsRuns, resolved: true } : null),
+            fetchJobsForRun: jenkinsFetchJobs,
+            fetchCommitData: reload,
+            get status() {
+              return status();
+            },
+            onOpenBuild: openJenkins,
+          },
+          openshift: {
+            getCommitData: () => (hasData() ? openshiftSnapshot() : null),
+            fetchCommitData: reload,
+            isLoading: loading,
+            liveAge: () => "live fixture",
+            get status() {
+              return status();
+            },
+            onOpenResource: openResource,
+          },
+          snyk: {
+            getCommitData: () => (hasData() ? snykScan() : null),
+            scanCommit: scanCommit,
+            isScanning: loading,
+            get status() {
+              return status();
+            },
+          },
         },
       };
       return (

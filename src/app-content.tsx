@@ -42,6 +42,7 @@ import { useDetailLoader } from "./hooks/use-detail-loader";
 import { type CommandBarMode, type DialogId, useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
 import { usePathFilter } from "./hooks/use-path-filter";
 import { providerAccent } from "./providers/colors";
+import type { ProviderDetailSources } from "./providers/detail-entries";
 import { githubJobLogEntries, githubJobSummary } from "./providers/github-actions/job-summary";
 import type { GitHubJob, GitHubWorkflowRun } from "./providers/github-actions/types";
 import { useGitHubCI } from "./providers/github-actions/use-github-ci";
@@ -678,36 +679,46 @@ export function AppContent(props: Readonly<AppContentProps>) {
 
   /** Provider data and dialogs for the detail panel and the compact detail dialog. */
   const providerDetailProps = {
-    githubGetCommitData: gitHubCI.getCommitData,
-    githubFetchJobsForRun: gitHubCI.fetchJobsForRun,
-    githubFetchCommitData: gitHubCI.fetchCommitDataForSHA,
-    get githubProviderStatus() {
-      return state.providerStatus();
-    },
-    onOpenJobLog: handleOpenJobLog,
-    jenkinsGetCommitData: jenkinsCI.getCommitData,
-    jenkinsFetchJobsForRun: jenkinsCI.fetchJobsForRun,
-    jenkinsFetchCommitData: jenkinsCI.fetchCommitDataForSHA,
-    onOpenJenkinsBuild: handleOpenJenkinsBuild,
-    onOpenJenkinsTestFailure: handleOpenJenkinsTestFailure,
-    get jenkinsProviderStatus() {
-      return state.providerStatus();
-    },
-    openshiftGetCommitData: openShift.getCommitData,
-    openshiftFetchCommitData: openShift.fetchCommitDataForSHA,
-    openshiftIsLoading: openShift.isLoading,
-    openshiftLiveAge: openShift.liveAge,
-    openshiftConsoleUrl: () => openShiftConfig().consoleUrl,
-    onOpenOpenShiftResource: handleOpenOpenShiftResource,
-    get openshiftProviderStatus() {
-      return state.providerStatus();
-    },
-    snykGetCommitData: snyk.getCommitData,
-    snykIsScanning: snyk.isScanning,
-    snykScanCommit: snyk.scanCommit,
-    get snykProviderStatus() {
-      return state.providerStatusFor("snyk");
-    },
+    providers: {
+      "github-actions": {
+        getCommitData: gitHubCI.getCommitData,
+        fetchJobsForRun: gitHubCI.fetchJobsForRun,
+        fetchCommitData: gitHubCI.fetchCommitDataForSHA,
+        get status() {
+          return state.providerStatus();
+        },
+        onOpenJobLog: handleOpenJobLog,
+      },
+      jenkins: {
+        getCommitData: jenkinsCI.getCommitData,
+        fetchJobsForRun: jenkinsCI.fetchJobsForRun,
+        fetchCommitData: jenkinsCI.fetchCommitDataForSHA,
+        get status() {
+          return state.providerStatus();
+        },
+        onOpenBuild: handleOpenJenkinsBuild,
+        onOpenTestFailure: handleOpenJenkinsTestFailure,
+      },
+      openshift: {
+        getCommitData: openShift.getCommitData,
+        fetchCommitData: openShift.fetchCommitDataForSHA,
+        isLoading: openShift.isLoading,
+        liveAge: openShift.liveAge,
+        consoleUrl: () => openShiftConfig().consoleUrl,
+        get status() {
+          return state.providerStatus();
+        },
+        onOpenResource: handleOpenOpenShiftResource,
+      },
+      snyk: {
+        getCommitData: snyk.getCommitData,
+        isScanning: snyk.isScanning,
+        scanCommit: snyk.scanCommit,
+        get status() {
+          return state.providerStatusFor("snyk");
+        },
+      },
+    } satisfies ProviderDetailSources,
     get tabNotice() {
       return tabNotice();
     },
