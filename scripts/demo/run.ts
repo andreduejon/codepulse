@@ -125,7 +125,8 @@ const providers = {
     namespaces: [...NAMESPACES],
     commitShaAnnotation: COMMIT_KEY,
   },
-  snyk: { enabled: true, tokenEnvVar: "SNYK_TOKEN" },
+  // Branch tips scan by themselves when the Snyk view opens; other commits wait for Scan commit.
+  snyk: { enabled: true, tokenEnvVar: "SNYK_TOKEN", autoScanBranches: ["main", "dev"] },
 };
 writeFileSync(
   join(home, ".config", "codepulse", "config.json"),
