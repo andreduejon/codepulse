@@ -1,9 +1,23 @@
 import { For, Show } from "solid-js";
 import type { Theme } from "../../context/theme";
 import { useT } from "../../hooks/use-t";
+import { statusColor, statusIcon } from "./status";
 
 /** One legend entry: its markers, each in its own colour, then a muted label. */
 export type LegendItem = [markers: [string, (theme: Theme) => string][], label: string];
+
+/** The marks of a CI tree (GitHub runs, Jenkins builds). Each names a cancelled run its own way. */
+export function runLegend(cancelled: "cancelled" | "aborted"): LegendItem[] {
+  return (
+    [
+      ["pass", "passed"],
+      ["running", "running"],
+      ["fail", "failed"],
+      ["skipped", "skipped"],
+      ["cancelled", cancelled],
+    ] as const
+  ).map(([category, label]) => [[[statusIcon(category), theme => statusColor(theme, category)]], label]);
+}
 
 /** Tab legend; DetailPanel renders it sticky below the scroll area. Items wrap whole in narrow panels. */
 export function DetailLegend(props: { items: readonly LegendItem[] }) {

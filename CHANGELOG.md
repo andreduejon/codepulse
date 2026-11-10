@@ -35,6 +35,8 @@ All notable changes to this project will be documented in this file.
 - Jenkins: a finished build with a JUnit report shows a **Tests** row with its failed tests. Enter opens a
   failure's error and stack trace in the log viewer, titled with the test, `←` / `→` move between failed tests.
 - Jenkins: a legend below the tree explains the marks (`✓ passed  ● running  ✗ failed  – skipped  ○ aborted`).
+- GitHub Actions: the job log's title gives the job's time, and the log starts with its steps (marks and times).
+  A legend below the tree explains the marks (`✓ passed  ● running  ✗ failed  – skipped  ○ cancelled`).
 
 - Snyk Vulnerabilities compare with an earlier scan: folded NEW and FIXED trees at the end, their muted headings
   naming the scan (`vs parent 4c5d6e7`, or `vs 1a2b3c4, 3 commits back` when the parent has no scan and the
@@ -46,6 +48,9 @@ All notable changes to this project will be documented in this file.
 - Jenkins rows are as quiet as the OpenShift tree: a build lists its stages straight under it (no **Pipeline**
   row) with their marks only. Times and test counts moved to the log viewer, so the build's age no longer shifts
   when its stages load. A build without stages has one **Console** row.
+- GitHub Actions rows are as quiet as the Jenkins and OpenShift trees: names, marks and the run's age, without
+  step counts, times or the annotation count. A job that passed is one row; a failed or running job lists its
+  steps.
 - Jenkins logs show `[Pipeline] { (Unit tests)` as the heading `▸ Unit tests` and mute the rest of the Pipeline
   markup, a parallel branch's opening too.
 - Log and diff footers say where the arrows go, without abbreviations: `← previous stage · → next stage`,
@@ -61,8 +66,11 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- Log views `issues only` and `errors only` keep test failures: a line ending in `FAILED` and an error or
-  exception with its message (`AssertionFailedError: expected …`). `0 failed` is not an error.
+- Log views `issues only` and `errors only` keep test failures: a line ending in `FAILED`, an error or exception
+  with its message (`AssertionFailedError: expected …`), Bun's `(fail)`, Jest's `✕`, Vitest's `×` and `FAIL src/…`.
+  `0 failed` is not an error.
+- A GitHub run no longer shows its first job's time as the run's time (`CI #812` read `2m 17s` while `test` took
+  `5m 17s`), and a skipped step no longer shows `0s`. Times are in the job log now, each job's and step's own.
 - OpenShift `(cached)` marks only a Build the cluster no longer lists. A Build it still lists is fresh, also once
   it is saved.
 - A Deployment scaled to 0 no longer marks its commit as running in a namespace. Details list it with

@@ -598,6 +598,21 @@ test("OpenShift tree lines close on the last group and the last stream", async (
   }
 });
 
+test("GitHub Actions explains its marks in a legend below the tree, only while it lists runs", async () => {
+  const d = await renderProvider("github-actions", false);
+  try {
+    const rows = d.frame().split("\n");
+    const legend = rows.findIndex(line => line.includes("skipped"));
+    expect(rows[legend]).toMatch(/✓ passed {2}● running {2}✗ failed {2}– skipped {2}○ cancelled/);
+    expect(d.cell(rows[legend].indexOf("○ cancelled"), legend)?.fg).toEqual(RGBA.fromHex(d.theme.foregroundMuted));
+    d.setHasData(false);
+    await d.flush();
+    expect(d.frame()).not.toContain("skipped");
+  } finally {
+    await d.dispose();
+  }
+});
+
 test("Jenkins explains its marks in a legend below the tree, only while it lists builds", async () => {
   const d = await renderProvider("jenkins", false);
   try {

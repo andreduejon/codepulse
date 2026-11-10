@@ -6,6 +6,7 @@ import type { DetailTab, ProviderStatus } from "../context/state";
 import { useAppState } from "../context/state";
 import type { DiffTarget } from "../git/types";
 import { useT } from "../hooks/use-t";
+import { GITHUB_LEGEND } from "../providers/github-actions/detail-tab";
 import type {
   GitHubCommitData,
   GitHubJob,
@@ -210,13 +211,15 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
   };
 
   /**
-   * Snyk Vulnerabilities: fix and exploit markers; Dependencies: severity triangles; OpenShift and Jenkins: status
-   * marks. Only when there is something to explain (findings, resources, builds).
+   * Snyk Vulnerabilities: fix and exploit markers; Dependencies: severity triangles; OpenShift, Jenkins and GitHub:
+   * status marks. Only when there is something to explain (findings, resources, builds).
    */
   const legend = () => {
     const hash = state.selectedCommit()?.hash ?? "";
     const tab = state.detailActiveTab();
     if (isUncommittedHash(hash)) return null;
+    if (tab === "github-actions")
+      return (props.githubGetCommitData?.(hash)?.runs.length ?? 0) > 0 ? { items: GITHUB_LEGEND } : null;
     if (tab === "jenkins")
       return (props.jenkinsGetCommitData?.(hash)?.runs.length ?? 0) > 0 ? { items: JENKINS_LEGEND } : null;
     if (tab === "openshift") {

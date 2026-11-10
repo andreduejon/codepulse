@@ -107,6 +107,8 @@ const PIPELINE_BLOCK = /^\[Pipeline\]\s+\{\s+\((?!Branch: )(.+)\)\s*$/i;
 const FAILURE_WORD = /(?<!\b0 )\b(error|exception|failed|failure)\b(?:[: ]|$)/i;
 /** An error or exception class with its message: `AssertionFailedError: expected…`, `TimeoutException: …`. */
 const THROWABLE = /\b\w*(?:Error|Exception):/;
+/** A test runner's failed test or file: Bun's `(fail)`, Jest's `✕`, Vitest's `×`, and `FAIL src/…`. */
+const TEST_FAILURE = /^\s*(?:\(fail\)\s|[✕×]\s|FAIL\s)/;
 
 function classifyLine(line: string): { kind: LogLineKind; text: string } | null {
   if (line.startsWith("##[endgroup]") || line.trim() === "") return null;
@@ -118,7 +120,13 @@ function classifyLine(line: string): { kind: LogLineKind; text: string } | null 
   if (line.startsWith("##[error]")) return { kind: "error", text: line.slice("##[error]".length) };
   if (line.startsWith("##[warning]")) return { kind: "warning", text: line.slice("##[warning]".length) };
   if (/\bwarning\b[: ]/i.test(line)) return { kind: "warning", text: line };
-  if (/^error:/i.test(line) || /^\s+at\s/.test(line) || FAILURE_WORD.test(line) || THROWABLE.test(line))
+  if (
+    /^error:/i.test(line) ||
+    /^\s+at\s/.test(line) ||
+    FAILURE_WORD.test(line) ||
+    THROWABLE.test(line) ||
+    TEST_FAILURE.test(line)
+  )
     return { kind: "error", text: line };
   return { kind: "normal", text: line };
 }

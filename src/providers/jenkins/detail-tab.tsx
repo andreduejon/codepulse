@@ -1,10 +1,9 @@
 import { createMemo, createSignal } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
 import { BUSY } from "../../utils/busy-text";
-import type { LegendItem } from "../shared/detail-legend";
+import { type LegendItem, runLegend } from "../shared/detail-legend";
 import type { RowShortcut } from "../shared/open-row";
 import { ProviderRunTree, type ProviderTreeJob, type ProviderTreeRun } from "../shared/provider-run-tree";
-import { statusColor, statusIcon } from "../shared/status";
 import { jenkinsTestsJob } from "./tests";
 import type {
   JenkinsCommitData,
@@ -40,15 +39,7 @@ export interface JenkinsDetailTabProps {
 }
 
 /** The row marks, explained below the tree. A cancelled build is `aborted` in Jenkins. */
-export const JENKINS_LEGEND: LegendItem[] = (
-  [
-    ["pass", "passed"],
-    ["running", "running"],
-    ["fail", "failed"],
-    ["skipped", "skipped"],
-    ["cancelled", "aborted"],
-  ] as const
-).map(([category, label]) => [[[statusIcon(category), theme => statusColor(theme, category)]], label]);
+export const JENKINS_LEGEND: LegendItem[] = runLegend("aborted");
 
 /**
  * The rows under a build, as quiet as the OpenShift tree: each stage with its mark (times are in the log's summary),
@@ -127,8 +118,6 @@ export function JenkinsDetailTab(props: Readonly<JenkinsDetailTabProps>) {
       jobsLoadingText={BUSY.fetchingStages}
       reloadBusyText={BUSY.fetchingBuilds}
       noJobsText=""
-      showRunDuration={false}
-      showJobDuration={false}
       onReloadCommit={async () => {
         if (reloadBusy() || props.unavailableReason) return;
         setReloadBusy(true);

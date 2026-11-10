@@ -42,6 +42,7 @@ import { useDetailLoader } from "./hooks/use-detail-loader";
 import { type CommandBarMode, type DialogId, useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
 import { usePathFilter } from "./hooks/use-path-filter";
 import { providerAccent } from "./providers/colors";
+import { githubJobLogEntries, githubJobSummary } from "./providers/github-actions/job-summary";
 import JobLogDialog, { type JobLogContent, type JobLogEntry } from "./providers/github-actions/log-dialog";
 import type { GitHubJob, GitHubWorkflowRun } from "./providers/github-actions/types";
 import { useGitHubCI } from "./providers/github-actions/use-github-ci";
@@ -288,14 +289,25 @@ export function AppContent(props: Readonly<AppContentProps>) {
     setDialog("diff-blame");
   };
 
+  /**
+   * A GitHub job in the log viewer, ←/→ to the run's other jobs. The title gives the job's time and the log starts
+   * with its steps (marks and times); they are read again with the log, so `r` updates a running job.
+   */
   const handleOpenJobLog = (job: GitHubJob, run: GitHubWorkflowRun, jobs: GitHubJob[] = [job], search?: string) => {
+    const known = jobs.length > 0 ? jobs : [job];
+    const entries = githubJobLogEntries(known);
     setJobLogTarget({
       provider: "github-actions",
-      job,
+      job: entries.find(entry => entry.id === job.id) ?? entries[0],
       run,
       search,
-      jobs: jobs.length > 0 ? jobs : [job],
-      fetchLog: currentJob => gitHubCI.fetchJobLogForJob(Number(currentJob.id), run),
+      jobs: entries,
+      fetchLog: async current => {
+        const log = await gitHubCI.fetchJobLogForJob(Number(current.id), run);
+        const latest = await gitHubCI.fetchJobsForRun(run).catch(() => null);
+        const shown = [...(latest?.jobs ?? []), ...known].find(candidate => candidate.id === current.id);
+        return { log, summary: shown ? githubJobSummary(shown) : [] };
+      },
     });
     setDialog("job-log");
   };

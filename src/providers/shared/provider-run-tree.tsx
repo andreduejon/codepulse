@@ -4,7 +4,7 @@ import type { DetailNavRef } from "../../components/detail-types";
 import type { DebugEventSource } from "../../debug/events";
 import { useT } from "../../hooks/use-t";
 import { BUSY } from "../../utils/busy-text";
-import { formatDuration, formatRelativeDate } from "../../utils/date";
+import { formatRelativeDate } from "../../utils/date";
 import { ProviderActionRow, ProviderSummaryRow, ScrollingLabel, useDetailRowMouse } from "./detail-rows";
 import { type RowShortcut, useOpenRowShortcut } from "./open-row";
 import { fetchProviderJobs } from "./provider-job-fetch";
@@ -148,10 +148,6 @@ export interface ProviderRunTreeProps<TRaw, TJobRaw> {
   jobsLoadingText?: string;
   noJobsText?: string;
   autoExpandSingleRun?: boolean;
-  childCountLabel?: (count: number) => string;
-  showRunDuration?: boolean;
-  /** When false, job rows leave out their time (Jenkins stages: it is in the log's summary). */
-  showJobDuration?: boolean;
   /** When false, notes leave out their `✗`/`!` (Jenkins: every listed test failed). */
   noteMarks?: boolean;
   onReloadCommit?: () => void | Promise<void>;
@@ -224,45 +220,25 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
       return next;
     });
 
-  const formatStepDuration = (step: ProviderTreeStep) => formatDuration(step.startedAt, step.completedAt);
-  const formatRunDuration = (run: ProviderTreeRun<TRaw>) => {
-    if (props.showRunDuration === false) return "";
-    const primaryJob = jobsOf(run.id).current[0];
-    const exactDuration = primaryJob ? formatDuration(primaryJob.startedAt, primaryJob.completedAt) : "";
-    if (exactDuration) return exactDuration;
-    const duration = formatDuration(run.startedAt ?? null, run.updatedAt);
-    return duration ? `~${duration}` : "";
-  };
   const statusMark = (status: string, conclusion: string | null) => statusIcon(categorize(status, conclusion));
-  const formatJobDuration = (job: ProviderTreeJob<TJobRaw>) =>
-    props.showJobDuration === false ? "" : formatDuration(job.startedAt, job.completedAt);
+  /** When the last of these jobs ended: an earlier attempt's age. */
+  const lastFinished = (jobs: readonly ProviderTreeJob<TJobRaw>[]) =>
+    jobs.reduce<string | null>(
+      (latest, job) => (job.completedAt && (!latest || job.completedAt > latest) ? job.completedAt : latest),
+      null,
+    );
 
+  /**
+   * The ages column of runs and earlier attempts. Rows show no times or counts, like the OpenShift tree: a job's and
+   * a step's time are in the log viewer.
+   */
   const rightInfoWidth = createMemo(() => {
     let max = 0;
     for (const run of props.runs) {
       max = Math.max(max, formatRelativeDate(run.updatedAt).length);
-    }
-    for (const jobs of fetchedJobs().values()) {
-      for (const job of jobs) {
-        const label =
-          job.steps.length > 0
-            ? (props.childCountLabel?.(job.steps.length) ??
-              `${job.steps.length} step${job.steps.length === 1 ? "" : "s"}`)
-            : "";
-        max = Math.max(max, label.length);
-      }
-    }
-    return max;
-  });
-
-  const durationWidth = createMemo(() => {
-    let max = 0;
-    for (const run of props.runs) {
-      max = Math.max(max, formatRunDuration(run).length);
-    }
-    for (const jobs of fetchedJobs().values()) {
-      for (const job of jobs) {
-        max = Math.max(max, formatJobDuration(job).length);
+      for (const attempt of jobsOf(run.id).attempts) {
+        const finished = lastFinished(attempt.jobs);
+        if (finished) max = Math.max(max, formatRelativeDate(finished).length);
       }
     }
     return max;
@@ -611,7 +587,6 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
           const cat = () => categorize(run.status, run.conclusion);
           const color = () => statusColor(t(), cat());
           const relTime = () => formatRelativeDate(run.updatedAt);
-          const runDuration = () => formatRunDuration(run);
           const runTreePrefix = () => (runIndexFn() === props.runs.length - 1 ? "└─ " : "├─ ");
           const runIndicatorColor = () => (isCursored() ? t().accent : t().foregroundMuted);
           const runTextColor = () => (isCursored() ? t().accent : t().foreground);
@@ -648,12 +623,6 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                 <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
                   {relTime().padStart(rightInfoWidth())}
                 </text>
-                {/* Keep the duration column even when runs hide theirs (Jenkins), so runs and jobs line up. */}
-                <Show when={durationWidth() > 0}>
-                  <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                    {runDuration() ? ` ${runDuration().padStart(durationWidth())}` : " ".repeat(durationWidth() + 1)}
-                  </text>
-                </Show>
                 <text
                   selectable={!props.mouseEnabled}
                   flexShrink={0}
@@ -703,14 +672,8 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                     const isJobCursored = () => props.detailFocused() && props.detailCursorIndex() === jobFlatIndex();
                     const jobCat = categorize(job.status, job.conclusion);
                     const jobColor = () => statusColor(t(), jobCat);
-                    const duration = formatJobDuration(job);
-                    const stepCountLabel = () =>
-                      job.steps.length > 0
-                        ? (props.childCountLabel?.(job.steps.length) ??
-                          `${job.steps.length} step${job.steps.length === 1 ? "" : "s"}`)
-                        : isLoading()
-                          ? (props.jobsLoadingText ?? BUSY.fetchingJobs)
-                          : "";
+                    /** A passed job is one row; a failed or running one lists its steps (where it went wrong). */
+                    const steps = () => (jobCat === "fail" || jobCat === "running" ? job.steps : []);
                     const jobTextColor = () => (isJobCursored() ? t().accent : t().foreground);
                     const jobTreeLead = () => (runIsLast() ? "   " : "│  ");
                     // Earlier attempts follow the jobs, so the last job is only last without them.
@@ -749,24 +712,6 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                           <text
                             selectable={!props.mouseEnabled}
                             flexShrink={0}
-                            wrapMode="none"
-                            fg={t().foregroundMuted}
-                          >
-                            {stepCountLabel().padStart(rightInfoWidth())}
-                          </text>
-                          <Show when={durationWidth() > 0}>
-                            <text
-                              selectable={!props.mouseEnabled}
-                              flexShrink={0}
-                              wrapMode="none"
-                              fg={t().foregroundMuted}
-                            >
-                              {duration ? ` ${duration.padStart(durationWidth())}` : " ".repeat(durationWidth() + 1)}
-                            </text>
-                          </Show>
-                          <text
-                            selectable={!props.mouseEnabled}
-                            flexShrink={0}
                             width={STATUS_COL_WIDTH}
                             wrapMode="none"
                             fg={jobColor()}
@@ -775,15 +720,14 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                           </text>
                         </box>
 
-                        <Show when={job.steps.length > 0}>
-                          <For each={job.steps}>
+                        <Show when={steps().length > 0}>
+                          <For each={steps()}>
                             {(step, stepIndexFn) => {
                               const stepCat = categorize(step.status, step.conclusion);
                               const stepColor = () => statusColor(t(), stepCat);
-                              const stepDuration = () => formatStepDuration(step);
                               const stepTreePrefix = () => jobTreeLead() + (jobIsLast() ? "   " : "│  ");
                               const stepConnector = () =>
-                                stepIndexFn() === job.steps.length - 1 && notes().length === 0 ? "└─ " : "├─ ";
+                                stepIndexFn() === steps().length - 1 && notes().length === 0 ? "└─ " : "├─ ";
 
                               return (
                                 <box flexDirection="row" width="100%">
@@ -792,11 +736,6 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                                     {stepConnector()}
                                   </text>
                                   <ScrollingLabel text={step.name} active={false} fg={t().foregroundMuted} />
-                                  <Show when={stepDuration()}>
-                                    <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                                      {stepDuration()}
-                                    </text>
-                                  </Show>
                                   <text flexShrink={0} width={STATUS_COL_WIDTH} wrapMode="none" fg={stepColor()}>
                                     {statusMark(step.status, step.conclusion).padStart(STATUS_COL_WIDTH)}
                                   </text>
@@ -814,9 +753,6 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                                   {childLead()}└─{" "}
                                 </text>
                                 <ScrollingLabel text={label()} active={false} fg={t().foregroundMuted} />
-                                <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                                  {String(notes().length)}
-                                </text>
                                 <text flexShrink={0} width={STATUS_COL_WIDTH} wrapMode="none">
                                   {" ".repeat(STATUS_COL_WIDTH)}
                                 </text>
@@ -895,18 +831,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                     const lead = () => (runIsLast() ? "   " : "│  ");
                     const childLead = () => lead() + (isLastAttempt() ? "   " : "│  ");
                     const status = () => attemptStatus(attempt.jobs);
-                    const finished = () =>
-                      attempt.jobs.reduce<string | null>(
-                        (latest, job) =>
-                          job.completedAt && (!latest || job.completedAt > latest) ? job.completedAt : latest,
-                        null,
-                      );
-                    const started = () =>
-                      attempt.jobs.reduce<string | null>(
-                        (first, job) => (job.startedAt && (!first || job.startedAt < first) ? job.startedAt : first),
-                        null,
-                      );
-                    const duration = () => formatDuration(started(), finished());
+                    const finished = () => lastFinished(attempt.jobs);
                     return (
                       <box flexDirection="column" width="100%">
                         <box
@@ -945,18 +870,6 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                           >
                             {(finished() ? formatRelativeDate(finished() ?? "") : "").padStart(rightInfoWidth())}
                           </text>
-                          <Show when={durationWidth() > 0}>
-                            <text
-                              selectable={!props.mouseEnabled}
-                              flexShrink={0}
-                              wrapMode="none"
-                              fg={t().foregroundMuted}
-                            >
-                              {duration()
-                                ? ` ${duration().padStart(durationWidth())}`
-                                : " ".repeat(durationWidth() + 1)}
-                            </text>
-                          </Show>
                           <text
                             selectable={!props.mouseEnabled}
                             flexShrink={0}
@@ -977,7 +890,6 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                                 );
                               const isJobCursored = () =>
                                 props.detailFocused() && props.detailCursorIndex() === jobFlatIndex();
-                              const jobDuration = formatDuration(job.startedAt, job.completedAt);
                               return (
                                 <box
                                   ref={(el: Renderable) => {
@@ -999,18 +911,6 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                                     active={isJobCursored()}
                                     fg={isJobCursored() ? t().accent : t().foreground}
                                   />
-                                  <Show when={durationWidth() > 0}>
-                                    <text
-                                      selectable={!props.mouseEnabled}
-                                      flexShrink={0}
-                                      wrapMode="none"
-                                      fg={t().foregroundMuted}
-                                    >
-                                      {jobDuration
-                                        ? ` ${jobDuration.padStart(durationWidth())}`
-                                        : " ".repeat(durationWidth() + 1)}
-                                    </text>
-                                  </Show>
                                   <text
                                     selectable={!props.mouseEnabled}
                                     flexShrink={0}

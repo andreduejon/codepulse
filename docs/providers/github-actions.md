@@ -51,6 +51,18 @@ cursor on its first failed job. Cancelled and skipped runs show as a grey chip i
 the graph. In the job log, `r` reloads the log (newer output of a running job, or a retry
 after a failure; a finished job's cached log does not change) and `o` opens the run in the browser.
 
+Rows are as quiet as the OpenShift and Jenkins trees: names and marks, and the
+run's age. A job that passed is one row; a failed or running job lists its steps,
+so you see where it went wrong. A legend below the tree explains the marks:
+`✓ passed  ● running  ✗ failed  – skipped  ○ cancelled`. Times are in the job
+log: its title gives the job's time (`GitHub Actions · CI #812 · test · 5m 17s`)
+and the log starts with its steps, each with its mark and time (a skipped step has
+none). `←` / `→` move between the run's jobs (`← previous job · → next job`).
+
+The log views `issues only` and `errors only` keep failed tests: `FAILED` at the
+end of a line, an error or exception with its message, Bun's `(fail)`, Jest's `✕`,
+Vitest's `×`, and `FAIL src/…`.
+
 ### Re-runs
 
 After a re-run, the run row says which attempt its jobs are from (`CI #812  attempt 2`).

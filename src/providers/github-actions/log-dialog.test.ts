@@ -13,6 +13,19 @@ test("a test failure is an error line: a line ending in FAILED, and an error or 
   expect(kinds("BUILD SUCCESSFUL in 1m 35s")).toEqual(["normal"]);
 });
 
+test("test runners' failure lines are errors: Bun's (fail), Jest's and Vitest's ✕ and ×, and FAIL", () => {
+  expect(kinds("(fail) retry > charges once after a timeout [12.1ms]")).toEqual(["error"]);
+  expect(kinds("  ✕ adds 1 + 2 (5 ms)")).toEqual(["error"]);
+  expect(kinds(" × src/sum.test.ts > adds")).toEqual(["error"]);
+  expect(kinds("FAIL src/sum.test.js")).toEqual(["error"]);
+  expect(kinds(" FAIL  src/sum.test.ts > adds")).toEqual(["error"]);
+  // Passing lines stay plain.
+  expect(kinds("(pass) cart > adds an item [0.42ms]")).toEqual(["normal"]);
+  expect(kinds("  ✓ adds 1 + 2 (2 ms)")).toEqual(["normal"]);
+  expect(kinds("PASS src/sum.test.js")).toEqual(["normal"]);
+  expect(kinds("Image size 3 × 4")).toEqual(["normal"]);
+});
+
 test("Jenkins Pipeline markup: a block's opening is a heading with its name, the rest is muted", () => {
   const lines = parseLogLines(
     [

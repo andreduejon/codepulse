@@ -81,6 +81,17 @@ function stepTime(job: FakeJob, index: number): string {
   return new Date(start + Math.round((total * done) / all)).toISOString();
 }
 
+/** GitHub gives a skipped step the same start and end; the others end where the next one starts. */
+const stepEnd = (job: FakeJob, step: FakeJob["steps"][number], index: number) =>
+  !step.conclusion ? null : step.conclusion === "skipped" ? stepTime(job, index) : stepTime(job, index + 1);
+
+/** When GitHub last changed a run: its last job's end, or now while it runs. */
+function runUpdatedAt(run: FakeRun): string {
+  if (run.status !== "completed") return new Date(started).toISOString();
+  const jobs = run.jobs.filter(job => job.attempt === latestAttempt(run));
+  return new Date(Math.max(...jobs.map(job => Date.parse(githubTimes(started, job).completed)))).toISOString();
+}
+
 function gqlJob(job: FakeJob) {
   const times = githubTimes(started, job);
   return {
@@ -96,7 +107,7 @@ function gqlJob(job: FakeJob) {
       status: step.conclusion ? "COMPLETED" : "IN_PROGRESS",
       conclusion: upper(step.conclusion),
       startedAt: stepTime(job, index),
-      completedAt: step.conclusion ? stepTime(job, index + 1) : null,
+      completedAt: stepEnd(job, step, index),
     })),
   };
 }
@@ -117,7 +128,7 @@ function restJob(job: FakeJob) {
       status: step.conclusion ? "completed" : "in_progress",
       conclusion: step.conclusion,
       started_at: stepTime(job, index),
-      completed_at: step.conclusion ? stepTime(job, index + 1) : null,
+      completed_at: stepEnd(job, step, index),
     })),
   };
 }
@@ -141,7 +152,7 @@ function graphql(body: string): Response {
             runNumber: run.runNumber,
             event: "push",
             createdAt: startedAt,
-            updatedAt: startedAt,
+            updatedAt: runUpdatedAt(run),
             url: `https://github.com/${GITHUB_REPO.owner}/${GITHUB_REPO.repo}/actions/runs/${run.id}`,
             workflow: { name: run.name },
             // GraphQL has no attempts: it lists the latest attempt's jobs, so the first expand asks REST once.

@@ -125,12 +125,64 @@ test("Reload commit refreshes the jobs and steps of an expanded run that was sti
     await t.settle();
     expect(t.reload).toHaveBeenCalledTimes(1);
     expect(t.fetchJobs).toHaveBeenCalledTimes(2);
+    // The job passed now: one row, its steps folded away.
+    expect(t.captureCharFrame()).not.toContain("compile");
     const childRows = t
       .captureCharFrame()
       .split("\n")
-      .filter(line => line.includes("build") || line.includes("compile"));
-    expect(childRows).toHaveLength(2);
-    for (const line of childRows) expect(line).toContain("✓");
+      .filter(line => line.includes("build"));
+    expect(childRows).toHaveLength(1);
+    expect(childRows[0]).toContain("✓");
+  } finally {
+    t.renderer.destroy();
+  }
+});
+
+test("rows give names and marks only; a passed job is one row, a failed or running one lists its steps", async () => {
+  const t = await renderTree();
+  const step = (id: string, name: string, conclusion: string, completedAt = "2026-01-01T00:01:30Z") => ({
+    id,
+    name,
+    status: "completed",
+    conclusion,
+    startedAt: date,
+    completedAt,
+  });
+  try {
+    t.setJobs([
+      {
+        ...job("completed", "success", "completed"),
+        id: "j-build",
+        name: "build",
+        completedAt: "2026-01-01T00:02:17Z",
+        steps: [step("s1", "compile", "success")],
+      },
+      {
+        ...job("completed", "failure", "completed"),
+        id: "j-test",
+        name: "test",
+        completedAt: "2026-01-01T00:05:17Z",
+        steps: [step("s2", "Run tests", "failure"), step("s3", "Upload coverage", "skipped", date)],
+        notesLabel: "Annotations",
+        notes: [{ id: "a1", mark: "fail", text: "src/a.test.ts:1  boom" }],
+      },
+    ]);
+    t.setRuns([run("completed", "failure", "2026-01-01T00:05:17Z")]);
+    await t.settle();
+    t.setCursor(1);
+    t.navRef.activateCurrentItem();
+    await t.settle();
+    const frame = t.captureCharFrame();
+    const row = (text: string) => frame.split("\n").find(line => line.includes(text)) ?? "";
+    // No step counts and no times: they are in the log viewer.
+    expect(frame).not.toMatch(/\d+ steps?\b|\b\d+s\b|\b\d+m \d+s\b|~/);
+    expect(row("CI #7")).toMatch(/✗\s*$/);
+    expect(row("build")).toMatch(/├─ build\s+✓\s*$/);
+    expect(frame).not.toContain("compile");
+    expect(row("test")).toMatch(/└─ test\s+✗\s*$/);
+    expect(row("Run tests")).toMatch(/├─ Run tests\s+✗\s*$/);
+    expect(row("Upload coverage")).toMatch(/├─ Upload coverage\s+–\s*$/);
+    expect(row("Annotations")).toMatch(/└─ Annotations\s*$/);
   } finally {
     t.renderer.destroy();
   }
@@ -191,7 +243,7 @@ test("a job's notes follow its steps under their label; Enter opens one and o op
     const at = (text: string) => rows.findIndex(row => row.includes(text));
     expect(at("compile")).toBeLessThan(at("Annotations"));
     expect(rows[at("compile")]).toContain("├─ compile");
-    expect(rows[at("Annotations")]).toMatch(/└─ Annotations\s+2/);
+    expect(rows[at("Annotations")]).toMatch(/└─ Annotations\s*$/);
     expect(rows[at("Expected 200")]).toContain("├─ ✗ src/auth.test.ts:42  Expected 200, received 401");
     expect(rows[at("deprecated")]).toContain("└─ ! src/api.ts:17");
     // Reload, run, job, then the two notes.

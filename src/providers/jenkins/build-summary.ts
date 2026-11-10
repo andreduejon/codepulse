@@ -1,7 +1,7 @@
 import { formatDuration } from "../../utils/date";
 import type { JobLogSummaryLine } from "../github-actions/log-dialog";
-import { categorize } from "../shared/status";
-import type { JenkinsJob, JenkinsStage, JenkinsTestReport } from "./types";
+import { stepsSummary, stepTime } from "../shared/log-summary";
+import type { JenkinsJob, JenkinsTestReport } from "./types";
 
 /** The log viewer's first entry for a build, before its stages: the summary, then the whole console. */
 export const JENKINS_FULL_LOG = "full log";
@@ -17,12 +17,6 @@ export interface JenkinsLogEntry {
 }
 
 export const isWholeBuildEntry = (entry: { id: string | number }) => entry.id === WHOLE_BUILD_ID;
-
-/** A stage's time; a skipped stage never ran, so it has none. */
-function stageTime(stage: JenkinsStage): string {
-  if (categorize(stage.status, stage.conclusion) === "skipped") return "";
-  return formatDuration(stage.startedAt, stage.completedAt);
-}
 
 const count = (value: number) => value.toLocaleString("en-US");
 
@@ -49,7 +43,7 @@ export function jenkinsLogEntries(pipeline: JenkinsJob): JenkinsLogEntry[] {
     ...pipeline.steps.map(stage => ({
       id: `stage:${stage.id}`,
       name: stage.name,
-      detail: stageTime(stage) || undefined,
+      detail: stepTime(stage) || undefined,
     })),
   ];
 }
@@ -59,21 +53,7 @@ export function jenkinsLogEntries(pipeline: JenkinsJob): JenkinsLogEntry[] {
  * test counts. Empty for a build without stages or test report.
  */
 export function jenkinsBuildSummary(pipeline: JenkinsJob): JobLogSummaryLine[] {
-  const rows = pipeline.steps.map(stage => ({
-    name: stage.name,
-    time: stageTime(stage),
-    mark: categorize(stage.status, stage.conclusion),
-  }));
-  const nameWidth = Math.max("STAGE".length, ...rows.map(row => row.name.length));
-  const timeWidth = Math.max("DURATION".length, ...rows.map(row => row.time.length));
-  const line = (name: string, time: string) => `${name.padEnd(nameWidth)}  ${time.padStart(timeWidth)}`;
-  const lines: JobLogSummaryLine[] = [];
-  if (rows.length > 0) {
-    // The marks go in the line number column, so the names start where the log text does.
-    lines.push({ text: line("STAGE", "DURATION"), kind: "muted" });
-    for (const row of rows)
-      lines.push({ text: row.time ? line(row.name, row.time) : row.name, kind: "normal", mark: row.mark });
-  }
+  const lines = stepsSummary("STAGE", pipeline.steps);
   if (pipeline.tests)
     lines.push({
       text: ["Tests", jenkinsTestCounts(pipeline.tests)].filter(Boolean).join("  "),
