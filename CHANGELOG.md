@@ -92,7 +92,8 @@ All notable changes to this project will be documented in this file.
   keeps its run's id.
 - GitHub Actions: a fetch that fails in the background (a rate limit, offline) shows its error like Jenkins does.
   The runs looked as if they were still loading until a Reload.
-- A terminal made smaller keeps the selected commit on screen.
+- A terminal made smaller keeps the selected commit on screen, and a diff or log open from the details stays open
+  when the terminal becomes too narrow for the side panel (the details came over it).
 - In a narrow terminal (details as a dialog), `Esc` in a CI log or an OpenShift resource goes back to the details,
   like it does from a diff. It closed the details too and left the keys going to them, so Enter reopened the log.
   The details also come back as they were (open runs, attempts, cursor), not rebuilt with the first failure open.

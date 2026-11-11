@@ -208,15 +208,15 @@ export function AppContent(props: Readonly<AppContentProps>) {
   });
 
   // Seamless resize transitions between layout modes:
-  // - Normal → Compact while detail is focused: auto-open the detail dialog
+  // - Normal → Compact while detail is focused: auto-open the detail dialog, unless another dialog is open (a diff
+  //   or log opened from the details stays; closing it goes back to the details)
   // - Compact → Normal while detail dialog is open: close dialog, keep detail focused
   // Uses untrack() for dialog() so this effect only fires on layoutMode changes,
   // not every time any dialog (e.g. diff-blame) opens/closes.
   createEffect(() => {
     const mode = layoutMode();
     const currentDialog = untrack(dialog);
-    if (mode === "compact" && state.detailFocused() && currentDialog !== "detail") {
-      // Only open the detail dialog on resize — not when another dialog (e.g. diff-blame) opens
+    if (mode === "compact" && state.detailFocused() && currentDialog === null) {
       setDialog("detail");
     } else if (mode === "normal" && currentDialog === "detail") {
       setDialog(null);
