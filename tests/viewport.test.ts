@@ -2,14 +2,14 @@
  * Test: verifies the sliding graph viewport functions.
  *
  * Covers: computeSingleViewportOffset, sliceGraphToViewport,
- * getMaxGraphColumns, buildEdgeIndicator.
+ * getMaxGraphColumns, edgeMarks.
  */
 import { describe, expect, test } from "bun:test";
-import type { RenderOptions } from "../src/git/graph";
+import type { GraphChar, RenderOptions } from "../src/git/graph";
 import {
-  buildEdgeIndicator,
   buildGraph,
   computeSingleViewportOffset,
+  edgeMarks,
   getMaxGraphColumns,
   renderConnectorRow,
   renderGraphRow,
@@ -111,60 +111,38 @@ describe("Viewport", () => {
     }
   });
 
-  test("Edge indicator (single right-side column)", () => {
-    const mutedColor = "#6c7086";
-    const depthLimit = 4;
-    const maxColumns = 12;
+  test("Edge marks: a line cut by an edge gets an arrow there, a hidden commit one on its side", () => {
+    const muted = "#6c7086";
+    /** A full-width row from text: two characters per column. */
+    const full = (text: string): GraphChar[] =>
+      Array.from({ length: text.length / 2 }, (_, i) => ({ char: text.slice(i * 2, i * 2 + 2), color: "#line" }));
+    const text = (chars: GraphChar[]) => chars.map(gc => gc.char).join("");
+    // Columns 1 and 2 of 6 are visible.
+    const marks = (row: string, node: number | null, depth = 2, max = 6) =>
+      edgeMarks(full(row), 1, depth, max, node, muted);
 
-    // 5a: Node to the LEFT of viewport → ◀
-    {
-      const result = buildEdgeIndicator(0, 2, depthLimit, maxColumns, mutedColor, true);
-      expect(result.char).toBe("◀ ");
-      expect(result.color).toBe(mutedColor);
-    }
+    // A branch line from column 0 to column 3 crosses both edges.
+    const both = marks("█─┼─┼─╯     ", 0);
+    expect(text(both.left)).toBe("◀─");
+    expect(both.left[0]?.color).toBe(muted);
+    expect(both.left[1]?.color).toBe("#line");
+    expect(text(both.right)).toBe("▶ ");
 
-    // 5b: Node to the RIGHT of viewport → ▶
-    {
-      const result = buildEdgeIndicator(10, 2, depthLimit, maxColumns, mutedColor, true);
-      expect(result.char).toBe(" ▶");
-      expect(result.color).toBe(mutedColor);
-    }
+    // Lanes that only run down past the edges cut nothing.
+    expect(text(marks("│ │ │ │ │ │ ", null).left)).toBe("  ");
+    expect(text(marks("│ │ │ │ │ │ ", null).right)).toBe("  ");
 
-    // 5c: Node WITHIN viewport → blank
-    {
-      const result = buildEdgeIndicator(3, 2, depthLimit, maxColumns, mutedColor, true);
-      expect(result.char).toBe("  ");
-    }
+    // A commit off-screen on one side gets an arrow on that side.
+    expect(text(marks("█ │ │ │     ", 0).left)).toBe("◀ ");
+    expect(text(marks("│ │ │ │ █   ", 4).right)).toBe("▶ ");
+    expect(text(marks("│ │ │ │ █   ", 4).left)).toBe("  ");
+    // A connector row has no commit: only its lines count.
+    expect(text(marks("│ │ │ │ █   ", null).right)).toBe("  ");
 
-    // 5d: Node at left edge of viewport → blank
-    {
-      const result = buildEdgeIndicator(2, 2, depthLimit, maxColumns, mutedColor, true);
-      expect(result.char).toBe("  ");
-    }
-
-    // 5e: Node at right edge → blank
-    {
-      const result = buildEdgeIndicator(5, 2, depthLimit, maxColumns, mutedColor, true);
-      expect(result.char).toBe("  ");
-    }
-
-    // 5f: Connector row → always blank
-    {
-      const result = buildEdgeIndicator(0, 2, depthLimit, maxColumns, mutedColor, false);
-      expect(result.char).toBe("  ");
-    }
-
-    // 5g: Viewport not active → blank
-    {
-      const result = buildEdgeIndicator(5, 0, maxColumns, maxColumns, mutedColor, true);
-      expect(result.char).toBe("  ");
-    }
-
-    // 5h: Node exactly at viewportEnd → ▶
-    {
-      const result = buildEdgeIndicator(6, 2, depthLimit, maxColumns, mutedColor, true);
-      expect(result.char).toBe(" ▶");
-    }
+    // Without scrolling, there are no edges.
+    const wide = marks("█─┼─┼─╯     ", 0, 6, 6);
+    expect(text(wide.left)).toBe("");
+    expect(text(wide.right)).toBe("");
   });
 
   test("No slicing when viewport covers full width", () => {

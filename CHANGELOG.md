@@ -54,6 +54,9 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Graph: while it scrolls sideways (more than 12 lanes), both edges show where a line runs past them (`◀─` on the
+  left, `▶` on the right), so cut lines no longer seem to start from nothing. A hidden commit's arrow is on its own
+  side; `◀` was drawn on the right.
 - Graph: a commit that starts several branches is one block. The rows above it show the branches joining its line
   (`├─┼─╯`); they drew the block on every row, a tall bar.
 - Graph: a branch no longer starts directly below a root commit (the first commit of an orphan branch like

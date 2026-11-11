@@ -18,10 +18,10 @@ import {
 } from "../constants";
 import { useAppState } from "../context/state";
 import {
-  buildEdgeIndicator,
   computeBrightColumns,
   computeSingleViewportOffset,
   dimGraphChars,
+  edgeMarks,
   type GraphChar,
   getColorForColumn,
   graphCharsToContent,
@@ -57,7 +57,8 @@ import Badge from "./badge";
 function useGraphDimensions(maxGraphColumns: () => number) {
   const effectiveGraphColumns = () => Math.min(maxGraphColumns(), MAX_GRAPH_COLUMNS);
   const viewportActive = () => maxGraphColumns() > MAX_GRAPH_COLUMNS;
-  const graphWidth = () => Math.max(effectiveGraphColumns() * 2 + 1 + (viewportActive() ? 2 : 0), 6);
+  // While scrolling sideways, a 2-character mark column on each side (see `edgeMarks`).
+  const graphWidth = () => Math.max(effectiveGraphColumns() * 2 + 1 + (viewportActive() ? 4 : 0), 6);
   return { effectiveGraphColumns, viewportActive, graphWidth };
 }
 
@@ -274,33 +275,6 @@ function GraphLine(
   // Combined dimming: true when the row is dimmed by any highlight mode or is uncommitted
   const isDimmed = () => isUncommitted() || props.isDimmedByAncestry() || props.isDimmedByHighlight();
 
-  // Edge indicator helper — single 2-char column appended to the right
-  const edgeColor = () => t().foregroundMuted;
-  const blankEdge = (): GraphChar => ({ char: "  ", color: edgeColor() });
-
-  // Append edge indicator column to the right of the graph chars.
-  // Uses push on a shallow copy to avoid the spread operator's overhead
-  // of iterating the entire source array through the iterator protocol.
-  const withEdgeIndicator = (chars: GraphChar[], isCommitRow: boolean): GraphChar[] => {
-    if (!viewportActive()) return chars;
-    const out = chars.slice();
-    if (isCommitRow) {
-      out.push(
-        buildEdgeIndicator(
-          props.row.nodeColumn,
-          props.viewportOffset(),
-          MAX_GRAPH_COLUMNS,
-          state.maxGraphColumns(),
-          edgeColor(),
-          true,
-        ),
-      );
-    } else {
-      out.push(blankEdge());
-    }
-    return out;
-  };
-
   // --- Performance optimization: split full-width render (expensive) from
   // viewport slicing (cheap). When only viewportOffset changes, the memoized
   // full-width renders are reused and only the cheap slice re-runs. ---
@@ -345,20 +319,24 @@ function GraphLine(
   );
   const fullConnectorChars = createMemo(() => dimChars(renderConnectorRow(props.row, renderOpts())));
 
-  // Viewport-sliced renders — depend on memoized full-width + viewportOffset (cheap)
-  const graphChars = () => {
-    const chars = fullGraphChars();
-    if (!viewportActive()) return chars;
-    return sliceGraphToViewport(chars, props.viewportOffset(), MAX_GRAPH_COLUMNS, props.row, renderOpts());
-  };
-  const connectorChars = () => {
-    const chars = fullConnectorChars();
-    if (!viewportActive()) return chars;
-    return sliceGraphToViewport(chars, props.viewportOffset(), MAX_GRAPH_COLUMNS, props.row, renderOpts());
+  // While the graph scrolls sideways, each row is sliced to the viewport and gets a mark column on both sides:
+  // arrows where a line runs past an edge, and on the side of a commit whose block is off-screen. Slicing is cheap;
+  // the full-width renders above stay memoized while only viewportOffset changes.
+  const edgeColor = () => t().foregroundMuted;
+  /** A full-width row fitted to the viewport with its edge marks; `nodeColumn` is null for non-commit rows. */
+  const frameRow = (full: GraphChar[], nodeColumn: number | null): GraphChar[] => {
+    if (!viewportActive()) return full;
+    const offset = props.viewportOffset();
+    const marks = edgeMarks(full, offset, MAX_GRAPH_COLUMNS, state.maxGraphColumns(), nodeColumn, edgeColor());
+    return [
+      ...marks.left,
+      ...sliceGraphToViewport(full, offset, MAX_GRAPH_COLUMNS, props.row, renderOpts()),
+      ...marks.right,
+    ];
   };
 
-  const graphContent = () => graphCharsToContent(withEdgeIndicator(graphChars(), true));
-  const connectorContent = () => graphCharsToContent(withEdgeIndicator(connectorChars(), false));
+  const graphContent = () => graphCharsToContent(frameRow(fullGraphChars(), props.row.nodeColumn));
+  const connectorContent = () => graphCharsToContent(frameRow(fullConnectorChars(), null));
 
   // Check if the commit row has merge/branch connectors (horizontals, corners, tees).
   // If so, the commit row carries connection info and can't be replaced by a fan-out row.
@@ -388,14 +366,11 @@ function GraphLine(
   });
 
   // Derive fan-out display: rows above the commit + the commit row's graph content.
-  // applyViewport and addEdge are passed as callbacks to keep buildFanOutDisplay pure.
-  const fanOutDisplay = () => {
-    const applyViewport = (chars: GraphChar[]) =>
-      viewportActive()
-        ? sliceGraphToViewport(chars, props.viewportOffset(), MAX_GRAPH_COLUMNS, props.row, renderOpts())
-        : chars;
-    return buildFanOutDisplay(fullFanOutChars(), canMergeFanOut(), graphContent(), applyViewport, withEdgeIndicator);
-  };
+  // frameRow is passed as a callback to keep buildFanOutDisplay pure.
+  const fanOutDisplay = () =>
+    buildFanOutDisplay(fullFanOutChars(), canMergeFanOut(), graphContent(), (chars, isCommitRow) =>
+      frameRow(chars, isCommitRow ? props.row.nodeColumn : null),
+    );
 
   const fanOutAboveContents = () => fanOutDisplay().fanOutAboveContents;
   const commitRowGraphContent = () => fanOutDisplay().commitRowGraphContent;
@@ -690,22 +665,20 @@ interface FanOutDisplay {
  * @param allFanOutChars  Full-width char arrays for each fan-out row (from createMemo).
  * @param canMerge        Whether the last fan-out row can replace the commit row graph.
  * @param normalGraphContent  The pre-computed commit-row graph content (used when !canMerge).
- * @param applyViewport   Callback that applies optional viewport slicing to a char array.
- * @param addEdge         Callback that appends the edge-indicator column.
+ * @param frame           Fits a full-width row to the viewport and adds its edge marks.
  */
 function buildFanOutDisplay(
   allFanOutChars: GraphChar[][],
   canMerge: boolean,
   normalGraphContent: StyledText,
-  applyViewport: (chars: GraphChar[]) => GraphChar[],
-  addEdge: (chars: GraphChar[], isCommitRow: boolean) => GraphChar[],
+  frame: (chars: GraphChar[], isCommitRow: boolean) => GraphChar[],
 ): FanOutDisplay {
   if (allFanOutChars.length === 0) {
     return { fanOutAboveContents: [], commitRowGraphContent: normalGraphContent };
   }
 
   const toContent = (chars: GraphChar[], isCommitRow: boolean): StyledText =>
-    graphCharsToContent(addEdge(applyViewport(chars), isCommitRow));
+    graphCharsToContent(frame(chars, isCommitRow));
 
   if (canMerge) {
     // Show all fan-out rows except the last (which merges into the commit row)
