@@ -720,3 +720,29 @@ test("a narrow footer drops whole hints, the least needed first, never cutting o
     setup.renderer.destroy();
   }
 });
+
+test("the title takes the time read with the log, so a job that finished meanwhile shows it", async () => {
+  const theme = createThemeState();
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={theme}>
+        <JobLogDialog
+          provider="github-actions"
+          job={{ id: 1, name: "test" }}
+          jobs={[{ id: 1, name: "test" }]}
+          run={{ name: "CI", runNumber: 814 }}
+          fetchLog={async () => ({ log: "ok", detail: "1m 44s" })}
+          onClose={() => {}}
+        />
+      </ThemeContext.Provider>
+    ),
+    { width: 100, height: 20, kittyKeyboard: true },
+  );
+  try {
+    await setup.flush();
+    await setup.flush();
+    expect(setup.captureCharFrame()).toContain("GitHub Actions · CI #814 · test · 1m 44s");
+  } finally {
+    setup.renderer.destroy();
+  }
+});

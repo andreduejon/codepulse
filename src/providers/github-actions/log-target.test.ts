@@ -42,3 +42,14 @@ test("a GitHub job log opens at its job, ←/→ to the run's jobs, and reads it
   ]);
   expect(ci.fetchJobLogForJob).toHaveBeenCalledWith(2, run);
 });
+
+test("a job that was running when its log opened gets its time once r reads it again finished", async () => {
+  const running = { ...job(2, "test"), status: "in_progress", conclusion: null, completedAt: null };
+  const ci = {
+    fetchJobLogForJob: mock(async () => "log"),
+    fetchJobsForRun: mock(async () => ({ jobs: [job(2, "test")], error: null })),
+  };
+  const target = githubJobLogTarget(ci, running, run, [running]);
+  expect(target.job.detail).toBeUndefined();
+  expect(await target.fetchLog(target.job)).toMatchObject({ detail: "2m 17s" });
+});

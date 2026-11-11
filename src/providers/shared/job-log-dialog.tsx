@@ -31,6 +31,8 @@ export interface JobLogSummaryLine {
 export interface JobLogContent {
   log: string;
   summary?: JobLogSummaryLine[];
+  /** The entry's time as read with the log, for the title: a job that was running when it opened has one now. */
+  detail?: string;
 }
 
 /** One log the dialog moves between with ←/→: a GitHub job, a Jenkins build or stage, a failed test. */
@@ -59,6 +61,8 @@ export interface JobLogTarget {
 interface LoadedLog {
   raw: string | null;
   summary: JobLogSummaryLine[];
+  /** The time read with the log; the entry's own until then. */
+  detail?: string;
   loading: boolean;
   error: string | null;
 }
@@ -184,7 +188,13 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
       // An empty log is a successful, neutral result; only a failed request is an error (with its reason).
       .then(result => {
         const content = typeof result === "string" ? { log: result } : result;
-        setLoadedLog(job.id, { raw: content.log, summary: content.summary ?? [], loading: false, error: null });
+        setLoadedLog(job.id, {
+          raw: content.log,
+          summary: content.summary ?? [],
+          detail: content.detail,
+          loading: false,
+          error: null,
+        });
       })
       .catch(error =>
         setLoadedLog(job.id, {
@@ -285,7 +295,7 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
         { text: props.provider === "jenkins" ? "Jenkins" : "GitHub Actions", drop: 3 },
         { text: `${props.run.name} #${props.run.runNumber}`, drop: 4 },
         { text: currentJob().name, emphasis: true, primary: true },
-        { text: currentJob().detail ?? "", drop: 1 },
+        { text: currentLoadedLog().detail ?? currentJob().detail ?? "", drop: 1 },
         { text: VIEW_MODE_TITLE_LABEL[viewMode()], drop: 2 },
       ]}
       lines={filteredLines}

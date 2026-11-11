@@ -31,7 +31,8 @@ export function githubJobLogTarget(
       const log = await ci.fetchJobLogForJob(Number(current.id), run);
       const latest = await ci.fetchJobsForRun(run).catch(() => null);
       const shown = [...(latest?.jobs ?? []), ...known].find(candidate => candidate.id === current.id);
-      return { log, summary: shown ? githubJobSummary(shown) : [] };
+      if (!shown) return { log, summary: [] };
+      return { log, summary: githubJobSummary(shown), detail: githubJobLogEntries([shown])[0]?.detail };
     },
   };
 }
