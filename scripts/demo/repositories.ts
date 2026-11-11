@@ -146,6 +146,7 @@ export function shopHistory(): HistorySpec {
     }),
     c("revert", ["ship"], at(4, 16), ANA, 'Revert "feat(cart): free shipping over 50"', {
       body: "The warehouse cannot ship for free yet.",
+      files: {},
       deletes: ["src/cart/shipping.ts"],
     }),
     c("backport", ["rel141"], at(4, 12), JONAS, "fix(payments): time out after 30 seconds"),

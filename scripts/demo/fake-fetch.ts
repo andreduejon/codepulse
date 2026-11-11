@@ -139,7 +139,8 @@ function stepTime(job: FakeJob, index: number): string {
   const times = githubTimes(started, job);
   const start = Date.parse(times.started);
   const total = Date.parse(times.completed) - start;
-  const weights = job.steps.map((_, i) => 1 + i * i);
+  // A skipped step takes no time, so the steps add up to the job's time.
+  const weights = job.steps.map((step, i) => (step.conclusion === "skipped" ? 0 : 1 + i * i));
   const done = weights.slice(0, index).reduce((sum, weight) => sum + weight, 0);
   const all = weights.reduce((sum, weight) => sum + weight, 0);
   return new Date(start + Math.round((total * done) / all)).toISOString();
