@@ -546,11 +546,13 @@ onPhase(next => {
   log(`world moved to phase ${next.index} of ${LAST_PHASE}`);
 });
 
-// --live: the interactive demo moves on by itself, one phase per interval.
+// --live: the interactive demo moves on by itself, one phase per interval. The timer does not keep the app running:
+// quitting ends it like any other run.
 if (state.live !== null) {
   const timer = setInterval(() => {
     if (!advancePhase() || currentPhase().index >= LAST_PHASE) clearInterval(timer);
   }, state.live * 1000);
+  timer.unref();
 }
 
 // ── Router ───────────────────────────────────────────────────────────────────

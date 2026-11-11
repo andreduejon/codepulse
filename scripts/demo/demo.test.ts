@@ -6,7 +6,8 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
-import { installFakeCli } from "./world";
+import { parseDemoOptions } from "./options";
+import { buildWorld, installFakeCli } from "./world";
 
 const repoRoot = join(import.meta.dir, "..", "..");
 const sandbox = mkdtempSync(join(tmpdir(), "codepulse-demo-test-"));
@@ -36,13 +37,17 @@ function userEnv(name: string) {
   return { home, temp, env };
 }
 
-async function demo(args: string[], env: Record<string, string>) {
-  const child = Bun.spawn([process.execPath, join("scripts", "demo", "run.ts"), ...args], {
+function spawnDemo(args: string[], env: Record<string, string>) {
+  return Bun.spawn([process.execPath, join("scripts", "demo", "run.ts"), ...args], {
     cwd: repoRoot,
     env,
     stdout: "pipe",
     stderr: "pipe",
   });
+}
+
+async function demo(args: string[], env: Record<string, string>) {
+  const child = spawnDemo(args, env);
   const [stdout, stderr, code] = await Promise.all([
     new Response(child.stdout).text(),
     new Response(child.stderr).text(),
@@ -109,6 +114,43 @@ describe("bun run demo --play", () => {
     { timeout: 120_000 },
   );
 
+  test(
+    "a signal while the world is built still removes the folder, and the demo exits as stopped",
+    async () => {
+      const user = userEnv("signal-build");
+      const child = spawnDemo(["--play", "shot"], user.env);
+      // Stop it as soon as its folder exists: in the middle of building the repositories.
+      for (let i = 0; i < 500 && contents(user.temp).length === 0; i++) await Bun.sleep(10);
+      expect(contents(user.temp).length).toBeGreaterThan(0);
+      child.kill("SIGTERM");
+      expect(await child.exited).toBe(143);
+      expect(contents(user.temp)).toEqual([]);
+    },
+    { timeout: 120_000 },
+  );
+
+  test(
+    "a signal stops a play at once, also in the middle of a sleep, and the folder goes",
+    async () => {
+      const user = userEnv("signal-sleep");
+      const child = spawnDemo(["--play", "shot sleep:60000 shot"], user.env);
+      const reader = child.stdout.getReader();
+      let output = "";
+      while (!output.includes("=== shot 1")) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        output += new TextDecoder().decode(value);
+      }
+      reader.releaseLock();
+      const stoppedAt = performance.now();
+      child.kill("SIGTERM");
+      expect(await child.exited).toBe(143);
+      expect(performance.now() - stoppedAt).toBeLessThan(10_000);
+      expect(contents(user.temp)).toEqual([]);
+    },
+    { timeout: 120_000 },
+  );
+
   test("a wrong option or step stops before anything is built", async () => {
     const user = userEnv("wrong");
     const result = await demo(["--play", "details"], user.env);
@@ -134,6 +176,25 @@ test(
       code: 0,
       stdout: JSON.stringify(["1.2.5", "1.2.6", "1.2.7", "1.2.8"]),
     });
+  },
+  { timeout: 120_000 },
+);
+
+test(
+  "--live moves the world on by itself without keeping the app running once it quits",
+  async () => {
+    const world = buildWorld(parseDemoOptions(["--live", "60"]), Date.now());
+    try {
+      const started = performance.now();
+      const app = Bun.spawn(
+        [process.execPath, "--preload", join(import.meta.dir, "fake-fetch.ts"), "-e", "console.log('quit')"],
+        { cwd: repoRoot, env: world.env, stdout: "pipe", stderr: "pipe" },
+      );
+      expect(await app.exited).toBe(0);
+      expect(performance.now() - started).toBeLessThan(10_000);
+    } finally {
+      rmSync(world.root, { recursive: true, force: true });
+    }
   },
   { timeout: 120_000 },
 );

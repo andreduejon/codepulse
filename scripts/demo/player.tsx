@@ -147,9 +147,13 @@ export async function play(config: PlayConfig): Promise<number> {
         for (let i = 0; i < step.repeat; i++) await setup.mockMouse.scroll(x, y, step.direction);
         return settle();
       }
-      case "sleep":
-        await Bun.sleep(step.ms);
+      case "sleep": {
+        // In short naps, so a stopped app (a signal) ends the play at once rather than after the whole sleep.
+        const end = performance.now() + step.ms;
+        while (performance.now() < end && !setup.renderer.isDestroyed)
+          await Bun.sleep(Math.min(50, end - performance.now()));
         return settle();
+      }
     }
   };
 
