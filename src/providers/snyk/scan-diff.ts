@@ -32,8 +32,8 @@ function failedTargets(scan: SnykScanResult): Set<string> | null {
 
 /**
  * Like `diffSnykScans`, for two whole scans. A project either scan could not resolve is left out on both sides: its
- * findings are neither fixed (they were not looked for) nor new. Null when a partial scan does not say which
- * projects failed.
+ * findings are neither fixed (they were not looked for) nor new. Null when that cannot be told: a partial scan that
+ * does not say which projects failed, or a finding without a manifest path next to a failed project.
  */
 export function compareSnykScans(
   scan: SnykScanResult,
@@ -42,8 +42,10 @@ export function compareSnykScans(
   const here = failedTargets(scan);
   const there = failedTargets(parent);
   if (!here || !there) return null;
-  const compared = (finding: SnykFinding) =>
-    finding.targetFile === null || (!here.has(finding.targetFile) && !there.has(finding.targetFile));
+  const failed = new Set([...here, ...there]);
+  const findings = [...scan.findings, ...parent.findings];
+  if (failed.size > 0 && findings.some(finding => finding.targetFile === null)) return null;
+  const compared = (finding: SnykFinding) => finding.targetFile === null || !failed.has(finding.targetFile);
   return diffSnykScans(scan.findings.filter(compared), parent.findings.filter(compared));
 }
 

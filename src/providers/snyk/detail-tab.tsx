@@ -82,13 +82,17 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
     if (word) return [];
     return filterSnykFindings(findings, filter.query());
   });
+  /** The findings of NEW or FIXED the filter keeps: all of them for their own word, none for the other's. */
+  const shownChanges = (change: "new" | "fixed", findings: readonly SnykFinding[]): readonly SnykFinding[] => {
+    const word = diffWord();
+    return word === change ? findings : word ? [] : filterSnykFindings(findings, filter.query());
+  };
   /** NEW repeats the added findings (they stay under their severity too); FIXED lists the earlier scan's gone ones. */
   const changeSection = (change: "new" | "fixed", findings: readonly SnykFinding[]): Section | null => {
     const baseline = props.baseline;
     // Shown at 0 when nothing changed: the heading still says what was compared.
     if (!baseline || !diff()) return null;
-    const word = diffWord();
-    const shown = word === change ? findings : word ? [] : filterSnykFindings(findings, filter.query());
+    const shown = shownChanges(change, findings);
     // Own keys: a finding under its severity and under NEW opens and takes the cursor in each on its own.
     const entries = groupSnykVulnerabilities(shown).map(entry => ({ ...entry, key: `${change}:${entry.key}` }));
     return {
@@ -244,6 +248,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
   const scanJson = () => {
     const scan = props.scan;
     if (!scan) return "";
+    const changes = diff();
     return JSON.stringify(
       {
         commit: scan.sha,
@@ -262,6 +267,16 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
           reason,
         })),
         findings: filteredFindings(),
+        // What NEW and FIXED show, against the scan they compare with.
+        ...(props.baseline && changes
+          ? {
+              comparison: {
+                baseline: props.baseline.sha,
+                new: shownChanges("new", [...changes.added]),
+                fixed: shownChanges("fixed", changes.fixed),
+              },
+            }
+          : {}),
       },
       null,
       2,

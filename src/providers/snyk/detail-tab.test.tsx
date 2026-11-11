@@ -1,9 +1,10 @@
-import { expect, test } from "bun:test";
+import { expect, mock, spyOn, test } from "bun:test";
 import { RGBA } from "@opentui/core";
 import { testRender } from "@opentui/solid";
 import { createSignal } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
 import { createThemeState, ThemeContext } from "../../context/theme";
+import * as clipboard from "../../hooks/use-clipboard";
 import { SnykDetailTab } from "./detail-tab";
 import { finding } from "./scan-diff.test";
 import type { SnykFinding, SnykScanResult } from "./types";
@@ -314,5 +315,25 @@ test("a selected package row shows its full coordinate, scrolling when it does n
     expect(row()).toContain("org.example.very.long.groupname:");
   } finally {
     setup.renderer.destroy();
+  }
+});
+
+test("Copy JSON gives what the trees show: with fixed, the fixed findings and the scan they were in", async () => {
+  const copy = mock((_text: string, _id: string) => {});
+  const clipboardSpy = spyOn(clipboard, "useClipboard").mockImplementation(() => ({
+    copiedId: () => null,
+    copyToClipboard: copy,
+  }));
+  const t = await renderSnyk(scanOf(PARENT, [gone]), "fixed", 1, scanOf("a".repeat(40), []));
+  try {
+    t.setCursor(1);
+    await t.settle();
+    t.navRef.activateCurrentItem?.();
+    const json = JSON.parse(copy.mock.calls[0]?.[0] ?? "{}");
+    expect(json.findings).toEqual([]);
+    expect(json.comparison).toEqual({ baseline: PARENT, new: [], fixed: [gone] });
+  } finally {
+    t.renderer.destroy();
+    clipboardSpy.mockRestore();
   }
 });

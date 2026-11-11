@@ -85,3 +85,12 @@ test("nothing is compared when a partial scan does not say which projects failed
   ).toBeNull();
   expect(compareSnykScans(scanOf([]), scanOf([root]))?.fixed).toEqual([root]);
 });
+
+test("a finding without a manifest path is not compared when a partial scan failed somewhere", () => {
+  const unlocated = finding("SNYK-ADMIN-1", "minimist", "1.2.5", { targetFile: null, project: "admin" });
+  const failed = { partial: true, failedProjects: 1, failedTargets: ["admin/package.json"] };
+  expect(compareSnykScans(scanOf([], failed), scanOf([unlocated]))).toBeNull();
+  expect(compareSnykScans(scanOf([unlocated]), scanOf([], failed))).toBeNull();
+  // Complete scans still compare it.
+  expect(compareSnykScans(scanOf([]), scanOf([unlocated]))?.fixed).toEqual([unlocated]);
+});
