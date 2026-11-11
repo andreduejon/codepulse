@@ -12,21 +12,21 @@ import { type GraphChar, renderConnectorRow, renderFanOutRow, renderGraphRow } f
 import { getMaxGraphColumns, MAX_GRAPH_COLUMNS } from "../../src/git/graph-viewport";
 import { getCommits } from "../../src/git/repo";
 import type { Commit, GraphRow } from "../../src/git/types";
-import { importHistory } from "./history";
+import { type GitRunner, importHistory } from "./history";
 import { shopHistory } from "./repositories";
 
 const root = mkdtempSync(join(tmpdir(), "codepulse-demo-graph-"));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
-function git(cwd: string, args: string[], extra: Record<string, string> = {}, stdin?: string): string {
+const git: GitRunner = (cwd, args, extra = {}, stdin) => {
   const result = Bun.spawnSync(["git", ...args], {
     cwd,
     env: { ...process.env, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: join(root, "gitconfig"), ...extra },
-    stdin: stdin === undefined ? "ignore" : new TextEncoder().encode(stdin),
+    stdin: stdin === undefined ? "ignore" : typeof stdin === "string" ? new TextEncoder().encode(stdin) : stdin,
   });
   if (result.exitCode !== 0) throw new Error(`git ${args.join(" ")} failed: ${result.stderr.toString()}`);
   return result.stdout.toString().trim();
-}
+};
 
 let commits: Commit[];
 let rows: GraphRow[];

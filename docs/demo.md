@@ -106,8 +106,8 @@ reads, so its view notes the limit.
 shop has 86 commits over twelve days, built to show every shape the graph has to draw
 (`scripts/demo/repositories.ts`):
 
-- Eleven local-only branches (`lane/01` … `lane/11`) out of one commit, crossed by two long-lived lanes: 14 lanes at
-  the widest, more than the 12 the graph shows, so it scrolls sideways (`◀` and `▶` mark the hidden side).
+- Eleven Renovate pull requests (`renovate/*`, local only) out of one commit, crossed by two long-lived lanes: 14
+  lanes at the widest, more than the 12 the graph shows, so it scrolls sideways (`◀` and `▶` mark the hidden side).
 - Merges of every kind: pull request merges, `main` merged into feature branches, stacked branches
   (`feature/checkout-ui` merged into `feature/checkout-api`, then into `main`), a criss-cross (`feature/inventory`
   and `feature/pricing` merge each other), and an octopus merge of four `deps/*` branches.
@@ -119,6 +119,27 @@ shop has 86 commits over twelve days, built to show every shape the graph has to
 
 `scripts/demo/graph.test.ts` draws it with the app's renderer and checks that every line meets another line or a
 commit.
+
+### Files and logs
+
+The commits edit a small TypeScript shop (`scripts/demo/codebase.ts`), so diffs have hunks with context in the
+middle of files, and commit messages have bodies. Among them, one of each kind of diff:
+
+| Commit | File | Shows |
+|--------|------|-------|
+| `docs: rewrite the README …` | `README.md` | A rewrite: several hunks |
+| `feat(search): index product names` | `data/products.csv` | 6,001 lines, past the 5,000 the diff shows |
+| `feat(theme): dark mode` | `assets/logo.png` | A binary file changed |
+| `feat(metrics): sales dashboard` | `public/vendor/chart.min.js` | One line of 20,000 characters |
+| `chore: make the deploy scripts portable` | `deploy/deploy.sh`, `deploy/install.bat` | Made executable; a file deleted |
+| `chore: import the legacy deploy scripts` | `deploy/install.bat` | Windows line endings |
+| `chore(lint): move to ESLint 9` | `.eslintrc.json`, `eslint.config.js` | A rename (a delete and an add) |
+
+The logs are as long and noisy as real ones (`scripts/demo/logs.ts`): GitHub job logs from runner setup to cleanup
+(about 460 lines for a test job: checkout, install, every test, failures with their source and stack, coverage),
+with GitHub's timestamps and byte order mark; Jenkins consoles with Git, Gradle and every JUnit test (the Unit tests
+stage is about 1,270 lines); Spring Boot pod logs, one crashing with a long `Caused by` chain; and OpenShift build
+logs. Everything comes from seeded randomness, so it is the same every run.
 
 ### Phases
 
@@ -141,6 +162,7 @@ Everything lives in `scripts/demo/`:
 | `run.ts` | The launcher: reads the options, builds the folder, starts the app, removes the folder. |
 | `world.ts` | The folder: both repositories and their remotes, the config, the fake tools, and the app's environment (home, config, cache and temp all inside the folder, on every OS). |
 | `repositories.ts`, `history.ts` | The repositories' histories, and the importer that builds them in one `git fast-import`. |
+| `codebase.ts`, `logs.ts`, `random.ts` | The shop's files, the CI and cluster logs, and the seeded randomness they use. |
 | `scenario.ts` | The made-up GitHub, Jenkins and OpenShift data, per phase. |
 | `packages.ts` | The npm world: each commit's `package.json`, the dependency graphs, the findings, the registry. |
 | `fake-fetch.ts` | Preloaded into the app: answers GitHub, Jenkins and OpenShift requests and logs them to `requests.log`. |

@@ -46,7 +46,8 @@ All notable changes to this project will be documented in this file.
 - `bun run demo` (from a source checkout): codepulse on two made-up repositories with GitHub Actions, Jenkins,
   OpenShift and Snyk data, offline and without touching your config or cache, on macOS, Linux and Windows. The
   main one has 86 commits with every shape the graph draws (octopus and criss-cross merges, stacked branches,
-  three roots, more lanes than fit, so it scrolls sideways). Every
+  three roots, more lanes than fit, so it scrolls sideways), commits that edit a small TypeScript shop, and CI and
+  cluster logs as long as real ones. Every
   provider can start normal, empty, off or failing (`--github error:rate-limit`), `--live` moves the world on
   (runs finish, a rollout fails, a new commit arrives), and `--play "STEPS"` runs it headless and prints the
   screens as text, the same every run. See [docs/demo.md](docs/demo.md).

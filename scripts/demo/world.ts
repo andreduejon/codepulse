@@ -66,11 +66,11 @@ function setEnv(env: Record<string, string>, key: string, value: string | undefi
 
 /** Git with the demo's environment, in `cwd`. */
 function gitRunner(env: Record<string, string>) {
-  return (cwd: string, args: string[], extra: Record<string, string> = {}, stdin?: string): string => {
+  return (cwd: string, args: string[], extra: Record<string, string> = {}, stdin?: string | Uint8Array): string => {
     const result = Bun.spawnSync(["git", ...args], {
       cwd,
       env: { ...env, ...extra },
-      stdin: stdin === undefined ? "ignore" : new TextEncoder().encode(stdin),
+      stdin: stdin === undefined ? "ignore" : typeof stdin === "string" ? new TextEncoder().encode(stdin) : stdin,
     });
     if (result.exitCode !== 0) throw new Error(`git ${args.join(" ")} failed: ${result.stderr.toString()}`);
     return result.stdout.toString().trim();
@@ -241,7 +241,7 @@ function fillWorld(root: string, options: DemoOptions, now: number): DemoWorld {
   // release/1.x is one commit behind origin: someone else pushed the 1.4.2 release.
   git(shop, ["branch", "-q", "-f", "release/1.x", shas.rel141]);
 
-  writeFileSync(join(shop, "README.md"), `${SHOP_README.trimEnd()} Work in progress.\n`);
+  writeFileSync(join(shop, "README.md"), `${SHOP_README}\nTODO: say how long the retry waits before giving up.\n`);
   const stashDate = new Date(now - 2 * 60_000).toISOString();
   git(
     shop,

@@ -8,9 +8,11 @@
  */
 import { appendFileSync } from "node:fs";
 import { join } from "node:path";
+import { buildLog, githubJobLog, servingLog } from "./logs";
 import type { ProviderName } from "./options";
 import { advancePhase, currentPhase, onPhase } from "./phase";
 import {
+  COMMIT_KEY,
   type FakeBuild,
   type FakeJob,
   type FakeRun,
@@ -203,6 +205,43 @@ function restJob(job: FakeJob) {
 
 const runsOf = (repo: string) => (isEmpty("github") ? [] : runs.filter(run => run.repo === repo));
 
+/**
+ * A job's log as GitHub serves it: a byte order mark, then every line stamped with the time it was written, spread
+ * over the job's run. A skipped job has none.
+ */
+function jobLog(run: FakeRun, job: FakeJob): string | null {
+  if (job.conclusion === "skipped" || job.status === "queued") return null;
+  const outcome =
+    job.status !== "completed"
+      ? "running"
+      : job.conclusion === "success"
+        ? "success"
+        : job.conclusion === "cancelled"
+          ? "cancelled"
+          : job.conclusion === "timed_out"
+            ? "timed_out"
+            : "failure";
+  const raw = githubJobLog({
+    repo: `demo/${run.repo}`,
+    sha: run.sha,
+    job: job.name,
+    kind: job.logKind ?? "build",
+    outcome,
+    failures: job.failures,
+    lint: job.lint,
+    seed: String(job.id),
+  });
+  const times = githubTimes(started, job);
+  const start = Date.parse(times.started);
+  const end = job.status === "completed" ? Date.parse(times.completed) : Date.now();
+  const lines = raw.replace(/\n$/, "").split("\n");
+  const stamped = lines.map((line, index) => {
+    const at = new Date(start + Math.round(((end - start) * index) / lines.length)).toISOString();
+    return `${at.replace("Z", "0000Z")} ${line}`;
+  });
+  return `\ufeff${stamped.join("\n")}\n`;
+}
+
 function graphql(body: string): Response {
   const parsed = JSON.parse(body) as { query: string; variables?: Record<string, string> };
   const repoRuns = runsOf(parsed.variables?.repo ?? "");
@@ -254,8 +293,10 @@ function github(url: URL, method: string, body: string): Response {
   if (annotations) return json(allJobs.find(job => job.id === Number(annotations[1]))?.annotations ?? []);
   const logs = path.match(/^\/actions\/jobs\/(\d+)\/logs$/);
   if (logs) {
-    const job = allJobs.find(item => item.id === Number(logs[1]));
-    return job ? text(job.log ?? `${job.name}: nothing to see here.\n`) : notFound();
+    const run = repoRuns.find(item => item.jobs.some(job => job.id === Number(logs[1])));
+    const job = run?.jobs.find(item => item.id === Number(logs[1]));
+    const log = run && job ? jobLog(run, job) : null;
+    return log === null ? notFound() : text(log);
   }
   return notFound();
 }
@@ -438,7 +479,11 @@ function openshift(url: URL, signal: AbortSignal | null | undefined): Response {
   const item = items.find(entry => nameOf(entry) === name);
   if (!item) return notFound();
   if (!log) return json(item);
-  const saved = world.logs.get(`${ns}/${name}`) ?? `${name} started\n${followLine(0)}\n`;
+  const saved =
+    world.logs.get(`${ns}/${name}`) ??
+    (kind === "Build"
+      ? buildLog(name, labelsOf(item)[COMMIT_KEY] ?? "0".repeat(40), false)
+      : servingLog(started - 45 * 60_000, name));
   // Like a cluster: only a running container keeps the followed log open. A crashed one ends with its crash.
   const statuses = (item.status as { containerStatuses?: { state?: { running?: unknown } }[] } | undefined)
     ?.containerStatuses;

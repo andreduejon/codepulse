@@ -8,7 +8,18 @@
  * 2. A new commit lands on origin/dev, with a queued GitHub run and a running Jenkins build.
  */
 import { readFileSync } from "node:fs";
+import { gatewayClientTest, RETRY_TEST } from "./codebase";
+import {
+  buildLog,
+  crashLoopLog,
+  type GitHubJobKind,
+  type JavaFailure,
+  type JenkinsStageLog,
+  jenkinsConsole,
+  type TestFailure,
+} from "./logs";
 import type { ProviderMode, ProviderName } from "./options";
+import { ANNOTATION_LINES, shopHistory } from "./repositories";
 
 export interface DemoState {
   root: string;
@@ -87,7 +98,10 @@ export interface FakeJob {
   endsAt?: number;
   steps: FakeStep[];
   annotations?: { annotation_level: string; path: string; start_line: number; message: string }[];
-  log?: string;
+  /** What its log shows (logs.ts builds it): the job's kind, its failing tests, a linter's findings. */
+  logKind?: GitHubJobKind;
+  failures?: TestFailure[];
+  lint?: string[];
 }
 export interface FakeRun {
   id: number;
@@ -107,25 +121,53 @@ const setupSteps = (conclusion: FakeStep["conclusion"] = "success"): FakeStep[] 
   { name: "Install dependencies", conclusion },
 ];
 
-function testLog(lines: string[]): string {
-  const stamp = "2026-11-09T08:14:03.1234567Z";
-  return [
-    ...[
-      "##[group]Run bun test",
-      "bun test v1.3.4",
-      "src/cart/cart.test.ts:",
-      "(pass) cart > adds an item [0.42ms]",
-      "(pass) cart > rounds discounts to cents [0.31ms]",
-    ],
-    ...lines,
-    ...Array.from({ length: 40 }, (_, i) => `(pass) payments > case ${i + 1} [0.${i}ms]`),
-  ]
-    .map(line => `${stamp} ${line}`)
-    .join("\n");
-}
+const WORKSPACE = "/home/runner/work/shop/shop";
+
+const RETRY_FAILURE: TestFailure = {
+  file: "src/payments/retry.test.ts",
+  name: "retry > charges once after a timeout",
+  source: RETRY_TEST,
+  at: "expect(response.status).toBe(200)",
+  error: [
+    "error: expect(received).toBe(expected)",
+    "",
+    "Expected: 200",
+    "Received: 401",
+    "",
+    `      at <anonymous> (${WORKSPACE}/src/payments/retry.test.ts:${ANNOTATION_LINES.retryTest}:29)`,
+  ],
+  annotation: "Expected 200, received 401",
+  ms: 12.1,
+};
+
+const UNUSED_DELAY = [
+  "",
+  `${WORKSPACE}/src/payments/retry.ts`,
+  `  ${ANNOTATION_LINES.unusedDelay}:9  warning  'delay' is assigned a value but never used  @typescript-eslint/no-unused-vars`,
+  "",
+  "✖ 1 problem (0 errors, 1 warning)",
+];
+
+const TYPE_ERROR =
+  "Type 'string' is not assignable to type 'number'. The expected type comes from property 'maxAttempts', which is declared here on type 'RetryPolicy'.";
 
 const LONG_LINE =
   "error: request to https://payments.internal.example/v2/charge failed after 3 retries (attempt=3, backoff=4000ms, idempotency-key=7f3a9c1e-2b4d-4e8a-9c6f-1a2b3c4d5e6f): PaymentGateway timed out after 30000ms and refused the request";
+
+const GATEWAY_FAILURE: TestFailure = {
+  file: "src/payments/gateway-client-with-a-long-file-name.test.ts",
+  name: "gateway > gives up after three retries",
+  source: gatewayClientTest(),
+  at: 'test("gives up after three retries"',
+  error: [
+    'error: Test "gives up after three retries" timed out after 31000ms',
+    LONG_LINE,
+    "",
+    `      at <anonymous> (${WORKSPACE}/src/payments/gateway-client-with-a-long-file-name.test.ts:${ANNOTATION_LINES.gatewayTest}:3)`,
+  ],
+  annotation: "PaymentGateway timed out after 30000ms and refused the request",
+  ms: 30012.4,
+};
 
 export function githubRuns(state: DemoState, phase: Phase): FakeRun[] {
   const s = state.shas;
@@ -166,16 +208,12 @@ export function githubRuns(state: DemoState, phase: Phase): FakeRun[] {
             {
               annotation_level: "failure",
               path: "src/payments/retry.test.ts",
-              start_line: 42,
+              start_line: ANNOTATION_LINES.retryTest,
               message: "Expected 200, received 401",
             },
           ],
-          log: testLog([
-            "src/payments/retry.test.ts:",
-            "(fail) retry > charges once after a timeout [12.1ms]",
-            "  error: expect(received).toBe(expected)",
-            "  Expected 200, received 401",
-          ]),
+          logKind: "test",
+          failures: [RETRY_FAILURE],
         },
         {
           id: 70021,
@@ -204,19 +242,19 @@ export function githubRuns(state: DemoState, phase: Phase): FakeRun[] {
             {
               annotation_level: "failure",
               path: "src/payments/retry.test.ts",
-              start_line: 42,
+              start_line: ANNOTATION_LINES.retryTest,
               message: "Expected 200, received 401\n\n  at retry.test.ts:42:18\n  at processTicksAndRejections",
             },
             {
               annotation_level: "failure",
               path: "src/payments/gateway-client-with-a-long-file-name.test.ts",
-              start_line: 118,
+              start_line: ANNOTATION_LINES.gatewayTest,
               message: "PaymentGateway timed out after 30000ms and refused the request",
             },
             {
               annotation_level: "warning",
               path: "src/payments/retry.ts",
-              start_line: 17,
+              start_line: ANNOTATION_LINES.unusedDelay,
               message: "'delay' is assigned a value but never used",
             },
             {
@@ -232,16 +270,9 @@ export function githubRuns(state: DemoState, phase: Phase): FakeRun[] {
               message: "Process completed with exit code 1.",
             },
           ],
-          log: testLog([
-            "src/payments/retry.test.ts:",
-            "(fail) retry > charges once after a timeout [12.1ms]",
-            "  error: expect(received).toBe(expected)",
-            "  Expected 200, received 401",
-            "src/payments/gateway-client-with-a-long-file-name.test.ts:",
-            "(fail) gateway > gives up after three retries [30012.4ms]",
-            `  ${LONG_LINE}`,
-            "src/payments/retry.ts:17:9 warning: 'delay' is assigned a value but never used",
-          ]),
+          logKind: "test",
+          failures: [RETRY_FAILURE, GATEWAY_FAILURE],
+          lint: UNUSED_DELAY,
         },
         {
           // Needs test: skipped once it failed.
@@ -285,7 +316,7 @@ export function githubRuns(state: DemoState, phase: Phase): FakeRun[] {
           startedAgoMin: 38,
           minutes: 3,
           steps: [...setupSteps(), { name: "Run tests", conclusion: "success" }],
-          log: testLog([]),
+          logKind: "test",
         },
       ],
     },
@@ -311,6 +342,7 @@ export function githubRuns(state: DemoState, phase: Phase): FakeRun[] {
             { name: "Set up job", conclusion: "success" },
             { name: "oc apply", conclusion: "success" },
           ],
+          logKind: "deploy",
         },
       ],
     },
@@ -338,7 +370,7 @@ export function githubRuns(state: DemoState, phase: Phase): FakeRun[] {
             ...setupSteps(finished ? "success" : null),
             { name: "Run tests", conclusion: finished ? "success" : null },
           ],
-          log: finished ? testLog([]) : undefined,
+          logKind: "test",
         },
       ],
     },
@@ -367,6 +399,7 @@ export function githubRuns(state: DemoState, phase: Phase): FakeRun[] {
                 { name: "oc apply", conclusion: null },
               ]
             : [],
+          logKind: "deploy",
         },
       ],
     },
@@ -390,7 +423,7 @@ export function githubRuns(state: DemoState, phase: Phase): FakeRun[] {
           startedAgoMin: 48,
           minutes: 2,
           steps: [...setupSteps(), { name: "Run tests", conclusion: "cancelled" }],
-          log: testLog(["##[error]The operation was canceled."]),
+          logKind: "test",
         },
       ],
     },
@@ -414,9 +447,7 @@ export function githubRuns(state: DemoState, phase: Phase): FakeRun[] {
           startedAgoMin: 60 * 24 * 8,
           minutes: 60,
           steps: [...setupSteps(), { name: "Run e2e", conclusion: "cancelled" }],
-          log: testLog([
-            "##[error]The job running on runner demo-2 has exceeded the maximum execution time of 60 minutes.",
-          ]),
+          logKind: "e2e",
         },
       ],
     },
@@ -458,14 +489,22 @@ export function githubRuns(state: DemoState, phase: Phase): FakeRun[] {
             {
               annotation_level: "failure",
               path: "src/payments/retry-policy-with-exponential-backoff.ts",
-              start_line: 7,
-              message:
-                "Type 'string' is not assignable to type 'number'. A long message that does not fit a narrow panel.",
+              start_line: ANNOTATION_LINES.retryPolicy,
+              message: TYPE_ERROR,
             },
           ],
-          log: testLog([
-            "src/payments/retry-policy-with-exponential-backoff.ts(7,3): error TS2322: Type 'string' is not assignable to type 'number'. A long message that does not fit a narrow panel.",
-          ]),
+          logKind: "lint",
+          failures: [
+            {
+              file: "src/payments/retry-policy-with-exponential-backoff.ts",
+              name: "typecheck",
+              error: [
+                `src/payments/retry-policy-with-exponential-backoff.ts(${ANNOTATION_LINES.retryPolicy},58): error TS2322: ${TYPE_ERROR}`,
+              ],
+              annotation: TYPE_ERROR,
+              ms: 0,
+            },
+          ],
         },
       ],
     },
@@ -511,11 +550,16 @@ export function githubRuns(state: DemoState, phase: Phase): FakeRun[] {
           startedAgoMin: 170,
           minutes: 2,
           steps: [...setupSteps(), { name: "Build", conclusion: "failure" }],
-          log: testLog([
-            "src/price.test.ts:",
-            "(fail) price > shows two decimals [1.2ms]",
-            '  Expected "9.90", received "9.9"',
-          ]),
+          logKind: "web-test",
+          failures: [
+            {
+              file: "src/price.test.ts",
+              name: "price > shows two decimals",
+              error: ["error: expect(received).toBe(expected)", "", 'Expected: "9.90"', 'Received: "9.9"'],
+              annotation: 'Expected "9.90", received "9.9"',
+              ms: 1.2,
+            },
+          ],
         },
       ],
     },
@@ -544,36 +588,70 @@ export interface FakeBuild {
   console: string;
 }
 
-function pipelineConsole(stages: { name: string; lines: string[]; nested?: string[] }[]): string {
-  const out = ["Started by an SCM change", "[Pipeline] Start of Pipeline", "[Pipeline] node", "[Pipeline] {"];
-  for (const stage of stages) {
-    out.push("[Pipeline] stage", `[Pipeline] { (${stage.name})`);
-    if (stage.nested) {
-      out.push("[Pipeline] parallel");
-      for (const branch of stage.nested) {
-        out.push(`[Pipeline] { (Branch: ${branch})`, "[Pipeline] stage", `[Pipeline] { (${branch})`);
-        out.push(`+ ./gradlew ${branch.toLowerCase().replace(/\s+/g, "-")}`, `${branch}: done`);
-        out.push("[Pipeline] }", "[Pipeline] // stage", "[Pipeline] }");
-      }
-      out.push("[Pipeline] // parallel");
-    }
-    out.push(...stage.lines, "[Pipeline] }", "[Pipeline] // stage");
-  }
-  out.push("[Pipeline] }", "[Pipeline] // node", "[Pipeline] End of Pipeline");
-  return out.join("\n");
-}
+type BuildData = Omit<FakeBuild, "console">;
 
-/** A build's console while it runs: the stages so far, the last one still open. */
-function runningConsole(sha: string, stages: { name: string; lines: string[] }[]): string {
-  const out = ["Started by an SCM change", "[Pipeline] Start of Pipeline", "[Pipeline] node", "[Pipeline] {"];
-  stages.forEach((stage, index) => {
-    out.push("[Pipeline] stage", `[Pipeline] { (${stage.name})`, ...stage.lines);
-    if (index < stages.length - 1) out.push("[Pipeline] }", "[Pipeline] // stage");
-  });
-  return out.join("\n").replaceAll("{sha}", sha.slice(0, 7));
-}
-
+/** Each build's console, from its stages, tests and result (logs.ts writes it the way Jenkins does). */
 export function jenkinsBuilds(state: DemoState, phase: Phase): FakeBuild[] {
+  const subjects = new Map(shopHistory().commits.map(commit => [state.shas[commit.key], commit.subject]));
+  return jenkinsBuildData(state, phase).map(build => ({
+    ...build,
+    console: consoleOf(build, subjects.get(build.sha) ?? ""),
+  }));
+}
+
+function consoleOf(build: BuildData, subject: string): string {
+  const failures: JavaFailure[] = (build.tests?.failed ?? []).map(test => ({
+    className: test.className,
+    method: test.name,
+    error: test.stack.split("\n")[0] ?? test.details,
+    line: Number(/:(\d+)\)/.exec(test.stack)?.[1] ?? 42),
+  }));
+  const stages = build.stages.map((stage): JenkinsStageLog => {
+    const kind = /checkout/i.test(stage.name)
+      ? "checkout"
+      : /^checks$/i.test(stage.name)
+        ? "checks"
+        : /test/i.test(stage.name)
+          ? "test"
+          : /publish/i.test(stage.name)
+            ? "publish"
+            : stage.status === "ABORTED"
+              ? "aborted"
+              : "build";
+    const state =
+      stage.status === "NOT_EXECUTED"
+        ? "skipped"
+        : stage.status === "IN_PROGRESS"
+          ? "running"
+          : stage.status === "FAILED" || stage.status === "ABORTED"
+            ? "failed"
+            : "done";
+    return {
+      name: stage.name,
+      seconds: stage.seconds,
+      kind,
+      state,
+      ...(kind === "test" && build.tests
+        ? {
+            failures,
+            tests: { total: build.tests.pass + build.tests.skip + failures.length, skipped: build.tests.skip },
+          }
+        : {}),
+    };
+  });
+  return jenkinsConsole({
+    job: `shop/${build.branch}`,
+    branch: build.branch,
+    sha: build.sha,
+    subject,
+    stages,
+    result: build.result,
+    seed: `${build.branch}#${build.number}`,
+    ...(build.result === "ABORTED" ? { abortedBy: "Ana Lima" } : {}),
+  });
+}
+
+function jenkinsBuildData(state: DemoState, phase: Phase): BuildData[] {
   const s = state.shas;
   const started = phase.at[0];
   // dev #7 runs at the start and fails its tests once the world moves on.
@@ -581,7 +659,7 @@ export function jenkinsBuilds(state: DemoState, phase: Phase): FakeBuild[] {
   const metricsTestSeconds = phase.at[1]
     ? Math.max(5, Math.round((phase.at[1] - (started - metricsAgoMin * MIN)) / 1000) - 63)
     : 0;
-  const metricsBuild: FakeBuild =
+  const metricsBuild: BuildData =
     phase.index >= 1
       ? {
           branch: "dev",
@@ -614,22 +692,6 @@ export function jenkinsBuilds(state: DemoState, phase: Phase): FakeBuild[] {
               },
             ],
           },
-          console: pipelineConsole([
-            { name: "Checkout", lines: ["+ git checkout -f metrics"] },
-            { name: "Build", lines: ["+ ./gradlew assemble", "BUILD SUCCESSFUL in 1m 0s"] },
-            {
-              name: "Unit tests",
-              lines: [
-                "+ ./gradlew test",
-                "MetricsExporterTest > exportsRequestCounts() FAILED",
-                "    org.opentest4j.AssertionFailedError: expected: <42> but was: <0>",
-                "MetricsExporterTest > labelsRequestsByRoute() FAILED",
-                "    java.lang.IllegalStateException: Missing label: route",
-                "1219 tests completed, 2 failed, 12 skipped",
-                "ERROR: script returned exit code 1",
-              ],
-            },
-          ]),
         }
       : {
           branch: "dev",
@@ -641,11 +703,6 @@ export function jenkinsBuilds(state: DemoState, phase: Phase): FakeBuild[] {
             { name: "Checkout", status: "SUCCESS", seconds: 3 },
             { name: "Build", status: "IN_PROGRESS", seconds: 60 },
           ],
-          // Still running: the Build stage is not closed yet.
-          console: runningConsole(s.metrics, [
-            { name: "Checkout", lines: ["+ git checkout -f metrics"] },
-            { name: "Build", lines: ["+ ./gradlew assemble", "> Task :compileJava"] },
-          ]),
         };
   return [
     metricsBuild,
@@ -661,11 +718,6 @@ export function jenkinsBuilds(state: DemoState, phase: Phase): FakeBuild[] {
         { name: "Build", status: "ABORTED", seconds: 41 },
         { name: "Unit tests", status: "NOT_EXECUTED", seconds: 0 },
       ],
-      console: pipelineConsole([
-        { name: "Checkout", lines: ["+ git checkout -f health"] },
-        { name: "Build", lines: ["+ ./gradlew assemble", "Aborted by Ana Lima"] },
-        { name: "Unit tests", lines: ["Stage skipped due to earlier failure(s)"] },
-      ]),
     },
     {
       // Unstable: it built, one test failed.
@@ -691,19 +743,6 @@ export function jenkinsBuilds(state: DemoState, phase: Phase): FakeBuild[] {
           },
         ],
       },
-      console: pipelineConsole([
-        { name: "Checkout", lines: ["+ git checkout -f retry"] },
-        { name: "Build", lines: ["+ ./gradlew assemble", "BUILD SUCCESSFUL in 1m 28s"] },
-        {
-          name: "Unit tests",
-          lines: [
-            "+ ./gradlew test",
-            "RetryPolicyTest > waitsLongerAfterEachAttempt() FAILED",
-            "1207 tests completed, 1 failed, 12 skipped",
-            "Build step 'Publish JUnit test result report' changed build result to UNSTABLE",
-          ],
-        },
-      ]),
     },
     ...(phase.index >= 2
       ? [
@@ -714,7 +753,6 @@ export function jenkinsBuilds(state: DemoState, phase: Phase): FakeBuild[] {
             result: null,
             agoMin: 0,
             stages: [{ name: "Checkout", status: "IN_PROGRESS" as const, seconds: 2 }],
-            console: runningConsole(s.next, [{ name: "Checkout", lines: ["+ git checkout -f {sha}"] }]),
           },
         ]
       : []),
@@ -756,21 +794,6 @@ export function jenkinsBuilds(state: DemoState, phase: Phase): FakeBuild[] {
           },
         ],
       },
-      console: pipelineConsole([
-        { name: "Checkout", lines: ["+ git checkout -f payments", "HEAD is now at payments"] },
-        { name: "Build", lines: ["+ ./gradlew assemble", "BUILD SUCCESSFUL in 1m 35s"] },
-        {
-          name: "Unit tests",
-          lines: [
-            "+ ./gradlew test",
-            "PaymentServiceTest > refundsTwice() FAILED",
-            "    org.opentest4j.AssertionFailedError: expected: <200> but was: <401>",
-            "1207 tests completed, 3 failed, 12 skipped",
-            "ERROR: script returned exit code 1",
-          ],
-        },
-        { name: "Publish image to the internal registry", lines: ["Stage skipped due to earlier failure(s)"] },
-      ]),
     },
     {
       branch: "main",
@@ -785,12 +808,6 @@ export function jenkinsBuilds(state: DemoState, phase: Phase): FakeBuild[] {
         { name: "Publish image to the internal registry", status: "SUCCESS", seconds: 40 },
       ],
       tests: { pass: 1207, skip: 12, failed: [] },
-      console: pipelineConsole([
-        { name: "Checkout", lines: ["+ git checkout -f readme"] },
-        { name: "Build", lines: ["+ ./gradlew assemble", "BUILD SUCCESSFUL in 1m 30s"] },
-        { name: "Checks", lines: ["All checks passed"], nested: ["Unit tests", "Integration tests", "Lint"] },
-        { name: "Publish image to the internal registry", lines: ["+ docker push registry/shop-api:42"] },
-      ]),
     },
     {
       // No test report: the Tests row is left out and Debug stays quiet about the 404.
@@ -803,10 +820,6 @@ export function jenkinsBuilds(state: DemoState, phase: Phase): FakeBuild[] {
         { name: "Checkout", status: "SUCCESS", seconds: 3 },
         { name: "Build", status: "SUCCESS", seconds: 80 },
       ],
-      console: pipelineConsole([
-        { name: "Checkout", lines: ["+ git checkout -f rounding"] },
-        { name: "Build", lines: ["+ ./gradlew assemble", "BUILD SUCCESSFUL in 1m 20s"] },
-      ]),
     },
   ];
 }
@@ -1122,18 +1135,10 @@ export function openShiftWorld(state: DemoState, phase: Phase): OpenShiftWorld {
     ],
   ]);
 
+  // The crash-looping pod and the failed build; other pods and builds get a healthy log (fake-fetch.ts).
   const logs = new Map<string, string>([
-    [
-      "shop-test/shop-api-7d9f8-x2k4q",
-      [
-        "Starting ShopApiApplication v0.42.0 using Java 21.0.5",
-        "Tomcat initialized with port 8080 (http)",
-        `ERROR 1 --- [main] o.s.boot.SpringApplication : Application run failed: ${LONG_LINE}`,
-        "Caused by: java.net.SocketTimeoutException: Connect timed out",
-        "\tat java.base/sun.nio.ch.NioSocketImpl.timedFinishConnect(NioSocketImpl.java:546)",
-      ].join("\n"),
-    ],
-    ["shop-dev/shop-api-41", "Step 4/9 : RUN ./gradlew assemble\nerror: build failed: DockerBuildFailed\n"],
+    ["shop-test/shop-api-7d9f8-x2k4q", crashLoopLog(now - 2 * MIN, "shop-api-7d9f8-x2k4q", LONG_LINE)],
+    ["shop-dev/shop-api-41", buildLog("shop-api-41", s.payments, true)],
   ]);
 
   // Every object carries the phase's resource version, so a watch picks up where its list left off.
@@ -1146,8 +1151,12 @@ export function openShiftWorld(state: DemoState, phase: Phase): OpenShiftWorld {
 
 export const resourceVersion = (phase: Phase) => String(1000 + phase.index);
 
-/** Lines a followed Pod log keeps adding, so the viewer drops its oldest ones. */
+/** Lines a followed Pod log keeps adding (requests as they come in), so the viewer drops its oldest ones. */
 export function followLine(n: number): string {
-  const level = n % 17 === 0 ? "WARN" : "INFO";
-  return `2026-11-09T08:${String(Math.floor(n / 60) % 60).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}Z ${level} request ${n} GET /api/cart 200 ${(n * 7) % 90}ms${n % 50 === 0 ? " PaymentGateway slow" : ""}`;
+  const routes = ["/cart", "/cart/lines", "/search?q=shoes", "/health/ready", "/checkout", "/metrics"];
+  const slow = n % 50 === 0;
+  const status = n % 37 === 0 ? 503 : 200;
+  // Forty lines come at once, every 250 ms: a few milliseconds apart, like requests in a busy second.
+  const at = new Date(Date.now() - (40 - (n % 40)) * 6);
+  return `${at.toISOString().replace("Z", "+00:00")}  ${status === 200 && !slow ? "INFO" : "WARN"} 1 --- [shop-api] [nio-8080-exec-${(n % 10) + 1}] c.d.shop.web.RequestLog                  : ${n % 4 === 1 ? "POST" : "GET"} ${routes[n % routes.length]} ${status} ${slow ? 2400 + n : (n * 7) % 90}ms${slow ? " (PaymentGateway slow)" : ""}`;
 }
