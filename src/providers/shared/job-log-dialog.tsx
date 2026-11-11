@@ -103,6 +103,8 @@ const FAILURE_WORD = /(?<!\b0 )\b(error|exception|failed|failure)\b(?:[: ]|$)/i;
 const THROWABLE = /\b\w*(?:Error|Exception):/;
 /** A test runner's failed test or file: Bun's `(fail)`, Jest's `✕`, Vitest's `×`, and `FAIL src/…`. */
 const TEST_FAILURE = /^\s*(?:\(fail\)\s|[✕×]\s|FAIL\s)/;
+/** A test runner's passing test (Bun's `(pass)`, Jest's `✓`, Gradle's `PASSED`): fine, whatever its name says. */
+const TEST_PASS = /^\s*(?:\(pass\)\s|✓\s)|\sPASSED$/;
 
 function classifyLine(line: string): { kind: LogLineKind; text: string } | null {
   if (line.startsWith("##[endgroup]") || line.trim() === "") return null;
@@ -113,6 +115,7 @@ function classifyLine(line: string): { kind: LogLineKind; text: string } | null 
   if (/^\[Pipeline\]/i.test(line)) return { kind: "muted", text: line };
   if (line.startsWith("##[error]")) return { kind: "error", text: line.slice("##[error]".length) };
   if (line.startsWith("##[warning]")) return { kind: "warning", text: line.slice("##[warning]".length) };
+  if (TEST_PASS.test(line)) return { kind: "normal", text: line };
   if (/\bwarning\b[: ]/i.test(line)) return { kind: "warning", text: line };
   if (
     /^error:/i.test(line) ||
@@ -126,7 +129,8 @@ function classifyLine(line: string): { kind: LogLineKind; text: string } | null 
 }
 
 export function parseLogLines(raw: string): LogLine[] {
-  const lines = raw.split("\n");
+  // GitHub's job logs start with a byte order mark, before the first line's timestamp.
+  const lines = raw.replace(/^\ufeff/, "").split("\n");
   const result: LogLine[] = [];
   for (let i = 0; i < lines.length; i++) {
     const classified = classifyLine(stripTimestamp(lines[i]));

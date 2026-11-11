@@ -49,3 +49,17 @@ test("Jenkins Pipeline markup: a block's opening is a heading with its name, the
     ["muted", "[Pipeline] { (Branch: Lint)"],
   ]);
 });
+
+test("a passing test is not an issue, even when its name says failed", () => {
+  expect(kinds("(pass) checkout > keeps a failed payment [1.23ms]")).toEqual(["normal"]);
+  expect(kinds("✓ shows an error for a failed payment (3 ms)")).toEqual(["normal"]);
+  expect(kinds("RetryTest > retriesAFailedCharge() PASSED")).toEqual(["normal"]);
+  expect(kinds("(fail) checkout > keeps a failed payment [1.23ms]")).toEqual(["error"]);
+});
+
+test("a GitHub log's byte order mark does not keep the first line's timestamp", () => {
+  const lines = parseLogLines(
+    "﻿2026-03-02T08:33:00.0010000Z Current runner version: '2.321.0'\n2026-03-02T08:33:00.0020000Z next",
+  );
+  expect(lines.map(line => line.text)).toEqual(["Current runner version: '2.321.0'", "next"]);
+});

@@ -74,6 +74,9 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- CI logs: the first line of a GitHub job log no longer shows its timestamp (GitHub's logs start with a byte order
+  mark), and `issues only` and `errors only` no longer list passing tests whose names say failed
+  (`(pass) checkout > keeps a failed payment`, `✓ …`, `… PASSED`).
 - In a narrow terminal (details as a dialog), `Esc` in a CI log or an OpenShift resource goes back to the details,
   like it does from a diff. It closed the details too and left the keys going to them, so Enter reopened the log.
 - OpenShift: when the cluster lists but does not allow watching, the **Watch denied** notice no longer disappears
