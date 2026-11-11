@@ -21,8 +21,9 @@ import {
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { storageRoot } from "../../src/utils/storage-path";
+import { importHistory } from "./history";
 import { type DemoOptions, PROVIDERS, providerError } from "./options";
-import { ADMIN_MANIFEST, lockfile, type Manifest, SHOP_MANIFESTS } from "./packages";
+import { FEATURE_BRANCH, LANE_BRANCHES, SHOP_README, shopHistory, webHistory } from "./repositories";
 import {
   COMMIT_KEY,
   DEMO_STATE_ENV,
@@ -36,9 +37,6 @@ import {
 } from "./scenario";
 
 const here = import.meta.dir;
-const MIN = 60_000;
-const HOUR = 60 * MIN;
-const DAY = 24 * HOUR;
 
 export const TOKEN_ENV = {
   github: "GITHUB_TOKEN",
@@ -68,8 +66,12 @@ function setEnv(env: Record<string, string>, key: string, value: string | undefi
 
 /** Git with the demo's environment, in `cwd`. */
 function gitRunner(env: Record<string, string>) {
-  return (cwd: string, args: string[], extra: Record<string, string> = {}): string => {
-    const result = Bun.spawnSync(["git", ...args], { cwd, env: { ...env, ...extra } });
+  return (cwd: string, args: string[], extra: Record<string, string> = {}, stdin?: string): string => {
+    const result = Bun.spawnSync(["git", ...args], {
+      cwd,
+      env: { ...env, ...extra },
+      stdin: stdin === undefined ? "ignore" : new TextEncoder().encode(stdin),
+    });
     if (result.exitCode !== 0) throw new Error(`git ${args.join(" ")} failed: ${result.stderr.toString()}`);
     return result.stdout.toString().trim();
   };
@@ -138,12 +140,6 @@ function demoPath(bin: string): string {
   }
   symlinkSync(realpathSync(git), join(bin, "git"));
   return [bin, "/usr/bin", "/bin", "/usr/sbin", "/sbin"].join(delimiter);
-}
-
-function writeManifest(directory: string, manifest: Manifest) {
-  mkdirSync(directory, { recursive: true });
-  writeFileSync(join(directory, "package.json"), `${JSON.stringify(manifest, null, 2)}\n`);
-  writeFileSync(join(directory, "package-lock.json"), lockfile(manifest));
 }
 
 /**
@@ -217,100 +213,53 @@ function fillWorld(root: string, options: DemoOptions, now: number): DemoWorld {
   installFakeCli(bin, cliNames);
 
   const git = gitRunner(env);
-  const author = (name: string) => ({
-    GIT_AUTHOR_NAME: name,
-    GIT_AUTHOR_EMAIL: `${name.toLowerCase().replace(/\W+/g, ".")}@demo.invalid`,
-    GIT_COMMITTER_NAME: "Demo Dev",
-    GIT_COMMITTER_EMAIL: "dev@demo.invalid",
-  });
-
-  // ── shop: the repository the demo opens ───────────────────────────────────
-  for (const [owner, repo] of GITHUB_REPOS.map(r => [r.owner, r.repo]))
-    git(remotes, ["init", "-q", "--bare", "-b", "main", `${owner}/${repo}.git`]);
-
-  let changeCounter = 0;
-  const commitIn =
-    (repoPath: string) =>
-    (subject: string, agoMs: number, name = "Demo Dev", write?: () => void): string => {
-      if (write) write();
-      else writeFileSync(join(repoPath, `change-${++changeCounter}.txt`), `${subject}\n`);
-      const date = new Date(now - agoMs).toISOString();
-      git(repoPath, ["add", "-A"]);
-      git(repoPath, ["commit", "-q", "-m", subject], {
-        ...author(name),
-        GIT_AUTHOR_DATE: date,
-        GIT_COMMITTER_DATE: date,
-      });
-      return git(repoPath, ["rev-parse", "HEAD"]);
-    };
-
+  // ── shop: the repository the demo opens (its history: repositories.ts) ──
+  for (const repo of GITHUB_REPOS)
+    git(remotes, ["init", "-q", "--bare", "-b", "main", `${repo.owner}/${repo.repo}.git`]);
   git(shop, ["init", "-q", "-b", "main"]);
   git(shop, ["remote", "add", "origin", "git@github.com:demo/shop.git"]);
-  const commit = commitIn(shop);
-  const shas: Record<string, string> = {};
-  shas.initial = commit("chore: initial commit", 12 * DAY, "Demo Dev", () => {
-    writeManifest(shop, SHOP_MANIFESTS.initial);
-    writeFileSync(join(shop, "README.md"), "# shop\n");
-  });
-  shas.cart = commit("feat(cart): add the cart service", 11 * DAY, "Ana Lima", () => {
-    writeManifest(shop, SHOP_MANIFESTS.cart);
-    writeManifest(join(shop, "admin"), ADMIN_MANIFEST);
-  });
-
-  // Eleven short branches from `cart`: twelve lanes side by side in the graph. They stay local (never pushed).
-  const lanes: string[] = [];
-  for (let i = 1; i <= 11; i++) {
-    const branch = `lane/${String(i).padStart(2, "0")}`;
-    git(shop, ["checkout", "-q", "-b", branch, shas.cart]);
-    shas[`lane${i}`] = commit(`chore(lane ${i}): a parallel branch so the graph needs many lanes`, 10 * DAY - i * HOUR);
-    lanes.push(branch);
-  }
-  git(shop, ["checkout", "-q", "main"]);
-  shas.rounding = commit("fix(cart): round discounts to cents", 9 * DAY, "Jonas Weber", () =>
-    writeManifest(shop, SHOP_MANIFESTS.rounding),
-  );
-  shas.payments = commit(
-    "feat(payments): retry failed payments with exponential backoff, and a subject long enough to need cutting",
-    7 * HOUR,
-    "Demo Dev",
-    () => writeManifest(shop, SHOP_MANIFESTS.payments),
-  );
-  const feature = "feature/payments-retry-with-a-really-long-branch-name";
-  git(shop, ["checkout", "-q", "-b", feature]);
-  shas.retry = commit("wip(payments): retry policy types", 6 * HOUR, "Mei Chen");
-  git(shop, ["checkout", "-q", "main"]);
-  shas.readme = commit("docs: 更新 README の説明 🚀 and explain the cart flow", HOUR, "山田 太郎", () =>
-    writeFileSync(join(shop, "README.md"), "# shop\n\nThe cart flow: add, discount, pay.\n"),
-  );
-  git(shop, ["checkout", "-q", "-b", "dev"]);
-  shas.health = commit("feat(api): add a health endpoint", 50 * MIN);
-  shas.metrics = commit("feat(api): export request metrics", 5 * MIN);
-  // The commit `--live` and `advance` push to origin/dev later: in the remote already, under a ref fetch skips.
-  shas.next = commit("fix(api): pin the metrics exporter version", 0);
-  git(shop, ["push", "-q", "origin", "HEAD:refs/demo/next-dev"]);
-  git(shop, ["reset", "-q", "--hard", shas.metrics]);
-  git(shop, ["checkout", "-q", "main"]);
-  git(shop, ["tag", "v0.42.0", shas.readme]);
-  git(shop, ["push", "-q", "origin", "main", "dev", feature, "v0.42.0"]);
+  const shas = importHistory(shop, shopHistory(), now, git);
+  // On origin: the shared branches, the remote-only dashboard branch, and the commit phase 2 lands on origin/dev.
+  git(shop, [
+    "push",
+    "-q",
+    "origin",
+    "main",
+    "dev",
+    FEATURE_BRANCH,
+    "release/1.x",
+    "gh-pages",
+    "feature/metrics-dashboard",
+    "refs/demo/next-dev",
+    "--tags",
+  ]);
+  git(shop, ["update-ref", "-d", "refs/demo/next-dev"]);
+  git(shop, ["branch", "-q", "-D", "feature/metrics-dashboard"]);
   git(shop, ["fetch", "-q", "origin"]);
-  for (const branch of ["main", "dev", feature]) git(shop, ["branch", "-q", "-u", `origin/${branch}`, branch]);
+  for (const branch of ["main", "dev", FEATURE_BRANCH, "release/1.x", "gh-pages"])
+    git(shop, ["branch", "-q", "-u", `origin/${branch}`, branch]);
+  // release/1.x is one commit behind origin: someone else pushed the 1.4.2 release.
+  git(shop, ["branch", "-q", "-f", "release/1.x", shas.rel141]);
 
-  writeFileSync(join(shop, "README.md"), "# shop\n\nThe cart flow: add, discount, pay. Work in progress.\n");
-  const stashDate = new Date(now - 2 * MIN).toISOString();
+  writeFileSync(join(shop, "README.md"), `${SHOP_README.trimEnd()} Work in progress.\n`);
+  const stashDate = new Date(now - 2 * 60_000).toISOString();
   git(
     shop,
     ["stash", "push", "-q", "-m", "WIP on payments: try a shorter retry delay before giving up on the payment gateway"],
-    { ...author("Demo Dev"), GIT_AUTHOR_DATE: stashDate, GIT_COMMITTER_DATE: stashDate },
+    {
+      GIT_AUTHOR_NAME: "Demo Dev",
+      GIT_AUTHOR_EMAIL: "demo.dev@demo.invalid",
+      GIT_COMMITTER_NAME: "Demo Dev",
+      GIT_COMMITTER_EMAIL: "demo.dev@demo.invalid",
+      GIT_AUTHOR_DATE: stashDate,
+      GIT_COMMITTER_DATE: stashDate,
+    },
   );
 
   // ── shop-web: a second repository in the group, for the project switcher ──
   git(web, ["init", "-q", "-b", "main"]);
   git(web, ["remote", "add", "origin", "git@github.com:demo/shop-web.git"]);
-  const commitWeb = commitIn(web);
-  const webShas: Record<string, string> = {};
-  webShas.initial = commitWeb("chore: initial commit", 3 * DAY, "Ana Lima");
-  webShas.gallery = commitWeb("feat(web): product page with an image gallery", 2 * DAY, "Ana Lima");
-  webShas.prices = commitWeb("fix(web): show prices with two decimals", 3 * HOUR, "Jonas Weber");
+  const webShas = importHistory(web, webHistory(), now, git);
   git(web, ["push", "-q", "origin", "main"]);
   git(web, ["fetch", "-q", "origin"]);
   git(web, ["branch", "-q", "-u", "origin/main", "main"]);
@@ -322,7 +271,8 @@ function fillWorld(root: string, options: DemoOptions, now: number): DemoWorld {
     remotes,
     shas,
     webShas,
-    branches: ["main", "dev", feature, ...lanes],
+    // The branches Jenkins has jobs for (with OLD_BRANCHES, more than it reads).
+    branches: ["main", "dev", FEATURE_BRANCH, ...LANE_BRANCHES],
     unseenSha: "c0ffee5e7a1b2c3d4e5f60718293a4b5c6d7e8f9",
     providers: options.providers,
     latency: options.latency,

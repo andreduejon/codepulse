@@ -86,19 +86,39 @@ diff before.txt after.txt
 Two repositories in the group `demo`: **shop**, which the demo opens, and **shop-web** (`shift →`), with GitHub and
 Snyk only. shop's `origin` is `git@github.com:demo/shop.git`, served from a local copy, so `f` fetches offline.
 
+The newest commits carry the provider data:
+
 | Commit | Shows |
 |--------|-------|
 | `export request metrics` (dev) | GitHub run running, Deploy preview queued. Jenkins build running. shop-dev rolling out, one pod still pulling. |
 | `add a health endpoint` | GitHub run cancelled. Jenkins build aborted. |
-| `docs: 更新 README …` (main, tag, stash) | GitHub green, deploy run with a long name. Jenkins parallel stages. Live in shop-prod, events forbidden there. |
+| `docs: rewrite the README …` (main, tag, stash) | GitHub green, deploy run with a long name. Jenkins parallel stages. Live in shop-prod, events forbidden there. |
 | `retry policy types` (feature branch) | GitHub lint failure with a long annotation. Jenkins unstable. Snyk scan fails. |
 | `retry failed payments …` | GitHub re-run (attempt 2) with annotations, a skipped job. Jenkins failed tests. Crash loop, OOM and eviction in shop-test. Snyk: a new package, an override that can go. |
 | `round discounts to cents` | GitHub nightly run timed out. Jenkins build without a test report. |
-| `lane/01` … `lane/11` | Local-only branches, so the graph needs many lanes. |
 
 Snyk scans the branch tips by itself; other commits wait for **Scan commit**. Its findings and dependency tree come
 from each commit's `package.json` files (the root project and `admin/`). Jenkins lists more branch jobs than it
 reads, so its view notes the limit.
+
+### The graph
+
+shop has 86 commits over twelve days, built to show every shape the graph has to draw
+(`scripts/demo/repositories.ts`):
+
+- Eleven local-only branches (`lane/01` … `lane/11`) out of one commit, crossed by two long-lived lanes: 14 lanes at
+  the widest, more than the 12 the graph shows, so it scrolls sideways (`◀` and `▶` mark the hidden side).
+- Merges of every kind: pull request merges, `main` merged into feature branches, stacked branches
+  (`feature/checkout-ui` merged into `feature/checkout-api`, then into `main`), a criss-cross (`feature/inventory`
+  and `feature/pricing` merge each other), and an octopus merge of four `deps/*` branches.
+- Three roots: `main`, the `gh-pages` branch, and legacy deploy scripts merged in as an unrelated history.
+- A release branch with tags (`v1.4.0` … `v1.4.2`), a hotfix merged into it and into `main`, and a backport.
+- A change and its revert, six branches out of one commit merged back in a different order, and open branches:
+  local-only (`feature/dark-mode`, `experiment/graph-layout`), remote-only (`origin/feature/metrics-dashboard`),
+  and behind its remote (`release/1.x`).
+
+`scripts/demo/graph.test.ts` draws it with the app's renderer and checks that every line meets another line or a
+commit.
 
 ### Phases
 
@@ -120,6 +140,7 @@ Everything lives in `scripts/demo/`:
 |------|------|
 | `run.ts` | The launcher: reads the options, builds the folder, starts the app, removes the folder. |
 | `world.ts` | The folder: both repositories and their remotes, the config, the fake tools, and the app's environment (home, config, cache and temp all inside the folder, on every OS). |
+| `repositories.ts`, `history.ts` | The repositories' histories, and the importer that builds them in one `git fast-import`. |
 | `scenario.ts` | The made-up GitHub, Jenkins and OpenShift data, per phase. |
 | `packages.ts` | The npm world: each commit's `package.json`, the dependency graphs, the findings, the registry. |
 | `fake-fetch.ts` | Preloaded into the app: answers GitHub, Jenkins and OpenShift requests and logs them to `requests.log`. |

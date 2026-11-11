@@ -24,4 +24,7 @@ if (!config) {
   console.error(`${PLAY_ENV} is not set. Start the headless demo with: bun run demo --play "…"`);
   process.exit(2);
 }
-process.exit(await play(config));
+const code = await play(config);
+// Exit once every shot is written, also when the output goes to a pipe (`| grep`).
+await new Promise<void>(resolve => process.stdout.write("", () => resolve()));
+process.exit(code);
