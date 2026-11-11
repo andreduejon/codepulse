@@ -120,7 +120,9 @@ export function fastImportStream(spec: HistorySpec, now: number): Uint8Array {
       tree.set(path, { ...entry, content: edit(entry.content), ago: commit.ago });
     }
     for (const path of commit.deletes ?? []) {
-      if (!tree.get(path)?.content) throw new Error(`${commit.key}: no file ${path} to delete`);
+      const content = tree.get(path)?.content;
+      // An empty file ("") is still a file: only a missing or deleted one (null) has nothing to delete.
+      if (content === undefined || content === null) throw new Error(`${commit.key}: no file ${path} to delete`);
       tree.set(path, { content: null, mode: "100644", ago: commit.ago });
     }
     trees.set(commit.key, tree);
