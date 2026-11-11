@@ -856,6 +856,15 @@ export default function GraphView(
       scrollY
       scrollX={false}
       verticalScrollbarOptions={{ visible: false }}
+      onSizeChange={() => {
+        // A smaller terminal can leave the selected row below the screen: bring it back into view, once this layout
+        // pass has given the rows and the viewport their new places.
+        queueMicrotask(() => {
+          const idx = state.scrollTargetIndex();
+          if (scrollboxRef?.isDestroyed || idx < 0 || props.suppressAutoScroll?.()) return;
+          scrollRowIntoView(idx);
+        });
+      }}
       onMouseScroll={event => {
         if (event.scroll?.direction !== "down" || props.mouseEnabled?.() === false) return;
         // OpenTUI applies wheel scrolling after this handler; inspect the updated viewport.

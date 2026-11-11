@@ -602,3 +602,60 @@ test("a subject that does not fit ends in …, measured in terminal columns (wid
     setup.renderer.destroy();
   }
 });
+
+test("a terminal made smaller keeps the selected commit on screen", async () => {
+  let app!: ReturnType<typeof createAppState>;
+  const setup = await testRender(
+    () => {
+      app = createAppState(100, 0, 0);
+      const commits: Commit[] = Array.from({ length: 40 }, (_, index) => ({
+        hash: `${index}`,
+        shortHash: `${index}`,
+        parents: index < 39 ? [`${index + 1}`] : [],
+        subject: `Commit ${index}`,
+        body: "",
+        author: "Author",
+        authorEmail: "author@example.com",
+        authorDate: "2026-01-01T00:00:00Z",
+        committer: "Author",
+        committerEmail: "author@example.com",
+        commitDate: "2026-01-01T00:00:00Z",
+        refs: [],
+      }));
+      app.actions.setGraphRows(buildGraph(commits));
+      app.actions.setCommits(commits);
+      app.actions.setLoading(false);
+      app.actions.setHasMore(false);
+      return createComponent(ThemeContext.Provider, {
+        value: createThemeState(),
+        get children() {
+          return createComponent(AppStateContext.Provider, {
+            value: app,
+            get children() {
+              return createComponent(GraphView, {});
+            },
+          });
+        },
+      });
+    },
+    { width: 120, height: 50 },
+  );
+  try {
+    await setup.flush();
+    app.actions.setCursorIndex(39);
+    app.actions.setScrollTargetIndex(39);
+    for (let i = 0; i < 5; i++) {
+      await Bun.sleep(20);
+      await setup.flush();
+    }
+    expect(setup.captureCharFrame()).toContain("Commit 39");
+    setup.resize(120, 20);
+    for (let i = 0; i < 5; i++) {
+      await Bun.sleep(20);
+      await setup.flush();
+    }
+    expect(setup.captureCharFrame()).toContain("Commit 39");
+  } finally {
+    setup.renderer.destroy();
+  }
+});
