@@ -164,13 +164,14 @@ function charAt(chars: GraphChar[], position: number): GraphChar | null {
 }
 
 /**
- * Marks for the graph's left and right edges while it scrolls sideways, one 2-character column each. A line that
- * runs past an edge gets an arrow there (`◀─` leading into it on the left, `▶` right after it on the right), so it
- * does not seem to come from nothing. A commit whose block is off-screen gets an arrow on its side (`◀ ` or `▶ `).
+ * Marks for the graph's left and right edges while it scrolls sideways, one 2-character column each. A triangle
+ * means this row's commit is off-screen on that side (`◀ `, ` ▶`). A line that runs past the edge continues into the
+ * column: into the triangle when it leads to that hidden commit (`◀─`, `─▶`), into a dashed end when it just goes
+ * on (`╌─`, `─╌`). So a triangle always means a commit, and a line never seems to start from nothing.
  *
  * @param fullChars - The row at full width, before slicing
  * @param nodeColumn - The commit's column on a commit row; null for connector and fan-out rows
- * @param color - Muted color for the arrows
+ * @param color - Muted color for the triangles; lines keep their own color
  */
 export function edgeMarks(
   fullChars: GraphChar[],
@@ -181,23 +182,22 @@ export function edgeMarks(
   color: string,
 ): EdgeMarks {
   if (depthLimit >= maxColumns) return { left: [], right: [] };
-  const blank = (): GraphChar[] => [{ char: "  ", color }];
   const viewportEnd = viewportOffset + depthLimit;
 
   // A horizontal crosses an edge when the filler between the two columns there is a line.
   const leftFiller = viewportOffset > 0 ? charAt(fullChars, viewportOffset * 2 - 1) : null;
   const rightFiller = charAt(fullChars, viewportEnd * 2 - 1);
+  const leftLine = leftFiller?.char === "─" ? leftFiller.color : null;
+  const rightLine = rightFiller?.char === "─" ? rightFiller.color : null;
+  const hiddenLeft = nodeColumn !== null && nodeColumn < viewportOffset;
+  const hiddenRight = nodeColumn !== null && nodeColumn >= viewportEnd;
 
-  let left = blank();
-  if (leftFiller?.char === "─")
-    left = [
-      { char: "◀", color },
-      { char: "─", color: leftFiller.color },
-    ];
-  else if (nodeColumn !== null && nodeColumn < viewportOffset) left = [{ char: "◀ ", color }];
+  const outer = (hidden: boolean, line: string | null, triangle: string): GraphChar =>
+    hidden ? { char: triangle, color } : line ? { char: "╌", color: line } : { char: " ", color };
+  const inner = (line: string | null): GraphChar => (line ? { char: "─", color: line } : { char: " ", color });
 
-  const right =
-    rightFiller?.char === "─" || (nodeColumn !== null && nodeColumn >= viewportEnd) ? [{ char: "▶ ", color }] : blank();
-
-  return { left, right };
+  return {
+    left: [outer(hiddenLeft, leftLine, "◀"), inner(leftLine)],
+    right: [inner(rightLine), outer(hiddenRight, rightLine, "▶")],
+  };
 }

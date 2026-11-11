@@ -111,7 +111,7 @@ describe("Viewport", () => {
     }
   });
 
-  test("Edge marks: a line cut by an edge gets an arrow there, a hidden commit one on its side", () => {
+  test("Edge marks: a triangle for a hidden commit, a dashed end for a line that goes on", () => {
     const muted = "#6c7086";
     /** A full-width row from text: two characters per column. */
     const full = (text: string): GraphChar[] =>
@@ -121,23 +121,27 @@ describe("Viewport", () => {
     const marks = (row: string, node: number | null, depth = 2, max = 6) =>
       edgeMarks(full(row), 1, depth, max, node, muted);
 
-    // A branch line from column 0 to column 3 crosses both edges.
+    // A line that only goes on past an edge fades out: no triangle, no commit there.
+    const lines = marks("█─┼─┼─╯     ", null);
+    expect(text(lines.left)).toBe("╌─");
+    expect(text(lines.right)).toBe("─╌");
+    expect(lines.left.every(gc => gc.color === "#line")).toBe(true);
+
+    // This row's commit is off-screen: a triangle on its side.
+    expect(text(marks("█ │ │ │     ", 0).left)).toBe("◀ ");
+    expect(text(marks("│ │ │ │ █   ", 4).right)).toBe(" ▶");
+    expect(text(marks("│ │ │ │ █   ", 4).left)).toBe("  ");
+
+    // A line runs to the hidden commit: it leads into the triangle.
     const both = marks("█─┼─┼─╯     ", 0);
     expect(text(both.left)).toBe("◀─");
     expect(both.left[0]?.color).toBe(muted);
     expect(both.left[1]?.color).toBe("#line");
-    expect(text(both.right)).toBe("▶ ");
+    expect(text(both.right)).toBe("─╌");
 
     // Lanes that only run down past the edges cut nothing.
     expect(text(marks("│ │ │ │ │ │ ", null).left)).toBe("  ");
     expect(text(marks("│ │ │ │ │ │ ", null).right)).toBe("  ");
-
-    // A commit off-screen on one side gets an arrow on that side.
-    expect(text(marks("█ │ │ │     ", 0).left)).toBe("◀ ");
-    expect(text(marks("│ │ │ │ █   ", 4).right)).toBe("▶ ");
-    expect(text(marks("│ │ │ │ █   ", 4).left)).toBe("  ");
-    // A connector row has no commit: only its lines count.
-    expect(text(marks("│ │ │ │ █   ", null).right)).toBe("  ");
 
     // Without scrolling, there are no edges.
     const wide = marks("█─┼─┼─╯     ", 0, 6, 6);
