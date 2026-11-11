@@ -1159,11 +1159,11 @@ export function openShiftWorld(state: DemoState, phase: Phase): OpenShiftWorld {
 export const resourceVersion = (phase: Phase) => String(1000 + phase.index);
 
 /** Lines a followed Pod log keeps adding (requests as they come in), so the viewer drops its oldest ones. */
-export function followLine(n: number): string {
+export function followLine(n: number, time?: Date): string {
   const routes = ["/cart", "/cart/lines", "/search?q=shoes", "/health/ready", "/checkout", "/metrics"];
   const slow = n % 50 === 0;
   const status = n % 37 === 0 ? 503 : 200;
   // Forty lines come at once, every 250 ms: a few milliseconds apart, like requests in a busy second.
-  const at = new Date(Date.now() - (40 - (n % 40)) * 6);
+  const at = time ?? new Date(Date.now() - (40 - (n % 40)) * 6);
   return `${at.toISOString().replace("Z", "+00:00")}  ${status === 200 && !slow ? "INFO" : "WARN"} 1 --- [shop-api] [nio-8080-exec-${(n % 10) + 1}] c.d.shop.web.RequestLog                  : ${n % 4 === 1 ? "POST" : "GET"} ${routes[n % routes.length]} ${status} ${slow ? 2400 + n : (n * 7) % 90}ms${slow ? " (PaymentGateway slow)" : ""}`;
 }

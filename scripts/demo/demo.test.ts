@@ -151,6 +151,20 @@ describe("bun run demo --play", () => {
     { timeout: 120_000 },
   );
 
+  test(
+    "a followed log prints the same lines every run",
+    async () => {
+      const user = userEnv("follow");
+      const play = "g tab*3 enter wait:pull9 click:shop-api-7d9f8-r2m4p shot";
+      const first = await demo(["--play", play], user.env);
+      expect(first.code).toBe(0);
+      expect(first.stdout).toMatch(/RequestLog/);
+      const second = await demo(["--play", play], user.env);
+      expect(second.stdout).toBe(first.stdout);
+    },
+    { timeout: 180_000 },
+  );
+
   test("a wrong option or step stops before anything is built", async () => {
     const user = userEnv("wrong");
     const result = await demo(["--play", "details"], user.env);

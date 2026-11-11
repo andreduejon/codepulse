@@ -16,6 +16,7 @@ import {
   type FakeBuild,
   type FakeJob,
   type FakeRun,
+  FIXED_NOW,
   followLine,
   githubRuns,
   githubTimes,
@@ -45,13 +46,13 @@ const text = (body: string, status = 200) =>
 const notFound = () => json({ message: "Not Found" }, 404);
 
 /**
- * A response that stays open until the request is aborted. `next` feeds it every 250 ms; `listen` gets a function
- * that writes to it whenever the caller wants and returns how to stop listening.
+ * A response that stays open until the request is aborted. `next` feeds it every 250 ms, until it returns null;
+ * `listen` gets a function that writes to it whenever the caller wants and returns how to stop listening.
  */
 function stream(
   signal: AbortSignal | null | undefined,
   first: string,
-  options: { next?: () => string; listen?: (write: (text: string) => void) => () => void } = {},
+  options: { next?: () => string | null; listen?: (write: (text: string) => void) => () => void } = {},
 ): Response {
   const encoder = new TextEncoder();
   let timer: ReturnType<typeof setInterval> | undefined;
@@ -75,7 +76,12 @@ function stream(
         }
       };
       if (first) write(first);
-      if (options.next) timer = setInterval(() => write(options.next?.() ?? ""), 250);
+      if (options.next)
+        timer = setInterval(() => {
+          const value = options.next?.() ?? null;
+          if (value === null) clearInterval(timer);
+          else write(value);
+        }, 250);
       unlisten = options.listen?.(write);
     },
     cancel() {
@@ -440,6 +446,8 @@ const itemsOf = (target: OpenShiftWorld, ns: string, kind: string) =>
   isEmpty("openshift") ? [] : (target.lists.get(ns)?.get(kind) ?? []);
 
 let followCount = 0;
+/** How many batches of lines a followed log gets in a play before it stops growing. */
+const HEADLESS_FOLLOW_BATCHES = 3;
 
 function openshift(url: URL, signal: AbortSignal | null | undefined): Response {
   const match = url.pathname.match(/^\/apis?\/(?:[^/]+\/)?v1\/namespaces\/([^/]+)\/([^/]+)(?:\/([^/]+))?(?:\/(log))?$/);
@@ -487,13 +495,22 @@ function openshift(url: URL, signal: AbortSignal | null | undefined): Response {
   // Like a cluster: only a running container keeps the followed log open. A crashed one ends with its crash.
   const statuses = (item.status as { containerStatuses?: { state?: { running?: unknown } }[] } | undefined)
     ?.containerStatuses;
-  if (url.searchParams.get("follow") === "true" && statuses?.some(status => status.state?.running))
+  if (url.searchParams.get("follow") === "true" && statuses?.some(status => status.state?.running)) {
+    let batches = 0;
     return stream(signal, `${saved}\n`, {
-      next: () =>
-        Array.from({ length: 40 }, () => followLine(++followCount))
+      next: () => {
+        // Headless, the log stops growing after a few batches, dated by line, so a play settles on the same lines
+        // every run. Interactive, it keeps coming, dated now.
+        if (state.headless && ++batches > HEADLESS_FOLLOW_BATCHES) return null;
+        return Array.from({ length: 40 }, () => {
+          const n = ++followCount;
+          return followLine(n, state.headless ? new Date(FIXED_NOW + n * 6) : undefined);
+        })
           .join("\n")
-          .concat("\n"),
+          .concat("\n");
+      },
     });
+  }
   return text(saved);
 }
 
