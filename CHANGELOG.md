@@ -54,6 +54,8 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Graph: a branch no longer starts directly below a root commit (the first commit of an orphan branch like
+  `gh-pages`, or of an unrelated history), where the two read as one branch. It takes the next column.
 - Jenkins rows are as quiet as the OpenShift tree: a build lists its stages straight under it (no **Pipeline**
   row) with their marks only. Times and test counts moved to the log viewer, so the build's age no longer shifts
   when its stages load. A build without stages has one **Console** row.
