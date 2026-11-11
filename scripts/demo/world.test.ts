@@ -30,3 +30,36 @@ test("o and copy reach the demo's own browser and clipboard commands, which writ
     "browser https://github.com/demo/shop/actions/runs/9001\nclipboard a1b2c3d\n",
   );
 });
+
+test("the app gets none of the user's credentials, proxies, agents or folders outside the demo", () => {
+  const hostile: Record<string, string> = {
+    SSH_AUTH_SOCK: "/tmp/agent.sock",
+    KUBECONFIG: "/home/someone/.kube/config",
+    GH_TOKEN: "ghp_real",
+    HTTPS_PROXY: "http://proxy:3128",
+    https_proxy: "http://proxy:3128",
+    XDG_DATA_HOME: "/home/someone/.local/share",
+    XDG_STATE_HOME: "/home/someone/.local/state",
+    BUN_RUNTIME_TRANSPILER_CACHE_PATH: "/home/someone/.bun-cache",
+    CODEPULSE_CONFIG: "/home/someone/.config/codepulse/config.json",
+  };
+  const saved = Object.fromEntries(Object.keys(hostile).map(key => [key, process.env[key]]));
+  Object.assign(process.env, hostile);
+  let other: ReturnType<typeof buildWorld> | undefined;
+  try {
+    other = buildWorld(parseDemoOptions(["--play", "shot"]), FIXED_NOW);
+    const env = other.env;
+    for (const key of ["SSH_AUTH_SOCK", "KUBECONFIG", "GH_TOKEN", "HTTPS_PROXY", "https_proxy"])
+      expect(env[key]).toBeUndefined();
+    expect(env.BUN_RUNTIME_TRANSPILER_CACHE_PATH).toBeUndefined();
+    expect(env.CODEPULSE_CONFIG).toBeUndefined();
+    for (const [key, value] of Object.entries(env).filter(([key]) => key.startsWith("XDG_")))
+      expect(`${key}=${value}`).toStartWith(`${key}=${other.root}`);
+  } finally {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    if (other) rmSync(other.root, { recursive: true, force: true });
+  }
+});

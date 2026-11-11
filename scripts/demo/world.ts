@@ -56,6 +56,10 @@ export interface DemoWorld {
   env: Record<string, string>;
 }
 
+/** Variables of the user's that the app does not get. */
+const LEFT_OUT_ENV =
+  /^(GIT_|SNYK_|GITHUB_|GH_|JENKINS_|OPENSHIFT_|KUBE|NPM_CONFIG_|PNPM_|SSH_|XDG_|CODEPULSE_)|^((HTTPS?|ALL|NO|FTP)_PROXY|BUN_RUNTIME_TRANSPILER_CACHE_PATH)$/i;
+
 /** Sets a variable, dropping other spellings first: Windows names are case-insensitive (`Path` is `PATH`). */
 function setEnv(env: Record<string, string>, key: string, value: string | undefined) {
   if (process.platform === "win32") {
@@ -169,10 +173,11 @@ function fillWorld(root: string, options: DemoOptions, now: number): DemoWorld {
   const statePath = join(root, "state.json");
   for (const directory of [shop, web, remotes, bin, temp]) mkdirSync(directory, { recursive: true });
 
-  // The app's environment: the user's, minus anything that points Git or a provider at real data.
+  // The app's environment: the user's, minus anything that points Git, a provider, a package manager, ssh,
+  // Kubernetes or a proxy at real data or credentials, and minus folders and caches the demo sets inside itself.
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env)) {
-    if (value === undefined || /^(GIT_|SNYK_|GITHUB_|JENKINS_|OPENSHIFT_|NPM_CONFIG_|PNPM_)/i.test(key)) continue;
+    if (value === undefined || LEFT_OUT_ENV.test(key)) continue;
     env[key] = value;
   }
   const appData = join(home, "AppData");
@@ -183,6 +188,8 @@ function fillWorld(root: string, options: DemoOptions, now: number): DemoWorld {
     LOCALAPPDATA: join(appData, "Local"),
     XDG_CONFIG_HOME: join(home, ".config"),
     XDG_CACHE_HOME: join(home, ".cache"),
+    XDG_DATA_HOME: join(home, ".local", "share"),
+    XDG_STATE_HOME: join(home, ".local", "state"),
     TMPDIR: temp,
     TEMP: temp,
     TMP: temp,
