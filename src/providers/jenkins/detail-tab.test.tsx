@@ -55,7 +55,7 @@ const pipeline: JenkinsJob = {
   tests: { passCount: 1204, failCount: 1, skipCount: 12, failed: [failedTest] },
 };
 
-async function renderJenkinsTab(jobs: JenkinsJob[], gate?: Promise<void>) {
+async function renderJenkinsTab(jobs: JenkinsJob[] | (() => JenkinsJob[]), gate?: Promise<void>) {
   const [cursor, setCursor] = createSignal(0);
   const openBuild = mock((_run: JenkinsRun, _pipeline: JenkinsJob, _entry: number) => {});
   const openTest = mock((_run: JenkinsRun, _failed: JenkinsFailedTest[], _index: number) => {});
@@ -76,8 +76,9 @@ async function renderJenkinsTab(jobs: JenkinsJob[], gate?: Promise<void>) {
             getCommitData={() => ({ sha: SHA, runs: [run], resolved: true })}
             fetchJobsForRun={async () => {
               await gate;
-              return { jobs, error: null };
+              return { jobs: typeof jobs === "function" ? jobs() : jobs, error: null };
             }}
+            fetchCommitData={async () => {}}
             navRef={navRef}
             detailCursorIndex={cursor}
             detailFocused={() => true}
@@ -172,6 +173,20 @@ test("a build without stages has one Console row that opens the whole build", as
     expect(t.row("Console")).toMatch(/└─ Console\s+✗\s*$/);
     await t.activate("Console");
     expect(t.openBuild).toHaveBeenLastCalledWith(run, { ...pipeline, steps: [], tests: undefined }, 0);
+  } finally {
+    t.renderer.destroy();
+  }
+});
+
+test("Reload asks again for a finished build's test report that could not be read", async () => {
+  const { tests: _unknown, ...withoutReport } = pipeline;
+  let fetches = 0;
+  const t = await renderJenkinsTab(() => (++fetches === 1 ? [withoutReport] : [pipeline]));
+  try {
+    expect(t.captureCharFrame()).not.toContain("└─ Tests");
+    await t.activate("Reload commit");
+    expect(fetches).toBe(2);
+    expect(t.row("Tests")).toMatch(/└─ Tests\s+✗\s*$/);
   } finally {
     t.renderer.destroy();
   }

@@ -149,6 +149,11 @@ export interface ProviderRunTreeProps<TRaw, TJobRaw> {
   /** When false, notes leave out their `✗`/`!` (Jenkins: every listed test failed). */
   noteMarks?: boolean;
   onReloadCommit?: () => void | Promise<void>;
+  /**
+   * Whether a finished run's loaded jobs are final beyond their statuses (Jenkins: the test report is known). One that
+   * is not loads again on Reload, like a run still running or one that failed to load.
+   */
+  jobsFinal?: (jobs: readonly ProviderTreeJob<TJobRaw>[]) => boolean;
   reloadLabel?: string;
   reloadBusy?: boolean;
   /** Muted text after the reload label while it is busy (`fetching runs...`). */
@@ -370,11 +375,14 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
   };
 
   /** Completed, with every loaded job and step completed: its jobs and steps cannot change any more. */
-  const isSettled = (run: ProviderTreeRun<TRaw>) =>
-    run.status === "completed" &&
-    (fetchedJobs().get(run.id) ?? []).every(
-      job => job.status === "completed" && job.steps.every(step => step.status === "completed"),
+  const isSettled = (run: ProviderTreeRun<TRaw>) => {
+    const jobs = fetchedJobs().get(run.id) ?? [];
+    return (
+      run.status === "completed" &&
+      jobs.every(job => job.status === "completed" && job.steps.every(step => step.status === "completed")) &&
+      (props.jobsFinal?.(jobs) ?? true)
     );
+  };
 
   const reloadCommit = async () => {
     // Expanded runs that failed to load or were still running get fresh jobs and steps too.

@@ -111,6 +111,8 @@ export function JenkinsDetailTab(props: Readonly<JenkinsDetailTabProps>) {
         const failed = job.raw.kind === "tests" ? job.raw.report.failed : [];
         props.onOpenTestFailure?.(run.raw, failed, Number(note.id));
       }}
+      // A finished build whose test report could not be read asks again on Reload.
+      jobsFinal={jobs => jobs.every(job => job.raw.kind !== "log" || job.raw.pipeline.tests !== undefined)}
       noteAction="view failure"
       noteMarks={false}
       summaryLabel="total builds"
