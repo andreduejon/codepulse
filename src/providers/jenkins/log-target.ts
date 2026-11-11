@@ -4,6 +4,9 @@ import { sliceStageLog } from "./stage-log";
 import { testFailureText, testLabel } from "./tests";
 import type { JenkinsFailedTest, JenkinsJob, JenkinsJobFetchResult, JenkinsRun } from "./types";
 
+const STAGE_IN_PARALLEL = "Runs in parallel: the full log, with the other branches' lines";
+const STAGE_NOT_IN_LOG = "Not in the log yet: the full log";
+
 /** What a build log reads from the Jenkins provider. */
 export interface JenkinsLogReader {
   fetchRunLog: (run: JenkinsRun) => Promise<string>;
@@ -29,7 +32,13 @@ export function jenkinsBuildLogTarget(
     noun: "stage",
     fetchLog: async current => {
       const full = await ci.fetchRunLog(run);
-      if (!isWholeBuildEntry(current)) return sliceStageLog(full, current.name) ?? full;
+      if (!isWholeBuildEntry(current)) {
+        const stage = sliceStageLog(full, current.name);
+        if (stage.log !== undefined) return stage.log;
+        // The title still names the stage, so say why the whole console shows instead.
+        const why = stage.missing === "parallel" ? STAGE_IN_PARALLEL : STAGE_NOT_IN_LOG;
+        return { log: full, summary: [{ text: why, kind: "muted" }] };
+      }
       const latest = await ci.fetchJobsForRun(run).catch(() => null);
       return { log: full, summary: jenkinsBuildSummary(latest?.jobs[0] ?? pipeline) };
     },
