@@ -215,6 +215,36 @@ test("jobs of a finished run are cached only once every job and step has finishe
   expect(jobs).toHaveBeenCalledTimes(2);
 });
 
+test("a re-run keeps its run id but not its jobs: the cached jobs of the earlier attempt are not reused", async () => {
+  const { github } = await mountGitHub();
+  const job = (attempt: number, status: string, conclusion: string | null) => ({
+    id: 5 + attempt,
+    name: "test",
+    status,
+    conclusion,
+    startedAt: null,
+    completedAt: null,
+    steps: [],
+    runAttempt: attempt,
+  });
+  const jobs = spyOn(api, "fetchRunJobs")
+    .mockResolvedValueOnce({ jobs: [job(1, "completed", "failure")], error: null })
+    .mockResolvedValueOnce({ jobs: [job(1, "completed", "failure"), job(2, "in_progress", null)], error: null })
+    .mockResolvedValue({ jobs: [job(1, "completed", "failure"), job(2, "completed", "success")], error: null });
+  const annotations = spyOn(api, "fetchJobAnnotations").mockResolvedValue([]);
+  cleanup.push(() => {
+    jobs.mockRestore();
+    annotations.mockRestore();
+  });
+  await github.fetchJobsForRun(run({ status: "completed", conclusion: "failure" }));
+  const rerunning = await github.fetchJobsForRun(run({ updatedAt: "2026-01-01T01:00:00Z" }));
+  expect(rerunning.jobs.map(entry => entry.runAttempt)).toEqual([1, 2]);
+  const rerun = run({ status: "completed", conclusion: "success", updatedAt: "2026-01-01T01:05:00Z" });
+  expect((await github.fetchJobsForRun(rerun)).jobs.map(entry => entry.conclusion)).toEqual(["failure", "success"]);
+  await github.fetchJobsForRun(rerun);
+  expect(jobs).toHaveBeenCalledTimes(3);
+});
+
 test("a failed job gets its annotations once; a passing job asks for none", async () => {
   const { github } = await mountGitHub();
   const job = (id: number, conclusion: string) => ({
