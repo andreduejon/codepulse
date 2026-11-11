@@ -42,6 +42,9 @@ test("the app gets none of the user's credentials, proxies, agents or folders ou
     XDG_STATE_HOME: "/home/someone/.local/state",
     BUN_RUNTIME_TRANSPILER_CACHE_PATH: "/home/someone/.bun-cache",
     CODEPULSE_CONFIG: "/home/someone/.config/codepulse/config.json",
+    // OpenTUI's input log and captures write files wherever these point.
+    OTUI_STDIN_LOG: "/home/someone/input.log",
+    OTUI_DUMP_CAPTURES: "1",
   };
   const saved = Object.fromEntries(Object.keys(hostile).map(key => [key, process.env[key]]));
   Object.assign(process.env, hostile);
@@ -53,6 +56,8 @@ test("the app gets none of the user's credentials, proxies, agents or folders ou
       expect(env[key]).toBeUndefined();
     expect(env.BUN_RUNTIME_TRANSPILER_CACHE_PATH).toBeUndefined();
     expect(env.CODEPULSE_CONFIG).toBeUndefined();
+    expect(env.OTUI_STDIN_LOG).toBeUndefined();
+    expect(env.OTUI_DUMP_CAPTURES).toBeUndefined();
     for (const [key, value] of Object.entries(env).filter(([key]) => key.startsWith("XDG_")))
       expect(`${key}=${value}`).toStartWith(`${key}=${other.root}`);
   } finally {

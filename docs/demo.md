@@ -3,7 +3,8 @@
 `bun run demo` starts codepulse on throwaway repositories with made-up GitHub Actions, Jenkins, OpenShift and Snyk
 data. It needs a source checkout, Bun and Git, and no accounts. Nothing reaches the network, and your own config,
 cache and Git settings stay untouched: everything the demo writes goes into a fresh folder in the system temp
-directory, which is removed when it ends.
+directory, which is removed when it ends. The one exception is on Windows, where the fake tools are compiled once
+and kept in `node_modules/.cache/codepulse-demo`.
 
 It is for development: to look at a screen without a real server, and to check a UI change headless.
 

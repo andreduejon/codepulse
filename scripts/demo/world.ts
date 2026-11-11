@@ -56,9 +56,13 @@ export interface DemoWorld {
   env: Record<string, string>;
 }
 
-/** Variables of the user's that the app does not get. */
+/**
+ * Variables of the user's that the app does not get: what points Git, a provider, a package manager, ssh, Kubernetes
+ * or a proxy elsewhere, the folders the demo sets inside itself, and OpenTUI's debug switches (`OTUI_STDIN_LOG` and
+ * others write files wherever they point).
+ */
 const LEFT_OUT_ENV =
-  /^(GIT_|SNYK_|GITHUB_|GH_|JENKINS_|OPENSHIFT_|KUBE|NPM_CONFIG_|PNPM_|SSH_|XDG_|CODEPULSE_)|^((HTTPS?|ALL|NO|FTP)_PROXY|BUN_RUNTIME_TRANSPILER_CACHE_PATH)$/i;
+  /^(GIT_|SNYK_|GITHUB_|GH_|JENKINS_|OPENSHIFT_|KUBE|NPM_CONFIG_|PNPM_|SSH_|XDG_|CODEPULSE_|OTUI_)|^((HTTPS?|ALL|NO|FTP)_PROXY|BUN_RUNTIME_TRANSPILER_CACHE_PATH)$/i;
 
 /** Sets a variable, dropping other spellings first: Windows names are case-insensitive (`Path` is `PATH`). */
 function setEnv(env: Record<string, string>, key: string, value: string | undefined) {
