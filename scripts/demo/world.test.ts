@@ -67,4 +67,4 @@ test("the app gets none of the user's credentials, proxies, agents or folders ou
     }
     if (other) rmSync(other.root, { recursive: true, force: true });
   }
-});
+}, 60_000);

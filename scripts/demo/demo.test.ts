@@ -114,7 +114,10 @@ describe("bun run demo --play", () => {
     { timeout: 120_000 },
   );
 
-  test(
+  // Windows has no signals to handle: killing the launcher ends it at once, with nothing left to clean up after it.
+  const signalTest = test.skipIf(process.platform === "win32");
+
+  signalTest(
     "a signal while the world is built still removes the folder, and the demo exits as stopped",
     async () => {
       const user = userEnv("signal-build");
@@ -129,7 +132,7 @@ describe("bun run demo --play", () => {
     { timeout: 120_000 },
   );
 
-  test(
+  signalTest(
     "a signal stops a play at once, also in the middle of a sleep, and the folder goes",
     async () => {
       const user = userEnv("signal-sleep");
