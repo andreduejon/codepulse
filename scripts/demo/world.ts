@@ -19,7 +19,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, join } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 import { storageRoot } from "../../src/utils/storage-path";
 import { importHistory } from "./history";
 import { type DemoOptions, PROVIDERS, providerError } from "./options";
@@ -317,15 +317,18 @@ function fillWorld(root: string, options: DemoOptions, now: number): DemoWorld {
     snyk: { enabled: enabled("snyk"), tokenEnvVar: TOKEN_ENV.snyk, autoScanBranches: ["main", "dev"] },
   };
   const common = { group: "demo", autoFetchSeconds, ...(options.theme ? { theme: options.theme } : {}) };
+  // The app looks a repository up under the folder Git names, which on Windows can be spelled other than the one here
+  // (a short folder name like RUNNER~1 in the temp path, or another letter case): the config uses Git's.
+  const known = (repo: string) => resolve(git(repo, ["rev-parse", "--show-toplevel"]));
   const repos: Record<string, unknown> = {
-    [web]: {
+    [known(web)]: {
       appName: "shop-web",
       ...common,
       providers: { github: shopProviders.github, snyk: { ...shopProviders.snyk, autoScanBranches: ["main"] } },
     },
   };
   // --setup: the config knows shop-web only, so shop opens on the welcome screen.
-  if (!options.setup) repos[shop] = { appName: "shop", ...common, providers: shopProviders };
+  if (!options.setup) repos[known(shop)] = { appName: "shop", ...common, providers: shopProviders };
   const configDir = storageRoot("config", process.platform, home, env);
   mkdirSync(configDir, { recursive: true });
   writeFileSync(join(configDir, "config.json"), `${JSON.stringify({ repos }, null, 2)}\n`);

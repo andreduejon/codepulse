@@ -4,12 +4,24 @@
 import { afterAll, expect, test } from "bun:test";
 import { readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { resolveConfigInfo } from "../../src/config";
+import { getRepoRoot } from "../../src/git/repo";
+import { storageRoot } from "../../src/utils/storage-path";
 import { parseDemoOptions } from "./options";
 import { FIXED_NOW } from "./scenario";
 import { buildWorld } from "./world";
 
 const world = buildWorld(parseDemoOptions(["--play", "shot"]), FIXED_NOW);
 afterAll(() => rmSync(world.root, { recursive: true, force: true }));
+
+test("the config knows both repositories under the path the app looks them up by, the one Git names", async () => {
+  const configPath = join(storageRoot("config", process.platform, join(world.root, "home"), world.env), "config.json");
+  for (const repo of [world.repoPath, join(dirname(world.repoPath), "shop-web")]) {
+    const root = await getRepoRoot(repo);
+    expect(root).not.toBeNull();
+    expect(resolveConfigInfo(root ?? "", configPath).hasRepoOverrides).toBe(true);
+  }
+});
 
 test("o and copy reach the demo's own browser and clipboard commands, which write to outside.log", () => {
   const PATH = world.env.PATH ?? world.env.Path ?? "";
