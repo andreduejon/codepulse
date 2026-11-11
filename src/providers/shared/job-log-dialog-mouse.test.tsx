@@ -746,3 +746,36 @@ test("the title takes the time read with the log, so a job that finished meanwhi
     setup.renderer.destroy();
   }
 });
+
+test("a note about what the log is shows in every view, so a filtered log still says it is the full one", async () => {
+  const theme = createThemeState();
+  const note = "Runs in parallel: the full log, with the other branches' lines";
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={theme}>
+        <JobLogDialog
+          provider="jenkins"
+          job={{ id: "stage-1", name: "Unit tests" }}
+          jobs={[{ id: "stage-1", name: "Unit tests" }]}
+          run={{ name: "main", runNumber: 41 }}
+          fetchLog={async () => ({ log: "+ ./gradlew lint\nLintTask FAILED", note })}
+          onClose={() => {}}
+        />
+      </ThemeContext.Provider>
+    ),
+    { width: 120, height: 20, kittyKeyboard: true },
+  );
+  try {
+    await setup.flush();
+    await setup.flush();
+    for (const view of ["all", "issues only", "errors only", "raw"]) {
+      const frame = setup.captureCharFrame();
+      if (view !== "all") expect(frame).toContain(view);
+      expect(frame).toContain(note);
+      setup.mockInput.pressKey("c");
+      await setup.flush();
+    }
+  } finally {
+    setup.renderer.destroy();
+  }
+});

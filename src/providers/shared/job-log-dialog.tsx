@@ -33,6 +33,11 @@ export interface JobLogContent {
   summary?: JobLogSummaryLine[];
   /** The entry's time as read with the log, for the title: a job that was running when it opened has one now. */
   detail?: string;
+  /**
+   * What the log is, when it is not what the title says (a stage's full log): a muted line above it in every view,
+   * so a filtered view still says so.
+   */
+  note?: string;
 }
 
 /** One log the dialog moves between with ←/→: a GitHub job, a Jenkins build or stage, a failed test. */
@@ -63,6 +68,7 @@ interface LoadedLog {
   summary: JobLogSummaryLine[];
   /** The time read with the log; the entry's own until then. */
   detail?: string;
+  note?: string;
   loading: boolean;
   error: string | null;
 }
@@ -192,6 +198,7 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
           raw: content.log,
           summary: content.summary ?? [],
           detail: content.detail,
+          note: content.note,
           loading: false,
           error: null,
         });
@@ -233,7 +240,8 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
     return parseLogLines(raw);
   });
 
-  const filteredLines = createMemo((): LogLine[] => {
+  /** The current view's lines: as received (raw), with the summary (all), or only issues or errors. */
+  const viewLines = (): LogLine[] => {
     const mode = viewMode();
     if (mode === "raw") {
       const raw = currentLoadedLog().raw;
@@ -255,6 +263,13 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
     }
     if (mode === "issues") return parsedLines().filter(line => line.kind === "warning" || line.kind === "error");
     return parsedLines().filter(line => line.kind === "error");
+  };
+  const filteredLines = createMemo((): LogLine[] => {
+    const lines = viewLines();
+    const note = currentLoadedLog().note;
+    // A view with nothing to show stays empty (its own message says so); otherwise the note goes first.
+    if (!note || lines.length === 0) return lines;
+    return [{ kind: "muted", text: note, lineNo: 0 }, { kind: "normal", text: "", lineNo: 0 }, ...lines];
   });
 
   const viewState = (): LogViewState | null => {

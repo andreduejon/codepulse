@@ -35,9 +35,8 @@ export function jenkinsBuildLogTarget(
       if (!isWholeBuildEntry(current)) {
         const stage = sliceStageLog(full, current.name);
         if (stage.log !== undefined) return stage.log;
-        // The title still names the stage, so say why the whole console shows instead.
-        const why = stage.missing === "parallel" ? STAGE_IN_PARALLEL : STAGE_NOT_IN_LOG;
-        return { log: full, summary: [{ text: why, kind: "muted" }] };
+        // The title still names the stage, so say why the whole console shows instead, in every view.
+        return { log: full, note: stage.missing === "parallel" ? STAGE_IN_PARALLEL : STAGE_NOT_IN_LOG };
       }
       const latest = await ci.fetchJobsForRun(run).catch(() => null);
       return { log: full, summary: jenkinsBuildSummary(latest?.jobs[0] ?? pipeline) };

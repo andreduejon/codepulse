@@ -59,12 +59,12 @@ test("a stage in a parallel branch, or one the console lacks, opens the full log
   const target = jenkinsBuildLogTarget(ci, run, pipeline, 1);
   expect(await target.fetchLog(target.job)).toEqual({
     log: parallel,
-    summary: [{ text: "Runs in parallel: the full log, with the other branches' lines", kind: "muted" }],
+    note: "Runs in parallel: the full log, with the other branches' lines",
   });
   ci.fetchRunLog.mockImplementation(async () => "Started\nFinished");
   expect(await target.fetchLog(target.job)).toEqual({
     log: "Started\nFinished",
-    summary: [{ text: "Not in the log yet: the full log", kind: "muted" }],
+    note: "Not in the log yet: the full log",
   });
 });
 
