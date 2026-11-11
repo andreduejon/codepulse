@@ -1098,7 +1098,7 @@ describe("fetchJobAnnotations", () => {
       }),
     );
     const annotations = await fetchJobAnnotations(TEST_REPO, TEST_TOKEN, 5);
-    expect(url).toEndWith("/repos/owner/repo/check-runs/5/annotations?per_page=50");
+    expect(url).toEndWith("/repos/owner/repo/check-runs/5/annotations?per_page=100");
     expect(annotations).toEqual([
       { level: "failure", path: "src/auth.test.ts", line: 42, message: "Expected 200, received 401\n  at line 42" },
       { level: "warning", path: ".github", line: null, message: "Node 16 is deprecated" },
@@ -1108,5 +1108,27 @@ describe("fetchJobAnnotations", () => {
   it("a failed request gives no annotations rather than an error", async () => {
     mockFetch(mock(async () => new Response(null, { status: 403 })));
     expect(await fetchJobAnnotations(TEST_REPO, TEST_TOKEN, 5)).toBeNull();
+  });
+
+  it("follows the next pages, so a failure after many notices still shows", async () => {
+    const notice = { path: "a.ts", start_line: 1, annotation_level: "notice", message: "note" };
+    const urls: string[] = [];
+    mockFetch(
+      mock(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        urls.push(url);
+        if (url.includes("page=2"))
+          return new Response(
+            JSON.stringify([{ path: "b.ts", start_line: 9, annotation_level: "failure", message: "boom" }]),
+          );
+        return new Response(JSON.stringify(Array.from({ length: 100 }, () => notice)), {
+          headers: { link: `<${url}&page=2>; rel="next"` },
+        });
+      }),
+    );
+    const annotations = await fetchJobAnnotations(TEST_REPO, TEST_TOKEN, 5);
+    expect(urls).toHaveLength(2);
+    expect(annotations).toHaveLength(101);
+    expect(annotations?.at(-1)).toEqual({ level: "failure", path: "b.ts", line: 9, message: "boom" });
   });
 });

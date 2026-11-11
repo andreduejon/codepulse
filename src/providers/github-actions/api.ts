@@ -785,6 +785,9 @@ export async function fetchRunJobs(
   }
 }
 
+/** The most annotation pages read for one job (100 each). */
+const MAX_ANNOTATION_PAGES = 5;
+
 /**
  * A job's annotations (an Actions job is a check run with the same id). Null when they could not be read, so the
  * caller asks again later; a failed job still shows without them.
@@ -795,31 +798,38 @@ export async function fetchJobAnnotations(
   jobId: number,
   signal?: AbortSignal,
 ): Promise<GitHubAnnotation[] | null> {
+  const origin = apiBase(repo);
+  let url: string | null = `${origin}/check-runs/${jobId}/annotations?per_page=100`;
+  const annotations: GitHubAnnotation[] = [];
   try {
-    const res = await fetchWithRetry(`${apiBase(repo)}/check-runs/${jobId}/annotations?per_page=50`, {
-      headers: createHeaders(token),
-      signal,
-    });
-    if (!res.ok) {
-      debugGitHubHttp(res, "jobs", `Annotations HTTP ${res.status} for job ${jobId}`);
-      return null;
+    // Every page: a failure can come after a page of notices. A page that cannot be read leaves them all unread.
+    for (let page = 0; page < MAX_ANNOTATION_PAGES && url; page++) {
+      const res = await fetchWithRetry(url, { headers: createHeaders(token), signal });
+      if (!res.ok) {
+        debugGitHubHttp(res, "jobs", `Annotations HTTP ${res.status} for job ${jobId}`);
+        return null;
+      }
+      const json = (await res.json()) as unknown;
+      if (!Array.isArray(json)) return null;
+      annotations.push(
+        ...json.flatMap((raw): GitHubAnnotation[] => {
+          const item = raw as Record<string, unknown>;
+          const level = item.annotation_level;
+          if (level !== "failure" && level !== "warning" && level !== "notice") return [];
+          const line = typeof item.start_line === "number" && item.start_line > 0 ? item.start_line : null;
+          return [
+            {
+              level,
+              path: typeof item.path === "string" ? item.path : "",
+              line,
+              message: typeof item.message === "string" ? item.message : "",
+            },
+          ];
+        }),
+      );
+      url = nextGithubLink(res.headers.get("link"), origin);
     }
-    const json = (await res.json()) as unknown;
-    if (!Array.isArray(json)) return null;
-    return json.flatMap((raw): GitHubAnnotation[] => {
-      const item = raw as Record<string, unknown>;
-      const level = item.annotation_level;
-      if (level !== "failure" && level !== "warning" && level !== "notice") return [];
-      const line = typeof item.start_line === "number" && item.start_line > 0 ? item.start_line : null;
-      return [
-        {
-          level,
-          path: typeof item.path === "string" ? item.path : "",
-          line,
-          message: typeof item.message === "string" ? item.message : "",
-        },
-      ];
-    });
+    return annotations;
   } catch (err) {
     if (signal?.aborted) throw err;
     debugError("GitHub", `Annotations for job ${jobId} failed: ${err instanceof Error ? err.message : String(err)}`);

@@ -259,6 +259,25 @@ test("a re-run keeps its run id but not its jobs: the cached jobs of the earlier
   expect(jobs).toHaveBeenCalledTimes(3);
 });
 
+test("cached jobs are final only for a finished run, even at the same update time", async () => {
+  const { github } = await mountGitHub();
+  const job = {
+    id: 5,
+    name: "test",
+    status: "completed",
+    conclusion: "success",
+    startedAt: null,
+    completedAt: null,
+    steps: [],
+    runAttempt: 1,
+  };
+  const jobs = spyOn(api, "fetchRunJobs").mockResolvedValue({ jobs: [job], error: null });
+  cleanup.push(() => jobs.mockRestore());
+  await github.fetchJobsForRun(run({ status: "completed", conclusion: "success" }));
+  await github.fetchJobsForRun(run({ status: "in_progress" }));
+  expect(jobs).toHaveBeenCalledTimes(2);
+});
+
 test("a failed job gets its annotations once; a passing job asks for none", async () => {
   const { github } = await mountGitHub();
   const job = (id: number, conclusion: string) => ({

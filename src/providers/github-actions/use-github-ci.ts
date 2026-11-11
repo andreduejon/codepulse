@@ -516,7 +516,7 @@ export function useGitHubCI(opts: {
     const cached = cachedJobsFor(run);
     // Jobs listed by GraphQL (or cached before v0.17) carry no attempt: REST is asked once, to learn about re-runs.
     const attemptsKnown = !!cached && cached.every(job => job.runAttempt !== undefined);
-    if (cached && jobsSettled(cached) && attemptsKnown) {
+    if (cached && run.status === "completed" && jobsSettled(cached) && attemptsKnown) {
       if (!cached.some(annotationsMissing(cached))) return { jobs: cached, error: null };
       const annotated = await withAnnotations(cached, signal);
       if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
