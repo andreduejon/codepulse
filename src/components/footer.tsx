@@ -4,14 +4,10 @@ import { useAppState } from "../context/state";
 import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
 import { useT } from "../hooks/use-t";
 import { providerShortName } from "../providers/provider";
-import { cellWidth } from "../utils/terminal-text";
 import { endTruncate } from "../utils/truncate";
-import { KeyHint, KeyHintSeparator } from "./key-hint";
+import { fitHints, KeyHint, KeyHintSeparator, type RankedHint } from "./key-hint";
 
-interface FooterHint {
-  key: string;
-  desc: string;
-  rank: number;
+interface FooterHint extends RankedHint {
   disabled?: boolean;
   onClick?: () => void;
 }
@@ -166,21 +162,8 @@ export default function Footer(
       { key: "↑/↓", desc: " navigate", rank: 3 },
     ];
   };
-  /** Hints that fit beside the spinner: the least needed (highest rank, the later one first) go until the rest fit. */
-  const shownHints = createMemo(() => {
-    const room = footerWidth() - 1;
-    const width = (list: FooterHint[]) =>
-      list.reduce((sum, hint) => sum + cellWidth(hint.key + hint.desc), 0) + Math.max(0, list.length - 1) * 3;
-    let kept = hints();
-    while (kept.length > 1 && width(kept) > room) {
-      let drop = 0;
-      kept.forEach((hint, index) => {
-        if (hint.rank >= (kept[drop]?.rank ?? 0)) drop = index;
-      });
-      kept = kept.filter((_, index) => index !== drop);
-    }
-    return kept;
-  });
+  /** Hints that fit beside the spinner. */
+  const shownHints = createMemo(() => fitHints(hints(), footerWidth() - 1));
 
   return (
     <>

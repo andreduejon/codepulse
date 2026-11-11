@@ -683,3 +683,40 @@ test("Jenkins names the stage and its time in the title, the footer where the ar
     setup.renderer.destroy();
   }
 });
+
+test("a narrow footer drops whole hints, the least needed first, never cutting one or leaving a separator", async () => {
+  const jobs = [
+    { id: 1, name: "build" },
+    { id: 2, name: "test" },
+    { id: 3, name: "lint" },
+  ];
+  const theme = createThemeState();
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={theme}>
+        <JobLogDialog
+          provider="github-actions"
+          job={jobs[1]}
+          jobs={jobs}
+          run={{ name: "CI", runNumber: 812, url: "https://example.com/run/812" }}
+          fetchLog={async () => "PaymentGateway timed out\nok"}
+          onClose={() => {}}
+          initialSearch="PaymentGateway"
+        />
+      </ThemeContext.Provider>
+    ),
+    { width: 90, height: 30, kittyKeyboard: true },
+  );
+  try {
+    await setup.flush();
+    await setup.flush();
+    const rows = setup.captureCharFrame().split("\n");
+    const footer = rows.find(row => row.includes("n/N")) ?? "";
+    expect(footer.trim()).toBe("← previous job · → next job · n/N next/previous · c view · o open");
+    // The footer keeps the dialog's inner padding: it ends where the title bar's esc close does.
+    const title = rows.find(row => row.includes("esc close")) ?? "";
+    expect(footer.trimEnd().length).toBe(title.trimEnd().length);
+  } finally {
+    setup.renderer.destroy();
+  }
+});

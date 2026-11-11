@@ -12,7 +12,7 @@ import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { createEffect, createMemo, createSignal, For, onMount, Show, untrack } from "solid-js";
 import { useT } from "../../hooks/use-t";
 import { type StatusCategory, statusColor, statusIcon } from "../../providers/shared/status";
-import { KeyHint, KeyHintSeparator } from "../key-hint";
+import { fitHints, KeyHint, KeyHintSeparator, type RankedHint } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitle, DialogTitleBar, getStandardDialogFrame } from "./dialog-chrome";
 import {
   highlightHits,
@@ -120,6 +120,27 @@ export function LogViewer(props: Readonly<LogViewerProps>) {
   });
 
   const toggleWrap = () => setWrapEnabled(value => !value);
+
+  /**
+   * The footer's hints, fitted to the dialog: the arrows and search stay longest, wrap goes first. Inside the frame's
+   * padding (1) and the footer's (4) on both sides.
+   */
+  const footerHints = () => {
+    const navigation = props.navigation?.();
+    const { view, refresh, open } = actions();
+    const hints: (RankedHint & { onClick: () => void })[] = [];
+    if (navigation?.previous)
+      hints.push({ key: "←", desc: ` ${navigation.previous}`, rank: 1, onClick: () => navigation.go(-1) });
+    if (navigation?.next)
+      hints.push({ key: "→", desc: ` ${navigation.next}`, rank: 1, onClick: () => navigation.go(1) });
+    if (search.term()) hints.push({ key: "n/N", desc: " next/previous", rank: 2, onClick: () => search.step(1) });
+    else hints.push({ key: "/", desc: " search", rank: 2, onClick: () => search.setEditing(true) });
+    if (view) hints.push({ key: "c", desc: " view", rank: 3, onClick: view });
+    hints.push({ key: "w", desc: wrapEnabled() ? " nowrap" : " wrap", rank: 6, onClick: toggleWrap });
+    if (refresh) hints.push({ key: "r", desc: " refresh", rank: 5, onClick: refresh });
+    if (open) hints.push({ key: "o", desc: " open", rank: 4, onClick: open });
+    return fitHints(hints, frame().width - 10);
+  };
   const titleElement = createMemo(() => <DialogTitle segments={fitTitleSegments(props.title(), frame().width)} />);
 
   useKeyboard(e => {
@@ -262,54 +283,16 @@ export function LogViewer(props: Readonly<LogViewerProps>) {
         </scrollbox>
         <LogSearchRow search={search} placeholder={props.searchPlaceholder()} />
         <DialogFooter>
-          <Show when={props.navigation?.()?.previous}>
-            {label => (
+          <For each={footerHints()}>
+            {(hint, index) => (
               <>
-                <KeyHint key="←" desc={` ${label()}`} onClick={() => props.navigation?.()?.go(-1)} />
-                <KeyHintSeparator />
+                <Show when={index() > 0}>
+                  <KeyHintSeparator />
+                </Show>
+                <KeyHint key={hint.key} desc={hint.desc} onClick={hint.onClick} />
               </>
             )}
-          </Show>
-          <Show when={props.navigation?.()?.next}>
-            {label => (
-              <>
-                <KeyHint key="→" desc={` ${label()}`} onClick={() => props.navigation?.()?.go(1)} />
-                <KeyHintSeparator />
-              </>
-            )}
-          </Show>
-          <Show
-            when={search.term()}
-            fallback={<KeyHint key="/" desc=" search" onClick={() => search.setEditing(true)} />}
-          >
-            <KeyHint key="n/N" desc=" next/previous" onClick={() => search.step(1)} />
-          </Show>
-          <Show when={actions().view}>
-            {view => (
-              <>
-                <KeyHintSeparator />
-                <KeyHint key="c" desc=" view" onClick={() => view()()} />
-              </>
-            )}
-          </Show>
-          <KeyHintSeparator />
-          <KeyHint key="w" desc={wrapEnabled() ? " nowrap" : " wrap"} onClick={toggleWrap} />
-          <Show when={actions().refresh}>
-            {refresh => (
-              <>
-                <KeyHintSeparator />
-                <KeyHint key="r" desc=" refresh" onClick={() => refresh()()} />
-              </>
-            )}
-          </Show>
-          <Show when={actions().open}>
-            {open => (
-              <>
-                <KeyHintSeparator />
-                <KeyHint key="o" desc=" open" onClick={() => open()()} />
-              </>
-            )}
-          </Show>
+          </For>
         </DialogFooter>
       </box>
     </DialogOverlay>
