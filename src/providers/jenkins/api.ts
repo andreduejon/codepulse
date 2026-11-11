@@ -238,6 +238,14 @@ export async function resolveJenkinsJobs(
     signal,
   );
 
+  // Branch jobs of every multibranch project, read after the limit is applied to all of them together.
+  const candidates: {
+    child: JenkinsMultibranchChildApi;
+    parentOrigin: string;
+    order: number;
+    preferred: boolean;
+    built: number;
+  }[] = [];
   for (const discovery of discoveries) {
     if (!discovery) continue;
     if (discovery.api._class !== "org.jenkinsci.plugins.workflow.multibranch.WorkflowMultiBranchProject") {
@@ -254,45 +262,46 @@ export async function resolveJenkinsJobs(
       firstError ??= BANNER.jenkins.invalidJobUrl;
       continue;
     }
-    // Over the limit, the branches in the graph are read first, then the most recently built (stable otherwise).
     const inGraph = (child: JenkinsMultibranchChildApi) => {
       const name = child.name ? safeDecode(child.name) : "";
       return preferredBranches.has(name) || (!!child.displayName && preferredBranches.has(child.displayName));
     };
-    const children = (discovery.api.jobs ?? [])
-      .filter(isEnabledMultibranchJob)
-      .map((child, order) => ({ child, order, preferred: inGraph(child), built: child.lastBuild?.timestamp ?? -1 }))
-      .sort((a, b) => Number(b.preferred) - Number(a.preferred) || b.built - a.built || a.order - b.order)
-      .map(entry => entry.child);
-    branchJobTotal += children.length;
-    for (const child of children) {
-      let url: string;
-      try {
-        url = normalizeJenkinsJobUrl(onOrigin(child.url ?? "", parentOrigin));
-      } catch {
-        debugError("Jenkins", child.url ?? "");
-        firstError ??= BANNER.jenkins.invalidJobUrl;
-        continue;
-      }
-      if (!url || resolved.has(url)) continue;
-      if (!isSafeJenkinsRequestUrl(url)) {
-        debugError("Jenkins", url);
-        firstError ??= BANNER.jenkins.invalidJobUrl;
-        continue;
-      }
-      if (discoveredCount >= JENKINS_MULTIBRANCH_JOB_LIMIT) {
-        if (!truncated)
-          debugError(
-            "Jenkins",
-            `Multibranch discovery limited to ${JENKINS_MULTIBRANCH_JOB_LIMIT} jobs for ${discovery.job.url}`,
-          );
-        truncated = true;
-        continue;
-      }
-      const childLabel = child.displayName?.trim() || child.name?.trim() || deriveJenkinsJobLabel({ url });
-      resolved.set(url, { url, label: childLabel });
-      discoveredCount++;
+    for (const child of (discovery.api.jobs ?? []).filter(isEnabledMultibranchJob))
+      candidates.push({
+        child,
+        parentOrigin,
+        order: candidates.length,
+        preferred: inGraph(child),
+        built: child.lastBuild?.timestamp ?? -1,
+      });
+  }
+  branchJobTotal = candidates.length;
+  // Over the limit, the branches in the graph are read first, then the most recently built (stable otherwise),
+  // whichever project they belong to.
+  candidates.sort((a, b) => Number(b.preferred) - Number(a.preferred) || b.built - a.built || a.order - b.order);
+  for (const { child, parentOrigin } of candidates) {
+    let url: string;
+    try {
+      url = normalizeJenkinsJobUrl(onOrigin(child.url ?? "", parentOrigin));
+    } catch {
+      debugError("Jenkins", child.url ?? "");
+      firstError ??= BANNER.jenkins.invalidJobUrl;
+      continue;
     }
+    if (!url || resolved.has(url)) continue;
+    if (!isSafeJenkinsRequestUrl(url)) {
+      debugError("Jenkins", url);
+      firstError ??= BANNER.jenkins.invalidJobUrl;
+      continue;
+    }
+    if (discoveredCount >= JENKINS_MULTIBRANCH_JOB_LIMIT) {
+      if (!truncated) debugError("Jenkins", `Multibranch discovery limited to ${JENKINS_MULTIBRANCH_JOB_LIMIT} jobs`);
+      truncated = true;
+      continue;
+    }
+    const childLabel = child.displayName?.trim() || child.name?.trim() || deriveJenkinsJobLabel({ url });
+    resolved.set(url, { url, label: childLabel });
+    discoveredCount++;
   }
 
   return {

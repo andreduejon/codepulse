@@ -769,6 +769,48 @@ describe("resolveJenkinsJobs", () => {
     }
   });
 
+  test("over the limit, the graph's branches come first across all multibranch projects, not per project", async () => {
+    const originalFetch = globalThis.fetch;
+    const branch = (project: string, name: string, timestamp: number) => ({
+      _class: "org.jenkinsci.plugins.workflow.job.WorkflowJob",
+      name,
+      url: `https://jenkins.example.com/job/${project}/job/${name}/`,
+      buildable: true,
+      disabled: false,
+      lastBuild: { timestamp },
+    });
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const project = String(input).includes("/job/tools/") ? "tools" : "service";
+      return Response.json({
+        _class: "org.jenkinsci.plugins.workflow.multibranch.WorkflowMultiBranchProject",
+        jobs:
+          project === "tools"
+            ? Array.from({ length: 30 }, (_, index) => branch("tools", `chore-${index}`, 2000 + index))
+            : [branch("service", "experiment", 1000), branch("service", "main", 10)],
+      });
+    }) as typeof fetch;
+
+    try {
+      const result = await resolveJenkinsJobs(
+        [{ url: "https://jenkins.example.com/job/tools" }, { url: "https://jenkins.example.com/job/service" }],
+        "user",
+        "token",
+        undefined,
+        undefined,
+        new Set(["main"]),
+      );
+      expect(result.jobs).toHaveLength(25);
+      expect(result.jobs[0]?.url).toBe("https://jenkins.example.com/job/service/job/main");
+      // Then the most recently built, whichever project they are in.
+      expect(result.jobs[1]?.url).toBe("https://jenkins.example.com/job/tools/job/chore-29");
+      expect(result.jobs.some(job => job.url.endsWith("/experiment"))).toBe(false);
+      expect(result.branchJobs).toEqual({ shown: 25, total: 32 });
+      expect(result.truncated).toBe(true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   test("treats a missing root class as a direct job", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () =>
