@@ -706,7 +706,7 @@ export async function fetchJenkinsTestReport(
   username: string | undefined,
   token: string,
   signal?: AbortSignal,
-): Promise<JenkinsTestReport | null> {
+): Promise<JenkinsTestReport | null | undefined> {
   try {
     const url = jenkinsApiUrl(
       onOrigin(run.url, run.jobUrl),
@@ -716,9 +716,10 @@ export async function fetchJenkinsTestReport(
     const res = await fetchWithRetry(url, { headers: authHeaders(username, token), signal, redirect: "manual" });
     // Most builds have no report: that is no error, so Debug stays quiet about it.
     if (res.status === 404) return null;
+    // Not read: unknown rather than none, so it is asked for again.
     if (!res.ok || /text\/html/i.test(res.headers.get("content-type") ?? "")) {
       debugError("Jenkins", `${res.status} ${res.statusText} ${url}`);
-      return null;
+      return undefined;
     }
     const report = (await res.json()) as {
       failCount?: number;
@@ -747,7 +748,7 @@ export async function fetchJenkinsTestReport(
     };
   } catch (err) {
     if (isAbortError(err, signal)) throw err;
-    return null;
+    return undefined;
   }
 }
 
@@ -795,8 +796,8 @@ export async function fetchJenkinsRunJobs(
       steps: stages,
     };
     // Reports are written when the build ends, so only a finished build is asked for one.
-    const tests = run.status === "completed" ? await fetchJenkinsTestReport(run, username, token, signal) : null;
-    return { jobs: [tests ? { ...job, tests } : job], error: null };
+    const tests = run.status === "completed" ? await fetchJenkinsTestReport(run, username, token, signal) : undefined;
+    return { jobs: [tests === undefined ? job : { ...job, tests }], error: null };
   } catch (err) {
     if (isAbortError(err, signal)) throw err;
     // Like GitHub's "jobs failed": say which part failed, not a generic fetch failure.

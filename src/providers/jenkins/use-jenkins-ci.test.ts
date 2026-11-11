@@ -247,6 +247,7 @@ test("stages of a finished build are cached only once every stage has finished",
     startedAt: null,
     completedAt: null,
     steps: [stage(stageStatus)],
+    tests: null,
   });
   const stages = spyOn(api, "fetchJenkinsRunJobs")
     .mockResolvedValueOnce({ jobs: [job("running")], error: null })
@@ -255,6 +256,28 @@ test("stages of a finished build are cached only once every stage has finished",
   await jenkins.fetchJobsForRun(run(), undefined);
   await jenkins.fetchJobsForRun(run(), undefined);
   expect(stages).toHaveBeenCalledTimes(2);
+  await jenkins.fetchJobsForRun(run(), undefined);
+  expect(stages).toHaveBeenCalledTimes(2);
+});
+
+test("a finished build whose test report could not be read is asked for again, then cached", async () => {
+  const { jenkins } = await mountJenkins();
+  const job = {
+    id: "j",
+    name: "app",
+    status: "completed",
+    conclusion: "unstable",
+    startedAt: null,
+    completedAt: null,
+    steps: [],
+  };
+  const report = { passCount: 3, failCount: 1, skipCount: 0, failed: [] };
+  const stages = spyOn(api, "fetchJenkinsRunJobs")
+    .mockResolvedValueOnce({ jobs: [job], error: null })
+    .mockResolvedValue({ jobs: [{ ...job, tests: report }], error: null });
+  cleanup.push(() => stages.mockRestore());
+  expect((await jenkins.fetchJobsForRun(run(), undefined)).jobs[0]?.tests).toBeUndefined();
+  expect((await jenkins.fetchJobsForRun(run(), undefined)).jobs[0]?.tests).toEqual(report);
   await jenkins.fetchJobsForRun(run(), undefined);
   expect(stages).toHaveBeenCalledTimes(2);
 });

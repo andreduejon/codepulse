@@ -25,8 +25,11 @@ import {
   getJenkinsToken,
 } from "./api";
 import { isTerminalJenkinsRun, JenkinsCache, jobsMapFromCache, mergeJenkinsJobs, mergeJenkinsRuns } from "./cache";
-import type { JenkinsCommitData, JenkinsJobFetchResult, JenkinsProviderConfig, JenkinsRun } from "./types";
+import type { JenkinsCommitData, JenkinsJob, JenkinsJobFetchResult, JenkinsProviderConfig, JenkinsRun } from "./types";
 import { DEFAULT_JENKINS_CONFIG } from "./types";
+
+/** Whether every job knows its test report: one, or none (`null`). */
+const reportsKnown = (jobs: readonly JenkinsJob[]) => jobs.every(job => job.tests !== undefined);
 
 export interface UseJenkinsCIResult {
   getCommitData: (sha: string) => JenkinsCommitData | null;
@@ -368,9 +371,10 @@ export function useJenkinsCI(opts: {
     fetchJobsForRun: async (run, signal) => {
       const epoch = lifecycle.getEpoch();
       const repoPath = state.repoPath();
-      // Only finished stages are final; a cached snapshot with a running job or stage is fetched again.
+      // Only finished stages with a known test report are final; a cached snapshot with a running job or stage, or
+      // without its report (not read, or cached before reports were), is fetched again.
       const cached = jobsCache.get(run.id);
-      if (cached && jobsSettled(cached.jobs)) return cached;
+      if (cached && jobsSettled(cached.jobs) && reportsKnown(cached.jobs)) return cached;
       if (!lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
       // Frozen after an auth failure: no requests until Reload; say why instead of asking Jenkins again.
       if (authFrozen) return { jobs: [], error: authError ?? BANNER.jenkins.tokenExpired };
@@ -381,7 +385,12 @@ export function useJenkinsCI(opts: {
         signal,
       );
       if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
-      if (run.status === "completed" && result.error === null && jobsSettled(result.jobs)) {
+      if (
+        run.status === "completed" &&
+        result.error === null &&
+        jobsSettled(result.jobs) &&
+        reportsKnown(result.jobs)
+      ) {
         if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
         jobsCache.set(run.id, result);
         await persistTerminalRuns(repoPath, [run.headSha], epoch);

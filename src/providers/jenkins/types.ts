@@ -81,8 +81,11 @@ export interface JenkinsJob {
   startedAt: string | null;
   completedAt: string | null;
   steps: JenkinsStage[];
-  /** The build's test report, when it has one (read once the build has finished). */
-  tests?: JenkinsTestReport;
+  /**
+   * The build's test report, read once the build has finished: null when it has none, missing while it is not known
+   * (still running, or the report could not be read, so it is asked for again).
+   */
+  tests?: JenkinsTestReport | null;
 }
 
 /**

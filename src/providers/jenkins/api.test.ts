@@ -1057,7 +1057,16 @@ describe("Jenkins test reports", () => {
       // A missing report is no error: Debug only lists the request, it reports no failure.
       expect(getDebugEvents().some(event => event.message.startsWith("404"))).toBe(false);
       expect(jobs[0].steps.map(stage => stage.name)).toEqual(["Test"]);
-      expect(jobs[0].tests).toBeUndefined();
+      expect(jobs[0].tests).toBeNull();
+    });
+  });
+
+  test("a test report that could not be read is unknown, not missing, so it is asked for again", async () => {
+    await withFetch(new Response("busy", { status: 503 }), async () => {
+      const { jobs, error } = await fetchJenkinsRunJobs(run, "user", "token");
+      expect(error).toBeNull();
+      expect(jobs[0].steps.map(stage => stage.name)).toEqual(["Test"]);
+      expect(jobs[0]).not.toHaveProperty("tests");
     });
   });
 

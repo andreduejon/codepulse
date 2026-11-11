@@ -58,7 +58,7 @@ function isJenkinsJob(value: unknown): value is JenkinsJob {
     (job.completedAt === null || typeof job.completedAt === "string") &&
     Array.isArray(job.steps) &&
     job.steps.every(isJenkinsStage) &&
-    (job.tests === undefined || isJenkinsTestReport(job.tests))
+    (job.tests === undefined || job.tests === null || isJenkinsTestReport(job.tests))
   );
 }
 
