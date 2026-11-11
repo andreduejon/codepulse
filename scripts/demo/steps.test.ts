@@ -41,7 +41,7 @@ describe("parsePlay", () => {
         'type:/error wait:"full log" gone:Fetching expect:✗ absent:running shot shot:after size:100x30 advance sleep:250',
       ),
     ).toEqual([
-      { kind: "type", text: "/error" },
+      { kind: "type", keys: ["/", "e", "r", "r", "o", "r"] },
       { kind: "wait", text: "full log" },
       { kind: "gone", text: "Fetching" },
       { kind: "expect", text: "✗" },
@@ -52,6 +52,10 @@ describe("parsePlay", () => {
       { kind: "advance" },
       { kind: "sleep", ms: 250 },
     ]);
+  });
+
+  test("typed text is one key per character, an emoji whole", () => {
+    expect(steps("type:a🚀")).toEqual([{ kind: "type", keys: ["a", "🚀"] }]);
   });
 
   test("mouse steps point at text, its nth place, or a cell", () => {

@@ -15,7 +15,8 @@ export type Target = { kind: "text"; text: string; nth: number } | { kind: "cell
 
 export type Step =
   | { kind: "key"; key: string; modifiers: KeyModifiers; repeat: number }
-  | { kind: "type"; text: string }
+  /** One key per character, not per UTF-16 unit, so an emoji arrives whole. */
+  | { kind: "type"; keys: string[] }
   | { kind: "wait"; text: string }
   | { kind: "gone"; text: string }
   | { kind: "expect"; text: string }
@@ -159,7 +160,7 @@ function parseStep({ text: source, quotedTo }: StepSource): Step {
   const quotedIn = (from = 0) => Math.max(0, quotedTo - (colon + 1) - from);
   const text = (kind: "type" | "wait" | "gone" | "expect" | "absent"): Step => {
     if (!value) throw new PlayError(`${source}: the text is missing, like ${kind}:Console.`);
-    return { kind, text: value };
+    return kind === "type" ? { kind, keys: [...value] } : { kind, text: value };
   };
   switch (command) {
     case "type":

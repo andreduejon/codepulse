@@ -68,6 +68,8 @@ const PLAY = [
   'tab wait:"CI #812" expect:"attempt 2" shot:actions',
   "tab wait:Unit expect:aborted shot:jenkins",
   "esc g tab enter wait:pull9 advance sleep:400 shot:openshift",
+  // A followed log: its lines are dated by their number, so they come out the same every run too.
+  "click:shop-api-7d9f8-r2m4p shot:log",
 ].join("\n");
 
 describe("bun run demo --play", () => {
@@ -83,10 +85,12 @@ describe("bun run demo --play", () => {
         "=== shot 1: actions (160x45) ===",
         "=== shot 2: jenkins (160x45) ===",
         "=== shot 3: openshift (160x45) ===",
+        "=== shot 4: log (160x45) ===",
       ]);
       // The shop-dev rollout fails once the world moves on: a watch event, no reload.
-      const openshift = first.stdout.slice(first.stdout.indexOf("=== shot 3"));
+      const openshift = first.stdout.slice(first.stdout.indexOf("=== shot 3"), first.stdout.indexOf("=== shot 4"));
       expect(openshift).toMatch(/shop-api-7d9f8-pull9\s+✗/);
+      expect(first.stdout.slice(first.stdout.indexOf("=== shot 4"))).toMatch(/RequestLog/);
 
       const second = await demo(["--play", PLAY], user.env);
       expect(second.code).toBe(0);
@@ -150,31 +154,6 @@ describe("bun run demo --play", () => {
       expect(await child.exited).toBe(143);
       expect(performance.now() - stoppedAt).toBeLessThan(10_000);
       expect(contents(user.temp)).toEqual([]);
-    },
-    { timeout: 120_000 },
-  );
-
-  test(
-    "a followed log prints the same lines every run",
-    async () => {
-      const user = userEnv("follow");
-      const play = "g tab*3 enter wait:pull9 click:shop-api-7d9f8-r2m4p shot";
-      const first = await demo(["--play", play], user.env);
-      expect(first.code).toBe(0);
-      expect(first.stdout).toMatch(/RequestLog/);
-      const second = await demo(["--play", play], user.env);
-      expect(second.stdout).toBe(first.stdout);
-    },
-    { timeout: 180_000 },
-  );
-
-  test(
-    "typed text arrives whole, an emoji too",
-    async () => {
-      const user = userEnv("emoji");
-      const result = await demo(["--play", "/ type:🚀 expect:🚀"], user.env);
-      expect(result.stdout).not.toContain("=== failed");
-      expect(result.code).toBe(0);
     },
     { timeout: 120_000 },
   );
