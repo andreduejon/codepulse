@@ -34,7 +34,8 @@ Provider modes:
 - `default`: the normal world.
 - `empty`: connected, but nothing to show (no runs, no builds, no resources, no findings).
 - `off`: turned off in the config.
-- `error:KIND`: every request fails that way. `timeout` takes as long as the app waits (20 seconds).
+- `error:KIND`: every request fails that way. `timeout` takes as long as the app waits: 20 seconds a request, and it
+  tries once more, so about 40 seconds a fetch. Waits allow two minutes with it.
   `partial` fails one part (shop-prod's lists, or Snyk's `admin` project); `watch-denied` lets OpenShift list but
   not watch.
 
@@ -60,7 +61,7 @@ Steps are separated by spaces or new lines. Quote text with spaces: `wait:"full 
 | `shift+tab` `ctrl+d` `alt+x` | A key with modifiers. |
 | `down*3` | A key three times. |
 | `type:TEXT` | Types text, for search, filters and settings fields. |
-| `wait:TEXT` / `gone:TEXT` | Waits until the text shows, or is gone. Fails after 30 seconds. |
+| `wait:TEXT` / `gone:TEXT` | Waits until the text shows, or is gone. Fails after 30 seconds (two minutes with an `error:timeout` provider). |
 | `expect:TEXT` / `absent:TEXT` | Fails unless the text is on screen, or unless it is not. |
 | `shot` / `shot:NAME` | Prints the screen. Without any shot, the play prints the last screen. |
 | `size:WxH` | Resizes, for minimum widths and compact layouts. |

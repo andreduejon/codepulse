@@ -63,7 +63,7 @@ Options
 Steps (inside --play, separated by spaces or new lines, quote text with spaces)
   j  tab  enter  esc  up  pagedown  shift+tab  ctrl+d  down*3      keys
   type:TEXT               type text
-  wait:TEXT  gone:TEXT    wait until the text shows or is gone (30 seconds at most)
+  wait:TEXT  gone:TEXT    wait until the text shows or is gone (30 seconds, 2 minutes with error:timeout)
   expect:TEXT  absent:TEXT fail unless the text is on screen, or unless it is not
   shot  shot:NAME         print the screen
   size:WxH                resize
@@ -101,6 +101,14 @@ function parseMode(provider: ProviderName, value: string): ProviderMode {
   const errors: readonly string[] = PROVIDER_ERRORS[provider];
   if (value.startsWith("error:") && errors.includes(value.slice("error:".length))) return value as ProviderMode;
   throw new DemoOptionError(`--${provider} takes default, empty, off, or error:${errors.join("|")}. Got "${value}".`);
+}
+
+/**
+ * How long `wait:` and `gone:` wait: 30 seconds, or two minutes when a provider times out (the app gives a request
+ * 20 seconds and tries once more, so a fetch takes 40, and the next can queue behind it).
+ */
+export function waitLimitMs(options: DemoOptions): number {
+  return PROVIDERS.some(provider => providerError(options, provider) === "timeout") ? 120_000 : 30_000;
 }
 
 /** The error a provider was started with, or null. */

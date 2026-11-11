@@ -9,7 +9,7 @@
 import { rmSync } from "node:fs";
 import { constants } from "node:os";
 import { join } from "node:path";
-import { DEMO_HELP, DemoOptionError, parseDemoOptions } from "./options";
+import { DEMO_HELP, DemoOptionError, parseDemoOptions, waitLimitMs } from "./options";
 import { FIXED_NOW, PLAY_ENV, type PlayConfig } from "./scenario";
 import { PlayError, parsePlay } from "./steps";
 import { buildWorld } from "./world";
@@ -71,7 +71,12 @@ try {
     const entry = headless ? join(here, "play.ts") : join(repoRoot, "src", "index.tsx");
     const env = { ...world.env };
     if (options.play !== null) {
-      const config: PlayConfig = { steps: options.play, ...options.size, repoPath: world.repoPath };
+      const config: PlayConfig = {
+        steps: options.play,
+        ...options.size,
+        repoPath: world.repoPath,
+        waitMs: waitLimitMs(options),
+      };
       env[PLAY_ENV] = JSON.stringify(config);
     }
     app = Bun.spawn([process.execPath, ...preloads.flatMap(path => ["--preload", path]), entry, world.repoPath], {

@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_LIVE_SECONDS, DEFAULT_SIZE, DemoOptionError, parseDemoOptions, providerError } from "./options";
+import {
+  DEFAULT_LIVE_SECONDS,
+  DEFAULT_SIZE,
+  DemoOptionError,
+  parseDemoOptions,
+  providerError,
+  waitLimitMs,
+} from "./options";
 
 describe("parseDemoOptions", () => {
   test("starts interactive with every provider in its normal world", () => {
@@ -79,4 +86,9 @@ describe("parseDemoOptions", () => {
     expect(() => parseDemoOptions(args)).toThrow(DemoOptionError);
     expect(() => parseDemoOptions(args)).toThrow(message);
   });
+});
+
+test("waits allow two minutes when a provider times out: each fetch takes 40 seconds, and one can queue", () => {
+  expect(waitLimitMs(parseDemoOptions(["--play", "shot"]))).toBe(30_000);
+  expect(waitLimitMs(parseDemoOptions(["--jenkins", "error:timeout", "--play", "shot"]))).toBe(120_000);
 });

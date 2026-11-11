@@ -13,7 +13,6 @@ import { loadDemoState, type PlayConfig } from "./scenario";
 import { parsePlay, type Step, type Target } from "./steps";
 
 /** How long `wait:` and `gone:` wait, and how long a screen may keep changing after a step before the next one. */
-const WAIT_MS = 30_000;
 const SETTLE_MS = 5_000;
 const FIRST_SETTLE_MS = 20_000;
 /** Between repeats of a key (`down*5`), a little longer than the app's navigation throttle. */
@@ -60,9 +59,9 @@ export async function play(config: PlayConfig): Promise<number> {
     }
   };
 
-  /** Renders until `done` holds, or fails after WAIT_MS. */
+  /** Renders until `done` holds, or fails after the play's wait limit. */
   const until = async (done: () => boolean, failure: string) => {
-    const deadline = performance.now() + WAIT_MS;
+    const deadline = performance.now() + config.waitMs;
     while (!done()) {
       if (performance.now() > deadline || setup.renderer.isDestroyed) throw new StepFailure(failure);
       await Bun.sleep(50);
@@ -110,10 +109,13 @@ export async function play(config: PlayConfig): Promise<number> {
       case "wait":
         return until(
           () => screen().includes(step.text),
-          `"${step.text}" did not show within ${WAIT_MS / 1000} seconds`,
+          `"${step.text}" did not show within ${config.waitMs / 1000} seconds`,
         );
       case "gone":
-        return until(() => !screen().includes(step.text), `"${step.text}" did not go within ${WAIT_MS / 1000} seconds`);
+        return until(
+          () => !screen().includes(step.text),
+          `"${step.text}" did not go within ${config.waitMs / 1000} seconds`,
+        );
       case "expect":
         if (!screen().includes(step.text)) throw new StepFailure(`"${step.text}" is not on screen`);
         return;

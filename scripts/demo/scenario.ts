@@ -56,6 +56,8 @@ export interface PlayConfig {
   width: number;
   height: number;
   repoPath: string;
+  /** How long `wait:` and `gone:` wait. */
+  waitMs: number;
 }
 
 export const REMOTES_ENV = "CODEPULSE_DEMO_REMOTES";
