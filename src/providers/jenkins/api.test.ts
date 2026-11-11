@@ -811,6 +811,35 @@ describe("resolveJenkinsJobs", () => {
     }
   });
 
+  test("the limit notice counts distinct branch jobs: a project listed twice or a branch also configured directly counts once", async () => {
+    const originalFetch = globalThis.fetch;
+    const branch = (name: string) => ({
+      _class: "org.jenkinsci.plugins.workflow.job.WorkflowJob",
+      name,
+      url: `https://jenkins.example.com/job/service/job/${name}/`,
+      buildable: true,
+      disabled: false,
+    });
+    globalThis.fetch = (async (input: RequestInfo | URL) =>
+      String(input).includes("/job/service/job/")
+        ? Response.json({ _class: "org.jenkinsci.plugins.workflow.job.WorkflowJob" })
+        : Response.json({
+            _class: "org.jenkinsci.plugins.workflow.multibranch.WorkflowMultiBranchProject",
+            jobs: Array.from({ length: 30 }, (_, index) => branch(`b-${index}`)),
+          })) as typeof fetch;
+    try {
+      const project = { url: "https://jenkins.example.com/job/service" };
+      const direct = { url: "https://jenkins.example.com/job/service/job/b-0", label: "b-0 (configured)" };
+      const result = await resolveJenkinsJobs([project, project, direct], "user", "token");
+      expect(new Set(result.jobs.map(job => job.url)).size).toBe(result.jobs.length);
+      expect(result.jobs).toHaveLength(26);
+      // 29 branch jobs not configured directly; 25 of them are read.
+      expect(result.branchJobs).toEqual({ shown: 25, total: 29 });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   test("treats a missing root class as a direct job", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () =>

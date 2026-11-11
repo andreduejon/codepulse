@@ -275,11 +275,17 @@ export async function resolveJenkinsJobs(
         built: child.lastBuild?.timestamp ?? -1,
       });
   }
-  branchJobTotal = candidates.length;
-  // Over the limit, the branches in the graph are read first, then the most recently built (stable otherwise),
-  // whichever project they belong to.
-  candidates.sort((a, b) => Number(b.preferred) - Number(a.preferred) || b.built - a.built || a.order - b.order);
-  for (const { child, parentOrigin } of candidates) {
+  // Each branch job once, with a valid URL, and not one configured directly: those are what the limit and its notice
+  // count.
+  const branchJobs: {
+    child: JenkinsMultibranchChildApi;
+    url: string;
+    order: number;
+    preferred: boolean;
+    built: number;
+  }[] = [];
+  const seen = new Set<string>();
+  for (const { child, parentOrigin, ...rank } of candidates) {
     let url: string;
     try {
       url = normalizeJenkinsJobUrl(onOrigin(child.url ?? "", parentOrigin));
@@ -288,12 +294,20 @@ export async function resolveJenkinsJobs(
       firstError ??= BANNER.jenkins.invalidJobUrl;
       continue;
     }
-    if (!url || resolved.has(url)) continue;
+    if (!url || resolved.has(url) || seen.has(url)) continue;
     if (!isSafeJenkinsRequestUrl(url)) {
       debugError("Jenkins", url);
       firstError ??= BANNER.jenkins.invalidJobUrl;
       continue;
     }
+    seen.add(url);
+    branchJobs.push({ child, url, ...rank });
+  }
+  branchJobTotal = branchJobs.length;
+  // Over the limit, the branches in the graph are read first, then the most recently built (stable otherwise),
+  // whichever project they belong to.
+  branchJobs.sort((a, b) => Number(b.preferred) - Number(a.preferred) || b.built - a.built || a.order - b.order);
+  for (const { child, url } of branchJobs) {
     if (discoveredCount >= JENKINS_MULTIBRANCH_JOB_LIMIT) {
       if (!truncated) debugError("Jenkins", `Multibranch discovery limited to ${JENKINS_MULTIBRANCH_JOB_LIMIT} jobs`);
       truncated = true;
