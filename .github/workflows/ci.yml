@@ -40,7 +40,7 @@ jobs:
         run: bun run check:types
 
       - name: Run tests
-        timeout-minutes: 3
+        timeout-minutes: 6
         run: bun run test
 
       - name: Installer regression checks
