@@ -104,7 +104,8 @@ export async function play(config: PlayConfig): Promise<number> {
         }
         return settle();
       case "type":
-        await setup.mockInput.typeText(step.text);
+        // One key per character, not per UTF-16 unit, so an emoji arrives whole.
+        await setup.mockInput.pressKeys([...step.text]);
         return settle();
       case "wait":
         return until(

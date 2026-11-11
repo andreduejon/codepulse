@@ -165,6 +165,17 @@ describe("bun run demo --play", () => {
     { timeout: 180_000 },
   );
 
+  test(
+    "typed text arrives whole, an emoji too",
+    async () => {
+      const user = userEnv("emoji");
+      const result = await demo(["--play", "/ type:🚀 expect:🚀"], user.env);
+      expect(result.stdout).not.toContain("=== failed");
+      expect(result.code).toBe(0);
+    },
+    { timeout: 120_000 },
+  );
+
   test("a wrong option or step stops before anything is built", async () => {
     const user = userEnv("wrong");
     const result = await demo(["--play", "details"], user.env);

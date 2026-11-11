@@ -77,13 +77,23 @@ Example
 
 const SIZE = /^(\d+)x(\d+)$/;
 
+/** A whole number from `min` to `max` written in digits, or null. */
+export function wholeNumber(text: string, min: number, max: number): number | null {
+  if (!/^\d+$/.test(text)) return null;
+  const value = Number(text);
+  return value >= min && value <= max ? value : null;
+}
+
+/** The largest terminal a play can have, either way. */
+const MAX_SIDE = 1000;
+
 /** `160x45` as width and height, or null. */
 export function parseSize(value: string): { width: number; height: number } | null {
   const match = SIZE.exec(value);
   if (!match) return null;
-  const width = Number(match[1]);
-  const height = Number(match[2]);
-  return width > 0 && height > 0 ? { width, height } : null;
+  const width = wholeNumber(match[1] ?? "", 1, MAX_SIDE);
+  const height = wholeNumber(match[2] ?? "", 1, MAX_SIDE);
+  return width !== null && height !== null ? { width, height } : null;
 }
 
 function parseMode(provider: ProviderName, value: string): ProviderMode {
@@ -146,18 +156,20 @@ export function parseDemoOptions(args: readonly string[]): DemoOptions {
       case "--live": {
         const next = args[index + 1];
         if (next !== undefined && !next.startsWith("--")) {
-          if (!/^\d+$/.test(next) || Number(next) < 1)
-            throw new DemoOptionError(`--live takes whole seconds, like --live 60. Got "${next}".`);
-          options.live = Number(next);
+          const seconds = wholeNumber(next, 1, 86_400);
+          if (seconds === null)
+            throw new DemoOptionError(`--live takes whole seconds up to a day, like --live 60. Got "${next}".`);
+          options.live = seconds;
           index++;
         } else options.live = DEFAULT_LIVE_SECONDS;
         break;
       }
       case "--latency": {
         const text = value();
-        if (!/^\d+$/.test(text))
-          throw new DemoOptionError(`--latency takes milliseconds, like --latency 150. Got "${text}".`);
-        options.latency = Number(text);
+        const latency = wholeNumber(text, 0, 60_000);
+        if (latency === null)
+          throw new DemoOptionError(`--latency takes milliseconds up to a minute, like --latency 150. Got "${text}".`);
+        options.latency = latency;
         break;
       }
       case "--theme": {
