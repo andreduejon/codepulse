@@ -20,6 +20,33 @@ export function diffSnykScans(
   };
 }
 
+/**
+ * The projects a scan could not resolve, by target file; null when it failed somewhere it did not name, so nothing
+ * it found or missed can be trusted for a comparison.
+ */
+function failedTargets(scan: SnykScanResult): Set<string> | null {
+  if (!scan.partial) return new Set();
+  const named = scan.failedTargets ?? [];
+  return named.length >= (scan.failedProjects ?? 1) ? new Set(named) : null;
+}
+
+/**
+ * Like `diffSnykScans`, for two whole scans. A project either scan could not resolve is left out on both sides: its
+ * findings are neither fixed (they were not looked for) nor new. Null when a partial scan does not say which
+ * projects failed.
+ */
+export function compareSnykScans(
+  scan: SnykScanResult,
+  parent: SnykScanResult,
+): { added: Set<SnykFinding>; fixed: SnykFinding[] } | null {
+  const here = failedTargets(scan);
+  const there = failedTargets(parent);
+  if (!here || !there) return null;
+  const compared = (finding: SnykFinding) =>
+    finding.targetFile === null || (!here.has(finding.targetFile) && !there.has(finding.targetFile));
+  return diffSnykScans(scan.findings.filter(compared), parent.findings.filter(compared));
+}
+
 /** The scan NEW and FIXED compare with, and how many first-parent steps back its commit is. */
 export interface SnykBaseline {
   sha: string;

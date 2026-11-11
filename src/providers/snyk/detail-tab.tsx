@@ -9,7 +9,7 @@ import { BUSY } from "../../utils/busy-text";
 import { useOpenRowShortcut } from "../shared/open-row";
 import { filterSnykFindings, SnykFilterRow, useSnykFilter } from "./filter";
 import { countUniqueFindings, groupSnykFixes, groupSnykVulnerabilities, type SnykVulnerabilityEntry } from "./parser";
-import { diffKey, diffSnykScans, snykBaselineNote } from "./scan-diff";
+import { compareSnykScans, diffKey, snykBaselineNote } from "./scan-diff";
 import { SnykControlRow, type SnykDetailTabProps, snykScanIdentity, useSnykRows } from "./tab-shared";
 import type { SnykFinding, SnykSeverity } from "./types";
 import { useSnykTabMemory } from "./view-memory";
@@ -63,9 +63,12 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
   const itemRefs: Renderable[] = [];
   const rowsUi = useSnykRows(props, () => activateCurrentItem());
 
-  /** Against an earlier scan, when there is one: findings added (NEW, and marked `new`) and fixed (FIXED). */
+  /**
+   * Against an earlier scan, when there is one: findings added (NEW, and marked `new`) and fixed (FIXED). Null when
+   * a partial scan does not say which projects failed, so nothing can be told apart.
+   */
   const diff = createMemo(() =>
-    props.scan && props.baseline ? diffSnykScans(props.scan.findings, props.baseline.scan.findings) : null,
+    props.scan && props.baseline ? compareSnykScans(props.scan, props.baseline.scan) : null,
   );
   const addedKeys = createMemo(() => new Set([...(diff()?.added ?? [])].map(diffKey)));
   /** `new` and `fixed` in the filter show only that tree, like `pinned` in Dependencies. */
@@ -83,7 +86,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
   const changeSection = (change: "new" | "fixed", findings: readonly SnykFinding[]): Section | null => {
     const baseline = props.baseline;
     // Shown at 0 when nothing changed: the heading still says what was compared.
-    if (!baseline) return null;
+    if (!baseline || !diff()) return null;
     const word = diffWord();
     const shown = word === change ? findings : word ? [] : filterSnykFindings(findings, filter.query());
     // Own keys: a finding under its severity and under NEW opens and takes the cursor in each on its own.
@@ -103,6 +106,13 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
     ),
   );
   const entries = createMemo(() => groupSnykVulnerabilities(filteredFindings()));
+  /** Shown of all: with `new` or `fixed`, that tree's findings, like its heading; else this scan's. */
+  const filterCount = () => {
+    const word = diffWord();
+    const section = word ? changeSections().find(candidate => candidate.change === word) : undefined;
+    if (section) return `${section.entries.length}/${section.original}`;
+    return filter.query().trim() ? `${uniqueTotal()}/${originalTotal()}` : `${uniqueTotal()}`;
+  };
   const originalCounts = createMemo(() => {
     const counts = { critical: 0, high: 0, medium: 0, low: 0 } as Record<SnykSeverity, number>;
     for (const entry of groupSnykVulnerabilities(props.scan?.findings ?? [])) counts[entry.finding.severity]++;
@@ -110,6 +120,8 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
   });
   const originalTotal = createMemo(() => SEVERITIES.reduce((sum, severity) => sum + originalCounts()[severity], 0));
   const uniqueTotal = createMemo(() => entries().length);
+  /** Copy, Group by and the filter, when there are findings to show: this scan's, or the ones it fixed. */
+  const hasControls = () => originalTotal() > 0 || (diff()?.fixed.length ?? 0) > 0;
   // Unfiltered groups fix the list and its order, so filtering only changes counts (like severities).
   const originalGroups = createMemo(() => groupSnykFixes(groupSnykVulnerabilities(props.scan?.findings ?? [])));
   const sections = createMemo<Section[]>(() => [...currentSections(), ...changeSections()]);
@@ -155,8 +167,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
   ];
   const flatItems = createMemo<FlatItem[]>(() => [
     ...(props.unavailable ? [] : [{ kind: "scan" as const }]),
-    // Copy, Group by and filter only when the scan has findings to show.
-    ...(originalTotal() > 0
+    ...(hasControls()
       ? [{ kind: "copyJson" as const }, { kind: "groupBy" as const }, { kind: "filter" as const }]
       : []),
     ...sections().flatMap((section): FlatItem[] =>
@@ -448,7 +459,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
       />
 
       <Show when={props.scan}>
-        <Show when={originalTotal() > 0}>
+        <Show when={hasControls()}>
           <SnykControlRow
             rows={rowsUi}
             id="copyJson"
@@ -475,7 +486,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
             rowRef={rowRef({ kind: "filter" })}
           >
             <text flexShrink={0} selectable={false} fg={t().foregroundMuted} wrapMode="none">
-              {filter.query().trim() ? `${uniqueTotal()}/${originalTotal()}` : uniqueTotal()}
+              {filterCount()}
             </text>
           </SnykFilterRow>
         </Show>

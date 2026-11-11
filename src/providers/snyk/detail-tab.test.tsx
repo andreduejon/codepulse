@@ -22,7 +22,12 @@ const added = finding("SNYK-JS-LODASH-1", "lodash", "4.17.20");
 const gone = finding("SNYK-JS-AXIOS-1", "axios", "0.21.0");
 const PARENT = "b".repeat(40);
 
-async function renderSnyk(baselineScan: SnykScanResult | null, filter?: string, stepsBack = 1) {
+async function renderSnyk(
+  baselineScan: SnykScanResult | null,
+  filter?: string,
+  stepsBack = 1,
+  scan = scanOf("a".repeat(40), [kept, added]),
+) {
   const [cursor, setCursor] = createSignal(0);
   const actions: (string | null)[] = [];
   const navRef: DetailNavRef = {
@@ -39,7 +44,7 @@ async function renderSnyk(baselineScan: SnykScanResult | null, filter?: string, 
       <ThemeContext.Provider value={theme}>
         <box width={76} flexDirection="column">
           <SnykDetailTab
-            scan={scanOf("a".repeat(40), [kept, added])}
+            scan={scan}
             baseline={baselineScan ? { sha: PARENT, scan: baselineScan, stepsBack } : null}
             onScan={() => {}}
             takePendingFilter={() => filter ?? null}
@@ -169,6 +174,42 @@ test("the filter words new and fixed show only that tree", async () => {
     expect(onlyFixed.indexOf("AXIOS")).toBeGreaterThan(onlyFixed.indexOf("FIXED"));
   } finally {
     onlyFixed.renderer.destroy();
+  }
+});
+
+test("with new or fixed, the filter counts that tree's findings, like its heading", async () => {
+  const onlyNew = await renderSnyk(scanOf(PARENT, [kept, gone]), "new");
+  try {
+    expect(onlyNew.row("new ")).toMatch(/new\s+1\/1\s*$/);
+  } finally {
+    onlyNew.renderer.destroy();
+  }
+  const onlyFixed = await renderSnyk(scanOf(PARENT, [kept, gone]), "fixed");
+  try {
+    expect(onlyFixed.row("fixed ")).toMatch(/fixed\s+1\/1\s*$/);
+  } finally {
+    onlyFixed.renderer.destroy();
+  }
+});
+
+test("a commit that fixed everything keeps the filter, so fixed can still be typed", async () => {
+  const t = await renderSnyk(scanOf(PARENT, [gone]), "fixed", 1, scanOf("a".repeat(40), []));
+  try {
+    expect(t.indexOf("AXIOS")).toBeGreaterThan(t.indexOf("FIXED"));
+    expect(t.row("fixed ")).toMatch(/fixed\s+1\/1\s*$/);
+  } finally {
+    t.renderer.destroy();
+  }
+});
+
+test("no NEW and no FIXED against a partial scan that does not say which projects failed", async () => {
+  const t = await renderSnyk({ ...scanOf(PARENT, [kept, gone]), partial: true, failedProjects: 1 });
+  try {
+    expect(t.indexOf("NEW")).toBe(-1);
+    expect(t.indexOf("FIXED")).toBe(-1);
+    expect(t.row("LODASH")).not.toMatch(/\bnew\b/);
+  } finally {
+    t.renderer.destroy();
   }
 });
 

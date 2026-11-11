@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { diffSnykScans, findSnykBaseline, snykBaselineNote } from "./scan-diff";
+import { compareSnykScans, diffSnykScans, findSnykBaseline, snykBaselineNote } from "./scan-diff";
 import type { SnykFinding, SnykScanResult } from "./types";
 
 export const finding = (id: string, dependency: string, installedVersion: string, extra: Partial<SnykFinding> = {}) =>
@@ -57,4 +57,31 @@ test("the note names the parent, or how far back the compared commit is", () => 
   const scan = { sha: "x" } as SnykScanResult;
   expect(snykBaselineNote({ sha: "4c5d6e7f".repeat(5), scan, stepsBack: 1 })).toBe("vs parent 4c5d6e7");
   expect(snykBaselineNote({ sha: "1a2b3c4d".repeat(5), scan, stepsBack: 3 })).toBe("vs 1a2b3c4, 3 commits back");
+});
+
+const scanOf = (findings: SnykFinding[], extra: Partial<SnykScanResult> = {}) =>
+  ({ sha: "a".repeat(40), findings, ...extra }) as SnykScanResult;
+
+test("a project a partial scan could not resolve is left out on both sides, not listed as fixed or new", () => {
+  const root = finding("SNYK-JS-AXIOS-1", "axios", "0.21.0");
+  const admin = finding("SNYK-JS-MINIMIST-1", "minimist", "1.2.5", { targetFile: "admin/package.json" });
+  const failedHere = compareSnykScans(
+    scanOf([root], { partial: true, failedProjects: 1, failedTargets: ["admin/package.json"] }),
+    scanOf([root, admin]),
+  );
+  expect(failedHere?.fixed).toEqual([]);
+  const failedInParent = compareSnykScans(
+    scanOf([root, admin]),
+    scanOf([root], { partial: true, failedProjects: 1, failedTargets: ["admin/package.json"] }),
+  );
+  expect(failedInParent?.added.size).toBe(0);
+});
+
+test("nothing is compared when a partial scan does not say which projects failed", () => {
+  const root = finding("SNYK-JS-AXIOS-1", "axios", "0.21.0");
+  expect(compareSnykScans(scanOf([]), scanOf([root], { partial: true, failedProjects: 1 }))).toBeNull();
+  expect(
+    compareSnykScans(scanOf([], { partial: true, failedProjects: 2, failedTargets: ["a"] }), scanOf([root])),
+  ).toBeNull();
+  expect(compareSnykScans(scanOf([]), scanOf([root]))?.fixed).toEqual([root]);
 });
