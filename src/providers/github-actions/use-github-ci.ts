@@ -414,18 +414,16 @@ export function useGitHubCI(opts: {
         rememberAuthError(firstError);
         lifecycle.noteFetchResult(!firstError);
         if (!firstError) actions.setProviderLastSuccessfulRefresh("github-actions", new Date());
-        if (firstError === BANNER.github.tokenExpired || showStatus) {
-          actions.setProviderStatus("github-actions", firstError ? providerError(firstError) : providerIdle());
-        } else if (!firstError && state.providerStatusFor("github-actions").kind === "error") {
+        // An error shows also from a background fetch (like Jenkins): the runs would otherwise look not loaded yet.
+        if (firstError) actions.setProviderStatus("github-actions", providerError(firstError));
+        else if (showStatus || state.providerStatusFor("github-actions").kind === "error")
           actions.setProviderStatus("github-actions", providerIdle());
-        }
       } catch (err) {
         if (signal?.aborted) return;
         const message = bannerOrFallback(err, BANNER.github.fetchFailed, "GitHub");
         rememberAuthError(message);
         lifecycle.noteFetchResult(false);
-        if (showStatus || message === BANNER.github.tokenExpired)
-          actions.setProviderStatus("github-actions", providerError(message));
+        actions.setProviderStatus("github-actions", providerError(message));
         for (const sha of unqueried) queriedSHAs.delete(sha);
       }
     },

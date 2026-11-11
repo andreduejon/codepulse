@@ -61,6 +61,8 @@ async function mountGitHub(
     seed?: (root: string) => Promise<void>;
     runs?: GitHubWorkflowRun[];
     jobs?: Map<number, GitHubJob[]>;
+    /** The view the app starts in; GitHub's own by default. */
+    view?: "git" | "github-actions";
   } = {},
 ) {
   const original = process.env[TOKEN_ENV];
@@ -91,7 +93,7 @@ async function mountGitHub(
     const { state, actions } = createAppState();
     actions.setRepoPath("/repo/github-hook");
     actions.setRemoteUrl("https://github.com/o/r.git");
-    actions.setActiveProviderView("github-actions");
+    actions.setActiveProviderView(options.view ?? "github-actions");
     const hashes = [SHA, ...(options.older ?? [])];
     actions.setGraphRows(buildGraph(hashes.map((hash, index) => commit(hash, hashes[index + 1]))));
     const github = useGitHubCI({
@@ -128,6 +130,18 @@ test("a failed refresh of running runs shows its error, like Jenkins, instead of
   } finally {
     clock.mockRestore();
   }
+});
+
+test("a failed first fetch in the background shows its error, like Jenkins, instead of looking not loaded yet", async () => {
+  const { state, actions, ci } = await mountGitHub({ view: "git" });
+  ci.mockResolvedValue({ data: [], jobs: new Map(), error: BANNER.github.rateLimit });
+  await settle(() => ci.mock.calls.length > 0);
+  await settle();
+  expect(state.providerStatusFor("github-actions")).toEqual({ kind: "error", message: BANNER.github.rateLimit });
+  // Entering the view keeps saying why, also without asking GitHub again.
+  actions.setActiveProviderView("github-actions");
+  await settle();
+  expect(state.providerStatusFor("github-actions")).toEqual({ kind: "error", message: BANNER.github.rateLimit });
 });
 
 test("entering the GitHub view before the remote is known fetches once the remote arrives, without a stale banner", async () => {
