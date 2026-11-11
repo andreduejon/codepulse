@@ -57,14 +57,19 @@ const ARMS: Record<string, string> = {
 const rowHasConnections = (row: GraphRow) =>
   row.connectors.some(connector => !["straight", "node", "empty"].includes(connector.type));
 
-/** The graph as GraphView draws it: fan-out rows, the commit row (or the last fan-out row), the connector row. */
+/**
+ * The graph as GraphView draws it: fan-out rows (a junction at the commit's column), the commit row (or the last
+ * fan-out row, then with the commit's block), the connector row.
+ */
 function drawGraph(): string[][] {
   const opts = { padToColumns: getMaxGraphColumns(rows) };
   const text = (chars: GraphChar[]) => [...chars.map(gc => gc.char).join("")];
   const lines: string[][] = [];
   rows.forEach((row, index) => {
-    const fanOut = (row.fanOutRows ?? []).map(connectors => text(renderFanOutRow(connectors, opts, row.nodeColumn)));
-    const merged = fanOut.length > 0 && !rowHasConnections(row);
+    const merged = (row.fanOutRows?.length ?? 0) > 0 && !rowHasConnections(row);
+    const fanOut = (row.fanOutRows ?? []).map((connectors, index, all) =>
+      text(renderFanOutRow(connectors, opts, row.nodeColumn, merged && index === all.length - 1)),
+    );
     lines.push(...(merged ? fanOut.slice(0, -1) : fanOut));
     lines.push(merged ? (fanOut.at(-1) as string[]) : text(renderGraphRow(row, opts)));
     if (index < rows.length - 1) lines.push(text(renderConnectorRow(row, opts)));

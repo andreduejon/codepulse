@@ -2,7 +2,7 @@
  * Test: verifies block commit rendering (█ instead of ●).
  *
  * Tests:
- * 1-6.   Node glyph is █ (not ●) in rendered output
+ * 1-6.   Node glyph is █ (not ●) in rendered output; fan-out rows above it draw ├ / ┤
  * 8-9.   Fan-out merge optimization: last fan-out row merges into commit row
  *        when the commit row has no merge/branch connectors
  * 10-11. Fan-out merge is skipped when commit has merge/branch connectors
@@ -92,7 +92,7 @@ describe("Block Commit", () => {
     expect(blockWithSpace).toBeDefined();
   });
 
-  test("Fan-out rows use █ at node column", () => {
+  test("Fan-out rows above a commit draw a junction; the block is only on the commit's own row", () => {
     const commits = [
       makeCommit("c1", ["p1"], [{ name: "branch-a", type: "branch", isCurrent: false }]),
       makeCommit("c2", ["p1"], [{ name: "branch-b", type: "branch", isCurrent: false }]),
@@ -108,17 +108,19 @@ describe("Block Commit", () => {
     assertDefined(parentRow.fanOutRows, "parentRow.fanOutRows");
     expect(parentRow.fanOutRows.length).toBeGreaterThan(0);
 
-    for (let fi = 0; fi < parentRow.fanOutRows.length; fi++) {
-      const foConnectors = parentRow.fanOutRows[fi];
-      const foChars = renderFanOutRow(foConnectors, renderOpts());
-
-      expect(hasChar(foChars, "█")).toBe(true);
-      expect(hasChar(foChars, "├")).toBe(false);
-      expect(hasChar(foChars, "┤")).toBe(false);
+    for (const foConnectors of parentRow.fanOutRows) {
+      // A row above the commit: one line with branches joining it, not another block.
+      const above = renderFanOutRow(foConnectors, renderOpts(), parentRow.nodeColumn);
+      expect(hasChar(above, "█")).toBe(false);
+      expect(hasChar(above, "├")).toBe(true);
+      // The row that is the commit's own row draws its block.
+      const asCommitRow = renderFanOutRow(foConnectors, renderOpts(), parentRow.nodeColumn, true);
+      expect(hasChar(asCommitRow, "█")).toBe(true);
+      expect(hasChar(asCommitRow, "├")).toBe(false);
     }
   });
 
-  test("Fan-out █ with trailing dash when branch goes right", () => {
+  test("Fan-out junction with trailing dash when branch goes right", () => {
     const commits = [
       makeCommit("c1", ["p1"], [{ name: "branch-a", type: "branch", isCurrent: false }]),
       makeCommit("c2", ["p1"], [{ name: "branch-b", type: "branch", isCurrent: false }]),
@@ -131,21 +133,15 @@ describe("Block Commit", () => {
     assertDefined(parentRow, "parentRow");
     assertDefined(parentRow.fanOutRows, "parentRow.fanOutRows");
 
-    for (let fi = 0; fi < parentRow.fanOutRows.length; fi++) {
-      const foConnectors = parentRow.fanOutRows[fi];
-      const foChars = renderFanOutRow(foConnectors, renderOpts());
-
-      expect(hasChar(foChars, "█")).toBe(true);
-
-      const nodeCol = parentRow.nodeColumn;
-      const teeConn = foConnectors.find(c => c.column === nodeCol && (c.type === "tee-left" || c.type === "tee-right"));
-      if (teeConn?.type === "tee-left") {
-        expect(hasChar(foChars, "─")).toBe(true);
-      }
+    for (const foConnectors of parentRow.fanOutRows) {
+      const text = renderFanOutRow(foConnectors, renderOpts(), parentRow.nodeColumn)
+        .map(gc => gc.char)
+        .join("");
+      expect(text.includes("├─")).toBe(true);
     }
   });
 
-  test("Fan-out █ color matches node color", () => {
+  test("Fan-out junction and block take the node's color", () => {
     const commits = [
       makeCommit("c1", ["p1"], [{ name: "branch-a", type: "branch", isCurrent: false }]),
       makeCommit("c2", ["p1"], [{ name: "branch-b", type: "branch", isCurrent: false }]),
@@ -166,11 +162,17 @@ describe("Block Commit", () => {
     const fanOutRows = parentRow.fanOutRows;
     assertDefined(fanOutRows, "fanOutRows");
 
-    for (let fi = 0; fi < fanOutRows.length; fi++) {
-      const foChars = renderFanOutRow(fanOutRows[fi], opts);
-      const foBlock = foChars.find(gc => gc.char.includes("█"));
-      assertDefined(foBlock, "foBlock");
-      expect(foBlock.color).toBe(commitBlock.color);
+    for (const foConnectors of fanOutRows) {
+      const junction: GraphChar | undefined = renderFanOutRow(foConnectors, opts, parentRow.nodeColumn).find(gc =>
+        gc.char.includes("├"),
+      );
+      assertDefined(junction, "junction");
+      expect(junction.color).toBe(commitBlock.color);
+      const block: GraphChar | undefined = renderFanOutRow(foConnectors, opts, parentRow.nodeColumn, true).find(gc =>
+        gc.char.includes("█"),
+      );
+      assertDefined(block, "block");
+      expect(block.color).toBe(commitBlock.color);
     }
   });
 
@@ -315,10 +317,10 @@ describe("Block Commit", () => {
 
       if (row.fanOutRows) {
         for (let fi = 0; fi < row.fanOutRows.length; fi++) {
-          const foChars = renderFanOutRow(row.fanOutRows[fi], renderOpts(padCols));
-          expect(hasChar(foChars, "●")).toBe(false);
-          expect(hasChar(foChars, "├")).toBe(false);
-          expect(hasChar(foChars, "┤")).toBe(false);
+          for (const asCommitRow of [false, true]) {
+            const foChars = renderFanOutRow(row.fanOutRows[fi], renderOpts(padCols), row.nodeColumn, asCommitRow);
+            expect(hasChar(foChars, "●")).toBe(false);
+          }
         }
       }
     }

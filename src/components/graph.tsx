@@ -376,8 +376,14 @@ function GraphLine(
     if (!foRows || foRows.length === 0) return [];
     const foHBrightMap = props.brightFanOutHorizontals();
     const foVBright = props.brightFanOutVerticals();
+    // The last row stands in for the commit's own row when the commit has no connections: only it draws the block.
+    const lastIsCommitRow = canMergeFanOut();
     return foRows.map((foConnectors, idx) =>
-      dimChars(renderFanOutRow(foConnectors, renderOpts(), props.row.nodeColumn), foHBrightMap?.get(idx), foVBright),
+      dimChars(
+        renderFanOutRow(foConnectors, renderOpts(), props.row.nodeColumn, lastIsCommitRow && idx === foRows.length - 1),
+        foHBrightMap?.get(idx),
+        foVBright,
+      ),
     );
   });
 
