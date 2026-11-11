@@ -113,9 +113,16 @@ describe("Viewport", () => {
 
   test("Edge marks: a triangle for a hidden commit, a dashed end for a line that goes on", () => {
     const muted = "#6c7086";
-    /** A full-width row from text: two characters per column. */
+    /** A full-width row from text: two characters per column, the commit's block in its own color. */
     const full = (text: string): GraphChar[] =>
-      Array.from({ length: text.length / 2 }, (_, i) => ({ char: text.slice(i * 2, i * 2 + 2), color: "#line" }));
+      Array.from({ length: text.length / 2 }, (_, i) => text.slice(i * 2, i * 2 + 2)).flatMap(char =>
+        char.startsWith("█")
+          ? [
+              { char: "█", color: "#node", bold: true },
+              { char: char.slice(1), color: "#line" },
+            ]
+          : [{ char, color: "#line" }],
+      );
     const text = (chars: GraphChar[]) => chars.map(gc => gc.char).join("");
     // Columns 1 and 2 of 6 are visible.
     const marks = (row: string, node: number | null, depth = 2, max = 6) =>
@@ -127,15 +134,17 @@ describe("Viewport", () => {
     expect(text(lines.right)).toBe("─╌");
     expect(lines.left.every(gc => gc.color === "#line")).toBe(true);
 
-    // This row's commit is off-screen: a triangle on its side.
-    expect(text(marks("█ │ │ │     ", 0).left)).toBe("◀ ");
+    // This row's commit is off-screen: a triangle on its side, in the commit's color.
+    const hidden = marks("█ │ │ │     ", 0);
+    expect(text(hidden.left)).toBe("◀ ");
+    expect(hidden.left[0]).toEqual({ char: "◀", color: "#node", bold: true });
     expect(text(marks("│ │ │ │ █   ", 4).right)).toBe(" ▶");
     expect(text(marks("│ │ │ │ █   ", 4).left)).toBe("  ");
 
     // A line runs to the hidden commit: it leads into the triangle.
     const both = marks("█─┼─┼─╯     ", 0);
     expect(text(both.left)).toBe("◀─");
-    expect(both.left[0]?.color).toBe(muted);
+    expect(both.left[0]?.color).toBe("#node");
     expect(both.left[1]?.color).toBe("#line");
     expect(text(both.right)).toBe("─╌");
 

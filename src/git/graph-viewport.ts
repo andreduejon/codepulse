@@ -157,7 +157,8 @@ export interface EdgeMarks {
 function charAt(chars: GraphChar[], position: number): GraphChar | null {
   let pos = 0;
   for (const gc of chars) {
-    if (position < pos + gc.char.length) return { char: gc.char[position - pos] ?? " ", color: gc.color };
+    if (position < pos + gc.char.length)
+      return { char: gc.char[position - pos] ?? " ", color: gc.color, bold: gc.bold };
     pos += gc.char.length;
   }
   return null;
@@ -167,11 +168,12 @@ function charAt(chars: GraphChar[], position: number): GraphChar | null {
  * Marks for the graph's left and right edges while it scrolls sideways, one 2-character column each. A triangle
  * means this row's commit is off-screen on that side (`◀ `, ` ▶`). A line that runs past the edge continues into the
  * column: into the triangle when it leads to that hidden commit (`◀─`, `─▶`), into a dashed end when it just goes
- * on (`╌─`, `─╌`). So a triangle always means a commit, and a line never seems to start from nothing.
+ * on (`╌─`, `─╌`). So a triangle always means a commit, and a line never seems to start from nothing. The triangle
+ * takes the hidden commit's color (dimmed with it), so it shows which branch is off-screen.
  *
  * @param fullChars - The row at full width, before slicing
  * @param nodeColumn - The commit's column on a commit row; null for connector and fan-out rows
- * @param color - Muted color for the triangles; lines keep their own color
+ * @param color - For a triangle whose commit has no block to take the color from; lines keep their own color
  */
 export function edgeMarks(
   fullChars: GraphChar[],
@@ -191,9 +193,15 @@ export function edgeMarks(
   const rightLine = rightFiller?.char === "─" ? rightFiller.color : null;
   const hiddenLeft = nodeColumn !== null && nodeColumn < viewportOffset;
   const hiddenRight = nodeColumn !== null && nodeColumn >= viewportEnd;
+  const block = nodeColumn !== null ? charAt(fullChars, nodeColumn * 2) : null;
+  const node: Omit<GraphChar, "char"> = block && block.char !== " " ? block : { color };
 
   const outer = (hidden: boolean, line: string | null, triangle: string): GraphChar =>
-    hidden ? { char: triangle, color } : line ? { char: "╌", color: line } : { char: " ", color };
+    hidden
+      ? { char: triangle, color: node.color, bold: node.bold }
+      : line
+        ? { char: "╌", color: line }
+        : { char: " ", color };
   const inner = (line: string | null): GraphChar => (line ? { char: "─", color: line } : { char: " ", color });
 
   return {

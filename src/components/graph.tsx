@@ -320,8 +320,9 @@ function GraphLine(
   const fullConnectorChars = createMemo(() => dimChars(renderConnectorRow(props.row, renderOpts())));
 
   // While the graph scrolls sideways, each row is sliced to the viewport and gets a mark column on both sides:
-  // arrows where a line runs past an edge, and on the side of a commit whose block is off-screen. Slicing is cheap;
-  // the full-width renders above stay memoized while only viewportOffset changes.
+  // a dashed end where a line runs past an edge, a triangle in the commit's color on the side of a commit whose
+  // block is off-screen. Slicing is cheap; the full-width renders above stay memoized while only viewportOffset
+  // changes.
   const edgeColor = () => t().foregroundMuted;
   /** A full-width row fitted to the viewport with its edge marks; `nodeColumn` is null for non-commit rows. */
   const frameRow = (full: GraphChar[], nodeColumn: number | null): GraphChar[] => {
