@@ -451,8 +451,9 @@ function assignNodeColumn(hash: string, isRemoteOnly: boolean, ls: LaneState): n
     laneRemoteOnly[reuseIdx] = isRemoteOnly;
     laneColors[reuseIdx] = ls.nextColorIdx++;
   } else {
-    // The root's column was trimmed as trailing: keep it as an empty lane and start after it.
-    while (ls.rootGap !== null && lanes.length <= ls.rootGap) {
+    // The root's column was trimmed as trailing and would be the next one: keep it as an empty lane and start after
+    // it. Free columns before it are fine, so roots in a row take turns between two columns.
+    if (ls.rootGap !== null && lanes.length === ls.rootGap) {
       lanes.push(null);
       laneRemoteOnly.push(false);
       laneColors.push(0);

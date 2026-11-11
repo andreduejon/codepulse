@@ -30,3 +30,9 @@ test("one row later, the root's column is free again", () => {
   expect(findRow(rows, "m2").nodeColumn).toBe(0);
   expect(findRow(rows, "d1").nodeColumn).toBe(1);
 });
+
+test("roots in a row take turns between two columns instead of moving right", () => {
+  const roots = Array.from({ length: 14 }, (_, i) => makeCommit(`r${i}`, []));
+  const rows = buildGraph(roots);
+  expect(rows.map(row => row.nodeColumn)).toEqual(Array.from({ length: 14 }, (_, i) => i % 2));
+});
