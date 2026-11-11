@@ -31,7 +31,8 @@ All notable changes to this project will be documented in this file.
 - Jenkins stages are selectable: Enter opens only that stage's part of the console log, titled with the stage and
   its time, and `←` / `→` move between stages. `←` from the first stage shows the full log: a summary (each stage
   with its mark and time, the test counts), then the whole console. It is cut from the cached console log, so no
-  extra requests.
+  extra requests. A stage in a parallel branch opens the full log with a line that says so: the branches write to
+  the console at the same time.
 - Jenkins: a finished build with a JUnit report shows a **Tests** row with its failed tests. Enter opens a
   failure's error and stack trace in the log viewer, titled with the test, `←` / `→` move between failed tests.
 - Jenkins: a legend below the tree explains the marks (`✓ passed  ● running  ✗ failed  – skipped  ○ aborted`).
@@ -41,7 +42,8 @@ All notable changes to this project will be documented in this file.
 - Snyk Vulnerabilities compare with an earlier scan: folded NEW and FIXED trees at the end, their muted headings
   naming the scan (`vs parent 4c5d6e7`, or `vs 1a2b3c4, 3 commits back` when the parent has no scan and the
   nearest scanned commit stands in). Added findings also keep a muted `new` under their severity. `new` and
-  `fixed` work as filter words.
+  `fixed` work as filter words. A project that either scan could not resolve is left out of both trees, and a
+  partial scan that does not name its failed projects is not compared at all.
 
 - `bun run demo` (from a source checkout): codepulse on two made-up repositories with GitHub Actions, Jenkins,
   OpenShift and Snyk data, offline and without touching your config or cache, on macOS, Linux and Windows. The
@@ -85,9 +87,15 @@ All notable changes to this project will be documented in this file.
 
 - CI logs: the first line of a GitHub job log no longer shows its timestamp (GitHub's logs start with a byte order
   mark), and `issues only` and `errors only` no longer list passing tests whose names say failed
-  (`(pass) checkout > keeps a failed payment`, `✓ …`, `… PASSED`).
+  (`(pass) checkout > keeps a failed payment`, `✓ …`, `… PASSED`), nor drop failed ones whose names say warning.
+- GitHub Actions: a re-run no longer shows the jobs of its earlier attempt. Jobs were kept by run, and a re-run
+  keeps its run's id.
+- GitHub Actions: a fetch that fails in the background (a rate limit, offline) shows its error like Jenkins does.
+  The runs looked as if they were still loading until a Reload.
+- A terminal made smaller keeps the selected commit on screen.
 - In a narrow terminal (details as a dialog), `Esc` in a CI log or an OpenShift resource goes back to the details,
   like it does from a diff. It closed the details too and left the keys going to them, so Enter reopened the log.
+  The details also come back as they were (open runs, attempts, cursor), not rebuilt with the first failure open.
 - OpenShift: when the cluster lists but does not allow watching, the **Watch denied** notice no longer disappears
   as soon as the next build list arrives. The data can go stale while the watches are stopped, so the notice stays
   until a Reload.
@@ -105,7 +113,8 @@ All notable changes to this project will be documented in this file.
 - A long OpenShift resource name no longer pushes its status mark out of a narrow detail panel.
 - Log search with wrap off: a hit past the right edge moves the lines sideways (they start with `…`) so it shows.
 - A followed OpenShift log that drops its oldest lines keeps the selected search hit (`2/2` stays `2/2`).
-- A narrow footer leaves out whole key hints, least needed first, instead of cutting the last one mid-word.
+- A narrow footer leaves out whole key hints, least needed first, instead of cutting the last one mid-word. Log
+  and resource dialogs too: at 90 columns `o open` was cut off behind a dangling `·`.
 - Graph subjects that do not fit end in `…` (opentui cut them in the middle with `...`), counted in terminal
   columns so wide characters (CJK, emoji) no longer shift columns; ref badges too. Run tree, OpenShift group and
   stash rows end in `…` the same way.
