@@ -25,6 +25,8 @@ import { importHistory } from "./history";
 import { type DemoOptions, PROVIDERS, providerError } from "./options";
 import { FEATURE_BRANCH, LANE_BRANCHES, SHOP_README, shopHistory, webHistory } from "./repositories";
 import {
+  BROWSER_COMMANDS,
+  CLIPBOARD_COMMANDS,
   COMMIT_KEY,
   DEMO_STATE_ENV,
   type DemoState,
@@ -210,7 +212,7 @@ function fillWorld(root: string, options: DemoOptions, now: number): DemoWorld {
   writeFileSync(join(home, ".gitconfig"), "");
 
   const cliNames = providerError(options, "snyk") === "no-cli" ? ["npm", "pnpm"] : ["snyk", "npm", "pnpm"];
-  installFakeCli(bin, cliNames);
+  installFakeCli(bin, [...cliNames, ...BROWSER_COMMANDS, ...CLIPBOARD_COMMANDS]);
 
   const git = gitRunner(env);
   // ── shop: the repository the demo opens (its history: repositories.ts) ──

@@ -41,6 +41,13 @@ export interface DemoState {
 }
 
 export const DEMO_STATE_ENV = "CODEPULSE_DEMO_STATE";
+/**
+ * The commands the app hands a URL (`o`) or text (copy) to, on every OS. The demo has its own of each, so neither
+ * reaches the user's browser or clipboard: they write what they got to `OUTSIDE_LOG` in the demo folder.
+ */
+export const BROWSER_COMMANDS = ["open", "xdg-open", "powershell"];
+export const CLIPBOARD_COMMANDS = ["pbcopy", "wl-copy", "xclip", "clip"];
+export const OUTSIDE_LOG = "outside.log";
 /** The headless play, for the app process (play.ts). */
 export const PLAY_ENV = "CODEPULSE_DEMO_PLAY";
 

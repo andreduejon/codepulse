@@ -101,6 +101,9 @@ Snyk scans the branch tips by itself; other commits wait for **Scan commit**. It
 from each commit's `package.json` files (the root project and `admin/`). Jenkins lists more branch jobs than it
 reads, so its view notes the limit.
 
+`o` and copy do not reach your browser or clipboard: the demo has its own `open`, `pbcopy` and the others, which
+write what they got to `outside.log` in the demo folder (`--keep` keeps it).
+
 ### The graph
 
 shop has 86 commits over twelve days, built to show every shape the graph has to draw
@@ -166,7 +169,7 @@ Everything lives in `scripts/demo/`:
 | `scenario.ts` | The made-up GitHub, Jenkins and OpenShift data, per phase. |
 | `packages.ts` | The npm world: each commit's `package.json`, the dependency graphs, the findings, the registry. |
 | `fake-fetch.ts` | Preloaded into the app: answers GitHub, Jenkins and OpenShift requests and logs them to `requests.log`. |
-| `fake-cli.ts` | The `snyk`, `npm` and `pnpm` on the app's PATH (compiled into one executable on Windows, cached in `node_modules/.cache/codepulse-demo`). |
+| `fake-cli.ts` | The `snyk`, `npm` and `pnpm` on the app's PATH, and the browser and clipboard commands (compiled into one executable on Windows, cached in `node_modules/.cache/codepulse-demo`). |
 | `fake-ssh.ts` | Lets `git fetch` reach the local remotes. |
 | `play.ts`, `player.tsx`, `steps.ts`, `clock.ts` | The headless mode: steps, the test renderer, the fixed clock. |
 

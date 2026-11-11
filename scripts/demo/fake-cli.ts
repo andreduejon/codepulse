@@ -1,17 +1,20 @@
 /**
- * The demo's `snyk`, `npm` and `pnpm` (world.ts puts them on the app's PATH). A shell script runs this file with the
- * tool's name first; on Windows it is compiled into one executable, named after the tool it stands in for.
+ * The demo's `snyk`, `npm` and `pnpm`, and its browser and clipboard (world.ts puts them on the app's PATH). A shell
+ * script runs this file with the tool's name first; on Windows it is compiled into one executable, named after the
+ * tool it stands in for.
  *
  * - `snyk test --json` reports the findings for the checked-out commit's package.json files (packages.ts).
  * - `snyk test --print-graph` prints their dependency graphs.
  * - `npm view` and `pnpm view` answer the override check from the same made-up registry.
+ * - `open`, `xdg-open` and PowerShell (`o`), `pbcopy`, `wl-copy`, `xclip` and `clip` (copy) write what they got to
+ *   outside.log in the demo folder, instead of opening the user's browser or changing their clipboard.
  */
-import { existsSync, readFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { appendFileSync, existsSync, readFileSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import { dependencyTree, type Manifest, registryView, vulnerabilities } from "./packages";
-import { loadDemoState } from "./scenario";
+import { BROWSER_COMMANDS, CLIPBOARD_COMMANDS, DEMO_STATE_ENV, loadDemoState, OUTSIDE_LOG } from "./scenario";
 
-const TOOLS = ["snyk", "npm", "pnpm"];
+const TOOLS = ["snyk", "npm", "pnpm", ...BROWSER_COMMANDS, ...CLIPBOARD_COMMANDS];
 const own = basename(process.execPath).replace(/\.exe$/i, "");
 const [tool, args] = TOOLS.includes(own)
   ? [own, process.argv.slice(2)]
@@ -112,6 +115,25 @@ function view(): number {
   return 0;
 }
 
-const code = tool === "snyk" ? await snyk() : tool === "npm" || tool === "pnpm" ? view() : 127;
+/** What `o` or copy would hand the host, written down in the demo folder. */
+async function outside(kind: "browser" | "clipboard"): Promise<number> {
+  // PowerShell gets the URL in an environment variable (src/utils/open-url.ts), the others as the last argument.
+  const text = kind === "browser" ? (process.env.CODEPULSE_OPEN_URL ?? args.at(-1) ?? "") : await Bun.stdin.text();
+  const state = process.env[DEMO_STATE_ENV];
+  if (!state) return 1;
+  appendFileSync(join(dirname(state), OUTSIDE_LOG), `${kind} ${text}\n`);
+  return 0;
+}
+
+const code =
+  tool === "snyk"
+    ? await snyk()
+    : tool === "npm" || tool === "pnpm"
+      ? view()
+      : BROWSER_COMMANDS.includes(tool)
+        ? await outside("browser")
+        : CLIPBOARD_COMMANDS.includes(tool)
+          ? await outside("clipboard")
+          : 127;
 if (code === 127) console.error(`The demo has no fake for "${tool}".`);
 process.exit(code);
