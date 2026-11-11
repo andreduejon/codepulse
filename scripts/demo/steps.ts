@@ -107,6 +107,8 @@ function splitSources(play: string): StepSource[] {
 
 /** The most a step repeats, or the furthest place it points at. */
 const MAX_COUNT = 1000;
+/** The last cell of the largest screen a play can have (1000 columns and rows). */
+const MAX_CELL = 999;
 
 function count(text: string, source: string): number {
   const value = wholeNumber(text, 1, MAX_COUNT);
@@ -117,7 +119,12 @@ function count(text: string, source: string): number {
 /** What a mouse step points at. A `#N` inside quotes is part of the text; only one after them picks the nth place. */
 function parseTarget(value: string, source: string, quotedTo: number): Target {
   const cell = /^(\d+),(\d+)$/.exec(value);
-  if (cell && quotedTo === 0) return { kind: "cell", x: Number(cell[1]), y: Number(cell[2]) };
+  if (cell && quotedTo === 0) {
+    const x = wholeNumber(cell[1] ?? "", 0, MAX_CELL);
+    const y = wholeNumber(cell[2] ?? "", 0, MAX_CELL);
+    if (x === null || y === null) throw new PlayError(`${source}: a cell is X,Y from 0,0 to ${MAX_CELL},${MAX_CELL}.`);
+    return { kind: "cell", x, y };
+  }
   const match = /^(.+)#(\d+)$/.exec(value);
   const nth = match && (match[1]?.length ?? 0) >= quotedTo ? match : null;
   const text = nth ? nth[1] : value;

@@ -48,28 +48,28 @@ Nothing reaches the network, and your own config and cache stay untouched.
 
 Options
   --play "STEPS"          run headless: play the steps, print the screens, exit (1 when a step fails)
-  --size WxH              headless screen size (default ${DEFAULT_SIZE.width}x${DEFAULT_SIZE.height})
+  --size WxH              headless screen size (default ${DEFAULT_SIZE.width}x${DEFAULT_SIZE.height}, up to 1000x1000)
   --github MODE           default, empty, off, or error:401|rate-limit|offline|timeout|no-token
   --jenkins MODE          default, empty, off, or error:401|offline|timeout|no-token
   --openshift MODE        default, empty, off, or error:401|offline|timeout|partial|watch-denied|no-token
   --snyk MODE             default, empty, off, or error:no-token|partial|no-cli
   --setup                 start on a repository the config does not know yet
-  --live [SECONDS]        interactive: the world moves on every SECONDS (default ${DEFAULT_LIVE_SECONDS})
-  --latency MS            fake server delay in milliseconds (default ${DEFAULT_LATENCY_MS})
+  --live [SECONDS]        interactive: the world moves on every SECONDS (default ${DEFAULT_LIVE_SECONDS}, up to 86400)
+  --latency MS            fake server delay in milliseconds (default ${DEFAULT_LATENCY_MS}, up to 60000)
   --theme NAME            start with this theme
   --keep                  keep the demo folder and print where it is
   --help                  show this help
 
 Steps (inside --play, separated by spaces or new lines, quote text with spaces)
-  j  tab  enter  esc  up  pagedown  shift+tab  ctrl+d  down*3      keys
+  j  tab  enter  esc  up  pagedown  shift+tab  ctrl+d  down*3      keys (up to *1000)
   type:TEXT               type text
   wait:TEXT  gone:TEXT    wait until the text shows or is gone (30 seconds, 2 minutes with error:timeout)
   expect:TEXT  absent:TEXT fail unless the text is on screen, or unless it is not
   shot  shot:NAME         print the screen
-  size:WxH                resize
+  size:WxH                resize (up to 1000x1000)
   advance                 move the world to its next phase
   click:TEXT  click:TEXT#2  click:X,Y  hover:TEXT  scroll:down*5@TEXT    mouse
-  sleep:MS                wait a fixed time
+  sleep:MS                wait a fixed time (up to 600000)
 
 Example
   bun run demo --play 'j j l tab tab wait:"full log" shot'

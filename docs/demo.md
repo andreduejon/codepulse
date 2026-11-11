@@ -19,14 +19,14 @@ bun run demo --help                            # options and steps
 | Option | Mode | What it does |
 |--------|------|--------------|
 | `--play "STEPS"` | headless | Plays the steps, prints the screens, exits. Without it the demo is interactive. |
-| `--size WxH` | headless | Screen size, default `160x45`. The interactive demo uses your terminal's size. |
+| `--size WxH` | headless | Screen size, default `160x45`, up to `1000x1000`. The interactive demo uses your terminal's size. |
 | `--github MODE` | both | `default`, `empty`, `off`, or `error:401`, `error:rate-limit`, `error:offline`, `error:timeout`, `error:no-token` |
 | `--jenkins MODE` | both | `default`, `empty`, `off`, or `error:401`, `error:offline`, `error:timeout`, `error:no-token` |
 | `--openshift MODE` | both | `default`, `empty`, `off`, or `error:401`, `error:offline`, `error:timeout`, `error:partial`, `error:watch-denied`, `error:no-token` |
 | `--snyk MODE` | both | `default`, `empty`, `off`, or `error:no-token`, `error:partial`, `error:no-cli` |
 | `--setup` | both | Starts on a repository the config does not know yet: the welcome screen. |
-| `--live [SECONDS]` | interactive | The world moves on every SECONDS (default 60). See [Phases](#phases). |
-| `--latency MS` | both | Fake server delay in milliseconds, default 150. Raise it to look at loading states. |
+| `--live [SECONDS]` | interactive | The world moves on every SECONDS (default 60, up to 86400). See [Phases](#phases). |
+| `--latency MS` | both | Fake server delay in milliseconds, default 150, up to 60000. Raise it to look at loading states. |
 | `--theme NAME` | both | Starts with that theme. |
 | `--keep` | both | Keeps the demo folder (repositories, config, cache, `requests.log`) and prints where it is. |
 
@@ -60,17 +60,17 @@ Steps are separated by spaces or new lines. Quote text with spaces: `wait:"full 
 |------|--------------|
 | `j` `/` `G` `tab` `enter` `esc` `space` `backspace` | A key. Names: `up` `down` `left` `right` `home` `end` `pageup` `pagedown` `delete` `f1`…`f12`. |
 | `shift+tab` `ctrl+d` `alt+x` | A key with modifiers. |
-| `down*3` | A key three times. |
+| `down*3` | A key three times (up to 1000). |
 | `type:TEXT` | Types text, for search, filters and settings fields. |
 | `wait:TEXT` / `gone:TEXT` | Waits until the text shows, or is gone. Fails after 30 seconds (two minutes with an `error:timeout` provider). |
 | `expect:TEXT` / `absent:TEXT` | Fails unless the text is on screen, or unless it is not. |
 | `shot` / `shot:NAME` | Prints the screen. Without any shot, the play prints the last screen. |
 | `size:WxH` | Resizes, for minimum widths and compact layouts. |
 | `advance` | Moves the world to its next phase. |
-| `click:TEXT` / `click:TEXT#2` / `click:X,Y` | Clicks the middle of the first (or second) place the text shows, or a cell. |
+| `click:TEXT` / `click:TEXT#2` / `click:X,Y` | Clicks the middle of the first (or second, up to the 1000th) place the text shows, or a cell (from `0,0`). A `#` inside quotes is part of the text: `click:"CI #812"`. |
 | `hover:TEXT` | Moves the mouse over the text. |
 | `scroll:down*5@TEXT` | Scrolls the wheel over the text, or over the middle of the screen without `@`. |
-| `sleep:MS` | Waits a fixed time, for things on a timer. |
+| `sleep:MS` | Waits a fixed time, for things on a timer (up to 600000). |
 
 The same play prints the same screens every run: the commits and the app's clock start at a fixed moment
 (2 March 2026, 09:30 UTC), dates are shown in UTC, and long text in the selected row stays still instead of
