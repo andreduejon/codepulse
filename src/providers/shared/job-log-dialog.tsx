@@ -115,15 +115,11 @@ function classifyLine(line: string): { kind: LogLineKind; text: string } | null 
   if (/^\[Pipeline\]/i.test(line)) return { kind: "muted", text: line };
   if (line.startsWith("##[error]")) return { kind: "error", text: line.slice("##[error]".length) };
   if (line.startsWith("##[warning]")) return { kind: "warning", text: line.slice("##[warning]".length) };
+  // A test runner's verdict comes first: whatever the test's name says, it passed or it failed.
   if (TEST_PASS.test(line)) return { kind: "normal", text: line };
+  if (TEST_FAILURE.test(line)) return { kind: "error", text: line };
   if (/\bwarning\b[: ]/i.test(line)) return { kind: "warning", text: line };
-  if (
-    /^error:/i.test(line) ||
-    /^\s+at\s/.test(line) ||
-    FAILURE_WORD.test(line) ||
-    THROWABLE.test(line) ||
-    TEST_FAILURE.test(line)
-  )
+  if (/^error:/i.test(line) || /^\s+at\s/.test(line) || FAILURE_WORD.test(line) || THROWABLE.test(line))
     return { kind: "error", text: line };
   return { kind: "normal", text: line };
 }

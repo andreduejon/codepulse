@@ -57,6 +57,12 @@ test("a passing test is not an issue, even when its name says failed", () => {
   expect(kinds("(fail) checkout > keeps a failed payment [1.23ms]")).toEqual(["error"]);
 });
 
+test("a failed test is an error, even when its name says warning", () => {
+  expect(kinds("(fail) banner > shows a warning after a timeout [1.23ms]")).toEqual(["error"]);
+  expect(kinds("✕ displays warning: checkout failed (3 ms)")).toEqual(["error"]);
+  expect(kinds("FAIL src/warning: banner.test.ts")).toEqual(["error"]);
+});
+
 test("a GitHub log's byte order mark does not keep the first line's timestamp", () => {
   const lines = parseLogLines(
     "﻿2026-03-02T08:33:00.0010000Z Current runner version: '2.321.0'\n2026-03-02T08:33:00.0020000Z next",
