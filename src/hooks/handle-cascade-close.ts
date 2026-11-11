@@ -64,7 +64,7 @@ export function createCloseOneCascadeStep(opts: CascadeCloseOptions): () => bool
         actions.setDetailFocused(false);
         setDialog(null);
         return true;
-      case "diff-blame-compact":
+      case "back-to-detail":
         setDialog("detail");
         return true;
       case "dialog":

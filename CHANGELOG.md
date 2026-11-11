@@ -74,6 +74,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- In a narrow terminal (details as a dialog), `Esc` in a CI log or an OpenShift resource goes back to the details,
+  like it does from a diff. It closed the details too and left the keys going to them, so Enter reopened the log.
 - OpenShift: when the cluster lists but does not allow watching, the **Watch denied** notice no longer disappears
   as soon as the next build list arrives. The data can go stale while the watches are stopped, so the notice stays
   until a Reload.

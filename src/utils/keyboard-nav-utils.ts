@@ -108,7 +108,7 @@ export function computeDisplacedIndex(rows: GraphRow[], hSet: Set<string> | null
 export type CascadeTarget =
   | "command-bar"
   | "detail-dialog"
-  | "diff-blame-compact"
+  | "back-to-detail"
   | "dialog"
   | "search-focused"
   | "detail-focused"
@@ -131,11 +131,14 @@ export interface CascadeState {
   viewingBranch: string | null;
 }
 
+const DETAIL_CHILD_DIALOGS = new Set(["diff-blame", "job-log", "openshift-resource"]);
+
 export function computeCascadeTarget(s: CascadeState): CascadeTarget {
   if (s.commandBarMode !== "idle") return "command-bar";
   if (s.dialog) {
     if (s.dialog === "detail") return "detail-dialog";
-    if (s.dialog === "diff-blame" && s.layoutMode === "compact" && s.detailFocused) return "diff-blame-compact";
+    // A dialog opened from compact details (a diff, a log, an OpenShift resource) goes back to them.
+    if (DETAIL_CHILD_DIALOGS.has(s.dialog) && s.layoutMode === "compact" && s.detailFocused) return "back-to-detail";
     return "dialog";
   }
   if (s.searchFocused) return "search-focused";
