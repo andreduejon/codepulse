@@ -58,7 +58,7 @@ import JobLogDialog, { type JobLogTarget } from "./providers/shared/job-log-dial
 import { repositoryIdentity, setProviderCacheSuspended } from "./providers/shared/sha-sqlite-cache";
 import { type SnykProviderConfig, useSnyk } from "./providers/snyk/use-snyk";
 import { nextGroupRepoPath } from "./utils/group-repos";
-import { computeDisplacedIndex } from "./utils/keyboard-nav-utils";
+import { computeDisplacedIndex, DETAIL_CHILD_DIALOGS } from "./utils/keyboard-nav-utils";
 
 export function AppContent(props: Readonly<AppContentProps>) {
   const { state, actions } = createAppState(
@@ -661,6 +661,10 @@ export function AppContent(props: Readonly<AppContentProps>) {
   /** While a log dialog's search owns Esc, the app's Esc (cascade close) must not close the dialog. */
   const setLogSearchScope = (active: boolean) => actions.setKeyboardScopeOverride(active ? "log-search" : null);
 
+  /** A dialog opened from the compact details is showing; they wait under it. */
+  const compactDetailUnderChild = () =>
+    DETAIL_CHILD_DIALOGS.has(dialog() ?? "") && layoutMode() === "compact" && state.detailFocused();
+
   /** Dialogs opened from the details return to the compact detail dialog when they close. */
   const closeToDetail = () => {
     if (layoutMode() === "compact" && state.detailFocused()) setDialog("detail");
@@ -906,9 +910,11 @@ export function AppContent(props: Readonly<AppContentProps>) {
                     />
                   )}
                 </Show>
-                {/* Detail dialog — compact mode only */}
-                <Show when={dialog() === "detail"}>
+                {/* Detail dialog, compact mode only. Under a dialog opened from it, it stays mounted but hidden, so
+                    closing that dialog comes back to the details as they were (open runs, attempts, cursor). */}
+                <Show when={dialog() === "detail" || compactDetailUnderChild()}>
                   <DetailDialog
+                    visible={dialog() === "detail"}
                     scrollboxRef={el => {
                       detailScrollboxRef = el;
                     }}

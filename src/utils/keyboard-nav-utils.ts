@@ -131,7 +131,8 @@ export interface CascadeState {
   viewingBranch: string | null;
 }
 
-const DETAIL_CHILD_DIALOGS = new Set(["diff-blame", "job-log", "openshift-resource"]);
+/** Dialogs opened from the details: in compact layout, closing one goes back to the details dialog. */
+export const DETAIL_CHILD_DIALOGS: ReadonlySet<string> = new Set(["diff-blame", "job-log", "openshift-resource"]);
 
 export function computeCascadeTarget(s: CascadeState): CascadeTarget {
   if (s.commandBarMode !== "idle") return "command-bar";
