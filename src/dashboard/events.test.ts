@@ -122,6 +122,64 @@ describe("events", () => {
   });
 });
 
+describe("event details", () => {
+  test("each event carries what its side panel shows, and its page when it has one", () => {
+    const [github] = githubEvents("/repo/shop", [
+      { sha: SHA, runs: [run({ startedAt: "2026-03-02T10:41:00Z", updatedAt: "2026-03-02T10:52:30Z" })] },
+    ]);
+    expect(github?.url).toBe("https://github.com/demo/shop/actions/runs/1");
+    expect(github?.facts).toEqual([
+      { label: "Workflow", value: "CI" },
+      { label: "Run", value: "#812" },
+      { label: "Trigger", value: "push" },
+      { label: "Duration", value: "11m 30s" },
+    ]);
+    const [failed] = openShiftEvents("/repo/shop", [
+      {
+        sha: SHA,
+        builds: [
+          {
+            id: "Build/shop-api-41",
+            name: "shop-api-41",
+            namespace: "shop-dev",
+            status: "fail",
+            imageRefs: [],
+            commitSha: SHA,
+            updatedAt: "2026-03-02T10:19:00Z",
+            object: {
+              status: {
+                completionTimestamp: "2026-03-02T10:25:00Z",
+                reason: "DockerBuildFailed",
+                message: "Docker build strategy has failed.",
+              },
+            },
+          },
+        ],
+      },
+    ]);
+    expect(failed?.url).toBeUndefined();
+    expect(failed?.facts).toEqual([
+      { label: "Namespace", value: "shop-dev" },
+      { label: "Build", value: "shop-api-41" },
+      { label: "Reason", value: "DockerBuildFailed: Docker build strategy has failed." },
+      { label: "Duration", value: "6m 00s" },
+    ]);
+    const [scan] = snykEvents("/repo/shop", [
+      {
+        sha: SHA,
+        scannedAt: "2026-03-02T10:30:00Z",
+        counts: { critical: 1, high: 3, medium: 0, low: 2 },
+        partial: true,
+        failedProjects: 1,
+      },
+    ]);
+    expect(scan?.facts).toEqual([
+      { label: "Vulnerabilities", value: "1 critical, 3 high, 0 medium, 2 low" },
+      { label: "Partial", value: "1 project could not be scanned" },
+    ]);
+  });
+});
+
 describe("dashboardRows", () => {
   const event = (app: string, minute: number, source: DashboardEvent["source"] = "git"): DashboardEvent => ({
     id: `${app}:${source}:${minute}`,

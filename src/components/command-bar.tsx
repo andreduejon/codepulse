@@ -3,11 +3,12 @@ import { createMemo, createSignal, For, Show } from "solid-js";
 import type { KnownRepoInfo } from "../config";
 import { isUncommittedHash } from "../constants";
 import { useAppState } from "../context/state";
+import { providerLegend } from "../dashboard/legend";
 import type { DashboardState } from "../dashboard/use-dashboard";
 import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
 import { useT } from "../hooks/use-t";
 import { providerColors } from "../providers/colors";
-import { type ProviderView, providerDisplayName } from "../providers/provider";
+import { type EventSource, type ProviderView, providerDisplayName } from "../providers/provider";
 import { commandBarPlaceholder, commitCountText, filterBadgeLabel, realCommitCount } from "../utils/command-bar-utils";
 import { groupMembersForRepo, repoDisplayName } from "../utils/group-repos";
 import Badge from "./badge";
@@ -209,12 +210,7 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
                       actions.setActiveProviderView(view);
                     }}
                   >
-                    {" "}
-                    {/* On the dashboard, each provider's knot color: the labels are its legend. */}
-                    <Show when={dashboardShown() && view !== "dashboard"}>
-                      <span style={{ fg: colors().bg }}>{"● "}</span>
-                    </Show>
-                    {`${providerDisplayName(view)} `}
+                    {` ${providerDisplayName(view)} `}
                   </text>
                 );
               }}
@@ -401,6 +397,14 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
               }}
             </For>
           </box>
+          {/* The dashboard's event count, where the graph's modes are. */}
+          <Show when={dashboardShown() && props.dashboard}>
+            {dashboard => (
+              <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted} bg={t().backgroundElementActive}>
+                {` ${dashboard().eventCount()} ${dashboard().eventCount() === 1 ? "event" : "events"} `}
+              </text>
+            )}
+          </Show>
         </box>
         <box
           position="absolute"
@@ -413,12 +417,19 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
           overflow="hidden"
           maxWidth="45%"
         >
-          <Show when={dashboardShown() && props.dashboard}>
-            {dashboard => (
-              <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted} bg={t().backgroundElementActive}>
-                {` ${dashboard().eventCount()} ${dashboard().eventCount() === 1 ? "event" : "events"} `}
-              </text>
-            )}
+          {/* The dashboard's legend: each provider's knot color. */}
+          <Show when={dashboardShown()}>
+            <For each={providerLegend(enabledProviders().filter((view): view is EventSource => view !== "dashboard"))}>
+              {([markers, label], index) => (
+                <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                  {index() > 0 ? " " : ""}
+                  <For each={markers}>
+                    {([marker, color]) => <span style={{ fg: color(t()) }}>{`${marker} `}</span>}
+                  </For>
+                  {label}
+                </text>
+              )}
+            </For>
           </Show>
           <Show when={!dashboardShown() && (checkedOutBranch() || viewingBranch())}>
             <Show

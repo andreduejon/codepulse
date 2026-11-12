@@ -1,10 +1,10 @@
 import { MouseButton, type Renderable, type ScrollBoxRenderable } from "@opentui/core";
 import { createEffect, createMemo, createSignal, For, Match, onCleanup, Show, Switch } from "solid-js";
 import type { DashboardEvent, DashboardRow } from "../dashboard/events";
+import { eventMark, KNOT } from "../dashboard/legend";
 import type { DashboardState } from "../dashboard/use-dashboard";
 import { useT } from "../hooks/use-t";
 import { providerColors } from "../providers/colors";
-import { statusColor, statusIcon } from "../providers/shared/status";
 import { formatClock, formatDayLabel } from "../utils/date";
 import { type ScrollSchedule, scheduleScrollIntoView, scrollElementIntoView } from "../utils/scroll";
 
@@ -47,7 +47,7 @@ export function DashboardView(
         <For each={apps()}>
           {(_, index) => (
             <text flexShrink={0} wrapMode="none" fg={knot()?.rope === index() ? knot()?.color : t().border}>
-              {knot()?.rope === index() ? "█ " : "│ "}
+              {knot()?.rope === index() ? `${KNOT} ` : "│ "}
             </text>
           )}
         </For>
@@ -61,7 +61,7 @@ export function DashboardView(
     return (
       <text wrapMode="none" truncate fg={t().foreground}>
         <Show
-          when={event().status}
+          when={eventMark(event())}
           fallback={
             <>
               <span style={{ fg: t().foregroundMuted }}>{`${short()} `}</span>
@@ -69,9 +69,9 @@ export function DashboardView(
             </>
           }
         >
-          {status => (
+          {mark => (
             <>
-              <span style={{ fg: statusColor(t(), status()) }}>{`${statusIcon(status())} `}</span>
+              <span style={{ fg: mark().color(t()) }}>{`${mark().icon} `}</span>
               {event().text}
               <span style={{ fg: t().foregroundMuted }}>{` · ${short()}`}</span>
             </>

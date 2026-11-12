@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { GitHubCache } from "../providers/github-actions/cache";
 import { closeProviderCaches } from "../providers/shared/sha-sqlite-cache";
 import { SnykCache } from "../providers/snyk/cache";
-import { loadAppEvents } from "./load";
+import { loadAppEvents, loadCommitInfo } from "./load";
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -96,4 +96,21 @@ test("a folder that is not a repository has no events instead of failing the das
   const root = await realpath(await mkdtemp(join(tmpdir(), "codepulse-dashboard-")));
   roots.push(root);
   expect(await loadAppEvents(join(root, "missing"), { since: 0, cacheRoot: join(root, "cache") })).toEqual([]);
+});
+
+test("a commit's author, date and message for the side panel; a commit the repository lacks has none", async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), "codepulse-dashboard-")));
+  roots.push(root);
+  const repo = join(root, "shop");
+  await Bun.spawn(["git", "init", "-q", "-b", "main", repo]).exited;
+  const sha = await commit(repo, "feat(api): health", "2026-03-02T09:20:00Z");
+  expect(await loadCommitInfo(repo, sha)).toEqual({
+    author: "Dev",
+    email: "dev@example.invalid",
+    date: "2026-03-02T09:20:00Z",
+    subject: "feat(api): health",
+    body: "",
+  });
+  expect(await loadCommitInfo(repo, "0".repeat(40))).toBeNull();
+  expect(await loadCommitInfo(repo, "--help")).toBeNull();
 });

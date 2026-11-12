@@ -7,6 +7,7 @@ import type { KnownRepoInfo } from "../config";
 import { UNCOMMITTED_HASH } from "../constants";
 import { AppStateContext, createAppState } from "../context/state";
 import { createThemeState, ThemeContext, themes } from "../context/theme";
+import type { DashboardState } from "../dashboard/use-dashboard";
 import { buildGraph } from "../git/graph";
 import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
 import { commandBarPlaceholder } from "../utils/command-bar-utils";
@@ -594,6 +595,64 @@ test("the highlighted count leaves out the working-tree node, like the total", a
   try {
     await setup.flush();
     expect(setup.captureCharFrame()).toContain("1 / 1 commit");
+  } finally {
+    setup.renderer.destroy();
+  }
+});
+
+test("on the dashboard: the event count takes the modes' place, the apps and the provider legend take the project row", async () => {
+  let app!: ReturnType<typeof createAppState>;
+  const [scope, setScope] = createSignal<string | null>(null);
+  const dashboard = {
+    apps: () => [
+      { path: "/repo/shop", name: "shop" },
+      { path: "/repo/web", name: "shop-web" },
+    ],
+    scope,
+    setScope,
+    eventCount: () => 23,
+  } as unknown as DashboardState;
+  const setup = await testRender(
+    () => {
+      app = createAppState(100, 0, 0);
+      app.actions.setCurrentBranch("main");
+      for (const id of ["github-actions", "snyk"] as const)
+        app.state.providers.register({ id, displayName: id, isAvailable: () => true });
+      app.actions.setActiveProviderView("dashboard");
+      return (
+        <ThemeContext.Provider value={createThemeState()}>
+          <AppStateContext.Provider value={app}>
+            <box width="100%" height="100%" flexDirection="column">
+              <CommandBar
+                commandBarMode={() => "idle"}
+                commandBarValue={() => ""}
+                searchInputValue={() => ""}
+                searchFocused={() => false}
+                detailFocused={() => false}
+                onInput={() => {}}
+                knownRepos={[]}
+                currentRepo="/repo/shop"
+                dashboard={dashboard}
+              />
+            </box>
+          </AppStateContext.Provider>
+        </ThemeContext.Provider>
+      );
+    },
+    { width: 160, height: 12, useMouse: true },
+  );
+  try {
+    await setup.flush();
+    const lines = setup.captureCharFrame().split("\n");
+    const top = lines.findIndex(line => line.includes("Dashboard"));
+    expect(lines[top]).toMatch(/Dashboard\s+Git\s+GitHub Actions\s+Snyk\s+23 events/);
+    expect(lines[top]).not.toContain("●");
+    expect(lines[top]).not.toContain("normal");
+    expect(lines[top + 2]).toMatch(/All apps\s+shop\s+shop-web\s+█ Git\s+█ Actions\s+█ Snyk/);
+    expect(lines[top + 2]).not.toContain("main");
+    const x = lines[top + 2].indexOf("shop-web") + 1;
+    await setup.mockMouse.click(x, top + 2, MouseButtons.LEFT);
+    expect(scope()).toBe("/repo/web");
   } finally {
     setup.renderer.destroy();
   }

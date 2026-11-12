@@ -84,3 +84,30 @@ export async function loadAppEvents(app: string, options: LoadOptions): Promise<
     ...snykEvents(app, snyk),
   ].filter(event => event.time >= options.since);
 }
+
+/** What the side panel shows about an event's commit. */
+export interface CommitInfo {
+  author: string;
+  email: string;
+  /** ISO 8601, as Git wrote it. */
+  date: string;
+  subject: string;
+  body: string;
+}
+
+/** An event's commit as the app's repository knows it; null when it does not (a commit only CI saw). */
+export async function loadCommitInfo(app: string, sha: string, signal?: AbortSignal): Promise<CommitInfo | null> {
+  if (!/^[0-9a-f]{7,40}$/i.test(sha)) return null;
+  try {
+    const { stdout, exitCode } = await runGit(
+      app,
+      ["show", "-s", `--format=%an${FIELD}%ae${FIELD}%aI${FIELD}%s${FIELD}%b`, sha, "--"],
+      signal,
+    );
+    if (exitCode !== 0) return null;
+    const [author = "", email = "", date = "", subject = "", body = ""] = stdout.split(FIELD);
+    return { author, email, date: date.replace(/\+00:00$/, "Z"), subject, body: body.trim() };
+  } catch {
+    return null;
+  }
+}

@@ -164,6 +164,7 @@ export default function Footer(
               },
             ]
           : []),
+        ...(dashboard.selected()?.url ? [{ key: "o", desc: " open", rank: 2 }] : []),
         ...(dashboard.apps().length > 1 ? [{ key: "←/→", desc: " switch app", rank: 4 }] : []),
         { key: "r", desc: " refresh", rank: 5, onClick: click(() => void dashboard.reload()) },
         { key: "↑/↓", desc: " navigate", rank: 3 },

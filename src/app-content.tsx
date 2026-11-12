@@ -8,6 +8,7 @@ import { isTabNoticeStatus, type TabNotice, tabNoticeFor } from "./app-tab-notic
 import type { AppContentProps, RepoSessionSnapshot } from "./app-types";
 import CacheScreen from "./components/cache-screen";
 import CommandBar from "./components/command-bar";
+import { DashboardDetail } from "./components/dashboard-detail";
 import { DashboardView } from "./components/dashboard-view";
 import { createDetailMemory } from "./components/detail-memory";
 import DetailPanel from "./components/detail-panel";
@@ -63,6 +64,7 @@ import { repositoryIdentity, setProviderCacheSuspended } from "./providers/share
 import { type SnykProviderConfig, useSnyk } from "./providers/snyk/use-snyk";
 import { groupMembersForRepo, nextGroupRepoPath, repoDisplayName } from "./utils/group-repos";
 import { computeDisplacedIndex, DETAIL_CHILD_DIALOGS } from "./utils/keyboard-nav-utils";
+import { openUrl } from "./utils/open-url";
 
 export function AppContent(props: Readonly<AppContentProps>) {
   const { state, actions } = createAppState(
@@ -473,6 +475,12 @@ export function AppContent(props: Readonly<AppContentProps>) {
       case "r":
         void dashboard.reload();
         break;
+      case "o": {
+        const url = dashboard.selected()?.url;
+        if (!url) return;
+        openUrl(url);
+        break;
+      }
       default:
         return;
     }
@@ -941,6 +949,15 @@ export function AppContent(props: Readonly<AppContentProps>) {
                   </box>
 
                   {/* Detail panel - right, hidden in compact/too-small mode */}
+                  {/* Dashboard details - right, like the commit details beside the graph */}
+                  <Show when={layoutMode() === "normal" && dashboardShown()}>
+                    <box flexDirection="column" width="25%" minWidth={60} flexShrink={0} paddingX={2} paddingBottom={1}>
+                      <DashboardDetail
+                        event={dashboard.selected}
+                        appName={path => dashboardApps().find(app => app.path === path)?.name ?? path}
+                      />
+                    </box>
+                  </Show>
                   <Show when={layoutMode() === "normal" && !dashboardShown()}>
                     <box flexDirection="column" width="25%" minWidth={60} flexShrink={0} paddingX={2} paddingBottom={1}>
                       <DetailPanel

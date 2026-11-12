@@ -33,6 +33,8 @@ export interface DashboardState {
   eventCount: Accessor<number>;
   /** The selected row's index in `rows`, -1 without any event. */
   cursor: Accessor<number>;
+  /** The event of the selected row, for the side panel; null on a knot's `more` row. */
+  selected: Accessor<DashboardEvent | null>;
   select: (index: number) => void;
   move: (delta: number) => void;
   moveToEnd: (end: "first" | "last") => void;
@@ -156,6 +158,10 @@ export function useDashboard(
     rows,
     eventCount: () => shownEvents().length,
     cursor,
+    selected: () => {
+      const row = rows()[cursor()];
+      return row?.kind === "event" ? row.event : null;
+    },
     select,
     move,
     moveToEnd,

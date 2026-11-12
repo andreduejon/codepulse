@@ -8,6 +8,13 @@ import type { OpenShiftCacheEntry } from "../providers/openshift/cache";
 import type { EventSource } from "../providers/provider";
 import { categorize, type StatusCategory } from "../providers/shared/status";
 import type { SnykScanResult } from "../providers/snyk/types";
+import { formatDuration } from "../utils/date";
+
+/** One line of an event's side panel: a label and its value. */
+export interface DashboardFact {
+  label: string;
+  value: string;
+}
 
 export interface DashboardEvent {
   /** Unique across apps and providers. */
@@ -22,7 +29,13 @@ export interface DashboardEvent {
   /** What happened, without the commit (shown beside it). */
   text: string;
   sha: string;
+  /** Its page (a run, a build), for `o`. */
+  url?: string;
+  /** What the side panel shows beside the commit. */
+  facts?: DashboardFact[];
 }
+
+const fact = (label: string, value: string | null | undefined): DashboardFact[] => (value ? [{ label, value }] : []);
 
 const VERBS: Record<StatusCategory, string> = {
   pass: "passed",
@@ -62,7 +75,7 @@ function runEvents<T extends { id: string | number; updatedAt: string; headSha: 
   app: string,
   source: EventSource,
   runs: readonly T[],
-  describe: (run: T) => { status: StatusCategory; text: string },
+  describe: (run: T) => { status: StatusCategory; text: string; url?: string; facts: DashboardFact[] },
 ): DashboardEvent[] {
   const events = new Map<string, DashboardEvent>();
   for (const run of runs) {
@@ -84,7 +97,17 @@ export function githubEvents(
     entries.flatMap(entry => entry.runs),
     run => {
       const status = categorize(run.status, run.conclusion);
-      return { status, text: `${run.name} #${run.runNumber} ${VERBS[status]}` };
+      return {
+        status,
+        text: `${run.name} #${run.runNumber} ${VERBS[status]}`,
+        ...(run.url ? { url: run.url } : {}),
+        facts: [
+          ...fact("Workflow", run.name),
+          ...fact("Run", `#${run.runNumber}`),
+          ...fact("Trigger", run.event),
+          ...fact("Duration", formatDuration(run.startedAt ?? null, run.updatedAt)),
+        ],
+      };
     },
   );
 }
@@ -100,7 +123,16 @@ export function jenkinsEvents(
     run => {
       const status = categorize(run.status, run.conclusion);
       const verb = status === "cancelled" ? "aborted" : VERBS[status];
-      return { status, text: `${run.jobLabel || run.name} #${run.runNumber} ${verb}` };
+      return {
+        status,
+        text: `${run.jobLabel || run.name} #${run.runNumber} ${verb}`,
+        ...(run.url ? { url: run.url } : {}),
+        facts: [
+          ...fact("Job", run.jobLabel || run.name),
+          ...fact("Build", `#${run.runNumber}`),
+          ...fact("Duration", formatDuration(run.startedAt, run.updatedAt)),
+        ],
+      };
     },
   );
 }
@@ -109,9 +141,11 @@ export function openShiftEvents(app: string, entries: readonly OpenShiftCacheEnt
   const events = new Map<string, DashboardEvent>();
   for (const build of entries.flatMap(entry => entry.builds)) {
     // When it finished; its creation time otherwise.
-    const completed = (build.object as { status?: { completionTimestamp?: unknown } } | undefined)?.status
-      ?.completionTimestamp;
-    const time = timeOf(typeof completed === "string" ? completed : null) ?? timeOf(build.updatedAt);
+    const objectStatus = (build.object as { status?: Record<string, unknown> } | undefined)?.status ?? {};
+    const text = (key: string) => (typeof objectStatus[key] === "string" ? (objectStatus[key] as string) : null);
+    const completed = text("completionTimestamp");
+    const time = timeOf(completed) ?? timeOf(build.updatedAt);
+    const reason = [text("reason"), text("message")].filter(Boolean).join(": ");
     const id = `${app}:openshift:${build.namespace}/${build.id}`;
     if (time === null || events.has(id)) continue;
     const outcome = build.status === "pass" ? "complete" : build.status === "fail" ? "failed" : "running";
@@ -123,6 +157,12 @@ export function openShiftEvents(app: string, entries: readonly OpenShiftCacheEnt
       status: build.status,
       text: `build ${build.name} ${outcome} in ${build.namespace}`,
       sha: build.commitSha,
+      facts: [
+        ...fact("Namespace", build.namespace),
+        ...fact("Build", build.name),
+        ...fact("Reason", build.status === "fail" ? reason : null),
+        ...fact("Duration", formatDuration(build.updatedAt ?? null, completed)),
+      ],
     });
   }
   return [...events.values()];
@@ -130,7 +170,8 @@ export function openShiftEvents(app: string, entries: readonly OpenShiftCacheEnt
 
 export function snykEvents(
   app: string,
-  scans: readonly Pick<SnykScanResult, "sha" | "scannedAt" | "counts">[],
+  scans: readonly (Pick<SnykScanResult, "sha" | "scannedAt" | "counts"> &
+    Partial<Pick<SnykScanResult, "partial" | "failedProjects">>)[],
 ): DashboardEvent[] {
   return scans.flatMap(scan => {
     const time = timeOf(scan.scannedAt);
@@ -152,6 +193,15 @@ export function snykEvents(
         status,
         text: `scan · ${found.length > 0 ? found.join(", ") : "no vulnerabilities"}`,
         sha: scan.sha,
+        facts: [
+          ...fact("Vulnerabilities", `${critical} critical, ${high} high, ${medium} medium, ${low} low`),
+          ...fact(
+            "Partial",
+            scan.partial
+              ? `${scan.failedProjects ?? 1} ${scan.failedProjects === 1 || scan.failedProjects === undefined ? "project" : "projects"} could not be scanned`
+              : null,
+          ),
+        ],
       },
     ];
   });
