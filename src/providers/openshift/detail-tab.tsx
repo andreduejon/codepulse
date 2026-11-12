@@ -3,15 +3,13 @@ import { createEffect, createMemo, createSignal, For, on, Show, untrack } from "
 import type { DetailNavRef } from "../../components/detail-types";
 import { useT } from "../../hooks/use-t";
 import { BUSY } from "../../utils/busy-text";
+import type { LegendItem } from "../shared/detail-legend";
 import { ProviderActionRow, ProviderSummaryRow, ScrollingLabel, useDetailRowMouse } from "../shared/detail-rows";
-import { type StatusCategory, statusIcon } from "../shared/status";
+import { type RowShortcut, useOpenRowShortcut } from "../shared/open-row";
+import { type StatusCategory, statusColor, statusIcon } from "../shared/status";
+import { openShiftConsoleUrl } from "./console";
 import { openShiftStatusColor } from "./graph-columns";
-import {
-  isCachedOpenShiftResource,
-  type OpenShiftCommitData,
-  type OpenShiftResource,
-  type OpenShiftStatus,
-} from "./types";
+import type { OpenShiftCommitData, OpenShiftResource, OpenShiftStatus } from "./types";
 
 export interface OpenShiftDetailTabProps {
   mouseEnabled?: boolean;
@@ -30,6 +28,9 @@ export interface OpenShiftDetailTabProps {
   detailFocused: () => boolean;
   setDetailCursorAction: (action: string | null) => void;
   setDetailCursorIndex: (idx: number) => void;
+  setDetailCursorShortcut?: (shortcut: RowShortcut | null) => void;
+  /** Web console URL from the settings; `o` opens the namespace or resource there when it is set. */
+  consoleUrl?: () => string;
 }
 
 type NamespaceData = OpenShiftCommitData["namespaces"][number];
@@ -57,6 +58,12 @@ function statusMark(status: OpenShiftStatus) {
   return statusIcon(statusCategory(status));
 }
 
+/** The row marks, explained below the tree (the namespace badges in the graph carry none). */
+export const OPENSHIFT_LEGEND: LegendItem[] = (["pass", "running", "fail"] as const).map(category => [
+  [[statusIcon(category), theme => statusColor(theme, category)]],
+  category === "pass" ? "ok" : category === "running" ? "in progress" : "failing",
+]);
+
 function namespaceResources(ns: NamespaceData): OpenShiftResource[] {
   return [...ns.imageStreamTags, ...ns.deployments, ...ns.deploymentConfigs, ...ns.pods, ...ns.builds];
 }
@@ -83,6 +90,14 @@ function groupedImageStreams(resources: OpenShiftResource[]): { stream: string; 
 function compactResourceName(resource: OpenShiftResource): string {
   if (resource.kind === "ImageStreamTag") return imageStreamParts(resource).tag;
   return resource.name;
+}
+
+/**
+ * Muted text after a resource's name: shown only from the cache, or that it runs nothing. Why a resource fails is
+ * left to its ✗ and the resource dialog, which keeps the tree quiet.
+ */
+function resourceTail(resource: OpenShiftResource): string {
+  return `${resource.cacheOnly ? " (cached)" : ""}${resource.scaledToZero ? "  0 replicas" : ""}`;
 }
 
 function resourcesForFlatItems(ns: NamespaceData): OpenShiftResource[] {
@@ -226,6 +241,20 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
     props.navRef.activateCurrentItem = activateCurrentItem;
   });
 
+  useOpenRowShortcut({
+    navRef: props.navRef,
+    detailFocused: props.detailFocused,
+    url: () => {
+      const item = flatItems()[props.detailCursorIndex()];
+      const consoleUrl = props.consoleUrl?.() ?? "";
+      if (item?.kind === "namespace") return openShiftConsoleUrl(consoleUrl, { namespace: item.namespace });
+      if (item?.kind === "resource")
+        return openShiftConsoleUrl(consoleUrl, { namespace: item.resource.namespace, resource: item.resource });
+      return null;
+    },
+    setDetailCursorShortcut: props.setDetailCursorShortcut,
+  });
+
   createEffect(() => {
     const item = flatItems()[props.detailCursorIndex()];
     if (!props.detailFocused() || !item) {
@@ -261,15 +290,12 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
         <ScrollingLabel
           selectable={!props.mouseEnabled}
           text={compactResourceName(resource)}
+          tail={resourceTail(resource)}
+          tailFg={t().foregroundMuted}
           active={isCursored()}
           fg={textColor()}
           grow={false}
         />
-        <Show when={isCachedOpenShiftResource(resource)}>
-          <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-            {" (cached)"}
-          </text>
-        </Show>
         <box flexGrow={1} />
         <text selectable={!props.mouseEnabled} flexShrink={0} width={2} wrapMode="none" fg={color()}>
           {statusMark(resource.status).padStart(2)}
@@ -367,9 +393,7 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
                                 {childLead()}
                                 {groupIsLast() ? "└─ " : "├─ "}
                               </text>
-                              <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
-                                {group.label}
-                              </text>
+                              <ScrollingLabel text={group.label} active={false} fg={t().foregroundMuted} />
                             </box>
                             <For each={ns[group.key]}>
                               {(resource, resourceIdx) =>
@@ -390,9 +414,7 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
                         <text flexShrink={0} wrapMode="none" fg={t().border}>
                           {childLead()}└─{" "}
                         </text>
-                        <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
-                          ImageStreams
-                        </text>
+                        <ScrollingLabel text="ImageStreams" active={false} fg={t().foregroundMuted} />
                       </box>
                       <For each={groupedImageStreams(ns.imageStreamTags)}>
                         {(stream, streamIdx) => {
@@ -406,9 +428,7 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
                                   {streamLead()}
                                   {streamIsLast() ? "└─ " : "├─ "}
                                 </text>
-                                <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
-                                  {stream.stream}
-                                </text>
+                                <ScrollingLabel text={stream.stream} active={false} fg={t().foregroundMuted} />
                               </box>
                               <For each={stream.tags}>
                                 {(tag, tagIdx) =>

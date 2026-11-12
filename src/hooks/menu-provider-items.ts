@@ -142,6 +142,15 @@ export function buildOpenShiftProviderItems(
       valid: () => isValidOpenShiftServerUrl(cfg.serverUrl),
       isDraftValid: isValidOpenShiftServerUrl,
     },
+    {
+      kind: "editable",
+      label: "Console",
+      placeholder: "optional, for o",
+      get: () => cfg.consoleUrl,
+      set: v => update({ ...cfg, consoleUrl: v.trim() }),
+      valid: () => !cfg.consoleUrl || isValidOpenShiftServerUrl(cfg.consoleUrl),
+      isDraftValid: value => !value.trim() || isValidOpenShiftServerUrl(value),
+    },
     tokenVariableItem({
       current: cfg.tokenEnvVar,
       fallback: "OPENSHIFT_TOKEN",

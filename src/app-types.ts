@@ -37,6 +37,7 @@ export interface AppProps {
   initialOpenShiftConfig?: {
     enabled?: boolean;
     serverUrl?: string;
+    consoleUrl?: string;
     tokenEnvVar?: string;
     namespaces?: string[];
     commitShaAnnotation?: string;

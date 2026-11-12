@@ -5,12 +5,16 @@ import { testRender } from "@opentui/solid";
 import { createSignal, Show } from "solid-js";
 import { createThemeState, ThemeContext } from "../../context/theme";
 import * as browser from "../../utils/open-url";
-import JobLogDialog from "./log-dialog";
+import JobLogDialog from "./job-log-dialog";
 
 const descendants = (node: Renderable): Renderable[] =>
   node.getChildren().flatMap(child => [child, ...descendants(child)]);
 
-async function renderLog(provider: "github-actions" | "jenkins", long: boolean | "wrapped" = false) {
+async function renderLog(
+  provider: "github-actions" | "jenkins",
+  long: boolean | "wrapped" = false,
+  initialSearch?: string,
+) {
   const jobs = [
     { id: 1, name: "first-job" },
     { id: 2, name: "empty-job" },
@@ -51,6 +55,7 @@ async function renderLog(provider: "github-actions" | "jenkins", long: boolean |
               fetchLog={fetchLog}
               onClose={close}
               onSearchActive={searchActive}
+              initialSearch={initialSearch}
             />
           </Show>
         </ThemeContext.Provider>
@@ -155,24 +160,19 @@ for (const provider of ["github-actions", "jenkins"] as const) {
       }
       expect(d.openUrl).not.toHaveBeenCalled();
       expect(d.close).not.toHaveBeenCalled();
-      const boundary = async (label: string, key: "ARROW_LEFT" | "ARROW_RIGHT", alias: "h" | "l") => {
+      // The footer names where the arrows go, and leaves out the one that goes nowhere; its keys do nothing.
+      const boundary = async (arrow: "←" | "→", key: "ARROW_LEFT" | "ARROW_RIGHT", alias: "h" | "l") => {
         await d.move();
+        expect(d.frame()).not.toContain(arrow);
         const before = d.frame();
-        const bg = d.cell(label)?.bg;
-        const arrow = descendants(d.renderer.root).find(
-          node => node instanceof TextRenderable && node.plainText === (label === "prev" ? "←" : "→"),
-        ) as TextRenderable;
-        expect(arrow.fg).toEqual(RGBA.fromHex(d.theme.foregroundMuted));
-        await d.move(label);
-        expect(d.cell(label)?.fg).toEqual(RGBA.fromHex(d.theme.foregroundMuted));
-        expect(d.cell(label)?.bg).toEqual(bg);
-        await d.click(label);
         await d.key(key);
         await d.key(alias);
         expect(d.frame()).toBe(before);
       };
-      await boundary("prev", "ARROW_LEFT", "h");
+      expect(d.frame()).toContain("→ next job");
+      await boundary("←", "ARROW_LEFT", "h");
       await d.click("→ next");
+      expect(d.frame()).toContain("← previous job · → next job");
       expect(d.frame()).toContain("No log output.");
       await d.key("h");
       expect(d.frame()).toContain("fetching log...");
@@ -216,8 +216,9 @@ for (const provider of ["github-actions", "jenkins"] as const) {
       await d.key("ARROW_RIGHT");
       expect(d.frame()).toContain("Failed to load log");
       expect(d.frame()).toContain("fake failure");
-      await boundary("next", "ARROW_RIGHT", "l");
-      await d.click("← prev");
+      await boundary("→", "ARROW_RIGHT", "l");
+      expect(d.frame()).toContain("← previous job");
+      await d.click("← previous");
       await d.key("ARROW_LEFT");
       expect(d.frame()).toContain("normal");
       await d.click("→ next");
@@ -280,7 +281,7 @@ test("native wheel and keyboard use the same scroll position, including jumps an
     await d.key("j");
     await d.click("→ next");
     expect(sb.scrollTop).toBe(0);
-    await d.click("← prev");
+    await d.click("← previous");
     expect(sb.scrollTop).toBe(0);
     expect(d.frame()).toContain("row-001");
     expect(d.fetchLog.mock.calls.map(([job]) => job.id)).toEqual([1, 2]);
@@ -548,5 +549,233 @@ test("raw view shows the log as received, with timestamps", async () => {
     expect(setup.captureCharFrame()).toContain("2026-01-01T00:00:00.1234567Z first");
   } finally {
     await setup.dispose();
+  }
+});
+
+test("opened from an annotation, the log starts with its message searched and the first hit shown", async () => {
+  const d = await renderLog("github-actions", false, "error-line");
+  try {
+    d.resolve();
+    await d.flush();
+    await d.flush();
+    expect(d.frame()).toContain("/ error-line");
+    expect(d.frame()).toContain("1/1");
+    expect(d.frame()).toContain("n/N next/previous");
+  } finally {
+    d.renderer.destroy();
+  }
+});
+
+test("with wrap off, a hit past the right edge moves the lines sideways so it shows", async () => {
+  const d = await renderLog("github-actions");
+  try {
+    d.resolve();
+    await d.flush();
+    expect(d.frame()).not.toContain("WRAP-END");
+    await d.key("/");
+    await d.mockInput.typeText("wrap-end");
+    await d.flush();
+    const row =
+      d
+        .frame()
+        .split("\n")
+        .find(line => line.includes("WRAP-END")) ?? "";
+    expect(row).toMatch(/1 {2}…x+ WRAP-END/);
+    // Without the search (Esc while typing clears it) the lines start at the left again.
+    await d.key("ESCAPE");
+    await d.flush();
+    expect(d.frame()).not.toContain("WRAP-END");
+    expect(d.frame()).toContain("normal x");
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("Jenkins names the stage and its time in the title, the footer where the arrows go; the full log starts with its summary", async () => {
+  const entries = [
+    { id: "build", name: "full log", detail: "5m 09s", navLabel: "full log" },
+    { id: "stage-3", name: "Unit tests", detail: "3m 30s" },
+  ];
+  const stageLog = ["[Pipeline] { (Unit tests)", "+ ./gradlew test", "[Pipeline] }"].join("\n");
+  const fetchLog = mock(async (entry: { id: string | number; name: string }) =>
+    entry.id === "build"
+      ? {
+          log: ["Started by an SCM change", stageLog.replace("+ ./gradlew test", "refundsTwice() FAILED")].join("\n"),
+          summary: [
+            { text: "STAGE         DURATION", kind: "muted" as const },
+            { text: "Checkout          4s", kind: "normal" as const, mark: "pass" as const },
+            { text: "Unit tests    3m 30s", kind: "normal" as const, mark: "fail" as const },
+          ],
+        }
+      : stageLog,
+  );
+  const theme = createThemeState();
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={theme}>
+        <JobLogDialog
+          provider="jenkins"
+          job={entries[1]}
+          jobs={entries}
+          run={{ name: "main", runNumber: 41 }}
+          fetchLog={fetchLog}
+          entryNoun="stage"
+          onClose={() => {}}
+        />
+      </ThemeContext.Provider>
+    ),
+    { width: 90, height: 30, kittyKeyboard: true },
+  );
+  const fg = (label: string) => {
+    const rows = setup.captureCharFrame().split("\n");
+    const y = rows.findIndex(row => row.includes(label));
+    const x = rows[y]?.indexOf(label) ?? -1;
+    let column = 0;
+    return setup.captureSpans().lines[y]?.spans.find(span => {
+      column += span.text.length;
+      return column > x;
+    })?.fg;
+  };
+  const key = async (name: Parameters<typeof setup.mockInput.pressKey>[0]) => {
+    setup.mockInput.pressKey(name);
+    await setup.flush();
+  };
+  const colors = theme.theme();
+  try {
+    await setup.flush();
+    await setup.flush();
+    let frame = setup.captureCharFrame();
+    expect(frame).toContain("Jenkins · main #41 · Unit tests · 3m 30s");
+    // The stage heading without its markup; the closing markup muted.
+    expect(frame).toContain("▸ Unit tests");
+    expect(frame).not.toContain("[Pipeline] {");
+    expect(fg("[Pipeline] }")).toEqual(RGBA.fromHex(colors.foregroundMuted));
+    // The last stage: left goes to the full log, nothing to the right.
+    expect(frame).toContain("← full log");
+    expect(frame).not.toContain("→");
+
+    await key("ARROW_LEFT");
+    await setup.flush();
+    frame = setup.captureCharFrame();
+    expect(frame).toContain("Jenkins · main #41 · full log · 5m 09s");
+    expect(frame).toContain("→ first stage");
+    expect(frame).not.toContain("←");
+    const rows = frame.split("\n");
+    const summaryY = rows.findIndex(row => row.includes("STAGE"));
+    const logY = rows.findIndex(row => row.includes("Started by an SCM change"));
+    const checkoutY = rows.findIndex(row => row.includes("Checkout"));
+    expect(summaryY).toBeLessThan(logY);
+    // The marks sit in the line number column, right-aligned; names start where the log text does.
+    expect(rows[logY]).toMatch(/\s1 {2}Started by/);
+    expect(rows[checkoutY].indexOf("✓")).toBe(rows[logY].indexOf("1  Started"));
+    expect(rows[checkoutY].indexOf("Checkout")).toBe(rows[logY].indexOf("Started"));
+    expect(rows[summaryY].indexOf("STAGE")).toBe(rows[logY].indexOf("Started"));
+    expect(fg("✓")).toEqual(RGBA.fromHex(colors.success));
+    expect(fg("✗")).toEqual(RGBA.fromHex(colors.error));
+    expect(fg("Unit tests    3m 30s")).toEqual(RGBA.fromHex(colors.foreground));
+
+    // Issues only: the failure, not the summary.
+    await key("c");
+    frame = setup.captureCharFrame();
+    expect(frame).not.toContain("STAGE");
+    expect(frame).toContain("refundsTwice() FAILED");
+  } finally {
+    setup.renderer.destroy();
+  }
+});
+
+test("a narrow footer drops whole hints, the least needed first, never cutting one or leaving a separator", async () => {
+  const jobs = [
+    { id: 1, name: "build" },
+    { id: 2, name: "test" },
+    { id: 3, name: "lint" },
+  ];
+  const theme = createThemeState();
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={theme}>
+        <JobLogDialog
+          provider="github-actions"
+          job={jobs[1]}
+          jobs={jobs}
+          run={{ name: "CI", runNumber: 812, url: "https://example.com/run/812" }}
+          fetchLog={async () => "PaymentGateway timed out\nok"}
+          onClose={() => {}}
+          initialSearch="PaymentGateway"
+        />
+      </ThemeContext.Provider>
+    ),
+    { width: 90, height: 30, kittyKeyboard: true },
+  );
+  try {
+    await setup.flush();
+    await setup.flush();
+    const rows = setup.captureCharFrame().split("\n");
+    const footer = rows.find(row => row.includes("n/N")) ?? "";
+    expect(footer.trim()).toBe("← previous job · → next job · n/N next/previous · c view · o open");
+    // The footer keeps the dialog's inner padding: it ends where the title bar's esc close does.
+    const title = rows.find(row => row.includes("esc close")) ?? "";
+    expect(footer.trimEnd().length).toBe(title.trimEnd().length);
+  } finally {
+    setup.renderer.destroy();
+  }
+});
+
+test("the title takes the time read with the log, so a job that finished meanwhile shows it", async () => {
+  const theme = createThemeState();
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={theme}>
+        <JobLogDialog
+          provider="github-actions"
+          job={{ id: 1, name: "test" }}
+          jobs={[{ id: 1, name: "test" }]}
+          run={{ name: "CI", runNumber: 814 }}
+          fetchLog={async () => ({ log: "ok", detail: "1m 44s" })}
+          onClose={() => {}}
+        />
+      </ThemeContext.Provider>
+    ),
+    { width: 100, height: 20, kittyKeyboard: true },
+  );
+  try {
+    await setup.flush();
+    await setup.flush();
+    expect(setup.captureCharFrame()).toContain("GitHub Actions · CI #814 · test · 1m 44s");
+  } finally {
+    setup.renderer.destroy();
+  }
+});
+
+test("a note about what the log is shows in every view, so a filtered log still says it is the full one", async () => {
+  const theme = createThemeState();
+  const note = "Runs in parallel: the full log, with the other branches' lines";
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={theme}>
+        <JobLogDialog
+          provider="jenkins"
+          job={{ id: "stage-1", name: "Unit tests" }}
+          jobs={[{ id: "stage-1", name: "Unit tests" }]}
+          run={{ name: "main", runNumber: 41 }}
+          fetchLog={async () => ({ log: "+ ./gradlew lint\nLintTask FAILED", note })}
+          onClose={() => {}}
+        />
+      </ThemeContext.Provider>
+    ),
+    { width: 120, height: 20, kittyKeyboard: true },
+  );
+  try {
+    await setup.flush();
+    await setup.flush();
+    for (const view of ["all", "issues only", "errors only", "raw"]) {
+      const frame = setup.captureCharFrame();
+      if (view !== "all") expect(frame).toContain(view);
+      expect(frame).toContain(note);
+      setup.mockInput.pressKey("c");
+      await setup.flush();
+    }
+  } finally {
+    setup.renderer.destroy();
   }
 });

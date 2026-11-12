@@ -8,6 +8,7 @@ import { createThemeState, ThemeContext, themes } from "../context/theme";
 import { buildGraph } from "../git/graph";
 import { getMaxGraphColumns } from "../git/graph-viewport";
 import type { Commit } from "../git/types";
+import type { GraphBadge, GraphStatusCounts } from "../providers/provider";
 import GraphView from "./graph";
 
 test("graph wheel preserves selection; left click selects; modal blocks mouse", async () => {
@@ -310,7 +311,15 @@ test("wide provider chips never squeeze the commit subject out at narrow widths"
   }
 });
 /** One commit with these refs in a tight OpenShift row (wide provider counts, compact layout of 90 columns). */
-async function renderRefRow(refs: Commit["refs"]) {
+async function renderRefRow(
+  refs: Commit["refs"],
+  options: {
+    namespaces?: GraphBadge["namespaces"];
+    lane?: GraphStatusCounts;
+    width?: number;
+    unseen?: { sha: string; namespaces: NonNullable<GraphBadge["namespaces"]> };
+  } = {},
+) {
   const sha = "f".repeat(40);
   const setup = await testRender(
     () => {
@@ -336,7 +345,7 @@ async function renderRefRow(refs: Commit["refs"]) {
       app.actions.setLoading(false);
       app.actions.setHasMore(false);
       app.actions.setActiveProviderView("openshift");
-      const lane = { failCount: 123, runningCount: 456, unknownCount: 789, passCount: 321 };
+      const lane = options.lane ?? { failCount: 123, runningCount: 456, unknownCount: 789, passCount: 321 };
       app.actions.setGraphBadges(
         "openshift",
         new Map([
@@ -351,8 +360,26 @@ async function renderRefRow(refs: Commit["refs"]) {
               lanes: { live: lane, cache: lane },
               latestRunAt: "",
               latestStatus: "fail",
+              ...(options.namespaces && { namespaces: options.namespaces }),
             },
           ],
+          ...(options.unseen
+            ? [
+                [
+                  options.unseen.sha,
+                  {
+                    sha: options.unseen.sha,
+                    badge: "unknown" as const,
+                    passCount: 0,
+                    failCount: 0,
+                    runningCount: 0,
+                    latestRunAt: "",
+                    latestStatus: "unknown" as const,
+                    namespaces: options.unseen.namespaces,
+                  },
+                ] as const,
+              ]
+            : []),
         ]),
       );
       return createComponent(ThemeContext.Provider, {
@@ -368,11 +395,59 @@ async function renderRefRow(refs: Commit["refs"]) {
       });
     },
     // Compact layout (no sidebar): the graph has the full 90 columns.
-    { width: 90, height: 10 },
+    { width: options.width ?? 90, height: 10 },
   );
   await setup.renderOnce();
   return setup;
 }
+
+test("a namespace that runs a commit the graph does not show is named at the end of the graph", async () => {
+  const setup = await renderRefRow([], {
+    lane: { failCount: 0, runningCount: 0, unknownCount: 0, passCount: 1 },
+    unseen: { sha: "a".repeat(40), namespaces: [{ namespace: "prod", state: "live" }] },
+  });
+  try {
+    expect(setup.captureCharFrame()).toContain("Not in the graph: prod runs aaaaaaa");
+  } finally {
+    setup.renderer.destroy();
+  }
+});
+
+test("namespaces show next to the refs of the commit they run, in the OpenShift colour, by name only", async () => {
+  // Narrow: short badges keep their own width, so the current branch and a namespace still show before +N.
+  const narrow = await renderRefRow([{ name: "main", type: "branch", isCurrent: true }], {
+    lane: { failCount: 0, runningCount: 0, unknownCount: 0, passCount: 1 },
+    namespaces: [
+      { namespace: "dev", state: "live" },
+      { namespace: "test", state: "rolling" },
+      { namespace: "prod", state: "fail" },
+    ],
+  });
+  try {
+    expect(narrow.captureCharFrame()).toMatch(/ main {3}dev {3}\+\d {2}Visible/);
+  } finally {
+    narrow.renderer.destroy();
+  }
+  const setup = await renderRefRow([{ name: "main", type: "branch", isCurrent: true }], {
+    lane: { failCount: 0, runningCount: 0, unknownCount: 0, passCount: 1 },
+    width: 120,
+    namespaces: [
+      { namespace: "dev", state: "live" },
+      { namespace: "test", state: "rolling" },
+      { namespace: "prod", state: "fail" },
+    ],
+  });
+  try {
+    const frame = setup.captureCharFrame();
+    // Ready, rolling out or failing: the Live counts and the details say which, the badge only where.
+    expect(frame).toMatch(/ main {3}dev {3}test {3}prod {2}Visible subject/);
+    const y = frame.split("\n").findIndex(row => row.includes("Visible"));
+    const dev = setup.captureSpans().lines[y]?.spans.find(span => span.text === " dev ");
+    expect(dev?.bg).toEqual(RGBA.fromHex(createThemeState().theme().openShiftBg));
+  } finally {
+    setup.renderer.destroy();
+  }
+});
 
 test("many long refs collapse into +N instead of squeezing the commit subject out", async () => {
   const setup = await renderRefRow([
@@ -464,6 +539,122 @@ test("when not even one shortened ref fits, the refs collapse into +N alone and 
     const frame = setup.captureCharFrame();
     expect(frame).toMatch(/\+4/);
     expect(frame).toMatch(/VISIB/);
+  } finally {
+    setup.renderer.destroy();
+  }
+});
+
+test("a subject that does not fit ends in …, measured in terminal columns (wide characters too)", async () => {
+  const commit = (hash: string, parents: string[], subject: string): Commit => ({
+    hash,
+    shortHash: hash.slice(0, 7),
+    parents,
+    subject,
+    body: "",
+    author: "Author",
+    authorEmail: "author@example.com",
+    authorDate: "2026-01-01T00:00:00Z",
+    committer: "Author",
+    committerEmail: "author@example.com",
+    commitDate: "2026-01-01T00:00:00Z",
+    refs: [],
+  });
+  const first = "a".repeat(40);
+  const second = "b".repeat(40);
+  const setup = await testRender(
+    () => {
+      const app = createAppState(100, 0, 0);
+      const commits = [
+        commit(first, [second], "short"),
+        commit(second, [], `支持退款 ${"wide characters and a subject far too long for the row ".repeat(3)}END`),
+      ];
+      app.actions.setGraphRows(buildGraph(commits));
+      app.actions.setCommits(commits);
+      app.actions.setLoading(false);
+      app.actions.setHasMore(false);
+      return createComponent(ThemeContext.Provider, {
+        value: createThemeState(),
+        get children() {
+          return createComponent(AppStateContext.Provider, {
+            value: app,
+            get children() {
+              return createComponent(GraphView, {});
+            },
+          });
+        },
+      });
+    },
+    { width: 90, height: 10 },
+  );
+  try {
+    // The label measures its width on the first frame and cuts to it on the next.
+    await setup.renderOnce();
+    await setup.renderOnce();
+    const row =
+      setup
+        .captureCharFrame()
+        .split("\n")
+        .find(line => line.includes("支持退款")) ?? "";
+    expect(row).not.toContain("...");
+    expect(row).not.toContain("END");
+    expect(row).toMatch(/…\s+Author/);
+  } finally {
+    setup.renderer.destroy();
+  }
+});
+
+test("a terminal made smaller keeps the selected commit on screen", async () => {
+  let app!: ReturnType<typeof createAppState>;
+  const setup = await testRender(
+    () => {
+      app = createAppState(100, 0, 0);
+      const commits: Commit[] = Array.from({ length: 40 }, (_, index) => ({
+        hash: `${index}`,
+        shortHash: `${index}`,
+        parents: index < 39 ? [`${index + 1}`] : [],
+        subject: `Commit ${index}`,
+        body: "",
+        author: "Author",
+        authorEmail: "author@example.com",
+        authorDate: "2026-01-01T00:00:00Z",
+        committer: "Author",
+        committerEmail: "author@example.com",
+        commitDate: "2026-01-01T00:00:00Z",
+        refs: [],
+      }));
+      app.actions.setGraphRows(buildGraph(commits));
+      app.actions.setCommits(commits);
+      app.actions.setLoading(false);
+      app.actions.setHasMore(false);
+      return createComponent(ThemeContext.Provider, {
+        value: createThemeState(),
+        get children() {
+          return createComponent(AppStateContext.Provider, {
+            value: app,
+            get children() {
+              return createComponent(GraphView, {});
+            },
+          });
+        },
+      });
+    },
+    { width: 120, height: 50 },
+  );
+  try {
+    await setup.flush();
+    app.actions.setCursorIndex(39);
+    app.actions.setScrollTargetIndex(39);
+    for (let i = 0; i < 5; i++) {
+      await Bun.sleep(20);
+      await setup.flush();
+    }
+    expect(setup.captureCharFrame()).toContain("Commit 39");
+    setup.resize(120, 20);
+    for (let i = 0; i < 5; i++) {
+      await Bun.sleep(20);
+      await setup.flush();
+    }
+    expect(setup.captureCharFrame()).toContain("Commit 39");
   } finally {
     setup.renderer.destroy();
   }

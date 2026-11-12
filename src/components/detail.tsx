@@ -9,7 +9,6 @@ import { useClipboard } from "../hooks/use-clipboard";
 import { type CopyableField, useDetailCursor } from "../hooks/use-detail-cursor";
 import { useStashState } from "../hooks/use-stash-state";
 import { useT } from "../hooks/use-t";
-import type { SnykViewMemory } from "../providers/snyk/view-memory";
 import { formatDate } from "../utils/date";
 import { isCursored as _isCursored, itemHighlightBg as _itemHighlightBg } from "../utils/detail-cursor";
 import { ProviderDetailTabs } from "./detail-provider-tabs";
@@ -83,8 +82,12 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
 
   // Active tab for committed commits: "info" | "files" | "stashes"
   const activeTab = () => state.detailActiveTab();
-  /** Snyk tab view state across tab switches (mutable ref; this view outlives its tabs). */
-  const snykMemory: SnykViewMemory = {};
+  /** Provider tab state across tab switches (a mutable ref per key; this view outlives its tabs). */
+  const providerMemory = new Map<string, unknown>();
+  const memory = <T,>(key: string, create: () => T): T => {
+    if (!providerMemory.has(key)) providerMemory.set(key, create());
+    return providerMemory.get(key) as T;
+  };
 
   // Whether to show committer info (only when different from author)
   const showCommitter = () => {
@@ -582,7 +585,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
             </Show>
 
             {/* ══════════════ Provider tabs ══════════════ */}
-            <ProviderDetailTabs view={props} sha={c().hash} snykMemory={snykMemory} />
+            <ProviderDetailTabs view={props} sha={c().hash} memory={memory} />
           </>
         )}
       </Show>

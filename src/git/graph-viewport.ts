@@ -147,55 +147,65 @@ export function sliceGraphToViewport(
   return result;
 }
 
+/** The marks at the graph's two edges while it scrolls sideways (empty when it does not). */
+export interface EdgeMarks {
+  left: GraphChar[];
+  right: GraphChar[];
+}
+
+/** The character at a position of a full-width row (entries may hold one or two characters). */
+function charAt(chars: GraphChar[], position: number): GraphChar | null {
+  let pos = 0;
+  for (const gc of chars) {
+    if (position < pos + gc.char.length)
+      return { char: gc.char[position - pos] ?? " ", color: gc.color, bold: gc.bold };
+    pos += gc.char.length;
+  }
+  return null;
+}
+
 /**
- * Build a single edge indicator GraphChar for a commit row.
+ * Marks for the graph's left and right edges while it scrolls sideways, one 2-character column each. A triangle
+ * means this row's commit is off-screen on that side (`◀ `, ` ▶`). A line that runs past the edge continues into the
+ * column: into the triangle when it leads to that hidden commit (`◀─`, `─▶`), into a dashed end when it just goes
+ * on (`╌─`, `─╌`). So a triangle always means a commit, and a line never seems to start from nothing. The triangle
+ * takes the hidden commit's color (dimmed with it), so it shows which branch is off-screen.
  *
- * When the viewport is scrolled and a commit's node (█) is off-screen,
- * a muted triangle (◀ or ▶) is shown in a fixed 2-char-wide column
- * appended to the right side of the graph area.
- *
- * A commit node can only be off-screen in ONE direction, so a single
- * indicator column suffices. This keeps the graph starting at column 0
- * with no extra left padding.
- *
- * Returns a single 2-char GraphChar:
- *   "◀ " when node is off-screen to the left
- *   " ▶" when node is off-screen to the right
- *   "  " when node is in viewport or for non-commit rows
- *
- * @param nodeColumn - The commit's node column
- * @param viewportOffset - The first visible column index
- * @param depthLimit - Number of columns in the viewport
- * @param maxColumns - Total graph columns
- * @param indicatorColor - Muted color for the triangle
- * @param isCommitRow - true for commit rows, false for connector/fan-out rows
+ * @param fullChars - The row at full width, before slicing
+ * @param nodeColumn - The commit's column on a commit row; null for connector and fan-out rows
+ * @param color - For a triangle whose commit has no block to take the color from; lines keep their own color
  */
-export function buildEdgeIndicator(
-  nodeColumn: number,
+export function edgeMarks(
+  fullChars: GraphChar[],
   viewportOffset: number,
   depthLimit: number,
   maxColumns: number,
-  indicatorColor: string,
-  isCommitRow: boolean = true,
-): GraphChar {
-  const blank: GraphChar = { char: "  ", color: indicatorColor };
-
-  if (depthLimit >= maxColumns) {
-    return blank;
-  }
-
-  if (!isCommitRow) {
-    return blank;
-  }
-
-  if (nodeColumn < viewportOffset) {
-    return { char: "◀ ", color: indicatorColor };
-  }
-
+  nodeColumn: number | null,
+  color: string,
+): EdgeMarks {
+  if (depthLimit >= maxColumns) return { left: [], right: [] };
   const viewportEnd = viewportOffset + depthLimit;
-  if (nodeColumn >= viewportEnd) {
-    return { char: " ▶", color: indicatorColor };
-  }
 
-  return blank;
+  // A horizontal crosses an edge when the filler between the two columns there is a line.
+  const leftFiller = viewportOffset > 0 ? charAt(fullChars, viewportOffset * 2 - 1) : null;
+  const rightFiller = charAt(fullChars, viewportEnd * 2 - 1);
+  const leftLine = leftFiller?.char === "─" ? leftFiller.color : null;
+  const rightLine = rightFiller?.char === "─" ? rightFiller.color : null;
+  const hiddenLeft = nodeColumn !== null && nodeColumn < viewportOffset;
+  const hiddenRight = nodeColumn !== null && nodeColumn >= viewportEnd;
+  const block = nodeColumn !== null ? charAt(fullChars, nodeColumn * 2) : null;
+  const node: Omit<GraphChar, "char"> = block && block.char !== " " ? block : { color };
+
+  const outer = (hidden: boolean, line: string | null, triangle: string): GraphChar =>
+    hidden
+      ? { char: triangle, color: node.color, bold: node.bold }
+      : line
+        ? { char: "╌", color: line }
+        : { char: " ", color };
+  const inner = (line: string | null): GraphChar => (line ? { char: "─", color: line } : { char: " ", color });
+
+  return {
+    left: [outer(hiddenLeft, leftLine, "◀"), inner(leftLine)],
+    right: [inner(rightLine), outer(hiddenRight, rightLine, "▶")],
+  };
 }

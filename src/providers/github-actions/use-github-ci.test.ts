@@ -9,7 +9,7 @@ import { buildGraph } from "../../git/graph";
 import { closeProviderCaches } from "../shared/sha-sqlite-cache";
 import * as api from "./api";
 import { GitHubCache } from "./cache";
-import type { GitHubWorkflowRun } from "./types";
+import type { GitHubJob, GitHubWorkflowRun } from "./types";
 import { useGitHubCI } from "./use-github-ci";
 
 const SHA = "e".repeat(40);
@@ -55,7 +55,15 @@ const commit = (hash: string, parent?: string) => ({
 });
 
 async function mountGitHub(
-  options: { fetchDepth?: 10 | 20 | 50; older?: string[]; seed?: (root: string) => Promise<void> } = {},
+  options: {
+    fetchDepth?: 10 | 20 | 50;
+    older?: string[];
+    seed?: (root: string) => Promise<void>;
+    runs?: GitHubWorkflowRun[];
+    jobs?: Map<number, GitHubJob[]>;
+    /** The view the app starts in; GitHub's own by default. */
+    view?: "git" | "github-actions";
+  } = {},
 ) {
   const original = process.env[TOKEN_ENV];
   process.env[TOKEN_ENV] = "test-token";
@@ -69,7 +77,11 @@ async function mountGitHub(
     await rm(root, { recursive: true, force: true });
   });
   await options.seed?.(root);
-  const ci = spyOn(api, "fetchCIDataForSHAs").mockResolvedValue({ data: [run()], jobs: new Map(), error: null });
+  const ci = spyOn(api, "fetchCIDataForSHAs").mockResolvedValue({
+    data: options.runs ?? [run()],
+    jobs: options.jobs ?? new Map(),
+    error: null,
+  });
   cleanup.push(() => ci.mockRestore());
   let mounted!: {
     state: ReturnType<typeof createAppState>["state"];
@@ -81,7 +93,7 @@ async function mountGitHub(
     const { state, actions } = createAppState();
     actions.setRepoPath("/repo/github-hook");
     actions.setRemoteUrl("https://github.com/o/r.git");
-    actions.setActiveProviderView("github-actions");
+    actions.setActiveProviderView(options.view ?? "github-actions");
     const hashes = [SHA, ...(options.older ?? [])];
     actions.setGraphRows(buildGraph(hashes.map((hash, index) => commit(hash, hashes[index + 1]))));
     const github = useGitHubCI({
@@ -118,6 +130,18 @@ test("a failed refresh of running runs shows its error, like Jenkins, instead of
   } finally {
     clock.mockRestore();
   }
+});
+
+test("a failed first fetch in the background shows its error, like Jenkins, instead of looking not loaded yet", async () => {
+  const { state, actions, ci } = await mountGitHub({ view: "git" });
+  ci.mockResolvedValue({ data: [], jobs: new Map(), error: BANNER.github.rateLimit });
+  await settle(() => ci.mock.calls.length > 0);
+  await settle();
+  expect(state.providerStatusFor("github-actions")).toEqual({ kind: "error", message: BANNER.github.rateLimit });
+  // Entering the view keeps saying why, also without asking GitHub again.
+  actions.setActiveProviderView("github-actions");
+  await settle();
+  expect(state.providerStatusFor("github-actions")).toEqual({ kind: "error", message: BANNER.github.rateLimit });
 });
 
 test("entering the GitHub view before the remote is known fetches once the remote arrives, without a stale banner", async () => {
@@ -203,6 +227,136 @@ test("jobs of a finished run are cached only once every job and step has finishe
   expect(jobs).toHaveBeenCalledTimes(2);
   await github.fetchJobsForRun(finished);
   expect(jobs).toHaveBeenCalledTimes(2);
+});
+
+test("a re-run keeps its run id but not its jobs: the cached jobs of the earlier attempt are not reused", async () => {
+  const { github } = await mountGitHub();
+  const job = (attempt: number, status: string, conclusion: string | null) => ({
+    id: 5 + attempt,
+    name: "test",
+    status,
+    conclusion,
+    startedAt: null,
+    completedAt: null,
+    steps: [],
+    runAttempt: attempt,
+  });
+  const jobs = spyOn(api, "fetchRunJobs")
+    .mockResolvedValueOnce({ jobs: [job(1, "completed", "failure")], error: null })
+    .mockResolvedValueOnce({ jobs: [job(1, "completed", "failure"), job(2, "in_progress", null)], error: null })
+    .mockResolvedValue({ jobs: [job(1, "completed", "failure"), job(2, "completed", "success")], error: null });
+  const annotations = spyOn(api, "fetchJobAnnotations").mockResolvedValue([]);
+  cleanup.push(() => {
+    jobs.mockRestore();
+    annotations.mockRestore();
+  });
+  await github.fetchJobsForRun(run({ status: "completed", conclusion: "failure" }));
+  const rerunning = await github.fetchJobsForRun(run({ updatedAt: "2026-01-01T01:00:00Z" }));
+  expect(rerunning.jobs.map(entry => entry.runAttempt)).toEqual([1, 2]);
+  const rerun = run({ status: "completed", conclusion: "success", updatedAt: "2026-01-01T01:05:00Z" });
+  expect((await github.fetchJobsForRun(rerun)).jobs.map(entry => entry.conclusion)).toEqual(["failure", "success"]);
+  await github.fetchJobsForRun(rerun);
+  expect(jobs).toHaveBeenCalledTimes(3);
+});
+
+test("cached jobs are final only for a finished run, even at the same update time", async () => {
+  const { github } = await mountGitHub();
+  const job = {
+    id: 5,
+    name: "test",
+    status: "completed",
+    conclusion: "success",
+    startedAt: null,
+    completedAt: null,
+    steps: [],
+    runAttempt: 1,
+  };
+  const jobs = spyOn(api, "fetchRunJobs").mockResolvedValue({ jobs: [job], error: null });
+  cleanup.push(() => jobs.mockRestore());
+  await github.fetchJobsForRun(run({ status: "completed", conclusion: "success" }));
+  await github.fetchJobsForRun(run({ status: "in_progress" }));
+  expect(jobs).toHaveBeenCalledTimes(2);
+});
+
+test("a failed job gets its annotations once; a passing job asks for none", async () => {
+  const { github } = await mountGitHub();
+  const job = (id: number, conclusion: string) => ({
+    id,
+    name: `job-${id}`,
+    status: "completed",
+    conclusion,
+    startedAt: null,
+    completedAt: null,
+    steps: [],
+  });
+  const jobs = spyOn(api, "fetchRunJobs").mockResolvedValue({
+    jobs: [job(5, "failure"), job(6, "success")],
+    error: null,
+  });
+  const annotation = { level: "failure" as const, path: "src/a.ts", line: 3, message: "boom" };
+  const annotations = spyOn(api, "fetchJobAnnotations").mockResolvedValue([annotation]);
+  cleanup.push(() => {
+    jobs.mockRestore();
+    annotations.mockRestore();
+  });
+  const finished = run({ status: "completed", conclusion: "failure" });
+  const first = await github.fetchJobsForRun(finished);
+  expect(first.jobs.map(entry => entry.annotations)).toEqual([[annotation], undefined]);
+  expect(annotations.mock.calls.map(call => call[2])).toEqual([5]);
+  const again = await github.fetchJobsForRun(finished);
+  expect(again.jobs[0].annotations).toEqual([annotation]);
+  expect(annotations).toHaveBeenCalledTimes(1);
+});
+
+test("annotations that could not be read are asked for again next time", async () => {
+  const { github } = await mountGitHub();
+  const failed = {
+    id: 5,
+    name: "test",
+    status: "completed",
+    conclusion: "failure",
+    startedAt: null,
+    completedAt: null,
+    steps: [],
+  };
+  const jobs = spyOn(api, "fetchRunJobs").mockResolvedValue({ jobs: [failed], error: null });
+  const annotations = spyOn(api, "fetchJobAnnotations")
+    .mockResolvedValueOnce(null)
+    .mockResolvedValue([{ level: "failure", path: "src/a.ts", line: 3, message: "boom" }]);
+  cleanup.push(() => {
+    jobs.mockRestore();
+    annotations.mockRestore();
+  });
+  const finished = run({ status: "completed", conclusion: "failure" });
+  expect((await github.fetchJobsForRun(finished)).jobs[0].annotations).toBeUndefined();
+  expect((await github.fetchJobsForRun(finished)).jobs[0].annotations).toHaveLength(1);
+});
+
+test("jobs from GraphQL (no attempt numbers) are asked of REST once, to learn about re-runs", async () => {
+  const graphqlJob: GitHubJob = {
+    id: 7,
+    name: "build",
+    status: "completed",
+    conclusion: "success",
+    startedAt: null,
+    completedAt: null,
+    steps: [],
+  };
+  const finished = run({ status: "completed", conclusion: "success", event: "push" });
+  const { github } = await mountGitHub({ runs: [finished], jobs: new Map([[finished.id, [graphqlJob]]]) });
+  const rest = spyOn(api, "fetchRunJobs").mockResolvedValue({
+    jobs: [
+      { ...graphqlJob, id: 6, runAttempt: 1 },
+      { ...graphqlJob, runAttempt: 2 },
+    ],
+    error: null,
+  });
+  cleanup.push(() => rest.mockRestore());
+  await settle();
+  const first = await github.fetchJobsForRun(finished);
+  expect(first.jobs.map(job => job.runAttempt)).toEqual([1, 2]);
+  await github.fetchJobsForRun(finished);
+  expect(rest).toHaveBeenCalledTimes(1);
 });
 
 test("a fetch cancelled by a repository switch leaves the new repository's loading status alone", async () => {

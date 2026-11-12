@@ -624,22 +624,3 @@ export function parseNumstatOutput(stdout: string): FileChange[] {
   }
   return files;
 }
-
-/**
- * Parse `git diff --name-status` output into a map of path → status letter.
- *
- * Lines look like:  M\tsrc/foo.ts   or  R100\told.ts\tnew.ts
- * For renames/copies the second path (destination) is used as the key.
- */
-export function parseNameStatusOutput(stdout: string): Map<string, FileChange["status"]> {
-  const map = new Map<string, FileChange["status"]>();
-  for (const line of stdout.split("\n")) {
-    if (!line?.includes("\t")) continue;
-    const parts = line.split("\t");
-    const rawStatus = parts[0].charAt(0) as FileChange["status"];
-    // For rename/copy the destination path is the last part
-    const filePath = parts.length >= 3 ? parts[parts.length - 1] : parts[1];
-    if (filePath) map.set(filePath, rawStatus);
-  }
-  return map;
-}

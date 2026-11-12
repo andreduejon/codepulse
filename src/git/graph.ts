@@ -16,8 +16,8 @@ export {
   renderGraphRow,
 } from "./graph-render";
 export {
-  buildEdgeIndicator,
   computeSingleViewportOffset,
+  edgeMarks,
   getMaxGraphColumns,
   MAX_GRAPH_COLUMNS,
   sliceGraphToViewport,

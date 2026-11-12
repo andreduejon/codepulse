@@ -91,6 +91,30 @@ back to *Snyk returned no dependency graph*.
 
 Snyk Open Source only scans supported manifests and lockfiles. Unsupported ecosystems or lockfiles produce no usable project result. Add a lockfile Snyk supports, then scan again.
 
+### Changes against an earlier scan
+
+When an earlier commit has a scan, Vulnerabilities ends with two folded trees after
+a blank line: **NEW** lists the findings this commit added (they also stay under
+their severity, with a muted **new** before the score), and **FIXED** the earlier
+scan's findings this commit no longer has. Both headings are muted, so the
+severities keep the attention, and name the scan they compare with:
+
+```text
+▸ NEW  vs parent 4c5d6e7                1
+▸ FIXED  vs parent 4c5d6e7              1
+```
+
+When nothing changed, both show `0`. The compared scan is the first parent's. Without one, the nearest scanned commit further
+down the first-parent line stands in: `vs 1a2b3c4, 3 commits back`. The further
+back it is, the more of the commits in between the changes include, and scans from
+different days can also differ because Snyk's database changed. Nothing is scanned
+for the comparison: with no scanned commit below, NEW and FIXED do not show. Merge
+commits follow their first parent.
+
+A vulnerability stays the same finding across a version bump of its package, so a
+bump that keeps it vulnerable is neither new nor fixed. Type `new` or `fixed` in the
+filter to see only that tree.
+
 ### Dependency graph capture
 
 Scans also capture dependency graphs for committed `package-lock.json`,

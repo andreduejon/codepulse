@@ -29,10 +29,11 @@ export function getStandardDialogFrame(dimensions: Readonly<{ width: number; hei
  * Shared by all dialog components.
  */
 export function DialogOverlay(
-  props: Readonly<{ children: JSX.Element; align?: "center" | "top"; topOffset?: number }>,
+  props: Readonly<{ children: JSX.Element; align?: "center" | "top"; topOffset?: number; visible?: boolean }>,
 ) {
   return (
     <box
+      visible={props.visible ?? true}
       position="absolute"
       top={0}
       left={0}

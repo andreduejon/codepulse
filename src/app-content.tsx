@@ -42,20 +42,23 @@ import { useDetailLoader } from "./hooks/use-detail-loader";
 import { type CommandBarMode, type DialogId, useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
 import { usePathFilter } from "./hooks/use-path-filter";
 import { providerAccent } from "./providers/colors";
-import JobLogDialog from "./providers/github-actions/log-dialog";
+import type { ProviderDetailSources } from "./providers/detail-entries";
+import { githubJobLogTarget } from "./providers/github-actions/log-target";
 import type { GitHubJob, GitHubWorkflowRun } from "./providers/github-actions/types";
 import { useGitHubCI } from "./providers/github-actions/use-github-ci";
-import type { JenkinsJob, JenkinsRun } from "./providers/jenkins/types";
+import { jenkinsBuildLogTarget, jenkinsTestFailureTarget } from "./providers/jenkins/log-target";
+import type { JenkinsFailedTest, JenkinsJob, JenkinsRun } from "./providers/jenkins/types";
 import { useJenkinsCI } from "./providers/jenkins/use-jenkins-ci";
 import OpenShiftResourceDialog from "./providers/openshift/resource-dialog";
 import type { OpenShiftResource } from "./providers/openshift/types";
 import { useOpenShift } from "./providers/openshift/use-openshift";
 import { providerDisplayName } from "./providers/provider";
 import { type CacheRepositorySummary, evictRepositoryCache } from "./providers/shared/cache-management";
+import JobLogDialog, { type JobLogTarget } from "./providers/shared/job-log-dialog";
 import { repositoryIdentity, setProviderCacheSuspended } from "./providers/shared/sha-sqlite-cache";
 import { type SnykProviderConfig, useSnyk } from "./providers/snyk/use-snyk";
 import { nextGroupRepoPath } from "./utils/group-repos";
-import { computeDisplacedIndex } from "./utils/keyboard-nav-utils";
+import { computeDisplacedIndex, DETAIL_CHILD_DIALOGS } from "./utils/keyboard-nav-utils";
 
 export function AppContent(props: Readonly<AppContentProps>) {
   const { state, actions } = createAppState(
@@ -185,13 +188,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
   /** Target for the diff+blame dialog (set when user activates a file). */
   const [diffTarget, setDiffTarget] = createSignal<DiffTarget | null>(null);
   /** Target for the job log dialog (set when user opens a job log). */
-  const [jobLogTarget, setJobLogTarget] = createSignal<{
-    provider: "github-actions" | "jenkins";
-    job: { id: string | number; name: string };
-    run: { name: string; runNumber: number; url?: string };
-    jobs: { id: string | number; name: string }[];
-    fetchLog: (job: { id: string | number; name: string }) => Promise<string>;
-  } | null>(null);
+  const [jobLogTarget, setJobLogTarget] = createSignal<JobLogTarget | null>(null);
   const [openShiftResourceTarget, setOpenShiftResourceTarget] = createSignal<OpenShiftResource | null>(null);
 
   /** Command bar mode — drives placeholder text and key routing. */
@@ -211,15 +208,15 @@ export function AppContent(props: Readonly<AppContentProps>) {
   });
 
   // Seamless resize transitions between layout modes:
-  // - Normal → Compact while detail is focused: auto-open the detail dialog
+  // - Normal → Compact while detail is focused: auto-open the detail dialog, unless another dialog is open (a diff
+  //   or log opened from the details stays; closing it goes back to the details)
   // - Compact → Normal while detail dialog is open: close dialog, keep detail focused
   // Uses untrack() for dialog() so this effect only fires on layoutMode changes,
   // not every time any dialog (e.g. diff-blame) opens/closes.
   createEffect(() => {
     const mode = layoutMode();
     const currentDialog = untrack(dialog);
-    if (mode === "compact" && state.detailFocused() && currentDialog !== "detail") {
-      // Only open the detail dialog on resize — not when another dialog (e.g. diff-blame) opens
+    if (mode === "compact" && state.detailFocused() && currentDialog === null) {
       setDialog("detail");
     } else if (mode === "normal" && currentDialog === "detail") {
       setDialog(null);
@@ -281,25 +278,10 @@ export function AppContent(props: Readonly<AppContentProps>) {
     setDialog("diff-blame");
   };
 
-  const handleOpenJobLog = (job: GitHubJob, run: GitHubWorkflowRun, jobs: GitHubJob[] = [job]) => {
-    setJobLogTarget({
-      provider: "github-actions",
-      job,
-      run,
-      jobs: jobs.length > 0 ? jobs : [job],
-      fetchLog: currentJob => gitHubCI.fetchJobLogForJob(Number(currentJob.id), run),
-    });
-    setDialog("job-log");
-  };
-
-  const handleOpenJenkinsJobLog = (job: JenkinsJob, run: JenkinsRun, jobs: JenkinsJob[] = [job]) => {
-    setJobLogTarget({
-      provider: "jenkins",
-      job,
-      run,
-      jobs: jobs.length > 0 ? jobs : [job],
-      fetchLog: () => jenkinsCI.fetchRunLog(run),
-    });
+  /** The log viewer with what a provider built for it (a job, a build at an entry, a failed test). */
+  const openJobLog = (target: JobLogTarget | null) => {
+    if (!target) return;
+    setJobLogTarget(target);
     setDialog("job-log");
   };
 
@@ -627,34 +609,49 @@ export function AppContent(props: Readonly<AppContentProps>) {
 
   /** Provider data and dialogs for the detail panel and the compact detail dialog. */
   const providerDetailProps = {
-    githubGetCommitData: gitHubCI.getCommitData,
-    githubFetchJobsForRun: gitHubCI.fetchJobsForRun,
-    githubFetchCommitData: gitHubCI.fetchCommitDataForSHA,
-    get githubProviderStatus() {
-      return state.providerStatus();
-    },
-    onOpenJobLog: handleOpenJobLog,
-    jenkinsGetCommitData: jenkinsCI.getCommitData,
-    jenkinsFetchJobsForRun: jenkinsCI.fetchJobsForRun,
-    jenkinsFetchCommitData: jenkinsCI.fetchCommitDataForSHA,
-    onOpenJenkinsJobLog: handleOpenJenkinsJobLog,
-    get jenkinsProviderStatus() {
-      return state.providerStatus();
-    },
-    openshiftGetCommitData: openShift.getCommitData,
-    openshiftFetchCommitData: openShift.fetchCommitDataForSHA,
-    openshiftIsLoading: openShift.isLoading,
-    openshiftLiveAge: openShift.liveAge,
-    onOpenOpenShiftResource: handleOpenOpenShiftResource,
-    get openshiftProviderStatus() {
-      return state.providerStatus();
-    },
-    snykGetCommitData: snyk.getCommitData,
-    snykIsScanning: snyk.isScanning,
-    snykScanCommit: snyk.scanCommit,
-    get snykProviderStatus() {
-      return state.providerStatusFor("snyk");
-    },
+    providers: {
+      "github-actions": {
+        getCommitData: gitHubCI.getCommitData,
+        fetchJobsForRun: gitHubCI.fetchJobsForRun,
+        fetchCommitData: gitHubCI.fetchCommitDataForSHA,
+        get status() {
+          return state.providerStatus();
+        },
+        onOpenJobLog: (job: GitHubJob, run: GitHubWorkflowRun, jobs?: GitHubJob[], search?: string) =>
+          openJobLog(githubJobLogTarget(gitHubCI, job, run, jobs ?? [job], search)),
+      },
+      jenkins: {
+        getCommitData: jenkinsCI.getCommitData,
+        fetchJobsForRun: jenkinsCI.fetchJobsForRun,
+        fetchCommitData: jenkinsCI.fetchCommitDataForSHA,
+        get status() {
+          return state.providerStatus();
+        },
+        onOpenBuild: (run: JenkinsRun, pipeline: JenkinsJob, entry: number) =>
+          openJobLog(jenkinsBuildLogTarget(jenkinsCI, run, pipeline, entry)),
+        onOpenTestFailure: (run: JenkinsRun, failed: JenkinsFailedTest[], index: number) =>
+          openJobLog(jenkinsTestFailureTarget(run, failed, index)),
+      },
+      openshift: {
+        getCommitData: openShift.getCommitData,
+        fetchCommitData: openShift.fetchCommitDataForSHA,
+        isLoading: openShift.isLoading,
+        liveAge: openShift.liveAge,
+        consoleUrl: () => openShiftConfig().consoleUrl,
+        get status() {
+          return state.providerStatus();
+        },
+        onOpenResource: handleOpenOpenShiftResource,
+      },
+      snyk: {
+        getCommitData: snyk.getCommitData,
+        isScanning: snyk.isScanning,
+        scanCommit: snyk.scanCommit,
+        get status() {
+          return state.providerStatusFor("snyk");
+        },
+      },
+    } satisfies ProviderDetailSources,
     get tabNotice() {
       return tabNotice();
     },
@@ -663,6 +660,10 @@ export function AppContent(props: Readonly<AppContentProps>) {
 
   /** While a log dialog's search owns Esc, the app's Esc (cascade close) must not close the dialog. */
   const setLogSearchScope = (active: boolean) => actions.setKeyboardScopeOverride(active ? "log-search" : null);
+
+  /** A dialog opened from the compact details is showing; they wait under it. */
+  const compactDetailUnderChild = () =>
+    DETAIL_CHILD_DIALOGS.has(dialog() ?? "") && layoutMode() === "compact" && state.detailFocused();
 
   /** Dialogs opened from the details return to the compact detail dialog when they close. */
   const closeToDetail = () => {
@@ -909,9 +910,11 @@ export function AppContent(props: Readonly<AppContentProps>) {
                     />
                   )}
                 </Show>
-                {/* Detail dialog — compact mode only */}
-                <Show when={dialog() === "detail"}>
+                {/* Detail dialog, compact mode only. Under a dialog opened from it, it stays mounted but hidden, so
+                    closing that dialog comes back to the details as they were (open runs, attempts, cursor). */}
+                <Show when={dialog() === "detail" || compactDetailUnderChild()}>
                   <DetailDialog
+                    visible={dialog() === "detail"}
                     scrollboxRef={el => {
                       detailScrollboxRef = el;
                     }}
@@ -940,6 +943,8 @@ export function AppContent(props: Readonly<AppContentProps>) {
                       jobs={target().jobs}
                       run={target().run}
                       fetchLog={target().fetchLog}
+                      entryNoun={target().noun}
+                      initialSearch={target().search}
                       onClose={closeToDetail}
                       onSearchActive={setLogSearchScope}
                     />
@@ -953,6 +958,8 @@ export function AppContent(props: Readonly<AppContentProps>) {
                         item.kind === "Pod" ? openShift.loadPodLog(item) : openShift.loadBuildLog(item, force)
                       }
                       followLog={openShift.followLog}
+                      consoleUrl={openShiftConfig().consoleUrl}
+                      loadEvents={item => openShift.loadResourceEvents(item)}
                       loadObject={(item, force) => openShift.loadResourceObject(item, force)}
                       onClose={closeToDetail}
                       onSearchActive={setLogSearchScope}

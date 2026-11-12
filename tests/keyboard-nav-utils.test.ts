@@ -136,11 +136,16 @@ describe("computeCascadeTarget", () => {
     expect(computeCascadeTarget({ ...base, dialog: "detail" })).toBe("detail-dialog");
   });
 
-  test("diff-blame in compact mode with detail focused steps back to detail dialog", () => {
-    expect(computeCascadeTarget({ ...base, dialog: "diff-blame", layoutMode: "compact", detailFocused: true })).toBe(
-      "diff-blame-compact",
-    );
-  });
+  test.each(["diff-blame", "job-log", "openshift-resource"])(
+    "%s opened from compact details steps back to the detail dialog",
+    dialog => {
+      expect(computeCascadeTarget({ ...base, dialog, layoutMode: "compact", detailFocused: true })).toBe(
+        "back-to-detail",
+      );
+      // With the side panel, closing it is enough: the panel stays.
+      expect(computeCascadeTarget({ ...base, dialog, layoutMode: "normal", detailFocused: true })).toBe("dialog");
+    },
+  );
 
   test("non-detail dialog closes the dialog", () => {
     expect(computeCascadeTarget({ ...base, dialog: "menu" })).toBe("dialog");

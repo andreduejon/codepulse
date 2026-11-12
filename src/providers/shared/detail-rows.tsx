@@ -104,20 +104,56 @@ export function ProviderSummaryRow(props: Readonly<{ label: string; count: numbe
  * A row label that banner-scrolls while its row is cursored and the text does not fit, like Info fields and Snyk
  * dependencies; otherwise it ends in `…` when cut. `grow: false` keeps it at its text width (for labels followed by a tag).
  */
+/** A tail narrower than this is left out: `  Cr…` says nothing. */
+const MIN_TAIL_WIDTH = 8;
+
 export function ScrollingLabel(
-  props: Readonly<{ text: string; active: boolean; fg: string; selectable?: boolean; grow?: boolean }>,
+  props: Readonly<{
+    text: string;
+    active: boolean;
+    fg: string;
+    selectable?: boolean;
+    grow?: boolean;
+    /** Bold text (the graph's active subject). */
+    bold?: boolean;
+    /**
+     * Extra text after the name in its own color (a failure reason, a count): cut first when space is short, so the
+     * name keeps its room, and scrolled into view with the name on the selected row. Starts with its own separator.
+     */
+    tail?: string;
+    tailFg?: string;
+  }>,
 ) {
   const [width, setWidth] = createSignal(0);
+  const tail = () => props.tail ?? "";
+  const full = () => props.text + tail();
   // Measured in terminal columns, so wide (CJK) characters and emoji scroll and cut correctly.
-  const overflow = () => (props.active && width() > 0 ? Math.max(0, cellWidth(props.text) - width()) : 0);
+  const overflow = () => (props.active && width() > 0 ? Math.max(0, cellWidth(full()) - width()) : 0);
   const offset = useBannerScroll(overflow);
+  /** The visible name and tail. A tail is dropped rather than shown as a stub of a few columns. */
+  const parts = (): [string, string] => {
+    const w = width();
+    if (w <= 0) return [props.text, tail()];
+    const nameWidth = cellWidth(props.text);
+    if (overflow() > 0) {
+      const start = offset();
+      const head = start < nameWidth ? sliceCells(props.text, start, Math.min(w, nameWidth - start)) : "";
+      return [head, sliceCells(tail(), Math.max(0, start - nameWidth), w - cellWidth(head))];
+    }
+    if (nameWidth >= w) return [truncateCells(props.text, w), ""];
+    const room = w - nameWidth;
+    return [props.text, room >= MIN_TAIL_WIDTH || cellWidth(tail()) <= room ? truncateCells(tail(), room) : ""];
+  };
   // The text is positioned absolutely so only the flex layout sizes the box: measuring a box that the text
   // itself stretches would feed back into the visible width.
   return (
+    // `grow={false}` keeps the label at its text's width so something can follow it: it grows (strongly, so a spacer
+    // after it only gets what the label leaves) up to that width. A plain flexShrink does not shrink it in opentui.
     <box
-      flexGrow={props.grow === false ? 0 : 1}
+      flexGrow={props.grow === false ? 1000 : 1}
       flexShrink={1}
-      flexBasis={props.grow === false ? cellWidth(props.text) : 0}
+      flexBasis={0}
+      maxWidth={props.grow === false ? cellWidth(full()) : undefined}
       minWidth={0}
       height={1}
       overflow="hidden"
@@ -134,11 +170,12 @@ export function ScrollingLabel(
         wrapMode="none"
         fg={props.fg}
       >
-        {overflow() > 0
-          ? sliceCells(props.text, offset(), width())
-          : width() > 0
-            ? truncateCells(props.text, width())
-            : props.text}
+        <Show when={props.bold} fallback={parts()[0]}>
+          <strong>
+            <span>{parts()[0]}</span>
+          </strong>
+        </Show>
+        <Show when={parts()[1]}>{visible => <span style={{ fg: props.tailFg ?? props.fg }}>{visible()}</span>}</Show>
       </text>
     </box>
   );

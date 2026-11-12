@@ -6,6 +6,7 @@ import {
   buildCommitDataMap,
   buildGraphBadges,
   fetchCIDataForSHAs,
+  fetchJobAnnotations,
   fetchJobLog,
   fetchRunJobs,
   GQL_BATCH_SIZE,
@@ -399,6 +400,22 @@ describe("fetchRunJobs", () => {
     expect(jobs[0].steps).toHaveLength(2);
     expect(jobs[0].steps[0].name).toBe("Checkout");
     expect(jobs[0].steps[1].number).toBe(2);
+  });
+
+  it("asks for the jobs of every attempt and keeps each job's attempt", async () => {
+    let url = "";
+    mockFetch(
+      mock(async (input: RequestInfo | URL) => {
+        url = String(input);
+        return new Response(
+          JSON.stringify({ jobs: [makeApiJob({ id: 1, run_attempt: 1 }), makeApiJob({ id: 2, run_attempt: 2 })] }),
+          { status: 200 },
+        );
+      }),
+    );
+    const { jobs } = await fetchRunJobs(TEST_REPO, TEST_TOKEN, 123);
+    expect(url).toContain("/actions/runs/123/jobs?per_page=100&filter=all");
+    expect(jobs.map(job => job.runAttempt)).toEqual([1, 2]);
   });
 
   it("returns explicit error (no throw) on 404", async () => {
@@ -1050,5 +1067,68 @@ describe("fetchJobLog", () => {
       }),
     );
     await expect(fetchJobLog(TEST_REPO, TEST_TOKEN, 7)).rejects.toThrow(BANNER.github.logFailed);
+  });
+});
+
+// ── fetchJobAnnotations (mocked fetch) ────────────────────────────────────
+
+describe("fetchJobAnnotations", () => {
+  afterEach(() => {
+    globalThis.fetch = fetch;
+  });
+
+  it("reads the job's check run annotations: level, place and message", async () => {
+    let url = "";
+    mockFetch(
+      mock(async (input: RequestInfo | URL) => {
+        url = String(input);
+        return new Response(
+          JSON.stringify([
+            {
+              path: "src/auth.test.ts",
+              start_line: 42,
+              annotation_level: "failure",
+              message: "Expected 200, received 401\n  at line 42",
+              title: "auth test",
+            },
+            { path: ".github", start_line: 0, annotation_level: "warning", message: "Node 16 is deprecated" },
+          ]),
+          { status: 200 },
+        );
+      }),
+    );
+    const annotations = await fetchJobAnnotations(TEST_REPO, TEST_TOKEN, 5);
+    expect(url).toEndWith("/repos/owner/repo/check-runs/5/annotations?per_page=100");
+    expect(annotations).toEqual([
+      { level: "failure", path: "src/auth.test.ts", line: 42, message: "Expected 200, received 401\n  at line 42" },
+      { level: "warning", path: ".github", line: null, message: "Node 16 is deprecated" },
+    ]);
+  });
+
+  it("a failed request gives no annotations rather than an error", async () => {
+    mockFetch(mock(async () => new Response(null, { status: 403 })));
+    expect(await fetchJobAnnotations(TEST_REPO, TEST_TOKEN, 5)).toBeNull();
+  });
+
+  it("follows the next pages, so a failure after many notices still shows", async () => {
+    const notice = { path: "a.ts", start_line: 1, annotation_level: "notice", message: "note" };
+    const urls: string[] = [];
+    mockFetch(
+      mock(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        urls.push(url);
+        if (url.includes("page=2"))
+          return new Response(
+            JSON.stringify([{ path: "b.ts", start_line: 9, annotation_level: "failure", message: "boom" }]),
+          );
+        return new Response(JSON.stringify(Array.from({ length: 100 }, () => notice)), {
+          headers: { link: `<${url}&page=2>; rel="next"` },
+        });
+      }),
+    );
+    const annotations = await fetchJobAnnotations(TEST_REPO, TEST_TOKEN, 5);
+    expect(urls).toHaveLength(2);
+    expect(annotations).toHaveLength(101);
+    expect(annotations?.at(-1)).toEqual({ level: "failure", path: "b.ts", line: 9, message: "boom" });
   });
 });

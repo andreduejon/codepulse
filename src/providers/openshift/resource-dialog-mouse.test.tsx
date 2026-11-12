@@ -1,19 +1,27 @@
-import { expect, mock, test } from "bun:test";
+import { expect, mock, spyOn, test } from "bun:test";
 import { type Renderable, RGBA, ScrollBoxRenderable, TextRenderable } from "@opentui/core";
 import { MouseButtons } from "@opentui/core/testing";
 import { testRender } from "@opentui/solid";
 import { createSignal, Show } from "solid-js";
 import { createThemeState, ThemeContext } from "../../context/theme";
 import { BANNER } from "../../debug/banner";
+import * as browser from "../../utils/open-url";
 import OpenShiftResourceDialog from "./resource-dialog";
-import type { OpenShiftResource } from "./types";
+import type { OpenShiftEvent, OpenShiftResource } from "./types";
 
 const descendants = (node: Renderable): Renderable[] =>
   node.getChildren().flatMap(child => [child, ...descendants(child)]);
 const logRows = (count: number) =>
   Array.from({ length: count }, (_, i) => `row-${String(i + 1).padStart(3, "0")}`).join("\n");
 
-async function renderResource(kind: OpenShiftResource["kind"], follow = false, hasLoader = true) {
+async function renderResource(
+  kind: OpenShiftResource["kind"],
+  follow = false,
+  hasLoader = true,
+  consoleUrl?: string,
+  loadEvents?: (resource: OpenShiftResource) => Promise<OpenShiftEvent[]>,
+  object: unknown = { objectMarker: "fake-object" },
+) {
   const resource: OpenShiftResource = {
     id: `${kind}/resource`,
     kind,
@@ -24,7 +32,7 @@ async function renderResource(kind: OpenShiftResource["kind"], follow = false, h
   };
   const raw = `normal ${"x".repeat(180)} WRAP-END`;
   const loadLog = mock(async (_resource: OpenShiftResource, _force?: boolean) => raw);
-  const loadObject = mock(async (_resource: OpenShiftResource, _force?: boolean) => ({ objectMarker: "fake-object" }));
+  const loadObject = mock(async (_resource: OpenShiftResource, _force?: boolean) => object);
   const streams: { signal: AbortSignal; emit: (text: string) => void; end: () => void }[] = [];
   const followLog = mock(
     (_resource: OpenShiftResource, signal: AbortSignal, emit: (text: string) => void) =>
@@ -42,6 +50,8 @@ async function renderResource(kind: OpenShiftResource["kind"], follow = false, h
             loadLog={hasLoader ? loadLog : undefined}
             loadObject={loadObject}
             followLog={follow ? followLog : undefined}
+            consoleUrl={consoleUrl}
+            loadEvents={loadEvents}
             onClose={close}
           />
         </Show>
@@ -375,11 +385,225 @@ test("/ searches the resource log and object like the CI log", async () => {
     const number = d.captureSpans().lines[hitY]?.spans.find(span => span.text.trim() === "1");
     expect(number?.bg).toEqual(RGBA.fromHex(d.theme.accent));
     await d.key("RETURN");
-    expect(d.frame()).toContain("n/N next/prev");
+    expect(d.frame()).toContain("n/N next/previous");
     await d.key("ESCAPE");
     expect(d.frame()).not.toContain("1/1");
     expect(d.open()).toBe(true);
   } finally {
     await d.dispose();
+  }
+});
+
+test("o opens the resource in the web console when its URL is set, and the footer says so", async () => {
+  const openUrl = spyOn(browser, "openUrl").mockImplementation(() => {});
+  const without = await renderResource("Pod");
+  try {
+    expect(without.frame()).not.toContain("o open");
+    await without.key("o");
+    expect(openUrl).not.toHaveBeenCalled();
+  } finally {
+    without.renderer.destroy();
+  }
+  const d = await renderResource("Pod", false, true, "https://console.example.com");
+  try {
+    expect(d.frame()).toContain("o open");
+    await d.key("o");
+    expect(openUrl).toHaveBeenLastCalledWith("https://console.example.com/k8s/ns/test-ns/pods/test-resource");
+    await d.click("o open");
+    expect(openUrl).toHaveBeenCalledTimes(2);
+  } finally {
+    openUrl.mockRestore();
+    d.renderer.destroy();
+  }
+});
+
+const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+
+test("c cycles log, object and events; events are newest first, warnings in the warning color, r refetches", async () => {
+  const loadEvents = mock(
+    async (_resource: OpenShiftResource): Promise<OpenShiftEvent[]> => [
+      {
+        type: "Warning",
+        reason: "BackOff",
+        message: "Back-off restarting failed container api",
+        count: 31,
+        lastSeen: minutesAgo(2),
+      },
+      {
+        type: "Normal",
+        reason: "Scheduled",
+        message: "Successfully assigned test-ns/test-resource",
+        count: 1,
+        lastSeen: minutesAgo(16),
+      },
+    ],
+  );
+  const d = await renderResource("Pod", false, true, undefined, loadEvents);
+  try {
+    expect(d.frame()).toContain("c view");
+    await d.key("c");
+    expect(d.frame()).toContain("objectMarker");
+    await d.key("c");
+    await d.flush();
+    const frame = d.frame();
+    expect(frame).toMatch(/test-resource · events/);
+    expect(frame).toMatch(/LAST SEEN\s+TYPE\s+REASON\s+COUNT\s+MESSAGE/);
+    expect(frame.indexOf("BackOff")).toBeLessThan(frame.indexOf("Scheduled"));
+    expect(frame).toMatch(/2m ago\s+Warning\s+BackOff\s+31\s+Back-off restarting failed container api/);
+    expect(d.cell("Back-off")?.fg).toEqual(RGBA.fromHex(d.theme.warning));
+    expect(loadEvents).toHaveBeenCalledTimes(1);
+    await d.key("r");
+    await d.flush();
+    expect(loadEvents).toHaveBeenCalledTimes(2);
+    await d.key("c");
+    expect(d.frame()).toContain("normal");
+  } finally {
+    d.renderer.destroy();
+  }
+});
+
+const CRASHING_POD = {
+  kind: "Pod",
+  status: {
+    phase: "Running",
+    containerStatuses: [
+      {
+        name: "api",
+        state: { waiting: { reason: "CrashLoopBackOff", message: "back-off 5m0s restarting failed container" } },
+        lastState: { terminated: { reason: "Error", exitCode: 1 } },
+      },
+    ],
+  },
+};
+const FAILING_DEPLOYMENT = {
+  kind: "Deployment",
+  status: {
+    conditions: [
+      {
+        type: "Progressing",
+        status: "False",
+        reason: "ProgressDeadlineExceeded",
+        message: 'ReplicaSet "test-resource-7d9f8" has timed out progressing.',
+      },
+    ],
+  },
+};
+const warning = (reason: string, minutes: number): OpenShiftEvent => ({
+  type: "Warning",
+  reason,
+  message: `${reason} message`,
+  count: 3,
+  lastSeen: minutesAgo(minutes),
+});
+
+test("the events view starts with what the status says is wrong; the title counts the warnings", async () => {
+  const loadEvents = mock(
+    async (_resource: OpenShiftResource): Promise<OpenShiftEvent[]> => [
+      warning("BackOff", 2),
+      warning("Unhealthy", 3),
+      { type: "Normal", reason: "Scheduled", message: "Successfully assigned", count: 1, lastSeen: minutesAgo(16) },
+    ],
+  );
+  const d = await renderResource("Pod", false, true, undefined, loadEvents, CRASHING_POD);
+  try {
+    await d.flush();
+    // Counted when the dialog opens, so the log view already says there is more to see.
+    expect(d.frame()).toMatch(/test-resource · log · 2 warnings/);
+    await d.key("c");
+    await d.key("c");
+    await d.flush();
+    const frame = d.frame();
+    expect(frame).toMatch(/test-resource · events · 2 warnings/);
+    expect(frame).toMatch(/waiting\s+CrashLoopBackOff\s+back-off 5m0s restarting failed container/);
+    expect(frame).toMatch(/last run\s+Error · exit 1/);
+    expect(frame.indexOf("STATUS")).toBeLessThan(frame.indexOf("LAST SEEN"));
+    expect(d.cell("CrashLoopBackOff")?.fg).toEqual(RGBA.fromHex(d.theme.warning));
+    // Loaded once when the dialog opened; the events view reuses them (r refetches).
+    expect(loadEvents).toHaveBeenCalledTimes(1);
+  } finally {
+    d.renderer.destroy();
+  }
+});
+
+test("when events cannot load or are gone, the status still says what is wrong", async () => {
+  const forbidden = async (_resource: OpenShiftResource): Promise<OpenShiftEvent[]> => {
+    throw new Error("No permission to list events in test-ns.");
+  };
+  const d = await renderResource("Deployment", false, false, undefined, forbidden, FAILING_DEPLOYMENT);
+  try {
+    await d.key("c");
+    await d.flush();
+    expect(d.frame()).toMatch(/Progressing False\s+ProgressDeadlineExceeded\s+ReplicaSet "test-resource-7d9f8"/);
+    expect(d.frame()).toContain("No permission to list events in test-ns.");
+    expect(d.frame()).not.toContain("Failed to load events");
+    expect(d.frame()).not.toMatch(/· \d+ warnings?/);
+  } finally {
+    d.renderer.destroy();
+  }
+  const gone = await renderResource("Deployment", false, false, undefined, async () => [], FAILING_DEPLOYMENT);
+  try {
+    await gone.key("c");
+    await gone.flush();
+    expect(gone.frame()).toMatch(/Progressing False\s+ProgressDeadlineExceeded/);
+    expect(gone.frame()).toContain("No recent events. OpenShift keeps them for 3 hours by default.");
+  } finally {
+    gone.renderer.destroy();
+  }
+  const one = await renderResource("Deployment", false, false, undefined, async () => [warning("BackOff", 1)]);
+  try {
+    await one.flush();
+    expect(one.frame()).toMatch(/test-resource · object · 1 warning(?!s)/);
+  } finally {
+    one.renderer.destroy();
+  }
+});
+
+test("a Deployment cycles object and events; events that cannot load, or none, say so", async () => {
+  const failing = mock(async (_resource: OpenShiftResource): Promise<OpenShiftEvent[]> => {
+    throw new Error("No permission to list events in test-ns.");
+  });
+  const d = await renderResource("Deployment", false, false, undefined, failing);
+  try {
+    expect(d.frame()).toContain("c view");
+    await d.key("c");
+    await d.flush();
+    expect(d.frame()).toContain("Failed to load events");
+    expect(d.frame()).toContain("No permission to list events in test-ns.");
+  } finally {
+    d.renderer.destroy();
+  }
+  const empty = await renderResource("Deployment", false, false, undefined, async () => []);
+  try {
+    await empty.key("c");
+    await empty.flush();
+    expect(empty.frame()).toContain("No recent events. OpenShift keeps them for 3 hours by default.");
+  } finally {
+    empty.renderer.destroy();
+  }
+});
+
+test("a followed log that drops its oldest lines keeps the selected hit", async () => {
+  const d = await renderResource("Pod", true);
+  const lines = (from: number, to: number) =>
+    Array.from({ length: to - from + 1 }, (_, i) => {
+      const n = from + i;
+      return n === 3 || n === 7 ? `line ${n} hit` : `line ${n}`;
+    }).join("\n");
+  try {
+    d.streams[0].emit(lines(1, 10));
+    await d.flush();
+    await d.key("/");
+    await d.mockInput.typeText("hit");
+    await d.flush();
+    await d.key("RETURN");
+    await d.key("n");
+    expect(d.frame()).toContain("2/2");
+    // The follow keeps the last lines: the oldest one goes, a new one arrives.
+    d.streams[0].emit(lines(2, 11));
+    await d.flush();
+    await d.flush();
+    expect(d.frame()).toContain("2/2");
+  } finally {
+    d.renderer.destroy();
   }
 });

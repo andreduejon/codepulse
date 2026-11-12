@@ -37,7 +37,7 @@ const notice = (
 
 describe("tab notices", () => {
   test("only warnings leave the banner for the tab", () => {
-    expect(isTabNoticeStatus({ kind: "warning", message: BANNER.jenkins.incomplete })).toBe(true);
+    expect(isTabNoticeStatus({ kind: "warning", message: BANNER.jenkins.branchLimit(25, 30) })).toBe(true);
     expect(isTabNoticeStatus({ kind: "error", message: BANNER.jenkins.authFailed })).toBe(false);
     expect(isTabNoticeStatus({ kind: "unavailable", message: BANNER.jenkins.noJobs })).toBe(false);
   });
@@ -54,8 +54,11 @@ describe("tab notices", () => {
       entries: [],
     });
     expect(
-      notice("jenkins", "Jenkins", { kind: "warning", message: BANNER.jenkins.incomplete }, "jenkins"),
-    ).toMatchObject({ title: "Data incomplete", detail: ["Branch-job limit reached."] });
+      notice("jenkins", "Jenkins", { kind: "warning", message: BANNER.jenkins.branchLimit(25, 30) }, "jenkins"),
+    ).toMatchObject({
+      title: "Branch jobs · 25 of 30 read",
+      detail: ["Branches in the graph come first. Builds on the other 5 do not show."],
+    });
   });
 
   test("a partial Snyk rescan warns on every Snyk tab", () => {

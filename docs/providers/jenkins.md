@@ -29,14 +29,17 @@ authentication errors instead of build failures.
 ## Multibranch pipelines
 
 Job URLs are detected through the Jenkins API. Multibranch pipeline URLs load
-enabled, buildable Workflow jobs automatically. Discovery includes the first 25
-valid, unique branch jobs in Jenkins API order. This is one global limit across
-all configured multibranch parents, not 25 jobs per parent.
+enabled, buildable Workflow jobs automatically. Discovery includes 25 valid,
+unique branch jobs: first the branches in the graph (local branches, and remote
+ones without the remote's name), then the most recently built, then Jenkins API
+order. This is one global limit across all configured multibranch parents, not 25
+jobs per parent.
 
 If more jobs are available, existing runs and badges from included jobs remain
-visible and a notice under the Jenkins tab reads **Data incomplete** with
-`Branch-job limit reached.` below.
-Remaining branch jobs are not queried. The Debug dialog records the affected
+visible, and a notice at the bottom of the Jenkins details gives the counts
+(`Branch jobs · 25 of 61 read`) and says what they mean (`Branches in the graph
+come first. Builds on the other 36 do not show.`). Remaining branch jobs are not
+queried. The Debug dialog records the affected
 parent URL and limit. Truncated discovery is not stored as an authoritative
 cache refresh.
 
@@ -61,5 +64,37 @@ Aborted builds show as cancelled (`○`, a grey chip in the graph) like aborted
 stages, and not-built builds as skipped. Entering a commit's **Jenkins** tab opens
 its first failed build. In the console log, `r` reloads it (a finished build's cached log does not change).
 
+A build lists its stages straight under it, each with its mark and nothing else,
+like the OpenShift tree. A legend below the tree explains the marks:
+`✓ passed  ● running  ✗ failed  – skipped  ○ aborted`. Times and test counts are
+in the log viewer.
+
+Enter on a stage opens only its part of the console log (from
+`[Pipeline] { (Stage)` to the end of that block). The title names the stage and
+its time (`Jenkins · main #41 · Unit tests · 3m 30s`). `←` / `→` move to the
+previous and next stage, and `←` from the first stage shows the **full log**: a
+summary first (each stage with its mark and time, then the test counts), then the
+whole console. The marks sit in the line number column, so the stage names start
+where the log text does. The footer says where the arrows go (`← previous stage`,
+`← full log`, `→ first stage`) and leaves out the one that goes nowhere. A build
+without stages has one **Console** row that opens the full log. A stage the log
+does not mark shows the whole log too. Stage logs are cut from the same console
+log, so they need no extra requests and work for cached builds.
+
+In the log, `[Pipeline] { (Unit tests)` shows as the heading `▸ Unit tests`, and
+the rest of the Pipeline markup (`[Pipeline] }`, `[Pipeline] // stage`) is muted,
+also a parallel branch's opening (`[Pipeline] { (Branch: Unit tests)`), so only
+its stage is a heading.
+
 Fetch size controls both the graph commit window and recent builds inspected per
 job. It is independent from cache retention.
+
+## Tests
+
+A finished build with a JUnit test report shows a **Tests** row after its
+stages, with each failed test under it (`PaymentServiceTest › refundsTwice`, up
+to 50). Its counts (`3 failed · 1,204 passed · 12 skipped`) are in the whole
+build's summary. The report is read once the build has finished, together with
+its stages, and cached with the build. Enter on a failed test opens its error and
+stack trace in the log viewer (search, wrap), titled with the test, and `←` / `→`
+move between the failed tests; `o` opens the build's test report. A build without a report has no Tests row.

@@ -4,8 +4,9 @@ import type { DetailNavRef } from "../../components/detail-types";
 import type { DebugEventSource } from "../../debug/events";
 import { useT } from "../../hooks/use-t";
 import { BUSY } from "../../utils/busy-text";
-import { formatDuration, formatRelativeDate } from "../../utils/date";
+import { formatRelativeDate } from "../../utils/date";
 import { ProviderActionRow, ProviderSummaryRow, ScrollingLabel, useDetailRowMouse } from "./detail-rows";
+import { type RowShortcut, useOpenRowShortcut } from "./open-row";
 import { fetchProviderJobs } from "./provider-job-fetch";
 import { categorize, statusColor, statusIcon } from "./status";
 
@@ -14,8 +15,6 @@ export interface ProviderTreeStep {
   name: string;
   status: string;
   conclusion: string | null;
-  startedAt: string | null;
-  completedAt: string | null;
 }
 
 export interface ProviderTreeRun<TRaw> {
@@ -24,8 +23,10 @@ export interface ProviderTreeRun<TRaw> {
   status: string;
   conclusion: string | null;
   runNumber: number;
-  startedAt?: string | null;
+  /** When it last changed: its age. */
   updatedAt: string;
+  /** The run's web page, opened with `o`. */
+  url?: string;
   raw: TRaw;
 }
 
@@ -34,10 +35,65 @@ export interface ProviderTreeJob<TJobRaw> {
   name: string;
   status: string;
   conclusion: string | null;
-  startedAt: string | null;
+  /** When it ended: an earlier attempt's age. */
   completedAt: string | null;
   steps: ProviderTreeStep[];
+  /** The job's web page, opened with `o`. */
+  url?: string;
+  /** Why it failed, one selectable row each after the steps (GitHub annotations, Jenkins failed tests). */
+  notes?: ProviderTreeNote[];
+  /** A row above the notes with their count (`Annotations`); without it the notes follow the steps directly. */
+  notesLabel?: string;
+  /** The run attempt it belongs to (GitHub re-runs). The latest attempt's jobs show; earlier ones fold away. */
+  attempt?: number;
+  /** Muted text after the name (`  3 failed · 1,204 passed`), cut before the name when space is short. */
+  tail?: string;
   raw: TJobRaw;
+}
+
+/** The jobs of an earlier attempt of a re-run, folded into one `attempt N` row. */
+interface AttemptGroup<TJobRaw> {
+  number: number;
+  jobs: ProviderTreeJob<TJobRaw>[];
+}
+
+/** A run's jobs split by attempt: the latest attempt's jobs, and earlier attempts newest first. */
+function splitAttempts<TJobRaw>(jobs: ProviderTreeJob<TJobRaw>[]) {
+  const latest = jobs.reduce((max, job) => Math.max(max, job.attempt ?? 1), 1);
+  const earlier = new Map<number, ProviderTreeJob<TJobRaw>[]>();
+  for (const job of jobs) {
+    const number = job.attempt ?? 1;
+    if (number !== latest) earlier.set(number, [...(earlier.get(number) ?? []), job]);
+  }
+  return {
+    latest,
+    current: jobs.filter(job => (job.attempt ?? 1) === latest),
+    attempts: [...earlier]
+      .sort((a, b) => b[0] - a[0])
+      .map(([number, attemptJobs]): AttemptGroup<TJobRaw> => ({ number, jobs: attemptJobs })),
+  };
+}
+
+/** An attempt's status from its jobs: failed if one failed, running if one runs, cancelled if all were. */
+function attemptStatus<TJobRaw>(jobs: ProviderTreeJob<TJobRaw>[]): { status: string; conclusion: string | null } {
+  const categories = jobs.map(job => categorize(job.status, job.conclusion));
+  if (categories.includes("fail")) return { status: "completed", conclusion: "failure" };
+  if (categories.includes("running")) return { status: "in_progress", conclusion: null };
+  if (categories.length > 0 && categories.every(category => category === "cancelled"))
+    return { status: "completed", conclusion: "cancelled" };
+  return { status: "completed", conclusion: "success" };
+}
+
+/** A selectable row under a job that says why it failed: `✗ src/auth.test.ts:42  Expected 200, received 401`. */
+export interface ProviderTreeNote {
+  id: string;
+  /** `✗` in the error colour for a failure, `!` in the warning colour for a warning. */
+  mark: "fail" | "warning";
+  text: string;
+  /** Its web page for `o`; the job's page otherwise. */
+  url?: string;
+  /** Text to find in the job's log when the note is opened (an annotation's message). */
+  search?: string;
 }
 
 export interface ProviderTreeJobFetchResult<TJobRaw> {
@@ -48,7 +104,15 @@ export interface ProviderTreeJobFetchResult<TJobRaw> {
 type FlatItem<TRaw, TJobRaw> =
   | { kind: "reload"; flatIndex: number }
   | { kind: "run"; run: ProviderTreeRun<TRaw>; flatIndex: number }
-  | { kind: "job"; job: ProviderTreeJob<TJobRaw>; run: ProviderTreeRun<TRaw>; flatIndex: number };
+  | { kind: "job"; job: ProviderTreeJob<TJobRaw>; run: ProviderTreeRun<TRaw>; flatIndex: number }
+  | { kind: "attempt"; attempt: AttemptGroup<TJobRaw>; run: ProviderTreeRun<TRaw>; flatIndex: number }
+  | {
+      kind: "note";
+      note: ProviderTreeNote;
+      job: ProviderTreeJob<TJobRaw>;
+      run: ProviderTreeRun<TRaw>;
+      flatIndex: number;
+    };
 
 export interface ProviderRunTreeProps<TRaw, TJobRaw> {
   mouseEnabled?: boolean;
@@ -59,6 +123,7 @@ export interface ProviderRunTreeProps<TRaw, TJobRaw> {
   detailFocused: () => boolean;
   setDetailCursorAction: (action: string | null) => void;
   setDetailCursorIndex: (idx: number) => void;
+  setDetailCursorShortcut?: (shortcut: RowShortcut | null) => void;
   fetchJobsForRun: (run: ProviderTreeRun<TRaw>, signal?: AbortSignal) => Promise<ProviderTreeJobFetchResult<TJobRaw>>;
   debugSource: DebugEventSource;
   dataKey: string;
@@ -68,13 +133,27 @@ export interface ProviderRunTreeProps<TRaw, TJobRaw> {
     run: ProviderTreeRun<TRaw>,
     jobs?: ProviderTreeJob<TJobRaw>[],
   ) => void;
+  /** Enter on a note (an annotation, a failed test). */
+  onOpenNote?: (
+    note: ProviderTreeNote,
+    job: ProviderTreeJob<TJobRaw>,
+    run: ProviderTreeRun<TRaw>,
+    jobs: ProviderTreeJob<TJobRaw>[],
+  ) => void;
+  /** Footer verb for Enter on a note (`view in log`). */
+  noteAction?: string;
   summaryLabel: string;
   jobsLoadingText?: string;
   noJobsText?: string;
   autoExpandSingleRun?: boolean;
-  childCountLabel?: (count: number) => string;
-  showRunDuration?: boolean;
+  /** When false, notes leave out their `✗`/`!` (Jenkins: every listed test failed). */
+  noteMarks?: boolean;
   onReloadCommit?: () => void | Promise<void>;
+  /**
+   * Whether a finished run's loaded jobs are final beyond their statuses (Jenkins: the test report is known). One that
+   * is not loads again on Reload, like a run still running or one that failed to load.
+   */
+  jobsFinal?: (jobs: readonly ProviderTreeJob<TJobRaw>[]) => boolean;
   reloadLabel?: string;
   reloadBusy?: boolean;
   /** Muted text after the reload label while it is busy (`fetching runs...`). */
@@ -90,6 +169,8 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
   const t = useT();
   const STATUS_COL_WIDTH = 2;
   const [expandedRuns, setExpandedRuns] = createSignal<Set<string>>(new Set());
+  /** Open earlier attempts, as `runId:number`. */
+  const [expandedAttempts, setExpandedAttempts] = createSignal<Set<string>>(new Set());
   const [fetchedJobs, setFetchedJobs] = createSignal<Map<string, ProviderTreeJob<TJobRaw>[]>>(new Map());
   const [jobErrors, setJobErrors] = createSignal<Map<string, string>>(new Map());
   const [loadingRuns, setLoadingRuns] = createSignal<Set<string>>(new Set());
@@ -107,7 +188,11 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
       ? "reload"
       : item.kind === "run"
         ? `run:${item.run.id}`
-        : `job:${item.run.id}:${item.job.id}`;
+        : item.kind === "job"
+          ? `job:${item.run.id}:${item.job.id}`
+          : item.kind === "attempt"
+            ? `attempt:${item.run.id}:${item.attempt.number}`
+            : `note:${item.run.id}:${item.job.id}:${item.note.id}`;
   const syncItemRefs = () => {
     const items = flatItems();
     itemRefs.length = items.length;
@@ -124,43 +209,39 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
   });
   const { mouseRow, hoverBg } = rows;
 
-  const formatStepDuration = (step: ProviderTreeStep) => formatDuration(step.startedAt, step.completedAt);
-  const formatRunDuration = (run: ProviderTreeRun<TRaw>) => {
-    if (props.showRunDuration === false) return "";
-    const primaryJob = fetchedJobs().get(run.id)?.[0];
-    const exactDuration = primaryJob ? formatDuration(primaryJob.startedAt, primaryJob.completedAt) : "";
-    if (exactDuration) return exactDuration;
-    const duration = formatDuration(run.startedAt ?? null, run.updatedAt);
-    return duration ? `~${duration}` : "";
-  };
-  const statusMark = (status: string, conclusion: string | null) => statusIcon(categorize(status, conclusion));
+  // Before every memo that reads them (createMemo runs at once).
+  const runJobs = createMemo(() => new Map([...fetchedJobs()].map(([id, jobs]) => [id, splitAttempts(jobs)])));
+  const jobsOf = (runId: string) =>
+    runJobs().get(runId) ?? { latest: 1, current: [] as ProviderTreeJob<TJobRaw>[], attempts: [] };
+  const attemptKey = (runId: string, number: number) => `${runId}:${number}`;
+  const toggleAttempt = (runId: string, number: number) =>
+    setExpandedAttempts(prev => {
+      const next = new Set(prev);
+      const key = attemptKey(runId, number);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
 
+  const statusMark = (status: string, conclusion: string | null) => statusIcon(categorize(status, conclusion));
+  /** When the last of these jobs ended: an earlier attempt's age. */
+  const lastFinished = (jobs: readonly ProviderTreeJob<TJobRaw>[]) =>
+    jobs.reduce<string | null>(
+      (latest, job) => (job.completedAt && (!latest || job.completedAt > latest) ? job.completedAt : latest),
+      null,
+    );
+
+  /**
+   * The ages column of runs and earlier attempts. Rows show no times or counts, like the OpenShift tree: a job's and
+   * a step's time are in the log viewer.
+   */
   const rightInfoWidth = createMemo(() => {
     let max = 0;
     for (const run of props.runs) {
       max = Math.max(max, formatRelativeDate(run.updatedAt).length);
-    }
-    for (const jobs of fetchedJobs().values()) {
-      for (const job of jobs) {
-        const label =
-          job.steps.length > 0
-            ? (props.childCountLabel?.(job.steps.length) ??
-              `${job.steps.length} step${job.steps.length === 1 ? "" : "s"}`)
-            : "";
-        max = Math.max(max, label.length);
-      }
-    }
-    return max;
-  });
-
-  const durationWidth = createMemo(() => {
-    let max = 0;
-    for (const run of props.runs) {
-      max = Math.max(max, formatRunDuration(run).length);
-    }
-    for (const jobs of fetchedJobs().values()) {
-      for (const job of jobs) {
-        max = Math.max(max, formatDuration(job.startedAt, job.completedAt).length);
+      for (const attempt of jobsOf(run.id).attempts) {
+        const finished = lastFinished(attempt.jobs);
+        if (finished) max = Math.max(max, formatRelativeDate(finished).length);
       }
     }
     return max;
@@ -173,7 +254,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
 
   const flatItems = createMemo((): FlatItem<TRaw, TJobRaw>[] => {
     const expanded = expandedRuns();
-    const jobs = fetchedJobs();
+    const openAttempts = expandedAttempts();
     const items: FlatItem<TRaw, TJobRaw>[] = [];
     let idx = 0;
     // A disabled reload row stays visible (muted) but leaves the cursor order.
@@ -181,7 +262,16 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     for (const run of props.runs) {
       items.push({ kind: "run", run, flatIndex: idx++ });
       if (expanded.has(run.id)) {
-        for (const job of jobs.get(run.id) ?? []) items.push({ kind: "job", job, run, flatIndex: idx++ });
+        const { current, attempts } = jobsOf(run.id);
+        for (const job of current) {
+          items.push({ kind: "job", job, run, flatIndex: idx++ });
+          for (const note of job.notes ?? []) items.push({ kind: "note", note, job, run, flatIndex: idx++ });
+        }
+        for (const attempt of attempts) {
+          items.push({ kind: "attempt", attempt, run, flatIndex: idx++ });
+          if (!openAttempts.has(attemptKey(run.id, attempt.number))) continue;
+          for (const job of attempt.jobs) items.push({ kind: "job", job, run, flatIndex: idx++ });
+        }
       }
     }
     return items;
@@ -285,11 +375,14 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
   };
 
   /** Completed, with every loaded job and step completed: its jobs and steps cannot change any more. */
-  const isSettled = (run: ProviderTreeRun<TRaw>) =>
-    run.status === "completed" &&
-    (fetchedJobs().get(run.id) ?? []).every(
-      job => job.status === "completed" && job.steps.every(step => step.status === "completed"),
+  const isSettled = (run: ProviderTreeRun<TRaw>) => {
+    const jobs = fetchedJobs().get(run.id) ?? [];
+    return (
+      run.status === "completed" &&
+      jobs.every(job => job.status === "completed" && job.steps.every(step => step.status === "completed")) &&
+      (props.jobsFinal?.(jobs) ?? true)
     );
+  };
 
   const reloadCommit = async () => {
     // Expanded runs that failed to load or were still running get fresh jobs and steps too.
@@ -321,6 +414,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     for (const ctrl of fetchControllers.values()) ctrl.abort();
     fetchControllers.clear();
     setExpandedRuns(new Set<string>());
+    setExpandedAttempts(new Set<string>());
     setFetchedJobs(new Map<string, ProviderTreeJob<TJobRaw>[]>());
     setJobErrors(new Map<string, string>());
     setLoadingRuns(new Set<string>());
@@ -400,7 +494,21 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
       toggleRun(item.run);
       return false;
     }
-    props.onOpenJobAction?.(item.job, item.run, fetchedJobs().get(item.run.id) ?? []);
+    if (item.kind === "attempt") {
+      toggleAttempt(item.run.id, item.attempt.number);
+      return false;
+    }
+    if (item.kind === "note") {
+      props.onOpenNote?.(item.note, item.job, item.run, jobsOf(item.run.id).current);
+      return false;
+    }
+    // ←/→ in the log move between the jobs of the same attempt.
+    const split = jobsOf(item.run.id);
+    const siblings =
+      (item.job.attempt ?? 1) === split.latest
+        ? split.current
+        : (split.attempts.find(attempt => attempt.number === item.job.attempt)?.jobs ?? [item.job]);
+    props.onOpenJobAction?.(item.job, item.run, siblings);
     return false;
   };
 
@@ -423,7 +531,24 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     const item = items[idx];
     if (item.kind === "reload") props.setDetailCursorAction(reloadEnabled() && !reloadBusy() ? reloadHint() : null);
     else if (item.kind === "run") props.setDetailCursorAction(expandedRuns().has(item.run.id) ? "collapse" : "expand");
+    else if (item.kind === "note") props.setDetailCursorAction(props.onOpenNote ? (props.noteAction ?? "open") : null);
+    else if (item.kind === "attempt")
+      props.setDetailCursorAction(
+        expandedAttempts().has(attemptKey(item.run.id, item.attempt.number)) ? "collapse" : "expand",
+      );
     else props.setDetailCursorAction(props.onOpenJobAction ? "view log" : null);
+  });
+
+  useOpenRowShortcut({
+    navRef: props.navRef,
+    detailFocused: props.detailFocused,
+    url: () => {
+      const item = flatItems()[props.detailCursorIndex()];
+      if (item?.kind === "note") return item.note.url ?? item.job.url;
+      if (item?.kind === "attempt") return item.run.url ? `${item.run.url}/attempts/${item.attempt.number}` : null;
+      return item?.kind === "run" ? item.run.url : item?.kind === "job" ? item.job.url : null;
+    },
+    setDetailCursorShortcut: props.setDetailCursorShortcut,
   });
 
   const reloadIdx = () => flatItems().findIndex(item => item.kind === "reload");
@@ -459,13 +584,15 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
           const runFlatIndex = () => flatItems().findIndex(it => it.kind === "run" && it.run.id === run.id);
           const isExpanded = () => expandedRuns().has(run.id);
           const isLoading = () => loadingRuns().has(run.id);
-          const jobs = () => fetchedJobs().get(run.id) ?? [];
+          const jobs = () => jobsOf(run.id).current;
+          const attempts = () => jobsOf(run.id).attempts;
+          /** A re-run says which attempt its jobs are from. */
+          const runTail = () => (jobsOf(run.id).latest > 1 ? `  attempt ${jobsOf(run.id).latest}` : undefined);
           const jobError = () => jobErrors().get(run.id) ?? null;
           const isCursored = () => props.detailFocused() && props.detailCursorIndex() === runFlatIndex();
           const cat = () => categorize(run.status, run.conclusion);
           const color = () => statusColor(t(), cat());
           const relTime = () => formatRelativeDate(run.updatedAt);
-          const runDuration = () => formatRunDuration(run);
           const runTreePrefix = () => (runIndexFn() === props.runs.length - 1 ? "└─ " : "├─ ");
           const runIndicatorColor = () => (isCursored() ? t().accent : t().foregroundMuted);
           const runTextColor = () => (isCursored() ? t().accent : t().foreground);
@@ -493,6 +620,8 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                 <ScrollingLabel
                   selectable={!props.mouseEnabled}
                   text={`${run.label} #${run.runNumber}`}
+                  tail={runTail()}
+                  tailFg={t().foregroundMuted}
                   active={isCursored()}
                   fg={runTextColor()}
                 />
@@ -500,12 +629,6 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                 <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
                   {relTime().padStart(rightInfoWidth())}
                 </text>
-                {/* Keep the duration column even when runs hide theirs (Jenkins), so runs and jobs line up. */}
-                <Show when={durationWidth() > 0}>
-                  <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                    {runDuration() ? ` ${runDuration().padStart(durationWidth())}` : " ".repeat(durationWidth() + 1)}
-                  </text>
-                </Show>
                 <text
                   selectable={!props.mouseEnabled}
                   flexShrink={0}
@@ -535,9 +658,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                         {placeholderTreeLead()}└─
                       </text>
                       <text> </text>
-                      <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().error}>
-                        {error()}
-                      </text>
+                      <ScrollingLabel text={error()} active={false} fg={t().error} />
                     </box>
                   )}
                 </Show>
@@ -557,18 +678,16 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                     const isJobCursored = () => props.detailFocused() && props.detailCursorIndex() === jobFlatIndex();
                     const jobCat = categorize(job.status, job.conclusion);
                     const jobColor = () => statusColor(t(), jobCat);
-                    const duration = formatDuration(job.startedAt, job.completedAt);
-                    const stepCountLabel = () =>
-                      job.steps.length > 0
-                        ? (props.childCountLabel?.(job.steps.length) ??
-                          `${job.steps.length} step${job.steps.length === 1 ? "" : "s"}`)
-                        : isLoading()
-                          ? (props.jobsLoadingText ?? BUSY.fetchingJobs)
-                          : "";
+                    /** A passed job is one row; a failed or running one lists its steps (where it went wrong). */
+                    const steps = () => (jobCat === "fail" || jobCat === "running" ? job.steps : []);
                     const jobTextColor = () => (isJobCursored() ? t().accent : t().foreground);
                     const jobTreeLead = () => (runIsLast() ? "   " : "│  ");
-                    const jobTreePrefix = () => (jobIndexFn() === jobs().length - 1 ? "└─ " : "├─ ");
-                    const jobIsLast = () => jobIndexFn() === jobs().length - 1;
+                    // Earlier attempts follow the jobs, so the last job is only last without them.
+                    const jobIsLast = () => jobIndexFn() === jobs().length - 1 && attempts().length === 0;
+                    const jobTreePrefix = () => (jobIsLast() ? "└─ " : "├─ ");
+                    const notes = () => job.notes ?? [];
+                    /** The lead of the job's children: steps, the notes row, and the notes without one. */
+                    const childLead = () => jobTreeLead() + (jobIsLast() ? "   " : "│  ");
 
                     return (
                       <box flexDirection="column" width="100%">
@@ -591,27 +710,11 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                           <ScrollingLabel
                             selectable={!props.mouseEnabled}
                             text={job.name}
+                            tail={job.tail}
+                            tailFg={t().foregroundMuted}
                             active={isJobCursored()}
                             fg={jobTextColor()}
                           />
-                          <text
-                            selectable={!props.mouseEnabled}
-                            flexShrink={0}
-                            wrapMode="none"
-                            fg={t().foregroundMuted}
-                          >
-                            {stepCountLabel().padStart(rightInfoWidth())}
-                          </text>
-                          <Show when={durationWidth() > 0}>
-                            <text
-                              selectable={!props.mouseEnabled}
-                              flexShrink={0}
-                              wrapMode="none"
-                              fg={t().foregroundMuted}
-                            >
-                              {duration ? ` ${duration.padStart(durationWidth())}` : " ".repeat(durationWidth() + 1)}
-                            </text>
-                          </Show>
                           <text
                             selectable={!props.mouseEnabled}
                             flexShrink={0}
@@ -623,14 +726,14 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                           </text>
                         </box>
 
-                        <Show when={job.steps.length > 0}>
-                          <For each={job.steps}>
+                        <Show when={steps().length > 0}>
+                          <For each={steps()}>
                             {(step, stepIndexFn) => {
                               const stepCat = categorize(step.status, step.conclusion);
                               const stepColor = () => statusColor(t(), stepCat);
-                              const stepDuration = () => formatStepDuration(step);
                               const stepTreePrefix = () => jobTreeLead() + (jobIsLast() ? "   " : "│  ");
-                              const stepConnector = () => (stepIndexFn() === job.steps.length - 1 ? "└─ " : "├─ ");
+                              const stepConnector = () =>
+                                stepIndexFn() === steps().length - 1 && notes().length === 0 ? "└─ " : "├─ ";
 
                               return (
                                 <box flexDirection="row" width="100%">
@@ -638,16 +741,190 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                                     {stepTreePrefix()}
                                     {stepConnector()}
                                   </text>
-                                  <text flexGrow={1} flexShrink={1} wrapMode="none" truncate fg={t().foregroundMuted}>
-                                    {step.name}
-                                  </text>
-                                  <Show when={stepDuration()}>
-                                    <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                                      {stepDuration()}
-                                    </text>
-                                  </Show>
+                                  <ScrollingLabel text={step.name} active={false} fg={t().foregroundMuted} />
                                   <text flexShrink={0} width={STATUS_COL_WIDTH} wrapMode="none" fg={stepColor()}>
                                     {statusMark(step.status, step.conclusion).padStart(STATUS_COL_WIDTH)}
+                                  </text>
+                                </box>
+                              );
+                            }}
+                          </For>
+                        </Show>
+
+                        <Show when={notes().length > 0}>
+                          <Show when={job.notesLabel}>
+                            {label => (
+                              <box flexDirection="row" width="100%">
+                                <text flexShrink={0} wrapMode="none" fg={t().border}>
+                                  {childLead()}└─{" "}
+                                </text>
+                                <ScrollingLabel text={label()} active={false} fg={t().foregroundMuted} />
+                                <text flexShrink={0} width={STATUS_COL_WIDTH} wrapMode="none">
+                                  {" ".repeat(STATUS_COL_WIDTH)}
+                                </text>
+                              </box>
+                            )}
+                          </Show>
+                          <For each={notes()}>
+                            {(note, noteIndexFn) => {
+                              const key = `note:${run.id}:${job.id}:${note.id}`;
+                              const noteFlatIndex = () =>
+                                flatItems().findIndex(
+                                  it =>
+                                    it.kind === "note" &&
+                                    it.note.id === note.id &&
+                                    it.job.id === job.id &&
+                                    it.run.id === run.id,
+                                );
+                              const isNoteCursored = () =>
+                                props.detailFocused() && props.detailCursorIndex() === noteFlatIndex();
+                              const noteLead = () => childLead() + (job.notesLabel ? "   " : "");
+                              const noteConnector = () => (noteIndexFn() === notes().length - 1 ? "└─ " : "├─ ");
+                              return (
+                                <box
+                                  ref={(el: Renderable) => {
+                                    refsByKey.set(key, el);
+                                    syncItemRefs();
+                                  }}
+                                  {...mouseRow(key, noteFlatIndex)}
+                                  flexDirection="row"
+                                  width="100%"
+                                  backgroundColor={isNoteCursored() ? t().backgroundElementActive : hoverBg(key)}
+                                >
+                                  <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().border}>
+                                    {noteLead()}
+                                    {noteConnector()}
+                                  </text>
+                                  <Show when={props.noteMarks !== false}>
+                                    <text
+                                      selectable={!props.mouseEnabled}
+                                      flexShrink={0}
+                                      wrapMode="none"
+                                      fg={note.mark === "fail" ? t().error : t().warning}
+                                    >
+                                      {note.mark === "fail" ? "✗ " : "! "}
+                                    </text>
+                                  </Show>
+                                  <ScrollingLabel
+                                    selectable={!props.mouseEnabled}
+                                    text={note.text}
+                                    active={isNoteCursored()}
+                                    fg={isNoteCursored() ? t().accent : t().foreground}
+                                  />
+                                  <text flexShrink={0} width={STATUS_COL_WIDTH} wrapMode="none">
+                                    {" ".repeat(STATUS_COL_WIDTH)}
+                                  </text>
+                                </box>
+                              );
+                            }}
+                          </For>
+                        </Show>
+                      </box>
+                    );
+                  }}
+                </For>
+                <For each={attempts()}>
+                  {(attempt, attemptIndexFn) => {
+                    const key = `attempt:${run.id}:${attempt.number}`;
+                    const attemptFlatIndex = () =>
+                      flatItems().findIndex(
+                        it => it.kind === "attempt" && it.run.id === run.id && it.attempt.number === attempt.number,
+                      );
+                    const isAttemptCursored = () =>
+                      props.detailFocused() && props.detailCursorIndex() === attemptFlatIndex();
+                    const isOpen = () => expandedAttempts().has(attemptKey(run.id, attempt.number));
+                    const isLastAttempt = () => attemptIndexFn() === attempts().length - 1;
+                    const lead = () => (runIsLast() ? "   " : "│  ");
+                    const childLead = () => lead() + (isLastAttempt() ? "   " : "│  ");
+                    const status = () => attemptStatus(attempt.jobs);
+                    const finished = () => lastFinished(attempt.jobs);
+                    return (
+                      <box flexDirection="column" width="100%">
+                        <box
+                          ref={(el: Renderable) => {
+                            refsByKey.set(key, el);
+                            syncItemRefs();
+                          }}
+                          {...mouseRow(key, attemptFlatIndex)}
+                          flexDirection="row"
+                          width="100%"
+                          backgroundColor={isAttemptCursored() ? t().backgroundElementActive : hoverBg(key)}
+                        >
+                          <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().border}>
+                            {lead()}
+                            {isLastAttempt() ? "└─ " : "├─ "}
+                          </text>
+                          <text
+                            selectable={!props.mouseEnabled}
+                            flexShrink={0}
+                            wrapMode="none"
+                            fg={isAttemptCursored() ? t().accent : t().foregroundMuted}
+                          >
+                            {isOpen() ? "▾ " : "▸ "}
+                          </text>
+                          <ScrollingLabel
+                            selectable={!props.mouseEnabled}
+                            text={`attempt ${attempt.number}`}
+                            active={isAttemptCursored()}
+                            fg={isAttemptCursored() ? t().accent : t().foreground}
+                          />
+                          <text
+                            selectable={!props.mouseEnabled}
+                            flexShrink={0}
+                            wrapMode="none"
+                            fg={t().foregroundMuted}
+                          >
+                            {(finished() ? formatRelativeDate(finished() ?? "") : "").padStart(rightInfoWidth())}
+                          </text>
+                          <text
+                            selectable={!props.mouseEnabled}
+                            flexShrink={0}
+                            width={STATUS_COL_WIDTH}
+                            wrapMode="none"
+                            fg={statusColor(t(), categorize(status().status, status().conclusion))}
+                          >
+                            {statusMark(status().status, status().conclusion).padStart(STATUS_COL_WIDTH)}
+                          </text>
+                        </box>
+                        <Show when={isOpen()}>
+                          <For each={attempt.jobs}>
+                            {(job, jobIndexFn) => {
+                              const jobKey = `job:${run.id}:${job.id}`;
+                              const jobFlatIndex = () =>
+                                flatItems().findIndex(
+                                  it => it.kind === "job" && it.job.id === job.id && it.run.id === run.id,
+                                );
+                              const isJobCursored = () =>
+                                props.detailFocused() && props.detailCursorIndex() === jobFlatIndex();
+                              return (
+                                <box
+                                  ref={(el: Renderable) => {
+                                    refsByKey.set(jobKey, el);
+                                    syncItemRefs();
+                                  }}
+                                  {...mouseRow(jobKey, jobFlatIndex)}
+                                  flexDirection="row"
+                                  width="100%"
+                                  backgroundColor={isJobCursored() ? t().backgroundElementActive : hoverBg(jobKey)}
+                                >
+                                  <text selectable={!props.mouseEnabled} flexShrink={0} wrapMode="none" fg={t().border}>
+                                    {childLead()}
+                                    {jobIndexFn() === attempt.jobs.length - 1 ? "└─ " : "├─ "}
+                                  </text>
+                                  <ScrollingLabel
+                                    selectable={!props.mouseEnabled}
+                                    text={job.name}
+                                    active={isJobCursored()}
+                                    fg={isJobCursored() ? t().accent : t().foreground}
+                                  />
+                                  <text
+                                    selectable={!props.mouseEnabled}
+                                    flexShrink={0}
+                                    width={STATUS_COL_WIDTH}
+                                    wrapMode="none"
+                                    fg={statusColor(t(), categorize(job.status, job.conclusion))}
+                                  >
+                                    {statusMark(job.status, job.conclusion).padStart(STATUS_COL_WIDTH)}
                                   </text>
                                 </box>
                               );

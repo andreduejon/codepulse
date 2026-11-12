@@ -45,9 +45,6 @@ export type SettingItem =
       fullWidth?: boolean;
     };
 
-/** Width of the info label column (characters). */
-export const INFO_LABEL_WIDTH = 12;
-
 /** Usable width for copyable text: dialog=70 - 2(paddingX=1) - 8(paddingX=4) = 60 */
 export const COPYABLE_VISIBLE_WIDTH = 60;
 
@@ -73,6 +70,8 @@ export interface JenkinsMenuConfig {
 export interface OpenShiftMenuConfig {
   enabled: boolean;
   serverUrl: string;
+  /** Web console URL; empty when not set (then `o` is not offered for OpenShift). */
+  consoleUrl: string;
   tokenEnvVar: string;
   namespaces: string[];
   commitShaAnnotation: string;

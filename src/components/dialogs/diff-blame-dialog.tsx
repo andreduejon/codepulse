@@ -666,14 +666,14 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
           <Show when={hasMultipleFiles()}>
             <KeyHint
               key={"\u2190"}
-              desc=" prev"
+              desc=" previous file"
               disabled={props.target.fileIndex === 0}
               onClick={props.target.fileIndex > 0 ? () => navigateFile(-1) : undefined}
             />
             <KeyHintSeparator />
             <KeyHint
               key={"\u2192"}
-              desc=" next"
+              desc=" next file"
               disabled={props.target.fileIndex === props.target.fileList.length - 1}
               onClick={props.target.fileIndex < props.target.fileList.length - 1 ? () => navigateFile(1) : undefined}
             />

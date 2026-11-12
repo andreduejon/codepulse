@@ -31,9 +31,10 @@ describe("banner catalog", () => {
     expect(isBanner(BANNER.jenkins.tokenExpired)).toBe(true);
   });
 
-  test("Jenkins incomplete-data warning is catalogued", () => {
-    expect(BANNER.jenkins.incomplete).toBe("Jenkins data incomplete. Branch-job limit reached.");
-    expect(isBanner(BANNER.jenkins.incomplete)).toBe(true);
+  test("the Jenkins branch-job limit gives the counts, then what they mean", () => {
+    expect(BANNER.jenkins.branchLimit(25, 61)).toBe(
+      "Jenkins branch jobs · 25 of 61 read. Branches in the graph come first. Builds on the other 36 do not show.",
+    );
   });
 
   test("keeps known banners and dumps unknown detail to debug", () => {
@@ -67,7 +68,12 @@ describe("bannerParts", () => {
     ["Git", BANNER.git.fetchFailed, "Fetch failed", []],
     ["GitHub Actions", BANNER.github.missingToken("GITHUB_TOKEN"), "Unavailable", ["Missing GITHUB_TOKEN."]],
     ["GitHub Actions", BANNER.github.disabled, "Disabled", []],
-    ["Jenkins", BANNER.jenkins.incomplete, "Data incomplete", ["Branch-job limit reached."]],
+    [
+      "Jenkins",
+      BANNER.jenkins.branchLimit(25, 30),
+      "Branch jobs · 25 of 30 read",
+      ["Branches in the graph come first. Builds on the other 5 do not show."],
+    ],
     ["OpenShift", BANNER.openshift.watchDenied, "Watch denied", ["Resource data might be stale. Reload to refresh."]],
     ["Snyk", "Partial scan. Kept last complete snapshot.", "Partial scan", ["Kept last complete snapshot."]],
     [

@@ -10,6 +10,7 @@ import {
 } from "../../context/state";
 import { BANNER, debugError } from "../../debug/banner";
 import { collectTopSHAs } from "../github-actions/sha-selection";
+import type { GraphBadge } from "../provider";
 import { sleep } from "../shared/http";
 import { persistMergedSnapshots } from "../shared/sha-sqlite-cache";
 import { useProviderFetchLifecycle } from "../shared/use-provider-fetch-lifecycle";
@@ -17,7 +18,9 @@ import {
   applyOpenShiftWatchEvent,
   buildOpenShiftCommitMap,
   buildOpenShiftGraphBadges,
+  buildOpenShiftNamespaceMarkers,
   fetchOpenShiftBuildLog,
+  fetchOpenShiftEvents,
   fetchOpenShiftInventory,
   fetchOpenShiftObject,
   fetchOpenShiftPodLog,
@@ -32,7 +35,13 @@ import {
   watchOpenShiftStream,
 } from "./api";
 import { cachedBuildToResource, mergeById, OpenShiftCache, type OpenShiftCacheEntry, toCachedBuild } from "./cache";
-import type { OpenShiftCommitData, OpenShiftNamespaceData, OpenShiftProviderConfig, OpenShiftResource } from "./types";
+import type {
+  OpenShiftCommitData,
+  OpenShiftEvent,
+  OpenShiftNamespaceData,
+  OpenShiftProviderConfig,
+  OpenShiftResource,
+} from "./types";
 import { DEFAULT_OPENSHIFT_AUTO_REFRESH_SECONDS, DEFAULT_OPENSHIFT_CONFIG, OPENSHIFT_WATCH_KINDS } from "./types";
 import { appendOpenShiftLogFollow } from "./watch";
 
@@ -49,6 +58,22 @@ export interface UseOpenShiftResult {
   followLog: (resource: OpenShiftResource, signal: AbortSignal, onText: (text: string) => void) => Promise<void>;
   /** The resource's object; `force` (refresh) asks the API instead of using the embedded or cached copy. */
   loadResourceObject: (resource: OpenShiftResource, force?: boolean) => Promise<unknown>;
+  /** The events about the resource, always from the API (they change by the minute and are not cached). */
+  loadResourceEvents: (resource: OpenShiftResource) => Promise<OpenShiftEvent[]>;
+}
+
+/** A graph badge with no resources, for a commit that only carries namespace markers. */
+function emptyGraphBadge(sha: string): GraphBadge {
+  const none = { passCount: 0, failCount: 0, runningCount: 0, unknownCount: 0 };
+  return {
+    sha,
+    badge: "unknown",
+    ...none,
+    resourceCount: 0,
+    lanes: { live: { ...none }, cache: { ...none } },
+    latestRunAt: "",
+    latestStatus: "unknown",
+  };
 }
 
 function emptyNamespace(namespace: string): OpenShiftNamespaceData {
@@ -232,7 +257,15 @@ export function useOpenShift(opts: {
 
   function publish(): void {
     setVersion(v => v + 1);
-    actions.setGraphBadges("openshift", buildOpenShiftGraphBadges(commits));
+    const badges = buildOpenShiftGraphBadges(commits);
+    // What each namespace runs comes from the whole live list, so a deployed commit below the window is marked too.
+    const markers = live.listed ? buildOpenShiftNamespaceMarkers(live.listed.resources, config.namespaces) : new Map();
+    for (const [sha, namespaces] of markers) {
+      const badge = badges.get(sha);
+      if (badge) badges.set(sha, { ...badge, namespaces });
+      else badges.set(sha, { ...emptyGraphBadge(sha), namespaces });
+    }
+    actions.setGraphBadges("openshift", badges);
   }
 
   function unavailableMessage(): string {
@@ -437,7 +470,10 @@ export function useOpenShift(opts: {
         const commit = seeds.get(sha);
         if (commit) commits.set(sha, mergeLiveIntoCommit(commit, commits.get(sha), sha));
       }
-      publish();
+      // The live list may have landed first: commits this build list adds get their live resources now, not on the
+      // next watch event or selection.
+      if (live.listed) applyLive(live.listed);
+      else publish();
       lifecycle.noteFetchStarted();
       // A status the live list set (a live 401 that froze requests, a failed list) is the live list's to clear.
       const liveOwned = liveStatus !== null && state.providerStatusFor("openshift") === liveStatus;
@@ -560,7 +596,9 @@ export function useOpenShift(opts: {
             return;
           }
           if (results.length > 0 && results.every(result => result === "forbidden")) {
-            actions.setProviderStatus("openshift", providerWarning(BANNER.openshift.watchDenied));
+            // The live list's own warning: a build inventory that lands later must not clear it, a good list after
+            // Reload does.
+            setLiveStatus("warning", BANNER.openshift.watchDenied);
             return;
           }
           delayMs = 1000;
@@ -699,6 +737,16 @@ export function useOpenShift(opts: {
         fetchOpenShiftObject(config.serverUrl, token, resource, signal),
       );
       return lifecycle.isCurrent(epoch, repoPath) ? object : null;
+    },
+    loadResourceEvents: async resource => {
+      const epoch = lifecycle.getEpoch();
+      const repoPath = state.repoPath();
+      const token = getOpenShiftToken(config.tokenEnvVar);
+      if (!token) throw new Error(unavailableMessage());
+      const events = await lifecycle.runRequest(signal =>
+        fetchOpenShiftEvents(config.serverUrl, token, resource, signal),
+      );
+      return lifecycle.isCurrent(epoch, repoPath) ? events : [];
     },
   };
 }

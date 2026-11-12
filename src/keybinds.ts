@@ -40,6 +40,7 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     { kind: "binding", key: "g", desc: "Top", indent: 1 },
     { kind: "binding", key: "G", desc: "Bottom", indent: 1 },
     { kind: "binding", key: "shift ↑/↓", desc: "Jump 10 items", indent: 1 },
+    { kind: "binding", key: "o", desc: "Open the row in the browser", indent: 1 },
     { kind: "binding", key: "v", desc: "Show a package's findings", indent: 1 },
     { kind: "binding", key: "↑/↓  or  j/k", desc: "Navigate items", indent: 1 },
     { kind: "binding", key: "←  or  h", desc: "Previous tab / back", indent: 1 },
@@ -247,6 +248,12 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
       kind: "binding",
       key: "Server",
       desc: "OpenShift API server URL.",
+      indent: 1,
+    },
+    {
+      kind: "binding",
+      key: "Console",
+      desc: "Optional web console URL, so o opens namespaces and resources in the browser.",
       indent: 1,
     },
     {

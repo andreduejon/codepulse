@@ -41,6 +41,7 @@ import {
   buildCommitDataMap,
   buildGraphBadges,
   fetchCIDataForSHAs,
+  fetchJobAnnotations,
   fetchJobLog,
   fetchRunJobs,
   GQL_BATCH_SIZE,
@@ -181,6 +182,18 @@ export function useGitHubCI(opts: {
   /** runId → jobs (pre-populated from GraphQL; REST fallback for on-demand fetches) */
   const jobsCache = new Map<number, GitHubJob[]>();
   /**
+   * runId → the run's `updatedAt` its cached jobs belong to. A re-run keeps the run id but changes the run, so jobs
+   * cached for an earlier version are not reused for it.
+   */
+  const jobsRunVersion = new Map<number, string>();
+  const cacheJobs = (run: Pick<GitHubWorkflowRun, "id" | "updatedAt">, jobs: GitHubJob[]) => {
+    jobsCache.set(run.id, jobs);
+    jobsRunVersion.set(run.id, run.updatedAt);
+  };
+  /** The cached jobs, when they belong to this version of the run. */
+  const cachedJobsFor = (run: GitHubWorkflowRun) =>
+    jobsRunVersion.get(run.id) === run.updatedAt ? jobsCache.get(run.id) : undefined;
+  /**
    * Set of SHAs that have already been queried.
    * Used to avoid re-fetching completed runs and to detect new commits after
    * a git fetch.  Cleared on manual refresh to force a full re-query.
@@ -248,7 +261,8 @@ export function useGitHubCI(opts: {
     for (const result of results) {
       allRuns.push(...result.data);
       for (const [runId, jobs] of result.jobs) {
-        if (jobs.length > 0) jobsCache.set(runId, jobs);
+        const listed = result.data.find(candidate => candidate.id === runId);
+        if (jobs.length > 0 && listed) cacheJobs(listed, jobs);
       }
     }
 
@@ -298,8 +312,8 @@ export function useGitHubCI(opts: {
       if (!entry) continue;
       commitDataCache.set(sha, { sha, runs: entry.runs });
       for (const [id, jobs] of Object.entries(entry.jobs ?? {})) {
-        const runId = Number(id);
-        if (!Number.isNaN(runId) && !jobsCache.has(runId)) jobsCache.set(runId, jobs);
+        const listed = entry.runs.find(candidate => candidate.id === Number(id));
+        if (listed && !jobsCache.has(listed.id)) cacheJobs(listed, jobs);
       }
       changed = true;
     }
@@ -316,17 +330,18 @@ export function useGitHubCI(opts: {
       shas,
       () => lifecycle.isCurrent(epoch, repoPath),
       sha => (commitDataCache.get(sha)?.runs ?? []).filter(isTerminalGitHubRun),
-      (sha, existing, incoming) => ({
-        sha,
-        runs: mergeGitHubRuns(existing?.runs ?? [], incoming),
-        jobs: mergeGitHubJobs(
+      (sha, existing, incoming) => {
+        const jobs = mergeGitHubJobs(
           existing?.jobs,
           jobsMapFromGitHubCache(
             jobsCache,
-            incoming.map(run => run.id),
+            incoming.filter(run => cachedJobsFor(run)).map(run => run.id),
           ),
-        ),
-      }),
+        );
+        // A re-run's jobs from before it are not its jobs: they are asked for again rather than kept with it.
+        for (const run of incoming) if (!cachedJobsFor(run)) delete jobs[String(run.id)];
+        return { sha, runs: mergeGitHubRuns(existing?.runs ?? [], incoming), jobs };
+      },
     );
   }
 
@@ -399,18 +414,16 @@ export function useGitHubCI(opts: {
         rememberAuthError(firstError);
         lifecycle.noteFetchResult(!firstError);
         if (!firstError) actions.setProviderLastSuccessfulRefresh("github-actions", new Date());
-        if (firstError === BANNER.github.tokenExpired || showStatus) {
-          actions.setProviderStatus("github-actions", firstError ? providerError(firstError) : providerIdle());
-        } else if (!firstError && state.providerStatusFor("github-actions").kind === "error") {
+        // An error shows also from a background fetch (like Jenkins): the runs would otherwise look not loaded yet.
+        if (firstError) actions.setProviderStatus("github-actions", providerError(firstError));
+        else if (showStatus || state.providerStatusFor("github-actions").kind === "error")
           actions.setProviderStatus("github-actions", providerIdle());
-        }
       } catch (err) {
         if (signal?.aborted) return;
         const message = bannerOrFallback(err, BANNER.github.fetchFailed, "GitHub");
         rememberAuthError(message);
         lifecycle.noteFetchResult(false);
-        if (showStatus || message === BANNER.github.tokenExpired)
-          actions.setProviderStatus("github-actions", providerError(message));
+        actions.setProviderStatus("github-actions", providerError(message));
         for (const sha of unqueried) queriedSHAs.delete(sha);
       }
     },
@@ -441,6 +454,7 @@ export function useGitHubCI(opts: {
     onResetCaches: () => {
       commitDataCache = new Map();
       jobsCache.clear();
+      jobsRunVersion.clear();
       queriedSHAs.clear();
       authFrozen = false;
       jobsUnsupported = false;
@@ -467,26 +481,71 @@ export function useGitHubCI(opts: {
   }
 
   // ── On-demand job fetching ────────────────────────────────────────────
+  /** Failed jobs say why: their annotations are read once (a job is a check run) and kept with the job. */
+  const latestAttempt = (jobs: readonly GitHubJob[]) =>
+    jobs.reduce((max, job) => Math.max(max, job.runAttempt ?? 1), 1);
+  /** Only the latest attempt's failed jobs: earlier attempts are history, folded away in the tree. */
+  const annotationsMissing = (jobs: readonly GitHubJob[]) => {
+    const latest = latestAttempt(jobs);
+    return (job: GitHubJob) =>
+      job.conclusion === "failure" && job.annotations === undefined && (job.runAttempt ?? 1) === latest;
+  };
+  async function withAnnotations(jobs: GitHubJob[], signal?: AbortSignal): Promise<GitHubJob[]> {
+    const needsAnnotations = annotationsMissing(jobs);
+    if (!jobs.some(needsAnnotations)) return jobs;
+    const repo = cachedGitHubRepo();
+    const token = getGitHubToken(config.tokenEnvVar);
+    if (!repo || !token || authFrozen) return jobs;
+    return Promise.all(
+      jobs.map(async job => {
+        if (!needsAnnotations(job)) return job;
+        const annotations = await lifecycle.runRequest(
+          requestSignal => fetchJobAnnotations(repo, token, job.id, requestSignal),
+          signal,
+        );
+        return annotations ? { ...job, annotations } : job;
+      }),
+    );
+  }
+
   async function fetchJobsForRun(run: GitHubWorkflowRun, signal?: AbortSignal): Promise<GitHubJobFetchResult> {
     const epoch = lifecycle.getEpoch();
     const repoPath = state.repoPath();
-    // Only finished jobs are final; a cached snapshot with a running job or step is fetched again.
-    const cached = jobsCache.get(run.id);
-    if (cached && jobsSettled(cached)) return { jobs: cached, error: null };
+    // Only finished jobs are final; a cached snapshot with a running job or step is fetched again, and so is one of
+    // an earlier version of the run (a re-run keeps its id).
+    const cached = cachedJobsFor(run);
+    // Jobs listed by GraphQL (or cached before v0.17) carry no attempt: REST is asked once, to learn about re-runs.
+    const attemptsKnown = !!cached && cached.every(job => job.runAttempt !== undefined);
+    if (cached && run.status === "completed" && jobsSettled(cached) && attemptsKnown) {
+      if (!cached.some(annotationsMissing(cached))) return { jobs: cached, error: null };
+      const annotated = await withAnnotations(cached, signal);
+      if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
+      if (annotated.some((job, index) => job !== cached[index])) {
+        cacheJobs(run, annotated);
+        await persistTerminalRuns(repoPath, [run.headSha], epoch);
+      }
+      return { jobs: annotated, error: null };
+    }
     if (!lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
+    // Finished GraphQL jobs still show when REST cannot be asked about attempts.
+    const fallback = cached && jobsSettled(cached) ? { jobs: cached, error: null } : null;
     // Frozen after a 401: no requests until Reload; say why instead of asking GitHub again.
-    if (authFrozen) return { jobs: [], error: BANNER.github.tokenExpired };
+    if (authFrozen) return fallback ?? { jobs: [], error: BANNER.github.tokenExpired };
 
     const repo = cachedGitHubRepo();
     const token = getGitHubToken(config.tokenEnvVar);
-    if (!repo || !token) return { jobs: [], error: BANNER.github.unavailable };
+    if (!repo || !token) return fallback ?? { jobs: [], error: BANNER.github.unavailable };
 
-    const { jobs, error } = await lifecycle.runRequest(signal => fetchRunJobs(repo, token, run.id, signal), signal);
+    const fetched = await lifecycle.runRequest(signal => fetchRunJobs(repo, token, run.id, signal), signal);
     if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
-    if (error) return { jobs, error };
+    if (fetched.error) return fallback ?? fetched;
+    // REST lists every attempt, so its jobs know theirs (1 where the host does not say).
+    const listed = fetched.jobs.map(job => (job.runAttempt === undefined ? { ...job, runAttempt: 1 } : job));
+    const jobs = await withAnnotations(listed, signal);
+    if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
     if (run.status === "completed" && jobsSettled(jobs)) {
       if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
-      jobsCache.set(run.id, jobs);
+      cacheJobs(run, jobs);
       await persistTerminalRuns(repoPath, [run.headSha], epoch);
     }
     return { jobs, error: null };

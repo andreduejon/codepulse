@@ -7,6 +7,7 @@ import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useClipboard } from "../../hooks/use-clipboard";
 import { useT } from "../../hooks/use-t";
 import { BUSY } from "../../utils/busy-text";
+import type { LegendItem } from "../shared/detail-legend";
 import {
   type DependencyGroupBy,
   type DependencyScopeFilter,
@@ -17,14 +18,7 @@ import { dependencyPackageList } from "./deps-packages";
 import { DependencyRow, dependencyLabelWidth, isEmptyHeader, parentKey } from "./deps-row";
 import { buildDependencyTree, defaultDependencyExpansion } from "./deps-tree";
 import { highlightMatch, SnykFilterRow, useSnykFilter } from "./filter";
-import {
-  SnykControlRow,
-  type SnykDetailTabProps,
-  type SnykLegendItem,
-  severityColor,
-  snykScanIdentity,
-  useSnykRows,
-} from "./tab-shared";
+import { SnykControlRow, type SnykDetailTabProps, severityColor, snykScanIdentity, useSnykRows } from "./tab-shared";
 import { useSnykTabMemory } from "./view-memory";
 
 export type SnykDependenciesTabProps = SnykDetailTabProps & {
@@ -34,7 +28,7 @@ export type SnykDependenciesTabProps = SnykDetailTabProps & {
 };
 
 /** Pinned below the tab when the scan has findings: the triangle's colour is the package's worst severity. */
-export const DEPENDENCY_LEGEND: SnykLegendItem[] = [
+export const DEPENDENCY_LEGEND: LegendItem[] = [
   [
     (["critical", "high", "medium", "low"] as const).map(severity => ["▲", theme => severityColor(theme, severity)]),
     "severity",

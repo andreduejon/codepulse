@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { testRender } from "@opentui/solid";
 import { createThemeState, ThemeContext } from "../../context/theme";
-import { SnykLegend } from "./tab-shared";
+import { DetailLegend } from "../shared/detail-legend";
 import { VULNERABILITY_LEGEND } from "./vulnerabilities-model";
 
 test("the legend wraps whole items instead of clipping them in a narrow panel", async () => {
@@ -10,7 +10,7 @@ test("the legend wraps whole items instead of clipping them in a narrow panel", 
     () => (
       <ThemeContext.Provider value={theme}>
         <box width={40} flexDirection="column">
-          <SnykLegend items={VULNERABILITY_LEGEND} />
+          <DetailLegend items={VULNERABILITY_LEGEND} />
         </box>
       </ThemeContext.Provider>
     ),

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseLogLines } from "../providers/github-actions/log-dialog";
+import { parseLogLines } from "../providers/shared/job-log-dialog";
 import { cellWidth, sliceCells, stripTerminalControls, truncateCells } from "./terminal-text";
 
 test.each([

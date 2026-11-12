@@ -1,15 +1,8 @@
 /**
- * GitHub Actions CI detail tab.
- *
- * Layout:
- *   - Each run header shows: status icon, workflow name, run number, time, event
- *   - Expanding a run (Enter key) fetches its jobs via REST and shows them inline
- *   - Enter on a job will open the log dialog (wired in a later commit)
- *
- * Cursor system:
- *   - Builds a flat `FlatItem[]` list from runs + expanded jobs
- *   - Writes itemCount / activateCurrentItem / itemRefs to navRef on every change
- *   - Highlights the row matching state.detailCursorIndex()
+ * GitHub Actions detail tab, on the shared run tree (`ProviderRunTree`):
+ *   - A run row: its workflow, number, attempt, age and mark. Enter expands it and reads its jobs.
+ *   - A job that passed is one row; a failed or running one lists its steps and annotations.
+ *   - Enter on a job opens its log; on an annotation, the log with its message searched.
  *
  * Receives props directly (not via useContext) because this component may be
  * rendered during setup before the AppStateContext.Provider mounts (AGENTS.md rule 5).
@@ -18,12 +11,15 @@
 import { createMemo, createSignal } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
 import { BUSY } from "../../utils/busy-text";
+import { type LegendItem, runLegend } from "../shared/detail-legend";
+import type { RowShortcut } from "../shared/open-row";
 import {
   ProviderRunTree,
   type ProviderTreeJob,
   type ProviderTreeRun,
   type ProviderTreeStep,
 } from "../shared/provider-run-tree";
+import { annotationNotes } from "./annotations";
 import type { GitHubCommitData, GitHubJob, GitHubJobFetchResult, GitHubStep, GitHubWorkflowRun } from "./types";
 
 // ── Props ─────────────────────────────────────────────────────────────────
@@ -67,9 +63,14 @@ export interface ActionsDetailTabProps {
   setDetailCursorAction: (action: string | null) => void;
   /** Move the detail cursor to a specific index. */
   setDetailCursorIndex: (idx: number) => void;
-  /** Called when Enter is pressed on a job — opens the log dialog. */
-  onOpenJobLog?: (job: GitHubJob, run: GitHubWorkflowRun, jobs?: GitHubJob[]) => void;
+  /** Footer row shortcut (`o open` on rows with a web page). */
+  setDetailCursorShortcut?: (shortcut: RowShortcut | null) => void;
+  /** Called when Enter is pressed on a job (or an annotation, with its message to search) — opens the log dialog. */
+  onOpenJobLog?: (job: GitHubJob, run: GitHubWorkflowRun, jobs?: GitHubJob[], search?: string) => void;
 }
+
+/** The row marks, explained below the tree. */
+export const GITHUB_LEGEND: LegendItem[] = runLegend("cancelled");
 
 // ── Top-level component ───────────────────────────────────────────────────
 
@@ -84,8 +85,8 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
       status: run.status,
       conclusion: run.conclusion,
       runNumber: run.runNumber,
-      startedAt: run.startedAt ?? null,
       updatedAt: run.updatedAt,
+      url: run.url,
       raw: run,
     })),
   );
@@ -95,18 +96,20 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
     name: step.name,
     status: step.status,
     conclusion: step.conclusion,
-    startedAt: step.startedAt,
-    completedAt: step.completedAt,
   });
 
-  const mapJob = (job: GitHubJob): ProviderTreeJob<GitHubJob> => ({
+  /** GitHub's job page hangs off its run's page, here and on GitHub Enterprise. */
+  const mapJob = (job: GitHubJob, runUrl: string | undefined): ProviderTreeJob<GitHubJob> => ({
     id: String(job.id),
     name: job.name,
     status: job.status,
     conclusion: job.conclusion,
-    startedAt: job.startedAt,
     completedAt: job.completedAt,
     steps: job.steps.map(mapStep),
+    url: runUrl ? `${runUrl}/job/${job.id}` : undefined,
+    notes: annotationNotes(job.annotations ?? []),
+    notesLabel: "Annotations",
+    attempt: job.runAttempt,
     raw: job,
   });
 
@@ -120,13 +123,23 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
       detailFocused={props.detailFocused}
       setDetailCursorAction={props.setDetailCursorAction}
       setDetailCursorIndex={props.setDetailCursorIndex}
+      setDetailCursorShortcut={props.setDetailCursorShortcut}
       fetchJobsForRun={async (run, signal) => {
         const { jobs, error } = await props.fetchJobsForRun(run.raw, signal);
-        return { jobs: jobs.map(mapJob), error };
+        return { jobs: jobs.map(job => mapJob(job, run.url)), error };
       }}
       debugSource="GitHub"
       dataKey={props.sha}
       onOpenJobAction={(job, run, jobs) => props.onOpenJobLog?.(job.raw, run.raw, jobs?.map(entry => entry.raw) ?? [])}
+      onOpenNote={(note, job, run, jobs) =>
+        props.onOpenJobLog?.(
+          job.raw,
+          run.raw,
+          jobs.map(entry => entry.raw),
+          note.search,
+        )
+      }
+      noteAction="view in log"
       summaryLabel="total workflow runs"
       jobsLoadingText={BUSY.fetchingJobs}
       reloadBusyText={BUSY.fetchingRuns}

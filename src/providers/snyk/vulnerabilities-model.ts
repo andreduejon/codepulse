@@ -1,4 +1,5 @@
 import type { Theme } from "../../context/theme";
+import type { LegendItem } from "../shared/detail-legend";
 import {
   isMatureExploit,
   type SnykFixGroup,
@@ -7,7 +8,6 @@ import {
   type SnykVulnerabilityEntry,
   snykUpgrade,
 } from "./parser";
-import type { SnykLegendItem } from "./tab-shared";
 import type { SnykSeverity } from "./types";
 
 export type Section = {
@@ -20,6 +20,10 @@ export type Section = {
   entries: SnykVulnerabilityEntry[];
   /** Unfiltered entry count, shown as `/M` while filtering. */
   original: number;
+  /** NEW or FIXED: what changed against an earlier scan. Its own tree with a muted heading. */
+  change?: "new" | "fixed";
+  /** Muted text after the label: the scan NEW and FIXED compare with (`vs parent 4c5d6e7`). */
+  note?: string;
 };
 export type PackageRow = {
   key: string;
@@ -52,7 +56,7 @@ export type FlatItem =
   | { kind: "field"; owner: string; line: DetailLine };
 
 /** Pinned below the tab when the scan has findings. */
-export const VULNERABILITY_LEGEND: SnykLegendItem[] = [
+export const VULNERABILITY_LEGEND: LegendItem[] = [
   [[["●", theme => toneColor(theme, "upgrade")]], "upgrade"],
   [[["●", theme => toneColor(theme, "override")]], "override"],
   [[["●", theme => toneColor(theme, "no fix")]], "no fix"],
@@ -69,6 +73,11 @@ export function toneColor(theme: Theme, tone: DetailLine["tone"]): string {
 }
 
 /** `group:artifact@version` → `artifact@version`; npm names have no group and stay as they are. */
+/** A Snyk vulnerability's public page; license and custom issues have none. */
+export function snykVulnerabilityUrl(id: string): string | null {
+  return /^SNYK-[A-Z0-9][A-Z0-9-]*$/i.test(id) ? `https://security.snyk.io/vuln/${id}` : null;
+}
+
 export function shortCoordinate(value: string): string {
   return value.slice(value.lastIndexOf(":") + 1);
 }

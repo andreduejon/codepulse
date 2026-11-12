@@ -25,8 +25,11 @@ import {
   getJenkinsToken,
 } from "./api";
 import { isTerminalJenkinsRun, JenkinsCache, jobsMapFromCache, mergeJenkinsJobs, mergeJenkinsRuns } from "./cache";
-import type { JenkinsCommitData, JenkinsJobFetchResult, JenkinsProviderConfig, JenkinsRun } from "./types";
+import type { JenkinsCommitData, JenkinsJob, JenkinsJobFetchResult, JenkinsProviderConfig, JenkinsRun } from "./types";
 import { DEFAULT_JENKINS_CONFIG } from "./types";
+
+/** Whether every job knows its test report: one, or none (`null`). */
+const reportsKnown = (jobs: readonly JenkinsJob[]) => jobs.every(job => job.tests !== undefined);
 
 export interface UseJenkinsCIResult {
   getCommitData: (sha: string) => JenkinsCommitData | null;
@@ -93,8 +96,23 @@ export function useJenkinsCI(opts: {
   /** The auth banner that froze requests (token expired or authentication failed). */
   let authError: string | null = null;
   let discoveryTruncated = false;
+  let branchJobs = { shown: 0, total: 0 };
 
-  const settledStatus = () => (discoveryTruncated ? providerWarning(BANNER.jenkins.incomplete) : providerIdle());
+  const settledStatus = () =>
+    discoveryTruncated
+      ? providerWarning(BANNER.jenkins.branchLimit(branchJobs.shown, branchJobs.total))
+      : providerIdle();
+  /** Branch names in the loaded graph (local, and remote without the remote's name): their jobs are read first. */
+  const graphBranches = () => {
+    const names = new Set<string>();
+    for (const row of state.graphRows()) {
+      for (const ref of row.commit.refs) {
+        if (ref.type === "branch") names.add(ref.name);
+        else if (ref.type === "remote") names.add(ref.name.slice(ref.name.indexOf("/") + 1));
+      }
+    }
+    return names;
+  };
 
   function rememberAuthError(error: string | null): void {
     if (error === BANNER.jenkins.tokenExpired || error === BANNER.jenkins.authFailed) {
@@ -133,10 +151,12 @@ export function useJenkinsCI(opts: {
             signal,
             buildLimit: config.fetchDepth,
             knownLastBuilds: lastBuildByJob,
+            preferredBranches: graphBranches(),
           })
         : await fetchJenkinsDataForSHAs(jobs, config.username, token, shas, {
             signal,
             buildLimit: config.fetchDepth,
+            preferredBranches: graphBranches(),
           });
     if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { firstError: null, stale: true };
     if (result.error === null) {
@@ -153,6 +173,7 @@ export function useJenkinsCI(opts: {
       }
     }
     discoveryTruncated = result.discoveryTruncated;
+    branchJobs = result.branchJobs;
     for (const [url, number] of result.lastBuilds) lastBuildByJob.set(url, number);
     for (const run of result.data) {
       runCache.set(`${run.id}:${run.headSha}`, run);
@@ -350,9 +371,10 @@ export function useJenkinsCI(opts: {
     fetchJobsForRun: async (run, signal) => {
       const epoch = lifecycle.getEpoch();
       const repoPath = state.repoPath();
-      // Only finished stages are final; a cached snapshot with a running job or stage is fetched again.
+      // Only finished stages with a known test report are final; a cached snapshot with a running job or stage, or
+      // without its report (not read, or cached before reports were), is fetched again.
       const cached = jobsCache.get(run.id);
-      if (cached && jobsSettled(cached.jobs)) return cached;
+      if (cached && jobsSettled(cached.jobs) && reportsKnown(cached.jobs)) return cached;
       if (!lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
       // Frozen after an auth failure: no requests until Reload; say why instead of asking Jenkins again.
       if (authFrozen) return { jobs: [], error: authError ?? BANNER.jenkins.tokenExpired };
@@ -363,7 +385,12 @@ export function useJenkinsCI(opts: {
         signal,
       );
       if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
-      if (run.status === "completed" && result.error === null && jobsSettled(result.jobs)) {
+      if (
+        run.status === "completed" &&
+        result.error === null &&
+        jobsSettled(result.jobs) &&
+        reportsKnown(result.jobs)
+      ) {
         if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return { jobs: [], error: null };
         jobsCache.set(run.id, result);
         await persistTerminalRuns(repoPath, [run.headSha], epoch);
