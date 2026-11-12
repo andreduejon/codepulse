@@ -1,4 +1,3 @@
-import type { Renderable } from "@opentui/core";
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show, untrack } from "solid-js";
 import { createRememberedSignal, type DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
@@ -7,6 +6,7 @@ import { useT } from "../../hooks/use-t";
 import { BUSY } from "../../utils/busy-text";
 import { formatRelativeDate } from "../../utils/date";
 import { ProviderActionRow, ProviderSummaryRow, ScrollingLabel, useDetailRowMouse } from "./detail-rows";
+import { useDetailTree } from "./detail-tree";
 import { type RowShortcut, useOpenRowShortcut } from "./open-row";
 import { fetchProviderJobs } from "./provider-job-fetch";
 import { categorize, statusColor, statusIcon } from "./status";
@@ -212,8 +212,6 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
   /** Runs whose status changed while their jobs were loading; they load again when that request settles. */
   const reloadAfterLoad = new Set<string>();
   let previousDataKey = props.dataKey;
-  const itemRefs: Renderable[] = [];
-  const refsByKey = new Map<string, Renderable>();
   const itemKey = (item: FlatItem<TRaw, TJobRaw>) =>
     item.kind === "reload"
       ? "reload"
@@ -224,13 +222,6 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
           : item.kind === "attempt"
             ? `attempt:${item.run.id}:${item.attempt.number}`
             : `note:${item.run.id}:${item.job.id}:${item.note.id}`;
-  const syncItemRefs = () => {
-    const items = flatItems();
-    itemRefs.length = items.length;
-    items.forEach((item, index) => {
-      itemRefs[index] = refsByKey.get(itemKey(item)) as Renderable;
-    });
-  };
   const rows = useDetailRowMouse({
     mouseEnabled: () => props.mouseEnabled,
     onMouseFocus: props.onMouseFocus,
@@ -448,8 +439,6 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     setLoadingRuns(new Set<string>());
     setPendingFocusRunId(null);
     reloadAfterLoad.clear();
-    itemRefs.length = 0;
-    refsByKey.clear();
     rows.clearHover();
   };
 
@@ -520,13 +509,6 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     toggleRun(run);
   });
 
-  createEffect(() => {
-    const count = flatItems().length;
-    const cursor = untrack(() => props.detailCursorIndex());
-    if (count === 0) props.setDetailCursorIndex(0);
-    else if (cursor < 0 || cursor >= count) props.setDetailCursorIndex(Math.max(0, Math.min(count - 1, cursor)));
-  });
-
   const activateCurrentItem = () => {
     const item = flatItems()[props.detailCursorIndex()];
     if (!item) return false;
@@ -556,13 +538,12 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     return false;
   };
 
-  createEffect(() => {
-    const items = flatItems();
-    syncItemRefs();
-    if (!props.navRef) return;
-    props.navRef.itemCount = items.length;
-    props.navRef.itemRefs = itemRefs;
-    props.navRef.activateCurrentItem = activateCurrentItem;
+  const tree = useDetailTree({
+    navRef: props.navRef,
+    keys: () => flatItems().map(itemKey),
+    activate: activateCurrentItem,
+    detailCursorIndex: props.detailCursorIndex,
+    setDetailCursorIndex: props.setDetailCursorIndex,
   });
 
   createEffect(() => {
@@ -614,10 +595,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
           rows={rows}
           rowKey="reload"
           index={reloadIdx}
-          rowRef={el => {
-            refsByKey.set("reload", el);
-            syncItemRefs();
-          }}
+          rowRef={tree.ref("reload")}
         />
       </Show>
       <Show when={props.showSummary !== false}>
@@ -646,10 +624,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
           return (
             <box flexDirection="column" width="100%">
               <box
-                ref={(el: Renderable) => {
-                  refsByKey.set(`run:${run.id}`, el);
-                  syncItemRefs();
-                }}
+                ref={tree.ref(`run:${run.id}`)}
                 {...mouseRow(`run:${run.id}`, runFlatIndex)}
                 flexDirection="row"
                 width="100%"
@@ -736,10 +711,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                     return (
                       <box flexDirection="column" width="100%">
                         <box
-                          ref={(el: Renderable) => {
-                            refsByKey.set(`job:${run.id}:${job.id}`, el);
-                            syncItemRefs();
-                          }}
+                          ref={tree.ref(`job:${run.id}:${job.id}`)}
                           {...mouseRow(`job:${run.id}:${job.id}`, jobFlatIndex)}
                           flexDirection="row"
                           width="100%"
@@ -826,10 +798,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                               const noteConnector = () => (noteIndexFn() === notes().length - 1 ? "└─ " : "├─ ");
                               return (
                                 <box
-                                  ref={(el: Renderable) => {
-                                    refsByKey.set(key, el);
-                                    syncItemRefs();
-                                  }}
+                                  ref={tree.ref(key)}
                                   {...mouseRow(key, noteFlatIndex)}
                                   flexDirection="row"
                                   width="100%"
@@ -885,10 +854,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                     return (
                       <box flexDirection="column" width="100%">
                         <box
-                          ref={(el: Renderable) => {
-                            refsByKey.set(key, el);
-                            syncItemRefs();
-                          }}
+                          ref={tree.ref(key)}
                           {...mouseRow(key, attemptFlatIndex)}
                           flexDirection="row"
                           width="100%"
@@ -942,10 +908,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                                 props.detailFocused() && props.detailCursorIndex() === jobFlatIndex();
                               return (
                                 <box
-                                  ref={(el: Renderable) => {
-                                    refsByKey.set(jobKey, el);
-                                    syncItemRefs();
-                                  }}
+                                  ref={tree.ref(jobKey)}
                                   {...mouseRow(jobKey, jobFlatIndex)}
                                   flexDirection="row"
                                   width="100%"

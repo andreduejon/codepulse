@@ -1,4 +1,3 @@
-import type { Renderable } from "@opentui/core";
 import { createEffect, createMemo, createSignal, For, on, Show, untrack } from "solid-js";
 import type { DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
@@ -6,6 +5,7 @@ import { useT } from "../../hooks/use-t";
 import { BUSY } from "../../utils/busy-text";
 import type { LegendItem } from "../shared/detail-legend";
 import { ProviderActionRow, ProviderSummaryRow, ScrollingLabel, useDetailRowMouse } from "../shared/detail-rows";
+import { useDetailTree } from "../shared/detail-tree";
 import { type RowShortcut, useOpenRowShortcut } from "../shared/open-row";
 import { type StatusCategory, statusColor, statusIcon } from "../shared/status";
 import { openShiftConsoleUrl } from "./console";
@@ -133,8 +133,6 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
   const [expandedNamespaces, setExpandedNamespaces] = createSignal<Set<string>>(
     kept.sha === untrack(() => props.sha) ? kept.expanded : new Set(),
   );
-  const itemRefs: Renderable[] = [];
-  const refsByKey = new Map<string, Renderable>();
   const rows = useDetailRowMouse({
     mouseEnabled: () => props.mouseEnabled,
     onMouseFocus: props.onMouseFocus,
@@ -147,15 +145,6 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
   const flatItemKey = (item: FlatItem) => {
     if (item.kind === "reload") return "reload";
     return item.kind === "namespace" ? `namespace:${item.namespace}` : `resource:${item.resource.id}`;
-  };
-
-  const syncItemRefs = () => {
-    const items = flatItems();
-    itemRefs.length = items.length;
-    items.forEach((item, index) => {
-      itemRefs[index] = refsByKey.get(flatItemKey(item)) as Renderable;
-    });
-    if (props.navRef) props.navRef.itemRefs = itemRefs;
   };
 
   // Namespaces without matched resources are left out of both the tree and the cursor order (no invisible stops).
@@ -233,13 +222,6 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
     }),
   );
 
-  createEffect(() => {
-    const count = flatItems().length;
-    const cursor = untrack(() => props.detailCursorIndex());
-    if (count === 0) props.setDetailCursorIndex(0);
-    else if (cursor < 0 || cursor >= count) props.setDetailCursorIndex(Math.max(0, Math.min(count - 1, cursor)));
-  });
-
   const activateCurrentItem = () => {
     const item = flatItems()[props.detailCursorIndex()];
     if (!item) return false;
@@ -250,12 +232,12 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
     return false;
   };
 
-  createEffect(() => {
-    if (!props.navRef) return;
-    const items = flatItems();
-    props.navRef.itemCount = items.length;
-    syncItemRefs();
-    props.navRef.activateCurrentItem = activateCurrentItem;
+  const tree = useDetailTree({
+    navRef: props.navRef,
+    keys: () => flatItems().map(flatItemKey),
+    activate: activateCurrentItem,
+    detailCursorIndex: props.detailCursorIndex,
+    setDetailCursorIndex: props.setDetailCursorIndex,
   });
 
   useOpenRowShortcut({
@@ -292,10 +274,7 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
     return (
       <box
         {...mouseRow(`resource:${resource.id}`, idx)}
-        ref={(el: Renderable) => {
-          refsByKey.set(`resource:${resource.id}`, el);
-          syncItemRefs();
-        }}
+        ref={tree.ref(`resource:${resource.id}`)}
         flexDirection="row"
         width="100%"
         backgroundColor={isCursored() ? t().backgroundElementActive : hoverBg(`resource:${resource.id}`)}
@@ -340,10 +319,7 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
         rows={rows}
         rowKey="reload"
         index={reloadIdx}
-        rowRef={el => {
-          refsByKey.set("reload", el);
-          syncItemRefs();
-        }}
+        rowRef={tree.ref("reload")}
       />
       <Show when={!!data()}>
         <ProviderSummaryRow label="total resources" count={resources().length} />
@@ -364,10 +340,7 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
                 <box flexDirection="column" width="100%">
                   <box
                     {...mouseRow(`namespace:${ns.namespace}`, namespaceIdx)}
-                    ref={(el: Renderable) => {
-                      refsByKey.set(`namespace:${ns.namespace}`, el);
-                      syncItemRefs();
-                    }}
+                    ref={tree.ref(`namespace:${ns.namespace}`)}
                     flexDirection="row"
                     width="100%"
                     backgroundColor={
