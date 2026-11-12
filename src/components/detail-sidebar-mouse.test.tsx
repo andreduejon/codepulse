@@ -585,7 +585,8 @@ test("clearing either Snyk filter reveals its row after navigating deep into a l
       await d.dispose();
     }
   }
-});
+  // Two 200-row trees: about a second here, but over the 5-second default on the slow Intel Mac release runner.
+}, 20_000);
 
 test("Info row establishes focus before copy activation", async () => {
   let d: Awaited<ReturnType<typeof renderSidebar>> | undefined;
