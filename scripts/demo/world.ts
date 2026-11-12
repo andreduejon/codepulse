@@ -138,6 +138,19 @@ export function installFakeCli(bin: string, names: readonly string[], compiled =
 }
 
 /**
+ * Git for Windows' `cmd` folder, which holds only Git's own programs. The `git` on PATH may be a shim in a package
+ * manager's folder (Scoop, Chocolatey) next to every other tool it installed, a real `snyk` among them. Git's exec
+ * path is `<root>/mingw64/libexec/git-core` (`clangarm64` on ARM64); an unknown layout keeps git's own folder.
+ */
+export function windowsGitFolder(git: string, execPath: string | null, exists: (path: string) => boolean): string {
+  if (execPath) {
+    const cmd = join(execPath, "..", "..", "..", "cmd");
+    if (exists(join(cmd, "git.exe"))) return cmd;
+  }
+  return dirname(git);
+}
+
+/**
  * The PATH the app gets: the fake CLIs first, then Git and the system's own tools. Nothing else, so a real `snyk`,
  * `npm` or `pnpm` installed next to Git can never answer instead of a fake (or reach the network).
  */
@@ -146,7 +159,9 @@ function demoPath(bin: string): string {
   if (!git) throw new Error("The demo needs Git on PATH.");
   if (process.platform === "win32") {
     const system = process.env.SystemRoot ?? "C:\\Windows";
-    return [bin, dirname(git), join(system, "System32"), system, join(system, "System32", "Wbem")].join(delimiter);
+    const execPath = Bun.spawnSync([git, "--exec-path"], { stdout: "pipe", stderr: "ignore" });
+    const folder = windowsGitFolder(git, execPath.success ? execPath.stdout.toString().trim() : null, existsSync);
+    return [bin, folder, join(system, "System32"), system, join(system, "System32", "Wbem")].join(delimiter);
   }
   symlinkSync(realpathSync(git), join(bin, "git"));
   return [bin, "/usr/bin", "/bin", "/usr/sbin", "/sbin"].join(delimiter);
