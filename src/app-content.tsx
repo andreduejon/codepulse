@@ -1,4 +1,4 @@
-import type { ScrollBoxRenderable } from "@opentui/core";
+import type { KeyEvent, ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { batch, createEffect, createMemo, createSignal, onCleanup, onMount, Show, untrack } from "solid-js";
 import { runAppCommand } from "./app-commands";
@@ -8,6 +8,7 @@ import { isTabNoticeStatus, type TabNotice, tabNoticeFor } from "./app-tab-notic
 import type { AppContentProps, RepoSessionSnapshot } from "./app-types";
 import CacheScreen from "./components/cache-screen";
 import CommandBar from "./components/command-bar";
+import { DashboardView } from "./components/dashboard-view";
 import { createDetailMemory } from "./components/detail-memory";
 import DetailPanel from "./components/detail-panel";
 import type { DetailNavRef } from "./components/detail-types";
@@ -34,6 +35,8 @@ import {
 } from "./constants";
 import { AppStateContext, createAppState, providerIdle, providerStatusMessage } from "./context/state";
 import { ThemeContext } from "./context/theme";
+import type { DashboardEvent } from "./dashboard/events";
+import { type DashboardApp, useDashboard } from "./dashboard/use-dashboard";
 import { BANNER, displayBanner } from "./debug/banner";
 import type { DiffTarget } from "./git/types";
 import { openGraphDetails } from "./hooks/handle-graph-keys";
@@ -53,12 +56,12 @@ import { useJenkinsCI } from "./providers/jenkins/use-jenkins-ci";
 import OpenShiftResourceDialog from "./providers/openshift/resource-dialog";
 import type { OpenShiftResource } from "./providers/openshift/types";
 import { useOpenShift } from "./providers/openshift/use-openshift";
-import { providerDisplayName } from "./providers/provider";
+import { isProviderDetailView, type ProviderView, providerDisplayName } from "./providers/provider";
 import { type CacheRepositorySummary, evictRepositoryCache } from "./providers/shared/cache-management";
 import JobLogDialog, { type JobLogTarget } from "./providers/shared/job-log-dialog";
 import { repositoryIdentity, setProviderCacheSuspended } from "./providers/shared/sha-sqlite-cache";
 import { type SnykProviderConfig, useSnyk } from "./providers/snyk/use-snyk";
-import { nextGroupRepoPath } from "./utils/group-repos";
+import { groupMembersForRepo, nextGroupRepoPath, repoDisplayName } from "./utils/group-repos";
 import { computeDisplacedIndex, DETAIL_CHILD_DIALOGS } from "./utils/keyboard-nav-utils";
 
 export function AppContent(props: Readonly<AppContentProps>) {
@@ -123,7 +126,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
 
     const status = state.providerStatus();
     const message = providerStatusMessage(status);
-    if (state.activeProviderView() !== "git" && message && !isTabNoticeStatus(status))
+    if (isProviderDetailView(state.activeProviderView()) && message && !isTabNoticeStatus(status))
       return {
         kind: status.kind === "error" || status.kind === "warning" ? status.kind : ("info" as const),
         source: providerDisplayName(state.activeProviderView()),
@@ -389,6 +392,93 @@ export function AppContent(props: Readonly<AppContentProps>) {
     switchRepoPath(nextPath);
   };
 
+  // ── Dashboard ─────────────────────────────────────────────────────────────
+  /** The open repository's group, or the repository alone: one rope each. */
+  const dashboardApps = createMemo((): DashboardApp[] => {
+    const display = currentRepoDisplayConfig();
+    const members = groupMembersForRepo(knownRepoInfos(), activeRepoPath(), display);
+    const apps = members.length > 0 ? members : [{ path: activeRepoPath(), ...display }];
+    return apps.map(repo => ({ path: repo.path, name: repoDisplayName(repo) }));
+  });
+  const dashboardShown = () => state.activeProviderView() === "dashboard";
+  const dashboard = useDashboard({ apps: dashboardApps, active: dashboardShown });
+  // No details beside the dashboard.
+  createEffect(() => {
+    if (dashboardShown()) actions.setDetailFocused(false);
+  });
+
+  /** A commit to select once its repository's graph is there, in the view of the provider that showed it. */
+  const [pendingGraphJump, setPendingGraphJump] = createSignal<{ sha: string; view: ProviderView } | null>(null);
+  const showInGraph = (event: DashboardEvent) => {
+    if (event.app !== activeRepoPath()) switchRepoPath(event.app);
+    setPendingGraphJump({ sha: event.sha, view: event.source });
+  };
+  createEffect(() => {
+    const jump = pendingGraphJump();
+    if (!jump || state.loading()) return;
+    const rows = state.graphRows();
+    if (rows.length === 0) return;
+    const index = rows.findIndex(row => row.commit.hash === jump.sha);
+    batch(() => {
+      setPendingGraphJump(null);
+      actions.setActiveProviderView(state.providers.getEnabledViews().includes(jump.view) ? jump.view : "git");
+      if (index >= 0) {
+        actions.setCursorIndex(index);
+        actions.setScrollTargetIndex(index);
+      }
+    });
+  });
+  const activateDashboard = () => {
+    const event = dashboard.activate();
+    if (event) showInGraph(event);
+  };
+  const handleDashboardKey = (event: KeyEvent) => {
+    const step = event.shift ? 10 : 1;
+    switch (event.name) {
+      case "down":
+      case "j":
+        dashboard.move(step);
+        break;
+      case "up":
+      case "k":
+        dashboard.move(-step);
+        break;
+      case "pagedown":
+        dashboard.move(10);
+        break;
+      case "pageup":
+        dashboard.move(-10);
+        break;
+      case "g":
+        dashboard.moveToEnd(event.shift ? "last" : "first");
+        break;
+      case "home":
+        dashboard.moveToEnd("first");
+        break;
+      case "end":
+        dashboard.moveToEnd("last");
+        break;
+      case "left":
+      case "h":
+        dashboard.cycleScope(-1);
+        break;
+      case "right":
+      case "l":
+        dashboard.cycleScope(1);
+        break;
+      case "return":
+      case "enter":
+        activateDashboard();
+        break;
+      case "r":
+        void dashboard.reload();
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
+  };
+
   const handleReloadAll = async () => {
     reloadRuntimeConfig();
     await loadData(undefined, undefined, false, true);
@@ -606,6 +696,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     getCommitData: activeProviderCommitData,
     getProviderLoading: () => state.providerStatus().kind === "loading",
     onSwitchGroupRepo: switchGroupRepo,
+    onDashboardKey: handleDashboardKey,
   });
 
   /** Provider data and dialogs for the detail panel and the compact detail dialog. */
@@ -750,8 +841,17 @@ export function AppContent(props: Readonly<AppContentProps>) {
                     backgroundColor={themeState.theme().backgroundPanel}
                     paddingX={2}
                   >
-                    {/* Graph area */}
-                    <box flexDirection="column" flexGrow={1} paddingBottom={1}>
+                    <Show when={dashboardShown()}>
+                      <box flexDirection="column" flexGrow={1} paddingBottom={1}>
+                        <DashboardView
+                          dashboard={dashboard}
+                          mouseEnabled={() => dialog() == null && state.keyboardScopeOverride() == null}
+                          onActivate={activateDashboard}
+                        />
+                      </box>
+                    </Show>
+                    {/* Graph area: kept behind the dashboard, so it comes back where it was */}
+                    <box flexDirection="column" flexGrow={1} paddingBottom={1} visible={!dashboardShown()}>
                       {/* Sticky column headers - above scrollbox */}
                       <ColumnHeader />
 
@@ -819,6 +919,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                         currentRepo={activeRepoPath()}
                         currentGroup={currentRepoDisplayConfig().group}
                         currentAppName={currentRepoDisplayConfig().appName}
+                        dashboard={dashboard}
                       />
 
                       {/* Footer - hotkey hints, 1 char gap above, right-aligned */}
@@ -834,12 +935,13 @@ export function AppContent(props: Readonly<AppContentProps>) {
                         commandBarMode={commandBarMode}
                         filterActive={!!state.highlightSet() || !!state.viewingBranch()}
                         compact={layoutMode() === "compact"}
+                        dashboard={dashboard}
                       />
                     </box>
                   </box>
 
                   {/* Detail panel - right, hidden in compact/too-small mode */}
-                  <Show when={layoutMode() === "normal"}>
+                  <Show when={layoutMode() === "normal" && !dashboardShown()}>
                     <box flexDirection="column" width="25%" minWidth={60} flexShrink={0} paddingX={2} paddingBottom={1}>
                       <DetailPanel
                         mouseEnabled={dialog() == null && state.keyboardScopeOverride() == null}

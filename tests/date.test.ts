@@ -5,7 +5,7 @@
  * days, same-year absolute, different-year absolute), and empty string guard.
  */
 import { describe, expect, spyOn, test } from "bun:test";
-import { formatGraphDate, formatRelativeDate } from "../src/utils/date";
+import { formatClock, formatDayLabel, formatGraphDate, formatRelativeDate } from "../src/utils/date";
 
 /** Create an ISO date string offset from now by the given milliseconds. */
 const ago = (ms: number): string => new Date(Date.now() - ms).toISOString();
@@ -185,5 +185,16 @@ describe("formatRelativeDate cache lifecycle", () => {
     } finally {
       clock.mockRestore();
     }
+  });
+});
+
+describe("formatDayLabel and formatClock", () => {
+  test("name today and yesterday, other days by date, with the year only when it is another one", () => {
+    const now = new Date(2026, 2, 2, 12, 0).getTime();
+    expect(formatDayLabel(new Date(2026, 2, 2, 0, 5).getTime(), now)).toBe("Today");
+    expect(formatDayLabel(new Date(2026, 2, 1, 23, 59).getTime(), now)).toBe("Yesterday");
+    expect(formatDayLabel(new Date(2026, 1, 11, 9, 0).getTime(), now)).toBe("11. Feb");
+    expect(formatDayLabel(new Date(2025, 11, 31, 9, 0).getTime(), now)).toBe("31. Dec 2025");
+    expect(formatClock(new Date(2026, 2, 2, 9, 5).getTime())).toBe("09:05");
   });
 });

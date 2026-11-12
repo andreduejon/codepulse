@@ -7,7 +7,7 @@ import { useAppState } from "../context/state";
 import type { DiffTarget } from "../git/types";
 import { useT } from "../hooks/use-t";
 import { detailEntryFor, type ProviderDetailSources } from "../providers/detail-entries";
-import { providerDetailTab } from "../providers/provider";
+import { isProviderDetailView, providerDetailTab } from "../providers/provider";
 import { DetailLegend } from "../providers/shared/detail-legend";
 import { scheduleScrollIntoView, scrollElementIntoView } from "../utils/scroll";
 import { getAvailableTabs } from "../utils/tab-utils";
@@ -67,7 +67,7 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
   /** The active provider's source, if it has one (not in the Git view). */
   const providerSource = () => {
     const view = state.activeProviderView();
-    return view === "git" ? undefined : props.providers?.[view];
+    return isProviderDetailView(view) ? props.providers?.[view] : undefined;
   };
 
   const tabs = (): { id: DetailTab; label: string; disabled: boolean }[] => {

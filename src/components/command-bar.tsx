@@ -3,6 +3,7 @@ import { createMemo, createSignal, For, Show } from "solid-js";
 import type { KnownRepoInfo } from "../config";
 import { isUncommittedHash } from "../constants";
 import { useAppState } from "../context/state";
+import type { DashboardState } from "../dashboard/use-dashboard";
 import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
 import { useT } from "../hooks/use-t";
 import { providerColors } from "../providers/colors";
@@ -26,6 +27,8 @@ interface CommandBarProps {
   currentRepo: string;
   currentGroup?: string;
   currentAppName?: string;
+  /** While the dashboard shows: its apps and scope take the project row, its event count the commit count's place. */
+  dashboard?: DashboardState;
 }
 
 /** Provider, project and mode rows, with an inline input for colon commands. */
@@ -42,6 +45,8 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
     start: number;
   } | null>(null);
   const [contentWidth, setContentWidth] = createSignal(0);
+  const dashboardShown = () => state.activeProviderView() === "dashboard" && !!props.dashboard;
+  const [hoveredScope, setHoveredScope] = createSignal<string | null>(null);
   const enabledProviders = createMemo(() => {
     state.providers.getVersion();
     return state.providers.getEnabledViews();
@@ -204,7 +209,12 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
                       actions.setActiveProviderView(view);
                     }}
                   >
-                    {` ${providerDisplayName(view)} `}
+                    {" "}
+                    {/* On the dashboard, each provider's knot color: the labels are its legend. */}
+                    <Show when={dashboardShown() && view !== "dashboard"}>
+                      <span style={{ fg: colors().bg }}>{"● "}</span>
+                    </Show>
+                    {`${providerDisplayName(view)} `}
                   </text>
                 );
               }}
@@ -221,7 +231,71 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
           flexShrink={0}
         >
           <box flexDirection="row" flexShrink={1} minWidth={0} overflow="hidden">
-            <Show when={projectBadges().length > 0}>
+            {/* Dashboard: all apps, or one of them. */}
+            <Show when={dashboardShown() && props.dashboard}>
+              {dashboard => (
+                <For
+                  each={[
+                    null,
+                    ...dashboard()
+                      .apps()
+                      .map(app => app.path),
+                  ]}
+                >
+                  {(path, index) => {
+                    const label = () =>
+                      path === null
+                        ? "All apps"
+                        : (dashboard()
+                            .apps()
+                            .find(app => app.path === path)?.name ?? path);
+                    const key = path ?? "";
+                    return (
+                      <>
+                        <Show when={index() > 0}>
+                          <text flexShrink={0} wrapMode="none">
+                            {" "}
+                          </text>
+                        </Show>
+                        {/* biome-ignore lint/a11y/noStaticElementInteractions: TUI apps also switch with Left/Right. */}
+                        {/* biome-ignore lint/a11y/useKeyWithMouseEvents: The chosen app already uses accent badge colors. */}
+                        <box
+                          flexShrink={0}
+                          onMouseOver={() => setHoveredScope(key)}
+                          onMouseOut={() => setHoveredScope(null)}
+                          onMouseDown={event => {
+                            if (event.button !== MouseButton.LEFT || props.mouseEnabled?.() === false) return;
+                            event.preventDefault();
+                            dashboard().setScope(path);
+                          }}
+                        >
+                          <Show
+                            when={dashboard().scope() === path}
+                            fallback={
+                              <text
+                                flexShrink={0}
+                                wrapMode="none"
+                                fg={
+                                  hoveredScope() === key && props.mouseEnabled?.() !== false
+                                    ? t().foreground
+                                    : t().foregroundMuted
+                                }
+                                bg={t().backgroundElementActive}
+                              >
+                                {` ${label()} `}
+                              </text>
+                            }
+                          >
+                            <Badge name={label()} color={t().accent} noShrink />
+                          </Show>
+                        </box>
+                      </>
+                    );
+                  }}
+                </For>
+              )}
+            </Show>
+            <Show when={!dashboardShown() && projectBadges().length > 0}>
               <Show when={visibleProjects().leftHidden > 0}>
                 <HiddenProjectCount direction={-1} />
                 <text flexShrink={0} wrapMode="none">
@@ -290,7 +364,7 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
           minWidth={0}
           flexShrink={0}
         >
-          <box flexDirection="row" gap={1} flexShrink={0}>
+          <box flexDirection="row" gap={1} flexShrink={0} visible={!dashboardShown()}>
             <For each={["normal", "search", "path", "ancestry"] as const}>
               {mode => {
                 const selected = () => {
@@ -339,7 +413,14 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
           overflow="hidden"
           maxWidth="45%"
         >
-          <Show when={checkedOutBranch() || viewingBranch()}>
+          <Show when={dashboardShown() && props.dashboard}>
+            {dashboard => (
+              <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted} bg={t().backgroundElementActive}>
+                {` ${dashboard().eventCount()} ${dashboard().eventCount() === 1 ? "event" : "events"} `}
+              </text>
+            )}
+          </Show>
+          <Show when={!dashboardShown() && (checkedOutBranch() || viewingBranch())}>
             <Show
               when={viewingOtherBranch()}
               fallback={
@@ -365,9 +446,11 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
               </box>
             </Show>
           </Show>
-          <text flexShrink={0} wrapMode="none" fg={countColor()} bg={t().backgroundElementActive}>
-            {` ${countText()} `}
-          </text>
+          <Show when={!dashboardShown()}>
+            <text flexShrink={0} wrapMode="none" fg={countColor()} bg={t().backgroundElementActive}>
+              {` ${countText()} `}
+            </text>
+          </Show>
         </box>
       </box>
     </box>

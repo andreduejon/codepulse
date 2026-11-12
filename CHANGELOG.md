@@ -6,6 +6,14 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- **Dashboard**, a new first view in the tab row (Tab from the last provider, or a click). Every app of the open
+  repository's group gets a straight line, a "rope", and everything that happened is a knot on its app's rope, in
+  its provider's color: commits on the main branch, GitHub Actions runs, Jenkins builds, OpenShift builds and Snyk
+  scans, newest first. A knot is one app's events within an hour; a date row starts each day. The provider labels
+  show their knot color, the footer chooses all apps or one (click, or ←/→), and Enter shows the event's commit in
+  that app's graph. This first version reads Git and the provider caches only, so a provider shows what it found
+  the last time its view was open; `r` reads them again.
+
 - Snyk Dependencies: a Maven `managed` pin is also marked `removable` when every dependency that brings the package
   already asks for the pinned version or later, so Maven would pick at least that version without the pin. Their
   POMs are read from the local Maven repository (`~/.m2/repository`, or where `settings.xml`, `.mvn/maven.config` or

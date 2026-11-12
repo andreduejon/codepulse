@@ -66,6 +66,8 @@ interface KeyboardNavigationOptions {
   /** Returns true while the initial CI fetch is in-flight. */
   getProviderLoading?: () => boolean;
   onSwitchGroupRepo?: (direction: 1 | -1) => void;
+  /** The dashboard's keys while it shows, instead of the graph's and the details'. */
+  onDashboardKey?: (event: KeyEvent) => void;
 }
 
 /**
@@ -118,6 +120,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions) {
     getCommitData,
     getProviderLoading,
     onSwitchGroupRepo,
+    onDashboardKey,
   } = opts;
 
   // Build shared input exit and applied-search clear helpers.
@@ -237,6 +240,12 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions) {
     if (e.sequence === "?") {
       e.preventDefault();
       onCommandExecute("help");
+      return;
+    }
+
+    // ── Dashboard: no graph and no details behind it ─────────────────────────
+    if (state.activeProviderView() === "dashboard") {
+      onDashboardKey?.(e);
       return;
     }
 

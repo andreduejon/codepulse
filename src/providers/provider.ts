@@ -11,15 +11,17 @@ import { createSignal } from "solid-js";
 
 /**
  * Canonical provider order used everywhere providers are cycled or displayed.
- * Mental model: source → CI → runtime → scan/quality.
+ * Mental model: the dashboard over every provider, then source → CI → runtime → scan/quality.
  * Future providers should extend this order as:
- * Git → GitHub Actions → Jenkins → OpenShift → Snyk → SonarQube.
+ * Dashboard → Git → GitHub Actions → Jenkins → OpenShift → Snyk → SonarQube.
  */
-export const PROVIDER_ORDER = ["git", "github-actions", "jenkins", "openshift", "snyk"] as const;
+export const PROVIDER_ORDER = ["dashboard", "git", "github-actions", "jenkins", "openshift", "snyk"] as const;
 
 /** Provider view identifiers — Tab cycles through these. */
 export type ProviderView = (typeof PROVIDER_ORDER)[number];
-export type ProviderDetailView = Exclude<ProviderView, "git">;
+/** The views that show a provider's events on the dashboard: every view but the dashboard itself. */
+export type EventSource = Exclude<ProviderView, "dashboard">;
+export type ProviderDetailView = Exclude<ProviderView, "git" | "dashboard">;
 
 export interface ProviderMetadata {
   displayName: string;
@@ -27,10 +29,11 @@ export interface ProviderMetadata {
   detailLabel?: string;
   /** Short name in the footer's `tab` hint, like the detail tab. Defaults to displayName. */
   shortName?: string;
-  category: "source" | "ci" | "runtime" | "scan-quality";
+  category: "overview" | "source" | "ci" | "runtime" | "scan-quality";
 }
 
 export const PROVIDER_METADATA: Record<ProviderView, ProviderMetadata> = {
+  dashboard: { displayName: "Dashboard", category: "overview" },
   git: { displayName: "Git", category: "source" },
   "github-actions": { displayName: "GitHub Actions", detailLabel: "Actions", shortName: "Actions", category: "ci" },
   jenkins: { displayName: "Jenkins", category: "ci" },
@@ -114,7 +117,7 @@ export function createProviderRegistry(): ProviderRegistry {
 
   const getEnabledViews = (): ProviderView[] => {
     const registered = new Set(entries.map(p => p.id));
-    return PROVIDER_ORDER.filter(view => view === "git" || registered.has(view));
+    return PROVIDER_ORDER.filter(view => view === "dashboard" || view === "git" || registered.has(view));
   };
 
   return {
@@ -157,7 +160,7 @@ export function isProviderView(view: string): view is ProviderView {
 }
 
 export function isProviderDetailView(view: string): view is ProviderDetailView {
-  return isProviderView(view) && view !== "git";
+  return isProviderView(view) && view !== "git" && view !== "dashboard";
 }
 
 export function providerDetailTab(view: ProviderView): { id: ProviderDetailView; label: string } | null {

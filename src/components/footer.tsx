@@ -1,6 +1,7 @@
 import type { BoxRenderable } from "@opentui/core";
 import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import { useAppState } from "../context/state";
+import type { DashboardState } from "../dashboard/use-dashboard";
 import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
 import { useT } from "../hooks/use-t";
 import { providerShortName } from "../providers/provider";
@@ -25,6 +26,8 @@ export default function Footer(
     onConfirm?: () => void;
     onClose?: () => void;
     mouseEnabled?: boolean;
+    /** While the dashboard shows: its keys, and its reading as work in progress. */
+    dashboard?: DashboardState;
   }>,
 ) {
   const t = useT();
@@ -51,7 +54,10 @@ export default function Footer(
   /** Generic `loading` only for a provider that cannot name its work; the others say `fetching` or `scanning`. */
   const genericLoading = () =>
     providerStatus().kind === "loading" && !state.providers.get(state.activeProviderView())?.activity;
+  const dashboardShown = () => state.activeProviderView() === "dashboard" && !!props.dashboard;
+  const dashboardReading = () => dashboardShown() && !!props.dashboard?.loading();
   const busy = () =>
+    dashboardReading() ||
     state.loading() ||
     state.fetching() ||
     state.detailLoading() ||
@@ -61,7 +67,12 @@ export default function Footer(
   const [labelWidth, setLabelWidth] = createSignal(Number.POSITIVE_INFINITY);
   const loadingLabel = () => {
     const git = gitActivity();
-    const parts = [...(git ? [git] : []), ...(genericLoading() ? ["loading"] : []), ...activities()];
+    const parts = [
+      ...(dashboardReading() ? ["Dashboard reading"] : []),
+      ...(git ? [git] : []),
+      ...(genericLoading() ? ["loading"] : []),
+      ...activities(),
+    ];
     return parts.length > 0 ? ` ${parts.join(" · ")}` : "";
   };
 
@@ -135,6 +146,26 @@ export default function Footer(
         ...(shortcut ? [{ key: shortcut.key, desc: ` ${shortcut.desc}`, rank: 2 }] : []),
         { key: "esc", desc: " back", rank: 2, onClick: click(props.onClose) },
         { key: "←/→", desc: " switch tab", rank: 4 },
+        { key: "↑/↓", desc: " navigate", rank: 3 },
+      ];
+    }
+    const dashboard = props.dashboard;
+    if (dashboardShown() && dashboard && mode() === "idle") {
+      const selected = dashboard.rows()[dashboard.cursor()];
+      return [
+        ...viewHint,
+        ...(selected?.kind === "event" || selected?.kind === "more"
+          ? [
+              {
+                key: "enter",
+                desc: selected.kind === "more" ? " show all" : " show in graph",
+                rank: 1,
+                onClick: click(props.onConfirm),
+              },
+            ]
+          : []),
+        ...(dashboard.apps().length > 1 ? [{ key: "←/→", desc: " switch app", rank: 4 }] : []),
+        { key: "r", desc: " refresh", rank: 5, onClick: click(() => void dashboard.reload()) },
         { key: "↑/↓", desc: " navigate", rank: 3 },
       ];
     }
