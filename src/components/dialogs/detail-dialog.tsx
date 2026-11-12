@@ -71,7 +71,9 @@ export function DetailDialog(
           <KeyHint
             key="enter"
             desc={` ${enterVerb()}`}
-            disabled={props.navRef.itemCount === 0}
+            // The cursor's action, not navRef's row count: navRef is not reactive, and the rows register after
+            // the dialog mounts, so a count read here would stay 0 on the first open in the compact layout.
+            disabled={state.detailCursorAction() === null}
             onClick={() => props.navRef.activateCurrentItem?.()}
           />
           <KeyHintSeparator />

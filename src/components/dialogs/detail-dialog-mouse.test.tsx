@@ -197,6 +197,7 @@ async function renderDetail(compact = true, fileCount = 40, family = false, jump
     scrollbox,
     theme: theme.theme(),
     open,
+    setOpen,
     close,
     onOpenDiff,
     onJumpToCommit,
@@ -337,6 +338,25 @@ test("compact footer Enter invokes the real current file activation, is nonselec
     expect(d.close).toHaveBeenCalledTimes(1);
     expect(d.open()).toBe(false);
     expect(d.frame()).not.toContain("Details");
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("compact footer Enter works in details opened before any rows registered, as on the first open after startup", async () => {
+  const d = await renderDetail();
+  try {
+    d.setOpen(false);
+    await d.flush();
+    // No side panel in the compact layout: nothing has set the row count when the details open.
+    d.navRef.itemCount = 0;
+    d.navRef.activateCurrentItem = () => false;
+    d.setOpen(true);
+    await d.flush();
+    d.navRef.scrollToFile("file-002.ts");
+    await d.flush();
+    await d.click("enter view diff");
+    expect(d.onOpenDiff).toHaveBeenCalledTimes(1);
   } finally {
     await d.dispose();
   }

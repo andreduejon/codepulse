@@ -10,6 +10,8 @@ All notable changes to this project will be documented in this file.
   panel: open runs and attempts (GitHub Actions, Jenkins), closed namespaces (OpenShift), the Snyk view, collapsed
   folders and the Info sections. Before, a resize or a tab switch closed them and the cursor landed on another row.
   The footer also keeps offering `o open` after such a resize.
+- Clicking `enter` in the footer of the compact details works the first time they open after startup. It stayed
+  unclickable until the details had been opened once before.
 
 ## [0.17.0] - 2026-11-11
 
