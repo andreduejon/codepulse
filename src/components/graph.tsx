@@ -18,10 +18,10 @@ import {
 } from "../constants";
 import { useAppState } from "../context/state";
 import {
-  buildEdgeIndicator,
   computeBrightColumns,
   computeSingleViewportOffset,
   dimGraphChars,
+  edgeMarks,
   type GraphChar,
   getColorForColumn,
   graphCharsToContent,
@@ -31,8 +31,7 @@ import {
   renderGraphRow,
   sliceGraphToViewport,
 } from "../git/graph";
-import type { GraphRow } from "../git/types";
-import { useBannerScroll } from "../hooks/use-banner-scroll";
+import type { GraphRow, RefInfo } from "../git/types";
 import { useT } from "../hooks/use-t";
 import {
   ActionsColumnHeaders,
@@ -46,18 +45,20 @@ import {
   OpenShiftCountsColumn,
 } from "../providers/openshift/graph-columns";
 import type { GraphBadge, ProviderView } from "../providers/provider";
+import { ScrollingLabel } from "../providers/shared/detail-rows";
 import { SnykColumnHeaders, SnykCountsColumn, SnykScanColumn } from "../providers/snyk/graph-columns";
 import type { SnykScanResult } from "../providers/snyk/types";
 import { formatRelativeDate } from "../utils/date";
 import { scheduleScrollIntoView, scrollElementIntoView } from "../utils/scroll";
-import { truncateName } from "../utils/truncate";
+import { cellWidth } from "../utils/terminal-text";
 import Badge from "./badge";
 
 /** Shared graph dimension computations used by ColumnHeader and GraphLine. */
 function useGraphDimensions(maxGraphColumns: () => number) {
   const effectiveGraphColumns = () => Math.min(maxGraphColumns(), MAX_GRAPH_COLUMNS);
   const viewportActive = () => maxGraphColumns() > MAX_GRAPH_COLUMNS;
-  const graphWidth = () => Math.max(effectiveGraphColumns() * 2 + 1 + (viewportActive() ? 2 : 0), 6);
+  // While scrolling sideways, a 2-character mark column on each side (see `edgeMarks`).
+  const graphWidth = () => Math.max(effectiveGraphColumns() * 2 + 1 + (viewportActive() ? 4 : 0), 6);
   return { effectiveGraphColumns, viewportActive, graphWidth };
 }
 
@@ -274,33 +275,6 @@ function GraphLine(
   // Combined dimming: true when the row is dimmed by any highlight mode or is uncommitted
   const isDimmed = () => isUncommitted() || props.isDimmedByAncestry() || props.isDimmedByHighlight();
 
-  // Edge indicator helper — single 2-char column appended to the right
-  const edgeColor = () => t().foregroundMuted;
-  const blankEdge = (): GraphChar => ({ char: "  ", color: edgeColor() });
-
-  // Append edge indicator column to the right of the graph chars.
-  // Uses push on a shallow copy to avoid the spread operator's overhead
-  // of iterating the entire source array through the iterator protocol.
-  const withEdgeIndicator = (chars: GraphChar[], isCommitRow: boolean): GraphChar[] => {
-    if (!viewportActive()) return chars;
-    const out = chars.slice();
-    if (isCommitRow) {
-      out.push(
-        buildEdgeIndicator(
-          props.row.nodeColumn,
-          props.viewportOffset(),
-          MAX_GRAPH_COLUMNS,
-          state.maxGraphColumns(),
-          edgeColor(),
-          true,
-        ),
-      );
-    } else {
-      out.push(blankEdge());
-    }
-    return out;
-  };
-
   // --- Performance optimization: split full-width render (expensive) from
   // viewport slicing (cheap). When only viewportOffset changes, the memoized
   // full-width renders are reused and only the cheap slice re-runs. ---
@@ -345,20 +319,25 @@ function GraphLine(
   );
   const fullConnectorChars = createMemo(() => dimChars(renderConnectorRow(props.row, renderOpts())));
 
-  // Viewport-sliced renders — depend on memoized full-width + viewportOffset (cheap)
-  const graphChars = () => {
-    const chars = fullGraphChars();
-    if (!viewportActive()) return chars;
-    return sliceGraphToViewport(chars, props.viewportOffset(), MAX_GRAPH_COLUMNS, props.row, renderOpts());
-  };
-  const connectorChars = () => {
-    const chars = fullConnectorChars();
-    if (!viewportActive()) return chars;
-    return sliceGraphToViewport(chars, props.viewportOffset(), MAX_GRAPH_COLUMNS, props.row, renderOpts());
+  // While the graph scrolls sideways, each row is sliced to the viewport and gets a mark column on both sides:
+  // a dashed end where a line runs past an edge, a triangle in the commit's color on the side of a commit whose
+  // block is off-screen. Slicing is cheap; the full-width renders above stay memoized while only viewportOffset
+  // changes.
+  const edgeColor = () => t().foregroundMuted;
+  /** A full-width row fitted to the viewport with its edge marks; `nodeColumn` is null for non-commit rows. */
+  const frameRow = (full: GraphChar[], nodeColumn: number | null): GraphChar[] => {
+    if (!viewportActive()) return full;
+    const offset = props.viewportOffset();
+    const marks = edgeMarks(full, offset, MAX_GRAPH_COLUMNS, state.maxGraphColumns(), nodeColumn, edgeColor());
+    return [
+      ...marks.left,
+      ...sliceGraphToViewport(full, offset, MAX_GRAPH_COLUMNS, props.row, renderOpts()),
+      ...marks.right,
+    ];
   };
 
-  const graphContent = () => graphCharsToContent(withEdgeIndicator(graphChars(), true));
-  const connectorContent = () => graphCharsToContent(withEdgeIndicator(connectorChars(), false));
+  const graphContent = () => graphCharsToContent(frameRow(fullGraphChars(), props.row.nodeColumn));
+  const connectorContent = () => graphCharsToContent(frameRow(fullConnectorChars(), null));
 
   // Check if the commit row has merge/branch connectors (horizontals, corners, tees).
   // If so, the commit row carries connection info and can't be replaced by a fan-out row.
@@ -376,20 +355,23 @@ function GraphLine(
     if (!foRows || foRows.length === 0) return [];
     const foHBrightMap = props.brightFanOutHorizontals();
     const foVBright = props.brightFanOutVerticals();
+    // The last row stands in for the commit's own row when the commit has no connections: only it draws the block.
+    const lastIsCommitRow = canMergeFanOut();
     return foRows.map((foConnectors, idx) =>
-      dimChars(renderFanOutRow(foConnectors, renderOpts(), props.row.nodeColumn), foHBrightMap?.get(idx), foVBright),
+      dimChars(
+        renderFanOutRow(foConnectors, renderOpts(), props.row.nodeColumn, lastIsCommitRow && idx === foRows.length - 1),
+        foHBrightMap?.get(idx),
+        foVBright,
+      ),
     );
   });
 
   // Derive fan-out display: rows above the commit + the commit row's graph content.
-  // applyViewport and addEdge are passed as callbacks to keep buildFanOutDisplay pure.
-  const fanOutDisplay = () => {
-    const applyViewport = (chars: GraphChar[]) =>
-      viewportActive()
-        ? sliceGraphToViewport(chars, props.viewportOffset(), MAX_GRAPH_COLUMNS, props.row, renderOpts())
-        : chars;
-    return buildFanOutDisplay(fullFanOutChars(), canMergeFanOut(), graphContent(), applyViewport, withEdgeIndicator);
-  };
+  // frameRow is passed as a callback to keep buildFanOutDisplay pure.
+  const fanOutDisplay = () =>
+    buildFanOutDisplay(fullFanOutChars(), canMergeFanOut(), graphContent(), (chars, isCommitRow) =>
+      frameRow(chars, isCommitRow ? props.row.nodeColumn : null),
+    );
 
   const fanOutAboveContents = () => fanOutDisplay().fanOutAboveContents;
   const commitRowGraphContent = () => fanOutDisplay().commitRowGraphContent;
@@ -402,10 +384,18 @@ function GraphLine(
     if (graphTextRef) graphTextRef.content = commitRowGraphContent();
   });
 
-  // Ref sort order: tag=0, branch=1, remote=2, head=3 (hoisted to module scope)
-  const visibleRefs = createMemo(() => {
+  // Ref sort order: tag=0, branch=1, remote=2, head=3 (hoisted to module scope). In the OpenShift view the
+  // namespaces running this commit follow the refs, in the OpenShift colour.
+  const visibleRefs = createMemo((): RowBadge[] => {
     const allRefs = commit().refs;
-    return [...allRefs].sort((a, b) => (REF_SORT_ORDER[a.type] ?? 9) - (REF_SORT_ORDER[b.type] ?? 9));
+    const refs: RowBadge[] = [...allRefs].sort((a, b) => (REF_SORT_ORDER[a.type] ?? 9) - (REF_SORT_ORDER[b.type] ?? 9));
+    if (state.activeProviderView() !== "openshift") return refs;
+    const markers = lookupOpenShiftBadge(state.graphBadges(), commit().hash)?.namespaces ?? [];
+    return [
+      ...refs,
+      // By name only: whether it is ready, rolling out or failing shows in the Live counts and the details.
+      ...markers.map(marker => ({ name: marker.namespace, isCurrent: false, namespace: true })),
+    ];
   });
 
   // Effective text color for the commit subject (primary column).
@@ -443,9 +433,10 @@ function GraphLine(
       columnWidths().first -
       columnWidths().second -
       MIN_SUBJECT_WIDTH;
-    // The checked-out branch (or a detached HEAD) keeps its badge first; the others in display order. Kept badges
-    // still render in display order.
-    const byPriority = [...refs].sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent));
+    // The checked-out branch (or a detached HEAD) keeps its badge first, then the namespaces (what the OpenShift view
+    // is about), then the others in display order. Kept badges still render in display order.
+    const rank = (badge: RowBadge) => (badge.isCurrent ? 0 : badge.namespace ? 1 : 2);
+    const byPriority = [...refs].sort((a, b) => rank(a) - rank(b));
     const keep = (count: number) => {
       const kept = new Set(byPriority.slice(0, count));
       return refs.filter(ref => kept.has(ref));
@@ -454,54 +445,21 @@ function GraphLine(
       const hidden = refs.length - shown;
       // `+N` badge: its text + 2, plus one gap.
       const overflow = hidden > 0 ? `+${hidden}`.length + 3 : 0;
-      // Each shown badge: name + 2, one gap between badges and one after them.
-      const perBadge = Math.floor((room - overflow) / shown) - 3;
-      if (perBadge >= 8) return { shown: keep(shown), hidden, maxLength: Math.min(30, perBadge) };
+      const kept = keep(shown);
+      // Each shown badge: its name (cut at `cap`) + 2, one gap between badges and one after them. Short names
+      // (`dev`) take only their own width, so they are not folded into `+N` for the room a long name would need.
+      const needed = (cap: number) =>
+        kept.reduce((sum, ref) => sum + Math.min(cellWidth(ref.name), cap) + 3, 0) + overflow;
+      for (let cap = 30; cap >= 8; cap--) {
+        if (needed(cap) <= room) return { shown: kept, hidden, maxLength: cap };
+      }
     }
     // Not even one shortened badge fits beside `+N`: all refs collapse into it, so the subject keeps its room.
     return { shown: [], hidden: refs.length, maxLength: 8 };
   });
   const refMaxLength = () => refLayout().maxLength;
 
-  const refBadgesWidth = createMemo(() => {
-    const { shown, hidden } = refLayout();
-    if (shown.length === 0 && hidden === 0) return 0;
-    const badges = [...shown.map(r => truncateName(r.name, refMaxLength())), ...(hidden > 0 ? [`+${hidden}`] : [])];
-    // sum of (displayName + 2) for each badge + gaps between badges + 1 paddingRight
-    return badges.reduce((acc, name) => acc + name.length + 2, 0) + (badges.length - 1) + 1;
-  });
-
-  // Approximate available width for the subject text in the graph panel.
-  // Graph panel takes the remaining width after the detail panel (normal mode)
-  // or the full width minus outer padding (compact mode).
-  // Fixed consumed columns: graphWidth + 1 (hash paddingLeft) + HASH_COL_WIDTH
-  //   + 1 (desc box paddingLeft) + 2 (desc box paddingRight)
-  //   + refBadgesWidth + AUTHOR_COL_WIDTH + 2 (author paddingRight) + DATE_COL_WIDTH
-  //   + 4 (left panel paddingX=2 each side)
-  const subjectAvailableWidth = createMemo(() => {
-    const panelWidth = graphPanelWidth(props.terminalWidth());
-    // Hash box: width=HASH_COL_WIDTH (internal paddingLeft NOT added separately — it's inside the fixed width).
-    // Author box: width=AUTHOR_COL_WIDTH (internal paddingRight NOT added separately — same reason).
-    // Date box: width=DATE_COL_WIDTH (no internal padding).
-    // Desc box: paddingLeft=1 + paddingRight=2 are layout padding on a flex-grow box (no fixed width), so they DO consume space.
-    const fixedCols =
-      graphWidth() +
-      HASH_COL_WIDTH + // hash box (width=9, internal paddingLeft is inside that 9)
-      1 + // desc box paddingLeft
-      2 + // desc box paddingRight
-      refBadgesWidth() +
-      columnWidths().first + // author / provider status box (internal paddingRight is inside its width)
-      columnWidths().second; // date / provider time box
-    return Math.max(0, panelWidth - fixedCols);
-  });
-
   const subjectText = () => (isUncommitted() ? "Staged and unstaged changes in working tree" : commit().subject);
-
-  const bannerOverflow = () => {
-    if (!props.active) return 0;
-    return Math.max(0, subjectText().length - subjectAvailableWidth());
-  };
-  const bannerOffset = useBannerScroll(bannerOverflow);
 
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: TUI block uses existing keyboard graph navigation, not DOM roles.
@@ -549,7 +507,7 @@ function GraphLine(
                 {ri => (
                   <Badge
                     name={ri.name}
-                    color={laneColor()}
+                    color={ri.namespace ? t().openShiftBg : laneColor()}
                     dimmed={ri.type === "stash" || ri.type === "uncommitted" || isDimmed()}
                     maxLength={refMaxLength()}
                     noShrink
@@ -561,22 +519,13 @@ function GraphLine(
               </Show>
             </box>
           </Show>
-          <text flexGrow={1} flexShrink={1} fg={effectiveTextColor()} wrapMode="none" truncate={bannerOverflow() === 0}>
-            {(() => {
-              const v = subjectText();
-              if (props.active) {
-                const off = bannerOffset();
-                const ov = bannerOverflow();
-                const rendered = ov > 0 ? v.substring(off, off + subjectAvailableWidth()) : v;
-                return (
-                  <strong>
-                    <span>{rendered}</span>
-                  </strong>
-                );
-              }
-              return v;
-            })()}
-          </text>
+          {/* Measured like the detail rows: cut with … in terminal columns, and the active subject scrolls. */}
+          <ScrollingLabel
+            text={subjectText()}
+            active={!!props.active}
+            bold={!!props.active}
+            fg={effectiveTextColor()}
+          />
         </box>
 
         {/* Author / Date — replaced by CI columns when in CI view */}
@@ -674,6 +623,9 @@ function GraphLine(
 }
 
 /** Sort order for ref badges: tags first, then branches, remotes, HEAD last. */
+/** A badge before the subject: a Git ref, or (OpenShift view) a namespace that runs the commit. */
+type RowBadge = { name: string; type?: RefInfo["type"]; isCurrent: boolean; namespace?: boolean };
+
 const REF_SORT_ORDER: Record<string, number> = { tag: 0, branch: 1, remote: 2, stash: 3, uncommitted: 4, head: 5 };
 
 /**
@@ -714,22 +666,20 @@ interface FanOutDisplay {
  * @param allFanOutChars  Full-width char arrays for each fan-out row (from createMemo).
  * @param canMerge        Whether the last fan-out row can replace the commit row graph.
  * @param normalGraphContent  The pre-computed commit-row graph content (used when !canMerge).
- * @param applyViewport   Callback that applies optional viewport slicing to a char array.
- * @param addEdge         Callback that appends the edge-indicator column.
+ * @param frame           Fits a full-width row to the viewport and adds its edge marks.
  */
 function buildFanOutDisplay(
   allFanOutChars: GraphChar[][],
   canMerge: boolean,
   normalGraphContent: StyledText,
-  applyViewport: (chars: GraphChar[]) => GraphChar[],
-  addEdge: (chars: GraphChar[], isCommitRow: boolean) => GraphChar[],
+  frame: (chars: GraphChar[], isCommitRow: boolean) => GraphChar[],
 ): FanOutDisplay {
   if (allFanOutChars.length === 0) {
     return { fanOutAboveContents: [], commitRowGraphContent: normalGraphContent };
   }
 
   const toContent = (chars: GraphChar[], isCommitRow: boolean): StyledText =>
-    graphCharsToContent(addEdge(applyViewport(chars), isCommitRow));
+    graphCharsToContent(frame(chars, isCommitRow));
 
   if (canMerge) {
     // Show all fan-out rows except the last (which merges into the commit row)
@@ -881,6 +831,21 @@ export default function GraphView(
   // re-evaluations from N (every row) down to exactly 2.
   const isActive = createSelector(() => state.cursorIndex());
 
+  /**
+   * OpenShift: namespaces that run a commit the graph does not show (older than the loaded history, or filtered out),
+   * named at the end of the graph since they have no row to carry the badge.
+   */
+  const unseenDeployments = createMemo(() => {
+    if (state.activeProviderView() !== "openshift") return null;
+    const shown = new Set(state.commits().map(commit => commit.hash.toLowerCase()));
+    const parts: string[] = [];
+    for (const [sha, badge] of state.graphBadges()) {
+      if (!badge.namespaces || shown.has(sha.toLowerCase())) continue;
+      for (const marker of badge.namespaces) parts.push(`${marker.namespace} runs ${sha.slice(0, 7)}`);
+    }
+    return parts.length > 0 ? `Not in the graph: ${parts.join(", ")}` : null;
+  });
+
   return (
     <scrollbox
       ref={el => {
@@ -891,6 +856,15 @@ export default function GraphView(
       scrollY
       scrollX={false}
       verticalScrollbarOptions={{ visible: false }}
+      onSizeChange={() => {
+        // A smaller terminal can leave the selected row below the screen: bring it back into view, once this layout
+        // pass has given the rows and the viewport their new places.
+        queueMicrotask(() => {
+          const idx = state.scrollTargetIndex();
+          if (scrollboxRef?.isDestroyed || idx < 0 || props.suppressAutoScroll?.()) return;
+          scrollRowIntoView(idx);
+        });
+      }}
       onMouseScroll={event => {
         if (event.scroll?.direction !== "down" || props.mouseEnabled?.() === false) return;
         // OpenTUI applies wheel scrolling after this handler; inspect the updated viewport.
@@ -969,6 +943,15 @@ export default function GraphView(
                 Could not load more history. Scroll to the end to retry.
               </text>
             </box>
+          </Show>
+          <Show when={unseenDeployments()}>
+            {text => (
+              <box paddingLeft={2} height={1} flexShrink={0}>
+                <text wrapMode="none" truncate fg={t().foregroundMuted}>
+                  {text()}
+                </text>
+              </box>
+            )}
           </Show>
         </Show>
       </box>

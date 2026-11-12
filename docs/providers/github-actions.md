@@ -51,6 +51,38 @@ cursor on its first failed job. Cancelled and skipped runs show as a grey chip i
 the graph. In the job log, `r` reloads the log (newer output of a running job, or a retry
 after a failure; a finished job's cached log does not change) and `o` opens the run in the browser.
 
+Rows are as quiet as the OpenShift and Jenkins trees: names and marks, and the
+run's age. A job that passed is one row; a failed or running job lists its steps,
+so you see where it went wrong. A legend below the tree explains the marks:
+`✓ passed  ● running  ✗ failed  – skipped  ○ cancelled`. Times are in the job
+log: its title gives the job's time (`GitHub Actions · CI #812 · test · 5m 17s`)
+and the log starts with its steps, each with its mark and time (a skipped step has
+none). `←` / `→` move between the run's jobs (`← previous job · → next job`).
+
+The log views `issues only` and `errors only` keep failed tests: `FAILED` at the
+end of a line, an error or exception with its message, Bun's `(fail)`, Jest's `✕`,
+Vitest's `×`, and `FAIL src/…`.
+
+### Re-runs
+
+After a re-run, the run row says which attempt its jobs are from (`CI #812  attempt 2`).
+Its jobs are the latest attempt's; earlier attempts are the last rows of the run,
+newest first (`▸ attempt 1` with its status), and expand to their jobs and logs.
+`o` on an attempt opens that attempt's page. The jobs of every attempt come from
+one REST request (`filter=all`); jobs that GraphQL listed carry no attempt, so the
+first expand of such a run asks REST once and caches the answer. The graph chip
+keeps showing the latest attempt.
+
+### Annotations
+
+A failed job lists its annotations after its steps, under **Annotations**:
+failures (`✗`) and warnings (`!`) with their file and line, and the first line of
+the message (`✗ src/auth.test.ts:42  Expected 200, received 401`). Notices are
+left out. They are read once per failed job when its run is expanded (one request
+per failed job) and cached with the job. Enter opens the job log with the message
+searched, so the first hit is where it happened and `n` / `N` find repeats; `o`
+opens the job page.
+
 ## Errors and limits
 
 Expired credentials stop live requests until a valid token is available.
@@ -65,3 +97,5 @@ diagnostics.
 ## Permissions
 
 Token needs repository metadata and Actions read access for private repos.
+Annotations also need Checks read access (a fine-grained token's **Checks: Read**);
+without it a failed job simply shows no annotations.

@@ -66,6 +66,8 @@ export interface CodepulseConfig {
     openshift?: {
       enabled?: boolean;
       serverUrl?: string;
+      /** Web console, for opening resources in the browser (`o`). */
+      consoleUrl?: string;
       tokenEnvVar?: string;
       namespaces?: string[];
       commitShaAnnotation?: string;
@@ -112,6 +114,7 @@ export function defaultConfig(): Required<Omit<CodepulseConfig, "branch" | "grou
       openshift: {
         enabled: false,
         serverUrl: "",
+        consoleUrl: "",
         tokenEnvVar: "OPENSHIFT_TOKEN",
         namespaces: [],
         commitShaAnnotation: "dev/commit-sha",
@@ -500,6 +503,17 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
           if (value !== undefined) {
             if (isValidOpenShiftServerUrl(value)) config.providers.openshift.serverUrl = value;
             else warnings.push(`${path}: "providers.openshift.serverUrl" must be a valid HTTPS URL, ignoring`);
+          }
+        }
+        if (openshift.consoleUrl !== undefined) {
+          const value = parseOptionalText(
+            "providers.openshift.consoleUrl",
+            openshift.consoleUrl,
+            OPENSHIFT_SERVER_URL_MAX_LENGTH,
+          );
+          if (value !== undefined) {
+            if (isValidOpenShiftServerUrl(value)) config.providers.openshift.consoleUrl = value;
+            else warnings.push(`${path}: "providers.openshift.consoleUrl" must be a valid HTTPS URL, ignoring`);
           }
         }
         for (const field of ["tokenEnvVar", "commitShaAnnotation"] as const) {

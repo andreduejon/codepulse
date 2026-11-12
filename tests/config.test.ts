@@ -278,6 +278,7 @@ describe("loadConfig", () => {
       providers: {
         openshift: {
           serverUrl: " https://api.example.com:6443 ",
+          consoleUrl: " https://console.example.com ",
           tokenEnvVar: "T".repeat(255),
           commitShaAnnotation: "A".repeat(255),
           namespaces: ["team-one", "Bad_Name", "x".repeat(64)],
@@ -287,11 +288,24 @@ describe("loadConfig", () => {
     const { config: result, warnings } = loadConfig(repoPath, configPath);
     expect(result.providers?.openshift).toEqual({
       serverUrl: "https://api.example.com:6443",
+      consoleUrl: "https://console.example.com",
       tokenEnvVar: "T".repeat(255),
       commitShaAnnotation: "A".repeat(255),
       namespaces: ["team-one"],
     });
     expect(warnings.filter(warning => warning.includes("providers.openshift.namespaces"))).toHaveLength(2);
+  });
+
+  test("ignores an OpenShift console URL that is not HTTPS", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("openshift-console", repoPath, {
+      providers: { openshift: { consoleUrl: "http://console.example.com" } },
+    });
+    const { config: result, warnings } = loadConfig(repoPath, configPath);
+    expect(result.providers?.openshift?.consoleUrl).toBeUndefined();
+    expect(
+      warnings.some(warning => warning.includes('"providers.openshift.consoleUrl" must be a valid HTTPS URL')),
+    ).toBe(true);
   });
 
   test("accepts OpenShift autoRefreshSeconds cycle values", () => {

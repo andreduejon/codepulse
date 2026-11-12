@@ -73,21 +73,25 @@ const jenkinsRuns: JenkinsRun[] = githubRuns.map(run => ({
   jobLabel: "pipeline",
   jobUrl: "https://jenkins.invalid/job",
 }));
-const jenkinsJobs: JenkinsJob[] = githubJobs.map(job => ({
-  ...job,
-  id: String(job.id),
-  name: `Jenkins job ${job.id}`,
-  steps: [
-    {
-      id: "stage",
-      name: "Jenkins stage",
-      status: "completed",
-      conclusion: "success",
-      startedAt: date,
-      completedAt: date,
-    },
-  ],
+// One Pipeline per build; its stages are the rows under the build.
+const jenkinsStages = [1, 2].map(id => ({
+  id: `stage-${id}`,
+  name: `Jenkins stage ${id}`,
+  status: "completed",
+  conclusion: "success",
+  startedAt: date,
+  completedAt: date,
 }));
+const jenkinsPipeline: JenkinsJob = {
+  id: "pipeline",
+  name: "Pipeline",
+  status: "completed",
+  conclusion: "success",
+  startedAt: date,
+  completedAt: date,
+  steps: jenkinsStages,
+};
+const jenkinsJobs: JenkinsJob[] = [jenkinsPipeline];
 const resources: OpenShiftResource[] = ["team-a", "team-b"].flatMap(namespace => [
   { id: `${namespace}-pod`, kind: "Pod", namespace, name: `${namespace}-pod`, status: "running", imageRefs: [] },
   { id: `${namespace}-tag-z`, kind: "ImageStreamTag", namespace, name: "app:z-tag", status: "pass", imageRefs: [] },
@@ -173,7 +177,7 @@ async function renderProvider(provider: Provider, compact = true, deferredJobs =
     return { jobs: jenkinsJobs, error: null };
   });
   const openGithub = mock((_job: GitHubJob, _run: GitHubWorkflowRun, _jobs?: GitHubJob[]) => {});
-  const openJenkins = mock((_job: JenkinsJob, _run: JenkinsRun, _jobs?: JenkinsJob[]) => {});
+  const openJenkins = mock((_run: JenkinsRun, _pipeline: JenkinsJob, _entry: number) => {});
   const openResource = mock((_resource: OpenShiftResource) => {});
   const scanCommit = mock(async (_sha: string, _force?: boolean) => scan);
   let app!: ReturnType<typeof createAppState>;
@@ -207,33 +211,43 @@ async function renderProvider(provider: Provider, compact = true, deferredJobs =
         onOpenDiff: () => {},
         onJumpToCommit: () => {},
         scrollboxRef: el => (scrollbox = el),
-        githubGetCommitData: () => (hasData() ? { sha, runs: githubRuns } : null),
-        githubFetchJobsForRun: githubFetchJobs,
-        githubFetchCommitData: reload,
-        get githubProviderStatus() {
-          return status();
-        },
-        onOpenJobLog: openGithub,
-        jenkinsGetCommitData: () => (hasData() ? { sha, runs: jenkinsRuns, resolved: true } : null),
-        jenkinsFetchJobsForRun: jenkinsFetchJobs,
-        jenkinsFetchCommitData: reload,
-        get jenkinsProviderStatus() {
-          return status();
-        },
-        onOpenJenkinsJobLog: openJenkins,
-        openshiftGetCommitData: () => (hasData() ? openshiftSnapshot() : null),
-        openshiftFetchCommitData: reload,
-        openshiftIsLoading: loading,
-        openshiftLiveAge: () => "live fixture",
-        get openshiftProviderStatus() {
-          return status();
-        },
-        onOpenOpenShiftResource: openResource,
-        snykGetCommitData: () => (hasData() ? snykScan() : null),
-        snykScanCommit: scanCommit,
-        snykIsScanning: loading,
-        get snykProviderStatus() {
-          return status();
+        providers: {
+          "github-actions": {
+            getCommitData: () => (hasData() ? { sha, runs: githubRuns } : null),
+            fetchJobsForRun: githubFetchJobs,
+            fetchCommitData: reload,
+            get status() {
+              return status();
+            },
+            onOpenJobLog: openGithub,
+          },
+          jenkins: {
+            getCommitData: () => (hasData() ? { sha, runs: jenkinsRuns, resolved: true } : null),
+            fetchJobsForRun: jenkinsFetchJobs,
+            fetchCommitData: reload,
+            get status() {
+              return status();
+            },
+            onOpenBuild: openJenkins,
+          },
+          openshift: {
+            getCommitData: () => (hasData() ? openshiftSnapshot() : null),
+            fetchCommitData: reload,
+            isLoading: loading,
+            liveAge: () => "live fixture",
+            get status() {
+              return status();
+            },
+            onOpenResource: openResource,
+          },
+          snyk: {
+            getCommitData: () => (hasData() ? snykScan() : null),
+            scanCommit: scanCommit,
+            isScanning: loading,
+            get status() {
+              return status();
+            },
+          },
         },
       };
       return (
@@ -362,9 +376,14 @@ for (const provider of ["github-actions", "jenkins"] as const) {
     const d = await renderProvider(provider);
     const github = provider === "github-actions";
     const runs = github ? githubRuns : jenkinsRuns;
-    const jobs = github ? githubJobs : jenkinsJobs;
+    // GitHub lists jobs under a run; Jenkins lists the build's stages.
+    const rowNames = github ? githubJobs.map(job => job.name) : jenkinsStages.map(stage => stage.name);
     const fetchJobs = github ? d.githubFetchJobs : d.jenkinsFetchJobs;
     const open = github ? d.openGithub : d.openJenkins;
+    /** Enter on the row at `index`: a GitHub job's log, or the Jenkins build's log at that stage (the whole build is 0). */
+    const opened = (index: number) =>
+      github ? [githubJobs[index], runs[0], githubJobs] : [runs[0], jenkinsPipeline, index + 1];
+    const perJob = 1;
     try {
       expect(d.frame()).toContain("Details");
       expect(d.navRef.itemCount).toBe(3);
@@ -372,34 +391,34 @@ for (const provider of ["github-actions", "jenkins"] as const) {
       expect(fetchJobs).not.toHaveBeenCalled();
       await d.click(runs[0].name);
       expect(fetchJobs).toHaveBeenLastCalledWith(runs[0], expect.any(AbortSignal));
-      expect(d.navRef.itemCount).toBe(5);
+      expect(d.navRef.itemCount).toBe(3 + 2 * perJob);
       expect(d.state.detailCursorIndex()).toBe(2);
       d.actions.setDetailCursorIndex(1);
       await d.flush();
-      await hoverAndRightClick(d, jobs[1].name);
+      await hoverAndRightClick(d, rowNames[1]);
       expect(open).not.toHaveBeenCalled();
-      await d.click(jobs[1].name);
-      expect(d.state.detailCursorIndex()).toBe(3);
+      await d.click(rowNames[1]);
+      expect(d.state.detailCursorIndex()).toBe(2 + perJob);
       expect(d.state.detailCursorAction()).toBe("view log");
-      expect(open).toHaveBeenLastCalledWith(jobs[1], runs[0], jobs);
-      expect(d.navRef.itemRefs[3] === d.text(jobs[1].name).parent?.parent).toBe(true);
+      expect(open).toHaveBeenLastCalledWith(...opened(1));
+      expect(d.navRef.itemRefs[2 + perJob] === d.text(rowNames[1]).parent?.parent).toBe(true);
       d.mockInput.pressKey("RETURN");
       await d.flush();
       expect(open).toHaveBeenCalledTimes(2);
       await d.click("enter view log");
       expect(open).toHaveBeenCalledTimes(3);
       await d.click(runs[1].name);
-      expect(d.navRef.itemCount).toBe(7);
+      expect(d.navRef.itemCount).toBe(3 + 4 * perJob);
       await d.click(runs[0].name);
-      expect(d.navRef.itemCount).toBe(5);
+      expect(d.navRef.itemCount).toBe(3 + 2 * perJob);
       expect(d.state.detailCursorIndex()).toBe(1);
       await d.click(runs[1].name);
       expect(d.state.detailCursorIndex()).toBe(2);
       expect(d.navRef.itemCount).toBe(3);
       await d.click(runs[0].name);
       expect(fetchJobs).toHaveBeenCalledTimes(2);
-      await d.click(jobs[0].name);
-      expect(open).toHaveBeenLastCalledWith(jobs[0], runs[0], jobs);
+      await d.click(rowNames[0]);
+      expect(open).toHaveBeenLastCalledWith(...opened(0));
       await hoverAndRightClick(d, "Reload commit");
       expect(d.reload).not.toHaveBeenCalled();
       d.setHoldReload(true);
@@ -424,6 +443,7 @@ for (const provider of ["github-actions", "jenkins"] as const) {
     const d = await renderProvider(provider, true, true);
     const runs = provider === "github-actions" ? githubRuns : jenkinsRuns;
     const fetchJobs = provider === "github-actions" ? d.githubFetchJobs : d.jenkinsFetchJobs;
+    const perJob = 1;
     try {
       d.setLoading(true);
       await d.flush();
@@ -442,7 +462,7 @@ for (const provider of ["github-actions", "jenkins"] as const) {
       expect(fetchJobs).toHaveBeenCalledTimes(1);
       d.resolveJobs();
       await d.flush();
-      expect(d.navRef.itemCount).toBe(5);
+      expect(d.navRef.itemCount).toBe(3 + 2 * perJob);
       expect(d.state.detailCursorIndex()).toBe(2);
       d.setHasData(false);
       await d.flush();
@@ -553,6 +573,26 @@ for (const [provider, label] of [
   });
 }
 
+test("OpenShift explains its row marks in a legend below the tree, only while it lists resources", async () => {
+  const d = await renderProvider("openshift");
+  try {
+    const rows = d.frame().split("\n");
+    const legend = rows.findIndex(line => line.includes("in progress"));
+    expect(rows[legend]).toMatch(/✓ ok {2}● in progress {2}✗ failing/);
+    for (const [marker, label, color] of [
+      ["✓", "ok", d.theme.success],
+      ["●", "in progress", d.theme.info],
+      ["✗", "failing", d.theme.error],
+    ])
+      expect(d.cell(rows[legend].indexOf(`${marker} ${label}`), legend)?.fg).toEqual(RGBA.fromHex(color));
+    d.setOpenshiftEmpty(true);
+    await d.flush();
+    expect(d.frame()).not.toContain("in progress");
+  } finally {
+    await d.dispose();
+  }
+});
+
 test("OpenShift tree lines close on the last group and the last stream", async () => {
   const d = await renderProvider("openshift");
   try {
@@ -568,17 +608,38 @@ test("OpenShift tree lines close on the last group and the last stream", async (
   }
 });
 
-test("Jenkins runs keep the duration column so their time lines up with the stage counts below", async () => {
-  const d = await renderProvider("jenkins");
+test("GitHub Actions explains its marks in a legend below the tree, only while it lists runs", async () => {
+  const d = await renderProvider("github-actions", false);
   try {
-    await d.click(jenkinsRuns[0].name);
-    await d.flush();
     const rows = d.frame().split("\n");
-    const run = rows.find(row => row.includes(jenkinsRuns[0].name)) ?? "";
-    const job = rows.find(row => row.includes("Jenkins job")) ?? "";
-    const runInfoEnd = /\S(?=\s+\S\s*$)/.exec(run)?.index;
-    expect(job).toContain("1 stage");
-    expect(runInfoEnd).toBe(job.indexOf("1 stage") + "1 stage".length - 1);
+    const legend = rows.findIndex(line => line.includes("skipped"));
+    expect(rows[legend]).toMatch(/✓ passed {2}● running {2}✗ failed {2}– skipped {2}○ cancelled/);
+    expect(d.cell(rows[legend].indexOf("○ cancelled"), legend)?.fg).toEqual(RGBA.fromHex(d.theme.foregroundMuted));
+    d.setHasData(false);
+    await d.flush();
+    expect(d.frame()).not.toContain("skipped");
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("Jenkins explains its marks in a legend below the tree, only while it lists builds", async () => {
+  const d = await renderProvider("jenkins", false);
+  try {
+    const rows = d.frame().split("\n");
+    const legend = rows.findIndex(line => line.includes("skipped"));
+    expect(rows[legend]).toMatch(/✓ passed {2}● running {2}✗ failed {2}– skipped {2}○ aborted/);
+    for (const [marker, label, color] of [
+      ["✓", "passed", d.theme.success],
+      ["●", "running", d.theme.info],
+      ["✗", "failed", d.theme.error],
+      ["–", "skipped", d.theme.foregroundMuted],
+      ["○", "aborted", d.theme.foregroundMuted],
+    ])
+      expect(d.cell(rows[legend].indexOf(`${marker} ${label}`), legend)?.fg).toEqual(RGBA.fromHex(color));
+    d.setHasData(false);
+    await d.flush();
+    expect(d.frame()).not.toContain("skipped");
   } finally {
     await d.dispose();
   }
@@ -1081,7 +1142,7 @@ for (const provider of ["github-actions", "jenkins", "openshift", "snyk"] as con
         provider === "github-actions"
           ? ["Reload commit", "Workflow 1", "GitHub job 1"]
           : provider === "jenkins"
-            ? ["Reload commit", "Build 1", "Jenkins job 1"]
+            ? ["Reload commit", "Build 1", "Jenkins stage 1"]
             : provider === "openshift"
               ? ["Reload commit", "team-a", "team-a-pod", "a-tag"]
               : ["Rescan commit", "HIGH", "CVE-2026-0001"];

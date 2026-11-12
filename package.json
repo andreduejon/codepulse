@@ -1,6 +1,6 @@
 {
 	"name": "@andreduejon/codepulse",
-	"version": "0.16.0",
+	"version": "0.17.0",
 	"private": true,
 	"description": "A terminal git graph visualizer that is read-only by default",
 	"license": "MIT",
@@ -20,6 +20,7 @@
 	"type": "module",
 	"scripts": {
 		"start": "bun run src/index.tsx",
+		"demo": "bun run scripts/demo/run.ts",
 		"build": "bun run scripts/build.ts",
 		"test": "bun test",
 		"lint": "biome lint src/ tests/ scripts/",

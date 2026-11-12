@@ -2,6 +2,126 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.17.0] - 2026-11-11
+
+### Added
+
+- `o` opens the selected row in the browser from the detail panel: a GitHub run or job, a Jenkins build, an
+  OpenShift namespace or resource, or a Snyk finding (its security.snyk.io page). The footer offers `o` only on
+  rows that have a page.
+- OpenShift **Console** setting (optional): the web console URL that `o` uses for namespaces and resources, in the
+  detail panel and the resource dialog. It cannot be worked out from the API server URL.
+- OpenShift resource dialog: an events view. `c` cycles log, JSON and events for Pods, Builds, Deployments and
+  DeploymentConfigs. It starts with what the status says is wrong (a container waiting on `CrashLoopBackOff`, its
+  last run's exit code and restarts, failing conditions with their messages), which stays after OpenShift deletes the events
+  and where they are forbidden. Then the events, newest first (`LAST SEEN  TYPE  REASON  COUNT  MESSAGE`),
+  warnings in the warning colour, searchable, and `r` refetches them. The dialog title counts the warnings. It
+  needs `list` on `events`; without it the view says so.
+- OpenShift view: each namespace that runs a commit shows as a badge next to its refs, also below the fetch size.
+  The badge only names the namespace; the Live counts and the details show whether it is ready, rolling out or
+  failing, and a legend below the tree explains the row marks. A namespace running a commit the graph does not
+  show is named at the end of the graph.
+
+- GitHub Actions: a failed job lists its annotations after its steps (failures and warnings, with file and line).
+  Enter opens the job log with the message searched; they are read once per failed job and cached.
+
+- GitHub Actions re-runs: the run row names its attempt (`attempt 2`), and earlier attempts are folded rows at the
+  end of the run that expand to their jobs and logs.
+
+- Jenkins stages are selectable: Enter opens only that stage's part of the console log, titled with the stage and
+  its time, and `←` / `→` move between stages. `←` from the first stage shows the full log: a summary (each stage
+  with its mark and time, the test counts), then the whole console. It is cut from the cached console log, so no
+  extra requests. A stage in a parallel branch opens the full log with a line that says so: the branches write to
+  the console at the same time.
+- Jenkins: a finished build with a JUnit report shows a **Tests** row with its failed tests. Enter opens a
+  failure's error and stack trace in the log viewer, titled with the test, `←` / `→` move between failed tests.
+- Jenkins: a legend below the tree explains the marks (`✓ passed  ● running  ✗ failed  – skipped  ○ aborted`).
+- GitHub Actions: the job log's title gives the job's time, and the log starts with its steps (marks and times).
+  A legend below the tree explains the marks (`✓ passed  ● running  ✗ failed  – skipped  ○ cancelled`).
+
+- Snyk Vulnerabilities compare with an earlier scan: folded NEW and FIXED trees at the end, their muted headings
+  naming the scan (`vs parent 4c5d6e7`, or `vs 1a2b3c4, 3 commits back` when the parent has no scan and the
+  nearest scanned commit stands in). Added findings also keep a muted `new` under their severity. `new` and
+  `fixed` work as filter words. A project that either scan could not resolve is left out of both trees, and a
+  partial scan that does not name its failed projects is not compared at all.
+
+- `bun run demo` (from a source checkout): codepulse on two made-up repositories with GitHub Actions, Jenkins,
+  OpenShift and Snyk data, offline and without touching your config or cache, on macOS, Linux and Windows. The
+  main one has 86 commits with every shape the graph draws (octopus and criss-cross merges, stacked branches,
+  three roots, more lanes than fit, so it scrolls sideways), commits that edit a small TypeScript shop, and CI and
+  cluster logs as long as real ones. Every
+  provider can start normal, empty, off or failing (`--github error:rate-limit`), `--live` moves the world on
+  (runs finish, a rollout fails, a new commit arrives), and `--play "STEPS"` runs it headless and prints the
+  screens as text, the same every run. See [docs/demo.md](docs/demo.md).
+
+### Changed
+
+- Graph: while it scrolls sideways (more than 12 lanes), both edges are marked. A triangle in the commit's color
+  means the row's commit is off-screen on that side (`◀` was drawn on the right for both sides, always gray); a line
+  that runs past an edge fades into a dashed end (`╌─`, `─╌`), or into the triangle when it leads to that commit.
+  Cut lines no longer seem to start from nothing.
+- Graph: a commit that starts several branches is one block. The rows above it show the branches joining its line
+  (`├─┼─╯`); they drew the block on every row, a tall bar.
+- Graph: a branch no longer starts directly below a root commit (the first commit of an orphan branch like
+  `gh-pages`, or of an unrelated history), where the two read as one branch. It takes the next column.
+- Jenkins rows are as quiet as the OpenShift tree: a build lists its stages straight under it (no **Pipeline**
+  row) with their marks only. Times and test counts moved to the log viewer, so the build's age no longer shifts
+  when its stages load. A build without stages has one **Console** row.
+- GitHub Actions rows are as quiet as the Jenkins and OpenShift trees: names, marks and the run's age, without
+  step counts, times or the annotation count. A job that passed is one row; a failed or running job lists its
+  steps.
+- Jenkins logs show `[Pipeline] { (Unit tests)` as the heading `▸ Unit tests` and mute the rest of the Pipeline
+  markup, a parallel branch's opening too.
+- Log and diff footers say where the arrows go, without abbreviations: `← previous stage · → next stage`,
+  `← full log`, `→ first stage`, `previous test`, `previous job`, `previous file`. The arrow that goes nowhere is
+  left out of a log footer. Search reads `n/N next/previous`.
+- Jenkins multibranch: over the 25 branch-job limit, the branches in the graph are read first, then the most
+  recently built. The notice gives the counts and what they mean (`Branch jobs · 25 of 61 read`, then
+  `Builds on the other 36 do not show.`).
+- Graph ref badges take only their own width, so short names (`main`, `dev`) are no longer folded into `+N` for
+  the room a long name would need.
+- A selected Snyk severity, NEW or FIXED heading keeps its colour on the arrow too. The row shade marks the
+  cursor.
+
+### Fixed
+
+- CI logs: the first line of a GitHub job log no longer shows its timestamp (GitHub's logs start with a byte order
+  mark), and `issues only` and `errors only` no longer list passing tests whose names say failed
+  (`(pass) checkout > keeps a failed payment`, `✓ …`, `… PASSED`), nor drop failed ones whose names say warning.
+- GitHub Actions: a re-run no longer shows the jobs of its earlier attempt. Jobs were kept by run, and a re-run
+  keeps its run's id.
+- GitHub Actions: a fetch that fails in the background (a rate limit, offline) shows its error like Jenkins does.
+  The runs looked as if they were still loading until a Reload.
+- A terminal made smaller keeps the selected commit on screen, and a diff or log open from the details stays open
+  when the terminal becomes too narrow for the side panel (the details came over it).
+- In a narrow terminal (details as a dialog), `Esc` in a CI log or an OpenShift resource goes back to the details,
+  like it does from a diff. It closed the details too and left the keys going to them, so Enter reopened the log.
+  The details also come back as they were (open runs, attempts, cursor), not rebuilt with the first failure open.
+- OpenShift: when the cluster lists but does not allow watching, the **Watch denied** notice no longer disappears
+  as soon as the next build list arrives. The data can go stale while the watches are stopped, so the notice stays
+  until a Reload.
+- Log views `issues only` and `errors only` keep test failures: a line ending in `FAILED`, an error or exception
+  with its message (`AssertionFailedError: expected …`), Bun's `(fail)`, Jest's `✕`, Vitest's `×` and `FAIL src/…`.
+  `0 failed` is not an error.
+- A GitHub run no longer shows its first job's time as the run's time (`CI #812` read `2m 17s` while `test` took
+  `5m 17s`), and a skipped step no longer shows `0s`. Times are in the job log now, each job's and step's own.
+- OpenShift `(cached)` marks only a Build the cluster no longer lists. A Build it still lists is fresh, also once
+  it is saved.
+- A Deployment scaled to 0 no longer marks its commit as running in a namespace. Details list it with
+  `0 replicas`.
+- OpenShift Live counts show for every running commit at once. When the live list came before the Build list,
+  a commit only got them once selected.
+- A long OpenShift resource name no longer pushes its status mark out of a narrow detail panel.
+- Log search with wrap off: a hit past the right edge moves the lines sideways (they start with `…`) so it shows.
+- A followed OpenShift log that drops its oldest lines keeps the selected search hit (`2/2` stays `2/2`).
+- A narrow footer leaves out whole key hints, least needed first, instead of cutting the last one mid-word. Log
+  and resource dialogs too: at 90 columns `o open` was cut off behind a dangling `·`.
+- Graph subjects that do not fit end in `…` (opentui cut them in the middle with `...`), counted in terminal
+  columns so wide characters (CJK, emoji) no longer shift columns; ref badges too. Run tree, OpenShift group and
+  stash rows end in `…` the same way.
+- A selected Snyk package row (Vulnerabilities grouped by dependency) shows its full coordinate and scrolls.
+- The footer's `tab` hint says `Actions` for the GitHub view, like its detail tab.
+
 ## [0.16.0] - 2026-11-09
 
 ### Added

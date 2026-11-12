@@ -1,17 +1,19 @@
 import { BANNER, debugError } from "../../debug/banner";
-import type { GraphBadge, GraphStatusCounts } from "../provider";
+import type { GraphBadge, GraphStatusCounts, NamespaceMarker } from "../provider";
 import { fetchWithRetry, isAbortError } from "../shared/http";
 import type {
   OpenShiftCommitData,
   OpenShiftControllerReference,
+  OpenShiftEvent,
   OpenShiftInventoryFailure,
   OpenShiftInventoryKind,
   OpenShiftInventoryResult,
   OpenShiftOwnerReference,
   OpenShiftResource,
+  OpenShiftResourceKind,
   OpenShiftStatus,
 } from "./types";
-import { isCachedOpenShiftResource, OPENSHIFT_TERMINAL_PHASES, OPENSHIFT_WATCH_KINDS } from "./types";
+import { isCachedOpenShiftResource, OPENSHIFT_WATCH_KINDS } from "./types";
 import { isValidOpenShiftNamespace } from "./validation";
 import { isOpenShiftWatchGone, type OpenShiftWatchEvent, parseOpenShiftWatchBuffer } from "./watch";
 
@@ -40,10 +42,6 @@ export function getOpenShiftToken(envVar: string): string | null {
 
 export function isTerminalBuildStatus(status: OpenShiftStatus): boolean {
   return status === "pass" || status === "fail";
-}
-
-export function isTerminalBuildPhase(phase: string | undefined): boolean {
-  return phase !== undefined && OPENSHIFT_TERMINAL_PHASES.has(phase);
 }
 
 export function normalizeOpenShiftServerUrl(value: string): string {
@@ -143,6 +141,11 @@ export function imageTokens(ref: string | undefined): string[] {
   return [...out];
 }
 
+/** Replicas a Deployment or DeploymentConfig asks for: 1 when unset, 0 for a DeploymentConfig in test mode. */
+function desiredReplicas(spec: Record<string, unknown>): number {
+  return spec.test === true ? 0 : typeof spec.replicas === "number" ? spec.replicas : 1;
+}
+
 function workloadStatus(item: unknown): OpenShiftStatus {
   const md = metadata(item);
   const spec = obj(obj(item)?.spec) ?? {};
@@ -164,7 +167,7 @@ function workloadStatus(item: unknown): OpenShiftStatus {
 
   const replicaFields = ["replicas", "updatedReplicas", "availableReplicas", "unavailableReplicas"] as const;
   const hasReplicaStatus = replicaFields.some(field => typeof status[field] === "number");
-  const desired = spec.test === true ? 0 : typeof spec.replicas === "number" ? spec.replicas : 1;
+  const desired = desiredReplicas(spec);
   if (desired === 0) {
     const replicas = typeof status.replicas === "number" ? status.replicas : 0;
     const updated = typeof status.updatedReplicas === "number" ? status.updatedReplicas : 0;
@@ -188,30 +191,37 @@ function workloadStatus(item: unknown): OpenShiftStatus {
   return "unknown";
 }
 
+const FATAL_WAITING_REASONS = new Set([
+  "CrashLoopBackOff",
+  "ImagePullBackOff",
+  "ErrImagePull",
+  "CreateContainerError",
+  "CreateContainerConfigError",
+  "InvalidImageName",
+  "RunContainerError",
+]);
+
+/** A container that makes its Pod fail: waiting on a fatal reason, or ended with a non-zero exit code. */
+function isFatalContainer(container: unknown): boolean {
+  const state = obj(obj(container)?.state) ?? {};
+  const waitingReason = str(obj(state.waiting)?.reason);
+  const terminated = obj(state.terminated);
+  return (
+    (waitingReason !== undefined && FATAL_WAITING_REASONS.has(waitingReason)) ||
+    (terminated?.reason !== "Completed" && typeof terminated?.exitCode === "number" && terminated.exitCode !== 0)
+  );
+}
+
+function podContainerStatuses(pod: unknown): unknown[] {
+  const status = obj(obj(pod)?.status) ?? {};
+  return [...arr(status.initContainerStatuses), ...arr(status.containerStatuses)];
+}
+
 function podStatus(pod: unknown): OpenShiftStatus {
   const phase = str(obj(pod)?.status && obj(obj(pod)?.status)?.phase);
   if (str(metadata(pod).deletionTimestamp)) return "unknown";
   const status = obj(obj(pod)?.status) ?? {};
-  const statuses = [...arr(status.initContainerStatuses), ...arr(status.containerStatuses)];
-  const fatalReasons = new Set([
-    "CrashLoopBackOff",
-    "ImagePullBackOff",
-    "ErrImagePull",
-    "CreateContainerError",
-    "CreateContainerConfigError",
-    "InvalidImageName",
-    "RunContainerError",
-  ]);
-  const hasFatalContainer = statuses.some(container => {
-    const state = obj(obj(container)?.state) ?? {};
-    const waitingReason = str(obj(state.waiting)?.reason);
-    const terminated = obj(state.terminated);
-    return (
-      (waitingReason !== undefined && fatalReasons.has(waitingReason)) ||
-      (terminated?.reason !== "Completed" && typeof terminated?.exitCode === "number" && terminated.exitCode !== 0)
-    );
-  });
-  if (hasFatalContainer) return "fail";
+  if (podContainerStatuses(pod).some(isFatalContainer)) return "fail";
   if (phase === "Failed") return "fail";
   if (phase === "Succeeded") return "pass";
   if (phase === "Pending") return "running";
@@ -220,6 +230,84 @@ function podStatus(pod: unknown): OpenShiftStatus {
     return obj(ready)?.status === "True" ? "pass" : "running";
   }
   return "unknown";
+}
+
+const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
+
+/** One thing a resource's status says is wrong: `waiting  CrashLoopBackOff  back-off 5m0s restarting…`. */
+export interface OpenShiftStatusRow {
+  status: string;
+  reason: string;
+  message: string;
+}
+
+/** Workload conditions in the state that says something is wrong; the healthy ones are left out. */
+const PROBLEM_CONDITIONS: Record<string, string> = {
+  Available: "False",
+  Progressing: "False",
+  ReplicaFailure: "True",
+  Failed: "True",
+  Degraded: "True",
+};
+
+/** `OOMKilled · exit 137`, `Error · exit 1`: how a container run ended. */
+function endedText(terminated: AnyObj): string {
+  const code = typeof terminated.exitCode === "number" ? ` · exit ${terminated.exitCode}` : "";
+  return `${str(terminated.reason) ?? "Error"}${code}`;
+}
+
+/**
+ * Why a resource is unhealthy, from its status, which outlives its events (3 hours): what a Pod's containers wait on
+ * or how they ended, its conditions that are False, a workload's failing conditions, a Build's failure.
+ */
+export function openShiftStatusRows(kind: OpenShiftResourceKind, object: unknown): OpenShiftStatusRow[] {
+  const status = obj(obj(object)?.status);
+  if (!status) return [];
+  const row = (label: string, reason: string | undefined, message: unknown): OpenShiftStatusRow => ({
+    status: label,
+    reason: reason ?? "",
+    message: str(message) ?? "",
+  });
+  if (kind === "Pod") {
+    const rows: OpenShiftStatusRow[] = [];
+    const podReason = str(status.reason);
+    if (podReason) rows.push(row(str(status.phase) ?? "Pod", podReason, status.message));
+    const containers = [...arr(status.initContainerStatuses), ...arr(status.containerStatuses)].map(
+      container => obj(container) ?? {},
+    );
+    // With several containers each row names its own.
+    const label = (text: string, container: AnyObj) =>
+      containers.length > 1 && str(container.name) ? `${text} ${container.name}` : text;
+    for (const container of containers) {
+      const state = obj(container.state) ?? {};
+      const waiting = obj(state.waiting);
+      if (waiting) rows.push(row(label("waiting", container), str(waiting.reason), waiting.message));
+      const ended = obj(state.terminated);
+      if (ended) rows.push(row(label("ended", container), endedText(ended), ended.message));
+      const lastRun = obj(obj(container.lastState)?.terminated);
+      const restarts = typeof container.restartCount === "number" ? container.restartCount : 0;
+      if (lastRun)
+        rows.push(
+          row(
+            label("last run", container),
+            [endedText(lastRun), restarts > 0 ? plural(restarts, "restart") : ""].filter(Boolean).join(" · "),
+            lastRun.message,
+          ),
+        );
+    }
+    for (const condition of arr(status.conditions).map(value => obj(value) ?? {}))
+      if (condition.status === "False")
+        rows.push(row(`${condition.type} False`, str(condition.reason), condition.message));
+    return rows;
+  }
+  if (kind === "Deployment" || kind === "DeploymentConfig")
+    return arr(status.conditions)
+      .map(value => obj(value) ?? {})
+      .filter(condition => PROBLEM_CONDITIONS[String(condition.type)] === condition.status)
+      .map(condition => row(`${condition.type} ${condition.status}`, str(condition.reason), condition.message));
+  if (kind === "Build" && buildStatus(object) === "fail")
+    return [row(str(status.phase) ?? "Failed", str(status.reason), status.message)];
+  return [];
 }
 
 function buildStatus(build: unknown): OpenShiftStatus {
@@ -319,9 +407,11 @@ function extractWorkload(
   item: unknown,
   annotationKey: string,
 ): OpenShiftResource {
+  const status = workloadStatus(item);
   return {
     ...baseResource(kind, namespace, item),
-    status: workloadStatus(item),
+    status,
+    scaledToZero: desiredReplicas(obj(obj(item)?.spec) ?? {}) === 0 || undefined,
     imageRefs: containerImages(obj(item)?.spec),
     commitSha: commitShaFromItem(item, annotationKey),
     podSelector: podSelectorFrom(item),
@@ -331,7 +421,12 @@ function extractWorkload(
 function extractPod(namespace: string, item: unknown): OpenShiftResource {
   const statuses = arr(obj(obj(item)?.status)?.containerStatuses);
   const imageRefs = statuses.flatMap(s => [...imageTokens(str(obj(s)?.image)), ...imageTokens(str(obj(s)?.imageID))]);
-  return { ...baseResource("Pod", namespace, item), status: podStatus(item), imageRefs };
+  const status = podStatus(item);
+  return {
+    ...baseResource("Pod", namespace, item),
+    status,
+    imageRefs,
+  };
 }
 
 export function resourceFromWatchObject(object: unknown, annotationKey: string): OpenShiftResource | null {
@@ -986,6 +1081,48 @@ export async function fetchOpenShiftObject(
   return await res.json();
 }
 
+function parseOpenShiftEvent(item: unknown): OpenShiftEvent {
+  const event = obj(item) ?? {};
+  const series = obj(event.series);
+  const count = typeof series?.count === "number" ? series.count : typeof event.count === "number" ? event.count : 1;
+  return {
+    type: str(event.type) ?? "Normal",
+    reason: str(event.reason) ?? "",
+    message: (str(event.note) ?? str(event.message) ?? "").replace(/\s*\n\s*/g, " ").trim(),
+    count,
+    lastSeen:
+      str(series?.lastObservedTime) ??
+      str(event.lastTimestamp) ??
+      str(event.eventTime) ??
+      str(event.firstTimestamp) ??
+      str(metadata(item).creationTimestamp) ??
+      null,
+  };
+}
+
+/** The events about one resource (by kind and name in its namespace), newest first. */
+export async function fetchOpenShiftEvents(
+  serverUrl: string,
+  token: string,
+  resource: OpenShiftResource,
+  signal?: AbortSignal,
+): Promise<OpenShiftEvent[]> {
+  const selector = `involvedObject.kind=${resource.kind},involvedObject.name=${resource.name}`;
+  const path = `/api/v1/namespaces/${encodeURIComponent(resource.namespace)}/events?fieldSelector=${encodeURIComponent(selector)}`;
+  const res = await fetchWithRetry(
+    openShiftApiUrl(serverUrl, path),
+    { signal, headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } },
+    FETCH_OPTS,
+    "OpenShift",
+  );
+  if (isOpenShiftAuthStatus(res.status)) throw new Error(BANNER.openshift.tokenExpired);
+  if (res.status === 403)
+    throw new Error(`No permission to list events in ${resource.namespace}. The token needs list on events.`);
+  if (!res.ok) throw new Error(`OpenShift events failed: ${res.status}`);
+  const events = arr(obj(await res.json())?.items).map(parseOpenShiftEvent);
+  return events.sort((a, b) => (b.lastSeen ?? "").localeCompare(a.lastSeen ?? ""));
+}
+
 export async function fetchOpenShiftResources(
   config: InventoryConfig,
   token: string,
@@ -1087,6 +1224,44 @@ function worstStatus(counts: GraphStatusCounts): GraphBadge["badge"] {
   if (counts.runningCount > 0) return "running";
   if (counts.unknownCount > 0) return "unknown";
   return "pass";
+}
+
+const MARKER_RANK: Record<NamespaceMarker["state"], number> = { live: 0, rolling: 1, fail: 2 };
+
+/**
+ * The namespaces each commit runs in now, from the listed Deployments and DeploymentConfigs (every one in the
+ * namespace, not only the fetch window): ready is `live`, a rollout in progress `rolling`, a failing one `fail`.
+ * One marker per namespace and commit, the most telling state winning; in the configured namespace order.
+ */
+export function buildOpenShiftNamespaceMarkers(
+  resources: readonly OpenShiftResource[],
+  namespaces: readonly string[],
+): Map<string, NamespaceMarker[]> {
+  const byCommit = new Map<string, Map<string, NamespaceMarker["state"]>>();
+  for (const resource of resources) {
+    if (resource.kind !== "Deployment" && resource.kind !== "DeploymentConfig") continue;
+    // Scaled to 0, it runs nothing: no badge (the detail panel still lists it, `0 replicas`).
+    if (!resource.commitSha || resource.terminating || resource.scaledToZero) continue;
+    const state = resource.status === "pass" ? "live" : resource.status === "running" ? "rolling" : resource.status;
+    if (state === "unknown") continue;
+    const sha = resource.commitSha.toLowerCase();
+    const states = byCommit.get(sha) ?? new Map<string, NamespaceMarker["state"]>();
+    const previous = states.get(resource.namespace);
+    if (!previous || MARKER_RANK[state] > MARKER_RANK[previous]) states.set(resource.namespace, state);
+    byCommit.set(sha, states);
+  }
+  const order = (namespace: string) => {
+    const index = namespaces.indexOf(namespace);
+    return index < 0 ? namespaces.length : index;
+  };
+  return new Map(
+    [...byCommit].map(([sha, states]) => [
+      sha,
+      [...states]
+        .map(([namespace, state]) => ({ namespace, state }))
+        .sort((a, b) => order(a.namespace) - order(b.namespace) || a.namespace.localeCompare(b.namespace)),
+    ]),
+  );
 }
 
 export function buildOpenShiftGraphBadges(data: Map<string, OpenShiftCommitData>): Map<string, GraphBadge> {

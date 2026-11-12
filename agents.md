@@ -53,3 +53,18 @@
   `actions` (or any context value) as **parameters**, not via `useContext()`.
   Only child components rendered *inside* the Provider's JSX subtree can safely
   call `useContext()`.
+
+## Checking UI changes
+
+Check a UI change in the demo before calling it done: `bun run demo` runs codepulse on made-up data, and `--play`
+runs it headless and prints the screens as text. See [docs/demo.md](docs/demo.md) for every option and step.
+
+```sh
+bun run demo --play 'j j enter tab wait:"CI #812" shot'      # the screen after those keys
+bun run demo --github error:401 --play 'tab sleep:500 shot'  # a provider failing
+bun run demo --play "$(cat play.txt)" > after.txt            # the same play prints the same screens: diff it
+```
+
+- A play that fails prints the step, why and the screen, and exits with 1.
+- When a state you need is missing, add it to `scripts/demo/scenario.ts` (or `packages.ts`) instead of testing
+  against a real server.

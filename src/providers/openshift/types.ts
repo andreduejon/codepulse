@@ -1,9 +1,5 @@
 import {
   DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS,
-  PROVIDER_AUTO_REFRESH_MS,
-  PROVIDER_AUTO_REFRESH_OPTIONS,
-  PROVIDER_AUTO_REFRESH_SECONDS,
-  PROVIDER_MS_TO_LABEL,
   type ProviderAutoRefreshSeconds,
   type ProviderCacheLimit,
   type ProviderLimit,
@@ -11,19 +7,16 @@ import {
 
 export type OpenShiftCacheLimit = ProviderCacheLimit;
 
-export const OPENSHIFT_AUTO_REFRESH_OPTIONS = PROVIDER_AUTO_REFRESH_OPTIONS;
-export const OPENSHIFT_AUTO_REFRESH_SECONDS = PROVIDER_AUTO_REFRESH_SECONDS;
 export type OpenShiftAutoRefreshSeconds = ProviderAutoRefreshSeconds;
 export const DEFAULT_OPENSHIFT_AUTO_REFRESH_SECONDS = DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS;
-export const OPENSHIFT_AUTO_REFRESH_MS = PROVIDER_AUTO_REFRESH_MS;
-export const OPENSHIFT_MS_TO_LABEL = PROVIDER_MS_TO_LABEL;
 export const OPENSHIFT_LOG_FOLLOW_MAX_LINES = 1000;
 export const OPENSHIFT_WATCH_KINDS = ["Deployment", "DeploymentConfig", "Pod"] as const;
-export type OpenShiftWatchKind = (typeof OPENSHIFT_WATCH_KINDS)[number];
 
 export interface OpenShiftProviderConfig {
   enabled: boolean;
   serverUrl: string;
+  /** Web console, for `o`. Not part of the fetch identity: it changes no data. */
+  consoleUrl: string;
   tokenEnvVar: string;
   namespaces: string[];
   commitShaAnnotation: string;
@@ -36,6 +29,7 @@ export interface OpenShiftProviderConfig {
 export const DEFAULT_OPENSHIFT_CONFIG: OpenShiftProviderConfig = {
   enabled: false,
   serverUrl: "",
+  consoleUrl: "",
   tokenEnvVar: "OPENSHIFT_TOKEN",
   namespaces: [],
   commitShaAnnotation: "dev/commit-sha",
@@ -43,8 +37,6 @@ export const DEFAULT_OPENSHIFT_CONFIG: OpenShiftProviderConfig = {
   fetchDepth: 20,
   autoRefreshSeconds: DEFAULT_OPENSHIFT_AUTO_REFRESH_SECONDS,
 };
-
-export const OPENSHIFT_TERMINAL_PHASES = new Set(["Complete", "Failed", "Error", "Cancelled"]);
 
 export type OpenShiftResourceKind = "Build" | "ImageStreamTag" | "Deployment" | "DeploymentConfig" | "Pod";
 export type OpenShiftInventoryKind = OpenShiftResourceKind | "ReplicaSet" | "ReplicationController";
@@ -78,6 +70,21 @@ export interface OpenShiftResource {
   labels?: Record<string, string>;
   /** Full API object. Kept for Build JSON dialog / disk cache. */
   object?: unknown;
+  /** A finished Build shown from Codepulse's cache that the cluster has not listed since: `(cached)`. */
+  cacheOnly?: boolean;
+  /** A Deployment or DeploymentConfig with 0 replicas: it runs nothing, so it marks no namespace. */
+  scaledToZero?: boolean;
+}
+
+/** One Kubernetes event about a resource, as the events view lists it. */
+export interface OpenShiftEvent {
+  /** `Normal` or `Warning`. */
+  type: string;
+  reason: string;
+  message: string;
+  count: number;
+  /** When it last happened (ISO), or null when the event has no time. */
+  lastSeen: string | null;
 }
 
 export interface OpenShiftNamespaceData {

@@ -16,9 +16,26 @@ The graph has two lanes:
 - **Cache** — terminal Builds persisted locally by commit.
 
 Both lanes show fail, running, pass, and unknown counts. Empty lanes show
-`·······`; details append `(cached)` to terminal Build names. Builds and
+`·······`. In details, a terminal Build the cluster no longer lists (pruned, or
+older than the fetch size) shows from the cache with `(cached)` after its name. Builds and
 ImageStreamTags poll while the OpenShift view is focused. Deployments,
 DeploymentConfigs, and Pods are listed and watched until you leave the view.
+
+### Live in namespace
+
+Next to a commit's refs, a badge in the OpenShift colour names each namespace
+that runs that commit now: its Deployments or DeploymentConfigs carry the
+commit's SHA label. The badge only names the namespace: whether it is ready,
+rolling out or failing shows in the Live counts and the details. A
+Deployment scaled to 0 runs nothing, so it marks no namespace; details still
+list it with `0 replicas`. Badges
+come from the live list of the whole namespace, so a commit below the fetch size
+is marked too, with no extra requests. A namespace that runs a commit the graph
+does not show (older than the loaded history, or filtered out) is named at the
+end of the graph: `Not in the graph: prod runs 4c5d6e7`.
+
+When the row is narrow, the checked-out branch keeps its badge first, then the
+namespaces; the rest fold into `+N`.
 
 ## Configuration
 
@@ -26,6 +43,10 @@ Configure the provider per repository from `:providers`:
 
 - Enable the provider.
 - Set an HTTPS OpenShift API server URL.
+- Optionally set the web console URL (**Console**, for example
+  `https://console-openshift-console.apps.example.com`). With it, `o` opens the selected namespace or
+  resource in the console, from the detail panel and from the resource dialog. Without it, `o` is not offered
+  for OpenShift.
 - Set the environment variable containing an API token. Default:
   `OPENSHIFT_TOKEN`. Prefer a long-lived service-account token over
   `oc whoami -t` (env is fixed until Codepulse restarts).
@@ -112,12 +133,23 @@ that produced them.
   1000 lines. Open at the bottom; stay pinned only if you are already at the
   bottom. When the stream closes the title shows `log ended`. Press `r` to
   restart. They are not stored.
-- `c` cycles view mode (log / JSON) for Builds and Pods. Terminal Build JSON
-  uses the cached object when present; otherwise JSON is a live snapshot.
-  Leave the log view or close the dialog to abort follow.
-- `r` refreshes what is shown: the log (restarting a follow) or, in JSON view, the
-  object. Workloads without logs open in JSON and refresh the same way.
-- `/` searches the log or JSON (`n` / `N` next and previous hit), like CI logs.
+- `c` cycles the view: log (Builds and Pods), JSON, and events (Pods, Builds,
+  Deployments, DeploymentConfigs). Terminal Build JSON uses the cached object when
+  present; otherwise JSON is a live snapshot. Leave the log view or close the
+  dialog to abort follow.
+- **Events** starts with what the resource's status says is wrong
+  (`STATUS  REASON  MESSAGE`): what a Pod's containers wait on, how their last run
+  ended and how often they restarted, its conditions that are False, a workload's failing conditions, a
+  Build's failure. The status comes with the object, so it stays after OpenShift
+  deletes the events and where events are forbidden. Below it, the events newest
+  first: `LAST SEEN  TYPE  REASON  COUNT  MESSAGE`, warnings in the warning colour.
+  Events are read when the dialog opens and are not stored; the title counts the
+  warnings (`2 warnings`). OpenShift keeps events for 3 hours by default (plain
+  Kubernetes for 1), so an older resource says *No recent events*. Without
+  permission to list events the view says so.
+- `r` refreshes what is shown: the log (restarting a follow), the object, or the
+  events. Workloads without logs open in JSON and refresh the same way.
+- `/` searches the log, JSON or events (`n` / `N` next and previous hit), like CI logs.
   A failed request shows its reason; an empty log says *No log output.*
 
 Live updates keep the namespaces you collapsed and the cursor on the same row.
@@ -127,7 +159,7 @@ request failed) or a tab notice (some failed) says so.
 ## Status
 
 Resources show the same status symbols as CI runs; graph chips use the same
-colours.
+colours. A legend below the tree explains them: `✓ ok  ● in progress  ✗ failing`.
 
 - `✓` pass: successful Build, Ready Pod, or fully converged workload.
 - `●` running: active Build, Pending/not-ready Pod, or incomplete workload rollout.
@@ -136,6 +168,10 @@ colours.
 - `?` unknown: insufficient or indeterminate status (a grey chip in the graph).
 
 Aggregate precedence is fail, running, unknown, then pass.
+
+A failing row shows only its name and `✗`, to keep the tree quiet. Why it fails
+is in the resource dialog's events view: what its containers wait on, exit codes,
+restarts, failing conditions and their messages.
 
 ## Required read permissions
 
@@ -148,6 +184,7 @@ Configured token needs `list` access for:
 - `deploymentconfigs.apps.openshift.io`
 - `replicationcontrollers`
 - `pods`
+- `events` (only for the resource dialog: its events view and warning count)
 
 Live freshness also needs `watch` on Deployments, DeploymentConfigs, and Pods
 in each configured namespace. OpenShift/`kubernetes` `view` already has

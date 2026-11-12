@@ -639,7 +639,7 @@ test("footer says which CI provider is fetching, and long labels truncate before
         .split("\n")
         .find(row => row.includes("navigate")) ?? "";
     // Too long for a 100-column footer: the label is cut at the end and every hint stays whole.
-    expect(line()).toMatch(/Git fetching · GitH\S*… tab GitHub Actions/);
+    expect(line()).toMatch(/Git fetching · GitH[^·]*… tab Actions/);
     expect(line()).toContain("↑/↓ navigate");
     expect(line()).toContain("shift ←/→ switch project");
     setGithub(null);
@@ -671,6 +671,27 @@ test("a wide footer shows every provider's activity in full", async () => {
     await d.flush();
     expect(d.captureCharFrame()).toContain("Git fetching · GitHub Actions fetching · Snyk scanning");
     expect(d.captureCharFrame()).not.toContain("…");
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("a narrow footer leaves out whole hints, least needed first, instead of cutting one", async () => {
+  const d = await renderFooter(70);
+  try {
+    d.state.providers.register({ id: "github-actions", displayName: "GitHub Actions", isAvailable: () => true });
+    d.actions.setSearchQuery("fix");
+    await d.flush();
+    const line =
+      d
+        .captureCharFrame()
+        .split("\n")
+        .find(row => row.includes("navigate")) ?? "";
+    // Every shown hint is whole; switching project and views gives way first.
+    expect(line).toMatch(/↑\/↓ navigate\s*$/);
+    expect(line).toContain("esc clear");
+    expect(line).toContain("enter details");
+    expect(line).not.toContain("switch project");
   } finally {
     await d.dispose();
   }

@@ -74,6 +74,7 @@ describe("help reference", () => {
       buildOpenShiftProviderItems({
         enabled: true,
         serverUrl: "",
+        consoleUrl: "",
         tokenEnvVar: "OPENSHIFT_TOKEN",
         namespaces: [],
         commitShaAnnotation: "dev/commit-sha",

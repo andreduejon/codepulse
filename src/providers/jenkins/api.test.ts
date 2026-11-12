@@ -598,7 +598,46 @@ describe("resolveJenkinsJobs", () => {
           label: "main",
         },
       ]);
-      expect(decodeURIComponent(requestedUrl)).toContain("jobs[_class,name,displayName,url,buildable,disabled]");
+      expect(decodeURIComponent(requestedUrl)).toContain(
+        "jobs[_class,name,displayName,url,buildable,disabled,lastBuild[timestamp]]",
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("over the limit, branches in the graph come first, then the most recently built", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      Response.json({
+        _class: "org.jenkinsci.plugins.workflow.multibranch.WorkflowMultiBranchProject",
+        jobs: Array.from({ length: 30 }, (_, idx) => ({
+          _class: "org.jenkinsci.plugins.workflow.job.WorkflowJob",
+          // Jenkins encodes the slash of a branch name in the job name.
+          name: idx === 29 ? "feature%2Frefunds" : `branch-${idx}`,
+          url: `https://jenkins.example.com/job/service/job/b${idx}/`,
+          buildable: true,
+          disabled: false,
+          // branch-0 was built longest ago, branch-28 most recently; branch-1 never.
+          lastBuild: idx === 1 ? null : { timestamp: 1_000 + idx },
+        })),
+      })) as unknown as typeof fetch;
+    try {
+      const result = await resolveJenkinsJobs(
+        [{ url: "https://jenkins.example.com/job/service" }],
+        "user",
+        "token",
+        undefined,
+        undefined,
+        new Set(["feature/refunds"]),
+      );
+      expect(result.truncated).toBe(true);
+      expect(result.branchJobs).toEqual({ shown: 25, total: 30 });
+      const labels = result.jobs.map(job => job.label);
+      expect(labels[0]).toBe("feature%2Frefunds");
+      expect(labels.slice(1, 4)).toEqual(["branch-28", "branch-27", "branch-26"]);
+      expect(labels).not.toContain("branch-1");
+      expect(labels).not.toContain("branch-0");
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -730,6 +769,77 @@ describe("resolveJenkinsJobs", () => {
     }
   });
 
+  test("over the limit, the graph's branches come first across all multibranch projects, not per project", async () => {
+    const originalFetch = globalThis.fetch;
+    const branch = (project: string, name: string, timestamp: number) => ({
+      _class: "org.jenkinsci.plugins.workflow.job.WorkflowJob",
+      name,
+      url: `https://jenkins.example.com/job/${project}/job/${name}/`,
+      buildable: true,
+      disabled: false,
+      lastBuild: { timestamp },
+    });
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const project = String(input).includes("/job/tools/") ? "tools" : "service";
+      return Response.json({
+        _class: "org.jenkinsci.plugins.workflow.multibranch.WorkflowMultiBranchProject",
+        jobs:
+          project === "tools"
+            ? Array.from({ length: 30 }, (_, index) => branch("tools", `chore-${index}`, 2000 + index))
+            : [branch("service", "experiment", 1000), branch("service", "main", 10)],
+      });
+    }) as typeof fetch;
+
+    try {
+      const result = await resolveJenkinsJobs(
+        [{ url: "https://jenkins.example.com/job/tools" }, { url: "https://jenkins.example.com/job/service" }],
+        "user",
+        "token",
+        undefined,
+        undefined,
+        new Set(["main"]),
+      );
+      expect(result.jobs).toHaveLength(25);
+      expect(result.jobs[0]?.url).toBe("https://jenkins.example.com/job/service/job/main");
+      // Then the most recently built, whichever project they are in.
+      expect(result.jobs[1]?.url).toBe("https://jenkins.example.com/job/tools/job/chore-29");
+      expect(result.jobs.some(job => job.url.endsWith("/experiment"))).toBe(false);
+      expect(result.branchJobs).toEqual({ shown: 25, total: 32 });
+      expect(result.truncated).toBe(true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("the limit notice counts distinct branch jobs: a project listed twice or a branch also configured directly counts once", async () => {
+    const originalFetch = globalThis.fetch;
+    const branch = (name: string) => ({
+      _class: "org.jenkinsci.plugins.workflow.job.WorkflowJob",
+      name,
+      url: `https://jenkins.example.com/job/service/job/${name}/`,
+      buildable: true,
+      disabled: false,
+    });
+    globalThis.fetch = (async (input: RequestInfo | URL) =>
+      String(input).includes("/job/service/job/")
+        ? Response.json({ _class: "org.jenkinsci.plugins.workflow.job.WorkflowJob" })
+        : Response.json({
+            _class: "org.jenkinsci.plugins.workflow.multibranch.WorkflowMultiBranchProject",
+            jobs: Array.from({ length: 30 }, (_, index) => branch(`b-${index}`)),
+          })) as typeof fetch;
+    try {
+      const project = { url: "https://jenkins.example.com/job/service" };
+      const direct = { url: "https://jenkins.example.com/job/service/job/b-0", label: "b-0 (configured)" };
+      const result = await resolveJenkinsJobs([project, project, direct], "user", "token");
+      expect(new Set(result.jobs.map(job => job.url)).size).toBe(result.jobs.length);
+      expect(result.jobs).toHaveLength(26);
+      // 29 branch jobs not configured directly; 25 of them are read.
+      expect(result.branchJobs).toEqual({ shown: 25, total: 29 });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   test("treats a missing root class as a direct job", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () =>
@@ -843,7 +953,8 @@ test("cached run requests stay on the job origin even when the stored run URL na
     await fetchJenkinsRunsForBuilds([run], "user", "token");
     await fetchJenkinsRunJobs(run, "user", "token");
     await fetchJenkinsConsoleLog(run, "user", "token");
-    expect(calls).toHaveLength(3);
+    // Builds, stages, the test report of the finished build, and the console log.
+    expect(calls).toHaveLength(4);
     expect(calls.every(url => url.startsWith("https://jenkins.example.com/job/foo/12/"))).toBe(true);
   } finally {
     globalThis.fetch = originalFetch;
@@ -912,5 +1023,128 @@ describe("fetchJenkinsRunJobs failures", () => {
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+});
+
+describe("Jenkins test reports", () => {
+  const run: JenkinsRun = {
+    id: "1",
+    name: "app",
+    status: "completed",
+    conclusion: "unstable",
+    headSha: "a".repeat(40),
+    runNumber: 412,
+    startedAt: null,
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    url: "https://jenkins.example.com/job/app/412/",
+    jobLabel: "app",
+    jobUrl: "https://jenkins.example.com/job/app",
+  };
+  const withFetch = async (report: Response, check: (calls: string[]) => Promise<void>) => {
+    const originalFetch = globalThis.fetch;
+    const calls: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      calls.push(url);
+      if (url.includes("/wfapi/describe"))
+        return Response.json({ stages: [{ id: "6", name: "Test", status: "UNSTABLE" }] });
+      if (url.includes("/testReport/")) return report;
+      throw new Error(`Unexpected request ${url}`);
+    }) as typeof fetch;
+    try {
+      await check(calls);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  };
+
+  test("a finished build's test report gives its counts and its failed tests", async () => {
+    const report = Response.json({
+      failCount: 2,
+      passCount: 1204,
+      skipCount: 12,
+      suites: [
+        {
+          cases: [
+            {
+              className: "com.example.PaymentServiceTest",
+              name: "refundsTwice",
+              status: "FAILED",
+              errorDetails: "expected: <1> but was: <2>",
+              errorStackTrace:
+                "org.opentest4j.AssertionFailedError: expected: <1> but was: <2>\n\tat PaymentServiceTest.refundsTwice(PaymentServiceTest.java:88)",
+            },
+            {
+              className: "com.example.PaymentServiceTest",
+              name: "pays",
+              status: "PASSED",
+              errorDetails: null,
+              errorStackTrace: null,
+            },
+          ],
+        },
+        {
+          cases: [
+            {
+              className: "OrderMapperTest",
+              name: "mapsCurrency",
+              status: "REGRESSION",
+              errorDetails: null,
+              errorStackTrace: "boom",
+            },
+          ],
+        },
+      ],
+    });
+    await withFetch(report, async calls => {
+      const { jobs, error } = await fetchJenkinsRunJobs(run, "user", "token");
+      expect(error).toBeNull();
+      expect(
+        calls.some(url => url.startsWith("https://jenkins.example.com/job/app/412/testReport/api/json?tree=")),
+      ).toBe(true);
+      expect(jobs[0].tests).toEqual({
+        passCount: 1204,
+        failCount: 2,
+        skipCount: 12,
+        failed: [
+          {
+            className: "com.example.PaymentServiceTest",
+            name: "refundsTwice",
+            details: "expected: <1> but was: <2>",
+            stackTrace:
+              "org.opentest4j.AssertionFailedError: expected: <1> but was: <2>\n\tat PaymentServiceTest.refundsTwice(PaymentServiceTest.java:88)",
+          },
+          { className: "OrderMapperTest", name: "mapsCurrency", details: null, stackTrace: "boom" },
+        ],
+      });
+    });
+  });
+
+  test("a build without a test report has no tests, and still has its stages", async () => {
+    await withFetch(new Response("not found", { status: 404 }), async () => {
+      clearDebugEvents();
+      const { jobs, error } = await fetchJenkinsRunJobs(run, "user", "token");
+      expect(error).toBeNull();
+      // A missing report is no error: Debug only lists the request, it reports no failure.
+      expect(getDebugEvents().some(event => event.message.startsWith("404"))).toBe(false);
+      expect(jobs[0].steps.map(stage => stage.name)).toEqual(["Test"]);
+      expect(jobs[0].tests).toBeNull();
+    });
+  });
+
+  test("a test report that could not be read is unknown, not missing, so it is asked for again", async () => {
+    await withFetch(new Response("busy", { status: 503 }), async () => {
+      const { jobs, error } = await fetchJenkinsRunJobs(run, "user", "token");
+      expect(error).toBeNull();
+      expect(jobs[0].steps.map(stage => stage.name)).toEqual(["Test"]);
+      expect(jobs[0]).not.toHaveProperty("tests");
+    });
+  });
+
+  test("a running build does not ask for a test report", async () => {
+    await withFetch(Response.json({}), async calls => {
+      await fetchJenkinsRunJobs({ ...run, status: "running", conclusion: null }, "user", "token");
+      expect(calls.some(url => url.includes("/testReport/"))).toBe(false);
+    });
   });
 });

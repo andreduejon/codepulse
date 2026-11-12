@@ -5,8 +5,9 @@ import { snykPartialScanNotice, snykProjectNotice } from "./providers/snyk/proje
 import type { SnykScanResult } from "./providers/snyk/types";
 
 /**
- * A notice pinned under the detail tabs. The banner over the graph is for "can't work" (errors, missing
- * setup); a tab notice is for "works, but incomplete": provider warnings and per-commit coverage gaps.
+ * A notice pinned at the bottom of the details, under the tab content. The banner over the graph is for "can't
+ * work" (errors, missing setup); a tab notice is for "works, but incomplete": provider warnings and per-commit
+ * coverage gaps.
  */
 export interface TabNotice {
   /** Identity for dismissal: a closed notice stays closed until its key changes. */

@@ -11,6 +11,7 @@ import type { GraphBadge } from "../../providers/provider";
 import { fetchWithRetry as fetchWithRetryPolicy } from "../shared/http";
 import { categorize } from "./status";
 import type {
+  GitHubAnnotation,
   GitHubApiJob,
   GitHubCommitData,
   GitHubJob,
@@ -217,6 +218,8 @@ function mapApiJob(j: GitHubApiJob): GitHubJob {
     conclusion: j.conclusion,
     startedAt: j.started_at ?? null,
     completedAt: j.completed_at ?? null,
+    // Hosts that do not report attempts have one attempt per run.
+    runAttempt: typeof j.run_attempt === "number" ? j.run_attempt : 1,
     steps: (j.steps ?? []).map(
       (s): GitHubStep => ({
         name: s.name,
@@ -757,7 +760,8 @@ export async function fetchRunJobs(
 ): Promise<GitHubJobFetchResult> {
   const headers = createHeaders(token);
   const origin = apiBase(repo);
-  let url: string | null = `${origin}/actions/runs/${runId}/jobs?per_page=100`;
+  // Every attempt's jobs, so a re-run can show what the earlier attempts did.
+  let url: string | null = `${origin}/actions/runs/${runId}/jobs?per_page=100&filter=all`;
   const jobs: GitHubJob[] = [];
 
   try {
@@ -778,6 +782,58 @@ export async function fetchRunJobs(
   } catch (err) {
     if (signal?.aborted) throw err;
     return { jobs: [], error: bannerOrFallback(err, BANNER.github.jobsFailed, "GitHub") };
+  }
+}
+
+/** The most annotation pages read for one job (100 each). */
+const MAX_ANNOTATION_PAGES = 5;
+
+/**
+ * A job's annotations (an Actions job is a check run with the same id). Null when they could not be read, so the
+ * caller asks again later; a failed job still shows without them.
+ */
+export async function fetchJobAnnotations(
+  repo: GitHubRepo,
+  token: string,
+  jobId: number,
+  signal?: AbortSignal,
+): Promise<GitHubAnnotation[] | null> {
+  const origin = apiBase(repo);
+  let url: string | null = `${origin}/check-runs/${jobId}/annotations?per_page=100`;
+  const annotations: GitHubAnnotation[] = [];
+  try {
+    // Every page: a failure can come after a page of notices. A page that cannot be read leaves them all unread.
+    for (let page = 0; page < MAX_ANNOTATION_PAGES && url; page++) {
+      const res = await fetchWithRetry(url, { headers: createHeaders(token), signal });
+      if (!res.ok) {
+        debugGitHubHttp(res, "jobs", `Annotations HTTP ${res.status} for job ${jobId}`);
+        return null;
+      }
+      const json = (await res.json()) as unknown;
+      if (!Array.isArray(json)) return null;
+      annotations.push(
+        ...json.flatMap((raw): GitHubAnnotation[] => {
+          const item = raw as Record<string, unknown>;
+          const level = item.annotation_level;
+          if (level !== "failure" && level !== "warning" && level !== "notice") return [];
+          const line = typeof item.start_line === "number" && item.start_line > 0 ? item.start_line : null;
+          return [
+            {
+              level,
+              path: typeof item.path === "string" ? item.path : "",
+              line,
+              message: typeof item.message === "string" ? item.message : "",
+            },
+          ];
+        }),
+      );
+      url = nextGithubLink(res.headers.get("link"), origin);
+    }
+    return annotations;
+  } catch (err) {
+    if (signal?.aborted) throw err;
+    debugError("GitHub", `Annotations for job ${jobId} failed: ${err instanceof Error ? err.message : String(err)}`);
+    return null;
   }
 }
 

@@ -4,7 +4,7 @@ import { MouseButtons } from "@opentui/core/testing";
 import { testRender } from "@opentui/solid";
 import { createSignal } from "solid-js";
 import { UNCOMMITTED_HASH } from "../constants";
-import { AppStateContext, createAppState } from "../context/state";
+import { AppStateContext, createAppState, type ProviderStatus } from "../context/state";
 import { createThemeState, ThemeContext } from "../context/theme";
 import { buildGraph } from "../git/graph";
 import * as repo from "../git/repo";
@@ -70,7 +70,15 @@ const jenkinsRun: JenkinsRun = {
   jobLabel: "pipeline",
   jobUrl: "https://jenkins.invalid/job",
 };
-const jenkinsJob: JenkinsJob = { ...job, id: "1", steps: [] };
+// Its one stage is the row under the build, named like the GitHub job so both click the same label.
+const jenkinsJob: JenkinsJob = {
+  ...job,
+  id: "1",
+  name: "Pipeline",
+  steps: [
+    { id: "stage", name: job.name, status: "completed", conclusion: "success", startedAt: date, completedAt: date },
+  ],
+};
 const resource: OpenShiftResource = {
   id: "pod",
   kind: "Pod",
@@ -170,39 +178,53 @@ async function renderSidebar(provider: ProviderView = "git", snykScan: SnykScanR
                   scrollboxRef={el => (scrollbox = el)}
                   onJumpToCommit={() => {}}
                   onOpenDiff={openDiff}
-                  githubGetCommitData={() => ({ sha: detail.hash, runs: [run] })}
-                  githubFetchJobsForRun={async () => ({ jobs: [job], error: null })}
-                  githubFetchCommitData={reload}
-                  githubProviderStatus={busy() ? { kind: "loading" } : { kind: "idle" }}
-                  onOpenJobLog={openJob}
-                  jenkinsGetCommitData={() => ({ sha: detail.hash, runs: [jenkinsRun], resolved: true })}
-                  jenkinsFetchJobsForRun={async () => ({ jobs: [jenkinsJob], error: null })}
-                  jenkinsFetchCommitData={reload}
-                  jenkinsProviderStatus={busy() ? { kind: "loading" } : { kind: "idle" }}
-                  onOpenJenkinsJobLog={openJob}
-                  openshiftGetCommitData={() => ({
-                    sha: detail.hash,
-                    liveFetched: true,
-                    namespaces: [
-                      {
-                        namespace: resource.namespace,
-                        pods: [resource],
-                        deployments: [],
-                        deploymentConfigs: [],
-                        builds: [],
-                        imageStreamTags: [],
+                  providers={{
+                    "github-actions": {
+                      getCommitData: () => ({ sha: detail.hash, runs: [run] }),
+                      fetchJobsForRun: async () => ({ jobs: [job], error: null }),
+                      fetchCommitData: reload,
+                      get status(): ProviderStatus {
+                        return busy() ? { kind: "loading" } : { kind: "idle" };
                       },
-                    ],
-                  })}
-                  openshiftFetchCommitData={reload}
-                  openshiftIsLoading={busy}
-                  onOpenOpenShiftResource={openJob}
-                  snykGetCommitData={sha => (sha === snykScan.sha ? snykScan : null)}
-                  snykScanCommit={async () => {
-                    await reload();
-                    return snykScan;
+                      onOpenJobLog: openJob,
+                    },
+                    jenkins: {
+                      getCommitData: () => ({ sha: detail.hash, runs: [jenkinsRun], resolved: true }),
+                      fetchJobsForRun: async () => ({ jobs: [jenkinsJob], error: null }),
+                      fetchCommitData: reload,
+                      get status(): ProviderStatus {
+                        return busy() ? { kind: "loading" } : { kind: "idle" };
+                      },
+                      onOpenBuild: openJob,
+                    },
+                    openshift: {
+                      getCommitData: () => ({
+                        sha: detail.hash,
+                        liveFetched: true,
+                        namespaces: [
+                          {
+                            namespace: resource.namespace,
+                            pods: [resource],
+                            deployments: [],
+                            deploymentConfigs: [],
+                            builds: [],
+                            imageStreamTags: [],
+                          },
+                        ],
+                      }),
+                      fetchCommitData: reload,
+                      isLoading: busy,
+                      onOpenResource: openJob,
+                    },
+                    snyk: {
+                      getCommitData: sha => (sha === snykScan.sha ? snykScan : null),
+                      scanCommit: async () => {
+                        await reload();
+                        return snykScan;
+                      },
+                      isScanning: busy,
+                    },
                   }}
-                  snykIsScanning={busy}
                 />
               </box>
             </box>

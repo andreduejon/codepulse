@@ -1,6 +1,7 @@
 import { existsSync, statSync } from "node:fs";
 import { render } from "@opentui/solid";
 import App from "./app";
+import type { AppProps } from "./app-types";
 import { parseArgs } from "./cli/parse-args";
 import { getKnownRepoInfos, type KnownRepoInfo, loadConfig, mergeOptions, resolveConfigInfo } from "./config";
 import { loadCustomThemes } from "./context/custom-themes";
@@ -16,9 +17,12 @@ export type StartupMode =
   | { kind: "selector"; message?: string; messagePath?: string; knownRepos: KnownRepoInfo[] }
   | { kind: "error"; message: string };
 
-export async function main() {
-  process.once("exit", () => closeProviderCaches());
-  const cli = parseArgs(process.argv);
+/**
+ * Everything before the first frame: arguments, config, themes and which screen to show. The demo's headless player
+ * (`bun run demo --play`) starts the app through this too, so it boots the way the real app does.
+ */
+export async function startupProps(argv: string[]): Promise<AppProps> {
+  const cli = parseArgs(argv);
   try {
     cleanupInactiveProviderCaches();
   } catch (error) {
@@ -72,30 +76,31 @@ export async function main() {
     startupMode = { kind: "graph" };
   }
 
-  await render(
-    () => (
-      <App
-        repoPath={opts.repoPath}
-        branch={opts.branch}
-        all={opts.all}
-        maxCount={opts.maxCount}
-        themeName={opts.themeName}
-        customThemes={customThemes}
-        autoRefreshInterval={opts.autoRefreshInterval}
-        autoFetchInterval={opts.autoFetchInterval}
-        configInfo={configInfo}
-        startupMode={startupMode}
-        initialGithubConfig={config.providers?.github}
-        initialJenkinsConfig={config.providers?.jenkins}
-        initialOpenShiftConfig={config.providers?.openshift}
-        initialSnykConfig={config.providers?.snyk}
-      />
-    ),
-    {
-      exitOnCtrlC: true,
-      useMouse: true,
-      enableMouseMovement: true,
-      targetFps: 60,
-    },
-  );
+  return {
+    repoPath: opts.repoPath,
+    branch: opts.branch,
+    all: opts.all,
+    maxCount: opts.maxCount,
+    themeName: opts.themeName,
+    customThemes,
+    autoRefreshInterval: opts.autoRefreshInterval,
+    autoFetchInterval: opts.autoFetchInterval,
+    configInfo,
+    startupMode,
+    initialGithubConfig: config.providers?.github,
+    initialJenkinsConfig: config.providers?.jenkins,
+    initialOpenShiftConfig: config.providers?.openshift,
+    initialSnykConfig: config.providers?.snyk,
+  };
+}
+
+export async function main() {
+  process.once("exit", () => closeProviderCaches());
+  const props = await startupProps(process.argv);
+  await render(() => <App {...props} />, {
+    exitOnCtrlC: true,
+    useMouse: true,
+    enableMouseMovement: true,
+    targetFps: 60,
+  });
 }

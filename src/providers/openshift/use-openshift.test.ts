@@ -47,6 +47,11 @@ function mountOpenShift(
     fetchDepth?: 10 | 20 | 50;
     older?: string[];
     cached?: OpenShiftCacheEntry[];
+    listedResources?: OpenShiftResource[];
+    /** More commits the build inventory returns (beside the cached SHA). */
+    seeds?: OpenShiftCacheEntry[];
+    /** Holds the build inventory back until it settles. */
+    inventoryGate?: Promise<unknown>;
   } = {},
 ) {
   const tokenEnvVar = "CODEPULSE_TEST_OPENSHIFT_TOKEN";
@@ -59,7 +64,7 @@ function mountOpenShift(
   });
   const entry = { sha: SHA, builds: [{ ...build, commitSha: SHA }] };
   const listed: api.OpenShiftListedInventory = {
-    resources: [{ ...pod, commitSha: SHA }],
+    resources: options.listedResources ?? [{ ...pod, commitSha: SHA }],
     controllers: [],
     failures: [],
     successfulRequests: 1,
@@ -72,11 +77,25 @@ function mountOpenShift(
   const cacheWrite = spyOn(OpenShiftCache.prototype, "write").mockResolvedValue(undefined);
   const logRead = spyOn(OpenShiftCache.prototype, "readLog").mockResolvedValue(null);
   const logWrite = spyOn(OpenShiftCache.prototype, "writeLog").mockResolvedValue(undefined);
-  const inventory = spyOn(api, "fetchOpenShiftInventory").mockResolvedValue({
-    data: new Map([[SHA, commitDataFromCacheEntry(entry)]]),
-    error: null,
-    failures: [],
-    successfulRequests: 1,
+  // What the cluster lists: the entries' builds, fresh from the API (not marked as cache-only).
+  const listedCommit = (seed: OpenShiftCacheEntry): OpenShiftCommitData => {
+    const data = commitDataFromCacheEntry(seed);
+    return {
+      ...data,
+      namespaces: data.namespaces.map(ns => ({
+        ...ns,
+        builds: ns.builds.map(({ cacheOnly: _cacheOnly, ...listed }) => listed),
+      })),
+    };
+  };
+  const inventory = spyOn(api, "fetchOpenShiftInventory").mockImplementation(async () => {
+    await options.inventoryGate;
+    return {
+      data: new Map([entry, ...(options.seeds ?? [])].map(seed => [seed.sha, listedCommit(seed)])),
+      error: null,
+      failures: [],
+      successfulRequests: 1,
+    };
   });
   const live = spyOn(api, "fetchOpenShiftResources").mockResolvedValue(listed);
   const watches: Array<{
@@ -270,6 +289,12 @@ describe("OpenShift cache below the fetch depth", () => {
     await settle();
     expect(mounted.state.graphBadges().has(older)).toBe(true);
     expect(mounted.openShift.getCommitData(older)?.namespaces[0].builds.map(b => b.name)).toEqual(["app-0"]);
+    // The cluster did not list it (the inventory asks for the window only): shown as `(cached)`.
+    expect(mounted.openShift.getCommitData(older)?.namespaces[0].builds[0].cacheOnly).toBe(true);
+    // A cached Build the cluster lists again is fresh, not `(cached)`.
+    for (let i = 0; i < 100 && mounted.openShift.getCommitData(SHA)?.namespaces[0].builds[0].cacheOnly; i++)
+      await Bun.sleep(5);
+    expect(mounted.openShift.getCommitData(SHA)?.namespaces[0].builds[0].cacheOnly).toBeUndefined();
     // Shown, not read: showing an older commit does not count as a use for eviction.
     expect(mounted.cacheRead.mock.calls.some(call => call[1] === older)).toBe(false);
     // The build inventory covers only the window; a refresh keeps the older commit.
@@ -277,6 +302,55 @@ describe("OpenShift cache below the fetch depth", () => {
     await Bun.sleep(5);
     expect(mounted.state.graphBadges().has(older)).toBe(true);
     expect(mounted.openShift.getCommitData(older)?.namespaces[0].builds.map(b => b.name)).toEqual(["app-0"]);
+  });
+});
+
+describe("OpenShift live in namespace", () => {
+  test("the commit each namespace runs is marked in the graph, also below the fetch window", async () => {
+    const newer = Array.from({ length: 9 }, (_, i) => String(i + 1).repeat(40));
+    const older = "b".repeat(40);
+    const deployment = (name: string, commitSha: string, status: OpenShiftResource["status"]): OpenShiftResource => ({
+      id: `Deployment:ns:${name}`,
+      kind: "Deployment",
+      namespace: "ns",
+      name,
+      status,
+      imageRefs: [],
+      commitSha,
+    });
+    const mounted = mountOpenShift(false, true, {
+      fetchDepth: 10,
+      older: [...newer, older],
+      listedResources: [deployment("api", older, "pass"), deployment("api-next", SHA, "running")],
+    });
+    for (let i = 0; i < 100 && !mounted.state.graphBadges().get(older)?.namespaces; i++) await Bun.sleep(5);
+    expect(mounted.state.graphBadges().get(older)?.namespaces).toEqual([{ namespace: "ns", state: "live" }]);
+    expect(mounted.state.graphBadges().get(SHA)?.namespaces).toEqual([{ namespace: "ns", state: "rolling" }]);
+  });
+});
+
+describe("OpenShift live list before the build list", () => {
+  test("a commit the build list adds after the live list landed shows its live resources at once", async () => {
+    const other = "c".repeat(40);
+    let releaseInventory!: () => void;
+    const inventoryGate = new Promise<void>(resolve => {
+      releaseInventory = resolve;
+    });
+    const otherBuild = { ...build, id: "Build:ns:app-2", name: "app-2", imageRefs: ["sha256:def"], commitSha: other };
+    const otherPod = { ...pod, id: "Pod:ns:app-2", name: "app-2", imageRefs: ["sha256:def"], commitSha: other };
+    const mounted = mountOpenShift(false, true, {
+      older: [other],
+      seeds: [{ sha: other, builds: [otherBuild] }],
+      listedResources: [{ ...pod, commitSha: SHA }, otherPod],
+      inventoryGate,
+    });
+    // The live list lands first: its watches start while the build list is still on its way.
+    for (let i = 0; i < 100 && mounted.watches.length === 0; i++) await Bun.sleep(5);
+    expect(mounted.watches.length).toBeGreaterThan(0);
+    releaseInventory();
+    for (let i = 0; i < 100 && !mounted.state.graphBadges().get(other); i++) await Bun.sleep(5);
+    // The Build from the build list and the Pod from the live list, without selecting the commit first.
+    expect(mounted.state.graphBadges().get(other)?.resourceCount).toBe(2);
   });
 });
 
@@ -536,6 +610,32 @@ describe("OpenShift auth recovery across inventory and live list", () => {
     expect(mounted.state.providerStatusFor("openshift")).toEqual({
       kind: "error",
       message: BANNER.openshift.tokenExpired,
+    });
+  });
+
+  test("a build inventory that succeeds after the watches were denied keeps the watch warning", async () => {
+    const mounted = mountOpenShift();
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => (release = resolve));
+    mounted.inventory.mockImplementationOnce(async () => {
+      await gate;
+      return fine;
+    });
+    await Bun.sleep(30);
+    expect(mounted.watches.length).toBeGreaterThan(0);
+    // The cluster lists but does not watch, while the first inventory is still out.
+    for (const watch of mounted.watches) watch.resolve("forbidden");
+    await Bun.sleep(10);
+    expect(mounted.state.providerStatusFor("openshift")).toEqual({
+      kind: "warning",
+      message: BANNER.openshift.watchDenied,
+    });
+    release();
+    await Bun.sleep(30);
+    // The watches stay stopped, so the data can go stale: the warning must stay until a reload.
+    expect(mounted.state.providerStatusFor("openshift")).toEqual({
+      kind: "warning",
+      message: BANNER.openshift.watchDenied,
     });
   });
 

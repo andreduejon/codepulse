@@ -258,17 +258,23 @@ export function renderGapRow(row: GraphRow, opts: RenderOptions = {}): GraphChar
 }
 
 /**
- * Render a fan-out connector row. These are extra rows below a commit that
+ * Render a fan-out connector row. These are extra rows above a commit that
  * show branch-off corners for lanes that were all pointing to the same parent.
  * Each fan-out row shows one lane closing with a corner, plus straight lines
  * for active lanes and horizontals spanning from the parent's column.
  *
  * The connectors array is pre-built by buildGraph — one entry per column.
+ *
+ * @param asCommitRow - The row stands in for the commit's own row (the last
+ *   fan-out row of a commit without connections): its node column draws the
+ *   commit's █ block. Rows above the commit draw a ├ / ┤ junction there, so a
+ *   commit with many branches stays one block instead of a tall bar.
  */
 export function renderFanOutRow(
   fanOutConnectors: Connector[],
   opts: RenderOptions = {},
   nodeColumn?: number,
+  asCommitRow = false,
 ): GraphChar[] {
   const padToColumns = opts.padToColumns;
   const result: GraphChar[] = [];
@@ -283,9 +289,9 @@ export function renderFanOutRow(
     if (c.column >= maxCol) maxCol = c.column + 1;
   }
 
-  // Node column uses █ for the commit's block glyph.
-  // Other columns (e.g. absorbed merge connectors) use ├/┤ so they
-  // don't look like a second commit on the same row.
+  // The commit's own row uses █ at the node column. Rows above it, and other
+  // columns (e.g. absorbed merge connectors), use ├/┤ so they don't look like
+  // another commit.
   const nodeConfig: ConnectorGlyphConfig = {
     teeLeftChar: "█",
     teeRightGlyph: "█ ",
@@ -304,9 +310,8 @@ export function renderFanOutRow(
       continue;
     }
 
-    // Use █ only at the node column; ├/┤ at absorbed merge tee columns
-    const config =
-      (nodeColumn !== undefined && col === nodeColumn) || nodeColumn === undefined ? nodeConfig : mergeConfig;
+    // █ only at the node column of the commit's own row; ├/┤ everywhere else
+    const config = asCommitRow && (nodeColumn === undefined || col === nodeColumn) ? nodeConfig : mergeConfig;
 
     if (!renderConnectorGlyphs(connectors, col, byCol, result, opts, config)) {
       result.push({ char: "  ", color: getBaseColor(col, opts) });

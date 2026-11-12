@@ -1,6 +1,7 @@
 import { MouseButton } from "@opentui/core";
 import { createSignal, type JSX, Show } from "solid-js";
 import { useT } from "../hooks/use-t";
+import { cellWidth } from "../utils/terminal-text";
 
 interface KeyHintProps {
   key: JSX.Element | string;
@@ -59,6 +60,31 @@ export function KeyHint(props: Readonly<KeyHintProps>) {
       </text>
     </Show>
   );
+}
+
+/** A hint in a footer that drops hints to fit: the higher its rank, the sooner it goes. */
+export interface RankedHint {
+  key: string;
+  desc: string;
+  rank: number;
+}
+
+/**
+ * The hints that fit in `room` cells with ` · ` between them: the least needed (highest rank, the later one first)
+ * go until the rest fit. Whole hints go, so none is cut and no separator is left at the end. One always stays.
+ */
+export function fitHints<T extends RankedHint>(hints: readonly T[], room: number): T[] {
+  const width = (list: readonly T[]) =>
+    list.reduce((sum, hint) => sum + cellWidth(hint.key + hint.desc), 0) + Math.max(0, list.length - 1) * 3;
+  let kept = [...hints];
+  while (kept.length > 1 && width(kept) > room) {
+    let drop = 0;
+    kept.forEach((hint, index) => {
+      if (hint.rank >= (kept[drop]?.rank ?? 0)) drop = index;
+    });
+    kept = kept.filter((_, index) => index !== drop);
+  }
+  return kept;
 }
 
 export function KeyHintSeparator() {

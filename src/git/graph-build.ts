@@ -407,13 +407,19 @@ interface LaneState {
   laneRemoteOnly: boolean[];
   laneColors: number[];
   nextColorIdx: number;
+  /**
+   * The column a root commit ended on the row before. A new branch tip on the next row does not take it: an
+   * unrelated branch right below a root reads as one branch (an orphan gh-pages root above a feature branch).
+   */
+  rootGap: number | null;
 }
 
 /**
  * Assign a lane column to the given commit hash.
  *
  * If the hash is already tracked, returns its column. Otherwise, reuses the
- * first interior null gap (to keep the graph compact) or appends a new lane.
+ * first interior null gap (to keep the graph compact) or appends a new lane,
+ * never in the column a root commit ended on the row before (`rootGap`).
  * Mutates `ls` when a new lane is allocated.
  */
 function assignNodeColumn(hash: string, isRemoteOnly: boolean, ls: LaneState): number {
@@ -424,7 +430,7 @@ function assignNodeColumn(hash: string, isRemoteOnly: boolean, ls: LaneState): n
   // Find first interior gap (null surrounded by active lanes on the right)
   let reuseIdx = -1;
   for (let j = 0; j < lanes.length; j++) {
-    if (lanes[j] === null) {
+    if (lanes[j] === null && j !== ls.rootGap) {
       let hasActiveAfter = false;
       for (let k = j + 1; k < lanes.length; k++) {
         if (lanes[k] !== null) {
@@ -445,6 +451,13 @@ function assignNodeColumn(hash: string, isRemoteOnly: boolean, ls: LaneState): n
     laneRemoteOnly[reuseIdx] = isRemoteOnly;
     laneColors[reuseIdx] = ls.nextColorIdx++;
   } else {
+    // The root's column was trimmed as trailing and would be the next one: keep it as an empty lane and start after
+    // it. Free columns before it are fine, so roots in a row take turns between two columns.
+    if (ls.rootGap !== null && lanes.length === ls.rootGap) {
+      lanes.push(null);
+      laneRemoteOnly.push(false);
+      laneColors.push(0);
+    }
     nodeColumn = lanes.length;
     lanes.push(hash);
     laneRemoteOnly.push(isRemoteOnly);
@@ -788,7 +801,7 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
 
   // Phase 3: Main loop — assign lanes, build connectors, create rows
   const rows: GraphRow[] = [];
-  const ls: LaneState = { lanes: [], laneRemoteOnly: [], laneColors: [], nextColorIdx: 0 };
+  const ls: LaneState = { lanes: [], laneRemoteOnly: [], laneColors: [], nextColorIdx: 0, rootGap: null };
   const nodeColorByHash = new Map<string, number>();
   const processedColumns = new Map<string, number>();
 
@@ -797,6 +810,8 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
 
     // 3a. Assign the commit's lane column (reuse gap or append)
     const nodeColumn = assignNodeColumn(commit.hash, isCommitRemoteOnly, ls);
+    // A root's column is kept free for the one row after it only.
+    ls.rootGap = null;
 
     // 3b. Find extra lanes tracking the same hash (fan-out)
     const extraLanes: number[] = [];
@@ -827,6 +842,9 @@ export function buildGraph(commits: Commit[]): GraphRow[] {
     );
 
     const mergeSourceColor = parentLaneColors.length >= 2 ? parentLaneColors[1] : undefined;
+
+    // A root ends its lane with nothing below: the next row starts no new branch in its column.
+    if (commit.parents.length === 0 && ls.lanes[nodeColumn] === null) ls.rootGap = nodeColumn;
 
     // 3f. Optimize fan-out + merge connector layout
     optimizeFanOutMerge(fanOutRows, connectors, nodeColumn);

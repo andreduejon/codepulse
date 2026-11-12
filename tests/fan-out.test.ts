@@ -338,7 +338,8 @@ describe("Fan-Out", () => {
       { type: "corner-top-right", color: 2, column: 3 },
     ];
 
-    const rendered = renderFanOutRow(syntheticRow, { themeColors: THEME_COLORS });
+    // The merged fan-out row is the commit's own row: its node column draws the block.
+    const rendered = renderFanOutRow(syntheticRow, { themeColors: THEME_COLORS }, 1, true);
     const str = graphCharsToAscii(rendered);
 
     expect(str.includes("╮")).toBe(true);

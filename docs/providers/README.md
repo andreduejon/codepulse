@@ -43,6 +43,9 @@ differs where noted:
   (`n` / `N` move between hits), `c` cycles the view, `w` wraps, `r` refreshes what is shown,
   `g` / `G`, space, and shift arrows scroll. A failed log shows its reason; an empty
   one says *No log output.*
+- **`o`** opens the selected detail row in the browser: a CI run or job, a Jenkins build, an OpenShift
+  namespace or resource (with the **Console** setting), or a Snyk finding. The footer shows `o open` only
+  on rows that have a page.
 
 ## Cache
 

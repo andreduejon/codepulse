@@ -30,7 +30,9 @@ export const BANNER = {
     authFailed: "Jenkins authentication failed. Live data unavailable. Reload to retry.",
     tokenExpired: "Jenkins token expired. Live data unavailable. Reload to retry.",
     fetchFailed: "Jenkins fetch failed.",
-    incomplete: "Jenkins data incomplete. Branch-job limit reached.",
+    /** A headline with the counts, then what it means, like the other tab notices. */
+    branchLimit: (shown: number, total: number) =>
+      `Jenkins branch jobs · ${shown} of ${total} read. Branches in the graph come first. Builds on the other ${total - shown} do not show.`,
     invalidJobUrl: "Jenkins job URL invalid.",
     logFailed: "Jenkins log failed.",
     stagesFailed: "Jenkins stages failed.",

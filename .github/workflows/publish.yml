@@ -90,7 +90,7 @@ jobs:
         run: bun -e 'if (process.arch !== "${{ matrix.arch }}") process.exit(1)'
 
       - name: Native tests
-        timeout-minutes: 3
+        timeout-minutes: 6
         run: bun test
 
       - name: Installer regression checks

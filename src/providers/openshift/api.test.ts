@@ -4,12 +4,15 @@ import { clearDebugEvents, getDebugEvents } from "../../debug/events";
 import {
   buildOpenShiftCommitMap,
   buildOpenShiftGraphBadges,
+  buildOpenShiftNamespaceMarkers,
   commitLabelSelector,
   commitShaFromItem,
+  fetchOpenShiftEvents,
   fetchOpenShiftInventory,
   fetchOpenShiftResources,
   MAX_LIST_ITEMS,
   MAX_LIST_PAGES,
+  resourceFromWatchObject,
 } from "./api";
 import type { OpenShiftCommitData, OpenShiftResource } from "./types";
 
@@ -996,5 +999,234 @@ describe("fetchOpenShiftInventory modes", () => {
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+});
+
+describe("failing status", () => {
+  const pod = (status: Record<string, unknown>) => ({
+    kind: "Pod",
+    metadata: { name: "api-7f9c", namespace: "dev" },
+    status,
+  });
+  const statusOf = (object: unknown) => resourceFromWatchObject(object, "dev/commit-sha")?.status;
+
+  test("a Pod fails on a crash loop, a bad exit, a failed image pull or an eviction", () => {
+    expect(
+      statusOf(
+        pod({
+          phase: "Running",
+          containerStatuses: [
+            {
+              restartCount: 14,
+              state: { waiting: { reason: "CrashLoopBackOff" } },
+              lastState: { terminated: { reason: "Error", exitCode: 1 } },
+            },
+          ],
+        }),
+      ),
+    ).toBe("fail");
+    expect(
+      statusOf(
+        pod({
+          phase: "Running",
+          containerStatuses: [{ restartCount: 0, state: { terminated: { reason: "OOMKilled", exitCode: 137 } } }],
+        }),
+      ),
+    ).toBe("fail");
+    expect(
+      statusOf(pod({ phase: "Pending", containerStatuses: [{ state: { waiting: { reason: "ImagePullBackOff" } } }] })),
+    ).toBe("fail");
+    expect(statusOf(pod({ phase: "Failed", reason: "Evicted" }))).toBe("fail");
+  });
+
+  test("a Deployment fails past its progress deadline or when it cannot create replicas", () => {
+    const deployment = (status: Record<string, unknown>, replicas = 3) => ({
+      kind: "Deployment",
+      metadata: { name: "api", namespace: "dev", generation: 2 },
+      spec: { replicas },
+      status: { observedGeneration: 2, ...status },
+    });
+    expect(
+      statusOf(
+        deployment({
+          readyReplicas: 1,
+          conditions: [{ type: "Progressing", status: "False", reason: "ProgressDeadlineExceeded" }],
+        }),
+      ),
+    ).toBe("fail");
+    expect(
+      statusOf(deployment({ conditions: [{ type: "ReplicaFailure", status: "True", reason: "FailedCreate" }] }, 2)),
+    ).toBe("fail");
+  });
+
+  test("a ready Pod passes and a starting one is in progress", () => {
+    expect(statusOf(pod({ phase: "Running", conditions: [{ type: "Ready", status: "True" }] }))).toBe("pass");
+    expect(
+      statusOf(pod({ phase: "Pending", containerStatuses: [{ state: { waiting: { reason: "ContainerCreating" } } }] })),
+    ).toBe("running");
+  });
+});
+
+describe("fetchOpenShiftEvents", () => {
+  const pod: OpenShiftResource = {
+    id: "Pod:dev:api-7f9c",
+    kind: "Pod",
+    namespace: "dev",
+    name: "api-7f9c",
+    status: "fail",
+    imageRefs: [],
+  };
+  const withFetch = async (response: Response, run: (url: () => string) => Promise<void>) => {
+    const originalFetch = globalThis.fetch;
+    let url = "";
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      url = String(input);
+      return response;
+    }) as typeof fetch;
+    try {
+      await run(() => url);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  };
+
+  test("lists the events about the resource, by kind and name, newest first", async () => {
+    const items = [
+      {
+        type: "Normal",
+        reason: "Scheduled",
+        message: "Successfully assigned",
+        count: 1,
+        lastTimestamp: "2026-01-01T00:00:00Z",
+      },
+      {
+        type: "Warning",
+        reason: "BackOff",
+        message: "Back-off restarting",
+        count: 31,
+        lastTimestamp: "2026-01-01T00:10:00Z",
+      },
+      {
+        type: "Warning",
+        reason: "Unhealthy",
+        message: "Readiness probe failed",
+        series: { count: 6, lastObservedTime: "2026-01-01T00:05:00Z" },
+        eventTime: "2026-01-01T00:01:00Z",
+      },
+    ];
+    await withFetch(new Response(JSON.stringify({ items }), { status: 200 }), async url => {
+      const events = await fetchOpenShiftEvents("https://api.example.com:6443", "token", pod);
+      expect(url()).toBe(
+        `https://api.example.com:6443/api/v1/namespaces/dev/events?fieldSelector=${encodeURIComponent(
+          "involvedObject.kind=Pod,involvedObject.name=api-7f9c",
+        )}`,
+      );
+      expect(events.map(event => [event.reason, event.count, event.lastSeen])).toEqual([
+        ["BackOff", 31, "2026-01-01T00:10:00Z"],
+        ["Unhealthy", 6, "2026-01-01T00:05:00Z"],
+        ["Scheduled", 1, "2026-01-01T00:00:00Z"],
+      ]);
+    });
+  });
+
+  test("a missing events permission says which permission", async () => {
+    await withFetch(new Response("forbidden", { status: 403 }), async () => {
+      await expect(fetchOpenShiftEvents("https://api.example.com:6443", "token", pod)).rejects.toThrow(
+        "No permission to list events",
+      );
+    });
+  });
+});
+
+describe("buildOpenShiftNamespaceMarkers", () => {
+  const workload = (
+    kind: "Deployment" | "DeploymentConfig",
+    namespace: string,
+    name: string,
+    commitSha: string | undefined,
+    status: OpenShiftResource["status"],
+  ): OpenShiftResource => ({
+    id: `${kind}:${namespace}:${name}`,
+    kind,
+    namespace,
+    name,
+    status,
+    imageRefs: [],
+    commitSha,
+  });
+
+  test("each namespace marks the commits its workloads run, in the configured namespace order", () => {
+    const a = "a".repeat(40);
+    const b = "b".repeat(40);
+    const markers = buildOpenShiftNamespaceMarkers(
+      [
+        workload("Deployment", "test", "api", a, "running"),
+        workload("Deployment", "dev", "api", a, "pass"),
+        workload("DeploymentConfig", "dev", "worker", a, "pass"),
+        workload("Deployment", "prod", "api", b.toUpperCase(), "pass"),
+        workload("Deployment", "dev", "web", undefined, "pass"),
+        // A Pod says nothing about what a namespace was deployed with.
+        {
+          id: "Pod:dev:api-1",
+          kind: "Pod",
+          namespace: "dev",
+          name: "api-1",
+          status: "fail",
+          imageRefs: [],
+          commitSha: b,
+        },
+      ],
+      ["dev", "test", "prod"],
+    );
+    expect(markers.get(a)).toEqual([
+      { namespace: "dev", state: "live" },
+      { namespace: "test", state: "rolling" },
+    ]);
+    expect(markers.get(b)).toEqual([{ namespace: "prod", state: "live" }]);
+  });
+
+  test("a failing workload wins over a rolling one, which wins over a live one, per namespace", () => {
+    const a = "a".repeat(40);
+    const markers = buildOpenShiftNamespaceMarkers(
+      [
+        workload("Deployment", "dev", "api", a, "pass"),
+        workload("Deployment", "dev", "worker", a, "running"),
+        workload("Deployment", "test", "api", a, "running"),
+        workload("Deployment", "test", "worker", a, "fail"),
+      ],
+      ["dev", "test"],
+    );
+    expect(markers.get(a)).toEqual([
+      { namespace: "dev", state: "rolling" },
+      { namespace: "test", state: "fail" },
+    ]);
+  });
+
+  test("a Deployment scaled to 0 runs nothing, so it marks no namespace", () => {
+    const a = "a".repeat(40);
+    const b = "b".repeat(40);
+    const markers = buildOpenShiftNamespaceMarkers(
+      [
+        { ...workload("Deployment", "test", "batch", a, "pass"), scaledToZero: true },
+        { ...workload("DeploymentConfig", "test", "worker", b, "running"), scaledToZero: true },
+        workload("Deployment", "dev", "batch", a, "pass"),
+      ],
+      ["dev", "test"],
+    );
+    expect(markers.get(a)).toEqual([{ namespace: "dev", state: "live" }]);
+    expect(markers.has(b)).toBe(false);
+  });
+
+  test("Deployments and DeploymentConfigs with 0 replicas are scaled to 0", () => {
+    const workloadObject = (kind: string, spec: Record<string, unknown>) =>
+      resourceFromWatchObject(
+        { kind, metadata: { name: "batch", namespace: "test" }, spec, status: { observedGeneration: 1 } },
+        "dev/commit-sha",
+      );
+    expect(workloadObject("Deployment", { replicas: 0 })?.scaledToZero).toBe(true);
+    expect(workloadObject("DeploymentConfig", { replicas: 0 })?.scaledToZero).toBe(true);
+    expect(workloadObject("Deployment", { replicas: 2 })?.scaledToZero).toBeUndefined();
+    // No replicas field means 1.
+    expect(workloadObject("Deployment", {})?.scaledToZero).toBeUndefined();
   });
 });

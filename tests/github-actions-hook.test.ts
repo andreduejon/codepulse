@@ -58,7 +58,7 @@ test("unsupported GraphQL jobs stay disabled while runs and REST expansion still
           },
         });
       }
-      if (url === "https://api.github.com/repos/owner/repo/actions/runs/1/jobs?per_page=100") {
+      if (url === "https://api.github.com/repos/owner/repo/actions/runs/1/jobs?per_page=100&filter=all") {
         return Response.json({
           jobs: [{ id: 10, name: "build", status: "completed", conclusion: "success", steps: [] }],
         });
@@ -108,7 +108,7 @@ test("unsupported GraphQL jobs stay disabled while runs and REST expansion still
     });
     expect(urls).toEqual([
       ...Array(3).fill("https://api.github.com/graphql"),
-      "https://api.github.com/repos/owner/repo/actions/runs/1/jobs?per_page=100",
+      "https://api.github.com/repos/owner/repo/actions/runs/1/jobs?per_page=100&filter=all",
     ]);
     const events = getDebugEvents();
     expect(events.filter(event => event.status === "info")).toEqual([

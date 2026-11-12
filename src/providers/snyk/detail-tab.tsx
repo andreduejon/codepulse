@@ -6,10 +6,12 @@ import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useClipboard } from "../../hooks/use-clipboard";
 import { useT } from "../../hooks/use-t";
 import { BUSY } from "../../utils/busy-text";
+import { useOpenRowShortcut } from "../shared/open-row";
 import { filterSnykFindings, SnykFilterRow, useSnykFilter } from "./filter";
 import { countUniqueFindings, groupSnykFixes, groupSnykVulnerabilities, type SnykVulnerabilityEntry } from "./parser";
+import { compareSnykScans, diffKey, snykBaselineNote } from "./scan-diff";
 import { SnykControlRow, type SnykDetailTabProps, snykScanIdentity, useSnykRows } from "./tab-shared";
-import type { SnykSeverity } from "./types";
+import type { SnykFinding, SnykSeverity } from "./types";
 import { useSnykTabMemory } from "./view-memory";
 import {
   detailLines,
@@ -20,6 +22,7 @@ import {
   ROW_TAIL_WIDTH,
   type Section,
   shortCoordinate,
+  snykVulnerabilityUrl,
 } from "./vulnerabilities-model";
 import { SectionView, type VulnerabilityRowsView } from "./vulnerabilities-rows";
 
@@ -42,9 +45,13 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
   /** Dependency groups and packages start open (CVEs closed); track the ones closed. */
   const [collapsedGroups, setCollapsedGroups] = createSignal<Set<string>>(new Set());
   const isSectionExpanded = (section: Section) =>
-    section.severity ? expandedSections().has(section.key) : !collapsedGroups().has(section.key);
+    section.change
+      ? expandedSections().has(section.key) || diffWord() === section.change
+      : section.severity
+        ? expandedSections().has(section.key)
+        : !collapsedGroups().has(section.key);
   const isPackageExpanded = (pkg: PackageRow) => !collapsedGroups().has(pkg.key);
-  // Cursor order: Scan (left out while Snyk is unavailable), Copy, Group by, filter, then the findings.
+  // Cursor order: Scan (left out while Snyk is unavailable), Copy, Group by, filter, the findings, then NEW and FIXED.
   const base = () => (props.unavailable ? 0 : 1);
   const copyIndex = () => base();
   const groupByIndex = () => base() + 1;
@@ -56,8 +63,60 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
   const itemRefs: Renderable[] = [];
   const rowsUi = useSnykRows(props, () => activateCurrentItem());
 
-  const filteredFindings = createMemo(() => filterSnykFindings(props.scan?.findings ?? [], filter.query()));
+  /**
+   * Against an earlier scan, when there is one: findings added (NEW, and marked `new`) and fixed (FIXED). Null when
+   * a partial scan does not say which projects failed, so nothing can be told apart.
+   */
+  const diff = createMemo(() =>
+    props.scan && props.baseline ? compareSnykScans(props.scan, props.baseline.scan) : null,
+  );
+  const addedKeys = createMemo(() => new Set([...(diff()?.added ?? [])].map(diffKey)));
+  /** `new` and `fixed` in the filter show only that tree, like `pinned` in Dependencies. */
+  const diffWord = () => {
+    const word = filter.query().trim().toLowerCase();
+    return diff() && (word === "new" || word === "fixed") ? word : null;
+  };
+  const filteredFindings = createMemo(() => {
+    const findings = props.scan?.findings ?? [];
+    const word = diffWord();
+    if (word) return [];
+    return filterSnykFindings(findings, filter.query());
+  });
+  /** The findings of NEW or FIXED the filter keeps: all of them for their own word, none for the other's. */
+  const shownChanges = (change: "new" | "fixed", findings: readonly SnykFinding[]): readonly SnykFinding[] => {
+    const word = diffWord();
+    return word === change ? findings : word ? [] : filterSnykFindings(findings, filter.query());
+  };
+  /** NEW repeats the added findings (they stay under their severity too); FIXED lists the earlier scan's gone ones. */
+  const changeSection = (change: "new" | "fixed", findings: readonly SnykFinding[]): Section | null => {
+    const baseline = props.baseline;
+    // Shown at 0 when nothing changed: the heading still says what was compared.
+    if (!baseline || !diff()) return null;
+    const shown = shownChanges(change, findings);
+    // Own keys: a finding under its severity and under NEW opens and takes the cursor in each on its own.
+    const entries = groupSnykVulnerabilities(shown).map(entry => ({ ...entry, key: `${change}:${entry.key}` }));
+    return {
+      key: change,
+      label: change.toUpperCase(),
+      change,
+      note: snykBaselineNote(baseline),
+      entries,
+      original: groupSnykVulnerabilities(findings).length,
+    };
+  };
+  const changeSections = createMemo(() =>
+    [changeSection("new", [...(diff()?.added ?? [])]), changeSection("fixed", diff()?.fixed ?? [])].filter(
+      (section): section is Section => section !== null,
+    ),
+  );
   const entries = createMemo(() => groupSnykVulnerabilities(filteredFindings()));
+  /** Shown of all: with `new` or `fixed`, that tree's findings, like its heading; else this scan's. */
+  const filterCount = () => {
+    const word = diffWord();
+    const section = word ? changeSections().find(candidate => candidate.change === word) : undefined;
+    if (section) return `${section.entries.length}/${section.original}`;
+    return filter.query().trim() ? `${uniqueTotal()}/${originalTotal()}` : `${uniqueTotal()}`;
+  };
   const originalCounts = createMemo(() => {
     const counts = { critical: 0, high: 0, medium: 0, low: 0 } as Record<SnykSeverity, number>;
     for (const entry of groupSnykVulnerabilities(props.scan?.findings ?? [])) counts[entry.finding.severity]++;
@@ -65,9 +124,12 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
   });
   const originalTotal = createMemo(() => SEVERITIES.reduce((sum, severity) => sum + originalCounts()[severity], 0));
   const uniqueTotal = createMemo(() => entries().length);
+  /** Copy, Group by and the filter, when there are findings to show: this scan's, or the ones it fixed. */
+  const hasControls = () => originalTotal() > 0 || (diff()?.fixed.length ?? 0) > 0;
   // Unfiltered groups fix the list and its order, so filtering only changes counts (like severities).
   const originalGroups = createMemo(() => groupSnykFixes(groupSnykVulnerabilities(props.scan?.findings ?? [])));
-  const sections = createMemo<Section[]>(() => {
+  const sections = createMemo<Section[]>(() => [...currentSections(), ...changeSections()]);
+  function currentSections(): Section[] {
     if (!props.scan) return [];
     if (groupBy() === "dependency") {
       const filtered = new Map(groupSnykFixes(entries()).map(group => [group.key, group]));
@@ -97,7 +159,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
       entries: entries().filter(entry => entry.finding.severity === severity),
       original: originalCounts()[severity],
     }));
-  });
+  }
 
   const entryItems = (entry: SnykVulnerabilityEntry): FlatItem[] => [
     { kind: "finding", entry },
@@ -109,8 +171,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
   ];
   const flatItems = createMemo<FlatItem[]>(() => [
     ...(props.unavailable ? [] : [{ kind: "scan" as const }]),
-    // Copy, Group by and filter only when the scan has findings to show.
-    ...(originalTotal() > 0
+    ...(hasControls()
       ? [{ kind: "copyJson" as const }, { kind: "groupBy" as const }, { kind: "filter" as const }]
       : []),
     ...sections().flatMap((section): FlatItem[] =>
@@ -145,12 +206,18 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
   const sectionLabelWidth = (section: Section) =>
     Math.max(1, panelUsableWidth() - 2 - String(section.entries.length).length - 1);
   const metadataWidth = () => Math.max(10, panelUsableWidth() - METADATA_PREFIX_WIDTH - nesting());
+  /** A package row: its branch and marker (5 columns), then the name, a gap and its count. */
+  const packageLabelWidth = (pkg: PackageRow) =>
+    Math.max(1, panelUsableWidth() - 5 - 1 - String(pkg.entries.length).length);
   const cursorItem = () => (props.detailFocused() ? flatItems()[props.detailCursorIndex()] : undefined);
   const bannerOverflow = createMemo(() => {
     const item = cursorItem();
     if (item?.kind === "finding") return Math.max(0, item.entry.label.length - findingLabelWidth());
     if (item?.kind === "section" && !item.section.severity)
       return Math.max(0, item.section.label.length - sectionLabelWidth(item.section));
+    // The selected package shows its full coordinate (`org.example:artifact`), scrolling when it does not fit.
+    if (item?.kind === "package" && !item.pkg.self)
+      return Math.max(0, item.pkg.name.length - packageLabelWidth(item.pkg));
     if (item?.kind === "field" && !item.line.wrap)
       return Math.max(0, (item.line.full ?? item.line.text).length - metadataWidth());
     return 0;
@@ -181,6 +248,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
   const scanJson = () => {
     const scan = props.scan;
     if (!scan) return "";
+    const changes = diff();
     return JSON.stringify(
       {
         commit: scan.sha,
@@ -199,6 +267,16 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
           reason,
         })),
         findings: filteredFindings(),
+        // What NEW and FIXED show, against the scan they compare with.
+        ...(props.baseline && changes
+          ? {
+              comparison: {
+                baseline: props.baseline.sha,
+                new: shownChanges("new", [...changes.added]),
+                fixed: shownChanges("fixed", changes.fixed),
+              },
+            }
+          : {}),
       },
       null,
       2,
@@ -226,7 +304,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
   const toggleSection = (section: Section) => {
     const open = isSectionExpanded(section);
     if (open) closeEntries(section.entries);
-    if (section.severity) toggle(setExpandedSections, section.key);
+    if (section.severity || section.change) toggle(setExpandedSections, section.key);
     else
       update(setCollapsedGroups, next => {
         if (!open) next.delete(section.key);
@@ -329,6 +407,16 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
     props.navRef.activateCurrentItem = activateCurrentItem;
   });
 
+  useOpenRowShortcut({
+    navRef: props.navRef,
+    detailFocused: props.detailFocused,
+    url: () => {
+      const item = flatItems()[props.detailCursorIndex()];
+      return item?.kind === "finding" ? snykVulnerabilityUrl(item.entry.finding.id) : null;
+    },
+    setDetailCursorShortcut: props.setDetailCursorShortcut,
+  });
+
   createEffect(() => {
     const item = flatItems()[props.detailCursorIndex()];
     if (!props.detailFocused() || !item) {
@@ -362,7 +450,9 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
     metadataWidth,
     findingLabelWidth,
     sectionLabelWidth,
+    packageLabelWidth,
     findingExpanded: key => expandedFindings().has(key),
+    isNew: entry => addedKeys().has(diffKey(entry.finding)),
     sectionExpanded: isSectionExpanded,
     packageExpanded: isPackageExpanded,
   };
@@ -384,7 +474,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
       />
 
       <Show when={props.scan}>
-        <Show when={originalTotal() > 0}>
+        <Show when={hasControls()}>
           <SnykControlRow
             rows={rowsUi}
             id="copyJson"
@@ -411,13 +501,20 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
             rowRef={rowRef({ kind: "filter" })}
           >
             <text flexShrink={0} selectable={false} fg={t().foregroundMuted} wrapMode="none">
-              {filter.query().trim() ? `${uniqueTotal()}/${originalTotal()}` : uniqueTotal()}
+              {filterCount()}
             </text>
           </SnykFilterRow>
         </Show>
 
         <box height={1} flexShrink={0} />
-        <For each={sections()}>{section => <SectionView view={view} section={section} />}</For>
+        <For each={sections().filter(section => !section.change)}>
+          {section => <SectionView view={view} section={section} />}
+        </For>
+        {/* NEW and FIXED start their own trees: what changed against the earlier scan. */}
+        <Show when={changeSections().length > 0}>
+          <box height={1} flexShrink={0} />
+          <For each={changeSections()}>{section => <SectionView view={view} section={section} />}</For>
+        </Show>
       </Show>
     </box>
   );

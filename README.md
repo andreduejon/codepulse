@@ -16,7 +16,8 @@ commit and branch context.
 ## Prerequisites
 
 - Git installed and available on path.
-- An interactive terminal with at least **90 columns and 30 rows**.
+- An interactive terminal with at least **90 columns and 30 rows**, true color, mouse input and Unicode box
+  drawing.
 
 | Operating system | Architectures | Terminal |
 |------------------|---------------|----------|
@@ -104,6 +105,16 @@ and save selections per repository.
 
 See the [theme guide](docs/themes.md) for controls, available themes, and custom
 configuration examples.
+
+## Development
+
+```sh
+bun install
+bun run demo    # codepulse on made-up data: no accounts, no network
+bun test
+```
+
+The [demo guide](docs/demo.md) covers its options and the headless mode for checking UI changes.
 
 ## Roadmap
 

@@ -434,6 +434,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
     const openshiftCfg = opts.openshiftConfig?.() ?? {
       enabled: false,
       serverUrl: "",
+      consoleUrl: "",
       tokenEnvVar: "OPENSHIFT_TOKEN",
       namespaces: [],
       commitShaAnnotation: "dev/commit-sha",

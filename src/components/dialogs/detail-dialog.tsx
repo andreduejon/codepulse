@@ -18,6 +18,8 @@ export function DetailDialog(
   props: Readonly<
     DetailPanelProps & {
       onClose: () => void;
+      /** False while a dialog opened from it shows: it stays mounted underneath, hidden, and keeps its state. */
+      visible?: boolean;
       /** The banner over the graph is hidden behind this overlay, so its message (why a provider cannot work) shows here. */
       message?: UIMessage | null;
       onDismissMessage?: () => void;
@@ -34,7 +36,7 @@ export function DetailDialog(
   const enterVerb = () => state.detailCursorAction() ?? "select";
 
   return (
-    <DialogOverlay>
+    <DialogOverlay visible={props.visible}>
       <box
         flexDirection="column"
         width={dialogWidth()}

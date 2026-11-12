@@ -5,10 +5,12 @@ import { categorize } from "../shared/status";
 import {
   JENKINS_MULTIBRANCH_JOB_LIMIT,
   type JenkinsCommitData,
+  type JenkinsFailedTest,
   type JenkinsJob,
   type JenkinsJobConfig,
   type JenkinsRun,
   type JenkinsStage,
+  type JenkinsTestReport,
 } from "./types";
 import { isSafeJenkinsRequestUrl } from "./validation";
 
@@ -40,6 +42,7 @@ interface JenkinsMultibranchChildApi {
   url?: string;
   buildable?: boolean;
   disabled?: boolean;
+  lastBuild?: { timestamp?: number } | null;
 }
 
 interface JenkinsWfapiStage {
@@ -105,7 +108,7 @@ function buildDetailTree(): string {
 }
 
 function multibranchJobsTree(): string {
-  return "_class,jobs[_class,name,displayName,url,buildable,disabled]";
+  return "_class,jobs[_class,name,displayName,url,buildable,disabled,lastBuild[timestamp]]";
 }
 
 function autoDetectTree(jobTree?: string): string {
@@ -197,17 +200,22 @@ export async function resolveJenkinsJobs(
   token: string,
   signal?: AbortSignal,
   jobTree?: string,
+  /** Branch names in the graph: over the limit, their jobs are kept first. */
+  preferredBranches: ReadonlySet<string> = new Set(),
 ): Promise<{
   jobs: JenkinsJobConfig[];
   rootData: Map<string, JenkinsJobApi>;
   error: string | null;
   complete: boolean;
   truncated: boolean;
+  /** Branch jobs of multibranch projects: how many are read, out of how many enabled ones. */
+  branchJobs: { shown: number; total: number };
 }> {
   const resolved = new Map<string, JenkinsJobConfig>();
   const rootData = new Map<string, JenkinsJobApi>();
   let firstError: string | null = null;
   let discoveredCount = 0;
+  let branchJobTotal = 0;
   let truncated = false;
   const discoveries: ({ job: JenkinsJobConfig; api: JenkinsJobApi } | null)[] = jobs.map(() => null);
   await runLimited(
@@ -230,6 +238,14 @@ export async function resolveJenkinsJobs(
     signal,
   );
 
+  // Branch jobs of every multibranch project, read after the limit is applied to all of them together.
+  const candidates: {
+    child: JenkinsMultibranchChildApi;
+    parentOrigin: string;
+    order: number;
+    preferred: boolean;
+    built: number;
+  }[] = [];
   for (const discovery of discoveries) {
     if (!discovery) continue;
     if (discovery.api._class !== "org.jenkinsci.plugins.workflow.multibranch.WorkflowMultiBranchProject") {
@@ -246,33 +262,60 @@ export async function resolveJenkinsJobs(
       firstError ??= BANNER.jenkins.invalidJobUrl;
       continue;
     }
-    for (const child of (discovery.api.jobs ?? []).filter(isEnabledMultibranchJob)) {
-      let url: string;
-      try {
-        url = normalizeJenkinsJobUrl(onOrigin(child.url ?? "", parentOrigin));
-      } catch {
-        debugError("Jenkins", child.url ?? "");
-        firstError ??= BANNER.jenkins.invalidJobUrl;
-        continue;
-      }
-      if (!url || resolved.has(url)) continue;
-      if (!isSafeJenkinsRequestUrl(url)) {
-        debugError("Jenkins", url);
-        firstError ??= BANNER.jenkins.invalidJobUrl;
-        continue;
-      }
-      if (discoveredCount >= JENKINS_MULTIBRANCH_JOB_LIMIT) {
-        truncated = true;
-        debugError(
-          "Jenkins",
-          `Multibranch discovery limited to ${JENKINS_MULTIBRANCH_JOB_LIMIT} jobs for ${discovery.job.url}`,
-        );
-        break;
-      }
-      const childLabel = child.displayName?.trim() || child.name?.trim() || deriveJenkinsJobLabel({ url });
-      resolved.set(url, { url, label: childLabel });
-      discoveredCount++;
+    const inGraph = (child: JenkinsMultibranchChildApi) => {
+      const name = child.name ? safeDecode(child.name) : "";
+      return preferredBranches.has(name) || (!!child.displayName && preferredBranches.has(child.displayName));
+    };
+    for (const child of (discovery.api.jobs ?? []).filter(isEnabledMultibranchJob))
+      candidates.push({
+        child,
+        parentOrigin,
+        order: candidates.length,
+        preferred: inGraph(child),
+        built: child.lastBuild?.timestamp ?? -1,
+      });
+  }
+  // Each branch job once, with a valid URL, and not one configured directly: those are what the limit and its notice
+  // count.
+  const branchJobs: {
+    child: JenkinsMultibranchChildApi;
+    url: string;
+    order: number;
+    preferred: boolean;
+    built: number;
+  }[] = [];
+  const seen = new Set<string>();
+  for (const { child, parentOrigin, ...rank } of candidates) {
+    let url: string;
+    try {
+      url = normalizeJenkinsJobUrl(onOrigin(child.url ?? "", parentOrigin));
+    } catch {
+      debugError("Jenkins", child.url ?? "");
+      firstError ??= BANNER.jenkins.invalidJobUrl;
+      continue;
     }
+    if (!url || resolved.has(url) || seen.has(url)) continue;
+    if (!isSafeJenkinsRequestUrl(url)) {
+      debugError("Jenkins", url);
+      firstError ??= BANNER.jenkins.invalidJobUrl;
+      continue;
+    }
+    seen.add(url);
+    branchJobs.push({ child, url, ...rank });
+  }
+  branchJobTotal = branchJobs.length;
+  // Over the limit, the branches in the graph are read first, then the most recently built (stable otherwise),
+  // whichever project they belong to.
+  branchJobs.sort((a, b) => Number(b.preferred) - Number(a.preferred) || b.built - a.built || a.order - b.order);
+  for (const { child, url } of branchJobs) {
+    if (discoveredCount >= JENKINS_MULTIBRANCH_JOB_LIMIT) {
+      if (!truncated) debugError("Jenkins", `Multibranch discovery limited to ${JENKINS_MULTIBRANCH_JOB_LIMIT} jobs`);
+      truncated = true;
+      continue;
+    }
+    const childLabel = child.displayName?.trim() || child.name?.trim() || deriveJenkinsJobLabel({ url });
+    resolved.set(url, { url, label: childLabel });
+    discoveredCount++;
   }
 
   return {
@@ -281,7 +324,16 @@ export async function resolveJenkinsJobs(
     error: firstError,
     complete: discoveries.every(Boolean) && !truncated,
     truncated,
+    branchJobs: { shown: discoveredCount, total: branchJobTotal },
   };
+}
+
+function safeDecode(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 export function extractSha(raw: unknown): string | null {
@@ -473,19 +525,27 @@ export async function fetchJenkinsDataForSHAs(
   username: string | undefined,
   token: string,
   shas: string[],
-  opts: { signal?: AbortSignal; buildLimit?: number } = {},
+  opts: { signal?: AbortSignal; buildLimit?: number; preferredBranches?: ReadonlySet<string> } = {},
 ): Promise<{
   data: JenkinsRun[];
   error: string | null;
   jobUrls: string[];
   discoveryComplete: boolean;
   discoveryTruncated: boolean;
+  branchJobs: { shown: number; total: number };
   lastBuilds: Map<string, number>;
 }> {
   const buildLimit = opts.buildLimit ?? 20;
   const wanted = new Set(shas.map(s => s.toLowerCase()));
   const runs: JenkinsRun[] = [];
-  const resolved = await resolveJenkinsJobs(jobs, username, token, opts.signal, buildRefsTree(buildLimit));
+  const resolved = await resolveJenkinsJobs(
+    jobs,
+    username,
+    token,
+    opts.signal,
+    buildRefsTree(buildLimit),
+    opts.preferredBranches,
+  );
   let firstError = resolved.error;
   await runLimited(
     resolved.jobs,
@@ -533,6 +593,7 @@ export async function fetchJenkinsDataForSHAs(
     jobUrls: resolved.jobs.map(job => normalizeJenkinsJobUrl(job.url)),
     discoveryComplete: resolved.complete,
     discoveryTruncated: resolved.truncated,
+    branchJobs: resolved.branchJobs,
     lastBuilds: new Map<string, number>(),
   };
 }
@@ -546,6 +607,7 @@ export async function fetchJenkinsGraphDataForSHAs(
     signal?: AbortSignal;
     buildLimit?: number;
     knownLastBuilds?: ReadonlyMap<string, number>;
+    preferredBranches?: ReadonlySet<string>;
   } = {},
 ): Promise<{
   data: JenkinsRun[];
@@ -553,6 +615,7 @@ export async function fetchJenkinsGraphDataForSHAs(
   jobUrls: string[];
   discoveryComplete: boolean;
   discoveryTruncated: boolean;
+  branchJobs: { shown: number; total: number };
   lastBuilds: Map<string, number>;
 }> {
   const buildLimit = opts.buildLimit ?? 20;
@@ -566,6 +629,7 @@ export async function fetchJenkinsGraphDataForSHAs(
     token,
     opts.signal,
     probeOnly ? lastBuildTree() : shallowGraphTree(buildLimit),
+    opts.preferredBranches,
   );
   let firstError = resolved.error;
   await runLimited(
@@ -606,6 +670,7 @@ export async function fetchJenkinsGraphDataForSHAs(
     jobUrls: resolved.jobs.map(job => normalizeJenkinsJobUrl(job.url)),
     discoveryComplete: resolved.complete,
     discoveryTruncated: resolved.truncated,
+    branchJobs: resolved.branchJobs,
     lastBuilds,
   };
 }
@@ -648,6 +713,66 @@ export function buildJenkinsGraphBadges(runs: JenkinsRun[]): Map<string, GraphBa
     map.set(run.headSha, badge);
   }
   return map;
+}
+
+/** At most this many failed tests are kept and listed; the counts still say how many failed. */
+const MAX_FAILED_TESTS = 50;
+const TEST_REPORT_TREE =
+  "failCount,passCount,skipCount,suites[cases[className,name,status,errorDetails,errorStackTrace]]";
+
+/**
+ * A finished build's JUnit test report. Null when the build has none (404) or it could not be read: the build still
+ * shows, only without a Tests row.
+ */
+export async function fetchJenkinsTestReport(
+  run: JenkinsRun,
+  username: string | undefined,
+  token: string,
+  signal?: AbortSignal,
+): Promise<JenkinsTestReport | null | undefined> {
+  try {
+    const url = jenkinsApiUrl(
+      onOrigin(run.url, run.jobUrl),
+      `testReport/api/json?tree=${encodeURIComponent(TEST_REPORT_TREE)}`,
+    );
+    if (!isSafeJenkinsRequestUrl(url)) return null;
+    const res = await fetchWithRetry(url, { headers: authHeaders(username, token), signal, redirect: "manual" });
+    // Most builds have no report: that is no error, so Debug stays quiet about it.
+    if (res.status === 404) return null;
+    // Not read: unknown rather than none, so it is asked for again.
+    if (!res.ok || /text\/html/i.test(res.headers.get("content-type") ?? "")) {
+      debugError("Jenkins", `${res.status} ${res.statusText} ${url}`);
+      return undefined;
+    }
+    const report = (await res.json()) as {
+      failCount?: number;
+      passCount?: number;
+      skipCount?: number;
+      suites?: { cases?: Record<string, unknown>[] }[];
+    };
+    const text = (value: unknown) => (typeof value === "string" && value.trim() ? value : null);
+    const failed = (report.suites ?? [])
+      .flatMap(suite => suite.cases ?? [])
+      .filter(test => test.status === "FAILED" || test.status === "REGRESSION")
+      .slice(0, MAX_FAILED_TESTS)
+      .map(
+        (test): JenkinsFailedTest => ({
+          className: typeof test.className === "string" ? test.className : "",
+          name: typeof test.name === "string" ? test.name : "test",
+          details: text(test.errorDetails),
+          stackTrace: text(test.errorStackTrace),
+        }),
+      );
+    return {
+      passCount: report.passCount ?? 0,
+      failCount: report.failCount ?? failed.length,
+      skipCount: report.skipCount ?? 0,
+      failed,
+    };
+  } catch (err) {
+    if (isAbortError(err, signal)) throw err;
+    return undefined;
+  }
 }
 
 export async function fetchJenkinsRunJobs(
@@ -693,7 +818,9 @@ export async function fetchJenkinsRunJobs(
       completedAt: wfapiCompletedAt,
       steps: stages,
     };
-    return { jobs: [job], error: null };
+    // Reports are written when the build ends, so only a finished build is asked for one.
+    const tests = run.status === "completed" ? await fetchJenkinsTestReport(run, username, token, signal) : undefined;
+    return { jobs: [tests === undefined ? job : { ...job, tests }], error: null };
   } catch (err) {
     if (isAbortError(err, signal)) throw err;
     // Like GitHub's "jobs failed": say which part failed, not a generic fetch failure.
