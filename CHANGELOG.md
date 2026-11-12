@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Snyk Dependencies: a Maven `managed` pin is also marked `removable` when every dependency that brings the package
+  already asks for the pinned version or later, so Maven would pick at least that version without the pin. Their
+  POMs are read from the local Maven repository (`~/.m2/repository`, or where `settings.xml`, `.mvn/maven.config` or
+  `MAVEN_OPTS` put it), where Maven saved them while Snyk resolved the tree. Nothing is downloaded: a POM that is not
+  there, a version range or an unknown property keeps the pin. A direct dependency keeps its pin too. Scans made
+  before this version show it after **Rescan commit**.
+
 ### Fixed
 
 - The details keep what you opened when you switch tabs or when the terminal width crosses into or out of the side

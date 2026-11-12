@@ -48,7 +48,7 @@ const childText = (element: XmlElement | undefined, name: string) => {
   return found ? found.text.trim() : undefined;
 };
 
-interface ManagedEntry {
+interface DependencyEntry {
   groupId: string;
   artifactId: string;
   version?: string;
@@ -56,26 +56,30 @@ interface ManagedEntry {
   type?: string;
 }
 
-interface Pom {
+export interface Pom {
   path: string;
   groupId?: string;
   artifactId?: string;
   version?: string;
   parent?: { groupId?: string; artifactId?: string; version?: string; relativePath: string | null };
   properties: Record<string, string>;
-  managed: ManagedEntry[];
+  /** `<dependencyManagement>`'s entries. */
+  managed: DependencyEntry[];
+  /** `<dependencies>`' entries. */
+  dependencies: DependencyEntry[];
 }
 
-export function parsePom(path: string, text: string): Pom | null {
-  const project = parseXml(text);
-  if (project?.name !== "project") return null;
-  const parent = child(project, "parent");
-  const relativePath = childText(parent, "relativePath");
-  const properties: Record<string, string> = {};
-  for (const property of child(project, "properties")?.children ?? []) properties[property.name] = property.text.trim();
-  const managed = (child(child(project, "dependencyManagement"), "dependencies")?.children ?? [])
+/** Where POMs come from: the repository's own (`PomIndex`) or the local Maven repository's. */
+export interface PomSource {
+  read(path: string): Promise<Pom | null>;
+  parentOf(pom: Pom): Promise<Pom | null>;
+  find(groupId: string, artifactId: string, version?: string): Promise<Pom | null>;
+}
+
+const dependencyEntries = (list: XmlElement | undefined) =>
+  (list?.children ?? [])
     .filter(item => item.name === "dependency")
-    .flatMap((dependency): ManagedEntry[] => {
+    .flatMap((dependency): DependencyEntry[] => {
       const groupId = childText(dependency, "groupId");
       const artifactId = childText(dependency, "artifactId");
       if (!groupId || !artifactId) return [];
@@ -85,6 +89,14 @@ export function parsePom(path: string, text: string): Pom | null {
       });
       return [{ groupId, artifactId, ...Object.fromEntries(fields) }];
     });
+
+export function parsePom(path: string, text: string): Pom | null {
+  const project = parseXml(text);
+  if (project?.name !== "project") return null;
+  const parent = child(project, "parent");
+  const relativePath = childText(parent, "relativePath");
+  const properties: Record<string, string> = {};
+  for (const property of child(project, "properties")?.children ?? []) properties[property.name] = property.text.trim();
   return {
     path,
     groupId: childText(project, "groupId"),
@@ -102,14 +114,15 @@ export function parsePom(path: string, text: string): Pom | null {
         }
       : {}),
     properties,
-    managed,
+    managed: dependencyEntries(child(child(project, "dependencyManagement"), "dependencies")),
+    dependencies: dependencyEntries(child(project, "dependencies")),
   };
 }
 
 const MAX_DEPTH = 10;
 
 /** Reads the repository's tracked POMs on demand, once each. */
-export class PomIndex {
+export class PomIndex implements PomSource {
   private readonly cache = new Map<string, Promise<Pom | null>>();
 
   constructor(
@@ -164,8 +177,8 @@ export class PomIndex {
   }
 }
 
-/** A POM and its in-repo ancestors, the POM itself first. */
-async function lineage(index: PomIndex, pom: Pom): Promise<Pom[]> {
+/** A POM and the ancestors its source has, the POM itself first. */
+export async function lineage(index: PomSource, pom: Pom): Promise<Pom[]> {
   const chain = [pom];
   for (let current = pom; chain.length < MAX_DEPTH; ) {
     const parent = await index.parentOf(current);
@@ -178,7 +191,7 @@ async function lineage(index: PomIndex, pom: Pom): Promise<Pom[]> {
 
 const PLACEHOLDER = /\$\{([^}]+)\}/g;
 
-function interpolate(value: string, properties: Readonly<Record<string, string>>): string {
+export function interpolate(value: string, properties: Readonly<Record<string, string>>): string {
   let result = value;
   for (let round = 0; round < MAX_DEPTH && result.includes("${"); round++) {
     const next = result.replace(PLACEHOLDER, (placeholder, name: string) => properties[name] ?? placeholder);
@@ -189,7 +202,7 @@ function interpolate(value: string, properties: Readonly<Record<string, string>>
 }
 
 /** Properties as Maven sees them in this POM: ancestors' first, then its own, then `project.*`. */
-function effectiveProperties(chain: readonly Pom[]): Record<string, string> {
+export function effectiveProperties(chain: readonly Pom[]): Record<string, string> {
   const [pom] = chain;
   const properties: Record<string, string> = {};
   for (const ancestor of [...chain].reverse()) Object.assign(properties, ancestor.properties);
@@ -212,7 +225,7 @@ function effectiveProperties(chain: readonly Pom[]): Record<string, string> {
 /** `null` when the version is unknown: an unresolved property, a range, or none at all. */
 export type ManagedVersions = Map<string, string | null>;
 
-const resolvedVersion = (version: string | undefined) =>
+export const resolvedVersion = (version: string | undefined) =>
   version && !version.includes("${") && !/^[[(]/.test(version) ? version : null;
 
 /**
@@ -220,13 +233,13 @@ const resolvedVersion = (version: string | undefined) =>
  * in-repo parents', then in-repo BOMs it imports. Parents' entries are interpolated with this POM's properties, as
  * Maven inherits before it interpolates; a BOM uses its own.
  */
-export async function mavenManagedVersions(index: PomIndex, path: string, depth = 0): Promise<ManagedVersions> {
+export async function mavenManagedVersions(index: PomSource, path: string, depth = 0): Promise<ManagedVersions> {
   const managed: ManagedVersions = new Map();
   const pom = await index.read(path);
   if (!pom || depth >= MAX_DEPTH) return managed;
   const chain = await lineage(index, pom);
   const properties = effectiveProperties(chain);
-  const imports: ManagedEntry[] = [];
+  const imports: DependencyEntry[] = [];
   for (const ancestor of chain) {
     for (const entry of ancestor.managed) {
       const groupId = interpolate(entry.groupId, properties);

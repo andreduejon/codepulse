@@ -42,7 +42,7 @@ export function isSnykDependencyGraph(value: unknown): value is SnykDependencyGr
         isString(pkg.name) &&
         (pkg.version === null || isString(pkg.version)) &&
         (pkg.pin === undefined || pkg.pin === "override" || pkg.pin === "managed") &&
-        (pkg.removable === undefined || (pkg.removable === true && pkg.pin === "override")),
+        (pkg.removable === undefined || (pkg.removable === true && pkg.pin !== undefined)),
     ) ||
     !value.nodes.every(
       (node: unknown): node is SnykDependencyNode =>

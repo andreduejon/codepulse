@@ -1,5 +1,5 @@
 import { lstat, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, posix, relative, resolve } from "node:path";
 import { BANNER } from "../../debug/banner";
 import { addDebugEvent, redactDebugValue } from "../../debug/events";
@@ -7,7 +7,8 @@ import { repositoryIdentity } from "../shared/sha-sqlite-cache";
 import { SnykCache } from "./cache";
 import { normalizeSnykTargetFile, parseSnykDepGraphs } from "./dep-graph";
 import { snykFailureReason } from "./failure-reason";
-import { applyMavenManaged, mavenManagedVersions, PomIndex } from "./maven-managed";
+import { applyMavenManaged, mavenManagedVersions, PomIndex, type PomSource } from "./maven-managed";
+import { LocalRepositoryPoms, markRemovableManaged, mavenLocalRepository } from "./maven-removable";
 import { applyOverrideRules, manifestRanges, markRemovableOverrides, projectOverrideRules } from "./overrides";
 import { parseSnykOutput, shouldReplaceSnykResult } from "./parser";
 import { discoverSnykDependencyProjects, type SnykDependencyProjectInput } from "./projects";
@@ -36,6 +37,8 @@ export interface SnykScannerDependencies {
   which?: (command: string) => string | null;
   cacheRoot?: string;
   now?: () => Date;
+  /** The local Maven repository; otherwise found the way Maven finds it (see `mavenLocalRepository`). */
+  mavenRepository?: string;
 }
 
 function abortError(): Error {
@@ -501,6 +504,7 @@ async function scanDependencyProjects(
   runCommand: SnykCommandRunner,
   trackedFiles: readonly string[],
   registry: () => RegistryLookup | null,
+  mavenPoms: () => Promise<PomSource>,
 ): Promise<{ projects: SnykDependencyProjectResult[]; failures: SnykProjectFailures }> {
   const ready = projects.filter(project => !unavailable.has(project.targetFile));
   if (ready.length === 0) return { projects: [...unavailable.values()], failures: NO_PROJECT_FAILURES };
@@ -548,18 +552,19 @@ async function scanDependencyProjects(
     };
   });
   await Promise.all(pending);
-  await markOverrides(results, commandOptions, registry);
+  await markOverrides(results, commandOptions, registry, mavenPoms);
   return { projects: results, failures };
 }
 
 /**
  * Marks what each project's overrides force (asking the registry only when a project has overridden packages) and
- * what Maven's `<dependencyManagement>` pins.
+ * what Maven's `<dependencyManagement>` pins (reading the local Maven repository only when something is pinned).
  */
 async function markOverrides(
   projects: readonly SnykDependencyProjectResult[],
   commandOptions: Parameters<SnykCommandRunner>[1],
   registry: () => RegistryLookup | null,
+  mavenPoms: () => Promise<PomSource>,
 ): Promise<void> {
   const manifests = new Map<string, Promise<Record<string, string>>>();
   const rootRanges = (manifest: string) => {
@@ -582,6 +587,10 @@ async function markOverrides(
       const managed = await mavenManagedVersions(poms, project.targetFile);
       throwIfAborted(commandOptions.signal);
       for (const graph of project.graphs) applyMavenManaged(graph, managed);
+      if (!project.graphs.some(graph => graph.packages.some(pkg => pkg.pin === "managed"))) continue;
+      const local = await mavenPoms();
+      for (const graph of project.graphs) await markRemovableManaged(graph, managed, local);
+      throwIfAborted(commandOptions.signal);
       continue;
     }
     const rules = await projectOverrideRules(commandOptions.cwd, project);
@@ -719,6 +728,20 @@ export async function scanSnykCommit(
         });
       return lookup;
     };
+    // Found once, on the first Maven pin: the POMs Maven downloaded while Snyk resolved the tree.
+    let localPoms: Promise<PomSource> | undefined;
+    const mavenPoms = () => {
+      localPoms ??= (
+        dependencies.mavenRepository !== undefined
+          ? Promise.resolve(dependencies.mavenRepository)
+          : mavenLocalRepository({
+              home: homedir(),
+              env: commandOptions.env ?? process.env,
+              worktree: commandOptions.cwd,
+            })
+      ).then(repository => new LocalRepositoryPoms(repository));
+      return localPoms;
+    };
     const graphRun = await scanDependencyProjects(
       projects,
       unavailable,
@@ -726,6 +749,7 @@ export async function scanSnykCommit(
       runCommand,
       trackedFiles,
       registry,
+      mavenPoms,
     );
     result.dependencyProjects = graphRun.projects;
     // Both runs detect the same projects; only the graph run reports the ones Snyk could not resolve.
