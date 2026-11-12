@@ -2,7 +2,8 @@ import { expect, mock, spyOn, test } from "bun:test";
 import type { KeyEvent } from "@opentui/core";
 import { RGBA } from "@opentui/core";
 import { testRender } from "@opentui/solid";
-import { createSignal } from "solid-js";
+import { createSignal, Show } from "solid-js";
+import { createDetailMemory, type DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
 import { createThemeState, ThemeContext } from "../../context/theme";
 import * as browser from "../../utils/open-url";
@@ -34,6 +35,7 @@ export async function renderOpenShiftTab(
     deployments?: OpenShiftResource[];
     consoleUrl?: string;
     width?: number;
+    memory?: DetailMemory;
   }> = {},
 ) {
   const data: OpenShiftCommitData = {
@@ -51,6 +53,8 @@ export async function renderOpenShiftTab(
     ],
   };
   const [cursor, setCursor] = createSignal(0);
+  /** Off and on again: what a tab switch or a switch between the two layouts does to the tab. */
+  const [mounted, setMounted] = createSignal(true);
   const [consoleUrl, setConsoleUrl] = createSignal(opts.consoleUrl ?? CONSOLE);
   const shortcut = mock((_shortcut: { key: string; desc: string } | null) => {});
   const navRef: DetailNavRef = {
@@ -67,17 +71,20 @@ export async function renderOpenShiftTab(
     () => (
       <ThemeContext.Provider value={theme}>
         <box width={width} flexDirection="column">
-          <OpenShiftDetailTab
-            sha={SHA}
-            getCommitData={() => data}
-            consoleUrl={consoleUrl}
-            navRef={navRef}
-            detailCursorIndex={cursor}
-            detailFocused={() => true}
-            setDetailCursorAction={() => {}}
-            setDetailCursorIndex={setCursor}
-            setDetailCursorShortcut={shortcut}
-          />
+          <Show when={mounted()}>
+            <OpenShiftDetailTab
+              sha={SHA}
+              getCommitData={() => data}
+              consoleUrl={consoleUrl}
+              navRef={navRef}
+              memory={opts.memory}
+              detailCursorIndex={cursor}
+              detailFocused={() => true}
+              setDetailCursorAction={() => {}}
+              setDetailCursorIndex={setCursor}
+              setDetailCursorShortcut={shortcut}
+            />
+          </Show>
         </box>
       </ThemeContext.Provider>
     ),
@@ -96,7 +103,19 @@ export async function renderOpenShiftTab(
       .captureCharFrame()
       .split("\n")
       .find(line => line.includes(text)) ?? "";
-  return { ...setup, navRef, shortcut, setCursor, setConsoleUrl, settle, press, row, theme: theme.theme() };
+  return {
+    ...setup,
+    navRef,
+    shortcut,
+    cursor,
+    setCursor,
+    setMounted,
+    setConsoleUrl,
+    settle,
+    press,
+    row,
+    theme: theme.theme(),
+  };
 }
 
 test("o opens the selected namespace or resource in the web console, only when its URL is set", async () => {
@@ -201,6 +220,29 @@ test("a healthy row has no note", async () => {
   const t = await renderOpenShiftTab({ pods: [resource("Pod", "payments-api-6d2b-m9w3")] });
   try {
     expect(t.row("payments-api").replace(/\s+/g, " ")).toMatch(/payments-api-6d2b-m9w3 ✓/);
+  } finally {
+    t.renderer.destroy();
+  }
+});
+
+test("a namespace closed by the user stays closed, with the cursor on it, when the tab mounts again", async () => {
+  const t = await renderOpenShiftTab({ memory: createDetailMemory() });
+  try {
+    // Reload commit, then the namespace.
+    const namespace = 1;
+    t.setCursor(namespace);
+    await t.settle();
+    expect(t.row("payments-dev")).toContain("▾");
+    t.navRef.activateCurrentItem();
+    await t.settle();
+    expect(t.captureCharFrame()).not.toContain("payments-api");
+    t.setMounted(false);
+    await t.settle();
+    t.setMounted(true);
+    await t.settle();
+    expect(t.row("payments-dev")).toContain("▸");
+    expect(t.captureCharFrame()).not.toContain("payments-api");
+    expect(t.cursor()).toBe(namespace);
   } finally {
     t.renderer.destroy();
   }

@@ -1,6 +1,6 @@
 import { MouseButton, type MouseEvent, type Renderable } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/solid";
-import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
+import { createMemo, For, Show } from "solid-js";
 import { isUncommittedHash, UNCOMMITTED_PLACEHOLDER } from "../constants";
 import { useAppState } from "../context/state";
 import type { Commit, GraphRow } from "../git/types";
@@ -11,6 +11,7 @@ import { useStashState } from "../hooks/use-stash-state";
 import { useT } from "../hooks/use-t";
 import { formatDate } from "../utils/date";
 import { isCursored as _isCursored, itemHighlightBg as _itemHighlightBg } from "../utils/detail-cursor";
+import { createDetailMemory, createRememberedSignal } from "./detail-memory";
 import { ProviderDetailTabs } from "./detail-provider-tabs";
 import { DetailRefs } from "./detail-refs";
 import { CopyableRow, type DetailRowsView, InteractiveCommitEntry, InteractiveSectionHeader } from "./detail-rows";
@@ -55,17 +56,18 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   // Only the currently-cursored item scrolls when its text overflows.
   const panelUsableWidth = () => detailUsableWidth(props.contentWidth, dimensions().width);
 
-  // Collapsible section state — reset to expanded when commit changes
-  const [childrenExpanded, setChildrenExpanded] = createSignal(true);
-  const [parentsExpanded, setParentsExpanded] = createSignal(true);
+  /** Open sections, folders and tab views, kept by the app (or by this view when it runs alone, as in tests). */
+  const memory = props.memory ?? createDetailMemory();
+  const commitHash = () => commit()?.hash ?? "";
 
-  createEffect(() => {
-    // Reset collapse state when selected commit changes
-    commit();
-    row();
-    setChildrenExpanded(true);
-    setParentsExpanded(true);
-  });
+  // Collapsible sections: open again for every other commit.
+  const [childrenExpanded, setChildrenExpanded] = createRememberedSignal(
+    memory,
+    "info.children",
+    commitHash,
+    () => true,
+  );
+  const [parentsExpanded, setParentsExpanded] = createRememberedSignal(memory, "info.parents", commitHash, () => true);
 
   /** Children excluding the synthetic uncommitted node (shown in graph, not in detail). */
   const filteredChildren = createMemo(() => {
@@ -82,12 +84,6 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
 
   // Active tab for committed commits: "info" | "files" | "stashes"
   const activeTab = () => state.detailActiveTab();
-  /** Provider tab state across tab switches (a mutable ref per key; this view outlives its tabs). */
-  const providerMemory = new Map<string, unknown>();
-  const memory = <T,>(key: string, create: () => T): T => {
-    if (!providerMemory.has(key)) providerMemory.set(key, create());
-    return providerMemory.get(key) as T;
-  };
 
   // Whether to show committer info (only when different from author)
   const showCommitter = () => {
@@ -134,7 +130,7 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
     toggleStashDir,
     getStashFileTreeRows,
     getStashFileWidths,
-  } = useStashState(commit);
+  } = useStashState(commit, memory);
 
   // Element refs for each interactive item, indexed by flat item position.
   // Populated via ref callbacks on each rendered interactive item, used by
@@ -491,7 +487,8 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
                 loading={() => state.detailLoading()}
                 commitHash={() => commit()?.hash ?? ""}
                 diffSource={() => "commit"}
-                resetTrigger={commit}
+                subject={commitHash}
+                memory={memory}
                 navRef={props.navRef as DetailNavRef}
                 onOpenDiff={props.onOpenDiff}
               />

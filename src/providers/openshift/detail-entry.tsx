@@ -1,3 +1,4 @@
+import { scopedMemory } from "../../components/detail-memory";
 import { BANNER } from "../../debug/banner";
 import { detailEntry, type ProviderDetailSource } from "../shared/detail-entry";
 import { OPENSHIFT_LEGEND, OpenShiftDetailTab } from "./detail-tab";
@@ -28,6 +29,7 @@ export const openshiftDetail = detailEntry({
       isLoading={props.source.isLoading}
       liveAge={props.source.liveAge}
       consoleUrl={props.source.consoleUrl}
+      memory={scopedMemory(props.context.memory, "openshift")}
       onOpenResource={props.source.onOpenResource}
       unavailableReason={props.context.unavailable("openshift", props.source.status)}
       liveUnavailable={

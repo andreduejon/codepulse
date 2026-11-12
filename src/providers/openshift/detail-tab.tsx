@@ -1,5 +1,6 @@
 import type { Renderable } from "@opentui/core";
 import { createEffect, createMemo, createSignal, For, on, Show, untrack } from "solid-js";
+import type { DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
 import { useT } from "../../hooks/use-t";
 import { BUSY } from "../../utils/busy-text";
@@ -23,6 +24,8 @@ export interface OpenShiftDetailTabProps {
   unavailableReason?: string | null;
   liveUnavailable?: boolean;
   loading?: boolean;
+  /** Keeps open namespaces while the tab is not shown (another tab, the other layout). */
+  memory?: DetailMemory;
   navRef?: DetailNavRef;
   detailCursorIndex: () => number;
   detailFocused: () => boolean;
@@ -107,6 +110,15 @@ function resourcesForFlatItems(ns: NamespaceData): OpenShiftResource[] {
   ];
 }
 
+/** The namespaces a commit had and the ones open, for the commit `sha`. */
+interface NamespaceMemory {
+  sha: string | null;
+  known: Set<string>;
+  expanded: Set<string>;
+}
+
+const newNamespaceMemory = (): NamespaceMemory => ({ sha: null, known: new Set(), expanded: new Set() });
+
 export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
   const t = useT();
   const data = () => props.getCommitData(props.sha);
@@ -116,7 +128,11 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
   // An expired token only stops automatic fetches (below); Reload commit stays available as the explicit retry.
   const reloadEnabled = () => !props.unavailableReason;
   const liveAge = () => props.liveAge?.() ?? "";
-  const [expandedNamespaces, setExpandedNamespaces] = createSignal<Set<string>>(new Set());
+  // The open namespaces of one commit, and the ones it had: kept in the memory, so coming back is no new commit.
+  const kept = props.memory?.("namespaces", newNamespaceMemory) ?? newNamespaceMemory();
+  const [expandedNamespaces, setExpandedNamespaces] = createSignal<Set<string>>(
+    kept.sha === untrack(() => props.sha) ? kept.expanded : new Set(),
+  );
   const itemRefs: Renderable[] = [];
   const refsByKey = new Map<string, Renderable>();
   const rows = useDetailRowMouse({
@@ -172,6 +188,7 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
       else next.add(namespace);
       return next;
     });
+    kept.expanded = expandedNamespaces();
   };
 
   createEffect(() => {
@@ -182,21 +199,21 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
 
   // A new commit opens every namespace with the cursor on top. Live updates for the same commit keep the
   // user's open/closed choices (new namespaces open) and keep the cursor on the same row.
-  let expansionSha: string | null = null;
-  let knownNamespaces = new Set<string>();
   createEffect(() => {
     const sha = props.sha;
     const names = namespaces().map(ns => ns.namespace);
-    if (sha !== expansionSha) {
-      expansionSha = sha;
-      knownNamespaces = new Set(names);
+    if (sha !== kept.sha) {
+      kept.sha = sha;
+      kept.known = new Set(names);
       setExpandedNamespaces(new Set(names));
+      kept.expanded = untrack(expandedNamespaces);
       props.setDetailCursorIndex(0);
       return;
     }
-    const added = names.filter(name => !knownNamespaces.has(name));
-    knownNamespaces = new Set(names);
+    const added = names.filter(name => !kept.known.has(name));
+    kept.known = new Set(names);
     if (added.length > 0) setExpandedNamespaces(prev => new Set([...prev, ...added]));
+    kept.expanded = untrack(expandedNamespaces);
   });
 
   let cursorSha: string | null = null;

@@ -8,6 +8,7 @@ import { isTabNoticeStatus, type TabNotice, tabNoticeFor } from "./app-tab-notic
 import type { AppContentProps, RepoSessionSnapshot } from "./app-types";
 import CacheScreen from "./components/cache-screen";
 import CommandBar from "./components/command-bar";
+import { createDetailMemory } from "./components/detail-memory";
 import DetailPanel from "./components/detail-panel";
 import type { DetailNavRef } from "./components/detail-types";
 import DebugDialog from "./components/dialogs/debug-dialog";
@@ -609,6 +610,8 @@ export function AppContent(props: Readonly<AppContentProps>) {
 
   /** Provider data and dialogs for the detail panel and the compact detail dialog. */
   const providerDetailProps = {
+    // One for both layouts: a resize between them keeps open folders, runs and namespaces.
+    memory: createDetailMemory(),
     providers: {
       "github-actions": {
         getCommitData: gitHubCI.getCommitData,

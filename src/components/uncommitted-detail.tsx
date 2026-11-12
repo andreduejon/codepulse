@@ -10,6 +10,7 @@ import { BUSY } from "../utils/busy-text";
 import { isCursored as _isCursored, itemHighlightBg as _itemHighlightBg } from "../utils/detail-cursor";
 import { buildDiffTarget } from "../utils/diff-target";
 import { getUncommittedProviderNotice } from "../utils/tab-utils";
+import { scopedMemory } from "./detail-memory";
 import type { DetailViewProps } from "./detail-types";
 import { computeFileWidths, detailUsableWidth, fileRowOverflow } from "./detail-types";
 import { FileTreeEntry } from "./file-tree-entry";
@@ -51,8 +52,12 @@ export default function UncommittedDetailView(props: Readonly<DetailViewProps>) 
     return computeFileWidths(files);
   });
 
-  // File tree state — resets collapsed dirs when active tab changes
-  const { fileTreeRows, collapsedDirs, toggleDir } = useFileTree(activeFiles, activeTab);
+  // Every folder opens again on another tab; the memory keeps them across the switch between the two layouts.
+  const { fileTreeRows, collapsedDirs, toggleDir } = useFileTree(
+    activeFiles,
+    activeTab,
+    props.memory && scopedMemory(props.memory, "uncommitted"),
+  );
 
   // Mutable array of element refs for scroll-into-view (same pattern as detail.tsx)
   const itemRefs: Renderable[] = [];

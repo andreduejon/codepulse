@@ -1,5 +1,6 @@
 import type { Accessor } from "solid-js";
-import { createEffect, createMemo, createSignal } from "solid-js";
+import { createMemo } from "solid-js";
+import { createRememberedSignal, type DetailMemory } from "../components/detail-memory";
 import { computeFileWidths } from "../components/detail-types";
 import { useAppState } from "../context/state";
 import { getStashFiles } from "../git/repo";
@@ -37,9 +38,10 @@ export interface StashState {
  * Manages stash section state for the commit detail panel.
  *
  * Accepts the currently selected commit as a reactive accessor. Resets all
- * state when the commit changes and handles lazy file loading on expand.
+ * state when the commit changes and handles lazy file loading on expand; the
+ * memory keeps it while the stashes are not shown (another tab, the other layout).
  */
-export function useStashState(commit: Accessor<Commit | null | undefined>): StashState {
+export function useStashState(commit: Accessor<Commit | null | undefined>, memory?: DetailMemory): StashState {
   const { state } = useAppState();
 
   const stashEntries = createMemo((): Commit[] => {
@@ -48,17 +50,26 @@ export function useStashState(commit: Accessor<Commit | null | undefined>): Stas
     return state.stashByParent().get(c.hash) ?? [];
   });
 
-  const [expandedStashes, setExpandedStashes] = createSignal(new Set<string>());
-  const [stashFileCache, setStashFileCache] = createSignal(new Map<string, FileChange[]>());
-  const [stashCollapsedDirs, setStashCollapsedDirs] = createSignal(new Map<string, Set<string>>());
-
-  // Reset stash state when selected commit changes
-  createEffect(() => {
-    commit();
-    setExpandedStashes(new Set<string>());
-    setStashFileCache(new Map<string, FileChange[]>());
-    setStashCollapsedDirs(new Map<string, Set<string>>());
-  });
+  // All of it starts over for another commit.
+  const commitHash = () => commit()?.hash ?? "";
+  const [expandedStashes, setExpandedStashes] = createRememberedSignal(
+    memory,
+    "stashes.expanded",
+    commitHash,
+    () => new Set<string>(),
+  );
+  const [stashFileCache, setStashFileCache] = createRememberedSignal(
+    memory,
+    "stashes.files",
+    commitHash,
+    () => new Map<string, FileChange[]>(),
+  );
+  const [stashCollapsedDirs, setStashCollapsedDirs] = createRememberedSignal(
+    memory,
+    "stashes.collapsed",
+    commitHash,
+    () => new Map<string, Set<string>>(),
+  );
 
   const toggleStash = async (stashHash: string) => {
     const next = new Set(expandedStashes());

@@ -1,4 +1,5 @@
 import { createMemo, createSignal } from "solid-js";
+import type { DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
 import { BUSY } from "../../utils/busy-text";
 import { type LegendItem, runLegend } from "../shared/detail-legend";
@@ -23,6 +24,8 @@ export interface JenkinsDetailTabProps {
   fetchCommitData?: (sha: string, force?: boolean) => Promise<void>;
   unavailableReason?: string | null;
   loading?: boolean;
+  /** Keeps open runs and loaded jobs while the tab is not shown (another tab, the other layout). */
+  memory?: DetailMemory;
   navRef?: DetailNavRef;
   detailCursorIndex: () => number;
   detailFocused: () => boolean;
@@ -102,6 +105,7 @@ export function JenkinsDetailTab(props: Readonly<JenkinsDetailTabProps>) {
       }}
       debugSource="Jenkins"
       dataKey={props.sha}
+      memory={props.memory}
       onOpenJobAction={(job, run) => {
         const row = job.raw;
         if (row.kind === "log") props.onOpenBuild?.(run.raw, row.pipeline, row.entry);

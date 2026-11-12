@@ -3,6 +3,7 @@ import { type ProviderStatus, useAppState } from "../context/state";
 import { DETAIL_ENTRIES } from "../providers/detail-entries";
 import type { ProviderDetailView } from "../providers/provider";
 import type { DetailEntryContext } from "../providers/shared/detail-entry";
+import type { DetailMemory } from "./detail-memory";
 import type { DetailViewProps } from "./detail-types";
 
 /** The provider tabs of a committed commit's detail view: the active one, from its provider's entry. */
@@ -10,8 +11,8 @@ export function ProviderDetailTabs(
   props: Readonly<{
     view: DetailViewProps;
     sha: string;
-    /** Tab state across tab switches (owned by the detail view, which outlives its tabs). */
-    memory: <T>(key: string, create: () => T) => T;
+    /** Tab state while a tab is not shown (owned by the app, which outlives both layouts). */
+    memory: DetailMemory;
   }>,
 ) {
   const { state, actions } = useAppState();
@@ -41,7 +42,9 @@ export function ProviderDetailTabs(
       state.providers.getVersion();
       return state.providers.get(view)?.isAvailable() === false ? "Setup incomplete." : null;
     },
-    memory: (key, create) => props.memory(key, create),
+    get memory() {
+      return props.memory;
+    },
   };
 
   return (

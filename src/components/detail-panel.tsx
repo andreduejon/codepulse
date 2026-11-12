@@ -12,6 +12,7 @@ import { DetailLegend } from "../providers/shared/detail-legend";
 import { scheduleScrollIntoView, scrollElementIntoView } from "../utils/scroll";
 import { getAvailableTabs } from "../utils/tab-utils";
 import CommitDetailView from "./detail";
+import type { DetailMemory } from "./detail-memory";
 import type { DetailNavRef } from "./detail-types";
 import MessageBox from "./message-box";
 import UncommittedDetailView from "./uncommitted-detail";
@@ -32,6 +33,8 @@ export interface DetailPanelProps {
   onOpenDiff: (target: DiffTarget) => void;
   /** What each provider hands its detail tabs (see `providers/detail-entries.ts`). */
   providers?: Partial<ProviderDetailSources>;
+  /** Kept by the app, so the side panel and the compact dialog show the same open folders, runs and namespaces. */
+  memory?: DetailMemory;
   /** Notice pinned under the tab content ("works, but incomplete"); see `tabNoticeFor`. */
   tabNotice?: TabNotice | null;
   onDismissTabNotice?: () => void;
@@ -252,6 +255,7 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
               onJumpToCommit={props.onJumpToCommit}
               onOpenDiff={props.onOpenDiff}
               navRef={props.navRef}
+              memory={props.memory}
             />
           }
         >
@@ -263,6 +267,7 @@ export default function DetailPanel(props: Readonly<DetailPanelProps>) {
             onOpenDiff={props.onOpenDiff}
             navRef={props.navRef}
             providers={props.providers}
+            memory={props.memory}
           />
         </Show>
       </scrollbox>

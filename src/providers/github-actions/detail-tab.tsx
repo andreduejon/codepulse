@@ -9,6 +9,7 @@
  */
 
 import { createMemo, createSignal } from "solid-js";
+import type { DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
 import { BUSY } from "../../utils/busy-text";
 import { type LegendItem, runLegend } from "../shared/detail-legend";
@@ -54,6 +55,8 @@ export interface ActionsDetailTabProps {
    * Mutable navRef to populate so the keyboard handler can navigate items.
    * When provided, this component owns navRef while the github-actions tab is active.
    */
+  /** Keeps open runs and loaded jobs while the tab is not shown (another tab, the other layout). */
+  memory?: DetailMemory;
   navRef?: DetailNavRef;
   /** Current cursor index from app state (passed as accessor to avoid useContext during setup). */
   detailCursorIndex: () => number;
@@ -130,6 +133,7 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
       }}
       debugSource="GitHub"
       dataKey={props.sha}
+      memory={props.memory}
       onOpenJobAction={(job, run, jobs) => props.onOpenJobLog?.(job.raw, run.raw, jobs?.map(entry => entry.raw) ?? [])}
       onOpenNote={(note, job, run, jobs) =>
         props.onOpenJobLog?.(

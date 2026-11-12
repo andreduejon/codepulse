@@ -1,3 +1,4 @@
+import { scopedMemory } from "../../components/detail-memory";
 import { detailEntry, type ProviderDetailSource } from "../shared/detail-entry";
 import { JENKINS_LEGEND, JenkinsDetailTab } from "./detail-tab";
 import type { JenkinsCommitData, JenkinsFailedTest, JenkinsJob, JenkinsJobFetchResult, JenkinsRun } from "./types";
@@ -27,6 +28,7 @@ export const jenkinsDetail = detailEntry({
       unavailableReason={props.context.unavailable("jenkins", props.source.status)}
       loading={props.source.status?.kind === "loading"}
       {...props.context.cursor}
+      memory={scopedMemory(props.context.memory, "jenkins")}
       onOpenBuild={props.source.onOpenBuild}
       onOpenTestFailure={props.source.onOpenTestFailure}
     />

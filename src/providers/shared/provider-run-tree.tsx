@@ -1,5 +1,6 @@
 import type { Renderable } from "@opentui/core";
-import { createEffect, createMemo, createSignal, For, onCleanup, Show, untrack } from "solid-js";
+import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show, untrack } from "solid-js";
+import { createRememberedSignal, type DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
 import type { DebugEventSource } from "../../debug/events";
 import { useT } from "../../hooks/use-t";
@@ -101,6 +102,25 @@ export interface ProviderTreeJobFetchResult<TJobRaw> {
   error: string | null;
 }
 
+/** What a tree records about a commit besides its open rows; mutable, so no effect runs again on it. */
+interface OpenedMemory {
+  /** The commit the run statuses and the single opened run belong to. */
+  dataKey: string | null;
+  /** The commit whose first failed run was opened on entering the tab (once, so closing it sticks). */
+  failureOpenedKey: string | null;
+  /** The single run opened on its own (`id:number`), so closing it sticks too. */
+  autoExpandedSignature: string | null;
+  /** Each run's last seen status: an open run whose status moved loads its jobs again. */
+  runSignatures: Map<string, string>;
+}
+
+const newOpenedMemory = (): OpenedMemory => ({
+  dataKey: null,
+  failureOpenedKey: null,
+  autoExpandedSignature: null,
+  runSignatures: new Map(),
+});
+
 type FlatItem<TRaw, TJobRaw> =
   | { kind: "reload"; flatIndex: number }
   | { kind: "run"; run: ProviderTreeRun<TRaw>; flatIndex: number }
@@ -127,6 +147,8 @@ export interface ProviderRunTreeProps<TRaw, TJobRaw> {
   fetchJobsForRun: (run: ProviderTreeRun<TRaw>, signal?: AbortSignal) => Promise<ProviderTreeJobFetchResult<TJobRaw>>;
   debugSource: DebugEventSource;
   dataKey: string;
+  /** Keeps open runs, attempts and loaded jobs while the tree is not shown (another tab, the other layout). */
+  memory?: DetailMemory;
   getInitialJobsForRun?: (run: ProviderTreeRun<TRaw>) => ProviderTreeJob<TJobRaw>[];
   onOpenJobAction?: (
     job: ProviderTreeJob<TJobRaw>,
@@ -168,18 +190,27 @@ export interface ProviderRunTreeProps<TRaw, TJobRaw> {
 export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreeProps<TRaw, TJobRaw>>) {
   const t = useT();
   const STATUS_COL_WIDTH = 2;
-  const [expandedRuns, setExpandedRuns] = createSignal<Set<string>>(new Set());
+  // What the user opened and what loaded for it, per commit: kept in the memory when there is one.
+  const dataKey = () => props.dataKey;
+  const remembered = <T,>(key: string, initial: () => T) => createRememberedSignal(props.memory, key, dataKey, initial);
+  const [expandedRuns, setExpandedRuns] = remembered("expandedRuns", () => new Set<string>());
   /** Open earlier attempts, as `runId:number`. */
-  const [expandedAttempts, setExpandedAttempts] = createSignal<Set<string>>(new Set());
-  const [fetchedJobs, setFetchedJobs] = createSignal<Map<string, ProviderTreeJob<TJobRaw>[]>>(new Map());
-  const [jobErrors, setJobErrors] = createSignal<Map<string, string>>(new Map());
+  const [expandedAttempts, setExpandedAttempts] = remembered("expandedAttempts", () => new Set<string>());
+  const [fetchedJobs, setFetchedJobs] = remembered("fetchedJobs", () => new Map<string, ProviderTreeJob<TJobRaw>[]>());
+  const [jobErrors, setJobErrors] = remembered("jobErrors", () => new Map<string, string>());
+  const [loadedRuns, setLoadedRuns] = remembered("loadedRuns", () => new Set<string>());
+  /** Which commit already had its failed run opened, the single run opened, and each run's last seen status. */
+  const opened = props.memory?.("opened", newOpenedMemory) ?? newOpenedMemory();
+  if (opened.dataKey !== props.dataKey) {
+    opened.dataKey = props.dataKey;
+    opened.autoExpandedSignature = null;
+    opened.runSignatures.clear();
+  }
   const [loadingRuns, setLoadingRuns] = createSignal<Set<string>>(new Set());
-  const [loadedRuns, setLoadedRuns] = createSignal<Set<string>>(new Set());
   const [pendingFocusRunId, setPendingFocusRunId] = createSignal<string | null>(null);
   const fetchControllers = new Map<string, AbortController>();
   /** Runs whose status changed while their jobs were loading; they load again when that request settles. */
   const reloadAfterLoad = new Set<string>();
-  let autoExpandedSignature: string | null = null;
   let previousDataKey = props.dataKey;
   const itemRefs: Renderable[] = [];
   const refsByKey = new Map<string, Renderable>();
@@ -395,7 +426,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
 
   // Auto refresh replaces the runs: an expanded run whose status moved reloads its jobs and steps. If its jobs are
   // still loading, they load again once that request settles (its answer may predate the change).
-  const runSignatures = new Map<string, string>();
+  const runSignatures = opened.runSignatures;
   createEffect(() => {
     const runs = props.runs;
     untrack(() => {
@@ -410,22 +441,28 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     });
   });
 
-  const resetRunState = () => {
+  /** Stops what this tree has running: a tree mounted again (or for another commit) starts its own. */
+  const stopLoading = () => {
     for (const ctrl of fetchControllers.values()) ctrl.abort();
     fetchControllers.clear();
-    setExpandedRuns(new Set<string>());
-    setExpandedAttempts(new Set<string>());
-    setFetchedJobs(new Map<string, ProviderTreeJob<TJobRaw>[]>());
-    setJobErrors(new Map<string, string>());
     setLoadingRuns(new Set<string>());
-    setLoadedRuns(new Set<string>());
     setPendingFocusRunId(null);
-    autoExpandedSignature = null;
-    runSignatures.clear();
     reloadAfterLoad.clear();
     itemRefs.length = 0;
     refsByKey.clear();
     rows.clearHover();
+  };
+
+  const resetRunState = () => {
+    stopLoading();
+    setExpandedRuns(new Set<string>());
+    setExpandedAttempts(new Set<string>());
+    setFetchedJobs(new Map<string, ProviderTreeJob<TJobRaw>[]>());
+    setJobErrors(new Map<string, string>());
+    setLoadedRuns(new Set<string>());
+    opened.dataKey = props.dataKey;
+    opened.autoExpandedSignature = null;
+    runSignatures.clear();
   };
 
   createEffect(() => {
@@ -435,7 +472,14 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     resetRunState();
   });
 
-  onCleanup(resetRunState);
+  onCleanup(stopLoading);
+
+  // Back from another tab or layout: an open run whose jobs had not arrived yet loads them again.
+  onMount(() => {
+    for (const run of props.runs) {
+      if (expandedRuns().has(run.id) && !loadedRuns().has(run.id) && !jobErrors().has(run.id)) void loadJobsForRun(run);
+    }
+  });
 
   createEffect(() => {
     const runId = pendingFocusRunId();
@@ -454,12 +498,12 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
 
   // Failure first: entering a commit's tab (detail focus) opens its first failed run once, unless the user already
   // opened one. Only on focus, so browsing commits in the graph never fetches jobs.
-  let failureOpenedKey: string | null = null;
+
   createEffect(() => {
     if (props.openFailedRun === false || !props.detailFocused() || props.runs.length === 0) return;
     const key = props.dataKey;
-    if (failureOpenedKey === key) return;
-    failureOpenedKey = key;
+    if (opened.failureOpenedKey === key) return;
+    opened.failureOpenedKey = key;
     const failed = props.runs.find(run => categorize(run.status, run.conclusion) === "fail");
     if (!failed || untrack(expandedRuns).size > 0) return;
     untrack(() => toggleRun(failed));
@@ -470,9 +514,9 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     if (props.runs.length !== 1) return;
     const run = props.runs[0];
     const signature = `${run.id}:${run.runNumber}`;
-    if (autoExpandedSignature === signature) return;
+    if (opened.autoExpandedSignature === signature) return;
     if (expandedRuns().has(run.id)) return;
-    autoExpandedSignature = signature;
+    opened.autoExpandedSignature = signature;
     toggleRun(run);
   });
 

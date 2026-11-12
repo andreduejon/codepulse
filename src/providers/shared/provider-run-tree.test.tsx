@@ -1,7 +1,8 @@
 import { expect, mock, spyOn, test } from "bun:test";
 import type { KeyEvent } from "@opentui/core";
 import { testRender } from "@opentui/solid";
-import { createSignal } from "solid-js";
+import { createSignal, Show } from "solid-js";
+import { createDetailMemory, type DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
 import { createThemeState, ThemeContext } from "../../context/theme";
 import * as browser from "../../utils/open-url";
@@ -45,9 +46,12 @@ const job = (status: string, conclusion: string | null, stepStatus: string): Pro
   raw: null,
 });
 
-async function renderTree(options: { onOpenNote?: (note: ProviderTreeNote) => void } = {}) {
+async function renderTree(options: { onOpenNote?: (note: ProviderTreeNote) => void; memory?: DetailMemory } = {}) {
   const [runs, setRuns] = createSignal([run("in_progress", null, "2026-01-01T00:01:00Z")]);
   const [cursor, setCursor] = createSignal(0);
+  /** Off and on again: what a tab switch or a switch between the two layouts does to the tree. */
+  const [mounted, setMounted] = createSignal(true);
+  const [dataKey, setDataKey] = createSignal("sha");
   let jobs = [job("in_progress", null, "in_progress")];
   const fetchJobs = mock(async () => ({ jobs, error: null }));
   const reload = mock(async () => {});
@@ -64,22 +68,25 @@ async function renderTree(options: { onOpenNote?: (note: ProviderTreeNote) => vo
     () => (
       <ThemeContext.Provider value={createThemeState()}>
         <box width={70} flexDirection="column">
-          <ProviderRunTree
-            runs={runs()}
-            navRef={navRef}
-            detailCursorIndex={cursor}
-            detailFocused={() => true}
-            setDetailCursorAction={() => {}}
-            setDetailCursorIndex={setCursor}
-            setDetailCursorShortcut={shortcut}
-            fetchJobsForRun={fetchJobs}
-            debugSource="GitHub"
-            dataKey="sha"
-            summaryLabel="total workflow runs"
-            onReloadCommit={reload}
-            onOpenNote={options.onOpenNote}
-            noteAction="view in log"
-          />
+          <Show when={mounted()}>
+            <ProviderRunTree
+              runs={runs()}
+              navRef={navRef}
+              detailCursorIndex={cursor}
+              detailFocused={() => true}
+              setDetailCursorAction={() => {}}
+              setDetailCursorIndex={setCursor}
+              setDetailCursorShortcut={shortcut}
+              fetchJobsForRun={fetchJobs}
+              debugSource="GitHub"
+              dataKey={dataKey()}
+              memory={options.memory}
+              summaryLabel="total workflow runs"
+              onReloadCommit={reload}
+              onOpenNote={options.onOpenNote}
+              noteAction="view in log"
+            />
+          </Show>
         </box>
       </ThemeContext.Provider>
     ),
@@ -100,6 +107,8 @@ async function renderTree(options: { onOpenNote?: (note: ProviderTreeNote) => vo
     shortcut,
     setRuns,
     setCursor,
+    setMounted,
+    setDataKey,
     settle,
     setJobs: (next: ProviderTreeJob<null>[]) => {
       jobs = next;
@@ -586,5 +595,78 @@ test("wide-character run names are cut by terminal columns, keeping the ellipsis
     expect(row).toContain("✓");
   } finally {
     setup.renderer.destroy();
+  }
+});
+
+test("open runs and attempts come back as they were when the tree mounts again, without reading the jobs again", async () => {
+  const t = await renderTree({ memory: createDetailMemory() });
+  const attemptJob = (id: string, name: string, attempt: number, conclusion: string) => ({
+    ...job("completed", conclusion, "completed"),
+    id,
+    name,
+    attempt,
+  });
+  try {
+    t.setJobs([attemptJob("j1", "test-first", 1, "failure"), attemptJob("j2", "test-again", 2, "success")]);
+    t.setRuns([run("completed", "success", "2026-01-01T00:05:00Z")]);
+    t.setCursor(1);
+    await t.settle();
+    t.navRef.activateCurrentItem();
+    await t.settle();
+    // Reload, run, the job, then the attempt row.
+    t.setCursor(3);
+    t.navRef.activateCurrentItem();
+    await t.settle();
+    expect(t.captureCharFrame()).toContain("test-first");
+    expect(t.fetchJobs).toHaveBeenCalledTimes(1);
+
+    t.setMounted(false);
+    await t.settle();
+    expect(t.captureCharFrame()).not.toContain("CI #7");
+    t.setMounted(true);
+    await t.settle();
+    const rows = t.captureCharFrame().split("\n");
+    expect(rows.find(row => row.includes("CI #7"))).toContain("▾");
+    expect(rows.find(row => row.includes("attempt 1"))).toContain("▾");
+    expect(rows.some(row => row.includes("test-first"))).toBe(true);
+    expect(t.fetchJobs).toHaveBeenCalledTimes(1);
+
+    // Another commit starts closed.
+    t.setMounted(false);
+    t.setDataKey("other");
+    await t.settle();
+    t.setMounted(true);
+    await t.settle();
+    expect(t.captureCharFrame()).not.toContain("test-again");
+  } finally {
+    t.renderer.destroy();
+  }
+});
+
+test("a run whose jobs were still loading when the tree went away loads them when it mounts again", async () => {
+  const t = await renderTree({ memory: createDetailMemory() });
+  let answer: (() => void) | undefined;
+  t.fetchJobs.mockImplementation(
+    () =>
+      new Promise(resolve => {
+        answer = () => resolve({ jobs: [job("in_progress", null, "in_progress")], error: null });
+      }),
+  );
+  try {
+    t.setCursor(1);
+    t.navRef.activateCurrentItem();
+    await t.settle();
+    expect(t.fetchJobs).toHaveBeenCalledTimes(1);
+    t.setMounted(false);
+    await t.settle();
+    answer?.();
+    t.setMounted(true);
+    await t.settle();
+    expect(t.fetchJobs).toHaveBeenCalledTimes(2);
+    answer?.();
+    await t.settle();
+    expect(t.captureCharFrame()).toContain("compile");
+  } finally {
+    t.renderer.destroy();
   }
 });

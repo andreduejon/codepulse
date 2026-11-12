@@ -1,3 +1,4 @@
+import { scopedMemory } from "../../components/detail-memory";
 import { detailEntry, type ProviderDetailSource } from "../shared/detail-entry";
 import { ActionsDetailTab, GITHUB_LEGEND } from "./detail-tab";
 import type { GitHubCommitData, GitHubJob, GitHubJobFetchResult, GitHubWorkflowRun } from "./types";
@@ -25,6 +26,7 @@ export const githubDetail = detailEntry({
       unavailableReason={props.context.unavailable("github-actions", props.source.status)}
       loading={props.source.status?.kind === "loading"}
       {...props.context.cursor}
+      memory={scopedMemory(props.context.memory, "github-actions")}
       onOpenJobLog={props.source.onOpenJobLog}
     />
   ),
