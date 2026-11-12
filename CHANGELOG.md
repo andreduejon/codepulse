@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- The details keep what you opened when you switch tabs or when the terminal width crosses into or out of the side
+  panel: open runs and attempts (GitHub Actions, Jenkins), closed namespaces (OpenShift), the Snyk view, collapsed
+  folders and the Info sections. Before, a resize or a tab switch closed them and the cursor landed on another row.
+  The footer also keeps offering `o open` after such a resize.
+
 ## [0.17.0] - 2026-11-11
 
 ### Added
