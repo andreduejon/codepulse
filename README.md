@@ -16,7 +16,8 @@ commit and branch context.
 ## Prerequisites
 
 - Git installed and available on path.
-- An interactive terminal with at least **90 columns and 30 rows**.
+- An interactive terminal with at least **90 columns and 30 rows**, true color, mouse input and Unicode box
+  drawing.
 
 | Operating system | Architectures | Terminal |
 |------------------|---------------|----------|
