@@ -962,25 +962,43 @@ export function openShiftWorld(state: DemoState, phase: Phase): OpenShiftWorld {
       }),
     ],
   });
-  // OpenShift only matches commits that have a Build (or ImageStreamTag), so every deployed commit gets one.
-  const completeBuild = (name: string, sha: string) =>
+  // OpenShift only matches commits that have a Build (or ImageStreamTag), so every deployed commit gets one. Each took
+  // 6 minutes and ended `endedMin` minutes ago (the dashboard dates builds by their end).
+  const completeBuild = (name: string, sha: string, endedMin: number) =>
     add("shop-dev", "Build", {
       kind: "Build",
-      metadata: { name, namespace: "shop-dev", uid: nextUid(), labels: { [COMMIT_KEY]: sha } },
+      metadata: {
+        name,
+        namespace: "shop-dev",
+        uid: nextUid(),
+        labels: { [COMMIT_KEY]: sha },
+        creationTimestamp: created(endedMin + 6),
+      },
       spec: { output: { to: { kind: "ImageStreamTag", name: `shop-api:${name.split("-").pop()}` } } },
-      status: { phase: "Complete", outputDockerImageReference: imageOf(sha) },
+      status: { phase: "Complete", outputDockerImageReference: imageOf(sha), completionTimestamp: created(endedMin) },
     });
-  completeBuild("shop-api-40", s.rounding);
+  completeBuild("shop-api-40", s.rounding, 2 * 24 * 60);
   add("shop-dev", "Build", {
     kind: "Build",
-    metadata: { name: "shop-api-41", namespace: "shop-dev", uid: nextUid(), labels: { [COMMIT_KEY]: s.payments } },
+    metadata: {
+      name: "shop-api-41",
+      namespace: "shop-dev",
+      uid: nextUid(),
+      labels: { [COMMIT_KEY]: s.payments },
+      creationTimestamp: created(400),
+    },
     spec: { output: { to: { kind: "ImageStreamTag", name: "shop-api:41" } } },
-    status: { phase: "Failed", reason: "DockerBuildFailed", message: "Docker build strategy has failed." },
+    status: {
+      phase: "Failed",
+      reason: "DockerBuildFailed",
+      message: "Docker build strategy has failed.",
+      completionTimestamp: created(396),
+    },
   });
   // 41 failed, its re-run 42 made the image shop-test runs.
-  completeBuild("shop-api-42", s.payments);
-  completeBuild("shop-api-43", s.readme);
-  completeBuild("shop-api-44", s.metrics);
+  completeBuild("shop-api-42", s.payments, 380);
+  completeBuild("shop-api-43", s.readme, 50);
+  completeBuild("shop-api-44", s.metrics, 3);
   if (phase.index >= 2)
     add("shop-dev", "Build", {
       kind: "Build",
