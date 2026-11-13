@@ -13,6 +13,7 @@ import { DashboardView } from "./components/dashboard-view";
 import { createDetailMemory } from "./components/detail-memory";
 import DetailPanel from "./components/detail-panel";
 import type { DetailNavRef } from "./components/detail-types";
+import { DashboardEventDialog } from "./components/dialogs/dashboard-event-dialog";
 import DebugDialog from "./components/dialogs/debug-dialog";
 import { DetailDialog } from "./components/dialogs/detail-dialog";
 import DiffBlameDialog from "./components/dialogs/diff-blame-dialog";
@@ -227,6 +228,9 @@ export function AppContent(props: Readonly<AppContentProps>) {
     } else if (mode === "normal" && currentDialog === "detail") {
       setDialog(null);
       // detailFocused stays true — panel is now visible in two-column layout
+    } else if (mode === "normal" && currentDialog === "dashboard-event") {
+      // The side panel shows the event now.
+      setDialog(null);
     }
   });
 
@@ -404,10 +408,13 @@ export function AppContent(props: Readonly<AppContentProps>) {
   });
   const dashboardShown = () => state.activeProviderView() === "dashboard";
   const dashboard = useDashboard({ apps: dashboardApps, active: dashboardShown });
-  // No details beside the dashboard.
+  const dashboardAppName = (path: string) => dashboardApps().find(app => app.path === path)?.name ?? path;
+  // No commit details beside the dashboard; its own details leave with it.
   createEffect(() => {
     if (dashboardShown()) actions.setDetailFocused(false);
+    else if (untrack(dialog) === "dashboard-event") setDialog(null);
   });
+  let dashboardDialogScrollbox: ScrollBoxRenderable | undefined;
 
   /** A commit to select once its repository's graph is there, in the view of the provider that showed it. */
   const [pendingGraphJump, setPendingGraphJump] = createSignal<{ sha: string; view: ProviderView } | null>(null);
@@ -430,11 +437,57 @@ export function AppContent(props: Readonly<AppContentProps>) {
       }
     });
   });
+  /** Enter: beside the side panel, the event in the graph; without it, its details first, like the graph's. */
   const activateDashboard = () => {
     const event = dashboard.activate();
+    if (!event) return;
+    if (layoutMode() === "compact") setDialog("dashboard-event");
+    else showInGraph(event);
+  };
+  const showSelectedInGraph = () => {
+    const event = dashboard.selected();
+    setDialog(null);
     if (event) showInGraph(event);
   };
+  const openSelectedEvent = () => {
+    const url = dashboard.selected()?.url;
+    if (url) openUrl(url);
+  };
+  /** Keys in the compact details: Enter shows the event in the graph, ↑/↓ scroll, Esc (the cascade) closes. */
+  const handleDashboardDialogKey = (event: KeyEvent) => {
+    const scrollbox = dashboardDialogScrollbox;
+    switch (event.name) {
+      case "return":
+      case "enter":
+        showSelectedInGraph();
+        break;
+      case "o":
+        openSelectedEvent();
+        break;
+      case "down":
+      case "j":
+        scrollbox?.scrollBy(event.shift ? 10 : 1, "absolute");
+        break;
+      case "up":
+      case "k":
+        scrollbox?.scrollBy(event.shift ? -10 : -1, "absolute");
+        break;
+      case "pagedown":
+        scrollbox?.scrollBy(1, "viewport");
+        break;
+      case "pageup":
+        scrollbox?.scrollBy(-1, "viewport");
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
+  };
   const handleDashboardKey = (event: KeyEvent) => {
+    if (dialog() === "dashboard-event") {
+      handleDashboardDialogKey(event);
+      return;
+    }
     const step = event.shift ? 10 : 1;
     switch (event.name) {
       case "down":
@@ -475,12 +528,10 @@ export function AppContent(props: Readonly<AppContentProps>) {
       case "r":
         void dashboard.reload();
         break;
-      case "o": {
-        const url = dashboard.selected()?.url;
-        if (!url) return;
-        openUrl(url);
+      case "o":
+        if (!dashboard.selected()?.url) return;
+        openSelectedEvent();
         break;
-      }
       default:
         return;
     }
@@ -952,10 +1003,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                   {/* Dashboard details - right, like the commit details beside the graph */}
                   <Show when={layoutMode() === "normal" && dashboardShown()}>
                     <box flexDirection="column" width="25%" minWidth={60} flexShrink={0} paddingX={2} paddingBottom={1}>
-                      <DashboardDetail
-                        event={dashboard.selected}
-                        appName={path => dashboardApps().find(app => app.path === path)?.name ?? path}
-                      />
+                      <DashboardDetail event={dashboard.selected} appName={dashboardAppName} />
                     </box>
                   </Show>
                   <Show when={layoutMode() === "normal" && !dashboardShown()}>
@@ -1054,6 +1102,19 @@ export function AppContent(props: Readonly<AppContentProps>) {
                     {...providerDetailProps}
                     message={screenMessage()}
                     onDismissMessage={clearScreenMessage}
+                  />
+                </Show>
+                {/* The dashboard's details, compact mode only */}
+                <Show when={dialog() === "dashboard-event"}>
+                  <DashboardEventDialog
+                    event={dashboard.selected}
+                    appName={dashboardAppName}
+                    onClose={() => setDialog(null)}
+                    onShowInGraph={showSelectedInGraph}
+                    onOpen={openSelectedEvent}
+                    scrollboxRef={element => {
+                      dashboardDialogScrollbox = element;
+                    }}
                   />
                 </Show>
                 {/* Job log dialog */}

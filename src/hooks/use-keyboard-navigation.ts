@@ -15,6 +15,8 @@ export type DialogId =
   | "theme"
   | "diff-blame"
   | "detail"
+  /** The selected dashboard event's details, in the compact layout. */
+  | "dashboard-event"
   | "job-log"
   | "openshift-resource"
   | "debug"

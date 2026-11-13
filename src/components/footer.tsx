@@ -158,7 +158,7 @@ export default function Footer(
           ? [
               {
                 key: "enter",
-                desc: selected.kind === "more" ? " show all" : " show in graph",
+                desc: selected.kind === "more" ? " show all" : props.compact ? " details" : " show in graph",
                 rank: 1,
                 onClick: click(props.onConfirm),
               },

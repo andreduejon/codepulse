@@ -1,0 +1,56 @@
+import type { ScrollBoxRenderable } from "@opentui/core";
+import { useTerminalDimensions } from "@opentui/solid";
+import { type Accessor, Show } from "solid-js";
+import type { DashboardEvent } from "../../dashboard/events";
+import { useT } from "../../hooks/use-t";
+import { DashboardDetail } from "../dashboard-detail";
+import { KeyHint, KeyHintSeparator } from "../key-hint";
+import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
+
+/**
+ * The selected dashboard event's details as a dialog, where the terminal is too narrow for the side panel: the same
+ * frame as the graph's compact details.
+ */
+export function DashboardEventDialog(
+  props: Readonly<{
+    event: Accessor<DashboardEvent | null>;
+    appName: (path: string) => string;
+    onClose: () => void;
+    onShowInGraph: () => void;
+    onOpen: () => void;
+    scrollboxRef?: (element: ScrollBoxRenderable) => void;
+  }>,
+) {
+  const dimensions = useTerminalDimensions();
+  const t = useT();
+  const dialogWidth = () => Math.min(72, dimensions().width - 8);
+  const dialogHeight = () => dimensions().height - 8;
+
+  return (
+    <DialogOverlay>
+      <box
+        flexDirection="column"
+        width={dialogWidth()}
+        height={dialogHeight()}
+        backgroundColor={t().background}
+        paddingX={1}
+        paddingY={1}
+      >
+        <DialogTitleBar title="Details" onClose={props.onClose} />
+        {/* paddingX=4 matches other dialogs' inner content padding (outer box already has paddingX=1) */}
+        <box flexDirection="column" flexGrow={1} paddingX={4}>
+          <DashboardDetail event={props.event} appName={props.appName} scrollboxRef={props.scrollboxRef} />
+        </box>
+        <DialogFooter>
+          <KeyHint key="enter" desc=" show in graph" disabled={!props.event()} onClick={() => props.onShowInGraph()} />
+          <KeyHintSeparator />
+          <Show when={props.event()?.url}>
+            <KeyHint key="o" desc=" open" onClick={() => props.onOpen()} />
+            <KeyHintSeparator />
+          </Show>
+          <KeyHint key="↑/↓" desc=" scroll" />
+        </DialogFooter>
+      </box>
+    </DialogOverlay>
+  );
+}

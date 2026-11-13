@@ -28,7 +28,8 @@ export function DashboardView(
   const d = props.dashboard;
   const apps = () => d.shownApps();
   const showApp = () => apps().length > 1;
-  const graphWidth = () => 1 + apps().length * 2 + 1;
+  // Room for the ropes, and at least for the column's header.
+  const graphWidth = () => Math.max(1 + apps().length * 2 + 1, "Graph".length + 2);
   const appWidth = createMemo(() => Math.max(3, ...apps().map(app => app.name.length)) + 2);
   const appName = (path: string) => d.apps().find(app => app.path === path)?.name ?? path;
   const ropeOf = (path: string) => apps().findIndex(app => app.path === path);

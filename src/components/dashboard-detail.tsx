@@ -1,3 +1,4 @@
+import type { ScrollBoxRenderable } from "@opentui/core";
 import { type Accessor, createEffect, createSignal, For, type JSX, onCleanup, Show } from "solid-js";
 import type { DashboardEvent } from "../dashboard/events";
 import { eventMark, markLegend } from "../dashboard/legend";
@@ -17,6 +18,8 @@ export function DashboardDetail(
     appName: (path: string) => string;
     /** How an event's commit is read (tests); from the app's repository otherwise. */
     loadCommit?: (app: string, sha: string) => Promise<CommitInfo | null>;
+    /** The content's scrollbox, for the compact dialog's ↑/↓. */
+    scrollboxRef?: (element: ScrollBoxRenderable) => void;
   }>,
 ) {
   const t = useT();
@@ -70,7 +73,13 @@ export function DashboardDetail(
         </box>
         <box border={["top"]} borderStyle="single" borderColor={t().border} flexShrink={0} />
       </box>
-      <scrollbox flexGrow={1} scrollY scrollX={false} verticalScrollbarOptions={{ visible: false }}>
+      <scrollbox
+        ref={element => props.scrollboxRef?.(element)}
+        flexGrow={1}
+        scrollY
+        scrollX={false}
+        verticalScrollbarOptions={{ visible: false }}
+      >
         <Show
           when={props.event()}
           fallback={

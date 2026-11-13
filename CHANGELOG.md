@@ -7,15 +7,15 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - **Dashboard**, a new first view in the tab row (Tab from the last provider, or a click). Every app of the open
-  repository's group gets a straight line, a "rope", and everything that happened is a knot on its app's rope, in
-  its provider's color: commits on the main branch, GitHub Actions runs, Jenkins builds, OpenShift builds and Snyk
-  scans, newest first. A knot is one app's events within an hour; a date row starts each day. In a group of several
-  apps the project row chooses All or one app (click, or ←/→), and it shows a legend of the knot colors; the event
-  count takes the graph modes' place. From 180 columns a side
-  panel shows the selected event like the commit details: what happened, the provider's facts (workflow, duration,
-  why a build failed, the scan's counts), its commit and the provider's marks. Enter shows the event's commit in
-  that app's graph, and `o` opens a run's or build's page. This first version reads Git and the provider caches
-  only, so a provider shows what it found the last time its view was open; `r` reads them again.
+  repository's group gets a straight line, a "rope", and everything that happened is a knot on its app's rope, in its
+  provider's color: commits on the main branch, GitHub Actions runs, Jenkins builds, OpenShift builds and Snyk scans,
+  newest first. A knot is one app's events within an hour; a date row starts each day. In a group of several apps the
+  project row chooses All or one app (click, or ←/→), and it shows a legend of the knot colors; the event count takes
+  the graph modes' place. From 180 columns a side panel shows the selected event like the commit details: what happened,
+  the provider's facts (workflow, duration, why a build failed, the scan's counts), its commit and the provider's marks;
+  below that, Enter opens them as a dialog, like the graph's details. Enter shows the event's commit in that app's
+  graph, and `o` opens a run's or build's page. This first version reads Git and the provider caches only, so a provider
+  shows what it found the last time its view was open; `r` reads them again.
 
 - Snyk Dependencies: a Maven `managed` pin is also marked `removable` when every dependency that brings the package
   already asks for the pinned version or later, so Maven would pick at least that version without the pin. Their
