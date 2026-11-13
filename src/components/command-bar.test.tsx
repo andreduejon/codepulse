@@ -62,7 +62,8 @@ test("provider badges switch directly; panel width switches between two and thre
     expect(lines()[providersLine + 1].slice(1).trim()).toBe("");
     expect(lines()[providersLine + 3].slice(1).trim()).toBe("");
     expect(lineWith("after bar")).toBe(7);
-    expect(lines()[providersLine]).not.toContain("·");
+    // One dot only: the one setting Dashboard apart from the providers.
+    expect(lines()[providersLine]).toMatch(/^[^·]*Dashboard\s+·\s+Git\s+GitHub Actions[^·]*$/);
     expect(lines()[providersLine + 4]).not.toContain("·");
     const muted = providerSpan();
     const x = lines()[providersLine].indexOf("GitHub Actions") + 2;
@@ -92,7 +93,7 @@ test("provider badges switch directly; panel width switches between two and thre
     await setup.mockMouse.click(lines()[lineWith("GitHub Actions")].indexOf("Jenkins") + 2, lineWith("GitHub Actions"));
     expect(app.state.activeProviderView()).toBe("jenkins");
     setMouseEnabled(false);
-    expect(lines()[lineWith("GitHub Actions")]).not.toContain(" · ");
+    expect(lines()[lineWith("GitHub Actions")]).toMatch(/^[^·]*Dashboard\s+·\s+Git\s+GitHub Actions[^·]*$/);
     app.state.providers.unregister("jenkins");
     await setup.flush();
     expect(setup.captureCharFrame()).not.toContain("Jenkins");
@@ -600,14 +601,11 @@ test("the highlighted count leaves out the working-tree node, like the total", a
   }
 });
 
-test("on the dashboard: the event count takes the modes' place, the apps and the provider legend take the project row", async () => {
+async function renderDashboardBar(apps: { path: string; name: string }[]) {
   let app!: ReturnType<typeof createAppState>;
   const [scope, setScope] = createSignal<string | null>(null);
   const dashboard = {
-    apps: () => [
-      { path: "/repo/shop", name: "shop" },
-      { path: "/repo/web", name: "shop-web" },
-    ],
+    apps: () => apps,
     scope,
     setScope,
     eventCount: () => 23,
@@ -641,18 +639,37 @@ test("on the dashboard: the event count takes the modes' place, the apps and the
     },
     { width: 160, height: 12, useMouse: true },
   );
+  await setup.flush();
+  const lines = setup.captureCharFrame().split("\n");
+  return { setup, scope, lines, top: lines.findIndex(line => line.includes("Dashboard")) };
+}
+
+test("on the dashboard: the event count takes the modes' place, the apps and the provider legend take the project row", async () => {
+  const { setup, scope, lines, top } = await renderDashboardBar([
+    { path: "/repo/shop", name: "shop" },
+    { path: "/repo/web", name: "shop-web" },
+  ]);
   try {
-    await setup.flush();
-    const lines = setup.captureCharFrame().split("\n");
-    const top = lines.findIndex(line => line.includes("Dashboard"));
-    expect(lines[top]).toMatch(/Dashboard\s+Git\s+GitHub Actions\s+Snyk\s+23 events/);
+    // The overviews come first, a dot apart from what they sum up: Dashboard from the providers, All from the apps.
+    expect(lines[top]).toMatch(/Dashboard\s+·\s+Git\s+GitHub Actions\s+Snyk\s+23 events/);
     expect(lines[top]).not.toContain("●");
     expect(lines[top]).not.toContain("normal");
-    expect(lines[top + 2]).toMatch(/All apps\s+shop\s+shop-web\s+█ Git\s+█ Actions\s+█ Snyk/);
+    expect(lines[top + 2]).toMatch(/All\s+·\s+shop\s+shop-web\s+█ Git\s+█ Actions\s+█ Snyk/);
     expect(lines[top + 2]).not.toContain("main");
     const x = lines[top + 2].indexOf("shop-web") + 1;
     await setup.mockMouse.click(x, top + 2, MouseButtons.LEFT);
     expect(scope()).toBe("/repo/web");
+  } finally {
+    setup.renderer.destroy();
+  }
+});
+
+test("on the dashboard of one app, the project row shows only that app", async () => {
+  const { setup, lines, top } = await renderDashboardBar([{ path: "/repo/shop", name: "shop" }]);
+  try {
+    expect(lines[top + 2]).toMatch(/^\W*shop\s+█ Git/);
+    expect(lines[top + 2]).not.toContain("All");
+    expect(lines[top + 2]).not.toContain("·");
   } finally {
     setup.renderer.destroy();
   }

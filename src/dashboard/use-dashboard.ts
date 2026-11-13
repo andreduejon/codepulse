@@ -27,7 +27,7 @@ export interface DashboardState {
   /** The chosen app's path, or null for all apps. */
   scope: Accessor<string | null>;
   setScope: (path: string | null) => void;
-  /** All apps, then each app: ←/→ in the footer. */
+  /** All apps, then each app: ←/→ in the footer. One app has nothing to switch to. */
   cycleScope: (direction: 1 | -1) => void;
   rows: Accessor<DashboardRow[]>;
   eventCount: Accessor<number>;
@@ -133,6 +133,8 @@ export function useDashboard(
     select((end === "first" ? stops[0] : stops.at(-1)) ?? -1);
   };
   const cycleScope = (direction: 1 | -1) => {
+    // One app is all of them: nothing to switch to.
+    if (opts.apps().length <= 1) return;
     const choices = [null, ...opts.apps().map(app => app.path)];
     const at = Math.max(0, choices.indexOf(scope()));
     setScope(choices[(at + direction + choices.length) % choices.length] ?? null);

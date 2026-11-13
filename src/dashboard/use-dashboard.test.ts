@@ -15,15 +15,17 @@ const event = (app: string, minutesAgo: number): DashboardEvent => ({
 });
 const settle = () => new Promise(resolve => setTimeout(resolve, 0));
 
-async function dashboard(events: DashboardEvent[]) {
+const TWO_APPS = [
+  { path: "/shop", name: "shop" },
+  { path: "/web", name: "web" },
+];
+
+async function dashboard(events: DashboardEvent[], apps = TWO_APPS) {
   const [active, setActive] = createSignal(false);
   const loads: string[] = [];
   const state = createRoot(() =>
     useDashboard({
-      apps: () => [
-        { path: "/shop", name: "shop" },
-        { path: "/web", name: "web" },
-      ],
+      apps: () => apps,
       active,
       now: () => NOW,
       load: async app => {
@@ -67,6 +69,17 @@ test("←/→ go through all apps, then each app; the event count follows", asyn
   expect(d.state.scope()).toBeNull();
   d.state.cycleScope(-1);
   expect(d.state.scope()).toBe("/web");
+});
+
+test("one app has nothing to switch to: ←/→ keep it", async () => {
+  const d = await dashboard([event("/shop", 5)], [{ path: "/shop", name: "shop" }]);
+  d.setActive(true);
+  await settle();
+  d.state.cycleScope(1);
+  expect(d.state.scope()).toBeNull();
+  d.state.cycleScope(-1);
+  expect(d.state.scope()).toBeNull();
+  expect(d.state.eventCount()).toBe(1);
 });
 
 test("Enter on a knot's last row opens it and stays there; on an event it hands the event over", async () => {

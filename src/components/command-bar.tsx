@@ -107,7 +107,11 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
     };
   });
   const wide = createMemo(() => {
-    const providersWidth = enabledProviders().reduce((width, view) => width + providerDisplayName(view).length + 3, -1);
+    // Each label, its padding and the gap after it; the dot after Dashboard and its gap.
+    const providersWidth = enabledProviders().reduce(
+      (width, view) => width + providerDisplayName(view).length + 3 + (view === "dashboard" ? 2 : 0),
+      -1,
+    );
     const modesWidth =
       22 + filterBadgeLabel("search", state.searchQuery()).length + filterBadgeLabel("path", state.pathFilter()).length;
     return contentWidth() >= Math.max(120, providersWidth + modesWidth + 4);
@@ -195,23 +199,31 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
                 const hovered = () => hoveredProvider() === view && props.mouseEnabled?.() !== false;
                 const colors = () => providerColors(t(), view);
                 return (
-                  // biome-ignore lint/a11y/noStaticElementInteractions: TUI provider selection also supports Tab keyboard cycling.
-                  // biome-ignore lint/a11y/useKeyWithMouseEvents: Keyboard-selected provider already uses normal badge colors.
-                  <text
-                    flexShrink={0}
-                    wrapMode="none"
-                    fg={selected() ? colors().bg : hovered() ? t().foreground : t().foregroundMuted}
-                    bg={t().backgroundElementActive}
-                    onMouseOver={() => setHoveredProvider(view)}
-                    onMouseOut={() => setHoveredProvider(null)}
-                    onMouseDown={event => {
-                      if (event.button !== MouseButton.LEFT || props.mouseEnabled?.() === false) return;
-                      event.preventDefault();
-                      actions.setActiveProviderView(view);
-                    }}
-                  >
-                    {` ${providerDisplayName(view)} `}
-                  </text>
+                  <>
+                    {/* biome-ignore lint/a11y/noStaticElementInteractions: TUI provider selection also supports Tab keyboard cycling. */}
+                    {/* biome-ignore lint/a11y/useKeyWithMouseEvents: Keyboard-selected provider already uses normal badge colors. */}
+                    <text
+                      flexShrink={0}
+                      wrapMode="none"
+                      fg={selected() ? colors().bg : hovered() ? t().foreground : t().foregroundMuted}
+                      bg={t().backgroundElementActive}
+                      onMouseOver={() => setHoveredProvider(view)}
+                      onMouseOut={() => setHoveredProvider(null)}
+                      onMouseDown={event => {
+                        if (event.button !== MouseButton.LEFT || props.mouseEnabled?.() === false) return;
+                        event.preventDefault();
+                        actions.setActiveProviderView(view);
+                      }}
+                    >
+                      {` ${providerDisplayName(view)} `}
+                    </text>
+                    {/* The overview, a dot apart from the providers it sums up. */}
+                    <Show when={view === "dashboard" && enabledProviders().length > 1}>
+                      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                        ·
+                      </text>
+                    </Show>
+                  </>
                 );
               }}
             </For>
@@ -227,69 +239,72 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
           flexShrink={0}
         >
           <box flexDirection="row" flexShrink={1} minWidth={0} overflow="hidden">
-            {/* Dashboard: all apps, or one of them. */}
+            {/* Dashboard: all apps, a dot apart from each of them; one app is all of them. */}
             <Show when={dashboardShown() && props.dashboard}>
-              {dashboard => (
-                <For
-                  each={[
-                    null,
-                    ...dashboard()
-                      .apps()
-                      .map(app => app.path),
-                  ]}
-                >
-                  {(path, index) => {
-                    const label = () =>
-                      path === null
-                        ? "All apps"
-                        : (dashboard()
-                            .apps()
-                            .find(app => app.path === path)?.name ?? path);
-                    const key = path ?? "";
-                    return (
-                      <>
-                        <Show when={index() > 0}>
-                          <text flexShrink={0} wrapMode="none">
-                            {" "}
-                          </text>
-                        </Show>
-                        {/* biome-ignore lint/a11y/noStaticElementInteractions: TUI apps also switch with Left/Right. */}
-                        {/* biome-ignore lint/a11y/useKeyWithMouseEvents: The chosen app already uses accent badge colors. */}
-                        <box
-                          flexShrink={0}
-                          onMouseOver={() => setHoveredScope(key)}
-                          onMouseOut={() => setHoveredScope(null)}
-                          onMouseDown={event => {
-                            if (event.button !== MouseButton.LEFT || props.mouseEnabled?.() === false) return;
-                            event.preventDefault();
-                            dashboard().setScope(path);
-                          }}
-                        >
-                          <Show
-                            when={dashboard().scope() === path}
-                            fallback={
-                              <text
-                                flexShrink={0}
-                                wrapMode="none"
-                                fg={
-                                  hoveredScope() === key && props.mouseEnabled?.() !== false
-                                    ? t().foreground
-                                    : t().foregroundMuted
-                                }
-                                bg={t().backgroundElementActive}
-                              >
-                                {` ${label()} `}
-                              </text>
-                            }
-                          >
-                            <Badge name={label()} color={t().accent} noShrink />
+              {dashboard => {
+                const several = () => dashboard().apps().length > 1;
+                const choices = () => [
+                  ...(several() ? [null] : []),
+                  ...dashboard()
+                    .apps()
+                    .map(app => app.path),
+                ];
+                return (
+                  <For each={choices()}>
+                    {(path, index) => {
+                      const label = () =>
+                        path === null
+                          ? "All"
+                          : (dashboard()
+                              .apps()
+                              .find(app => app.path === path)?.name ?? path);
+                      const key = path ?? "";
+                      const chosen = () => !several() || dashboard().scope() === path;
+                      return (
+                        <>
+                          <Show when={index() > 0}>
+                            <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                              {index() === 1 && several() ? " · " : " "}
+                            </text>
                           </Show>
-                        </box>
-                      </>
-                    );
-                  }}
-                </For>
-              )}
+                          {/* biome-ignore lint/a11y/noStaticElementInteractions: TUI apps also switch with Left/Right. */}
+                          {/* biome-ignore lint/a11y/useKeyWithMouseEvents: The chosen app already uses accent badge colors. */}
+                          <box
+                            flexShrink={0}
+                            onMouseOver={() => setHoveredScope(key)}
+                            onMouseOut={() => setHoveredScope(null)}
+                            onMouseDown={event => {
+                              if (event.button !== MouseButton.LEFT || props.mouseEnabled?.() === false) return;
+                              event.preventDefault();
+                              dashboard().setScope(path);
+                            }}
+                          >
+                            <Show
+                              when={chosen()}
+                              fallback={
+                                <text
+                                  flexShrink={0}
+                                  wrapMode="none"
+                                  fg={
+                                    hoveredScope() === key && props.mouseEnabled?.() !== false
+                                      ? t().foreground
+                                      : t().foregroundMuted
+                                  }
+                                  bg={t().backgroundElementActive}
+                                >
+                                  {` ${label()} `}
+                                </text>
+                              }
+                            >
+                              <Badge name={label()} color={t().accent} noShrink />
+                            </Show>
+                          </box>
+                        </>
+                      );
+                    }}
+                  </For>
+                );
+              }}
             </Show>
             <Show when={!dashboardShown() && projectBadges().length > 0}>
               <Show when={visibleProjects().leftHidden > 0}>
