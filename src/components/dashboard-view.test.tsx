@@ -10,7 +10,7 @@ import { DashboardView } from "./dashboard-view";
 const NOW = new Date(2026, 2, 2, 11, 0).getTime();
 const SHA = "e6209dd7a1b2c3d4e5f60718293a4b5c6d7e8f90";
 
-test("one rope per app, each event a knot on its app's rope, with App, Time and Event; a click selects, a second opens", async () => {
+test("one rope per app, each event a knot on its app's rope, with App, Commit, Time and Event; a click selects, a second opens", async () => {
   const events: DashboardEvent[] = [
     {
       id: "a",
@@ -56,10 +56,13 @@ test("one rope per app, each event a knot on its app's rope, with App, Time and 
     await new Promise(resolve => setTimeout(resolve, 0));
     await setup.renderOnce();
     const lines = setup.captureCharFrame().split("\n");
-    expect(lines.some(line => /Graph\s+App\s+Time\s+Event/.test(line))).toBe(true);
+    expect(lines.some(line => /Graph\s+App\s+Commit\s+Time\s+Event/.test(line))).toBe(true);
     expect(lines.find(line => line.includes("Today"))).toMatch(/│ │\s+Today/);
-    expect(lines.find(line => line.includes("CI #812"))).toMatch(/█ │\s+shop\s+10:52\s+✗ CI #812 failed · e6209dd/);
-    expect(lines.find(line => line.includes("round totals"))).toMatch(/│ █\s+shop-web\s+10:12\s+e6209dd fix\(cart\)/);
+    // The commit has its own column, like in the graph: the event's text is only what happened.
+    expect(lines.find(line => line.includes("CI #812"))).toMatch(/█ │\s+shop\s+e6209dd\s+10:52\s+✗ CI #812 failed\s*$/);
+    expect(lines.find(line => line.includes("round totals"))).toMatch(
+      /│ █\s+shop-web\s+e6209dd\s+10:12\s+fix\(cart\): round totals\s*$/,
+    );
     const y = lines.findIndex(line => line.includes("round totals"));
     await setup.mockMouse.click(30, y, MouseButtons.LEFT);
     expect(dashboard.rows()[dashboard.cursor()]).toMatchObject({ kind: "event", event: { id: "b" } });

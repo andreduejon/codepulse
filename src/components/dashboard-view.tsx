@@ -1,5 +1,6 @@
 import { MouseButton, type Renderable, type ScrollBoxRenderable } from "@opentui/core";
 import { createEffect, createMemo, createSignal, For, Match, onCleanup, Show, Switch } from "solid-js";
+import { HASH_COL_WIDTH } from "../constants";
 import type { DashboardEvent, DashboardRow } from "../dashboard/events";
 import { eventMark, KNOT } from "../dashboard/legend";
 import type { DashboardState } from "../dashboard/use-dashboard";
@@ -13,7 +14,7 @@ const TIME_COL_WIDTH = 7;
 
 /**
  * The dashboard: one rope per app, with each event a knot on its app's rope in its provider's color, newest first.
- * Laid out like the graph view: the ropes, then App (when several apps show), Time and Event.
+ * Laid out like the graph view: the ropes, then App (when several apps show), Commit, Time and Event.
  */
 export function DashboardView(
   props: Readonly<{
@@ -56,28 +57,15 @@ export function DashboardView(
     );
   };
 
+  /** What happened: its mark (a commit has none), then its text. The commit is in its own column. */
   const EventText = (eventProps: { event: DashboardEvent }) => {
     const event = () => eventProps.event;
-    const short = () => event().sha.slice(0, 7);
     return (
       <text wrapMode="none" truncate fg={t().foreground}>
-        <Show
-          when={eventMark(event())}
-          fallback={
-            <>
-              <span style={{ fg: t().foregroundMuted }}>{`${short()} `}</span>
-              {event().text}
-            </>
-          }
-        >
-          {mark => (
-            <>
-              <span style={{ fg: mark().color(t()) }}>{`${mark().icon} `}</span>
-              {event().text}
-              <span style={{ fg: t().foregroundMuted }}>{` · ${short()}`}</span>
-            </>
-          )}
+        <Show when={eventMark(event())}>
+          {mark => <span style={{ fg: mark().color(t()) }}>{`${mark().icon} `}</span>}
         </Show>
+        {event().text}
       </text>
     );
   };
@@ -124,6 +112,9 @@ export function DashboardView(
             {header("App")}
           </box>
         </Show>
+        <box flexShrink={0} width={HASH_COL_WIDTH} paddingLeft={1}>
+          {header("Commit")}
+        </box>
         <box flexShrink={0} width={TIME_COL_WIDTH} paddingLeft={1}>
           {header("Time")}
         </box>
@@ -198,6 +189,11 @@ export function DashboardView(
                               </text>
                             </box>
                           </Show>
+                          <box flexShrink={0} width={HASH_COL_WIDTH} paddingLeft={1} overflow="hidden">
+                            <text wrapMode="none" truncate fg={t().foregroundMuted}>
+                              {eventRow().event.sha.slice(0, 7)}
+                            </text>
+                          </box>
                           <box flexShrink={0} width={TIME_COL_WIDTH} paddingLeft={1}>
                             <text wrapMode="none" fg={t().foregroundMuted}>
                               {formatClock(eventRow().event.time)}
@@ -213,7 +209,7 @@ export function DashboardView(
                       {more => (
                         <box
                           flexGrow={1}
-                          paddingLeft={showApp() ? appWidth() + TIME_COL_WIDTH + 1 : TIME_COL_WIDTH + 1}
+                          paddingLeft={(showApp() ? appWidth() : 0) + HASH_COL_WIDTH + TIME_COL_WIDTH + 1}
                         >
                           <text wrapMode="none" truncate fg={t().foregroundMuted}>
                             {`+${more().hidden} more`}
