@@ -33,6 +33,8 @@ All notable changes to this project will be documented in this file.
   The footer also keeps offering `o open` after such a resize.
 - Clicking `enter` in the footer of the compact details works the first time they open after startup. It stayed
   unclickable until the details had been opened once before.
+- `codepulse xyz` without a folder `xyz` opens the project selector with "Hmm, that directory doesn't exist" instead
+  of stopping with a fatal error about Git. Without Git installed, the startup now says so the same way.
 
 ## [0.17.0] - 2026-11-11
 
