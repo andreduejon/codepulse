@@ -3,7 +3,6 @@ import { createMemo, createSignal, For, Show } from "solid-js";
 import type { KnownRepoInfo } from "../config";
 import { isUncommittedHash } from "../constants";
 import { useAppState } from "../context/state";
-import { providerLegend } from "../dashboard/legend";
 import type { DashboardState } from "../dashboard/use-dashboard";
 import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
 import { useT } from "../hooks/use-t";
@@ -28,7 +27,10 @@ interface CommandBarProps {
   currentRepo: string;
   currentGroup?: string;
   currentAppName?: string;
-  /** While the dashboard shows: its event count takes the commit count's place, its legend the branch's. */
+  /**
+   * While the dashboard shows: its provider badges take the modes' place (a click hides or shows a provider's events),
+   * its event count the commit count's.
+   */
   dashboard?: DashboardState;
 }
 
@@ -38,6 +40,7 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
   const t = useT();
   const [hoveredProvider, setHoveredProvider] = createSignal<ProviderView | null>(null);
   const [hoveredMode, setHoveredMode] = createSignal<string | null>(null);
+  const [hoveredSource, setHoveredSource] = createSignal<EventSource | null>(null);
   const [hoveredProject, setHoveredProject] = createSignal<string | null>(null);
   const [hoveredCount, setHoveredCount] = createSignal<-1 | 1 | null>(null);
   const [projectWindow, setProjectWindow] = createSignal<{
@@ -105,24 +108,37 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
       rightHidden: members.length - start - 3,
     };
   });
-  /** The dashboard's legend, the providers whose knot and whole name fit in its 45%; the rest are left out. */
-  const fittingLegend = createMemo(() => {
-    const room = Math.floor(contentWidth() * 0.45);
-    const items = providerLegend(enabledProviders().filter((view): view is EventSource => view !== "dashboard"));
-    let used = 0;
-    return items.filter(([, label], index) => {
-      // `█ Name`, and before every item but the first a space and the gap.
-      used += 2 + label.length + (index > 0 ? 2 : 0);
-      return used <= room;
-    });
-  });
+  /** The dashboard's providers: each a badge in its knot color, which hides or shows its events. */
+  const eventSources = createMemo(() => enabledProviders().filter((view): view is EventSource => view !== "dashboard"));
+  /** "23 events", or "20 / 23 events" while a provider is hidden, like the graph's highlighted count. */
+  const eventCountText = () => {
+    const dashboard = props.dashboard;
+    if (!dashboard) return "";
+    const shown = dashboard.eventCount();
+    const total = dashboard.totalCount();
+    return `${shown === total ? total : `${shown} / ${total}`} ${total === 1 ? "event" : "events"}`;
+  };
+  // Each label, its padding and the gap after it.
+  const badgesWidth = (labels: readonly string[]) => labels.reduce((width, label) => width + label.length + 3, -1);
   const wide = createMemo(() => {
-    // Each label, its padding and the gap after it.
-    const providersWidth = enabledProviders().reduce((width, view) => width + providerDisplayName(view).length + 3, -1);
-    const modesWidth =
-      22 + filterBadgeLabel("search", state.searchQuery()).length + filterBadgeLabel("path", state.pathFilter()).length;
+    const providersWidth = badgesWidth(enabledProviders().map(providerDisplayName));
+    const modesWidth = dashboardShown()
+      ? badgesWidth(eventSources().map(providerDisplayName))
+      : 22 +
+        filterBadgeLabel("search", state.searchQuery()).length +
+        filterBadgeLabel("path", state.pathFilter()).length;
     return contentWidth() >= Math.max(120, providersWidth + modesWidth + 4);
   });
+  /** What the project row's right side takes: the branch badges and the commit count, or the event count. */
+  const rightWidth = () => {
+    if (dashboardShown()) return eventCountText().length + 2;
+    const branches = viewingOtherBranch()
+      ? [viewingBranch() ?? "", checkedOutBranch()]
+      : checkedOutBranch() || viewingBranch()
+        ? [checkedOutBranch() || viewingBranch() || ""]
+        : [];
+    return branches.reduce((width, name) => width + name.length + 3, countText().length + 2);
+  };
   const HiddenProjectCount = (badgeProps: { direction: -1 | 1 }) => (
     // biome-ignore lint/a11y/noStaticElementInteractions: TUI projects also support Shift+Left/Right.
     // biome-ignore lint/a11y/useKeyWithMouseEvents: Hover only changes the badge text color.
@@ -233,7 +249,7 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
           top={wide() ? 2 : 4}
           left={0}
           flexDirection="row"
-          width={wide() ? "45%" : "100%"}
+          width={wide() ? "45%" : Math.max(0, contentWidth() - rightWidth() - 1)}
           minWidth={0}
           flexShrink={0}
         >
@@ -344,12 +360,37 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
               }}
             </For>
           </box>
-          {/* The dashboard's event count, where the graph's modes are. */}
+          {/* The dashboard's providers, where the graph's modes are: a click hides or shows a provider's events. */}
           <Show when={dashboardShown() && props.dashboard}>
             {dashboard => (
-              <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted} bg={t().backgroundElementActive}>
-                {` ${dashboard().eventCount()} ${dashboard().eventCount() === 1 ? "event" : "events"} `}
-              </text>
+              <box flexDirection="row" gap={1} flexShrink={0}>
+                <For each={eventSources()}>
+                  {source => {
+                    const shown = () => !dashboard().hidden().has(source);
+                    const hovered = () => hoveredSource() === source && props.mouseEnabled?.() !== false;
+                    const colors = () => providerColors(t(), source);
+                    return (
+                      // biome-ignore lint/a11y/noStaticElementInteractions: TUI badge, a mouse-only filter.
+                      // biome-ignore lint/a11y/useKeyWithMouseEvents: Hover only changes the badge text color.
+                      <text
+                        flexShrink={0}
+                        wrapMode="none"
+                        fg={shown() ? colors().fg : hovered() ? t().foreground : t().foregroundMuted}
+                        bg={shown() ? colors().bg : t().backgroundElementActive}
+                        onMouseOver={() => setHoveredSource(source)}
+                        onMouseOut={() => setHoveredSource(null)}
+                        onMouseDown={event => {
+                          if (event.button !== MouseButton.LEFT || props.mouseEnabled?.() === false) return;
+                          event.preventDefault();
+                          dashboard().toggleSource(source);
+                        }}
+                      >
+                        {` ${providerDisplayName(source)} `}
+                      </text>
+                    );
+                  }}
+                </For>
+              </box>
             )}
           </Show>
         </box>
@@ -364,19 +405,11 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
           overflow="hidden"
           maxWidth="45%"
         >
-          {/* The dashboard's legend: each provider's knot color. */}
+          {/* The dashboard's event count, where the graph's commit count is. */}
           <Show when={dashboardShown()}>
-            <For each={fittingLegend()}>
-              {([markers, label], index) => (
-                <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                  {index() > 0 ? " " : ""}
-                  <For each={markers}>
-                    {([marker, color]) => <span style={{ fg: color(t()) }}>{`${marker} `}</span>}
-                  </For>
-                  {label}
-                </text>
-              )}
-            </For>
+            <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted} bg={t().backgroundElementActive}>
+              {` ${eventCountText()} `}
+            </text>
           </Show>
           <Show when={!dashboardShown() && (checkedOutBranch() || viewingBranch())}>
             <Show

@@ -14,19 +14,20 @@ All notable changes to this project will be documented in this file.
   whose tip reaches it in the fewest first-parent steps, so a commit merged from develop stays develop's. Local branches
   count for commits not pushed yet. A knot is the events within an hour; a line from the Commit column to the end starts
   each day, with the weekday and date where the times are. The project row keeps the group's badges, so another app's
-  dashboard is a click away, and it shows a legend of the knot colors; the event count takes the graph modes' place.
-  From 180 columns a side panel shows the selected event like the commit details: what happened, the provider's facts
-  (workflow, duration, why a build failed, the scan's total and counts), its commit and the provider's marks; below
-  that, Enter opens them as a dialog, like the graph's details. Each event's mark and legend are the ones its provider's
-  detail tab shows: a scan with findings gets Snyk's `▲` in its worst finding's severity color. Enter, or **Show in
-  graph** at the top of the details, shows the event's commit in the graph (a click on a row only selects it, like in
-  the graph), and `o` opens a run's or build's page. The dashboard reads Git and the provider caches, and reads them
-  again whenever a provider finishes a fetch or the graph is read again, so it follows the providers' own Auto refresh;
-  `r` reads them at once. **Menu → Providers → Dashboard** sets how far back it reads (Time window, 1 to 30 days, 7 by
-  default) and how long a knot is (Knot size, 15 minutes to 4 hours, 1 hour by default). The Dashboard tab has its own
-  color in every theme; custom themes set it with `dashboardFg` and `dashboardBg`. The graph's search (`/`), path filter
-  and ancestry don't work on the dashboard, an open search bar closes when it shows, and Esc there leaves the graph's
-  highlights and branch view alone.
+  dashboard is a click away, and the event count is where the graph's commit count is. Where the graph's modes are, each
+  provider is a badge in its knot color: a click hides its events (the badge goes grey and the count reads `26 / 30
+  events`), another shows them again. From 180 columns a side panel shows the selected event like the commit details:
+  what happened, the provider's facts (workflow, duration, why a build failed, the scan's total and counts), its commit
+  and the provider's marks; below that, Enter opens them as a dialog, like the graph's details. Each event's mark and
+  legend are the ones its provider's detail tab shows: a scan with findings gets Snyk's `▲` in its worst finding's
+  severity color. Enter, or **Show in graph** at the top of the details, shows the event's commit in the graph (a click
+  on a row only selects it, like in the graph), and `o` opens a run's or build's page. The dashboard reads Git and the
+  provider caches, and reads them again whenever a provider finishes a fetch or the graph is read again, so it follows
+  the providers' own Auto refresh; `r` reads them at once. **Menu → Providers → Dashboard** sets how far back it reads
+  (Time window, 1 to 30 days, 7 by default) and how long a knot is (Knot size, 15 minutes to 4 hours, 1 hour by
+  default). The Dashboard tab has its own color in every theme; custom themes set it with `dashboardFg` and
+  `dashboardBg`. The graph's search (`/`), path filter and ancestry don't work on the dashboard, an open search bar
+  closes when it shows, and Esc there leaves the graph's highlights and branch view alone.
 - **Menu → Repository → Preferences → Start in** chooses the view a repository opens in: Git (the default), the
   Dashboard or a provider that is turned on. Saved per repository as `startView`. Another repository of the group opens
   in its own start view the first time it's shown, and where you left it after that. A provider turned off since starts
@@ -48,9 +49,10 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- The GitHub Actions provider is called **GitHub** in the app: its tab, the knot legend, the footer's `tab` hint,
-  **Menu → Providers**, the help, a job log's title and the theme dialog. Its detail tab is still **Actions**. The
-  config (`providers.github`) and the theme colors (`githubActionsFg`, `githubActionsBg`) keep their names.
+- The GitHub Actions provider is called **GitHub** in the app: its tab, the dashboard's provider badge, the footer's
+  `tab` hint, **Menu → Providers**, the help, a job log's title and the theme dialog. Its detail tab is still
+  **Actions**. The config (`providers.github`) and the theme colors (`githubActionsFg`, `githubActionsBg`) keep their
+  names.
 - The Jenkins and OpenShift detail tabs are called **Builds** and **Resources**: each detail tab names what it lists,
   like Actions, Vulnerabilities and Dependencies.
 

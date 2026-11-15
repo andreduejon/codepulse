@@ -1,4 +1,5 @@
 import { type Accessor, createEffect, createMemo, createSignal, onCleanup, untrack } from "solid-js";
+import type { EventSource } from "../providers/provider";
 import { onProviderCacheWrite } from "../providers/shared/sha-sqlite-cache";
 import { type DashboardEvent, type DashboardRow, dashboardRows } from "./events";
 import { type LoadOptions, loadAppEvents } from "./load";
@@ -24,7 +25,14 @@ export interface DashboardState {
   app: Accessor<DashboardApp>;
   settings: Accessor<DashboardSettings>;
   rows: Accessor<DashboardRow[]>;
+  /** The events shown: all but the hidden providers'. */
   eventCount: Accessor<number>;
+  /** Every event read, shown or not. */
+  totalCount: Accessor<number>;
+  /** The providers whose events are left out, from their badges. */
+  hidden: Accessor<ReadonlySet<EventSource>>;
+  /** A provider badge's click: hides its events, or shows them again. */
+  toggleSource: (source: EventSource) => void;
   /** The selected row's index in `rows`, -1 without any event. */
   cursor: Accessor<number>;
   /** The event of the selected row, for the side panel. */
@@ -62,6 +70,7 @@ export function useDashboard(
   const [events, setEvents] = createSignal<DashboardEvent[]>([]);
   const [loading, setLoading] = createSignal(false);
   const [selectedKey, setSelectedKey] = createSignal<string | null>(null);
+  const [hidden, setHidden] = createSignal<ReadonlySet<EventSource>>(new Set());
   let controller: AbortController | undefined;
   let reloadTimer: ReturnType<typeof setTimeout> | undefined;
   onCleanup(() => {
@@ -119,11 +128,21 @@ export function useDashboard(
     onCleanup(onProviderCacheWrite(reloadSoon));
   });
 
+  const shown = createMemo(() => {
+    const left = hidden();
+    return left.size === 0 ? events() : events().filter(event => !left.has(event.source));
+  });
   const rows = createMemo(() =>
-    dashboardRows(events(), {
+    dashboardRows(shown(), {
       knotMs: settings().knotMinutes * 60_000,
     }),
   );
+  const toggleSource = (source: EventSource) =>
+    setHidden(current => {
+      const next = new Set(current);
+      if (!next.delete(source)) next.add(source);
+      return next;
+    });
   const selectable = createMemo(() => rows().flatMap((row, index) => (dashboardRowKey(row) === null ? [] : [index])));
   /** The selected row: the one with the selected key, else the first event. */
   const cursor = createMemo(() => {
@@ -155,7 +174,10 @@ export function useDashboard(
     app: opts.app,
     settings,
     rows,
-    eventCount: () => events().length,
+    eventCount: () => shown().length,
+    totalCount: () => events().length,
+    hidden,
+    toggleSource,
     cursor,
     selected,
     select,

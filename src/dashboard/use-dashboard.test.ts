@@ -144,3 +144,24 @@ test("while shown, a provider's cache write or a new graph reads the events agai
   await afterReloadDelay();
   expect(d.loads.length).toBe(shown + 2);
 });
+
+test("a provider hidden from its badge leaves the rope with its events; the count says how many of all show", async () => {
+  const run: DashboardEvent = { ...event("/shop", 20), id: "run", source: "jenkins", status: "pass" };
+  const d = dashboard([event("/shop", 5), run, event("/shop", 40)]);
+  d.setActive(true);
+  await settle();
+  d.state.select(d.state.rows().findIndex(row => row.kind === "event" && row.event.id === "run"));
+  expect(d.state.selected()?.id).toBe("run");
+
+  d.state.toggleSource("jenkins");
+  expect(d.state.hidden().has("jenkins")).toBe(true);
+  expect(d.state.rows().some(row => row.kind === "event" && row.event.source === "jenkins")).toBe(false);
+  expect([d.state.eventCount(), d.state.totalCount()]).toEqual([2, 3]);
+  // The selected event is hidden: the cursor goes to the newest one shown.
+  expect(d.state.selected()?.id).toBe("/shop:5");
+
+  // Shown again, nothing else changed: the same events as before.
+  d.state.toggleSource("jenkins");
+  expect(d.state.hidden().size).toBe(0);
+  expect([d.state.eventCount(), d.state.totalCount()]).toEqual([3, 3]);
+});

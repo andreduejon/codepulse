@@ -137,9 +137,11 @@ export function DashboardView(
               <text wrapMode="none" truncate fg={t().foregroundMuted}>
                 {d.loading()
                   ? "reading events..."
-                  : days() === 1
-                    ? "Nothing happened in the last day."
-                    : `Nothing happened in the last ${days()} days.`}
+                  : d.totalCount() > 0
+                    ? "Every event is hidden. Click a provider's badge to show its events."
+                    : days() === 1
+                      ? "Nothing happened in the last day."
+                      : `Nothing happened in the last ${days()} days.`}
               </text>
             </box>
           }

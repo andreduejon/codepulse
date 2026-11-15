@@ -604,7 +604,14 @@ test("the highlighted count leaves out the working-tree node, like the total", a
 async function renderDashboardBar(knownRepos: KnownRepoInfo[]) {
   let app!: ReturnType<typeof createAppState>;
   const selected: string[] = [];
-  const dashboard = { eventCount: () => 23 } as unknown as DashboardState;
+  const [hidden, setHidden] = createSignal<ReadonlySet<string>>(new Set());
+  const dashboard = {
+    hidden,
+    toggleSource: (source: string) =>
+      setHidden(current => (current.has(source) ? new Set<string>() : new Set([...current, source]))),
+    eventCount: () => (hidden().has("snyk") ? 20 : 23),
+    totalCount: () => 23,
+  } as unknown as DashboardState;
   const setup = await testRender(
     () => {
       app = createAppState(100, 0, 0);
@@ -639,34 +646,50 @@ async function renderDashboardBar(knownRepos: KnownRepoInfo[]) {
   );
   await setup.flush();
   const lines = setup.captureCharFrame().split("\n");
-  return { setup, selected, lines, top: lines.findIndex(line => line.includes("Dashboard")) };
+  return { setup, selected, lines, top: lines.findIndex(line => line.includes("Dashboard")), dashboard };
 }
 
-test("on the dashboard: the event count takes the modes' place, the provider legend the branch's, and the group's badges switch the app", async () => {
-  const { setup, selected, lines, top } = await renderDashboardBar([
+test("on the dashboard: provider badges take the modes' place and filter, the event count the commit count's", async () => {
+  const { setup, selected, lines, top, dashboard } = await renderDashboardBar([
     { path: "/repo/shop", group: "demo", appName: "shop" },
     { path: "/repo/web", group: "demo", appName: "shop-web" },
   ]);
+  const theme = themes["catppuccin-mocha"];
+  const badge = (line: number, label: string) =>
+    setup
+      .captureSpans()
+      .lines[line]?.spans.filter(span => span.text.includes(label))
+      .at(-1);
   try {
-    // The overview comes first, one tab like the others.
-    expect(lines[top]).toMatch(/Dashboard {3}Git {3}GitHub {3}Snyk\s+23 events/);
-    expect(lines[top]).not.toContain("●");
+    // The overview comes first, one tab like the others; its providers are badges in their colors at the right.
+    expect(lines[top]).toMatch(/^.*Dashboard {3}Git {3}GitHub {3}Snyk\s{10,}Git {3}GitHub {3}Snyk\s*$/);
     expect(lines[top]).not.toContain("normal");
-    expect(lines[top + 2]).toMatch(/shop\s+shop-web\s+█ Git\s+█ GitHub\s+█ Snyk/);
-    expect(lines[top + 2]).not.toContain("All");
+    expect(badge(top, "GitHub")?.bg).toEqual(RGBA.fromHex(theme.githubActionsBg));
+    expect(badge(top, "GitHub")?.fg).toEqual(RGBA.fromHex(theme.githubActionsFg));
+    // Like the graph's commit count, the event count is on the project row.
+    expect(lines[top + 2]).toMatch(/shop\s+shop-web\s+23 events\s*$/);
     expect(lines[top + 2]).not.toContain("main");
     const x = lines[top + 2].indexOf("shop-web") + 1;
     await setup.mockMouse.click(x, top + 2, MouseButtons.LEFT);
     expect(selected).toEqual(["/repo/web"]);
 
-    // Narrow, the legend keeps the providers whose whole name fits, never part of one.
-    setup.resize(48, 12);
+    // A click hides the provider's events: its badge goes grey and the count says how many of all show.
+    await setup.mockMouse.click(lines[top].lastIndexOf("Snyk") + 1, top, MouseButtons.LEFT);
     await setup.flush();
-    const legend = setup
-      .captureCharFrame()
-      .split("\n")
-      .find(line => line.includes("█ Git"));
-    expect(legend?.trimEnd()).toMatch(/█ Git {2}█ GitHub$/);
+    expect(dashboard.hidden().has("snyk")).toBe(true);
+    await setup.mockMouse.moveTo(0, 0);
+    await setup.flush();
+    expect(badge(top, "Snyk")?.bg).toEqual(RGBA.fromHex(theme.backgroundElementActive));
+    expect(badge(top, "Snyk")?.fg).toEqual(RGBA.fromHex(theme.foregroundMuted));
+    expect(setup.captureCharFrame()).toContain("20 / 23 events");
+
+    // Narrow, the badges get their own row, and the apps stop before the count instead of running into it.
+    setup.resize(40, 12);
+    await setup.flush();
+    const narrow = setup.captureCharFrame().split("\n");
+    const tabs = narrow.findIndex(line => line.includes("Dashboard"));
+    expect(narrow[tabs + 2]).toMatch(/^\W*Git {3}GitHub {3}Snyk\s*$/);
+    expect(narrow[tabs + 4]).toMatch(/shop\s.*\s20 \/ 23 events\s*$/);
   } finally {
     setup.renderer.destroy();
   }

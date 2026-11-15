@@ -93,3 +93,44 @@ test("the open app's rope, each event a knot on it, with Commit, Branch, Time an
     setup.renderer.destroy();
   }
 });
+
+test("with every provider that has events hidden, it says how to show them again", async () => {
+  const events: DashboardEvent[] = [
+    {
+      id: "a",
+      app: "/shop",
+      source: "jenkins",
+      time: new Date(2026, 2, 2, 10, 52).getTime(),
+      status: "pass",
+      text: "main #42 passed",
+      sha: SHA,
+    },
+  ];
+  const [active] = createSignal(true);
+  const dashboard = createRoot(() =>
+    useDashboard({
+      app: () => ({ path: "/shop", name: "shop" }),
+      active,
+      now: () => NOW,
+      load: async () => events,
+    }),
+  );
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={createThemeState()}>
+        <DashboardView dashboard={dashboard} now={() => NOW} />
+      </ThemeContext.Provider>
+    ),
+    { width: 100, height: 12 },
+  );
+  try {
+    await new Promise(resolve => setTimeout(resolve, 0));
+    dashboard.toggleSource("jenkins");
+    await setup.renderOnce();
+    const frame = setup.captureCharFrame();
+    expect(frame).toContain("Every event is hidden. Click a provider's badge to show its events.");
+    expect(frame).not.toContain("Nothing happened");
+  } finally {
+    setup.renderer.destroy();
+  }
+});
