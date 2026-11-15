@@ -155,7 +155,7 @@ export function useGitHubCI(opts: {
     if (configAccessor().enabled === true) {
       state.providers.register({
         id: "github-actions",
-        displayName: "GitHub Actions",
+        displayName: "GitHub",
         isAvailable,
         // Runs in every view: graph fetches, auto refresh and Reload commit all go through the lifecycle.
         activity: () => (lifecycle.isFetching() ? "fetching" : null),

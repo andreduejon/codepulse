@@ -55,7 +55,7 @@ Rows are as quiet as the OpenShift and Jenkins trees: names and marks, and the
 run's age. A job that passed is one row; a failed or running job lists its steps,
 so you see where it went wrong. A legend below the tree explains the marks:
 `✓ passed  ● running  ✗ failed  – skipped  ○ cancelled`. Times are in the job
-log: its title gives the job's time (`GitHub Actions · CI #812 · test · 5m 17s`)
+log: its title gives the job's time (`GitHub · CI #812 · test · 5m 17s`)
 and the log starts with its steps, each with its mark and time (a skipped step has
 none). `←` / `→` move between the run's jobs (`← previous job · → next job`).
 

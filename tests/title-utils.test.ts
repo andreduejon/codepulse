@@ -202,7 +202,7 @@ describe("buildDiffTitleParts", () => {
 
 describe("fitTitleSegments", () => {
   const segments = [
-    { text: "GitHub Actions", drop: 2 },
+    { text: "GitHub", drop: 2 },
     { text: "Release pipeline for every platform #42", drop: 3 },
     { text: "build-and-sign-macos-universal-binary", emphasis: true, primary: true },
     { text: "issues only", drop: 1 },

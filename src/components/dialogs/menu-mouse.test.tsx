@@ -282,7 +282,7 @@ test("menu row hover never selects; clicks share copy, action, dialog, toggle, c
     expect(m.reload).toHaveBeenCalledTimes(2);
     expect(m.write).toHaveBeenCalledTimes(2);
     await m.click("Providers");
-    for (const label of ["GitHub Actions", "Last refresh", "Allow host"]) {
+    for (const label of ["GitHub", "Last refresh", "Allow host"]) {
       await m.move(label);
       expect(m.span(label)?.bg).not.toEqual(highlight);
       await m.click(label);

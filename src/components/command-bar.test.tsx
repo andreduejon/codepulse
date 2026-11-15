@@ -50,10 +50,10 @@ test("provider badges switch directly; panel width switches between two and thre
   const lines = () => setup.captureCharFrame().split("\n");
   const lineWith = (text: string) => lines().findIndex(line => line.includes(text));
   const providerSpan = () =>
-    setup.captureSpans().lines[lineWith("GitHub Actions")]?.spans.find(span => span.text.includes("GitHub Actions"));
+    setup.captureSpans().lines[lineWith("GitHub")]?.spans.find(span => span.text.includes("GitHub"));
   try {
     await setup.flush();
-    const providersLine = lineWith("GitHub Actions");
+    const providersLine = lineWith("GitHub");
     expect(providersLine).toBeGreaterThan(0);
     expect(lineWith("normal")).toBe(providersLine + 2);
     expect(lineWith("codepulse")).toBe(providersLine + 4);
@@ -63,10 +63,10 @@ test("provider badges switch directly; panel width switches between two and thre
     expect(lines()[providersLine + 3].slice(1).trim()).toBe("");
     expect(lineWith("after bar")).toBe(7);
     // Dashboard is one more tab, without a dot setting it apart.
-    expect(lines()[providersLine]).toMatch(/^[^·]*Dashboard {3}Git {3}GitHub Actions[^·]*$/);
+    expect(lines()[providersLine]).toMatch(/^[^·]*Dashboard {3}Git {3}GitHub[^·]*$/);
     expect(lines()[providersLine + 4]).not.toContain("·");
     const muted = providerSpan();
-    const x = lines()[providersLine].indexOf("GitHub Actions") + 2;
+    const x = lines()[providersLine].indexOf("GitHub") + 2;
     await setup.mockMouse.moveTo(x, providersLine);
     await setup.flush();
     expect(providerSpan()?.fg).not.toEqual(muted?.fg);
@@ -85,28 +85,28 @@ test("provider badges switch directly; panel width switches between two and thre
     expect(app.state.activeProviderView()).toBe("github-actions");
     setup.resize(180, 30);
     await setup.flush();
-    expect(lineWith("codepulse")).toBe(lineWith("GitHub Actions") + 2);
-    expect(lineWith("normal")).toBe(lineWith("GitHub Actions"));
-    expect(lineWith("develop")).toBe(lineWith("GitHub Actions") + 2);
+    expect(lineWith("codepulse")).toBe(lineWith("GitHub") + 2);
+    expect(lineWith("normal")).toBe(lineWith("GitHub"));
+    expect(lineWith("develop")).toBe(lineWith("GitHub") + 2);
     expect(lineWith("after bar")).toBe(5);
     setMouseEnabled(true);
-    await setup.mockMouse.click(lines()[lineWith("GitHub Actions")].indexOf("Jenkins") + 2, lineWith("GitHub Actions"));
+    await setup.mockMouse.click(lines()[lineWith("GitHub")].indexOf("Jenkins") + 2, lineWith("GitHub"));
     expect(app.state.activeProviderView()).toBe("jenkins");
     setMouseEnabled(false);
-    expect(lines()[lineWith("GitHub Actions")]).toMatch(/^[^·]*Dashboard {3}Git {3}GitHub Actions[^·]*$/);
+    expect(lines()[lineWith("GitHub")]).toMatch(/^[^·]*Dashboard {3}Git {3}GitHub[^·]*$/);
     app.state.providers.unregister("jenkins");
     await setup.flush();
     expect(setup.captureCharFrame()).not.toContain("Jenkins");
     setPanelWidth(110); // Wide terminal, narrow command-bar panel still keeps the spacers.
     await setup.flush();
-    expect(lineWith("develop")).toBe(lineWith("GitHub Actions") + 4);
+    expect(lineWith("develop")).toBe(lineWith("GitHub") + 4);
     setPanelWidth("100%");
     await setup.flush();
-    expect(lineWith("normal")).toBe(lineWith("GitHub Actions"));
-    expect(lineWith("develop")).toBe(lineWith("GitHub Actions") + 2);
+    expect(lineWith("normal")).toBe(lineWith("GitHub"));
+    expect(lineWith("develop")).toBe(lineWith("GitHub") + 2);
     setup.resize(90, 30);
     await setup.flush();
-    expect(lineWith("develop")).toBe(lineWith("GitHub Actions") + 4);
+    expect(lineWith("develop")).toBe(lineWith("GitHub") + 4);
   } finally {
     await setup.dispose();
   }
@@ -649,10 +649,10 @@ test("on the dashboard: the event count takes the modes' place, the provider leg
   ]);
   try {
     // The overview comes first, one tab like the others.
-    expect(lines[top]).toMatch(/Dashboard {3}Git {3}GitHub Actions {3}Snyk\s+23 events/);
+    expect(lines[top]).toMatch(/Dashboard {3}Git {3}GitHub {3}Snyk\s+23 events/);
     expect(lines[top]).not.toContain("●");
     expect(lines[top]).not.toContain("normal");
-    expect(lines[top + 2]).toMatch(/shop\s+shop-web\s+█ Git\s+█ GitHub Actions\s+█ Snyk/);
+    expect(lines[top + 2]).toMatch(/shop\s+shop-web\s+█ Git\s+█ GitHub\s+█ Snyk/);
     expect(lines[top + 2]).not.toContain("All");
     expect(lines[top + 2]).not.toContain("main");
     const x = lines[top + 2].indexOf("shop-web") + 1;
@@ -660,13 +660,13 @@ test("on the dashboard: the event count takes the modes' place, the provider leg
     expect(selected).toEqual(["/repo/web"]);
 
     // Narrow, the legend keeps the providers whose whole name fits, never part of one.
-    setup.resize(70, 12);
+    setup.resize(48, 12);
     await setup.flush();
     const legend = setup
       .captureCharFrame()
       .split("\n")
       .find(line => line.includes("█ Git"));
-    expect(legend?.trimEnd()).toMatch(/█ Git {2}█ GitHub Actions$/);
+    expect(legend?.trimEnd()).toMatch(/█ Git {2}█ GitHub$/);
   } finally {
     setup.renderer.destroy();
   }

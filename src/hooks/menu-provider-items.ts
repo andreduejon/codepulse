@@ -256,7 +256,7 @@ export function buildGitHubProviderItems(
   const hostAllowed = remoteHost === "github.com" || (remoteHost != null && ghCfg.trustedEnterpriseHost === remoteHost);
 
   const items: SettingItem[] = [
-    { kind: "header", label: "GitHub Actions" },
+    { kind: "header", label: "GitHub" },
     {
       kind: "toggle",
       label: "Enabled",

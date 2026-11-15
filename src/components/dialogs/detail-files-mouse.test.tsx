@@ -374,7 +374,7 @@ test("provider views still list the uncommitted files, with a muted note that th
   try {
     d.actions.setActiveProviderView("github-actions");
     await d.flush();
-    expect(d.frame()).toContain("No GitHub Actions data for uncommitted changes.");
+    expect(d.frame()).toContain("No GitHub data for uncommitted changes.");
     expect(d.frame()).toContain("beta.ts");
     await d.click("beta.ts");
     expect(d.onOpenDiff).toHaveBeenLastCalledWith(

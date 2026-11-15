@@ -609,7 +609,7 @@ test("footer says which CI provider is fetching, and long labels truncate before
     const [github, setGithub] = createSignal<string | null>("fetching");
     d.state.providers.register({
       id: "github-actions",
-      displayName: "GitHub Actions",
+      displayName: "GitHub",
       isAvailable: () => true,
       activity: github,
     });
@@ -639,14 +639,14 @@ test("footer says which CI provider is fetching, and long labels truncate before
         .split("\n")
         .find(row => row.includes("navigate")) ?? "";
     // Too long for a 100-column footer: the label is cut at the end and every hint stays whole.
-    expect(line()).toMatch(/Git fetching · GitH[^·]*… tab Actions/);
+    expect(line()).toMatch(/Git fetching · GitH[^·]*… tab GitHub/);
     expect(line()).toContain("↑/↓ navigate");
     expect(line()).toContain("shift ←/→ switch project");
     setGithub(null);
     d.actions.setFetching(false);
     await d.flush();
     expect(line()).toContain("Jenkins fetching · O");
-    expect(line()).not.toContain("GitHub Actions fetching");
+    expect(line()).not.toContain("GitHub fetching");
   } finally {
     await d.dispose();
   }
@@ -657,7 +657,7 @@ test("a wide footer shows every provider's activity in full", async () => {
   try {
     d.state.providers.register({
       id: "github-actions",
-      displayName: "GitHub Actions",
+      displayName: "GitHub",
       isAvailable: () => true,
       activity: () => "fetching",
     });
@@ -669,7 +669,7 @@ test("a wide footer shows every provider's activity in full", async () => {
     });
     d.actions.setFetching(true);
     await d.flush();
-    expect(d.captureCharFrame()).toContain("Git fetching · GitHub Actions fetching · Snyk scanning");
+    expect(d.captureCharFrame()).toContain("Git fetching · GitHub fetching · Snyk scanning");
     expect(d.captureCharFrame()).not.toContain("…");
   } finally {
     await d.dispose();
@@ -679,7 +679,7 @@ test("a wide footer shows every provider's activity in full", async () => {
 test("a narrow footer leaves out whole hints, least needed first, instead of cutting one", async () => {
   const d = await renderFooter(70);
   try {
-    d.state.providers.register({ id: "github-actions", displayName: "GitHub Actions", isAvailable: () => true });
+    d.state.providers.register({ id: "github-actions", displayName: "GitHub", isAvailable: () => true });
     d.actions.setSearchQuery("fix");
     await d.flush();
     const line =

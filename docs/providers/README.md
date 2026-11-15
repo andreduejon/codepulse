@@ -27,7 +27,7 @@ differs where noted:
 
 - **Busy text** says what kind of work runs: `fetching` is network (Git remote,
   GitHub Actions, Jenkins, OpenShift), `reading` is local Git, `scanning` is Snyk.
-  The footer names it (`GitHub Actions fetching`, `Snyk scanning`), including auto
+  The footer names it (`GitHub fetching`, `Snyk scanning`), including auto
   refresh, and cuts the label with `…` before the key hints when space runs out.
 - **Graph columns** use the same chips: fail, running, neutral (grey: cancelled,
   skipped, or unknown), pass (Snyk: four severity chips). Columns widen to fit the

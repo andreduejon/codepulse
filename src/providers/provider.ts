@@ -13,7 +13,7 @@ import { createSignal } from "solid-js";
  * Canonical provider order used everywhere providers are cycled or displayed.
  * Mental model: the dashboard over every provider, then source → CI → runtime → scan/quality.
  * Future providers should extend this order as:
- * Dashboard → Git → GitHub Actions → Jenkins → OpenShift → Snyk → SonarQube.
+ * Dashboard → Git → GitHub → Jenkins → OpenShift → Snyk → SonarQube.
  */
 export const PROVIDER_ORDER = ["dashboard", "git", "github-actions", "jenkins", "openshift", "snyk"] as const;
 
@@ -27,15 +27,13 @@ export interface ProviderMetadata {
   displayName: string;
   /** Label for detail panel tab. Defaults to displayName. */
   detailLabel?: string;
-  /** Short name in the footer's `tab` hint, like the detail tab. Defaults to displayName. */
-  shortName?: string;
   category: "overview" | "source" | "ci" | "runtime" | "scan-quality";
 }
 
 export const PROVIDER_METADATA: Record<ProviderView, ProviderMetadata> = {
   dashboard: { displayName: "Dashboard", category: "overview" },
   git: { displayName: "Git", category: "source" },
-  "github-actions": { displayName: "GitHub Actions", detailLabel: "Actions", shortName: "Actions", category: "ci" },
+  "github-actions": { displayName: "GitHub", detailLabel: "Actions", category: "ci" },
   jenkins: { displayName: "Jenkins", category: "ci" },
   openshift: { displayName: "OpenShift", category: "runtime" },
   snyk: { displayName: "Snyk", detailLabel: "Vulnerabilities", category: "scan-quality" },
@@ -148,11 +146,6 @@ export function createProviderRegistry(): ProviderRegistry {
 
 export function providerDisplayName(view: ProviderView): string {
   return PROVIDER_METADATA[view]?.displayName ?? view;
-}
-
-/** The footer's name for a view: `Actions` like its detail tab, the display name otherwise. */
-export function providerShortName(view: ProviderView): string {
-  return PROVIDER_METADATA[view]?.shortName ?? providerDisplayName(view);
 }
 
 export function isProviderView(view: string): view is ProviderView {

@@ -32,6 +32,12 @@ All notable changes to this project will be documented in this file.
   there, a version range or an unknown property keeps the pin. A direct dependency keeps its pin too. Scans made
   before this version show it after **Rescan commit**.
 
+### Changed
+
+- The GitHub Actions provider is called **GitHub** in the app: its tab, the knot legend, the footer's `tab` hint,
+  **Menu → Providers**, the help, a job log's title and the theme dialog. Its detail tab is still **Actions**. The
+  config (`providers.github`) and the theme colors (`githubActionsFg`, `githubActionsBg`) keep their names.
+
 ### Fixed
 
 - The details keep what you opened when you switch tabs or when the terminal width crosses into or out of the side

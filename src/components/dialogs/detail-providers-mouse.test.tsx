@@ -608,7 +608,7 @@ test("OpenShift tree lines close on the last group and the last stream", async (
   }
 });
 
-test("GitHub Actions explains its marks in a legend below the tree, only while it lists runs", async () => {
+test("GitHub explains its marks in a legend below the tree, only while it lists runs", async () => {
   const d = await renderProvider("github-actions", false);
   try {
     const rows = d.frame().split("\n");

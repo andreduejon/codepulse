@@ -6,7 +6,7 @@ describe("provider order", () => {
     const registry = createProviderRegistry();
     registry.register({ id: "openshift", displayName: "OpenShift", isAvailable: () => true });
     registry.register({ id: "jenkins", displayName: "Jenkins", isAvailable: () => true });
-    registry.register({ id: "github-actions", displayName: "GitHub Actions", isAvailable: () => true });
+    registry.register({ id: "github-actions", displayName: "GitHub", isAvailable: () => true });
 
     // The dashboard comes first, before Git: Tab from the last provider goes to it.
     expect(registry.getEnabledViews()).toEqual(["dashboard", "git", "github-actions", "jenkins", "openshift"]);

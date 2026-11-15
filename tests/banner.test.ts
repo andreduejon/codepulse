@@ -66,8 +66,8 @@ describe("banner catalog", () => {
 describe("bannerParts", () => {
   test.each([
     ["Git", BANNER.git.fetchFailed, "Fetch failed", []],
-    ["GitHub Actions", BANNER.github.missingToken("GITHUB_TOKEN"), "Unavailable", ["Missing GITHUB_TOKEN."]],
-    ["GitHub Actions", BANNER.github.disabled, "Disabled", []],
+    ["GitHub", BANNER.github.missingToken("GITHUB_TOKEN"), "Unavailable", ["Missing GITHUB_TOKEN."]],
+    ["GitHub", BANNER.github.disabled, "Disabled", []],
     [
       "Jenkins",
       BANNER.jenkins.branchLimit(25, 30),

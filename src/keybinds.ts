@@ -131,11 +131,11 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     { kind: "binding", key: ":theme", desc: "Open theme dialog" },
   ],
   providers: [
-    { kind: "section", label: "GitHub Actions" },
+    { kind: "section", label: "GitHub" },
     {
       kind: "binding",
       key: "Enabled",
-      desc: "Allow switching to the GitHub Actions view in the graph. Data loads once the token is set and the host is allowed.",
+      desc: "Allow switching to the GitHub view in the graph. Data loads once the token is set and the host is allowed.",
       indent: 1,
     },
     {

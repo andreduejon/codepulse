@@ -4,7 +4,7 @@ import { useAppState } from "../context/state";
 import type { DashboardState } from "../dashboard/use-dashboard";
 import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
 import { useT } from "../hooks/use-t";
-import { providerShortName } from "../providers/provider";
+import { providerDisplayName } from "../providers/provider";
 import { endTruncate } from "../utils/truncate";
 import { fitHints, KeyHint, KeyHintSeparator, type RankedHint } from "./key-hint";
 
@@ -114,7 +114,7 @@ export default function Footer(
     if (views.length <= 1) return null;
     const next = state.providers.nextView(state.activeProviderView());
     if (next === state.activeProviderView()) return null;
-    return providerShortName(next);
+    return providerDisplayName(next);
   };
 
   const mode = () => props.commandBarMode();

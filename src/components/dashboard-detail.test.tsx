@@ -46,7 +46,7 @@ test("the side panel shows the event, its facts, its commit and its provider's m
     await new Promise(resolve => setTimeout(resolve, 0));
     await setup.renderOnce();
     let frame = setup.captureCharFrame();
-    expect(frame).toContain("GitHub Actions");
+    expect(frame).toContain("GitHub");
     expect(frame).toContain("✗ CI #812 failed");
     for (const text of [
       "Workflow",
