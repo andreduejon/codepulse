@@ -14,12 +14,12 @@ import * as detailLoader from "./hooks/use-detail-loader";
 const repo = resolve("/repo/start-view");
 const other = resolve("/repo/start-view-other");
 
-/** Codepulse on two apps of one group, both starting in the Dashboard, without Git or provider data. */
-async function launch() {
+/** Codepulse on two apps of one group, both starting in the Dashboard unless told otherwise, without Git or provider data. */
+async function launch(configFor: (path: string) => config.CodepulseConfig = () => ({ startView: "dashboard" })) {
   let app: { state: AppState; actions: AppActions } | undefined;
   const spies = [
     spyOn(configWrite, "backfillRepoConfig").mockImplementation(() => {}),
-    spyOn(config, "loadConfig").mockReturnValue({ config: { startView: "dashboard" }, warnings: [] }),
+    spyOn(config, "loadConfig").mockImplementation(path => ({ config: configFor(resolve(path ?? "")), warnings: [] })),
     spyOn(config, "getRepoDisplayConfig").mockImplementation(path => ({
       group: "shop",
       appName: path === other ? "other-app" : "first-app",
@@ -113,6 +113,27 @@ test("the graph's search bar closes when the dashboard shows", async () => {
     app.actions.setActiveProviderView("dashboard");
     await setup.flush();
     expect(setup.captureCharFrame()).not.toContain("Search commits...");
+  } finally {
+    await dispose();
+  }
+});
+
+test("another repository brings its own auto fetch, auto refresh, page size and branches", async () => {
+  const { app, setup, dispose } = await launch(path =>
+    path === other
+      ? { autoFetchSeconds: 60, autoRefreshSeconds: 120, pageSize: 500, showAllBranches: false }
+      : { autoFetchSeconds: 0, autoRefreshSeconds: 30, pageSize: 200, showAllBranches: true },
+  );
+  try {
+    const lines = setup.captureCharFrame().split("\n");
+    const y = lines.findIndex(line => line.includes("other-app"));
+    await setup.mockMouse.click(lines[y]?.indexOf("other-app") ?? 0, y);
+    await setup.flush();
+    expect(app.state.repoPath()).toBe(other);
+    expect(app.state.autoFetchInterval()).toBe(60_000);
+    expect(app.state.autoRefreshInterval()).toBe(120_000);
+    expect(app.state.maxCount()).toBe(500);
+    expect(app.state.showAllBranches()).toBe(false);
   } finally {
     await dispose();
   }

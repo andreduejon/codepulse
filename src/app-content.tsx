@@ -26,7 +26,14 @@ import GraphView, { ColumnHeader } from "./components/graph";
 import MessageBox, { type UIMessage } from "./components/message-box";
 import ProjectSelector from "./components/project-selector";
 import SetupScreen from "./components/setup-screen";
-import { defaultConfig, getKnownRepoInfos, getRepoDisplayConfig, loadConfig, startViewFor } from "./config";
+import {
+  defaultConfig,
+  getKnownRepoInfos,
+  getRepoDisplayConfig,
+  loadConfig,
+  mergeOptions,
+  startViewFor,
+} from "./config";
 import { backfillRepoConfig, writeConfig } from "./config-write";
 import {
   COMPACT_THRESHOLD_WIDTH,
@@ -383,13 +390,20 @@ export function AppContent(props: Readonly<AppContentProps>) {
     actions.clearProviderState();
     resetTransientRepoState();
     setRepoSelectorVisible(false);
+    // Its own Preferences, before its graph loads: they are per repository, like at startup.
+    const { config: nextConfig } = loadConfig(nextPath);
+    const nextOptions = mergeOptions({ repoPath: nextPath }, nextConfig);
+    actions.setAutoFetchInterval(nextOptions.autoFetchInterval);
+    actions.setAutoRefreshInterval(nextOptions.autoRefreshInterval);
+    actions.setMaxCount(nextOptions.maxCount);
+    actions.setShowAllBranches(nextConfig.showAllBranches ?? true);
     setActiveRepoPath(nextPath);
     const snapshot = repoSessionCache.get(nextPath);
     if (snapshot) {
       restoreRepoSessionSnapshot(snapshot);
     } else {
       // A repository not shown yet in this session opens in its start view; one shown before, where it was left.
-      actions.setActiveProviderView(startViewFor(loadConfig(nextPath).config));
+      actions.setActiveProviderView(startViewFor(nextConfig));
       actions.setCommits([]);
       actions.setGraphRows([]);
       actions.setBranches([]);

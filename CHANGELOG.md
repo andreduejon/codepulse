@@ -40,6 +40,9 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Another repository, opened with a group badge or **Switch repository**, uses its own Auto fetch, Auto refresh, Page
+  size and Show all branches. Before, it kept the first repository's, so it might never fetch, and the menu showed
+  and saved the first repository's values.
 - The details keep what you opened when you switch tabs or when the terminal width crosses into or out of the side
   panel: open runs and attempts (GitHub Actions, Jenkins), closed namespaces (OpenShift), the Snyk view, collapsed
   folders and the Info sections. Before, a resize or a tab switch closed them and the cursor landed on another row.
