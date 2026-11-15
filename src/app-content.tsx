@@ -934,7 +934,6 @@ export function AppContent(props: Readonly<AppContentProps>) {
                         <DashboardView
                           dashboard={dashboard}
                           mouseEnabled={() => dialog() == null && state.keyboardScopeOverride() == null}
-                          onActivate={activateDashboard}
                         />
                       </box>
                     </Show>
@@ -1032,7 +1031,12 @@ export function AppContent(props: Readonly<AppContentProps>) {
                   {/* Dashboard details - right, like the commit details beside the graph */}
                   <Show when={layoutMode() === "normal" && dashboardShown()}>
                     <box flexDirection="column" width="25%" minWidth={60} flexShrink={0} paddingX={2} paddingBottom={1}>
-                      <DashboardDetail event={dashboard.selected} appName={dashboardAppName} />
+                      <DashboardDetail
+                        event={dashboard.selected}
+                        appName={dashboardAppName}
+                        onShowInGraph={showSelectedInGraph}
+                        mouseEnabled={() => dialog() == null && state.keyboardScopeOverride() == null}
+                      />
                     </box>
                   </Show>
                   <Show when={layoutMode() === "normal" && !dashboardShown()}>

@@ -20,8 +20,6 @@ export function DashboardView(
   props: Readonly<{
     dashboard: DashboardState;
     mouseEnabled?: () => boolean;
-    /** Enter on the selected row, or a click on a selected row. */
-    onActivate: () => void;
     now?: () => number;
   }>,
 ) {
@@ -153,8 +151,8 @@ export function DashboardView(
                   onMouseDown={event => {
                     if (event.button !== MouseButton.LEFT || props.mouseEnabled?.() === false || !selectable()) return;
                     event.preventDefault();
-                    if (active()) props.onActivate();
-                    else d.select(index());
+                    // Like the graph, a click only selects: the details' first row shows the event in the graph.
+                    d.select(index());
                   }}
                 >
                   <Rope row={row} />

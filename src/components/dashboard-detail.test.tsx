@@ -1,4 +1,5 @@
-import { expect, test } from "bun:test";
+import { expect, mock, test } from "bun:test";
+import { MouseButtons } from "@opentui/core/testing";
 import { testRender } from "@opentui/solid";
 import { createSignal } from "solid-js";
 import { createThemeState, ThemeContext } from "../context/theme";
@@ -68,6 +69,50 @@ test("the side panel shows the event, its facts, its commit and its provider's m
     setEvent(null);
     await setup.renderOnce();
     expect(setup.captureCharFrame()).toContain("No event selected");
+  } finally {
+    setup.renderer.destroy();
+  }
+});
+
+test("the first row shows the event's commit in the graph, on a click", async () => {
+  const run: DashboardEvent = {
+    id: "run",
+    app: "/shop",
+    source: "github-actions",
+    time: Date.parse("2026-03-02T10:52:00Z"),
+    status: "fail",
+    text: "CI #812 failed",
+    sha: SHA,
+  };
+  const [event, setEvent] = createSignal<DashboardEvent | null>(run);
+  const onShowInGraph = mock(() => {});
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={createThemeState()}>
+        <DashboardDetail
+          event={event}
+          appName={() => "shop"}
+          loadCommit={async () => null}
+          onShowInGraph={onShowInGraph}
+          mouseEnabled={() => true}
+        />
+      </ThemeContext.Provider>
+    ),
+    { width: 60, height: 20, useMouse: true },
+  );
+  try {
+    await setup.renderOnce();
+    const lines = setup.captureCharFrame().split("\n");
+    const y = lines.findIndex(line => line.includes("Show in graph"));
+    const title = lines.findIndex(line => line.includes("CI #812 failed"));
+    expect(y).toBeGreaterThan(0);
+    expect(y).toBeLessThan(title);
+    expect(lines[y]).toMatch(/Show in graph\s+e6209dd\s*$/);
+    await setup.mockMouse.click(4, y, MouseButtons.LEFT);
+    expect(onShowInGraph).toHaveBeenCalledTimes(1);
+    setEvent(null);
+    await setup.renderOnce();
+    expect(setup.captureCharFrame()).not.toContain("Show in graph");
   } finally {
     setup.renderer.destroy();
   }

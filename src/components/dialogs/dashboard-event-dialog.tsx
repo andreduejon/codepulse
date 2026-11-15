@@ -39,7 +39,12 @@ export function DashboardEventDialog(
         <DialogTitleBar title="Details" onClose={props.onClose} />
         {/* paddingX=4 matches other dialogs' inner content padding (outer box already has paddingX=1) */}
         <box flexDirection="column" flexGrow={1} paddingX={4}>
-          <DashboardDetail event={props.event} appName={props.appName} scrollboxRef={props.scrollboxRef} />
+          <DashboardDetail
+            event={props.event}
+            appName={props.appName}
+            scrollboxRef={props.scrollboxRef}
+            onShowInGraph={props.onShowInGraph}
+          />
         </box>
         <DialogFooter>
           <KeyHint key="enter" desc=" show in graph" disabled={!props.event()} onClick={() => props.onShowInGraph()} />

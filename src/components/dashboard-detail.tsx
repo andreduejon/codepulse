@@ -1,4 +1,4 @@
-import type { ScrollBoxRenderable } from "@opentui/core";
+import { MouseButton, type ScrollBoxRenderable } from "@opentui/core";
 import { type Accessor, createEffect, createSignal, For, type JSX, onCleanup, Show } from "solid-js";
 import type { DashboardEvent } from "../dashboard/events";
 import { eventMark, markLegend } from "../dashboard/legend";
@@ -20,9 +20,13 @@ export function DashboardDetail(
     loadCommit?: (app: string, sha: string) => Promise<CommitInfo | null>;
     /** The content's scrollbox, for the compact dialog's ↑/↓. */
     scrollboxRef?: (element: ScrollBoxRenderable) => void;
+    /** The first row: the event's commit in the graph, on its provider's tab. */
+    onShowInGraph?: () => void;
+    mouseEnabled?: () => boolean;
   }>,
 ) {
   const t = useT();
+  const [actionHovered, setActionHovered] = createSignal(false);
   const commits = new Map<string, Promise<CommitInfo | null>>();
   const [commit, setCommit] = createSignal<CommitInfo | null>(null);
   let disposed = false;
@@ -90,6 +94,34 @@ export function DashboardDetail(
         >
           {event => (
             <box flexDirection="column" width="100%">
+              <Show when={props.onShowInGraph}>
+                {/* The first row, like a provider tab's Reload commit: here, the way to the event's commit. */}
+                {/* biome-ignore lint/a11y/noStaticElementInteractions: TUI row; Enter does the same. */}
+                {/* biome-ignore lint/a11y/useKeyWithMouseEvents: Hover only shades the row. */}
+                <box
+                  flexDirection="row"
+                  width="100%"
+                  flexShrink={0}
+                  backgroundColor={
+                    actionHovered() && props.mouseEnabled?.() !== false ? t().backgroundElement : undefined
+                  }
+                  onMouseOver={() => setActionHovered(true)}
+                  onMouseOut={() => setActionHovered(false)}
+                  onMouseDown={mouse => {
+                    if (mouse.button !== MouseButton.LEFT || props.mouseEnabled?.() === false) return;
+                    mouse.preventDefault();
+                    props.onShowInGraph?.();
+                  }}
+                >
+                  <text flexGrow={1} fg={t().foreground} wrapMode="none">
+                    Show in graph
+                  </text>
+                  <text flexShrink={0} fg={t().foregroundMuted} wrapMode="none">
+                    {event().sha.slice(0, 7)}
+                  </text>
+                </box>
+                <box height={1} flexShrink={0} />
+              </Show>
               <text fg={t().foreground} wrapMode="word">
                 <Show when={eventMark(event())}>
                   {mark => <span style={{ fg: mark().color(t()) }}>{`${mark().icon} `}</span>}

@@ -1,4 +1,4 @@
-import { expect, mock, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { MouseButtons } from "@opentui/core/testing";
 import { testRender } from "@opentui/solid";
 import { createRoot, createSignal } from "solid-js";
@@ -10,7 +10,7 @@ import { DashboardView } from "./dashboard-view";
 const NOW = new Date(2026, 2, 2, 11, 0).getTime();
 const SHA = "e6209dd7a1b2c3d4e5f60718293a4b5c6d7e8f90";
 
-test("the open app's rope, each event a knot on it, with Commit, Time and Event; a click selects, a second opens", async () => {
+test("the open app's rope, each event a knot on it, with Commit, Time and Event; a click selects, like the graph's", async () => {
   const events: DashboardEvent[] = [
     {
       id: "a",
@@ -40,11 +40,10 @@ test("the open app's rope, each event a knot on it, with Commit, Time and Event;
       load: async app => events.filter(event => event.app === app),
     }),
   );
-  const onActivate = mock(() => {});
   const setup = await testRender(
     () => (
       <ThemeContext.Provider value={createThemeState()}>
-        <DashboardView dashboard={dashboard} onActivate={onActivate} now={() => NOW} />
+        <DashboardView dashboard={dashboard} now={() => NOW} />
       </ThemeContext.Provider>
     ),
     { width: 100, height: 16, useMouse: true },
@@ -70,9 +69,9 @@ test("the open app's rope, each event a knot on it, with Commit, Time and Event;
     const y = lines.findIndex(line => line.includes("round totals"));
     await setup.mockMouse.click(30, y, MouseButtons.LEFT);
     expect(dashboard.rows()[dashboard.cursor()]).toMatchObject({ kind: "event", event: { id: "b" } });
-    expect(onActivate).not.toHaveBeenCalled();
+    // A second click opens nothing: the details' first row shows the event in the graph.
     await setup.mockMouse.click(30, y, MouseButtons.LEFT);
-    expect(onActivate).toHaveBeenCalledTimes(1);
+    expect(dashboard.rows()[dashboard.cursor()]).toMatchObject({ kind: "event", event: { id: "b" } });
   } finally {
     setup.renderer.destroy();
   }
