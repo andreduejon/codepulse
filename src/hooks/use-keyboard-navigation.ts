@@ -234,7 +234,12 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions) {
       onCommandExecute("menu");
       return;
     }
-    if (e.name === "f" && !e.shift) {
+    if (e.name === "f" && e.ctrl && !e.shift && !e.meta) {
+      e.preventDefault();
+      onCommandExecute("pull");
+      return;
+    }
+    if (e.name === "f" && !e.shift && !e.ctrl && !e.meta) {
       e.preventDefault();
       onCommandExecute("fetch");
       return;

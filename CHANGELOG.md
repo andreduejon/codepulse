@@ -28,6 +28,13 @@ All notable changes to this project will be documented in this file.
   Dashboard or a provider that is turned on. Saved per repository as `startView`. Another repository of the group opens
   in its own start view the first time it's shown, and where you left it after that. A provider turned off since starts
   in Git.
+- **`ctrl+f`** and **`:pull`** fetch, then fast-forward each local branch that is only behind its remote branch, like
+  `git pull --ff-only`, and say what moved. So a pull request merged on GitHub reaches your local `main`. The
+  checked-out branch moves with its files only while no tracked file has changes. A branch with commits of its own, or
+  one checked out in another worktree, stays where it is, and the message says why. **Menu → Repository → Preferences
+  → Auto fast-forward** (off by default, saved per repository as `autoFastForward`) makes `f` and Auto fetch
+  fast-forward too. They only report a branch that stayed behind. **Menu → Repository → Actions → Fast-forward** does
+  what `ctrl+f` does.
 
 - Snyk Dependencies: a Maven `managed` pin is also marked `removable` when every dependency that brings the package
   already asks for the pinned version or later, so Maven would pick at least that version without the pin. Their

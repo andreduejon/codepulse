@@ -5,6 +5,8 @@ import { BANNER, bannerOrFallback, debugError } from "../debug/banner";
 import { buildGraph, getMaxGraphColumns } from "../git/graph";
 import { mergeCommitPages } from "../git/merge-pages";
 import {
+  type FastForwardResult,
+  fastForwardBranches,
   fetchRemote,
   getBranches,
   getCommits,
@@ -33,6 +35,10 @@ interface UseDataLoaderOptions {
   state: AppState;
   /** App actions — passed directly to avoid reading from context before the Provider renders. */
   actions: AppActions;
+  /** Menu → Repository → Preferences → Auto fast-forward: `f` and Auto fetch fast-forward too. Off by default. */
+  autoFastForward?: Accessor<boolean>;
+  /** After a fast-forward: `explicit` for ctrl+f and `:pull`, which always report. */
+  onFastForward?: (result: FastForwardResult, explicit: boolean) => void;
 }
 
 interface UseDataLoaderResult {
@@ -40,8 +46,8 @@ interface UseDataLoaderResult {
   loadData: (branch?: string, stickyHash?: string, silent?: boolean, preserveLoaded?: boolean) => Promise<void>;
   /** Load the next page of commits and append to the existing list. */
   loadMoreData: () => Promise<void>;
-  /** Fetch from the configured remote and reload data. */
-  handleFetch: () => Promise<void>;
+  /** Fetch from the configured remote and reload data; `pull` (ctrl+f, `:pull`) also fast-forwards. */
+  handleFetch: (mode?: "fetch" | "pull") => Promise<void>;
 }
 
 /**
@@ -59,7 +65,14 @@ interface UseDataLoaderResult {
  * this hook is called during AppContent's setup phase — before the AppStateContext.Provider
  * is rendered in the JSX return. Reading from context at that point would return undefined.
  */
-export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDataLoaderOptions): UseDataLoaderResult {
+export function useDataLoader({
+  repoPath,
+  initialBranch,
+  state,
+  actions,
+  autoFastForward,
+  onFastForward,
+}: UseDataLoaderOptions): UseDataLoaderResult {
   const initialRepoPath = repoPath();
   // ── loadData ──────────────────────────────────────────────────────
   let loadAbortCtrl: AbortController | null = null;
@@ -255,8 +268,9 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
 
   // ── handleFetch ───────────────────────────────────────────────────
   let fetchOperation = 0;
-  async function handleFetch() {
+  async function handleFetch(mode: "fetch" | "pull" = "fetch") {
     const path = repoPath();
+    const fastForward = mode === "pull" || (autoFastForward?.() ?? false);
     if (state.fetching()) return; // guard against double-fetch
     const operation = ++fetchOperation;
     const isCurrent = () => operation === fetchOperation && repoPath() === path;
@@ -268,6 +282,11 @@ export function useDataLoader({ repoPath, initialBranch, state, actions }: UseDa
         const fetchTime = await getLastFetchTime(path);
         if (!isCurrent()) return;
         actions.setLastFetchTime(fetchTime);
+        if (fastForward) {
+          const moved = await fastForwardBranches(path);
+          if (!isCurrent()) return;
+          onFastForward?.(moved, mode === "pull");
+        }
         const stickyHash = state.selectedCommit()?.hash;
         // silent=true: don't toggle state.loading() — that unmounts the entire
         // graph <For> list and destroys the scrollbox position.  state.fetching()

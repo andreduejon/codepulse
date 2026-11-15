@@ -27,6 +27,7 @@ function context(dialog: DialogId = null) {
     setAnchor: mock((_hash: string) => {}),
     clearAnchor: mock(() => {}),
     fetchAll: mock(async () => {}),
+    pullAll: mock(async () => {}),
     reloadAll: mock(async () => {}),
     setSearchFocused: mock((_focused: boolean) => {}),
     setSearchInputValue: mock((_value: string) => {}),
@@ -45,7 +46,7 @@ test("menu commands open the menu on their tab; unknown commands do nothing", ()
   expect(ctx.setDialog).toHaveBeenCalledTimes(1);
 });
 
-test("debug toggles, clear dismisses the banner and Debug, fetch and reload drop ancestry first", () => {
+test("debug toggles, clear dismisses the banner and Debug, fetch, pull and reload drop ancestry first", () => {
   const { ctx, dialog } = context("debug");
   runAppCommand("debug", ctx);
   expect(dialog()).toBeNull();
@@ -55,9 +56,12 @@ test("debug toggles, clear dismisses the banner and Debug, fetch and reload drop
   expect(getDebugEvents()).toHaveLength(0);
   runAppCommand("f", ctx);
   runAppCommand("reload", ctx);
-  expect(ctx.clearAnchor).toHaveBeenCalledTimes(2);
+  runAppCommand(":pull", ctx);
+  expect(ctx.clearAnchor).toHaveBeenCalledTimes(3);
   expect(ctx.fetchAll).toHaveBeenCalledTimes(1);
   expect(ctx.reloadAll).toHaveBeenCalledTimes(1);
+  // :pull fetches and fast-forwards; f only fetches.
+  expect(ctx.pullAll).toHaveBeenCalledTimes(1);
 });
 
 test("search starts from the active query and path from the active filter", () => {

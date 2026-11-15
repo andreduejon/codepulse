@@ -48,6 +48,8 @@ export interface CodepulseConfig {
   autoFetchSeconds?: number;
   /** The view codepulse opens in: Git by default, the dashboard or a provider that is turned on. */
   startView?: ProviderView;
+  /** `f` and Auto fetch also fast-forward the branches that are only behind their remote branch. Off by default. */
+  autoFastForward?: boolean;
   /** The dashboard: how many days back it reads, and how many minutes one knot holds. */
   dashboard?: {
     windowDays?: DashboardWindowDays;
@@ -108,6 +110,7 @@ export function defaultConfig(): Required<Omit<CodepulseConfig, "branch" | "grou
     autoRefreshSeconds: DEFAULT_AUTO_REFRESH_INTERVAL / 1000,
     autoFetchSeconds: DEFAULT_AUTO_FETCH_INTERVAL / 1000,
     startView: "git",
+    autoFastForward: false,
     dashboard: { ...DEFAULT_DASHBOARD_SETTINGS },
     providers: {
       github: {
@@ -622,8 +625,14 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
     }
   }
 
+  if (raw.autoFastForward !== undefined) {
+    if (typeof raw.autoFastForward === "boolean") config.autoFastForward = raw.autoFastForward;
+    else warnings.push(`${path}: "autoFastForward" must be a boolean, ignoring`);
+  }
+
   if (raw.startView !== undefined) {
-    if ((PROVIDER_ORDER as readonly unknown[]).includes(raw.startView)) config.startView = raw.startView as ProviderView;
+    if ((PROVIDER_ORDER as readonly unknown[]).includes(raw.startView))
+      config.startView = raw.startView as ProviderView;
     else warnings.push(`${path}: "startView" must be one of ${PROVIDER_ORDER.join(", ")}, ignoring`);
   }
 
@@ -635,9 +644,7 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
         if ((DASHBOARD_WINDOW_DAYS as readonly unknown[]).includes(dashboard.windowDays))
           config.dashboard.windowDays = dashboard.windowDays as DashboardWindowDays;
         else
-          warnings.push(
-            `${path}: "dashboard.windowDays" must be one of ${DASHBOARD_WINDOW_DAYS.join(", ")}, ignoring`,
-          );
+          warnings.push(`${path}: "dashboard.windowDays" must be one of ${DASHBOARD_WINDOW_DAYS.join(", ")}, ignoring`);
       }
       if (dashboard.knotMinutes !== undefined) {
         if ((DASHBOARD_KNOT_MINUTES as readonly unknown[]).includes(dashboard.knotMinutes))

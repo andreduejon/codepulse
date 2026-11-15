@@ -48,6 +48,7 @@ import type { DashboardEvent } from "./dashboard/events";
 import { dashboardSettings } from "./dashboard/settings";
 import { type DashboardApp, useDashboard } from "./dashboard/use-dashboard";
 import { BANNER, displayBanner } from "./debug/banner";
+import type { FastForwardResult } from "./git/repo";
 import type { DiffTarget } from "./git/types";
 import { openGraphDetails } from "./hooks/handle-graph-keys";
 import { useAncestry } from "./hooks/use-ancestry";
@@ -71,6 +72,7 @@ import { type CacheRepositorySummary, evictRepositoryCache } from "./providers/s
 import JobLogDialog, { type JobLogTarget } from "./providers/shared/job-log-dialog";
 import { repositoryIdentity, setProviderCacheSuspended } from "./providers/shared/sha-sqlite-cache";
 import { type SnykProviderConfig, useSnyk } from "./providers/snyk/use-snyk";
+import { fastForwardMessage } from "./utils/fast-forward-message";
 import { nextGroupRepoPath, repoDisplayName } from "./utils/group-repos";
 import { computeDisplacedIndex, DETAIL_CHILD_DIALOGS } from "./utils/keyboard-nav-utils";
 import { openUrl } from "./utils/open-url";
@@ -101,6 +103,8 @@ export function AppContent(props: Readonly<AppContentProps>) {
   const [dashboardConfig, setDashboardConfig] = createSignal(dashboardSettings(startConfig.dashboard));
   /** The view this repository opens in, as Menu → Providers → Start in shows it. */
   const [startView, setStartView] = createSignal<ProviderView>(startConfig.startView ?? "git");
+  /** Menu → Repository → Preferences → Auto fast-forward: `f` and Auto fetch fast-forward too. */
+  const [autoFastForward, setAutoFastForward] = createSignal(startConfig.autoFastForward ?? false);
   actions.setActiveProviderView(startViewFor(startConfig));
 
   const [repoDisplayConfig, setRepoDisplayConfig] = createSignal(getRepoDisplayConfig(activeRepoPath()));
@@ -115,6 +119,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     setSnykConfig(snykSettings(config.providers?.snyk));
     setDashboardConfig(dashboardSettings(config.dashboard));
     setStartView(config.startView ?? "git");
+    setAutoFastForward(config.autoFastForward ?? false);
     setRepoDisplayConfig(getRepoDisplayConfig(path));
     // The theme is per repository; without this a switch keeps the previous repo's theme, and the next settings
     // change saves it into this one. An unknown theme falls back to the default, as at startup.
@@ -138,9 +143,13 @@ export function AppContent(props: Readonly<AppContentProps>) {
   // Repo selector visibility — shown when "Switch repository" is selected from menu
   const [repoSelectorVisible, setRepoSelectorVisible] = createSignal(false);
 
+  /** What the last fast-forward did (ctrl+f, `:pull`), or which branches it left behind. */
+  const [gitNotice, setGitNotice] = createSignal<UIMessage | null>(null);
   const screenMessage = createMemo<UIMessage | null>(() => {
     const err = state.error();
     if (err) return { kind: "error" as const, source: "Git", message: displayBanner(err, BANNER.git.fetchFailed) };
+    const notice = gitNotice();
+    if (notice) return notice;
 
     const status = state.providerStatus();
     const message = providerStatusMessage(status);
@@ -181,10 +190,33 @@ export function AppContent(props: Readonly<AppContentProps>) {
   /** Dismisses the banner: `:clear` (which also clears Debug and the tab notice) or its `✕`. */
   const clearScreenMessage = () => {
     actions.setError(null);
+    setGitNotice(null);
     snyk.dismissBackgroundError();
     // Only a status the banner showed; a loading provider keeps its spinner.
     if (providerStatusMessage(state.providerStatus()))
       actions.setProviderStatus(state.activeProviderView(), providerIdle());
+  };
+
+  /**
+   * The branches the last fetch left behind, so Auto fetch doesn't bring back a warning that was closed while nothing
+   * changed. A mutable ref: it outlives the effects and timers that fetch.
+   */
+  const fastForwardNotice = { skipped: "" };
+  const showFastForward = (result: FastForwardResult, explicit: boolean) => {
+    const message = fastForwardMessage(result, explicit);
+    const skipped = JSON.stringify(result.skipped);
+    const repeated = skipped === fastForwardNotice.skipped;
+    fastForwardNotice.skipped = result.skipped.length > 0 ? skipped : "";
+    if (explicit) {
+      setGitNotice(message);
+      return;
+    }
+    // After f or Auto fetch: a warning shows once, and goes once every branch it named moved.
+    if (!message) {
+      if (gitNotice()?.kind === "warning" && gitNotice()?.source === "Git") setGitNotice(null);
+      return;
+    }
+    if (!repeated) setGitNotice(message);
   };
 
   const handleSetupComplete = () => {
@@ -371,6 +403,8 @@ export function AppContent(props: Readonly<AppContentProps>) {
     actions.setPathFilter(null);
     actions.setPathMatchSet(null);
     actions.setError(null);
+    setGitNotice(null);
+    fastForwardNotice.skipped = "";
     actions.setCommitDetail(null);
     actions.setUncommittedDetail(null);
     actions.setDetailCursorIndex(0);
@@ -580,6 +614,15 @@ export function AppContent(props: Readonly<AppContentProps>) {
     await refreshActiveProvider();
   };
 
+  /** ctrl+f and `:pull`: like `f`, and the local branches that are only behind follow their remote branches. */
+  const handlePullAll = async () => {
+    const path = activeRepoPath();
+    setGitNotice(null);
+    await handleFetch("pull");
+    if (activeRepoPath() !== path) return;
+    await refreshActiveProvider();
+  };
+
   /** The active provider's data for a commit; Git has none. */
   const activeProviderCommitData = (sha: string) => {
     switch (state.activeProviderView()) {
@@ -602,6 +645,8 @@ export function AppContent(props: Readonly<AppContentProps>) {
     initialBranch: props.branch,
     state,
     actions,
+    autoFastForward,
+    onFastForward: showFastForward,
   });
 
   onMount(() => {
@@ -685,6 +730,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
       setAnchor,
       clearAnchor,
       fetchAll: handleFetchAll,
+      pullAll: handlePullAll,
       reloadAll: handleReloadAll,
       setSearchFocused,
       setSearchInputValue,
@@ -1068,6 +1114,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                     onClose={() => setDialog(null)}
                     onReload={() => void handleReloadAll()}
                     onFetch={() => void handleFetchAll()}
+                    onPull={() => void handlePullAll()}
                     onOpenDialog={handleOpenDialog}
                     onOpenCache={openCacheScreen}
                     onViewBranch={handleViewBranch}
@@ -1090,6 +1137,8 @@ export function AppContent(props: Readonly<AppContentProps>) {
                     onDashboardConfigChange={setDashboardConfig}
                     startView={startView()}
                     onStartViewChange={setStartView}
+                    autoFastForward={autoFastForward()}
+                    onAutoFastForwardChange={setAutoFastForward}
                     onRepoDisplayConfigChange={setRepoDisplayConfig}
                   />
                 </Show>

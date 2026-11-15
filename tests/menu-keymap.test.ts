@@ -16,6 +16,14 @@ describe("menu keymap", () => {
     expect(routeMenuKey({ mode: "normal", keyName: "right", selectedKind: "other" }).action).toBe("next-tab");
   });
 
+  it("f forgets or fetches, ctrl+f fetches and fast-forwards", () => {
+    expect(routeMenuKey({ mode: "normal", keyName: "f", selectedKind: "other" }).action).toBe("forget");
+    expect(routeMenuKey({ mode: "normal", keyName: "f", ctrl: true, selectedKind: "other" })).toEqual({
+      action: "pull",
+      consume: true,
+    });
+  });
+
   it("starts edit only when selected row is editable", () => {
     expect(routeMenuKey({ mode: "normal", keyName: "return", selectedKind: "editable" })).toEqual({
       action: "start-edit",

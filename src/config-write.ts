@@ -283,6 +283,7 @@ function applyConfigFields(target: Record<string, unknown>, config: CodepulseCon
   if (config.autoRefreshSeconds !== undefined) target.autoRefreshSeconds = config.autoRefreshSeconds;
   if (config.autoFetchSeconds !== undefined) target.autoFetchSeconds = config.autoFetchSeconds;
   if (config.startView !== undefined) target.startView = config.startView;
+  if (config.autoFastForward !== undefined) target.autoFastForward = config.autoFastForward;
   if (config.dashboard !== undefined) {
     const existing =
       typeof target.dashboard === "object" && target.dashboard !== null && !Array.isArray(target.dashboard)

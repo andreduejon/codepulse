@@ -20,6 +20,7 @@ the full shortcut and provider setup reference.
 | `/` | Open search mode |
 | `m` | Open menu dialog |
 | `f` | Fetch Git and the open provider |
+| `ctrl+f` | Fetch and fast-forward |
 | `?` | Open help dialog |
 | `q` | Quit |
 
@@ -90,6 +91,7 @@ Theme controls and custom configuration are in the [theme guide](themes.md).
 | `:help` | Open help dialog |
 | `:menu` | Open menu dialog |
 | `:path` | Switch to path mode |
+| `:pull` | Fetch and fast-forward |
 | `:providers` | Open menu dialog on Providers tab |
 | `:quit` | Quit application |
 | `:reload` | Reload repository data from disk |
@@ -112,7 +114,17 @@ are absent. Earlier experimental Windows `.config`/`.cache` files are not migrat
 
 Local auto-refresh reloads repository state from disk. Remote fetching stays
 manual by default (`f` / `:fetch`). Enable auto-fetch separately in repository
-configuration. Provider request, cache, and diagnostic behavior is described in
+configuration.
+
+A fetch moves the remote branches (`origin/main`), never your local ones.
+`ctrl+f` / `:pull` fetches and then fast-forwards each local branch that is only
+behind its remote branch, like `git pull --ff-only`, and says what moved. The
+checked-out branch moves with its files only while no tracked file has changes.
+A branch with commits of its own, or one checked out in another worktree, stays
+where it is, and the message says why. **Menu → Repository → Preferences →
+Auto fast-forward** (off by default, saved per repository as
+`autoFastForward`) makes `f` and Auto fetch fast-forward too. They only
+report a branch that stayed behind. Provider request, cache, and diagnostic behavior is described in
 the [provider guide](providers/README.md).
 
 Use `:cache` to inspect storage across repositories. See the [cache guide](cache.md)

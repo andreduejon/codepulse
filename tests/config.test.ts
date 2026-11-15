@@ -1071,3 +1071,17 @@ describe("writeConfig", () => {
     expect(loaded2.branch).toBe("develop");
   });
 });
+
+describe("auto fast-forward", () => {
+  test("is off by default, round-trips per repository, and a value that is not a boolean is ignored with a warning", () => {
+    expect(defaultConfig().autoFastForward).toBe(false);
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("auto-fast-forward", repoPath, {});
+    expect(writeConfig({ autoFastForward: true }, repoPath, configPath)).toBe(true);
+    expect(loadConfig(repoPath, configPath)).toEqual({ config: { autoFastForward: true }, warnings: [] });
+    const invalid = makeRepoConfig("auto-fast-forward-invalid", repoPath, { autoFastForward: "yes" });
+    const { config, warnings } = loadConfig(repoPath, invalid);
+    expect(config.autoFastForward).toBeUndefined();
+    expect(warnings).toEqual([expect.stringContaining('"autoFastForward" must be a boolean')]);
+  });
+});

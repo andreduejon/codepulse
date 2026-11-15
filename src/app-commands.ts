@@ -16,6 +16,8 @@ export interface AppCommandContext {
   setAnchor: (hash: string) => void;
   clearAnchor: () => void;
   fetchAll: () => Promise<void>;
+  /** Fetch, then fast-forward the branches that are only behind (ctrl+f, `:pull`). */
+  pullAll: () => Promise<void>;
   reloadAll: () => Promise<void>;
   setSearchFocused: (focused: boolean) => void;
   setSearchInputValue: (value: string) => void;
@@ -78,6 +80,10 @@ export function runAppCommand(cmd: string, ctx: AppCommandContext): void {
     case "fetch":
       ctx.clearAnchor();
       void ctx.fetchAll();
+      break;
+    case "pull":
+      ctx.clearAnchor();
+      void ctx.pullAll();
       break;
     case "r":
     case "reload":

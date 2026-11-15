@@ -61,6 +61,8 @@ export interface MenuItemsOptions {
   copyToClipboard: (text: string, id: string) => void;
   /** Prop callbacks forwarded from the component. */
   onFetch: () => void;
+  /** ctrl+f: fetch, then fast-forward the branches that are only behind. */
+  onPull?: () => void;
   onReload: () => void;
   onOpenDialog?: (dialogId: "theme") => void;
   onViewBranch: (branch: string | null) => void;
@@ -83,6 +85,8 @@ export interface MenuItemsOptions {
   onDashboardConfigChange?: (cfg: DashboardSettings) => void;
   startView?: Accessor<ProviderView | undefined>;
   onStartViewChange?: (view: ProviderView) => void;
+  autoFastForward?: Accessor<boolean | undefined>;
+  onAutoFastForwardChange?: (enabled: boolean) => void;
   onRepoDisplayConfigChange?: (cfg: { group?: string; appName?: string }) => void;
 }
 
@@ -232,6 +236,9 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
 
       { kind: "header", label: "Actions" },
       { kind: "action", label: "Fetch remote", hotkey: "f", get: lastFetchLabel, run: () => opts.onFetch() },
+      ...(opts.onPull
+        ? [{ kind: "action" as const, label: "Fast-forward", hotkey: "ctrl+f", run: () => opts.onPull?.() }]
+        : []),
       ...(opts.onSwitchRepo
         ? [{ kind: "action" as const, label: "Switch repository", run: () => opts.onSwitchRepo?.() }]
         : []),
@@ -291,6 +298,15 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
           const ms = AUTO_REFRESH_MS[v] ?? DEFAULT_AUTO_FETCH_INTERVAL;
           actions.setAutoFetchInterval(ms);
           persistFullConfig({ autoFetchSeconds: ms / 1000 });
+        },
+      },
+      {
+        kind: "toggle",
+        label: "Auto fast-forward",
+        get: () => opts.autoFastForward?.() ?? false,
+        set: v => {
+          opts.onAutoFastForwardChange?.(v);
+          persistFullConfig({ autoFastForward: v });
         },
       },
     ];

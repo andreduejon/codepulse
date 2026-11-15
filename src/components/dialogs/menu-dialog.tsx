@@ -30,6 +30,7 @@ interface MenuDialogProps {
   onClose: () => void;
   onReload: () => void;
   onFetch: () => void;
+  onPull?: () => void;
   onOpenDialog?: (dialogId: "theme") => void;
   /** View graph from a specific branch's perspective. null clears the filter. */
   onViewBranch: (branch: string | null) => void;
@@ -52,6 +53,8 @@ interface MenuDialogProps {
   onDashboardConfigChange?: (cfg: DashboardSettings) => void;
   startView?: ProviderView;
   onStartViewChange?: (view: ProviderView) => void;
+  autoFastForward?: boolean;
+  onAutoFastForwardChange?: (enabled: boolean) => void;
   onRepoDisplayConfigChange?: (cfg: { group?: string; appName?: string }) => void;
 }
 
@@ -102,6 +105,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     setTheme,
     copyToClipboard,
     onFetch: () => props.onFetch(),
+    onPull: props.onPull ? () => props.onPull?.() : undefined,
     onReload: () => props.onReload(),
     onOpenDialog: props.onOpenDialog,
     onViewBranch: branch => props.onViewBranch(branch),
@@ -121,6 +125,8 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     onDashboardConfigChange: props.onDashboardConfigChange,
     startView: () => props.startView,
     onStartViewChange: props.onStartViewChange,
+    autoFastForward: () => props.autoFastForward,
+    onAutoFastForwardChange: props.onAutoFastForwardChange,
     onRepoDisplayConfigChange: props.onRepoDisplayConfigChange,
   });
 
@@ -271,6 +277,9 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
         // `f` forgets a removable row; anywhere else it is the Fetch remote hotkey the menu shows.
         if (!forgetSelected()) runHotkey("f");
         break;
+      case "pull":
+        runHotkey("ctrl+f");
+        break;
       case "start-edit":
         startEdit();
         break;
@@ -330,6 +339,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
       mode: editingIdx() == null ? "normal" : "token-edit",
       keyName: e.name,
       shift: e.shift,
+      ctrl: e.ctrl,
       selectedKind: selected?.kind === "editable" ? "editable" : selected ? "other" : null,
     });
 
