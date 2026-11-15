@@ -11,9 +11,8 @@ import {
   buildJenkinsProviderItems,
   buildOpenShiftProviderItems,
   buildSnykProviderItems,
-  buildStartViewItems,
 } from "../src/hooks/menu-provider-items";
-import { isOptionalRepoMetadataValid, optionalRepoMetadataValue } from "../src/hooks/use-menu-items";
+import { isOptionalRepoMetadataValid, optionalRepoMetadataValue, startViewItem } from "../src/hooks/use-menu-items";
 
 describe("buildDashboardItems", () => {
   it("offers the time window and the knot size, and saves the next choice", () => {
@@ -36,13 +35,12 @@ describe("buildDashboardItems", () => {
   });
 });
 
-describe("buildStartViewItems", () => {
+describe("startViewItem", () => {
   it("offers the views that are turned on, and saves the chosen one", () => {
     const saved: unknown[] = [];
-    const items = buildStartViewItems(["dashboard", "git", "jenkins"], "jenkins", view => saved.push(view));
-    expect(items.map(item => ("label" in item ? item.label : ""))).toEqual(["Views", "Start in"]);
-    const start = items[1];
-    if (start?.kind !== "cycle") throw new Error("expected a cycle item");
+    const start = startViewItem(["dashboard", "git", "jenkins"], "jenkins", view => saved.push(view));
+    if (start.kind !== "cycle") throw new Error("expected a cycle item");
+    expect(start.label).toBe("Start in");
     expect(start.options).toEqual(["Dashboard", "Git", "Jenkins"]);
     expect(start.get()).toBe("Jenkins");
     start.set("Dashboard");
@@ -50,8 +48,8 @@ describe("buildStartViewItems", () => {
   });
 
   it("shows Git when the chosen view's provider is turned off, as codepulse starts there", () => {
-    const [, start] = buildStartViewItems(["dashboard", "git"], "snyk", () => {});
-    if (start?.kind !== "cycle") throw new Error("expected a cycle item");
+    const start = startViewItem(["dashboard", "git"], "snyk", () => {});
+    if (start.kind !== "cycle") throw new Error("expected a cycle item");
     expect(start.get()).toBe("Git");
   });
 });

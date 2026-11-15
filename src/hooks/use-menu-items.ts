@@ -8,7 +8,7 @@ import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL, useAppState
 import type { Theme } from "../context/theme";
 import { type DashboardSettings, DEFAULT_DASHBOARD_SETTINGS } from "../dashboard/settings";
 import { getTokenSource } from "../providers/github-actions/api";
-import type { ProviderDetailView, ProviderView } from "../providers/provider";
+import { type ProviderDetailView, type ProviderView, providerDisplayName } from "../providers/provider";
 import { DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS } from "../providers/shared/auto-refresh";
 import {
   COPYABLE_VISIBLE_WIDTH,
@@ -21,7 +21,6 @@ import {
 } from "./menu-items-types";
 import {
   buildDashboardItems,
-  buildStartViewItems,
   buildGitHubProviderItems,
   buildJenkinsProviderItems,
   buildOpenShiftProviderItems,
@@ -85,6 +84,24 @@ export interface MenuItemsOptions {
   startView?: Accessor<ProviderView | undefined>;
   onStartViewChange?: (view: ProviderView) => void;
   onRepoDisplayConfigChange?: (cfg: { group?: string; appName?: string }) => void;
+}
+
+/** Which view the repository opens in. It offers the views that are turned on; a view turned off since starts in Git. */
+export function startViewItem(
+  views: readonly ProviderView[],
+  current: ProviderView,
+  save: (view: ProviderView) => void,
+): SettingItem {
+  return {
+    kind: "cycle",
+    label: "Start in",
+    options: views.map(providerDisplayName),
+    get: () => providerDisplayName(views.includes(current) ? current : "git"),
+    set: value => {
+      const view = views.find(option => providerDisplayName(option) === value);
+      if (view) save(view);
+    },
+  };
 }
 
 export interface MenuItemsResult {
@@ -182,6 +199,8 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
   };
 
   const repoItems = createMemo<SettingItem[]>(() => {
+    // Start in offers the views turned on: read again when a provider is turned on or off.
+    state.providers.getVersion();
     const items: SettingItem[] = [
       { kind: "header", label: "Origin" },
       { kind: "copyable", label: "URL", get: () => state.remoteUrl() || "(none)" },
@@ -227,6 +246,10 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
         dialogId: "theme",
         get: () => opts.themes[opts.themeName()]?.name ?? opts.themeName(),
       },
+      startViewItem(state.providers.getEnabledViews(), opts.startView?.() ?? "git", view => {
+        opts.onStartViewChange?.(view);
+        persistFullConfig({ startView: view });
+      }),
       {
         kind: "cycle",
         label: "Page size",
@@ -455,12 +478,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
       autoScanBranches: [],
       maxCachedScans: 20 as const,
     };
-    state.providers.getVersion();
     return [
-      ...buildStartViewItems(state.providers.getEnabledViews(), opts.startView?.() ?? "git", view => {
-        opts.onStartViewChange?.(view);
-        persistFullConfig({ startView: view });
-      }),
       ...buildDashboardItems(opts.dashboardConfig?.() ?? DEFAULT_DASHBOARD_SETTINGS, next => {
         opts.onDashboardConfigChange?.(next);
         persistFullConfig({ dashboard: next });
