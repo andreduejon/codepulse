@@ -24,9 +24,10 @@ All notable changes to this project will be documented in this file.
   custom themes set it with `dashboardFg` and `dashboardBg`. The graph's search (`/`), path filter and ancestry don't
   work on the dashboard, an open search bar closes when it shows, and Esc there leaves the graph's highlights and branch
   view alone.
-- **Menu → Repository → Preferences → Start in** chooses the view a repository opens in: Git (the default), the Dashboard or a
-  provider that is turned on. Saved per repository as `startView`. Another repository of the group opens in its own
-  start view the first time it's shown, and where you left it after that. A provider turned off since starts in Git.
+- **Menu → Repository → Preferences → Start in** chooses the view a repository opens in: Git (the default), the
+  Dashboard or a provider that is turned on. Saved per repository as `startView`. Another repository of the group opens
+  in its own start view the first time it's shown, and where you left it after that. A provider turned off since starts
+  in Git.
 
 - Snyk Dependencies: a Maven `managed` pin is also marked `removable` when every dependency that brings the package
   already asks for the pinned version or later, so Maven would pick at least that version without the pin. Their
