@@ -49,7 +49,7 @@ import {
   isTrustedGitHubHost,
   parseGitHubRemote,
 } from "./api";
-import { GitHubCache, isTerminalGitHubRun, jobsMapFromGitHubCache, mergeGitHubJobs, mergeGitHubRuns } from "./cache";
+import { GitHubCache, isTerminalGitHubRun, mergeGitHubEntry, mergeGitHubRuns } from "./cache";
 import { collectRunningSHAs, collectTopSHAs } from "./sha-selection";
 import type {
   GitHubCommitData,
@@ -331,16 +331,12 @@ export function useGitHubCI(opts: {
       () => lifecycle.isCurrent(epoch, repoPath),
       sha => (commitDataCache.get(sha)?.runs ?? []).filter(isTerminalGitHubRun),
       (sha, existing, incoming) => {
-        const jobs = mergeGitHubJobs(
-          existing?.jobs,
-          jobsMapFromGitHubCache(
-            jobsCache,
-            incoming.filter(run => cachedJobsFor(run)).map(run => run.id),
-          ),
-        );
-        // A re-run's jobs from before it are not its jobs: they are asked for again rather than kept with it.
-        for (const run of incoming) if (!cachedJobsFor(run)) delete jobs[String(run.id)];
-        return { sha, runs: mergeGitHubRuns(existing?.runs ?? [], incoming), jobs };
+        const fresh = new Map<number, GitHubJob[]>();
+        for (const run of incoming) {
+          const jobs = cachedJobsFor(run);
+          if (jobs) fresh.set(run.id, jobs);
+        }
+        return mergeGitHubEntry(sha, existing, incoming, fresh);
       },
     );
   }

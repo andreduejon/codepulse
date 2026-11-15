@@ -56,7 +56,10 @@ export default function Footer(
     providerStatus().kind === "loading" && !state.providers.get(state.activeProviderView())?.activity;
   const dashboardShown = () => state.activeProviderView() === "dashboard" && !!props.dashboard;
   const dashboardReading = () => dashboardShown() && !!props.dashboard?.loading();
+  /** Asking the apps' providers: network work, so it says fetching like the providers do. */
+  const dashboardFetching = () => dashboardShown() && !!props.dashboard?.fetching();
   const busy = () =>
+    dashboardFetching() ||
     dashboardReading() ||
     state.loading() ||
     state.fetching() ||
@@ -68,7 +71,7 @@ export default function Footer(
   const loadingLabel = () => {
     const git = gitActivity();
     const parts = [
-      ...(dashboardReading() ? ["Dashboard reading"] : []),
+      ...(dashboardFetching() ? ["Dashboard fetching"] : dashboardReading() ? ["Dashboard reading"] : []),
       ...(git ? [git] : []),
       ...(genericLoading() ? ["loading"] : []),
       ...activities(),

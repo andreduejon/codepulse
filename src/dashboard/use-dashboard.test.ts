@@ -28,6 +28,8 @@ async function dashboard(events: DashboardEvent[], apps = TWO_APPS) {
       apps: () => apps,
       active,
       now: () => NOW,
+      // No providers: these tests are about the events and the cursor.
+      sync: { targets: () => [], run: async () => ({ error: null, authFailed: false }) },
       load: async app => {
         loads.push(app);
         return events.filter(item => item.app === app);

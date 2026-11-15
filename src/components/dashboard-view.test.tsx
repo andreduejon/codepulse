@@ -40,6 +40,7 @@ test("one rope per app, each event a knot on its app's rope, with App, Commit, T
       ],
       active,
       now: () => NOW,
+      sync: { targets: () => [], run: async () => ({ error: null, authFailed: false }) },
       load: async app => events.filter(event => event.app === app),
     }),
   );

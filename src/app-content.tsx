@@ -526,7 +526,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
         activateDashboard();
         break;
       case "r":
-        void dashboard.reload();
+        void dashboard.refresh();
         break;
       case "o":
         if (!dashboard.selected()?.url) return;

@@ -14,9 +14,12 @@ All notable changes to this project will be documented in this file.
   the knot colors; the event count takes the graph modes' place. From 180 columns a side panel shows the selected event
   like the commit details: what happened, the provider's facts (workflow, duration, why a build failed, the scan's
   counts), its commit and the provider's marks; below that, Enter opens them as a dialog, like the graph's details.
-  Enter shows the event's commit in that app's graph, and `o` opens a run's or build's page. This first version reads
-  Git and the provider caches only, so a provider shows what it found the last time its view was open; `r` reads them
-  again.
+  Enter shows the event's commit in that app's graph, and `o` opens a run's or build's page. While it shows, the
+  dashboard asks each app's GitHub Actions, Jenkins and OpenShift about the app's newest commits, as many as the
+  provider's Fetch size, like its view does when that app is open. It asks once when the dashboard opens, then again
+  at the provider's Auto refresh, and the footer says "Dashboard fetching" meanwhile. What they find goes into their
+  normal caches, so the app's views show it too. `r` asks all of them again, also a provider whose token was refused.
+  Snyk is not asked: its scans show as the Snyk view made them.
 
 - Snyk Dependencies: a Maven `managed` pin is also marked `removable` when every dependency that brings the package
   already asks for the pinned version or later, so Maven would pick at least that version without the pin. Their
