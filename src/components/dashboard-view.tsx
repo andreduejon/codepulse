@@ -41,23 +41,11 @@ export function DashboardView(
       return null;
     };
     return (
-      <Show
-        when={ropeProps.row.kind !== "date"}
-        fallback={
-          // A day's divider crosses the rope.
-          <box flexShrink={0} width={graphWidth}>
-            <text flexShrink={0} wrapMode="none" fg={t().border}>
-              {`─┼${"─".repeat(graphWidth - 2)}`}
-            </text>
-          </box>
-        }
-      >
-        <box flexDirection="row" flexShrink={0} width={graphWidth} paddingLeft={1}>
-          <text flexShrink={0} wrapMode="none" fg={knot() ?? t().border}>
-            {knot() ? KNOT : "│"}
-          </text>
-        </box>
-      </Show>
+      <box flexDirection="row" flexShrink={0} width={graphWidth} paddingLeft={1}>
+        <text flexShrink={0} wrapMode="none" fg={knot() ?? t().border}>
+          {knot() ? KNOT : "│"}
+        </text>
+      </box>
     );
   };
 
@@ -175,9 +163,10 @@ export function DashboardView(
                   <Switch>
                     <Match when={row.kind === "date" && row}>
                       {date => (
-                        // The divider goes on across the table, the day where the commits start.
+                        // The divider runs from the Commit column to the end; the day starts where the times do.
                         <box flexDirection="row" flexGrow={1} minWidth={0} paddingLeft={1}>
                           <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                            <span style={{ fg: t().border }}>{`${"─".repeat(HASH_COL_WIDTH - 1)} `}</span>
                             {`${formatDayLabel(date().time, props.now?.())} `}
                           </text>
                           <box flexGrow={1} height={1} border={["top"]} borderStyle="single" borderColor={t().border} />

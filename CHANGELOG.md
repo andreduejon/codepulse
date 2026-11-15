@@ -9,7 +9,7 @@ All notable changes to this project will be documented in this file.
 - **Dashboard**, a new first view in the tab row (Tab from the last provider, or a click). The open app gets a straight
   line, a "rope", and everything that happened is a knot on it in its provider's color: commits on the main branch,
   GitHub Actions runs, Jenkins builds, OpenShift builds and Snyk scans, newest first, in the columns Commit, Time and
-  Event. A knot is the events within an hour; a divider line across the rope, with the weekday and date in the Commit column, starts each day. The project row keeps the group's badges, so
+  Event. A knot is the events within an hour; a line from the Commit column to the end starts each day, with the weekday and date where the times are. The project row keeps the group's badges, so
   another app's dashboard is a click away, and it shows a legend of the knot colors; the event count takes the graph
   modes' place. From 180 columns a side panel shows the selected event like the commit details: what happened, the
   provider's facts (workflow, duration, why a build failed, the scan's counts), its commit and the provider's marks;
