@@ -11,10 +11,15 @@ import { type ScrollSchedule, scheduleScrollIntoView, scrollElementIntoView } fr
 
 /** Width of the Time column: `09:05` and its padding. */
 const TIME_COL_WIDTH = 7;
+/** The longest branch name the Branch column shows whole; a longer one ends in `…`. */
+const BRANCH_MAX = 20;
+
+/** `feature/payments-retry-…` for a name longer than `max`. */
+const cutBranch = (name: string, max = BRANCH_MAX) => (name.length <= max ? name : `${name.slice(0, max - 1)}…`);
 
 /**
  * The dashboard: the open app's rope, with each event a knot in its provider's color, newest first. Laid out like the
- * graph view: the rope, then Commit, Time and Event.
+ * graph view: the rope, then Commit, Branch, Time and Event.
  */
 export function DashboardView(
   props: Readonly<{
@@ -29,6 +34,13 @@ export function DashboardView(
   const graphWidth = "Graph".length + 2;
   const [hovered, setHovered] = createSignal<number | null>(null);
   const days = () => d.settings().windowDays;
+  /** As wide as the longest branch shown (at most BRANCH_MAX), and its header; one column of padding. */
+  const branchWidth = () => {
+    let longest = "Branch".length;
+    for (const row of d.rows())
+      if (row.kind === "event" && row.event.branch) longest = Math.max(longest, row.event.branch.length);
+    return Math.min(longest, BRANCH_MAX) + 1;
+  };
 
   /** The rope of one row: a knot in the provider's color for an event, plain rope elsewhere. */
   const Rope = (ropeProps: { row: DashboardRow }) => {
@@ -98,6 +110,9 @@ export function DashboardView(
         <box flexShrink={0} width={HASH_COL_WIDTH} paddingLeft={1}>
           {header("Commit")}
         </box>
+        <box flexShrink={0} width={branchWidth() + 1} paddingLeft={1}>
+          {header("Branch")}
+        </box>
         <box flexShrink={0} width={TIME_COL_WIDTH} paddingLeft={1}>
           {header("Time")}
         </box>
@@ -162,7 +177,7 @@ export function DashboardView(
                         // The divider runs from the Commit column to the end; the day starts where the times do.
                         <box flexDirection="row" flexGrow={1} minWidth={0} paddingLeft={1}>
                           <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                            <span style={{ fg: t().border }}>{`${"─".repeat(HASH_COL_WIDTH - 1)} `}</span>
+                            <span style={{ fg: t().border }}>{`${"─".repeat(HASH_COL_WIDTH + branchWidth())} `}</span>
                             {`${formatDayLabel(date().time, props.now?.())} `}
                           </text>
                           <box flexGrow={1} height={1} border={["top"]} borderStyle="single" borderColor={t().border} />
@@ -175,6 +190,11 @@ export function DashboardView(
                           <box flexShrink={0} width={HASH_COL_WIDTH} paddingLeft={1} overflow="hidden">
                             <text wrapMode="none" truncate fg={t().foregroundMuted}>
                               {eventRow().event.sha.slice(0, 7)}
+                            </text>
+                          </box>
+                          <box flexShrink={0} width={branchWidth() + 1} paddingLeft={1} overflow="hidden">
+                            <text wrapMode="none" fg={t().foregroundMuted}>
+                              {cutBranch(eventRow().event.branch ?? "")}
                             </text>
                           </box>
                           <box flexShrink={0} width={TIME_COL_WIDTH} paddingLeft={1}>

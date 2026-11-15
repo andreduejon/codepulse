@@ -370,6 +370,7 @@ interface GqlWorkflowJob {
 interface GqlCheckSuite {
   status: string;
   conclusion: string | null;
+  branch?: { name: string } | null;
   workflowRun: {
     databaseId: number;
     runNumber: number;
@@ -451,6 +452,7 @@ function mapGqlCheckSuiteToRun(suite: GqlCheckSuite, sha: string): GitHubWorkflo
     status,
     conclusion,
     headSha: sha,
+    ...(suite.branch?.name ? { headBranch: suite.branch.name } : {}),
     event: wr.event,
     runNumber: wr.runNumber,
     startedAt: wr.createdAt,
@@ -493,6 +495,7 @@ function checkSuiteNodeFields(includeJobs: boolean): string {
   return `
       status
       conclusion
+      branch { name }
       workflowRun {
         databaseId
         runNumber

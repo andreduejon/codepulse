@@ -30,6 +30,8 @@ export interface DashboardEvent {
   severity?: SnykSeverity | null;
   /** What happened, without the commit (shown beside it). */
   text: string;
+  /** The branch it happened on: the provider's own (GitHub), else the one Git finds holding the commit. */
+  branch?: string;
   sha: string;
   /** Its page (a run, a build), for `o`. */
   url?: string;
@@ -60,7 +62,8 @@ export interface GitCommitEvent {
   subject: string;
 }
 
-export function gitEvents(app: string, commits: readonly GitCommitEvent[]): DashboardEvent[] {
+/** The commits on the app's main branch, `branch`. */
+export function gitEvents(app: string, commits: readonly GitCommitEvent[], branch?: string): DashboardEvent[] {
   return commits.map(commit => ({
     id: `${app}:git:${commit.hash}`,
     app,
@@ -69,6 +72,7 @@ export function gitEvents(app: string, commits: readonly GitCommitEvent[]): Dash
     status: null,
     text: commit.subject,
     sha: commit.hash,
+    ...(branch ? { branch } : {}),
   }));
 }
 
@@ -77,7 +81,13 @@ function runEvents<T extends { id: string | number; updatedAt: string; headSha: 
   app: string,
   source: EventSource,
   runs: readonly T[],
-  describe: (run: T) => { status: StatusCategory; text: string; url?: string; facts: DashboardFact[] },
+  describe: (run: T) => {
+    status: StatusCategory;
+    text: string;
+    url?: string;
+    branch?: string;
+    facts: DashboardFact[];
+  },
 ): DashboardEvent[] {
   const events = new Map<string, DashboardEvent>();
   for (const run of runs) {
@@ -103,6 +113,7 @@ export function githubEvents(
         status,
         text: `${run.name} #${run.runNumber} ${VERBS[status]}`,
         ...(run.url ? { url: run.url } : {}),
+        ...(run.headBranch ? { branch: run.headBranch } : {}),
         facts: [
           ...fact("Workflow", run.name),
           ...fact("Run", `#${run.runNumber}`),

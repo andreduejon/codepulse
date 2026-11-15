@@ -114,3 +114,62 @@ test("a commit's author, date and message for the side panel; a commit the repos
   expect(await loadCommitInfo(repo, "0".repeat(40))).toBeNull();
   expect(await loadCommitInfo(repo, "--help")).toBeNull();
 });
+
+test("each event names its branch: GitHub's own, else the remote branch that holds its commit, else a local one", async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), "codepulse-dashboard-")));
+  roots.push(root);
+  const origin = join(root, "origin.git");
+  const seed = join(root, "seed");
+  const repo = join(root, "shop");
+  await git(root, "init", "-q", "--bare", "-b", "main", origin);
+  await git(root, "init", "-q", "-b", "main", seed);
+  const base = await commit(seed, "feat(api): health", "2026-03-02T09:00:00Z");
+  await git(seed, "remote", "add", "origin", origin);
+  await git(seed, "push", "-q", "origin", "main");
+  // A branch at main's tip: the commit is still main's.
+  await git(seed, "push", "-q", "origin", "main:hotfix");
+  await git(seed, "checkout", "-q", "-b", "feature/login");
+  const feature = await commit(seed, "feat(login): form", "2026-03-02T09:30:00Z");
+  await git(seed, "push", "-q", "origin", "feature/login");
+  await git(root, "clone", "-q", origin, repo);
+  await git(repo, "checkout", "-q", "-b", "wip");
+  const local = await commit(repo, "wip: not pushed", "2026-03-02T09:40:00Z");
+
+  const cacheRoot = join(root, "cache");
+  const run = (id: number, sha: string, headBranch?: string) => ({
+    id,
+    name: "CI",
+    status: "completed",
+    conclusion: "success",
+    headSha: sha,
+    event: "push",
+    runNumber: id,
+    updatedAt: "2026-03-02T10:00:00Z",
+    ...(headBranch ? { headBranch } : {}),
+  });
+  await new GitHubCache({ root: cacheRoot }).write(repo, { sha: feature, runs: [run(1, feature)] });
+  await new GitHubCache({ root: cacheRoot }).write(repo, { sha: base, runs: [run(2, base, "release/1.x")] });
+  const scan = (sha: string) => ({
+    sha,
+    scannedAt: "2026-03-02T10:30:00Z",
+    includesDev: true as const,
+    dependencyProjects: [],
+    counts: { critical: 0, high: 0, medium: 0, low: 0 },
+    findings: [],
+  });
+  await new SnykCache({ root: cacheRoot }).write(repo, scan(local));
+  await new SnykCache({ root: cacheRoot }).write(repo, scan(base));
+  await new SnykCache({ root: cacheRoot }).write(repo, scan("0".repeat(40)));
+
+  const events = await loadAppEvents(repo, { since: Date.parse("2026-03-01T00:00:00Z"), cacheRoot });
+  const branchOf = (source: string, sha: string) =>
+    events.find(event => event.source === source && event.sha === sha)?.branch;
+  expect(branchOf("git", base)).toBe("main");
+  expect(branchOf("github-actions", feature)).toBe("feature/login");
+  // GitHub knows which branch it ran for.
+  expect(branchOf("github-actions", base)).toBe("release/1.x");
+  expect(branchOf("snyk", local)).toBe("wip");
+  // On the main branch's own line, every event of that commit says main, like its commit row.
+  expect(branchOf("snyk", base)).toBe("main");
+  expect(branchOf("snyk", "0".repeat(40))).toBeUndefined();
+});

@@ -138,6 +138,13 @@ export function DashboardDetail(
                   </Field>
                 )}
               </For>
+              <Show when={event().branch}>
+                {branch => (
+                  <Field label="Branch" wrap>
+                    {branch()}
+                  </Field>
+                )}
+              </Show>
               <Field label="Commit">{event().sha}</Field>
               <Show when={commit()}>
                 {info => (

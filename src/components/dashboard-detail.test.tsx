@@ -18,12 +18,20 @@ test("the side panel shows the event, its facts, its commit and its provider's m
     text: "CI #812 failed",
     sha: SHA,
     url: "https://github.com/demo/shop/actions/runs/1",
+    branch: "feature/payments-retry-with-a-really-long-branch-name",
     facts: [
       { label: "Workflow", value: "CI" },
       { label: "Duration", value: "11m 30s" },
     ],
   };
-  const commit: DashboardEvent = { ...run, id: "commit", source: "git", status: null, text: "feat(api): health" };
+  const { branch: _branch, ...unbranched } = run;
+  const commit: DashboardEvent = {
+    ...unbranched,
+    id: "commit",
+    source: "git",
+    status: null,
+    text: "feat(api): health",
+  };
   const [event, setEvent] = createSignal<DashboardEvent | null>(run);
   const setup = await testRender(
     () => (
@@ -60,12 +68,17 @@ test("the side panel shows the event, its facts, its commit and its provider's m
     ])
       expect(frame).toContain(text);
     expect(frame).toMatch(/✓ passed\s+● running\s+✗ failed/);
+    // The branch, whole, above its commit.
+    expect(frame.indexOf("Branch")).toBeGreaterThan(frame.indexOf("11m 30s"));
+    expect(frame.indexOf("Branch")).toBeLessThan(frame.indexOf("Commit"));
+    expect(frame.replace(/\s+/g, "")).toContain("feature/payments-retry-with-a-really-long-branch-name");
     setEvent(commit);
     await new Promise(resolve => setTimeout(resolve, 0));
     await setup.renderOnce();
     frame = setup.captureCharFrame();
     expect(frame).toContain("Git");
     expect(frame).not.toContain("✓ passed");
+    expect(frame).not.toContain("Branch");
     setEvent(null);
     await setup.renderOnce();
     expect(setup.captureCharFrame()).toContain("No event selected");
