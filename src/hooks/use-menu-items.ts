@@ -8,7 +8,7 @@ import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL, useAppState
 import type { Theme } from "../context/theme";
 import { type DashboardSettings, DEFAULT_DASHBOARD_SETTINGS } from "../dashboard/settings";
 import { getTokenSource } from "../providers/github-actions/api";
-import type { ProviderDetailView } from "../providers/provider";
+import type { ProviderDetailView, ProviderView } from "../providers/provider";
 import { DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS } from "../providers/shared/auto-refresh";
 import {
   COPYABLE_VISIBLE_WIDTH,
@@ -21,6 +21,7 @@ import {
 } from "./menu-items-types";
 import {
   buildDashboardItems,
+  buildStartViewItems,
   buildGitHubProviderItems,
   buildJenkinsProviderItems,
   buildOpenShiftProviderItems,
@@ -81,6 +82,8 @@ export interface MenuItemsOptions {
   onSnykConfigChange?: (cfg: SnykMenuConfig) => void;
   dashboardConfig?: Accessor<DashboardSettings | undefined>;
   onDashboardConfigChange?: (cfg: DashboardSettings) => void;
+  startView?: Accessor<ProviderView | undefined>;
+  onStartViewChange?: (view: ProviderView) => void;
   onRepoDisplayConfigChange?: (cfg: { group?: string; appName?: string }) => void;
 }
 
@@ -452,7 +455,12 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
       autoScanBranches: [],
       maxCachedScans: 20 as const,
     };
+    state.providers.getVersion();
     return [
+      ...buildStartViewItems(state.providers.getEnabledViews(), opts.startView?.() ?? "git", view => {
+        opts.onStartViewChange?.(view);
+        persistFullConfig({ startView: view });
+      }),
       ...buildDashboardItems(opts.dashboardConfig?.() ?? DEFAULT_DASHBOARD_SETTINGS, next => {
         opts.onDashboardConfigChange?.(next);
         persistFullConfig({ dashboard: next });

@@ -7,6 +7,7 @@ import {
   windowDaysLabel,
 } from "../dashboard/settings";
 import { parseGitHubRemote } from "../providers/github-actions/api";
+import { type ProviderView, providerDisplayName } from "../providers/provider";
 import { isValidJenkinsJobUrl } from "../providers/jenkins/validation";
 import {
   isValidOpenShiftNamespace,
@@ -29,6 +30,27 @@ import type {
   SettingItem,
   SnykMenuConfig,
 } from "./menu-items-types";
+
+/** Which view codepulse opens in. It offers the views that are turned on; a view turned off since starts in Git. */
+export function buildStartViewItems(
+  views: readonly ProviderView[],
+  current: ProviderView,
+  save: (view: ProviderView) => void,
+): SettingItem[] {
+  return [
+    { kind: "header", label: "Views" },
+    {
+      kind: "cycle",
+      label: "Start in",
+      options: views.map(providerDisplayName),
+      get: () => providerDisplayName(views.includes(current) ? current : "git"),
+      set: value => {
+        const view = views.find(option => providerDisplayName(option) === value);
+        if (view) save(view);
+      },
+    },
+  ];
+}
 
 /** The dashboard's own section: how far back it reads and how long one knot is. Both save at once. */
 export function buildDashboardItems(cfg: DashboardSettings, save: (next: DashboardSettings) => void): SettingItem[] {

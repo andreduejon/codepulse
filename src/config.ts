@@ -10,6 +10,7 @@ import {
   type DashboardWindowDays,
 } from "./dashboard/settings";
 import { normalizeGitHubHost } from "./providers/github-actions/api";
+import { PROVIDER_ORDER, type ProviderView } from "./providers/provider";
 import { isValidJenkinsJobUrl, JENKINS_JOB_URL_MAX_LENGTH } from "./providers/jenkins/validation";
 import {
   isValidOpenShiftNamespace,
@@ -45,6 +46,8 @@ export interface CodepulseConfig {
   autoRefreshSeconds?: number;
   /** Auto-fetch interval in seconds. 0 = off. */
   autoFetchSeconds?: number;
+  /** The view codepulse opens in: Git by default, the dashboard or a provider that is turned on. */
+  startView?: ProviderView;
   /** The dashboard: how many days back it reads, and how many minutes one knot holds. */
   dashboard?: {
     windowDays?: DashboardWindowDays;
@@ -104,6 +107,7 @@ export function defaultConfig(): Required<Omit<CodepulseConfig, "branch" | "grou
     showAllBranches: true,
     autoRefreshSeconds: DEFAULT_AUTO_REFRESH_INTERVAL / 1000,
     autoFetchSeconds: DEFAULT_AUTO_FETCH_INTERVAL / 1000,
+    startView: "git",
     dashboard: { ...DEFAULT_DASHBOARD_SETTINGS },
     providers: {
       github: {
@@ -618,6 +622,11 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
     }
   }
 
+  if (raw.startView !== undefined) {
+    if ((PROVIDER_ORDER as readonly unknown[]).includes(raw.startView)) config.startView = raw.startView as ProviderView;
+    else warnings.push(`${path}: "startView" must be one of ${PROVIDER_ORDER.join(", ")}, ignoring`);
+  }
+
   if (raw.dashboard !== undefined) {
     if (typeof raw.dashboard === "object" && raw.dashboard !== null && !Array.isArray(raw.dashboard)) {
       const dashboard = raw.dashboard as Record<string, unknown>;
@@ -644,6 +653,24 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
   }
 
   return config;
+}
+
+/** The view a repository opens in: its `startView` while that provider is turned on, else Git. */
+export function startViewFor(config: CodepulseConfig): ProviderView {
+  const view = config.startView ?? "git";
+  switch (view) {
+    case "dashboard":
+    case "git":
+      return view;
+    case "github-actions":
+      return config.providers?.github?.enabled === true ? view : "git";
+    case "jenkins":
+      return config.providers?.jenkins?.enabled === true ? view : "git";
+    case "openshift":
+      return config.providers?.openshift?.enabled === true ? view : "git";
+    case "snyk":
+      return config.providers?.snyk?.enabled === true ? view : "git";
+  }
 }
 
 /**

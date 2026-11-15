@@ -9,6 +9,7 @@ import {
   loadConfig,
   mergeOptions,
   resolveConfigInfo,
+  startViewFor,
 } from "../src/config";
 import { backfillRepoConfig, writeConfig } from "../src/config-write";
 import { DEFAULT_MAX_COUNT } from "../src/constants";
@@ -821,6 +822,29 @@ describe("dashboard settings", () => {
     const { config, warnings } = loadConfig(repoPath, configPath);
     expect(config.dashboard).toEqual({});
     expect(warnings).toHaveLength(2);
+  });
+});
+
+describe("start view", () => {
+  test("the view codepulse starts in round-trips, and one it does not have is ignored with a warning", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("start-view", repoPath, {});
+    expect(writeConfig({ startView: "dashboard" }, repoPath, configPath)).toBe(true);
+    expect(loadConfig(repoPath, configPath)).toEqual({ config: { startView: "dashboard" }, warnings: [] });
+    const invalid = makeRepoConfig("start-view-invalid", repoPath, { startView: "graph" });
+    const { config, warnings } = loadConfig(repoPath, invalid);
+    expect(config.startView).toBeUndefined();
+    expect(warnings).toHaveLength(1);
+  });
+
+  test("it starts in the chosen view while that provider is turned on, else in Git", () => {
+    expect(startViewFor({})).toBe("git");
+    expect(startViewFor({ startView: "dashboard" })).toBe("dashboard");
+    expect(startViewFor({ startView: "jenkins", providers: { jenkins: { enabled: true } } })).toBe("jenkins");
+    expect(startViewFor({ startView: "jenkins", providers: { jenkins: { enabled: false } } })).toBe("git");
+    expect(startViewFor({ startView: "github-actions" })).toBe("git");
+    expect(startViewFor({ startView: "snyk", providers: { snyk: { enabled: true } } })).toBe("snyk");
+    expect(startViewFor({ startView: "openshift", providers: { openshift: { enabled: true } } })).toBe("openshift");
   });
 });
 

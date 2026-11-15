@@ -26,7 +26,7 @@ import GraphView, { ColumnHeader } from "./components/graph";
 import MessageBox, { type UIMessage } from "./components/message-box";
 import ProjectSelector from "./components/project-selector";
 import SetupScreen from "./components/setup-screen";
-import { defaultConfig, getKnownRepoInfos, getRepoDisplayConfig, loadConfig } from "./config";
+import { defaultConfig, getKnownRepoInfos, getRepoDisplayConfig, loadConfig, startViewFor } from "./config";
 import { backfillRepoConfig, writeConfig } from "./config-write";
 import {
   COMPACT_THRESHOLD_WIDTH,
@@ -90,9 +90,11 @@ export function AppContent(props: Readonly<AppContentProps>) {
   const [jenkinsConfig, setJenkinsConfig] = createSignal(jenkinsSettings(props.initialJenkinsConfig));
   const [openShiftConfig, setOpenShiftConfig] = createSignal(openShiftSettings(props.initialOpenShiftConfig));
   const [snykConfig, setSnykConfig] = createSignal<SnykProviderConfig>(snykSettings(props.initialSnykConfig));
-  const [dashboardConfig, setDashboardConfig] = createSignal(
-    dashboardSettings(loadConfig(activeRepoPath()).config.dashboard),
-  );
+  const startConfig = loadConfig(activeRepoPath()).config;
+  const [dashboardConfig, setDashboardConfig] = createSignal(dashboardSettings(startConfig.dashboard));
+  /** The view this repository opens in, as Menu → Providers → Start in shows it. */
+  const [startView, setStartView] = createSignal<ProviderView>(startConfig.startView ?? "git");
+  actions.setActiveProviderView(startViewFor(startConfig));
 
   const [repoDisplayConfig, setRepoDisplayConfig] = createSignal(getRepoDisplayConfig(activeRepoPath()));
 
@@ -105,6 +107,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     setOpenShiftConfig(openShiftSettings(config.providers?.openshift));
     setSnykConfig(snykSettings(config.providers?.snyk));
     setDashboardConfig(dashboardSettings(config.dashboard));
+    setStartView(config.startView ?? "git");
     setRepoDisplayConfig(getRepoDisplayConfig(path));
     // The theme is per repository; without this a switch keeps the previous repo's theme, and the next settings
     // change saves it into this one. An unknown theme falls back to the default, as at startup.
@@ -385,6 +388,8 @@ export function AppContent(props: Readonly<AppContentProps>) {
     if (snapshot) {
       restoreRepoSessionSnapshot(snapshot);
     } else {
+      // A repository not shown yet in this session opens in its start view; one shown before, where it was left.
+      actions.setActiveProviderView(startViewFor(loadConfig(nextPath).config));
       actions.setCommits([]);
       actions.setGraphRows([]);
       actions.setBranches([]);
@@ -1058,6 +1063,8 @@ export function AppContent(props: Readonly<AppContentProps>) {
                     }}
                     dashboardConfig={dashboardConfig()}
                     onDashboardConfigChange={setDashboardConfig}
+                    startView={startView()}
+                    onStartViewChange={setStartView}
                     onRepoDisplayConfigChange={setRepoDisplayConfig}
                   />
                 </Show>

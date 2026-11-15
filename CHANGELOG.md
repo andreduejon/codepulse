@@ -9,7 +9,7 @@ All notable changes to this project will be documented in this file.
 - **Dashboard**, a new first view in the tab row (Tab from the last provider, or a click). The open app gets a straight
   line, a "rope", and everything that happened is a knot on it in its provider's color: commits on the main branch,
   GitHub Actions runs, Jenkins builds, OpenShift builds and Snyk scans, newest first, in the columns Commit, Time and
-  Event. A knot is the events within an hour; a date row starts each day. The project row keeps the group's badges, so
+  Event. A knot is the events within an hour; a divider line with the weekday and date starts each day. The project row keeps the group's badges, so
   another app's dashboard is a click away, and it shows a legend of the knot colors; the event count takes the graph
   modes' place. From 180 columns a side panel shows the selected event like the commit details: what happened, the
   provider's facts (workflow, duration, why a build failed, the scan's counts), its commit and the provider's marks;
@@ -17,7 +17,11 @@ All notable changes to this project will be documented in this file.
   `o` opens a run's or build's page. The dashboard reads Git and the provider caches, and reads them again whenever a
   provider finishes a fetch or the graph is read again, so it follows the providers' own Auto refresh; `r` reads them
   at once. **Menu → Providers → Dashboard** sets how far back it reads (Time window, 1 to 30 days, 7 by default) and how
-  long a knot is (Knot size, 15 minutes to 4 hours, 1 hour by default).
+  long a knot is (Knot size, 15 minutes to 4 hours, 1 hour by default). The Dashboard tab has its own color in every
+  theme; custom themes set it with `dashboardFg` and `dashboardBg`.
+- **Menu → Providers → Start in** chooses the view a repository opens in: Git (the default), the Dashboard or a
+  provider that is turned on. Saved per repository as `startView`. Another repository of the group opens in its own
+  start view the first time it's shown, and where you left it after that. A provider turned off since starts in Git.
 
 - Snyk Dependencies: a Maven `managed` pin is also marked `removable` when every dependency that brings the package
   already asks for the pinned version or later, so Maven would pick at least that version without the pin. Their
