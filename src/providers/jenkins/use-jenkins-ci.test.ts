@@ -125,7 +125,7 @@ async function mountJenkins(
     });
     mounted = { state, actions, jenkins };
   });
-  return { ...mounted, graph, full };
+  return { ...mounted, graph, full, root };
 }
 
 /** Wait until the lifecycle has no fetch in flight (disk cache work is asynchronous). */
@@ -158,6 +158,14 @@ test("over the branch-job limit, the graph's branches are asked for first and th
     title: "Branch jobs · 25 of 61 read",
     detail: ["Branches in the graph come first. Builds on the other 36 do not show."],
   });
+});
+
+test("over the branch-job limit, the finished builds that were read are still cached, like GitHub's and OpenShift's", async () => {
+  const { state, jenkins, root } = await mountJenkins({ truncated: true });
+  await jenkins.refresh();
+  await settle(() => state.providerStatusFor("jenkins").kind === "warning");
+  const cached = await new JenkinsCache({ root, maxEntries: 200 }).read("/repo/jenkins-hook", SHA, { touch: false });
+  expect(cached?.runs.map(cachedRun => cachedRun.id)).toEqual([`${JOB_URL}#1`]);
 });
 
 test("manual refresh re-queries the whole graph window even when no build is running", async () => {

@@ -179,7 +179,9 @@ export function useJenkinsCI(opts: {
       runCache.set(`${run.id}:${run.headSha}`, run);
     }
     rebuildCaches();
-    if (!result.discoveryTruncated) await persistTerminalRuns(repoPath, shas, epoch);
+    // Like GitHub's and OpenShift's: a truncated discovery still caches the finished builds it read. The notice says
+    // some branch jobs were not read, and each session asks again, so a build missing here is added later.
+    await persistTerminalRuns(repoPath, shas, epoch);
     return { firstError: result.error, stale: false };
   }
 
@@ -318,7 +320,7 @@ export function useJenkinsCI(opts: {
         if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return;
         for (const run of data) runCache.set(`${run.id}:${run.headSha}`, run);
         rebuildCaches();
-        if (!discoveryTruncated) await persistTerminalRuns(repoPath, target, epoch);
+        await persistTerminalRuns(repoPath, target, epoch);
         if (!lifecycle.isCurrent(epoch, repoPath)) return;
         lifecycle.noteRefreshSettled();
         rememberAuthError(error);

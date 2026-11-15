@@ -35,6 +35,9 @@ All notable changes to this project will be documented in this file.
   unclickable until the details had been opened once before.
 - `codepulse xyz` without a folder `xyz` opens the project selector with "Hmm, that directory doesn't exist" instead
   of stopping with a fatal error about Git. Without Git installed, the startup now says so the same way.
+- Jenkins with more than 25 branch jobs in a multibranch project caches the finished builds it read, like GitHub
+  Actions and OpenShift. Before, it cached nothing, so its builds never showed on the dashboard or below the fetch
+  depth.
 
 ## [0.17.0] - 2026-11-11
 
