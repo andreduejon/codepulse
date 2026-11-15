@@ -5,6 +5,7 @@ import type { ConfigInfo } from "../../config";
 import { SHIFT_JUMP } from "../../constants";
 import { useAppState } from "../../context/state";
 import { useTheme } from "../../context/theme";
+import type { DashboardSettings } from "../../dashboard/settings";
 import {
   COPYABLE_VISIBLE_WIDTH,
   type GitHubMenuConfig,
@@ -46,6 +47,8 @@ interface MenuDialogProps {
   onOpenShiftConfigChange?: (cfg: OpenShiftMenuConfig) => void;
   snykConfig?: SnykMenuConfig;
   onSnykConfigChange?: (cfg: SnykMenuConfig) => void;
+  dashboardConfig?: DashboardSettings;
+  onDashboardConfigChange?: (cfg: DashboardSettings) => void;
   onRepoDisplayConfigChange?: (cfg: { group?: string; appName?: string }) => void;
 }
 
@@ -111,6 +114,8 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     onOpenShiftConfigChange: props.onOpenShiftConfigChange,
     snykConfig: () => props.snykConfig,
     onSnykConfigChange: props.onSnykConfigChange,
+    dashboardConfig: () => props.dashboardConfig,
+    onDashboardConfigChange: props.onDashboardConfigChange,
     onRepoDisplayConfigChange: props.onRepoDisplayConfigChange,
   });
 

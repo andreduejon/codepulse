@@ -6,6 +6,7 @@ import { writeConfig } from "../config-write";
 import { AUTO_REFRESH_MS, INTERVAL_OPTIONS, MAX_COUNT_OPTIONS, MS_TO_LABEL } from "../constants";
 import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL, useAppState } from "../context/state";
 import type { Theme } from "../context/theme";
+import { type DashboardSettings, DEFAULT_DASHBOARD_SETTINGS } from "../dashboard/settings";
 import { getTokenSource } from "../providers/github-actions/api";
 import type { ProviderDetailView } from "../providers/provider";
 import { DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS } from "../providers/shared/auto-refresh";
@@ -19,6 +20,7 @@ import {
   type SnykMenuConfig,
 } from "./menu-items-types";
 import {
+  buildDashboardItems,
   buildGitHubProviderItems,
   buildJenkinsProviderItems,
   buildOpenShiftProviderItems,
@@ -77,6 +79,8 @@ export interface MenuItemsOptions {
   onOpenShiftConfigChange?: (cfg: OpenShiftMenuConfig) => void;
   snykConfig?: Accessor<SnykMenuConfig | undefined>;
   onSnykConfigChange?: (cfg: SnykMenuConfig) => void;
+  dashboardConfig?: Accessor<DashboardSettings | undefined>;
+  onDashboardConfigChange?: (cfg: DashboardSettings) => void;
   onRepoDisplayConfigChange?: (cfg: { group?: string; appName?: string }) => void;
 }
 
@@ -449,6 +453,10 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
       maxCachedScans: 20 as const,
     };
     return [
+      ...buildDashboardItems(opts.dashboardConfig?.() ?? DEFAULT_DASHBOARD_SETTINGS, next => {
+        opts.onDashboardConfigChange?.(next);
+        persistFullConfig({ dashboard: next });
+      }),
       ...buildGitHubProviderItems(
         ghCfg,
         state.remoteUrl(),

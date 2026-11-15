@@ -2,6 +2,13 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { DEFAULT_MAX_COUNT } from "./constants";
 import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL } from "./context/state";
+import {
+  DASHBOARD_KNOT_MINUTES,
+  DASHBOARD_WINDOW_DAYS,
+  DEFAULT_DASHBOARD_SETTINGS,
+  type DashboardKnotMinutes,
+  type DashboardWindowDays,
+} from "./dashboard/settings";
 import { normalizeGitHubHost } from "./providers/github-actions/api";
 import { isValidJenkinsJobUrl, JENKINS_JOB_URL_MAX_LENGTH } from "./providers/jenkins/validation";
 import {
@@ -38,6 +45,11 @@ export interface CodepulseConfig {
   autoRefreshSeconds?: number;
   /** Auto-fetch interval in seconds. 0 = off. */
   autoFetchSeconds?: number;
+  /** The dashboard: how many days back it reads, and how many minutes one knot holds. */
+  dashboard?: {
+    windowDays?: DashboardWindowDays;
+    knotMinutes?: DashboardKnotMinutes;
+  };
   /** Provider-specific configuration. */
   providers?: {
     github?: {
@@ -92,6 +104,7 @@ export function defaultConfig(): Required<Omit<CodepulseConfig, "branch" | "grou
     showAllBranches: true,
     autoRefreshSeconds: DEFAULT_AUTO_REFRESH_INTERVAL / 1000,
     autoFetchSeconds: DEFAULT_AUTO_FETCH_INTERVAL / 1000,
+    dashboard: { ...DEFAULT_DASHBOARD_SETTINGS },
     providers: {
       github: {
         enabled: false,
@@ -602,6 +615,31 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
       }
     } else {
       warnings.push(`${path}: "providers" must be an object, ignoring`);
+    }
+  }
+
+  if (raw.dashboard !== undefined) {
+    if (typeof raw.dashboard === "object" && raw.dashboard !== null && !Array.isArray(raw.dashboard)) {
+      const dashboard = raw.dashboard as Record<string, unknown>;
+      config.dashboard = {};
+      if (dashboard.windowDays !== undefined) {
+        if ((DASHBOARD_WINDOW_DAYS as readonly unknown[]).includes(dashboard.windowDays))
+          config.dashboard.windowDays = dashboard.windowDays as DashboardWindowDays;
+        else
+          warnings.push(
+            `${path}: "dashboard.windowDays" must be one of ${DASHBOARD_WINDOW_DAYS.join(", ")}, ignoring`,
+          );
+      }
+      if (dashboard.knotMinutes !== undefined) {
+        if ((DASHBOARD_KNOT_MINUTES as readonly unknown[]).includes(dashboard.knotMinutes))
+          config.dashboard.knotMinutes = dashboard.knotMinutes as DashboardKnotMinutes;
+        else
+          warnings.push(
+            `${path}: "dashboard.knotMinutes" must be one of ${DASHBOARD_KNOT_MINUTES.join(", ")}, ignoring`,
+          );
+      }
+    } else {
+      warnings.push(`${path}: "dashboard" must be an object, ignoring`);
     }
   }
 

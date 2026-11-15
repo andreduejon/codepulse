@@ -1,5 +1,5 @@
 import { MouseButton, type Renderable, type ScrollBoxRenderable } from "@opentui/core";
-import { createEffect, createMemo, createSignal, For, Match, onCleanup, Show, Switch } from "solid-js";
+import { createEffect, createSignal, For, Match, onCleanup, Show, Switch } from "solid-js";
 import { HASH_COL_WIDTH } from "../constants";
 import type { DashboardEvent, DashboardRow } from "../dashboard/events";
 import { eventMark, KNOT } from "../dashboard/legend";
@@ -13,8 +13,8 @@ import { type ScrollSchedule, scheduleScrollIntoView, scrollElementIntoView } fr
 const TIME_COL_WIDTH = 7;
 
 /**
- * The dashboard: one rope per app, with each event a knot on its app's rope in its provider's color, newest first.
- * Laid out like the graph view: the ropes, then App (when several apps show), Commit, Time and Event.
+ * The dashboard: the open app's rope, with each event a knot in its provider's color, newest first. Laid out like the
+ * graph view: the rope, then Commit, Time and Event.
  */
 export function DashboardView(
   props: Readonly<{
@@ -27,32 +27,24 @@ export function DashboardView(
 ) {
   const t = useT();
   const d = props.dashboard;
-  const apps = () => d.shownApps();
-  const showApp = () => apps().length > 1;
-  // Room for the ropes, and at least for the column's header.
-  const graphWidth = () => Math.max(1 + apps().length * 2 + 1, "Graph".length + 2);
-  const appWidth = createMemo(() => Math.max(3, ...apps().map(app => app.name.length)) + 2);
-  const appName = (path: string) => d.apps().find(app => app.path === path)?.name ?? path;
-  const ropeOf = (path: string) => apps().findIndex(app => app.path === path);
+  // The column's header is wider than the rope.
+  const graphWidth = "Graph".length + 2;
   const [hovered, setHovered] = createSignal<number | null>(null);
+  const days = () => d.settings().windowDays;
 
-  /** The ropes of one row: a knot in the provider's color on the event's own rope, plain rope elsewhere. */
-  const Ropes = (ropeProps: { row: DashboardRow }) => {
+  /** The rope of one row: a knot in the provider's color for an event, plain rope elsewhere. */
+  const Rope = (ropeProps: { row: DashboardRow }) => {
     const knot = () => {
       const row = ropeProps.row;
-      if (row.kind === "event") return { rope: ropeOf(row.event.app), color: providerColors(t(), row.event.source).bg };
-      if (row.kind === "more") return { rope: ropeOf(row.app), color: t().foregroundMuted };
+      if (row.kind === "event") return providerColors(t(), row.event.source).bg;
+      if (row.kind === "more") return t().foregroundMuted;
       return null;
     };
     return (
-      <box flexDirection="row" flexShrink={0} width={graphWidth()} paddingLeft={1}>
-        <For each={apps()}>
-          {(_, index) => (
-            <text flexShrink={0} wrapMode="none" fg={knot()?.rope === index() ? knot()?.color : t().border}>
-              {knot()?.rope === index() ? `${KNOT} ` : "│ "}
-            </text>
-          )}
-        </For>
+      <box flexDirection="row" flexShrink={0} width={graphWidth} paddingLeft={1}>
+        <text flexShrink={0} wrapMode="none" fg={knot() ?? t().border}>
+          {knot() ? KNOT : "│"}
+        </text>
       </box>
     );
   };
@@ -104,14 +96,9 @@ export function DashboardView(
         borderStyle="single"
         borderColor={t().accent}
       >
-        <box flexShrink={0} width={graphWidth()} paddingLeft={1}>
+        <box flexShrink={0} width={graphWidth} paddingLeft={1}>
           {header("Graph")}
         </box>
-        <Show when={showApp()}>
-          <box flexShrink={0} width={appWidth()} paddingLeft={1}>
-            {header("App")}
-          </box>
-        </Show>
         <box flexShrink={0} width={HASH_COL_WIDTH} paddingLeft={1}>
           {header("Commit")}
         </box>
@@ -137,7 +124,11 @@ export function DashboardView(
           fallback={
             <box paddingLeft={2} height={1} flexShrink={0}>
               <text wrapMode="none" truncate fg={t().foregroundMuted}>
-                {d.loading() ? "reading events..." : "Nothing happened in the last 7 days."}
+                {d.loading()
+                  ? "reading events..."
+                  : days() === 1
+                    ? "Nothing happened in the last day."
+                    : `Nothing happened in the last ${days()} days.`}
               </text>
             </box>
           }
@@ -168,7 +159,7 @@ export function DashboardView(
                     else d.select(index());
                   }}
                 >
-                  <Ropes row={row} />
+                  <Rope row={row} />
                   <Switch>
                     <Match when={row.kind === "date" && row}>
                       {date => (
@@ -182,13 +173,6 @@ export function DashboardView(
                     <Match when={row.kind === "event" && row}>
                       {eventRow => (
                         <>
-                          <Show when={showApp()}>
-                            <box flexShrink={0} width={appWidth()} paddingLeft={1}>
-                              <text wrapMode="none" truncate fg={t().foregroundMuted}>
-                                {appName(eventRow().event.app)}
-                              </text>
-                            </box>
-                          </Show>
                           <box flexShrink={0} width={HASH_COL_WIDTH} paddingLeft={1} overflow="hidden">
                             <text wrapMode="none" truncate fg={t().foregroundMuted}>
                               {eventRow().event.sha.slice(0, 7)}
@@ -207,10 +191,7 @@ export function DashboardView(
                     </Match>
                     <Match when={row.kind === "more" && row}>
                       {more => (
-                        <box
-                          flexGrow={1}
-                          paddingLeft={(showApp() ? appWidth() : 0) + HASH_COL_WIDTH + TIME_COL_WIDTH + 1}
-                        >
+                        <box flexGrow={1} paddingLeft={HASH_COL_WIDTH + TIME_COL_WIDTH + 1}>
                           <text wrapMode="none" truncate fg={t().foregroundMuted}>
                             {`+${more().hidden} more`}
                           </text>

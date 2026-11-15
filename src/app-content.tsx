@@ -38,6 +38,7 @@ import {
 import { AppStateContext, createAppState, providerIdle, providerStatusMessage } from "./context/state";
 import { ThemeContext } from "./context/theme";
 import type { DashboardEvent } from "./dashboard/events";
+import { dashboardSettings } from "./dashboard/settings";
 import { type DashboardApp, useDashboard } from "./dashboard/use-dashboard";
 import { BANNER, displayBanner } from "./debug/banner";
 import type { DiffTarget } from "./git/types";
@@ -63,7 +64,7 @@ import { type CacheRepositorySummary, evictRepositoryCache } from "./providers/s
 import JobLogDialog, { type JobLogTarget } from "./providers/shared/job-log-dialog";
 import { repositoryIdentity, setProviderCacheSuspended } from "./providers/shared/sha-sqlite-cache";
 import { type SnykProviderConfig, useSnyk } from "./providers/snyk/use-snyk";
-import { groupMembersForRepo, nextGroupRepoPath, repoDisplayName } from "./utils/group-repos";
+import { nextGroupRepoPath, repoDisplayName } from "./utils/group-repos";
 import { computeDisplacedIndex, DETAIL_CHILD_DIALOGS } from "./utils/keyboard-nav-utils";
 import { openUrl } from "./utils/open-url";
 
@@ -89,6 +90,9 @@ export function AppContent(props: Readonly<AppContentProps>) {
   const [jenkinsConfig, setJenkinsConfig] = createSignal(jenkinsSettings(props.initialJenkinsConfig));
   const [openShiftConfig, setOpenShiftConfig] = createSignal(openShiftSettings(props.initialOpenShiftConfig));
   const [snykConfig, setSnykConfig] = createSignal<SnykProviderConfig>(snykSettings(props.initialSnykConfig));
+  const [dashboardConfig, setDashboardConfig] = createSignal(
+    dashboardSettings(loadConfig(activeRepoPath()).config.dashboard),
+  );
 
   const [repoDisplayConfig, setRepoDisplayConfig] = createSignal(getRepoDisplayConfig(activeRepoPath()));
 
@@ -100,6 +104,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     setJenkinsConfig(jenkinsSettings(config.providers?.jenkins));
     setOpenShiftConfig(openShiftSettings(config.providers?.openshift));
     setSnykConfig(snykSettings(config.providers?.snyk));
+    setDashboardConfig(dashboardSettings(config.dashboard));
     setRepoDisplayConfig(getRepoDisplayConfig(path));
     // The theme is per repository; without this a switch keeps the previous repo's theme, and the next settings
     // change saves it into this one. An unknown theme falls back to the default, as at startup.
@@ -399,16 +404,22 @@ export function AppContent(props: Readonly<AppContentProps>) {
   };
 
   // ── Dashboard ─────────────────────────────────────────────────────────────
-  /** The open repository's group, or the repository alone: one rope each. */
-  const dashboardApps = createMemo((): DashboardApp[] => {
-    const display = currentRepoDisplayConfig();
-    const members = groupMembersForRepo(knownRepoInfos(), activeRepoPath(), display);
-    const apps = members.length > 0 ? members : [{ path: activeRepoPath(), ...display }];
-    return apps.map(repo => ({ path: repo.path, name: repoDisplayName(repo) }));
-  });
+  /** The open repository: another app of its group is a click on its badge away. */
+  const dashboardApp = createMemo(
+    (): DashboardApp => ({
+      path: activeRepoPath(),
+      name: repoDisplayName({ path: activeRepoPath(), ...currentRepoDisplayConfig() }),
+    }),
+  );
   const dashboardShown = () => state.activeProviderView() === "dashboard";
-  const dashboard = useDashboard({ apps: dashboardApps, active: dashboardShown });
-  const dashboardAppName = (path: string) => dashboardApps().find(app => app.path === path)?.name ?? path;
+  const dashboard = useDashboard({
+    app: dashboardApp,
+    active: dashboardShown,
+    settings: dashboardConfig,
+    // The graph read again (a refresh, a fetch, a new commit): its main branch may have moved.
+    changes: () => state.graphRows(),
+  });
+  const dashboardAppName = () => dashboardApp().name;
   // No commit details beside the dashboard; its own details leave with it.
   createEffect(() => {
     if (dashboardShown()) actions.setDetailFocused(false);
@@ -512,14 +523,6 @@ export function AppContent(props: Readonly<AppContentProps>) {
         break;
       case "end":
         dashboard.moveToEnd("last");
-        break;
-      case "left":
-      case "h":
-        dashboard.cycleScope(-1);
-        break;
-      case "right":
-      case "l":
-        dashboard.cycleScope(1);
         break;
       case "return":
       case "enter":
@@ -1053,6 +1056,8 @@ export function AppContent(props: Readonly<AppContentProps>) {
                       snykConfig: snykConfig(),
                       onSnykConfigChange: (config: SnykProviderConfig) => setSnykConfig(config),
                     }}
+                    dashboardConfig={dashboardConfig()}
+                    onDashboardConfigChange={setDashboardConfig}
                     onRepoDisplayConfigChange={setRepoDisplayConfig}
                   />
                 </Show>

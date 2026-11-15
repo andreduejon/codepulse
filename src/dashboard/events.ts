@@ -1,6 +1,6 @@
 /**
  * The dashboard's events: what each provider did for an app, one event per commit, run, build or scan, at the time it
- * happened. `dashboardRows` lays them out as knots on each app's rope.
+ * happened. `dashboardRows` lays them out as knots on the app's rope.
  */
 import type { GitHubCacheEntry } from "../providers/github-actions/cache";
 import type { JenkinsCacheEntry } from "../providers/jenkins/cache";

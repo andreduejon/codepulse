@@ -6,12 +6,34 @@ import type {
   SnykMenuConfig,
 } from "../src/hooks/menu-items-types";
 import {
+  buildDashboardItems,
   buildGitHubProviderItems,
   buildJenkinsProviderItems,
   buildOpenShiftProviderItems,
   buildSnykProviderItems,
 } from "../src/hooks/menu-provider-items";
 import { isOptionalRepoMetadataValid, optionalRepoMetadataValue } from "../src/hooks/use-menu-items";
+
+describe("buildDashboardItems", () => {
+  it("offers the time window and the knot size, and saves the next choice", () => {
+    const saved: unknown[] = [];
+    const items = buildDashboardItems({ windowDays: 7, knotMinutes: 60 }, next => saved.push(next));
+    expect(items.map(item => ("label" in item ? item.label : ""))).toEqual(["Dashboard", "Time window", "Knot size"]);
+    const window = items[1];
+    const knot = items[2];
+    if (window?.kind !== "cycle" || knot?.kind !== "cycle") throw new Error("expected cycle items");
+    expect(window.options).toEqual(["1d", "3d", "7d", "14d", "30d"]);
+    expect(window.get()).toBe("7d");
+    expect(knot.options).toEqual(["15m", "30m", "1h", "2h", "4h"]);
+    expect(knot.get()).toBe("1h");
+    window.set("14d");
+    knot.set("15m");
+    expect(saved).toEqual([
+      { windowDays: 14, knotMinutes: 60 },
+      { windowDays: 7, knotMinutes: 15 },
+    ]);
+  });
+});
 
 describe("buildGitHubProviderItems", () => {
   const baseCfg: GitHubMenuConfig = {

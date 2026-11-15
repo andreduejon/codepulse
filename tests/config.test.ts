@@ -803,6 +803,27 @@ describe("resolveConfigInfo", () => {
   });
 });
 
+describe("dashboard settings", () => {
+  test("the time window and knot size round-trip, and writing one keeps the other and the providers", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("dashboard-roundtrip", repoPath, { providers: { github: { enabled: true } } });
+    expect(writeConfig({ dashboard: { windowDays: 14, knotMinutes: 30 } }, repoPath, configPath)).toBe(true);
+    expect(writeConfig({ dashboard: { knotMinutes: 120 } }, repoPath, configPath)).toBe(true);
+    const { config, warnings } = loadConfig(repoPath, configPath);
+    expect(config.dashboard).toEqual({ windowDays: 14, knotMinutes: 120 });
+    expect(config.providers?.github?.enabled).toBe(true);
+    expect(warnings).toEqual([]);
+  });
+
+  test("values the menu does not offer are ignored with a warning", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("dashboard-invalid", repoPath, { dashboard: { windowDays: 5, knotMinutes: "1h" } });
+    const { config, warnings } = loadConfig(repoPath, configPath);
+    expect(config.dashboard).toEqual({});
+    expect(warnings).toHaveLength(2);
+  });
+});
+
 describe("writeConfig", () => {
   test("creates new config file with repo entry", () => {
     const dir = makeTempDir("write-new");

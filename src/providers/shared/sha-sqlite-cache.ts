@@ -14,6 +14,16 @@ const reportedErrors = new Map<string, string>();
 const writesBlockedUntil = new Map<string, number>();
 const suspendedRoots = new Set<string>();
 const writeEpochs = new Map<string, number>();
+const writeListeners = new Set<(repoPath: string) => void>();
+
+/**
+ * Calls `listener` with the repository after each snapshot a provider writes, so a view built from the caches (the
+ * dashboard) can read them again. Returns the function that stops it.
+ */
+export function onProviderCacheWrite(listener: (repoPath: string) => void): () => void {
+  writeListeners.add(listener);
+  return () => writeListeners.delete(listener);
+}
 
 export function invalidateProviderCacheWrites(root = DEFAULT_PROVIDER_CACHE_ROOT): void {
   const directory = resolve(root);
@@ -303,7 +313,9 @@ export class ShaSqliteCache<T extends { sha: string }> {
       })();
     } catch (error) {
       reportCacheError(this.root, error);
+      return;
     }
+    for (const listener of writeListeners) listener(repoPath);
   }
 
   async evictForRepo(repoPath: string): Promise<void> {

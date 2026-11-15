@@ -1,6 +1,8 @@
 import { type Accessor, createEffect, createMemo, createSignal, onCleanup, untrack } from "solid-js";
+import { onProviderCacheWrite } from "../providers/shared/sha-sqlite-cache";
 import { type DashboardEvent, type DashboardRow, dashboardRows } from "./events";
 import { type LoadOptions, loadAppEvents } from "./load";
+import { DEFAULT_DASHBOARD_SETTINGS, type DashboardSettings } from "./settings";
 
 export interface DashboardApp {
   path: string;
@@ -8,9 +10,10 @@ export interface DashboardApp {
 }
 
 const HOUR = 3_600_000;
-const DEFAULT_WINDOW_MS = 7 * 24 * HOUR;
-const DEFAULT_KNOT_MS = HOUR;
+const DAY = 24 * HOUR;
 const MAX_KNOT_ROWS = 5;
+/** How long the dashboard waits after a provider's write before reading again, so a fetch's writes read once. */
+const RELOAD_DELAY_MS = 300;
 
 /** A selectable row's identity, so the cursor stays on its event when the rows are read again. */
 export function dashboardRowKey(row: DashboardRow | undefined): string | null {
@@ -20,15 +23,9 @@ export function dashboardRowKey(row: DashboardRow | undefined): string | null {
 }
 
 export interface DashboardState {
-  /** Every app of the group, in rope order. */
-  apps: Accessor<DashboardApp[]>;
-  /** The apps shown: all of them, or the one chosen in the footer. */
-  shownApps: Accessor<DashboardApp[]>;
-  /** The chosen app's path, or null for all apps. */
-  scope: Accessor<string | null>;
-  setScope: (path: string | null) => void;
-  /** All apps, then each app: ←/→ in the footer. One app has nothing to switch to. */
-  cycleScope: (direction: 1 | -1) => void;
+  /** The open app. */
+  app: Accessor<DashboardApp>;
+  settings: Accessor<DashboardSettings>;
   rows: Accessor<DashboardRow[]>;
   eventCount: Accessor<number>;
   /** The selected row's index in `rows`, -1 without any event. */
@@ -45,67 +42,91 @@ export interface DashboardState {
 }
 
 /**
- * The dashboard's data and cursor. It reads the apps' events when the dashboard is shown, again when the apps change
- * and on `reload`; it never reads while hidden.
+ * The open app's dashboard: its data and cursor. It reads the app's events when the dashboard is shown, again when
+ * the app or the settings change, when its providers write to their caches or its graph is read again, and on
+ * `reload`. It never reads while hidden. Nothing is fetched: the app's provider views fill the caches.
  */
 export function useDashboard(
   opts: Readonly<{
-    apps: Accessor<DashboardApp[]>;
+    app: Accessor<DashboardApp>;
     active: Accessor<boolean>;
+    settings?: Accessor<DashboardSettings>;
+    /** Read again when this changes while shown: the graph's commits, after a refresh or a fetch. */
+    changes?: Accessor<unknown>;
     now?: () => number;
-    windowMs?: number;
-    knotMs?: number;
     cacheRoot?: string;
-    /** How one app's events are read (tests); from Git and the provider caches otherwise. */
+    /** How the app's events are read (tests); from Git and the provider caches otherwise. */
     load?: (app: string, options: LoadOptions) => Promise<DashboardEvent[]>;
   }>,
 ): DashboardState {
-  const [scope, setScope] = createSignal<string | null>(null);
+  const settings = () => opts.settings?.() ?? DEFAULT_DASHBOARD_SETTINGS;
+  /** Only a new window reads again: a new knot size lays out the same events. */
+  const windowDays = createMemo(() => settings().windowDays);
   const [events, setEvents] = createSignal<DashboardEvent[]>([]);
   const [loading, setLoading] = createSignal(false);
   const [expanded, setExpanded] = createSignal<ReadonlySet<string>>(new Set());
   const [selectedKey, setSelectedKey] = createSignal<string | null>(null);
   let controller: AbortController | undefined;
-  onCleanup(() => controller?.abort());
+  let reloadTimer: ReturnType<typeof setTimeout> | undefined;
+  onCleanup(() => {
+    controller?.abort();
+    if (reloadTimer) clearTimeout(reloadTimer);
+  });
 
   const reload = async () => {
     controller?.abort();
     const current = new AbortController();
     controller = current;
-    const apps = untrack(opts.apps);
-    const since = (opts.now ?? Date.now)() - (opts.windowMs ?? DEFAULT_WINDOW_MS);
+    const app = untrack(opts.app);
+    const since = (opts.now ?? Date.now)() - untrack(windowDays) * DAY;
     setLoading(true);
     try {
-      const loaded = await Promise.all(
-        apps.map(app =>
-          (opts.load ?? loadAppEvents)(app.path, { since, signal: current.signal, cacheRoot: opts.cacheRoot }),
-        ),
-      );
+      const loaded = await (opts.load ?? loadAppEvents)(app.path, {
+        since,
+        signal: current.signal,
+        cacheRoot: opts.cacheRoot,
+      });
       if (current.signal.aborted) return;
-      setEvents(loaded.flat());
+      setEvents(loaded);
     } finally {
       if (controller === current) setLoading(false);
     }
   };
+  /** Many writes in a row (one per commit of a fetch) read once, after the last. */
+  const reloadSoon = () => {
+    if (reloadTimer) clearTimeout(reloadTimer);
+    reloadTimer = setTimeout(() => {
+      reloadTimer = undefined;
+      if (untrack(opts.active)) void reload();
+    }, RELOAD_DELAY_MS);
+  };
 
   createEffect(() => {
     if (!opts.active()) return;
-    opts.apps();
+    opts.app();
+    windowDays();
     void untrack(reload);
   });
+  // A new app starts with nothing open and the cursor on its newest event.
+  createEffect(() => {
+    opts.app();
+    setExpanded(new Set<string>());
+    setSelectedKey(null);
+  });
+  createEffect(() => {
+    if (!opts.active()) return;
+    let first = true;
+    createEffect(() => {
+      opts.changes?.();
+      if (first) first = false;
+      else reloadSoon();
+    });
+    onCleanup(onProviderCacheWrite(reloadSoon));
+  });
 
-  const shownApps = createMemo(() => {
-    const apps = opts.apps();
-    const chosen = scope();
-    return chosen && apps.some(app => app.path === chosen) ? apps.filter(app => app.path === chosen) : apps;
-  });
-  const shownEvents = createMemo(() => {
-    const shown = new Set(shownApps().map(app => app.path));
-    return events().filter(event => shown.has(event.app));
-  });
   const rows = createMemo(() =>
-    dashboardRows(shownEvents(), {
-      knotMs: opts.knotMs ?? DEFAULT_KNOT_MS,
+    dashboardRows(events(), {
+      knotMs: settings().knotMinutes * 60_000,
       maxKnotRows: MAX_KNOT_ROWS,
       expanded: expanded(),
     }),
@@ -132,13 +153,6 @@ export function useDashboard(
     const stops = selectable();
     select((end === "first" ? stops[0] : stops.at(-1)) ?? -1);
   };
-  const cycleScope = (direction: 1 | -1) => {
-    // One app is all of them: nothing to switch to.
-    if (opts.apps().length <= 1) return;
-    const choices = [null, ...opts.apps().map(app => app.path)];
-    const at = Math.max(0, choices.indexOf(scope()));
-    setScope(choices[(at + direction + choices.length) % choices.length] ?? null);
-  };
   const activate = () => {
     const row = rows()[cursor()];
     if (row?.kind === "more") {
@@ -152,13 +166,10 @@ export function useDashboard(
   };
 
   return {
-    apps: opts.apps,
-    shownApps,
-    scope,
-    setScope,
-    cycleScope,
+    app: opts.app,
+    settings,
     rows,
-    eventCount: () => shownEvents().length,
+    eventCount: () => events().length,
     cursor,
     selected: () => {
       const row = rows()[cursor()];

@@ -601,15 +601,10 @@ test("the highlighted count leaves out the working-tree node, like the total", a
   }
 });
 
-async function renderDashboardBar(apps: { path: string; name: string }[]) {
+async function renderDashboardBar(knownRepos: KnownRepoInfo[]) {
   let app!: ReturnType<typeof createAppState>;
-  const [scope, setScope] = createSignal<string | null>(null);
-  const dashboard = {
-    apps: () => apps,
-    scope,
-    setScope,
-    eventCount: () => 23,
-  } as unknown as DashboardState;
+  const selected: string[] = [];
+  const dashboard = { eventCount: () => 23 } as unknown as DashboardState;
   const setup = await testRender(
     () => {
       app = createAppState(100, 0, 0);
@@ -628,8 +623,11 @@ async function renderDashboardBar(apps: { path: string; name: string }[]) {
                 searchFocused={() => false}
                 detailFocused={() => false}
                 onInput={() => {}}
-                knownRepos={[]}
+                knownRepos={knownRepos}
                 currentRepo="/repo/shop"
+                currentGroup={knownRepos.length > 0 ? "demo" : undefined}
+                mouseEnabled={() => true}
+                onSelectProject={path => selected.push(path)}
                 dashboard={dashboard}
               />
             </box>
@@ -641,35 +639,25 @@ async function renderDashboardBar(apps: { path: string; name: string }[]) {
   );
   await setup.flush();
   const lines = setup.captureCharFrame().split("\n");
-  return { setup, scope, lines, top: lines.findIndex(line => line.includes("Dashboard")) };
+  return { setup, selected, lines, top: lines.findIndex(line => line.includes("Dashboard")) };
 }
 
-test("on the dashboard: the event count takes the modes' place, the apps and the provider legend take the project row", async () => {
-  const { setup, scope, lines, top } = await renderDashboardBar([
-    { path: "/repo/shop", name: "shop" },
-    { path: "/repo/web", name: "shop-web" },
+test("on the dashboard: the event count takes the modes' place, the provider legend the branch's, and the group's badges switch the app", async () => {
+  const { setup, selected, lines, top } = await renderDashboardBar([
+    { path: "/repo/shop", group: "demo", appName: "shop" },
+    { path: "/repo/web", group: "demo", appName: "shop-web" },
   ]);
   try {
-    // The overviews come first, a dot apart from what they sum up: Dashboard from the providers, All from the apps.
+    // The overview comes first, a dot apart from the providers it sums up.
     expect(lines[top]).toMatch(/Dashboard\s+·\s+Git\s+GitHub Actions\s+Snyk\s+23 events/);
     expect(lines[top]).not.toContain("●");
     expect(lines[top]).not.toContain("normal");
-    expect(lines[top + 2]).toMatch(/All\s+·\s+shop\s+shop-web\s+█ Git\s+█ Actions\s+█ Snyk/);
+    expect(lines[top + 2]).toMatch(/shop\s+shop-web\s+█ Git\s+█ Actions\s+█ Snyk/);
+    expect(lines[top + 2]).not.toContain("All");
     expect(lines[top + 2]).not.toContain("main");
     const x = lines[top + 2].indexOf("shop-web") + 1;
     await setup.mockMouse.click(x, top + 2, MouseButtons.LEFT);
-    expect(scope()).toBe("/repo/web");
-  } finally {
-    setup.renderer.destroy();
-  }
-});
-
-test("on the dashboard of one app, the project row shows only that app", async () => {
-  const { setup, lines, top } = await renderDashboardBar([{ path: "/repo/shop", name: "shop" }]);
-  try {
-    expect(lines[top + 2]).toMatch(/^\W*shop\s+█ Git/);
-    expect(lines[top + 2]).not.toContain("All");
-    expect(lines[top + 2]).not.toContain("·");
+    expect(selected).toEqual(["/repo/web"]);
   } finally {
     setup.renderer.destroy();
   }

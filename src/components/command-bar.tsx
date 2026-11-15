@@ -28,7 +28,7 @@ interface CommandBarProps {
   currentRepo: string;
   currentGroup?: string;
   currentAppName?: string;
-  /** While the dashboard shows: its apps and scope take the project row, its event count the commit count's place. */
+  /** While the dashboard shows: its event count takes the commit count's place, its legend the branch's. */
   dashboard?: DashboardState;
 }
 
@@ -47,7 +47,6 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
   } | null>(null);
   const [contentWidth, setContentWidth] = createSignal(0);
   const dashboardShown = () => state.activeProviderView() === "dashboard" && !!props.dashboard;
-  const [hoveredScope, setHoveredScope] = createSignal<string | null>(null);
   const enabledProviders = createMemo(() => {
     state.providers.getVersion();
     return state.providers.getEnabledViews();
@@ -239,74 +238,7 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
           flexShrink={0}
         >
           <box flexDirection="row" flexShrink={1} minWidth={0} overflow="hidden">
-            {/* Dashboard: all apps, a dot apart from each of them; one app is all of them. */}
-            <Show when={dashboardShown() && props.dashboard}>
-              {dashboard => {
-                const several = () => dashboard().apps().length > 1;
-                const choices = () => [
-                  ...(several() ? [null] : []),
-                  ...dashboard()
-                    .apps()
-                    .map(app => app.path),
-                ];
-                return (
-                  <For each={choices()}>
-                    {(path, index) => {
-                      const label = () =>
-                        path === null
-                          ? "All"
-                          : (dashboard()
-                              .apps()
-                              .find(app => app.path === path)?.name ?? path);
-                      const key = path ?? "";
-                      const chosen = () => !several() || dashboard().scope() === path;
-                      return (
-                        <>
-                          <Show when={index() > 0}>
-                            <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                              {index() === 1 && several() ? " · " : " "}
-                            </text>
-                          </Show>
-                          {/* biome-ignore lint/a11y/noStaticElementInteractions: TUI apps also switch with Left/Right. */}
-                          {/* biome-ignore lint/a11y/useKeyWithMouseEvents: The chosen app already uses accent badge colors. */}
-                          <box
-                            flexShrink={0}
-                            onMouseOver={() => setHoveredScope(key)}
-                            onMouseOut={() => setHoveredScope(null)}
-                            onMouseDown={event => {
-                              if (event.button !== MouseButton.LEFT || props.mouseEnabled?.() === false) return;
-                              event.preventDefault();
-                              dashboard().setScope(path);
-                            }}
-                          >
-                            <Show
-                              when={chosen()}
-                              fallback={
-                                <text
-                                  flexShrink={0}
-                                  wrapMode="none"
-                                  fg={
-                                    hoveredScope() === key && props.mouseEnabled?.() !== false
-                                      ? t().foreground
-                                      : t().foregroundMuted
-                                  }
-                                  bg={t().backgroundElementActive}
-                                >
-                                  {` ${label()} `}
-                                </text>
-                              }
-                            >
-                              <Badge name={label()} color={t().accent} noShrink />
-                            </Show>
-                          </box>
-                        </>
-                      );
-                    }}
-                  </For>
-                );
-              }}
-            </Show>
-            <Show when={!dashboardShown() && projectBadges().length > 0}>
+            <Show when={projectBadges().length > 0}>
               <Show when={visibleProjects().leftHidden > 0}>
                 <HiddenProjectCount direction={-1} />
                 <text flexShrink={0} wrapMode="none">

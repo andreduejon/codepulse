@@ -1,4 +1,11 @@
 import type { Accessor } from "solid-js";
+import {
+  DASHBOARD_KNOT_MINUTES,
+  DASHBOARD_WINDOW_DAYS,
+  type DashboardSettings,
+  knotMinutesLabel,
+  windowDaysLabel,
+} from "../dashboard/settings";
 import { parseGitHubRemote } from "../providers/github-actions/api";
 import { isValidJenkinsJobUrl } from "../providers/jenkins/validation";
 import {
@@ -22,6 +29,30 @@ import type {
   SettingItem,
   SnykMenuConfig,
 } from "./menu-items-types";
+
+/** The dashboard's own section: how far back it reads and how long one knot is. Both save at once. */
+export function buildDashboardItems(cfg: DashboardSettings, save: (next: DashboardSettings) => void): SettingItem[] {
+  const next = <T>(options: readonly T[], label: (value: T) => string, chosen: string, fallback: T): T =>
+    options.find(option => label(option) === chosen) ?? fallback;
+  return [
+    { kind: "header", label: "Dashboard" },
+    {
+      kind: "cycle",
+      label: "Time window",
+      options: DASHBOARD_WINDOW_DAYS.map(windowDaysLabel),
+      get: () => windowDaysLabel(cfg.windowDays),
+      set: value => save({ ...cfg, windowDays: next(DASHBOARD_WINDOW_DAYS, windowDaysLabel, value, cfg.windowDays) }),
+    },
+    {
+      kind: "cycle",
+      label: "Knot size",
+      options: DASHBOARD_KNOT_MINUTES.map(knotMinutesLabel),
+      get: () => knotMinutesLabel(cfg.knotMinutes),
+      set: value =>
+        save({ ...cfg, knotMinutes: next(DASHBOARD_KNOT_MINUTES, knotMinutesLabel, value, cfg.knotMinutes) }),
+    },
+  ];
+}
 
 const isValidEnvVarName = (value: string): boolean => /^[A-Za-z_][A-Za-z0-9_]*$/.test(value);
 
