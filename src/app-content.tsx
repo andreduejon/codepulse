@@ -425,10 +425,17 @@ export function AppContent(props: Readonly<AppContentProps>) {
     changes: () => state.graphRows(),
   });
   const dashboardAppName = () => dashboardApp().name;
-  // No commit details beside the dashboard; its own details leave with it.
+  // No commit details or graph search beside the dashboard; its own details leave with it.
   createEffect(() => {
-    if (dashboardShown()) actions.setDetailFocused(false);
-    else if (untrack(dialog) === "dashboard-event") setDialog(null);
+    if (dashboardShown()) {
+      actions.setDetailFocused(false);
+      const mode = untrack(commandBarMode);
+      if (mode === "search" || mode === "path") {
+        setSearchFocused(false);
+        setCommandBarMode("idle");
+        setCommandBarValue("");
+      }
+    } else if (untrack(dialog) === "dashboard-event") setDialog(null);
   });
   let dashboardDialogScrollbox: ScrollBoxRenderable | undefined;
 

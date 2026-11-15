@@ -18,8 +18,10 @@ All notable changes to this project will be documented in this file.
   provider finishes a fetch or the graph is read again, so it follows the providers' own Auto refresh; `r` reads them
   at once. **Menu → Providers → Dashboard** sets how far back it reads (Time window, 1 to 30 days, 7 by default) and how
   long a knot is (Knot size, 15 minutes to 4 hours, 1 hour by default). The Dashboard tab has its own color in every
-  theme; custom themes set it with `dashboardFg` and `dashboardBg`.
-- **Menu → Providers → Start in** chooses the view a repository opens in: Git (the default), the Dashboard or a
+  theme; custom themes set it with `dashboardFg` and `dashboardBg`. The graph's search (`/`), path filter and ancestry
+  don't work on the dashboard, an open search bar closes when it shows, and Esc there leaves the graph's highlights
+  and branch view alone.
+- **Menu → Repository → Preferences → Start in** chooses the view a repository opens in: Git (the default), the Dashboard or a
   provider that is turned on. Saved per repository as `startView`. Another repository of the group opens in its own
   start view the first time it's shown, and where you left it after that. A provider turned off since starts in Git.
 

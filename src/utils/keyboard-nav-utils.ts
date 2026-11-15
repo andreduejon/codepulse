@@ -129,6 +129,8 @@ export interface CascadeState {
   ancestrySet: Set<string> | null;
   pathFilter: string | null;
   viewingBranch: string | null;
+  /** The dashboard shows: the graph's search, highlights and branch view are behind it, so Esc leaves them. */
+  dashboard?: boolean;
 }
 
 /** Dialogs opened from the details: in compact layout, closing one goes back to the details dialog. */
@@ -142,6 +144,7 @@ export function computeCascadeTarget(s: CascadeState): CascadeTarget {
     if (DETAIL_CHILD_DIALOGS.has(s.dialog) && s.layoutMode === "compact" && s.detailFocused) return "back-to-detail";
     return "dialog";
   }
+  if (s.dashboard) return null;
   if (s.searchFocused) return "search-focused";
   if (s.detailFocused) return "detail-focused";
   if (s.highlightSet !== null) {

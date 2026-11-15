@@ -72,3 +72,15 @@ test("search starts from the active query and path from the active filter", () =
   expect(ctx.setCommandBarMode).toHaveBeenLastCalledWith("path");
   expect(ctx.setSearchFocused.mock.calls).toEqual([[true], [false]]);
 });
+
+test("on the dashboard, the graph's search, path and ancestry commands do nothing", () => {
+  const { ctx } = context();
+  ctx.actions.setActiveProviderView("dashboard");
+  for (const command of ["search", "path", "p", "ancestry", "a"]) runAppCommand(command, ctx);
+  expect(ctx.setCommandBarMode).not.toHaveBeenCalled();
+  expect(ctx.setSearchFocused).not.toHaveBeenCalled();
+  expect(ctx.setAnchor).not.toHaveBeenCalled();
+  expect(ctx.clearAnchor).not.toHaveBeenCalled();
+  runAppCommand("theme", ctx);
+  expect(ctx.setDialog).toHaveBeenCalledWith("theme");
+});

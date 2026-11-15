@@ -54,6 +54,7 @@ export function createCloseOneCascadeStep(opts: CascadeCloseOptions): () => bool
       ancestrySet: state.ancestrySet(),
       pathFilter: state.pathFilter(),
       viewingBranch: state.viewingBranch(),
+      dashboard: state.activeProviderView() === "dashboard",
     });
 
     switch (target) {

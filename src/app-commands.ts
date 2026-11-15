@@ -27,8 +27,12 @@ export interface AppCommandContext {
  * Execute a command dispatched from the command bar.
  * Receives the trimmed value entered after `:` (e.g. "q", "quit", "m", "search").
  */
+/** Commands that act on the graph: the dashboard has none of it behind it, so they do nothing there. */
+const GRAPH_COMMANDS: ReadonlySet<string> = new Set(["search", "p", "path", "a", "ancestry"]);
+
 export function runAppCommand(cmd: string, ctx: AppCommandContext): void {
   const normalized = cmd.toLowerCase().replace(/^:/, "");
+  if (ctx.state.activeProviderView() === "dashboard" && GRAPH_COMMANDS.has(normalized)) return;
 
   switch (normalized) {
     case "cache":

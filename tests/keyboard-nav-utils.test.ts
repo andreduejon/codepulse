@@ -120,7 +120,16 @@ describe("computeCascadeTarget", () => {
     ancestrySet: null,
     pathFilter: null,
     viewingBranch: null,
+    dashboard: false,
   };
+
+  test("on the dashboard, Esc only closes the command bar or a dialog: the graph's highlights and branch stay", () => {
+    const graph = { highlightSet: new Set(["a"]), searchQuery: "fix", viewingBranch: "dev", searchFocused: true };
+    expect(computeCascadeTarget({ ...base, ...graph, dashboard: true })).toBeNull();
+    expect(computeCascadeTarget({ ...base, ...graph, dashboard: true, dialog: "menu" })).toBe("dialog");
+    expect(computeCascadeTarget({ ...base, ...graph, dashboard: true, commandBarMode: "command" })).toBe("command-bar");
+    expect(computeCascadeTarget({ ...base, ...graph })).toBe("search-focused");
+  });
 
   test("returns null when nothing is open", () => {
     expect(computeCascadeTarget(base)).toBe(null);
