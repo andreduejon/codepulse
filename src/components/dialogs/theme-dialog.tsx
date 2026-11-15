@@ -38,6 +38,8 @@ const colorLabels: Record<Exclude<keyof Theme, "name" | "graphColors">, string> 
   snykBg: "Snyk background",
   openShiftFg: "OpenShift text",
   openShiftBg: "OpenShift background",
+  dashboardFg: "Dashboard text",
+  dashboardBg: "Dashboard background",
 };
 
 export default function ThemeDialog(props: Readonly<{ onClose: () => void; onSelect?: (name: string) => void }>) {

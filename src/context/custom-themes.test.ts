@@ -56,6 +56,19 @@ test("standalone themes require and normalize all colors without an override lis
   expect(custom.theme.graphColors).not.toBe(themes.dracula.graphColors);
 });
 
+test("a standalone theme from before the Dashboard colors still loads, its Dashboard in its accent", () => {
+  const { name: _name, dashboardBg: _bg, dashboardFg: _fg, ...colors } = themes.dracula;
+  writeThemes({ "older-theme": { name: "Older", colors } });
+  const [custom] = loadCustomThemes(path);
+  expect(custom.theme).toEqual({
+    ...themes.dracula,
+    name: "Older",
+    dashboardBg: themes.dracula.accent,
+    dashboardFg: themes.dracula.background,
+  });
+  expect(getDebugEvents()).toEqual([]);
+});
+
 test("graph overrides replace the complete array and inherited-only themes are valid", () => {
   writeThemes({
     "one-line": { name: "One Line", base: "dracula", colors: { graphColors: ["#ABCDEF"] } },

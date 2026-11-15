@@ -67,7 +67,8 @@ the entry.
 ### Standalone definitions
 
 Omit `base` to create an independent theme. Every color key below is then
-required, including `graphColors`. Omitted values are not filled automatically.
+required, including `graphColors`, except `dashboardFg` and `dashboardBg`: without
+them the Dashboard uses `background` and `accent`.
 
 ```text
 background, backgroundPanel, backgroundElement, backgroundElementActive,
@@ -76,7 +77,7 @@ info, error, warning, success,
 severityCritical, severityHigh, severityMedium, severityLow,
 graphColors, diffAdded, diffRemoved, diffAddedBg, diffRemovedBg,
 githubActionsFg, githubActionsBg, jenkinsFg, jenkinsBg,
-snykFg, snykBg, openShiftFg, openShiftBg
+snykFg, snykBg, openShiftFg, openShiftBg, dashboardFg, dashboardBg
 ```
 
 ## Loading and diagnostics
