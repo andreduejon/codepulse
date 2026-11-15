@@ -1,9 +1,6 @@
 import { type Accessor, createEffect, createMemo, createSignal, onCleanup, untrack } from "solid-js";
-import { addDebugEvent } from "../debug/events";
-import type { CacheSyncResult } from "../providers/shared/cache-sync";
 import { type DashboardEvent, type DashboardRow, dashboardRows } from "./events";
 import { type LoadOptions, loadAppEvents } from "./load";
-import { type SyncTarget, syncTarget, syncTargets } from "./sync";
 
 export interface DashboardApp {
   path: string;
@@ -14,9 +11,6 @@ const HOUR = 3_600_000;
 const DEFAULT_WINDOW_MS = 7 * 24 * HOUR;
 const DEFAULT_KNOT_MS = HOUR;
 const MAX_KNOT_ROWS = 5;
-const DEBUG_SOURCE = { "github-actions": "GitHub", jenkins: "Jenkins", openshift: "OpenShift" } as const;
-/** How often the dashboard looks for a provider whose auto refresh is due. */
-const SYNC_TICK_MS = 15_000;
 
 /** A selectable row's identity, so the cursor stays on its event when the rows are read again. */
 export function dashboardRowKey(row: DashboardRow | undefined): string | null {
@@ -46,22 +40,13 @@ export interface DashboardState {
   moveToEnd: (end: "first" | "last") => void;
   /** Enter: opens a knot's hidden rows, or returns the selected event for the caller to show. */
   activate: () => DashboardEvent | null;
-  /** Reading the events from Git and the caches. */
   loading: Accessor<boolean>;
-  /** Asking the apps' providers for new runs and builds. */
-  fetching: Accessor<boolean>;
   reload: () => Promise<void>;
-  /** `r`: reads the events again and asks every provider of every app, also one whose token was refused. */
-  refresh: () => Promise<void>;
 }
 
 /**
  * The dashboard's data and cursor. It reads the apps' events when the dashboard is shown, again when the apps change
  * and on `reload`; it never reads while hidden.
- *
- * While shown, it also asks each app's providers for new runs and builds, as their views would if the app were open:
- * each provider once when the dashboard is first shown, then again when its own auto refresh is due. What they find
- * goes into their normal caches, and the events are read again from there.
  */
 export function useDashboard(
   opts: Readonly<{
@@ -73,12 +58,6 @@ export function useDashboard(
     cacheRoot?: string;
     /** How one app's events are read (tests); from Git and the provider caches otherwise. */
     load?: (app: string, options: LoadOptions) => Promise<DashboardEvent[]>;
-    /** Which providers of an app are asked and how (tests); each app's settings and the real servers otherwise. */
-    sync?: {
-      targets: (app: string) => SyncTarget[];
-      run: (target: SyncTarget, signal: AbortSignal) => Promise<CacheSyncResult>;
-    };
-    tickMs?: number;
   }>,
 ): DashboardState {
   const [scope, setScope] = createSignal<string | null>(null);
@@ -86,23 +65,8 @@ export function useDashboard(
   const [loading, setLoading] = createSignal(false);
   const [expanded, setExpanded] = createSignal<ReadonlySet<string>>(new Set());
   const [selectedKey, setSelectedKey] = createSignal<string | null>(null);
-  const [fetching, setFetching] = createSignal(false);
   let controller: AbortController | undefined;
-  let syncController: AbortController | undefined;
-  onCleanup(() => {
-    controller?.abort();
-    syncController?.abort();
-  });
-  const now = () => (opts.now ?? Date.now)();
-  const sync = opts.sync ?? {
-    targets: syncTargets,
-    run: (target: SyncTarget, signal: AbortSignal) => syncTarget(target, { signal, cacheRoot: opts.cacheRoot }),
-  };
-  const syncKey = (target: SyncTarget) => `${target.app}\u0000${target.source}`;
-  /** When each provider of each app last finished asking, this session. */
-  const lastSynced = new Map<string, number>();
-  /** Providers whose token was refused: asked again only on `refresh`. */
-  const refused = new Set<string>();
+  onCleanup(() => controller?.abort());
 
   const reload = async () => {
     controller?.abort();
@@ -124,81 +88,10 @@ export function useDashboard(
     }
   };
 
-  /** Asks the providers that are due (all of them with `force`), then reads the events of each app that answered. */
-  const syncDue = async (force: boolean) => {
-    if (syncController && !force) return;
-    syncController?.abort();
-    if (force) refused.clear();
-    const at = now();
-    const due = (target: SyncTarget) => {
-      const key = syncKey(target);
-      if (force) return true;
-      if (refused.has(key)) return false;
-      const last = lastSynced.get(key);
-      return last === undefined || (target.intervalMs > 0 && at - last >= target.intervalMs);
-    };
-    const plan = untrack(opts.apps)
-      .map(app => sync.targets(app.path).filter(due))
-      .filter(targets => targets.length > 0);
-    if (plan.length === 0) return;
-    const current = new AbortController();
-    syncController = current;
-    setFetching(true);
-    try {
-      await Promise.all(
-        plan.map(async targets => {
-          const results = await Promise.all(
-            targets.map(async target => {
-              try {
-                return await sync.run(target, current.signal);
-              } catch (error) {
-                if (current.signal.aborted) return null;
-                return { error: error instanceof Error ? error.message : String(error), authFailed: false };
-              }
-            }),
-          );
-          if (current.signal.aborted) return;
-          targets.forEach((target, index) => {
-            const result = results[index];
-            lastSynced.set(syncKey(target), now());
-            if (result?.authFailed) refused.add(syncKey(target));
-            if (result?.error)
-              addDebugEvent({
-                source: DEBUG_SOURCE[target.source],
-                message: `Dashboard, ${target.app}: ${result.error}`,
-                status: "error",
-              });
-          });
-          await reload();
-        }),
-      );
-    } finally {
-      if (syncController === current) {
-        syncController = undefined;
-        setFetching(false);
-      }
-    }
-  };
-
-  const refresh = async () => {
-    await Promise.all([reload(), syncDue(true)]);
-  };
-
   createEffect(() => {
-    if (!opts.active()) {
-      // Nothing is asked while hidden: a sync running stops, and what is due runs when the dashboard shows again.
-      untrack(() => {
-        syncController?.abort();
-        syncController = undefined;
-        setFetching(false);
-      });
-      return;
-    }
+    if (!opts.active()) return;
     opts.apps();
     void untrack(reload);
-    void untrack(() => syncDue(false));
-    const timer = setInterval(() => void syncDue(false), opts.tickMs ?? SYNC_TICK_MS);
-    onCleanup(() => clearInterval(timer));
   });
 
   const shownApps = createMemo(() => {
@@ -276,8 +169,6 @@ export function useDashboard(
     moveToEnd,
     activate,
     loading,
-    fetching,
     reload,
-    refresh,
   };
 }

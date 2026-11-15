@@ -24,7 +24,7 @@ export interface LoadOptions {
 const FIELD = "\u001f";
 
 /** The branch an app's rope follows: the remote's default branch, else the checked-out one. */
-export async function mainBranch(repo: string, signal?: AbortSignal): Promise<string> {
+async function mainBranch(repo: string, signal?: AbortSignal): Promise<string> {
   const remote = await runGit(repo, ["rev-parse", "--abbrev-ref", "origin/HEAD"], signal);
   const name = remote.stdout.trim();
   return remote.exitCode === 0 && name && name !== "origin/HEAD" ? name : "HEAD";
@@ -65,7 +65,7 @@ const quietly = async <T>(read: () => Promise<T[]>): Promise<T[]> => {
 
 /**
  * One app's events since the window starts: the commits on its main branch, and the finished runs, builds and scans
- * its provider caches hold. Nothing is fetched here: the dashboard's sync and the app's own views fill the caches.
+ * its provider caches hold. Nothing is fetched: the caches are as fresh as the last time the app was open.
  */
 export async function loadAppEvents(app: string, options: LoadOptions): Promise<DashboardEvent[]> {
   const root = options.cacheRoot === undefined ? {} : { root: options.cacheRoot };

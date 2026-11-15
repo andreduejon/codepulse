@@ -159,21 +159,6 @@ export function buildCommitLogArgs(options: {
   return args;
 }
 
-/** The newest `count` commit hashes in the graph's order: the commits the graph's first rows show. */
-export async function getTopCommitHashes(
-  repoPath: string,
-  count: number,
-  options: { branch?: string; all?: boolean },
-  signal?: AbortSignal,
-): Promise<string[]> {
-  const args = buildCommitLogArgs({ maxCount: count, ...options }).map(arg =>
-    arg.startsWith("--format=") ? "--format=%H" : arg,
-  );
-  const { stdout, exitCode } = await runGit(repoPath, args, signal);
-  if (exitCode !== 0) return [];
-  return stdout.split("\n").filter(line => /^[0-9a-f]{40,64}$/i.test(line));
-}
-
 export async function getCommits(
   repoPath: string,
   options: {

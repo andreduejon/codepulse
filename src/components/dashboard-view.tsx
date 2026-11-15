@@ -137,11 +137,7 @@ export function DashboardView(
           fallback={
             <box paddingLeft={2} height={1} flexShrink={0}>
               <text wrapMode="none" truncate fg={t().foregroundMuted}>
-                {d.fetching()
-                  ? "fetching events..."
-                  : d.loading()
-                    ? "reading events..."
-                    : "Nothing happened in the last 7 days."}
+                {d.loading() ? "reading events..." : "Nothing happened in the last 7 days."}
               </text>
             </box>
           }
