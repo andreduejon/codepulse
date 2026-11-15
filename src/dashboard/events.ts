@@ -7,7 +7,7 @@ import type { JenkinsCacheEntry } from "../providers/jenkins/cache";
 import type { OpenShiftCacheEntry } from "../providers/openshift/cache";
 import type { EventSource } from "../providers/provider";
 import { categorize, type StatusCategory } from "../providers/shared/status";
-import type { SnykScanResult } from "../providers/snyk/types";
+import type { SnykScanResult, SnykSeverity } from "../providers/snyk/types";
 import { formatDuration } from "../utils/date";
 
 /** One line of an event's side panel: a label and its value. */
@@ -26,6 +26,8 @@ export interface DashboardEvent {
   time: number;
   /** How it ended; null for a commit. */
   status: StatusCategory | null;
+  /** A scan's worst finding; null for a clean scan. */
+  severity?: SnykSeverity | null;
   /** What happened, without the commit (shown beside it). */
   text: string;
   sha: string;
@@ -177,13 +179,16 @@ export function snykEvents(
     const time = timeOf(scan.scannedAt);
     if (time === null) return [];
     const { critical, high, medium, low } = scan.counts;
-    const found = [
-      [critical, "critical"],
-      [high, "high"],
-      [medium, "medium"],
-      [low, "low"],
-    ].flatMap(([count, severity]) => (count ? [`${count} ${severity}`] : []));
-    const status: StatusCategory = critical + high > 0 ? "fail" : found.length > 0 ? "unknown" : "pass";
+    const bySeverity = [
+      ["critical", critical],
+      ["high", high],
+      ["medium", medium],
+      ["low", low],
+    ] as const;
+    const found = bySeverity.flatMap(([severity, count]) => (count ? [`${count} ${severity}`] : []));
+    const total = critical + high + medium + low;
+    const status: StatusCategory = critical + high > 0 ? "fail" : total > 0 ? "unknown" : "pass";
+    const counted = `${total} ${total === 1 ? "vulnerability" : "vulnerabilities"}`;
     return [
       {
         id: `${app}:snyk:${scan.sha}`,
@@ -191,10 +196,11 @@ export function snykEvents(
         source: "snyk" as const,
         time,
         status,
-        text: `scan · ${found.length > 0 ? found.join(", ") : "no vulnerabilities"}`,
+        severity: bySeverity.find(([, count]) => count > 0)?.[0] ?? null,
+        text: `scan · ${total > 0 ? `${counted} · ${found.join(", ")}` : "no vulnerabilities"}`,
         sha: scan.sha,
         facts: [
-          ...fact("Vulnerabilities", `${critical} critical, ${high} high, ${medium} medium, ${low} low`),
+          ...fact("Vulnerabilities", `${total} (${critical} critical, ${high} high, ${medium} medium, ${low} low)`),
           ...fact(
             "Partial",
             scan.partial

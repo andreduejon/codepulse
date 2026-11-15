@@ -2,7 +2,6 @@ import { createMemo, createSignal } from "solid-js";
 import type { DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
 import { BUSY } from "../../utils/busy-text";
-import { type LegendItem, runLegend } from "../shared/detail-legend";
 import type { RowShortcut } from "../shared/open-row";
 import { ProviderRunTree, type ProviderTreeJob, type ProviderTreeRun } from "../shared/provider-run-tree";
 import { jenkinsTestsJob } from "./tests";
@@ -40,9 +39,6 @@ export interface JenkinsDetailTabProps {
   /** Enter on a failed test: its error and stack in the log viewer, ←/→ to the other failed tests. */
   onOpenTestFailure?: (run: JenkinsRun, failed: JenkinsFailedTest[], index: number) => void;
 }
-
-/** The row marks, explained below the tree. A cancelled build is `aborted` in Jenkins. */
-export const JENKINS_LEGEND: LegendItem[] = runLegend("aborted");
 
 /**
  * The rows under a build, as quiet as the OpenShift tree: each stage with its mark (times are in the log's summary),

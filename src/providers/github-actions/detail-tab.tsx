@@ -12,7 +12,6 @@ import { createMemo, createSignal } from "solid-js";
 import type { DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
 import { BUSY } from "../../utils/busy-text";
-import { type LegendItem, runLegend } from "../shared/detail-legend";
 import type { RowShortcut } from "../shared/open-row";
 import {
   ProviderRunTree,
@@ -71,9 +70,6 @@ export interface ActionsDetailTabProps {
   /** Called when Enter is pressed on a job (or an annotation, with its message to search) — opens the log dialog. */
   onOpenJobLog?: (job: GitHubJob, run: GitHubWorkflowRun, jobs?: GitHubJob[], search?: string) => void;
 }
-
-/** The row marks, explained below the tree. */
-export const GITHUB_LEGEND: LegendItem[] = runLegend("cancelled");
 
 // ── Top-level component ───────────────────────────────────────────────────
 

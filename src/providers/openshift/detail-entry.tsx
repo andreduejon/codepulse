@@ -1,7 +1,8 @@
 import { scopedMemory } from "../../components/detail-memory";
 import { BANNER } from "../../debug/banner";
+import { OPENSHIFT_LEGEND } from "../legends";
 import { detailEntry, type ProviderDetailSource } from "../shared/detail-entry";
-import { OPENSHIFT_LEGEND, OpenShiftDetailTab } from "./detail-tab";
+import { OpenShiftDetailTab } from "./detail-tab";
 import type { OpenShiftCommitData, OpenShiftResource } from "./types";
 
 /** What OpenShift hands the detail view. */

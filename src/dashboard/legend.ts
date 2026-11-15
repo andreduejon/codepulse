@@ -1,8 +1,10 @@
 import type { Theme } from "../context/theme";
 import { providerColors } from "../providers/colors";
+import { GITHUB_LEGEND, JENKINS_LEGEND, OPENSHIFT_LEGEND, SNYK_SEVERITY_LEGEND } from "../providers/legends";
 import { type EventSource, providerDisplayName } from "../providers/provider";
-import { type LegendItem, runLegend } from "../providers/shared/detail-legend";
+import type { LegendItem } from "../providers/shared/detail-legend";
 import { statusColor, statusIcon } from "../providers/shared/status";
+import { severityColor } from "../providers/snyk/severity";
 import type { DashboardEvent } from "./events";
 
 /** The knot every event shows in, in its provider's color. */
@@ -14,38 +16,31 @@ export function providerLegend(sources: readonly EventSource[]): LegendItem[] {
 }
 
 /**
- * An event's mark before its text: how a run or build ended; for a scan, how bad its worst finding is. A commit has
- * none.
+ * An event's mark before its text, as its provider's tab shows it: how a run or build ended; for a scan, its worst
+ * finding's severity. A commit and a clean scan have none.
  */
 export function eventMark(event: DashboardEvent): { icon: string; color: (theme: Theme) => string } | null {
   const status = event.status;
   if (status === null) return null;
   if (event.source === "snyk") {
-    if (status === "pass") return { icon: "✓", color: theme => theme.success };
-    return { icon: "▲", color: theme => (status === "fail" ? theme.error : theme.warning) };
+    const severity = event.severity;
+    return severity ? { icon: "▲", color: theme => severityColor(theme, severity) } : null;
   }
   return { icon: statusIcon(status), color: theme => statusColor(theme, status) };
 }
 
-/** The marks one provider's events use, for the side panel. */
+/** The marks one provider's events use, for the side panel: the legend of the provider's own detail tab. */
 export function markLegend(source: EventSource): LegendItem[] | null {
   switch (source) {
     case "git":
       return null;
     case "github-actions":
-      return runLegend("cancelled");
+      return GITHUB_LEGEND;
     case "jenkins":
-      return runLegend("aborted");
+      return JENKINS_LEGEND;
     case "openshift":
-      return (["pass", "running", "fail"] as const).map(category => [
-        [[statusIcon(category), theme => statusColor(theme, category)]],
-        category === "pass" ? "complete" : category === "running" ? "running" : "failed",
-      ]);
+      return OPENSHIFT_LEGEND;
     case "snyk":
-      return [
-        [[["▲", theme => theme.error]], "critical or high"],
-        [[["▲", theme => theme.warning]], "medium or low"],
-        [[["✓", theme => theme.success]], "no vulnerabilities"],
-      ];
+      return SNYK_SEVERITY_LEGEND;
   }
 }

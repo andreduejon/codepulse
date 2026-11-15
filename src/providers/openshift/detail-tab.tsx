@@ -3,11 +3,10 @@ import type { DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
 import { useT } from "../../hooks/use-t";
 import { BUSY } from "../../utils/busy-text";
-import type { LegendItem } from "../shared/detail-legend";
 import { ProviderActionRow, ProviderSummaryRow, ScrollingLabel, useDetailRowMouse } from "../shared/detail-rows";
 import { useDetailTree } from "../shared/detail-tree";
 import { type RowShortcut, useOpenRowShortcut } from "../shared/open-row";
-import { type StatusCategory, statusColor, statusIcon } from "../shared/status";
+import { type StatusCategory, statusIcon } from "../shared/status";
 import { openShiftConsoleUrl } from "./console";
 import { openShiftStatusColor } from "./graph-columns";
 import type { OpenShiftCommitData, OpenShiftResource, OpenShiftStatus } from "./types";
@@ -60,12 +59,6 @@ function statusCategory(status: OpenShiftStatus): StatusCategory {
 function statusMark(status: OpenShiftStatus) {
   return statusIcon(statusCategory(status));
 }
-
-/** The row marks, explained below the tree (the namespace badges in the graph carry none). */
-export const OPENSHIFT_LEGEND: LegendItem[] = (["pass", "running", "fail"] as const).map(category => [
-  [[statusIcon(category), theme => statusColor(theme, category)]],
-  category === "pass" ? "ok" : category === "running" ? "in progress" : "failing",
-]);
 
 function namespaceResources(ns: NamespaceData): OpenShiftResource[] {
   return [...ns.imageStreamTags, ...ns.deployments, ...ns.deploymentConfigs, ...ns.pods, ...ns.builds];

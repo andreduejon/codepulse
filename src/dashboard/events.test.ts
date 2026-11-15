@@ -112,13 +112,23 @@ describe("events", () => {
     ]);
     const counts = { critical: 1, high: 3, medium: 0, low: 2 };
     expect(snykEvents("/repo/shop", [{ sha: SHA, scannedAt: "2026-03-02T10:30:00Z", counts }])).toEqual([
-      expect.objectContaining({ source: "snyk", status: "fail", text: "scan · 1 critical, 3 high, 2 low" }),
+      expect.objectContaining({
+        source: "snyk",
+        status: "fail",
+        severity: "critical",
+        text: "scan · 6 vulnerabilities · 1 critical, 3 high, 2 low",
+      }),
     ]);
+    expect(
+      snykEvents("/repo/shop", [
+        { sha: SHA, scannedAt: "2026-03-02T10:30:00Z", counts: { critical: 0, high: 0, medium: 1, low: 0 } },
+      ]),
+    ).toEqual([expect.objectContaining({ severity: "medium", text: "scan · 1 vulnerability · 1 medium" })]);
     expect(
       snykEvents("/repo/shop", [
         { sha: SHA, scannedAt: "2026-03-02T10:30:00Z", counts: { critical: 0, high: 0, medium: 0, low: 0 } },
       ]),
-    ).toEqual([expect.objectContaining({ status: "pass", text: "scan · no vulnerabilities" })]);
+    ).toEqual([expect.objectContaining({ status: "pass", severity: null, text: "scan · no vulnerabilities" })]);
   });
 });
 
@@ -174,7 +184,7 @@ describe("event details", () => {
       },
     ]);
     expect(scan?.facts).toEqual([
-      { label: "Vulnerabilities", value: "1 critical, 3 high, 0 medium, 2 low" },
+      { label: "Vulnerabilities", value: "6 (1 critical, 3 high, 0 medium, 2 low)" },
       { label: "Partial", value: "1 project could not be scanned" },
     ]);
   });
