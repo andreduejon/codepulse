@@ -648,16 +648,25 @@ test("on the dashboard: the event count takes the modes' place, the provider leg
     { path: "/repo/web", group: "demo", appName: "shop-web" },
   ]);
   try {
-    // The overview comes first, a dot apart from the providers it sums up.
+    // The overview comes first, one tab like the others.
     expect(lines[top]).toMatch(/Dashboard {3}Git {3}GitHub Actions {3}Snyk\s+23 events/);
     expect(lines[top]).not.toContain("●");
     expect(lines[top]).not.toContain("normal");
-    expect(lines[top + 2]).toMatch(/shop\s+shop-web\s+█ Git\s+█ Actions\s+█ Snyk/);
+    expect(lines[top + 2]).toMatch(/shop\s+shop-web\s+█ Git\s+█ GitHub Actions\s+█ Snyk/);
     expect(lines[top + 2]).not.toContain("All");
     expect(lines[top + 2]).not.toContain("main");
     const x = lines[top + 2].indexOf("shop-web") + 1;
     await setup.mockMouse.click(x, top + 2, MouseButtons.LEFT);
     expect(selected).toEqual(["/repo/web"]);
+
+    // Narrow, the legend keeps the providers whose whole name fits, never part of one.
+    setup.resize(70, 12);
+    await setup.flush();
+    const legend = setup
+      .captureCharFrame()
+      .split("\n")
+      .find(line => line.includes("█ Git"));
+    expect(legend?.trimEnd()).toMatch(/█ Git {2}█ GitHub Actions$/);
   } finally {
     setup.renderer.destroy();
   }

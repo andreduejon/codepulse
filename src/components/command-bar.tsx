@@ -105,6 +105,17 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
       rightHidden: members.length - start - 3,
     };
   });
+  /** The dashboard's legend, the providers whose knot and whole name fit in its 45%; the rest are left out. */
+  const fittingLegend = createMemo(() => {
+    const room = Math.floor(contentWidth() * 0.45);
+    const items = providerLegend(enabledProviders().filter((view): view is EventSource => view !== "dashboard"));
+    let used = 0;
+    return items.filter(([, label], index) => {
+      // `█ Name`, and before every item but the first a space and the gap.
+      used += 2 + label.length + (index > 0 ? 2 : 0);
+      return used <= room;
+    });
+  });
   const wide = createMemo(() => {
     // Each label, its padding and the gap after it.
     const providersWidth = enabledProviders().reduce((width, view) => width + providerDisplayName(view).length + 3, -1);
@@ -355,7 +366,7 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
         >
           {/* The dashboard's legend: each provider's knot color. */}
           <Show when={dashboardShown()}>
-            <For each={providerLegend(enabledProviders().filter((view): view is EventSource => view !== "dashboard"))}>
+            <For each={fittingLegend()}>
               {([markers, label], index) => (
                 <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
                   {index() > 0 ? " " : ""}

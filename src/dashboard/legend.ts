@@ -1,6 +1,6 @@
 import type { Theme } from "../context/theme";
 import { providerColors } from "../providers/colors";
-import { type EventSource, providerShortName } from "../providers/provider";
+import { type EventSource, providerDisplayName } from "../providers/provider";
 import { type LegendItem, runLegend } from "../providers/shared/detail-legend";
 import { statusColor, statusIcon } from "../providers/shared/status";
 import type { DashboardEvent } from "./events";
@@ -10,7 +10,7 @@ export const KNOT = "█";
 
 /** The bottom row's legend: a knot in each shown provider's color, with its name. */
 export function providerLegend(sources: readonly EventSource[]): LegendItem[] {
-  return sources.map(source => [[[KNOT, theme => providerColors(theme, source).bg]], providerShortName(source)]);
+  return sources.map(source => [[[KNOT, theme => providerColors(theme, source).bg]], providerDisplayName(source)]);
 }
 
 /**
