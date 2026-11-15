@@ -68,6 +68,11 @@ describe("events", () => {
     expect(jenkinsEvents("/repo/shop", [{ sha: SHA, runs: [jenkins] }])).toEqual([
       expect.objectContaining({ source: "jenkins", status: "pass", text: "shop #412 passed" }),
     ]);
+    // A multibranch branch job's build carries the branch; a plain job's leaves it to Git.
+    expect(jenkinsEvents("/repo/shop", [{ sha: SHA, runs: [{ ...jenkins, branch: "develop" }] }])[0]?.branch).toBe(
+      "develop",
+    );
+    expect(jenkinsEvents("/repo/shop", [{ sha: SHA, runs: [jenkins] }])[0]).not.toHaveProperty("branch");
     expect(
       openShiftEvents("/repo/shop", [
         {
@@ -102,13 +107,21 @@ describe("events", () => {
               imageRefs: [],
               commitSha: SHA,
               updatedAt: null,
-              object: { status: { phase: "Failed", completionTimestamp: "2026-03-02T10:25:00Z" } },
+              object: {
+                spec: { source: { git: { uri: "https://git.example/shop.git", ref: "refs/heads/develop" } } },
+                status: { phase: "Failed", completionTimestamp: "2026-03-02T10:25:00Z" },
+              },
             },
           ],
         },
       ]),
     ).toEqual([
-      expect.objectContaining({ time: at("2026-03-02T10:25:00Z"), text: "build shop-api-13 failed in shop-dev" }),
+      // The build's Git ref is the branch it built.
+      expect.objectContaining({
+        time: at("2026-03-02T10:25:00Z"),
+        text: "build shop-api-13 failed in shop-dev",
+        branch: "develop",
+      }),
     ]);
     const counts = { critical: 1, high: 3, medium: 0, low: 2 };
     expect(snykEvents("/repo/shop", [{ sha: SHA, scannedAt: "2026-03-02T10:30:00Z", counts }])).toEqual([

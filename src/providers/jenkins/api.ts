@@ -314,7 +314,9 @@ export async function resolveJenkinsJobs(
       continue;
     }
     const childLabel = child.displayName?.trim() || child.name?.trim() || deriveJenkinsJobLabel({ url });
-    resolved.set(url, { url, label: childLabel });
+    // Jenkins names a branch job after its branch; a pull request's job (`PR-12`, `MR-3`) builds no branch.
+    const branch = child.name ? safeDecode(child.name).trim() : "";
+    resolved.set(url, { url, label: childLabel, ...(branch && !/^(PR|MR)-\d+$/.test(branch) ? { branch } : {}) });
     discoveredCount++;
   }
 
@@ -486,6 +488,7 @@ function mapRun(job: JenkinsJobConfig, build: JenkinsBuildApi, sha: string): Jen
     url: build.url ? onOrigin(build.url, job.url) : `${normalizeJenkinsJobUrl(job.url)}/${number}`,
     jobLabel: label,
     jobUrl: normalizeJenkinsJobUrl(job.url),
+    ...(job.branch ? { branch: job.branch } : {}),
     ...status,
   };
 }
@@ -509,7 +512,13 @@ export async function fetchJenkinsRunsForBuilds(
           token,
           signal,
         );
-        out.push(mapRun({ url: run.jobUrl, label: run.jobLabel }, build, run.headSha));
+        out.push(
+          mapRun(
+            { url: run.jobUrl, label: run.jobLabel, ...(run.branch ? { branch: run.branch } : {}) },
+            build,
+            run.headSha,
+          ),
+        );
       } catch (err) {
         if (isAbortError(err, signal)) throw err;
         firstError ??= bannerOrFallback(err, BANNER.jenkins.fetchFailed, "Jenkins");

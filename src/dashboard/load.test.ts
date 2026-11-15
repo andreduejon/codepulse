@@ -128,6 +128,14 @@ test("each event names its branch: GitHub's own, else the remote branch that hol
   await git(seed, "push", "-q", "origin", "main");
   // A branch at main's tip: the commit is still main's.
   await git(seed, "push", "-q", "origin", "main:hotfix");
+  // Git flow: develop is merged into main, then moves on. Its commit is reachable from main only through the merge.
+  await git(seed, "checkout", "-q", "-b", "develop");
+  const developed = await commit(seed, "feat(cart): totals", "2026-03-02T09:10:00Z");
+  await git(seed, "checkout", "-q", "main");
+  await git(seed, "merge", "-q", "--no-ff", "-m", "Merge develop", "develop");
+  await git(seed, "checkout", "-q", "develop");
+  await commit(seed, "feat(cart): rounding", "2026-03-02T09:20:00Z");
+  await git(seed, "push", "-q", "origin", "main", "develop");
   await git(seed, "checkout", "-q", "-b", "feature/login");
   const feature = await commit(seed, "feat(login): form", "2026-03-02T09:30:00Z");
   await git(seed, "push", "-q", "origin", "feature/login");
@@ -159,6 +167,7 @@ test("each event names its branch: GitHub's own, else the remote branch that hol
   });
   await new SnykCache({ root: cacheRoot }).write(repo, scan(local));
   await new SnykCache({ root: cacheRoot }).write(repo, scan(base));
+  await new SnykCache({ root: cacheRoot }).write(repo, scan(developed));
   await new SnykCache({ root: cacheRoot }).write(repo, scan("0".repeat(40)));
 
   const events = await loadAppEvents(repo, { since: Date.parse("2026-03-01T00:00:00Z"), cacheRoot });
@@ -171,5 +180,7 @@ test("each event names its branch: GitHub's own, else the remote branch that hol
   expect(branchOf("snyk", local)).toBe("wip");
   // On the main branch's own line, every event of that commit says main, like its commit row.
   expect(branchOf("snyk", base)).toBe("main");
+  // Made on develop and merged into main: develop's, not main's.
+  expect(branchOf("snyk", developed)).toBe("develop");
   expect(branchOf("snyk", "0".repeat(40))).toBeUndefined();
 });

@@ -38,37 +38,74 @@ async function mainBranchName(repo: string, ref: string, signal?: AbortSignal): 
   return head.exitCode === 0 && name && name !== "HEAD" ? name : undefined;
 }
 
+/** How far back the branch walk reads: every branch's recent first-parent history, at most this many commits. */
+const BRANCH_WALK_COMMITS = 20000;
+
 /**
- * The branch that holds each commit, as `git name-rev` names it: a remote branch first (`origin/feature/login~2` is
- * `feature/login`), else a local one, for a commit not pushed yet. A commit no branch holds, or one the repository
- * lacks, has none.
+ * The branch each commit was made on, the way the graph tells: a branch owns the commits on its first-parent line.
+ * The main branch owns its own line, whichever other branch points into it. Any other commit belongs to the branch
+ * whose tip reaches it in the fewest first-parent steps: a commit made on develop and merged into main is develop's.
+ * Local branches count too, for commits not pushed yet. A commit no branch's recent history holds has none.
  */
-async function branchesHolding(repo: string, shas: readonly string[], signal?: AbortSignal) {
-  const found = new Map<string, string>();
-  const remotes = await runGit(repo, ["remote"], signal);
-  const prefixes = remotes.stdout
+async function branchesOwning(repo: string, shas: readonly string[], signal?: AbortSignal) {
+  const owners = new Map<string, string>();
+  const wanted = new Set(shas);
+  const [refs, remotes, log, ref] = await Promise.all([
+    runGit(repo, ["for-each-ref", `--format=%(objectname)${FIELD}%(refname)`, "refs/heads", "refs/remotes"], signal),
+    runGit(repo, ["remote"], signal),
+    runGit(
+      repo,
+      ["log", "--first-parent", "--branches", "--remotes", "--format=%H %P", "-n", String(BRANCH_WALK_COMMITS)],
+      signal,
+    ),
+    mainBranch(repo, signal),
+  ]);
+  if (log.exitCode !== 0) return owners;
+  const firstParent = new Map<string, string | undefined>();
+  for (const line of log.stdout.split("\n")) {
+    const [sha, parent] = line.trim().split(" ");
+    if (sha) firstParent.set(sha, parent);
+  }
+  const remoteNames = remotes.stdout
     .split("\n")
     .map(name => name.trim())
-    .filter(Boolean)
-    .map(name => `${name}/`);
-  const name = async (refs: string[], strip: (ref: string) => string) => {
-    const missing = shas.filter(sha => !found.has(sha) && /^[0-9a-f]{40}$/i.test(sha));
-    if (missing.length === 0) return;
-    const { stdout } = await runGit(repo, ["name-rev", ...refs, ...missing], signal);
-    for (const line of stdout.split("\n")) {
-      const [sha, ref] = line.trim().split(" ");
-      if (!sha || !ref || ref === "undefined") continue;
-      const branch = strip(ref.replace(/[~^].*$/, ""));
-      if (branch) found.set(sha, branch);
-    }
-  };
-  await name(["--refs=refs/remotes/*", "--exclude=refs/remotes/*/HEAD"], ref => {
-    const remoteRef = ref.replace(/^remotes\//, "");
-    const prefix = prefixes.find(candidate => remoteRef.startsWith(candidate));
-    return prefix ? remoteRef.slice(prefix.length) : remoteRef;
+    .filter(Boolean);
+  const tips = refs.stdout.split("\n").flatMap(line => {
+    const [sha = "", refname = ""] = line.split(FIELD);
+    if (!sha || refname.endsWith("/HEAD")) return [];
+    if (refname.startsWith("refs/heads/")) return [{ sha, name: refname.slice("refs/heads/".length), refname }];
+    const remoteRef = refname.slice("refs/remotes/".length);
+    const remote = remoteNames.find(name => remoteRef.startsWith(`${name}/`));
+    return [{ sha, name: remote ? remoteRef.slice(remote.length + 1) : remoteRef, refname }];
   });
-  await name(["--refs=refs/heads/*"], ref => ref.replace(/^heads\//, ""));
-  return found;
+
+  // The main branch's own line first: it is main's, and the walks below stop where they reach it.
+  const mainName = await mainBranchName(repo, ref, signal);
+  const mainRefname = ref === "HEAD" ? null : `refs/remotes/${ref}`;
+  const mainTip =
+    tips.find(tip => tip.refname === mainRefname)?.sha ??
+    (await runGit(repo, ["rev-parse", "--verify", `${ref}^{commit}`], signal)).stdout.trim();
+  const mainLine = new Set<string>();
+  let walked: string | undefined = mainTip;
+  while (walked && firstParent.has(walked) && !mainLine.has(walked)) {
+    mainLine.add(walked);
+    walked = firstParent.get(walked);
+  }
+  if (mainName) for (const sha of wanted) if (mainLine.has(sha)) owners.set(sha, mainName);
+
+  const best = new Map<string, { name: string; steps: number }>();
+  for (const tip of [...tips].sort((a, b) => a.name.localeCompare(b.name))) {
+    let steps = 0;
+    for (let sha: string | undefined = tip.sha; sha && firstParent.has(sha) && !mainLine.has(sha); steps++) {
+      if (wanted.has(sha)) {
+        const current = best.get(sha);
+        if (!current || steps < current.steps) best.set(sha, { name: tip.name, steps });
+      }
+      sha = firstParent.get(sha);
+    }
+  }
+  for (const [sha, { name }] of best) if (!owners.has(sha)) owners.set(sha, name);
+  return owners;
 }
 
 /** What landed on the main branch since `since`: its first-parent commits, at the time they were committed. */
@@ -130,21 +167,12 @@ export async function loadAppEvents(app: string, options: LoadOptions): Promise<
     ...openShiftEvents(app, openshift),
     ...snykEvents(app, snyk),
   ].filter(event => event.time >= options.since);
-  // A commit on the main branch's own line is main's, whichever other branch points at it too: its runs and scans
-  // name the branch its commit row does.
-  const mainLine = new Map<string, string>();
-  for (const event of events) if (event.source === "git" && event.branch) mainLine.set(event.sha, event.branch);
-  const named = events.map(event => {
-    const branch = event.branch ? undefined : mainLine.get(event.sha);
-    return branch ? { ...event, branch } : event;
-  });
-  const unnamed = [...new Set(named.filter(event => !event.branch).map(event => event.sha))];
-  if (unnamed.length === 0) return named;
-  const branches = await quietly(async () => [await branchesHolding(app, unnamed, options.signal)]);
-  const holding = branches[0];
-  if (!holding) return named;
-  return named.map(event => {
-    const branch = event.branch ? undefined : holding.get(event.sha);
+  const unnamed = [...new Set(events.filter(event => !event.branch).map(event => event.sha))];
+  if (unnamed.length === 0) return events;
+  const [owners] = await quietly(async () => [await branchesOwning(app, unnamed, options.signal)]);
+  if (!owners) return events;
+  return events.map(event => {
+    const branch = event.branch ? undefined : owners.get(event.sha);
     return branch ? { ...event, branch } : event;
   });
 }

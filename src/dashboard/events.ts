@@ -140,6 +140,7 @@ export function jenkinsEvents(
         status,
         text: `${run.jobLabel || run.name} #${run.runNumber} ${verb}`,
         ...(run.url ? { url: run.url } : {}),
+        ...(run.branch ? { branch: run.branch } : {}),
         facts: [
           ...fact("Job", run.jobLabel || run.name),
           ...fact("Build", `#${run.runNumber}`),
@@ -162,6 +163,10 @@ export function openShiftEvents(app: string, entries: readonly OpenShiftCacheEnt
     const id = `${app}:openshift:${build.namespace}/${build.id}`;
     if (time === null || events.has(id)) continue;
     const outcome = build.status === "pass" ? "complete" : build.status === "fail" ? "failed" : "running";
+    // The Git ref its BuildConfig builds, when it names one (`develop`, `refs/heads/develop`); else Git finds it.
+    const spec = (build.object as { spec?: { source?: { git?: { ref?: unknown } } } } | undefined)?.spec;
+    const ref = spec?.source?.git?.ref;
+    const branch = typeof ref === "string" ? ref.trim().replace(/^refs\/heads\//, "") : "";
     events.set(id, {
       id,
       app,
@@ -170,6 +175,7 @@ export function openShiftEvents(app: string, entries: readonly OpenShiftCacheEnt
       status: build.status,
       text: `build ${build.name} ${outcome} in ${build.namespace}`,
       sha: build.commitSha,
+      ...(branch ? { branch } : {}),
       facts: [
         ...fact("Namespace", build.namespace),
         ...fact("Build", build.name),

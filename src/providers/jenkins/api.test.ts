@@ -568,6 +568,22 @@ describe("resolveJenkinsJobs", () => {
             },
             {
               _class: "org.jenkinsci.plugins.workflow.job.WorkflowJob",
+              name: "feature%2Flogin",
+              displayName: "feature/login",
+              url: "https://jenkins.example.com/job/service/job/feature%252Flogin/",
+              buildable: true,
+              disabled: false,
+            },
+            {
+              _class: "org.jenkinsci.plugins.workflow.job.WorkflowJob",
+              name: "PR-12",
+              displayName: "PR-12",
+              url: "https://jenkins.example.com/job/service/job/PR-12/",
+              buildable: true,
+              disabled: false,
+            },
+            {
+              _class: "org.jenkinsci.plugins.workflow.job.WorkflowJob",
               name: "disabled",
               url: "https://jenkins.example.com/job/service/job/disabled/",
               buildable: false,
@@ -592,10 +608,21 @@ describe("resolveJenkinsJobs", () => {
         "token",
       );
       expect(result.error).toBeNull();
+      // A branch job is named after its branch, which its builds carry; a pull request's job is not a branch.
       expect(result.jobs).toEqual([
         {
           url: "https://jenkins.example.com/job/service/job/main",
           label: "main",
+          branch: "main",
+        },
+        {
+          url: "https://jenkins.example.com/job/service/job/feature%252Flogin",
+          label: "feature/login",
+          branch: "feature/login",
+        },
+        {
+          url: "https://jenkins.example.com/job/service/job/PR-12",
+          label: "PR-12",
         },
       ]);
       expect(decodeURIComponent(requestedUrl)).toContain(
