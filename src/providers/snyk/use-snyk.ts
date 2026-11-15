@@ -361,7 +361,9 @@ export function useSnyk(opts: {
     const current = config();
     const repoPath = state.repoPath();
     const branches = state.branches();
-    if (state.activeProviderView() !== SNYK_PROVIDER_ID) return;
+    // The dashboard shows scans too: the configured branch tips are scanned there as on the Snyk view.
+    const view = state.activeProviderView();
+    if (view !== SNYK_PROVIDER_ID && view !== "dashboard") return;
     if (!repoPath || !isAvailable() || current.autoScanBranches.length === 0) return;
 
     const branchTipSHAs = collectSnykAutoScanTips(branches, current.autoScanBranches);

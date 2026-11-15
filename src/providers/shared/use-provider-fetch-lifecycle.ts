@@ -230,6 +230,15 @@ export function useProviderFetchLifecycle(opts: {
     }
   }
 
+  /**
+   * The views that keep this provider fresh: its own tab, and the dashboard, which shows its events. Only its own tab
+   * shows loading: on the dashboard it fetches quietly.
+   */
+  function watched(): boolean {
+    const view = state.activeProviderView();
+    return view === providerId || view === "dashboard";
+  }
+
   function currentInterval(): number {
     return opts.refreshInterval?.() ?? state.autoRefreshInterval();
   }
@@ -240,7 +249,7 @@ export function useProviderFetchLifecycle(opts: {
     const interval = currentInterval();
     if (interval <= 0) return;
     autoRefreshTimer = setInterval(() => {
-      if (state.activeProviderView() !== providerId) return;
+      if (!watched()) return;
       if (fetchInFlight) return;
       const ctrl = new AbortController();
       fetchAbortCtrl = ctrl;
@@ -309,34 +318,29 @@ export function useProviderFetchLifecycle(opts: {
     identityVersion();
     if (opts.suspended?.()) return;
     const view = state.activeProviderView();
-    if (view !== providerId) {
+    if (!watched()) {
+      // Leaving both views cancels what entering them started (stopAutoRefresh aborts fetchAbortCtrl).
       stopAutoRefresh();
       return;
     }
+    // Moving between the dashboard and the provider's tab keeps a running fetch: it is the same data.
+    const showStatus = view === providerId;
     if (!hasFetchedOnce) {
+      if (fetchInFlight && fetchAbortCtrl) return startAutoRefresh();
       const controller = new AbortController();
       fetchAbortCtrl = controller;
-      // Untracked: signals the fetch reads (badges, repo) must not re-run this effect, whose cleanup would abort it.
-      untrack(() => void fetchInitial(controller.signal, undefined, true));
-      onCleanup(() => {
-        controller.abort();
-        if (fetchAbortCtrl === controller) fetchAbortCtrl = null;
-      });
+      // Untracked: signals the fetch reads (badges, repo) must not re-run this effect.
+      untrack(() => void fetchInitial(controller.signal, undefined, showStatus));
     } else {
       const interval = currentInterval();
       const staleThreshold = interval > 0 ? interval : 30_000;
-      if (Date.now() - lastFetchedAt > staleThreshold) {
+      if (Date.now() - lastFetchedAt > staleThreshold && !fetchInFlight) {
         const controller = new AbortController();
         fetchAbortCtrl = controller;
-        untrack(() => void fetchRefresh(controller.signal, true));
-        onCleanup(() => {
-          controller.abort();
-          if (fetchAbortCtrl === controller) fetchAbortCtrl = null;
-        });
+        untrack(() => void fetchRefresh(controller.signal, showStatus));
       }
     }
     startAutoRefresh();
-    onCleanup(stopAutoRefresh);
   });
 
   createEffect(() => {
@@ -364,7 +368,7 @@ export function useProviderFetchLifecycle(opts: {
     if (opts.suspended?.()) return;
     opts.refreshInterval?.();
     state.autoRefreshInterval();
-    if (state.activeProviderView() === providerId) {
+    if (watched()) {
       clearRefreshTimer();
       startAutoRefresh();
     }

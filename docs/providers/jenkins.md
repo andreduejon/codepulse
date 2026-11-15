@@ -19,7 +19,8 @@ Configure the provider per repository from `:providers`:
 - Fetch size (`10`, `20`, `50`): how many graph commits are queried, and how
   many recent builds to inspect per job.
 - Auto refresh (`off`, `2m`, `5m`, `10m`): re-query running builds while the
-  Jenkins view is focused. Default `2m`. Git Auto refresh stays git-only.
+  Jenkins view or the Dashboard is shown. Default `2m`. Git Auto refresh stays
+  git-only.
 
 Credentials remain in environment variables and are not written to config.
 Jenkins sends the username and token using Basic authentication. Missing

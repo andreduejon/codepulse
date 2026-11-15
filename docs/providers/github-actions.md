@@ -18,8 +18,8 @@ Configure the provider per repository from `:providers`:
 - Fetch size (`10`, `20`, `50`): how many graph commits are queried for
   workflow runs.
 - Auto refresh (`off`, `2m`, `5m`, `10m`): re-query running workflow SHAs
-  while the GitHub view is focused. Default `2m`. Git Auto refresh stays
-  git-only.
+  while the GitHub view or the Dashboard is shown. Default `2m`. Git Auto
+  refresh stays git-only.
 
 GitHub.com is supported automatically. GitHub Enterprise repositories require
 the detected host to be explicitly trusted. Credentials remain in environment

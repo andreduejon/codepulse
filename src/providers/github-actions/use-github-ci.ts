@@ -3,7 +3,7 @@
  *
  * Manages the full lifecycle of CI data for the GitHub Actions provider:
  *   - Registers the provider in the shared registry
- *   - Lazy initial fetch (triggered on first Tab switch to CI view)
+ *   - Lazy initial fetch (on the first switch to the CI view or the Dashboard)
  *   - Viewport-driven SHA batching: queries the top fetchDepth commits
  *     from state.graphRows() — covering all branches — rather than walking
  *     a single branch's history.  Works for any commit on any branch,

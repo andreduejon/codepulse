@@ -364,4 +364,87 @@ describe("useProviderFetchLifecycle", () => {
     });
     expect(refreshes).toBe(1);
   });
+
+  test("the dashboard counts as the provider's view: a quiet first fetch, then auto refresh until it leaves", async () => {
+    const fetches: Array<{ signal?: AbortSignal; showStatus: boolean; resolve: () => void }> = [];
+    let refreshes = 0;
+    let setView!: (view: "dashboard" | "git" | "jenkins") => void;
+    createRoot(dispose => {
+      disposers.push(dispose);
+      const { state, actions } = createAppState(100, 0, 0);
+      actions.setRepoPath("/repo");
+      actions.setActiveProviderView("dashboard");
+      setView = view => actions.setActiveProviderView(view);
+      const lifecycle = useProviderFetchLifecycle({
+        state,
+        providerId: "jenkins",
+        identity: () => "id",
+        isAvailable: () => true,
+        isBackgroundReady: () => false,
+        skipShaBackground: true,
+        queriedSHAs: new Set(),
+        refreshInterval: () => 20,
+        reportUnavailable: () => {},
+        runInitialFetch: async ({ signal, showStatus }) => {
+          lifecycle.noteFetchStarted();
+          await new Promise<void>(resolve => fetches.push({ signal, showStatus, resolve }));
+        },
+        runRefresh: async () => {
+          refreshes++;
+        },
+        onResetCaches: () => {},
+      });
+    });
+    await Bun.sleep(0);
+    // No loading status or banner on the dashboard: its fetches are the provider's own, quietly.
+    expect(fetches.map(fetch => fetch.showStatus)).toEqual([false]);
+
+    // Opening the provider's tab keeps the fetch: nothing starts over, nothing is cancelled.
+    setView("jenkins");
+    await Bun.sleep(0);
+    expect(fetches).toHaveLength(1);
+    expect(fetches[0]?.signal?.aborted).toBe(false);
+    setView("dashboard");
+    fetches[0]?.resolve();
+    await Bun.sleep(70);
+    expect(refreshes).toBeGreaterThan(0);
+
+    // Another view stops it.
+    setView("git");
+    const stopped = refreshes;
+    await Bun.sleep(70);
+    expect(refreshes).toBe(stopped);
+  });
+
+  test("leaving for a view that is neither cancels the dashboard's first fetch", async () => {
+    const signals: Array<AbortSignal | undefined> = [];
+    let setView!: (view: "dashboard" | "git") => void;
+    createRoot(dispose => {
+      disposers.push(dispose);
+      const { state, actions } = createAppState(100, 0, 0);
+      actions.setRepoPath("/repo");
+      actions.setActiveProviderView("dashboard");
+      setView = view => actions.setActiveProviderView(view);
+      useProviderFetchLifecycle({
+        state,
+        providerId: "jenkins",
+        identity: () => "id",
+        isAvailable: () => true,
+        isBackgroundReady: () => false,
+        skipShaBackground: true,
+        queriedSHAs: new Set(),
+        reportUnavailable: () => {},
+        runInitialFetch: ({ signal }) => {
+          signals.push(signal);
+          return new Promise<void>(() => {});
+        },
+        runRefresh: async () => {},
+        onResetCaches: () => {},
+      });
+    });
+    await Bun.sleep(0);
+    expect(signals).toHaveLength(1);
+    setView("git");
+    expect(signals[0]?.aborted).toBe(true);
+  });
 });

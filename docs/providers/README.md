@@ -6,8 +6,9 @@ and are never written to Codepulse configuration.
 
 ## Refresh and fetch
 
-Provider **Auto refresh** controls provider requests while that provider view is
-focused. Git **Auto refresh** and **Auto fetch** apply only to repository data.
+Provider **Auto refresh** controls provider requests while that provider view or
+the Dashboard is shown. On the Dashboard a provider fetches without a loading
+status. Git **Auto refresh** and **Auto fetch** apply only to repository data.
 
 **Fetch size** is the graph commit window considered by a provider. It is not a
 cache-retention setting and does not limit resources returned by provider APIs,

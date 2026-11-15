@@ -505,6 +505,23 @@ describe("useSnyk", () => {
     expect(calls).toHaveLength(0);
   });
 
+  test("auto-scans configured branch tips on the dashboard, as on the Snyk view", async () => {
+    const calls: SnykScanOptions[] = [];
+    mountSnyk({
+      scan: options => {
+        calls.push(options);
+        return Promise.resolve(result(options.sha));
+      },
+      config: { autoScanBranches: ["main"] },
+      setup: next => {
+        next.setActiveProviderView("dashboard");
+        next.setBranches([{ name: "main", isCurrent: true, isRemote: false, lastCommitHash: SHA_A }]);
+      },
+    });
+    await Bun.sleep(0);
+    expect(calls.map(call => call.sha)).toEqual([SHA_A]);
+  });
+
   test("selects unique configured local branch tips", () => {
     expect(
       collectSnykAutoScanTips(

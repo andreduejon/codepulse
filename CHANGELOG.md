@@ -21,13 +21,15 @@ All notable changes to this project will be documented in this file.
   and the provider's marks; below that, Enter opens them as a dialog, like the graph's details. Each event's mark and
   legend are the ones its provider's detail tab shows: a scan with findings gets Snyk's `▲` in its worst finding's
   severity color. Enter, or **Show in graph** at the top of the details, shows the event's commit in the graph (a click
-  on a row only selects it, like in the graph), and `o` opens a run's or build's page. The dashboard reads Git and the
-  provider caches, and reads them again whenever a provider finishes a fetch or the graph is read again, so it follows
-  the providers' own Auto refresh; `r` reads them at once. **Menu → Providers → Dashboard** sets how far back it reads
-  (Time window, 1 to 30 days, 7 by default) and how long a knot is (Knot size, 15 minutes to 4 hours, 1 hour by
-  default). The Dashboard tab has its own color in every theme; custom themes set it with `dashboardFg` and
-  `dashboardBg`. The graph's search (`/`), path filter and ancestry don't work on the dashboard, an open search bar
-  closes when it shows, and Esc there leaves the graph's highlights and branch view alone.
+  on a row only selects it, like in the graph), and `o` opens a run's or build's page. While the dashboard is shown,
+  each provider fetches and auto refreshes as if its tab were open, without a loading status, and Snyk scans the tips of
+  its Auto scan branches, so the events are fresh without visiting each tab. The dashboard reads Git and the provider
+  caches, and reads them again whenever a provider finishes a fetch or the graph is read again; `r` reads them at once.
+  **Menu → Providers → Dashboard** sets how far back it reads (Time window, 1 to 30 days, 7 by default) and how long a
+  knot is (Knot size, 15 minutes to 4 hours, 1 hour by default). The Dashboard tab has its own color in every theme;
+  custom themes set it with `dashboardFg` and `dashboardBg`. The graph's search (`/`), path filter and ancestry don't
+  work on the dashboard, an open search bar closes when it shows, and Esc there leaves the graph's highlights and branch
+  view alone.
 - **Menu → Repository → Preferences → Start in** chooses the view a repository opens in: Git (the default), the
   Dashboard or a provider that is turned on. Saved per repository as `startView`. Another repository of the group opens
   in its own start view the first time it's shown, and where you left it after that. A provider turned off since starts
