@@ -62,8 +62,8 @@ test("provider badges switch directly; panel width switches between two and thre
     expect(lines()[providersLine + 1].slice(1).trim()).toBe("");
     expect(lines()[providersLine + 3].slice(1).trim()).toBe("");
     expect(lineWith("after bar")).toBe(7);
-    // One dot only: the one setting Dashboard apart from the providers.
-    expect(lines()[providersLine]).toMatch(/^[^·]*Dashboard\s+·\s+Git\s+GitHub Actions[^·]*$/);
+    // Dashboard is one more tab, without a dot setting it apart.
+    expect(lines()[providersLine]).toMatch(/^[^·]*Dashboard {3}Git {3}GitHub Actions[^·]*$/);
     expect(lines()[providersLine + 4]).not.toContain("·");
     const muted = providerSpan();
     const x = lines()[providersLine].indexOf("GitHub Actions") + 2;
@@ -93,7 +93,7 @@ test("provider badges switch directly; panel width switches between two and thre
     await setup.mockMouse.click(lines()[lineWith("GitHub Actions")].indexOf("Jenkins") + 2, lineWith("GitHub Actions"));
     expect(app.state.activeProviderView()).toBe("jenkins");
     setMouseEnabled(false);
-    expect(lines()[lineWith("GitHub Actions")]).toMatch(/^[^·]*Dashboard\s+·\s+Git\s+GitHub Actions[^·]*$/);
+    expect(lines()[lineWith("GitHub Actions")]).toMatch(/^[^·]*Dashboard {3}Git {3}GitHub Actions[^·]*$/);
     app.state.providers.unregister("jenkins");
     await setup.flush();
     expect(setup.captureCharFrame()).not.toContain("Jenkins");
@@ -649,7 +649,7 @@ test("on the dashboard: the event count takes the modes' place, the provider leg
   ]);
   try {
     // The overview comes first, a dot apart from the providers it sums up.
-    expect(lines[top]).toMatch(/Dashboard\s+·\s+Git\s+GitHub Actions\s+Snyk\s+23 events/);
+    expect(lines[top]).toMatch(/Dashboard {3}Git {3}GitHub Actions {3}Snyk\s+23 events/);
     expect(lines[top]).not.toContain("●");
     expect(lines[top]).not.toContain("normal");
     expect(lines[top + 2]).toMatch(/shop\s+shop-web\s+█ Git\s+█ Actions\s+█ Snyk/);

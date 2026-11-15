@@ -106,11 +106,8 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
     };
   });
   const wide = createMemo(() => {
-    // Each label, its padding and the gap after it; the dot after Dashboard and its gap.
-    const providersWidth = enabledProviders().reduce(
-      (width, view) => width + providerDisplayName(view).length + 3 + (view === "dashboard" ? 2 : 0),
-      -1,
-    );
+    // Each label, its padding and the gap after it.
+    const providersWidth = enabledProviders().reduce((width, view) => width + providerDisplayName(view).length + 3, -1);
     const modesWidth =
       22 + filterBadgeLabel("search", state.searchQuery()).length + filterBadgeLabel("path", state.pathFilter()).length;
     return contentWidth() >= Math.max(120, providersWidth + modesWidth + 4);
@@ -198,31 +195,23 @@ export default function CommandBar(props: Readonly<CommandBarProps>) {
                 const hovered = () => hoveredProvider() === view && props.mouseEnabled?.() !== false;
                 const colors = () => providerColors(t(), view);
                 return (
-                  <>
-                    {/* biome-ignore lint/a11y/noStaticElementInteractions: TUI provider selection also supports Tab keyboard cycling. */}
-                    {/* biome-ignore lint/a11y/useKeyWithMouseEvents: Keyboard-selected provider already uses normal badge colors. */}
-                    <text
-                      flexShrink={0}
-                      wrapMode="none"
-                      fg={selected() ? colors().bg : hovered() ? t().foreground : t().foregroundMuted}
-                      bg={t().backgroundElementActive}
-                      onMouseOver={() => setHoveredProvider(view)}
-                      onMouseOut={() => setHoveredProvider(null)}
-                      onMouseDown={event => {
-                        if (event.button !== MouseButton.LEFT || props.mouseEnabled?.() === false) return;
-                        event.preventDefault();
-                        actions.setActiveProviderView(view);
-                      }}
-                    >
-                      {` ${providerDisplayName(view)} `}
-                    </text>
-                    {/* The overview, a dot apart from the providers it sums up. */}
-                    <Show when={view === "dashboard" && enabledProviders().length > 1}>
-                      <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
-                        ·
-                      </text>
-                    </Show>
-                  </>
+                  // biome-ignore lint/a11y/noStaticElementInteractions: TUI provider selection also supports Tab keyboard cycling.
+                  // biome-ignore lint/a11y/useKeyWithMouseEvents: Keyboard-selected provider already uses normal badge colors.
+                  <text
+                    flexShrink={0}
+                    wrapMode="none"
+                    fg={selected() ? colors().bg : hovered() ? t().foreground : t().foregroundMuted}
+                    bg={t().backgroundElementActive}
+                    onMouseOver={() => setHoveredProvider(view)}
+                    onMouseOut={() => setHoveredProvider(null)}
+                    onMouseDown={event => {
+                      if (event.button !== MouseButton.LEFT || props.mouseEnabled?.() === false) return;
+                      event.preventDefault();
+                      actions.setActiveProviderView(view);
+                    }}
+                  >
+                    {` ${providerDisplayName(view)} `}
+                  </text>
                 );
               }}
             </For>
