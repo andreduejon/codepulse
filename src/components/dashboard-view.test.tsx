@@ -55,7 +55,8 @@ test("the open app's rope, each event a knot on it, with Commit, Time and Event;
     const lines = setup.captureCharFrame().split("\n");
     expect(lines.some(line => /Graph\s+Commit\s+Time\s+Event/.test(line))).toBe(true);
     expect(lines.some(line => /\bApp\b/.test(line))).toBe(false);
-    expect(lines.find(line => line.includes("Today"))).toMatch(/^\s*│\s+Today/);
+    // A new day is a divider line across the table, with the day in it.
+    expect(lines.find(line => line.includes("Today"))).toMatch(/^\s*│\s+── Today · Mon, Mar 2 ─{20,}\s*$/);
     // The commit has its own column, like in the graph: the event's text is only what happened.
     expect(lines.find(line => line.includes("CI #812"))).toMatch(/^\s*█\s+e6209dd\s+10:52\s+✗ CI #812 failed\s*$/);
     expect(lines.find(line => line.includes("round totals"))).toMatch(

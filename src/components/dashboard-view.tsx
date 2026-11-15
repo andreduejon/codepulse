@@ -163,10 +163,13 @@ export function DashboardView(
                   <Switch>
                     <Match when={row.kind === "date" && row}>
                       {date => (
-                        <box flexGrow={1} paddingLeft={1}>
-                          <text wrapMode="none" truncate fg={t().foregroundMuted}>
-                            {formatDayLabel(date().time, props.now?.())}
+                        // A divider across the table, with the day in it.
+                        <box flexDirection="row" flexGrow={1} minWidth={0} paddingLeft={1} paddingRight={2}>
+                          <text flexShrink={0} wrapMode="none" fg={t().foregroundMuted}>
+                            <span style={{ fg: t().border }}>── </span>
+                            {`${formatDayLabel(date().time, props.now?.())} `}
                           </text>
+                          <box flexGrow={1} height={1} border={["top"]} borderStyle="single" borderColor={t().border} />
                         </box>
                       )}
                     </Match>

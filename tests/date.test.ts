@@ -189,12 +189,12 @@ describe("formatRelativeDate cache lifecycle", () => {
 });
 
 describe("formatDayLabel and formatClock", () => {
-  test("name today and yesterday, other days by date, with the year only when it is another one", () => {
+  test("name today and yesterday before the date, other days by their date, with the year only when it is another one", () => {
     const now = new Date(2026, 2, 2, 12, 0).getTime();
-    expect(formatDayLabel(new Date(2026, 2, 2, 0, 5).getTime(), now)).toBe("Today");
-    expect(formatDayLabel(new Date(2026, 2, 1, 23, 59).getTime(), now)).toBe("Yesterday");
-    expect(formatDayLabel(new Date(2026, 1, 11, 9, 0).getTime(), now)).toBe("11. Feb");
-    expect(formatDayLabel(new Date(2025, 11, 31, 9, 0).getTime(), now)).toBe("31. Dec 2025");
+    expect(formatDayLabel(new Date(2026, 2, 2, 0, 5).getTime(), now)).toBe("Today · Mon, Mar 2");
+    expect(formatDayLabel(new Date(2026, 2, 1, 23, 59).getTime(), now)).toBe("Yesterday · Sun, Mar 1");
+    expect(formatDayLabel(new Date(2026, 1, 11, 9, 0).getTime(), now)).toBe("Wed, Feb 11");
+    expect(formatDayLabel(new Date(2025, 11, 31, 9, 0).getTime(), now)).toBe("Wed, Dec 31, 2025");
     expect(formatClock(new Date(2026, 2, 2, 9, 5).getTime())).toBe("09:05");
   });
 });

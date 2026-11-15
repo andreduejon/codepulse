@@ -129,14 +129,22 @@ export function formatDate(dateStr: string): string {
 const sameDay = (a: Date, b: Date) =>
   a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
-/** A day as the dashboard names it: `Today`, `Yesterday`, else `11. Nov`, with the year when it is another one. */
+/**
+ * A day as the dashboard's divider names it: `Today · Mon, Mar 2`, `Yesterday · Sun, Mar 1`, else `Wed, Feb 11`, with
+ * the year when it is another one.
+ */
 export function formatDayLabel(time: number, now: number = Date.now()): string {
   const date = new Date(time);
   const today = new Date(now);
-  if (sameDay(date, today)) return "Today";
-  if (sameDay(date, new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1))) return "Yesterday";
-  const label = `${String(date.getDate()).padStart(2, "0")}. ${MONTHS[date.getMonth()]}`;
-  return date.getFullYear() === today.getFullYear() ? label : `${label} ${date.getFullYear()}`;
+  const label = date.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    ...(date.getFullYear() === today.getFullYear() ? {} : { year: "numeric" }),
+  });
+  if (sameDay(date, today)) return `Today · ${label}`;
+  if (sameDay(date, new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1))) return `Yesterday · ${label}`;
+  return label;
 }
 
 /** The local clock time, `09:05`. */
