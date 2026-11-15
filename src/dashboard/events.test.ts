@@ -194,7 +194,7 @@ describe("dashboardRows", () => {
   test("a knot holds one app's events within one knot, newest first, with a rope row between knots", () => {
     const rows = dashboardRows(
       [event("shop", 52), event("web", 48), event("shop", 41), event("shop", -40), event("web", 12)],
-      { knotMs: HOUR, maxKnotRows: 5, expanded: new Set(), utcOffset: () => 0 },
+      { knotMs: HOUR, utcOffset: () => 0 },
     );
     expect(rows.map(row => (row.kind === "event" ? `${row.event.app}@${row.event.time}` : row.kind))).toEqual([
       "date",
@@ -208,25 +208,10 @@ describe("dashboardRows", () => {
     ]);
   });
 
-  test("a new day starts with a date row; a knot past its row limit ends in a row that opens it", () => {
+  test("a new day starts with a date row, and a busy knot shows every event", () => {
     const busy = Array.from({ length: 7 }, (_, index) => event("shop", 50 - index));
     const yesterday = { ...event("shop", 0), id: "old", time: at("2026-03-01T15:00:00Z") };
-    const rows = dashboardRows([...busy, yesterday], {
-      knotMs: HOUR,
-      maxKnotRows: 5,
-      expanded: new Set(),
-      utcOffset: () => 0,
-    });
-    expect(rows.map(row => row.kind)).toEqual(["date", ...Array(5).fill("event"), "more", "gap", "date", "event"]);
-    const more = rows.find(row => row.kind === "more");
-    expect(more).toMatchObject({ hidden: 2 });
-    const opened = dashboardRows([...busy, yesterday], {
-      knotMs: HOUR,
-      maxKnotRows: 5,
-      expanded: new Set([more?.kind === "more" ? more.knot : ""]),
-      utcOffset: () => 0,
-    });
-    expect(opened.filter(row => row.kind === "event")).toHaveLength(8);
-    expect(opened.some(row => row.kind === "more")).toBe(false);
+    const rows = dashboardRows([...busy, yesterday], { knotMs: HOUR, utcOffset: () => 0 });
+    expect(rows.map(row => row.kind)).toEqual(["date", ...Array(7).fill("event"), "gap", "date", "event"]);
   });
 });

@@ -84,20 +84,14 @@ test("only the open app shows; switching the repository shows the other app from
   expect(d.state.rows()[d.state.cursor()]).toMatchObject({ kind: "event", event: { id: "/web:70" } });
 });
 
-test("Enter on a knot's last row opens it and stays there; on an event it hands the event over", async () => {
+test("a busy knot shows every event, and Enter hands the selected one over", async () => {
   const d = dashboard(Array.from({ length: 7 }, (_, index) => event("/shop", index + 1)));
   d.setActive(true);
   await settle();
+  expect(d.state.rows().map(row => row.kind)).toEqual(["date", ...Array(7).fill("event")]);
   expect(d.state.activate()).toMatchObject({ id: "/shop:1" });
   d.state.moveToEnd("last");
-  expect(d.state.rows()[d.state.cursor()]).toMatchObject({ kind: "more", hidden: 2 });
-  expect(d.state.activate()).toBeNull();
-  expect(d.state.rows().filter(row => row.kind === "event")).toHaveLength(7);
-  // The cursor stays in place, on the first event the knot had hidden.
-  expect(d.state.rows()[d.state.cursor()]).toMatchObject({ kind: "event", event: { id: "/shop:6" } });
-  // The cursor keeps its event when rows change: still the first one.
-  d.state.moveToEnd("first");
-  expect(d.state.activate()).toMatchObject({ id: "/shop:1" });
+  expect(d.state.activate()).toMatchObject({ id: "/shop:7" });
 });
 
 test("the time window decides how far back it reads, and a new window reads again", async () => {

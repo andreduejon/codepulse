@@ -36,9 +36,7 @@ export function DashboardView(
   const Rope = (ropeProps: { row: DashboardRow }) => {
     const knot = () => {
       const row = ropeProps.row;
-      if (row.kind === "event") return providerColors(t(), row.event.source).bg;
-      if (row.kind === "more") return t().foregroundMuted;
-      return null;
+      return row.kind === "event" ? providerColors(t(), row.event.source).bg : null;
     };
     return (
       <box flexDirection="row" flexShrink={0} width={graphWidth} paddingLeft={1}>
@@ -135,7 +133,7 @@ export function DashboardView(
         >
           <For each={d.rows()}>
             {(row, index) => {
-              const selectable = () => row.kind === "event" || row.kind === "more";
+              const selectable = () => row.kind === "event";
               const active = () => index() === d.cursor();
               const lit = () => active() || (hovered() === index() && props.mouseEnabled?.() !== false);
               return (
@@ -190,15 +188,6 @@ export function DashboardView(
                             <EventText event={eventRow().event} />
                           </box>
                         </>
-                      )}
-                    </Match>
-                    <Match when={row.kind === "more" && row}>
-                      {more => (
-                        <box flexGrow={1} paddingLeft={HASH_COL_WIDTH + TIME_COL_WIDTH + 1}>
-                          <text wrapMode="none" truncate fg={t().foregroundMuted}>
-                            {`+${more().hidden} more`}
-                          </text>
-                        </box>
                       )}
                     </Match>
                   </Switch>

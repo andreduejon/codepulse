@@ -1,5 +1,5 @@
 /** The dashboard's settings, per repository: how far back it reads, and how long one knot is. */
-export const DASHBOARD_WINDOW_DAYS = [1, 3, 7, 14, 30] as const;
+export const DASHBOARD_WINDOW_DAYS = [1, 3, 7, 10, 30] as const;
 export type DashboardWindowDays = (typeof DASHBOARD_WINDOW_DAYS)[number];
 export const DASHBOARD_KNOT_MINUTES = [15, 30, 60, 120, 240] as const;
 export type DashboardKnotMinutes = (typeof DASHBOARD_KNOT_MINUTES)[number];

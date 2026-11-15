@@ -11,15 +11,12 @@ export interface DashboardApp {
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
-const MAX_KNOT_ROWS = 5;
 /** How long the dashboard waits after a provider's write before reading again, so a fetch's writes read once. */
 const RELOAD_DELAY_MS = 300;
 
 /** A selectable row's identity, so the cursor stays on its event when the rows are read again. */
 export function dashboardRowKey(row: DashboardRow | undefined): string | null {
-  if (row?.kind === "event") return `event:${row.event.id}`;
-  if (row?.kind === "more") return `more:${row.knot}`;
-  return null;
+  return row?.kind === "event" ? `event:${row.event.id}` : null;
 }
 
 export interface DashboardState {
@@ -30,12 +27,12 @@ export interface DashboardState {
   eventCount: Accessor<number>;
   /** The selected row's index in `rows`, -1 without any event. */
   cursor: Accessor<number>;
-  /** The event of the selected row, for the side panel; null on a knot's `more` row. */
+  /** The event of the selected row, for the side panel. */
   selected: Accessor<DashboardEvent | null>;
   select: (index: number) => void;
   move: (delta: number) => void;
   moveToEnd: (end: "first" | "last") => void;
-  /** Enter: opens a knot's hidden rows, or returns the selected event for the caller to show. */
+  /** Enter: the selected event, for the caller to show. */
   activate: () => DashboardEvent | null;
   loading: Accessor<boolean>;
   reload: () => Promise<void>;
@@ -64,7 +61,6 @@ export function useDashboard(
   const windowDays = createMemo(() => settings().windowDays);
   const [events, setEvents] = createSignal<DashboardEvent[]>([]);
   const [loading, setLoading] = createSignal(false);
-  const [expanded, setExpanded] = createSignal<ReadonlySet<string>>(new Set());
   const [selectedKey, setSelectedKey] = createSignal<string | null>(null);
   let controller: AbortController | undefined;
   let reloadTimer: ReturnType<typeof setTimeout> | undefined;
@@ -107,10 +103,9 @@ export function useDashboard(
     windowDays();
     void untrack(reload);
   });
-  // A new app starts with nothing open and the cursor on its newest event.
+  // A new app starts with the cursor on its newest event.
   createEffect(() => {
     opts.app();
-    setExpanded(new Set<string>());
     setSelectedKey(null);
   });
   createEffect(() => {
@@ -127,8 +122,6 @@ export function useDashboard(
   const rows = createMemo(() =>
     dashboardRows(events(), {
       knotMs: settings().knotMinutes * 60_000,
-      maxKnotRows: MAX_KNOT_ROWS,
-      expanded: expanded(),
     }),
   );
   const selectable = createMemo(() => rows().flatMap((row, index) => (dashboardRowKey(row) === null ? [] : [index])));
@@ -153,15 +146,8 @@ export function useDashboard(
     const stops = selectable();
     select((end === "first" ? stops[0] : stops.at(-1)) ?? -1);
   };
-  const activate = () => {
+  const selected = () => {
     const row = rows()[cursor()];
-    if (row?.kind === "more") {
-      // Its place goes to the first event it hid: the cursor stays where it was.
-      const at = cursor();
-      setExpanded(previous => new Set([...previous, row.knot]));
-      select(at);
-      return null;
-    }
     return row?.kind === "event" ? row.event : null;
   };
 
@@ -171,14 +157,11 @@ export function useDashboard(
     rows,
     eventCount: () => events().length,
     cursor,
-    selected: () => {
-      const row = rows()[cursor()];
-      return row?.kind === "event" ? row.event : null;
-    },
+    selected,
     select,
     move,
     moveToEnd,
-    activate,
+    activate: selected,
     loading,
     reload,
   };

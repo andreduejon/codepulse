@@ -154,11 +154,11 @@ export default function Footer(
       const selected = dashboard.rows()[dashboard.cursor()];
       return [
         ...viewHint,
-        ...(selected?.kind === "event" || selected?.kind === "more"
+        ...(selected?.kind === "event"
           ? [
               {
                 key: "enter",
-                desc: selected.kind === "more" ? " show all" : props.compact ? " details" : " show in graph",
+                desc: props.compact ? " details" : " show in graph",
                 rank: 1,
                 onClick: click(props.onConfirm),
               },

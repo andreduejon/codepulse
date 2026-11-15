@@ -212,17 +212,11 @@ export type DashboardRow =
   | { kind: "date"; time: number }
   /** Only the ropes, between two knots. */
   | { kind: "gap" }
-  | { kind: "event"; event: DashboardEvent; knot: string }
-  /** The rest of a knot past its row limit; Enter opens it. */
-  | { kind: "more"; knot: string; app: string; hidden: number };
+  | { kind: "event"; event: DashboardEvent; knot: string };
 
 export interface DashboardRowOptions {
   /** How long one knot is. */
   knotMs: number;
-  /** Rows a knot shows before it ends in a `more` row. */
-  maxKnotRows: number;
-  /** Knots opened past their row limit. */
-  expanded: ReadonlySet<string>;
   /** Milliseconds to add to a UTC time to get local time, so knots and days follow the local clock. */
   utcOffset?: (time: number) => number;
 }
@@ -231,8 +225,8 @@ const DAY = 86_400_000;
 const localOffset = (time: number) => -new Date(time).getTimezoneOffset() * 60_000;
 
 /**
- * The rows of the dashboard, newest first. A knot is one app's events within one knot length; knots are separated
- * by a rope row, and each day starts with a date row.
+ * The rows of the dashboard, newest first. A knot is one app's events within one knot length, every one of them on
+ * its own row; knots are separated by a rope row, and each day starts with a date row.
  */
 export function dashboardRows(events: readonly DashboardEvent[], options: DashboardRowOptions): DashboardRow[] {
   const offset = options.utcOffset ?? localOffset;
@@ -260,10 +254,7 @@ export function dashboardRows(events: readonly DashboardEvent[], options: Dashbo
       rows.push({ kind: "date", time: newest });
       day = knotDay;
     }
-    const open = options.expanded.has(knot.key) || knot.events.length <= options.maxKnotRows;
-    const shown = open ? knot.events : knot.events.slice(0, options.maxKnotRows);
-    for (const event of shown) rows.push({ kind: "event", event, knot: knot.key });
-    if (!open) rows.push({ kind: "more", knot: knot.key, app: knot.app, hidden: knot.events.length - shown.length });
+    for (const event of knot.events) rows.push({ kind: "event", event, knot: knot.key });
   }
   return rows;
 }
