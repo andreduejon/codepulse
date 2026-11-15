@@ -41,6 +41,8 @@ All notable changes to this project will be documented in this file.
 - The GitHub Actions provider is called **GitHub** in the app: its tab, the knot legend, the footer's `tab` hint,
   **Menu → Providers**, the help, a job log's title and the theme dialog. Its detail tab is still **Actions**. The
   config (`providers.github`) and the theme colors (`githubActionsFg`, `githubActionsBg`) keep their names.
+- The Jenkins and OpenShift detail tabs are called **Builds** and **Resources**: each detail tab names what it lists,
+  like Actions, Vulnerabilities and Dependencies.
 
 ### Fixed
 

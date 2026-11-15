@@ -70,7 +70,7 @@ Resource lists follow Kubernetes `metadata.continue` tokens until complete and
 retain the final `metadata.resourceVersion` for watches. Each list is bounded to
 100 pages and 50,000 items, and repeated continuation tokens stop that resource
 request. Resources fetched before a later-page failure remain visible. Codepulse
-reports partial inventory in a notice under the OpenShift tab (**Inventory partially
+reports partial inventory in a notice under the **Resources** tab (**Inventory partially
 failed**) and records namespace,
 resource kind, and technical details in the Debug dialog.
 
@@ -190,7 +190,7 @@ Live freshness also needs `watch` on Deployments, DeploymentConfigs, and Pods
 in each configured namespace. OpenShift/`kubernetes` `view` already has
 `get`/`list`/`watch`. A custom ServiceAccount needs the extra `watch` verb on
 those three kinds; Builds and ImageStreamTags stay `list` only. Without watch,
-the last list stays until Reload. A notice under the OpenShift tab reads **Watch
+the last list stays until Reload. A notice under the **Resources** tab reads **Watch
 denied** with `Resource data might be stale. Reload to refresh.` below. `live` only appears
 while a watch socket is connected.
 
@@ -221,6 +221,6 @@ rules:
 ```
 
 Partial permission failures preserve successful inventory and show a notice under
-the OpenShift tab. When every request fails, the banner over the graph shows the error.
+the **Resources** tab. When every request fails, the banner over the graph shows the error.
 Routes, Services, Helm releases, and console links are outside the provider's
 current scope.

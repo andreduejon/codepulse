@@ -34,8 +34,8 @@ export const PROVIDER_METADATA: Record<ProviderView, ProviderMetadata> = {
   dashboard: { displayName: "Dashboard", category: "overview" },
   git: { displayName: "Git", category: "source" },
   "github-actions": { displayName: "GitHub", detailLabel: "Actions", category: "ci" },
-  jenkins: { displayName: "Jenkins", category: "ci" },
-  openshift: { displayName: "OpenShift", category: "runtime" },
+  jenkins: { displayName: "Jenkins", detailLabel: "Builds", category: "ci" },
+  openshift: { displayName: "OpenShift", detailLabel: "Resources", category: "runtime" },
   snyk: { displayName: "Snyk", detailLabel: "Vulnerabilities", category: "scan-quality" },
 };
 
