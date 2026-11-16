@@ -1,11 +1,12 @@
 import type { UIMessage } from "../components/message-box";
 import type { ProviderView } from "../providers/provider";
 
-/** The providers whose fetch status the dashboard reports; Snyk's scans report their own failures. */
+/** The providers whose error status the dashboard reports (Snyk's: a scan that failed, also on its own tab). */
 export const DASHBOARD_FETCHING_PROVIDERS = [
   "github-actions",
   "jenkins",
   "openshift",
+  "snyk",
 ] as const satisfies readonly ProviderView[];
 
 /** A provider's failed fetch or scan, as its own tab words it. */

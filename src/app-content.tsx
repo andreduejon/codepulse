@@ -189,8 +189,10 @@ export function AppContent(props: Readonly<AppContentProps>) {
       if (status.kind === "error")
         errors.push({ source: providerDisplayName(view), message: displayBanner(status.message, status.message) });
     }
+    // A scan that failed in another view, unless Snyk's status says the same already.
     const scan = snyk.backgroundError();
-    if (scan) errors.push({ source: "Snyk", message: scan });
+    if (scan && !errors.some(error => error.source === "Snyk" && error.message === scan))
+      errors.push({ source: "Snyk", message: scan });
     return errors;
   });
   /** Errors closed on the dashboard; one that goes away is forgotten, so its next failure shows again. */

@@ -167,3 +167,15 @@ test("the config's warnings show in Debug", async () => {
     clearDebugEvents();
   }
 });
+
+test("a Snyk failure stays in the dashboard's box while Snyk still reports it, also after visiting its tab", async () => {
+  const { actions, setup, dispose } = await launch();
+  try {
+    actions.setProviderStatus("snyk", providerError("Snyk CLI not found."));
+    actions.setActiveProviderView("dashboard");
+    await setup.flush();
+    expect(setup.captureCharFrame()).toMatch(/Snyk CLI not found|CLI not found · Snyk/);
+  } finally {
+    await dispose();
+  }
+});
