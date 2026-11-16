@@ -37,7 +37,8 @@ All notable changes to this project will be documented in this file.
   build or run that is still running shows as running (`● CI #814 running`), from what the providers hold, and turns
   into how it ended in the same row. The selected row is bold and in the Dashboard's color, as a provider view's is in
   its own. The dashboard reads Git and the provider caches, and reads them again whenever a provider finishes a fetch or
-  the graph is read again. `r`, `f` and `:reload` fetch every provider that is turned on again, as they do for one
+  the graph is read again. A provider turned off has no events there, also none it cached before, and asks nothing. `r`,
+  `f` and `:reload` fetch every provider that is turned on again, as they do for one
   provider on its tab, so a build that just finished shows at once. **Menu → Providers → Dashboard** turns it off
   (Enabled, on by default: without it there is no Dashboard tab and a repository set to start in it starts in Git) and
   sets how far back it reads (Time window, 1 to 30 days, 7 by default) and how long a knot is (Knot size, 15 minutes to

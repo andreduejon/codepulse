@@ -413,3 +413,28 @@ test("reading only some branch jobs is a notice, not a failure: automatic refres
   }
   expect(graph.mock.calls.length).toBeGreaterThan(calls);
 });
+
+test("a Jenkins turned off asks Jenkins nothing, also for a forced load of one commit (the dashboard's Load commit)", async () => {
+  const original = process.env[TOKEN_ENV];
+  process.env[TOKEN_ENV] = "test-token";
+  cleanup.push(() => {
+    if (original === undefined) delete process.env[TOKEN_ENV];
+    else process.env[TOKEN_ENV] = original;
+  });
+  const full = spyOn(api, "fetchJenkinsDataForSHAs").mockResolvedValue(result([run()]));
+  cleanup.push(() => full.mockRestore());
+  let jenkins!: ReturnType<typeof useJenkinsCI>;
+  createRoot(dispose => {
+    cleanup.push(dispose);
+    const { state, actions } = createAppState();
+    actions.setRepoPath("/repo/jenkins-off");
+    actions.setActiveProviderView("dashboard");
+    jenkins = useJenkinsCI({
+      state,
+      actions,
+      config: { enabled: false, username: "user", tokenEnvVar: TOKEN_ENV, jobs: [{ url: JOB_URL }] },
+    });
+  });
+  await jenkins.fetchCommitDataForSHA(SHA, true);
+  expect(full).not.toHaveBeenCalled();
+});

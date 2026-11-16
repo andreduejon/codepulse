@@ -90,7 +90,13 @@ import { useJenkinsCI } from "./providers/jenkins/use-jenkins-ci";
 import OpenShiftResourceDialog from "./providers/openshift/resource-dialog";
 import type { OpenShiftResource } from "./providers/openshift/types";
 import { useOpenShift } from "./providers/openshift/use-openshift";
-import { isProviderDetailView, type ProviderView, providerDetailTab, providerDisplayName } from "./providers/provider";
+import {
+  type EventSource,
+  isProviderDetailView,
+  type ProviderView,
+  providerDetailTab,
+  providerDisplayName,
+} from "./providers/provider";
 import { type CacheRepositorySummary, evictRepositoryCache } from "./providers/shared/cache-management";
 import JobLogDialog, { type JobLogTarget } from "./providers/shared/job-log-dialog";
 import { repositoryIdentity, setProviderCacheSuspended } from "./providers/shared/sha-sqlite-cache";
@@ -554,10 +560,16 @@ export function AppContent(props: Readonly<AppContentProps>) {
       ...openShiftEvents(app, openShift.heldEntries()),
     ];
   });
+  /** The providers turned on: the dashboard leaves out a turned-off one's cached events. */
+  const dashboardSources = createMemo(() => {
+    state.providers.getVersion();
+    return new Set(state.providers.getEnabledViews().filter((view): view is EventSource => view !== "dashboard"));
+  });
   const dashboard = useDashboard({
     app: dashboardApp,
     active: dashboardShown,
     live: heldDashboardEvents,
+    shownSources: dashboardSources,
     settings: dashboardConfig,
     // The graph read again (a refresh, a fetch, a new commit): its main branch may have moved.
     changes: () => state.graphRows(),

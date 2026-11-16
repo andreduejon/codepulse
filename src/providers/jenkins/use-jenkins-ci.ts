@@ -437,7 +437,8 @@ export function useJenkinsCI(opts: {
       const repoPath = state.repoPath();
       await hydrateCachedCandidates(repoPath, [sha], epoch);
       if (!lifecycle.isCurrent(epoch, repoPath)) return;
-      if (!force) return;
+      // Turned off or not set up (a cached event on the dashboard can still offer Load commit): the cache only.
+      if (!force || !isAvailable()) return;
       queriedSHAs.delete(sha);
       // Reload commit is an explicit retry: it clears an auth freeze and reports its own outcome.
       authFrozen = false;

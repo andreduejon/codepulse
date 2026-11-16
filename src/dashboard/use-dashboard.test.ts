@@ -303,3 +303,29 @@ test("only an app's first read shows as reading: reading it again keeps its even
   release();
   await again;
 });
+
+test("a provider turned off shows none of its cached events", async () => {
+  const [sources, setSources] = createSignal<ReadonlySet<string>>(new Set(["git", "jenkins"]));
+  const [active] = createSignal(true);
+  const build: DashboardEvent = {
+    ...event(SHOP.path, 5),
+    id: "/shop:jenkins:1",
+    source: "jenkins",
+    text: "main #1 passed",
+  };
+  const state = createRoot(dispose => {
+    cleanup.push(dispose);
+    return useDashboard({
+      app: () => SHOP,
+      active,
+      now: () => NOW,
+      shownSources: sources as () => ReadonlySet<"git" | "jenkins">,
+      load: async () => [build, event(SHOP.path, 10)],
+    });
+  });
+  await settle();
+  expect(state.totalCount()).toBe(2);
+  setSources(new Set(["git"]));
+  expect(state.totalCount()).toBe(1);
+  expect(state.rows().some(row => row.kind === "event" && row.event.source === "jenkins")).toBe(false);
+});

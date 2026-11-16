@@ -15,6 +15,17 @@ import * as detailLoader from "./hooks/use-detail-loader";
 import * as snykHook from "./providers/snyk/use-snyk";
 import * as openUrlModule from "./utils/open-url";
 
+/** Every provider turned on, without a token (the dashboard leaves out a turned-off provider's events). */
+const NO_TOKEN = "CODEPULSE_TEST_NO_TOKEN";
+const PROVIDERS_ON: config.CodepulseConfig = {
+  providers: {
+    github: { enabled: true, tokenEnvVar: NO_TOKEN },
+    jenkins: { enabled: true, tokenEnvVar: NO_TOKEN },
+    openshift: { enabled: true, tokenEnvVar: NO_TOKEN },
+    snyk: { enabled: true, tokenEnvVar: NO_TOKEN },
+  },
+};
+
 test("in the compact layout, Enter on a dashboard event opens its details with its provider's tab, and s shows it there", async () => {
   const repo = resolve("/repo/compact-dashboard");
   let app: { state: AppState; actions: AppActions } | undefined;
@@ -34,7 +45,7 @@ test("in the compact layout, Enter on a dashboard event opens its details with i
   }));
   const spies = [
     spyOn(configWrite, "backfillRepoConfig").mockImplementation(() => {}),
-    spyOn(config, "loadConfig").mockReturnValue({ config: {}, warnings: [] }),
+    spyOn(config, "loadConfig").mockReturnValue({ config: PROVIDERS_ON, warnings: [] }),
     spyOn(config, "getRepoDisplayConfig").mockReturnValue({}),
     spyOn(config, "getKnownRepoInfos").mockReturnValue([{ path: repo }]),
     spyOn(detailLoader, "useDetailLoader").mockImplementation(() => {}),
@@ -110,7 +121,7 @@ test("in the compact layout, Enter on a dashboard event opens its details with i
     await setup.flush();
     setup.mockInput.pressKey("s");
     for (let tries = 0; tries < 20 && app.state.activeProviderView() === "dashboard"; tries++) await setup.flush();
-    expect(app.state.activeProviderView()).toBe("git");
+    expect(app.state.activeProviderView()).toBe("github-actions");
     expect(app.state.cursorIndex()).toBe(1);
     await setup.flush();
     expect(frame()).toContain("esc close");
@@ -143,7 +154,7 @@ test("beside the events, → gives the provider's tab the keyboard: ←/→ betw
   ];
   const spies = [
     spyOn(configWrite, "backfillRepoConfig").mockImplementation(() => {}),
-    spyOn(config, "loadConfig").mockReturnValue({ config: {}, warnings: [] }),
+    spyOn(config, "loadConfig").mockReturnValue({ config: PROVIDERS_ON, warnings: [] }),
     spyOn(config, "getRepoDisplayConfig").mockReturnValue({}),
     spyOn(config, "getKnownRepoInfos").mockReturnValue([{ path: repo }]),
     spyOn(detailLoader, "useDetailLoader").mockImplementation(() => {}),
@@ -233,10 +244,10 @@ test("beside the events, → gives the provider's tab the keyboard: ←/→ betw
     await press("ESCAPE");
     expect(state.detailFocused()).toBe(false);
 
-    // Enter on the event: its commit in its provider's view (Snyk is off here: Git), with the details focused.
+    // Enter on the event: its commit in its provider's view (Snyk), with the details focused.
     await press("RETURN");
     for (let tries = 0; tries < 20 && state.activeProviderView() === "dashboard"; tries++) await setup.flush();
-    expect(state.activeProviderView()).toBe("git");
+    expect(state.activeProviderView()).toBe("snyk");
     expect(state.detailFocused()).toBe(true);
   } finally {
     await setup?.dispose();
@@ -264,7 +275,7 @@ async function launchDashboard(opts: { width: number; shas: string[]; events: Da
   }));
   const spies = [
     spyOn(configWrite, "backfillRepoConfig").mockImplementation(() => {}),
-    spyOn(config, "loadConfig").mockReturnValue({ config: {}, warnings: [] }),
+    spyOn(config, "loadConfig").mockReturnValue({ config: PROVIDERS_ON, warnings: [] }),
     spyOn(config, "getRepoDisplayConfig").mockReturnValue({}),
     spyOn(config, "getKnownRepoInfos").mockReturnValue([{ path: repo }]),
     spyOn(detailLoader, "useDetailLoader").mockImplementation(() => {}),

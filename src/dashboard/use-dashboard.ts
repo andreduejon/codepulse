@@ -68,6 +68,8 @@ export function useDashboard(
      * here. With the same id, the newer wins; one without a branch takes its commit's from a read event.
      */
     live?: Accessor<DashboardEvent[]>;
+    /** The providers turned on: a turned-off one's cached events stay out, so nothing offers to ask it. All without. */
+    shownSources?: Accessor<ReadonlySet<EventSource>>;
   }>,
 ): DashboardState {
   const settings = () => opts.settings?.() ?? DEFAULT_DASHBOARD_SETTINGS;
@@ -139,9 +141,16 @@ export function useDashboard(
     onCleanup(onProviderCacheWrite(reloadSoon));
   });
 
-  const all = createMemo(() => {
+  /** The events read, without those of providers turned off. */
+  const readOn = createMemo(() => {
     const read = events();
-    const held = opts.live?.() ?? [];
+    const on = opts.shownSources?.();
+    return !on || read.every(event => on.has(event.source)) ? read : read.filter(event => on.has(event.source));
+  });
+  const all = createMemo(() => {
+    const read = readOn();
+    const on = opts.shownSources?.();
+    const held = (opts.live?.() ?? []).filter(event => !on || on.has(event.source));
     if (held.length === 0) return read;
     const since = (opts.now ?? Date.now)() - windowDays() * DAY;
     const byId = new Map(read.map(event => [event.id, event] as const));
