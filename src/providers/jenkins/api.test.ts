@@ -422,6 +422,32 @@ describe("fetchJenkinsGraphDataForSHAs", () => {
     }
   });
 
+  test("a job with an earlier build still running isn't remembered either: that build may get its commit later", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          lastBuild: { number: 12, building: false },
+          builds: [
+            { number: 12, url: "https://jenkins.example.com/job/foo/12/", building: false, result: "SUCCESS" },
+            { number: 11, url: "https://jenkins.example.com/job/foo/11/", building: true },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      )) as unknown as typeof fetch;
+    try {
+      const result = await fetchJenkinsGraphDataForSHAs(
+        [{ url: "https://jenkins.example.com/job/foo/" }],
+        "user",
+        "token",
+        ["a".repeat(40)],
+      );
+      expect(result.lastBuilds.has("https://jenkins.example.com/job/foo")).toBe(false);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   test("a multibranch project's branch jobs are probed by their last build in its one listing", async () => {
     const WORKFLOW_JOB = "org.jenkinsci.plugins.workflow.job.WorkflowJob";
     const originalFetch = globalThis.fetch;

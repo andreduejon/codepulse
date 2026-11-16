@@ -674,10 +674,10 @@ export async function fetchJenkinsGraphDataForSHAs(
                 token,
                 opts.signal,
               );
-        // Only a finished last build is remembered: one still building may not have checked out its commit yet, so
-        // its job is listed again next time.
+        // Only a job whose listed builds have all finished is remembered: one still building (the last or an earlier
+        // one) may not have checked out its commit yet, so its job is listed again next time.
         const listed = settledNumber(api.lastBuild);
-        if (listed !== null) lastBuilds.set(url, listed);
+        if (listed !== null && !(api.builds ?? []).some(build => build.building)) lastBuilds.set(url, listed);
         const builds = api.builds ?? [];
         for (const build of builds) {
           for (const sha of matchingHeadShas(build, wanted)) runs.push(mapRun(job, build, sha));
