@@ -1,16 +1,14 @@
 import { MouseButton, type Renderable, type ScrollBoxRenderable } from "@opentui/core";
 import { createEffect, createSignal, For, Match, onCleanup, Show, Switch } from "solid-js";
 import { HASH_COL_WIDTH } from "../constants";
-import type { DashboardEvent, DashboardRow } from "../dashboard/events";
-import { eventMark, KNOT } from "../dashboard/legend";
+import type { DashboardRow } from "../dashboard/events";
+import { KNOT } from "../dashboard/legend";
 import type { DashboardState } from "../dashboard/use-dashboard";
 import { useT } from "../hooks/use-t";
 import { providerColors } from "../providers/colors";
-import { severityColor } from "../providers/snyk/severity";
 import { formatClock, formatDayLabel } from "../utils/date";
 import { type ScrollSchedule, scheduleScrollIntoView, scrollElementIntoView } from "../utils/scroll";
-
-const SNYK_SEVERITIES = ["critical", "high", "medium", "low"] as const;
+import { DashboardEventText } from "./dashboard-event-text";
 
 /** Width of the Time column: `09:05` and its padding. */
 const TIME_COL_WIDTH = 7;
@@ -57,45 +55,6 @@ export function DashboardView(
           {knot() ? KNOT : "│"}
         </text>
       </box>
-    );
-  };
-
-  /**
-   * What happened: its mark (a commit has none), then its text. The commit is in its own column. A scan's counts take
-   * their severity's color, muted without findings, and a partial scan ends in Snyk's warning `?`.
-   */
-  const EventText = (eventProps: { event: DashboardEvent; color?: string }) => {
-    const event = () => eventProps.event;
-    const counts = () => {
-      const found = event().counts;
-      return found ? SNYK_SEVERITIES.map(severity => [severity, found[severity]] as const) : null;
-    };
-    return (
-      <text wrapMode="none" truncate fg={eventProps.color ?? t().foreground}>
-        <Show when={eventMark(event())}>
-          {mark => <span style={{ fg: mark().color(t()) }}>{`${mark().icon} `}</span>}
-        </Show>
-        <Show when={counts()} fallback={event().text}>
-          {found => (
-            <>
-              {event().text.split(" · ").slice(0, 2).join(" · ")}
-              <For each={found()}>
-                {([severity, count]) => (
-                  <>
-                    {" · "}
-                    <span style={{ fg: count > 0 ? severityColor(t(), severity) : t().foregroundMuted }}>
-                      {`${count} ${severity}`}
-                    </span>
-                  </>
-                )}
-              </For>
-              <Show when={event().partial}>
-                <span style={{ fg: t().warning }}>{" ?"}</span>
-              </Show>
-            </>
-          )}
-        </Show>
-      </text>
     );
   };
 
@@ -236,7 +195,7 @@ export function DashboardView(
                             </text>
                           </box>
                           <box flexGrow={1} flexShrink={1} minWidth={0} paddingLeft={1} paddingRight={2}>
-                            <EventText
+                            <DashboardEventText
                               event={eventRow().event}
                               color={active() ? providerColors(t(), "dashboard").bg : undefined}
                             />

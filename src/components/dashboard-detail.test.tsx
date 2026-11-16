@@ -1,4 +1,5 @@
 import { expect, mock, test } from "bun:test";
+import { RGBA } from "@opentui/core";
 import { MouseButtons } from "@opentui/core/testing";
 import { testRender } from "@opentui/solid";
 import { createSignal } from "solid-js";
@@ -126,6 +127,50 @@ test("the first row shows the event's commit in the graph, on a click", async ()
     setEvent(null);
     await setup.renderOnce();
     expect(setup.captureCharFrame()).not.toContain("Show in graph");
+  } finally {
+    setup.renderer.destroy();
+  }
+});
+
+test("a scan's headline wraps between its parts, never inside a count, and colors its counts like the row", async () => {
+  const scan: DashboardEvent = {
+    id: "scan",
+    app: "/shop",
+    source: "snyk",
+    time: Date.parse("2026-03-02T10:52:00Z"),
+    status: "fail",
+    severity: "critical",
+    counts: { critical: 1, high: 3, medium: 0, low: 0 },
+    text: "scan · 4 vulnerabilities · 1 critical · 3 high · 0 medium · 0 low",
+    sha: SHA,
+  };
+  const themeState = createThemeState();
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={themeState}>
+        <DashboardDetail event={() => scan} appName={() => "shop"} />
+      </ThemeContext.Provider>
+    ),
+    { width: 58, height: 20 },
+  );
+  try {
+    await setup.renderOnce();
+    const lines = setup.captureCharFrame().split("\n");
+    const first = lines.findIndex(line => line.includes("▲ scan"));
+    const headline = lines.slice(first, first + 3).join(" ");
+    for (const part of ["4 vulnerabilities", "1 critical", "3 high", "0 medium", "0 low"])
+      expect(headline.replace(/\s+/g, " ")).toContain(part);
+    // At this width the headline needs two lines: it breaks after a part, not between `0` and `medium`.
+    expect(lines[first + 1]?.trim()).not.toBe("");
+    for (const line of lines.slice(first, first + 3)) expect(line.trimEnd()).not.toMatch(/\d$/);
+    const theme = themeState.theme();
+    const fg = (label: string) =>
+      setup
+        .captureSpans()
+        .lines.flatMap(line => line.spans)
+        .find(span => span.text.includes(label))?.fg;
+    expect(fg("critical")).toEqual(RGBA.fromHex(theme.severityCritical));
+    expect(fg("high")).toEqual(RGBA.fromHex(theme.severityHigh));
   } finally {
     setup.renderer.destroy();
   }

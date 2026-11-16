@@ -1,12 +1,13 @@
 import { MouseButton, type ScrollBoxRenderable } from "@opentui/core";
 import { type Accessor, createEffect, createSignal, For, type JSX, onCleanup, Show } from "solid-js";
 import type { DashboardEvent } from "../dashboard/events";
-import { eventMark, markLegend } from "../dashboard/legend";
+import { markLegend } from "../dashboard/legend";
 import { type CommitInfo, loadCommitInfo } from "../dashboard/load";
 import { useT } from "../hooks/use-t";
 import { providerDisplayName } from "../providers/provider";
 import { DetailLegend } from "../providers/shared/detail-legend";
 import { formatDate } from "../utils/date";
+import { DashboardEventText } from "./dashboard-event-text";
 
 /**
  * The dashboard's side panel: the selected event, like the graph's details show the selected commit. What happened,
@@ -122,12 +123,7 @@ export function DashboardDetail(
                 </box>
                 <box height={1} flexShrink={0} />
               </Show>
-              <text fg={t().foreground} wrapMode="word">
-                <Show when={eventMark(event())}>
-                  {mark => <span style={{ fg: mark().color(t()) }}>{`${mark().icon} `}</span>}
-                </Show>
-                <strong>{event().text}</strong>
-              </text>
+              <DashboardEventText event={event()} wrap bold />
               <text fg={t().foregroundMuted} wrapMode="none" truncate>
                 {`${props.appName(event().app)} · ${formatDate(new Date(event().time).toISOString())}`}
               </text>
