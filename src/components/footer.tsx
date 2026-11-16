@@ -28,6 +28,8 @@ export default function Footer(
     mouseEnabled?: boolean;
     /** While the dashboard shows: its keys, and its reading as work in progress. */
     dashboard?: DashboardState;
+    /** The dashboard's `r`: fetch its providers again and read its events (only reading without it). */
+    onDashboardRefresh?: () => void;
   }>,
 ) {
   const t = useT();
@@ -169,7 +171,12 @@ export default function Footer(
             ]
           : []),
         ...(dashboard.selected()?.url ? [{ key: "o", desc: " open", rank: 2 }] : []),
-        { key: "r", desc: " refresh", rank: 5, onClick: click(() => void dashboard.reload()) },
+        {
+          key: "r",
+          desc: " refresh",
+          rank: 5,
+          onClick: click(props.onDashboardRefresh ?? (() => void dashboard.reload())),
+        },
         { key: "↑/↓", desc: " navigate", rank: 3 },
       ];
     }

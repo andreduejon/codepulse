@@ -12,6 +12,7 @@ import * as dashboardLoad from "./dashboard/load";
 import { buildGraph } from "./git/graph";
 import * as dataLoader from "./hooks/use-data-loader";
 import * as detailLoader from "./hooks/use-detail-loader";
+import * as openUrlModule from "./utils/open-url";
 
 test("in the compact layout, Enter on a dashboard event opens its details with its provider's tab, and s shows it there", async () => {
   const repo = resolve("/repo/compact-dashboard");
@@ -352,6 +353,27 @@ test("Info for a commit the graph doesn't hold shows what Git reads: hash, autho
     for (const text of [OUTSIDE, "Old Author <old@example.com>", "an old commit", "Its body."])
       expect(d.frame()).toContain(text);
   } finally {
+    await d.dispose();
+  }
+});
+
+test("in the compact dialog, o opens the row's own page when the row has one, the event's page otherwise", async () => {
+  const opened = spyOn(openUrlModule, "openUrl").mockImplementation(() => {});
+  const event: DashboardEvent = { ...outsideEvent, sha: "e".repeat(40), url: "https://example.invalid/runs/1" };
+  const d = await launchDashboard({ width: 120, shas: ["e".repeat(40)], events: [event] });
+  try {
+    await d.press("RETURN");
+    expect(d.frame()).toContain("esc close");
+    // A row with its own page (a job): the tab opens it, not the event.
+    d.actions.setDetailCursorShortcut({ key: "o", desc: "open" });
+    await d.press("o");
+    expect(opened).not.toHaveBeenCalledWith("https://example.invalid/runs/1");
+    // A row without one: the event's page.
+    d.actions.setDetailCursorShortcut(null);
+    await d.press("o");
+    expect(opened).toHaveBeenCalledWith("https://example.invalid/runs/1");
+  } finally {
+    opened.mockRestore();
     await d.dispose();
   }
 });

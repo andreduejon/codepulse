@@ -714,6 +714,11 @@ export function AppContent(props: Readonly<AppContentProps>) {
       </Show>
     );
   };
+  /** The dashboard's `r` (and its footer hint): what is cached at once, then every provider fetched again. */
+  const refreshDashboard = () => {
+    void dashboard.reload();
+    void refreshActiveProvider();
+  };
   /** Keys while the provider tab has the keyboard, as in the graph's details. */
   const handleDashboardTabKey = (event: KeyEvent) =>
     handleDetailKey(event, {
@@ -747,7 +752,8 @@ export function AppContent(props: Readonly<AppContentProps>) {
   /** Keys in the compact details: Enter shows the event in the graph, ↑/↓ scroll, Esc (the cascade) closes. */
   const handleDashboardDialogKey = (event: KeyEvent) => {
     const scrollbox = dashboardDialogScrollbox;
-    if (event.name === "o") {
+    // `o`: the tab's row when it has its own page (a job, a resource), as in the wide layout; else the event's.
+    if (event.name === "o" && !(state.detailFocused() && state.detailCursorShortcut()?.key === "o")) {
       event.preventDefault();
       openSelectedEvent();
       return;
@@ -831,9 +837,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
         activateDashboard();
         break;
       case "r":
-        // Read what is cached at once; each provider's fetch reads again when it is written.
-        void dashboard.reload();
-        void refreshActiveProvider();
+        refreshDashboard();
         break;
       case "o":
         if (!dashboard.selected()?.url) return;
@@ -1318,6 +1322,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                         filterActive={!!state.highlightSet() || !!state.viewingBranch()}
                         compact={layoutMode() === "compact"}
                         dashboard={dashboard}
+                        onDashboardRefresh={refreshDashboard}
                       />
                     </box>
                   </box>

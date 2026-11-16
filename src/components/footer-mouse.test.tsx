@@ -9,6 +9,7 @@ import { buildGraph } from "../git/graph";
 import type { Commit } from "../git/types";
 import { type GraphKeyOptions, openGraphDetails } from "../hooks/handle-graph-keys";
 import { type CommandBarMode, type DialogId, useKeyboardNavigation } from "../hooks/use-keyboard-navigation";
+import type { DashboardState } from "../dashboard/use-dashboard";
 import type { DetailNavRef } from "./detail-types";
 import Footer from "./footer";
 
@@ -694,5 +695,43 @@ test("a narrow footer leaves out whole hints, least needed first, instead of cut
     expect(line).not.toContain("switch project");
   } finally {
     await d.dispose();
+  }
+});
+
+test("on the dashboard, a click on r refresh does what r does: the refresh it is given", async () => {
+  const app = createAppState();
+  app.actions.setActiveProviderView("dashboard");
+  app.actions.setLoading(false);
+  const reload = mock(async () => {});
+  const refresh = mock(() => {});
+  const dashboard = {
+    rows: () => [],
+    cursor: () => -1,
+    selected: () => null,
+    reload,
+    loading: () => false,
+  } as unknown as DashboardState;
+  const setup = await testRender(
+    () => (
+      <AppStateContext.Provider value={app}>
+        <ThemeContext.Provider value={createThemeState()}>
+          <Footer commandBarMode={() => "idle"} dashboard={dashboard} onDashboardRefresh={refresh} />
+        </ThemeContext.Provider>
+      </AppStateContext.Provider>
+    ),
+    { width: 100, height: 3, useMouse: true },
+  );
+  try {
+    // The hints fit once the footer knows its width: a second pass.
+    await setup.renderOnce();
+    await setup.renderOnce();
+    const lines = setup.captureCharFrame().split("\n");
+    const y = lines.findIndex(line => line.includes("refresh"));
+    expect(y).toBeGreaterThanOrEqual(0);
+    await setup.mockMouse.click(lines[y]?.indexOf("r refresh") ?? 0, y, MouseButtons.LEFT);
+    await setup.renderOnce();
+    expect(refresh).toHaveBeenCalledTimes(1);
+  } finally {
+    setup.renderer.destroy();
   }
 });
