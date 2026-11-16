@@ -787,6 +787,8 @@ export function AppContent(props: Readonly<AppContentProps>) {
       fetchAll: handleFetchAll,
       pullAll: handlePullAll,
       reloadAll: handleReloadAll,
+      toggleDashboardSource: dashboard.toggleSource,
+      hiddenDashboardSources: dashboard.hidden,
       setSearchFocused,
       setSearchInputValue,
       setCommandBarMode,

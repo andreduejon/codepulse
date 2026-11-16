@@ -4,6 +4,7 @@ import { lastMenuTab, setLastMenuTab } from "./components/dialogs/menu-dialog";
 import { createAppState } from "./context/state";
 import { addDebugEvent, clearDebugEvents, getDebugEvents } from "./debug/events";
 import type { DialogId } from "./hooks/use-keyboard-navigation";
+import type { EventSource } from "./providers/provider";
 
 afterEach(() => {
   setLastMenuTab("repository");
@@ -13,6 +14,7 @@ afterEach(() => {
 function context(dialog: DialogId = null) {
   const { state, actions } = createAppState();
   let current = dialog;
+  const hidden = new Set<EventSource>();
   const ctx = {
     state,
     actions,
@@ -33,6 +35,10 @@ function context(dialog: DialogId = null) {
     setSearchInputValue: mock((_value: string) => {}),
     setCommandBarMode: mock((_mode: string) => {}),
     setCommandBarValue: mock((_value: string) => {}),
+    toggleDashboardSource: mock((source: EventSource) => {
+      if (!hidden.delete(source)) hidden.add(source);
+    }),
+    hiddenDashboardSources: () => hidden,
   } satisfies AppCommandContext;
   return { ctx, dialog: () => current };
 }
@@ -87,4 +93,26 @@ test("on the dashboard, the graph's search, path and ancestry commands do nothin
   expect(ctx.clearAnchor).not.toHaveBeenCalled();
   runAppCommand("theme", ctx);
   expect(ctx.setDialog).toHaveBeenCalledWith("theme");
+});
+
+test("on the dashboard, :hide and :show hide and show a provider's events, and :show alone shows them all", () => {
+  const { ctx } = context();
+  const hidden = () => [...ctx.hiddenDashboardSources()].sort();
+  // Only the dashboard has provider badges.
+  runAppCommand("hide jenkins", ctx);
+  expect(hidden()).toEqual([]);
+
+  ctx.actions.setActiveProviderView("dashboard");
+  runAppCommand(":hide Jenkins", ctx);
+  runAppCommand("hide github", ctx);
+  runAppCommand("hide snyk", ctx);
+  runAppCommand("hide jenkins", ctx);
+  expect(hidden()).toEqual(["github-actions", "jenkins", "snyk"]);
+  runAppCommand("show github", ctx);
+  expect(hidden()).toEqual(["jenkins", "snyk"]);
+  // A name it doesn't know changes nothing.
+  runAppCommand("hide gitlab", ctx);
+  expect(hidden()).toEqual(["jenkins", "snyk"]);
+  runAppCommand("show", ctx);
+  expect(hidden()).toEqual([]);
 });

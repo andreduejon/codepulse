@@ -2,6 +2,7 @@ import { setLastMenuTab } from "./components/dialogs/menu-dialog";
 import type { AppActions, AppState } from "./context/app-state-types";
 import { clearDebugEvents } from "./debug/events";
 import type { CommandBarMode, DialogId } from "./hooks/use-keyboard-navigation";
+import type { EventSource } from "./providers/provider";
 
 /** What `:` commands can reach in the app. */
 export interface AppCommandContext {
@@ -23,6 +24,30 @@ export interface AppCommandContext {
   setSearchInputValue: (value: string) => void;
   setCommandBarMode: (mode: CommandBarMode) => void;
   setCommandBarValue: (value: string) => void;
+  /** The dashboard's provider badges: a click hides or shows that provider's events. */
+  toggleDashboardSource: (source: EventSource) => void;
+  hiddenDashboardSources: () => ReadonlySet<EventSource>;
+}
+
+/** The names `:hide` and `:show` take, as the badges read (`GitHub` is `github`). */
+const DASHBOARD_SOURCES: Readonly<Record<string, EventSource>> = {
+  git: "git",
+  github: "github-actions",
+  jenkins: "jenkins",
+  openshift: "openshift",
+  snyk: "snyk",
+};
+
+/** `:hide NAME`, `:show NAME`, `:show`: what a badge click does, from the keyboard. Dashboard only. */
+function runSourceCommand(verb: "hide" | "show", name: string | undefined, ctx: AppCommandContext): void {
+  if (ctx.state.activeProviderView() !== "dashboard") return;
+  const hidden = ctx.hiddenDashboardSources();
+  if (verb === "show" && name === undefined) {
+    for (const source of [...hidden]) ctx.toggleDashboardSource(source);
+    return;
+  }
+  const source = name === undefined ? undefined : DASHBOARD_SOURCES[name];
+  if (source && hidden.has(source) !== (verb === "hide")) ctx.toggleDashboardSource(source);
 }
 
 /**
@@ -35,6 +60,11 @@ const GRAPH_COMMANDS: ReadonlySet<string> = new Set(["search", "p", "path", "a",
 export function runAppCommand(cmd: string, ctx: AppCommandContext): void {
   const normalized = cmd.toLowerCase().replace(/^:/, "");
   if (ctx.state.activeProviderView() === "dashboard" && GRAPH_COMMANDS.has(normalized)) return;
+  const [verb, name, ...rest] = normalized.trim().split(/\s+/);
+  if ((verb === "hide" || verb === "show") && rest.length === 0) {
+    runSourceCommand(verb, name, ctx);
+    return;
+  }
 
   switch (normalized) {
     case "cache":
