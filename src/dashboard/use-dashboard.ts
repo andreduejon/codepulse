@@ -3,7 +3,7 @@ import type { EventSource } from "../providers/provider";
 import { onProviderCacheWrite } from "../providers/shared/sha-sqlite-cache";
 import { type DashboardEvent, type DashboardRow, dashboardRows } from "./events";
 import { type LoadOptions, loadAppEvents } from "./load";
-import { DEFAULT_DASHBOARD_SETTINGS, type DashboardSettings } from "./settings";
+import { type DashboardSettings, DEFAULT_DASHBOARD_SETTINGS } from "./settings";
 
 export interface DashboardApp {
   path: string;
@@ -62,6 +62,11 @@ export function useDashboard(
     cacheRoot?: string;
     /** How the app's events are read (tests); from Git and the provider caches otherwise. */
     load?: (app: string, options: LoadOptions) => Promise<DashboardEvent[]>;
+    /**
+     * The open app's events its providers hold now: their caches keep only what ended, so a running build comes from
+     * here. A read event with the same id wins (it ended); one without a branch takes its commit's from a read event.
+     */
+    live?: Accessor<DashboardEvent[]>;
   }>,
 ): DashboardState {
   const settings = () => opts.settings?.() ?? DEFAULT_DASHBOARD_SETTINGS;
@@ -128,9 +133,23 @@ export function useDashboard(
     onCleanup(onProviderCacheWrite(reloadSoon));
   });
 
+  const all = createMemo(() => {
+    const read = events();
+    const held = opts.live?.() ?? [];
+    if (held.length === 0) return read;
+    const since = (opts.now ?? Date.now)() - windowDays() * DAY;
+    const ids = new Set(read.map(event => event.id));
+    const branches = new Map(read.flatMap(event => (event.branch ? [[event.sha, event.branch] as const] : [])));
+    const added = held.flatMap(event => {
+      if (ids.has(event.id) || event.time < since) return [];
+      const branch = event.branch ?? branches.get(event.sha);
+      return [branch ? { ...event, branch } : event];
+    });
+    return added.length === 0 ? read : [...read, ...added].sort((a, b) => b.time - a.time);
+  });
   const shown = createMemo(() => {
     const left = hidden();
-    return left.size === 0 ? events() : events().filter(event => !left.has(event.source));
+    return left.size === 0 ? all() : all().filter(event => !left.has(event.source));
   });
   const rows = createMemo(() =>
     dashboardRows(shown(), {
@@ -175,7 +194,7 @@ export function useDashboard(
     settings,
     rows,
     eventCount: () => shown().length,
-    totalCount: () => events().length,
+    totalCount: () => all().length,
     hidden,
     toggleSource,
     cursor,

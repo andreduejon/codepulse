@@ -43,14 +43,15 @@ import {
   MIN_TERMINAL_WIDTH,
 } from "./constants";
 import { AppStateContext, createAppState, providerIdle, providerStatusMessage } from "./context/state";
+import { ThemeContext } from "./context/theme";
+import type { DashboardEvent } from "./dashboard/events";
+import { githubEvents, jenkinsEvents, openShiftEvents } from "./dashboard/events";
 import {
   DASHBOARD_FETCHING_PROVIDERS,
   dashboardFetchMessage,
   type FetchError,
   fetchErrorKey,
 } from "./dashboard/fetch-errors";
-import { ThemeContext } from "./context/theme";
-import type { DashboardEvent } from "./dashboard/events";
 import { dashboardSettings } from "./dashboard/settings";
 import { type DashboardApp, useDashboard } from "./dashboard/use-dashboard";
 import { BANNER, displayBanner } from "./debug/banner";
@@ -518,9 +519,20 @@ export function AppContent(props: Readonly<AppContentProps>) {
     }),
   );
   const dashboardShown = () => state.activeProviderView() === "dashboard";
+  /** What the open app's providers hold now, as dashboard events: a running build is only here, not in a cache. */
+  const heldDashboardEvents = createMemo(() => {
+    if (!dashboardShown()) return [];
+    const app = activeRepoPath();
+    return [
+      ...githubEvents(app, gitHubCI.heldEntries()),
+      ...jenkinsEvents(app, jenkinsCI.heldEntries()),
+      ...openShiftEvents(app, openShift.heldEntries()),
+    ];
+  });
   const dashboard = useDashboard({
     app: dashboardApp,
     active: dashboardShown,
+    live: heldDashboardEvents,
     settings: dashboardConfig,
     // The graph read again (a refresh, a fetch, a new commit): its main branch may have moved.
     changes: () => state.graphRows(),

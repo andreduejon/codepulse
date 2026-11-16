@@ -64,6 +64,11 @@ export interface UseGitHubCIResult {
   /** Retrieve all runs for a given commit SHA (null if not fetched yet). */
   getCommitData: (sha: string) => GitHubCommitData | null;
   /**
+   * Every run it holds for the open repository, shaped like its cache entries: the dashboard shows the running ones
+   * from here (the cache keeps only what ended). Reactive.
+   */
+  heldEntries: () => GitHubCommitData[];
+  /**
    * Fetch jobs for a run on demand and cache them.
    * Returns the jobs once fetched (or from cache).
    * Resolves to an empty array on provider errors; cancellation rejects with AbortError.
@@ -579,6 +584,10 @@ export function useGitHubCI(opts: {
       return log;
     },
     fetchCommitDataForSHA,
+    heldEntries: () => {
+      commitDataVersion();
+      return [...commitDataCache.values()];
+    },
     refresh: refreshWindow,
     isAvailable,
     invalidate: lifecycle.resetCaches,

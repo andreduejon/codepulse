@@ -172,3 +172,52 @@ test("a provider hidden from its badge leaves the rope with its events; the coun
   expect(d.state.hidden().size).toBe(0);
   expect([d.state.eventCount(), d.state.totalCount()]).toEqual([3, 3]);
 });
+
+test("what the providers hold now joins the read events: a running build shows, and the read event wins once it ends", async () => {
+  const SHA = "b".repeat(40);
+  const finished: DashboardEvent = {
+    id: "/shop:jenkins:7",
+    app: "/shop",
+    source: "jenkins",
+    time: NOW - 5 * 60_000,
+    status: "pass",
+    text: "dev #7 passed",
+    sha: SHA,
+    branch: "dev",
+  };
+  const [live, setLive] = createSignal<DashboardEvent[]>([]);
+  const [loaded, setLoaded] = createSignal<DashboardEvent[]>([]);
+  const [active] = createSignal(true);
+  const state = createRoot(dispose => {
+    cleanup.push(dispose);
+    return useDashboard({
+      app: () => SHOP,
+      active,
+      now: () => NOW,
+      live,
+      load: async () => loaded(),
+    });
+  });
+  await settle();
+  const running: DashboardEvent = { ...finished, status: "running", text: "dev #7 running", time: NOW - 60_000 };
+  const { branch: _branch, ...unbranched } = running;
+  // The provider names no branch: the one a read event of the same commit has fills in.
+  setLoaded([{ ...event("/shop", 30), sha: SHA, branch: "dev" }]);
+  await state.reload();
+  setLive([unbranched, { ...running, id: "/shop:jenkins:1", time: NOW - 9 * 24 * 3_600_000 }]);
+  const texts = () => state.rows().flatMap(row => (row.kind === "event" ? [row.event.text] : []));
+  expect(texts()).toEqual(["dev #7 running", "/shop 30"]);
+  expect(state.rows().find(row => row.kind === "event" && row.event.id === finished.id)).toMatchObject({
+    event: { branch: "dev" },
+  });
+  expect(state.totalCount()).toBe(2);
+
+  // It ended and its provider wrote it: the read event, not the one still in memory.
+  setLoaded([finished, { ...event("/shop", 30), sha: SHA, branch: "dev" }]);
+  await state.reload();
+  expect(texts()).toEqual(["dev #7 passed", "/shop 30"]);
+
+  // A hidden provider hides what it holds too.
+  state.toggleSource("jenkins");
+  expect(texts()).toEqual(["/shop 30"]);
+});

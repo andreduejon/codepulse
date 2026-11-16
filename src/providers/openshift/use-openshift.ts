@@ -47,6 +47,11 @@ import { appendOpenShiftLogFollow } from "./watch";
 
 export interface UseOpenShiftResult {
   getCommitData: (sha: string) => OpenShiftCommitData | null;
+  /**
+   * Every build it holds for the open repository, shaped like its cache entries: the dashboard shows the running ones
+   * from here (the cache keeps only what ended). Reactive.
+   */
+  heldEntries: () => OpenShiftCacheEntry[];
   refresh: () => Promise<void>;
   fetchCommitDataForSHA: (sha: string, force?: boolean) => Promise<void>;
   isLoading: (sha: string) => boolean;
@@ -643,6 +648,16 @@ export function useOpenShift(opts: {
     getCommitData: sha => {
       version();
       return commits.get(sha.toLowerCase()) ?? null;
+    },
+    heldEntries: () => {
+      version();
+      return [...commits.values()].map(commit => ({
+        sha: commit.sha,
+        builds: commit.namespaces
+          .flatMap(namespace => namespace.builds)
+          .map(toCachedBuild)
+          .filter(build => build !== null),
+      }));
     },
     refresh: async () => lifecycle.fetchRefresh(undefined, true, true),
     fetchCommitDataForSHA: async (sha, force) => {

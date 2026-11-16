@@ -33,6 +33,11 @@ const reportsKnown = (jobs: readonly JenkinsJob[]) => jobs.every(job => job.test
 
 export interface UseJenkinsCIResult {
   getCommitData: (sha: string) => JenkinsCommitData | null;
+  /**
+   * Every build it holds for the open repository, shaped like its cache entries: the dashboard shows the running ones
+   * from here (the cache keeps only what ended). Reactive.
+   */
+  heldEntries: () => JenkinsCommitData[];
   fetchJobsForRun: (run: JenkinsRun, signal?: AbortSignal) => Promise<JenkinsJobFetchResult>;
   fetchRunLog: (run: JenkinsRun, signal?: AbortSignal) => Promise<string>;
   fetchCommitDataForSHA: (sha: string, force?: boolean) => Promise<void>;
@@ -454,6 +459,10 @@ export function useJenkinsCI(opts: {
       }
       if (!discoveryTruncated) actions.setProviderLastSuccessfulRefresh("jenkins", new Date());
       if (state.providerStatusFor("jenkins").kind === "error") actions.setProviderStatus("jenkins", settledStatus());
+    },
+    heldEntries: () => {
+      commitDataVersion();
+      return [...commitDataCache.values()];
     },
     refresh: refreshWindow,
     isAvailable,
