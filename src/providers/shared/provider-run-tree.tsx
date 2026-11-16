@@ -527,7 +527,8 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     if (!id || !props.detailFocused()) return;
     const key = `${props.dataKey}\u0000${id}`;
     if (opened.targetFocusedKey === key) return;
-    const index = untrack(flatItems).findIndex(item => item.kind === "run" && item.run.id === id);
+    // Tracked: a run that arrives later (its commit's data loads after the focus) still gets the cursor, once.
+    const index = flatItems().findIndex(item => item.kind === "run" && item.run.id === id);
     if (index < 0) return;
     opened.targetFocusedKey = key;
     props.setDetailCursorIndex(index);

@@ -277,3 +277,53 @@ test("the dashboard's event: its build is marked in the given color, and the tab
     tab.renderer.destroy();
   }
 });
+
+test("the dashboard's build that arrives after the tab got the keyboard still gets the cursor", async () => {
+  const [data, setData] = createSignal<OpenShiftCommitData | null>(null);
+  const [cursor, setCursor] = createSignal(0);
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={createThemeState()}>
+        <box width={70} flexDirection="column">
+          <OpenShiftDetailTab
+            sha={SHA}
+            getCommitData={() => data()}
+            detailCursorIndex={cursor}
+            detailFocused={() => true}
+            setDetailCursorAction={() => {}}
+            setDetailCursorIndex={setCursor}
+            targetResourceId="Build/shop-api-43"
+          />
+        </box>
+      </ThemeContext.Provider>
+    ),
+    { width: 74, height: 20 },
+  );
+  try {
+    await setup.flush();
+    expect(cursor()).toBe(0);
+    setData({
+      sha: SHA,
+      liveFetched: true,
+      namespaces: [
+        {
+          namespace: "payments-dev",
+          builds: [resource("Build", "shop-api-43")],
+          imageStreamTags: [],
+          deployments: [],
+          deploymentConfigs: [],
+          pods: [],
+        },
+      ],
+    });
+    for (let i = 0; i < 4; i++) {
+      await Bun.sleep(0);
+      await setup.flush();
+    }
+    const lines = setup.captureCharFrame().split("\n");
+    expect(cursor()).toBeGreaterThan(0);
+    expect(lines.find(line => line.includes("shop-api-43"))).toBeDefined();
+  } finally {
+    setup.renderer.destroy();
+  }
+});

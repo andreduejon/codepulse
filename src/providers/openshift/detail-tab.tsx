@@ -269,7 +269,8 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
     if (!id || !props.detailFocused()) return;
     const key = `${props.sha}\u0000${id}`;
     if (targetFocus.key === key) return;
-    const index = untrack(flatItems).findIndex(item => item.kind === "resource" && item.resource.id === id);
+    // Tracked: a build that arrives later (its commit's data loads after the focus) still gets the cursor, once.
+    const index = flatItems().findIndex(item => item.kind === "resource" && item.resource.id === id);
     if (index < 0) return;
     targetFocus.key = key;
     props.setDetailCursorIndex(index);
