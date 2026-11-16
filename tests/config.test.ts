@@ -813,15 +813,24 @@ describe("dashboard settings", () => {
     const { config, warnings } = loadConfig(repoPath, configPath);
     expect(config.dashboard).toEqual({ windowDays: 10, knotMinutes: 120 });
     expect(config.providers?.github?.enabled).toBe(true);
+    expect(writeConfig({ dashboard: { enabled: false } }, repoPath, configPath)).toBe(true);
+    expect(loadConfig(repoPath, configPath).config.dashboard).toEqual({
+      enabled: false,
+      windowDays: 10,
+      knotMinutes: 120,
+    });
     expect(warnings).toEqual([]);
   });
 
   test("values the menu does not offer are ignored with a warning", () => {
     const repoPath = "/tmp/repo";
-    const configPath = makeRepoConfig("dashboard-invalid", repoPath, { dashboard: { windowDays: 14, knotMinutes: "1h" } });
+    const configPath = makeRepoConfig("dashboard-invalid", repoPath, {
+      dashboard: { enabled: "yes", windowDays: 14, knotMinutes: "1h" },
+    });
     const { config, warnings } = loadConfig(repoPath, configPath);
     expect(config.dashboard).toEqual({});
-    expect(warnings).toHaveLength(2);
+    expect(warnings).toHaveLength(3);
+    expect(warnings[0]).toContain('"dashboard.enabled" must be a boolean');
   });
 });
 
@@ -840,6 +849,7 @@ describe("start view", () => {
   test("it starts in the chosen view while that provider is turned on, else in Git", () => {
     expect(startViewFor({})).toBe("git");
     expect(startViewFor({ startView: "dashboard" })).toBe("dashboard");
+    expect(startViewFor({ startView: "dashboard", dashboard: { enabled: false } })).toBe("git");
     expect(startViewFor({ startView: "jenkins", providers: { jenkins: { enabled: true } } })).toBe("jenkins");
     expect(startViewFor({ startView: "jenkins", providers: { jenkins: { enabled: false } } })).toBe("git");
     expect(startViewFor({ startView: "github-actions" })).toBe("git");

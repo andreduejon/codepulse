@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { RGBA } from "@opentui/core";
 import { MouseButtons } from "@opentui/core/testing";
 import { testRender } from "@opentui/solid";
 import { createRoot, createSignal } from "solid-js";
@@ -130,6 +131,55 @@ test("with every provider that has events hidden, it says how to show them again
     const frame = setup.captureCharFrame();
     expect(frame).toContain("Every event is hidden. Click a provider's badge to show its events.");
     expect(frame).not.toContain("Nothing happened");
+  } finally {
+    setup.renderer.destroy();
+  }
+});
+
+test("a scan's counts each take their severity's color, and a severity without findings is muted", async () => {
+  const counts = { critical: 1, high: 3, medium: 0, low: 2 };
+  const scan: DashboardEvent = {
+    id: "scan",
+    app: "/shop",
+    source: "snyk",
+    time: new Date(2026, 2, 2, 10, 5).getTime(),
+    status: "fail",
+    severity: "critical",
+    counts,
+    text: "scan · 6 vulnerabilities · 1 critical · 3 high · 0 medium · 2 low",
+    sha: SHA,
+    branch: "main",
+  };
+  const [active] = createSignal(true);
+  const dashboard = createRoot(() =>
+    useDashboard({
+      app: () => ({ path: "/shop", name: "shop" }),
+      active,
+      now: () => NOW,
+      load: async () => [scan],
+    }),
+  );
+  const themeState = createThemeState();
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={themeState}>
+        <DashboardView dashboard={dashboard} now={() => NOW} />
+      </ThemeContext.Provider>
+    ),
+    { width: 120, height: 10 },
+  );
+  try {
+    await Bun.sleep(0);
+    await setup.flush();
+    const lines = setup.captureCharFrame().split("\n");
+    const row = lines.findIndex(line => line.includes("6 vulnerabilities"));
+    expect(lines[row]).toContain("▲ scan · 6 vulnerabilities · 1 critical · 3 high · 0 medium · 2 low");
+    const theme = themeState.theme();
+    const fg = (label: string) => setup.captureSpans().lines[row]?.spans.find(span => span.text.includes(label))?.fg;
+    expect(fg("1 critical")).toEqual(RGBA.fromHex(theme.severityCritical));
+    expect(fg("3 high")).toEqual(RGBA.fromHex(theme.severityHigh));
+    expect(fg("0 medium")).toEqual(RGBA.fromHex(theme.foregroundMuted));
+    expect(fg("2 low")).toEqual(RGBA.fromHex(theme.severityLow));
   } finally {
     setup.renderer.destroy();
   }

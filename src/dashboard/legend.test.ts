@@ -38,4 +38,16 @@ describe("dashboard marks", () => {
     }
     expect(eventMark(scan(null))).toBeNull();
   });
+
+  test("the severity legend names each level beside its triangle, without the Snyk tab to explain it", () => {
+    const theme = themes["catppuccin-mocha"];
+    expect(
+      SNYK_SEVERITY_LEGEND.map(([markers, label]) => [markers.map(([icon, color]) => [icon, color(theme)]), label]),
+    ).toEqual([
+      [[["▲", theme.severityCritical]], "critical"],
+      [[["▲", theme.severityHigh]], "high"],
+      [[["▲", theme.severityMedium]], "medium"],
+      [[["▲", theme.severityLow]], "low"],
+    ]);
+  });
 });

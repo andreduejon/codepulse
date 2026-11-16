@@ -6,8 +6,11 @@ import { eventMark, KNOT } from "../dashboard/legend";
 import type { DashboardState } from "../dashboard/use-dashboard";
 import { useT } from "../hooks/use-t";
 import { providerColors } from "../providers/colors";
+import { severityColor } from "../providers/snyk/severity";
 import { formatClock, formatDayLabel } from "../utils/date";
 import { type ScrollSchedule, scheduleScrollIntoView, scrollElementIntoView } from "../utils/scroll";
+
+const SNYK_SEVERITIES = ["critical", "high", "medium", "low"] as const;
 
 /** Width of the Time column: `09:05` and its padding. */
 const TIME_COL_WIDTH = 7;
@@ -57,15 +60,38 @@ export function DashboardView(
     );
   };
 
-  /** What happened: its mark (a commit has none), then its text. The commit is in its own column. */
+  /**
+   * What happened: its mark (a commit has none), then its text. The commit is in its own column. A scan's counts take
+   * their severity's color, muted without findings.
+   */
   const EventText = (eventProps: { event: DashboardEvent }) => {
     const event = () => eventProps.event;
+    const counts = () => {
+      const found = event().counts;
+      return found ? SNYK_SEVERITIES.map(severity => [severity, found[severity]] as const) : null;
+    };
     return (
       <text wrapMode="none" truncate fg={t().foreground}>
         <Show when={eventMark(event())}>
           {mark => <span style={{ fg: mark().color(t()) }}>{`${mark().icon} `}</span>}
         </Show>
-        {event().text}
+        <Show when={counts()} fallback={event().text}>
+          {found => (
+            <>
+              {event().text.split(" · ").slice(0, 2).join(" · ")}
+              <For each={found()}>
+                {([severity, count]) => (
+                  <>
+                    {" · "}
+                    <span style={{ fg: count > 0 ? severityColor(t(), severity) : t().foregroundMuted }}>
+                      {`${count} ${severity}`}
+                    </span>
+                  </>
+                )}
+              </For>
+            </>
+          )}
+        </Show>
       </text>
     );
   };

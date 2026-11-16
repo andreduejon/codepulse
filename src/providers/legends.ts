@@ -17,10 +17,8 @@ export const OPENSHIFT_LEGEND: LegendItem[] = (["pass", "running", "fail"] as co
   category === "pass" ? "ok" : category === "running" ? "in progress" : "failing",
 ]);
 
-/** The triangle's color is a package's (on the dashboard, a scan's) worst severity. */
-export const SNYK_SEVERITY_LEGEND: LegendItem[] = [
-  [
-    (["critical", "high", "medium", "low"] as const).map(severity => ["▲", theme => severityColor(theme, severity)]),
-    "severity",
-  ],
-];
+/** The triangle's color is a package's (on the dashboard, a scan's) worst severity: each level by its name. */
+export const SNYK_SEVERITY_LEGEND: LegendItem[] = (["critical", "high", "medium", "low"] as const).map(severity => [
+  [["▲", theme => severityColor(theme, severity)]],
+  severity,
+]);

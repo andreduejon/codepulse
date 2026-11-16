@@ -14,12 +14,12 @@ import * as detailLoader from "./hooks/use-detail-loader";
 const repo = resolve("/repo/dashboard-errors");
 
 /** Codepulse on the dashboard of one app, without Git or providers: the test sets the providers' statuses. */
-async function launch() {
+async function launch(repoConfig: config.CodepulseConfig = {}) {
   let actions: AppActions | undefined;
   const spies = [
     spyOn(configWrite, "backfillRepoConfig").mockImplementation(() => {}),
     spyOn(configWrite, "writeConfig").mockImplementation(() => true),
-    spyOn(config, "loadConfig").mockImplementation(() => ({ config: {}, warnings: [] })),
+    spyOn(config, "loadConfig").mockImplementation(() => ({ config: repoConfig, warnings: [] })),
     spyOn(config, "getRepoDisplayConfig").mockImplementation(() => ({ group: "shop", appName: "first-app" })),
     spyOn(config, "getKnownRepoInfos").mockReturnValue([{ path: repo, group: "shop", appName: "first-app" }]),
     spyOn(detailLoader, "useDetailLoader").mockImplementation(() => {}),
@@ -98,6 +98,53 @@ test("the dashboard shows its providers' fetch errors in one box, until closed o
     actions.setProviderStatus("github-actions", providerError("GitHub rate limit exceeded."));
     expect(await frame()).toContain("GitHub rate limit exceeded.");
     expect(await frame()).toContain("Errors from GitHub and Jenkins");
+  } finally {
+    await dispose();
+  }
+});
+
+test("a dashboard turned off has no tab, and a repository set to start in it starts in Git", async () => {
+  const { actions, setup, dispose } = await launch({ startView: "dashboard", dashboard: { enabled: false } });
+  try {
+    await setup.flush();
+    const frame = setup.captureCharFrame();
+    expect(frame).not.toContain("Dashboard");
+    expect(frame).toMatch(/Graph\s+Commit\s+Description/);
+    // Tab cycles without it.
+    actions.setActiveProviderView("git");
+    setup.mockInput.pressTab();
+    await setup.flush();
+    expect(setup.captureCharFrame()).not.toContain("Event");
+  } finally {
+    await dispose();
+  }
+});
+
+test("turning the dashboard off in the menu while it is shown goes back to Git", async () => {
+  const { setup, dispose } = await launch({ startView: "dashboard" });
+  try {
+    await setup.flush();
+    expect(setup.captureCharFrame()).toMatch(/Graph\s+Commit\s+Branch\s+Time\s+Event/);
+    setup.mockInput.pressKey("m");
+    await setup.flush();
+    for (let step = 0; step < 6 && !setup.captureCharFrame().includes("Time window"); step++) {
+      setup.mockInput.pressArrow("right");
+      await setup.flush();
+    }
+    const menu = setup.captureCharFrame().split("\n");
+    const row = menu.findIndex(line => line.includes("Enabled"));
+    expect(row).toBeGreaterThan(0);
+    await setup.mockMouse.click(menu[row]?.indexOf("Enabled") ?? 0, row);
+    await setup.flush();
+    setup.mockInput.pressEscape();
+    await setup.flush();
+    const frame = setup.captureCharFrame();
+    expect(frame).not.toContain("Dashboard");
+    expect(frame).toMatch(/Graph\s+Commit\s+Description/);
+    expect(configWrite.writeConfig).toHaveBeenLastCalledWith(
+      expect.objectContaining({ dashboard: expect.objectContaining({ enabled: false }) }),
+      repo,
+    );
   } finally {
     await dispose();
   }

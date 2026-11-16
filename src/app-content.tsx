@@ -112,6 +112,12 @@ export function AppContent(props: Readonly<AppContentProps>) {
   /** Menu → Repository → Preferences → Auto fast-forward: `f` and Auto fetch fast-forward too. */
   const [autoFastForward, setAutoFastForward] = createSignal(startConfig.autoFastForward ?? false);
   actions.setActiveProviderView(startViewFor(startConfig));
+  // Menu → Providers → Dashboard → Enabled, per repository: off, it has no tab, and leaving it shows Git.
+  createEffect(() => {
+    const enabled = dashboardConfig().enabled;
+    state.providers.setDashboardEnabled(enabled);
+    if (!enabled && untrack(state.activeProviderView) === "dashboard") actions.setActiveProviderView("git");
+  });
 
   const [repoDisplayConfig, setRepoDisplayConfig] = createSignal(getRepoDisplayConfig(activeRepoPath()));
 

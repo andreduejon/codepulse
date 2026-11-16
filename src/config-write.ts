@@ -291,6 +291,7 @@ function applyConfigFields(target: Record<string, unknown>, config: CodepulseCon
         : {};
     target.dashboard = {
       ...existing,
+      ...(config.dashboard.enabled !== undefined ? { enabled: config.dashboard.enabled } : {}),
       ...(config.dashboard.windowDays !== undefined ? { windowDays: config.dashboard.windowDays } : {}),
       ...(config.dashboard.knotMinutes !== undefined ? { knotMinutes: config.dashboard.knotMinutes } : {}),
     };

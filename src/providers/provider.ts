@@ -104,6 +104,8 @@ export interface ProviderRegistry {
   unregister: (id: ProviderView) => void;
   getVersion: () => number;
   getEnabledViews: () => ProviderView[];
+  /** The Dashboard tab shows while it is turned on (Menu → Providers → Dashboard). */
+  setDashboardEnabled: (enabled: boolean) => void;
   nextView: (current: ProviderView) => ProviderView;
   get: (id: ProviderView) => ProviderRegistration | undefined;
 }
@@ -112,10 +114,13 @@ export interface ProviderRegistry {
 export function createProviderRegistry(): ProviderRegistry {
   const entries: ProviderRegistration[] = [];
   const [version, setVersion] = createSignal(0);
+  const [dashboardEnabled, setDashboardEnabled] = createSignal(true);
 
   const getEnabledViews = (): ProviderView[] => {
     const registered = new Set(entries.map(p => p.id));
-    return PROVIDER_ORDER.filter(view => view === "dashboard" || view === "git" || registered.has(view));
+    return PROVIDER_ORDER.filter(
+      view => (view === "dashboard" && dashboardEnabled()) || view === "git" || registered.has(view),
+    );
   };
 
   return {
@@ -134,6 +139,7 @@ export function createProviderRegistry(): ProviderRegistry {
     },
     getVersion: () => version(),
     getEnabledViews,
+    setDashboardEnabled,
     nextView(current) {
       const views = getEnabledViews();
       if (views.length <= 1) return "git";

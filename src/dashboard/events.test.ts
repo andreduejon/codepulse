@@ -129,14 +129,21 @@ describe("events", () => {
         source: "snyk",
         status: "fail",
         severity: "critical",
-        text: "scan · 6 vulnerabilities · 1 critical, 3 high, 2 low",
+        // Every severity, in order, also when none was found: the counts line up from scan to scan.
+        text: "scan · 6 vulnerabilities · 1 critical · 3 high · 0 medium · 2 low",
+        counts,
       }),
     ]);
     expect(
       snykEvents("/repo/shop", [
         { sha: SHA, scannedAt: "2026-03-02T10:30:00Z", counts: { critical: 0, high: 0, medium: 1, low: 0 } },
       ]),
-    ).toEqual([expect.objectContaining({ severity: "medium", text: "scan · 1 vulnerability · 1 medium" })]);
+    ).toEqual([
+      expect.objectContaining({
+        severity: "medium",
+        text: "scan · 1 vulnerability · 0 critical · 0 high · 1 medium · 0 low",
+      }),
+    ]);
     expect(
       snykEvents("/repo/shop", [
         { sha: SHA, scannedAt: "2026-03-02T10:30:00Z", counts: { critical: 0, high: 0, medium: 0, low: 0 } },

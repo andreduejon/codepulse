@@ -50,8 +50,9 @@ export interface CodepulseConfig {
   startView?: ProviderView;
   /** `f` and Auto fetch also fast-forward the branches that are only behind their remote branch. Off by default. */
   autoFastForward?: boolean;
-  /** The dashboard: how many days back it reads, and how many minutes one knot holds. */
+  /** The dashboard: whether it shows (on by default), how many days back it reads, how many minutes one knot holds. */
   dashboard?: {
+    enabled?: boolean;
     windowDays?: DashboardWindowDays;
     knotMinutes?: DashboardKnotMinutes;
   };
@@ -640,6 +641,10 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
     if (typeof raw.dashboard === "object" && raw.dashboard !== null && !Array.isArray(raw.dashboard)) {
       const dashboard = raw.dashboard as Record<string, unknown>;
       config.dashboard = {};
+      if (dashboard.enabled !== undefined) {
+        if (typeof dashboard.enabled === "boolean") config.dashboard.enabled = dashboard.enabled;
+        else warnings.push(`${path}: "dashboard.enabled" must be a boolean, ignoring`);
+      }
       if (dashboard.windowDays !== undefined) {
         if ((DASHBOARD_WINDOW_DAYS as readonly unknown[]).includes(dashboard.windowDays))
           config.dashboard.windowDays = dashboard.windowDays as DashboardWindowDays;
@@ -667,6 +672,7 @@ export function startViewFor(config: CodepulseConfig): ProviderView {
   const view = config.startView ?? "git";
   switch (view) {
     case "dashboard":
+      return config.dashboard?.enabled === false ? "git" : view;
     case "git":
       return view;
     case "github-actions":

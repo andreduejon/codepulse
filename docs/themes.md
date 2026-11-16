@@ -67,8 +67,8 @@ the entry.
 ### Standalone definitions
 
 Omit `base` to create an independent theme. Every color key below is then
-required, including `graphColors`, except `dashboardFg` and `dashboardBg`: without
-them the Dashboard uses `background` and `accent`.
+required, including `graphColors`. A theme that lacks one is skipped, and Debug
+names the missing colors.
 
 ```text
 background, backgroundPanel, backgroundElement, backgroundElementActive,

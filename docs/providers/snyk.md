@@ -202,7 +202,7 @@ bar.
   nothing opens for findings. Press **v** on a marked row to open Vulnerabilities
   filtered to its `name@version` (the footer shows the hint): that package's own
   findings in every manifest, not those of packages it pulls in. Scores, exploits and
-  fixes live in Vulnerabilities. A legend (`▲ ▲ ▲ ▲ severity`) is pinned below the
+  fixes live in Vulnerabilities. A legend (`▲ critical  ▲ high  ▲ medium  ▲ low`) is pinned below the
   tab when the scan has findings. Leaves sit one space after their connector.
 - Packages whose version the project forces carry a muted **override** keyword,
   in both Group by views. For pnpm it comes from the `overrides:` section of

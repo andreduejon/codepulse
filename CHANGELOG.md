@@ -20,18 +20,21 @@ All notable changes to this project will be documented in this file.
   what happened, the provider's facts (workflow, duration, why a build failed, the scan's total and counts), its commit
   and the provider's marks; below that, Enter opens them as a dialog, like the graph's details. Each event's mark and
   legend are the ones its provider's detail tab shows: a scan with findings gets Snyk's `▲` in its worst finding's
-  severity color. Enter, or **Show in graph** at the top of the details, shows the event's commit in the graph (a click
-  on a row only selects it, like in the graph), and `o` opens a run's or build's page. While the dashboard is shown,
-  each provider fetches and auto refreshes as if its tab were open, without a loading status, and Snyk scans the tips of
-  its Auto scan branches, so the events are fresh without visiting each tab. A failed fetch or scan shows in the message
-  box, worded as on the provider's tab; several share one box (`Errors from GitHub and Jenkins`) with a line each.
-  Closing it with `✕` or `:clear` keeps it closed until an error changes. The dashboard reads Git and the provider
-  caches, and reads them again whenever a provider finishes a fetch or the graph is read again; `r` reads them at once.
-  **Menu → Providers → Dashboard** sets how far back it reads (Time window, 1 to 30 days, 7 by default) and how long a
-  knot is (Knot size, 15 minutes to 4 hours, 1 hour by default). The Dashboard tab has its own color in every theme;
-  custom themes set it with `dashboardFg` and `dashboardBg`. The graph's search (`/`), path filter and ancestry don't
-  work on the dashboard, an open search bar closes when it shows, and Esc there leaves the graph's highlights and branch
-  view alone.
+  severity color, then its total and every severity in order (`scan · 4 vulnerabilities · 1 critical · 3 high · 0 medium
+  · 0 low`), each count in its severity's color and muted at zero. Enter, or **Show in graph** at the top of the
+  details, shows the event's commit in the graph (a click on a row only selects it, like in the graph), and `o` opens a
+  run's or build's page. While the dashboard is shown, each provider fetches and auto refreshes as if its tab were open,
+  without a loading status, and Snyk scans the tips of its Auto scan branches, so the events are fresh without visiting
+  each tab. A failed fetch or scan shows in the message box, worded as on the provider's tab; several share one box
+  (`Errors from GitHub and Jenkins`) with a line each. Closing it with `✕` or `:clear` keeps it closed until an error
+  changes. The dashboard reads Git and the provider caches, and reads them again whenever a provider finishes a fetch or
+  the graph is read again; `r` reads them at once. **Menu → Providers → Dashboard** turns it off (Enabled, on by
+  default: without it there is no Dashboard tab and a repository set to start in it starts in Git) and sets how far back
+  it reads (Time window, 1 to 30 days, 7 by default) and how long a knot is (Knot size, 15 minutes to 4 hours, 1 hour by
+  default). The Dashboard tab has its own color in every theme; custom themes set it with `dashboardFg` and
+  `dashboardBg`, which a standalone theme (one without `base`) must have: one without them is skipped, and Debug names
+  the missing colors. The graph's search (`/`), path filter and ancestry don't work on the dashboard, an open search bar
+  closes when it shows, and Esc there leaves the graph's highlights and branch view alone.
 - **Menu → Repository → Preferences → Start in** chooses the view a repository opens in: Git (the default), the
   Dashboard or a provider that is turned on. Saved per repository as `startView`. Another repository of the group opens
   in its own start view the first time it's shown, and where you left it after that. A provider turned off since starts
@@ -53,6 +56,8 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Snyk's severity legend, below the Snyk tab and in the Dashboard's details, names each level beside its triangle (`▲
+  critical  ▲ high  ▲ medium  ▲ low`) instead of four triangles and `severity`.
 - OpenShift lists its builds once when a repository loads, like GitHub and Jenkins already fetch their runs, and Snyk
   scans the tips of its Auto scan branches on every view, once per new tip. So the graph and the Dashboard show them
   before their tabs are opened. Auto refresh still runs only on a provider's tab and the Dashboard.

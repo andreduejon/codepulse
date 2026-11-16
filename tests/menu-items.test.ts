@@ -19,13 +19,31 @@ import {
   startViewItem,
 } from "../src/hooks/use-menu-items";
 
+describe("buildDashboardItems, turned off", () => {
+  it("is on by default; turned off it shows only Enabled, like a provider", () => {
+    const saved: unknown[] = [];
+    const items = buildDashboardItems({ enabled: false, windowDays: 7, knotMinutes: 60 }, next => saved.push(next));
+    expect(items.map(item => ("label" in item ? item.label : ""))).toEqual(["Dashboard", "Enabled"]);
+    const enabled = items[1];
+    if (enabled?.kind !== "toggle") throw new Error("expected a toggle");
+    expect(enabled.get()).toBe(false);
+    enabled.set(true);
+    expect(saved).toEqual([{ enabled: true, windowDays: 7, knotMinutes: 60 }]);
+  });
+});
+
 describe("buildDashboardItems", () => {
   it("offers the time window and the knot size, and saves the next choice", () => {
     const saved: unknown[] = [];
-    const items = buildDashboardItems({ windowDays: 7, knotMinutes: 60 }, next => saved.push(next));
-    expect(items.map(item => ("label" in item ? item.label : ""))).toEqual(["Dashboard", "Time window", "Knot size"]);
-    const window = items[1];
-    const knot = items[2];
+    const items = buildDashboardItems({ enabled: true, windowDays: 7, knotMinutes: 60 }, next => saved.push(next));
+    expect(items.map(item => ("label" in item ? item.label : ""))).toEqual([
+      "Dashboard",
+      "Enabled",
+      "Time window",
+      "Knot size",
+    ]);
+    const window = items[2];
+    const knot = items[3];
     if (window?.kind !== "cycle" || knot?.kind !== "cycle") throw new Error("expected cycle items");
     expect(window.options).toEqual(["1d", "3d", "7d", "10d", "30d"]);
     expect(window.get()).toBe("7d");
@@ -34,8 +52,8 @@ describe("buildDashboardItems", () => {
     window.set("10d");
     knot.set("15m");
     expect(saved).toEqual([
-      { windowDays: 10, knotMinutes: 60 },
-      { windowDays: 7, knotMinutes: 15 },
+      { enabled: true, windowDays: 10, knotMinutes: 60 },
+      { enabled: true, windowDays: 7, knotMinutes: 15 },
     ]);
   });
 });

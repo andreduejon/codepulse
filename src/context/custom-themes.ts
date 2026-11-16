@@ -8,11 +8,6 @@ type ColorKey = Exclude<keyof Theme, "name">;
 const colorKeys = Object.keys(themes["catppuccin-mocha"]).filter(key => key !== "name") as ColorKey[];
 // Unlike $, this end assertion also rejects a trailing newline.
 const validId = /^[a-z0-9]+(?:-[a-z0-9]+)*(?![\s\S])/;
-/** Colors added after standalone themes existed: one without them takes the color the app used before. */
-const laterColors = { dashboardBg: "accent", dashboardFg: "background" } as const satisfies Partial<
-  Record<ColorKey, ColorKey>
->;
-type LaterColor = keyof typeof laterColors;
 const validHex = /^#[0-9a-fA-F]{6}(?![\s\S])/;
 
 export function defaultCustomThemesPath(): string {
@@ -48,10 +43,13 @@ function parseTheme(id: string, value: unknown): CustomTheme {
 
   const theme = { name: value.name } as Theme;
   const baseTheme = base ? themes[base] : undefined;
+  // Every color, the newest too (dashboardFg, dashboardBg): a standalone theme names what it lacks.
+  const colors = value.colors;
+  const missing = base ? [] : colorKeys.filter(key => !Object.hasOwn(colors, key));
+  if (missing.length > 0) throw new Error(`standalone theme is missing colors: ${missing.join(", ")}`);
   for (const key of colorKeys) {
     const supplied = Object.hasOwn(value.colors, key);
-    if (!supplied && !base && !(key in laterColors)) throw new Error("standalone theme is missing colors");
-    const color = supplied ? value.colors[key] : (baseTheme?.[key] ?? value.colors[laterColors[key as LaterColor]]);
+    const color = supplied ? value.colors[key] : baseTheme?.[key];
     if (key === "graphColors") {
       if (
         !Array.isArray(color) ||

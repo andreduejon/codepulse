@@ -14,6 +14,16 @@ describe("provider order", () => {
     expect(registry.nextView("openshift")).toBe("dashboard");
     expect(registry.nextView("dashboard")).toBe("git");
   });
+
+  test("a dashboard turned off has no tab: Tab from the last provider goes to Git", () => {
+    const registry = createProviderRegistry();
+    registry.register({ id: "jenkins", displayName: "Jenkins", isAvailable: () => true });
+    registry.setDashboardEnabled(false);
+    expect(registry.getEnabledViews()).toEqual(["git", "jenkins"]);
+    expect(registry.nextView("jenkins")).toBe("git");
+    registry.setDashboardEnabled(true);
+    expect(registry.getEnabledViews()).toEqual(["dashboard", "git", "jenkins"]);
+  });
 });
 
 describe("detail tabs", () => {

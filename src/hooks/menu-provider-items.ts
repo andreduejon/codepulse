@@ -30,12 +30,17 @@ import type {
   SnykMenuConfig,
 } from "./menu-items-types";
 
-/** The dashboard's own section: how far back it reads and how long one knot is. Both save at once. */
+/** The dashboard's own section: whether it shows, how far back it reads and how long one knot is. Each saves at once. */
 export function buildDashboardItems(cfg: DashboardSettings, save: (next: DashboardSettings) => void): SettingItem[] {
   const next = <T>(options: readonly T[], label: (value: T) => string, chosen: string, fallback: T): T =>
     options.find(option => label(option) === chosen) ?? fallback;
-  return [
+  const items: SettingItem[] = [
     { kind: "header", label: "Dashboard" },
+    { kind: "toggle", label: "Enabled", get: () => cfg.enabled, set: enabled => save({ ...cfg, enabled }) },
+  ];
+  if (!cfg.enabled) return items;
+  return [
+    ...items,
     {
       kind: "cycle",
       label: "Time window",
