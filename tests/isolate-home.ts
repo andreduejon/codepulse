@@ -18,4 +18,10 @@ process.env.LOCALAPPDATA = join(home, "AppData", "Local");
 const isolated = { ...os, homedir: () => home };
 mock.module("node:os", () => ({ ...isolated, default: isolated }));
 mock.module("os", () => ({ ...isolated, default: isolated }));
-afterAll(() => rmSync(home, { recursive: true, force: true }));
+afterAll(async () => {
+  // Windows can't remove a file that is open: close the provider cache's database in that home first. Imported here,
+  // after the mocks, so its default folder is the test home.
+  const { closeProviderCaches } = await import("../src/providers/shared/sha-sqlite-cache");
+  closeProviderCaches();
+  rmSync(home, { recursive: true, force: true });
+});

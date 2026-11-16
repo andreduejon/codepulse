@@ -74,7 +74,8 @@ test("moves the checked-out branch and the other branches that are only behind t
   expect(await head("main")).toBe(await head("origin/main"));
   expect(await head("dev")).toBe(await head("origin/dev"));
   // The checked-out branch's files follow it.
-  expect(await readFile(join(local, "file.txt"), "utf-8")).toBe("merge pull request 2\n");
+  // Line endings as checked out: Git for Windows writes CRLF (core.autocrlf).
+  expect((await readFile(join(local, "file.txt"), "utf-8")).replace(/\r\n/g, "\n")).toBe("merge pull request 2\n");
   expect(await git(local, "status", "--porcelain")).toBe("");
 });
 

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import {
   compareMavenVersions,
   LocalRepositoryPoms,
@@ -69,14 +69,15 @@ describe("mavenLocalRepository", () => {
     });
     const worktree = await folder({ ".mvn/maven.config": "-B -Dmaven.repo.local=/from/config" });
     const plain = await folder();
-    expect(await mavenLocalRepository({ home, env: {}, worktree })).toBe("/from/config");
+    // Absolute as Maven reads it: on Windows `/from/config` is on the current drive.
+    expect(await mavenLocalRepository({ home, env: {}, worktree })).toBe(resolve("/from/config"));
     expect(
       await mavenLocalRepository({
         home,
         env: { MAVEN_OPTS: "-Xmx1g -Dmaven.repo.local=/from/opts" },
         worktree: plain,
       }),
-    ).toBe("/from/opts");
+    ).toBe(resolve("/from/opts"));
     expect(await mavenLocalRepository({ home, env: {}, worktree: plain })).toBe(join(home, "maven-cache"));
     expect(await mavenLocalRepository({ home: plain, env: {}, worktree: plain })).toBe(
       join(plain, ".m2", "repository"),
