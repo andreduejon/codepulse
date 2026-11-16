@@ -54,7 +54,8 @@ Configure the provider per repository from `:providers`:
 - Fetch size (`10`, `20`, `50`): how many graph commits are candidates. Only
   those commits that also have a Build or ImageStreamTag seed are matched.
 - Auto refresh (`off`, `2m`, `5m`, `10m`): poll Builds and ImageStreamTags
-  while the OpenShift view or the Dashboard is shown. `off` skips that poll. Reload still
+  while the OpenShift view or the Dashboard is shown. They are also listed
+  once when the repository loads. `off` skips that poll. Reload still
   lists seeds. Live Deploy/DC/Pod freshness is watch, not this timer.
 - Set the commit SHA label/annotation key. Default: `dev/commit-sha`. Labels first, then
   annotations, on Builds, Deployments, and ImageStreamTags.

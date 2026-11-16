@@ -8,7 +8,9 @@ and are never written to Codepulse configuration.
 
 Provider **Auto refresh** controls provider requests while that provider view or
 the Dashboard is shown. On the Dashboard a provider fetches without a loading
-status. Git **Auto refresh** and **Auto fetch** apply only to repository data.
+status, and a failed fetch shows in the message box. When a repository loads,
+GitHub and Jenkins fetch the newest commits' runs, OpenShift lists its builds
+and Snyk scans its Auto scan branches, once each. Git **Auto refresh** and **Auto fetch** apply only to repository data.
 
 **Fetch size** is the graph commit window considered by a provider. It is not a
 cache-retention setting and does not limit resources returned by provider APIs,

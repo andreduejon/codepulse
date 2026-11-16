@@ -40,6 +40,11 @@ export function useProviderFetchLifecycle(opts: {
   queriedSHAs: Set<string>;
   /** Skip graph-SHA background catch-up (inventory providers). */
   skipShaBackground?: boolean;
+  /**
+   * One quiet first fetch once the repository's graph is read, whatever the view (an inventory provider, which has no
+   * graph-SHA catch-up). Once per repository: a failure waits for the provider's view, the dashboard or a Reload.
+   */
+  fetchOnLoad?: boolean;
   reportUnavailable: (showStatus: boolean) => void;
   runInitialFetch: (args: ProviderFetchArgs) => Promise<void>;
   runRefresh: (args: ProviderFetchArgs) => Promise<void>;
@@ -66,6 +71,8 @@ export function useProviderFetchLifecycle(opts: {
   /** Counts status-showing fetches as they start: only the latest may settle a `loading` it was cancelled under. */
   let statusFetchSeq = 0;
   let hasFetchedOnce = false;
+  /** The `fetchOnLoad` fetch started for this repository. */
+  let loadFetchStarted = false;
   let lastFetchedAt = 0;
   let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
   let fetchAbortCtrl: AbortController | null = null;
@@ -291,6 +298,7 @@ export function useProviderFetchLifecycle(opts: {
   function resetCaches() {
     cancelRequests();
     hasFetchedOnce = false;
+    loadFetchStarted = false;
     lastFetchedAt = 0;
     consecutiveErrors = 0;
     backoffUntil = 0;
@@ -341,6 +349,21 @@ export function useProviderFetchLifecycle(opts: {
       }
     }
     startAutoRefresh();
+  });
+
+  createEffect(() => {
+    identityVersion();
+    if (!opts.fetchOnLoad) return;
+    // Suspension cancels it: the fetch starts again after.
+    if (opts.suspended?.()) {
+      if (!hasFetchedOnce) loadFetchStarted = false;
+      return;
+    }
+    if (state.graphRows().length === 0 || loadFetchStarted || hasFetchedOnce || !opts.isAvailable()) return;
+    loadFetchStarted = true;
+    const ctrl = new AbortController();
+    backgroundFetchAbortCtrl = ctrl;
+    untrack(() => void fetchInitial(ctrl.signal, undefined, false));
   });
 
   createEffect(() => {

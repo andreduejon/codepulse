@@ -1,9 +1,29 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { createRoot, createSignal } from "solid-js";
 import { createAppState } from "../src/context/state";
+import { buildGraph } from "../src/git/graph";
 import { useProviderFetchLifecycle } from "../src/providers/shared/use-provider-fetch-lifecycle";
 
 const disposers: Array<() => void> = [];
+
+/** Graph rows for commits `shas`, newest first. */
+const rows = (shas: string[]) =>
+  buildGraph(
+    shas.map(hash => ({
+      hash,
+      shortHash: hash.slice(0, 7),
+      parents: [],
+      subject: hash,
+      body: "",
+      author: "A",
+      authorEmail: "a@example.test",
+      authorDate: "2026-01-01T00:00:00Z",
+      committer: "A",
+      committerEmail: "a@example.test",
+      commitDate: "2026-01-01T00:00:00Z",
+      refs: [],
+    })),
+  );
 
 afterEach(() => {
   for (const dispose of disposers.splice(0)) dispose();
@@ -414,6 +434,48 @@ describe("useProviderFetchLifecycle", () => {
     const stopped = refreshes;
     await Bun.sleep(70);
     expect(refreshes).toBe(stopped);
+  });
+
+  test("fetchOnLoad: one quiet fetch once the repository's graph is read, on any view, and again for a new one", async () => {
+    const fetches: boolean[] = [];
+    let actions!: ReturnType<typeof createAppState>["actions"];
+    let setIdentity!: (value: string) => void;
+    createRoot(dispose => {
+      disposers.push(dispose);
+      const app = createAppState(100, 0, 0);
+      actions = app.actions;
+      actions.setRepoPath("/repo");
+      const [identity, setId] = createSignal("first");
+      setIdentity = setId;
+      useProviderFetchLifecycle({
+        state: app.state,
+        providerId: "openshift",
+        identity,
+        isAvailable: () => true,
+        isBackgroundReady: () => false,
+        skipShaBackground: true,
+        fetchOnLoad: true,
+        queriedSHAs: new Set(),
+        reportUnavailable: () => {},
+        // Fails without marking a fetch: a failure must not make every graph read try again.
+        runInitialFetch: async ({ showStatus }) => {
+          fetches.push(showStatus);
+        },
+        runRefresh: async () => {},
+        onResetCaches: () => {},
+      });
+    });
+    await Bun.sleep(0);
+    expect(fetches).toEqual([]);
+    actions.setGraphRows(rows(["a"]));
+    await Bun.sleep(0);
+    expect(fetches).toEqual([false]);
+    actions.setGraphRows(rows(["b", "a"]));
+    await Bun.sleep(0);
+    expect(fetches).toEqual([false]);
+    setIdentity("second");
+    await Bun.sleep(0);
+    expect(fetches).toEqual([false, false]);
   });
 
   test("leaving for a view that is neither cancels the dashboard's first fetch", async () => {

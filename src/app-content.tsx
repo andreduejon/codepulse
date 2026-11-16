@@ -43,6 +43,12 @@ import {
   MIN_TERMINAL_WIDTH,
 } from "./constants";
 import { AppStateContext, createAppState, providerIdle, providerStatusMessage } from "./context/state";
+import {
+  DASHBOARD_FETCHING_PROVIDERS,
+  dashboardFetchMessage,
+  type FetchError,
+  fetchErrorKey,
+} from "./dashboard/fetch-errors";
 import { ThemeContext } from "./context/theme";
 import type { DashboardEvent } from "./dashboard/events";
 import { dashboardSettings } from "./dashboard/settings";
@@ -145,6 +151,29 @@ export function AppContent(props: Readonly<AppContentProps>) {
 
   /** What the last fast-forward did (ctrl+f, `:pull`), or which branches it left behind. */
   const [gitNotice, setGitNotice] = createSignal<UIMessage | null>(null);
+
+  /** The failed fetches and scans of the providers the dashboard shows, on any view: shown on the dashboard. */
+  const dashboardErrors = createMemo<FetchError[]>(() => {
+    const errors: FetchError[] = [];
+    for (const view of DASHBOARD_FETCHING_PROVIDERS) {
+      const status = state.providerStatusFor(view);
+      if (status.kind === "error")
+        errors.push({ source: providerDisplayName(view), message: displayBanner(status.message, status.message) });
+    }
+    const scan = snyk.backgroundError();
+    if (scan) errors.push({ source: "Snyk", message: scan });
+    return errors;
+  });
+  /** Errors closed on the dashboard; one that goes away is forgotten, so its next failure shows again. */
+  const [dismissedFetchErrors, setDismissedFetchErrors] = createSignal<ReadonlySet<string>>(new Set());
+  createEffect(() => {
+    const current = new Set(dashboardErrors().map(fetchErrorKey));
+    setDismissedFetchErrors(dismissed => {
+      const kept = [...dismissed].filter(key => current.has(key));
+      return kept.length === dismissed.size ? dismissed : new Set(kept);
+    });
+  });
+
   const screenMessage = createMemo<UIMessage | null>(() => {
     const err = state.error();
     if (err) return { kind: "error" as const, source: "Git", message: displayBanner(err, BANNER.git.fetchFailed) };
@@ -159,6 +188,12 @@ export function AppContent(props: Readonly<AppContentProps>) {
         source: providerDisplayName(state.activeProviderView()),
         message: displayBanner(message, message),
       };
+
+    // The dashboard fetches for every provider: their failures, in one box.
+    if (state.activeProviderView() === "dashboard") {
+      const dismissed = dismissedFetchErrors();
+      return dashboardFetchMessage(dashboardErrors().filter(error => !dismissed.has(fetchErrorKey(error))));
+    }
 
     // Snyk scans keep running in other views; a failure must not pass silently. The view's own problems come first.
     const background = snyk.backgroundError();
@@ -189,6 +224,8 @@ export function AppContent(props: Readonly<AppContentProps>) {
 
   /** Dismisses the banner: `:clear` (which also clears Debug and the tab notice) or its `✕`. */
   const clearScreenMessage = () => {
+    if (state.activeProviderView() === "dashboard")
+      setDismissedFetchErrors(dismissed => new Set([...dismissed, ...dashboardErrors().map(fetchErrorKey)]));
     actions.setError(null);
     setGitNotice(null);
     snyk.dismissBackgroundError();

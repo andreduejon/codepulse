@@ -311,6 +311,8 @@ export function useOpenShift(opts: {
     suspended: opts.suspended,
     providerId: "openshift",
     skipShaBackground: true,
+    // The build list once the repository loads, so the graph and the dashboard show builds before the tab is opened.
+    fetchOnLoad: true,
     identity: () => {
       const partial = configAccessor();
       return JSON.stringify({

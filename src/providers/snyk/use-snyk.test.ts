@@ -487,7 +487,7 @@ describe("useSnyk", () => {
     expect(reads).toHaveLength(20);
   });
 
-  test("does not auto-scan configured branch tips on the Git view", async () => {
+  test("auto-scans configured branch tips on the Git view too, once the repository loads", async () => {
     const calls: SnykScanOptions[] = [];
     const scan: Scan = options => {
       calls.push(options);
@@ -502,7 +502,7 @@ describe("useSnyk", () => {
     });
     await Promise.resolve();
     await Promise.resolve();
-    expect(calls).toHaveLength(0);
+    expect(calls.map(call => call.sha)).toEqual([SHA_A]);
   });
 
   test("auto-scans configured branch tips on the dashboard, as on the Snyk view", async () => {
