@@ -17,20 +17,21 @@ All notable changes to this project will be documented in this file.
   dashboard is a click away, and the event count is where the graph's commit count is. Where the graph's modes are, each
   provider is a badge in its knot color: a click, or `:hide NAME` and `:show NAME` (`:show` alone shows all), hides its
   events (the badge goes grey and the count reads `26 / 30 events`), another shows them again. From 180 columns a side
-  panel shows the selected event: what happened, its branch, app and time, then its provider's own tab for the event's
-  commit, the one that provider's view shows (GitHub's runs with their jobs, steps and annotations, Jenkins' builds with
-  stages and tests, OpenShift's resources, Snyk's Vulnerabilities and Dependencies), with its legend. `→` gives the tab
-  the keyboard: `↑`/`↓`, Enter (open a run, a log) and `←`/`→` between Snyk's two tabs work as in the provider's view,
-  and `←` on the first tab gives it back. A commit shows its hash and author. Below 180 columns, Enter opens the same as
-  a dialog. Each event's mark and legend are the ones its provider's detail tab shows: a scan with findings gets Snyk's
-  `▲` in its worst finding's severity color, then its total and every severity in order (`scan · 4 vulnerabilities · 1
-  critical · 3 high · 0 medium · 0 low`), each count in its severity's color and muted at zero. A scan without findings
-  lists every severity at zero, like Snyk's `C0 H0 M0 L0`, and a partial scan ends in Snyk's `?` in the warning color.
-  Enter, or **Show in GitHub** (the event's provider) at the top of the details, shows the event's commit in that
-  provider's view with its details focused (`s` in the compact dialog, where Enter acts on the tab's rows). A click on a
-  row only selects it, and `o` opens a run's or build's page. While the dashboard is shown, each provider fetches and
-  auto refreshes as if its tab were open, without a loading status, and Snyk scans the tips of its Auto scan branches,
-  so the events are fresh without visiting each tab. A failed fetch or scan shows in the message box, worded as on the
+  panel shows the selected event: what happened, then its provider's own tab for the event's commit, the one that
+  provider's view shows (GitHub's runs with their jobs, steps and annotations, Jenkins' builds with stages and tests,
+  OpenShift's resources, Snyk's Vulnerabilities and Dependencies), with its legend, and **Info**, the commit as the
+  graph's Info tab shows it (branches, tags, author, date, subject, body, children and parents). `→` gives the tab the
+  keyboard: `↑`/`↓`, Enter (open a run, a log) and `←`/`→` between Snyk's two tabs work as in the provider's view, and
+  `←` on the first tab gives it back. A commit has Info only. Below 180 columns, Enter opens the same as a dialog. Each
+  event's mark and legend are the ones its provider's detail tab shows: a scan with findings gets Snyk's `▲` in its
+  worst finding's severity color, then its total and every severity in order (`scan · 4 vulnerabilities · 1 critical · 3
+  high · 0 medium · 0 low`), each count in its severity's color and muted at zero. A scan without findings lists every
+  severity at zero, like Snyk's `C0 H0 M0 L0`, and a partial scan ends in Snyk's `?` in the warning color. Enter, or
+  **Show in GitHub** (the event's provider) at the top of the details, shows the event's commit in that provider's view
+  with its details focused (`s` in the compact dialog, where Enter acts on the tab's rows). A click on a row only
+  selects it, and `o` opens a run's or build's page. While the dashboard is shown, each provider fetches and auto
+  refreshes as if its tab were open, without a loading status, and Snyk scans the tips of its Auto scan branches, so the
+  events are fresh without visiting each tab. A failed fetch or scan shows in the message box, worded as on the
   provider's tab; several share one box (`Errors from GitHub and Jenkins`) with a line each. Closing it with `✕` or
   `:clear` keeps it closed until an error changes. A build or run that is still running shows as running (`● CI #814
   running`), from what the providers hold, and turns into how it ended in the same row. The selected row is bold and in

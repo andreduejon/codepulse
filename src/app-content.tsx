@@ -1,6 +1,16 @@
 import type { KeyEvent, ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
-import { batch, createEffect, createMemo, createSignal, onCleanup, onMount, Show, untrack } from "solid-js";
+import {
+  type Accessor,
+  batch,
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  onMount,
+  Show,
+  untrack,
+} from "solid-js";
 import { runAppCommand } from "./app-commands";
 import { githubSettings, jenkinsSettings, openShiftSettings, snykSettings } from "./app-provider-config";
 import { applyRepoSession, captureRepoSession } from "./app-repo-session";
@@ -8,8 +18,9 @@ import { isTabNoticeStatus, type TabNotice, tabNoticeFor } from "./app-tab-notic
 import type { AppContentProps, RepoSessionSnapshot } from "./app-types";
 import CacheScreen from "./components/cache-screen";
 import CommandBar from "./components/command-bar";
-import { DashboardDetail, type DashboardDetailTab } from "./components/dashboard-detail";
+import { DashboardCommitFields, DashboardDetail, type DashboardDetailTab } from "./components/dashboard-detail";
 import { DashboardView } from "./components/dashboard-view";
+import CommitDetailView from "./components/detail";
 import { createDetailMemory } from "./components/detail-memory";
 import DetailPanel from "./components/detail-panel";
 import { ProviderTab } from "./components/detail-provider-tabs";
@@ -55,6 +66,7 @@ import {
   fetchErrorKey,
 } from "./dashboard/fetch-errors";
 import { markLegend } from "./dashboard/legend";
+import type { CommitInfo } from "./dashboard/load";
 import { dashboardSettings } from "./dashboard/settings";
 import { type DashboardApp, useDashboard } from "./dashboard/use-dashboard";
 import { BANNER, displayBanner } from "./debug/banner";
@@ -590,12 +602,16 @@ export function AppContent(props: Readonly<AppContentProps>) {
     }
   });
 
-  /** The selected event's provider tabs: the provider's own (Snyk's two), none for a commit. */
+  /** The selected event's tabs: its provider's own (Snyk's two), then Info, its commit as the graph shows it. */
   const dashboardTabsFor = (event: DashboardEvent | null): DashboardDetailTab[] => {
-    if (!event || !isProviderDetailView(event.source)) return [];
-    const own = providerDetailTab(event.source);
-    const tabs: DashboardDetailTab[] = own ? [{ id: own.id, label: own.label }] : [];
-    if (event.source === "snyk") tabs.push({ id: "snyk-deps", label: "Dependencies" });
+    if (!event) return [];
+    const tabs: DashboardDetailTab[] = [];
+    if (isProviderDetailView(event.source)) {
+      const own = providerDetailTab(event.source);
+      if (own) tabs.push({ id: own.id, label: own.label });
+      if (event.source === "snyk") tabs.push({ id: "snyk-deps", label: "Dependencies" });
+    }
+    tabs.push({ id: "info", label: "Info" });
     return tabs;
   };
   /** The tab shown: the one chosen for this event's provider, else its first. */
@@ -615,17 +631,22 @@ export function AppContent(props: Readonly<AppContentProps>) {
     });
     return true;
   };
-  // Another event: its tab starts at the top, and the events keep the keyboard. A re-read gives the same event as a
-  // new object: only another id counts (a mutable ref, so it outlives the effect's runs).
-  const shownEvent = { id: null as string | null };
+  // Another event, or the dashboard shown again: its first tab, at the top, and the events keep the keyboard. A re-read
+  // gives the same event as a new object: only another id counts (a mutable ref, so it outlives the effect's runs).
+  const shownEvent = { key: null as string | null };
   createEffect(() => {
     const id = dashboard.selected()?.id ?? null;
-    if (id === shownEvent.id) return;
-    shownEvent.id = id;
+    const key = dashboardShown() && id !== null ? id : null;
+    if (key === shownEvent.key) return;
+    shownEvent.key = key;
+    if (key === null) return;
     untrack(() => {
-      actions.setDetailCursorAction(null);
-      actions.setDetailCursorIndex(0);
-      if (dashboardShown() && dialog() !== "dashboard-event") actions.setDetailFocused(false);
+      batch(() => {
+        actions.setDetailCursorAction(null);
+        actions.setDetailActiveTab(dashboardTabsFor(dashboard.selected())[0]?.id ?? "info");
+        actions.setDetailCursorIndex(0);
+        if (dialog() !== "dashboard-event") actions.setDetailFocused(false);
+      });
     });
   });
   let dashboardDetailScrollbox: ScrollBoxRenderable | undefined;
@@ -642,18 +663,45 @@ export function AppContent(props: Readonly<AppContentProps>) {
       if (!event || !tab) return event ? markLegend(event.source) : null;
       return detailEntryFor(tab)?.legend(providerDetailProps.providers, event.sha) ?? null;
     },
-    renderTab: (event: DashboardEvent, tab: DetailTab) => (
-      <ProviderTab
-        tab={tab}
-        sha={event.sha}
-        providers={providerDetailProps.providers}
-        navRef={detailNavRef}
-        mouseEnabled={dialog() == null || dialog() === "dashboard-event"}
-        onMouseFocus={() => focusDashboardTab(tab)}
-        memory={providerDetailProps.memory}
-      />
-    ),
+    renderTab: (event: DashboardEvent, tab: DetailTab, info: Accessor<CommitInfo | null>) =>
+      tab === "info" ? (
+        <DashboardInfoTab event={event} info={info} />
+      ) : (
+        <ProviderTab
+          tab={tab}
+          sha={event.sha}
+          providers={providerDetailProps.providers}
+          navRef={detailNavRef}
+          mouseEnabled={dialog() == null || dialog() === "dashboard-event"}
+          onMouseFocus={() => focusDashboardTab(tab)}
+          memory={providerDetailProps.memory}
+        />
+      ),
   });
+  /**
+   * The event's commit as the graph's Info tab shows it (refs, hash, author, date, subject, body, children, parents),
+   * while the graph holds it; one older than the graph's pages shows what Git reads.
+   */
+  const DashboardInfoTab = (infoProps: { event: DashboardEvent; info: Accessor<CommitInfo | null> }) => {
+    const row = () => state.graphRows().find(graphRow => graphRow.commit.hash === infoProps.event.sha) ?? null;
+    return (
+      <Show when={row()} fallback={<DashboardCommitFields event={infoProps.event} commit={infoProps.info()} />}>
+        {graphRow => (
+          <CommitDetailView
+            commit={() => graphRow().commit}
+            row={graphRow}
+            detail={() => ({ ...graphRow().commit, body: infoProps.info()?.body ?? graphRow().commit.body, files: [] })}
+            navRef={detailNavRef}
+            memory={providerDetailProps.memory}
+            mouseEnabled={dialog() == null || dialog() === "dashboard-event"}
+            onMouseFocus={() => focusDashboardTab("info")}
+            // A child or parent: that commit in the graph.
+            onJumpToCommit={hash => setPendingGraphJump({ sha: hash, view: "git" })}
+          />
+        )}
+      </Show>
+    );
+  };
   /** Keys while the provider tab has the keyboard, as in the graph's details. */
   const handleDashboardTabKey = (event: KeyEvent) =>
     handleDetailKey(event, {

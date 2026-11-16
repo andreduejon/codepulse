@@ -38,8 +38,8 @@ export function DashboardDetail(
     /** The tab's rows have the keyboard (→ from the events). */
     focused?: Accessor<boolean>;
     onSelectTab?: (tab: DetailTab) => void;
-    /** The provider's own tab for the event's commit. */
-    renderTab?: (event: DashboardEvent, tab: DetailTab) => JSX.Element;
+    /** The tab's content for the event's commit: its provider's own tab, or Info (with the commit as Git reads it). */
+    renderTab?: (event: DashboardEvent, tab: DetailTab, commit: Accessor<CommitInfo | null>) => JSX.Element;
     /** The legend below: the active tab's own, else the provider's. */
     legend?: () => readonly LegendItem[] | null;
     /** A click inside the panel gives it the keyboard. */
@@ -69,53 +69,18 @@ export function DashboardDetail(
     });
   });
 
-  const Field = (fieldProps: { label: string; children: JSX.Element; wrap?: boolean }) => (
-    <>
-      <box height={1} />
-      <text fg={t().accent} wrapMode="none">
-        <strong>{fieldProps.label}</strong>
-      </text>
-      <text fg={t().foreground} wrapMode={fieldProps.wrap ? "word" : "none"} truncate={!fieldProps.wrap}>
-        {fieldProps.children}
-      </text>
-    </>
-  );
-
-  /** A commit's details (it has no provider tab): what the app's repository knows about it. */
-  const CommitFields = (fieldProps: { event: DashboardEvent }) => (
-    <>
-      <For each={fieldProps.event.facts ?? []}>
-        {fact => (
-          <Field label={fact.label} wrap={fact.label === "Reason"}>
-            {fact.value}
-          </Field>
-        )}
-      </For>
-      <Field label="Commit">{fieldProps.event.sha}</Field>
-      <Show when={commit()}>
-        {info => (
-          <>
-            <Show when={fieldProps.event.source !== "git"}>
-              <Field label="Subject" wrap>
-                {info().subject}
-              </Field>
-            </Show>
-            <Field label="Author">{`${info().author} <${info().email}>`}</Field>
-            <Show when={fieldProps.event.source !== "git"}>
-              <Field label="Date">{formatDate(info().date)}</Field>
-            </Show>
-          </>
-        )}
-      </Show>
-    </>
-  );
-
   const legend = () => {
     const event = props.event();
     if (!event) return null;
     return props.legend ? props.legend() : markLegend(event.source);
   };
   const tabs = () => (props.event() ? (props.tabs?.() ?? []) : []);
+  /** The shown tab's identity: another event or tab builds its own content. */
+  const tabKey = (): string | null => {
+    const event = props.event();
+    const tab = props.activeTab?.();
+    return props.renderTab && event && tab ? `${event.id}\u0000${tab}` : null;
+  };
   const [hoveredTab, setHoveredTab] = createSignal<DetailTab | null>(null);
 
   return (
@@ -218,19 +183,30 @@ export function DashboardDetail(
                 </box>
                 <box height={1} flexShrink={0} />
               </Show>
-              <DashboardEventText event={event()} wrap bold />
-              <text fg={t().foregroundMuted} wrapMode="word">
-                {[event().branch, props.appName(event().app), formatDate(new Date(event().time).toISOString())]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </text>
-              <Show when={props.renderTab && props.activeTab?.()} fallback={<CommitFields event={event()} />}>
-                {tab => (
+              {/* What happened; a commit's subject is in its Info tab. */}
+              <Show when={!props.renderTab || event().source !== "git"}>
+                <DashboardEventText event={event()} wrap bold />
+                <box height={1} flexShrink={0} />
+              </Show>
+              <Show
+                when={tabKey()}
+                keyed
+                fallback={
                   <>
-                    <box height={1} flexShrink={0} />
-                    {props.renderTab?.(event(), tab())}
+                    <text fg={t().foregroundMuted} wrapMode="word">
+                      {[event().branch, props.appName(event().app), formatDate(new Date(event().time).toISOString())]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </text>
+                    <DashboardCommitFields event={event()} commit={commit()} />
                   </>
-                )}
+                }
+              >
+                {(_key: string) => {
+                  const tab = props.activeTab?.();
+                  const shown = props.event();
+                  return tab && shown ? props.renderTab?.(shown, tab, commit) : null;
+                }}
               </Show>
             </box>
           )}
@@ -245,5 +221,48 @@ export function DashboardDetail(
         )}
       </Show>
     </box>
+  );
+}
+
+/** A commit's details as Git reads them, where the graph doesn't hold it (older than its pages): hash and author. */
+export function DashboardCommitFields(props: Readonly<{ event: DashboardEvent; commit: CommitInfo | null }>) {
+  const t = useT();
+  const Field = (fieldProps: { label: string; children: JSX.Element; wrap?: boolean }) => (
+    <>
+      <box height={1} />
+      <text fg={t().accent} wrapMode="none">
+        <strong>{fieldProps.label}</strong>
+      </text>
+      <text fg={t().foreground} wrapMode={fieldProps.wrap ? "word" : "none"} truncate={!fieldProps.wrap}>
+        {fieldProps.children}
+      </text>
+    </>
+  );
+  return (
+    <>
+      <For each={props.event.facts ?? []}>
+        {fact => (
+          <Field label={fact.label} wrap={fact.label === "Reason"}>
+            {fact.value}
+          </Field>
+        )}
+      </For>
+      <Field label="Commit">{props.event.sha}</Field>
+      <Show when={props.commit}>
+        {info => (
+          <>
+            <Show when={props.event.source !== "git"}>
+              <Field label="Subject" wrap>
+                {info().subject}
+              </Field>
+            </Show>
+            <Field label="Author">{`${info().author} <${info().email}>`}</Field>
+            <Show when={props.event.source !== "git"}>
+              <Field label="Date">{formatDate(info().date)}</Field>
+            </Show>
+          </>
+        )}
+      </Show>
+    </>
   );
 }

@@ -27,9 +27,9 @@ export default function CommitDetailView(props: Readonly<DetailViewProps>) {
   const t = useT();
   const dimensions = useTerminalDimensions();
 
-  const commit = () => state.selectedCommit();
-  const detail = () => state.commitDetail();
-  const row = () => state.selectedRow();
+  const commit = () => (props.commit ? props.commit() : state.selectedCommit());
+  const detail = () => (props.detail ? props.detail() : state.commitDetail());
+  const row = () => (props.row ? props.row() : state.selectedRow());
   /** Non-null row accessor — safe inside <Show when={commit()}>
    *  since selectedRow and selectedCommit are derived from the same index. */
   // biome-ignore lint/style/noNonNullAssertion: safe inside <Show when={commit()}> guard

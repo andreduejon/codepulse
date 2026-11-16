@@ -192,7 +192,7 @@ test("beside the events, → gives the provider's tab the keyboard: ←/→ betw
     };
     app.actions.setActiveProviderView("dashboard");
     for (let tries = 0; tries < 20 && !frame().includes("1 vulnerability"); tries++) await setup.flush();
-    expect(frame()).toMatch(/Vulnerabilities\s+Dependencies/);
+    expect(frame()).toMatch(/Vulnerabilities\s+Dependencies\s+Info/);
     expect(frame()).toContain("Show in Snyk");
     expect(state.detailFocused()).toBe(false);
 
@@ -201,6 +201,12 @@ test("beside the events, → gives the provider's tab the keyboard: ←/→ betw
     expect(state.detailActiveTab()).toBe("snyk");
     await press("ARROW_RIGHT");
     expect(state.detailActiveTab()).toBe("snyk-deps");
+    // Info: the event's commit as the graph's Info tab shows it.
+    await press("ARROW_RIGHT");
+    expect(state.detailActiveTab()).toBe("info");
+    expect(frame()).toContain(sha);
+    expect(frame()).toContain("scanned commit");
+    await press("ARROW_LEFT");
     await press("ARROW_LEFT");
     expect(state.detailActiveTab()).toBe("snyk");
     // ← on the first tab: the events have the keyboard again, on the same event.

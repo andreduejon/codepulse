@@ -1,6 +1,6 @@
 import type { KeyEvent, Renderable } from "@opentui/core";
 import { DETAIL_PANEL_WIDTH_FRACTION } from "../constants";
-import type { DiffTarget } from "../git/types";
+import type { Commit, CommitDetail, DiffTarget, GraphRow } from "../git/types";
 import type { ProviderDetailSources } from "../providers/detail-entries";
 import type { FileTreeRow } from "../utils/file-tree";
 import type { DetailMemory } from "./detail-memory";
@@ -44,6 +44,13 @@ export interface DetailViewProps {
   providers?: Partial<ProviderDetailSources>;
   /** Open folders, runs and namespaces kept while the details are not shown (see `detail-memory.ts`). */
   memory?: DetailMemory;
+  /**
+   * Another commit than the graph's selected one (the dashboard's event): its commit, graph row and details. Without
+   * them, the graph's selection.
+   */
+  commit?: () => Commit | null | undefined;
+  row?: () => GraphRow | null | undefined;
+  detail?: () => CommitDetail | null | undefined;
 }
 
 /** Layout constants shared between committed and uncommitted detail views */
