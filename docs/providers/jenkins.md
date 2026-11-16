@@ -18,9 +18,9 @@ Configure the provider per repository from `:providers`:
 - Cache limit (`10`, `20`, `50`, `100`, `200`, `500`): maximum commit snapshots kept on disk.
 - Fetch size (`10`, `20`, `50`): how many graph commits are queried, and how
   many recent builds to inspect per job.
-- Auto refresh (`off`, `2m`, `5m`, `10m`): re-query running builds while the
-  Jenkins view or the Dashboard is shown. Default `2m`. Git Auto refresh stays
-  git-only.
+- Auto refresh (`off`, `2m`, `5m`, `10m`): re-query running builds and look
+  for new ones while the Jenkins view or the Dashboard is shown. Default `2m`.
+  Git Auto refresh stays git-only.
 
 Credentials remain in environment variables and are not written to config.
 Jenkins sends the username and token using Basic authentication. Missing
@@ -55,9 +55,9 @@ and does not recreate the snapshot. The cache limit caps commit snapshots.
 Deleting or evicting a snapshot cascades to its logs. Snapshot updates preserve
 existing logs.
 A build deleted in Jenkins stays in the local cache.
-Auto refresh only re-queries SHAs that still show as running; Reload and Fetch
-(`:reload`, `f`) re-query the whole graph window, so new builds on finished
-commits appear. Scrolling outside fetch size reads disk cache only — it does not
+Auto refresh re-queries the builds still running and asks each job for its
+last build, listing only the jobs with a new one or one still running, so new
+builds appear. Reload and Fetch (`:reload`, `f`) list every job again. Scrolling outside fetch size reads disk cache only — it does not
 query Jenkins. Details include **Reload commit** (Enter hint: `reload`) to query
 the selected SHA; a failed reload shows its error in the banner.
 

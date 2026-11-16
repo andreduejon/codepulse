@@ -507,3 +507,23 @@ test("on the dashboard, the refresh asks GitHub about running runs again, as on 
   await settle(() => github.getCommitData(SHA)?.runs[0]?.status === "completed");
   expect(github.getCommitData(SHA)?.runs[0]).toMatchObject({ status: "completed", conclusion: "success" });
 });
+
+test("automatic refresh finds a run that started after the first fetch, for a commit already asked about", async () => {
+  const { github, actions, ci } = await mountGitHub({ runs: [] });
+  await github.refresh();
+  await settle();
+  expect(github.getCommitData(SHA)?.runs ?? []).toEqual([]);
+  // A workflow starts on that commit later (a deploy, a re-run).
+  ci.mockResolvedValue({ data: [run()], jobs: new Map(), error: null });
+  const calls = ci.mock.calls.length;
+  const clock = spyOn(Date, "now").mockReturnValue(Date.now() + 120_000);
+  try {
+    actions.setActiveProviderView("git");
+    actions.setActiveProviderView("dashboard");
+    await settle(() => ci.mock.calls.length > calls);
+  } finally {
+    clock.mockRestore();
+  }
+  await settle(() => (github.getCommitData(SHA)?.runs.length ?? 0) > 0);
+  expect(github.getCommitData(SHA)?.runs[0]?.status).toBe("in_progress");
+});

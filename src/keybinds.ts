@@ -36,6 +36,14 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     { kind: "binding", key: "↑/↓  or  j/k", desc: "Navigate commits", indent: 1 },
     { kind: "binding", key: "→  or  l", desc: "Focus details", indent: 1 },
     { kind: "spacer" },
+    { kind: "section", label: "Dashboard" },
+    { kind: "binding", key: "enter", desc: "Show the event in its provider's view", indent: 1 },
+    { kind: "binding", key: "→  or  l", desc: "Focus the event's details", indent: 1 },
+    { kind: "binding", key: "o", desc: "Open the run or build in the browser", indent: 1 },
+    { kind: "binding", key: "r", desc: "Fetch every provider again", indent: 1 },
+    { kind: "binding", key: "s", desc: "Show the event in its provider's view (compact details)", indent: 1 },
+    { kind: "binding", key: "↑/↓  or  j/k", desc: "Navigate events", indent: 1 },
+    { kind: "spacer" },
     { kind: "section", label: "Details" },
     { kind: "binding", key: "enter", desc: "Activate selected item", indent: 1 },
     { kind: "binding", key: "g", desc: "Top", indent: 1 },
@@ -181,7 +189,7 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     {
       kind: "binding",
       key: "Auto refresh",
-      desc: "Re-query running workflow SHAs while the GitHub view is focused. Options: off, 2m, 5m, 10m. Default 2m. Git Auto refresh stays git-only.",
+      desc: "Re-query running workflows and the newest commits while the GitHub view or the Dashboard is shown. Options: off, 2m, 5m, 10m. Default 2m. Git Auto refresh stays git-only.",
       indent: 1,
     },
     { kind: "spacer" },
@@ -225,7 +233,7 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     {
       kind: "binding",
       key: "Auto refresh",
-      desc: "Re-query running Jenkins builds while the Jenkins view is focused. Options: off, 2m, 5m, 10m. Default 2m. Git Auto refresh stays git-only.",
+      desc: "Re-query running builds and look for new ones while the Jenkins view or the Dashboard is shown. Options: off, 2m, 5m, 10m. Default 2m. Git Auto refresh stays git-only.",
       indent: 1,
     },
     {
@@ -281,7 +289,7 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     {
       kind: "binding",
       key: "Auto refresh",
-      desc: "Poll Builds and ImageStreamTags while the OpenShift view is focused. Options: off, 2m, 5m, 10m. Default 2m. Live Deploy/DC/Pod use watch, not this timer. Git Auto refresh stays git-only.",
+      desc: "Poll Builds and ImageStreamTags while the OpenShift view or the Dashboard is shown. Options: off, 2m, 5m, 10m. Default 2m. Live Deploy/DC/Pod use watch, not this timer. Git Auto refresh stays git-only.",
       indent: 1,
     },
     {
@@ -325,7 +333,7 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     {
       kind: "binding",
       key: "New branch",
-      desc: "Add a concrete local branch. Its tip auto-scans only while the Snyk view is focused and has no cache. Other views read cache only.",
+      desc: "Add a concrete local branch. Its tip auto-scans once, from when the repository loads, when it has no cached scan.",
       indent: 1,
     },
     {

@@ -433,11 +433,13 @@ export function useGitHubCI(opts: {
       if (authFrozen && !retry) return;
       if (retry) authFrozen = false;
       lifecycle.noteRefreshSettled();
-      // Its own badges: on the dashboard, the shown view's are the dashboard's (none).
+      // The runs still running (its own badges: on the dashboard, the shown view's are none), and the newest commits,
+      // where a workflow may have started since (a deploy, a re-run): one query for both.
       const runningSHAs = collectRunningSHAs(state.graphBadgesFor("github-actions"));
-      if (runningSHAs.length === 0) return;
+      const shas = [...new Set([...runningSHAs, ...collectTopSHAs(state.graphRows(), config.fetchDepth)])];
+      if (shas.length === 0) return;
       try {
-        const { firstError } = await fetchForSHAs(runningSHAs, signal);
+        const { firstError } = await fetchForSHAs(shas, signal);
         if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return;
         rememberAuthError(firstError);
         lifecycle.noteFetchResult(!firstError);
