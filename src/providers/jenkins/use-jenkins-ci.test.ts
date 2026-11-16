@@ -394,3 +394,22 @@ test("commits Jenkins hasn't been asked about, and Reload, skip no job and disco
   expect(jobs).toEqual([{ url: JOB_URL }]);
   expect(options?.knownLastBuilds).toBeUndefined();
 });
+
+test("reading only some branch jobs is a notice, not a failure: automatic refresh doesn't wait longer and longer", async () => {
+  const { jenkins, actions, graph } = await mountJenkins({ truncated: true });
+  await jenkins.refresh();
+  await settle();
+  await jenkins.refresh();
+  await settle();
+  const calls = graph.mock.calls.length;
+  // 45 seconds on: past the 30-second staleness, within the minute two failures would have to wait.
+  const clock = spyOn(Date, "now").mockReturnValue(Date.now() + 45_000);
+  try {
+    actions.setActiveProviderView("git");
+    actions.setActiveProviderView("dashboard");
+    await settle(() => graph.mock.calls.length > calls);
+  } finally {
+    clock.mockRestore();
+  }
+  expect(graph.mock.calls.length).toBeGreaterThan(calls);
+});

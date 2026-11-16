@@ -304,8 +304,9 @@ export function useJenkinsCI(opts: {
       if (stale || !lifecycle.isCurrent(epoch, repoPath)) return;
       lifecycle.noteFetchStarted();
       rememberAuthError(firstError ?? null);
-      lifecycle.noteFetchResult(!firstError && !discoveryTruncated);
-      if (!firstError && !discoveryTruncated) actions.setProviderLastSuccessfulRefresh("jenkins", new Date());
+      // Reading only some branch jobs is a notice (its own banner), not a failure that delays the next refresh.
+      lifecycle.noteFetchResult(!firstError);
+      if (!firstError) actions.setProviderLastSuccessfulRefresh("jenkins", new Date());
       if (firstError) actions.setProviderStatus("jenkins", providerError(firstError));
       else actions.setProviderStatus("jenkins", settledStatus());
     },
@@ -339,8 +340,8 @@ export function useJenkinsCI(opts: {
       lifecycle.noteRefreshSettled();
       const error = runningError ?? firstError ?? null;
       rememberAuthError(error);
-      lifecycle.noteFetchResult(!error && !discoveryTruncated);
-      if (!error && !discoveryTruncated) actions.setProviderLastSuccessfulRefresh("jenkins", new Date());
+      lifecycle.noteFetchResult(!error);
+      if (!error) actions.setProviderLastSuccessfulRefresh("jenkins", new Date());
       if (error) actions.setProviderStatus("jenkins", providerError(error));
       else actions.setProviderStatus("jenkins", settledStatus());
     },
@@ -456,7 +457,7 @@ export function useJenkinsCI(opts: {
         actions.setProviderStatus("jenkins", providerError(firstError));
         return;
       }
-      if (!discoveryTruncated) actions.setProviderLastSuccessfulRefresh("jenkins", new Date());
+      actions.setProviderLastSuccessfulRefresh("jenkins", new Date());
       if (state.providerStatusFor("jenkins").kind === "error") actions.setProviderStatus("jenkins", settledStatus());
     },
     heldEntries: () => {
