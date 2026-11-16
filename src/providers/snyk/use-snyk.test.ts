@@ -207,6 +207,24 @@ describe("useSnyk", () => {
     expect(snyk.backgroundError()).toBeNull();
   });
 
+  test("a failed scan's error goes when that commit scans without an error, not when another one does", async () => {
+    let failing = true;
+    const { snyk } = mountSnyk({
+      setup: actions => actions.setActiveProviderView("git"),
+      scan: async options => {
+        if (options.sha === SHA_C && failing) throw new Error("Snyk scan failed.");
+        return result(options.sha);
+      },
+    });
+    await snyk.scanCommit(SHA_C);
+    expect(snyk.backgroundError()).toBe("Snyk scan failed.");
+    await snyk.scanCommit(SHA_B, true);
+    expect(snyk.backgroundError()).toBe("Snyk scan failed.");
+    failing = false;
+    await snyk.scanCommit(SHA_C, true);
+    expect(snyk.backgroundError()).toBeNull();
+  });
+
   test("suspension preserves results and badges, aborts scans, and drops queued work", async () => {
     const pending = deferred<SnykScanResult>();
     const calls: SnykScanOptions[] = [];

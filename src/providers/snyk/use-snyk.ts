@@ -120,8 +120,13 @@ export function useSnyk(opts: {
   let epoch = 0;
   let disposed = false;
   const [workVersion, setWorkVersion] = createSignal(0);
-  /** A scan that failed out of sight; finished scans need no message, the footer hint just goes away. */
-  const [backgroundError, setBackgroundError] = createSignal<string | null>(null);
+  /**
+   * A scan that failed out of sight, with its commit: a scan of that commit without an error takes it away. Finished
+   * scans need no message, the footer hint just goes away.
+   */
+  const [failedOutOfSight, setFailedOutOfSight] = createSignal<{ sha: string; message: string } | null>(null);
+  const backgroundError = () => failedOutOfSight()?.message ?? null;
+  const clearBackgroundError = () => setFailedOutOfSight(null);
 
   function publishResults(): void {
     setResultsVersion(version => version + 1);
@@ -158,7 +163,7 @@ export function useSnyk(opts: {
   function resetForIdentityChange(): void {
     cancelWork();
     autoScanAttempted.clear();
-    setBackgroundError(null);
+    clearBackgroundError();
     results = new Map();
     publishResults();
     const current = config();
@@ -207,6 +212,7 @@ export function useSnyk(opts: {
         entry.repoPath === state.repoPath()
       ) {
         mergeResult(scanResult, entry.epoch, entry.force);
+        if (untrack(failedOutOfSight)?.sha === entry.sha) clearBackgroundError();
         actions.setProviderLastSuccessfulRefresh(SNYK_PROVIDER_ID, new Date());
         // Coverage gaps (failed or skipped projects) show in the Dependencies tab, not the banner.
         if (queue.length === 0) actions.setProviderStatus(SNYK_PROVIDER_ID, providerIdle());
@@ -222,7 +228,8 @@ export function useSnyk(opts: {
         // A partial rescan kept the complete snapshot: Snyk still works, so it's a warning for the tab notice.
         const partial = message === BANNER.snyk.partialRescan;
         actions.setProviderStatus(SNYK_PROVIDER_ID, partial ? providerWarning(message) : providerError(message));
-        if (!partial && untrack(state.activeProviderView) !== SNYK_PROVIDER_ID) setBackgroundError(message);
+        if (!partial && untrack(state.activeProviderView) !== SNYK_PROVIDER_ID)
+          setFailedOutOfSight({ sha: entry.sha, message });
       }
     } finally {
       entry.resolve(controller.signal.aborted || entry.epoch !== epoch ? null : scanResult);
@@ -320,7 +327,7 @@ export function useSnyk(opts: {
 
   // Opening the Snyk view shows the error there, so the background banner has done its job.
   createEffect(() => {
-    if (state.activeProviderView() === SNYK_PROVIDER_ID) setBackgroundError(null);
+    if (state.activeProviderView() === SNYK_PROVIDER_ID) clearBackgroundError();
   });
 
   createEffect(() => {
@@ -419,6 +426,6 @@ export function useSnyk(opts: {
     isAvailable,
     invalidate: resetForIdentityChange,
     backgroundError,
-    dismissBackgroundError: () => setBackgroundError(null),
+    dismissBackgroundError: clearBackgroundError,
   };
 }
