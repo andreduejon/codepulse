@@ -8,10 +8,11 @@ import { isTabNoticeStatus, type TabNotice, tabNoticeFor } from "./app-tab-notic
 import type { AppContentProps, RepoSessionSnapshot } from "./app-types";
 import CacheScreen from "./components/cache-screen";
 import CommandBar from "./components/command-bar";
-import { DashboardDetail } from "./components/dashboard-detail";
+import { DashboardDetail, type DashboardDetailTab } from "./components/dashboard-detail";
 import { DashboardView } from "./components/dashboard-view";
 import { createDetailMemory } from "./components/detail-memory";
 import DetailPanel from "./components/detail-panel";
+import { ProviderTab } from "./components/detail-provider-tabs";
 import type { DetailNavRef } from "./components/detail-types";
 import { DashboardEventDialog } from "./components/dialogs/dashboard-event-dialog";
 import DebugDialog from "./components/dialogs/debug-dialog";
@@ -43,7 +44,7 @@ import {
   MIN_TERMINAL_HEIGHT,
   MIN_TERMINAL_WIDTH,
 } from "./constants";
-import { AppStateContext, createAppState, providerIdle, providerStatusMessage } from "./context/state";
+import { AppStateContext, createAppState, type DetailTab, providerIdle, providerStatusMessage } from "./context/state";
 import { ThemeContext } from "./context/theme";
 import type { DashboardEvent } from "./dashboard/events";
 import { githubEvents, jenkinsEvents, openShiftEvents } from "./dashboard/events";
@@ -53,11 +54,13 @@ import {
   type FetchError,
   fetchErrorKey,
 } from "./dashboard/fetch-errors";
+import { markLegend } from "./dashboard/legend";
 import { dashboardSettings } from "./dashboard/settings";
 import { type DashboardApp, useDashboard } from "./dashboard/use-dashboard";
 import { BANNER, displayBanner } from "./debug/banner";
 import type { FastForwardResult } from "./git/repo";
 import type { DiffTarget } from "./git/types";
+import { handleDetailKey } from "./hooks/handle-detail-keys";
 import { openGraphDetails } from "./hooks/handle-graph-keys";
 import { useAncestry } from "./hooks/use-ancestry";
 import { useDataLoader } from "./hooks/use-data-loader";
@@ -65,7 +68,7 @@ import { useDetailLoader } from "./hooks/use-detail-loader";
 import { type CommandBarMode, type DialogId, useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
 import { usePathFilter } from "./hooks/use-path-filter";
 import { providerAccent } from "./providers/colors";
-import type { ProviderDetailSources } from "./providers/detail-entries";
+import { detailEntryFor, type ProviderDetailSources } from "./providers/detail-entries";
 import { githubJobLogTarget } from "./providers/github-actions/log-target";
 import type { GitHubJob, GitHubWorkflowRun } from "./providers/github-actions/types";
 import { useGitHubCI } from "./providers/github-actions/use-github-ci";
@@ -75,7 +78,7 @@ import { useJenkinsCI } from "./providers/jenkins/use-jenkins-ci";
 import OpenShiftResourceDialog from "./providers/openshift/resource-dialog";
 import type { OpenShiftResource } from "./providers/openshift/types";
 import { useOpenShift } from "./providers/openshift/use-openshift";
-import { isProviderDetailView, type ProviderView, providerDisplayName } from "./providers/provider";
+import { isProviderDetailView, type ProviderView, providerDetailTab, providerDisplayName } from "./providers/provider";
 import { type CacheRepositorySummary, evictRepositoryCache } from "./providers/shared/cache-management";
 import JobLogDialog, { type JobLogTarget } from "./providers/shared/job-log-dialog";
 import { repositoryIdentity, setProviderCacheSuspended } from "./providers/shared/sha-sqlite-cache";
@@ -561,6 +564,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
 
   /** A commit to select once its repository's graph is there, in the view of the provider that showed it. */
   const [pendingGraphJump, setPendingGraphJump] = createSignal<{ sha: string; view: ProviderView } | null>(null);
+  /** The event's commit in its provider's view, with that provider's details open on it. */
   const showInGraph = (event: DashboardEvent) => {
     if (event.app !== activeRepoPath()) switchRepoPath(event.app);
     setPendingGraphJump({ sha: event.sha, view: event.source });
@@ -579,13 +583,97 @@ export function AppContent(props: Readonly<AppContentProps>) {
         actions.setScrollTargetIndex(index);
       }
     });
+    // Its details, as the dashboard showed them: focused beside the graph, the details dialog in the compact layout.
+    if (index >= 0) {
+      if (untrack(layoutMode) === "compact") setDialog("detail");
+      else actions.setDetailFocused(true);
+    }
   });
+
+  /** The selected event's provider tabs: the provider's own (Snyk's two), none for a commit. */
+  const dashboardTabsFor = (event: DashboardEvent | null): DashboardDetailTab[] => {
+    if (!event || !isProviderDetailView(event.source)) return [];
+    const own = providerDetailTab(event.source);
+    const tabs: DashboardDetailTab[] = own ? [{ id: own.id, label: own.label }] : [];
+    if (event.source === "snyk") tabs.push({ id: "snyk-deps", label: "Dependencies" });
+    return tabs;
+  };
+  /** The tab shown: the one chosen for this event's provider, else its first. */
+  const dashboardActiveTab = (): DetailTab | null => {
+    const tabs = dashboardTabsFor(dashboard.selected());
+    const chosen = state.detailActiveTab();
+    return tabs.some(tab => tab.id === chosen) ? chosen : (tabs[0]?.id ?? null);
+  };
+  /** The provider tab takes the keyboard (→ beside the events, the compact dialog). */
+  const focusDashboardTab = (tab: DetailTab | null = dashboardActiveTab()) => {
+    if (!tab) return false;
+    batch(() => {
+      actions.setDetailCursorAction(null);
+      actions.setDetailActiveTab(tab);
+      actions.setDetailCursorIndex(0);
+      actions.setDetailFocused(true);
+    });
+    return true;
+  };
+  // Another event: its tab starts at the top, and the events keep the keyboard. A re-read gives the same event as a
+  // new object: only another id counts (a mutable ref, so it outlives the effect's runs).
+  const shownEvent = { id: null as string | null };
+  createEffect(() => {
+    const id = dashboard.selected()?.id ?? null;
+    if (id === shownEvent.id) return;
+    shownEvent.id = id;
+    untrack(() => {
+      actions.setDetailCursorAction(null);
+      actions.setDetailCursorIndex(0);
+      if (dashboardShown() && dialog() !== "dashboard-event") actions.setDetailFocused(false);
+    });
+  });
+  let dashboardDetailScrollbox: ScrollBoxRenderable | undefined;
+  /** The provider tab in the dashboard's details (both layouts): the same tab as in that provider's view. */
+  const dashboardTabProps = () => ({
+    tabs: () => dashboardTabsFor(dashboard.selected()),
+    activeTab: dashboardActiveTab,
+    focused: () => state.detailFocused(),
+    onSelectTab: (tab: DetailTab) => focusDashboardTab(tab),
+    onMouseFocus: () => focusDashboardTab(),
+    legend: () => {
+      const event = dashboard.selected();
+      const tab = dashboardActiveTab();
+      if (!event || !tab) return event ? markLegend(event.source) : null;
+      return detailEntryFor(tab)?.legend(providerDetailProps.providers, event.sha) ?? null;
+    },
+    renderTab: (event: DashboardEvent, tab: DetailTab) => (
+      <ProviderTab
+        tab={tab}
+        sha={event.sha}
+        providers={providerDetailProps.providers}
+        navRef={detailNavRef}
+        mouseEnabled={dialog() == null || dialog() === "dashboard-event"}
+        onMouseFocus={() => focusDashboardTab(tab)}
+        memory={providerDetailProps.memory}
+      />
+    ),
+  });
+  /** Keys while the provider tab has the keyboard, as in the graph's details. */
+  const handleDashboardTabKey = (event: KeyEvent) =>
+    handleDetailKey(event, {
+      state,
+      actions,
+      // The compact dialog holds the tab like the graph's details dialog: ← on the first tab stays.
+      dialog: () => (dialog() === "dashboard-event" ? "detail" : dialog()),
+      getDetailScrollboxRef: () =>
+        dialog() === "dashboard-event" ? dashboardDialogScrollbox : dashboardDetailScrollbox,
+      detailNavRef,
+      tabs: () => dashboardTabsFor(dashboard.selected()).map(tab => tab.id),
+    });
   /** Enter: beside the side panel, the event in the graph; without it, its details first, like the graph's. */
   const activateDashboard = () => {
     const event = dashboard.activate();
     if (!event) return;
-    if (layoutMode() === "compact") setDialog("dashboard-event");
-    else showInGraph(event);
+    if (layoutMode() === "compact") {
+      setDialog("dashboard-event");
+      focusDashboardTab();
+    } else showInGraph(event);
   };
   const showSelectedInGraph = () => {
     const event = dashboard.selected();
@@ -599,6 +687,20 @@ export function AppContent(props: Readonly<AppContentProps>) {
   /** Keys in the compact details: Enter shows the event in the graph, ↑/↓ scroll, Esc (the cascade) closes. */
   const handleDashboardDialogKey = (event: KeyEvent) => {
     const scrollbox = dashboardDialogScrollbox;
+    if (event.name === "o") {
+      event.preventDefault();
+      openSelectedEvent();
+      return;
+    }
+    if (event.name === "s" && dashboardActiveTab()) {
+      event.preventDefault();
+      showSelectedInGraph();
+      return;
+    }
+    if (state.detailFocused() && dashboardActiveTab()) {
+      handleDashboardTabKey(event);
+      return;
+    }
     switch (event.name) {
       case "return":
       case "enter":
@@ -631,8 +733,16 @@ export function AppContent(props: Readonly<AppContentProps>) {
       handleDashboardDialogKey(event);
       return;
     }
+    if (state.detailFocused() && layoutMode() === "normal") {
+      handleDashboardTabKey(event);
+      return;
+    }
     const step = event.shift ? 10 : 1;
     switch (event.name) {
+      case "right":
+      case "l":
+        if (layoutMode() === "normal") focusDashboardTab();
+        break;
       case "down":
       case "j":
         dashboard.move(step);
@@ -919,7 +1029,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
         fetchJobsForRun: gitHubCI.fetchJobsForRun,
         fetchCommitData: gitHubCI.fetchCommitDataForSHA,
         get status() {
-          return state.providerStatus();
+          return state.providerStatusFor("github-actions");
         },
         onOpenJobLog: (job: GitHubJob, run: GitHubWorkflowRun, jobs?: GitHubJob[], search?: string) =>
           openJobLog(githubJobLogTarget(gitHubCI, job, run, jobs ?? [job], search)),
@@ -929,7 +1039,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
         fetchJobsForRun: jenkinsCI.fetchJobsForRun,
         fetchCommitData: jenkinsCI.fetchCommitDataForSHA,
         get status() {
-          return state.providerStatus();
+          return state.providerStatusFor("jenkins");
         },
         onOpenBuild: (run: JenkinsRun, pipeline: JenkinsJob, entry: number) =>
           openJobLog(jenkinsBuildLogTarget(jenkinsCI, run, pipeline, entry)),
@@ -943,7 +1053,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
         liveAge: openShift.liveAge,
         consoleUrl: () => openShiftConfig().consoleUrl,
         get status() {
-          return state.providerStatus();
+          return state.providerStatusFor("openshift");
         },
         onOpenResource: handleOpenOpenShiftResource,
       },
@@ -1158,6 +1268,10 @@ export function AppContent(props: Readonly<AppContentProps>) {
                         appName={dashboardAppName}
                         onShowInGraph={showSelectedInGraph}
                         mouseEnabled={() => dialog() == null && state.keyboardScopeOverride() == null}
+                        scrollboxRef={element => {
+                          dashboardDetailScrollbox = element;
+                        }}
+                        {...dashboardTabProps()}
                       />
                     </box>
                   </Show>
@@ -1274,6 +1388,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                     onClose={() => setDialog(null)}
                     onShowInGraph={showSelectedInGraph}
                     onOpen={openSelectedEvent}
+                    tabProps={dashboardTabProps()}
                     scrollboxRef={element => {
                       dashboardDialogScrollbox = element;
                     }}

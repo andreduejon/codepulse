@@ -69,10 +69,10 @@ test("the side panel shows the event, its facts, its commit and its provider's m
     ])
       expect(frame).toContain(text);
     expect(frame).toMatch(/✓ passed\s+● running\s+✗ failed/);
-    // The branch, whole, above its commit.
-    expect(frame.indexOf("Branch")).toBeGreaterThan(frame.indexOf("11m 30s"));
-    expect(frame.indexOf("Branch")).toBeLessThan(frame.indexOf("Commit"));
-    expect(frame.replace(/\s+/g, "")).toContain("feature/payments-retry-with-a-really-long-branch-name");
+    // The branch, whole, under the headline with the app and the time.
+    expect(frame.indexOf("feature/payments")).toBeGreaterThan(frame.indexOf("CI #812 failed"));
+    expect(frame.indexOf("feature/payments")).toBeLessThan(frame.indexOf("Workflow"));
+    expect(frame.replace(/\s+/g, "")).toContain("feature/payments-retry-with-a-really-long-branch-name·shop·");
     setEvent(commit);
     await new Promise(resolve => setTimeout(resolve, 0));
     await setup.renderOnce();
@@ -88,7 +88,7 @@ test("the side panel shows the event, its facts, its commit and its provider's m
   }
 });
 
-test("the first row shows the event's commit in the graph, on a click", async () => {
+test("the first row shows the event's commit in its provider's view, on a click", async () => {
   const run: DashboardEvent = {
     id: "run",
     app: "/shop",
@@ -117,16 +117,16 @@ test("the first row shows the event's commit in the graph, on a click", async ()
   try {
     await setup.renderOnce();
     const lines = setup.captureCharFrame().split("\n");
-    const y = lines.findIndex(line => line.includes("Show in graph"));
+    const y = lines.findIndex(line => line.includes("Show in GitHub"));
     const title = lines.findIndex(line => line.includes("CI #812 failed"));
     expect(y).toBeGreaterThan(0);
     expect(y).toBeLessThan(title);
-    expect(lines[y]).toMatch(/Show in graph\s+e6209dd\s*$/);
+    expect(lines[y]).toMatch(/Show in GitHub\s+e6209dd\s*$/);
     await setup.mockMouse.click(4, y, MouseButtons.LEFT);
     expect(onShowInGraph).toHaveBeenCalledTimes(1);
     setEvent(null);
     await setup.renderOnce();
-    expect(setup.captureCharFrame()).not.toContain("Show in graph");
+    expect(setup.captureCharFrame()).not.toContain("Show in GitHub");
   } finally {
     setup.renderer.destroy();
   }
@@ -171,6 +171,61 @@ test("a scan's headline wraps between its parts, never inside a count, and color
         .find(span => span.text.includes(label))?.fg;
     expect(fg("critical")).toEqual(RGBA.fromHex(theme.severityCritical));
     expect(fg("high")).toEqual(RGBA.fromHex(theme.severityHigh));
+  } finally {
+    setup.renderer.destroy();
+  }
+});
+
+test("with its provider's tabs, the panel shows the tab bar and the provider's own tab instead of the facts", async () => {
+  const scan: DashboardEvent = {
+    id: "scan",
+    app: "/shop",
+    source: "snyk",
+    time: Date.parse("2026-03-02T10:52:00Z"),
+    status: "fail",
+    severity: "high",
+    counts: { critical: 0, high: 1, medium: 0, low: 0 },
+    text: "scan · 1 vulnerability · 0 critical · 1 high · 0 medium · 0 low",
+    sha: SHA,
+    branch: "main",
+    facts: [{ label: "Vulnerabilities", value: "1 (0 critical, 1 high, 0 medium, 0 low)" }],
+  };
+  const [active, setActive] = createSignal<"snyk" | "snyk-deps">("snyk");
+  const selected = mock((tab: string) => setActive(tab as "snyk" | "snyk-deps"));
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={createThemeState()}>
+        <DashboardDetail
+          event={() => scan}
+          appName={() => "shop"}
+          loadCommit={async () => null}
+          mouseEnabled={() => true}
+          tabs={() => [
+            { id: "snyk", label: "Vulnerabilities" },
+            { id: "snyk-deps", label: "Dependencies" },
+          ]}
+          activeTab={active}
+          focused={() => true}
+          onSelectTab={selected}
+          renderTab={(_event, tab) => <text>{`the ${tab} tab`}</text>}
+        />
+      </ThemeContext.Provider>
+    ),
+    { width: 70, height: 20, useMouse: true },
+  );
+  try {
+    await setup.renderOnce();
+    let frame = setup.captureCharFrame();
+    expect(frame).toMatch(/Vulnerabilities\s+Dependencies/);
+    expect(frame).toContain("the snyk tab");
+    expect(frame).not.toContain("1 (0 critical");
+    const lines = frame.split("\n");
+    const y = lines.findIndex(line => line.includes("Dependencies"));
+    await setup.mockMouse.click(lines[y]?.indexOf("Dependencies") ?? 0, y, MouseButtons.LEFT);
+    await setup.renderOnce();
+    expect(selected).toHaveBeenCalledWith("snyk-deps");
+    frame = setup.captureCharFrame();
+    expect(frame).toContain("the snyk-deps tab");
   } finally {
     setup.renderer.destroy();
   }

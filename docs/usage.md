@@ -90,7 +90,8 @@ ref), else the branch the commit was made on.
 | `↑` / `↓` or `j` / `k` | Navigate events |
 | `shift ↑` / `shift ↓`, `PgUp` / `PgDn` | Jump 10 events |
 | `g` / `G`, `home` / `end` | First / last event |
-| `enter` | Show the event's commit in the graph (wide layout) / open its details (compact layout) |
+| `enter` | Show the event's commit in its provider's view with its details (wide layout) / open its details (compact layout) |
+| `→` / `l` | Give the event's provider tab the keyboard (wide layout); `←` on its first tab gives it back |
 | `o` | Open the run's or build's page in the browser |
 | `r` | Fetch every provider again and read the events |
 
@@ -101,7 +102,10 @@ ref), else the branch the commit was made on.
   The names are `git`, `github`, `jenkins`, `openshift` and `snyk`.
 - A scan shows its total and every severity in order (`1 critical · 3 high · 0 medium · 0 low`), each count in its
   severity's color. A partial scan ends in Snyk's `?`.
-- From 180 columns a side panel shows the selected event, its facts, its commit and its provider's legend.
+- From 180 columns a side panel shows the selected event, then its provider's own tab for the event's commit, as
+  that provider's view shows it: runs with jobs, steps and annotations, builds with stages and tests, resources,
+  findings. Its keys work as there: `↑`/`↓`, `enter` (a run, a log), `←`/`→` between Snyk's two tabs. Below 180
+  columns, `enter` opens the same as a dialog, where `s` shows the event in its provider's view.
 - **Menu → Providers → Dashboard** turns it off (Enabled), and sets how far back it reads (Time window, 7 days by
   default) and how long a knot is (Knot size, 1 hour by default). Saved per repository.
 

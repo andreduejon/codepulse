@@ -1,17 +1,25 @@
 import { MouseButton, type ScrollBoxRenderable } from "@opentui/core";
 import { type Accessor, createEffect, createSignal, For, type JSX, onCleanup, Show } from "solid-js";
+import type { DetailTab } from "../context/state";
 import type { DashboardEvent } from "../dashboard/events";
 import { markLegend } from "../dashboard/legend";
 import { type CommitInfo, loadCommitInfo } from "../dashboard/load";
 import { useT } from "../hooks/use-t";
 import { providerDisplayName } from "../providers/provider";
-import { DetailLegend } from "../providers/shared/detail-legend";
+import { DetailLegend, type LegendItem } from "../providers/shared/detail-legend";
 import { formatDate } from "../utils/date";
 import { DashboardEventText } from "./dashboard-event-text";
 
+/** One of the selected event's provider tabs (Snyk has two). */
+export interface DashboardDetailTab {
+  id: DetailTab;
+  label: string;
+}
+
 /**
  * The dashboard's side panel: the selected event, like the graph's details show the selected commit. What happened,
- * the provider's facts about it, and its commit as the app's repository knows it, with the provider's marks below.
+ * then its provider's own tab for its commit (runs, builds, resources, findings), as that provider's view shows it.
+ * A commit, which has no provider tab, shows what the app's repository knows about it.
  */
 export function DashboardDetail(
   props: Readonly<{
@@ -21,9 +29,21 @@ export function DashboardDetail(
     loadCommit?: (app: string, sha: string) => Promise<CommitInfo | null>;
     /** The content's scrollbox, for the compact dialog's ↑/↓. */
     scrollboxRef?: (element: ScrollBoxRenderable) => void;
-    /** The first row: the event's commit in the graph, on its provider's tab. */
+    /** The first row: the event's commit in its provider's view, with that provider's details. */
     onShowInGraph?: () => void;
     mouseEnabled?: () => boolean;
+    /** The selected event's provider tabs; none for a commit. */
+    tabs?: Accessor<readonly DashboardDetailTab[]>;
+    activeTab?: Accessor<DetailTab | null>;
+    /** The tab's rows have the keyboard (→ from the events). */
+    focused?: Accessor<boolean>;
+    onSelectTab?: (tab: DetailTab) => void;
+    /** The provider's own tab for the event's commit. */
+    renderTab?: (event: DashboardEvent, tab: DetailTab) => JSX.Element;
+    /** The legend below: the active tab's own, else the provider's. */
+    legend?: () => readonly LegendItem[] | null;
+    /** A click inside the panel gives it the keyboard. */
+    onMouseFocus?: () => void;
   }>,
 ) {
   const t = useT();
@@ -61,23 +81,98 @@ export function DashboardDetail(
     </>
   );
 
+  /** A commit's details (it has no provider tab): what the app's repository knows about it. */
+  const CommitFields = (fieldProps: { event: DashboardEvent }) => (
+    <>
+      <For each={fieldProps.event.facts ?? []}>
+        {fact => (
+          <Field label={fact.label} wrap={fact.label === "Reason"}>
+            {fact.value}
+          </Field>
+        )}
+      </For>
+      <Field label="Commit">{fieldProps.event.sha}</Field>
+      <Show when={commit()}>
+        {info => (
+          <>
+            <Show when={fieldProps.event.source !== "git"}>
+              <Field label="Subject" wrap>
+                {info().subject}
+              </Field>
+            </Show>
+            <Field label="Author">{`${info().author} <${info().email}>`}</Field>
+            <Show when={fieldProps.event.source !== "git"}>
+              <Field label="Date">{formatDate(info().date)}</Field>
+            </Show>
+          </>
+        )}
+      </Show>
+    </>
+  );
+
   const legend = () => {
     const event = props.event();
-    return event ? markLegend(event.source) : null;
+    if (!event) return null;
+    return props.legend ? props.legend() : markLegend(event.source);
   };
+  const tabs = () => (props.event() ? (props.tabs?.() ?? []) : []);
+  const [hoveredTab, setHoveredTab] = createSignal<DetailTab | null>(null);
 
   return (
     <box flexDirection="column" flexGrow={1} width="100%">
-      {/* One tab, drawn like the graph's detail tabs. */}
-      <box flexDirection="column" width="100%" flexShrink={0}>
-        <box border={["top"]} borderStyle="single" borderColor={t().foregroundMuted} flexShrink={0} />
-        <box flexDirection="row" justifyContent="center" flexShrink={0}>
-          <text selectable={false} wrapMode="none" fg={t().foregroundMuted}>
-            <strong>{props.event() ? providerDisplayName(props.event()?.source ?? "git") : "Event"}</strong>
-          </text>
+      <Show
+        when={tabs().length > 0}
+        fallback={
+          // One tab, drawn like the graph's detail tabs.
+          <box flexDirection="column" width="100%" flexShrink={0}>
+            <box border={["top"]} borderStyle="single" borderColor={t().foregroundMuted} flexShrink={0} />
+            <box flexDirection="row" justifyContent="center" flexShrink={0}>
+              <text selectable={false} wrapMode="none" fg={t().foregroundMuted}>
+                <strong>{props.event() ? providerDisplayName(props.event()?.source ?? "git") : "Event"}</strong>
+              </text>
+            </box>
+            <box border={["top"]} borderStyle="single" borderColor={t().border} flexShrink={0} />
+          </box>
+        }
+      >
+        {/* The provider's tabs, drawn and colored like the graph's detail tabs. */}
+        <box flexDirection="row" width="100%" flexShrink={0}>
+          <For each={tabs()}>
+            {tab => {
+              const active = () => props.activeTab?.() === tab.id;
+              const focused = () => active() && !!props.focused?.();
+              const hovered = () => props.mouseEnabled?.() !== false && hoveredTab() === tab.id;
+              const line = () =>
+                focused() ? t().accent : hovered() ? t().foreground : active() ? t().foregroundMuted : t().border;
+              const label = () => (focused() ? t().accent : hovered() ? t().foreground : t().foregroundMuted);
+              return (
+                // biome-ignore lint/a11y/noStaticElementInteractions: TUI tabs also support Left/Right.
+                // biome-ignore lint/a11y/useKeyWithMouseEvents: Keyboard-selected tabs already use accent colors.
+                <box
+                  flexGrow={1}
+                  flexBasis={tab.label.length + 2}
+                  flexDirection="column"
+                  onMouseOver={() => setHoveredTab(tab.id)}
+                  onMouseOut={() => setHoveredTab(null)}
+                  onMouseDown={mouse => {
+                    if (mouse.button !== MouseButton.LEFT || props.mouseEnabled?.() === false) return;
+                    mouse.preventDefault();
+                    props.onSelectTab?.(tab.id);
+                  }}
+                >
+                  <box border={["top"]} borderStyle="single" borderColor={line()} flexShrink={0} />
+                  <box flexDirection="row" justifyContent="center" flexShrink={0}>
+                    <text selectable={false} wrapMode="none" fg={label()}>
+                      {active() ? <strong>{tab.label}</strong> : tab.label}
+                    </text>
+                  </box>
+                </box>
+              );
+            }}
+          </For>
         </box>
         <box border={["top"]} borderStyle="single" borderColor={t().border} flexShrink={0} />
-      </box>
+      </Show>
       <scrollbox
         ref={element => props.scrollboxRef?.(element)}
         flexGrow={1}
@@ -115,7 +210,7 @@ export function DashboardDetail(
                   }}
                 >
                   <text flexGrow={1} fg={t().foreground} wrapMode="none">
-                    Show in graph
+                    {`Show in ${providerDisplayName(event().source)}`}
                   </text>
                   <text flexShrink={0} fg={t().foregroundMuted} wrapMode="none">
                     {event().sha.slice(0, 7)}
@@ -124,34 +219,16 @@ export function DashboardDetail(
                 <box height={1} flexShrink={0} />
               </Show>
               <DashboardEventText event={event()} wrap bold />
-              <text fg={t().foregroundMuted} wrapMode="none" truncate>
-                {`${props.appName(event().app)} · ${formatDate(new Date(event().time).toISOString())}`}
+              <text fg={t().foregroundMuted} wrapMode="word">
+                {[event().branch, props.appName(event().app), formatDate(new Date(event().time).toISOString())]
+                  .filter(Boolean)
+                  .join(" · ")}
               </text>
-              <For each={event().facts ?? []}>
-                {fact => (
-                  <Field label={fact.label} wrap={fact.label === "Reason"}>
-                    {fact.value}
-                  </Field>
-                )}
-              </For>
-              <Show when={event().branch}>
-                {branch => (
-                  <Field label="Branch" wrap>
-                    {branch()}
-                  </Field>
-                )}
-              </Show>
-              <Field label="Commit">{event().sha}</Field>
-              <Show when={commit()}>
-                {info => (
+              <Show when={props.renderTab && props.activeTab?.()} fallback={<CommitFields event={event()} />}>
+                {tab => (
                   <>
-                    <Field label="Subject" wrap>
-                      {info().subject}
-                    </Field>
-                    <Field label="Author">{`${info().author} <${info().email}>`}</Field>
-                    <Show when={event().source !== "git"}>
-                      <Field label="Date">{formatDate(info().date)}</Field>
-                    </Show>
+                    <box height={1} flexShrink={0} />
+                    {props.renderTab?.(event(), tab())}
                   </>
                 )}
               </Show>

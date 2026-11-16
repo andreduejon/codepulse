@@ -97,7 +97,8 @@ export function useDetailLoader({
      * effects run synchronously when a signal updates, this flag is still
      * true when this effect fires.
      */
-    if (!getIsJumpNavigation()) {
+    // The dashboard shows an event's provider tabs with the same tab state: the graph's commit leaves it alone.
+    if (!getIsJumpNavigation() && activeProvider !== "dashboard") {
       actions.setDetailActiveTab(getDefaultDetailTab(commit, activeProvider));
       actions.setDetailCursorIndex(0);
       // Clear any stale jump direction on normal (non-jump) navigation
@@ -148,8 +149,9 @@ export function useDetailLoader({
     }, DETAIL_DEBOUNCE_MS);
   });
 
-  // Auto-switch away from empty tabs after detail loads.
+  // Auto-switch away from empty tabs after detail loads (the graph's tabs: not while the dashboard shows its own).
   createEffect(() => {
+    if (state.activeProviderView() === "dashboard") return;
     const commit = state.selectedCommit();
     const cd = state.commitDetail();
     const ud = state.uncommittedDetail();
