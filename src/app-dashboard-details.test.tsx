@@ -457,3 +457,38 @@ test("in the compact dialog, s for a commit the graph doesn't hold says why and 
     await d.dispose();
   }
 });
+
+test("Enter on Info for a commit outside the graph does nothing, also after Info of a commit in the graph", async () => {
+  // Commits: Info is their only tab, so the graph's Info view is followed directly by the fallback.
+  const inGraph: DashboardEvent = {
+    ...outsideEvent,
+    id: "git:inside",
+    source: "git",
+    sha: "e".repeat(40),
+    text: "CI #9 passed",
+  };
+  const outside: DashboardEvent = { ...outsideEvent, id: "git:outside", source: "git" };
+  const d = await launchDashboard({ width: 200, shas: ["e".repeat(40)], events: [inGraph, outside] });
+  const copies = spyOn(Bun, "spawn");
+  try {
+    const select = async (text: string) => {
+      const lines = d.frame().split("\n");
+      const y = lines.findIndex(line => line.includes(text));
+      await d.setup.mockMouse.click(lines[y]?.indexOf(text) ?? 0, y);
+      await d.setup.flush();
+    };
+    // Info of the commit in the graph (the graph's own Info view), then of the one outside it.
+    await select("CI #9 passed");
+    await d.press("ARROW_RIGHT");
+    expect(d.state.detailActiveTab()).toBe("info");
+    await select("CI #815 failed");
+    await d.press("ARROW_RIGHT");
+    expect(d.state.detailActiveTab()).toBe("info");
+    copies.mockClear();
+    await d.press("RETURN");
+    expect(copies).not.toHaveBeenCalled();
+  } finally {
+    copies.mockRestore();
+    await d.dispose();
+  }
+});
