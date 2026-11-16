@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { RGBA } from "@opentui/core";
+import { RGBA, TextAttributes } from "@opentui/core";
 import { MouseButtons } from "@opentui/core/testing";
 import { testRender } from "@opentui/solid";
 import { createRoot, createSignal } from "solid-js";
@@ -200,6 +200,13 @@ test("a scan's counts each take their severity's color, and a severity without f
     expect(fg("10:05")).toEqual(RGBA.fromHex(theme.dashboardBg));
     expect(fg("6 vulnerabilities")).toEqual(RGBA.fromHex(theme.dashboardBg));
     expect(fg("▲")).toEqual(RGBA.fromHex(theme.severityCritical));
+    // And bold, as a selected row is in the graph and the provider views.
+    const bold = (label: string, row: number) =>
+      ((setup.captureSpans().lines[row]?.spans.find(span => span.text.includes(label))?.attributes ?? 0) &
+        TextAttributes.BOLD) !==
+      0;
+    for (const label of ["e6209dd", "main", "10:05", "6 vulnerabilities", "1 critical"])
+      expect(bold(label, row)).toBe(true);
     // A partial scan ends in Snyk's warning `?`.
     const partial =
       setup
@@ -213,6 +220,8 @@ test("a scan's counts each take their severity's color, and a severity without f
       setup.captureSpans().lines[partialRow]?.spans.find(span => span.text.includes(label))?.fg;
     expect(partialFg("e6209dd")).toEqual(RGBA.fromHex(theme.foregroundMuted));
     expect(partialFg("1 vulnerability")).toEqual(RGBA.fromHex(theme.foreground));
+    expect(bold("e6209dd", partialRow)).toBe(false);
+    expect(bold("1 vulnerability", partialRow)).toBe(false);
     expect(setup.captureSpans().lines[partialRow]?.spans.find(span => span.text.trim() === "?")?.fg).toEqual(
       RGBA.fromHex(theme.warning),
     );

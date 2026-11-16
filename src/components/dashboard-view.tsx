@@ -139,8 +139,10 @@ export function DashboardView(
               const selectable = () => row.kind === "event";
               const active = () => index() === d.cursor();
               const lit = () => active() || (hovered() === index() && props.mouseEnabled?.() !== false);
-              // The selected row is in the dashboard's color, as a provider view's is in its own; marks keep theirs.
+              // The selected row is in the dashboard's color and bold, as a provider view's is; marks keep their colors.
               const muted = () => (active() ? providerColors(t(), "dashboard").bg : t().foregroundMuted);
+              /** The selected row's text is bold too, as in the graph and the provider views. */
+              const strong = (text: string) => (active() ? <strong>{text}</strong> : text);
               return (
                 // biome-ignore lint/a11y/noStaticElementInteractions: TUI rows use the dashboard's keyboard navigation.
                 // biome-ignore lint/a11y/useKeyWithMouseEvents: Keyboard selection already highlights the row.
@@ -181,23 +183,24 @@ export function DashboardView(
                         <>
                           <box flexShrink={0} width={HASH_COL_WIDTH} paddingLeft={1} overflow="hidden">
                             <text wrapMode="none" truncate fg={muted()}>
-                              {eventRow().event.sha.slice(0, 7)}
+                              {strong(eventRow().event.sha.slice(0, 7))}
                             </text>
                           </box>
                           <box flexShrink={0} width={branchWidth() + 1} paddingLeft={1} overflow="hidden">
                             <text wrapMode="none" fg={muted()}>
-                              {cutBranch(eventRow().event.branch ?? "")}
+                              {strong(cutBranch(eventRow().event.branch ?? ""))}
                             </text>
                           </box>
                           <box flexShrink={0} width={TIME_COL_WIDTH} paddingLeft={1}>
                             <text wrapMode="none" fg={muted()}>
-                              {formatClock(eventRow().event.time)}
+                              {strong(formatClock(eventRow().event.time))}
                             </text>
                           </box>
                           <box flexGrow={1} flexShrink={1} minWidth={0} paddingLeft={1} paddingRight={2}>
                             <DashboardEventText
                               event={eventRow().event}
                               color={active() ? providerColors(t(), "dashboard").bg : undefined}
+                              bold={active()}
                             />
                           </box>
                         </>
