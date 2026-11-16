@@ -562,6 +562,11 @@ export function AppContent(props: Readonly<AppContentProps>) {
     // The graph read again (a refresh, a fetch, a new commit): its main branch may have moved.
     changes: () => state.graphRows(),
   });
+  // A scan on the dashboard: its cached result, also for a commit the graph doesn't hold (Snyk reads the graph's).
+  createEffect(() => {
+    const event = dashboard.selected();
+    if (dashboardShown() && event?.source === "snyk") void snyk.readCachedScan(event.sha);
+  });
   const dashboardAppName = () => dashboardApp().name;
   // No commit details or graph search beside the dashboard; its own details leave with it.
   createEffect(() => {

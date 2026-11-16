@@ -79,6 +79,7 @@ test("Git view: a running Snyk scan shows in the footer, a failed one as an erro
         getCommitData: () => null,
         isScanning: () => false,
         scanCommit: async () => null,
+        readCachedScan: async () => {},
         isAvailable: () => true,
         invalidate: () => {},
         backgroundError: error,

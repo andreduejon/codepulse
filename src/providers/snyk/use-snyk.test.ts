@@ -594,3 +594,26 @@ describe("useSnyk", () => {
     expect(snyk.getCommitData(SHA_A)).toBeNull();
   });
 });
+
+describe("readCachedScan", () => {
+  test("reads one commit's cached scan, also one the graph doesn't hold, without scanning", async () => {
+    const reads: string[] = [];
+    const calls: SnykScanOptions[] = [];
+    const { snyk } = mountSnyk({
+      setup: actions => actions.setGraphRows(graphRows([SHA_A])),
+      readCache: async (_repo, sha) => {
+        reads.push(sha);
+        return sha === SHA_C ? result(SHA_C) : null;
+      },
+      scan: async options => {
+        calls.push(options);
+        return result(options.sha);
+      },
+    });
+    expect(snyk.getCommitData(SHA_C)).toBeNull();
+    await snyk.readCachedScan(SHA_C);
+    expect(snyk.getCommitData(SHA_C)?.sha).toBe(SHA_C);
+    expect(reads).toContain(SHA_C);
+    expect(calls).toEqual([]);
+  });
+});

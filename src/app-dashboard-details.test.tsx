@@ -1,4 +1,4 @@
-import { expect, spyOn, test } from "bun:test";
+import { expect, mock, spyOn, test } from "bun:test";
 import { resolve } from "node:path";
 import { CliRenderer } from "@opentui/core";
 import { testRender } from "@opentui/solid";
@@ -12,6 +12,7 @@ import * as dashboardLoad from "./dashboard/load";
 import { buildGraph } from "./git/graph";
 import * as dataLoader from "./hooks/use-data-loader";
 import * as detailLoader from "./hooks/use-detail-loader";
+import * as snykHook from "./providers/snyk/use-snyk";
 import * as openUrlModule from "./utils/open-url";
 
 test("in the compact layout, Enter on a dashboard event opens its details with its provider's tab, and s shows it there", async () => {
@@ -374,6 +375,21 @@ test("in the compact dialog, o opens the row's own page when the row has one, th
     expect(opened).toHaveBeenCalledWith("https://example.invalid/runs/1");
   } finally {
     opened.mockRestore();
+    await d.dispose();
+  }
+});
+
+test("a scan on the dashboard reads its cached result, also for a commit the graph doesn't hold", async () => {
+  const read = mock(async (_sha: string) => {});
+  const real = snykHook.useSnyk;
+  const snyk = spyOn(snykHook, "useSnyk").mockImplementation(options => ({ ...real(options), readCachedScan: read }));
+  const scan: DashboardEvent = { ...outsideEvent, id: "snyk:scan", source: "snyk", text: "scan · 0 vulnerabilities" };
+  const d = await launchDashboard({ width: 200, shas: ["e".repeat(40)], events: [scan] });
+  try {
+    for (let tries = 0; tries < 5 && read.mock.calls.length === 0; tries++) await d.setup.flush();
+    expect(read).toHaveBeenCalledWith(OUTSIDE);
+  } finally {
+    snyk.mockRestore();
     await d.dispose();
   }
 });

@@ -63,6 +63,11 @@ export interface UseSnykResult {
   scanCommit: (sha: string, force?: boolean) => Promise<SnykScanResult | null>;
   isAvailable: () => boolean;
   invalidate: () => void;
+  /**
+   * One commit's cached scan, read without scanning (and without counting as a use): for a commit the graph doesn't
+   * hold, which the dashboard shows a scan of.
+   */
+  readCachedScan: (sha: string) => Promise<void>;
   /** The error of a scan that failed while another view was open; cleared when the Snyk view opens. */
   backgroundError: () => string | null;
   dismissBackgroundError: () => void;
@@ -403,6 +408,14 @@ export function useSnyk(opts: {
       return scanningSHAs.has(sha.toLowerCase());
     },
     scanCommit: (sha, force = false) => enqueueScan(sha, force),
+    readCachedScan: async sha => {
+      const key = sha.toLowerCase();
+      const repoPath = state.repoPath();
+      if (results.has(key) || !repoPath || opts.suspended?.()) return;
+      const expectedEpoch = epoch;
+      const cached = await readCache(repoPath, key, { maxCachedScans: config().maxCachedScans, touch: false });
+      if (cached && expectedEpoch === epoch && repoPath === state.repoPath() && !disposed) mergeResult(cached, epoch);
+    },
     isAvailable,
     invalidate: resetForIdentityChange,
     backgroundError,
