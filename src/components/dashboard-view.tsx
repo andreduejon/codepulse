@@ -64,14 +64,14 @@ export function DashboardView(
    * What happened: its mark (a commit has none), then its text. The commit is in its own column. A scan's counts take
    * their severity's color, muted without findings, and a partial scan ends in Snyk's warning `?`.
    */
-  const EventText = (eventProps: { event: DashboardEvent }) => {
+  const EventText = (eventProps: { event: DashboardEvent; color?: string }) => {
     const event = () => eventProps.event;
     const counts = () => {
       const found = event().counts;
       return found ? SNYK_SEVERITIES.map(severity => [severity, found[severity]] as const) : null;
     };
     return (
-      <text wrapMode="none" truncate fg={t().foreground}>
+      <text wrapMode="none" truncate fg={eventProps.color ?? t().foreground}>
         <Show when={eventMark(event())}>
           {mark => <span style={{ fg: mark().color(t()) }}>{`${mark().icon} `}</span>}
         </Show>
@@ -180,6 +180,8 @@ export function DashboardView(
               const selectable = () => row.kind === "event";
               const active = () => index() === d.cursor();
               const lit = () => active() || (hovered() === index() && props.mouseEnabled?.() !== false);
+              // The selected row is in the dashboard's color, as a provider view's is in its own; marks keep theirs.
+              const muted = () => (active() ? providerColors(t(), "dashboard").bg : t().foregroundMuted);
               return (
                 // biome-ignore lint/a11y/noStaticElementInteractions: TUI rows use the dashboard's keyboard navigation.
                 // biome-ignore lint/a11y/useKeyWithMouseEvents: Keyboard selection already highlights the row.
@@ -219,22 +221,25 @@ export function DashboardView(
                       {eventRow => (
                         <>
                           <box flexShrink={0} width={HASH_COL_WIDTH} paddingLeft={1} overflow="hidden">
-                            <text wrapMode="none" truncate fg={t().foregroundMuted}>
+                            <text wrapMode="none" truncate fg={muted()}>
                               {eventRow().event.sha.slice(0, 7)}
                             </text>
                           </box>
                           <box flexShrink={0} width={branchWidth() + 1} paddingLeft={1} overflow="hidden">
-                            <text wrapMode="none" fg={t().foregroundMuted}>
+                            <text wrapMode="none" fg={muted()}>
                               {cutBranch(eventRow().event.branch ?? "")}
                             </text>
                           </box>
                           <box flexShrink={0} width={TIME_COL_WIDTH} paddingLeft={1}>
-                            <text wrapMode="none" fg={t().foregroundMuted}>
+                            <text wrapMode="none" fg={muted()}>
                               {formatClock(eventRow().event.time)}
                             </text>
                           </box>
                           <box flexGrow={1} flexShrink={1} minWidth={0} paddingLeft={1} paddingRight={2}>
-                            <EventText event={eventRow().event} />
+                            <EventText
+                              event={eventRow().event}
+                              color={active() ? providerColors(t(), "dashboard").bg : undefined}
+                            />
                           </box>
                         </>
                       )}

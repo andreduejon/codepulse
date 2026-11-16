@@ -194,6 +194,12 @@ test("a scan's counts each take their severity's color, and a severity without f
     expect(fg("3 high")).toEqual(RGBA.fromHex(theme.severityHigh));
     expect(fg("0 medium")).toEqual(RGBA.fromHex(theme.foregroundMuted));
     expect(fg("2 low")).toEqual(RGBA.fromHex(theme.severityLow));
+    // The selected row is in the dashboard's color, like a provider view's in its own; marks keep theirs.
+    expect(fg("e6209dd")).toEqual(RGBA.fromHex(theme.dashboardBg));
+    expect(fg("main")).toEqual(RGBA.fromHex(theme.dashboardBg));
+    expect(fg("10:05")).toEqual(RGBA.fromHex(theme.dashboardBg));
+    expect(fg("6 vulnerabilities")).toEqual(RGBA.fromHex(theme.dashboardBg));
+    expect(fg("▲")).toEqual(RGBA.fromHex(theme.severityCritical));
     // A partial scan ends in Snyk's warning `?`.
     const partial =
       setup
@@ -202,6 +208,11 @@ test("a scan's counts each take their severity's color, and a severity without f
         .find(line => line.includes("1 vulnerability")) ?? "";
     expect(partial).toMatch(/scan · 1 vulnerability · 0 critical · 0 high · 1 medium · 0 low \?\s*$/);
     const partialRow = setup.captureCharFrame().split("\n").indexOf(partial);
+    // Another row keeps its muted columns and plain text.
+    const partialFg = (label: string) =>
+      setup.captureSpans().lines[partialRow]?.spans.find(span => span.text.includes(label))?.fg;
+    expect(partialFg("e6209dd")).toEqual(RGBA.fromHex(theme.foregroundMuted));
+    expect(partialFg("1 vulnerability")).toEqual(RGBA.fromHex(theme.foreground));
     expect(setup.captureSpans().lines[partialRow]?.spans.find(span => span.text.trim() === "?")?.fg).toEqual(
       RGBA.fromHex(theme.warning),
     );
