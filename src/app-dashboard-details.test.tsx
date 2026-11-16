@@ -409,3 +409,36 @@ test("a click on the selected event gives the event list the keyboard back, as a
     await d.dispose();
   }
 });
+
+test("in the compact dialog, the o open hint shows for a row with its own page and a click on it opens the row", async () => {
+  const opened = spyOn(openUrlModule, "openUrl").mockImplementation(() => {});
+  // An OpenShift build: the event has no page, its rows (a resource) can.
+  const event: DashboardEvent = {
+    ...outsideEvent,
+    sha: "e".repeat(40),
+    source: "openshift",
+    text: "build shop-api-43 complete in shop-dev",
+  };
+  const d = await launchDashboard({ width: 120, shas: ["e".repeat(40)], events: [event] });
+  try {
+    await d.press("RETURN");
+    const hint = () =>
+      d
+        .frame()
+        .split("\n")
+        .find(line => line.includes("show in OpenShift")) ?? "";
+    expect(hint()).not.toContain("o open");
+    d.actions.setDetailCursorShortcut({ key: "o", desc: "open" });
+    await d.setup.flush();
+    expect(hint()).toContain("o open");
+    const lines = d.frame().split("\n");
+    const y = lines.findIndex(line => line.includes("show in OpenShift"));
+    await d.setup.mockMouse.click(lines[y]?.indexOf("o open") ?? 0, y);
+    await d.setup.flush();
+    // Not the event's page (it has none): the row's, through the tab.
+    expect(opened).not.toHaveBeenCalled();
+  } finally {
+    opened.mockRestore();
+    await d.dispose();
+  }
+});

@@ -20,6 +20,8 @@ export function DashboardEventDialog(
     onClose: () => void;
     onShowInGraph: () => void;
     onOpen: () => void;
+    /** Whether `o` opens something: the event's page, or the tab row's own. */
+    canOpen?: () => boolean;
     scrollboxRef?: (element: ScrollBoxRenderable) => void;
     /** The event's provider tab, as in the side panel: then Enter acts on its rows, `s` shows it in the graph. */
     tabProps?: Partial<ComponentProps<typeof DashboardDetail>>;
@@ -68,7 +70,7 @@ export function DashboardEventDialog(
             <KeyHint key="s" desc={` show in ${showIn()}`} onClick={() => props.onShowInGraph()} />
           </Show>
           <KeyHintSeparator />
-          <Show when={props.event()?.url}>
+          <Show when={props.canOpen ? props.canOpen() : props.event()?.url}>
             <KeyHint key="o" desc=" open" onClick={() => props.onOpen()} />
             <KeyHintSeparator />
           </Show>

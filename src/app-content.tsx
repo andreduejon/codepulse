@@ -1,4 +1,4 @@
-import type { KeyEvent, ScrollBoxRenderable } from "@opentui/core";
+import { KeyEvent, parseKeypress, type ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import {
   type Accessor,
@@ -757,10 +757,18 @@ export function AppContent(props: Readonly<AppContentProps>) {
     if (url) openUrl(url);
   };
   /** Keys in the compact details: Enter shows the event in the graph, ↑/↓ scroll, Esc (the cascade) closes. */
+  /** The tab's row has its own page (a job, a resource): `o` opens it there rather than the event's. */
+  const dashboardRowOpens = () => state.detailFocused() && state.detailCursorShortcut()?.key === "o";
+  /** The compact dialog's `o open` hint, clicked: what `o` does there. */
+  const openFromDashboardDialog = () => {
+    if (!dashboardRowOpens()) return openSelectedEvent();
+    const key = parseKeypress("o");
+    if (key) handleDashboardTabKey(new KeyEvent(key));
+  };
   const handleDashboardDialogKey = (event: KeyEvent) => {
     const scrollbox = dashboardDialogScrollbox;
     // `o`: the tab's row when it has its own page (a job, a resource), as in the wide layout; else the event's.
-    if (event.name === "o" && !(state.detailFocused() && state.detailCursorShortcut()?.key === "o")) {
+    if (event.name === "o" && !dashboardRowOpens()) {
       event.preventDefault();
       openSelectedEvent();
       return;
@@ -1466,7 +1474,8 @@ export function AppContent(props: Readonly<AppContentProps>) {
                       setDialog(null);
                     }}
                     onShowInGraph={showSelectedInGraph}
-                    onOpen={openSelectedEvent}
+                    onOpen={openFromDashboardDialog}
+                    canOpen={() => !!dashboard.selected()?.url || dashboardRowOpens()}
                     tabProps={dashboardTabProps()}
                     scrollboxRef={element => {
                       dashboardDialogScrollbox = element;
