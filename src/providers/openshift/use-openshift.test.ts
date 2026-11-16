@@ -211,7 +211,8 @@ describe("OpenShift suspension", () => {
     expect(mounted.inventory).not.toHaveBeenCalled();
     expect(mounted.live).not.toHaveBeenCalled();
     setSuspended(false);
-    await Bun.sleep(0);
+    // Long enough for a second fetch queued behind the first (the view's and the load's) to run too.
+    await Bun.sleep(50);
     expect(mounted.cachePeek).toHaveBeenCalledTimes(1);
     expect(mounted.inventory).toHaveBeenCalledTimes(1);
     expect(openShift.getCommitData(SHA)).not.toBeNull();
@@ -969,5 +970,24 @@ describe("OpenShift live list on the dashboard", () => {
     mounted.actions.setActiveProviderView("git");
     await Bun.sleep(20);
     expect(mounted.watches.every(watch => watch.signal.aborted)).toBe(true);
+  });
+});
+
+describe("OpenShift build list once the repository loads", () => {
+  test("one fetch, also when the dashboard opens while the list the Git view started is still fetching", async () => {
+    let release!: () => void;
+    const inventoryGate = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    const mounted = mountOpenShift(true, true, { inventoryGate });
+    mounted.actions.setActiveProviderView("git");
+    mounted.setSuspended(false);
+    for (let i = 0; i < 100 && mounted.inventory.mock.calls.length === 0; i++) await Bun.sleep(5);
+    expect(mounted.inventory).toHaveBeenCalledTimes(1);
+    mounted.actions.setActiveProviderView("dashboard");
+    release();
+    await Bun.sleep(50);
+    expect(mounted.inventory).toHaveBeenCalledTimes(1);
+    expect(mounted.cachePeek).toHaveBeenCalledTimes(1);
   });
 });

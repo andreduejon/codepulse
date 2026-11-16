@@ -73,6 +73,8 @@ export function useProviderFetchLifecycle(opts: {
   let hasFetchedOnce = false;
   /** The `fetchOnLoad` fetch started for this repository. */
   let loadFetchStarted = false;
+  /** The `fetchOnLoad` fetch while it runs: a view that opens meanwhile keeps it instead of fetching the same again. */
+  let loadFetch: Promise<void> | null = null;
   let lastFetchedAt = 0;
   let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
   let fetchAbortCtrl: AbortController | null = null;
@@ -287,6 +289,7 @@ export function useProviderFetchLifecycle(opts: {
     fetchAbortCtrl = null;
     backgroundFetchAbortCtrl?.abort();
     backgroundFetchAbortCtrl = null;
+    loadFetch = null;
     for (const ctrl of activeRequestControllers) ctrl.abort();
     activeRequestControllers.clear();
     fetchInFlight = false;
@@ -334,7 +337,7 @@ export function useProviderFetchLifecycle(opts: {
     // Moving between the dashboard and the provider's tab keeps a running fetch: it is the same data.
     const showStatus = view === providerId;
     if (!hasFetchedOnce) {
-      if (fetchInFlight && fetchAbortCtrl) return startAutoRefresh();
+      if (fetchInFlight && (fetchAbortCtrl || loadFetch)) return startAutoRefresh();
       const controller = new AbortController();
       fetchAbortCtrl = controller;
       // Untracked: signals the fetch reads (badges, repo) must not re-run this effect.
@@ -360,10 +363,16 @@ export function useProviderFetchLifecycle(opts: {
       return;
     }
     if (state.graphRows().length === 0 || loadFetchStarted || hasFetchedOnce || !opts.isAvailable()) return;
+    // A view's first fetch runs already: it is the same list.
+    if (fetchInFlight) return;
     loadFetchStarted = true;
     const ctrl = new AbortController();
     backgroundFetchAbortCtrl = ctrl;
-    untrack(() => void fetchInitial(ctrl.signal, undefined, false));
+    const run = untrack(() => fetchInitial(ctrl.signal, undefined, false));
+    loadFetch = run;
+    void run.finally(() => {
+      if (loadFetch === run) loadFetch = null;
+    });
   });
 
   createEffect(() => {
