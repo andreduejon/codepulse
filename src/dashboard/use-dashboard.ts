@@ -42,6 +42,7 @@ export interface DashboardState {
   moveToEnd: (end: "first" | "last") => void;
   /** Enter: the selected event, for the caller to show. */
   activate: () => DashboardEvent | null;
+  /** Reading the app's events for the first time: nothing to show yet. Re-reads don't count. */
   loading: Accessor<boolean>;
   reload: () => Promise<void>;
 }
@@ -214,7 +215,9 @@ export function useDashboard(
     move,
     moveToEnd,
     activate: selected,
-    loading,
+    // Only the first read of an app shows as reading: a re-read (a provider wrote, r, the graph changed) keeps the
+    // events on screen, so it needs no label and doesn't make the footer blink.
+    loading: () => loading() && loaded().app !== opts.app().path,
     reload,
   };
 }

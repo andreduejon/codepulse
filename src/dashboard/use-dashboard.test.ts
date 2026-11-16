@@ -274,3 +274,32 @@ test("a run going again under the same id (a GitHub re-run) shows as it is now, 
   const texts = state.rows().flatMap(row => (row.kind === "event" ? [row.event.text] : []));
   expect(texts).toEqual(["CI #9 running"]);
 });
+
+test("only an app's first read shows as reading: reading it again keeps its events and stays quiet", async () => {
+  const [active] = createSignal(true);
+  let release: () => void = () => {};
+  const state = createRoot(dispose => {
+    cleanup.push(dispose);
+    return useDashboard({
+      app: () => SHOP,
+      active,
+      now: () => NOW,
+      load: () =>
+        new Promise(resolve => {
+          release = () => resolve([event(SHOP.path, 5)]);
+        }),
+    });
+  });
+  await settle();
+  expect(state.loading()).toBe(true);
+  release();
+  await settle();
+  expect(state.loading()).toBe(false);
+  // Read again (a provider wrote, r, the graph changed): no reading label, the events stay.
+  const again = state.reload();
+  await settle();
+  expect(state.loading()).toBe(false);
+  expect(state.totalCount()).toBe(1);
+  release();
+  await again;
+});
