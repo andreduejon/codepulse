@@ -1036,6 +1036,60 @@ describe("fetchCIDataForSHAs", () => {
     expect(result.error).toBeNull();
   });
 
+  it("keeps the branch a run was for, and asks for it", async () => {
+    const response = {
+      data: {
+        repository: {
+          c0: {
+            oid: "sha",
+            checkSuites: {
+              pageInfo: { hasNextPage: false, endCursor: null },
+              nodes: [
+                {
+                  status: "COMPLETED",
+                  conclusion: "SUCCESS",
+                  branch: { name: "feature/login" },
+                  workflowRun: {
+                    databaseId: 1,
+                    runNumber: 1,
+                    event: "pull_request",
+                    updatedAt: "2024-01-02T00:00:00Z",
+                    workflow: { name: "CI" },
+                  },
+                },
+                {
+                  status: "COMPLETED",
+                  conclusion: "SUCCESS",
+                  branch: null,
+                  workflowRun: {
+                    databaseId: 2,
+                    runNumber: 2,
+                    event: "pull_request",
+                    updatedAt: "2024-01-02T00:00:00Z",
+                    workflow: { name: "Fork" },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
+    };
+    const fetcher = mock(
+      async (_url: string | URL | Request, _init?: RequestInit) =>
+        new Response(JSON.stringify(response), { status: 200 }),
+    );
+    mockFetch(fetcher);
+    const result = await fetchCIDataForSHAs(TEST_REPO, TEST_TOKEN, ["sha"]);
+    expect(String(fetcher.mock.calls[0]?.[1]?.body)).toContain("branch { name }");
+    expect(result.data.map(run => [run.name, run.headBranch])).toEqual([
+      ["CI", "feature/login"],
+      ["Fork", undefined],
+    ]);
+    // A run without a branch (from a fork) has no headBranch at all.
+    expect("headBranch" in (result.data[1] ?? {})).toBe(false);
+  });
+
   it("exports GQL_BATCH_SIZE as a positive integer", () => {
     expect(typeof GQL_BATCH_SIZE).toBe("number");
     expect(GQL_BATCH_SIZE).toBeGreaterThan(0);

@@ -105,7 +105,7 @@ describe("getAvailableTabs", () => {
 describe("getUncommittedProviderNotice", () => {
   test("explains provider limitation", () => {
     expect(getUncommittedProviderNotice("snyk")).toBe("No Snyk data for uncommitted changes.");
-    expect(getUncommittedProviderNotice("github-actions")).toBe("No GitHub Actions data for uncommitted changes.");
+    expect(getUncommittedProviderNotice("github-actions")).toBe("No GitHub data for uncommitted changes.");
   });
 
   test("is hidden in git view", () => {

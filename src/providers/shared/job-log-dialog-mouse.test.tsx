@@ -138,7 +138,7 @@ for (const provider of ["github-actions", "jenkins"] as const) {
   test(`${provider}: mouse/keyboard actions, hover, guarded navigation and terminal log cache`, async () => {
     const d = await renderLog(provider);
     try {
-      expect(d.frame()).toContain(provider === "jenkins" ? "Jenkins" : "GitHub Actions");
+      expect(d.frame()).toContain(provider === "jenkins" ? "Jenkins" : "GitHub");
       expect(d.frame()).toContain("fetching log...");
       expect(d.fetchLog.mock.calls.map(([job]) => job.id)).toEqual([1]);
       const footer = descendants(d.renderer.root).filter(
@@ -295,7 +295,7 @@ test("the line number column fits the largest number on screen, so the widest on
   try {
     await d.flush();
     const rows = () => d.frame().split("\n");
-    const titleX = rows()[rows().findIndex(row => row.includes("GitHub Actions"))].indexOf("GitHub Actions");
+    const titleX = rows()[rows().findIndex(row => row.includes("GitHub"))].indexOf("GitHub");
     const numberAt = (label: string) => {
       const row = rows().find(line => line.includes(label)) ?? "";
       return row.slice(titleX, row.indexOf(label)).trimEnd();
@@ -339,7 +339,7 @@ test("with wrap on, the line number column fits the screen too and settles", asy
     await d.key("w");
     await d.flush();
     const rows = () => d.frame().split("\n");
-    const titleX = rows()[rows().findIndex(row => row.includes("GitHub Actions"))].indexOf("GitHub Actions");
+    const titleX = rows()[rows().findIndex(row => row.includes("GitHub"))].indexOf("GitHub");
     const numberAt = (label: string) => {
       const row = rows().find(line => line.includes(label)) ?? "";
       return row.slice(titleX, row.indexOf(label)).trimEnd();
@@ -741,7 +741,7 @@ test("the title takes the time read with the log, so a job that finished meanwhi
   try {
     await setup.flush();
     await setup.flush();
-    expect(setup.captureCharFrame()).toContain("GitHub Actions · CI #814 · test · 1m 44s");
+    expect(setup.captureCharFrame()).toContain("GitHub · CI #814 · test · 1m 44s");
   } finally {
     setup.renderer.destroy();
   }

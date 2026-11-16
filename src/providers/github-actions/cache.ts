@@ -107,6 +107,27 @@ export function jobsMapFromGitHubCache(jobsCache: ReadonlyMap<number, GitHubJob[
   return jobs;
 }
 
+/**
+ * A commit's finished runs merged into its snapshot. `freshJobs` holds the jobs read with these runs: a run without
+ * them loses the jobs cached before, since a re-run's earlier jobs are not its jobs and are asked for again.
+ */
+export function mergeGitHubEntry(
+  sha: string,
+  existing: GitHubCacheEntry | null,
+  incoming: readonly GitHubWorkflowRun[],
+  freshJobs: ReadonlyMap<number, GitHubJob[]>,
+): GitHubCacheEntry {
+  const jobs = mergeGitHubJobs(
+    existing?.jobs,
+    jobsMapFromGitHubCache(
+      freshJobs,
+      incoming.filter(run => freshJobs.has(run.id)).map(run => run.id),
+    ),
+  );
+  for (const run of incoming) if (!freshJobs.has(run.id)) delete jobs[String(run.id)];
+  return { sha, runs: mergeGitHubRuns(existing?.runs ?? [], incoming), jobs };
+}
+
 export class GitHubCache extends ShaSqliteCache<GitHubCacheEntry> {
   constructor(options: { root?: string; maxEntries?: ProviderCacheLimit } = {}) {
     super({

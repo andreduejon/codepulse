@@ -2,6 +2,122 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.18.0] - 2026-11-17
+
+### Added
+
+- **Dashboard**, a new first view in the tab row (Tab from the last provider, or a click). The open app gets a straight
+  line, a "rope", and everything that happened is a knot on it in its provider's color: commits on the main branch,
+  GitHub Actions runs, Jenkins builds, OpenShift builds and Snyk scans, newest first, in the columns Commit, Branch,
+  Time and Event. The branch is the one the provider names (a GitHub run's, a Jenkins multibranch job's, an OpenShift
+  build's Git ref), else the one the commit was made on: the main branch for its own first-parent line, else the branch
+  whose tip reaches it in the fewest first-parent steps, so a commit merged from develop stays develop's. Local branches
+  count for commits not pushed yet. A knot is the events within an hour; a line from the Commit column to the end starts
+  each day, with the weekday and date where the times are. The project row keeps the group's badges, so another app's
+  dashboard is a click away, and the event count is where the graph's commit count is. Where the graph's modes are, each
+  provider is a badge in its knot color: a click, or `:hide NAME` and `:show NAME` (`:show` alone shows all), hides its
+  events (the badge goes grey and the count reads `26 / 30 events`), another shows them again. From 180 columns a side
+  panel shows the selected event in its provider's own tab for the event's commit, with the event's run, build or
+  resource open and its name in the Dashboard's color, the one that provider's view shows (GitHub's runs with their
+  jobs, steps and annotations, Jenkins' builds with stages and tests, OpenShift's resources, Snyk's Vulnerabilities and
+  Dependencies), with its legend, and **Info**, the commit as the graph's Info tab shows it (branches, tags, author,
+  date, subject, body, children and parents). `→` gives the tab the keyboard: `↑`/`↓`, Enter (open a run, a log) and
+  `←`/`→` between Snyk's two tabs work as in the provider's view, and `←` on the first tab gives it back. A commit has
+  Info only. Below 180 columns, Enter opens the same as a dialog. Each event's mark and legend are the ones its
+  provider's detail tab shows: a scan with findings gets Snyk's `▲` in its worst finding's severity color, then its
+  total and every severity in order (`scan · 4 vulnerabilities · 1 critical · 3 high · 0 medium · 0 low`), each count in
+  its severity's color and muted at zero. A scan without findings lists every severity at zero, like Snyk's `C0 H0 M0
+  L0`, and a partial scan ends in Snyk's `?` in the warning color. Enter, or **Show in GitHub** (the event's provider)
+  at the top of the details, shows the event's commit in that provider's view with its details focused (`s` in the
+  compact dialog, where Enter acts on the tab's rows). A click on a row only selects it, and `o` opens a run's or
+  build's page. While the dashboard is shown, each provider fetches and auto refreshes as if its tab were open, without
+  a loading status, and Snyk scans the tips of its Auto scan branches, so the events are fresh without visiting each
+  tab. A failed fetch or scan shows in the message box, worded as on the provider's tab; several share one box (`Errors
+  from GitHub and Jenkins`) with a line each. Closing it with `✕` or `:clear` keeps it closed until an error changes. A
+  build or run that is still running shows as running (`● CI #814 running`), from what the providers hold, and turns
+  into how it ended in the same row. The selected row is bold and in the Dashboard's color, as a provider view's is in
+  its own. The dashboard reads Git and the provider caches, and reads them again whenever a provider finishes a fetch or
+  the graph is read again. A provider turned off has no events there, also none it cached before, and asks nothing. `r`,
+  `f` and `:reload` fetch every provider that is turned on again, as they do for one
+  provider on its tab, so a build that just finished shows at once. **Menu → Providers → Dashboard** turns it off
+  (Enabled, on by default: without it there is no Dashboard tab and a repository set to start in it starts in Git) and
+  sets how far back it reads (Time window, 1 to 30 days, 7 by default) and how long a knot is (Knot size, 15 minutes to
+  4 hours, 1 hour by default). The Dashboard tab has its own color in every theme; custom themes set it with
+  `dashboardFg` and `dashboardBg`, which a standalone theme (one without `base`) must have: one without them is skipped,
+  and Debug names the missing colors. The graph's search (`/`), path filter and ancestry don't work on the dashboard, an
+  open search bar closes when it shows, and Esc there leaves the graph's highlights and branch view alone.
+- **Menu → Repository → Preferences → Start in** chooses the view a repository opens in: Git (the default), the
+  Dashboard or a provider that is turned on. Saved per repository as `startView`. Another repository of the group opens
+  in its own start view the first time it's shown, and where you left it after that. A provider turned off since starts
+  in Git.
+- **`ctrl+f`** and **`:pull`** fetch, then fast-forward each local branch that is only behind its remote branch, like
+  `git pull --ff-only`, and say what moved. So a pull request merged on GitHub reaches your local `main`. The
+  checked-out branch moves with its files only while no tracked file has changes. A branch with commits of its own, or
+  one checked out in another worktree, stays where it is, and the message says why. **Menu → Repository → Preferences
+  → Auto fast-forward** (off by default, saved per repository as `autoFastForward`) makes `f` and Auto fetch
+  fast-forward too. They only report a branch that stayed behind. **Menu → Repository → Actions → Fast-forward** does
+  what `ctrl+f` does.
+- Snyk Dependencies: a Maven `managed` pin is also marked `removable` when every dependency that brings the package
+  already asks for the pinned version or later, so Maven would pick at least that version without the pin. Their POMs
+  are read from the local Maven repository (`~/.m2/repository`, or where `settings.xml`, `.mvn/maven.config` or
+  `MAVEN_OPTS` put it), where Maven saved them while Snyk resolved the tree. Nothing is downloaded: a POM that is not
+  there, a version range or an unknown property keeps the pin. A direct dependency keeps its pin too. Scans made before
+  this version show it after **Rescan commit**. Only plain version numbers (`1.86`, `2.13.4`) are compared: a version
+  with a qualifier or a `-` (`1.0-rc`, `1.0-1`) keeps its pin, since Maven orders those in ways this check doesn't, and
+  so does a number part longer than 15 digits. A dependency that asks for a variant of the package (a test jar, a
+  classifier) keeps the pin as well.
+- `bun run demo`: a third app with a long name (`customer-notification-service`), shop-web with a `main` behind its
+  remote while a file has changes and a `dev` with commits on both sides (for `ctrl+f`'s warnings), GitHub runs and
+  OpenShift builds that name their branch, and the last fetch dated by the demo's clock. `--colors` names each color in
+  the shots by its theme key (`«severityHigh:3 high»`), so a play can check colors too.
+
+### Changed
+
+- The footer's spinner and its label (`GitHub fetching`, `Snyk scanning`) show once work has run for half a second, so
+  quick background refreshes no longer make the footer blink. The Dashboard says `Dashboard reading` only while it reads
+  an app for the first time; reading it again keeps its events and stays quiet.
+- Snyk's severity legend, below the Snyk tab and in the Dashboard's details, names each level beside its triangle (`▲
+  critical  ▲ high  ▲ medium  ▲ low`) instead of four triangles and `severity`.
+- OpenShift lists its builds once when a repository loads, like GitHub and Jenkins already fetch their runs, and Snyk
+  scans the tips of its Auto scan branches on every view, once per new tip. So the graph and the Dashboard show them
+  before their tabs are opened. Auto refresh still runs only on a provider's tab and the Dashboard.
+- The GitHub Actions provider is called **GitHub** in the app: its tab, the dashboard's provider badge, the footer's
+  `tab` hint, **Menu → Providers**, the help, a job log's title and the theme dialog. Its detail tab is still
+  **Actions**. The config (`providers.github`) and the theme colors (`githubActionsFg`, `githubActionsBg`) keep their
+  names.
+- The Jenkins and OpenShift detail tabs are called **Builds** and **Resources**: each detail tab names what it lists,
+  like Actions, Vulnerabilities and Dependencies.
+
+### Fixed
+
+- Jenkins: a build that started after codepulse had read its job now shows without a restart. A build still checking out
+  (no commit yet) or one for a commit the graph got later no longer makes Jenkins skip its job from then on, a branch
+  pushed since is found (each fetch lists the multibranch project's branch jobs again), and Auto refresh looks for new
+  builds too, not only at the ones already running. It asks each job for its last build and lists only the jobs with a
+  new one.
+- Menu → Providers → OpenShift: an empty **Server** or **Console** reads `Enter server URL...` / `Enter console URL...`,
+  like the other fields, instead of nothing or `optional, for o`.
+- A config value Codepulse ignores (`"dashboard.enabled" must be a boolean, ignoring`) now shows in Debug, once per run.
+  Before, the warning was dropped and the value silently ignored.
+- Switching to another app of the group no longer lets Snyk scan the previous app's branch tips in the new one (`Unable
+  to resolve commit SHA`): the switch changes the repository and its branches in one update.
+- **Menu → Repository → Actions → Fetch remote** says `just now` instead of a negative age when the last fetch time is
+  ahead of the clock.
+- Another repository, opened with a group badge or **Switch repository**, uses its own Auto fetch, Auto refresh, Page
+  size and Show all branches. Before, it kept the first repository's, so it might never fetch, and the menu showed
+  and saved the first repository's values.
+- The details keep what you opened when you switch tabs or when the terminal width crosses into or out of the side
+  panel: open runs and attempts (GitHub, Jenkins), closed namespaces (OpenShift), the Snyk view, collapsed
+  folders and the Info sections. Before, a resize or a tab switch closed them and the cursor landed on another row.
+  The footer also keeps offering `o open` after such a resize.
+- Clicking `enter` in the footer of the compact details works the first time they open after startup. It stayed
+  unclickable until the details had been opened once before.
+- `codepulse xyz` without a folder `xyz` opens the project selector with "Hmm, that directory doesn't exist" instead
+  of stopping with a fatal error about Git. Without Git installed, the startup now says so the same way.
+- Jenkins with more than 25 branch jobs in a multibranch project caches the finished builds it read, like GitHub
+  and OpenShift. Before, it cached nothing, so its builds never showed on the dashboard or below the fetch
+  depth.
+
 ## [0.17.0] - 2026-11-11
 
 ### Added

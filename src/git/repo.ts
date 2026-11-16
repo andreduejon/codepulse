@@ -549,6 +549,117 @@ export async function fetchRemote(repoPath: string): Promise<{ ok: boolean; erro
   return { ok: true };
 }
 
+/** Why a branch behind its remote branch stayed where it was. */
+export type FastForwardSkip =
+  /** It's checked out, and the working tree has changes to tracked files. */
+  | { branch: string; reason: "local-changes" }
+  /** It has commits its remote branch doesn't have. */
+  | { branch: string; reason: "diverged" }
+  /** Another worktree has it checked out: moving it would leave that worktree's files behind. */
+  | { branch: string; reason: "other-worktree" }
+  /** It's checked out, and the commits bring files that are untracked here: Git won't overwrite them. */
+  | { branch: string; reason: "untracked"; files: string[] }
+  /** Git refused (an untracked file in the way, a hook); `detail` is Git's first line. */
+  | { branch: string; reason: "failed"; detail: string };
+
+export interface FastForwardResult {
+  moved: { branch: string; commits: number }[];
+  skipped: FastForwardSkip[];
+}
+
+/**
+ * Moves each local branch that is only behind its remote branch up to it, like `git pull --ff-only`, after a fetch.
+ * The checked-out branch moves with its files (`git merge --ff-only`), and only while no tracked file has changes.
+ * Other branches move with `git update-ref`, unless another worktree has them checked out. Nothing is merged or
+ * rebased, so a branch with commits of its own stays.
+ */
+export async function fastForwardBranches(repoPath: string): Promise<FastForwardResult> {
+  const result: FastForwardResult = { moved: [], skipped: [] };
+  const { stdout, exitCode } = await runGit(repoPath, [
+    "for-each-ref",
+    `--format=%(HEAD)${RS}%(refname)${RS}%(refname:short)${RS}%(objectname)${RS}%(upstream)${RS}%(upstream:trackshort)`,
+    "refs/heads/",
+  ]);
+  if (exitCode !== 0) return result;
+  const branches = stdout
+    .split("\n")
+    .filter(Boolean)
+    .map(line => {
+      const [head, ref = "", name = "", sha = "", upstream = "", track = ""] = line.split(RS);
+      return { current: head === "*", ref, name, sha, upstream, track };
+    })
+    .filter(branch => branch.upstream && (branch.track === "<" || branch.track === "<>"));
+  if (branches.length === 0) return result;
+
+  const worktrees = await runGit(repoPath, ["worktree", "list", "--porcelain"]);
+  const checkedOut = new Set(
+    worktrees.stdout
+      .split("\n")
+      .filter(line => line.startsWith("branch "))
+      .map(line => line.slice("branch ".length)),
+  );
+
+  for (const branch of branches) {
+    if (branch.track === "<>") {
+      result.skipped.push({ branch: branch.name, reason: "diverged" });
+      continue;
+    }
+    if (!branch.current && checkedOut.has(branch.ref)) {
+      result.skipped.push({ branch: branch.name, reason: "other-worktree" });
+      continue;
+    }
+    const count = await runGit(repoPath, ["rev-list", "--count", `${branch.ref}..${branch.upstream}`]);
+    const commits = Number.parseInt(count.stdout.trim(), 10) || 0;
+    if (branch.current) {
+      const status = await runGit(repoPath, ["status", "--porcelain", "--untracked-files=no"]);
+      if (status.exitCode !== 0 || status.stdout.trim()) {
+        result.skipped.push({ branch: branch.name, reason: "local-changes" });
+        continue;
+      }
+      // Git overwrites ignored files by default: a file the upstream starts tracking (a local `.env`) must stay.
+      const merge = await runGit(repoPath, ["merge", "--ff-only", "--no-overwrite-ignore", "--quiet", branch.upstream]);
+      if (merge.exitCode !== 0) {
+        const detail = merge.stderr.trim();
+        if (detail) debugError("Git", detail);
+        if (detail.includes("untracked working tree files would be overwritten")) {
+          const files = detail
+            .split("\n")
+            .filter(line => line.startsWith("\t"))
+            .map(line => line.trim());
+          result.skipped.push({ branch: branch.name, reason: "untracked", files });
+          continue;
+        }
+        const first = detail.split("\n").find(line => line.trim()) ?? "Git refused the fast-forward";
+        result.skipped.push({ branch: branch.name, reason: "failed", detail: first.replace(/^(error|fatal): /, "") });
+        continue;
+      }
+    } else {
+      const target = await runGit(repoPath, ["rev-parse", "--verify", `${branch.upstream}^{commit}`]);
+      // The old value makes it a no-op if the branch moved since it was read.
+      const update = await runGit(repoPath, [
+        "update-ref",
+        "-m",
+        "codepulse: fast-forward",
+        branch.ref,
+        target.stdout.trim(),
+        branch.sha,
+      ]);
+      if (target.exitCode !== 0 || update.exitCode !== 0) {
+        const detail = (update.stderr || target.stderr).trim();
+        if (detail) debugError("Git", detail);
+        result.skipped.push({
+          branch: branch.name,
+          reason: "failed",
+          detail: (detail.split("\n")[0] ?? "").replace(/^(error|fatal): /, "") || "Git refused the fast-forward",
+        });
+        continue;
+      }
+    }
+    result.moved.push({ branch: branch.name, commits });
+  }
+  return result;
+}
+
 /**
  * Get the last fetch time by reading the mtime of FETCH_HEAD.
  * Returns null if the file doesn't exist (never fetched).

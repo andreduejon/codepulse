@@ -11,30 +11,31 @@ import { createSignal } from "solid-js";
 
 /**
  * Canonical provider order used everywhere providers are cycled or displayed.
- * Mental model: source → CI → runtime → scan/quality.
+ * Mental model: the dashboard over every provider, then source → CI → runtime → scan/quality.
  * Future providers should extend this order as:
- * Git → GitHub Actions → Jenkins → OpenShift → Snyk → SonarQube.
+ * Dashboard → Git → GitHub → Jenkins → OpenShift → Snyk → SonarQube.
  */
-export const PROVIDER_ORDER = ["git", "github-actions", "jenkins", "openshift", "snyk"] as const;
+export const PROVIDER_ORDER = ["dashboard", "git", "github-actions", "jenkins", "openshift", "snyk"] as const;
 
 /** Provider view identifiers — Tab cycles through these. */
 export type ProviderView = (typeof PROVIDER_ORDER)[number];
-export type ProviderDetailView = Exclude<ProviderView, "git">;
+/** The views that show a provider's events on the dashboard: every view but the dashboard itself. */
+export type EventSource = Exclude<ProviderView, "dashboard">;
+export type ProviderDetailView = Exclude<ProviderView, "git" | "dashboard">;
 
 export interface ProviderMetadata {
   displayName: string;
   /** Label for detail panel tab. Defaults to displayName. */
   detailLabel?: string;
-  /** Short name in the footer's `tab` hint, like the detail tab. Defaults to displayName. */
-  shortName?: string;
-  category: "source" | "ci" | "runtime" | "scan-quality";
+  category: "overview" | "source" | "ci" | "runtime" | "scan-quality";
 }
 
 export const PROVIDER_METADATA: Record<ProviderView, ProviderMetadata> = {
+  dashboard: { displayName: "Dashboard", category: "overview" },
   git: { displayName: "Git", category: "source" },
-  "github-actions": { displayName: "GitHub Actions", detailLabel: "Actions", shortName: "Actions", category: "ci" },
-  jenkins: { displayName: "Jenkins", category: "ci" },
-  openshift: { displayName: "OpenShift", category: "runtime" },
+  "github-actions": { displayName: "GitHub", detailLabel: "Actions", category: "ci" },
+  jenkins: { displayName: "Jenkins", detailLabel: "Builds", category: "ci" },
+  openshift: { displayName: "OpenShift", detailLabel: "Resources", category: "runtime" },
   snyk: { displayName: "Snyk", detailLabel: "Vulnerabilities", category: "scan-quality" },
 };
 
@@ -103,6 +104,8 @@ export interface ProviderRegistry {
   unregister: (id: ProviderView) => void;
   getVersion: () => number;
   getEnabledViews: () => ProviderView[];
+  /** The Dashboard tab shows while it is turned on (Menu → Providers → Dashboard). */
+  setDashboardEnabled: (enabled: boolean) => void;
   nextView: (current: ProviderView) => ProviderView;
   get: (id: ProviderView) => ProviderRegistration | undefined;
 }
@@ -111,10 +114,13 @@ export interface ProviderRegistry {
 export function createProviderRegistry(): ProviderRegistry {
   const entries: ProviderRegistration[] = [];
   const [version, setVersion] = createSignal(0);
+  const [dashboardEnabled, setDashboardEnabled] = createSignal(true);
 
   const getEnabledViews = (): ProviderView[] => {
     const registered = new Set(entries.map(p => p.id));
-    return PROVIDER_ORDER.filter(view => view === "git" || registered.has(view));
+    return PROVIDER_ORDER.filter(
+      view => (view === "dashboard" && dashboardEnabled()) || view === "git" || registered.has(view),
+    );
   };
 
   return {
@@ -133,6 +139,7 @@ export function createProviderRegistry(): ProviderRegistry {
     },
     getVersion: () => version(),
     getEnabledViews,
+    setDashboardEnabled,
     nextView(current) {
       const views = getEnabledViews();
       if (views.length <= 1) return "git";
@@ -147,17 +154,12 @@ export function providerDisplayName(view: ProviderView): string {
   return PROVIDER_METADATA[view]?.displayName ?? view;
 }
 
-/** The footer's name for a view: `Actions` like its detail tab, the display name otherwise. */
-export function providerShortName(view: ProviderView): string {
-  return PROVIDER_METADATA[view]?.shortName ?? providerDisplayName(view);
-}
-
 export function isProviderView(view: string): view is ProviderView {
   return PROVIDER_ORDER.includes(view as ProviderView);
 }
 
 export function isProviderDetailView(view: string): view is ProviderDetailView {
-  return isProviderView(view) && view !== "git";
+  return isProviderView(view) && view !== "git" && view !== "dashboard";
 }
 
 export function providerDetailTab(view: ProviderView): { id: ProviderDetailView; label: string } | null {

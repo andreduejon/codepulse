@@ -1,6 +1,16 @@
-import type { ScrollBoxRenderable } from "@opentui/core";
+import { KeyEvent, parseKeypress, type ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
-import { batch, createEffect, createMemo, createSignal, onCleanup, onMount, Show, untrack } from "solid-js";
+import {
+  type Accessor,
+  batch,
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  onMount,
+  Show,
+  untrack,
+} from "solid-js";
 import { runAppCommand } from "./app-commands";
 import { githubSettings, jenkinsSettings, openShiftSettings, snykSettings } from "./app-provider-config";
 import { applyRepoSession, captureRepoSession } from "./app-repo-session";
@@ -8,8 +18,14 @@ import { isTabNoticeStatus, type TabNotice, tabNoticeFor } from "./app-tab-notic
 import type { AppContentProps, RepoSessionSnapshot } from "./app-types";
 import CacheScreen from "./components/cache-screen";
 import CommandBar from "./components/command-bar";
+import { DashboardCommitFields, DashboardDetail, type DashboardDetailTab } from "./components/dashboard-detail";
+import { DashboardView } from "./components/dashboard-view";
+import CommitDetailView from "./components/detail";
+import { createDetailMemory } from "./components/detail-memory";
 import DetailPanel from "./components/detail-panel";
+import { ProviderTab } from "./components/detail-provider-tabs";
 import type { DetailNavRef } from "./components/detail-types";
+import { DashboardEventDialog } from "./components/dialogs/dashboard-event-dialog";
 import DebugDialog from "./components/dialogs/debug-dialog";
 import { DetailDialog } from "./components/dialogs/detail-dialog";
 import DiffBlameDialog from "./components/dialogs/diff-blame-dialog";
@@ -22,7 +38,15 @@ import GraphView, { ColumnHeader } from "./components/graph";
 import MessageBox, { type UIMessage } from "./components/message-box";
 import ProjectSelector from "./components/project-selector";
 import SetupScreen from "./components/setup-screen";
-import { defaultConfig, getKnownRepoInfos, getRepoDisplayConfig, loadConfig } from "./config";
+import {
+  defaultConfig,
+  getKnownRepoInfos,
+  getRepoDisplayConfig,
+  loadConfig,
+  mergeOptions,
+  reportConfigWarnings,
+  startViewFor,
+} from "./config";
 import { backfillRepoConfig, writeConfig } from "./config-write";
 import {
   COMPACT_THRESHOLD_WIDTH,
@@ -31,18 +55,32 @@ import {
   MIN_TERMINAL_HEIGHT,
   MIN_TERMINAL_WIDTH,
 } from "./constants";
-import { AppStateContext, createAppState, providerIdle, providerStatusMessage } from "./context/state";
+import { AppStateContext, createAppState, type DetailTab, providerIdle, providerStatusMessage } from "./context/state";
 import { ThemeContext } from "./context/theme";
+import type { DashboardEvent } from "./dashboard/events";
+import { githubEvents, jenkinsEvents, openShiftEvents } from "./dashboard/events";
+import {
+  DASHBOARD_FETCHING_PROVIDERS,
+  dashboardFetchMessage,
+  type FetchError,
+  fetchErrorKey,
+} from "./dashboard/fetch-errors";
+import { markLegend } from "./dashboard/legend";
+import type { CommitInfo } from "./dashboard/load";
+import { dashboardSettings } from "./dashboard/settings";
+import { type DashboardApp, useDashboard } from "./dashboard/use-dashboard";
 import { BANNER, displayBanner } from "./debug/banner";
+import type { FastForwardResult } from "./git/repo";
 import type { DiffTarget } from "./git/types";
+import { handleDetailKey } from "./hooks/handle-detail-keys";
 import { openGraphDetails } from "./hooks/handle-graph-keys";
 import { useAncestry } from "./hooks/use-ancestry";
 import { useDataLoader } from "./hooks/use-data-loader";
 import { useDetailLoader } from "./hooks/use-detail-loader";
 import { type CommandBarMode, type DialogId, useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
 import { usePathFilter } from "./hooks/use-path-filter";
-import { providerAccent } from "./providers/colors";
-import type { ProviderDetailSources } from "./providers/detail-entries";
+import { providerAccent, providerColors } from "./providers/colors";
+import { detailEntryFor, type ProviderDetailSources } from "./providers/detail-entries";
 import { githubJobLogTarget } from "./providers/github-actions/log-target";
 import type { GitHubJob, GitHubWorkflowRun } from "./providers/github-actions/types";
 import { useGitHubCI } from "./providers/github-actions/use-github-ci";
@@ -52,13 +90,21 @@ import { useJenkinsCI } from "./providers/jenkins/use-jenkins-ci";
 import OpenShiftResourceDialog from "./providers/openshift/resource-dialog";
 import type { OpenShiftResource } from "./providers/openshift/types";
 import { useOpenShift } from "./providers/openshift/use-openshift";
-import { providerDisplayName } from "./providers/provider";
+import {
+  type EventSource,
+  isProviderDetailView,
+  type ProviderView,
+  providerDetailTab,
+  providerDisplayName,
+} from "./providers/provider";
 import { type CacheRepositorySummary, evictRepositoryCache } from "./providers/shared/cache-management";
 import JobLogDialog, { type JobLogTarget } from "./providers/shared/job-log-dialog";
 import { repositoryIdentity, setProviderCacheSuspended } from "./providers/shared/sha-sqlite-cache";
 import { type SnykProviderConfig, useSnyk } from "./providers/snyk/use-snyk";
-import { nextGroupRepoPath } from "./utils/group-repos";
+import { fastForwardMessage } from "./utils/fast-forward-message";
+import { nextGroupRepoPath, repoDisplayName } from "./utils/group-repos";
 import { computeDisplacedIndex, DETAIL_CHILD_DIALOGS } from "./utils/keyboard-nav-utils";
+import { openUrl } from "./utils/open-url";
 
 export function AppContent(props: Readonly<AppContentProps>) {
   const { state, actions } = createAppState(
@@ -82,17 +128,39 @@ export function AppContent(props: Readonly<AppContentProps>) {
   const [jenkinsConfig, setJenkinsConfig] = createSignal(jenkinsSettings(props.initialJenkinsConfig));
   const [openShiftConfig, setOpenShiftConfig] = createSignal(openShiftSettings(props.initialOpenShiftConfig));
   const [snykConfig, setSnykConfig] = createSignal<SnykProviderConfig>(snykSettings(props.initialSnykConfig));
+  /** A repository's config; what it ignores goes to Debug. */
+  const readConfig = (path: string) => {
+    const { config, warnings } = loadConfig(path);
+    reportConfigWarnings(warnings);
+    return config;
+  };
+  const startConfig = readConfig(activeRepoPath());
+  const [dashboardConfig, setDashboardConfig] = createSignal(dashboardSettings(startConfig.dashboard));
+  /** The view this repository opens in, as Menu → Providers → Start in shows it. */
+  const [startView, setStartView] = createSignal<ProviderView>(startConfig.startView ?? "git");
+  /** Menu → Repository → Preferences → Auto fast-forward: `f` and Auto fetch fast-forward too. */
+  const [autoFastForward, setAutoFastForward] = createSignal(startConfig.autoFastForward ?? false);
+  actions.setActiveProviderView(startViewFor(startConfig));
+  // Menu → Providers → Dashboard → Enabled, per repository: off, it has no tab, and leaving it shows Git.
+  createEffect(() => {
+    const enabled = dashboardConfig().enabled;
+    state.providers.setDashboardEnabled(enabled);
+    if (!enabled && untrack(state.activeProviderView) === "dashboard") actions.setActiveProviderView("git");
+  });
 
   const [repoDisplayConfig, setRepoDisplayConfig] = createSignal(getRepoDisplayConfig(activeRepoPath()));
 
   const reloadRuntimeConfig = () => {
     const path = activeRepoPath();
     backfillRepoConfig(path);
-    const { config } = loadConfig(path);
+    const config = readConfig(path);
     setGithubConfig(githubSettings(config.providers?.github));
     setJenkinsConfig(jenkinsSettings(config.providers?.jenkins));
     setOpenShiftConfig(openShiftSettings(config.providers?.openshift));
     setSnykConfig(snykSettings(config.providers?.snyk));
+    setDashboardConfig(dashboardSettings(config.dashboard));
+    setStartView(config.startView ?? "git");
+    setAutoFastForward(config.autoFastForward ?? false);
     setRepoDisplayConfig(getRepoDisplayConfig(path));
     // The theme is per repository; without this a switch keeps the previous repo's theme, and the next settings
     // change saves it into this one. An unknown theme falls back to the default, as at startup.
@@ -116,18 +184,53 @@ export function AppContent(props: Readonly<AppContentProps>) {
   // Repo selector visibility — shown when "Switch repository" is selected from menu
   const [repoSelectorVisible, setRepoSelectorVisible] = createSignal(false);
 
+  /** What the last fast-forward did (ctrl+f, `:pull`), or which branches it left behind. */
+  const [gitNotice, setGitNotice] = createSignal<UIMessage | null>(null);
+
+  /** The failed fetches and scans of the providers the dashboard shows, on any view: shown on the dashboard. */
+  const dashboardErrors = createMemo<FetchError[]>(() => {
+    const errors: FetchError[] = [];
+    for (const view of DASHBOARD_FETCHING_PROVIDERS) {
+      const status = state.providerStatusFor(view);
+      if (status.kind === "error")
+        errors.push({ source: providerDisplayName(view), message: displayBanner(status.message, status.message) });
+    }
+    // A scan that failed in another view, unless Snyk's status says the same already.
+    const scan = snyk.backgroundError();
+    if (scan && !errors.some(error => error.source === "Snyk" && error.message === scan))
+      errors.push({ source: "Snyk", message: scan });
+    return errors;
+  });
+  /** Errors closed on the dashboard; one that goes away is forgotten, so its next failure shows again. */
+  const [dismissedFetchErrors, setDismissedFetchErrors] = createSignal<ReadonlySet<string>>(new Set());
+  createEffect(() => {
+    const current = new Set(dashboardErrors().map(fetchErrorKey));
+    setDismissedFetchErrors(dismissed => {
+      const kept = [...dismissed].filter(key => current.has(key));
+      return kept.length === dismissed.size ? dismissed : new Set(kept);
+    });
+  });
+
   const screenMessage = createMemo<UIMessage | null>(() => {
     const err = state.error();
     if (err) return { kind: "error" as const, source: "Git", message: displayBanner(err, BANNER.git.fetchFailed) };
+    const notice = gitNotice();
+    if (notice) return notice;
 
     const status = state.providerStatus();
     const message = providerStatusMessage(status);
-    if (state.activeProviderView() !== "git" && message && !isTabNoticeStatus(status))
+    if (isProviderDetailView(state.activeProviderView()) && message && !isTabNoticeStatus(status))
       return {
         kind: status.kind === "error" || status.kind === "warning" ? status.kind : ("info" as const),
         source: providerDisplayName(state.activeProviderView()),
         message: displayBanner(message, message),
       };
+
+    // The dashboard fetches for every provider: their failures, in one box.
+    if (state.activeProviderView() === "dashboard") {
+      const dismissed = dismissedFetchErrors();
+      return dashboardFetchMessage(dashboardErrors().filter(error => !dismissed.has(fetchErrorKey(error))));
+    }
 
     // Snyk scans keep running in other views; a failure must not pass silently. The view's own problems come first.
     const background = snyk.backgroundError();
@@ -158,11 +261,36 @@ export function AppContent(props: Readonly<AppContentProps>) {
 
   /** Dismisses the banner: `:clear` (which also clears Debug and the tab notice) or its `✕`. */
   const clearScreenMessage = () => {
+    if (state.activeProviderView() === "dashboard")
+      setDismissedFetchErrors(dismissed => new Set([...dismissed, ...dashboardErrors().map(fetchErrorKey)]));
     actions.setError(null);
+    setGitNotice(null);
     snyk.dismissBackgroundError();
     // Only a status the banner showed; a loading provider keeps its spinner.
     if (providerStatusMessage(state.providerStatus()))
       actions.setProviderStatus(state.activeProviderView(), providerIdle());
+  };
+
+  /**
+   * The branches the last fetch left behind, so Auto fetch doesn't bring back a warning that was closed while nothing
+   * changed. A mutable ref: it outlives the effects and timers that fetch.
+   */
+  const fastForwardNotice = { skipped: "" };
+  const showFastForward = (result: FastForwardResult, explicit: boolean) => {
+    const message = fastForwardMessage(result, explicit);
+    const skipped = JSON.stringify(result.skipped);
+    const repeated = skipped === fastForwardNotice.skipped;
+    fastForwardNotice.skipped = result.skipped.length > 0 ? skipped : "";
+    if (explicit) {
+      setGitNotice(message);
+      return;
+    }
+    // After f or Auto fetch: a warning shows once, and goes once every branch it named moved.
+    if (!message) {
+      if (gitNotice()?.kind === "warning" && gitNotice()?.source === "Git") setGitNotice(null);
+      return;
+    }
+    if (!repeated) setGitNotice(message);
   };
 
   const handleSetupComplete = () => {
@@ -217,10 +345,14 @@ export function AppContent(props: Readonly<AppContentProps>) {
     const mode = layoutMode();
     const currentDialog = untrack(dialog);
     if (mode === "compact" && state.detailFocused() && currentDialog === null) {
-      setDialog("detail");
+      // The dashboard's details have their own dialog.
+      setDialog(untrack(dashboardShown) ? "dashboard-event" : "detail");
     } else if (mode === "normal" && currentDialog === "detail") {
       setDialog(null);
       // detailFocused stays true — panel is now visible in two-column layout
+    } else if (mode === "normal" && currentDialog === "dashboard-event") {
+      // The side panel shows the event now.
+      setDialog(null);
     }
   });
 
@@ -290,11 +422,17 @@ export function AppContent(props: Readonly<AppContentProps>) {
     setDialog("openshift-resource");
   };
 
+  /** Fetch a provider's data again, as its Reload does; Snyk scans branch tips on its own. */
+  const refreshProvider = async (view: ProviderView) => {
+    if (view === "github-actions") await gitHubCI.refresh();
+    else if (view === "jenkins") await jenkinsCI.refresh();
+    else if (view === "openshift") await openShift.refresh();
+  };
+  /** The shown view's providers: its own, or on the dashboard every one turned on. */
   const refreshActiveProvider = async () => {
-    if (state.activeProviderView() === "github-actions") await gitHubCI.refresh();
-    else if (state.activeProviderView() === "jenkins") await jenkinsCI.refresh();
-    else if (state.activeProviderView() === "openshift") await openShift.refresh();
-    else if (state.activeProviderView() === "snyk") return;
+    const view = state.activeProviderView();
+    if (view !== "dashboard") return refreshProvider(view);
+    await Promise.all(state.providers.getEnabledViews().map(refreshProvider));
   };
 
   const knownRepoInfos = () => getKnownRepoInfos();
@@ -346,6 +484,8 @@ export function AppContent(props: Readonly<AppContentProps>) {
     actions.setPathFilter(null);
     actions.setPathMatchSet(null);
     actions.setError(null);
+    setGitNotice(null);
+    fastForwardNotice.skipped = "";
     actions.setCommitDetail(null);
     actions.setUncommittedDetail(null);
     actions.setDetailCursorIndex(0);
@@ -365,27 +505,378 @@ export function AppContent(props: Readonly<AppContentProps>) {
     actions.clearProviderState();
     resetTransientRepoState();
     setRepoSelectorVisible(false);
-    setActiveRepoPath(nextPath);
-    const snapshot = repoSessionCache.get(nextPath);
-    if (snapshot) {
-      restoreRepoSessionSnapshot(snapshot);
-    } else {
-      actions.setCommits([]);
-      actions.setGraphRows([]);
-      actions.setBranches([]);
-      actions.setCurrentBranch("");
-      actions.setRepoPath(nextPath);
-      actions.setRemoteUrl("");
-      actions.setTagDetails(new Map());
-      actions.setStashByParent(new Map());
-      actions.setLoading(true);
-    }
+    // Its own Preferences, before its graph loads: they are per repository, like at startup.
+    const nextConfig = readConfig(nextPath);
+    const nextOptions = mergeOptions({ repoPath: nextPath }, nextConfig);
+    actions.setAutoFetchInterval(nextOptions.autoFetchInterval);
+    actions.setAutoRefreshInterval(nextOptions.autoRefreshInterval);
+    actions.setMaxCount(nextOptions.maxCount);
+    actions.setShowAllBranches(nextConfig.showAllBranches ?? true);
+    // One update: the loader sets the new path as soon as the active one changes, and nothing may see the new path
+    // with the previous repository's branches (Snyk would scan their tips in the wrong repository).
+    batch(() => {
+      setActiveRepoPath(nextPath);
+      const snapshot = repoSessionCache.get(nextPath);
+      if (snapshot) {
+        restoreRepoSessionSnapshot(snapshot);
+      } else {
+        // A repository not shown yet in this session opens in its start view; one shown before, where it was left.
+        actions.setActiveProviderView(startViewFor(nextConfig));
+        actions.setCommits([]);
+        actions.setGraphRows([]);
+        actions.setBranches([]);
+        actions.setCurrentBranch("");
+        actions.setRepoPath(nextPath);
+        actions.setRemoteUrl("");
+        actions.setTagDetails(new Map());
+        actions.setStashByParent(new Map());
+        actions.setLoading(true);
+      }
+    });
   };
 
   const switchGroupRepo = (direction: 1 | -1) => {
     const nextPath = nextGroupRepoPath(knownRepoInfos(), activeRepoPath(), direction, currentRepoDisplayConfig());
     if (!nextPath) return;
     switchRepoPath(nextPath);
+  };
+
+  // ── Dashboard ─────────────────────────────────────────────────────────────
+  /** The open repository: another app of its group is a click on its badge away. */
+  const dashboardApp = createMemo(
+    (): DashboardApp => ({
+      path: activeRepoPath(),
+      name: repoDisplayName({ path: activeRepoPath(), ...currentRepoDisplayConfig() }),
+    }),
+  );
+  const dashboardShown = () => state.activeProviderView() === "dashboard";
+  /** What the open app's providers hold now, as dashboard events: a running build is only here, not in a cache. */
+  const heldDashboardEvents = createMemo(() => {
+    if (!dashboardShown()) return [];
+    const app = activeRepoPath();
+    return [
+      ...githubEvents(app, gitHubCI.heldEntries()),
+      ...jenkinsEvents(app, jenkinsCI.heldEntries()),
+      ...openShiftEvents(app, openShift.heldEntries()),
+    ];
+  });
+  /** The providers turned on: the dashboard leaves out a turned-off one's cached events. */
+  const dashboardSources = createMemo(() => {
+    state.providers.getVersion();
+    return new Set(state.providers.getEnabledViews().filter((view): view is EventSource => view !== "dashboard"));
+  });
+  const dashboard = useDashboard({
+    app: dashboardApp,
+    active: dashboardShown,
+    live: heldDashboardEvents,
+    shownSources: dashboardSources,
+    settings: dashboardConfig,
+    // The graph read again (a refresh, a fetch, a new commit): its main branch may have moved.
+    changes: () => state.graphRows(),
+  });
+  // A scan on the dashboard: its cached result, also for a commit the graph doesn't hold (Snyk reads the graph's).
+  createEffect(() => {
+    const event = dashboard.selected();
+    if (dashboardShown() && event?.source === "snyk") void snyk.readCachedScan(event.sha);
+  });
+  const dashboardAppName = () => dashboardApp().name;
+  // No commit details or graph search beside the dashboard; its own details leave with it.
+  createEffect(() => {
+    if (dashboardShown()) {
+      actions.setDetailFocused(false);
+      const mode = untrack(commandBarMode);
+      if (mode === "search" || mode === "path") {
+        setSearchFocused(false);
+        setCommandBarMode("idle");
+        setCommandBarValue("");
+      }
+    } else if (untrack(dialog) === "dashboard-event") setDialog(null);
+  });
+  let dashboardDialogScrollbox: ScrollBoxRenderable | undefined;
+
+  /** A commit to select once its repository's graph is there, in the view of the provider that showed it. */
+  const [pendingGraphJump, setPendingGraphJump] = createSignal<{ sha: string; view: ProviderView } | null>(null);
+  /** The event's commit in its provider's view, with that provider's details open on it. */
+  const showInGraph = (event: DashboardEvent) => {
+    if (event.app !== activeRepoPath()) switchRepoPath(event.app);
+    setPendingGraphJump({ sha: event.sha, view: event.source });
+  };
+  createEffect(() => {
+    const jump = pendingGraphJump();
+    if (!jump || state.loading()) return;
+    const rows = state.graphRows();
+    if (rows.length === 0) return;
+    const index = rows.findIndex(row => row.commit.hash === jump.sha);
+    // Not in the graph (older than its loaded pages, or outside its branch filter): stay, and say so, rather than show
+    // another commit in the provider's view.
+    if (index < 0) {
+      setPendingGraphJump(null);
+      setGitNotice({
+        kind: "info",
+        source: "Dashboard",
+        title: `${jump.sha.slice(0, 7)} is not in the graph`,
+        message: "It is older than the graph's loaded history, or outside its branch filter.",
+      });
+      return;
+    }
+    batch(() => {
+      setPendingGraphJump(null);
+      actions.setActiveProviderView(state.providers.getEnabledViews().includes(jump.view) ? jump.view : "git");
+      actions.setCursorIndex(index);
+      actions.setScrollTargetIndex(index);
+    });
+    // Its details, as the dashboard showed them and as Enter in the graph opens them: focused beside the graph, the
+    // details dialog with the keyboard in the compact layout.
+    untrack(() => openGraphDetails({ state, actions, layoutMode, setDialog, detailNavRef }));
+  });
+
+  /** The selected event's tabs: its provider's own (Snyk's two), then Info, its commit as the graph shows it. */
+  const dashboardTabsFor = (event: DashboardEvent | null): DashboardDetailTab[] => {
+    if (!event) return [];
+    const tabs: DashboardDetailTab[] = [];
+    if (isProviderDetailView(event.source)) {
+      const own = providerDetailTab(event.source);
+      if (own) tabs.push({ id: own.id, label: own.label });
+      if (event.source === "snyk") tabs.push({ id: "snyk-deps", label: "Dependencies" });
+    }
+    tabs.push({ id: "info", label: "Info" });
+    return tabs;
+  };
+  /** The tab shown: the one chosen for this event's provider, else its first. */
+  const dashboardActiveTab = (): DetailTab | null => {
+    const tabs = dashboardTabsFor(dashboard.selected());
+    const chosen = state.detailActiveTab();
+    return tabs.some(tab => tab.id === chosen) ? chosen : (tabs[0]?.id ?? null);
+  };
+  /** The provider tab takes the keyboard (→ beside the events, the compact dialog). */
+  const focusDashboardTab = (tab: DetailTab | null = dashboardActiveTab()) => {
+    if (!tab) return false;
+    batch(() => {
+      actions.setDetailCursorAction(null);
+      actions.setDetailActiveTab(tab);
+      actions.setDetailCursorIndex(0);
+      actions.setDetailFocused(true);
+    });
+    return true;
+  };
+  // Another event, or the dashboard shown again: its first tab, at the top, and the events keep the keyboard. A re-read
+  // gives the same event as a new object: only another id counts (a mutable ref, so it outlives the effect's runs).
+  const shownEvent = { key: null as string | null };
+  createEffect(() => {
+    const id = dashboard.selected()?.id ?? null;
+    const key = dashboardShown() && id !== null ? id : null;
+    if (key === shownEvent.key) return;
+    shownEvent.key = key;
+    if (key === null) return;
+    untrack(() => {
+      batch(() => {
+        actions.setDetailCursorAction(null);
+        actions.setDetailActiveTab(dashboardTabsFor(dashboard.selected())[0]?.id ?? "info");
+        actions.setDetailCursorIndex(0);
+        if (dialog() !== "dashboard-event") actions.setDetailFocused(false);
+      });
+    });
+  });
+  let dashboardDetailScrollbox: ScrollBoxRenderable | undefined;
+  /** The provider tab in the dashboard's details (both layouts): the same tab as in that provider's view. */
+  const dashboardTabProps = () => ({
+    tabs: () => dashboardTabsFor(dashboard.selected()),
+    activeTab: dashboardActiveTab,
+    focused: () => state.detailFocused(),
+    onSelectTab: (tab: DetailTab) => focusDashboardTab(tab),
+    onMouseFocus: () => focusDashboardTab(),
+    legend: () => {
+      const event = dashboard.selected();
+      const tab = dashboardActiveTab();
+      if (!event || !tab) return event ? markLegend(event.source) : null;
+      return detailEntryFor(tab)?.legend(providerDetailProps.providers, event.sha) ?? null;
+    },
+    renderTab: (event: DashboardEvent, tab: DetailTab, info: Accessor<CommitInfo | null>) =>
+      tab === "info" ? (
+        <DashboardInfoTab event={event} info={info} />
+      ) : (
+        <ProviderTab
+          tab={tab}
+          sha={event.sha}
+          providers={providerDetailProps.providers}
+          navRef={detailNavRef}
+          mouseEnabled={dialog() == null || dialog() === "dashboard-event"}
+          onMouseFocus={() => focusDashboardTab(tab)}
+          memory={providerDetailProps.memory}
+          // The event's own run, build or resource: open, marked in the dashboard's color like its row.
+          target={event.entry}
+          targetColor={providerColors(themeState.theme(), "dashboard").bg}
+        />
+      ),
+  });
+  /**
+   * The event's commit as the graph's Info tab shows it (refs, hash, author, date, subject, body, children, parents),
+   * while the graph holds it; one older than the graph's pages shows what Git reads.
+   */
+  const DashboardInfoTab = (infoProps: { event: DashboardEvent; info: Accessor<CommitInfo | null> }) => {
+    const row = () => state.graphRows().find(graphRow => graphRow.commit.hash === infoProps.event.sha) ?? null;
+    return (
+      <Show when={row()} fallback={<DashboardCommitFields event={infoProps.event} commit={infoProps.info()} />}>
+        {graphRow => (
+          <CommitDetailView
+            commit={() => graphRow().commit}
+            row={graphRow}
+            detail={() => ({ ...graphRow().commit, body: infoProps.info()?.body ?? graphRow().commit.body, files: [] })}
+            navRef={detailNavRef}
+            memory={providerDetailProps.memory}
+            mouseEnabled={dialog() == null || dialog() === "dashboard-event"}
+            onMouseFocus={() => focusDashboardTab("info")}
+            // A child or parent: that commit in the graph.
+            onJumpToCommit={hash => setPendingGraphJump({ sha: hash, view: "git" })}
+          />
+        )}
+      </Show>
+    );
+  };
+  /** The dashboard's `r` (and its footer hint): what is cached at once, then every provider fetched again. */
+  const refreshDashboard = () => {
+    void dashboard.reload();
+    void refreshActiveProvider();
+  };
+  /** Keys while the provider tab has the keyboard, as in the graph's details. */
+  const handleDashboardTabKey = (event: KeyEvent) =>
+    handleDetailKey(event, {
+      state,
+      actions,
+      // The compact dialog holds the tab like the graph's details dialog: ← on the first tab stays.
+      dialog: () => (dialog() === "dashboard-event" ? "detail" : dialog()),
+      getDetailScrollboxRef: () =>
+        dialog() === "dashboard-event" ? dashboardDialogScrollbox : dashboardDetailScrollbox,
+      detailNavRef,
+      tabs: () => dashboardTabsFor(dashboard.selected()).map(tab => tab.id),
+    });
+  /** Enter: beside the side panel, the event in the graph; without it, its details first, like the graph's. */
+  const activateDashboard = () => {
+    const event = dashboard.activate();
+    if (!event) return;
+    if (layoutMode() === "compact") {
+      setDialog("dashboard-event");
+      focusDashboardTab();
+    } else showInGraph(event);
+  };
+  const showSelectedInGraph = () => {
+    const event = dashboard.selected();
+    // The event list has the keyboard until the jump lands: then the provider's details take it (a commit outside
+    // the graph only gets a notice).
+    actions.setDetailFocused(false);
+    setDialog(null);
+    if (event) showInGraph(event);
+  };
+  const openSelectedEvent = () => {
+    const url = dashboard.selected()?.url;
+    if (url) openUrl(url);
+  };
+  /** Keys in the compact details: Enter shows the event in the graph, ↑/↓ scroll, Esc (the cascade) closes. */
+  /** The tab's row has its own page (a job, a resource): `o` opens it there rather than the event's. */
+  const dashboardRowOpens = () => state.detailFocused() && state.detailCursorShortcut()?.key === "o";
+  /** The compact dialog's `o open` hint, clicked: what `o` does there. */
+  const openFromDashboardDialog = () => {
+    if (!dashboardRowOpens()) return openSelectedEvent();
+    const key = parseKeypress("o");
+    if (key) handleDashboardTabKey(new KeyEvent(key));
+  };
+  const handleDashboardDialogKey = (event: KeyEvent) => {
+    const scrollbox = dashboardDialogScrollbox;
+    // `o`: the tab's row when it has its own page (a job, a resource), as in the wide layout; else the event's.
+    if (event.name === "o" && !dashboardRowOpens()) {
+      event.preventDefault();
+      openSelectedEvent();
+      return;
+    }
+    if (event.name === "s" && dashboardActiveTab()) {
+      event.preventDefault();
+      showSelectedInGraph();
+      return;
+    }
+    if (state.detailFocused() && dashboardActiveTab()) {
+      handleDashboardTabKey(event);
+      return;
+    }
+    switch (event.name) {
+      case "return":
+      case "enter":
+        showSelectedInGraph();
+        break;
+      case "o":
+        openSelectedEvent();
+        break;
+      case "down":
+      case "j":
+        scrollbox?.scrollBy(event.shift ? 10 : 1, "absolute");
+        break;
+      case "up":
+      case "k":
+        scrollbox?.scrollBy(event.shift ? -10 : -1, "absolute");
+        break;
+      case "pagedown":
+        scrollbox?.scrollBy(1, "viewport");
+        break;
+      case "pageup":
+        scrollbox?.scrollBy(-1, "viewport");
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
+  };
+  const handleDashboardKey = (event: KeyEvent) => {
+    if (dialog() === "dashboard-event") {
+      handleDashboardDialogKey(event);
+      return;
+    }
+    if (state.detailFocused() && layoutMode() === "normal") {
+      handleDashboardTabKey(event);
+      return;
+    }
+    const step = event.shift ? 10 : 1;
+    switch (event.name) {
+      case "right":
+      case "l":
+        if (layoutMode() === "normal") focusDashboardTab();
+        break;
+      case "down":
+      case "j":
+        dashboard.move(step);
+        break;
+      case "up":
+      case "k":
+        dashboard.move(-step);
+        break;
+      case "pagedown":
+        dashboard.move(10);
+        break;
+      case "pageup":
+        dashboard.move(-10);
+        break;
+      case "g":
+        dashboard.moveToEnd(event.shift ? "last" : "first");
+        break;
+      case "home":
+        dashboard.moveToEnd("first");
+        break;
+      case "end":
+        dashboard.moveToEnd("last");
+        break;
+      case "return":
+      case "enter":
+        activateDashboard();
+        break;
+      case "r":
+        refreshDashboard();
+        break;
+      case "o":
+        if (!dashboard.selected()?.url) return;
+        openSelectedEvent();
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
   };
 
   const handleReloadAll = async () => {
@@ -397,6 +888,15 @@ export function AppContent(props: Readonly<AppContentProps>) {
   const handleFetchAll = async () => {
     const path = activeRepoPath();
     await handleFetch();
+    if (activeRepoPath() !== path) return;
+    await refreshActiveProvider();
+  };
+
+  /** ctrl+f and `:pull`: like `f`, and the local branches that are only behind follow their remote branches. */
+  const handlePullAll = async () => {
+    const path = activeRepoPath();
+    setGitNotice(null);
+    await handleFetch("pull");
     if (activeRepoPath() !== path) return;
     await refreshActiveProvider();
   };
@@ -423,6 +923,8 @@ export function AppContent(props: Readonly<AppContentProps>) {
     initialBranch: props.branch,
     state,
     actions,
+    autoFastForward,
+    onFastForward: showFastForward,
   });
 
   onMount(() => {
@@ -506,7 +1008,10 @@ export function AppContent(props: Readonly<AppContentProps>) {
       setAnchor,
       clearAnchor,
       fetchAll: handleFetchAll,
+      pullAll: handlePullAll,
       reloadAll: handleReloadAll,
+      toggleDashboardSource: dashboard.toggleSource,
+      hiddenDashboardSources: dashboard.hidden,
       setSearchFocused,
       setSearchInputValue,
       setCommandBarMode,
@@ -605,17 +1110,20 @@ export function AppContent(props: Readonly<AppContentProps>) {
     getCommitData: activeProviderCommitData,
     getProviderLoading: () => state.providerStatus().kind === "loading",
     onSwitchGroupRepo: switchGroupRepo,
+    onDashboardKey: handleDashboardKey,
   });
 
   /** Provider data and dialogs for the detail panel and the compact detail dialog. */
   const providerDetailProps = {
+    // One for both layouts: a resize between them keeps open folders, runs and namespaces.
+    memory: createDetailMemory(),
     providers: {
       "github-actions": {
         getCommitData: gitHubCI.getCommitData,
         fetchJobsForRun: gitHubCI.fetchJobsForRun,
         fetchCommitData: gitHubCI.fetchCommitDataForSHA,
         get status() {
-          return state.providerStatus();
+          return state.providerStatusFor("github-actions");
         },
         onOpenJobLog: (job: GitHubJob, run: GitHubWorkflowRun, jobs?: GitHubJob[], search?: string) =>
           openJobLog(githubJobLogTarget(gitHubCI, job, run, jobs ?? [job], search)),
@@ -625,7 +1133,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
         fetchJobsForRun: jenkinsCI.fetchJobsForRun,
         fetchCommitData: jenkinsCI.fetchCommitDataForSHA,
         get status() {
-          return state.providerStatus();
+          return state.providerStatusFor("jenkins");
         },
         onOpenBuild: (run: JenkinsRun, pipeline: JenkinsJob, entry: number) =>
           openJobLog(jenkinsBuildLogTarget(jenkinsCI, run, pipeline, entry)),
@@ -639,7 +1147,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
         liveAge: openShift.liveAge,
         consoleUrl: () => openShiftConfig().consoleUrl,
         get status() {
-          return state.providerStatus();
+          return state.providerStatusFor("openshift");
         },
         onOpenResource: handleOpenOpenShiftResource,
       },
@@ -663,11 +1171,14 @@ export function AppContent(props: Readonly<AppContentProps>) {
 
   /** A dialog opened from the compact details is showing; they wait under it. */
   const compactDetailUnderChild = () =>
-    DETAIL_CHILD_DIALOGS.has(dialog() ?? "") && layoutMode() === "compact" && state.detailFocused();
+    DETAIL_CHILD_DIALOGS.has(dialog() ?? "") &&
+    layoutMode() === "compact" &&
+    state.detailFocused() &&
+    !dashboardShown();
 
   /** Dialogs opened from the details return to the compact detail dialog when they close. */
   const closeToDetail = () => {
-    if (layoutMode() === "compact" && state.detailFocused()) setDialog("detail");
+    if (layoutMode() === "compact" && state.detailFocused()) setDialog(dashboardShown() ? "dashboard-event" : "detail");
     else setDialog(null);
   };
 
@@ -747,8 +1258,17 @@ export function AppContent(props: Readonly<AppContentProps>) {
                     backgroundColor={themeState.theme().backgroundPanel}
                     paddingX={2}
                   >
-                    {/* Graph area */}
-                    <box flexDirection="column" flexGrow={1} paddingBottom={1}>
+                    <Show when={dashboardShown()}>
+                      <box flexDirection="column" flexGrow={1} paddingBottom={1}>
+                        <DashboardView
+                          dashboard={dashboard}
+                          mouseEnabled={() => dialog() == null && state.keyboardScopeOverride() == null}
+                          onRowClick={() => actions.setDetailFocused(false)}
+                        />
+                      </box>
+                    </Show>
+                    {/* Graph area: kept behind the dashboard, so it comes back where it was */}
+                    <box flexDirection="column" flexGrow={1} paddingBottom={1} visible={!dashboardShown()}>
                       {/* Sticky column headers - above scrollbox */}
                       <ColumnHeader />
 
@@ -816,6 +1336,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                         currentRepo={activeRepoPath()}
                         currentGroup={currentRepoDisplayConfig().group}
                         currentAppName={currentRepoDisplayConfig().appName}
+                        dashboard={dashboard}
                       />
 
                       {/* Footer - hotkey hints, 1 char gap above, right-aligned */}
@@ -831,12 +1352,29 @@ export function AppContent(props: Readonly<AppContentProps>) {
                         commandBarMode={commandBarMode}
                         filterActive={!!state.highlightSet() || !!state.viewingBranch()}
                         compact={layoutMode() === "compact"}
+                        dashboard={dashboard}
+                        onDashboardRefresh={refreshDashboard}
                       />
                     </box>
                   </box>
 
                   {/* Detail panel - right, hidden in compact/too-small mode */}
-                  <Show when={layoutMode() === "normal"}>
+                  {/* Dashboard details - right, like the commit details beside the graph */}
+                  <Show when={layoutMode() === "normal" && dashboardShown()}>
+                    <box flexDirection="column" width="25%" minWidth={60} flexShrink={0} paddingX={2} paddingBottom={1}>
+                      <DashboardDetail
+                        event={dashboard.selected}
+                        appName={dashboardAppName}
+                        onShowInGraph={showSelectedInGraph}
+                        mouseEnabled={() => dialog() == null && state.keyboardScopeOverride() == null}
+                        scrollboxRef={element => {
+                          dashboardDetailScrollbox = element;
+                        }}
+                        {...dashboardTabProps()}
+                      />
+                    </box>
+                  </Show>
+                  <Show when={layoutMode() === "normal" && !dashboardShown()}>
                     <box flexDirection="column" width="25%" minWidth={60} flexShrink={0} paddingX={2} paddingBottom={1}>
                       <DetailPanel
                         mouseEnabled={dialog() == null && state.keyboardScopeOverride() == null}
@@ -865,6 +1403,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                     onClose={() => setDialog(null)}
                     onReload={() => void handleReloadAll()}
                     onFetch={() => void handleFetchAll()}
+                    onPull={() => void handlePullAll()}
                     onOpenDialog={handleOpenDialog}
                     onOpenCache={openCacheScreen}
                     onViewBranch={handleViewBranch}
@@ -883,6 +1422,12 @@ export function AppContent(props: Readonly<AppContentProps>) {
                       snykConfig: snykConfig(),
                       onSnykConfigChange: (config: SnykProviderConfig) => setSnykConfig(config),
                     }}
+                    dashboardConfig={dashboardConfig()}
+                    onDashboardConfigChange={setDashboardConfig}
+                    startView={startView()}
+                    onStartViewChange={setStartView}
+                    autoFastForward={autoFastForward()}
+                    onAutoFastForwardChange={setAutoFastForward}
                     onRepoDisplayConfigChange={setRepoDisplayConfig}
                   />
                 </Show>
@@ -932,6 +1477,24 @@ export function AppContent(props: Readonly<AppContentProps>) {
                     {...providerDetailProps}
                     message={screenMessage()}
                     onDismissMessage={clearScreenMessage}
+                  />
+                </Show>
+                {/* The dashboard's details, compact mode only */}
+                <Show when={dialog() === "dashboard-event"}>
+                  <DashboardEventDialog
+                    event={dashboard.selected}
+                    appName={dashboardAppName}
+                    onClose={() => {
+                      actions.setDetailFocused(false);
+                      setDialog(null);
+                    }}
+                    onShowInGraph={showSelectedInGraph}
+                    onOpen={openFromDashboardDialog}
+                    canOpen={() => !!dashboard.selected()?.url || dashboardRowOpens()}
+                    tabProps={dashboardTabProps()}
+                    scrollboxRef={element => {
+                      dashboardDialogScrollbox = element;
+                    }}
                   />
                 </Show>
                 {/* Job log dialog */}

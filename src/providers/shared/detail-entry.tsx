@@ -6,6 +6,7 @@
  */
 
 import type { Component, JSX } from "solid-js";
+import type { DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
 import type { ProviderStatus } from "../../context/state";
 import type { ProviderDetailSources } from "../detail-entries";
@@ -41,8 +42,12 @@ export interface DetailEntryContext {
    * closing a message never re-enables an action that cannot work. Null when it can.
    */
   unavailable: (view: ProviderDetailView, status: ProviderStatus | undefined) => string | null;
-  /** State a tab keeps across tab switches (one value per key, for as long as the detail view lives). */
-  memory: <T>(key: string, create: () => T) => T;
+  /** State a tab keeps while it is not shown: across tab switches and the switch between the two layouts. */
+  memory: DetailMemory;
+  /** The entry the tab is shown for (the dashboard's event: a run's or a build's id): opened and marked. */
+  readonly target?: string;
+  /** The marked entry's color (the dashboard's). */
+  readonly targetColor?: string;
 }
 
 /** A provider's detail tab: the source it reads, what it renders, and the legend below it. */

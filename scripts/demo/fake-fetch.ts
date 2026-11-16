@@ -263,6 +263,7 @@ function graphql(body: string): Response {
         return {
           status: upper(run.status),
           conclusion: upper(run.conclusion),
+          branch: { name: run.branch },
           workflowRun: {
             databaseId: run.id,
             runNumber: run.runNumber,

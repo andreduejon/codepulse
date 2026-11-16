@@ -30,14 +30,16 @@ const colorLabels: Record<Exclude<keyof Theme, "name" | "graphColors">, string> 
   diffRemoved: "Removed text",
   diffAddedBg: "Added background",
   diffRemovedBg: "Removed background",
-  githubActionsFg: "GitHub Actions text",
-  githubActionsBg: "GitHub Actions background",
+  githubActionsFg: "GitHub text",
+  githubActionsBg: "GitHub background",
   jenkinsFg: "Jenkins text",
   jenkinsBg: "Jenkins background",
   snykFg: "Snyk text",
   snykBg: "Snyk background",
   openShiftFg: "OpenShift text",
   openShiftBg: "OpenShift background",
+  dashboardFg: "Dashboard text",
+  dashboardBg: "Dashboard background",
 };
 
 export default function ThemeDialog(props: Readonly<{ onClose: () => void; onSelect?: (name: string) => void }>) {

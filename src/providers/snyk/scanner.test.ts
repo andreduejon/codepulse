@@ -691,6 +691,56 @@ process.exit(1);
     expect(await new SnykCache({ root: f.cacheRoot }).read(f.repoPath, SHA)).toEqual(result);
   });
 
+  test("marks a Maven pin removable when the POM of the dependency that brings it in the local repository asks for that version", async () => {
+    const graph = `DepGraph data:\n${JSON.stringify({
+      schemaVersion: "1.3.0",
+      pkgManager: { name: "maven" },
+      pkgs: [
+        { id: "x:core@1.0", info: { name: "x:core", version: "1.0" } },
+        { id: "y:lib@1.0", info: { name: "y:lib", version: "1.0" } },
+        { id: "x:api@2.0", info: { name: "x:api", version: "2.0" } },
+      ],
+      graph: {
+        rootNodeId: "root-node",
+        nodes: [
+          { nodeId: "root-node", pkgId: "x:core@1.0", deps: [{ nodeId: "y:lib:jar:1.0:compile" }] },
+          { nodeId: "y:lib:jar:1.0:compile", pkgId: "y:lib@1.0", deps: [{ nodeId: "x:api:jar:2.0:compile" }] },
+          { nodeId: "x:api:jar:2.0:compile", pkgId: "x:api@2.0", deps: [] },
+        ],
+      },
+    })}\nDepGraph target:\npom.xml\nDepGraph end\n`;
+    const f = await dependencyFixture({
+      "pom.xml":
+        "<project><groupId>x</groupId><artifactId>core</artifactId><version>1.0</version><dependencyManagement>" +
+        "<dependencies><dependency><groupId>x</groupId><artifactId>api</artifactId><version>2.0</version></dependency>" +
+        "</dependencies></dependencyManagement></project>",
+    });
+    const repository = await root();
+    await mkdir(join(repository, "y", "lib", "1.0"), { recursive: true });
+    await writeFile(
+      join(repository, "y", "lib", "1.0", "lib-1.0.pom"),
+      "<project><groupId>y</groupId><artifactId>lib</artifactId><version>1.0</version><dependencies>" +
+        "<dependency><groupId>x</groupId><artifactId>api</artifactId><version>2.1</version></dependency>" +
+        "</dependencies></project>",
+    );
+    f.output.findings.stdout = JSON.stringify([
+      { packageManager: "maven", displayTargetFile: "pom.xml", vulnerabilities: [] },
+    ]);
+    f.output.graph.stdout = graph;
+    const result = await scanSnykCommit(
+      { repoPath: f.repoPath, sha: SHA },
+      {
+        cacheRoot: f.cacheRoot,
+        runCommand: f.runner,
+        which: command => (command.startsWith("mvn") ? command : null),
+        mavenRepository: repository,
+      },
+    );
+    const api = result.dependencyProjects[0]?.graphs[0]?.packages.find(pkg => pkg.name === "x:api");
+    expect(api).toMatchObject({ pin: "managed", removable: true });
+    expect(await new SnykCache({ root: f.cacheRoot }).read(f.repoPath, SHA)).toEqual(result);
+  });
+
   test("captures Maven graphs per pom.xml by exact path, with scopes from node IDs", async () => {
     const mavenGraph = (target: string, artifact: string) =>
       `DepGraph data:\n${JSON.stringify({

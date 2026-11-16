@@ -8,11 +8,14 @@ import {
   getKnownRepoInfos,
   loadConfig,
   mergeOptions,
+  reportConfigWarnings,
   resolveConfigInfo,
+  startViewFor,
 } from "../src/config";
 import { backfillRepoConfig, writeConfig } from "../src/config-write";
 import { DEFAULT_MAX_COUNT } from "../src/constants";
 import { DEFAULT_AUTO_REFRESH_INTERVAL } from "../src/context/state";
+import { clearDebugEvents, getDebugEvents } from "../src/debug/events";
 import { PROVIDER_CACHE_LIMIT_OPTIONS } from "../src/providers/shared/auto-refresh";
 
 const TEST_ROOT = join(tmpdir(), `codepulse-config-test-${Date.now()}`);
@@ -803,6 +806,60 @@ describe("resolveConfigInfo", () => {
   });
 });
 
+describe("dashboard settings", () => {
+  test("the time window and knot size round-trip, and writing one keeps the other and the providers", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("dashboard-roundtrip", repoPath, { providers: { github: { enabled: true } } });
+    expect(writeConfig({ dashboard: { windowDays: 10, knotMinutes: 30 } }, repoPath, configPath)).toBe(true);
+    expect(writeConfig({ dashboard: { knotMinutes: 120 } }, repoPath, configPath)).toBe(true);
+    const { config, warnings } = loadConfig(repoPath, configPath);
+    expect(config.dashboard).toEqual({ windowDays: 10, knotMinutes: 120 });
+    expect(config.providers?.github?.enabled).toBe(true);
+    expect(writeConfig({ dashboard: { enabled: false } }, repoPath, configPath)).toBe(true);
+    expect(loadConfig(repoPath, configPath).config.dashboard).toEqual({
+      enabled: false,
+      windowDays: 10,
+      knotMinutes: 120,
+    });
+    expect(warnings).toEqual([]);
+  });
+
+  test("values the menu does not offer are ignored with a warning", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("dashboard-invalid", repoPath, {
+      dashboard: { enabled: "yes", windowDays: 14, knotMinutes: "1h" },
+    });
+    const { config, warnings } = loadConfig(repoPath, configPath);
+    expect(config.dashboard).toEqual({});
+    expect(warnings).toHaveLength(3);
+    expect(warnings[0]).toContain('"dashboard.enabled" must be a boolean');
+  });
+});
+
+describe("start view", () => {
+  test("the view codepulse starts in round-trips, and one it does not have is ignored with a warning", () => {
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("start-view", repoPath, {});
+    expect(writeConfig({ startView: "dashboard" }, repoPath, configPath)).toBe(true);
+    expect(loadConfig(repoPath, configPath)).toEqual({ config: { startView: "dashboard" }, warnings: [] });
+    const invalid = makeRepoConfig("start-view-invalid", repoPath, { startView: "graph" });
+    const { config, warnings } = loadConfig(repoPath, invalid);
+    expect(config.startView).toBeUndefined();
+    expect(warnings).toHaveLength(1);
+  });
+
+  test("it starts in the chosen view while that provider is turned on, else in Git", () => {
+    expect(startViewFor({})).toBe("git");
+    expect(startViewFor({ startView: "dashboard" })).toBe("dashboard");
+    expect(startViewFor({ startView: "dashboard", dashboard: { enabled: false } })).toBe("git");
+    expect(startViewFor({ startView: "jenkins", providers: { jenkins: { enabled: true } } })).toBe("jenkins");
+    expect(startViewFor({ startView: "jenkins", providers: { jenkins: { enabled: false } } })).toBe("git");
+    expect(startViewFor({ startView: "github-actions" })).toBe("git");
+    expect(startViewFor({ startView: "snyk", providers: { snyk: { enabled: true } } })).toBe("snyk");
+    expect(startViewFor({ startView: "openshift", providers: { openshift: { enabled: true } } })).toBe("openshift");
+  });
+});
+
 describe("writeConfig", () => {
   test("creates new config file with repo entry", () => {
     const dir = makeTempDir("write-new");
@@ -1024,5 +1081,34 @@ describe("writeConfig", () => {
     expect(loaded2.theme).toBeUndefined();
     expect(loaded2.pageSize).toBe(500);
     expect(loaded2.branch).toBe("develop");
+  });
+});
+
+describe("auto fast-forward", () => {
+  test("is off by default, round-trips per repository, and a value that is not a boolean is ignored with a warning", () => {
+    expect(defaultConfig().autoFastForward).toBe(false);
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("auto-fast-forward", repoPath, {});
+    expect(writeConfig({ autoFastForward: true }, repoPath, configPath)).toBe(true);
+    expect(loadConfig(repoPath, configPath)).toEqual({ config: { autoFastForward: true }, warnings: [] });
+    const invalid = makeRepoConfig("auto-fast-forward-invalid", repoPath, { autoFastForward: "yes" });
+    const { config, warnings } = loadConfig(repoPath, invalid);
+    expect(config.autoFastForward).toBeUndefined();
+    expect(warnings).toEqual([expect.stringContaining('"autoFastForward" must be a boolean')]);
+  });
+});
+
+describe("config warnings", () => {
+  test("go to Debug, each once: the config is read again on every reload and repository switch", () => {
+    clearDebugEvents();
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("warnings-to-debug", repoPath, { dashboard: { enabled: "yes" } });
+    const { warnings } = loadConfig(repoPath, configPath);
+    expect(warnings).toHaveLength(1);
+    reportConfigWarnings(warnings);
+    reportConfigWarnings(loadConfig(repoPath, configPath).warnings);
+    expect(getDebugEvents().map(event => event.message)).toEqual(warnings);
+    expect(getDebugEvents()[0]?.source).toBe("error");
+    clearDebugEvents();
   });
 });

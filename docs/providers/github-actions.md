@@ -17,9 +17,10 @@ Configure the provider per repository from `:providers`:
 - Cache limit (`10`, `20`, `50`, `100`, `200`, `500`): maximum commit snapshots kept on disk.
 - Fetch size (`10`, `20`, `50`): how many graph commits are queried for
   workflow runs.
-- Auto refresh (`off`, `2m`, `5m`, `10m`): re-query running workflow SHAs
-  while the GitHub view is focused. Default `2m`. Git Auto refresh stays
-  git-only.
+- Auto refresh (`off`, `2m`, `5m`, `10m`): re-query running workflows and the
+  newest commits (Fetch size), so a workflow that starts later on a commit
+  shows, while the GitHub view or the Dashboard is shown. Default `2m`. Git
+  Auto refresh stays git-only.
 
 GitHub.com is supported automatically. GitHub Enterprise repositories require
 the detected host to be explicitly trusted. Credentials remain in environment
@@ -38,8 +39,8 @@ Without that parent snapshot, the fetched log still appears but is not persisted
 and does not recreate the snapshot. The cache limit caps commit snapshots.
 Deleting or evicting a snapshot cascades to its logs. Snapshot updates preserve
 existing logs.
-A run deleted on GitHub stays in the local cache. Running runs are refreshed
-while the provider view is active. Fetch size is the GraphQL window only.
+A run deleted on GitHub stays in the local cache. Running runs and the newest
+commits are refreshed while the provider view or the Dashboard is shown. Fetch size is the GraphQL window only.
 commits loaded on demand stay in memory. Scrolling outside that window reads
 disk cache only — it does not query GitHub. Reload / Auto refresh re-query the
 window without dropping other SHAs. Details include **Reload commit** (Enter
@@ -55,7 +56,7 @@ Rows are as quiet as the OpenShift and Jenkins trees: names and marks, and the
 run's age. A job that passed is one row; a failed or running job lists its steps,
 so you see where it went wrong. A legend below the tree explains the marks:
 `✓ passed  ● running  ✗ failed  – skipped  ○ cancelled`. Times are in the job
-log: its title gives the job's time (`GitHub Actions · CI #812 · test · 5m 17s`)
+log: its title gives the job's time (`GitHub · CI #812 · test · 5m 17s`)
 and the log starts with its steps, each with its mark and time (a skipped step has
 none). `←` / `→` move between the run's jobs (`← previous job · → next job`).
 

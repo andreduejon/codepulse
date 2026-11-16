@@ -9,9 +9,9 @@
  */
 
 import { createMemo, createSignal } from "solid-js";
+import type { DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
 import { BUSY } from "../../utils/busy-text";
-import { type LegendItem, runLegend } from "../shared/detail-legend";
 import type { RowShortcut } from "../shared/open-row";
 import {
   ProviderRunTree,
@@ -54,6 +54,8 @@ export interface ActionsDetailTabProps {
    * Mutable navRef to populate so the keyboard handler can navigate items.
    * When provided, this component owns navRef while the github-actions tab is active.
    */
+  /** Keeps open runs and loaded jobs while the tab is not shown (another tab, the other layout). */
+  memory?: DetailMemory;
   navRef?: DetailNavRef;
   /** Current cursor index from app state (passed as accessor to avoid useContext during setup). */
   detailCursorIndex: () => number;
@@ -67,10 +69,10 @@ export interface ActionsDetailTabProps {
   setDetailCursorShortcut?: (shortcut: RowShortcut | null) => void;
   /** Called when Enter is pressed on a job (or an annotation, with its message to search) — opens the log dialog. */
   onOpenJobLog?: (job: GitHubJob, run: GitHubWorkflowRun, jobs?: GitHubJob[], search?: string) => void;
+  /** The run the tab is shown for (the dashboard's event), and its mark's color. */
+  targetRunId?: string;
+  targetColor?: string;
 }
-
-/** The row marks, explained below the tree. */
-export const GITHUB_LEGEND: LegendItem[] = runLegend("cancelled");
 
 // ── Top-level component ───────────────────────────────────────────────────
 
@@ -130,6 +132,9 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
       }}
       debugSource="GitHub"
       dataKey={props.sha}
+      targetRunId={props.targetRunId}
+      targetColor={props.targetColor}
+      memory={props.memory}
       onOpenJobAction={(job, run, jobs) => props.onOpenJobLog?.(job.raw, run.raw, jobs?.map(entry => entry.raw) ?? [])}
       onOpenNote={(note, job, run, jobs) =>
         props.onOpenJobLog?.(

@@ -9,7 +9,7 @@ import { getRepoRoot } from "../../src/git/repo";
 import { storageRoot } from "../../src/utils/storage-path";
 import { parseDemoOptions } from "./options";
 import { FIXED_NOW } from "./scenario";
-import { buildWorld } from "./world";
+import { buildWorld, windowsGitFolder } from "./world";
 
 const world = buildWorld(parseDemoOptions(["--play", "shot"]), FIXED_NOW);
 afterAll(() => rmSync(world.root, { recursive: true, force: true }));
@@ -80,3 +80,22 @@ test("the app gets none of the user's credentials, proxies, agents or folders ou
     if (other) rmSync(other.root, { recursive: true, force: true });
   }
 }, 60_000);
+
+test("on Windows the PATH gets Git's own cmd folder, not a package manager's folder of shims next to a real snyk", () => {
+  const root = join("C:", "Users", "dev", "scoop", "apps", "git", "2.47.0");
+  const execPath = join(root, "mingw64", "libexec", "git-core");
+  const shim = join("C:", "Users", "dev", "scoop", "shims", "git.exe");
+  const installed = new Set([join(root, "cmd", "git.exe")]);
+  expect(windowsGitFolder(shim, execPath, path => installed.has(path))).toBe(join(root, "cmd"));
+  // An unknown layout keeps the folder git came from.
+  expect(windowsGitFolder(shim, execPath, () => false)).toBe(dirname(shim));
+  expect(windowsGitFolder(shim, null, () => true)).toBe(dirname(shim));
+});
+
+test("each repository's last fetch is 12 minutes before the demo's now, so the menu's age follows the demo clock", async () => {
+  const { getLastFetchTime } = await import("../../src/git/repo");
+  for (const name of ["shop", "shop-web", "customer-notification-service"]) {
+    const time = await getLastFetchTime(join(dirname(world.repoPath), name));
+    expect(time?.getTime()).toBe(FIXED_NOW - 12 * 60_000);
+  }
+});

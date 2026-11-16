@@ -115,7 +115,7 @@ export interface BannerParts {
 
 /**
  * Splits a banner sentence for display under its source: the first sentence becomes the headline without the
- * source's own name (`GitHub unavailable. Missing GITHUB_TOKEN.` under `GitHub Actions` → `Unavailable` plus
+ * source's own name (`GitHub unavailable. Missing GITHUB_TOKEN.` under `GitHub` → `Unavailable` plus
  * `Missing GITHUB_TOKEN.`), later sentences and lines become detail.
  */
 export function bannerParts(source: string, message: string): BannerParts {

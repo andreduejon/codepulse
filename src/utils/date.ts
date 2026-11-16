@@ -125,3 +125,31 @@ export function formatDate(dateStr: string): string {
     minute: "2-digit",
   });
 }
+
+const sameDay = (a: Date, b: Date) =>
+  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+/**
+ * A day as the dashboard's divider names it: `Today · Mon, Mar 2`, `Yesterday · Sun, Mar 1`, else `Wed, Feb 11`, with
+ * the year when it is another one.
+ */
+export function formatDayLabel(time: number, now: number = Date.now()): string {
+  const date = new Date(time);
+  const today = new Date(now);
+  const label = date.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    ...(date.getFullYear() === today.getFullYear() ? {} : { year: "numeric" }),
+  });
+  if (sameDay(date, today)) return `Today · ${label}`;
+  if (sameDay(date, new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1)))
+    return `Yesterday · ${label}`;
+  return label;
+}
+
+/** The local clock time, `09:05`. */
+export function formatClock(time: number): string {
+  const date = new Date(time);
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}

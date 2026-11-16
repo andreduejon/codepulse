@@ -6,7 +6,7 @@ import { BUSY } from "../../utils/busy-text";
 import { formatRelativeDate } from "../../utils/date";
 import type { GraphBadge } from "../provider";
 import { providerTextColor, type StatusChip, StatusChips } from "../shared/status-chips";
-import { severityColor } from "./tab-shared";
+import { severityColor } from "./severity";
 import type { SnykScanResult, SnykSeverity } from "./types";
 
 export interface SnykGraphColumnProps {

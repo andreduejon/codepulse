@@ -208,7 +208,7 @@ test("compact app rows aggregate all providers; selected reset reaches every pro
       "Physical database",
       "Working files",
       "Artifacts",
-      "GitHub Actions",
+      "GitHub",
       "Jenkins",
       "future/provider",
       "Repositories",

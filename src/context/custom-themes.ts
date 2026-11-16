@@ -43,9 +43,12 @@ function parseTheme(id: string, value: unknown): CustomTheme {
 
   const theme = { name: value.name } as Theme;
   const baseTheme = base ? themes[base] : undefined;
+  // Every color, the newest too (dashboardFg, dashboardBg): a standalone theme names what it lacks.
+  const colors = value.colors;
+  const missing = base ? [] : colorKeys.filter(key => !Object.hasOwn(colors, key));
+  if (missing.length > 0) throw new Error(`standalone theme is missing colors: ${missing.join(", ")}`);
   for (const key of colorKeys) {
     const supplied = Object.hasOwn(value.colors, key);
-    if (!supplied && !base) throw new Error("standalone theme is missing colors");
     const color = supplied ? value.colors[key] : baseTheme?.[key];
     if (key === "graphColors") {
       if (

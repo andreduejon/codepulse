@@ -18,8 +18,8 @@ The graph has two lanes:
 Both lanes show fail, running, pass, and unknown counts. Empty lanes show
 `·······`. In details, a terminal Build the cluster no longer lists (pruned, or
 older than the fetch size) shows from the cache with `(cached)` after its name. Builds and
-ImageStreamTags poll while the OpenShift view is focused. Deployments,
-DeploymentConfigs, and Pods are listed and watched until you leave the view.
+ImageStreamTags poll while the OpenShift view or the Dashboard is shown. Deployments,
+DeploymentConfigs, and Pods are listed and watched until you leave both.
 
 ### Live in namespace
 
@@ -54,7 +54,8 @@ Configure the provider per repository from `:providers`:
 - Fetch size (`10`, `20`, `50`): how many graph commits are candidates. Only
   those commits that also have a Build or ImageStreamTag seed are matched.
 - Auto refresh (`off`, `2m`, `5m`, `10m`): poll Builds and ImageStreamTags
-  while the OpenShift view is focused. `off` skips that poll. Reload still
+  while the OpenShift view or the Dashboard is shown. They are also listed
+  once when the repository loads. `off` skips that poll. Reload still
   lists seeds. Live Deploy/DC/Pod freshness is watch, not this timer.
 - Set the commit SHA label/annotation key. Default: `dev/commit-sha`. Labels first, then
   annotations, on Builds, Deployments, and ImageStreamTags.
@@ -70,7 +71,7 @@ Resource lists follow Kubernetes `metadata.continue` tokens until complete and
 retain the final `metadata.resourceVersion` for watches. Each list is bounded to
 100 pages and 50,000 items, and repeated continuation tokens stop that resource
 request. Resources fetched before a later-page failure remain visible. Codepulse
-reports partial inventory in a notice under the OpenShift tab (**Inventory partially
+reports partial inventory in a notice under the **Resources** tab (**Inventory partially
 failed**) and records namespace,
 resource kind, and technical details in the Debug dialog.
 
@@ -103,8 +104,8 @@ A commit SHA is taken from `metadata.labels` first, then annotations on
 metadata, ImageStreamTag `tag`, and the nested image (same key, default
 `dev/commit-sha`). `oc annotate istag` writes `tag.annotations`.
 
-While the OpenShift view is focused, Builds and ImageStreamTags poll on Auto
-refresh. Builds for the graph window are requested with
+While the OpenShift view or the Dashboard is shown, Builds and ImageStreamTags
+poll on Auto refresh. Builds for the graph window are requested with
 `labelSelector=dev/commit-sha in (…)`. If that returns nothing, the full Build
 list is scanned by annotation (old objects). ImageStreamTags are always listed
 in full; they cannot be labeled.
@@ -112,7 +113,7 @@ in full; they cannot be labeled.
 Live inventory lists Deployments, DeploymentConfigs, and Pods in the configured
 namespaces, then watches those kinds (`watch=true` from the list
 `resourceVersion`). A 410 Gone or dropped stream lists again. Leave the
-OpenShift view to stop watches. Matching still prefers labels, then
+OpenShift view and the Dashboard to stop watches. Matching still prefers labels, then
 annotations, then digest / owner-chain:
 
 ```text
@@ -190,7 +191,7 @@ Live freshness also needs `watch` on Deployments, DeploymentConfigs, and Pods
 in each configured namespace. OpenShift/`kubernetes` `view` already has
 `get`/`list`/`watch`. A custom ServiceAccount needs the extra `watch` verb on
 those three kinds; Builds and ImageStreamTags stay `list` only. Without watch,
-the last list stays until Reload. A notice under the OpenShift tab reads **Watch
+the last list stays until Reload. A notice under the **Resources** tab reads **Watch
 denied** with `Resource data might be stale. Reload to refresh.` below. `live` only appears
 while a watch socket is connected.
 
@@ -221,6 +222,6 @@ rules:
 ```
 
 Partial permission failures preserve successful inventory and show a notice under
-the OpenShift tab. When every request fails, the banner over the graph shows the error.
+the **Resources** tab. When every request fails, the banner over the graph shows the error.
 Routes, Services, Helm releases, and console links are outside the provider's
 current scope.

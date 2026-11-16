@@ -3,7 +3,14 @@ import { render } from "@opentui/solid";
 import App from "./app";
 import type { AppProps } from "./app-types";
 import { parseArgs } from "./cli/parse-args";
-import { getKnownRepoInfos, type KnownRepoInfo, loadConfig, mergeOptions, resolveConfigInfo } from "./config";
+import {
+  getKnownRepoInfos,
+  type KnownRepoInfo,
+  loadConfig,
+  mergeOptions,
+  reportConfigWarnings,
+  resolveConfigInfo,
+} from "./config";
 import { loadCustomThemes } from "./context/custom-themes";
 import { addDebugEvent, redactDebugValue } from "./debug/events";
 import { getRepoRoot, isGitAvailable, isGitRepo } from "./git/repo";
@@ -35,7 +42,8 @@ export async function startupProps(argv: string[]): Promise<AppProps> {
   };
 
   const configInfo = resolveConfigInfo(normalizedCli.repoPath);
-  const { config } = loadConfig(normalizedCli.repoPath);
+  const { config, warnings } = loadConfig(normalizedCli.repoPath);
+  reportConfigWarnings(warnings);
   const opts = mergeOptions(normalizedCli, config);
   const customThemes = loadCustomThemes();
 

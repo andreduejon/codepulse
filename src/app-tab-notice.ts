@@ -38,7 +38,7 @@ export function tabNoticeFor(input: {
   /** Snyk scan of the selected commit, if any. */
   snykScan: SnykScanResult | null;
 }): TabNotice | null {
-  if (input.view === "git") return null;
+  if (input.view === "git" || input.view === "dashboard") return null;
   if (input.status.kind === "warning") {
     const { title, detail } = bannerParts(input.source, input.status.message);
     return {

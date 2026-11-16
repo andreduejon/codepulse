@@ -487,3 +487,43 @@ test("loading shows every cached commit, also below the fetch depth, and asks Gi
   expect(ci.mock.calls.length).toBeGreaterThan(0);
   expect(ci.mock.calls.some(call => call[2].includes(older))).toBe(false);
 });
+
+test("on the dashboard, the refresh asks GitHub about running runs again, as on the GitHub tab", async () => {
+  const { github, state, actions, ci } = await mountGitHub();
+  await github.refresh();
+  await settle(() => state.graphBadgesFor("github-actions").size > 0);
+  expect(github.getCommitData(SHA)?.runs[0]?.status).toBe("in_progress");
+  ci.mockResolvedValue({ data: [run({ status: "completed", conclusion: "success" })], jobs: new Map(), error: null });
+  const clock = spyOn(Date, "now").mockReturnValue(Date.now() + 120_000);
+  try {
+    const calls = ci.mock.calls.length;
+    actions.setActiveProviderView("git");
+    actions.setActiveProviderView("dashboard");
+    await settle(() => ci.mock.calls.length > calls);
+    expect(ci.mock.calls.at(-1)?.[2]).toEqual([SHA]);
+  } finally {
+    clock.mockRestore();
+  }
+  await settle(() => github.getCommitData(SHA)?.runs[0]?.status === "completed");
+  expect(github.getCommitData(SHA)?.runs[0]).toMatchObject({ status: "completed", conclusion: "success" });
+});
+
+test("automatic refresh finds a run that started after the first fetch, for a commit already asked about", async () => {
+  const { github, actions, ci } = await mountGitHub({ runs: [] });
+  await github.refresh();
+  await settle();
+  expect(github.getCommitData(SHA)?.runs ?? []).toEqual([]);
+  // A workflow starts on that commit later (a deploy, a re-run).
+  ci.mockResolvedValue({ data: [run()], jobs: new Map(), error: null });
+  const calls = ci.mock.calls.length;
+  const clock = spyOn(Date, "now").mockReturnValue(Date.now() + 120_000);
+  try {
+    actions.setActiveProviderView("git");
+    actions.setActiveProviderView("dashboard");
+    await settle(() => ci.mock.calls.length > calls);
+  } finally {
+    clock.mockRestore();
+  }
+  await settle(() => (github.getCommitData(SHA)?.runs.length ?? 0) > 0);
+  expect(github.getCommitData(SHA)?.runs[0]?.status).toBe("in_progress");
+});

@@ -1,7 +1,8 @@
 import { createMemo } from "solid-js";
 import { useAppState } from "../../context/state";
+import { SNYK_SEVERITY_LEGEND } from "../legends";
 import { type DetailEntryContext, detailEntry, type ProviderDetailSource } from "../shared/detail-entry";
-import { DEPENDENCY_LEGEND, SnykDependenciesTab } from "./deps-tab";
+import { SnykDependenciesTab } from "./deps-tab";
 import { SnykDetailTab } from "./detail-tab";
 import { findSnykBaseline } from "./scan-diff";
 import type { SnykScanResult } from "./types";
@@ -105,5 +106,5 @@ export const snykVulnerabilitiesDetail = detailEntry({
 export const snykDependenciesDetail = detailEntry({
   view: "snyk",
   Tab: DependenciesTab,
-  legend: (source, sha) => (hasFindings(source, sha) ? DEPENDENCY_LEGEND : null),
+  legend: (source, sha) => (hasFindings(source, sha) ? SNYK_SEVERITY_LEGEND : null),
 });

@@ -1,5 +1,5 @@
 import type { Accessor } from "solid-js";
-import { createEffect, createSignal, onCleanup, untrack } from "solid-js";
+import { createEffect, createMemo, createSignal, onCleanup, untrack } from "solid-js";
 import type { AppActions, AppState } from "../../context/state";
 import {
   providerError,
@@ -47,6 +47,11 @@ import { appendOpenShiftLogFollow } from "./watch";
 
 export interface UseOpenShiftResult {
   getCommitData: (sha: string) => OpenShiftCommitData | null;
+  /**
+   * Every build it holds for the open repository, shaped like its cache entries: the dashboard shows the running ones
+   * from here (the cache keeps only what ended). Reactive.
+   */
+  heldEntries: () => OpenShiftCacheEntry[];
   refresh: () => Promise<void>;
   fetchCommitDataForSHA: (sha: string, force?: boolean) => Promise<void>;
   isLoading: (sha: string) => boolean;
@@ -311,6 +316,8 @@ export function useOpenShift(opts: {
     suspended: opts.suspended,
     providerId: "openshift",
     skipShaBackground: true,
+    // The build list once the repository loads, so the graph and the dashboard show builds before the tab is opened.
+    fetchOnLoad: true,
     identity: () => {
       const partial = configAccessor();
       return JSON.stringify({
@@ -620,6 +627,14 @@ export function useOpenShift(opts: {
     }
   }
 
+  /**
+   * The views that show live resources: its own, and the dashboard's details of a build. A memo, so moving between the
+   * two keeps the running list and watches.
+   */
+  const liveShown = createMemo(() => {
+    const view = state.activeProviderView();
+    return view === "openshift" || view === "dashboard";
+  });
   createEffect(() => {
     if (opts.suspended?.()) {
       setLiveState("idle");
@@ -628,7 +643,7 @@ export function useOpenShift(opts: {
     configAccessor();
     state.repoPath();
     watchEpoch();
-    if (state.activeProviderView() !== "openshift" || !isAvailable() || authFrozen) return;
+    if (!liveShown() || !isAvailable() || authFrozen) return;
     const epoch = lifecycle.getEpoch();
     const ctrl = new AbortController();
     void runWatchSession(ctrl.signal, epoch);
@@ -641,6 +656,16 @@ export function useOpenShift(opts: {
     getCommitData: sha => {
       version();
       return commits.get(sha.toLowerCase()) ?? null;
+    },
+    heldEntries: () => {
+      version();
+      return [...commits.values()].map(commit => ({
+        sha: commit.sha,
+        builds: commit.namespaces
+          .flatMap(namespace => namespace.builds)
+          .map(toCachedBuild)
+          .filter(build => build !== null),
+      }));
     },
     refresh: async () => lifecycle.fetchRefresh(undefined, true, true),
     fetchCommitDataForSHA: async (sha, force) => {

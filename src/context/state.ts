@@ -258,6 +258,7 @@ export function createAppState(
     graphBadges,
     providerStatus,
     providerStatusFor: view => providerStatusMap().get(view) ?? providerIdle(),
+    graphBadgesFor: view => providerGraphBadges().get(view) ?? new Map(),
     providerLastSuccessfulRefresh,
     keyboardScopeOverride,
     providers,

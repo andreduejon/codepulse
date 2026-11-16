@@ -40,6 +40,11 @@ export function useProviderFetchLifecycle(opts: {
   queriedSHAs: Set<string>;
   /** Skip graph-SHA background catch-up (inventory providers). */
   skipShaBackground?: boolean;
+  /**
+   * One quiet first fetch once the repository's graph is read, whatever the view (an inventory provider, which has no
+   * graph-SHA catch-up). Once per repository: a failure waits for the provider's view, the dashboard or a Reload.
+   */
+  fetchOnLoad?: boolean;
   reportUnavailable: (showStatus: boolean) => void;
   runInitialFetch: (args: ProviderFetchArgs) => Promise<void>;
   runRefresh: (args: ProviderFetchArgs) => Promise<void>;
@@ -66,6 +71,10 @@ export function useProviderFetchLifecycle(opts: {
   /** Counts status-showing fetches as they start: only the latest may settle a `loading` it was cancelled under. */
   let statusFetchSeq = 0;
   let hasFetchedOnce = false;
+  /** The `fetchOnLoad` fetch started for this repository. */
+  let loadFetchStarted = false;
+  /** The `fetchOnLoad` fetch while it runs: a view that opens meanwhile keeps it instead of fetching the same again. */
+  let loadFetch: Promise<void> | null = null;
   let lastFetchedAt = 0;
   let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
   let fetchAbortCtrl: AbortController | null = null;
@@ -230,6 +239,15 @@ export function useProviderFetchLifecycle(opts: {
     }
   }
 
+  /**
+   * The views that keep this provider fresh: its own tab, and the dashboard, which shows its events. Only its own tab
+   * shows loading: on the dashboard it fetches quietly.
+   */
+  function watched(): boolean {
+    const view = state.activeProviderView();
+    return view === providerId || view === "dashboard";
+  }
+
   function currentInterval(): number {
     return opts.refreshInterval?.() ?? state.autoRefreshInterval();
   }
@@ -240,7 +258,7 @@ export function useProviderFetchLifecycle(opts: {
     const interval = currentInterval();
     if (interval <= 0) return;
     autoRefreshTimer = setInterval(() => {
-      if (state.activeProviderView() !== providerId) return;
+      if (!watched()) return;
       if (fetchInFlight) return;
       const ctrl = new AbortController();
       fetchAbortCtrl = ctrl;
@@ -271,6 +289,7 @@ export function useProviderFetchLifecycle(opts: {
     fetchAbortCtrl = null;
     backgroundFetchAbortCtrl?.abort();
     backgroundFetchAbortCtrl = null;
+    loadFetch = null;
     for (const ctrl of activeRequestControllers) ctrl.abort();
     activeRequestControllers.clear();
     fetchInFlight = false;
@@ -282,6 +301,7 @@ export function useProviderFetchLifecycle(opts: {
   function resetCaches() {
     cancelRequests();
     hasFetchedOnce = false;
+    loadFetchStarted = false;
     lastFetchedAt = 0;
     consecutiveErrors = 0;
     backoffUntil = 0;
@@ -309,34 +329,50 @@ export function useProviderFetchLifecycle(opts: {
     identityVersion();
     if (opts.suspended?.()) return;
     const view = state.activeProviderView();
-    if (view !== providerId) {
+    if (!watched()) {
+      // Leaving both views cancels what entering them started (stopAutoRefresh aborts fetchAbortCtrl).
       stopAutoRefresh();
       return;
     }
+    // Moving between the dashboard and the provider's tab keeps a running fetch: it is the same data.
+    const showStatus = view === providerId;
     if (!hasFetchedOnce) {
+      if (fetchInFlight && (fetchAbortCtrl || loadFetch)) return startAutoRefresh();
       const controller = new AbortController();
       fetchAbortCtrl = controller;
-      // Untracked: signals the fetch reads (badges, repo) must not re-run this effect, whose cleanup would abort it.
-      untrack(() => void fetchInitial(controller.signal, undefined, true));
-      onCleanup(() => {
-        controller.abort();
-        if (fetchAbortCtrl === controller) fetchAbortCtrl = null;
-      });
+      // Untracked: signals the fetch reads (badges, repo) must not re-run this effect.
+      untrack(() => void fetchInitial(controller.signal, undefined, showStatus));
     } else {
       const interval = currentInterval();
       const staleThreshold = interval > 0 ? interval : 30_000;
-      if (Date.now() - lastFetchedAt > staleThreshold) {
+      if (Date.now() - lastFetchedAt > staleThreshold && !fetchInFlight) {
         const controller = new AbortController();
         fetchAbortCtrl = controller;
-        untrack(() => void fetchRefresh(controller.signal, true));
-        onCleanup(() => {
-          controller.abort();
-          if (fetchAbortCtrl === controller) fetchAbortCtrl = null;
-        });
+        untrack(() => void fetchRefresh(controller.signal, showStatus));
       }
     }
     startAutoRefresh();
-    onCleanup(stopAutoRefresh);
+  });
+
+  createEffect(() => {
+    identityVersion();
+    if (!opts.fetchOnLoad) return;
+    // Suspension cancels it: the fetch starts again after.
+    if (opts.suspended?.()) {
+      if (!hasFetchedOnce) loadFetchStarted = false;
+      return;
+    }
+    if (state.graphRows().length === 0 || loadFetchStarted || hasFetchedOnce || !opts.isAvailable()) return;
+    // A view's first fetch runs already: it is the same list.
+    if (fetchInFlight) return;
+    loadFetchStarted = true;
+    const ctrl = new AbortController();
+    backgroundFetchAbortCtrl = ctrl;
+    const run = untrack(() => fetchInitial(ctrl.signal, undefined, false));
+    loadFetch = run;
+    void run.finally(() => {
+      if (loadFetch === run) loadFetch = null;
+    });
   });
 
   createEffect(() => {
@@ -364,7 +400,7 @@ export function useProviderFetchLifecycle(opts: {
     if (opts.suspended?.()) return;
     opts.refreshInterval?.();
     state.autoRefreshInterval();
-    if (state.activeProviderView() === providerId) {
+    if (watched()) {
       clearRefreshTimer();
       startAutoRefresh();
     }

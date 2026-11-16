@@ -125,7 +125,7 @@ async function mountJenkins(
     });
     mounted = { state, actions, jenkins };
   });
-  return { ...mounted, graph, full };
+  return { ...mounted, graph, full, root };
 }
 
 /** Wait until the lifecycle has no fetch in flight (disk cache work is asynchronous). */
@@ -158,6 +158,14 @@ test("over the branch-job limit, the graph's branches are asked for first and th
     title: "Branch jobs · 25 of 61 read",
     detail: ["Branches in the graph come first. Builds on the other 36 do not show."],
   });
+});
+
+test("over the branch-job limit, the finished builds that were read are still cached, like GitHub's and OpenShift's", async () => {
+  const { state, jenkins, root } = await mountJenkins({ truncated: true });
+  await jenkins.refresh();
+  await settle(() => state.providerStatusFor("jenkins").kind === "warning");
+  const cached = await new JenkinsCache({ root, maxEntries: 200 }).read("/repo/jenkins-hook", SHA, { touch: false });
+  expect(cached?.runs.map(cachedRun => cachedRun.id)).toEqual([`${JOB_URL}#1`]);
 });
 
 test("manual refresh re-queries the whole graph window even when no build is running", async () => {
@@ -318,4 +326,115 @@ test("loading shows every cached commit, also below the fetch depth, and asks Je
   expect(state.graphBadges().has(older)).toBe(true);
   expect(graph.mock.calls.length).toBeGreaterThan(0);
   expect(graph.mock.calls.some(call => call[3].includes(older))).toBe(false);
+});
+
+test("on the dashboard, the refresh asks Jenkins about running builds again, as on the Jenkins tab", async () => {
+  const { jenkins, actions, graph } = await mountJenkins();
+  const running = spyOn(api, "fetchJenkinsRunsForBuilds").mockResolvedValue({ data: [run()], error: null });
+  cleanup.push(() => running.mockRestore());
+  graph.mockResolvedValue(result([run({ status: "running", conclusion: null })]));
+  await jenkins.refresh();
+  await settle();
+  expect(jenkins.getCommitData(SHA)?.runs[0]?.status).toBe("running");
+  // Listed again, Jenkins has it finished too.
+  graph.mockResolvedValue(result([run()]));
+
+  // The dashboard shows Jenkins' events: past the stale time, showing it refreshes the running build.
+  const clock = spyOn(Date, "now").mockReturnValue(Date.now() + 120_000);
+  try {
+    actions.setActiveProviderView("git");
+    actions.setActiveProviderView("dashboard");
+    await settle(() => running.mock.calls.length > 0);
+  } finally {
+    clock.mockRestore();
+  }
+  expect(running).toHaveBeenCalledTimes(1);
+  expect(jenkins.getCommitData(SHA)?.runs[0]).toMatchObject({ status: "completed", conclusion: "success" });
+});
+
+test("automatic refresh finds a build that started after the first fetch, for a commit already asked about", async () => {
+  const { jenkins, actions, graph } = await mountJenkins();
+  graph.mockResolvedValue(result([]));
+  await jenkins.refresh();
+  await settle();
+  expect(jenkins.getCommitData(SHA)?.runs ?? []).toEqual([]);
+
+  graph.mockResolvedValue(result([run({ status: "running", conclusion: null })]));
+  const calls = graph.mock.calls.length;
+  const clock = spyOn(Date, "now").mockReturnValue(Date.now() + 120_000);
+  try {
+    actions.setActiveProviderView("git");
+    actions.setActiveProviderView("dashboard");
+    await settle(() => graph.mock.calls.length > calls);
+  } finally {
+    clock.mockRestore();
+  }
+  await settle(() => (jenkins.getCommitData(SHA)?.runs.length ?? 0) > 0);
+  expect(jenkins.getCommitData(SHA)?.runs[0]?.status).toBe("running");
+  // A refresh of commits already asked about may skip jobs whose last build is unchanged.
+  expect(graph.mock.calls.at(-1)?.[4]?.knownLastBuilds).toBeDefined();
+});
+
+test("commits Jenkins hasn't been asked about, and Reload, skip no job and discover the jobs again", async () => {
+  const { jenkins, actions, graph } = await mountJenkins();
+  // Discovery found a branch job: the next fetches still start from the configured job, to find new branches.
+  graph.mockResolvedValue({ ...result([run()]), jobUrls: [`${JOB_URL}job/main`] });
+  await jenkins.refresh();
+  await settle();
+  expect(graph.mock.calls.at(-1)?.[0]).toEqual([{ url: JOB_URL }]);
+  expect(graph.mock.calls.at(-1)?.[4]?.knownLastBuilds).toBeUndefined();
+
+  // A commit the graph just got (after a fetch): asked about without the last-build shortcut.
+  const NEW = "d".repeat(40);
+  const calls = graph.mock.calls.length;
+  actions.setGraphRows(buildGraph([commit(NEW, SHA), commit(SHA)]));
+  await settle(() => graph.mock.calls.length > calls);
+  const [jobs, , , shas, options] = graph.mock.calls.at(-1) ?? [];
+  expect(shas).toEqual([NEW]);
+  expect(jobs).toEqual([{ url: JOB_URL }]);
+  expect(options?.knownLastBuilds).toBeUndefined();
+});
+
+test("reading only some branch jobs is a notice, not a failure: automatic refresh doesn't wait longer and longer", async () => {
+  const { jenkins, actions, graph } = await mountJenkins({ truncated: true });
+  await jenkins.refresh();
+  await settle();
+  await jenkins.refresh();
+  await settle();
+  const calls = graph.mock.calls.length;
+  // 45 seconds on: past the 30-second staleness, within the minute two failures would have to wait.
+  const clock = spyOn(Date, "now").mockReturnValue(Date.now() + 45_000);
+  try {
+    actions.setActiveProviderView("git");
+    actions.setActiveProviderView("dashboard");
+    await settle(() => graph.mock.calls.length > calls);
+  } finally {
+    clock.mockRestore();
+  }
+  expect(graph.mock.calls.length).toBeGreaterThan(calls);
+});
+
+test("a Jenkins turned off asks Jenkins nothing, also for a forced load of one commit (the dashboard's Load commit)", async () => {
+  const original = process.env[TOKEN_ENV];
+  process.env[TOKEN_ENV] = "test-token";
+  cleanup.push(() => {
+    if (original === undefined) delete process.env[TOKEN_ENV];
+    else process.env[TOKEN_ENV] = original;
+  });
+  const full = spyOn(api, "fetchJenkinsDataForSHAs").mockResolvedValue(result([run()]));
+  cleanup.push(() => full.mockRestore());
+  let jenkins!: ReturnType<typeof useJenkinsCI>;
+  createRoot(dispose => {
+    cleanup.push(dispose);
+    const { state, actions } = createAppState();
+    actions.setRepoPath("/repo/jenkins-off");
+    actions.setActiveProviderView("dashboard");
+    jenkins = useJenkinsCI({
+      state,
+      actions,
+      config: { enabled: false, username: "user", tokenEnvVar: TOKEN_ENV, jobs: [{ url: JOB_URL }] },
+    });
+  });
+  await jenkins.fetchCommitDataForSHA(SHA, true);
+  expect(full).not.toHaveBeenCalled();
 });

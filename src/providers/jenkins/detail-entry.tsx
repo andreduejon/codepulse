@@ -1,5 +1,7 @@
+import { scopedMemory } from "../../components/detail-memory";
+import { JENKINS_LEGEND } from "../legends";
 import { detailEntry, type ProviderDetailSource } from "../shared/detail-entry";
-import { JENKINS_LEGEND, JenkinsDetailTab } from "./detail-tab";
+import { JenkinsDetailTab } from "./detail-tab";
 import type { JenkinsCommitData, JenkinsFailedTest, JenkinsJob, JenkinsJobFetchResult, JenkinsRun } from "./types";
 
 /** What Jenkins hands the detail view. */
@@ -27,8 +29,11 @@ export const jenkinsDetail = detailEntry({
       unavailableReason={props.context.unavailable("jenkins", props.source.status)}
       loading={props.source.status?.kind === "loading"}
       {...props.context.cursor}
+      memory={scopedMemory(props.context.memory, "jenkins")}
       onOpenBuild={props.source.onOpenBuild}
       onOpenTestFailure={props.source.onOpenTestFailure}
+      targetRunId={props.context.target}
+      targetColor={props.context.targetColor}
     />
   ),
   legend: (source, sha) => ((source.getCommitData(sha)?.runs.length ?? 0) > 0 ? JENKINS_LEGEND : null),

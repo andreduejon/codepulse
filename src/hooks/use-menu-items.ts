@@ -6,8 +6,9 @@ import { writeConfig } from "../config-write";
 import { AUTO_REFRESH_MS, INTERVAL_OPTIONS, MAX_COUNT_OPTIONS, MS_TO_LABEL } from "../constants";
 import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL, useAppState } from "../context/state";
 import type { Theme } from "../context/theme";
+import { type DashboardSettings, DEFAULT_DASHBOARD_SETTINGS } from "../dashboard/settings";
 import { getTokenSource } from "../providers/github-actions/api";
-import type { ProviderDetailView } from "../providers/provider";
+import { type ProviderDetailView, type ProviderView, providerDisplayName } from "../providers/provider";
 import { DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS } from "../providers/shared/auto-refresh";
 import {
   COPYABLE_VISIBLE_WIDTH,
@@ -19,14 +20,17 @@ import {
   type SnykMenuConfig,
 } from "./menu-items-types";
 import {
+  buildDashboardItems,
   buildGitHubProviderItems,
   buildJenkinsProviderItems,
   buildOpenShiftProviderItems,
   buildSnykProviderItems,
 } from "./menu-provider-items";
 
-const relativeAgeLabel = (time: Date): string => {
+/** `5s ago`, `3h ago`; a time the clock puts ahead of now (a clock that is off) is `just now`. */
+export const relativeAgeLabel = (time: Date): string => {
   const secs = Math.round((Date.now() - time.getTime()) / 1000);
+  if (secs < 0) return "just now";
   if (secs < 60) return `${secs}s ago`;
   const mins = Math.round(secs / 60);
   if (mins < 60) return `${mins}m ago`;
@@ -59,6 +63,8 @@ export interface MenuItemsOptions {
   copyToClipboard: (text: string, id: string) => void;
   /** Prop callbacks forwarded from the component. */
   onFetch: () => void;
+  /** ctrl+f: fetch, then fast-forward the branches that are only behind. */
+  onPull?: () => void;
   onReload: () => void;
   onOpenDialog?: (dialogId: "theme") => void;
   onViewBranch: (branch: string | null) => void;
@@ -77,7 +83,31 @@ export interface MenuItemsOptions {
   onOpenShiftConfigChange?: (cfg: OpenShiftMenuConfig) => void;
   snykConfig?: Accessor<SnykMenuConfig | undefined>;
   onSnykConfigChange?: (cfg: SnykMenuConfig) => void;
+  dashboardConfig?: Accessor<DashboardSettings | undefined>;
+  onDashboardConfigChange?: (cfg: DashboardSettings) => void;
+  startView?: Accessor<ProviderView | undefined>;
+  onStartViewChange?: (view: ProviderView) => void;
+  autoFastForward?: Accessor<boolean | undefined>;
+  onAutoFastForwardChange?: (enabled: boolean) => void;
   onRepoDisplayConfigChange?: (cfg: { group?: string; appName?: string }) => void;
+}
+
+/** Which view the repository opens in. It offers the views that are turned on; a view turned off since starts in Git. */
+export function startViewItem(
+  views: readonly ProviderView[],
+  current: ProviderView,
+  save: (view: ProviderView) => void,
+): SettingItem {
+  return {
+    kind: "cycle",
+    label: "Start in",
+    options: views.map(providerDisplayName),
+    get: () => providerDisplayName(views.includes(current) ? current : "git"),
+    set: value => {
+      const view = views.find(option => providerDisplayName(option) === value);
+      if (view) save(view);
+    },
+  };
 }
 
 export interface MenuItemsResult {
@@ -175,6 +205,8 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
   };
 
   const repoItems = createMemo<SettingItem[]>(() => {
+    // Start in offers the views turned on: read again when a provider is turned on or off.
+    state.providers.getVersion();
     const items: SettingItem[] = [
       { kind: "header", label: "Origin" },
       { kind: "copyable", label: "URL", get: () => state.remoteUrl() || "(none)" },
@@ -206,6 +238,9 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
 
       { kind: "header", label: "Actions" },
       { kind: "action", label: "Fetch remote", hotkey: "f", get: lastFetchLabel, run: () => opts.onFetch() },
+      ...(opts.onPull
+        ? [{ kind: "action" as const, label: "Fast-forward", hotkey: "ctrl+f", run: () => opts.onPull?.() }]
+        : []),
       ...(opts.onSwitchRepo
         ? [{ kind: "action" as const, label: "Switch repository", run: () => opts.onSwitchRepo?.() }]
         : []),
@@ -220,6 +255,10 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
         dialogId: "theme",
         get: () => opts.themes[opts.themeName()]?.name ?? opts.themeName(),
       },
+      startViewItem(state.providers.getEnabledViews(), opts.startView?.() ?? "git", view => {
+        opts.onStartViewChange?.(view);
+        persistFullConfig({ startView: view });
+      }),
       {
         kind: "cycle",
         label: "Page size",
@@ -261,6 +300,15 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
           const ms = AUTO_REFRESH_MS[v] ?? DEFAULT_AUTO_FETCH_INTERVAL;
           actions.setAutoFetchInterval(ms);
           persistFullConfig({ autoFetchSeconds: ms / 1000 });
+        },
+      },
+      {
+        kind: "toggle",
+        label: "Auto fast-forward",
+        get: () => opts.autoFastForward?.() ?? false,
+        set: v => {
+          opts.onAutoFastForwardChange?.(v);
+          persistFullConfig({ autoFastForward: v });
         },
       },
     ];
@@ -449,6 +497,10 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
       maxCachedScans: 20 as const,
     };
     return [
+      ...buildDashboardItems(opts.dashboardConfig?.() ?? DEFAULT_DASHBOARD_SETTINGS, next => {
+        opts.onDashboardConfigChange?.(next);
+        persistFullConfig({ dashboard: next });
+      }),
       ...buildGitHubProviderItems(
         ghCfg,
         state.remoteUrl(),

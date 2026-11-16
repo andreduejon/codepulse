@@ -207,6 +207,24 @@ describe("useSnyk", () => {
     expect(snyk.backgroundError()).toBeNull();
   });
 
+  test("a failed scan's error goes when that commit scans without an error, not when another one does", async () => {
+    let failing = true;
+    const { snyk } = mountSnyk({
+      setup: actions => actions.setActiveProviderView("git"),
+      scan: async options => {
+        if (options.sha === SHA_C && failing) throw new Error("Snyk scan failed.");
+        return result(options.sha);
+      },
+    });
+    await snyk.scanCommit(SHA_C);
+    expect(snyk.backgroundError()).toBe("Snyk scan failed.");
+    await snyk.scanCommit(SHA_B, true);
+    expect(snyk.backgroundError()).toBe("Snyk scan failed.");
+    failing = false;
+    await snyk.scanCommit(SHA_C, true);
+    expect(snyk.backgroundError()).toBeNull();
+  });
+
   test("suspension preserves results and badges, aborts scans, and drops queued work", async () => {
     const pending = deferred<SnykScanResult>();
     const calls: SnykScanOptions[] = [];
@@ -487,7 +505,7 @@ describe("useSnyk", () => {
     expect(reads).toHaveLength(20);
   });
 
-  test("does not auto-scan configured branch tips on the Git view", async () => {
+  test("auto-scans configured branch tips on the Git view too, once the repository loads", async () => {
     const calls: SnykScanOptions[] = [];
     const scan: Scan = options => {
       calls.push(options);
@@ -502,7 +520,24 @@ describe("useSnyk", () => {
     });
     await Promise.resolve();
     await Promise.resolve();
-    expect(calls).toHaveLength(0);
+    expect(calls.map(call => call.sha)).toEqual([SHA_A]);
+  });
+
+  test("auto-scans configured branch tips on the dashboard, as on the Snyk view", async () => {
+    const calls: SnykScanOptions[] = [];
+    mountSnyk({
+      scan: options => {
+        calls.push(options);
+        return Promise.resolve(result(options.sha));
+      },
+      config: { autoScanBranches: ["main"] },
+      setup: next => {
+        next.setActiveProviderView("dashboard");
+        next.setBranches([{ name: "main", isCurrent: true, isRemote: false, lastCommitHash: SHA_A }]);
+      },
+    });
+    await Bun.sleep(0);
+    expect(calls.map(call => call.sha)).toEqual([SHA_A]);
   });
 
   test("selects unique configured local branch tips", () => {
@@ -575,5 +610,28 @@ describe("useSnyk", () => {
 
     expect(calls[0].repoPath).toBe("/repo-a");
     expect(snyk.getCommitData(SHA_A)).toBeNull();
+  });
+});
+
+describe("readCachedScan", () => {
+  test("reads one commit's cached scan, also one the graph doesn't hold, without scanning", async () => {
+    const reads: string[] = [];
+    const calls: SnykScanOptions[] = [];
+    const { snyk } = mountSnyk({
+      setup: actions => actions.setGraphRows(graphRows([SHA_A])),
+      readCache: async (_repo, sha) => {
+        reads.push(sha);
+        return sha === SHA_C ? result(SHA_C) : null;
+      },
+      scan: async options => {
+        calls.push(options);
+        return result(options.sha);
+      },
+    });
+    expect(snyk.getCommitData(SHA_C)).toBeNull();
+    await snyk.readCachedScan(SHA_C);
+    expect(snyk.getCommitData(SHA_C)?.sha).toBe(SHA_C);
+    expect(reads).toContain(SHA_C);
+    expect(calls).toEqual([]);
   });
 });

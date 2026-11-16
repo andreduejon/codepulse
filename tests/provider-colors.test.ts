@@ -18,3 +18,11 @@ test("OpenCode Git keeps original yellow distinct from Jenkins orange", () => {
   expect(providerColors(theme, "git").bg).toBe("#e5b567");
   expect(providerColors(theme, "git").bg).not.toBe(providerColors(theme, "jenkins").bg);
 });
+
+test("the Dashboard has its own badge colors, apart from every provider's in every predefined theme", () => {
+  const providers = ["git", "github-actions", "jenkins", "openshift", "snyk"] as const;
+  for (const theme of Object.values(themes)) {
+    expect(providerColors(theme, "dashboard")).toEqual({ bg: theme.dashboardBg, fg: theme.dashboardFg });
+    for (const view of providers) expect(theme.dashboardBg).not.toBe(providerColors(theme, view).bg);
+  }
+});

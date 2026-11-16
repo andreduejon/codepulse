@@ -356,8 +356,9 @@ describe("dependency tree", () => {
     expect(withPin("override")).toBe(true);
     expect(withPin("managed")).toBe(true);
     expect(withPin("override", true)).toBe(true);
-    expect(withPin("managed", true)).toBe(false);
+    expect(withPin("managed", true)).toBe(true);
     expect(withPin("override", false)).toBe(false);
+    expect(withPin(undefined, true)).toBe(false);
     expect(withPin("pinned")).toBe(false);
   });
 

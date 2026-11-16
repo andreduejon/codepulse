@@ -31,7 +31,7 @@ export interface DependencyTreeRow {
   direct?: boolean;
   /** The package's worst finding severity; details live in Vulnerabilities. */
   vulnerability?: SnykSeverity;
-  /** The project forces this version (`override`, `managed`); `removable` when the override could go. */
+  /** The project forces this version (`override`, `managed`); `removable` when the pin could go. */
   pin?: SnykDependencyPin;
   removable?: boolean;
   /** While filtering, closed rows: unique matching packages below them (`N+` when the search stopped early). */

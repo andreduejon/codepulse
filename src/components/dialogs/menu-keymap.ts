@@ -8,6 +8,7 @@ export type MenuKeyAction =
   | "move-up"
   | "activate"
   | "forget"
+  | "pull"
   | "start-edit"
   | "save-edit"
   | "cancel-edit"
@@ -18,6 +19,7 @@ export interface MenuKeyInput {
   mode: MenuKeyMode;
   keyName: string;
   shift?: boolean;
+  ctrl?: boolean;
   selectedKind: MenuSelectableKind;
 }
 
@@ -60,7 +62,7 @@ export function routeMenuKey(input: MenuKeyInput): MenuKeyDecision {
     case "return":
       return { action: selectedKind === "editable" ? "start-edit" : "activate", consume: true };
     case "f":
-      return { action: "forget", consume: true };
+      return { action: input.ctrl ? "pull" : "forget", consume: true };
     default:
       return { action: "none", consume: false };
   }

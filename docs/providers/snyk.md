@@ -19,8 +19,9 @@ Enable Snyk in **Menu → Providers**. Configure concrete local branch names for
 
 - Select a commit, press **Enter** to open details, select **Scan commit**, then press **Enter**.
 - Run **Rescan commit** to replace an existing result with a fresh scan.
-- Configured local branch tips scan automatically when the Snyk view is focused
-  and their exact commit has no cached result. Other views read cache only.
+- Configured local branch tips scan automatically, on every view from when
+  the repository loads, when their exact commit has no cached result. Each new
+  tip scans once.
   Manual **Scan commit** / **Rescan commit** still run from details.
 - Scans include development dependencies (`--dev`) and run sequentially in
   detached temporary Git worktrees. Current checkout remains unchanged.
@@ -201,7 +202,7 @@ bar.
   nothing opens for findings. Press **v** on a marked row to open Vulnerabilities
   filtered to its `name@version` (the footer shows the hint): that package's own
   findings in every manifest, not those of packages it pulls in. Scores, exploits and
-  fixes live in Vulnerabilities. A legend (`▲ ▲ ▲ ▲ severity`) is pinned below the
+  fixes live in Vulnerabilities. A legend (`▲ critical  ▲ high  ▲ medium  ▲ low`) is pinned below the
   tab when the scan has findings. Leaves sit one space after their connector.
 - Packages whose version the project forces carry a muted **override** keyword,
   in both Group by views. For pnpm it comes from the `overrides:` section of
@@ -246,6 +247,17 @@ bar.
   read, so their pins are not marked: **managed** shows the pins your repository
   declares, not everything a platform BOM (Spring Boot, Quarkus) manages, which is
   often most of the tree. Type `managed` in the filter to list them.
+- A **managed** pin is also **removable** when every dependency that brings the
+  package already asks for the pinned version or later, so Maven would pick at
+  least that version without the pin. Their POMs are read from the local Maven
+  repository (`~/.m2/repository`, or where `settings.xml`, `.mvn/maven.config` or
+  `MAVEN_OPTS` put it), where Maven saved them while Snyk resolved the tree.
+  Nothing is downloaded. The pin stays without **removable** when a POM is not
+  there, for a version range or an unknown property, for a package also declared
+  directly, when a dependency asks for a variant of it (a test jar, a classifier),
+  and for any version that is not plain numbers (`1.0-rc`, `1.0-1`), since Maven
+  orders those in ways this check doesn't. Scans made before v0.18 show it after
+  **Rescan commit**.
 - Type `pinned` in the filter to list **override** and **managed** packages
   together; the rows keep their own keyword.
 - Filter hits are highlighted in the package name in the Snyk colour (both tabs

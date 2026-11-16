@@ -16,6 +16,7 @@ import {
   realpathSync,
   rmSync,
   symlinkSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -23,7 +24,15 @@ import { delimiter, dirname, join, resolve } from "node:path";
 import { storageRoot } from "../../src/utils/storage-path";
 import { importHistory } from "./history";
 import { type DemoOptions, PROVIDERS, providerError } from "./options";
-import { FEATURE_BRANCH, LANE_BRANCHES, SHOP_README, shopHistory, webHistory } from "./repositories";
+import {
+  FEATURE_BRANCH,
+  LANE_BRANCHES,
+  NOTIFICATIONS_APP,
+  notificationsHistory,
+  SHOP_README,
+  shopHistory,
+  webHistory,
+} from "./repositories";
 import {
   BROWSER_COMMANDS,
   CLIPBOARD_COMMANDS,
@@ -138,6 +147,19 @@ export function installFakeCli(bin: string, names: readonly string[], compiled =
 }
 
 /**
+ * Git for Windows' `cmd` folder, which holds only Git's own programs. The `git` on PATH may be a shim in a package
+ * manager's folder (Scoop, Chocolatey) next to every other tool it installed, a real `snyk` among them. Git's exec
+ * path is `<root>/mingw64/libexec/git-core` (`clangarm64` on ARM64); an unknown layout keeps git's own folder.
+ */
+export function windowsGitFolder(git: string, execPath: string | null, exists: (path: string) => boolean): string {
+  if (execPath) {
+    const cmd = join(execPath, "..", "..", "..", "cmd");
+    if (exists(join(cmd, "git.exe"))) return cmd;
+  }
+  return dirname(git);
+}
+
+/**
  * The PATH the app gets: the fake CLIs first, then Git and the system's own tools. Nothing else, so a real `snyk`,
  * `npm` or `pnpm` installed next to Git can never answer instead of a fake (or reach the network).
  */
@@ -146,7 +168,9 @@ function demoPath(bin: string): string {
   if (!git) throw new Error("The demo needs Git on PATH.");
   if (process.platform === "win32") {
     const system = process.env.SystemRoot ?? "C:\\Windows";
-    return [bin, dirname(git), join(system, "System32"), system, join(system, "System32", "Wbem")].join(delimiter);
+    const execPath = Bun.spawnSync([git, "--exec-path"], { stdout: "pipe", stderr: "ignore" });
+    const folder = windowsGitFolder(git, execPath.success ? execPath.stdout.toString().trim() : null, existsSync);
+    return [bin, folder, join(system, "System32"), system, join(system, "System32", "Wbem")].join(delimiter);
   }
   symlinkSync(realpathSync(git), join(bin, "git"));
   return [bin, "/usr/bin", "/bin", "/usr/sbin", "/sbin"].join(delimiter);
@@ -171,11 +195,12 @@ function fillWorld(root: string, options: DemoOptions, now: number): DemoWorld {
   const code = join(home, "code");
   const shop = join(code, "shop");
   const web = join(code, "shop-web");
+  const notifications = join(code, NOTIFICATIONS_APP);
   const remotes = join(root, "remotes");
   const bin = join(root, "bin");
   const temp = join(root, "tmp");
   const statePath = join(root, "state.json");
-  for (const directory of [shop, web, remotes, bin, temp]) mkdirSync(directory, { recursive: true });
+  for (const directory of [shop, web, notifications, remotes, bin, temp]) mkdirSync(directory, { recursive: true });
 
   // The app's environment: the user's, minus anything that points Git, a provider, a package manager, ssh,
   // Kubernetes or a proxy at real data or credentials, and minus folders and caches the demo sets inside itself.
@@ -273,9 +298,30 @@ function fillWorld(root: string, options: DemoOptions, now: number): DemoWorld {
   git(web, ["init", "-q", "-b", "main"]);
   git(web, ["remote", "add", "origin", "git@github.com:demo/shop-web.git"]);
   const webShas = importHistory(web, webHistory(), now, git);
-  git(web, ["push", "-q", "origin", "main"]);
+  git(web, ["push", "-q", "origin", "main", "dev"]);
   git(web, ["fetch", "-q", "origin"]);
   git(web, ["branch", "-q", "-u", "origin/main", "main"]);
+  git(web, ["branch", "-q", "-u", "origin/dev", "dev"]);
+  // For ctrl+f's warnings: main is behind origin/main while a file has changes, and dev has a commit of its own.
+  git(web, ["reset", "-q", "--hard", webShas.prices]);
+  git(web, ["update-ref", "refs/heads/dev", webShas.carousel]);
+  git(web, ["update-ref", "-d", "refs/demo/local-dev"]);
+  writeFileSync(join(web, "README.md"), "# shop-web\n\nThe shop's storefront. Run `bun run dev` to start it.\n");
+
+  // ── customer-notification-service: a third app with a long name, Git only ──
+  const notificationsRemote = join(remotes, `${NOTIFICATIONS_APP}.git`);
+  git(remotes, ["init", "-q", "--bare", "-b", "main", notificationsRemote]);
+  git(notifications, ["init", "-q", "-b", "main"]);
+  git(notifications, ["remote", "add", "origin", notificationsRemote]);
+  importHistory(notifications, notificationsHistory(), now, git);
+  git(notifications, ["push", "-q", "origin", "main"]);
+  git(notifications, ["fetch", "-q", "origin"]);
+  git(notifications, ["branch", "-q", "-u", "origin/main", "main"]);
+
+  // The last fetch, 12 minutes before the demo's now: Git dates it by the real clock, the headless app runs on the
+  // demo's, so the menu's Fetch remote age would not make sense.
+  const fetchedAt = new Date(now - 12 * 60_000);
+  for (const repo of [shop, web, notifications]) utimesSync(join(repo, ".git", "FETCH_HEAD"), fetchedAt, fetchedAt);
 
   const state: DemoState = {
     root,
@@ -327,7 +373,8 @@ function fillWorld(root: string, options: DemoOptions, now: number): DemoWorld {
       providers: { github: shopProviders.github, snyk: { ...shopProviders.snyk, autoScanBranches: ["main"] } },
     },
   };
-  // --setup: the config knows shop-web only, so shop opens on the welcome screen.
+  repos[known(notifications)] = { appName: NOTIFICATIONS_APP, ...common };
+  // --setup: the config leaves shop out, so shop opens on the welcome screen.
   if (!options.setup) repos[known(shop)] = { appName: "shop", ...common, providers: shopProviders };
   const configDir = storageRoot("config", process.platform, home, env);
   mkdirSync(configDir, { recursive: true });

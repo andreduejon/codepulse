@@ -1,6 +1,8 @@
+import { scopedMemory } from "../../components/detail-memory";
 import { BANNER } from "../../debug/banner";
+import { OPENSHIFT_LEGEND } from "../legends";
 import { detailEntry, type ProviderDetailSource } from "../shared/detail-entry";
-import { OPENSHIFT_LEGEND, OpenShiftDetailTab } from "./detail-tab";
+import { OpenShiftDetailTab } from "./detail-tab";
 import type { OpenShiftCommitData, OpenShiftResource } from "./types";
 
 /** What OpenShift hands the detail view. */
@@ -28,7 +30,10 @@ export const openshiftDetail = detailEntry({
       isLoading={props.source.isLoading}
       liveAge={props.source.liveAge}
       consoleUrl={props.source.consoleUrl}
+      memory={scopedMemory(props.context.memory, "openshift")}
       onOpenResource={props.source.onOpenResource}
+      targetResourceId={props.context.target}
+      targetColor={props.context.targetColor}
       unavailableReason={props.context.unavailable("openshift", props.source.status)}
       liveUnavailable={
         props.source.status?.kind === "error" && props.source.status.message === BANNER.openshift.tokenExpired

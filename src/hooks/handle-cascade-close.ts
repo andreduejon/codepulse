@@ -54,6 +54,7 @@ export function createCloseOneCascadeStep(opts: CascadeCloseOptions): () => bool
       ancestrySet: state.ancestrySet(),
       pathFilter: state.pathFilter(),
       viewingBranch: state.viewingBranch(),
+      dashboard: state.activeProviderView() === "dashboard",
     });
 
     switch (target) {
@@ -65,7 +66,8 @@ export function createCloseOneCascadeStep(opts: CascadeCloseOptions): () => bool
         setDialog(null);
         return true;
       case "back-to-detail":
-        setDialog("detail");
+        // To the details it was opened from: the dashboard's own dialog there.
+        setDialog(state.activeProviderView() === "dashboard" ? "dashboard-event" : "detail");
         return true;
       case "dialog":
         setDialog(null);

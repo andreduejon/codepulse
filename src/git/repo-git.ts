@@ -1,4 +1,13 @@
+import { existsSync } from "node:fs";
 import { addDebugEvent, redactDebugValue } from "../debug/events";
+
+function spawnGit(repoPath: string, args: string[]) {
+  return Bun.spawn(["git", "-c", "core.quotePath=false", ...args], {
+    cwd: repoPath,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+}
 
 /** Read a stream as text, stopping (and calling `onLimit`) once it exceeds `maxBytes`. */
 async function readCapped(
@@ -40,11 +49,18 @@ export async function runGit(
   }
 
   // quotePath=false: print non-ASCII paths as UTF-8 instead of quoted octal escapes.
-  const proc = Bun.spawn(["git", "-c", "core.quotePath=false", ...args], {
-    cwd: repoPath,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+  let proc: ReturnType<typeof spawnGit>;
+  try {
+    proc = spawnGit(repoPath, args);
+  } catch (error) {
+    // Git never started: the folder is gone (`codepulse xyz` without xyz) or Git is not installed. Callers get a
+    // failed command, like Git's own errors, so the startup can say which.
+    const stderr = existsSync(repoPath)
+      ? `git could not start: ${error instanceof Error ? error.message : String(error)}`
+      : `cannot change to '${repoPath}': No such file or directory`;
+    addDebugEvent({ source: "Git", message: command, status: "error", durationMs: Date.now() - started });
+    return { stdout: "", stderr, exitCode: existsSync(repoPath) ? 127 : 128 };
+  }
 
   let treeCleanup: Promise<unknown> | undefined;
   // Git can spawn credential/network helpers; stop descendants on Windows too.

@@ -1,11 +1,12 @@
-import type { Renderable } from "@opentui/core";
-import { createEffect, createMemo, createSignal, For, onCleanup, Show, untrack } from "solid-js";
+import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show, untrack } from "solid-js";
+import { createRememberedSignal, type DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
 import type { DebugEventSource } from "../../debug/events";
 import { useT } from "../../hooks/use-t";
 import { BUSY } from "../../utils/busy-text";
 import { formatRelativeDate } from "../../utils/date";
 import { ProviderActionRow, ProviderSummaryRow, ScrollingLabel, useDetailRowMouse } from "./detail-rows";
+import { useDetailTree } from "./detail-tree";
 import { type RowShortcut, useOpenRowShortcut } from "./open-row";
 import { fetchProviderJobs } from "./provider-job-fetch";
 import { categorize, statusColor, statusIcon } from "./status";
@@ -101,6 +102,30 @@ export interface ProviderTreeJobFetchResult<TJobRaw> {
   error: string | null;
 }
 
+/** What a tree records about a commit besides its open rows; mutable, so no effect runs again on it. */
+interface OpenedMemory {
+  /** The commit the run statuses and the single opened run belong to. */
+  dataKey: string | null;
+  /** The commit whose first failed run was opened on entering the tab (once, so closing it sticks). */
+  failureOpenedKey: string | null;
+  /** The single run opened on its own (`id:number`), so closing it sticks too. */
+  autoExpandedSignature: string | null;
+  /** Each run's last seen status: an open run whose status moved loads its jobs again. */
+  runSignatures: Map<string, string>;
+  /** The target run opened on its own, and the one the focus was put on (`commit\0run`): once each. */
+  targetOpenedKey: string | null;
+  targetFocusedKey: string | null;
+}
+
+const newOpenedMemory = (): OpenedMemory => ({
+  dataKey: null,
+  failureOpenedKey: null,
+  autoExpandedSignature: null,
+  runSignatures: new Map(),
+  targetOpenedKey: null,
+  targetFocusedKey: null,
+});
+
 type FlatItem<TRaw, TJobRaw> =
   | { kind: "reload"; flatIndex: number }
   | { kind: "run"; run: ProviderTreeRun<TRaw>; flatIndex: number }
@@ -113,6 +138,9 @@ type FlatItem<TRaw, TJobRaw> =
       run: ProviderTreeRun<TRaw>;
       flatIndex: number;
     };
+
+/** How long the dashboard's event stays selected before its run opens (and loads its jobs) on its own. */
+const TARGET_OPEN_DELAY_MS = 400;
 
 export interface ProviderRunTreeProps<TRaw, TJobRaw> {
   mouseEnabled?: boolean;
@@ -127,6 +155,8 @@ export interface ProviderRunTreeProps<TRaw, TJobRaw> {
   fetchJobsForRun: (run: ProviderTreeRun<TRaw>, signal?: AbortSignal) => Promise<ProviderTreeJobFetchResult<TJobRaw>>;
   debugSource: DebugEventSource;
   dataKey: string;
+  /** Keeps open runs, attempts and loaded jobs while the tree is not shown (another tab, the other layout). */
+  memory?: DetailMemory;
   getInitialJobsForRun?: (run: ProviderTreeRun<TRaw>) => ProviderTreeJob<TJobRaw>[];
   onOpenJobAction?: (
     job: ProviderTreeJob<TJobRaw>,
@@ -163,26 +193,39 @@ export interface ProviderRunTreeProps<TRaw, TJobRaw> {
   showSummary?: boolean;
   /** Open the first failed run when the tab gets focus (default true). */
   openFailedRun?: boolean;
+  /**
+   * The run the tree is shown for (the dashboard's event): it opens at once, its name takes `targetColor`, and the
+   * tab's focus starts on it. Failure-first then opens nothing else.
+   */
+  targetRunId?: string;
+  targetColor?: string;
 }
 
 export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreeProps<TRaw, TJobRaw>>) {
   const t = useT();
   const STATUS_COL_WIDTH = 2;
-  const [expandedRuns, setExpandedRuns] = createSignal<Set<string>>(new Set());
+  // What the user opened and what loaded for it, per commit: kept in the memory when there is one.
+  const dataKey = () => props.dataKey;
+  const remembered = <T,>(key: string, initial: () => T) => createRememberedSignal(props.memory, key, dataKey, initial);
+  const [expandedRuns, setExpandedRuns] = remembered("expandedRuns", () => new Set<string>());
   /** Open earlier attempts, as `runId:number`. */
-  const [expandedAttempts, setExpandedAttempts] = createSignal<Set<string>>(new Set());
-  const [fetchedJobs, setFetchedJobs] = createSignal<Map<string, ProviderTreeJob<TJobRaw>[]>>(new Map());
-  const [jobErrors, setJobErrors] = createSignal<Map<string, string>>(new Map());
+  const [expandedAttempts, setExpandedAttempts] = remembered("expandedAttempts", () => new Set<string>());
+  const [fetchedJobs, setFetchedJobs] = remembered("fetchedJobs", () => new Map<string, ProviderTreeJob<TJobRaw>[]>());
+  const [jobErrors, setJobErrors] = remembered("jobErrors", () => new Map<string, string>());
+  const [loadedRuns, setLoadedRuns] = remembered("loadedRuns", () => new Set<string>());
+  /** Which commit already had its failed run opened, the single run opened, and each run's last seen status. */
+  const opened = props.memory?.("opened", newOpenedMemory) ?? newOpenedMemory();
+  if (opened.dataKey !== props.dataKey) {
+    opened.dataKey = props.dataKey;
+    opened.autoExpandedSignature = null;
+    opened.runSignatures.clear();
+  }
   const [loadingRuns, setLoadingRuns] = createSignal<Set<string>>(new Set());
-  const [loadedRuns, setLoadedRuns] = createSignal<Set<string>>(new Set());
   const [pendingFocusRunId, setPendingFocusRunId] = createSignal<string | null>(null);
   const fetchControllers = new Map<string, AbortController>();
   /** Runs whose status changed while their jobs were loading; they load again when that request settles. */
   const reloadAfterLoad = new Set<string>();
-  let autoExpandedSignature: string | null = null;
   let previousDataKey = props.dataKey;
-  const itemRefs: Renderable[] = [];
-  const refsByKey = new Map<string, Renderable>();
   const itemKey = (item: FlatItem<TRaw, TJobRaw>) =>
     item.kind === "reload"
       ? "reload"
@@ -193,13 +236,6 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
           : item.kind === "attempt"
             ? `attempt:${item.run.id}:${item.attempt.number}`
             : `note:${item.run.id}:${item.job.id}:${item.note.id}`;
-  const syncItemRefs = () => {
-    const items = flatItems();
-    itemRefs.length = items.length;
-    items.forEach((item, index) => {
-      itemRefs[index] = refsByKey.get(itemKey(item)) as Renderable;
-    });
-  };
   const rows = useDetailRowMouse({
     mouseEnabled: () => props.mouseEnabled,
     onMouseFocus: props.onMouseFocus,
@@ -395,7 +431,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
 
   // Auto refresh replaces the runs: an expanded run whose status moved reloads its jobs and steps. If its jobs are
   // still loading, they load again once that request settles (its answer may predate the change).
-  const runSignatures = new Map<string, string>();
+  const runSignatures = opened.runSignatures;
   createEffect(() => {
     const runs = props.runs;
     untrack(() => {
@@ -410,22 +446,26 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     });
   });
 
-  const resetRunState = () => {
+  /** Stops what this tree has running: a tree mounted again (or for another commit) starts its own. */
+  const stopLoading = () => {
     for (const ctrl of fetchControllers.values()) ctrl.abort();
     fetchControllers.clear();
+    setLoadingRuns(new Set<string>());
+    setPendingFocusRunId(null);
+    reloadAfterLoad.clear();
+    rows.clearHover();
+  };
+
+  const resetRunState = () => {
+    stopLoading();
     setExpandedRuns(new Set<string>());
     setExpandedAttempts(new Set<string>());
     setFetchedJobs(new Map<string, ProviderTreeJob<TJobRaw>[]>());
     setJobErrors(new Map<string, string>());
-    setLoadingRuns(new Set<string>());
     setLoadedRuns(new Set<string>());
-    setPendingFocusRunId(null);
-    autoExpandedSignature = null;
+    opened.dataKey = props.dataKey;
+    opened.autoExpandedSignature = null;
     runSignatures.clear();
-    reloadAfterLoad.clear();
-    itemRefs.length = 0;
-    refsByKey.clear();
-    rows.clearHover();
   };
 
   createEffect(() => {
@@ -435,7 +475,14 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     resetRunState();
   });
 
-  onCleanup(resetRunState);
+  onCleanup(stopLoading);
+
+  // Back from another tab or layout: an open run whose jobs had not arrived yet loads them again.
+  onMount(() => {
+    for (const run of props.runs) {
+      if (expandedRuns().has(run.id) && !loadedRuns().has(run.id) && !jobErrors().has(run.id)) void loadJobsForRun(run);
+    }
+  });
 
   createEffect(() => {
     const runId = pendingFocusRunId();
@@ -454,12 +501,44 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
 
   // Failure first: entering a commit's tab (detail focus) opens its first failed run once, unless the user already
   // opened one. Only on focus, so browsing commits in the graph never fetches jobs.
-  let failureOpenedKey: string | null = null;
+
+  // The dashboard's event: its run opens once (closing it sticks), and the focus starts on it once. Opening loads its
+  // jobs, so it waits until the event stays selected: browsing past events loads nothing. Jobs already loaded, or the
+  // tab's focus, open it at once.
   createEffect(() => {
-    if (props.openFailedRun === false || !props.detailFocused() || props.runs.length === 0) return;
+    const id = props.targetRunId;
+    const run = id ? props.runs.find(candidate => candidate.id === id) : undefined;
+    if (!id || !run) return;
+    const key = `${props.dataKey}\u0000${id}`;
+    if (opened.targetOpenedKey === key) return;
+    const open = () => {
+      opened.targetOpenedKey = key;
+      if (!untrack(expandedRuns).has(id)) untrack(() => toggleRun(run));
+    };
+    if (props.detailFocused() || untrack(fetchedJobs).has(id)) {
+      open();
+      return;
+    }
+    const timer = setTimeout(open, TARGET_OPEN_DELAY_MS);
+    onCleanup(() => clearTimeout(timer));
+  });
+  createEffect(() => {
+    const id = props.targetRunId;
+    if (!id || !props.detailFocused()) return;
+    const key = `${props.dataKey}\u0000${id}`;
+    if (opened.targetFocusedKey === key) return;
+    // Tracked: a run that arrives later (its commit's data loads after the focus) still gets the cursor, once.
+    const index = flatItems().findIndex(item => item.kind === "run" && item.run.id === id);
+    if (index < 0) return;
+    opened.targetFocusedKey = key;
+    props.setDetailCursorIndex(index);
+  });
+
+  createEffect(() => {
+    if (props.targetRunId || props.openFailedRun === false || !props.detailFocused() || props.runs.length === 0) return;
     const key = props.dataKey;
-    if (failureOpenedKey === key) return;
-    failureOpenedKey = key;
+    if (opened.failureOpenedKey === key) return;
+    opened.failureOpenedKey = key;
     const failed = props.runs.find(run => categorize(run.status, run.conclusion) === "fail");
     if (!failed || untrack(expandedRuns).size > 0) return;
     untrack(() => toggleRun(failed));
@@ -470,17 +549,10 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     if (props.runs.length !== 1) return;
     const run = props.runs[0];
     const signature = `${run.id}:${run.runNumber}`;
-    if (autoExpandedSignature === signature) return;
+    if (opened.autoExpandedSignature === signature) return;
     if (expandedRuns().has(run.id)) return;
-    autoExpandedSignature = signature;
+    opened.autoExpandedSignature = signature;
     toggleRun(run);
-  });
-
-  createEffect(() => {
-    const count = flatItems().length;
-    const cursor = untrack(() => props.detailCursorIndex());
-    if (count === 0) props.setDetailCursorIndex(0);
-    else if (cursor < 0 || cursor >= count) props.setDetailCursorIndex(Math.max(0, Math.min(count - 1, cursor)));
   });
 
   const activateCurrentItem = () => {
@@ -512,13 +584,12 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
     return false;
   };
 
-  createEffect(() => {
-    const items = flatItems();
-    syncItemRefs();
-    if (!props.navRef) return;
-    props.navRef.itemCount = items.length;
-    props.navRef.itemRefs = itemRefs;
-    props.navRef.activateCurrentItem = activateCurrentItem;
+  const tree = useDetailTree({
+    navRef: props.navRef,
+    keys: () => flatItems().map(itemKey),
+    activate: activateCurrentItem,
+    detailCursorIndex: props.detailCursorIndex,
+    setDetailCursorIndex: props.setDetailCursorIndex,
   });
 
   createEffect(() => {
@@ -570,10 +641,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
           rows={rows}
           rowKey="reload"
           index={reloadIdx}
-          rowRef={el => {
-            refsByKey.set("reload", el);
-            syncItemRefs();
-          }}
+          rowRef={tree.ref("reload")}
         />
       </Show>
       <Show when={props.showSummary !== false}>
@@ -595,17 +663,19 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
           const relTime = () => formatRelativeDate(run.updatedAt);
           const runTreePrefix = () => (runIndexFn() === props.runs.length - 1 ? "└─ " : "├─ ");
           const runIndicatorColor = () => (isCursored() ? t().accent : t().foregroundMuted);
-          const runTextColor = () => (isCursored() ? t().accent : t().foreground);
+          const runTextColor = () =>
+            isCursored()
+              ? t().accent
+              : run.id === props.targetRunId && props.targetColor
+                ? props.targetColor
+                : t().foreground;
           const runIsLast = () => runIndexFn() === props.runs.length - 1;
           const placeholderTreeLead = () => (runIsLast() ? "   " : "│  ");
 
           return (
             <box flexDirection="column" width="100%">
               <box
-                ref={(el: Renderable) => {
-                  refsByKey.set(`run:${run.id}`, el);
-                  syncItemRefs();
-                }}
+                ref={tree.ref(`run:${run.id}`)}
                 {...mouseRow(`run:${run.id}`, runFlatIndex)}
                 flexDirection="row"
                 width="100%"
@@ -692,10 +762,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                     return (
                       <box flexDirection="column" width="100%">
                         <box
-                          ref={(el: Renderable) => {
-                            refsByKey.set(`job:${run.id}:${job.id}`, el);
-                            syncItemRefs();
-                          }}
+                          ref={tree.ref(`job:${run.id}:${job.id}`)}
                           {...mouseRow(`job:${run.id}:${job.id}`, jobFlatIndex)}
                           flexDirection="row"
                           width="100%"
@@ -782,10 +849,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                               const noteConnector = () => (noteIndexFn() === notes().length - 1 ? "└─ " : "├─ ");
                               return (
                                 <box
-                                  ref={(el: Renderable) => {
-                                    refsByKey.set(key, el);
-                                    syncItemRefs();
-                                  }}
+                                  ref={tree.ref(key)}
                                   {...mouseRow(key, noteFlatIndex)}
                                   flexDirection="row"
                                   width="100%"
@@ -841,10 +905,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                     return (
                       <box flexDirection="column" width="100%">
                         <box
-                          ref={(el: Renderable) => {
-                            refsByKey.set(key, el);
-                            syncItemRefs();
-                          }}
+                          ref={tree.ref(key)}
                           {...mouseRow(key, attemptFlatIndex)}
                           flexDirection="row"
                           width="100%"
@@ -898,10 +959,7 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
                                 props.detailFocused() && props.detailCursorIndex() === jobFlatIndex();
                               return (
                                 <box
-                                  ref={(el: Renderable) => {
-                                    refsByKey.set(jobKey, el);
-                                    syncItemRefs();
-                                  }}
+                                  ref={tree.ref(jobKey)}
                                   {...mouseRow(jobKey, jobFlatIndex)}
                                   flexDirection="row"
                                   width="100%"

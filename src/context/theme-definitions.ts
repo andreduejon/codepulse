@@ -53,6 +53,8 @@ export const openCodeOriginal: Theme = {
   snykBg: "#a380df",
   openShiftFg: "#161617",
   openShiftBg: "#d17277",
+  dashboardFg: "#161617",
+  dashboardBg: "#56b6c2",
 };
 
 export const catppuccinMocha: Theme = {
@@ -101,6 +103,8 @@ export const catppuccinMocha: Theme = {
   snykBg: "#cba6f7",
   openShiftFg: "#1e1e2e",
   openShiftBg: "#eba0ac",
+  dashboardFg: "#1e1e2e",
+  dashboardBg: "#94e2d5",
 };
 
 export const tokyoNight: Theme = {
@@ -149,6 +153,8 @@ export const tokyoNight: Theme = {
   snykBg: "#bb9af7",
   openShiftFg: "#1a1b26",
   openShiftBg: "#ff9e64",
+  dashboardFg: "#1a1b26",
+  dashboardBg: "#73daca",
 };
 
 export const dracula: Theme = {
@@ -197,6 +203,8 @@ export const dracula: Theme = {
   snykBg: "#bd93f9",
   openShiftFg: "#282a36",
   openShiftBg: "#ffb86c",
+  dashboardFg: "#282a36",
+  dashboardBg: "#50fa7b",
 };
 
 export const nord: Theme = {
@@ -245,6 +253,8 @@ export const nord: Theme = {
   snykBg: "#b48ead",
   openShiftFg: "#2e3440",
   openShiftBg: "#d08770",
+  dashboardFg: "#2e3440",
+  dashboardBg: "#a3be8c",
 };
 
 export const oneDark: Theme = {
@@ -293,6 +303,8 @@ export const oneDark: Theme = {
   snykBg: "#c678dd",
   openShiftFg: "#282c34",
   openShiftBg: "#d19a66",
+  dashboardFg: "#282c34",
+  dashboardBg: "#56b6c2",
 };
 
 export const gruvbox: Theme = {
@@ -341,6 +353,8 @@ export const gruvbox: Theme = {
   snykBg: "#d3869b",
   openShiftFg: "#282828",
   openShiftBg: "#fe8019",
+  dashboardFg: "#282828",
+  dashboardBg: "#8ec07c",
 };
 
 export const monokai: Theme = {
@@ -389,6 +403,8 @@ export const monokai: Theme = {
   snykBg: "#ab9df2",
   openShiftFg: "#2d2a2e",
   openShiftBg: "#fc9867",
+  dashboardFg: "#2d2a2e",
+  dashboardBg: "#a9dc76",
 };
 
 export const ayuDark: Theme = {
@@ -437,6 +453,8 @@ export const ayuDark: Theme = {
   snykBg: "#d4bfff",
   openShiftFg: "#1f2430",
   openShiftBg: "#ffa759",
+  dashboardFg: "#1f2430",
+  dashboardBg: "#95e6cb",
 };
 
 export const synthwave: Theme = {
@@ -485,6 +503,8 @@ export const synthwave: Theme = {
   snykBg: "#8b00ff",
   openShiftFg: "#262335",
   openShiftBg: "#ff7edb",
+  dashboardFg: "#262335",
+  dashboardBg: "#72f1b8",
 };
 
 export const oliveGarden: Theme = {
@@ -533,6 +553,8 @@ export const oliveGarden: Theme = {
   snykBg: "#9999C2",
   openShiftFg: "#161617",
   openShiftBg: "#A88B72",
+  dashboardFg: "#161617",
+  dashboardBg: "#8cb9ab",
 };
 
 export const rosePine: Theme = {
@@ -581,4 +603,6 @@ export const rosePine: Theme = {
   snykBg: "#ebbcba",
   openShiftFg: "#191724",
   openShiftBg: "#f6c177",
+  dashboardFg: "#191724",
+  dashboardBg: "#9ccfd8",
 };

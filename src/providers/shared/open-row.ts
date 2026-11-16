@@ -37,8 +37,10 @@ export function useOpenRowShortcut(
   createEffect(() => {
     if (opts.navRef) opts.navRef.handleKey = handleKey;
   });
+  // Only while this tab still owns the keys: the other layout's details may have mounted first and set their own.
   onCleanup(() => {
-    if (opts.navRef?.handleKey === handleKey) opts.navRef.handleKey = undefined;
+    if (opts.navRef && opts.navRef.handleKey !== handleKey) return;
+    if (opts.navRef) opts.navRef.handleKey = undefined;
     opts.setDetailCursorShortcut?.(null);
   });
 }

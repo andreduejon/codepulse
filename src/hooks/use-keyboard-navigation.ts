@@ -15,6 +15,8 @@ export type DialogId =
   | "theme"
   | "diff-blame"
   | "detail"
+  /** The selected dashboard event's details, in the compact layout. */
+  | "dashboard-event"
   | "job-log"
   | "openshift-resource"
   | "debug"
@@ -66,6 +68,8 @@ interface KeyboardNavigationOptions {
   /** Returns true while the initial CI fetch is in-flight. */
   getProviderLoading?: () => boolean;
   onSwitchGroupRepo?: (direction: 1 | -1) => void;
+  /** The dashboard's keys while it shows, instead of the graph's and the details'. */
+  onDashboardKey?: (event: KeyEvent) => void;
 }
 
 /**
@@ -118,6 +122,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions) {
     getCommitData,
     getProviderLoading,
     onSwitchGroupRepo,
+    onDashboardKey,
   } = opts;
 
   // Build shared input exit and applied-search clear helpers.
@@ -229,7 +234,12 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions) {
       onCommandExecute("menu");
       return;
     }
-    if (e.name === "f" && !e.shift) {
+    if (e.name === "f" && e.ctrl && !e.shift && !e.meta) {
+      e.preventDefault();
+      onCommandExecute("pull");
+      return;
+    }
+    if (e.name === "f" && !e.shift && !e.ctrl && !e.meta) {
       e.preventDefault();
       onCommandExecute("fetch");
       return;
@@ -237,6 +247,12 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions) {
     if (e.sequence === "?") {
       e.preventDefault();
       onCommandExecute("help");
+      return;
+    }
+
+    // ── Dashboard: no graph and no details behind it ─────────────────────────
+    if (state.activeProviderView() === "dashboard") {
+      onDashboardKey?.(e);
       return;
     }
 

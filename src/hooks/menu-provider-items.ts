@@ -1,4 +1,11 @@
 import type { Accessor } from "solid-js";
+import {
+  DASHBOARD_KNOT_MINUTES,
+  DASHBOARD_WINDOW_DAYS,
+  type DashboardSettings,
+  knotMinutesLabel,
+  windowDaysLabel,
+} from "../dashboard/settings";
 import { parseGitHubRemote } from "../providers/github-actions/api";
 import { isValidJenkinsJobUrl } from "../providers/jenkins/validation";
 import {
@@ -22,6 +29,35 @@ import type {
   SettingItem,
   SnykMenuConfig,
 } from "./menu-items-types";
+
+/** The dashboard's own section: whether it shows, how far back it reads and how long one knot is. Each saves at once. */
+export function buildDashboardItems(cfg: DashboardSettings, save: (next: DashboardSettings) => void): SettingItem[] {
+  const next = <T>(options: readonly T[], label: (value: T) => string, chosen: string, fallback: T): T =>
+    options.find(option => label(option) === chosen) ?? fallback;
+  const items: SettingItem[] = [
+    { kind: "header", label: "Dashboard" },
+    { kind: "toggle", label: "Enabled", get: () => cfg.enabled, set: enabled => save({ ...cfg, enabled }) },
+  ];
+  if (!cfg.enabled) return items;
+  return [
+    ...items,
+    {
+      kind: "cycle",
+      label: "Time window",
+      options: DASHBOARD_WINDOW_DAYS.map(windowDaysLabel),
+      get: () => windowDaysLabel(cfg.windowDays),
+      set: value => save({ ...cfg, windowDays: next(DASHBOARD_WINDOW_DAYS, windowDaysLabel, value, cfg.windowDays) }),
+    },
+    {
+      kind: "cycle",
+      label: "Knot size",
+      options: DASHBOARD_KNOT_MINUTES.map(knotMinutesLabel),
+      get: () => knotMinutesLabel(cfg.knotMinutes),
+      set: value =>
+        save({ ...cfg, knotMinutes: next(DASHBOARD_KNOT_MINUTES, knotMinutesLabel, value, cfg.knotMinutes) }),
+    },
+  ];
+}
 
 const isValidEnvVarName = (value: string): boolean => /^[A-Za-z_][A-Za-z0-9_]*$/.test(value);
 
@@ -137,6 +173,7 @@ export function buildOpenShiftProviderItems(
     {
       kind: "editable",
       label: "Server",
+      placeholder: "Enter server URL...",
       get: () => cfg.serverUrl,
       set: v => update({ ...cfg, serverUrl: v.trim() }),
       valid: () => isValidOpenShiftServerUrl(cfg.serverUrl),
@@ -145,7 +182,7 @@ export function buildOpenShiftProviderItems(
     {
       kind: "editable",
       label: "Console",
-      placeholder: "optional, for o",
+      placeholder: "Enter console URL...",
       get: () => cfg.consoleUrl,
       set: v => update({ ...cfg, consoleUrl: v.trim() }),
       valid: () => !cfg.consoleUrl || isValidOpenShiftServerUrl(cfg.consoleUrl),
@@ -225,7 +262,7 @@ export function buildGitHubProviderItems(
   const hostAllowed = remoteHost === "github.com" || (remoteHost != null && ghCfg.trustedEnterpriseHost === remoteHost);
 
   const items: SettingItem[] = [
-    { kind: "header", label: "GitHub Actions" },
+    { kind: "header", label: "GitHub" },
     {
       kind: "toggle",
       label: "Enabled",
