@@ -39,7 +39,8 @@ test("the open app's rope, each event a knot on it, with Commit, Branch, Time an
       source: "snyk",
       time: new Date(2026, 2, 2, 10, 5).getTime(),
       status: "pass",
-      text: "scan · no vulnerabilities",
+      text: "scan · 0 vulnerabilities · 0 critical · 0 high · 0 medium · 0 low",
+      counts: { critical: 0, high: 0, medium: 0, low: 0 },
       sha: SHA,
     },
   ];
@@ -82,7 +83,9 @@ test("the open app's rope, each event a knot on it, with Commit, Branch, Time an
     expect(commit.indexOf("main")).toBe(event.indexOf("feature/"));
     // A commit no branch holds leaves the column empty; the times still line up.
     const scan = lines.find(line => line.includes("scan ·")) ?? "";
-    expect(scan).toMatch(/^\s*█\s+e6209dd\s+10:05\s+scan · no vulnerabilities\s*$/);
+    expect(scan).toMatch(
+      /^\s*█\s+e6209dd\s+10:05\s+scan · 0 vulnerabilities.*0 low\s*$/, // cut in the middle at this width
+    );
     expect(scan.indexOf("10:05")).toBe(event.indexOf("10:52"));
     const y = lines.findIndex(line => line.includes("round totals"));
     await setup.mockMouse.click(30, y, MouseButtons.LEFT);
@@ -156,7 +159,18 @@ test("a scan's counts each take their severity's color, and a severity without f
       app: () => ({ path: "/shop", name: "shop" }),
       active,
       now: () => NOW,
-      load: async () => [scan],
+      load: async () => [
+        scan,
+        {
+          ...scan,
+          id: "partial",
+          time: scan.time - 60_000,
+          severity: "medium",
+          counts: { critical: 0, high: 0, medium: 1, low: 0 },
+          partial: true,
+          text: "scan · 1 vulnerability · 0 critical · 0 high · 1 medium · 0 low",
+        },
+      ],
     }),
   );
   const themeState = createThemeState();
@@ -180,6 +194,17 @@ test("a scan's counts each take their severity's color, and a severity without f
     expect(fg("3 high")).toEqual(RGBA.fromHex(theme.severityHigh));
     expect(fg("0 medium")).toEqual(RGBA.fromHex(theme.foregroundMuted));
     expect(fg("2 low")).toEqual(RGBA.fromHex(theme.severityLow));
+    // A partial scan ends in Snyk's warning `?`.
+    const partial =
+      setup
+        .captureCharFrame()
+        .split("\n")
+        .find(line => line.includes("1 vulnerability")) ?? "";
+    expect(partial).toMatch(/scan · 1 vulnerability · 0 critical · 0 high · 1 medium · 0 low \?\s*$/);
+    const partialRow = setup.captureCharFrame().split("\n").indexOf(partial);
+    expect(setup.captureSpans().lines[partialRow]?.spans.find(span => span.text.trim() === "?")?.fg).toEqual(
+      RGBA.fromHex(theme.warning),
+    );
   } finally {
     setup.renderer.destroy();
   }

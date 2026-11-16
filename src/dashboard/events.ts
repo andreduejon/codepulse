@@ -30,6 +30,8 @@ export interface DashboardEvent {
   severity?: SnykSeverity | null;
   /** A scan's findings per severity: the dashboard colors each count. */
   counts?: SnykScanResult["counts"];
+  /** A scan that left projects out: its counts end in Snyk's warning `?`. */
+  partial?: boolean;
   /** What happened, without the commit (shown beside it). */
   text: string;
   /** The branch it happened on: the provider's own (GitHub), else the one Git finds holding the commit. */
@@ -205,7 +207,8 @@ export function snykEvents(
       ["low", low],
     ] as const;
     const total = critical + high + medium + low;
-    const status: StatusCategory = critical + high > 0 ? "fail" : total > 0 ? "unknown" : "pass";
+    // A partial scan without findings is not a clean result: some projects were not scanned.
+    const status: StatusCategory = critical + high > 0 ? "fail" : total > 0 || scan.partial ? "unknown" : "pass";
     const counted = `${total} ${total === 1 ? "vulnerability" : "vulnerabilities"}`;
     return [
       {
@@ -215,9 +218,10 @@ export function snykEvents(
         time,
         status,
         severity: bySeverity.find(([, count]) => count > 0)?.[0] ?? null,
-        // Every severity in order, zeros too, so the counts line up from scan to scan.
-        text: `scan · ${total > 0 ? [counted, ...bySeverity.map(([severity, count]) => `${count} ${severity}`)].join(" · ") : "no vulnerabilities"}`,
-        ...(total > 0 ? { counts: scan.counts } : {}),
+        // Every severity in order, zeros too, like Snyk's C0 H0 M0 L0: the counts line up from scan to scan.
+        text: ["scan", counted, ...bySeverity.map(([severity, count]) => `${count} ${severity}`)].join(" · "),
+        counts: scan.counts,
+        partial: scan.partial === true,
         sha: scan.sha,
         facts: [
           ...fact("Vulnerabilities", `${total} (${critical} critical, ${high} high, ${medium} medium, ${low} low)`),

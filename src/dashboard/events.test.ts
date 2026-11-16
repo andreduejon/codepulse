@@ -148,7 +148,28 @@ describe("events", () => {
       snykEvents("/repo/shop", [
         { sha: SHA, scannedAt: "2026-03-02T10:30:00Z", counts: { critical: 0, high: 0, medium: 0, low: 0 } },
       ]),
-    ).toEqual([expect.objectContaining({ status: "pass", severity: null, text: "scan · no vulnerabilities" })]);
+    ).toEqual([
+      // Like Snyk's own C0 H0 M0 L0: every severity at zero, no mark.
+      expect.objectContaining({
+        status: "pass",
+        severity: null,
+        text: "scan · 0 vulnerabilities · 0 critical · 0 high · 0 medium · 0 low",
+        counts: { critical: 0, high: 0, medium: 0, low: 0 },
+        partial: false,
+      }),
+    ]);
+    // Some projects failed: zero findings is not a clean result, so the scan is partial and not a pass.
+    expect(
+      snykEvents("/repo/shop", [
+        {
+          sha: SHA,
+          scannedAt: "2026-03-02T10:30:00Z",
+          counts: { critical: 0, high: 0, medium: 0, low: 0 },
+          partial: true,
+          failedProjects: 1,
+        },
+      ]),
+    ).toEqual([expect.objectContaining({ status: "unknown", severity: null, partial: true })]);
   });
 });
 

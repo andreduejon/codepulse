@@ -62,7 +62,7 @@ export function DashboardView(
 
   /**
    * What happened: its mark (a commit has none), then its text. The commit is in its own column. A scan's counts take
-   * their severity's color, muted without findings.
+   * their severity's color, muted without findings, and a partial scan ends in Snyk's warning `?`.
    */
   const EventText = (eventProps: { event: DashboardEvent }) => {
     const event = () => eventProps.event;
@@ -89,6 +89,9 @@ export function DashboardView(
                   </>
                 )}
               </For>
+              <Show when={event().partial}>
+                <span style={{ fg: t().warning }}>{" ?"}</span>
+              </Show>
             </>
           )}
         </Show>

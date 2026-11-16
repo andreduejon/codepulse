@@ -31,7 +31,10 @@ afterEach(async () => {
   for (const finish of cleanup.splice(0).reverse()) await finish();
 });
 
-function dashboard(events: DashboardEvent[], settings: DashboardSettings = { enabled: true, windowDays: 7, knotMinutes: 60 }) {
+function dashboard(
+  events: DashboardEvent[],
+  settings: DashboardSettings = { enabled: true, windowDays: 7, knotMinutes: 60 },
+) {
   const [active, setActive] = createSignal(false);
   const [app, setApp] = createSignal(SHOP);
   const [config, setConfig] = createSignal(settings);
@@ -95,7 +98,11 @@ test("a busy knot shows every event, and Enter hands the selected one over", asy
 });
 
 test("the time window decides how far back it reads, and a new window reads again", async () => {
-  const d = dashboard([event("/shop", 5), event("/shop", 3 * 24 * 60)], { enabled: true, windowDays: 1, knotMinutes: 60 });
+  const d = dashboard([event("/shop", 5), event("/shop", 3 * 24 * 60)], {
+    enabled: true,
+    windowDays: 1,
+    knotMinutes: 60,
+  });
   d.setActive(true);
   await settle();
   expect(d.loads.at(-1)?.since).toBe(NOW - 24 * 3_600_000);

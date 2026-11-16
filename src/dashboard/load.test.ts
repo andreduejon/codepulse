@@ -86,7 +86,7 @@ test("an app's events: its main branch's commits since the window starts, and wh
   expect(events.map(event => [event.source, event.text]).sort()).toEqual([
     ["git", "feat(api): health"],
     ["github-actions", "CI #812 failed"],
-    ["snyk", "scan · no vulnerabilities"],
+    ["snyk", "scan · 0 vulnerabilities · 0 critical · 0 high · 0 medium · 0 low"],
   ]);
   // Older than the window: left out.
   expect(await loadAppEvents(repo, { since: Date.parse("2026-03-03T00:00:00Z"), cacheRoot })).toEqual([]);
