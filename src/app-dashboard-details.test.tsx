@@ -126,6 +126,8 @@ test("in the compact layout, Enter on a dashboard event opens its details with i
     await setup.flush();
     expect(frame()).toContain("esc close");
     expect(frame()).not.toContain("Show in GitHub");
+    // The details dialog has the keyboard, as when Enter opens it in the graph.
+    expect(app.state.detailFocused()).toBe(true);
   } finally {
     await setup?.dispose();
     for (const spy of spies) spy.mockRestore();

@@ -625,9 +625,9 @@ export function AppContent(props: Readonly<AppContentProps>) {
       actions.setCursorIndex(index);
       actions.setScrollTargetIndex(index);
     });
-    // Its details, as the dashboard showed them: focused beside the graph, the details dialog in the compact layout.
-    if (untrack(layoutMode) === "compact") setDialog("detail");
-    else actions.setDetailFocused(true);
+    // Its details, as the dashboard showed them and as Enter in the graph opens them: focused beside the graph, the
+    // details dialog with the keyboard in the compact layout.
+    untrack(() => openGraphDetails({ state, actions, layoutMode, setDialog, detailNavRef }));
   });
 
   /** The selected event's tabs: its provider's own (Snyk's two), then Info, its commit as the graph shows it. */
