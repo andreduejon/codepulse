@@ -121,7 +121,7 @@ test("the first row shows the event's commit in its provider's view, on a click"
     const title = lines.findIndex(line => line.includes("CI #812 failed"));
     expect(y).toBeGreaterThan(0);
     expect(y).toBeLessThan(title);
-    expect(lines[y]).toMatch(/Show in GitHub\s+e6209dd\s*$/);
+    expect(lines[y]).toMatch(/Show in GitHub\s*$/);
     await setup.mockMouse.click(4, y, MouseButtons.LEFT);
     expect(onShowInGraph).toHaveBeenCalledTimes(1);
     setEvent(null);

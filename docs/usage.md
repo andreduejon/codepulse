@@ -102,9 +102,10 @@ ref), else the branch the commit was made on.
   The names are `git`, `github`, `jenkins`, `openshift` and `snyk`.
 - A scan shows its total and every severity in order (`1 critical · 3 high · 0 medium · 0 low`), each count in its
   severity's color. A partial scan ends in Snyk's `?`.
-- From 180 columns a side panel shows the selected event, then its provider's own tab for the event's commit, as
+- From 180 columns a side panel shows the selected event in its provider's own tab for the event's commit, as
   that provider's view shows it: runs with jobs, steps and annotations, builds with stages and tests, resources,
-  findings. **Info** beside it shows the commit as the graph's Info tab does; a commit has Info only. The keys work
+  findings. The event's own run, build or resource is open, its name in the Dashboard's color, and `→` puts the
+  cursor on it. **Info** beside it shows the commit as the graph's Info tab does; a commit has Info only. The keys work
   as there: `↑`/`↓`, `enter` (a run, a log), `←`/`→` between the tabs. Below 180
   columns, `enter` opens the same as a dialog, where `s` shows the event in its provider's view.
 - **Menu → Providers → Dashboard** turns it off (Enabled), and sets how far back it reads (Time window, 7 days by

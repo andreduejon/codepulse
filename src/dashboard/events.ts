@@ -39,6 +39,8 @@ export interface DashboardEvent {
   sha: string;
   /** Its page (a run, a build), for `o`. */
   url?: string;
+  /** Its entry in its provider's tab (a run's, a build's id): the details open and mark it. */
+  entry?: string;
   /** What the side panel shows beside the commit. */
   facts?: DashboardFact[];
 }
@@ -98,7 +100,7 @@ function runEvents<T extends { id: string | number; updatedAt: string; headSha: 
     const time = timeOf(run.updatedAt);
     const id = `${app}:${source}:${run.id}`;
     if (time === null || events.has(id)) continue;
-    events.set(id, { id, app, source, time, ...describe(run), sha: run.headSha });
+    events.set(id, { id, app, source, time, ...describe(run), sha: run.headSha, entry: String(run.id) });
   }
   return [...events.values()];
 }
@@ -174,6 +176,7 @@ export function openShiftEvents(app: string, entries: readonly OpenShiftCacheEnt
     events.set(id, {
       id,
       app,
+      entry: build.id,
       source: "openshift",
       time,
       status: build.status,

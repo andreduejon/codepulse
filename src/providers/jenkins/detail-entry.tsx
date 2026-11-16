@@ -32,6 +32,8 @@ export const jenkinsDetail = detailEntry({
       memory={scopedMemory(props.context.memory, "jenkins")}
       onOpenBuild={props.source.onOpenBuild}
       onOpenTestFailure={props.source.onOpenTestFailure}
+      targetRunId={props.context.target}
+      targetColor={props.context.targetColor}
     />
   ),
   legend: (source, sha) => ((source.getCommitData(sha)?.runs.length ?? 0) > 0 ? JENKINS_LEGEND : null),

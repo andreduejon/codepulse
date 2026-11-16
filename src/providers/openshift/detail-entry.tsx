@@ -32,6 +32,8 @@ export const openshiftDetail = detailEntry({
       consoleUrl={props.source.consoleUrl}
       memory={scopedMemory(props.context.memory, "openshift")}
       onOpenResource={props.source.onOpenResource}
+      targetResourceId={props.context.target}
+      targetColor={props.context.targetColor}
       unavailableReason={props.context.unavailable("openshift", props.source.status)}
       liveUnavailable={
         props.source.status?.kind === "error" && props.source.status.message === BANNER.openshift.tokenExpired

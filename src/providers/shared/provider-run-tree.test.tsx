@@ -1,5 +1,5 @@
 import { expect, mock, spyOn, test } from "bun:test";
-import type { KeyEvent } from "@opentui/core";
+import { type KeyEvent, RGBA } from "@opentui/core";
 import { testRender } from "@opentui/solid";
 import { createSignal, Show } from "solid-js";
 import { createDetailMemory, type DetailMemory } from "../../components/detail-memory";
@@ -668,5 +668,60 @@ test("a run whose jobs were still loading when the tree went away loads them whe
     expect(t.captureCharFrame()).toContain("compile");
   } finally {
     t.renderer.destroy();
+  }
+});
+
+test("the dashboard's event: its run opens at once and is marked, and the tab's focus starts on it", async () => {
+  const runs: ProviderTreeRun<null>[] = [
+    { ...run("completed", "failure", "2026-01-01T00:03:00Z"), id: "failed", label: "Lint", runNumber: 9 },
+    { ...run("completed", "success", "2026-01-01T00:02:00Z"), id: "event", label: "Deploy", runNumber: 8 },
+  ];
+  const [cursor, setCursor] = createSignal(0);
+  const [focused, setFocused] = createSignal(false);
+  const fetchJobs = mock(async () => ({ jobs: [job("completed", "success", "completed")], error: null }));
+  const themeState = createThemeState();
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={themeState}>
+        <box width={70} flexDirection="column">
+          <ProviderRunTree
+            runs={runs}
+            detailCursorIndex={cursor}
+            detailFocused={focused}
+            setDetailCursorAction={() => {}}
+            setDetailCursorIndex={setCursor}
+            fetchJobsForRun={fetchJobs}
+            debugSource="GitHub"
+            dataKey="sha"
+            summaryLabel="total workflow runs"
+            targetRunId="event"
+            targetColor="#00ff00"
+          />
+        </box>
+      </ThemeContext.Provider>
+    ),
+    { width: 70, height: 20 },
+  );
+  try {
+    await setup.renderOnce();
+    await Bun.sleep(0);
+    await setup.renderOnce();
+    const frame = setup.captureCharFrame();
+    // Open before any focus, the other run (even a failed one) stays closed.
+    expect(frame).toContain("▾ Deploy #8");
+    expect(frame).toContain("▸ Lint #9");
+    expect(fetchJobs).toHaveBeenCalledTimes(1);
+    const lines = frame.split("\n");
+    const y = lines.findIndex(line => line.includes("Deploy #8"));
+    const label = setup.captureSpans().lines[y]?.spans.find(span => span.text.includes("Deploy"));
+    expect(label?.fg).toEqual(RGBA.fromHex("#00ff00"));
+    // Focus lands on the event's run, and failure-first leaves the other run closed.
+    setFocused(true);
+    await setup.renderOnce();
+    // Lint is item 0 (no Reload row here), Deploy item 1.
+    expect(cursor()).toBe(1);
+    expect(setup.captureCharFrame()).toContain("▸ Lint #9");
+  } finally {
+    setup.renderer.destroy();
   }
 });

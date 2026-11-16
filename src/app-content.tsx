@@ -79,7 +79,7 @@ import { useDataLoader } from "./hooks/use-data-loader";
 import { useDetailLoader } from "./hooks/use-detail-loader";
 import { type CommandBarMode, type DialogId, useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
 import { usePathFilter } from "./hooks/use-path-filter";
-import { providerAccent } from "./providers/colors";
+import { providerAccent, providerColors } from "./providers/colors";
 import { detailEntryFor, type ProviderDetailSources } from "./providers/detail-entries";
 import { githubJobLogTarget } from "./providers/github-actions/log-target";
 import type { GitHubJob, GitHubWorkflowRun } from "./providers/github-actions/types";
@@ -675,6 +675,9 @@ export function AppContent(props: Readonly<AppContentProps>) {
           mouseEnabled={dialog() == null || dialog() === "dashboard-event"}
           onMouseFocus={() => focusDashboardTab(tab)}
           memory={providerDetailProps.memory}
+          // The event's own run, build or resource: open, marked in the dashboard's color like its row.
+          target={event.entry}
+          targetColor={providerColors(themeState.theme(), "dashboard").bg}
         />
       ),
   });

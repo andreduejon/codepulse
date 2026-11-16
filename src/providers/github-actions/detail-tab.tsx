@@ -69,6 +69,9 @@ export interface ActionsDetailTabProps {
   setDetailCursorShortcut?: (shortcut: RowShortcut | null) => void;
   /** Called when Enter is pressed on a job (or an annotation, with its message to search) — opens the log dialog. */
   onOpenJobLog?: (job: GitHubJob, run: GitHubWorkflowRun, jobs?: GitHubJob[], search?: string) => void;
+  /** The run the tab is shown for (the dashboard's event), and its mark's color. */
+  targetRunId?: string;
+  targetColor?: string;
 }
 
 // ── Top-level component ───────────────────────────────────────────────────
@@ -129,6 +132,8 @@ export function ActionsDetailTab(props: Readonly<ActionsDetailTabProps>) {
       }}
       debugSource="GitHub"
       dataKey={props.sha}
+      targetRunId={props.targetRunId}
+      targetColor={props.targetColor}
       memory={props.memory}
       onOpenJobAction={(job, run, jobs) => props.onOpenJobLog?.(job.raw, run.raw, jobs?.map(entry => entry.raw) ?? [])}
       onOpenNote={(note, job, run, jobs) =>

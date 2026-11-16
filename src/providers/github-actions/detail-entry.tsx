@@ -29,6 +29,8 @@ export const githubDetail = detailEntry({
       {...props.context.cursor}
       memory={scopedMemory(props.context.memory, "github-actions")}
       onOpenJobLog={props.source.onOpenJobLog}
+      targetRunId={props.context.target}
+      targetColor={props.context.targetColor}
     />
   ),
   legend: (source, sha) => ((source.getCommitData(sha)?.runs.length ?? 0) > 0 ? GITHUB_LEGEND : null),

@@ -112,6 +112,9 @@ interface OpenedMemory {
   autoExpandedSignature: string | null;
   /** Each run's last seen status: an open run whose status moved loads its jobs again. */
   runSignatures: Map<string, string>;
+  /** The target run opened on its own, and the one the focus was put on (`commit\0run`): once each. */
+  targetOpenedKey: string | null;
+  targetFocusedKey: string | null;
 }
 
 const newOpenedMemory = (): OpenedMemory => ({
@@ -119,6 +122,8 @@ const newOpenedMemory = (): OpenedMemory => ({
   failureOpenedKey: null,
   autoExpandedSignature: null,
   runSignatures: new Map(),
+  targetOpenedKey: null,
+  targetFocusedKey: null,
 });
 
 type FlatItem<TRaw, TJobRaw> =
@@ -185,6 +190,12 @@ export interface ProviderRunTreeProps<TRaw, TJobRaw> {
   showSummary?: boolean;
   /** Open the first failed run when the tab gets focus (default true). */
   openFailedRun?: boolean;
+  /**
+   * The run the tree is shown for (the dashboard's event): it opens at once, its name takes `targetColor`, and the
+   * tab's focus starts on it. Failure-first then opens nothing else.
+   */
+  targetRunId?: string;
+  targetColor?: string;
 }
 
 export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreeProps<TRaw, TJobRaw>>) {
@@ -488,8 +499,29 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
   // Failure first: entering a commit's tab (detail focus) opens its first failed run once, unless the user already
   // opened one. Only on focus, so browsing commits in the graph never fetches jobs.
 
+  // The dashboard's event: its run opens once (closing it sticks), and the focus starts on it once.
   createEffect(() => {
-    if (props.openFailedRun === false || !props.detailFocused() || props.runs.length === 0) return;
+    const id = props.targetRunId;
+    const run = id ? props.runs.find(candidate => candidate.id === id) : undefined;
+    if (!id || !run) return;
+    const key = `${props.dataKey}\u0000${id}`;
+    if (opened.targetOpenedKey === key) return;
+    opened.targetOpenedKey = key;
+    if (!untrack(expandedRuns).has(id)) untrack(() => toggleRun(run));
+  });
+  createEffect(() => {
+    const id = props.targetRunId;
+    if (!id || !props.detailFocused()) return;
+    const key = `${props.dataKey}\u0000${id}`;
+    if (opened.targetFocusedKey === key) return;
+    const index = untrack(flatItems).findIndex(item => item.kind === "run" && item.run.id === id);
+    if (index < 0) return;
+    opened.targetFocusedKey = key;
+    props.setDetailCursorIndex(index);
+  });
+
+  createEffect(() => {
+    if (props.targetRunId || props.openFailedRun === false || !props.detailFocused() || props.runs.length === 0) return;
     const key = props.dataKey;
     if (opened.failureOpenedKey === key) return;
     opened.failureOpenedKey = key;
@@ -617,7 +649,12 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
           const relTime = () => formatRelativeDate(run.updatedAt);
           const runTreePrefix = () => (runIndexFn() === props.runs.length - 1 ? "└─ " : "├─ ");
           const runIndicatorColor = () => (isCursored() ? t().accent : t().foregroundMuted);
-          const runTextColor = () => (isCursored() ? t().accent : t().foreground);
+          const runTextColor = () =>
+            isCursored()
+              ? t().accent
+              : run.id === props.targetRunId && props.targetColor
+                ? props.targetColor
+                : t().foreground;
           const runIsLast = () => runIndexFn() === props.runs.length - 1;
           const placeholderTreeLead = () => (runIsLast() ? "   " : "│  ");
 

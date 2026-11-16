@@ -177,14 +177,14 @@ export function DashboardDetail(
                   <text flexGrow={1} fg={t().foreground} wrapMode="none">
                     {`Show in ${providerDisplayName(event().source)}`}
                   </text>
-                  <text flexShrink={0} fg={t().foregroundMuted} wrapMode="none">
-                    {event().sha.slice(0, 7)}
-                  </text>
                 </box>
-                <box height={1} flexShrink={0} />
+                {/* Without a tab, what happened follows; a tab's own first row (Reload commit) comes right after. */}
+                <Show when={!props.renderTab}>
+                  <box height={1} flexShrink={0} />
+                </Show>
               </Show>
-              {/* What happened; a commit's subject is in its Info tab. */}
-              <Show when={!props.renderTab || event().source !== "git"}>
+              {/* What happened, where no tab shows it: the tab opens and marks the event's own entry instead. */}
+              <Show when={!props.renderTab}>
                 <DashboardEventText event={event()} wrap bold />
                 <box height={1} flexShrink={0} />
               </Show>

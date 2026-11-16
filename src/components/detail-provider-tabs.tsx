@@ -21,6 +21,9 @@ export function ProviderTab(
     contentWidth?: number;
     /** Tab state while a tab is not shown (owned by the app, which outlives both layouts). */
     memory: DetailMemory;
+    /** The entry to open and mark (the dashboard's event), and its color. */
+    target?: string;
+    targetColor?: string;
   }>,
 ) {
   const { state, actions } = useAppState();
@@ -54,6 +57,12 @@ export function ProviderTab(
     },
     get memory() {
       return props.memory;
+    },
+    get target() {
+      return props.target;
+    },
+    get targetColor() {
+      return props.targetColor;
     },
   };
   return <>{detailEntryFor(props.tab)?.render(props.providers, context)}</>;

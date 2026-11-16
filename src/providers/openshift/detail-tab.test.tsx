@@ -36,6 +36,9 @@ export async function renderOpenShiftTab(
     consoleUrl?: string;
     width?: number;
     memory?: DetailMemory;
+    /** The dashboard's event: a build to mark, and its color. */
+    targetResourceId?: string;
+    targetColor?: string;
   }> = {},
 ) {
   const data: OpenShiftCommitData = {
@@ -83,6 +86,8 @@ export async function renderOpenShiftTab(
               setDetailCursorAction={() => {}}
               setDetailCursorIndex={setCursor}
               setDetailCursorShortcut={shortcut}
+              targetResourceId={opts.targetResourceId}
+              targetColor={opts.targetColor}
             />
           </Show>
         </box>
@@ -245,5 +250,30 @@ test("a namespace closed by the user stays closed, with the cursor on it, when t
     expect(t.cursor()).toBe(namespace);
   } finally {
     t.renderer.destroy();
+  }
+});
+
+test("the dashboard's event: its build is marked in the given color, and the tab's focus starts on it", async () => {
+  const tab = await renderOpenShiftTab({
+    builds: [resource("Build", "shop-api-42"), resource("Build", "shop-api-43")],
+    targetResourceId: "Build/shop-api-43",
+    targetColor: "#00ff00",
+  });
+  try {
+    const lines = tab.captureCharFrame().split("\n");
+    const y = lines.findIndex(line => line.includes("shop-api-43"));
+    const span = (row: number, text: string) =>
+      tab.captureSpans().lines[row]?.spans.find(candidate => candidate.text.includes(text));
+    // The tab is focused here: the cursor starts on the event's build, which shows the cursor's color.
+    expect(tab.cursor()).toBeGreaterThan(0);
+    expect(span(y, "shop-api-43")?.fg).toEqual(RGBA.fromHex(tab.theme.accent));
+    // The cursor elsewhere: the event's build keeps its mark, the other build its usual color.
+    tab.setCursor(0);
+    await tab.flush();
+    expect(span(y, "shop-api-43")?.fg).toEqual(RGBA.fromHex("#00ff00"));
+    const other = lines.findIndex(line => line.includes("shop-api-42"));
+    expect(span(other, "shop-api-42")?.fg).toEqual(RGBA.fromHex(tab.theme.foreground));
+  } finally {
+    tab.renderer.destroy();
   }
 });

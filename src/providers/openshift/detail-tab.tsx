@@ -33,6 +33,9 @@ export interface OpenShiftDetailTabProps {
   setDetailCursorShortcut?: (shortcut: RowShortcut | null) => void;
   /** Web console URL from the settings; `o` opens the namespace or resource there when it is set. */
   consoleUrl?: () => string;
+  /** The resource the tab is shown for (the dashboard's event: a build), marked, with the tab's focus starting on it. */
+  targetResourceId?: string;
+  targetColor?: string;
 }
 
 type NamespaceData = OpenShiftCommitData["namespaces"][number];
@@ -259,11 +262,29 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
     else props.setDetailCursorAction("open");
   });
 
+  // The dashboard's event: the tab's focus starts on its build, once per commit.
+  const targetFocus = { key: null as string | null };
+  createEffect(() => {
+    const id = props.targetResourceId;
+    if (!id || !props.detailFocused()) return;
+    const key = `${props.sha}\u0000${id}`;
+    if (targetFocus.key === key) return;
+    const index = untrack(flatItems).findIndex(item => item.kind === "resource" && item.resource.id === id);
+    if (index < 0) return;
+    targetFocus.key = key;
+    props.setDetailCursorIndex(index);
+  });
+
   const renderResourceRow = (resource: OpenShiftResource, lead: string, connector: string) => {
     const idx = () => flatIndexForResource(resource);
     const isCursored = () => props.detailFocused() && props.detailCursorIndex() === idx();
     const color = () => openShiftStatusColor(t(), resource.status);
-    const textColor = () => (isCursored() ? t().accent : t().foreground);
+    const textColor = () =>
+      isCursored()
+        ? t().accent
+        : resource.id === props.targetResourceId && props.targetColor
+          ? props.targetColor
+          : t().foreground;
     return (
       <box
         {...mouseRow(`resource:${resource.id}`, idx)}

@@ -38,6 +38,9 @@ export interface JenkinsDetailTabProps {
   onOpenBuild?: (run: JenkinsRun, pipeline: JenkinsJob, entry: number) => void;
   /** Enter on a failed test: its error and stack in the log viewer, ←/→ to the other failed tests. */
   onOpenTestFailure?: (run: JenkinsRun, failed: JenkinsFailedTest[], index: number) => void;
+  /** The build the tab is shown for (the dashboard's event), and its mark's color. */
+  targetRunId?: string;
+  targetColor?: string;
 }
 
 /**
@@ -101,6 +104,8 @@ export function JenkinsDetailTab(props: Readonly<JenkinsDetailTabProps>) {
       }}
       debugSource="Jenkins"
       dataKey={props.sha}
+      targetRunId={props.targetRunId}
+      targetColor={props.targetColor}
       memory={props.memory}
       onOpenJobAction={(job, run) => {
         const row = job.raw;
