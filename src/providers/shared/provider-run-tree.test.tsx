@@ -729,7 +729,7 @@ test("the dashboard's event: its run opens at once and is marked, and the tab's 
 test("browsing past an event loads nothing: its run opens once the selection stays on it, or at once with the focus", async () => {
   const runs: ProviderTreeRun<null>[] = [{ ...run("completed", "success", date), id: "event", label: "Deploy" }];
   const [shown, setShown] = createSignal(true);
-  const [focused, setFocused] = createSignal(false);
+  const [focused] = createSignal(false);
   const fetchJobs = mock(async () => ({ jobs: [job("completed", "success", "completed")], error: null }));
   const setup = await testRender(
     () => (
