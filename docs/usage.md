@@ -155,7 +155,8 @@ Local auto-refresh reloads repository state from disk. Remote fetching stays
 manual by default (`f` / `:fetch`). Enable auto-fetch separately in repository
 configuration.
 
-A fetch moves the remote branches (`origin/main`), never your local ones.
+By default a fetch moves only the remote branches (`origin/main`), not your local
+ones (Auto fast-forward, below, changes that).
 `ctrl+f` / `:pull` fetches and then fast-forwards each local branch that is only
 behind its remote branch, like `git pull --ff-only`, and says what moved. The
 checked-out branch moves with its files only while no tracked file has changes.
