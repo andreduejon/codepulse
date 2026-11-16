@@ -17,6 +17,9 @@ interface FooterHint extends RankedHint {
 const SPINNER_FRAMES = ["\u28FE", "\u28FD", "\u28FB", "\u28BF", "\u287F", "\u283F", "\u28EF", "\u28F7"];
 const SPINNER_FRAME_MS = 120;
 
+/** How long work runs before the footer shows it as busy. */
+const BUSY_SHOW_DELAY_MS = 500;
+
 export default function Footer(
   props: Readonly<{
     commandBarMode: () => CommandBarMode;
@@ -30,6 +33,8 @@ export default function Footer(
     dashboard?: DashboardState;
     /** The dashboard's `r`: fetch its providers again and read its events (only reading without it). */
     onDashboardRefresh?: () => void;
+    /** How long work runs before the spinner and its label show (tests: 0). */
+    busyDelayMs?: number;
   }>,
 ) {
   const t = useT();
@@ -66,6 +71,27 @@ export default function Footer(
     providerStatus().kind === "loading" ||
     activities().length > 0;
 
+  /**
+   * Shown once something has been busy for a moment: background work that ends sooner (an automatic refresh, a quick
+   * read) never makes the footer blink. Gone as soon as nothing is busy. A memo, so the wait restarts only when busy
+   * flips, not each time its label changes.
+   */
+  const isBusy = createMemo(busy);
+  const [shownBusy, setShownBusy] = createSignal(false);
+  createEffect(() => {
+    if (!isBusy()) {
+      setShownBusy(false);
+      return;
+    }
+    const delay = props.busyDelayMs ?? BUSY_SHOW_DELAY_MS;
+    if (delay <= 0) {
+      setShownBusy(true);
+      return;
+    }
+    const timer = setTimeout(() => setShownBusy(true), delay);
+    onCleanup(() => clearTimeout(timer));
+  });
+
   const [labelWidth, setLabelWidth] = createSignal(Number.POSITIVE_INFINITY);
   const loadingLabel = () => {
     const git = gitActivity();
@@ -83,7 +109,7 @@ export default function Footer(
   let spinnerTimer: ReturnType<typeof setInterval> | null = null;
 
   createEffect(() => {
-    if (busy()) {
+    if (shownBusy()) {
       setFrame(0);
       if (!spinnerTimer) {
         spinnerTimer = setInterval(() => {
@@ -104,7 +130,7 @@ export default function Footer(
 
   // Always render the spinner element to avoid layout shift;
   // show the braille char when loading, empty space when idle.
-  const spinnerChar = () => (busy() ? SPINNER_FRAMES[frame()] : " ");
+  const spinnerChar = () => (shownBusy() ? SPINNER_FRAMES[frame()] : " ");
   const spinnerColor = () => t().accent;
 
   const enterAction = () => {
@@ -230,7 +256,7 @@ export default function Footer(
           }}
         >
           <text wrapMode="none" fg={t().foregroundMuted}>
-            {endTruncate(loadingLabel(), Math.max(0, labelWidth() - 1))}
+            {shownBusy() ? endTruncate(loadingLabel(), Math.max(0, labelWidth() - 1)) : ""}
           </text>
         </box>
 

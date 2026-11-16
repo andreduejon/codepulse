@@ -5,11 +5,11 @@ import { testRender, useKeyboard } from "@opentui/solid";
 import { createSignal } from "solid-js";
 import { AppStateContext, createAppState } from "../context/state";
 import { createThemeState, ThemeContext } from "../context/theme";
+import type { DashboardState } from "../dashboard/use-dashboard";
 import { buildGraph } from "../git/graph";
 import type { Commit } from "../git/types";
 import { type GraphKeyOptions, openGraphDetails } from "../hooks/handle-graph-keys";
 import { type CommandBarMode, type DialogId, useKeyboardNavigation } from "../hooks/use-keyboard-navigation";
-import type { DashboardState } from "../dashboard/use-dashboard";
 import type { DetailNavRef } from "./detail-types";
 import Footer from "./footer";
 
@@ -98,6 +98,7 @@ async function renderFooter(width = 100) {
           <AppStateContext.Provider value={app}>
             <box width="100%" height={2} flexDirection="column">
               <Footer
+                busyDelayMs={0}
                 commandBarMode={commandBarMode}
                 filterActive={!!(app.state.searchQuery() || app.state.pathFilter() || app.state.viewingBranch())}
                 compact={layoutMode() !== "normal"}
@@ -731,6 +732,44 @@ test("on the dashboard, a click on r refresh does what r does: the refresh it is
     await setup.mockMouse.click(lines[y]?.indexOf("r refresh") ?? 0, y, MouseButtons.LEFT);
     await setup.renderOnce();
     expect(refresh).toHaveBeenCalledTimes(1);
+  } finally {
+    setup.renderer.destroy();
+  }
+});
+
+test("short work never shows: the spinner and label appear once something has been busy for half a second", async () => {
+  const app = createAppState();
+  app.actions.setLoading(false);
+  const setup = await testRender(
+    () => (
+      <AppStateContext.Provider value={app}>
+        <ThemeContext.Provider value={createThemeState()}>
+          <Footer commandBarMode={() => "idle"} busyDelayMs={200} />
+        </ThemeContext.Provider>
+      </AppStateContext.Provider>
+    ),
+    { width: 100, height: 3 },
+  );
+  const footer = () => setup.captureCharFrame().split("\n")[0] ?? "";
+  try {
+    await setup.renderOnce();
+    // A fetch done in 50 ms: nothing blinks.
+    app.actions.setFetching(true);
+    await Bun.sleep(50);
+    await setup.renderOnce();
+    expect(footer()).not.toContain("fetching");
+    app.actions.setFetching(false);
+    await Bun.sleep(250);
+    await setup.renderOnce();
+    expect(footer()).not.toContain("fetching");
+    // One that takes longer: shown after the delay, gone as soon as it ends.
+    app.actions.setFetching(true);
+    await Bun.sleep(250);
+    await setup.renderOnce();
+    expect(footer()).toContain("Git fetching");
+    app.actions.setFetching(false);
+    await setup.renderOnce();
+    expect(footer()).not.toContain("fetching");
   } finally {
     setup.renderer.destroy();
   }

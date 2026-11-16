@@ -72,6 +72,9 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- The footer's spinner and its label (`GitHub fetching`, `Snyk scanning`) show once work has run for half a second, so
+  quick background refreshes no longer make the footer blink. The Dashboard says `Dashboard reading` only while it reads
+  an app for the first time; reading it again keeps its events and stays quiet.
 - Snyk's severity legend, below the Snyk tab and in the Dashboard's details, names each level beside its triangle (`▲
   critical  ▲ high  ▲ medium  ▲ low`) instead of four triangles and `severity`.
 - OpenShift lists its builds once when a repository loads, like GitHub and Jenkins already fetch their runs, and Snyk

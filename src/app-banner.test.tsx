@@ -101,7 +101,11 @@ test("Git view: a running Snyk scan shows in the footer, a failed one as an erro
       ),
       { width: 110, height: 40 },
     );
-    await setup.flush();
+    // Work shows in the footer once it has run for a moment (a scan does).
+    for (let i = 0; i < 30 && !setup.captureCharFrame().includes("Snyk scanning"); i++) {
+      await Bun.sleep(50);
+      await setup.flush();
+    }
     expect(setup.captureCharFrame()).toContain("Snyk scanning");
     setError("Snyk could not resolve any project.\nrequirements.txt: Something went wrong getting dependencies");
     await setup.flush();
