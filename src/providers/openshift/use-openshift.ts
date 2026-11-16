@@ -1,5 +1,5 @@
 import type { Accessor } from "solid-js";
-import { createEffect, createSignal, onCleanup, untrack } from "solid-js";
+import { createEffect, createMemo, createSignal, onCleanup, untrack } from "solid-js";
 import type { AppActions, AppState } from "../../context/state";
 import {
   providerError,
@@ -627,6 +627,14 @@ export function useOpenShift(opts: {
     }
   }
 
+  /**
+   * The views that show live resources: its own, and the dashboard's details of a build. A memo, so moving between the
+   * two keeps the running list and watches.
+   */
+  const liveShown = createMemo(() => {
+    const view = state.activeProviderView();
+    return view === "openshift" || view === "dashboard";
+  });
   createEffect(() => {
     if (opts.suspended?.()) {
       setLiveState("idle");
@@ -635,7 +643,7 @@ export function useOpenShift(opts: {
     configAccessor();
     state.repoPath();
     watchEpoch();
-    if (state.activeProviderView() !== "openshift" || !isAvailable() || authFrozen) return;
+    if (!liveShown() || !isAvailable() || authFrozen) return;
     const epoch = lifecycle.getEpoch();
     const ctrl = new AbortController();
     void runWatchSession(ctrl.signal, epoch);

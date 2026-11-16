@@ -18,8 +18,8 @@ The graph has two lanes:
 Both lanes show fail, running, pass, and unknown counts. Empty lanes show
 `·······`. In details, a terminal Build the cluster no longer lists (pruned, or
 older than the fetch size) shows from the cache with `(cached)` after its name. Builds and
-ImageStreamTags poll while the OpenShift view is focused. Deployments,
-DeploymentConfigs, and Pods are listed and watched until you leave the view.
+ImageStreamTags poll while the OpenShift view or the Dashboard is shown. Deployments,
+DeploymentConfigs, and Pods are listed and watched until you leave both.
 
 ### Live in namespace
 
