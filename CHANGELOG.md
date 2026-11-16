@@ -15,29 +15,31 @@ All notable changes to this project will be documented in this file.
   count for commits not pushed yet. A knot is the events within an hour; a line from the Commit column to the end starts
   each day, with the weekday and date where the times are. The project row keeps the group's badges, so another app's
   dashboard is a click away, and the event count is where the graph's commit count is. Where the graph's modes are, each
-  provider is a badge in its knot color: a click hides its events (the badge goes grey and the count reads `26 / 30
-  events`), another shows them again. From 180 columns a side panel shows the selected event like the commit details:
-  what happened, the provider's facts (workflow, duration, why a build failed, the scan's total and counts), its commit
-  and the provider's marks; below that, Enter opens them as a dialog, like the graph's details. Each event's mark and
-  legend are the ones its provider's detail tab shows: a scan with findings gets Snyk's `▲` in its worst finding's
-  severity color, then its total and every severity in order (`scan · 4 vulnerabilities · 1 critical · 3 high · 0 medium
-  · 0 low`), each count in its severity's color and muted at zero. A scan without findings lists every severity at zero,
-  like Snyk's `C0 H0 M0 L0`, and a partial scan ends in Snyk's `?` in the warning color. Enter, or **Show in graph** at
-  the top of the details, shows the event's commit in the graph (a click on a row only selects it, like in the graph),
-  and `o` opens a run's or build's page. While the dashboard is shown, each provider fetches and auto refreshes as if
-  its tab were open, without a loading status, and Snyk scans the tips of its Auto scan branches, so the events are
-  fresh without visiting each tab. A failed fetch or scan shows in the message box, worded as on the provider's tab;
-  several share one box (`Errors from GitHub and Jenkins`) with a line each. Closing it with `✕` or `:clear` keeps it
-  closed until an error changes. The dashboard reads Git and the provider caches, and reads them again whenever a
-  provider finishes a fetch or the graph is read again. `r`, `f` and `:reload` fetch every provider that is turned on
-  again, as they do for one provider on its tab, so a build that just finished shows at once. **Menu → Providers →
-  Dashboard** turns it off (Enabled, on by default: without it there is no Dashboard tab and a repository set to start
-  in it starts in Git) and sets how far back it reads (Time window, 1 to 30 days, 7 by default) and how long a knot is
-  (Knot size, 15 minutes to 4 hours, 1 hour by default). The Dashboard tab has its own color in every theme; custom
-  themes set it with `dashboardFg` and `dashboardBg`, which a standalone theme (one without `base`) must have: one
-  without them is skipped, and Debug names the missing colors. The graph's search (`/`), path filter and ancestry don't
-  work on the dashboard, an open search bar closes when it shows, and Esc there leaves the graph's highlights and branch
-  view alone.
+  provider is a badge in its knot color: a click, or `:hide NAME` and `:show NAME` (`:show` alone shows all), hides its
+  events (the badge goes grey and the count reads `26 / 30 events`), another shows them again. From 180 columns a side
+  panel shows the selected event like the commit details: what happened, the provider's facts (workflow, duration, why a
+  build failed, the scan's total and counts), its commit and the provider's marks; below that, Enter opens them as a
+  dialog, like the graph's details. Each event's mark and legend are the ones its provider's detail tab shows: a scan
+  with findings gets Snyk's `▲` in its worst finding's severity color, then its total and every severity in order (`scan
+  · 4 vulnerabilities · 1 critical · 3 high · 0 medium · 0 low`), each count in its severity's color and muted at zero.
+  A scan without findings lists every severity at zero, like Snyk's `C0 H0 M0 L0`, and a partial scan ends in Snyk's `?`
+  in the warning color. Enter, or **Show in graph** at the top of the details, shows the event's commit in the graph (a
+  click on a row only selects it, like in the graph), and `o` opens a run's or build's page. While the dashboard is
+  shown, each provider fetches and auto refreshes as if its tab were open, without a loading status, and Snyk scans the
+  tips of its Auto scan branches, so the events are fresh without visiting each tab. A failed fetch or scan shows in the
+  message box, worded as on the provider's tab; several share one box (`Errors from GitHub and Jenkins`) with a line
+  each. Closing it with `✕` or `:clear` keeps it closed until an error changes. A build or run that is still running
+  shows as running (`● CI #814 running`), from what the providers hold, and turns into how it ended in the same row. The
+  selected row is in the Dashboard's color, as a provider view's is in its own. The dashboard reads Git and the provider
+  caches, and reads them again whenever a provider finishes a fetch or the graph is read again. `r`, `f` and `:reload`
+  fetch every provider that is turned on again, as they do for one provider on its tab, so a build that just finished
+  shows at once. **Menu → Providers → Dashboard** turns it off (Enabled, on by default: without it there is no Dashboard
+  tab and a repository set to start in it starts in Git) and sets how far back it reads (Time window, 1 to 30 days, 7 by
+  default) and how long a knot is (Knot size, 15 minutes to 4 hours, 1 hour by default). The Dashboard tab has its own
+  color in every theme; custom themes set it with `dashboardFg` and `dashboardBg`, which a standalone theme (one without
+  `base`) must have: one without them is skipped, and Debug names the missing colors. The graph's search (`/`), path
+  filter and ancestry don't work on the dashboard, an open search bar closes when it shows, and Esc there leaves the
+  graph's highlights and branch view alone.
 - **Menu → Repository → Preferences → Start in** chooses the view a repository opens in: Git (the default), the
   Dashboard or a provider that is turned on. Saved per repository as `startView`. Another repository of the group opens
   in its own start view the first time it's shown, and where you left it after that. A provider turned off since starts
