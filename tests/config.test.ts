@@ -8,12 +8,14 @@ import {
   getKnownRepoInfos,
   loadConfig,
   mergeOptions,
+  reportConfigWarnings,
   resolveConfigInfo,
   startViewFor,
 } from "../src/config";
 import { backfillRepoConfig, writeConfig } from "../src/config-write";
 import { DEFAULT_MAX_COUNT } from "../src/constants";
 import { DEFAULT_AUTO_REFRESH_INTERVAL } from "../src/context/state";
+import { clearDebugEvents, getDebugEvents } from "../src/debug/events";
 import { PROVIDER_CACHE_LIMIT_OPTIONS } from "../src/providers/shared/auto-refresh";
 
 const TEST_ROOT = join(tmpdir(), `codepulse-config-test-${Date.now()}`);
@@ -1093,5 +1095,20 @@ describe("auto fast-forward", () => {
     const { config, warnings } = loadConfig(repoPath, invalid);
     expect(config.autoFastForward).toBeUndefined();
     expect(warnings).toEqual([expect.stringContaining('"autoFastForward" must be a boolean')]);
+  });
+});
+
+describe("config warnings", () => {
+  test("go to Debug, each once: the config is read again on every reload and repository switch", () => {
+    clearDebugEvents();
+    const repoPath = "/tmp/repo";
+    const configPath = makeRepoConfig("warnings-to-debug", repoPath, { dashboard: { enabled: "yes" } });
+    const { warnings } = loadConfig(repoPath, configPath);
+    expect(warnings).toHaveLength(1);
+    reportConfigWarnings(warnings);
+    reportConfigWarnings(loadConfig(repoPath, configPath).warnings);
+    expect(getDebugEvents().map(event => event.message)).toEqual(warnings);
+    expect(getDebugEvents()[0]?.source).toBe("error");
+    clearDebugEvents();
   });
 });

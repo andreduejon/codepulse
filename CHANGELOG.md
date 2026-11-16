@@ -80,6 +80,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- A config value Codepulse ignores (`"dashboard.enabled" must be a boolean, ignoring`) now shows in Debug, once per run.
+  Before, the warning was dropped and the value silently ignored.
 - Switching to another app of the group no longer lets Snyk scan the previous app's branch tips in the new one (`Unable
   to resolve commit SHA`): the switch changes the repository and its branches in one update.
 - **Menu → Repository → Actions → Fetch remote** says `just now` instead of a negative age when the last fetch time is

@@ -8,18 +8,19 @@ import * as configWrite from "./config-write";
 import { type AppActions, providerError, providerIdle } from "./context/state";
 import { createThemeState } from "./context/theme";
 import * as dashboardLoad from "./dashboard/load";
+import { clearDebugEvents, getDebugEvents } from "./debug/events";
 import * as dataLoader from "./hooks/use-data-loader";
 import * as detailLoader from "./hooks/use-detail-loader";
 
 const repo = resolve("/repo/dashboard-errors");
 
 /** Codepulse on the dashboard of one app, without Git or providers: the test sets the providers' statuses. */
-async function launch(repoConfig: config.CodepulseConfig = {}) {
+async function launch(repoConfig: config.CodepulseConfig = {}, warnings: string[] = []) {
   let actions: AppActions | undefined;
   const spies = [
     spyOn(configWrite, "backfillRepoConfig").mockImplementation(() => {}),
     spyOn(configWrite, "writeConfig").mockImplementation(() => true),
-    spyOn(config, "loadConfig").mockImplementation(() => ({ config: repoConfig, warnings: [] })),
+    spyOn(config, "loadConfig").mockImplementation(() => ({ config: repoConfig, warnings })),
     spyOn(config, "getRepoDisplayConfig").mockImplementation(() => ({ group: "shop", appName: "first-app" })),
     spyOn(config, "getKnownRepoInfos").mockReturnValue([{ path: repo, group: "shop", appName: "first-app" }]),
     spyOn(detailLoader, "useDetailLoader").mockImplementation(() => {}),
@@ -147,5 +148,22 @@ test("turning the dashboard off in the menu while it is shown goes back to Git",
     );
   } finally {
     await dispose();
+  }
+});
+
+test("the config's warnings show in Debug", async () => {
+  clearDebugEvents();
+  const warning = '/home/me/.config/codepulse/config.json: "dashboard.enabled" must be a boolean, ignoring';
+  const { setup, dispose } = await launch({}, [warning]);
+  try {
+    expect(getDebugEvents().map(event => event.message)).toContain(warning);
+    setup.mockInput.pressKey(":");
+    await setup.mockInput.typeText("debug");
+    setup.mockInput.pressEnter();
+    await setup.flush();
+    expect(setup.captureCharFrame()).toContain('"dashboard.enabled" must be a boolean');
+  } finally {
+    await dispose();
+    clearDebugEvents();
   }
 });

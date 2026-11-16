@@ -32,6 +32,7 @@ import {
   getRepoDisplayConfig,
   loadConfig,
   mergeOptions,
+  reportConfigWarnings,
   startViewFor,
 } from "./config";
 import { backfillRepoConfig, writeConfig } from "./config-write";
@@ -106,7 +107,13 @@ export function AppContent(props: Readonly<AppContentProps>) {
   const [jenkinsConfig, setJenkinsConfig] = createSignal(jenkinsSettings(props.initialJenkinsConfig));
   const [openShiftConfig, setOpenShiftConfig] = createSignal(openShiftSettings(props.initialOpenShiftConfig));
   const [snykConfig, setSnykConfig] = createSignal<SnykProviderConfig>(snykSettings(props.initialSnykConfig));
-  const startConfig = loadConfig(activeRepoPath()).config;
+  /** A repository's config; what it ignores goes to Debug. */
+  const readConfig = (path: string) => {
+    const { config, warnings } = loadConfig(path);
+    reportConfigWarnings(warnings);
+    return config;
+  };
+  const startConfig = readConfig(activeRepoPath());
   const [dashboardConfig, setDashboardConfig] = createSignal(dashboardSettings(startConfig.dashboard));
   /** The view this repository opens in, as Menu → Providers → Start in shows it. */
   const [startView, setStartView] = createSignal<ProviderView>(startConfig.startView ?? "git");
@@ -125,7 +132,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
   const reloadRuntimeConfig = () => {
     const path = activeRepoPath();
     backfillRepoConfig(path);
-    const { config } = loadConfig(path);
+    const config = readConfig(path);
     setGithubConfig(githubSettings(config.providers?.github));
     setJenkinsConfig(jenkinsSettings(config.providers?.jenkins));
     setOpenShiftConfig(openShiftSettings(config.providers?.openshift));
@@ -475,7 +482,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     resetTransientRepoState();
     setRepoSelectorVisible(false);
     // Its own Preferences, before its graph loads: they are per repository, like at startup.
-    const { config: nextConfig } = loadConfig(nextPath);
+    const nextConfig = readConfig(nextPath);
     const nextOptions = mergeOptions({ repoPath: nextPath }, nextConfig);
     actions.setAutoFetchInterval(nextOptions.autoFetchInterval);
     actions.setAutoRefreshInterval(nextOptions.autoRefreshInterval);

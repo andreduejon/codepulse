@@ -5,12 +5,12 @@ import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL } from "./co
 import {
   DASHBOARD_KNOT_MINUTES,
   DASHBOARD_WINDOW_DAYS,
-  DEFAULT_DASHBOARD_SETTINGS,
   type DashboardKnotMinutes,
   type DashboardWindowDays,
+  DEFAULT_DASHBOARD_SETTINGS,
 } from "./dashboard/settings";
+import { addDebugEvent } from "./debug/events";
 import { normalizeGitHubHost } from "./providers/github-actions/api";
-import { PROVIDER_ORDER, type ProviderView } from "./providers/provider";
 import { isValidJenkinsJobUrl, JENKINS_JOB_URL_MAX_LENGTH } from "./providers/jenkins/validation";
 import {
   isValidOpenShiftNamespace,
@@ -19,6 +19,7 @@ import {
   OPENSHIFT_SERVER_URL_MAX_LENGTH,
   OPENSHIFT_TEXT_MAX_LENGTH,
 } from "./providers/openshift/validation";
+import { PROVIDER_ORDER, type ProviderView } from "./providers/provider";
 import {
   isProviderAutoRefreshSeconds,
   isProviderCacheLimit,
@@ -278,6 +279,18 @@ export function getKnownRepoInfos(configPath?: string): KnownRepoInfo[] {
  * @param repoPath - The repository directory (used to look up the repo entry).
  * @param configPath - Override the global config path (used by tests).
  */
+/** The warnings already in Debug: the config is read again on every reload and repository switch. */
+const reportedConfigWarnings = new Set<string>();
+
+/** Puts the config's warnings (a value it ignores, and why) in Debug, each once per run. */
+export function reportConfigWarnings(warnings: readonly string[]): void {
+  for (const warning of warnings) {
+    if (reportedConfigWarnings.has(warning)) continue;
+    reportedConfigWarnings.add(warning);
+    addDebugEvent({ source: "error", status: "warning", message: warning });
+  }
+}
+
 export function loadConfig(repoPath: string, configPath?: string): { config: CodepulseConfig; warnings: string[] } {
   const warnings: string[] = [];
   const result = readRawConfig(configPath, warnings);

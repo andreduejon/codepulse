@@ -142,6 +142,8 @@ Settings are saved per repository. Menu → Repository → Configuration shows t
 full config path. Click it or press Enter to copy. Windows AppData locations
 fall back to the corresponding folders under your home if environment variables
 are absent. Earlier experimental Windows `.config`/`.cache` files are not migrated.
+A value Codepulse can't use is ignored, and Debug (`:debug`) names it and why, as
+it does for a custom theme it skips.
 
 Local auto-refresh reloads repository state from disk. Remote fetching stays
 manual by default (`f` / `:fetch`). Enable auto-fetch separately in repository
