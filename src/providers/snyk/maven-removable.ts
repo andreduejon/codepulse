@@ -70,6 +70,12 @@ export function compareMavenVersions(a: string, b: string): number {
   return 0;
 }
 
+/**
+ * Whether `compareMavenVersions` orders this version as Maven does. A `-` between two numbers (`1.0-1`, `2.0-20210101`)
+ * starts a list Maven puts below a plain number (`1.0-1` < `1.0.1`), which the comparison above can't tell apart.
+ */
+export const mavenOrderIsClear = (version: string): boolean => !/\d-\d/.test(version);
+
 const REPO_LOCAL = /-Dmaven\.repo\.local=("[^"]*"|\S+)/;
 const repoLocal = (text: string | undefined) => text?.match(REPO_LOCAL)?.[1]?.replace(/^"|"$/g, "") || null;
 
@@ -175,7 +181,13 @@ export async function markRemovableManaged(
       }
       if (parents.size === 0) return;
       const asked = await Promise.all([...parents.values()].map(parent => askedVersion(poms, parent, pkg.name)));
-      if (asked.every(version => version !== null && compareMavenVersions(version, pinned) >= 0)) pkg.removable = true;
+      // Only when the order is sure: a pin kept by doubt is safe, one removed by mistake is not.
+      const later = (version: string | null) =>
+        version !== null &&
+        mavenOrderIsClear(version) &&
+        mavenOrderIsClear(pinned) &&
+        compareMavenVersions(version, pinned) >= 0;
+      if (asked.every(later)) pkg.removable = true;
     }),
   );
 }
