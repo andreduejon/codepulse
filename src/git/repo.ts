@@ -616,7 +616,8 @@ export async function fastForwardBranches(repoPath: string): Promise<FastForward
         result.skipped.push({ branch: branch.name, reason: "local-changes" });
         continue;
       }
-      const merge = await runGit(repoPath, ["merge", "--ff-only", "--quiet", branch.upstream]);
+      // Git overwrites ignored files by default: a file the upstream starts tracking (a local `.env`) must stay.
+      const merge = await runGit(repoPath, ["merge", "--ff-only", "--no-overwrite-ignore", "--quiet", branch.upstream]);
       if (merge.exitCode !== 0) {
         const detail = merge.stderr.trim();
         if (detail) debugError("Git", detail);

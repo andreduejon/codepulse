@@ -115,6 +115,32 @@ test("an untracked file alone does not stop it, unless Git would overwrite it", 
   expect(await readFile(join(local, "new.txt"), "utf-8")).toBe("local copy\n");
 });
 
+test("an ignored local file the remote starts tracking is never overwritten: main stays, and the message names it", async () => {
+  const { root, local, head } = await setup();
+  const other = join(root, "other");
+  // origin ignores .env; the local clone has one with its own secrets.
+  await git(other, "checkout", "-B", "main", "origin/main");
+  await writeFile(join(other, ".gitignore"), ".env\n");
+  await git(other, "add", ".gitignore");
+  await git(other, "commit", "-m", "ignore .env");
+  await git(other, "push", "origin", "main");
+  await git(local, "pull", "--ff-only", "-q");
+  await writeFile(join(local, ".env"), "SECRET=local\n");
+  const before = await head("main");
+  // Then someone commits a .env anyway (git add -f).
+  await writeFile(join(other, ".env"), "SECRET=example\n");
+  await git(other, "add", "-f", ".env");
+  await git(other, "commit", "-m", "track .env");
+  await git(other, "push", "origin", "main");
+  await git(local, "fetch", "-q");
+
+  const result = await fastForwardBranches(local);
+  expect(result.moved).toEqual([]);
+  expect(result.skipped).toEqual([{ branch: "main", reason: "untracked", files: [".env"] }]);
+  expect(await head("main")).toBe(before);
+  expect(await readFile(join(local, ".env"), "utf-8")).toBe("SECRET=local\n");
+});
+
 test("never moves a branch with commits of its own, or one checked out in another worktree", async () => {
   const { root, local, push, head } = await setup();
   await commit(local, "local only");
