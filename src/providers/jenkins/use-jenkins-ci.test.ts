@@ -336,6 +336,8 @@ test("on the dashboard, the refresh asks Jenkins about running builds again, as 
   await jenkins.refresh();
   await settle();
   expect(jenkins.getCommitData(SHA)?.runs[0]?.status).toBe("running");
+  // Listed again, Jenkins has it finished too.
+  graph.mockResolvedValue(result([run()]));
 
   // The dashboard shows Jenkins' events: past the stale time, showing it refreshes the running build.
   const clock = spyOn(Date, "now").mockReturnValue(Date.now() + 120_000);
@@ -348,4 +350,47 @@ test("on the dashboard, the refresh asks Jenkins about running builds again, as 
   }
   expect(running).toHaveBeenCalledTimes(1);
   expect(jenkins.getCommitData(SHA)?.runs[0]).toMatchObject({ status: "completed", conclusion: "success" });
+});
+
+test("automatic refresh finds a build that started after the first fetch, for a commit already asked about", async () => {
+  const { jenkins, actions, graph } = await mountJenkins();
+  graph.mockResolvedValue(result([]));
+  await jenkins.refresh();
+  await settle();
+  expect(jenkins.getCommitData(SHA)?.runs ?? []).toEqual([]);
+
+  graph.mockResolvedValue(result([run({ status: "running", conclusion: null })]));
+  const calls = graph.mock.calls.length;
+  const clock = spyOn(Date, "now").mockReturnValue(Date.now() + 120_000);
+  try {
+    actions.setActiveProviderView("git");
+    actions.setActiveProviderView("dashboard");
+    await settle(() => graph.mock.calls.length > calls);
+  } finally {
+    clock.mockRestore();
+  }
+  await settle(() => (jenkins.getCommitData(SHA)?.runs.length ?? 0) > 0);
+  expect(jenkins.getCommitData(SHA)?.runs[0]?.status).toBe("running");
+  // A refresh of commits already asked about may skip jobs whose last build is unchanged.
+  expect(graph.mock.calls.at(-1)?.[4]?.knownLastBuilds).toBeDefined();
+});
+
+test("commits Jenkins hasn't been asked about, and Reload, skip no job and discover the jobs again", async () => {
+  const { jenkins, actions, graph } = await mountJenkins();
+  // Discovery found a branch job: the next fetches still start from the configured job, to find new branches.
+  graph.mockResolvedValue({ ...result([run()]), jobUrls: [`${JOB_URL}job/main`] });
+  await jenkins.refresh();
+  await settle();
+  expect(graph.mock.calls.at(-1)?.[0]).toEqual([{ url: JOB_URL }]);
+  expect(graph.mock.calls.at(-1)?.[4]?.knownLastBuilds).toBeUndefined();
+
+  // A commit the graph just got (after a fetch): asked about without the last-build shortcut.
+  const NEW = "d".repeat(40);
+  const calls = graph.mock.calls.length;
+  actions.setGraphRows(buildGraph([commit(NEW, SHA), commit(SHA)]));
+  await settle(() => graph.mock.calls.length > calls);
+  const [jobs, , , shas, options] = graph.mock.calls.at(-1) ?? [];
+  expect(shas).toEqual([NEW]);
+  expect(jobs).toEqual([{ url: JOB_URL }]);
+  expect(options?.knownLastBuilds).toBeUndefined();
 });

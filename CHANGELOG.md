@@ -80,6 +80,11 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Jenkins: a build that started after codepulse had read its job now shows without a restart. A build still checking out
+  (no commit yet) or one for a commit the graph got later no longer makes Jenkins skip its job from then on, a branch
+  pushed since is found (each fetch lists the multibranch project's branch jobs again), and Auto refresh looks for new
+  builds too, not only at the ones already running. It asks each job for its last build and lists only the jobs with a
+  new one.
 - Menu → Providers → OpenShift: an empty **Server** or **Console** reads `Enter server URL...` / `Enter console URL...`,
   like the other fields, instead of nothing or `optional, for o`.
 - A config value Codepulse ignores (`"dashboard.enabled" must be a boolean, ignoring`) now shows in Debug, once per run.

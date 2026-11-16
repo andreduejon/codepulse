@@ -382,6 +382,95 @@ describe("fetchJenkinsGraphDataForSHAs", () => {
     }
   });
 
+  test("a last build that is still building is listed again and not remembered: its commit may not be known yet", async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: string[] = [];
+    const sha = "a".repeat(40);
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = decodeURIComponent(String(input));
+      calls.push(url);
+      const body = url.includes("builds[")
+        ? {
+            lastBuild: { number: 12, building: true },
+            builds: [
+              {
+                number: 12,
+                url: "https://jenkins.example.com/job/foo/12/",
+                building: true,
+                timestamp: 1_700_000_000_000,
+                actions: [{ lastBuiltRevision: { SHA1: sha } }],
+              },
+            ],
+          }
+        : { lastBuild: { number: 12, building: true } };
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    }) as typeof fetch;
+    try {
+      const result = await fetchJenkinsGraphDataForSHAs(
+        [{ url: "https://jenkins.example.com/job/foo/" }],
+        "user",
+        "token",
+        [sha],
+        { knownLastBuilds: new Map([["https://jenkins.example.com/job/foo", 12]]) },
+      );
+      // Same number, but building: listed again, so a build whose checkout just finished gets its commit.
+      expect(calls.some(url => url.includes("builds["))).toBe(true);
+      expect(result.data.map(run => [run.runNumber, run.status])).toEqual([[12, "running"]]);
+      expect(result.lastBuilds.has("https://jenkins.example.com/job/foo")).toBe(false);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("a multibranch project's branch jobs are probed by their last build in its one listing", async () => {
+    const WORKFLOW_JOB = "org.jenkinsci.plugins.workflow.job.WorkflowJob";
+    const originalFetch = globalThis.fetch;
+    const calls: string[] = [];
+    const parent = "https://jenkins.example.com/job/app";
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = decodeURIComponent(String(input));
+      calls.push(url);
+      const body = url.startsWith(`${parent}/api/`)
+        ? {
+            _class: "org.jenkinsci.plugins.workflow.multibranch.WorkflowMultiBranchProject",
+            jobs: [
+              {
+                _class: WORKFLOW_JOB,
+                name: "main",
+                url: `${parent}/job/main/`,
+                buildable: true,
+                lastBuild: { number: 7 },
+              },
+              {
+                _class: WORKFLOW_JOB,
+                name: "dev",
+                url: `${parent}/job/dev/`,
+                buildable: true,
+                lastBuild: { number: 3 },
+              },
+            ],
+          }
+        : { lastBuild: { number: 4 }, builds: [] };
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    }) as typeof fetch;
+    try {
+      const result = await fetchJenkinsGraphDataForSHAs([{ url: `${parent}/` }], "user", "token", ["b".repeat(40)], {
+        knownLastBuilds: new Map([
+          [`${parent}/job/main`, 7],
+          [`${parent}/job/dev`, 2],
+        ]),
+      });
+      // main is unchanged: only dev, which has a new build, is listed.
+      expect(calls.filter(url => !url.startsWith(`${parent}/api/`)).map(url => url.split("/api/")[0])).toEqual([
+        `${parent}/job/dev`,
+      ]);
+      expect(result.lastBuilds.get(`${parent}/job/main`)).toBe(7);
+      expect(result.lastBuilds.get(`${parent}/job/dev`)).toBe(4);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   test("maps one build to head commit only", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () =>
@@ -626,7 +715,7 @@ describe("resolveJenkinsJobs", () => {
         },
       ]);
       expect(decodeURIComponent(requestedUrl)).toContain(
-        "jobs[_class,name,displayName,url,buildable,disabled,lastBuild[timestamp]]",
+        "jobs[_class,name,displayName,url,buildable,disabled,lastBuild[number,timestamp,building]]",
       );
     } finally {
       globalThis.fetch = originalFetch;

@@ -95,7 +95,6 @@ export function useJenkinsCI(opts: {
   const runCache = new Map<string, JenkinsRun>();
   const resolvedShas = new Set<string>();
   const queriedSHAs = new Set<string>();
-  let discoveredJobs: { url: string }[] | null = null;
   const lastBuildByJob = new Map<string, number>();
   let authFrozen = false;
   /** The auth banner that froze requests (token expired or authentication failed). */
@@ -143,19 +142,26 @@ export function useJenkinsCI(opts: {
     setCommitDataVersion(v => v + 1);
   }
 
-  async function fetchForSHAs(shas: string[], mode: "shallow" | "full", signal?: AbortSignal) {
+  /**
+   * Asks Jenkins about `shas`. Every fetch starts from the configured jobs, so a branch pushed since is found (one
+   * request per multibranch project lists its branch jobs). Commits already asked about may skip the jobs whose last
+   * build is unchanged and finished; new commits and a `thorough` fetch (Reload) skip none: a build can be for a
+   * commit the graph didn't have when its job was last listed.
+   */
+  async function fetchForSHAs(shas: string[], mode: "shallow" | "full", signal?: AbortSignal, thorough = false) {
     const epoch = lifecycle.getEpoch();
     const repoPath = state.repoPath();
     if (!lifecycle.isCurrent(epoch, repoPath)) return { firstError: null, stale: true };
     const token = getJenkinsToken(config.tokenEnvVar);
     if (!token || shas.length === 0) return { firstError: null };
-    const jobs = discoveredJobs ?? config.jobs;
+    const jobs = config.jobs;
+    const shortcuts = !thorough && shas.every(sha => queriedSHAs.has(sha));
     const result =
       mode === "shallow"
         ? await fetchJenkinsGraphDataForSHAs(jobs, config.username, token, shas, {
             signal,
             buildLimit: config.fetchDepth,
-            knownLastBuilds: lastBuildByJob,
+            ...(shortcuts ? { knownLastBuilds: lastBuildByJob } : {}),
             preferredBranches: graphBranches(),
           })
         : await fetchJenkinsDataForSHAs(jobs, config.username, token, shas, {
@@ -171,7 +177,6 @@ export function useJenkinsCI(opts: {
       }
     }
     if (result.discoveryComplete) {
-      discoveredJobs = result.jobUrls.map(url => ({ url }));
       const activeJobUrls = new Set(result.jobUrls);
       for (const [key, run] of runCache) {
         if (!activeJobUrls.has(run.jobUrl)) runCache.delete(key);
@@ -295,7 +300,7 @@ export function useJenkinsCI(opts: {
         lifecycle.noteFetchStarted();
         return;
       }
-      const { firstError, stale } = await fetchForSHAs(target, "shallow", signal);
+      const { firstError, stale } = await fetchForSHAs(target, "shallow", signal, retry);
       if (stale || !lifecycle.isCurrent(epoch, repoPath)) return;
       lifecycle.noteFetchStarted();
       rememberAuthError(firstError ?? null);
@@ -308,17 +313,14 @@ export function useJenkinsCI(opts: {
       const repoPath = state.repoPath();
       if (authFrozen && !retry) return;
       if (retry) authFrozen = false;
-      // Its own badges: on the dashboard, the shown view's are the dashboard's (none).
-      const target = collectRunningSHAs(state.graphBadgesFor("jenkins"));
-      if (target.length === 0) {
-        lifecycle.noteRefreshSettled();
-        return;
-      }
       if (showStatus) actions.setProviderStatus("jenkins", providerLoading());
+      // The builds still running, asked about directly (its own badges: on the dashboard, the shown view's are none).
+      const target = collectRunningSHAs(state.graphBadgesFor("jenkins"));
       const wanted = new Set(target.map(sha => sha.toLowerCase()));
       const runningRuns = [...runCache.values()].filter(
         run => wanted.has(run.headSha.toLowerCase()) && run.status === "running",
       );
+      let runningError: string | null = null;
       if (runningRuns.length > 0) {
         const token = getJenkinsToken(config.tokenEnvVar);
         if (!token) return;
@@ -328,21 +330,18 @@ export function useJenkinsCI(opts: {
         rebuildCaches();
         await persistTerminalRuns(repoPath, target, epoch);
         if (!lifecycle.isCurrent(epoch, repoPath)) return;
-        lifecycle.noteRefreshSettled();
-        rememberAuthError(error);
-        lifecycle.noteFetchResult(!error && !discoveryTruncated);
-        if (!error && !discoveryTruncated) actions.setProviderLastSuccessfulRefresh("jenkins", new Date());
-        if (error) actions.setProviderStatus("jenkins", providerError(error));
-        else actions.setProviderStatus("jenkins", settledStatus());
-        return;
+        runningError = error;
       }
-      const { firstError, stale } = await fetchForSHAs(target, "shallow", signal);
+      // Builds that started since: each job's last build is probed, and only the jobs with a new one are listed.
+      const window = collectTopSHAs(state.graphRows(), config.fetchDepth);
+      const { firstError, stale } = await fetchForSHAs(window, "shallow", signal);
       if (stale || !lifecycle.isCurrent(epoch, repoPath)) return;
       lifecycle.noteRefreshSettled();
-      rememberAuthError(firstError ?? null);
-      lifecycle.noteFetchResult(!firstError && !discoveryTruncated);
-      if (!firstError && !discoveryTruncated) actions.setProviderLastSuccessfulRefresh("jenkins", new Date());
-      if (firstError) actions.setProviderStatus("jenkins", providerError(firstError));
+      const error = runningError ?? firstError ?? null;
+      rememberAuthError(error);
+      lifecycle.noteFetchResult(!error && !discoveryTruncated);
+      if (!error && !discoveryTruncated) actions.setProviderLastSuccessfulRefresh("jenkins", new Date());
+      if (error) actions.setProviderStatus("jenkins", providerError(error));
       else actions.setProviderStatus("jenkins", settledStatus());
     },
     onResetCaches: () => {
@@ -352,7 +351,6 @@ export function useJenkinsCI(opts: {
       runCache.clear();
       resolvedShas.clear();
       queriedSHAs.clear();
-      discoveredJobs = null;
       lastBuildByJob.clear();
       authFrozen = false;
       discoveryTruncated = false;

@@ -31,7 +31,7 @@ interface JenkinsJobApi {
   _class?: string;
   displayName?: string;
   builds?: JenkinsBuildApi[];
-  lastBuild?: { number?: number; url?: string } | null;
+  lastBuild?: { number?: number; url?: string; building?: boolean } | null;
   jobs?: JenkinsMultibranchChildApi[];
 }
 
@@ -42,7 +42,7 @@ interface JenkinsMultibranchChildApi {
   url?: string;
   buildable?: boolean;
   disabled?: boolean;
-  lastBuild?: { timestamp?: number } | null;
+  lastBuild?: { number?: number; timestamp?: number; building?: boolean } | null;
 }
 
 interface JenkinsWfapiStage {
@@ -81,11 +81,11 @@ function treeApiSuffix(tree: string): string {
 }
 
 function lastBuildTree(): string {
-  return "lastBuild[number]";
+  return "lastBuild[number,building]";
 }
 
 function shallowGraphTree(limit: number): string {
-  return `lastBuild[number],builds[number,url,result,building,timestamp,duration,actions[lastBuiltRevision[SHA1],scmRevisionAction[revision[hash]]],changeSets[items[commitId,id]],changeSet[items[commitId,id]]]{0,${limit}}`;
+  return `lastBuild[number,building],builds[number,url,result,building,timestamp,duration,actions[lastBuiltRevision[SHA1],scmRevisionAction[revision[hash]]],changeSets[items[commitId,id]],changeSet[items[commitId,id]]]{0,${limit}}`;
 }
 
 function buildRefsTree(limit: number): string {
@@ -108,7 +108,7 @@ function buildDetailTree(): string {
 }
 
 function multibranchJobsTree(): string {
-  return "_class,jobs[_class,name,displayName,url,buildable,disabled,lastBuild[timestamp]]";
+  return "_class,jobs[_class,name,displayName,url,buildable,disabled,lastBuild[number,timestamp,building]]";
 }
 
 function autoDetectTree(jobTree?: string): string {
@@ -205,6 +205,8 @@ export async function resolveJenkinsJobs(
 ): Promise<{
   jobs: JenkinsJobConfig[];
   rootData: Map<string, JenkinsJobApi>;
+  /** Each branch job's last build, from its project's listing: what a probe compares. */
+  branchLastBuilds: Map<string, JenkinsJobApi["lastBuild"]>;
   error: string | null;
   complete: boolean;
   truncated: boolean;
@@ -213,6 +215,7 @@ export async function resolveJenkinsJobs(
 }> {
   const resolved = new Map<string, JenkinsJobConfig>();
   const rootData = new Map<string, JenkinsJobApi>();
+  const branchLastBuilds = new Map<string, JenkinsJobApi["lastBuild"]>();
   let firstError: string | null = null;
   let discoveredCount = 0;
   let branchJobTotal = 0;
@@ -317,12 +320,15 @@ export async function resolveJenkinsJobs(
     // Jenkins names a branch job after its branch; a pull request's job (`PR-12`, `MR-3`) builds no branch.
     const branch = child.name ? safeDecode(child.name).trim() : "";
     resolved.set(url, { url, label: childLabel, ...(branch && !/^(PR|MR)-\d+$/.test(branch) ? { branch } : {}) });
+    // Its last build, from the project's one listing: a probe skips the branch job when it is unchanged.
+    branchLastBuilds.set(url, child.lastBuild ?? null);
     discoveredCount++;
   }
 
   return {
     jobs: [...resolved.values()],
     rootData,
+    branchLastBuilds,
     error: firstError,
     complete: discoveries.every(Boolean) && !truncated,
     truncated,
@@ -607,6 +613,11 @@ export async function fetchJenkinsDataForSHAs(
   };
 }
 
+/** A last build's number once it has finished; null while it builds (or without one). */
+function settledNumber(build: { number?: number; building?: boolean } | null | undefined): number | null {
+  return typeof build?.number === "number" && !build.building ? build.number : null;
+}
+
 export async function fetchJenkinsGraphDataForSHAs(
   jobs: JenkinsJobConfig[],
   username: string | undefined,
@@ -648,9 +659,12 @@ export async function fetchJenkinsGraphDataForSHAs(
       try {
         const url = normalizeJenkinsJobUrl(job.url);
         const probed = resolved.rootData.get(url);
-        const lastNumber = probed?.lastBuild?.number;
-        if (typeof lastNumber === "number") lastBuilds.set(url, lastNumber);
-        if (typeof lastNumber === "number" && opts.knownLastBuilds?.get(url) === lastNumber) return;
+        // Unchanged since the last fetch, and finished: nothing new to list.
+        const lastNumber = settledNumber(probed ? probed.lastBuild : resolved.branchLastBuilds.get(url));
+        if (lastNumber !== null && opts.knownLastBuilds?.get(url) === lastNumber) {
+          lastBuilds.set(url, lastNumber);
+          return;
+        }
         const api =
           !probeOnly && probed
             ? probed
@@ -660,7 +674,10 @@ export async function fetchJenkinsGraphDataForSHAs(
                 token,
                 opts.signal,
               );
-        if (typeof api.lastBuild?.number === "number") lastBuilds.set(url, api.lastBuild.number);
+        // Only a finished last build is remembered: one still building may not have checked out its commit yet, so
+        // its job is listed again next time.
+        const listed = settledNumber(api.lastBuild);
+        if (listed !== null) lastBuilds.set(url, listed);
         const builds = api.builds ?? [];
         for (const build of builds) {
           for (const sha of matchingHeadShas(build, wanted)) runs.push(mapRun(job, build, sha));
