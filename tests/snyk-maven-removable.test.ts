@@ -69,15 +69,15 @@ describe("mavenLocalRepository", () => {
     });
     const worktree = await folder({ ".mvn/maven.config": "-B -Dmaven.repo.local=/from/config" });
     const plain = await folder();
-    // Absolute as Maven reads it: on Windows `/from/config` is on the current drive.
-    expect(await mavenLocalRepository({ home, env: {}, worktree })).toBe(resolve("/from/config"));
+    // Absolute as Maven reads it in the worktree: on Windows `/from/config` is on the worktree's drive.
+    expect(await mavenLocalRepository({ home, env: {}, worktree })).toBe(resolve(worktree, "/from/config"));
     expect(
       await mavenLocalRepository({
         home,
         env: { MAVEN_OPTS: "-Xmx1g -Dmaven.repo.local=/from/opts" },
         worktree: plain,
       }),
-    ).toBe(resolve("/from/opts"));
+    ).toBe(resolve(plain, "/from/opts"));
     expect(await mavenLocalRepository({ home, env: {}, worktree: plain })).toBe(join(home, "maven-cache"));
     expect(await mavenLocalRepository({ home: plain, env: {}, worktree: plain })).toBe(
       join(plain, ".m2", "repository"),
