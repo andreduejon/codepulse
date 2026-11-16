@@ -4,7 +4,7 @@ import { useAppState } from "../context/state";
 import type { DashboardState } from "../dashboard/use-dashboard";
 import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
 import { useT } from "../hooks/use-t";
-import { isProviderDetailView, providerDisplayName } from "../providers/provider";
+import { providerDisplayName } from "../providers/provider";
 import { endTruncate } from "../utils/truncate";
 import { fitHints, KeyHint, KeyHintSeparator, type RankedHint } from "./key-hint";
 
@@ -164,10 +164,8 @@ export default function Footer(
                 rank: 1,
                 onClick: click(props.onConfirm),
               },
-              // Beside the events, the provider's tab for the event's commit takes the keyboard.
-              ...(!props.compact && isProviderDetailView(selected.event.source)
-                ? [{ key: "→", desc: " details", rank: 2 }]
-                : []),
+              // Beside the events, the event's tabs (its provider's, Info) take the keyboard.
+              ...(!props.compact ? [{ key: "→", desc: " details", rank: 2 }] : []),
             ]
           : []),
         ...(dashboard.selected()?.url ? [{ key: "o", desc: " open", rank: 2 }] : []),
