@@ -62,8 +62,8 @@ All notable changes to this project will be documented in this file.
   are read from the local Maven repository (`~/.m2/repository`, or where `settings.xml`, `.mvn/maven.config` or
   `MAVEN_OPTS` put it), where Maven saved them while Snyk resolved the tree. Nothing is downloaded: a POM that is not
   there, a version range or an unknown property keeps the pin. A direct dependency keeps its pin too. Scans made before
-  this version show it after **Rescan commit**. A version with `-` between two numbers (`1.0-1`) keeps its pin: Maven
-  orders it below `1.0.1`, which this check can't tell.
+  this version show it after **Rescan commit**. Only plain version numbers (`1.86`, `2.13.4`) are compared: a version
+  with a qualifier or a `-` (`1.0-rc`, `1.0-1`) keeps its pin, since Maven orders those in ways this check doesn't.
 
 - `bun run demo`: a third app with a long name (`customer-notification-service`), shop-web with a `main` behind its
   remote while a file has changes and a `dev` with commits on both sides (for `ctrl+f`'s warnings), GitHub runs and

@@ -71,10 +71,11 @@ export function compareMavenVersions(a: string, b: string): number {
 }
 
 /**
- * Whether `compareMavenVersions` orders this version as Maven does. A `-` between two numbers (`1.0-1`, `2.0-20210101`)
- * starts a list Maven puts below a plain number (`1.0-1` < `1.0.1`), which the comparison above can't tell apart.
+ * Whether `compareMavenVersions` orders this version as Maven does, for sure: plain numbers only (`1.86`, `2.13.4`).
+ * Maven trims zeros before a qualifier and nests what follows a `-` (`1.0-rc` > `1.0.0-beta`, `1.0-1` < `1.0.1`),
+ * which this comparison doesn't; a pin with any such version stays.
  */
-export const mavenOrderIsClear = (version: string): boolean => !/\d-\d/.test(version);
+export const mavenOrderIsClear = (version: string): boolean => /^\d+(\.\d+)*$/.test(version.trim());
 
 const REPO_LOCAL = /-Dmaven\.repo\.local=("[^"]*"|\S+)/;
 const repoLocal = (text: string | undefined) => text?.match(REPO_LOCAL)?.[1]?.replace(/^"|"$/g, "") || null;

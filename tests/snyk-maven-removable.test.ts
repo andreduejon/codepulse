@@ -149,6 +149,22 @@ describe("markRemovableManaged", () => {
     expect(removable(value)).toEqual([]);
   });
 
+  test("a qualifier keeps the pin too: Maven puts 1.0-rc above 1.0.0-beta, where a plain order would not", async () => {
+    const repository = await folder({
+      [pomPath("com.hierynomus:smbj:0.14.0")]: pom(
+        "com.hierynomus:smbj:0.14.0",
+        `<dependencies>${dependency("org.bouncycastle", "bcprov-jdk18on", "1.0.0-beta")}</dependencies>`,
+      ),
+    });
+    const value = graph();
+    await markRemovableManaged(
+      value,
+      new Map([["org.bouncycastle:bcprov-jdk18on", "1.0-rc"]]),
+      new LocalRepositoryPoms(repository),
+    );
+    expect(removable(value)).toEqual([]);
+  });
+
   test("a version its parent POM manages counts too", async () => {
     const repository = await folder({
       [pomPath("com.hierynomus:smbj:0.14.0")]: pom(
