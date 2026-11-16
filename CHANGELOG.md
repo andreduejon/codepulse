@@ -65,6 +65,10 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Switching to another app of the group no longer lets Snyk scan the previous app's branch tips in the new one (`Unable
+  to resolve commit SHA`): the switch changes the repository and its branches in one update.
+- **Menu → Repository → Actions → Fetch remote** says `just now` instead of a negative age when the last fetch time is
+  ahead of the clock.
 - Another repository, opened with a group badge or **Switch repository**, uses its own Auto fetch, Auto refresh, Page
   size and Show all branches. Before, it kept the first repository's, so it might never fetch, and the menu showed
   and saved the first repository's values.

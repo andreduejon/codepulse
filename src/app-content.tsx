@@ -468,23 +468,27 @@ export function AppContent(props: Readonly<AppContentProps>) {
     actions.setAutoRefreshInterval(nextOptions.autoRefreshInterval);
     actions.setMaxCount(nextOptions.maxCount);
     actions.setShowAllBranches(nextConfig.showAllBranches ?? true);
-    setActiveRepoPath(nextPath);
-    const snapshot = repoSessionCache.get(nextPath);
-    if (snapshot) {
-      restoreRepoSessionSnapshot(snapshot);
-    } else {
-      // A repository not shown yet in this session opens in its start view; one shown before, where it was left.
-      actions.setActiveProviderView(startViewFor(nextConfig));
-      actions.setCommits([]);
-      actions.setGraphRows([]);
-      actions.setBranches([]);
-      actions.setCurrentBranch("");
-      actions.setRepoPath(nextPath);
-      actions.setRemoteUrl("");
-      actions.setTagDetails(new Map());
-      actions.setStashByParent(new Map());
-      actions.setLoading(true);
-    }
+    // One update: the loader sets the new path as soon as the active one changes, and nothing may see the new path
+    // with the previous repository's branches (Snyk would scan their tips in the wrong repository).
+    batch(() => {
+      setActiveRepoPath(nextPath);
+      const snapshot = repoSessionCache.get(nextPath);
+      if (snapshot) {
+        restoreRepoSessionSnapshot(snapshot);
+      } else {
+        // A repository not shown yet in this session opens in its start view; one shown before, where it was left.
+        actions.setActiveProviderView(startViewFor(nextConfig));
+        actions.setCommits([]);
+        actions.setGraphRows([]);
+        actions.setBranches([]);
+        actions.setCurrentBranch("");
+        actions.setRepoPath(nextPath);
+        actions.setRemoteUrl("");
+        actions.setTagDetails(new Map());
+        actions.setStashByParent(new Map());
+        actions.setLoading(true);
+      }
+    });
   };
 
   const switchGroupRepo = (direction: 1 | -1) => {

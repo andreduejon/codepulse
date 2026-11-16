@@ -27,8 +27,10 @@ import {
   buildSnykProviderItems,
 } from "./menu-provider-items";
 
-const relativeAgeLabel = (time: Date): string => {
+/** `5s ago`, `3h ago`; a time the clock puts ahead of now (a clock that is off) is `just now`. */
+export const relativeAgeLabel = (time: Date): string => {
   const secs = Math.round((Date.now() - time.getTime()) / 1000);
+  if (secs < 0) return "just now";
   if (secs < 60) return `${secs}s ago`;
   const mins = Math.round(secs / 60);
   if (mins < 60) return `${mins}m ago`;

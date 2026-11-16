@@ -653,7 +653,29 @@ export function webHistory(): HistorySpec {
           ),
         },
       }),
+      // A pull request merged on GitHub: origin/main has it, the local main is one commit behind (the world sets it back).
+      c("cart", ["prices"], at(0, 1, 20), JONAS, "feat(web): a mini cart in the header"),
+      // dev: one commit on both sides, then one only on origin/dev and one only here, so it can't fast-forward.
+      c("lazy", ["prices"], at(0, 2), ANA, "perf(web): lazy-load the gallery's images"),
+      c("aspect", ["lazy"], at(0, 1), JONAS, "fix(web): keep the gallery's aspect ratio"),
+      c("carousel", ["lazy"], at(0, 0, 40), ANA, "wip(web): try a carousel instead of thumbnails"),
     ],
-    refs: { "refs/heads/main": "prices" },
+    refs: { "refs/heads/main": "cart", "refs/heads/dev": "aspect", "refs/demo/local-dev": "carousel" },
+  };
+}
+
+/** A third app of the group, with a long name, Git only: the project row has to fit it beside the badges. */
+export const NOTIFICATIONS_APP = "customer-notification-service";
+
+export function notificationsHistory(): HistorySpec {
+  return {
+    commits: [
+      c("initial", [], at(5), ANA, "chore: initial commit", {
+        files: { "README.md": `# ${NOTIFICATIONS_APP}\n\nSends order and shipping emails.\n` },
+      }),
+      c("templates", ["initial"], at(3, 4), JONAS, "feat(mail): order confirmation template"),
+      c("retry", ["templates"], at(1, 2), ANA, "fix(mail): retry when the mail server is busy"),
+    ],
+    refs: { "refs/heads/main": "retry" },
   };
 }

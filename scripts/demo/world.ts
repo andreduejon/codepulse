@@ -23,7 +23,15 @@ import { delimiter, dirname, join, resolve } from "node:path";
 import { storageRoot } from "../../src/utils/storage-path";
 import { importHistory } from "./history";
 import { type DemoOptions, PROVIDERS, providerError } from "./options";
-import { FEATURE_BRANCH, LANE_BRANCHES, SHOP_README, shopHistory, webHistory } from "./repositories";
+import {
+  FEATURE_BRANCH,
+  LANE_BRANCHES,
+  NOTIFICATIONS_APP,
+  notificationsHistory,
+  SHOP_README,
+  shopHistory,
+  webHistory,
+} from "./repositories";
 import {
   BROWSER_COMMANDS,
   CLIPBOARD_COMMANDS,
@@ -186,11 +194,12 @@ function fillWorld(root: string, options: DemoOptions, now: number): DemoWorld {
   const code = join(home, "code");
   const shop = join(code, "shop");
   const web = join(code, "shop-web");
+  const notifications = join(code, NOTIFICATIONS_APP);
   const remotes = join(root, "remotes");
   const bin = join(root, "bin");
   const temp = join(root, "tmp");
   const statePath = join(root, "state.json");
-  for (const directory of [shop, web, remotes, bin, temp]) mkdirSync(directory, { recursive: true });
+  for (const directory of [shop, web, notifications, remotes, bin, temp]) mkdirSync(directory, { recursive: true });
 
   // The app's environment: the user's, minus anything that points Git, a provider, a package manager, ssh,
   // Kubernetes or a proxy at real data or credentials, and minus folders and caches the demo sets inside itself.
@@ -288,9 +297,25 @@ function fillWorld(root: string, options: DemoOptions, now: number): DemoWorld {
   git(web, ["init", "-q", "-b", "main"]);
   git(web, ["remote", "add", "origin", "git@github.com:demo/shop-web.git"]);
   const webShas = importHistory(web, webHistory(), now, git);
-  git(web, ["push", "-q", "origin", "main"]);
+  git(web, ["push", "-q", "origin", "main", "dev"]);
   git(web, ["fetch", "-q", "origin"]);
   git(web, ["branch", "-q", "-u", "origin/main", "main"]);
+  git(web, ["branch", "-q", "-u", "origin/dev", "dev"]);
+  // For ctrl+f's warnings: main is behind origin/main while a file has changes, and dev has a commit of its own.
+  git(web, ["reset", "-q", "--hard", webShas.prices]);
+  git(web, ["update-ref", "refs/heads/dev", webShas.carousel]);
+  git(web, ["update-ref", "-d", "refs/demo/local-dev"]);
+  writeFileSync(join(web, "README.md"), "# shop-web\n\nThe shop's storefront. Run `bun run dev` to start it.\n");
+
+  // ── customer-notification-service: a third app with a long name, Git only ──
+  const notificationsRemote = join(remotes, `${NOTIFICATIONS_APP}.git`);
+  git(remotes, ["init", "-q", "--bare", "-b", "main", notificationsRemote]);
+  git(notifications, ["init", "-q", "-b", "main"]);
+  git(notifications, ["remote", "add", "origin", notificationsRemote]);
+  importHistory(notifications, notificationsHistory(), now, git);
+  git(notifications, ["push", "-q", "origin", "main"]);
+  git(notifications, ["fetch", "-q", "origin"]);
+  git(notifications, ["branch", "-q", "-u", "origin/main", "main"]);
 
   const state: DemoState = {
     root,
@@ -342,7 +367,8 @@ function fillWorld(root: string, options: DemoOptions, now: number): DemoWorld {
       providers: { github: shopProviders.github, snyk: { ...shopProviders.snyk, autoScanBranches: ["main"] } },
     },
   };
-  // --setup: the config knows shop-web only, so shop opens on the welcome screen.
+  repos[known(notifications)] = { appName: NOTIFICATIONS_APP, ...common };
+  // --setup: the config leaves shop out, so shop opens on the welcome screen.
   if (!options.setup) repos[known(shop)] = { appName: "shop", ...common, providers: shopProviders };
   const configDir = storageRoot("config", process.platform, home, env);
   mkdirSync(configDir, { recursive: true });

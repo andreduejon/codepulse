@@ -85,8 +85,13 @@ diff before.txt after.txt
 
 ## The world
 
-Two repositories in the group `demo`: **shop**, which the demo opens, and **shop-web** (`shift →`), with GitHub and
-Snyk only. shop's `origin` is `git@github.com:demo/shop.git`, served from a local copy, so `f` fetches offline.
+Three repositories in the group `demo`: **shop**, which the demo opens, **shop-web** (`shift →`), with GitHub and
+Snyk only, and **customer-notification-service**, Git only, whose long name the project row has to fit. shop's
+`origin` is `git@github.com:demo/shop.git`, served from a local copy, so `f` fetches offline.
+
+For `ctrl+f`: in shop, `release/1.x` is behind its remote and moves. In shop-web, `main` is behind `origin/main` (a
+pull request merged on GitHub) while `README.md` has changes, and `dev` has a commit on each side, so both stay and the
+message says why.
 
 The newest commits carry the provider data:
 
@@ -99,7 +104,8 @@ The newest commits carry the provider data:
 | `retry failed payments …` | GitHub re-run (attempt 2) with annotations, a skipped job. Jenkins failed tests. Crash loop, OOM and eviction in shop-test. Snyk: a new package, an override that can go. |
 | `round discounts to cents` | GitHub nightly run timed out. Jenkins build without a test report. |
 
-Snyk scans the branch tips by itself; other commits wait for **Scan commit**. Its findings and dependency tree come
+GitHub names each run's branch and OpenShift each build's Git ref, so the Dashboard's Branch column comes from them.
+Snyk scans the branch tips by itself once a repository loads; other commits wait for **Scan commit**. Its findings and dependency tree come
 from each commit's `package.json` files (the root project and `admin/`). Jenkins lists more branch jobs than it
 reads, so its view notes the limit.
 

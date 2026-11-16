@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, test } from "bun:test";
 import type {
   GitHubMenuConfig,
   JenkinsMenuConfig,
@@ -12,7 +12,12 @@ import {
   buildOpenShiftProviderItems,
   buildSnykProviderItems,
 } from "../src/hooks/menu-provider-items";
-import { isOptionalRepoMetadataValid, optionalRepoMetadataValue, startViewItem } from "../src/hooks/use-menu-items";
+import {
+  isOptionalRepoMetadataValid,
+  optionalRepoMetadataValue,
+  relativeAgeLabel,
+  startViewItem,
+} from "../src/hooks/use-menu-items";
 
 describe("buildDashboardItems", () => {
   it("offers the time window and the knot size, and saves the next choice", () => {
@@ -511,4 +516,11 @@ describe("provider menu consistency", () => {
     const lastScan = items.find(item => item.kind === "info" && item.label === "Last scan");
     expect(lastScan?.kind === "info" && lastScan.get()).toBe("2m ago");
   });
+});
+
+test("a last fetch the clock puts in the future reads as just now, not a negative age", () => {
+  const now = Date.now();
+  expect(relativeAgeLabel(new Date(now + 22_325_948_000))).toBe("just now");
+  expect(relativeAgeLabel(new Date(now - 5_000))).toBe("5s ago");
+  expect(relativeAgeLabel(new Date(now - 3 * 3_600_000))).toBe("3h ago");
 });
