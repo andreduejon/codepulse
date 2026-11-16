@@ -247,6 +247,17 @@ bar.
   read, so their pins are not marked: **managed** shows the pins your repository
   declares, not everything a platform BOM (Spring Boot, Quarkus) manages, which is
   often most of the tree. Type `managed` in the filter to list them.
+- A **managed** pin is also **removable** when every dependency that brings the
+  package already asks for the pinned version or later, so Maven would pick at
+  least that version without the pin. Their POMs are read from the local Maven
+  repository (`~/.m2/repository`, or where `settings.xml`, `.mvn/maven.config` or
+  `MAVEN_OPTS` put it), where Maven saved them while Snyk resolved the tree.
+  Nothing is downloaded. The pin stays without **removable** when a POM is not
+  there, for a version range or an unknown property, for a package also declared
+  directly, when a dependency asks for a variant of it (a test jar, a classifier),
+  and for any version that is not plain numbers (`1.0-rc`, `1.0-1`), since Maven
+  orders those in ways this check doesn't. Scans made before v0.18 show it after
+  **Rescan commit**.
 - Type `pinned` in the filter to list **override** and **managed** packages
   together; the rows keep their own keyword.
 - Filter hits are highlighted in the package name in the Snyk colour (both tabs

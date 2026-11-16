@@ -96,7 +96,8 @@ ref), else the branch the commit was made on.
 | `r` | Fetch every provider again and read the events |
 
 - While the Dashboard is shown, each provider fetches and auto refreshes as on its own tab. `f` and `:reload` fetch
-  every provider. A failed fetch or scan shows in the message box: several share one box, with a line each.
+  every provider. A failed fetch or scan shows in the message box: several share one box, with a line each. A provider
+  that is turned off has no events there, also none it cached before.
 - Each provider has a badge in its color where the graph's modes are. A click on it, or `:hide NAME` and
   `:show NAME`, hides or shows that provider's events, and the count reads `26 / 30 events`. `:show` shows them all.
   The names are `git`, `github`, `jenkins`, `openshift` and `snyk`.

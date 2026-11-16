@@ -57,15 +57,15 @@ All notable changes to this project will be documented in this file.
   → Auto fast-forward** (off by default, saved per repository as `autoFastForward`) makes `f` and Auto fetch
   fast-forward too. They only report a branch that stayed behind. **Menu → Repository → Actions → Fast-forward** does
   what `ctrl+f` does.
-
 - Snyk Dependencies: a Maven `managed` pin is also marked `removable` when every dependency that brings the package
   already asks for the pinned version or later, so Maven would pick at least that version without the pin. Their POMs
   are read from the local Maven repository (`~/.m2/repository`, or where `settings.xml`, `.mvn/maven.config` or
   `MAVEN_OPTS` put it), where Maven saved them while Snyk resolved the tree. Nothing is downloaded: a POM that is not
   there, a version range or an unknown property keeps the pin. A direct dependency keeps its pin too. Scans made before
   this version show it after **Rescan commit**. Only plain version numbers (`1.86`, `2.13.4`) are compared: a version
-  with a qualifier or a `-` (`1.0-rc`, `1.0-1`) keeps its pin, since Maven orders those in ways this check doesn't.
-
+  with a qualifier or a `-` (`1.0-rc`, `1.0-1`) keeps its pin, since Maven orders those in ways this check doesn't, and
+  so does a number part longer than 15 digits. A dependency that asks for a variant of the package (a test jar, a
+  classifier) keeps the pin as well.
 - `bun run demo`: a third app with a long name (`customer-notification-service`), shop-web with a `main` behind its
   remote while a file has changes and a `dev` with commits on both sides (for `ctrl+f`'s warnings), GitHub runs and
   OpenShift builds that name their branch, and the last fetch dated by the demo's clock. `--colors` names each color in
@@ -107,7 +107,7 @@ All notable changes to this project will be documented in this file.
   size and Show all branches. Before, it kept the first repository's, so it might never fetch, and the menu showed
   and saved the first repository's values.
 - The details keep what you opened when you switch tabs or when the terminal width crosses into or out of the side
-  panel: open runs and attempts (GitHub Actions, Jenkins), closed namespaces (OpenShift), the Snyk view, collapsed
+  panel: open runs and attempts (GitHub, Jenkins), closed namespaces (OpenShift), the Snyk view, collapsed
   folders and the Info sections. Before, a resize or a tab switch closed them and the cursor landed on another row.
   The footer also keeps offering `o open` after such a resize.
 - Clicking `enter` in the footer of the compact details works the first time they open after startup. It stayed
@@ -115,7 +115,7 @@ All notable changes to this project will be documented in this file.
 - `codepulse xyz` without a folder `xyz` opens the project selector with "Hmm, that directory doesn't exist" instead
   of stopping with a fatal error about Git. Without Git installed, the startup now says so the same way.
 - Jenkins with more than 25 branch jobs in a multibranch project caches the finished builds it read, like GitHub
-  Actions and OpenShift. Before, it cached nothing, so its builds never showed on the dashboard or below the fetch
+  and OpenShift. Before, it cached nothing, so its builds never showed on the dashboard or below the fetch
   depth.
 
 ## [0.17.0] - 2026-11-11

@@ -104,8 +104,8 @@ A commit SHA is taken from `metadata.labels` first, then annotations on
 metadata, ImageStreamTag `tag`, and the nested image (same key, default
 `dev/commit-sha`). `oc annotate istag` writes `tag.annotations`.
 
-While the OpenShift view is focused, Builds and ImageStreamTags poll on Auto
-refresh. Builds for the graph window are requested with
+While the OpenShift view or the Dashboard is shown, Builds and ImageStreamTags
+poll on Auto refresh. Builds for the graph window are requested with
 `labelSelector=dev/commit-sha in (…)`. If that returns nothing, the full Build
 list is scanned by annotation (old objects). ImageStreamTags are always listed
 in full; they cannot be labeled.
@@ -113,7 +113,7 @@ in full; they cannot be labeled.
 Live inventory lists Deployments, DeploymentConfigs, and Pods in the configured
 namespaces, then watches those kinds (`watch=true` from the list
 `resourceVersion`). A 410 Gone or dropped stream lists again. Leave the
-OpenShift view to stop watches. Matching still prefers labels, then
+OpenShift view and the Dashboard to stop watches. Matching still prefers labels, then
 annotations, then digest / owner-chain:
 
 ```text
