@@ -329,3 +329,39 @@ test("a provider turned off shows none of its cached events", async () => {
   expect(state.totalCount()).toBe(1);
   expect(state.rows().some(row => row.kind === "event" && row.event.source === "jenkins")).toBe(false);
 });
+
+test("back to an app read before, its events show at once while they are read again, without a reading label", async () => {
+  const [app, setApp] = createSignal(SHOP);
+  const [active] = createSignal(true);
+  let release: () => void = () => {};
+  let first = true;
+  const state = createRoot(dispose => {
+    cleanup.push(dispose);
+    return useDashboard({
+      app,
+      active,
+      now: () => NOW,
+      load: path => {
+        if (path === WEB.path || first) {
+          first = path === WEB.path ? first : false;
+          return Promise.resolve([event(path, 5)]);
+        }
+        return new Promise(resolve => {
+          release = () => resolve([event(SHOP.path, 5), event(SHOP.path, 6)]);
+        });
+      },
+    });
+  });
+  await settle();
+  setApp(WEB);
+  await settle();
+  expect(state.selected()?.app).toBe(WEB.path);
+  setApp(SHOP);
+  await settle();
+  expect(state.loading()).toBe(false);
+  expect(state.selected()?.app).toBe(SHOP.path);
+  expect(state.totalCount()).toBe(1);
+  release();
+  await settle();
+  expect(state.totalCount()).toBe(2);
+});

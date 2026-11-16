@@ -75,12 +75,12 @@ export function useDashboard(
   const settings = () => opts.settings?.() ?? DEFAULT_DASHBOARD_SETTINGS;
   /** Only a new window reads again: a new knot size lays out the same events. */
   const windowDays = createMemo(() => settings().windowDays);
-  /** The events read, with the app they were read for: another app shows none of them while its own load. */
-  const [loaded, setLoaded] = createSignal<{ app: string; events: DashboardEvent[] }>({ app: "", events: [] });
-  const events = () => {
-    const read = loaded();
-    return read.app === opts.app().path ? read.events : [];
-  };
+  /**
+   * The events read, per app: another app shows none of them while its own load, and an app read before shows its
+   * last ones at once while they are read again.
+   */
+  const [loaded, setLoaded] = createSignal<ReadonlyMap<string, DashboardEvent[]>>(new Map());
+  const events = () => loaded().get(opts.app().path) ?? [];
   const [loading, setLoading] = createSignal(false);
   const [selectedKey, setSelectedKey] = createSignal<string | null>(null);
   const [hidden, setHidden] = createSignal<ReadonlySet<EventSource>>(new Set());
@@ -105,7 +105,7 @@ export function useDashboard(
         cacheRoot: opts.cacheRoot,
       });
       if (current.signal.aborted) return;
-      setLoaded({ app: app.path, events: loaded });
+      setLoaded(current => new Map(current).set(app.path, loaded));
     } finally {
       if (controller === current) setLoading(false);
     }
@@ -224,9 +224,9 @@ export function useDashboard(
     move,
     moveToEnd,
     activate: selected,
-    // Only the first read of an app shows as reading: a re-read (a provider wrote, r, the graph changed) keeps the
-    // events on screen, so it needs no label and doesn't make the footer blink.
-    loading: () => loading() && loaded().app !== opts.app().path,
+    // Only the first read of an app shows as reading: a re-read (a provider wrote, r, the graph changed, back from
+    // another app) keeps the events on screen, so it needs no label and doesn't make the footer blink.
+    loading: () => loading() && !loaded().has(opts.app().path),
     reload,
   };
 }
