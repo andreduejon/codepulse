@@ -131,6 +131,17 @@ describe("computeCascadeTarget", () => {
     expect(computeCascadeTarget({ ...base, ...graph })).toBe("search-focused");
   });
 
+  test("on the dashboard, Esc gives the event list the keyboard back: from its tab, and closing its compact dialog", () => {
+    expect(computeCascadeTarget({ ...base, dashboard: true, detailFocused: true })).toBe("detail-focused");
+    expect(computeCascadeTarget({ ...base, dashboard: true, detailFocused: true, dialog: "dashboard-event" })).toBe(
+      "detail-dialog",
+    );
+    // A log opened from the compact dialog goes back to it.
+    expect(
+      computeCascadeTarget({ ...base, dashboard: true, detailFocused: true, dialog: "job-log", layoutMode: "compact" }),
+    ).toBe("back-to-detail");
+  });
+
   test("returns null when nothing is open", () => {
     expect(computeCascadeTarget(base)).toBe(null);
   });

@@ -337,7 +337,8 @@ export function AppContent(props: Readonly<AppContentProps>) {
     const mode = layoutMode();
     const currentDialog = untrack(dialog);
     if (mode === "compact" && state.detailFocused() && currentDialog === null) {
-      setDialog("detail");
+      // The dashboard's details have their own dialog.
+      setDialog(untrack(dashboardShown) ? "dashboard-event" : "detail");
     } else if (mode === "normal" && currentDialog === "detail") {
       setDialog(null);
       // detailFocused stays true — panel is now visible in two-column layout
@@ -1128,11 +1129,14 @@ export function AppContent(props: Readonly<AppContentProps>) {
 
   /** A dialog opened from the compact details is showing; they wait under it. */
   const compactDetailUnderChild = () =>
-    DETAIL_CHILD_DIALOGS.has(dialog() ?? "") && layoutMode() === "compact" && state.detailFocused();
+    DETAIL_CHILD_DIALOGS.has(dialog() ?? "") &&
+    layoutMode() === "compact" &&
+    state.detailFocused() &&
+    !dashboardShown();
 
   /** Dialogs opened from the details return to the compact detail dialog when they close. */
   const closeToDetail = () => {
-    if (layoutMode() === "compact" && state.detailFocused()) setDialog("detail");
+    if (layoutMode() === "compact" && state.detailFocused()) setDialog(dashboardShown() ? "dashboard-event" : "detail");
     else setDialog(null);
   };
 
@@ -1436,7 +1440,10 @@ export function AppContent(props: Readonly<AppContentProps>) {
                   <DashboardEventDialog
                     event={dashboard.selected}
                     appName={dashboardAppName}
-                    onClose={() => setDialog(null)}
+                    onClose={() => {
+                      actions.setDetailFocused(false);
+                      setDialog(null);
+                    }}
                     onShowInGraph={showSelectedInGraph}
                     onOpen={openSelectedEvent}
                     tabProps={dashboardTabProps()}

@@ -95,11 +95,12 @@ test("in the compact layout, Enter on a dashboard event opens its details with i
     expect(app.state.detailFocused()).toBe(true);
     expect(app.state.activeProviderView()).toBe("dashboard");
 
-    // Esc: back to the dashboard.
+    // Esc: back to the dashboard, whose events have the keyboard again.
     setup.mockInput.pressKey("ESCAPE");
     await setup.flush();
     expect(frame()).not.toContain("esc close");
     expect(app.state.activeProviderView()).toBe("dashboard");
+    expect(app.state.detailFocused()).toBe(false);
 
     // Enter, then s: the event's commit in its provider's view (GitHub is off here: Git), with the details dialog.
     setup.mockInput.pressKey("RETURN");
@@ -209,10 +210,25 @@ test("beside the events, → gives the provider's tab the keyboard: ←/→ betw
     await press("ARROW_LEFT");
     await press("ARROW_LEFT");
     expect(state.detailActiveTab()).toBe("snyk");
-    // ← on the first tab: the events have the keyboard again, on the same event.
+    // ← on the first tab: the events have the keyboard again, on the same event. Esc does the same.
     await press("ARROW_LEFT");
     expect(state.detailFocused()).toBe(false);
     expect(state.activeProviderView()).toBe("dashboard");
+    await press("ARROW_RIGHT");
+    expect(state.detailFocused()).toBe(true);
+    await press("ESCAPE");
+    expect(state.detailFocused()).toBe(false);
+
+    // Narrower while the tab has the keyboard: the event's own dialog, not the graph's details.
+    await press("ARROW_RIGHT");
+    setup.resize(120, 40);
+    await setup.flush();
+    expect(frame()).toContain("Show in Snyk");
+    expect(frame()).toContain("esc close");
+    setup.resize(200, 40);
+    await setup.flush();
+    await press("ESCAPE");
+    expect(state.detailFocused()).toBe(false);
 
     // Enter on the event: its commit in its provider's view (Snyk is off here: Git), with the details focused.
     await press("RETURN");
