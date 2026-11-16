@@ -73,9 +73,10 @@ export function compareMavenVersions(a: string, b: string): number {
 /**
  * Whether `compareMavenVersions` orders this version as Maven does, for sure: plain numbers only (`1.86`, `2.13.4`).
  * Maven trims zeros before a qualifier and nests what follows a `-` (`1.0-rc` > `1.0.0-beta`, `1.0-1` < `1.0.1`),
- * which this comparison doesn't; a pin with any such version stays.
+ * which this comparison doesn't; a pin with any such version stays, as does one with a number part too long to compare
+ * exactly (over 15 digits).
  */
-export const mavenOrderIsClear = (version: string): boolean => /^\d+(\.\d+)*$/.test(version.trim());
+export const mavenOrderIsClear = (version: string): boolean => /^\d{1,15}(\.\d{1,15})*$/.test(version.trim());
 
 const REPO_LOCAL = /-Dmaven\.repo\.local=("[^"]*"|\S+)/;
 const repoLocal = (text: string | undefined) => text?.match(REPO_LOCAL)?.[1]?.replace(/^"|"$/g, "") || null;
@@ -147,13 +148,19 @@ async function askedVersion(poms: PomSource, parent: SnykDependencyPackage, targ
   if (!pom) return null;
   const chain = await lineage(poms, pom);
   const properties = effectiveProperties(chain);
-  for (const ancestor of chain)
-    for (const entry of ancestor.dependencies) {
-      if (`${interpolate(entry.groupId, properties)}:${interpolate(entry.artifactId, properties)}` !== target) continue;
-      if (entry.version !== undefined) return resolvedVersion(interpolate(entry.version, properties));
-      return (await mavenManagedVersions(poms, pom.path)).get(target) ?? null;
-    }
-  return null;
+  const declared = chain.flatMap(ancestor =>
+    ancestor.dependencies.filter(
+      entry => `${interpolate(entry.groupId, properties)}:${interpolate(entry.artifactId, properties)}` === target,
+    ),
+  );
+  // A variant of the artifact (a test jar, a classifier) is another artifact the graph can't tell apart: unknown.
+  const variant = (entry: (typeof declared)[number]) =>
+    !!entry.classifier || (entry.type !== undefined && interpolate(entry.type, properties) !== "jar");
+  if (declared.some(variant)) return null;
+  const entry = declared[0];
+  if (!entry) return null;
+  if (entry.version !== undefined) return resolvedVersion(interpolate(entry.version, properties));
+  return (await mavenManagedVersions(poms, pom.path)).get(target) ?? null;
 }
 
 /**

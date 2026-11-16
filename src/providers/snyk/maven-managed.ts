@@ -54,6 +54,8 @@ interface DependencyEntry {
   version?: string;
   scope?: string;
   type?: string;
+  /** Another artifact of the same coordinates (`tests`, `sources`). */
+  classifier?: string;
 }
 
 export interface Pom {
@@ -83,7 +85,7 @@ const dependencyEntries = (list: XmlElement | undefined) =>
       const groupId = childText(dependency, "groupId");
       const artifactId = childText(dependency, "artifactId");
       if (!groupId || !artifactId) return [];
-      const fields = (["version", "scope", "type"] as const).flatMap(field => {
+      const fields = (["version", "scope", "type", "classifier"] as const).flatMap(field => {
         const value = childText(dependency, field);
         return value ? [[field, value] as const] : [];
       });

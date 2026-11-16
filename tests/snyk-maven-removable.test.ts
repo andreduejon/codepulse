@@ -165,6 +165,41 @@ describe("markRemovableManaged", () => {
     expect(removable(value)).toEqual([]);
   });
 
+  test("a variant of the artifact (a test jar, a classifier) keeps the pin: the graph can't tell which one it is", async () => {
+    const repository = await folder({
+      [pomPath("com.hierynomus:smbj:0.14.0")]: pom(
+        "com.hierynomus:smbj:0.14.0",
+        `<dependencies>
+          <dependency><groupId>org.bouncycastle</groupId><artifactId>bcprov-jdk18on</artifactId><version>2.0</version><type>test-jar</type><classifier>tests</classifier></dependency>
+          ${dependency("org.bouncycastle", "bcprov-jdk18on", "1.0")}
+        </dependencies>`,
+      ),
+    });
+    const value = graph();
+    await markRemovableManaged(
+      value,
+      new Map([["org.bouncycastle:bcprov-jdk18on", "1.5"]]),
+      new LocalRepositoryPoms(repository),
+    );
+    expect(removable(value)).toEqual([]);
+  });
+
+  test("a number part too long to compare exactly keeps the pin", async () => {
+    const repository = await folder({
+      [pomPath("com.hierynomus:smbj:0.14.0")]: pom(
+        "com.hierynomus:smbj:0.14.0",
+        `<dependencies>${dependency("org.bouncycastle", "bcprov-jdk18on", "1.9007199254740992")}</dependencies>`,
+      ),
+    });
+    const value = graph();
+    await markRemovableManaged(
+      value,
+      new Map([["org.bouncycastle:bcprov-jdk18on", "1.9007199254740993"]]),
+      new LocalRepositoryPoms(repository),
+    );
+    expect(removable(value)).toEqual([]);
+  });
+
   test("a version its parent POM manages counts too", async () => {
     const repository = await folder({
       [pomPath("com.hierynomus:smbj:0.14.0")]: pom(
