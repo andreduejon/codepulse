@@ -1240,6 +1240,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                         <DashboardView
                           dashboard={dashboard}
                           mouseEnabled={() => dialog() == null && state.keyboardScopeOverride() == null}
+                          onRowClick={() => actions.setDetailFocused(false)}
                         />
                       </box>
                     </Show>

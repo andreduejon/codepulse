@@ -393,3 +393,19 @@ test("a scan on the dashboard reads its cached result, also for a commit the gra
     await d.dispose();
   }
 });
+
+test("a click on the selected event gives the event list the keyboard back, as a click on another one does", async () => {
+  const event: DashboardEvent = { ...outsideEvent, sha: "e".repeat(40) };
+  const d = await launchDashboard({ width: 200, shas: ["e".repeat(40)], events: [event] });
+  try {
+    await d.press("ARROW_RIGHT");
+    expect(d.state.detailFocused()).toBe(true);
+    const lines = d.frame().split("\n");
+    const y = lines.findIndex(line => line.includes("CI #815 failed"));
+    await d.setup.mockMouse.click(lines[y]?.indexOf("CI #815") ?? 0, y);
+    await d.setup.flush();
+    expect(d.state.detailFocused()).toBe(false);
+  } finally {
+    await d.dispose();
+  }
+});

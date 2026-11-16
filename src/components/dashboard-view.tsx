@@ -27,6 +27,8 @@ export function DashboardView(
     dashboard: DashboardState;
     mouseEnabled?: () => boolean;
     now?: () => number;
+    /** A click on an event: the event list has the keyboard (also on the event already selected). */
+    onRowClick?: () => void;
   }>,
 ) {
   const t = useT();
@@ -162,6 +164,7 @@ export function DashboardView(
                     event.preventDefault();
                     // Like the graph, a click only selects: the details' first row shows the event in the graph.
                     d.select(index());
+                    props.onRowClick?.();
                   }}
                 >
                   <Rope row={row} />
