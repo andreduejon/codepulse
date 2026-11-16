@@ -64,7 +64,7 @@ export function useDashboard(
     load?: (app: string, options: LoadOptions) => Promise<DashboardEvent[]>;
     /**
      * The open app's events its providers hold now: their caches keep only what ended, so a running build comes from
-     * here. A read event with the same id wins (it ended); one without a branch takes its commit's from a read event.
+     * here. With the same id, the newer wins; one without a branch takes its commit's from a read event.
      */
     live?: Accessor<DashboardEvent[]>;
   }>,
@@ -143,14 +143,20 @@ export function useDashboard(
     const held = opts.live?.() ?? [];
     if (held.length === 0) return read;
     const since = (opts.now ?? Date.now)() - windowDays() * DAY;
-    const ids = new Set(read.map(event => event.id));
+    const byId = new Map(read.map(event => [event.id, event] as const));
     const branches = new Map(read.flatMap(event => (event.branch ? [[event.sha, event.branch] as const] : [])));
-    const added = held.flatMap(event => {
-      if (ids.has(event.id) || event.time < since) return [];
-      const branch = event.branch ?? branches.get(event.sha);
-      return [branch ? { ...event, branch } : event];
-    });
-    return added.length === 0 ? read : [...read, ...added].sort((a, b) => b.time - a.time);
+    let changed = false;
+    for (const event of held) {
+      if (event.time < since) continue;
+      // The newer wins: a run going again under its id (a GitHub re-run) over its cached end, a cached end over a
+      // provider's older copy.
+      const known = byId.get(event.id);
+      if (known && known.time >= event.time) continue;
+      const branch = event.branch ?? known?.branch ?? branches.get(event.sha);
+      byId.set(event.id, branch ? { ...event, branch } : event);
+      changed = true;
+    }
+    return changed ? [...byId.values()].sort((a, b) => b.time - a.time) : read;
   });
   const shown = createMemo(() => {
     const left = hidden();

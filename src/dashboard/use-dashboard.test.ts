@@ -212,8 +212,9 @@ test("what the providers hold now joins the read events: a running build shows, 
   });
   expect(state.totalCount()).toBe(2);
 
-  // It ended and its provider wrote it: the read event, not the one still in memory.
+  // It ended: its provider holds the end and wrote it, with the same time. The read event, one copy.
   setLoaded([finished, { ...event("/shop", 30), sha: SHA, branch: "dev" }]);
+  setLive([{ ...unbranched, status: "pass", text: "dev #7 passed", time: finished.time }]);
   await state.reload();
   expect(texts()).toEqual(["dev #7 passed", "/shop 30"]);
 
@@ -249,4 +250,27 @@ test("another app shows none of the previous app's events while its own are read
   release();
   await settle();
   expect(state.selected()?.app).toBe(WEB.path);
+});
+
+test("a run going again under the same id (a GitHub re-run) shows as it is now, not as its cached end", async () => {
+  const failed: DashboardEvent = {
+    id: "/shop:github-actions:1",
+    app: "/shop",
+    source: "github-actions",
+    time: NOW - 30 * 60_000,
+    status: "fail",
+    text: "CI #9 failed",
+    sha: "c".repeat(40),
+  };
+  const [live] = createSignal<DashboardEvent[]>([
+    { ...failed, time: NOW - 60_000, status: "running", text: "CI #9 running" },
+  ]);
+  const [active] = createSignal(true);
+  const state = createRoot(dispose => {
+    cleanup.push(dispose);
+    return useDashboard({ app: () => SHOP, active, now: () => NOW, live, load: async () => [failed] });
+  });
+  await settle();
+  const texts = state.rows().flatMap(row => (row.kind === "event" ? [row.event.text] : []));
+  expect(texts).toEqual(["CI #9 running"]);
 });
