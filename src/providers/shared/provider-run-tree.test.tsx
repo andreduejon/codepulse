@@ -768,3 +768,17 @@ test("browsing past an event loads nothing: its run opens once the selection sta
     setup.renderer.destroy();
   }
 });
+
+test("a tree that is gone leaves no Enter action behind for what shows next (the dashboard's Info)", async () => {
+  const t = await renderTree();
+  try {
+    t.setCursor(0);
+    t.setMounted(false);
+    await t.settle();
+    t.navRef.activateCurrentItem();
+    await t.settle();
+    expect(t.reload).not.toHaveBeenCalled();
+  } finally {
+    t.renderer.destroy();
+  }
+});

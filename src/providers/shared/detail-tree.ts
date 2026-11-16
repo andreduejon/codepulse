@@ -50,6 +50,9 @@ export function useDetailTree(
     refsByKey.clear();
     indexByKey.clear();
     itemRefs.length = 0;
+    // Enter must not reach a tree that is gone (the dashboard's Info fallback has no rows of its own). Only its own
+    // action: another view may have taken the ref already.
+    if (opts.navRef && opts.navRef.activateCurrentItem === opts.activate) opts.navRef.activateCurrentItem = () => false;
   });
 
   const ref = (key: string) => (element: Renderable) => {
