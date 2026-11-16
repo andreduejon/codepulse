@@ -749,6 +749,9 @@ export function AppContent(props: Readonly<AppContentProps>) {
   };
   const showSelectedInGraph = () => {
     const event = dashboard.selected();
+    // The event list has the keyboard until the jump lands: then the provider's details take it (a commit outside
+    // the graph only gets a notice).
+    actions.setDetailFocused(false);
     setDialog(null);
     if (event) showInGraph(event);
   };

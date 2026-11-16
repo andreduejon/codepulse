@@ -442,3 +442,18 @@ test("in the compact dialog, the o open hint shows for a row with its own page a
     await d.dispose();
   }
 });
+
+test("in the compact dialog, s for a commit the graph doesn't hold says why and gives the event list the keyboard", async () => {
+  const d = await launchDashboard({ width: 120, shas: ["e".repeat(40)], events: [outsideEvent] });
+  try {
+    await d.press("RETURN");
+    expect(d.state.detailFocused()).toBe(true);
+    await d.press("s");
+    for (let tries = 0; tries < 5; tries++) await d.setup.flush();
+    expect(d.state.activeProviderView()).toBe("dashboard");
+    expect(d.frame()).toMatch(/not in the graph/);
+    expect(d.state.detailFocused()).toBe(false);
+  } finally {
+    await d.dispose();
+  }
+});
