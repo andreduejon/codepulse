@@ -139,6 +139,9 @@ type FlatItem<TRaw, TJobRaw> =
       flatIndex: number;
     };
 
+/** How long the dashboard's event stays selected before its run opens (and loads its jobs) on its own. */
+const TARGET_OPEN_DELAY_MS = 400;
+
 export interface ProviderRunTreeProps<TRaw, TJobRaw> {
   mouseEnabled?: boolean;
   onMouseFocus?: () => void;
@@ -499,15 +502,25 @@ export function ProviderRunTree<TRaw, TJobRaw>(props: Readonly<ProviderRunTreePr
   // Failure first: entering a commit's tab (detail focus) opens its first failed run once, unless the user already
   // opened one. Only on focus, so browsing commits in the graph never fetches jobs.
 
-  // The dashboard's event: its run opens once (closing it sticks), and the focus starts on it once.
+  // The dashboard's event: its run opens once (closing it sticks), and the focus starts on it once. Opening loads its
+  // jobs, so it waits until the event stays selected: browsing past events loads nothing. Jobs already loaded, or the
+  // tab's focus, open it at once.
   createEffect(() => {
     const id = props.targetRunId;
     const run = id ? props.runs.find(candidate => candidate.id === id) : undefined;
     if (!id || !run) return;
     const key = `${props.dataKey}\u0000${id}`;
     if (opened.targetOpenedKey === key) return;
-    opened.targetOpenedKey = key;
-    if (!untrack(expandedRuns).has(id)) untrack(() => toggleRun(run));
+    const open = () => {
+      opened.targetOpenedKey = key;
+      if (!untrack(expandedRuns).has(id)) untrack(() => toggleRun(run));
+    };
+    if (props.detailFocused() || untrack(fetchedJobs).has(id)) {
+      open();
+      return;
+    }
+    const timer = setTimeout(open, TARGET_OPEN_DELAY_MS);
+    onCleanup(() => clearTimeout(timer));
   });
   createEffect(() => {
     const id = props.targetRunId;

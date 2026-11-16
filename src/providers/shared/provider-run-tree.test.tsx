@@ -703,8 +703,8 @@ test("the dashboard's event: its run opens at once and is marked, and the tab's 
     { width: 70, height: 20 },
   );
   try {
-    await setup.renderOnce();
-    await Bun.sleep(0);
+    // Once the event stays selected (browsing past it would load nothing).
+    await Bun.sleep(500);
     await setup.renderOnce();
     const frame = setup.captureCharFrame();
     // Open before any focus, the other run (even a failed one) stays closed.
@@ -721,6 +721,49 @@ test("the dashboard's event: its run opens at once and is marked, and the tab's 
     // Lint is item 0 (no Reload row here), Deploy item 1.
     expect(cursor()).toBe(1);
     expect(setup.captureCharFrame()).toContain("▸ Lint #9");
+  } finally {
+    setup.renderer.destroy();
+  }
+});
+
+test("browsing past an event loads nothing: its run opens once the selection stays on it, or at once with the focus", async () => {
+  const runs: ProviderTreeRun<null>[] = [{ ...run("completed", "success", date), id: "event", label: "Deploy" }];
+  const [shown, setShown] = createSignal(true);
+  const [focused, setFocused] = createSignal(false);
+  const fetchJobs = mock(async () => ({ jobs: [job("completed", "success", "completed")], error: null }));
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={createThemeState()}>
+        <Show when={shown()}>
+          <ProviderRunTree
+            runs={runs}
+            detailCursorIndex={() => 0}
+            detailFocused={focused}
+            setDetailCursorAction={() => {}}
+            setDetailCursorIndex={() => {}}
+            fetchJobsForRun={fetchJobs}
+            debugSource="GitHub"
+            dataKey="sha"
+            summaryLabel="total workflow runs"
+            targetRunId="event"
+          />
+        </Show>
+      </ThemeContext.Provider>
+    ),
+    { width: 70, height: 12 },
+  );
+  try {
+    // Shown briefly (the next event selected right away): nothing loads.
+    await Bun.sleep(100);
+    setShown(false);
+    await Bun.sleep(500);
+    expect(fetchJobs).not.toHaveBeenCalled();
+    // Shown long enough: it opens and loads once.
+    setShown(true);
+    await Bun.sleep(600);
+    await setup.renderOnce();
+    expect(fetchJobs).toHaveBeenCalledTimes(1);
+    expect(setup.captureCharFrame()).toContain("▾ Deploy");
   } finally {
     setup.renderer.destroy();
   }
