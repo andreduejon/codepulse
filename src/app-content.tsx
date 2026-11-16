@@ -588,19 +588,27 @@ export function AppContent(props: Readonly<AppContentProps>) {
     const rows = state.graphRows();
     if (rows.length === 0) return;
     const index = rows.findIndex(row => row.commit.hash === jump.sha);
+    // Not in the graph (older than its loaded pages, or outside its branch filter): stay, and say so, rather than show
+    // another commit in the provider's view.
+    if (index < 0) {
+      setPendingGraphJump(null);
+      setGitNotice({
+        kind: "info",
+        source: "Dashboard",
+        title: `${jump.sha.slice(0, 7)} is not in the graph`,
+        message: "It is older than the graph's loaded history, or outside its branch filter.",
+      });
+      return;
+    }
     batch(() => {
       setPendingGraphJump(null);
       actions.setActiveProviderView(state.providers.getEnabledViews().includes(jump.view) ? jump.view : "git");
-      if (index >= 0) {
-        actions.setCursorIndex(index);
-        actions.setScrollTargetIndex(index);
-      }
+      actions.setCursorIndex(index);
+      actions.setScrollTargetIndex(index);
     });
     // Its details, as the dashboard showed them: focused beside the graph, the details dialog in the compact layout.
-    if (index >= 0) {
-      if (untrack(layoutMode) === "compact") setDialog("detail");
-      else actions.setDetailFocused(true);
-    }
+    if (untrack(layoutMode) === "compact") setDialog("detail");
+    else actions.setDetailFocused(true);
   });
 
   /** The selected event's tabs: its provider's own (Snyk's two), then Info, its commit as the graph shows it. */

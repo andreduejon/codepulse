@@ -7,6 +7,7 @@ import * as config from "./config";
 import * as configWrite from "./config-write";
 import type { AppActions, AppState } from "./context/state";
 import { createThemeState } from "./context/theme";
+import type { DashboardEvent } from "./dashboard/events";
 import * as dashboardLoad from "./dashboard/load";
 import { buildGraph } from "./git/graph";
 import * as dataLoader from "./hooks/use-data-loader";
@@ -238,5 +239,119 @@ test("beside the events, → gives the provider's tab the keyboard: ←/→ betw
   } finally {
     await setup?.dispose();
     for (const spy of spies) spy.mockRestore();
+  }
+});
+
+/** Codepulse on the dashboard of one app: its graph holds `shas`, the dashboard reads `events`. */
+async function launchDashboard(opts: { width: number; shas: string[]; events: DashboardEvent[] }) {
+  const repo = resolve("/repo/dashboard-helper");
+  let app: { state: AppState; actions: AppActions } | undefined;
+  const commits = opts.shas.map((hash, index) => ({
+    hash,
+    shortHash: hash.slice(0, 7),
+    parents: index + 1 < opts.shas.length ? [opts.shas[index + 1] ?? ""] : [],
+    subject: `commit ${index}`,
+    body: "",
+    author: "Author",
+    authorEmail: "author@example.com",
+    authorDate: "2026-10-13T10:00:00Z",
+    committer: "Author",
+    committerEmail: "author@example.com",
+    commitDate: "2026-10-13T10:00:00Z",
+    refs: [],
+  }));
+  const spies = [
+    spyOn(configWrite, "backfillRepoConfig").mockImplementation(() => {}),
+    spyOn(config, "loadConfig").mockReturnValue({ config: {}, warnings: [] }),
+    spyOn(config, "getRepoDisplayConfig").mockReturnValue({}),
+    spyOn(config, "getKnownRepoInfos").mockReturnValue([{ path: repo }]),
+    spyOn(detailLoader, "useDetailLoader").mockImplementation(() => {}),
+    spyOn(CliRenderer.prototype, "setTerminalTitle").mockImplementation(() => {}),
+    spyOn(dashboardLoad, "loadAppEvents").mockResolvedValue(opts.events.map(event => ({ ...event, app: repo }))),
+    spyOn(dashboardLoad, "loadCommitInfo").mockResolvedValue({
+      author: "Old Author",
+      email: "old@example.com",
+      date: "2026-01-02T03:04:05Z",
+      subject: "an old commit",
+      body: "Its body.",
+    }),
+    spyOn(dataLoader, "useDataLoader").mockImplementation(options => {
+      app = { state: options.state, actions: options.actions };
+      options.actions.setRepoPath(repo);
+      options.actions.setCommits(commits);
+      options.actions.setGraphRows(buildGraph(commits));
+      options.actions.setCurrentBranch("main");
+      options.actions.setLoading(false);
+      return { loadData: async () => {}, loadMoreData: async () => {}, handleFetch: async () => {} };
+    }),
+  ];
+  const setup = await testRender(
+    () => (
+      <AppContent
+        repoPath={repo}
+        startupMode={{ kind: "graph" }}
+        themeState={createThemeState()}
+        autoRefreshInterval={0}
+        autoFetchInterval={0}
+      />
+    ),
+    { width: opts.width, height: 40, kittyKeyboard: true, useMouse: true },
+  );
+  await setup.flush();
+  if (!app) throw new Error("App fixture did not initialize");
+  const frame = () => setup.captureCharFrame();
+  app.actions.setActiveProviderView("dashboard");
+  for (let tries = 0; tries < 20 && !opts.events.every(event => frame().includes(event.text)); tries++)
+    await setup.flush();
+  return {
+    ...app,
+    setup,
+    frame,
+    press: async (key: string) => {
+      setup.mockInput.pressKey(key);
+      await setup.flush();
+    },
+    dispose: async () => {
+      await setup.dispose();
+      for (const spy of spies) spy.mockRestore();
+    },
+  };
+}
+
+const OUTSIDE = "d".repeat(40);
+const outsideEvent: DashboardEvent = {
+  id: "github-actions:outside",
+  app: "",
+  source: "github-actions",
+  time: Date.now() - 60_000,
+  status: "fail",
+  text: "CI #815 failed",
+  sha: OUTSIDE,
+};
+
+test("Enter on an event whose commit the graph doesn't hold stays on the dashboard and says why", async () => {
+  const d = await launchDashboard({ width: 200, shas: ["e".repeat(40)], events: [outsideEvent] });
+  try {
+    await d.press("RETURN");
+    for (let tries = 0; tries < 5; tries++) await d.setup.flush();
+    expect(d.state.activeProviderView()).toBe("dashboard");
+    expect(d.frame()).toContain("dddddd");
+    expect(d.frame()).toMatch(/not in the graph/);
+  } finally {
+    await d.dispose();
+  }
+});
+
+test("Info for a commit the graph doesn't hold shows what Git reads: hash, author, date, subject and body", async () => {
+  const d = await launchDashboard({ width: 200, shas: ["e".repeat(40)], events: [outsideEvent] });
+  try {
+    await d.press("ARROW_RIGHT");
+    await d.press("ARROW_RIGHT");
+    for (let tries = 0; tries < 5; tries++) await d.setup.flush();
+    expect(d.state.detailActiveTab()).toBe("info");
+    for (const text of [OUTSIDE, "Old Author <old@example.com>", "an old commit", "Its body."])
+      expect(d.frame()).toContain(text);
+  } finally {
+    await d.dispose();
   }
 });

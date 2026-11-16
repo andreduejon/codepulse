@@ -198,7 +198,7 @@ export function DashboardDetail(
                         .filter(Boolean)
                         .join(" · ")}
                     </text>
-                    <DashboardCommitFields event={event()} commit={commit()} />
+                    <DashboardCommitFields event={event()} commit={commit()} facts />
                   </>
                 }
               >
@@ -224,41 +224,53 @@ export function DashboardDetail(
   );
 }
 
-/** A commit's details as Git reads them, where the graph doesn't hold it (older than its pages): hash and author. */
-export function DashboardCommitFields(props: Readonly<{ event: DashboardEvent; commit: CommitInfo | null }>) {
+/**
+ * A commit as Git reads it, in the order of the graph's Info tab: for one the graph doesn't hold (older than its pages,
+ * outside its branch filter). With `facts`, the event's provider facts come first (the panel without tabs).
+ */
+export function DashboardCommitFields(
+  props: Readonly<{ event: DashboardEvent; commit: CommitInfo | null; facts?: boolean }>,
+) {
   const t = useT();
-  const Field = (fieldProps: { label: string; children: JSX.Element; wrap?: boolean }) => (
+  const Field = (fieldProps: { label: string; children: JSX.Element; wrap?: boolean; muted?: boolean }) => (
     <>
       <box height={1} />
       <text fg={t().accent} wrapMode="none">
         <strong>{fieldProps.label}</strong>
       </text>
-      <text fg={t().foreground} wrapMode={fieldProps.wrap ? "word" : "none"} truncate={!fieldProps.wrap}>
+      <text
+        fg={fieldProps.muted ? t().foregroundMuted : t().foreground}
+        wrapMode={fieldProps.wrap ? "word" : "none"}
+        truncate={!fieldProps.wrap}
+      >
         {fieldProps.children}
       </text>
     </>
   );
   return (
     <>
-      <For each={props.event.facts ?? []}>
-        {fact => (
-          <Field label={fact.label} wrap={fact.label === "Reason"}>
-            {fact.value}
-          </Field>
-        )}
-      </For>
+      <Show when={props.facts}>
+        <For each={props.event.facts ?? []}>
+          {fact => (
+            <Field label={fact.label} wrap={fact.label === "Reason"}>
+              {fact.value}
+            </Field>
+          )}
+        </For>
+      </Show>
       <Field label="Commit">{props.event.sha}</Field>
       <Show when={props.commit}>
         {info => (
           <>
-            <Show when={props.event.source !== "git"}>
-              <Field label="Subject" wrap>
-                {info().subject}
-              </Field>
-            </Show>
             <Field label="Author">{`${info().author} <${info().email}>`}</Field>
-            <Show when={props.event.source !== "git"}>
-              <Field label="Date">{formatDate(info().date)}</Field>
+            <Field label="Date">{formatDate(info().date)}</Field>
+            <Field label="Subject" wrap>
+              {info().subject}
+            </Field>
+            <Show when={info().body}>
+              <Field label="Body" wrap muted>
+                {info().body}
+              </Field>
             </Show>
           </>
         )}
