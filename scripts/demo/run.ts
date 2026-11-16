@@ -9,6 +9,7 @@
 import { rmSync } from "node:fs";
 import { constants } from "node:os";
 import { join } from "node:path";
+import { defaultConfig } from "../../src/config";
 import { DEMO_HELP, DemoOptionError, parseDemoOptions, waitLimitMs } from "./options";
 import { FIXED_NOW, PLAY_ENV, type PlayConfig } from "./scenario";
 import { PlayError, parsePlay } from "./steps";
@@ -76,6 +77,7 @@ try {
         ...options.size,
         repoPath: world.repoPath,
         waitMs: waitLimitMs(options),
+        colors: options.colors ? { theme: options.theme ?? defaultConfig().theme } : null,
       };
       env[PLAY_ENV] = JSON.stringify(config);
     }

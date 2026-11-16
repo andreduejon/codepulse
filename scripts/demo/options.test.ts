@@ -17,6 +17,12 @@ describe("parseDemoOptions", () => {
     expect(options.live).toBeNull();
   });
 
+  test("--colors names the colors in a play's shots, and only there", () => {
+    expect(parseDemoOptions([]).colors).toBe(false);
+    expect(parseDemoOptions(["--play", "shot", "--colors"]).colors).toBe(true);
+    expect(() => parseDemoOptions(["--colors"])).toThrow("--colors works with --play");
+  });
+
   test("reads a play, its size and one mode per provider", () => {
     const options = parseDemoOptions([
       "--play",

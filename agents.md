@@ -62,6 +62,7 @@ runs it headless and prints the screens as text. See [docs/demo.md](docs/demo.md
 ```sh
 bun run demo --play 'j j enter tab wait:"CI #812" shot'      # the screen after those keys
 bun run demo --github error:401 --play 'tab sleep:500 shot'  # a provider failing
+bun run demo --colors --play 'click:Dashboard sleep:2000 shot' # each color named: «severityHigh:3 high»
 bun run demo --play "$(cat play.txt)" > after.txt            # the same play prints the same screens: diff it
 ```
 

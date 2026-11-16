@@ -58,6 +58,8 @@ export interface PlayConfig {
   repoPath: string;
   /** How long `wait:` and `gone:` wait. */
   waitMs: number;
+  /** `--colors`: shots name each color of this theme. */
+  colors: { theme: string } | null;
 }
 
 export const REMOTES_ENV = "CODEPULSE_DEMO_REMOTES";

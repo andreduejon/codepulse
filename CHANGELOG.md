@@ -29,13 +29,15 @@ All notable changes to this project will be documented in this file.
   fresh without visiting each tab. A failed fetch or scan shows in the message box, worded as on the provider's tab;
   several share one box (`Errors from GitHub and Jenkins`) with a line each. Closing it with `✕` or `:clear` keeps it
   closed until an error changes. The dashboard reads Git and the provider caches, and reads them again whenever a
-  provider finishes a fetch or the graph is read again; `r` reads them at once. **Menu → Providers → Dashboard** turns
-  it off (Enabled, on by default: without it there is no Dashboard tab and a repository set to start in it starts in
-  Git) and sets how far back it reads (Time window, 1 to 30 days, 7 by default) and how long a knot is (Knot size, 15
-  minutes to 4 hours, 1 hour by default). The Dashboard tab has its own color in every theme; custom themes set it with
-  `dashboardFg` and `dashboardBg`, which a standalone theme (one without `base`) must have: one without them is skipped,
-  and Debug names the missing colors. The graph's search (`/`), path filter and ancestry don't work on the dashboard, an
-  open search bar closes when it shows, and Esc there leaves the graph's highlights and branch view alone.
+  provider finishes a fetch or the graph is read again. `r`, `f` and `:reload` fetch every provider that is turned on
+  again, as they do for one provider on its tab, so a build that just finished shows at once. **Menu → Providers →
+  Dashboard** turns it off (Enabled, on by default: without it there is no Dashboard tab and a repository set to start
+  in it starts in Git) and sets how far back it reads (Time window, 1 to 30 days, 7 by default) and how long a knot is
+  (Knot size, 15 minutes to 4 hours, 1 hour by default). The Dashboard tab has its own color in every theme; custom
+  themes set it with `dashboardFg` and `dashboardBg`, which a standalone theme (one without `base`) must have: one
+  without them is skipped, and Debug names the missing colors. The graph's search (`/`), path filter and ancestry don't
+  work on the dashboard, an open search bar closes when it shows, and Esc there leaves the graph's highlights and branch
+  view alone.
 - **Menu → Repository → Preferences → Start in** chooses the view a repository opens in: Git (the default), the
   Dashboard or a provider that is turned on. Saved per repository as `startView`. Another repository of the group opens
   in its own start view the first time it's shown, and where you left it after that. A provider turned off since starts
@@ -54,6 +56,11 @@ All notable changes to this project will be documented in this file.
   `MAVEN_OPTS` put it), where Maven saved them while Snyk resolved the tree. Nothing is downloaded: a POM that is not
   there, a version range or an unknown property keeps the pin. A direct dependency keeps its pin too. Scans made
   before this version show it after **Rescan commit**.
+
+- `bun run demo`: a third app with a long name (`customer-notification-service`), shop-web with a `main` behind its
+  remote while a file has changes and a `dev` with commits on both sides (for `ctrl+f`'s warnings), GitHub runs and
+  OpenShift builds that name their branch, and the last fetch dated by the demo's clock. `--colors` names each color in
+  the shots by its theme key (`«severityHigh:3 high»`), so a play can check colors too.
 
 ### Changed
 

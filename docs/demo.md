@@ -28,6 +28,7 @@ bun run demo --help                            # options and steps
 | `--live [SECONDS]` | interactive | The world moves on every SECONDS (default 60, up to 86400). See [Phases](#phases). |
 | `--latency MS` | both | Fake server delay in milliseconds, default 150, up to 60000. Raise it to look at loading states. |
 | `--theme NAME` | both | Starts with that theme. |
+| `--colors` | headless | Shots name each color by its theme key: `«severityHigh:3 high»` for text, `«/backgroundElement:…»` for a background, `«fg/bg:…»` for both. The screen's own background and the theme's `foreground` and `background` stay plain. One color can be several keys (`«error\|severityCritical\|diffRemoved:…»`); a color no key has is its hex. |
 | `--keep` | both | Keeps the demo folder (repositories, config, cache, `requests.log`) and prints where it is. |
 
 Provider modes:

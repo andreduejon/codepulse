@@ -31,6 +31,8 @@ export interface DemoOptions {
   /** Fake server delay in milliseconds. */
   latency: number;
   theme: string | null;
+  /** Shots name each color (scripts/demo/colors.ts). */
+  colors: boolean;
   keep: boolean;
   help: boolean;
 }
@@ -57,6 +59,7 @@ Options
   --live [SECONDS]        interactive: the world moves on every SECONDS (default ${DEFAULT_LIVE_SECONDS}, up to 86400)
   --latency MS            fake server delay in milliseconds (default ${DEFAULT_LATENCY_MS}, up to 60000)
   --theme NAME            start with this theme
+  --colors                with --play: name each color in the shots, like «severityHigh:3 high»
   --keep                  keep the demo folder and print where it is
   --help                  show this help
 
@@ -126,6 +129,7 @@ export function parseDemoOptions(args: readonly string[]): DemoOptions {
     live: null,
     latency: DEFAULT_LATENCY_MS,
     theme: null,
+    colors: false,
     keep: false,
     help: false,
   };
@@ -187,6 +191,9 @@ export function parseDemoOptions(args: readonly string[]): DemoOptions {
         options.theme = theme;
         break;
       }
+      case "--colors":
+        options.colors = true;
+        break;
       case "--keep":
         options.keep = true;
         break;
@@ -200,6 +207,8 @@ export function parseDemoOptions(args: readonly string[]): DemoOptions {
   }
   if (sizeGiven && options.play === null)
     throw new DemoOptionError("--size works with --play. The interactive demo uses your terminal's size.");
+  if (options.colors && options.play === null)
+    throw new DemoOptionError("--colors works with --play: it names the colors in the shots.");
   if (options.live !== null && options.play !== null)
     throw new DemoOptionError("--live is for the interactive demo. In --play, the advance step moves the world on.");
   return options;

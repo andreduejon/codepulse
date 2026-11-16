@@ -91,3 +91,11 @@ test("on Windows the PATH gets Git's own cmd folder, not a package manager's fol
   expect(windowsGitFolder(shim, execPath, () => false)).toBe(dirname(shim));
   expect(windowsGitFolder(shim, null, () => true)).toBe(dirname(shim));
 });
+
+test("each repository's last fetch is 12 minutes before the demo's now, so the menu's age follows the demo clock", async () => {
+  const { getLastFetchTime } = await import("../../src/git/repo");
+  for (const name of ["shop", "shop-web", "customer-notification-service"]) {
+    const time = await getLastFetchTime(join(dirname(world.repoPath), name));
+    expect(time?.getTime()).toBe(FIXED_NOW - 12 * 60_000);
+  }
+});

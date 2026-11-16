@@ -390,11 +390,17 @@ export function AppContent(props: Readonly<AppContentProps>) {
     setDialog("openshift-resource");
   };
 
+  /** Fetch a provider's data again, as its Reload does; Snyk scans branch tips on its own. */
+  const refreshProvider = async (view: ProviderView) => {
+    if (view === "github-actions") await gitHubCI.refresh();
+    else if (view === "jenkins") await jenkinsCI.refresh();
+    else if (view === "openshift") await openShift.refresh();
+  };
+  /** The shown view's providers: its own, or on the dashboard every one turned on. */
   const refreshActiveProvider = async () => {
-    if (state.activeProviderView() === "github-actions") await gitHubCI.refresh();
-    else if (state.activeProviderView() === "jenkins") await jenkinsCI.refresh();
-    else if (state.activeProviderView() === "openshift") await openShift.refresh();
-    else if (state.activeProviderView() === "snyk") return;
+    const view = state.activeProviderView();
+    if (view !== "dashboard") return refreshProvider(view);
+    await Promise.all(state.providers.getEnabledViews().map(refreshProvider));
   };
 
   const knownRepoInfos = () => getKnownRepoInfos();
@@ -636,7 +642,9 @@ export function AppContent(props: Readonly<AppContentProps>) {
         activateDashboard();
         break;
       case "r":
+        // Read what is cached at once; each provider's fetch reads again when it is written.
         void dashboard.reload();
+        void refreshActiveProvider();
         break;
       case "o":
         if (!dashboard.selected()?.url) return;

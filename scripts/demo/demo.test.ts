@@ -168,6 +168,28 @@ describe("bun run demo --play", () => {
 });
 
 test(
+  "on the dashboard, r fetches again: a run that finishes after the world moves on shows at once, in its colors",
+  async () => {
+    const user = userEnv("dashboard-refresh");
+    const result = await demo(
+      [
+        "--colors",
+        "--size",
+        "130x30",
+        "--play",
+        'wait:"86 commits" click:Dashboard wait:"CI #813" absent:"CI #814" advance r wait:"CI #814 passed" shot',
+      ],
+      user.env,
+    );
+    expect(result.stderr).not.toContain("error");
+    expect(result.code).toBe(0);
+    // The run's knot is GitHub's color, its mark the passed one (the new row is selected: its text has a background).
+    expect(result.stdout).toMatch(/«[^:»]*githubActionsBg[^:»]*:█».*«success[^:»]*:✓ »(«[^:»]*:)?CI #814 passed/);
+  },
+  { timeout: 120_000 },
+);
+
+test(
   "the compiled fake CLIs (the Windows way) answer as snyk and npm",
   async () => {
     const bin = join(sandbox, "compiled-bin");

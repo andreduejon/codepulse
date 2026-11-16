@@ -16,6 +16,7 @@ import {
   realpathSync,
   rmSync,
   symlinkSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -316,6 +317,11 @@ function fillWorld(root: string, options: DemoOptions, now: number): DemoWorld {
   git(notifications, ["push", "-q", "origin", "main"]);
   git(notifications, ["fetch", "-q", "origin"]);
   git(notifications, ["branch", "-q", "-u", "origin/main", "main"]);
+
+  // The last fetch, 12 minutes before the demo's now: Git dates it by the real clock, the headless app runs on the
+  // demo's, so the menu's Fetch remote age would not make sense.
+  const fetchedAt = new Date(now - 12 * 60_000);
+  for (const repo of [shop, web, notifications]) utimesSync(join(repo, ".git", "FETCH_HEAD"), fetchedAt, fetchedAt);
 
   const state: DemoState = {
     root,

@@ -7,7 +7,9 @@
 import { CliRenderer } from "@opentui/core";
 import { testRender } from "@opentui/solid";
 import App from "../../src/app";
+import { themes } from "../../src/context/theme";
 import { startupProps } from "../../src/main";
+import { colorLines } from "./colors";
 import { advancePhase } from "./phase";
 import { loadDemoState, type PlayConfig } from "./scenario";
 import { parsePlay, type Step, type Target } from "./steps";
@@ -36,10 +38,14 @@ export async function play(config: PlayConfig): Promise<number> {
   let shots = 0;
 
   const screen = () => setup.captureCharFrame();
+  const colorTheme = config.colors ? themes[config.colors.theme] : undefined;
+  /** The screen's text, where steps find what they click and hover. */
   const lines = () =>
     screen()
       .split("\n")
       .map(line => line.trimEnd());
+  /** The screen as printed: its text, or with each color named (`--colors`). */
+  const printed = () => (colorTheme ? colorLines(setup.captureSpans(), colorTheme) : lines());
   const print = (title: string, body: string[]) =>
     process.stdout.write(`=== ${title} (${size.width}x${size.height}) ===\n${body.join("\n")}\n`);
 
@@ -123,7 +129,7 @@ export async function play(config: PlayConfig): Promise<number> {
         return;
       case "shot":
         shots++;
-        print(`shot ${shots}${step.name ? `: ${step.name}` : ""}`, lines());
+        print(`shot ${shots}${step.name ? `: ${step.name}` : ""}`, printed());
         return;
       case "size":
         size = { width: step.width, height: step.height };
@@ -171,12 +177,12 @@ export async function play(config: PlayConfig): Promise<number> {
       await run(step);
     } catch (error) {
       if (!(error instanceof StepFailure)) throw error;
-      print(`failed at step ${index + 1} (${source}): ${error.message}`, lines());
+      print(`failed at step ${index + 1} (${source}): ${error.message}`, printed());
       code = 1;
       break;
     }
   }
-  if (code === 0 && shots === 0 && !setup.renderer.isDestroyed) print("end", lines());
+  if (code === 0 && shots === 0 && !setup.renderer.isDestroyed) print("end", printed());
   if (!setup.renderer.isDestroyed) setup.renderer.destroy();
   return code;
 }
