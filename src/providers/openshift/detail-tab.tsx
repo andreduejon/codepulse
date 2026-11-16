@@ -114,6 +114,8 @@ interface NamespaceMemory {
 }
 
 const newNamespaceMemory = (): NamespaceMemory => ({ sha: null, known: new Set(), expanded: new Set() });
+/** The dashboard event the focus was put on (`commit\0resource`), so it is put there once. */
+const newTargetFocus = (): { key: string | null } => ({ key: null });
 
 export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
   const t = useT();
@@ -262,8 +264,9 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
     else props.setDetailCursorAction("open");
   });
 
-  // The dashboard's event: the tab's focus starts on its build, once per commit.
-  const targetFocus = { key: null as string | null };
+  // The dashboard's event: the tab's focus starts on its build, once per commit. Kept in the memory, so mounting again
+  // (a resize between the side panel and the dialog) leaves the cursor where it was moved.
+  const targetFocus = props.memory?.("targetFocus", newTargetFocus) ?? newTargetFocus();
   createEffect(() => {
     const id = props.targetResourceId;
     if (!id || !props.detailFocused()) return;

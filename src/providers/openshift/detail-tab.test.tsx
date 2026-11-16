@@ -327,3 +327,23 @@ test("the dashboard's build that arrives after the tab got the keyboard still ge
     setup.renderer.destroy();
   }
 });
+
+test("the dashboard's build gets the cursor once: mounted again (a resize), the tab leaves it where it was moved", async () => {
+  const tab = await renderOpenShiftTab({
+    builds: [resource("Build", "shop-api-42"), resource("Build", "shop-api-43")],
+    targetResourceId: "Build/shop-api-43",
+    memory: createDetailMemory(),
+  });
+  try {
+    expect(tab.cursor()).toBeGreaterThan(0);
+    tab.setCursor(0);
+    await tab.settle();
+    tab.setMounted(false);
+    await tab.settle();
+    tab.setMounted(true);
+    await tab.settle();
+    expect(tab.cursor()).toBe(0);
+  } finally {
+    tab.renderer.destroy();
+  }
+});
