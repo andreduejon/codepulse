@@ -221,3 +221,32 @@ test("what the providers hold now joins the read events: a running build shows, 
   state.toggleSource("jenkins");
   expect(texts()).toEqual(["/shop 30"]);
 });
+
+test("another app shows none of the previous app's events while its own are read", async () => {
+  const [app, setApp] = createSignal(SHOP);
+  const [active] = createSignal(true);
+  let release: () => void = () => {};
+  const state = createRoot(dispose => {
+    cleanup.push(dispose);
+    return useDashboard({
+      app,
+      active,
+      now: () => NOW,
+      load: path =>
+        path === SHOP.path
+          ? Promise.resolve([event(SHOP.path, 5)])
+          : new Promise(resolve => {
+              release = () => resolve([event(WEB.path, 7)]);
+            }),
+    });
+  });
+  await settle();
+  expect(state.selected()?.app).toBe(SHOP.path);
+  setApp(WEB);
+  // Still reading the web app: nothing of the shop, which an Enter would switch back to.
+  expect(state.selected()).toBeNull();
+  expect(state.totalCount()).toBe(0);
+  release();
+  await settle();
+  expect(state.selected()?.app).toBe(WEB.path);
+});

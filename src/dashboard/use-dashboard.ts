@@ -72,7 +72,12 @@ export function useDashboard(
   const settings = () => opts.settings?.() ?? DEFAULT_DASHBOARD_SETTINGS;
   /** Only a new window reads again: a new knot size lays out the same events. */
   const windowDays = createMemo(() => settings().windowDays);
-  const [events, setEvents] = createSignal<DashboardEvent[]>([]);
+  /** The events read, with the app they were read for: another app shows none of them while its own load. */
+  const [loaded, setLoaded] = createSignal<{ app: string; events: DashboardEvent[] }>({ app: "", events: [] });
+  const events = () => {
+    const read = loaded();
+    return read.app === opts.app().path ? read.events : [];
+  };
   const [loading, setLoading] = createSignal(false);
   const [selectedKey, setSelectedKey] = createSignal<string | null>(null);
   const [hidden, setHidden] = createSignal<ReadonlySet<EventSource>>(new Set());
@@ -97,7 +102,7 @@ export function useDashboard(
         cacheRoot: opts.cacheRoot,
       });
       if (current.signal.aborted) return;
-      setEvents(loaded);
+      setLoaded({ app: app.path, events: loaded });
     } finally {
       if (controller === current) setLoading(false);
     }
