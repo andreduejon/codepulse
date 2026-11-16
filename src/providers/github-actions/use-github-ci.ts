@@ -433,7 +433,8 @@ export function useGitHubCI(opts: {
       if (authFrozen && !retry) return;
       if (retry) authFrozen = false;
       lifecycle.noteRefreshSettled();
-      const runningSHAs = collectRunningSHAs(state.graphBadges());
+      // Its own badges: on the dashboard, the shown view's are the dashboard's (none).
+      const runningSHAs = collectRunningSHAs(state.graphBadgesFor("github-actions"));
       if (runningSHAs.length === 0) return;
       try {
         const { firstError } = await fetchForSHAs(runningSHAs, signal);

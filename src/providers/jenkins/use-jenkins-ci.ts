@@ -308,7 +308,8 @@ export function useJenkinsCI(opts: {
       const repoPath = state.repoPath();
       if (authFrozen && !retry) return;
       if (retry) authFrozen = false;
-      const target = collectRunningSHAs(state.graphBadges());
+      // Its own badges: on the dashboard, the shown view's are the dashboard's (none).
+      const target = collectRunningSHAs(state.graphBadgesFor("jenkins"));
       if (target.length === 0) {
         lifecycle.noteRefreshSettled();
         return;

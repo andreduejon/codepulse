@@ -173,6 +173,7 @@ export function buildOpenShiftProviderItems(
     {
       kind: "editable",
       label: "Server",
+      placeholder: "Enter server URL...",
       get: () => cfg.serverUrl,
       set: v => update({ ...cfg, serverUrl: v.trim() }),
       valid: () => isValidOpenShiftServerUrl(cfg.serverUrl),
@@ -181,7 +182,7 @@ export function buildOpenShiftProviderItems(
     {
       kind: "editable",
       label: "Console",
-      placeholder: "optional, for o",
+      placeholder: "Enter console URL...",
       get: () => cfg.consoleUrl,
       set: v => update({ ...cfg, consoleUrl: v.trim() }),
       valid: () => !cfg.consoleUrl || isValidOpenShiftServerUrl(cfg.consoleUrl),

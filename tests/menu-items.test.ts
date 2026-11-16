@@ -542,3 +542,25 @@ test("a last fetch the clock puts in the future reads as just now, not a negativ
   expect(relativeAgeLabel(new Date(now - 5_000))).toBe("5s ago");
   expect(relativeAgeLabel(new Date(now - 3 * 3_600_000))).toBe("3h ago");
 });
+
+test("every text field in Menu → Providers has the same placeholder style, Enter … with three dots", () => {
+  const openShift = buildOpenShiftProviderItems({
+    enabled: true,
+    serverUrl: "",
+    consoleUrl: "",
+    tokenEnvVar: "OPENSHIFT_TOKEN",
+    namespaces: [],
+    commitShaAnnotation: "dev/commit-sha",
+    cacheLimit: 20,
+    fetchDepth: 20,
+    autoRefreshSeconds: 120,
+  });
+  const placeholders = openShift.flatMap(item =>
+    item.kind === "editable" ? [[item.label, item.placeholder ?? ""] as const] : [],
+  );
+  expect(Object.fromEntries(placeholders)).toMatchObject({
+    Server: "Enter server URL...",
+    Console: "Enter console URL...",
+  });
+  for (const [, placeholder] of placeholders) if (placeholder) expect(placeholder).toMatch(/^Enter [^.]+\.\.\.$/);
+});

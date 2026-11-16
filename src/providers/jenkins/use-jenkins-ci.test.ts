@@ -327,3 +327,25 @@ test("loading shows every cached commit, also below the fetch depth, and asks Je
   expect(graph.mock.calls.length).toBeGreaterThan(0);
   expect(graph.mock.calls.some(call => call[3].includes(older))).toBe(false);
 });
+
+test("on the dashboard, the refresh asks Jenkins about running builds again, as on the Jenkins tab", async () => {
+  const { jenkins, actions, graph } = await mountJenkins();
+  const running = spyOn(api, "fetchJenkinsRunsForBuilds").mockResolvedValue({ data: [run()], error: null });
+  cleanup.push(() => running.mockRestore());
+  graph.mockResolvedValue(result([run({ status: "running", conclusion: null })]));
+  await jenkins.refresh();
+  await settle();
+  expect(jenkins.getCommitData(SHA)?.runs[0]?.status).toBe("running");
+
+  // The dashboard shows Jenkins' events: past the stale time, showing it refreshes the running build.
+  const clock = spyOn(Date, "now").mockReturnValue(Date.now() + 120_000);
+  try {
+    actions.setActiveProviderView("git");
+    actions.setActiveProviderView("dashboard");
+    await settle(() => running.mock.calls.length > 0);
+  } finally {
+    clock.mockRestore();
+  }
+  expect(running).toHaveBeenCalledTimes(1);
+  expect(jenkins.getCommitData(SHA)?.runs[0]).toMatchObject({ status: "completed", conclusion: "success" });
+});

@@ -80,6 +80,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Menu → Providers → OpenShift: an empty **Server** or **Console** reads `Enter server URL...` / `Enter console URL...`,
+  like the other fields, instead of nothing or `optional, for o`.
 - A config value Codepulse ignores (`"dashboard.enabled" must be a boolean, ignoring`) now shows in Debug, once per run.
   Before, the warning was dropped and the value silently ignored.
 - Switching to another app of the group no longer lets Snyk scan the previous app's branch tips in the new one (`Unable
