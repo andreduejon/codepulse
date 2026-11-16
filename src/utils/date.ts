@@ -143,7 +143,8 @@ export function formatDayLabel(time: number, now: number = Date.now()): string {
     ...(date.getFullYear() === today.getFullYear() ? {} : { year: "numeric" }),
   });
   if (sameDay(date, today)) return `Today · ${label}`;
-  if (sameDay(date, new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1))) return `Yesterday · ${label}`;
+  if (sameDay(date, new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1)))
+    return `Yesterday · ${label}`;
   return label;
 }
 

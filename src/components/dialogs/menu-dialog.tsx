@@ -6,7 +6,6 @@ import { SHIFT_JUMP } from "../../constants";
 import { useAppState } from "../../context/state";
 import { useTheme } from "../../context/theme";
 import type { DashboardSettings } from "../../dashboard/settings";
-import type { ProviderView } from "../../providers/provider";
 import {
   COPYABLE_VISIBLE_WIDTH,
   type GitHubMenuConfig,
@@ -18,6 +17,7 @@ import {
 import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useClipboard } from "../../hooks/use-clipboard";
 import { useMenuItems } from "../../hooks/use-menu-items";
+import type { ProviderView } from "../../providers/provider";
 import { scrollIndexedItemIntoView } from "../../utils/scroll";
 import { KeyHint, KeyHintSeparator } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
