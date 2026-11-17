@@ -33,5 +33,6 @@ export type ProviderLifecycle = Pick<
   | "runRequest"
   | "trackFetch"
   | "fetchInitial"
+  | "fetchRefresh"
   | "startAutoRefresh"
 >;
