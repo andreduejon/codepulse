@@ -1,5 +1,5 @@
 import { MouseButton, type MouseEvent, type Renderable, type ScrollBoxRenderable } from "@opentui/core";
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
+import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { batch, createEffect, createSignal, For, onCleanup } from "solid-js";
 import type { ConfigInfo } from "../../config";
 import { SHIFT_JUMP } from "../../constants";
@@ -17,6 +17,7 @@ import {
 import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useClipboard } from "../../hooks/use-clipboard";
 import { useMenuItems } from "../../hooks/use-menu-items";
+import { useKeys } from "../../keyboard/dispatcher";
 import type { ProviderView } from "../../providers/provider";
 import { scrollIndexedItemIntoView } from "../../utils/scroll";
 import { KeyHint, KeyHintSeparator } from "../key-hint";
@@ -303,7 +304,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     }
   };
 
-  useKeyboard(e => {
+  useKeys(e => {
     if (e.eventType === "release") return;
 
     const idx = selectedItemIndex();

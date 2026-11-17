@@ -1,10 +1,11 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
+import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, type JSX, onCleanup, Show } from "solid-js";
 import { useAppState } from "../../context/state";
 import { getFileBlame, getFileContent, getFileDiff } from "../../git/repo";
 import type { BlameLine, DiffTarget, FileContent, FileDiff } from "../../git/types";
 import { useT } from "../../hooks/use-t";
+import { useKeys } from "../../keyboard/dispatcher";
 import {
   type AbortableRequestState,
   abortActiveRequest,
@@ -370,7 +371,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
   const toggleWrap = () => setWrapEnabled(prev => !prev);
 
   // ── Keyboard navigation ────────────────────────────────────────────
-  useKeyboard(e => {
+  useKeys(e => {
     if (e.eventType === "release") return;
 
     switch (e.name) {

@@ -2,13 +2,14 @@ import { spawnSync } from "node:child_process";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { type CliRenderer, MouseButton, type Renderable, type ScrollBoxRenderable } from "@opentui/core";
-import { useKeyboard, useRenderer } from "@opentui/solid";
+import { useRenderer } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import packageJson from "../../package.json";
 import type { KnownRepoInfo } from "../config";
 import { removeRepoConfig } from "../config-write";
 import { SHIFT_JUMP } from "../constants";
 import { useT } from "../hooks/use-t";
+import { useKeys } from "../keyboard/dispatcher";
 import type { KeyboardScope } from "../keyboard/scope";
 import {
   buildProjectSelectorRows,
@@ -144,7 +145,7 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
     }
   };
 
-  useKeyboard(e => {
+  useKeys(e => {
     if (e.eventType === "release") return;
 
     // q quits from any context except when typing in path input

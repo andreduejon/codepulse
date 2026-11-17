@@ -1,7 +1,8 @@
-import { useKeyboard, useRenderer } from "@opentui/solid";
+import { useRenderer } from "@opentui/solid";
 import { For } from "solid-js";
 import packageJson from "../../package.json";
 import { useT } from "../hooks/use-t";
+import { useKeys } from "../keyboard/dispatcher";
 import { KeyHint } from "./key-hint";
 import LogoBanner, { LOGO_WIDTH } from "./logo-banner";
 
@@ -21,7 +22,7 @@ export default function ErrorScreen(props: Readonly<ErrorScreenProps>) {
   const t = useT();
   const renderer = useRenderer();
 
-  useKeyboard(e => {
+  useKeys(e => {
     if (e.eventType === "release") return;
     if (e.name === "q") {
       renderer.destroy();

@@ -1,8 +1,8 @@
 import { KeyEvent, parseKeypress, type ScrollBoxRenderable } from "@opentui/core";
-import { useKeyboard } from "@opentui/solid";
 import type { Accessor } from "solid-js";
 import type { DetailNavRef } from "../components/detail-types";
 import type { AppActions, AppState } from "../context/state";
+import { useKeys } from "../keyboard/dispatcher";
 import { routeGlobalKey } from "../keyboard/router";
 import { createCloseOneCascadeStep } from "./handle-cascade-close";
 import { createCommandBarHelpers, handleCommandOrPathKey, handleSearchKey } from "./handle-command-bar-keys";
@@ -285,7 +285,7 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions) {
     });
   };
 
-  useKeyboard(handleKey);
+  useKeys(handleKey);
 
   const dispatch = (sequence: string) => {
     const key = parseKeypress(sequence);

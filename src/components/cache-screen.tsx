@@ -1,11 +1,12 @@
 import { join, resolve } from "node:path";
 import { MouseButton, type Renderable, type ScrollBoxRenderable } from "@opentui/core";
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
+import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, Index, onCleanup, Show } from "solid-js";
 import packageJson from "../../package.json";
 import { getKnownRepoInfos } from "../config";
 import { useClipboard } from "../hooks/use-clipboard";
 import { useT } from "../hooks/use-t";
+import { useKeys } from "../keyboard/dispatcher";
 import type { KeyboardScope } from "../keyboard/scope";
 import {
   CACHE_INACTIVITY_MS,
@@ -281,7 +282,7 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
     }
   };
 
-  useKeyboard(event => {
+  useKeys(event => {
     if (event.eventType === "release") return;
     if (event.name === "q") {
       event.preventDefault();

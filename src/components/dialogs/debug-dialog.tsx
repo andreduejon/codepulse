@@ -1,5 +1,5 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
+import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { For } from "solid-js";
 import { SHIFT_JUMP } from "../../constants";
 import { getDebugEvents } from "../../debug/events";
@@ -11,6 +11,7 @@ import {
   isFailedDebugStatus,
 } from "../../debug/format";
 import { useT } from "../../hooks/use-t";
+import { useKeys } from "../../keyboard/dispatcher";
 import { debugSourceColor } from "../../providers/colors";
 import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
@@ -30,7 +31,7 @@ export default function DebugDialog(props: Readonly<{ onClose: () => void; gitCo
   const messageColor = (event: ReturnType<typeof events>[number]) =>
     event.status === "error" || event.source === "error" ? t().error : t().foreground;
 
-  useKeyboard(e => {
+  useKeys(e => {
     if (e.eventType === "release") return;
     if (e.name === "q") {
       e.preventDefault();
