@@ -11,8 +11,8 @@ import {
   Show,
   untrack,
 } from "solid-js";
+import { useRepoSettings } from "./app/repo-settings";
 import { runAppCommand } from "./app-commands";
-import { githubSettings, jenkinsSettings, openShiftSettings, snykSettings } from "./app-provider-config";
 import { applyRepoSession, captureRepoSession } from "./app-repo-session";
 import { isTabNoticeStatus, type TabNotice, tabNoticeFor } from "./app-tab-notice";
 import type { AppContentProps, RepoSessionSnapshot } from "./app-types";
@@ -38,15 +38,7 @@ import GraphView, { ColumnHeader } from "./components/graph";
 import MessageBox, { type UIMessage } from "./components/message-box";
 import ProjectSelector from "./components/project-selector";
 import SetupScreen from "./components/setup-screen";
-import {
-  defaultConfig,
-  getKnownRepoInfos,
-  getRepoDisplayConfig,
-  loadConfig,
-  mergeOptions,
-  reportConfigWarnings,
-  startViewFor,
-} from "./config";
+import { getKnownRepoInfos, mergeOptions, startViewFor } from "./config";
 import { backfillRepoConfig, writeConfig } from "./config-write";
 import {
   COMPACT_THRESHOLD_WIDTH,
@@ -68,7 +60,6 @@ import {
 } from "./dashboard/fetch-errors";
 import { markLegend } from "./dashboard/legend";
 import type { CommitInfo } from "./dashboard/load";
-import { dashboardSettings } from "./dashboard/settings";
 import { type DashboardApp, useDashboard } from "./dashboard/use-dashboard";
 import { BANNER, displayBanner } from "./debug/banner";
 import type { FastForwardResult } from "./git/repo";
@@ -126,49 +117,27 @@ export function AppContent(props: Readonly<AppContentProps>) {
     setProviderCacheSuspended(false);
   });
 
-  const [githubConfig, setGithubConfig] = createSignal(githubSettings(props.initialGithubConfig));
-  const [jenkinsConfig, setJenkinsConfig] = createSignal(jenkinsSettings(props.initialJenkinsConfig));
-  const [openShiftConfig, setOpenShiftConfig] = createSignal(openShiftSettings(props.initialOpenShiftConfig));
-  const [snykConfig, setSnykConfig] = createSignal<SnykProviderConfig>(snykSettings(props.initialSnykConfig));
-  /** A repository's config; what it ignores goes to Debug. */
-  const readConfig = (path: string) => {
-    const { config, warnings } = loadConfig(path);
-    reportConfigWarnings(warnings);
-    return config;
-  };
-  const startConfig = readConfig(activeRepoPath());
-  const [dashboardConfig, setDashboardConfig] = createSignal(dashboardSettings(startConfig.dashboard));
-  /** The view this repository opens in, as Menu → Providers → Start in shows it. */
-  const [startView, setStartView] = createSignal<ProviderView>(startConfig.startView ?? "git");
-  /** Menu → Repository → Preferences → Auto fast-forward: `f` and Auto fetch fast-forward too. */
-  const [autoFastForward, setAutoFastForward] = createSignal(startConfig.autoFastForward ?? false);
-  actions.setActiveProviderView(startViewFor(startConfig));
-  // Menu → Providers → Dashboard → Enabled, per repository: off, it has no tab, and leaving it shows Git.
-  createEffect(() => {
-    const enabled = dashboardConfig().enabled;
-    state.providers.setDashboardEnabled(enabled);
-    if (!enabled && untrack(state.activeProviderView) === "dashboard") actions.setActiveProviderView("git");
-  });
-
-  const [repoDisplayConfig, setRepoDisplayConfig] = createSignal(getRepoDisplayConfig(activeRepoPath()));
-
-  const reloadRuntimeConfig = () => {
-    const path = activeRepoPath();
-    backfillRepoConfig(path);
-    const config = readConfig(path);
-    setGithubConfig(githubSettings(config.providers?.github));
-    setJenkinsConfig(jenkinsSettings(config.providers?.jenkins));
-    setOpenShiftConfig(openShiftSettings(config.providers?.openshift));
-    setSnykConfig(snykSettings(config.providers?.snyk));
-    setDashboardConfig(dashboardSettings(config.dashboard));
-    setStartView(config.startView ?? "git");
-    setAutoFastForward(config.autoFastForward ?? false);
-    setRepoDisplayConfig(getRepoDisplayConfig(path));
-    // The theme is per repository; without this a switch keeps the previous repo's theme, and the next settings
-    // change saves it into this one. An unknown theme falls back to the default, as at startup.
-    const theme = config.theme ?? defaultConfig().theme;
-    themeState.setTheme(Object.hasOwn(themeState.themes, theme) ? theme : defaultConfig().theme);
-  };
+  const settings = useRepoSettings({ repoPath: activeRepoPath, initial: props, themeState, state, actions });
+  const {
+    github: githubConfig,
+    setGithub: setGithubConfig,
+    jenkins: jenkinsConfig,
+    setJenkins: setJenkinsConfig,
+    openShift: openShiftConfig,
+    setOpenShift: setOpenShiftConfig,
+    snyk: snykConfig,
+    setSnyk: setSnykConfig,
+    dashboard: dashboardConfig,
+    setDashboard: setDashboardConfig,
+    startView,
+    setStartView,
+    autoFastForward,
+    setAutoFastForward,
+    display: repoDisplayConfig,
+    setDisplay: setRepoDisplayConfig,
+    read: readConfig,
+    reload: reloadRuntimeConfig,
+  } = settings;
 
   // ── GitHub CI data hook (called during setup, before Provider renders — per AGENTS.md rule 5) ──
   const gitHubCI = useGitHubCI({
@@ -300,12 +269,6 @@ export function AppContent(props: Readonly<AppContentProps>) {
     backfillRepoConfig(activeRepoPath());
     setSetupVisible(false);
   };
-
-  // Backfill missing config keys for the active repo and refresh display labels on repo switches.
-  createEffect(() => {
-    activeRepoPath();
-    reloadRuntimeConfig();
-  });
 
   const [dialog, setDialog] = createSignal<DialogId>(null);
 
