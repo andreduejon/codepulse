@@ -15,6 +15,9 @@ All notable changes to this project will be documented in this file.
   whole.
 - Closing a GitHub or Jenkins log stops its download. Before, a long log kept
   loading after it was closed.
+- Auto refresh shows a changed remote, a tag's new message and a stash replaced by
+  another, also when no commit or branch moved. A selected Uncommitted changes row
+  shows the files as they are now on each refresh.
 
 ## [0.18.0] - 2026-11-17
 

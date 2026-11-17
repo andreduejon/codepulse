@@ -1,4 +1,4 @@
-import { type Accessor, createEffect, onCleanup } from "solid-js";
+import { type Accessor, createEffect, on, onCleanup, untrack } from "solid-js";
 import type { DetailNavRef } from "../components/detail-types";
 import { isUncommittedHash } from "../constants";
 import type { AppActions, AppState } from "../context/state";
@@ -215,9 +215,37 @@ export function useDetailLoader({
     }
   });
 
+  // A refresh that read a dirty working tree: the selected uncommitted row shows its files again, quietly (the cursor
+  // and tab stay). The rows themselves may be the same, so the selection doesn't change for it.
+  let workingTreeCtrl: AbortController | null = null;
+  createEffect(
+    on(
+      state.workingTreeReads,
+      () => {
+        const commit = untrack(state.selectedCommit);
+        if (!commit || !isUncommittedHash(commit.hash)) return;
+        const path = untrack(repoPath);
+        workingTreeCtrl?.abort();
+        const ctrl = new AbortController();
+        workingTreeCtrl = ctrl;
+        getUncommittedDetail(path, ctrl.signal)
+          .then(ud => {
+            if (ctrl.signal.aborted || repoPath() !== path || state.selectedCommit()?.hash !== commit.hash) return;
+            actions.setUncommittedDetail(ud);
+            actions.setCommitDetail({ ...commit, files: [...ud.staged, ...ud.unstaged, ...ud.untracked] });
+          })
+          .catch(() => {
+            // The next refresh or selection tries again; the files shown stay.
+          });
+      },
+      { defer: true },
+    ),
+  );
+
   // Cancel any pending debounce timers and abort in-flight git subprocesses.
   onCleanup(() => {
     cancelPending(detailDebounceTimer, detailAbortCtrl);
     detailDebounceTimer = detailAbortCtrl = null;
+    workingTreeCtrl?.abort();
   });
 }

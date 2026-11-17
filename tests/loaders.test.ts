@@ -329,3 +329,42 @@ test("cancelling a history page for a branch switch does not let the graph start
     spy.mockRestore();
   }
 });
+
+test("a refresh with the same commits still shows a changed remote URL, tag message and stash", async () => {
+  const { root, git } = await makeRepo(["one", "two"]);
+  await git("tag", "-a", "v1", "-m", "first message");
+  await writeFile(join(root, "file.txt"), "stashed\n");
+  await git("stash", "push", "-m", "first stash");
+  const { state, loader } = mount(root, 50);
+  await until(() => !state.loading() && state.commits().length > 0, "load");
+  const stashSubjects = () => [...state.stashByParent().values()].flat().map(stash => stash.subject);
+  expect(state.tagDetails().get("v1")?.message).toBe("first message");
+  expect(stashSubjects()).toEqual(["On main: first stash"]);
+
+  // The commits and refs stay the same: the tag moves to the same commit, one stash replaces the other.
+  await git("remote", "add", "origin", "https://github.com/o/r.git");
+  await git("tag", "-f", "-a", "v1", "-m", "second message");
+  await git("stash", "drop");
+  await writeFile(join(root, "file.txt"), "stashed again\n");
+  await git("stash", "push", "-m", "second stash");
+  await loader.loadData(undefined, undefined, true, true);
+
+  expect(state.remoteUrl()).toBe("https://github.com/o/r.git");
+  expect(state.tagDetails().get("v1")?.message).toBe("second message");
+  expect(stashSubjects()).toEqual(["On main: second stash"]);
+});
+
+test("a refresh shows the selected uncommitted row's new files, also while the working tree stays dirty", async () => {
+  const { root } = await makeRepo(["base"]);
+  await writeFile(join(root, "file.txt"), "dirty\n");
+  const { state, actions, loader } = mount(root, 50, true);
+  await until(() => !state.loading() && state.commits().length > 0, "load");
+  actions.setCursorIndex(state.graphRows().findIndex(row => isUncommittedHash(row.commit.hash)));
+  await until(() => state.uncommittedDetail() !== null, "uncommitted detail");
+  expect(state.uncommittedDetail()?.untracked.map(file => file.path)).toEqual([]);
+
+  await writeFile(join(root, "new.txt"), "new\n");
+  await loader.loadData(undefined, undefined, true, true);
+  await until(() => (state.uncommittedDetail()?.untracked.length ?? 0) > 0, "the new file");
+  expect(state.uncommittedDetail()?.untracked.map(file => file.path)).toEqual(["new.txt"]);
+});

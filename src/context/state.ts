@@ -85,6 +85,7 @@ export function createAppState(
   const [detailCursorShortcut, setDetailCursorShortcut] = createSignal<{ key: string; desc: string } | null>(null);
   const [snykPendingFilter, setSnykPendingFilter] = createSignal<string | null>(null);
   const [uncommittedDetail, setUncommittedDetail] = createSignal<UncommittedDetail | null>(null);
+  const [workingTreeReads, setWorkingTreeReads] = createSignal(0);
 
   // ── UI state & settings ───────────────────────────────────────────
   const [error, setError] = createSignal<string | null>(null);
@@ -248,6 +249,7 @@ export function createAppState(
     detailCursorShortcut,
     snykPendingFilter,
     uncommittedDetail,
+    workingTreeReads,
     viewingBranch,
     pathFilter,
     pathMatchSet,
@@ -300,6 +302,7 @@ export function createAppState(
     setDetailCursorShortcut,
     setSnykPendingFilter,
     setUncommittedDetail,
+    noteWorkingTreeRead: () => setWorkingTreeReads(count => count + 1),
     setViewingBranch,
     setPathFilter,
     setPathMatchSet,

@@ -156,8 +156,20 @@ export function useDataLoader({
         injectUncommittedNode(commits, headHash);
       }
 
-      // Skip update if nothing changed (avoids flicker on auto-refresh)
-      if (silent && isStaleResult(state.commits(), commits)) return;
+      // The same commits and refs: the rows stay as they are (no rebuild, no flicker). What can change beside them still
+      // shows: the remote, the branches' tracking, a tag's message, a stash replaced by another, the working tree.
+      if (silent && isStaleResult(state.commits(), commits)) {
+        const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+        batch(() => {
+          actions.setRemoteUrl(remoteUrl);
+          actions.setCurrentBranch(currentBranch);
+          if (!same(state.branches(), branches)) actions.setBranches(branches);
+          if (!same([...state.tagDetails()], [...tagDetails])) actions.setTagDetails(tagDetails);
+          if (!same([...state.stashByParent()], [...stashByParent])) actions.setStashByParent(stashByParent);
+          if (wtStatus) actions.noteWorkingTreeRead();
+        });
+        return;
+      }
 
       const rows = buildGraph(commits);
 
