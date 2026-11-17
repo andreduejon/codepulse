@@ -1,0 +1,282 @@
+=== shot 1: menu (200x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                        Author         Date                    Files (1)           Stashes (1)          Info
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+    █                           bf08113   dev   origin/dev  feat(api): export request metrics               Demo Dev       5m ago             total lines changed                               +35 -2
+    │                                                                                                                                         └─ README.md                                    M +35 -2
+    █                           e6209dd  feat(api): add a health endpoint                                   Demo Dev       50m ago
+    │
+    █                           3447db9   v0.42.0   main   origi
+    │                                                                Menu                                                 esc close
+    │ █                         6adc455   feature/payments-r…
+    │ │                                                              ──────────────────────────────────────────────────────────────
+    █─╯                         64ddc8a  feat(payments): retry f          Repository            Branches            Providers
+    │                                                                ──────────────────────────────────────────────────────────────
+    █                           917f7b3  perf(cart): cache price     Origin
+    │                                                                git@github.com:demo/shop.git
+    █─╮                         1bb16fb  Merge pull request #23
+    │ │                                                              Path
+    │ █                         0166f71  feat(i18n): add French      <demo folder>/home/code/shop
+    │ │
+    │ █─╮                       5245790  Merge branch 'main' int     Labels
+    │ │ │                                                            Group                                            demo
+    │ █ │                       484821c  feat(i18n): add German      App name                                         shop
+    │ │ │
+    │ █ │                       3ad11a2  feat(i18n): extract the     Actions
+    │ │ │                                                            Fetch remote                                  12m ago        f
+    █─┼─┼─╮                     fe7db4d  Merge pull request #9 f     Fast-forward                                            ctrl+f
+    │ │ │ │                                                          Switch repository
+    │ │ │ █                     9d1b361  fix(search): ignore acc     Inspect cache
+    │ │ │ │
+    │ │ │ █                     cce93f9  feat(search): search as     Preferences
+    │ │ │ │                                                          Color theme                          Catppuccin Mocha
+    │ │ │ █─╮                   ae57e03  Merge branch 'main' int     Start in                                        [Git]
+    │ │ │ │ │                                                        Page size                                       [200]
+    │ │ │ █ │                   a89a18f  feat(search): highlight     Show all branches                                [on]
+    │ │ │ │ │                                                        Auto refresh                                    [30s]
+    │ │ │ █ │                   52defc5  feat(search): rank resu
+                                                                                         enter copy · ←/→ switch tab · ↑/↓ navigate
+  │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                           normal   search   path   ancestry
+  │
+  │   customer-notification-service   shop   shop-web                                                                 main   86 commits
+  │
+
+                                                               tab GitHub · enter/→ show details · shift ←/→ switch project · ↑/↓ navigate
+
+
+=== shot 2: branches (200x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                        Author         Date                    Files (1)           Stashes (1)          Info
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+    █                           bf08113   dev   origin/dev  feat(api): export request metrics               Demo Dev       5m ago             total lines changed                               +35 -2
+    │                                                                                                                                         └─ README.md                                    M +35 -2
+    █                           e6209dd  feat(api): add a health endpoint                                   Demo Dev       50m ago
+    │
+    █                           3447db9   v0.42.0   main   origi
+    │                                                                Menu                                                 esc close
+    │ █                         6adc455   feature/payments-r…
+    │ │                                                              ──────────────────────────────────────────────────────────────
+    █─╯                         64ddc8a  feat(payments): retry f          Repository            Branches            Providers
+    │                                                                ──────────────────────────────────────────────────────────────
+    █                           917f7b3  perf(cart): cache price     Checked Out
+    │                                                                 main
+    █─╮                         1bb16fb  Merge pull request #23
+    │ │                                                              Showing
+    │ █                         0166f71  feat(i18n): add French       (all branches)
+    │ │
+    │ █─╮                       5245790  Merge branch 'main' int     Actions
+    │ │ │                                                            Clear filter
+    │ █ │                       484821c  feat(i18n): add German
+    │ │ │                                                            ▾ Local (18)
+    │ █ │                       3ad11a2  feat(i18n): extract the       main                                                   ↑0 ↓0
+    │ │ │                                                              dev                                                    ↑0 ↓0
+    █─┼─┼─╮                     fe7db4d  Merge pull request #9 f       experiment/graph-layout
+    │ │ │ │                                                            feature/dark-mode
+    │ │ │ █                     9d1b361  fix(search): ignore acc       feature/payments-retry-with-a-really-long-branch-name  ↑0 ↓0
+    │ │ │ │                                                            gh-pages                                               ↑0 ↓0
+    │ │ │ █                     cce93f9  feat(search): search as       release/1.x                                            ↑0 ↓2
+    │ │ │ │                                                            renovate/actions-checkout-4.x
+    │ │ │ █─╮                   ae57e03  Merge branch 'main' int       renovate/express-4.x
+    │ │ │ │ │                                                          renovate/lock-file-maintenance
+    │ │ │ █ │                   a89a18f  feat(search): highlight       renovate/major-jest-monorepo
+    │ │ │ │ │                                                          renovate/major-mkdirp
+    │ │ │ █ │                   52defc5  feat(search): rank resu
+                                                                                     enter collapse · ←/→ switch tab · ↑/↓ navigate
+  │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                           normal   search   path   ancestry
+  │
+  │   customer-notification-service   shop   shop-web                                                                 main   86 commits
+  │
+
+                                                               tab GitHub · enter/→ show details · shift ←/→ switch project · ↑/↓ navigate
+
+
+=== shot 3: providers (200x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                        Author         Date                    Files (1)           Stashes (1)          Info
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+    █                           bf08113   dev   origin/dev  feat(api): export request metrics               Demo Dev       5m ago             total lines changed                               +35 -2
+    │                                                                                                                                         └─ README.md                                    M +35 -2
+    █                           e6209dd  feat(api): add a health endpoint                                   Demo Dev       50m ago
+    │
+    █                           3447db9   v0.42.0   main   origi
+    │                                                                Menu                                                 esc close
+    │ █                         6adc455   feature/payments-r…
+    │ │                                                              ──────────────────────────────────────────────────────────────
+    █─╯                         64ddc8a  feat(payments): retry f          Repository            Branches            Providers
+    │                                                                ──────────────────────────────────────────────────────────────
+    █                           917f7b3  perf(cart): cache price     Dashboard
+    │                                                                Enabled                                          [on]
+    █─╮                         1bb16fb  Merge pull request #23      Time window                                      [7d]
+    │ │                                                              Knot size                                        [1h]
+    │ █                         0166f71  feat(i18n): add French
+    │ │                                                              GitHub
+    │ █─╮                       5245790  Merge branch 'main' int     Enabled                                          [on]
+    │ │ │                                                            Last refresh                                   0s ago
+    │ █ │                       484821c  feat(i18n): add German      Token                                    GITHUB_TOKEN        ✓
+    │ │ │                                                            Host                                       github.com        ✓
+    │ █ │                       3ad11a2  feat(i18n): extract the     Allow host                                       [on]
+    │ │ │                                                            Cache count                                      [20]
+    █─┼─┼─╮                     fe7db4d  Merge pull request #9 f     Fetch size                                       [20]
+    │ │ │ │                                                          Auto refresh                                     [2m]
+    │ │ │ █                     9d1b361  fix(search): ignore acc
+    │ │ │ │                                                          Jenkins
+    │ │ │ █                     cce93f9  feat(search): search as     Enabled                                          [on]
+    │ │ │ │                                                          Last refresh                                   0s ago
+    │ │ │ █─╮                   ae57e03  Merge branch 'main' int     Username                                         demo        ✓
+    │ │ │ │ │                                                        Token                                   JENKINS_TOKEN        ✓
+    │ │ │ █ │                   a89a18f  feat(search): highlight     Cache count                                      [20]
+    │ │ │ │ │                                                        Fetch size                                       [20]
+    │ │ │ █ │                   52defc5  feat(search): rank resu
+                                                                                       enter toggle · ←/→ switch tab · ↑/↓ navigate
+  │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                           normal   search   path   ancestry
+  │
+  │   customer-notification-service   shop   shop-web                                                                 main   86 commits
+  │
+
+                                                               tab GitHub · enter/→ show details · shift ←/→ switch project · ↑/↓ navigate
+
+
+=== shot 4: help (200x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                        Author         Date                    Files (1)           Stashes (1)          Info
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+    █                           bf08113   dev   origin/dev  feat(api): export request metrics               Demo Dev       5m ago             total lines changed                               +35 -2
+    │                                                                                                                                         └─ README.md                                    M +35 -2
+    █                           e6209dd  feat(api): add a health endpoint                                   Demo Dev       50m ago
+    │
+    █                           3447db9   v0.42.0   main   o
+    │                                                            Help                                                         esc close
+    │ █                         6adc455   feature/payments-r
+    │ │                                                          ──────────────────────────────────────────────────────────────────────
+    █─╯                         64ddc8a  feat(payments): ret             General                Commands               Providers
+    │                                                            ──────────────────────────────────────────────────────────────────────
+    █                           917f7b3  perf(cart): cache p     /                           Open search mode
+    │                                                            :                           Open command mode
+    █─╮                         1bb16fb  Merge pull request      ?                           Open help dialog
+    │ │                                                          esc                         Back / clear current mode
+    │ █                         0166f71  feat(i18n): add Fre     f                           Fetch Git and the open provider
+    │ │                                                          ctrl+f                      Fetch and fast-forward
+    │ █─╮                       5245790  Merge branch 'main'     m                           Open menu dialog
+    │ │ │                                                        q                           Quit
+    │ █ │                       484821c  feat(i18n): add Ger     tab                         Switch view
+    │ │ │
+    │ █ │                       3ad11a2  feat(i18n): extract     Graph
+    │ │ │                                                        a                           Enter ancestry mode
+    █─┼─┼─╮                     fe7db4d  Merge pull request      enter                       Open details
+    │ │ │ │                                                      g                           First commit
+    │ │ │ █                     9d1b361  fix(search): ignore     G                           Last commit
+    │ │ │ │                                                      p                           Enter path mode
+    │ │ │ █                     cce93f9  feat(search): searc     shift ←/→                   Switch repository
+    │ │ │ │                                                      shift ↑/↓                   Jump 10 commits
+    │ │ │ █─╮                   ae57e03  Merge branch 'main'     ↑/↓  or  j/k                Navigate commits
+    │ │ │ │ │                                                    →  or  l                    Focus details
+    │ │ │ █ │                   a89a18f  feat(search): highl
+    │ │ │ │ │                                                    Dashboard
+    │ │ │ █ │                   52defc5  feat(search): rank
+                                                                 codepulse v0.18.0                          ←/→ switch tab · ↑/↓ scroll
+  │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                           normal   search   path   ancestry
+  │
+  │   customer-notification-service   shop   shop-web                                                                 main   86 commits
+  │
+
+                                                               tab GitHub · enter/→ show details · shift ←/→ switch project · ↑/↓ navigate
+
+
+=== shot 5: theme (200x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                        Author         Date                    Files (1)           Stashes (1)          Info
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+    █                           bf08113   dev   origin/dev  feat(api): export request metrics               Demo Dev       5m ago             total lines changed                               +35 -2
+    │                                                                                                                                         └─ README.md                                    M +35 -2
+    █                           e6209dd  feat(api): add a health endpoint                                   Demo Dev       50m ago
+    │
+    █                           3447db9   v0.42.0   main   origi
+    │                                                                Color Theme                                          esc close
+    │ █                         6adc455   feature/payments-r…
+    │ │                                                              Predefined
+    █─╯                         64ddc8a  feat(payments): retry f     OpenCode Original
+    │                                                                Catppuccin Mocha                                             ✓
+    █                           917f7b3  perf(cart): cache price     Tokyo Night
+    │                                                                Dracula
+    █─╮                         1bb16fb  Merge pull request #23      Nord
+    │ │                                                              One Dark Pro
+    │ █                         0166f71  feat(i18n): add French      Gruvbox Dark
+    │ │                                                              Monokai Pro
+    │ █─╮                       5245790  Merge branch 'main' int     Ayu Mirage
+    │ │ │                                                            Synthwave '84
+    │ █ │                       484821c  feat(i18n): add German      Rosé Pine
+    │ │ │                                                            Olive Garden
+    │ █ │                       3ad11a2  feat(i18n): extract the
+    │ │ │
+    █─┼─┼─╮                     fe7db4d  Merge pull request #9 f
+    │ │ │ │
+    │ │ │ █                     9d1b361  fix(search): ignore acc
+    │ │ │ │
+    │ │ │ █                     cce93f9  feat(search): search as
+    │ │ │ │
+    │ │ │ █─╮                   ae57e03  Merge branch 'main' int
+    │ │ │ │ │
+    │ │ │ █ │                   a89a18f  feat(search): highlight
+    │ │ │ │ │
+    │ │ │ █ │                   52defc5  feat(search): rank resu
+
+  │                                                                                         enter select · ↑/↓ navigate · d details
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk
+  │
+  │   customer-notification-service   shop   shop-web                                                                 main   86 commits
+  │
+
+                                                               tab GitHub · enter/→ show details · shift ←/→ switch project · ↑/↓ navigate
+
+
+=== shot 6: closed (200x45) ===
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+  Graph                         Commit   Description                                                        Author         Date                    Files (1)           Stashes (1)          Info
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────    ────────────────────────────────────────────────────────
+    █                           bf08113   dev   origin/dev  feat(api): export request metrics               Demo Dev       5m ago             total lines changed                               +35 -2
+    │                                                                                                                                         └─ README.md                                    M +35 -2
+    █                           e6209dd  feat(api): add a health endpoint                                   Demo Dev       50m ago
+    │
+    █                           3447db9   v0.42.0   main   origin/…   origin/…   +1  docs: rewrite the REA  Noah Park      1h ago
+    │
+    │ █                         6adc455   feature/payments-r…   origin/feature/pay…  wip(payments): retry…  Mei Chen       6h ago
+    │ │
+    █─╯                         64ddc8a  feat(payments): retry failed payments with exponential backoff, …  Demo Dev       7h ago
+    │
+    █                           917f7b3  perf(cart): cache price lookups                                    Noah Park      20h ago
+    │
+    █─╮                         1bb16fb  Merge pull request #23 from demo/feature/i18n                      Sam O'Brien    2d ago
+    │ │
+    │ █                         0166f71  feat(i18n): add French                                             Sam O'Brien    2d ago
+    │ │
+    │ █─╮                       5245790  Merge branch 'main' into feature/i18n                              Sam O'Brien    2d ago
+    │ │ │
+    │ █ │                       484821c  feat(i18n): add German                                             Sam O'Brien    3d ago
+    │ │ │
+    │ █ │                       3ad11a2  feat(i18n): extract the checkout strings                           Sam O'Brien    3d ago
+    │ │ │
+    █─┼─┼─╮                     fe7db4d  Merge pull request #9 from demo/feature/search                     Mei Chen       2d ago
+    │ │ │ │
+    │ │ │ █                     9d1b361  fix(search): ignore accents                                        Mei Chen       2d ago
+    │ │ │ │
+    │ │ │ █                     cce93f9  feat(search): search as you type                                   Mei Chen       4d ago
+    │ │ │ │
+    │ │ │ █─╮                   ae57e03  Merge branch 'main' into feature/search                            Mei Chen       6d ago
+    │ │ │ │ │
+    │ │ │ █ │                   a89a18f  feat(search): highlight matching words                             Mei Chen       6d ago
+    │ │ │ │ │
+    │ │ │ █ │                   52defc5  feat(search): rank results by popularity                           Mei Chen       20. Feb 13:30
+
+  │
+  │   Dashboard   Git   GitHub   Jenkins   OpenShift   Snyk                                           normal   search   path   ancestry
+  │
+  │   customer-notification-service   shop   shop-web                                                                 main   86 commits
+  │
+
+                                                               tab GitHub · enter/→ show details · shift ←/→ switch project · ↑/↓ navigate
+
+

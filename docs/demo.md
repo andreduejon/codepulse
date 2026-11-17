@@ -85,6 +85,15 @@ bun run demo --play "$(cat play.txt)" > after.txt
 diff before.txt after.txt
 ```
 
+### Golden plays
+
+`bun run demo:golden` plays a fixed set of plays (`scripts/demo/golden.ts`) covering the graph, the details, the
+provider tabs, logs, the Dashboard, dialogs, highlights, errors, switching repositories and colors, and compares
+their screens with the ones kept in `scripts/demo/golden/`. A changed screen shows line by line, `-` as kept and `+`
+as printed now, and the run exits with 1. A refactoring should leave every screen as it was. After a change to the
+UI, `bun run demo:golden --update` writes the new screens, and their diff in the commit shows what changed.
+`bun run demo:golden dashboard` plays only those whose name contains `dashboard`.
+
 ## The world
 
 Three repositories in the group `demo`: **shop**, which the demo opens, **shop-web** (`shift →`), with GitHub and
@@ -182,6 +191,7 @@ Everything lives in `scripts/demo/`:
 | `fake-cli.ts` | The `snyk`, `npm` and `pnpm` on the app's PATH, and the browser and clipboard commands (compiled into one executable on Windows, cached in `node_modules/.cache/codepulse-demo`). |
 | `fake-ssh.ts` | Lets `git fetch` reach the local remotes. |
 | `play.ts`, `player.tsx`, `steps.ts`, `clock.ts` | The headless mode: steps, the test renderer, the fixed clock. |
+| `golden.ts`, `golden/` | The golden plays and the screens they keep. |
 
 To show a new state, add it to `scenario.ts` (or `packages.ts`) on a commit that has room for it, and list it in
 the table above.

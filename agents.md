@@ -64,8 +64,11 @@ bun run demo --play 'j j enter tab wait:"CI #812" shot'      # the screen after 
 bun run demo --github error:401 --play 'tab sleep:500 shot'  # a provider failing
 bun run demo --colors --play 'click:Dashboard sleep:2000 shot' # each color named: «severityHigh:3 high»
 bun run demo --play "$(cat play.txt)" > after.txt            # the same play prints the same screens: diff it
+bun run demo:golden                                          # the kept screens: a refactoring changes none
 ```
 
 - A play that fails prints the step, why and the screen, and exits with 1.
+- `bun run demo:golden` must pass after a refactoring. After a UI change, `bun run demo:golden --update` writes the
+  new screens; check their diff shows only the intended change.
 - When a state you need is missing, add it to `scripts/demo/scenario.ts` (or `packages.ts`) instead of testing
   against a real server.
