@@ -12,6 +12,7 @@ import {
   untrack,
 } from "solid-js";
 import { useMessageCenter } from "./app/messages";
+import { useProviderHost } from "./app/providers";
 import { useRepoSettings } from "./app/repo-settings";
 import { runAppCommand } from "./app-commands";
 import { applyRepoSession, captureRepoSession } from "./app-repo-session";
@@ -50,7 +51,6 @@ import {
 import { AppStateContext, createAppState, type DetailTab } from "./context/state";
 import { ThemeContext } from "./context/theme";
 import type { DashboardEvent } from "./dashboard/events";
-import { githubEvents, jenkinsEvents, openShiftEvents } from "./dashboard/events";
 import { markLegend } from "./dashboard/legend";
 import type { CommitInfo } from "./dashboard/load";
 import { type DashboardApp, useDashboard } from "./dashboard/use-dashboard";
@@ -63,21 +63,14 @@ import { useDetailLoader } from "./hooks/use-detail-loader";
 import { type CommandBarMode, type DialogId, useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
 import { usePathFilter } from "./hooks/use-path-filter";
 import { providerAccent, providerColors } from "./providers/colors";
-import { detailEntryFor, type ProviderDetailSources } from "./providers/detail-entries";
-import { githubJobLogTarget } from "./providers/github-actions/log-target";
-import type { GitHubJob, GitHubWorkflowRun } from "./providers/github-actions/types";
-import { useGitHubCI } from "./providers/github-actions/use-github-ci";
-import { jenkinsBuildLogTarget, jenkinsTestFailureTarget } from "./providers/jenkins/log-target";
-import type { JenkinsFailedTest, JenkinsJob, JenkinsRun } from "./providers/jenkins/types";
-import { useJenkinsCI } from "./providers/jenkins/use-jenkins-ci";
+import { detailEntryFor } from "./providers/detail-entries";
 import OpenShiftResourceDialog from "./providers/openshift/resource-dialog";
 import type { OpenShiftResource } from "./providers/openshift/types";
-import { useOpenShift } from "./providers/openshift/use-openshift";
 import { type EventSource, isProviderDetailView, type ProviderView, providerDetailTab } from "./providers/provider";
 import { type CacheRepositorySummary, evictRepositoryCache } from "./providers/shared/cache-management";
 import JobLogDialog, { type JobLogTarget } from "./providers/shared/job-log-dialog";
 import { repositoryIdentity, setProviderCacheSuspended } from "./providers/shared/sha-sqlite-cache";
-import { type SnykProviderConfig, useSnyk } from "./providers/snyk/use-snyk";
+import type { SnykProviderConfig } from "./providers/snyk/use-snyk";
 import { nextGroupRepoPath, repoDisplayName } from "./utils/group-repos";
 import { computeDisplacedIndex, DETAIL_CHILD_DIALOGS } from "./utils/keyboard-nav-utils";
 import { openUrl } from "./utils/open-url";
@@ -123,16 +116,15 @@ export function AppContent(props: Readonly<AppContentProps>) {
     reload: reloadRuntimeConfig,
   } = settings;
 
-  // ── GitHub CI data hook (called during setup, before Provider renders — per AGENTS.md rule 5) ──
-  const gitHubCI = useGitHubCI({
+  const providers = useProviderHost({
     state,
     actions,
-    config: githubConfig,
+    settings,
     suspended: cacheScreenVisible,
+    onOpenJobLog: target => openJobLog(target),
+    onOpenResource: resource => handleOpenOpenShiftResource(resource),
   });
-  const jenkinsCI = useJenkinsCI({ state, actions, config: jenkinsConfig, suspended: cacheScreenVisible });
-  const openShift = useOpenShift({ state, actions, config: openShiftConfig, suspended: cacheScreenVisible });
-  const snyk = useSnyk({ state, actions, config: snykConfig, suspended: cacheScreenVisible });
+  const { openShift, snyk } = providers;
 
   // Setup screen visibility — shown when startup mode is "setup"
   const [setupVisible, setSetupVisible] = createSignal(props.startupMode.kind === "setup");
@@ -272,18 +264,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     setDialog("openshift-resource");
   };
 
-  /** Fetch a provider's data again, as its Reload does; Snyk scans branch tips on its own. */
-  const refreshProvider = async (view: ProviderView) => {
-    if (view === "github-actions") await gitHubCI.refresh();
-    else if (view === "jenkins") await jenkinsCI.refresh();
-    else if (view === "openshift") await openShift.refresh();
-  };
-  /** The shown view's providers: its own, or on the dashboard every one turned on. */
-  const refreshActiveProvider = async () => {
-    const view = state.activeProviderView();
-    if (view !== "dashboard") return refreshProvider(view);
-    await Promise.all(state.providers.getEnabledViews().map(refreshProvider));
-  };
+  const refreshActiveProvider = providers.refreshActive;
 
   const knownRepoInfos = () => getKnownRepoInfos();
   const currentRepoDisplayConfig = () => repoDisplayConfig();
@@ -350,10 +331,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     setPendingGraphScrollTop(null);
     saveRepoSessionSnapshot(currentPath);
     actions.setActiveProviderView("git");
-    gitHubCI.invalidate();
-    jenkinsCI.invalidate();
-    openShift.invalidate();
-    snyk.invalidate();
+    providers.invalidateAll();
     actions.clearProviderState();
     resetTransientRepoState();
     setRepoSelectorVisible(false);
@@ -405,12 +383,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
   /** What the open app's providers hold now, as dashboard events: a running build is only here, not in a cache. */
   const heldDashboardEvents = createMemo(() => {
     if (!dashboardShown()) return [];
-    const app = activeRepoPath();
-    return [
-      ...githubEvents(app, gitHubCI.heldEntries()),
-      ...jenkinsEvents(app, jenkinsCI.heldEntries()),
-      ...openShiftEvents(app, openShift.heldEntries()),
-    ];
+    return providers.heldEvents(activeRepoPath());
   });
   /** The providers turned on: the dashboard leaves out a turned-off one's cached events. */
   const dashboardSources = createMemo(() => {
@@ -753,21 +726,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     await refreshActiveProvider();
   };
 
-  /** The active provider's data for a commit; Git has none. */
-  const activeProviderCommitData = (sha: string) => {
-    switch (state.activeProviderView()) {
-      case "github-actions":
-        return gitHubCI.getCommitData(sha);
-      case "jenkins":
-        return jenkinsCI.getCommitData(sha);
-      case "openshift":
-        return openShift.getCommitData(sha);
-      case "snyk":
-        return snyk.getCommitData(sha);
-      case "git":
-        return null;
-    }
-  };
+  const activeProviderCommitData = providers.activeCommitData;
 
   // All git data loading: initial load, pagination, fetch, and auto-refresh timer.
   const { loadData, loadMoreData, handleFetch } = useDataLoader({
@@ -875,10 +834,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     if (disposed || !cacheScreenVisible()) throw new Error("Cache screen is closed.");
     const removed = evictRepositoryCache(repo.repoHash);
     if (hash === repo.repoHash) {
-      gitHubCI.invalidate();
-      jenkinsCI.invalidate();
-      openShift.invalidate();
-      snyk.invalidate();
+      providers.invalidateAll();
     }
     return removed;
   };
@@ -969,49 +925,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
   const providerDetailProps = {
     // One for both layouts: a resize between them keeps open folders, runs and namespaces.
     memory: createDetailMemory(),
-    providers: {
-      "github-actions": {
-        getCommitData: gitHubCI.getCommitData,
-        fetchJobsForRun: gitHubCI.fetchJobsForRun,
-        fetchCommitData: gitHubCI.fetchCommitDataForSHA,
-        get status() {
-          return state.providerStatusFor("github-actions");
-        },
-        onOpenJobLog: (job: GitHubJob, run: GitHubWorkflowRun, jobs?: GitHubJob[], search?: string) =>
-          openJobLog(githubJobLogTarget(gitHubCI, job, run, jobs ?? [job], search)),
-      },
-      jenkins: {
-        getCommitData: jenkinsCI.getCommitData,
-        fetchJobsForRun: jenkinsCI.fetchJobsForRun,
-        fetchCommitData: jenkinsCI.fetchCommitDataForSHA,
-        get status() {
-          return state.providerStatusFor("jenkins");
-        },
-        onOpenBuild: (run: JenkinsRun, pipeline: JenkinsJob, entry: number) =>
-          openJobLog(jenkinsBuildLogTarget(jenkinsCI, run, pipeline, entry)),
-        onOpenTestFailure: (run: JenkinsRun, failed: JenkinsFailedTest[], index: number) =>
-          openJobLog(jenkinsTestFailureTarget(run, failed, index)),
-      },
-      openshift: {
-        getCommitData: openShift.getCommitData,
-        fetchCommitData: openShift.fetchCommitDataForSHA,
-        isLoading: openShift.isLoading,
-        liveAge: openShift.liveAge,
-        consoleUrl: () => openShiftConfig().consoleUrl,
-        get status() {
-          return state.providerStatusFor("openshift");
-        },
-        onOpenResource: handleOpenOpenShiftResource,
-      },
-      snyk: {
-        getCommitData: snyk.getCommitData,
-        isScanning: snyk.isScanning,
-        scanCommit: snyk.scanCommit,
-        get status() {
-          return state.providerStatusFor("snyk");
-        },
-      },
-    } satisfies ProviderDetailSources,
+    providers: providers.detailSources,
     get tabNotice() {
       return tabNotice();
     },
