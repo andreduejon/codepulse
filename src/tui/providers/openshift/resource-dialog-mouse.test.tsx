@@ -607,3 +607,40 @@ test("a followed log that drops its oldest lines keeps the selected hit", async 
     d.renderer.destroy();
   }
 });
+
+test("a read that answers after the dialog closed shows nothing and raises nothing", async () => {
+  const resource: OpenShiftResource = {
+    kind: "Deployment",
+    name: "web",
+    namespace: "shop",
+    status: "pass",
+    updatedAt: "2026-03-02T09:00:00Z",
+  } as OpenShiftResource;
+  let answer!: (object: unknown) => void;
+  const loadObject = mock(() => new Promise<unknown>(resolve => (answer = resolve)));
+  const [open, setOpen] = createSignal(true);
+  const errors = spyOn(console, "error").mockImplementation(() => {});
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={createThemeState()}>
+        <Show when={open()}>
+          <OpenShiftResourceDialog resource={resource} loadObject={loadObject} onClose={() => setOpen(false)} />
+        </Show>
+      </ThemeContext.Provider>
+    ),
+    { width: 100, height: 40 },
+  );
+  try {
+    await setup.flush();
+    expect(loadObject).toHaveBeenCalled();
+    setOpen(false);
+    await setup.flush();
+    answer({ kind: "Deployment" });
+    await Bun.sleep(0);
+    await setup.flush();
+    expect(errors).not.toHaveBeenCalled();
+  } finally {
+    errors.mockRestore();
+    setup.renderer.destroy();
+  }
+});

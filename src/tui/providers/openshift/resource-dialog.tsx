@@ -59,16 +59,23 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
     ...(canEvents() ? (["events"] as const) : []),
   ]);
 
+  /** Set when the dialog closes: a read that answers after that shows nothing (its screen may be gone). */
+  let closed = false;
+  onCleanup(() => {
+    closed = true;
+  });
+
   const loadEvents = async () => {
     if (!props.loadEvents) return;
     setEventsLoading(true);
     setEventsError(null);
     try {
-      setEvents(await props.loadEvents(props.resource));
+      const events = await props.loadEvents(props.resource);
+      if (!closed) setEvents(events);
     } catch (error) {
-      setEventsError(error instanceof Error ? error.message : String(error));
+      if (!closed) setEventsError(error instanceof Error ? error.message : String(error));
     } finally {
-      setEventsLoading(false);
+      if (!closed) setEventsLoading(false);
     }
   };
 
@@ -77,11 +84,12 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
     setLogLoading(true);
     setLogError(null);
     try {
-      setLogText(await props.loadLog(props.resource, force));
+      const text = await props.loadLog(props.resource, force);
+      if (!closed) setLogText(text);
     } catch (error) {
-      setLogError(error instanceof Error ? error.message : String(error));
+      if (!closed) setLogError(error instanceof Error ? error.message : String(error));
     } finally {
-      setLogLoading(false);
+      if (!closed) setLogLoading(false);
     }
   };
 
@@ -91,12 +99,13 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
     setObjectError(null);
     try {
       const object = await props.loadObject(props.resource, force);
+      if (closed) return;
       setObjectValue(object);
       setObjectText(JSON.stringify(object, null, 2));
     } catch (error) {
-      setObjectError(error instanceof Error ? error.message : String(error));
+      if (!closed) setObjectError(error instanceof Error ? error.message : String(error));
     } finally {
-      setObjectLoading(false);
+      if (!closed) setObjectLoading(false);
     }
   };
 
