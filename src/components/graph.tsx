@@ -725,7 +725,12 @@ export default function GraphView(
 
   // Refs for programmatic scroll-into-view
   let scrollboxRef: ScrollBoxRenderable | undefined;
-  const rowRefs: Renderable[] = [];
+  /** Each row's element by index, for scrolling it into view. Kept as long as the rows: shorter graphs shorten it. */
+  const rowRefs: (Renderable | undefined)[] = [];
+  createEffect(() => {
+    const count = state.graphRows().length;
+    if (rowRefs.length > count) rowRefs.length = count;
+  });
   const scrollSchedule: { scrollTimer?: ReturnType<typeof setTimeout> } = {};
   let lastScrollIndex = -1;
 
@@ -895,8 +900,15 @@ export default function GraphView(
               // Ref callbacks only fire on creation; this effect re-runs
               // whenever index() changes, keeping rowRefs in sync.
               let elRef: Renderable | undefined;
+              /** Where this row last put its element. */
+              let at = -1;
               createEffect(() => {
-                if (elRef) rowRefs[index()] = elRef;
+                at = index();
+                if (elRef) rowRefs[at] = elRef;
+              });
+              // A row that goes (a shorter graph, a reload) lets go of its element, unless another row took the slot.
+              onCleanup(() => {
+                if (at >= 0 && rowRefs[at] === elRef) rowRefs[at] = undefined;
               });
               return (
                 <GraphLine
@@ -931,7 +943,8 @@ export default function GraphView(
                   snykIsScanning={props.snykIsScanning}
                   rowRef={el => {
                     elRef = el;
-                    rowRefs[index()] = el;
+                    at = index();
+                    rowRefs[at] = el;
                   }}
                 />
               );

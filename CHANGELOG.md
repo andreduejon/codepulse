@@ -18,6 +18,8 @@ All notable changes to this project will be documented in this file.
 - Auto refresh shows a changed remote, a tag's new message and a stash replaced by
   another, also when no commit or branch moved. A selected Uncommitted changes row
   shows the files as they are now on each refresh.
+- The graph lets go of the rows it no longer shows: after many pages of history,
+  a shorter graph (a branch, another repository) frees their memory.
 
 ## [0.18.0] - 2026-11-17
 
