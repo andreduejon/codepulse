@@ -3,6 +3,7 @@ import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { batch, createEffect, createMemo, createSignal, onCleanup, onMount, Show } from "solid-js";
 import { useCommandBar } from "./app/commands";
 import { useDashboardController } from "./app/dashboard-controller";
+import { DialogLayer } from "./app/dialog-layer";
 import { useDialogHost } from "./app/dialogs";
 import { useMessageCenter } from "./app/messages";
 import { useProviderHost } from "./app/providers";
@@ -17,20 +18,13 @@ import { DashboardView } from "./components/dashboard-view";
 import { createDetailMemory } from "./components/detail-memory";
 import DetailPanel from "./components/detail-panel";
 import type { DetailNavRef } from "./components/detail-types";
-import { DashboardEventDialog } from "./components/dialogs/dashboard-event-dialog";
-import DebugDialog from "./components/dialogs/debug-dialog";
-import { DetailDialog } from "./components/dialogs/detail-dialog";
-import DiffBlameDialog from "./components/dialogs/diff-blame-dialog";
-import HelpDialog from "./components/dialogs/help-dialog";
-import MenuDialog from "./components/dialogs/menu-dialog";
-import ThemeDialog from "./components/dialogs/theme-dialog";
 import ErrorScreen from "./components/error-screen";
 import Footer from "./components/footer";
 import GraphView, { ColumnHeader } from "./components/graph";
 import MessageBox from "./components/message-box";
 import ProjectSelector from "./components/project-selector";
 import SetupScreen from "./components/setup-screen";
-import { backfillRepoConfig, writeConfig } from "./config-write";
+import { backfillRepoConfig } from "./config-write";
 import { COMPACT_THRESHOLD_WIDTH, DEFAULT_MAX_COUNT, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH } from "./constants";
 import { AppStateContext, createAppState } from "./context/state";
 import { ThemeContext } from "./context/theme";
@@ -40,10 +34,7 @@ import { useDataLoader } from "./hooks/use-data-loader";
 import { useDetailLoader } from "./hooks/use-detail-loader";
 import { useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
 import { providerAccent } from "./providers/colors";
-import OpenShiftResourceDialog from "./providers/openshift/resource-dialog";
-import JobLogDialog from "./providers/shared/job-log-dialog";
 import { setProviderCacheSuspended } from "./providers/shared/sha-sqlite-cache";
-import type { SnykProviderConfig } from "./providers/snyk/use-snyk";
 
 export function AppContent(props: Readonly<AppContentProps>) {
   const { state, actions } = createAppState(
@@ -64,25 +55,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
   });
 
   const settings = useRepoSettings({ repoPath: activeRepoPath, initial: props, themeState, state, actions });
-  const {
-    github: githubConfig,
-    setGithub: setGithubConfig,
-    jenkins: jenkinsConfig,
-    setJenkins: setJenkinsConfig,
-    openShift: openShiftConfig,
-    setOpenShift: setOpenShiftConfig,
-    snyk: snykConfig,
-    setSnyk: setSnykConfig,
-    dashboard: dashboardConfig,
-    setDashboard: setDashboardConfig,
-    startView,
-    setStartView,
-    autoFastForward,
-    setAutoFastForward,
-    display: repoDisplayConfig,
-    setDisplay: setRepoDisplayConfig,
-    reload: reloadRuntimeConfig,
-  } = settings;
+  const { autoFastForward, display: repoDisplayConfig, reload: reloadRuntimeConfig } = settings;
 
   const providers = useProviderHost({
     state,
@@ -146,21 +119,14 @@ export function AppContent(props: Readonly<AppContentProps>) {
     return "normal";
   });
 
+  const dialogs = useDialogHost({ state, actions, layoutMode });
   const {
     dialog,
     setDialog,
-    diffTarget,
-    setDiffTarget,
-    jobLogTarget,
-    openShiftResourceTarget,
     openDiff: handleOpenDiff,
     openJobLog,
     openResource: handleOpenOpenShiftResource,
-    openFromMenu: handleOpenDialog,
-    setLogSearchScope,
-    compactDetailUnderChild,
-    closeToDetail,
-  } = useDialogHost({ state, actions, layoutMode });
+  } = dialogs;
 
   // Ref for programmatic scrolling of the detail panel
   let graphScrollboxRef: ScrollBoxRenderable | undefined;
@@ -249,19 +215,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
   // ── Dashboard ─────────────────────────────────────────────────────────────
   /** One for both layouts and both views: a resize keeps open folders, runs and namespaces. */
   const detailMemory = createDetailMemory();
-  const {
-    dashboard,
-    dashboardShown,
-    dashboardAppName,
-    showSelectedInGraph,
-    dashboardTabProps,
-    refreshDashboard,
-    handleDashboardKey,
-    openFromDashboardDialog,
-    dashboardRowOpens,
-    setDialogScrollbox: setDashboardDialogScrollbox,
-    setDetailScrollbox: setDashboardDetailScrollbox,
-  } = useDashboardController({
+  const dashboardController = useDashboardController({
     state,
     actions,
     repoPath: activeRepoPath,
@@ -276,6 +230,16 @@ export function AppContent(props: Readonly<AppContentProps>) {
     setGitNotice,
     closeSearch: commandBar.closeSearch,
   });
+  const {
+    dashboard,
+    dashboardShown,
+    dashboardAppName,
+    showSelectedInGraph,
+    dashboardTabProps,
+    refreshDashboard,
+    handleDashboardKey,
+    setDetailScrollbox: setDashboardDetailScrollbox,
+  } = dashboardController;
 
   const handleReloadAll = async () => {
     reloadRuntimeConfig();
@@ -631,138 +595,36 @@ export function AppContent(props: Readonly<AppContentProps>) {
                   </Show>
                 </box>
 
-                {/* Dialogs */}
-                <Show when={dialog() === "menu"}>
-                  <MenuDialog
-                    onClose={() => setDialog(null)}
-                    onReload={() => void handleReloadAll()}
-                    onFetch={() => void handleFetchAll()}
-                    onPull={() => void handlePullAll()}
-                    onOpenDialog={handleOpenDialog}
-                    onOpenCache={openCacheScreen}
-                    onViewBranch={handleViewBranch}
-                    configInfo={props.configInfo}
-                    onSwitchRepo={() => {
+                <DialogLayer
+                  dialogs={dialogs}
+                  settings={settings}
+                  dashboard={dashboardController}
+                  openShift={openShift}
+                  repoPath={activeRepoPath}
+                  configInfo={props.configInfo}
+                  menu={{
+                    onReload: () => void handleReloadAll(),
+                    onFetch: () => void handleFetchAll(),
+                    onPull: () => void handlePullAll(),
+                    onOpenCache: openCacheScreen,
+                    onViewBranch: handleViewBranch,
+                    onSwitchRepo: () => {
                       setDialog(null);
                       setRepoSelectorVisible(true);
-                    }}
-                    githubConfig={githubConfig()}
-                    onGithubConfigChange={setGithubConfig}
-                    jenkinsConfig={jenkinsConfig()}
-                    onJenkinsConfigChange={setJenkinsConfig}
-                    openshiftConfig={openShiftConfig()}
-                    onOpenShiftConfigChange={setOpenShiftConfig}
-                    {...{
-                      snykConfig: snykConfig(),
-                      onSnykConfigChange: (config: SnykProviderConfig) => setSnykConfig(config),
-                    }}
-                    dashboardConfig={dashboardConfig()}
-                    onDashboardConfigChange={setDashboardConfig}
-                    startView={startView()}
-                    onStartViewChange={setStartView}
-                    autoFastForward={autoFastForward()}
-                    onAutoFastForwardChange={setAutoFastForward}
-                    onRepoDisplayConfigChange={setRepoDisplayConfig}
-                  />
-                </Show>
-                <Show when={dialog() === "help"}>
-                  <HelpDialog onClose={() => setDialog(null)} />
-                </Show>
-                <Show when={dialog() === "theme"}>
-                  <ThemeDialog
-                    onClose={() => setDialog(null)}
-                    onSelect={name => writeConfig({ theme: name }, activeRepoPath())}
-                  />
-                </Show>
-                <Show when={dialog() === "debug"}>
-                  <DebugDialog onClose={() => setDialog(null)} gitColor={themeState.theme().gitBg} />
-                </Show>
-                <Show when={dialog() === "diff-blame" && diffTarget()}>
-                  {target => (
-                    <DiffBlameDialog
-                      target={target()}
-                      onClose={closeToDetail}
-                      onNavigate={t => {
-                        setDiffTarget(t);
-                        detailNavRef.scrollToFile(t.filePath);
-                      }}
-                    />
-                  )}
-                </Show>
-                {/* Detail dialog, compact mode only. Under a dialog opened from it, it stays mounted but hidden, so
-                    closing that dialog comes back to the details as they were (open runs, attempts, cursor). */}
-                <Show when={dialog() === "detail" || compactDetailUnderChild()}>
-                  <DetailDialog
-                    visible={dialog() === "detail"}
-                    scrollboxRef={el => {
-                      detailScrollboxRef = el;
-                    }}
-                    navRef={detailNavRef}
-                    searchFocused={searchFocused()}
-                    onJumpToCommit={handleJumpToCommit}
-                    onOpenDiff={handleOpenDiff}
-                    onClose={() => {
-                      // Same as Esc (handle-cascade-close): leaving compact details also leaves detail focus.
-                      batch(() => {
-                        actions.setDetailFocused(false);
-                        setDialog(null);
-                      });
-                    }}
-                    {...providerDetailProps}
-                    message={screenMessage()}
-                    onDismissMessage={clearScreenMessage}
-                  />
-                </Show>
-                {/* The dashboard's details, compact mode only */}
-                <Show when={dialog() === "dashboard-event"}>
-                  <DashboardEventDialog
-                    event={dashboard.selected}
-                    appName={dashboardAppName}
-                    onClose={() => {
-                      actions.setDetailFocused(false);
-                      setDialog(null);
-                    }}
-                    onShowInGraph={showSelectedInGraph}
-                    onOpen={openFromDashboardDialog}
-                    canOpen={() => !!dashboard.selected()?.url || dashboardRowOpens()}
-                    tabProps={dashboardTabProps()}
-                    scrollboxRef={element => {
-                      setDashboardDialogScrollbox(element);
-                    }}
-                  />
-                </Show>
-                {/* Job log dialog */}
-                <Show when={dialog() === "job-log" && jobLogTarget()}>
-                  {target => (
-                    <JobLogDialog
-                      provider={target().provider}
-                      job={target().job}
-                      jobs={target().jobs}
-                      run={target().run}
-                      fetchLog={target().fetchLog}
-                      entryNoun={target().noun}
-                      initialSearch={target().search}
-                      onClose={closeToDetail}
-                      onSearchActive={setLogSearchScope}
-                    />
-                  )}
-                </Show>
-                <Show when={dialog() === "openshift-resource" && openShiftResourceTarget()}>
-                  {resource => (
-                    <OpenShiftResourceDialog
-                      resource={resource()}
-                      loadLog={async (item, force) =>
-                        item.kind === "Pod" ? openShift.loadPodLog(item) : openShift.loadBuildLog(item, force)
-                      }
-                      followLog={openShift.followLog}
-                      consoleUrl={openShiftConfig().consoleUrl}
-                      loadEvents={item => openShift.loadResourceEvents(item)}
-                      loadObject={(item, force) => openShift.loadResourceObject(item, force)}
-                      onClose={closeToDetail}
-                      onSearchActive={setLogSearchScope}
-                    />
-                  )}
-                </Show>
+                    },
+                  }}
+                  details={{
+                    navRef: detailNavRef,
+                    setScrollbox: element => {
+                      detailScrollboxRef = element;
+                    },
+                    searchFocused,
+                    onJumpToCommit: handleJumpToCommit,
+                    providerProps: providerDetailProps,
+                    message: screenMessage,
+                    onDismissMessage: clearScreenMessage,
+                  }}
+                />
               </box>
             </Show>
           </Show>
