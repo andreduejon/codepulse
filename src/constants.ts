@@ -9,10 +9,6 @@ export const SHIFT_JUMP = 10;
 /** Minimum time between held j/k moves so the cursor cannot outrun scroll. */
 export const NAV_REPEAT_MIN_MS = 16;
 
-/** When navigating in ancestry mode, preload the next page when fewer than
- *  this many ancestry rows remain below the cursor. */
-export const ANCESTRY_PRELOAD_ROWS = 5;
-
 /** Detail panel width as a fraction of terminal width. */
 export const DETAIL_PANEL_WIDTH_FRACTION = 0.25;
 

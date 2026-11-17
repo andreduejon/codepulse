@@ -11,12 +11,14 @@
  *
  * Returns true when the key was consumed.
  */
+
 import type { KeyEvent, ScrollBoxRenderable } from "@opentui/core";
 import type { DetailNavRef } from "../components/detail-types";
-import { ANCESTRY_PRELOAD_ROWS, SHIFT_JUMP } from "../constants";
+import { SHIFT_JUMP } from "../constants";
 import type { AppActions, AppState } from "../context/state";
-import { allowRepeatNav, countHighlightedBelow, findHighlightedIndex } from "../utils/keyboard-nav-utils";
-import type { CommandBarMode, DialogId } from "./use-keyboard-navigation";
+import type { CommandBarMode, DialogId } from "../core/app-state";
+import { createGraphNavigation } from "../core/navigation";
+import { allowRepeatNav } from "../keyboard/repeat";
 
 export interface GraphKeyOptions {
   state: AppState;
@@ -57,60 +59,17 @@ export function handleGraphKey(e: KeyEvent, opts: GraphKeyOptions): boolean {
   /** Reset detail scrollbox to top — called when the graph cursor moves. */
   const resetDetailScroll = () => scrollbox?.scrollTo(0);
 
-  /**
-   * When any highlighting is active, find the nearest highlighted row
-   * in the given direction from `from`, stepping `count` entries.
-   */
-  const findHighlighted = (from: number, direction: 1 | -1, count: number): number =>
-    findHighlightedIndex(state.graphRows(), state.highlightSet(), from, direction, count);
-
-  /** Count how many highlighted rows exist below `from` (up to `limit`). */
-  const countBelow = (from: number, limit: number): number =>
-    countHighlightedBelow(state.graphRows(), state.highlightSet(), from, limit);
+  const navigation = createGraphNavigation({ state, actions, loadMore: loadMoreData });
 
   switch (e.name) {
     case "down":
-    case "j": {
-      e.preventDefault();
-      if (!allowRepeatNav()) return true;
-      const hSet = state.highlightSet();
-      if (hSet) {
-        const count = e.shift ? SHIFT_JUMP : 1;
-        const target = findHighlighted(state.cursorIndex(), 1, count);
-        if (target !== state.cursorIndex()) {
-          actions.setCursorIndex(target);
-          actions.setScrollTargetIndex(target);
-          // Preload: when fewer than N highlighted rows remain below the cursor,
-          // start loading the next page so data is ready before the user reaches
-          // the boundary.
-          if (state.hasMore() && countBelow(target, ANCESTRY_PRELOAD_ROWS) < ANCESTRY_PRELOAD_ROWS) {
-            loadMoreData();
-          }
-        } else if (state.hasMore()) {
-          // No more highlighted rows in loaded data — trigger lazy load
-          loadMoreData();
-        }
-      } else {
-        actions.moveCursor(e.shift ? SHIFT_JUMP : 1);
-      }
-      resetDetailScroll();
-      return true;
-    }
+    case "j":
     case "up":
     case "k": {
       e.preventDefault();
       if (!allowRepeatNav()) return true;
-      const hSet = state.highlightSet();
-      if (hSet) {
-        const count = e.shift ? SHIFT_JUMP : 1;
-        const target = findHighlighted(state.cursorIndex(), -1, count);
-        if (target !== state.cursorIndex()) {
-          actions.setCursorIndex(target);
-          actions.setScrollTargetIndex(target);
-        }
-      } else {
-        actions.moveCursor(e.shift ? -SHIFT_JUMP : -1);
-      }
+      const direction = e.name === "down" || e.name === "j" ? 1 : -1;
+      navigation.step(direction, e.shift ? SHIFT_JUMP : 1);
       resetDetailScroll();
       return true;
     }
@@ -144,29 +103,7 @@ export function handleGraphKey(e: KeyEvent, opts: GraphKeyOptions): boolean {
       return true;
     case "g": {
       e.preventDefault();
-      const hSet = state.highlightSet();
-      if (!e.shift) {
-        if (hSet) {
-          const target = findHighlighted(-1, 1, 1);
-          actions.setCursorIndex(target);
-          actions.setScrollTargetIndex(target);
-        } else {
-          actions.setCursorIndex(0);
-          actions.setScrollTargetIndex(0);
-        }
-      } else {
-        if (hSet) {
-          const rows = state.graphRows();
-          const target = findHighlighted(rows.length, -1, 1);
-          actions.setCursorIndex(target);
-          actions.setScrollTargetIndex(target);
-          if (state.hasMore()) loadMoreData();
-        } else {
-          const lastIdx = state.graphRows().length - 1;
-          actions.setCursorIndex(lastIdx);
-          actions.setScrollTargetIndex(lastIdx);
-        }
-      }
+      navigation.toEnd(e.shift ? "last" : "first");
       resetDetailScroll();
       return true;
     }

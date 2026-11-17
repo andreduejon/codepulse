@@ -1,9 +1,9 @@
 import { afterEach, expect, mock, test } from "bun:test";
-import { type AppCommandContext, runAppCommand } from "./app-commands";
-import { createAppState } from "./context/state";
-import { addDebugEvent, clearDebugEvents, getDebugEvents } from "./core/debug-events";
-import type { EventSource } from "./core/provider-model";
-import type { DialogId } from "./hooks/use-keyboard-navigation";
+import { createAppState } from "../context/state";
+import type { DialogId } from "./app-state";
+import { type AppCommandContext, runAppCommand } from "./commands";
+import { addDebugEvent, clearDebugEvents, getDebugEvents } from "./debug-events";
+import type { EventSource } from "./provider-model";
 
 afterEach(() => {
   clearDebugEvents();

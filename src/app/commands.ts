@@ -6,10 +6,10 @@
 
 import { type Accessor, batch, createSignal } from "solid-js";
 import type { AppActions, AppState } from "../context/state";
+import type { CommandBarMode } from "../core/app-state";
 import type { GitPort } from "../core/git/port";
-import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
+import { computeDisplacedIndex } from "../core/navigation";
 import { usePathFilter } from "../hooks/use-path-filter";
-import { computeDisplacedIndex } from "../utils/keyboard-nav-utils";
 
 export type GraphMode = "normal" | "search" | "path" | "ancestry";
 

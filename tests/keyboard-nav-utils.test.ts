@@ -2,15 +2,14 @@ import { describe, expect, spyOn, test } from "bun:test";
 import { NAV_REPEAT_MIN_MS } from "../src/constants";
 import type { GraphRow } from "../src/core/git/types";
 import {
-  allowRepeatNav,
   type CascadeState,
   type CascadeTarget,
   computeCascadeTarget,
   computeDisplacedIndex,
   countHighlightedBelow,
   findHighlightedIndex,
-  resetRepeatNav,
-} from "../src/utils/keyboard-nav-utils";
+} from "../src/core/navigation";
+import { allowRepeatNav, resetRepeatNav } from "../src/keyboard/repeat";
 import { makeCommit } from "./test-helpers";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

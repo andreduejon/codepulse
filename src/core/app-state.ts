@@ -227,3 +227,19 @@ export function sameSet<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): boolean {
 export function clampCursor(cursor: number, delta: number, count: number): number {
   return Math.max(0, Math.min(count - 1, cursor + delta));
 }
+
+export type DialogId =
+  | "menu"
+  | "help"
+  | "theme"
+  | "diff-blame"
+  | "detail"
+  /** The selected dashboard event's details, in the compact layout. */
+  | "dashboard-event"
+  | "job-log"
+  | "openshift-resource"
+  | "debug"
+  | null;
+
+/** Command bar mode — drives placeholder text and key routing. */
+export type CommandBarMode = "idle" | "command" | "search" | "path";

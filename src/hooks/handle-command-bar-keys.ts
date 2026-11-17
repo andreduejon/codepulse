@@ -10,7 +10,7 @@
  */
 import type { KeyEvent } from "@opentui/core";
 import type { AppActions, AppState } from "../context/state";
-import type { CommandBarMode } from "./use-keyboard-navigation";
+import type { CommandBarMode } from "../core/app-state";
 
 export interface CommandBarKeyOptions {
   state: AppState;

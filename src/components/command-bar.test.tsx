@@ -5,11 +5,11 @@ import { testRender } from "@opentui/solid";
 import { createSignal } from "solid-js";
 import { AppStateContext, createAppState } from "../context/state";
 import { createThemeState, ThemeContext, themes } from "../context/theme";
+import type { CommandBarMode } from "../core/app-state";
 import { buildGraph } from "../core/git/graph";
 import { UNCOMMITTED_HASH } from "../core/git/types";
 import type { KnownRepoInfo } from "../core/settings/config";
 import type { DashboardState } from "../dashboard/use-dashboard";
-import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
 import { commandBarPlaceholder } from "../utils/command-bar-utils";
 import CommandBar from "./command-bar";
 

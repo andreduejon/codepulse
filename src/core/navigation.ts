@@ -1,13 +1,11 @@
-import { NAV_REPEAT_MIN_MS } from "../constants";
-
 /**
  * Pure helper functions extracted from use-keyboard-navigation.ts.
  *
  * These functions contain the core navigation logic and are framework-agnostic,
  * making them unit-testable without SolidJS or opentui dependencies.
  */
-import type { GraphRow } from "../core/git/types";
-import { monotonicNow, NEVER } from "../core/monotonic";
+import type { AppActions, AppState } from "./app-state";
+import type { GraphRow } from "./git/types";
 
 /**
  * When any highlighting is active, find the nearest highlighted row in the
@@ -159,15 +157,61 @@ export function computeCascadeTarget(s: CascadeState): CascadeTarget {
   return null;
 }
 
-let lastRepeatNavAt = NEVER;
+/** While a highlight is on, the next page loads once fewer highlighted rows than this remain below the cursor. */
+export const ANCESTRY_PRELOAD_ROWS = 5;
 
-/** Accept at most one held j/k move per frame. Single taps always pass. */
-export function allowRepeatNav(now = monotonicNow()): boolean {
-  if (now - lastRepeatNavAt < NAV_REPEAT_MIN_MS) return false;
-  lastRepeatNavAt = now;
-  return true;
+export interface GraphNavigationPorts {
+  state: Pick<AppState, "graphRows" | "highlightSet" | "cursorIndex" | "hasMore">;
+  actions: Pick<AppActions, "setCursorIndex" | "setScrollTargetIndex" | "moveCursor">;
+  /** Loads the next page of history. */
+  loadMore: () => void;
 }
 
-export function resetRepeatNav(): void {
-  lastRepeatNavAt = NEVER;
+/** Moving through the graph, for keys, the mouse or any other front end. */
+export function createGraphNavigation(ports: GraphNavigationPorts) {
+  const { state, actions, loadMore } = ports;
+  const select = (index: number) => {
+    actions.setCursorIndex(index);
+    actions.setScrollTargetIndex(index);
+  };
+  const highlighted = (from: number, direction: 1 | -1, count: number) =>
+    findHighlightedIndex(state.graphRows(), state.highlightSet(), from, direction, count);
+
+  return {
+    /**
+     * Down (1) or up (-1) by `count` rows; while a highlight is on, by `count` highlighted rows. Going down, the next
+     * page loads before the highlighted rows run out, or when none is left in what is loaded.
+     */
+    step(direction: 1 | -1, count: number): void {
+      if (!state.highlightSet()) {
+        actions.moveCursor(direction * count);
+        return;
+      }
+      const cursor = state.cursorIndex();
+      const target = highlighted(cursor, direction, count);
+      if (target !== cursor) {
+        select(target);
+        const few =
+          countHighlightedBelow(state.graphRows(), state.highlightSet(), target, ANCESTRY_PRELOAD_ROWS) <
+          ANCESTRY_PRELOAD_ROWS;
+        if (direction > 0 && state.hasMore() && few) loadMore();
+      } else if (direction > 0 && state.hasMore()) {
+        loadMore();
+      }
+    },
+    /** The first or the last row; while a highlight is on, the first or last highlighted one (the last loads on). */
+    toEnd(end: "first" | "last"): void {
+      const on = !!state.highlightSet();
+      if (end === "first") {
+        select(on ? highlighted(-1, 1, 1) : 0);
+        return;
+      }
+      if (on) {
+        select(highlighted(state.graphRows().length, -1, 1));
+        if (state.hasMore()) loadMore();
+      } else {
+        select(state.graphRows().length - 1);
+      }
+    },
+  };
 }

@@ -9,7 +9,7 @@ import { createThemeState, ThemeContext } from "../../context/theme";
 import type { SnykDependencyGraph, SnykDependencyProjectResult, SnykScanResult } from "../../core/snyk/types";
 import { handleDetailKey } from "../../hooks/handle-detail-keys";
 import * as clipboard from "../../hooks/use-clipboard";
-import { resetRepeatNav } from "../../utils/keyboard-nav-utils";
+import { resetRepeatNav } from "../../keyboard/repeat";
 import { SnykDependenciesTab } from "./deps-tab";
 
 function graphFixture(): SnykDependencyGraph {

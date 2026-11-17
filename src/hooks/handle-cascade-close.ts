@@ -8,8 +8,8 @@
  * Returns true if something was closed, false if there was nothing left.
  */
 import type { AppActions, AppState } from "../context/state";
-import { computeCascadeTarget } from "../utils/keyboard-nav-utils";
-import type { CommandBarMode, DialogId } from "./use-keyboard-navigation";
+import type { CommandBarMode, DialogId } from "../core/app-state";
+import { computeCascadeTarget } from "../core/navigation";
 
 export interface CascadeCloseOptions {
   state: AppState;

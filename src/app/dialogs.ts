@@ -5,11 +5,11 @@
  */
 import { type Accessor, createEffect, createSignal, on, untrack } from "solid-js";
 import type { AppState } from "../context/state";
+import type { DialogId } from "../core/app-state";
 import type { DiffTarget } from "../core/git/types";
+import { DETAIL_CHILD_DIALOGS } from "../core/navigation";
 import type { OpenShiftResource } from "../core/openshift/types";
-import type { DialogId } from "../hooks/use-keyboard-navigation";
 import type { JobLogTarget } from "../providers/shared/job-log-dialog";
-import { DETAIL_CHILD_DIALOGS } from "../utils/keyboard-nav-utils";
 
 export type LayoutMode = "too-small" | "compact" | "normal";
 

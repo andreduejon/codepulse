@@ -1,4 +1,4 @@
-import type { DialogId } from "../hooks/use-keyboard-navigation";
+import type { DialogId } from "../core/app-state";
 
 /**
  * Whether the app's own keys drive what shows: no dialog, or the compact details (the graph's or the dashboard's),

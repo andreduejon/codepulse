@@ -5,11 +5,12 @@ import { testRender, useKeyboard } from "@opentui/solid";
 import { createSignal } from "solid-js";
 import { AppStateContext, createAppState } from "../context/state";
 import { createThemeState, ThemeContext } from "../context/theme";
+import type { CommandBarMode, DialogId } from "../core/app-state";
 import { buildGraph } from "../core/git/graph";
 import type { Commit } from "../core/git/types";
 import type { DashboardState } from "../dashboard/use-dashboard";
 import { type GraphKeyOptions, openGraphDetails } from "../hooks/handle-graph-keys";
-import { type CommandBarMode, type DialogId, useKeyboardNavigation } from "../hooks/use-keyboard-navigation";
+import { useKeyboardNavigation } from "../hooks/use-keyboard-navigation";
 import type { DetailNavRef } from "./detail-types";
 import Footer from "./footer";
 

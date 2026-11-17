@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import type { KeyEvent } from "@opentui/core";
+import type { CommandBarMode } from "../src/core/app-state";
 import { handleCommandOrPathKey, handleSearchKey } from "../src/hooks/handle-command-bar-keys";
-import type { CommandBarMode } from "../src/hooks/use-keyboard-navigation";
 
 test("inline search/path cancel preserves filter; Enter applies trimmed or empty draft", () => {
   for (const kind of ["search", "path"] as const) {

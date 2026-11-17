@@ -1,11 +1,11 @@
 import { type BoxRenderable, MouseButton } from "@opentui/core";
 import { createMemo, createSignal, For, Show } from "solid-js";
 import { useAppState } from "../context/state";
+import type { CommandBarMode } from "../core/app-state";
 import { isUncommittedHash } from "../core/git/types";
 import { type EventSource, type ProviderView, providerDisplayName } from "../core/provider-model";
 import type { KnownRepoInfo } from "../core/settings/config";
 import type { DashboardState } from "../dashboard/use-dashboard";
-import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
 import { useT } from "../hooks/use-t";
 import { providerColors } from "../providers/colors";
 import { commandBarPlaceholder, commitCountText, filterBadgeLabel, realCommitCount } from "../utils/command-bar-utils";

@@ -2,6 +2,7 @@ import { KeyEvent, parseKeypress, type ScrollBoxRenderable } from "@opentui/core
 import type { Accessor } from "solid-js";
 import type { DetailNavRef } from "../components/detail-types";
 import type { AppActions, AppState } from "../context/state";
+import type { CommandBarMode, DialogId } from "../core/app-state";
 import { useKeys } from "../keyboard/dispatcher";
 import { appKeysDrive } from "../keyboard/scope";
 import { createCloseOneCascadeStep } from "./handle-cascade-close";
@@ -9,22 +10,7 @@ import { createCommandBarHelpers, handleCommandOrPathKey, handleSearchKey } from
 import { handleDetailKey } from "./handle-detail-keys";
 import { handleGraphKey } from "./handle-graph-keys";
 
-export type DialogId =
-  | "menu"
-  | "help"
-  | "theme"
-  | "diff-blame"
-  | "detail"
-  /** The selected dashboard event's details, in the compact layout. */
-  | "dashboard-event"
-  | "job-log"
-  | "openshift-resource"
-  | "debug"
-  | null;
 type LayoutMode = "too-small" | "compact" | "normal";
-
-/** Command bar mode — drives placeholder text and key routing. */
-export type CommandBarMode = "idle" | "command" | "search" | "path";
 
 interface KeyboardNavigationOptions {
   state: AppState;

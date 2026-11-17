@@ -20,7 +20,7 @@ import type { OpenShiftCommitData, OpenShiftResource } from "../../core/openshif
 import type { SnykScanResult } from "../../core/snyk/types";
 import { handleDetailKey } from "../../hooks/handle-detail-keys";
 import * as clipboard from "../../hooks/use-clipboard";
-import { resetRepeatNav } from "../../utils/keyboard-nav-utils";
+import { resetRepeatNav } from "../../keyboard/repeat";
 import DetailPanel, { type DetailPanelProps } from "../detail-panel";
 import type { DetailNavRef } from "../detail-types";
 import { DetailDialog } from "./detail-dialog";

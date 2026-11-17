@@ -1,7 +1,6 @@
-import type { AppActions, AppState } from "./core/app-state";
-import { clearDebugEvents } from "./core/debug-events";
-import type { EventSource } from "./core/provider-model";
-import type { CommandBarMode, DialogId } from "./hooks/use-keyboard-navigation";
+import type { AppActions, AppState, CommandBarMode, DialogId } from "./app-state";
+import { clearDebugEvents } from "./debug-events";
+import type { EventSource } from "./provider-model";
 
 /** What `:` commands can reach in the app. */
 export interface AppCommandContext {
