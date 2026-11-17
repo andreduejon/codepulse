@@ -5,6 +5,7 @@ import type { ConfigInfo } from "../../config";
 import { SHIFT_JUMP } from "../../constants";
 import { useAppState } from "../../context/state";
 import { useTheme } from "../../context/theme";
+import type { DashboardSettings } from "../../dashboard/settings";
 import {
   COPYABLE_VISIBLE_WIDTH,
   type GitHubMenuConfig,
@@ -16,6 +17,7 @@ import {
 import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useClipboard } from "../../hooks/use-clipboard";
 import { useMenuItems } from "../../hooks/use-menu-items";
+import type { ProviderView } from "../../providers/provider";
 import { scrollIndexedItemIntoView } from "../../utils/scroll";
 import { KeyHint, KeyHintSeparator } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
@@ -28,6 +30,7 @@ interface MenuDialogProps {
   onClose: () => void;
   onReload: () => void;
   onFetch: () => void;
+  onPull?: () => void;
   onOpenDialog?: (dialogId: "theme") => void;
   /** View graph from a specific branch's perspective. null clears the filter. */
   onViewBranch: (branch: string | null) => void;
@@ -46,6 +49,12 @@ interface MenuDialogProps {
   onOpenShiftConfigChange?: (cfg: OpenShiftMenuConfig) => void;
   snykConfig?: SnykMenuConfig;
   onSnykConfigChange?: (cfg: SnykMenuConfig) => void;
+  dashboardConfig?: DashboardSettings;
+  onDashboardConfigChange?: (cfg: DashboardSettings) => void;
+  startView?: ProviderView;
+  onStartViewChange?: (view: ProviderView) => void;
+  autoFastForward?: boolean;
+  onAutoFastForwardChange?: (enabled: boolean) => void;
   onRepoDisplayConfigChange?: (cfg: { group?: string; appName?: string }) => void;
 }
 
@@ -96,6 +105,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     setTheme,
     copyToClipboard,
     onFetch: () => props.onFetch(),
+    onPull: props.onPull ? () => props.onPull?.() : undefined,
     onReload: () => props.onReload(),
     onOpenDialog: props.onOpenDialog,
     onViewBranch: branch => props.onViewBranch(branch),
@@ -111,6 +121,12 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     onOpenShiftConfigChange: props.onOpenShiftConfigChange,
     snykConfig: () => props.snykConfig,
     onSnykConfigChange: props.onSnykConfigChange,
+    dashboardConfig: () => props.dashboardConfig,
+    onDashboardConfigChange: props.onDashboardConfigChange,
+    startView: () => props.startView,
+    onStartViewChange: props.onStartViewChange,
+    autoFastForward: () => props.autoFastForward,
+    onAutoFastForwardChange: props.onAutoFastForwardChange,
     onRepoDisplayConfigChange: props.onRepoDisplayConfigChange,
   });
 
@@ -261,6 +277,9 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
         // `f` forgets a removable row; anywhere else it is the Fetch remote hotkey the menu shows.
         if (!forgetSelected()) runHotkey("f");
         break;
+      case "pull":
+        runHotkey("ctrl+f");
+        break;
       case "start-edit":
         startEdit();
         break;
@@ -320,6 +339,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
       mode: editingIdx() == null ? "normal" : "token-edit",
       keyName: e.name,
       shift: e.shift,
+      ctrl: e.ctrl,
       selectedKind: selected?.kind === "editable" ? "editable" : selected ? "other" : null,
     });
 

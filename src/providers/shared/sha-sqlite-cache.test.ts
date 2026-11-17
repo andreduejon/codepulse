@@ -255,6 +255,8 @@ describe("ShaSqliteCache", () => {
       expect(await disk.read("/repo", "0".repeat(40))).toBeNull();
       expect(await disk.read("/repo", limit.toString(16).padStart(40, "0"))).not.toBeNull();
     },
+    // Windows writes SQLite far slower: 501 writes take seconds on its CI runner.
+    30_000,
   );
 
   test("upsert preserves manual reset metadata and deferred eviction", async () => {

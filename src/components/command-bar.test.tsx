@@ -7,6 +7,7 @@ import type { KnownRepoInfo } from "../config";
 import { UNCOMMITTED_HASH } from "../constants";
 import { AppStateContext, createAppState } from "../context/state";
 import { createThemeState, ThemeContext, themes } from "../context/theme";
+import type { DashboardState } from "../dashboard/use-dashboard";
 import { buildGraph } from "../git/graph";
 import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
 import { commandBarPlaceholder } from "../utils/command-bar-utils";
@@ -49,10 +50,10 @@ test("provider badges switch directly; panel width switches between two and thre
   const lines = () => setup.captureCharFrame().split("\n");
   const lineWith = (text: string) => lines().findIndex(line => line.includes(text));
   const providerSpan = () =>
-    setup.captureSpans().lines[lineWith("GitHub Actions")]?.spans.find(span => span.text.includes("GitHub Actions"));
+    setup.captureSpans().lines[lineWith("GitHub")]?.spans.find(span => span.text.includes("GitHub"));
   try {
     await setup.flush();
-    const providersLine = lineWith("GitHub Actions");
+    const providersLine = lineWith("GitHub");
     expect(providersLine).toBeGreaterThan(0);
     expect(lineWith("normal")).toBe(providersLine + 2);
     expect(lineWith("codepulse")).toBe(providersLine + 4);
@@ -61,10 +62,11 @@ test("provider badges switch directly; panel width switches between two and thre
     expect(lines()[providersLine + 1].slice(1).trim()).toBe("");
     expect(lines()[providersLine + 3].slice(1).trim()).toBe("");
     expect(lineWith("after bar")).toBe(7);
-    expect(lines()[providersLine]).not.toContain("·");
+    // Dashboard is one more tab, without a dot setting it apart.
+    expect(lines()[providersLine]).toMatch(/^[^·]*Dashboard {3}Git {3}GitHub[^·]*$/);
     expect(lines()[providersLine + 4]).not.toContain("·");
     const muted = providerSpan();
-    const x = lines()[providersLine].indexOf("GitHub Actions") + 2;
+    const x = lines()[providersLine].indexOf("GitHub") + 2;
     await setup.mockMouse.moveTo(x, providersLine);
     await setup.flush();
     expect(providerSpan()?.fg).not.toEqual(muted?.fg);
@@ -83,28 +85,28 @@ test("provider badges switch directly; panel width switches between two and thre
     expect(app.state.activeProviderView()).toBe("github-actions");
     setup.resize(180, 30);
     await setup.flush();
-    expect(lineWith("codepulse")).toBe(lineWith("GitHub Actions") + 2);
-    expect(lineWith("normal")).toBe(lineWith("GitHub Actions"));
-    expect(lineWith("develop")).toBe(lineWith("GitHub Actions") + 2);
+    expect(lineWith("codepulse")).toBe(lineWith("GitHub") + 2);
+    expect(lineWith("normal")).toBe(lineWith("GitHub"));
+    expect(lineWith("develop")).toBe(lineWith("GitHub") + 2);
     expect(lineWith("after bar")).toBe(5);
     setMouseEnabled(true);
-    await setup.mockMouse.click(lines()[lineWith("GitHub Actions")].indexOf("Jenkins") + 2, lineWith("GitHub Actions"));
+    await setup.mockMouse.click(lines()[lineWith("GitHub")].indexOf("Jenkins") + 2, lineWith("GitHub"));
     expect(app.state.activeProviderView()).toBe("jenkins");
     setMouseEnabled(false);
-    expect(lines()[lineWith("GitHub Actions")]).not.toContain(" · ");
+    expect(lines()[lineWith("GitHub")]).toMatch(/^[^·]*Dashboard {3}Git {3}GitHub[^·]*$/);
     app.state.providers.unregister("jenkins");
     await setup.flush();
     expect(setup.captureCharFrame()).not.toContain("Jenkins");
     setPanelWidth(110); // Wide terminal, narrow command-bar panel still keeps the spacers.
     await setup.flush();
-    expect(lineWith("develop")).toBe(lineWith("GitHub Actions") + 4);
+    expect(lineWith("develop")).toBe(lineWith("GitHub") + 4);
     setPanelWidth("100%");
     await setup.flush();
-    expect(lineWith("normal")).toBe(lineWith("GitHub Actions"));
-    expect(lineWith("develop")).toBe(lineWith("GitHub Actions") + 2);
+    expect(lineWith("normal")).toBe(lineWith("GitHub"));
+    expect(lineWith("develop")).toBe(lineWith("GitHub") + 2);
     setup.resize(90, 30);
     await setup.flush();
-    expect(lineWith("develop")).toBe(lineWith("GitHub Actions") + 4);
+    expect(lineWith("develop")).toBe(lineWith("GitHub") + 4);
   } finally {
     await setup.dispose();
   }
@@ -594,6 +596,100 @@ test("the highlighted count leaves out the working-tree node, like the total", a
   try {
     await setup.flush();
     expect(setup.captureCharFrame()).toContain("1 / 1 commit");
+  } finally {
+    setup.renderer.destroy();
+  }
+});
+
+async function renderDashboardBar(knownRepos: KnownRepoInfo[]) {
+  let app!: ReturnType<typeof createAppState>;
+  const selected: string[] = [];
+  const [hidden, setHidden] = createSignal<ReadonlySet<string>>(new Set());
+  const dashboard = {
+    hidden,
+    toggleSource: (source: string) =>
+      setHidden(current => (current.has(source) ? new Set<string>() : new Set([...current, source]))),
+    eventCount: () => (hidden().has("snyk") ? 20 : 23),
+    totalCount: () => 23,
+  } as unknown as DashboardState;
+  const setup = await testRender(
+    () => {
+      app = createAppState(100, 0, 0);
+      app.actions.setCurrentBranch("main");
+      for (const id of ["github-actions", "snyk"] as const)
+        app.state.providers.register({ id, displayName: id, isAvailable: () => true });
+      app.actions.setActiveProviderView("dashboard");
+      return (
+        <ThemeContext.Provider value={createThemeState()}>
+          <AppStateContext.Provider value={app}>
+            <box width="100%" height="100%" flexDirection="column">
+              <CommandBar
+                commandBarMode={() => "idle"}
+                commandBarValue={() => ""}
+                searchInputValue={() => ""}
+                searchFocused={() => false}
+                detailFocused={() => false}
+                onInput={() => {}}
+                knownRepos={knownRepos}
+                currentRepo="/repo/shop"
+                currentGroup={knownRepos.length > 0 ? "demo" : undefined}
+                mouseEnabled={() => true}
+                onSelectProject={path => selected.push(path)}
+                dashboard={dashboard}
+              />
+            </box>
+          </AppStateContext.Provider>
+        </ThemeContext.Provider>
+      );
+    },
+    { width: 160, height: 12, useMouse: true },
+  );
+  await setup.flush();
+  const lines = setup.captureCharFrame().split("\n");
+  return { setup, selected, lines, top: lines.findIndex(line => line.includes("Dashboard")), dashboard };
+}
+
+test("on the dashboard: provider badges take the modes' place and filter, the event count the commit count's", async () => {
+  const { setup, selected, lines, top, dashboard } = await renderDashboardBar([
+    { path: "/repo/shop", group: "demo", appName: "shop" },
+    { path: "/repo/web", group: "demo", appName: "shop-web" },
+  ]);
+  const theme = themes["catppuccin-mocha"];
+  const badge = (line: number, label: string) =>
+    setup
+      .captureSpans()
+      .lines[line]?.spans.filter(span => span.text.includes(label))
+      .at(-1);
+  try {
+    // The overview comes first, one tab like the others; its providers are badges in their colors at the right.
+    expect(lines[top]).toMatch(/^.*Dashboard {3}Git {3}GitHub {3}Snyk\s{10,}Git {3}GitHub {3}Snyk\s*$/);
+    expect(lines[top]).not.toContain("normal");
+    expect(badge(top, "GitHub")?.bg).toEqual(RGBA.fromHex(theme.githubActionsBg));
+    expect(badge(top, "GitHub")?.fg).toEqual(RGBA.fromHex(theme.githubActionsFg));
+    // Like the graph's commit count, the event count is on the project row.
+    expect(lines[top + 2]).toMatch(/shop\s+shop-web\s+23 events\s*$/);
+    expect(lines[top + 2]).not.toContain("main");
+    const x = lines[top + 2].indexOf("shop-web") + 1;
+    await setup.mockMouse.click(x, top + 2, MouseButtons.LEFT);
+    expect(selected).toEqual(["/repo/web"]);
+
+    // A click hides the provider's events: its badge goes grey and the count says how many of all show.
+    await setup.mockMouse.click(lines[top].lastIndexOf("Snyk") + 1, top, MouseButtons.LEFT);
+    await setup.flush();
+    expect(dashboard.hidden().has("snyk")).toBe(true);
+    await setup.mockMouse.moveTo(0, 0);
+    await setup.flush();
+    expect(badge(top, "Snyk")?.bg).toEqual(RGBA.fromHex(theme.backgroundElementActive));
+    expect(badge(top, "Snyk")?.fg).toEqual(RGBA.fromHex(theme.foregroundMuted));
+    expect(setup.captureCharFrame()).toContain("20 / 23 events");
+
+    // Narrow, the badges get their own row, and the apps stop before the count instead of running into it.
+    setup.resize(40, 12);
+    await setup.flush();
+    const narrow = setup.captureCharFrame().split("\n");
+    const tabs = narrow.findIndex(line => line.includes("Dashboard"));
+    expect(narrow[tabs + 2]).toMatch(/^\W*Git {3}GitHub {3}Snyk\s*$/);
+    expect(narrow[tabs + 4]).toMatch(/shop\s.*\s20 \/ 23 events\s*$/);
   } finally {
     setup.renderer.destroy();
   }

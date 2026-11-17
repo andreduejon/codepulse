@@ -1,7 +1,7 @@
 import { createMemo, createSignal } from "solid-js";
+import type { DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
 import { BUSY } from "../../utils/busy-text";
-import { type LegendItem, runLegend } from "../shared/detail-legend";
 import type { RowShortcut } from "../shared/open-row";
 import { ProviderRunTree, type ProviderTreeJob, type ProviderTreeRun } from "../shared/provider-run-tree";
 import { jenkinsTestsJob } from "./tests";
@@ -23,6 +23,8 @@ export interface JenkinsDetailTabProps {
   fetchCommitData?: (sha: string, force?: boolean) => Promise<void>;
   unavailableReason?: string | null;
   loading?: boolean;
+  /** Keeps open runs and loaded jobs while the tab is not shown (another tab, the other layout). */
+  memory?: DetailMemory;
   navRef?: DetailNavRef;
   detailCursorIndex: () => number;
   detailFocused: () => boolean;
@@ -36,10 +38,10 @@ export interface JenkinsDetailTabProps {
   onOpenBuild?: (run: JenkinsRun, pipeline: JenkinsJob, entry: number) => void;
   /** Enter on a failed test: its error and stack in the log viewer, ←/→ to the other failed tests. */
   onOpenTestFailure?: (run: JenkinsRun, failed: JenkinsFailedTest[], index: number) => void;
+  /** The build the tab is shown for (the dashboard's event), and its mark's color. */
+  targetRunId?: string;
+  targetColor?: string;
 }
-
-/** The row marks, explained below the tree. A cancelled build is `aborted` in Jenkins. */
-export const JENKINS_LEGEND: LegendItem[] = runLegend("aborted");
 
 /**
  * The rows under a build, as quiet as the OpenShift tree: each stage with its mark (times are in the log's summary),
@@ -102,6 +104,9 @@ export function JenkinsDetailTab(props: Readonly<JenkinsDetailTabProps>) {
       }}
       debugSource="Jenkins"
       dataKey={props.sha}
+      targetRunId={props.targetRunId}
+      targetColor={props.targetColor}
+      memory={props.memory}
       onOpenJobAction={(job, run) => {
         const row = job.raw;
         if (row.kind === "log") props.onOpenBuild?.(run.raw, row.pipeline, row.entry);

@@ -1,12 +1,12 @@
-import type { Renderable } from "@opentui/core";
 import { createEffect, createMemo, createSignal, For, on, Show, untrack } from "solid-js";
+import type { DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
 import { useT } from "../../hooks/use-t";
 import { BUSY } from "../../utils/busy-text";
-import type { LegendItem } from "../shared/detail-legend";
 import { ProviderActionRow, ProviderSummaryRow, ScrollingLabel, useDetailRowMouse } from "../shared/detail-rows";
+import { useDetailTree } from "../shared/detail-tree";
 import { type RowShortcut, useOpenRowShortcut } from "../shared/open-row";
-import { type StatusCategory, statusColor, statusIcon } from "../shared/status";
+import { type StatusCategory, statusIcon } from "../shared/status";
 import { openShiftConsoleUrl } from "./console";
 import { openShiftStatusColor } from "./graph-columns";
 import type { OpenShiftCommitData, OpenShiftResource, OpenShiftStatus } from "./types";
@@ -23,6 +23,8 @@ export interface OpenShiftDetailTabProps {
   unavailableReason?: string | null;
   liveUnavailable?: boolean;
   loading?: boolean;
+  /** Keeps open namespaces while the tab is not shown (another tab, the other layout). */
+  memory?: DetailMemory;
   navRef?: DetailNavRef;
   detailCursorIndex: () => number;
   detailFocused: () => boolean;
@@ -31,6 +33,9 @@ export interface OpenShiftDetailTabProps {
   setDetailCursorShortcut?: (shortcut: RowShortcut | null) => void;
   /** Web console URL from the settings; `o` opens the namespace or resource there when it is set. */
   consoleUrl?: () => string;
+  /** The resource the tab is shown for (the dashboard's event: a build), marked, with the tab's focus starting on it. */
+  targetResourceId?: string;
+  targetColor?: string;
 }
 
 type NamespaceData = OpenShiftCommitData["namespaces"][number];
@@ -57,12 +62,6 @@ function statusCategory(status: OpenShiftStatus): StatusCategory {
 function statusMark(status: OpenShiftStatus) {
   return statusIcon(statusCategory(status));
 }
-
-/** The row marks, explained below the tree (the namespace badges in the graph carry none). */
-export const OPENSHIFT_LEGEND: LegendItem[] = (["pass", "running", "fail"] as const).map(category => [
-  [[statusIcon(category), theme => statusColor(theme, category)]],
-  category === "pass" ? "ok" : category === "running" ? "in progress" : "failing",
-]);
 
 function namespaceResources(ns: NamespaceData): OpenShiftResource[] {
   return [...ns.imageStreamTags, ...ns.deployments, ...ns.deploymentConfigs, ...ns.pods, ...ns.builds];
@@ -107,6 +106,17 @@ function resourcesForFlatItems(ns: NamespaceData): OpenShiftResource[] {
   ];
 }
 
+/** The namespaces a commit had and the ones open, for the commit `sha`. */
+interface NamespaceMemory {
+  sha: string | null;
+  known: Set<string>;
+  expanded: Set<string>;
+}
+
+const newNamespaceMemory = (): NamespaceMemory => ({ sha: null, known: new Set(), expanded: new Set() });
+/** The dashboard event the focus was put on (`commit\0resource`), so it is put there once. */
+const newTargetFocus = (): { key: string | null } => ({ key: null });
+
 export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
   const t = useT();
   const data = () => props.getCommitData(props.sha);
@@ -116,9 +126,11 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
   // An expired token only stops automatic fetches (below); Reload commit stays available as the explicit retry.
   const reloadEnabled = () => !props.unavailableReason;
   const liveAge = () => props.liveAge?.() ?? "";
-  const [expandedNamespaces, setExpandedNamespaces] = createSignal<Set<string>>(new Set());
-  const itemRefs: Renderable[] = [];
-  const refsByKey = new Map<string, Renderable>();
+  // The open namespaces of one commit, and the ones it had: kept in the memory, so coming back is no new commit.
+  const kept = props.memory?.("namespaces", newNamespaceMemory) ?? newNamespaceMemory();
+  const [expandedNamespaces, setExpandedNamespaces] = createSignal<Set<string>>(
+    kept.sha === untrack(() => props.sha) ? kept.expanded : new Set(),
+  );
   const rows = useDetailRowMouse({
     mouseEnabled: () => props.mouseEnabled,
     onMouseFocus: props.onMouseFocus,
@@ -131,15 +143,6 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
   const flatItemKey = (item: FlatItem) => {
     if (item.kind === "reload") return "reload";
     return item.kind === "namespace" ? `namespace:${item.namespace}` : `resource:${item.resource.id}`;
-  };
-
-  const syncItemRefs = () => {
-    const items = flatItems();
-    itemRefs.length = items.length;
-    items.forEach((item, index) => {
-      itemRefs[index] = refsByKey.get(flatItemKey(item)) as Renderable;
-    });
-    if (props.navRef) props.navRef.itemRefs = itemRefs;
   };
 
   // Namespaces without matched resources are left out of both the tree and the cursor order (no invisible stops).
@@ -172,6 +175,7 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
       else next.add(namespace);
       return next;
     });
+    kept.expanded = expandedNamespaces();
   };
 
   createEffect(() => {
@@ -182,21 +186,21 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
 
   // A new commit opens every namespace with the cursor on top. Live updates for the same commit keep the
   // user's open/closed choices (new namespaces open) and keep the cursor on the same row.
-  let expansionSha: string | null = null;
-  let knownNamespaces = new Set<string>();
   createEffect(() => {
     const sha = props.sha;
     const names = namespaces().map(ns => ns.namespace);
-    if (sha !== expansionSha) {
-      expansionSha = sha;
-      knownNamespaces = new Set(names);
+    if (sha !== kept.sha) {
+      kept.sha = sha;
+      kept.known = new Set(names);
       setExpandedNamespaces(new Set(names));
+      kept.expanded = untrack(expandedNamespaces);
       props.setDetailCursorIndex(0);
       return;
     }
-    const added = names.filter(name => !knownNamespaces.has(name));
-    knownNamespaces = new Set(names);
+    const added = names.filter(name => !kept.known.has(name));
+    kept.known = new Set(names);
     if (added.length > 0) setExpandedNamespaces(prev => new Set([...prev, ...added]));
+    kept.expanded = untrack(expandedNamespaces);
   });
 
   let cursorSha: string | null = null;
@@ -216,13 +220,6 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
     }),
   );
 
-  createEffect(() => {
-    const count = flatItems().length;
-    const cursor = untrack(() => props.detailCursorIndex());
-    if (count === 0) props.setDetailCursorIndex(0);
-    else if (cursor < 0 || cursor >= count) props.setDetailCursorIndex(Math.max(0, Math.min(count - 1, cursor)));
-  });
-
   const activateCurrentItem = () => {
     const item = flatItems()[props.detailCursorIndex()];
     if (!item) return false;
@@ -233,12 +230,12 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
     return false;
   };
 
-  createEffect(() => {
-    if (!props.navRef) return;
-    const items = flatItems();
-    props.navRef.itemCount = items.length;
-    syncItemRefs();
-    props.navRef.activateCurrentItem = activateCurrentItem;
+  const tree = useDetailTree({
+    navRef: props.navRef,
+    keys: () => flatItems().map(flatItemKey),
+    activate: activateCurrentItem,
+    detailCursorIndex: props.detailCursorIndex,
+    setDetailCursorIndex: props.setDetailCursorIndex,
   });
 
   useOpenRowShortcut({
@@ -267,18 +264,35 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
     else props.setDetailCursorAction("open");
   });
 
+  // The dashboard's event: the tab's focus starts on its build, once per commit. Kept in the memory, so mounting again
+  // (a resize between the side panel and the dialog) leaves the cursor where it was moved.
+  const targetFocus = props.memory?.("targetFocus", newTargetFocus) ?? newTargetFocus();
+  createEffect(() => {
+    const id = props.targetResourceId;
+    if (!id || !props.detailFocused()) return;
+    const key = `${props.sha}\u0000${id}`;
+    if (targetFocus.key === key) return;
+    // Tracked: a build that arrives later (its commit's data loads after the focus) still gets the cursor, once.
+    const index = flatItems().findIndex(item => item.kind === "resource" && item.resource.id === id);
+    if (index < 0) return;
+    targetFocus.key = key;
+    props.setDetailCursorIndex(index);
+  });
+
   const renderResourceRow = (resource: OpenShiftResource, lead: string, connector: string) => {
     const idx = () => flatIndexForResource(resource);
     const isCursored = () => props.detailFocused() && props.detailCursorIndex() === idx();
     const color = () => openShiftStatusColor(t(), resource.status);
-    const textColor = () => (isCursored() ? t().accent : t().foreground);
+    const textColor = () =>
+      isCursored()
+        ? t().accent
+        : resource.id === props.targetResourceId && props.targetColor
+          ? props.targetColor
+          : t().foreground;
     return (
       <box
         {...mouseRow(`resource:${resource.id}`, idx)}
-        ref={(el: Renderable) => {
-          refsByKey.set(`resource:${resource.id}`, el);
-          syncItemRefs();
-        }}
+        ref={tree.ref(`resource:${resource.id}`)}
         flexDirection="row"
         width="100%"
         backgroundColor={isCursored() ? t().backgroundElementActive : hoverBg(`resource:${resource.id}`)}
@@ -323,10 +337,7 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
         rows={rows}
         rowKey="reload"
         index={reloadIdx}
-        rowRef={el => {
-          refsByKey.set("reload", el);
-          syncItemRefs();
-        }}
+        rowRef={tree.ref("reload")}
       />
       <Show when={!!data()}>
         <ProviderSummaryRow label="total resources" count={resources().length} />
@@ -347,10 +358,7 @@ export function OpenShiftDetailTab(props: Readonly<OpenShiftDetailTabProps>) {
                 <box flexDirection="column" width="100%">
                   <box
                     {...mouseRow(`namespace:${ns.namespace}`, namespaceIdx)}
-                    ref={(el: Renderable) => {
-                      refsByKey.set(`namespace:${ns.namespace}`, el);
-                      syncItemRefs();
-                    }}
+                    ref={tree.ref(`namespace:${ns.namespace}`)}
                     flexDirection="row"
                     width="100%"
                     backgroundColor={

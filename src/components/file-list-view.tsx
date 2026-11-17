@@ -9,6 +9,7 @@ import { useT } from "../hooks/use-t";
 import { BUSY } from "../utils/busy-text";
 import { isCursored as _isCursored, itemHighlightBg as _itemHighlightBg } from "../utils/detail-cursor";
 import { buildDiffTarget } from "../utils/diff-target";
+import type { DetailMemory } from "./detail-memory";
 import type { DetailNavRef } from "./detail-types";
 import { computeFileWidths, detailUsableWidth, fileRowOverflow } from "./detail-types";
 import { FileTreeEntry } from "./file-tree-entry";
@@ -23,8 +24,10 @@ export interface FileListViewProps {
   commitHash: () => string;
   /** Diff source type: "commit" | "stash" etc. */
   diffSource: () => DiffSource;
-  /** Identity value — when it changes, collapsed dirs reset. */
-  resetTrigger: () => unknown;
+  /** What the files belong to (the commit): another one opens every folder again. */
+  subject: () => string;
+  /** Keeps collapsed folders while the list is not shown (another tab, the other layout). */
+  memory?: DetailMemory;
   /** Mutable ref populated by this view for keyboard navigation. */
   navRef: DetailNavRef;
   /** Callback to open the diff+blame dialog for a file. */
@@ -51,8 +54,7 @@ export default function FileListView(props: Readonly<FileListViewProps>) {
   const { state, actions } = useAppState();
   const t = useT();
 
-  // File tree state — resets collapsed dirs when resetTrigger changes
-  const { fileTreeRows, collapsedDirs, toggleDir } = useFileTree(props.files, props.resetTrigger);
+  const { fileTreeRows, collapsedDirs, toggleDir } = useFileTree(props.files, props.subject, props.memory);
 
   // Column widths for stat columns
   const fileWidths = createMemo(() => computeFileWidths(props.files()));

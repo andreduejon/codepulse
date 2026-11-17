@@ -10,6 +10,8 @@ import {
 export interface JenkinsJobConfig {
   label?: string;
   url: string;
+  /** A multibranch project's branch job: the branch it builds. Never set in the config. */
+  branch?: string;
 }
 
 export const JENKINS_MULTIBRANCH_JOB_LIMIT = 25;
@@ -46,6 +48,8 @@ export interface JenkinsRun {
   url: string;
   jobLabel: string;
   jobUrl: string;
+  /** The branch it built, for a multibranch branch job; missing for other jobs and in older cached runs. */
+  branch?: string;
 }
 
 export interface JenkinsStage {

@@ -2,6 +2,14 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { DEFAULT_MAX_COUNT } from "./constants";
 import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL } from "./context/state";
+import {
+  DASHBOARD_KNOT_MINUTES,
+  DASHBOARD_WINDOW_DAYS,
+  type DashboardKnotMinutes,
+  type DashboardWindowDays,
+  DEFAULT_DASHBOARD_SETTINGS,
+} from "./dashboard/settings";
+import { addDebugEvent } from "./debug/events";
 import { normalizeGitHubHost } from "./providers/github-actions/api";
 import { isValidJenkinsJobUrl, JENKINS_JOB_URL_MAX_LENGTH } from "./providers/jenkins/validation";
 import {
@@ -11,6 +19,7 @@ import {
   OPENSHIFT_SERVER_URL_MAX_LENGTH,
   OPENSHIFT_TEXT_MAX_LENGTH,
 } from "./providers/openshift/validation";
+import { PROVIDER_ORDER, type ProviderView } from "./providers/provider";
 import {
   isProviderAutoRefreshSeconds,
   isProviderCacheLimit,
@@ -38,6 +47,16 @@ export interface CodepulseConfig {
   autoRefreshSeconds?: number;
   /** Auto-fetch interval in seconds. 0 = off. */
   autoFetchSeconds?: number;
+  /** The view codepulse opens in: Git by default, the dashboard or a provider that is turned on. */
+  startView?: ProviderView;
+  /** `f` and Auto fetch also fast-forward the branches that are only behind their remote branch. Off by default. */
+  autoFastForward?: boolean;
+  /** The dashboard: whether it shows (on by default), how many days back it reads, how many minutes one knot holds. */
+  dashboard?: {
+    enabled?: boolean;
+    windowDays?: DashboardWindowDays;
+    knotMinutes?: DashboardKnotMinutes;
+  };
   /** Provider-specific configuration. */
   providers?: {
     github?: {
@@ -92,6 +111,9 @@ export function defaultConfig(): Required<Omit<CodepulseConfig, "branch" | "grou
     showAllBranches: true,
     autoRefreshSeconds: DEFAULT_AUTO_REFRESH_INTERVAL / 1000,
     autoFetchSeconds: DEFAULT_AUTO_FETCH_INTERVAL / 1000,
+    startView: "git",
+    autoFastForward: false,
+    dashboard: { ...DEFAULT_DASHBOARD_SETTINGS },
     providers: {
       github: {
         enabled: false,
@@ -257,6 +279,18 @@ export function getKnownRepoInfos(configPath?: string): KnownRepoInfo[] {
  * @param repoPath - The repository directory (used to look up the repo entry).
  * @param configPath - Override the global config path (used by tests).
  */
+/** The warnings already in Debug: the config is read again on every reload and repository switch. */
+const reportedConfigWarnings = new Set<string>();
+
+/** Puts the config's warnings (a value it ignores, and why) in Debug, each once per run. */
+export function reportConfigWarnings(warnings: readonly string[]): void {
+  for (const warning of warnings) {
+    if (reportedConfigWarnings.has(warning)) continue;
+    reportedConfigWarnings.add(warning);
+    addDebugEvent({ source: "error", status: "warning", message: warning });
+  }
+}
+
 export function loadConfig(repoPath: string, configPath?: string): { config: CodepulseConfig; warnings: string[] } {
   const warnings: string[] = [];
   const result = readRawConfig(configPath, warnings);
@@ -605,7 +639,64 @@ function validateConfig(raw: Record<string, unknown>, path: string, warnings: st
     }
   }
 
+  if (raw.autoFastForward !== undefined) {
+    if (typeof raw.autoFastForward === "boolean") config.autoFastForward = raw.autoFastForward;
+    else warnings.push(`${path}: "autoFastForward" must be a boolean, ignoring`);
+  }
+
+  if (raw.startView !== undefined) {
+    if ((PROVIDER_ORDER as readonly unknown[]).includes(raw.startView))
+      config.startView = raw.startView as ProviderView;
+    else warnings.push(`${path}: "startView" must be one of ${PROVIDER_ORDER.join(", ")}, ignoring`);
+  }
+
+  if (raw.dashboard !== undefined) {
+    if (typeof raw.dashboard === "object" && raw.dashboard !== null && !Array.isArray(raw.dashboard)) {
+      const dashboard = raw.dashboard as Record<string, unknown>;
+      config.dashboard = {};
+      if (dashboard.enabled !== undefined) {
+        if (typeof dashboard.enabled === "boolean") config.dashboard.enabled = dashboard.enabled;
+        else warnings.push(`${path}: "dashboard.enabled" must be a boolean, ignoring`);
+      }
+      if (dashboard.windowDays !== undefined) {
+        if ((DASHBOARD_WINDOW_DAYS as readonly unknown[]).includes(dashboard.windowDays))
+          config.dashboard.windowDays = dashboard.windowDays as DashboardWindowDays;
+        else
+          warnings.push(`${path}: "dashboard.windowDays" must be one of ${DASHBOARD_WINDOW_DAYS.join(", ")}, ignoring`);
+      }
+      if (dashboard.knotMinutes !== undefined) {
+        if ((DASHBOARD_KNOT_MINUTES as readonly unknown[]).includes(dashboard.knotMinutes))
+          config.dashboard.knotMinutes = dashboard.knotMinutes as DashboardKnotMinutes;
+        else
+          warnings.push(
+            `${path}: "dashboard.knotMinutes" must be one of ${DASHBOARD_KNOT_MINUTES.join(", ")}, ignoring`,
+          );
+      }
+    } else {
+      warnings.push(`${path}: "dashboard" must be an object, ignoring`);
+    }
+  }
+
   return config;
+}
+
+/** The view a repository opens in: its `startView` while that provider is turned on, else Git. */
+export function startViewFor(config: CodepulseConfig): ProviderView {
+  const view = config.startView ?? "git";
+  switch (view) {
+    case "dashboard":
+      return config.dashboard?.enabled === false ? "git" : view;
+    case "git":
+      return view;
+    case "github-actions":
+      return config.providers?.github?.enabled === true ? view : "git";
+    case "jenkins":
+      return config.providers?.jenkins?.enabled === true ? view : "git";
+    case "openshift":
+      return config.providers?.openshift?.enabled === true ? view : "git";
+    case "snyk":
+      return config.providers?.snyk?.enabled === true ? view : "git";
+  }
 }
 
 /**

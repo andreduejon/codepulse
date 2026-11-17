@@ -19,7 +19,7 @@ import {
   type TestFailure,
 } from "./logs";
 import type { ProviderMode, ProviderName } from "./options";
-import { ANNOTATION_LINES, shopHistory } from "./repositories";
+import { ANNOTATION_LINES, FEATURE_BRANCH, shopHistory } from "./repositories";
 
 export interface DemoState {
   root: string;
@@ -58,6 +58,8 @@ export interface PlayConfig {
   repoPath: string;
   /** How long `wait:` and `gone:` wait. */
   waitMs: number;
+  /** `--colors`: shots name each color of this theme. */
+  colors: { theme: string } | null;
 }
 
 export const REMOTES_ENV = "CODEPULSE_DEMO_REMOTES";
@@ -116,6 +118,8 @@ export interface FakeRun {
   id: number;
   repo: (typeof GITHUB_REPOS)[number]["repo"];
   sha: string;
+  /** The branch the run was pushed to, which GitHub names on its check suite. */
+  branch: string;
   name: string;
   runNumber: number;
   status: "completed" | "in_progress" | "queued";
@@ -188,6 +192,7 @@ export function githubRuns(state: DemoState, phase: Phase): FakeRun[] {
       id: 9001,
       repo: "shop",
       sha: s.payments,
+      branch: "main",
       name: "CI",
       runNumber: 812,
       status: "completed",
@@ -300,6 +305,7 @@ export function githubRuns(state: DemoState, phase: Phase): FakeRun[] {
       id: 9002,
       repo: "shop",
       sha: s.readme,
+      branch: "main",
       name: "CI",
       runNumber: 813,
       status: "completed",
@@ -333,6 +339,7 @@ export function githubRuns(state: DemoState, phase: Phase): FakeRun[] {
       id: 9003,
       repo: "shop",
       sha: s.readme,
+      branch: "main",
       name: "Deploy to shop-prod with a long workflow name",
       runNumber: 77,
       status: "completed",
@@ -360,6 +367,7 @@ export function githubRuns(state: DemoState, phase: Phase): FakeRun[] {
       id: 9004,
       repo: "shop",
       sha: s.metrics,
+      branch: "dev",
       name: "CI",
       runNumber: 814,
       status: finished ? "completed" : "in_progress",
@@ -388,6 +396,7 @@ export function githubRuns(state: DemoState, phase: Phase): FakeRun[] {
       id: 9006,
       repo: "shop",
       sha: s.metrics,
+      branch: "dev",
       name: "Deploy preview",
       runNumber: 78,
       status: finished ? "in_progress" : "queued",
@@ -417,6 +426,7 @@ export function githubRuns(state: DemoState, phase: Phase): FakeRun[] {
       id: 9007,
       repo: "shop",
       sha: s.health,
+      branch: "dev",
       name: "CI",
       runNumber: 811,
       status: "completed",
@@ -441,6 +451,7 @@ export function githubRuns(state: DemoState, phase: Phase): FakeRun[] {
       id: 9008,
       repo: "shop",
       sha: s.rounding,
+      branch: "main",
       name: "Nightly e2e",
       runNumber: 203,
       status: "completed",
@@ -466,6 +477,7 @@ export function githubRuns(state: DemoState, phase: Phase): FakeRun[] {
             id: 9009,
             repo: "shop" as const,
             sha: s.next,
+            branch: "dev",
             name: "CI",
             runNumber: 816,
             status: "queued" as const,
@@ -479,6 +491,7 @@ export function githubRuns(state: DemoState, phase: Phase): FakeRun[] {
       id: 9005,
       repo: "shop",
       sha: s.retry,
+      branch: FEATURE_BRANCH,
       name: "CI",
       runNumber: 815,
       status: "completed",
@@ -522,6 +535,7 @@ export function githubRuns(state: DemoState, phase: Phase): FakeRun[] {
       id: 9101,
       repo: "shop-web",
       sha: w.gallery,
+      branch: "main",
       name: "CI",
       runNumber: 51,
       status: "completed",
@@ -544,6 +558,7 @@ export function githubRuns(state: DemoState, phase: Phase): FakeRun[] {
       id: 9102,
       repo: "shop-web",
       sha: w.prices,
+      branch: "main",
       name: "CI",
       runNumber: 52,
       status: "completed",
@@ -572,6 +587,35 @@ export function githubRuns(state: DemoState, phase: Phase): FakeRun[] {
         },
       ],
     },
+    // The pull request merged on GitHub that the local main doesn't have yet, and dev's own commit on origin.
+    ...(
+      [
+        [9103, w.cart, "main", 53, 80],
+        [9104, w.aspect, "dev", 54, 60],
+      ] as const
+    ).map(([id, sha, branch, runNumber, startedAgoMin]) => ({
+      id,
+      repo: "shop-web" as const,
+      sha,
+      branch,
+      name: "CI",
+      runNumber,
+      status: "completed" as const,
+      conclusion: "success" as const,
+      startedAgoMin,
+      jobs: [
+        {
+          id: id * 10 + 1,
+          name: "build",
+          attempt: 1,
+          status: "completed" as const,
+          conclusion: "success" as const,
+          startedAgoMin,
+          minutes: 2,
+          steps: [...setupSteps(), { name: "Build", conclusion: "success" as const }],
+        },
+      ],
+    })),
   ];
 }
 
@@ -962,30 +1006,54 @@ export function openShiftWorld(state: DemoState, phase: Phase): OpenShiftWorld {
       }),
     ],
   });
-  // OpenShift only matches commits that have a Build (or ImageStreamTag), so every deployed commit gets one.
-  const completeBuild = (name: string, sha: string) =>
+  // OpenShift only matches commits that have a Build (or ImageStreamTag), so every deployed commit gets one. Each took
+  // 6 minutes and ended `endedMin` minutes ago (the dashboard dates builds by their end).
+  /** The Git source a build checked out: its ref names the branch on the dashboard. */
+  const source = (ref: string) => ({ type: "Git", git: { uri: "https://github.com/demo/shop.git", ref } });
+  const completeBuild = (name: string, sha: string, endedMin: number, ref: string) =>
     add("shop-dev", "Build", {
       kind: "Build",
-      metadata: { name, namespace: "shop-dev", uid: nextUid(), labels: { [COMMIT_KEY]: sha } },
-      spec: { output: { to: { kind: "ImageStreamTag", name: `shop-api:${name.split("-").pop()}` } } },
-      status: { phase: "Complete", outputDockerImageReference: imageOf(sha) },
+      metadata: {
+        name,
+        namespace: "shop-dev",
+        uid: nextUid(),
+        labels: { [COMMIT_KEY]: sha },
+        creationTimestamp: created(endedMin + 6),
+      },
+      spec: {
+        source: source(ref),
+        output: { to: { kind: "ImageStreamTag", name: `shop-api:${name.split("-").pop()}` } },
+      },
+      status: { phase: "Complete", outputDockerImageReference: imageOf(sha), completionTimestamp: created(endedMin) },
     });
-  completeBuild("shop-api-40", s.rounding);
+  completeBuild("shop-api-40", s.rounding, 2 * 24 * 60, "main");
   add("shop-dev", "Build", {
     kind: "Build",
-    metadata: { name: "shop-api-41", namespace: "shop-dev", uid: nextUid(), labels: { [COMMIT_KEY]: s.payments } },
-    spec: { output: { to: { kind: "ImageStreamTag", name: "shop-api:41" } } },
-    status: { phase: "Failed", reason: "DockerBuildFailed", message: "Docker build strategy has failed." },
+    metadata: {
+      name: "shop-api-41",
+      namespace: "shop-dev",
+      uid: nextUid(),
+      labels: { [COMMIT_KEY]: s.payments },
+      creationTimestamp: created(400),
+    },
+    // A full ref, as a BuildConfig may name it.
+    spec: { source: source("refs/heads/main"), output: { to: { kind: "ImageStreamTag", name: "shop-api:41" } } },
+    status: {
+      phase: "Failed",
+      reason: "DockerBuildFailed",
+      message: "Docker build strategy has failed.",
+      completionTimestamp: created(396),
+    },
   });
   // 41 failed, its re-run 42 made the image shop-test runs.
-  completeBuild("shop-api-42", s.payments);
-  completeBuild("shop-api-43", s.readme);
-  completeBuild("shop-api-44", s.metrics);
+  completeBuild("shop-api-42", s.payments, 380, "main");
+  completeBuild("shop-api-43", s.readme, 50, "main");
+  completeBuild("shop-api-44", s.metrics, 3, "dev");
   if (phase.index >= 2)
     add("shop-dev", "Build", {
       kind: "Build",
       metadata: { name: "shop-api-45", namespace: "shop-dev", uid: nextUid(), labels: { [COMMIT_KEY]: s.next } },
-      spec: { output: { to: { kind: "ImageStreamTag", name: "shop-api:45" } } },
+      spec: { source: source("dev"), output: { to: { kind: "ImageStreamTag", name: "shop-api:45" } } },
       status: { phase: "Running" },
     });
   add("shop-dev", "ImageStreamTag", {

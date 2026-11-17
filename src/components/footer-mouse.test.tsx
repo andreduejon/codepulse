@@ -5,6 +5,7 @@ import { testRender, useKeyboard } from "@opentui/solid";
 import { createSignal } from "solid-js";
 import { AppStateContext, createAppState } from "../context/state";
 import { createThemeState, ThemeContext } from "../context/theme";
+import type { DashboardState } from "../dashboard/use-dashboard";
 import { buildGraph } from "../git/graph";
 import type { Commit } from "../git/types";
 import { type GraphKeyOptions, openGraphDetails } from "../hooks/handle-graph-keys";
@@ -97,6 +98,7 @@ async function renderFooter(width = 100) {
           <AppStateContext.Provider value={app}>
             <box width="100%" height={2} flexDirection="column">
               <Footer
+                busyDelayMs={0}
                 commandBarMode={commandBarMode}
                 filterActive={!!(app.state.searchQuery() || app.state.pathFilter() || app.state.viewingBranch())}
                 compact={layoutMode() !== "normal"}
@@ -609,7 +611,7 @@ test("footer says which CI provider is fetching, and long labels truncate before
     const [github, setGithub] = createSignal<string | null>("fetching");
     d.state.providers.register({
       id: "github-actions",
-      displayName: "GitHub Actions",
+      displayName: "GitHub",
       isAvailable: () => true,
       activity: github,
     });
@@ -639,14 +641,14 @@ test("footer says which CI provider is fetching, and long labels truncate before
         .split("\n")
         .find(row => row.includes("navigate")) ?? "";
     // Too long for a 100-column footer: the label is cut at the end and every hint stays whole.
-    expect(line()).toMatch(/Git fetching · GitH[^·]*… tab Actions/);
+    expect(line()).toMatch(/Git fetching · GitH[^·]*… tab GitHub/);
     expect(line()).toContain("↑/↓ navigate");
     expect(line()).toContain("shift ←/→ switch project");
     setGithub(null);
     d.actions.setFetching(false);
     await d.flush();
     expect(line()).toContain("Jenkins fetching · O");
-    expect(line()).not.toContain("GitHub Actions fetching");
+    expect(line()).not.toContain("GitHub fetching");
   } finally {
     await d.dispose();
   }
@@ -657,7 +659,7 @@ test("a wide footer shows every provider's activity in full", async () => {
   try {
     d.state.providers.register({
       id: "github-actions",
-      displayName: "GitHub Actions",
+      displayName: "GitHub",
       isAvailable: () => true,
       activity: () => "fetching",
     });
@@ -669,7 +671,7 @@ test("a wide footer shows every provider's activity in full", async () => {
     });
     d.actions.setFetching(true);
     await d.flush();
-    expect(d.captureCharFrame()).toContain("Git fetching · GitHub Actions fetching · Snyk scanning");
+    expect(d.captureCharFrame()).toContain("Git fetching · GitHub fetching · Snyk scanning");
     expect(d.captureCharFrame()).not.toContain("…");
   } finally {
     await d.dispose();
@@ -679,7 +681,7 @@ test("a wide footer shows every provider's activity in full", async () => {
 test("a narrow footer leaves out whole hints, least needed first, instead of cutting one", async () => {
   const d = await renderFooter(70);
   try {
-    d.state.providers.register({ id: "github-actions", displayName: "GitHub Actions", isAvailable: () => true });
+    d.state.providers.register({ id: "github-actions", displayName: "GitHub", isAvailable: () => true });
     d.actions.setSearchQuery("fix");
     await d.flush();
     const line =
@@ -694,5 +696,81 @@ test("a narrow footer leaves out whole hints, least needed first, instead of cut
     expect(line).not.toContain("switch project");
   } finally {
     await d.dispose();
+  }
+});
+
+test("on the dashboard, a click on r refresh does what r does: the refresh it is given", async () => {
+  const app = createAppState();
+  app.actions.setActiveProviderView("dashboard");
+  app.actions.setLoading(false);
+  const reload = mock(async () => {});
+  const refresh = mock(() => {});
+  const dashboard = {
+    rows: () => [],
+    cursor: () => -1,
+    selected: () => null,
+    reload,
+    loading: () => false,
+  } as unknown as DashboardState;
+  const setup = await testRender(
+    () => (
+      <AppStateContext.Provider value={app}>
+        <ThemeContext.Provider value={createThemeState()}>
+          <Footer commandBarMode={() => "idle"} dashboard={dashboard} onDashboardRefresh={refresh} />
+        </ThemeContext.Provider>
+      </AppStateContext.Provider>
+    ),
+    { width: 100, height: 3, useMouse: true },
+  );
+  try {
+    // The hints fit once the footer knows its width: a second pass.
+    await setup.renderOnce();
+    await setup.renderOnce();
+    const lines = setup.captureCharFrame().split("\n");
+    const y = lines.findIndex(line => line.includes("refresh"));
+    expect(y).toBeGreaterThanOrEqual(0);
+    await setup.mockMouse.click(lines[y]?.indexOf("r refresh") ?? 0, y, MouseButtons.LEFT);
+    await setup.renderOnce();
+    expect(refresh).toHaveBeenCalledTimes(1);
+  } finally {
+    setup.renderer.destroy();
+  }
+});
+
+test("short work never shows: the spinner and label appear once something has been busy for half a second", async () => {
+  const app = createAppState();
+  app.actions.setLoading(false);
+  const setup = await testRender(
+    () => (
+      <AppStateContext.Provider value={app}>
+        <ThemeContext.Provider value={createThemeState()}>
+          <Footer commandBarMode={() => "idle"} busyDelayMs={200} />
+        </ThemeContext.Provider>
+      </AppStateContext.Provider>
+    ),
+    { width: 100, height: 3 },
+  );
+  const footer = () => setup.captureCharFrame().split("\n")[0] ?? "";
+  try {
+    await setup.renderOnce();
+    // A fetch done in 50 ms: nothing blinks.
+    app.actions.setFetching(true);
+    await Bun.sleep(50);
+    await setup.renderOnce();
+    expect(footer()).not.toContain("fetching");
+    app.actions.setFetching(false);
+    await Bun.sleep(250);
+    await setup.renderOnce();
+    expect(footer()).not.toContain("fetching");
+    // One that takes longer: shown after the delay, gone as soon as it ends.
+    app.actions.setFetching(true);
+    await Bun.sleep(250);
+    await setup.renderOnce();
+    expect(footer()).toContain("Git fetching");
+    app.actions.setFetching(false);
+    await setup.renderOnce();
+    expect(footer()).not.toContain("fetching");
+  } finally {
+    setup.renderer.destroy();
   }
 });

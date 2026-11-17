@@ -6,8 +6,11 @@ and are never written to Codepulse configuration.
 
 ## Refresh and fetch
 
-Provider **Auto refresh** controls provider requests while that provider view is
-focused. Git **Auto refresh** and **Auto fetch** apply only to repository data.
+Provider **Auto refresh** controls provider requests while that provider view or
+the Dashboard is shown. On the Dashboard a provider fetches without a loading
+status, and a failed fetch shows in the message box. When a repository loads,
+GitHub and Jenkins fetch the newest commits' runs, OpenShift lists its builds
+and Snyk scans its Auto scan branches, once each. Git **Auto refresh** and **Auto fetch** apply only to repository data.
 
 **Fetch size** is the graph commit window considered by a provider. It is not a
 cache-retention setting and does not limit resources returned by provider APIs,
@@ -27,7 +30,7 @@ differs where noted:
 
 - **Busy text** says what kind of work runs: `fetching` is network (Git remote,
   GitHub Actions, Jenkins, OpenShift), `reading` is local Git, `scanning` is Snyk.
-  The footer names it (`GitHub Actions fetching`, `Snyk scanning`), including auto
+  The footer names it (`GitHub fetching`, `Snyk scanning`), including auto
   refresh, and cuts the label with `…` before the key hints when space runs out.
 - **Graph columns** use the same chips: fail, running, neutral (grey: cancelled,
   skipped, or unknown), pass (Snyk: four severity chips). Columns widen to fit the
@@ -98,7 +101,8 @@ Messages go to one of two places:
   missing setup or token, authentication, timeouts, failed requests, Git errors.
   It shows a bold headline and its source (`Git` or the provider), with any
   detail in muted lines below. A Snyk scan that fails while another view is open
-  shows here too, after that view's own problems.
+  shows here too, after that view's own problems, until that commit scans without
+  an error. On the Dashboard every provider's failed fetch or scan shows here.
 - **Tab notice**, pinned under the detail tabs, for results that work but are
   incomplete: provider warnings (OpenShift watch denied or partial inventory,
   Jenkins branch-job limit) and per-commit gaps (Snyk partial scans, Snyk projects

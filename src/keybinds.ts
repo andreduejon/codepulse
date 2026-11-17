@@ -20,6 +20,7 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     { kind: "binding", key: "?", desc: "Open help dialog", indent: 1 },
     { kind: "binding", key: "esc", desc: "Back / clear current mode", indent: 1 },
     { kind: "binding", key: "f", desc: "Fetch Git and the open provider", indent: 1 },
+    { kind: "binding", key: "ctrl+f", desc: "Fetch and fast-forward", indent: 1 },
     { kind: "binding", key: "m", desc: "Open menu dialog", indent: 1 },
     { kind: "binding", key: "q", desc: "Quit", indent: 1 },
     { kind: "binding", key: "tab", desc: "Switch view", indent: 1 },
@@ -34,6 +35,19 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     { kind: "binding", key: "shift ↑/↓", desc: "Jump 10 commits", indent: 1 },
     { kind: "binding", key: "↑/↓  or  j/k", desc: "Navigate commits", indent: 1 },
     { kind: "binding", key: "→  or  l", desc: "Focus details", indent: 1 },
+    { kind: "spacer" },
+    { kind: "section", label: "Dashboard" },
+    {
+      kind: "binding",
+      key: "enter",
+      desc: "Show the event in its provider's view (wide) / open its details",
+      indent: 1,
+    },
+    { kind: "binding", key: "→  or  l", desc: "Focus the event's details (wide layout)", indent: 1 },
+    { kind: "binding", key: "o", desc: "Open the run or build in the browser", indent: 1 },
+    { kind: "binding", key: "r", desc: "Fetch every provider again", indent: 1 },
+    { kind: "binding", key: "s", desc: "Show the event in its provider's view (compact details)", indent: 1 },
+    { kind: "binding", key: "↑/↓  or  j/k", desc: "Navigate events", indent: 1 },
     { kind: "spacer" },
     { kind: "section", label: "Details" },
     { kind: "binding", key: "enter", desc: "Activate selected item", indent: 1 },
@@ -120,22 +134,25 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     { kind: "binding", key: ":debug", desc: "Toggle debug dialog" },
     { kind: "binding", key: ":fetch", desc: "Fetch Git and the open provider" },
     { kind: "binding", key: ":help", desc: "Open help dialog" },
+    { kind: "binding", key: ":hide NAME", desc: "Hide a provider's events on the dashboard" },
     { kind: "binding", key: ":menu", desc: "Open menu dialog" },
     { kind: "binding", key: ":path", desc: "Switch to path mode" },
+    { kind: "binding", key: ":pull", desc: "Fetch and fast-forward" },
     { kind: "binding", key: ":providers", desc: "Open menu on Providers tab" },
     { kind: "binding", key: ":quit", desc: "Quit application" },
     { kind: "binding", key: ":reload", desc: "Reload repository data from disk" },
     { kind: "binding", key: ":repo", desc: "Open menu on Repository tab" },
     { kind: "binding", key: ":search", desc: "Switch to search mode" },
+    { kind: "binding", key: ":show [NAME]", desc: "Show a provider's events on the dashboard, or all" },
     { kind: "binding", key: ":switch", desc: "Open repository switcher" },
     { kind: "binding", key: ":theme", desc: "Open theme dialog" },
   ],
   providers: [
-    { kind: "section", label: "GitHub Actions" },
+    { kind: "section", label: "GitHub" },
     {
       kind: "binding",
       key: "Enabled",
-      desc: "Allow switching to the GitHub Actions view in the graph. Data loads once the token is set and the host is allowed.",
+      desc: "Allow switching to the GitHub view in the graph. Data loads once the token is set and the host is allowed.",
       indent: 1,
     },
     {
@@ -177,7 +194,7 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     {
       kind: "binding",
       key: "Auto refresh",
-      desc: "Re-query running workflow SHAs while the GitHub view is focused. Options: off, 2m, 5m, 10m. Default 2m. Git Auto refresh stays git-only.",
+      desc: "Re-query running workflows and the newest commits while the GitHub view or the Dashboard is shown. Options: off, 2m, 5m, 10m. Default 2m. Git Auto refresh stays git-only.",
       indent: 1,
     },
     { kind: "spacer" },
@@ -221,7 +238,7 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     {
       kind: "binding",
       key: "Auto refresh",
-      desc: "Re-query running Jenkins builds while the Jenkins view is focused. Options: off, 2m, 5m, 10m. Default 2m. Git Auto refresh stays git-only.",
+      desc: "Re-query running builds and look for new ones while the Jenkins view or the Dashboard is shown. Options: off, 2m, 5m, 10m. Default 2m. Git Auto refresh stays git-only.",
       indent: 1,
     },
     {
@@ -277,7 +294,7 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     {
       kind: "binding",
       key: "Auto refresh",
-      desc: "Poll Builds and ImageStreamTags while the OpenShift view is focused. Options: off, 2m, 5m, 10m. Default 2m. Live Deploy/DC/Pod use watch, not this timer. Git Auto refresh stays git-only.",
+      desc: "Poll Builds and ImageStreamTags while the OpenShift view or the Dashboard is shown. Options: off, 2m, 5m, 10m. Default 2m. Live Deploy/DC/Pod use watch, not this timer. Git Auto refresh stays git-only.",
       indent: 1,
     },
     {
@@ -321,7 +338,7 @@ export const KEYBINDS: Record<HelpTab, HelpRow[]> = {
     {
       kind: "binding",
       key: "New branch",
-      desc: "Add a concrete local branch. Its tip auto-scans only while the Snyk view is focused and has no cache. Other views read cache only.",
+      desc: "Add a concrete local branch. Its tip auto-scans once, from when the repository loads, when it has no cached scan.",
       indent: 1,
     },
     {

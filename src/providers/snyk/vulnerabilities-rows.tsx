@@ -3,7 +3,8 @@ import { For, Show } from "solid-js";
 import { useT } from "../../hooks/use-t";
 import { highlightMatch } from "./filter";
 import { isMatureExploit, type SnykVulnerabilityEntry } from "./parser";
-import { type SnykRows, severityColor } from "./tab-shared";
+import { severityColor } from "./severity";
+import type { SnykRows } from "./tab-shared";
 import {
   type DetailLine,
   detailLines,

@@ -129,6 +129,8 @@ export interface CascadeState {
   ancestrySet: Set<string> | null;
   pathFilter: string | null;
   viewingBranch: string | null;
+  /** The dashboard shows: the graph's search, highlights and branch view are behind it, so Esc leaves them. */
+  dashboard?: boolean;
 }
 
 /** Dialogs opened from the details: in compact layout, closing one goes back to the details dialog. */
@@ -137,11 +139,14 @@ export const DETAIL_CHILD_DIALOGS: ReadonlySet<string> = new Set(["diff-blame", 
 export function computeCascadeTarget(s: CascadeState): CascadeTarget {
   if (s.commandBarMode !== "idle") return "command-bar";
   if (s.dialog) {
-    if (s.dialog === "detail") return "detail-dialog";
+    // The dashboard's compact details close like the graph's: the events have the keyboard again.
+    if (s.dialog === "detail" || s.dialog === "dashboard-event") return "detail-dialog";
     // A dialog opened from compact details (a diff, a log, an OpenShift resource) goes back to them.
     if (DETAIL_CHILD_DIALOGS.has(s.dialog) && s.layoutMode === "compact" && s.detailFocused) return "back-to-detail";
     return "dialog";
   }
+  // The dashboard has no graph highlights or branch to clear: only its provider tab gives the keyboard back.
+  if (s.dashboard) return s.detailFocused ? "detail-focused" : null;
   if (s.searchFocused) return "search-focused";
   if (s.detailFocused) return "detail-focused";
   if (s.highlightSet !== null) {

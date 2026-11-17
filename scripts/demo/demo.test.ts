@@ -168,6 +168,28 @@ describe("bun run demo --play", () => {
 });
 
 test(
+  "on the dashboard, a running build shows as running, and after r it shows as it ended, in its colors",
+  async () => {
+    const user = userEnv("dashboard-refresh");
+    const result = await demo(
+      [
+        "--colors",
+        "--size",
+        "130x30",
+        "--play",
+        'wait:"86 commits" click:Dashboard wait:"CI #814 running" advance r wait:"CI #814 passed" absent:"CI #814 running" shot',
+      ],
+      user.env,
+    );
+    expect(result.stderr).not.toContain("error");
+    expect(result.code).toBe(0);
+    // The run's knot is GitHub's color, its mark the passed one (the new row is selected: its text has a background).
+    expect(result.stdout).toMatch(/«[^:»]*githubActionsBg[^:»]*:█».*«success[^:»]*:✓ »(«[^:»]*:)?CI #814 passed/);
+  },
+  { timeout: 120_000 },
+);
+
+test(
   "the compiled fake CLIs (the Windows way) answer as snyk and npm",
   async () => {
     const bin = join(sandbox, "compiled-bin");

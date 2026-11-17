@@ -20,12 +20,14 @@ the full shortcut and provider setup reference.
 | `/` | Open search mode |
 | `m` | Open menu dialog |
 | `f` | Fetch Git and the open provider |
+| `ctrl+f` | Fetch and fast-forward |
 | `?` | Open help dialog |
 | `q` | Quit |
 
 In the GitHub Actions, Jenkins, and OpenShift views, `f` fetches Git and then
-refreshes that provider. In the Snyk view only Git is fetched: Snyk has no server
-data to refetch, and scans run when started or when an auto-scan branch moves.
+refreshes that provider. On the Dashboard it refreshes every provider. In the
+Snyk view only Git is fetched: Snyk has no server data to refetch, and scans run
+when started or when an auto-scan branch moves.
 
 ### Graph
 
@@ -75,6 +77,41 @@ Normal clears highlighting without changing branch perspective.
 | `↑` / `↓` or `j` / `k`, `shift ↑` / `shift ↓`, space, `g` / `G` | Scroll |
 | `esc` | Clear search / close |
 
+### Dashboard
+
+The Dashboard is the first tab: everything that happened to the open app, newest first. Each event is a knot on the
+app's rope in its provider's color: commits on the main branch, GitHub runs, Jenkins builds, OpenShift builds and
+Snyk scans, with their commit, branch and time. A build that is still running shows as running and turns into how it
+ended. The branch is the one the provider names (a GitHub run's, a Jenkins multibranch job's, an OpenShift build's Git
+ref), else the branch the commit was made on.
+
+| Key | Action |
+|-----|--------|
+| `↑` / `↓` or `j` / `k` | Navigate events |
+| `shift ↑` / `shift ↓`, `PgUp` / `PgDn` | Jump 10 events |
+| `g` / `G`, `home` / `end` | First / last event |
+| `enter` | Show the event's commit in its provider's view with its details (wide layout) / open its details (compact layout) |
+| `→` / `l` | Give the event's provider tab the keyboard (wide layout); `←` on its first tab gives it back |
+| `o` | Open the run's or build's page in the browser |
+| `r` | Fetch every provider again and read the events |
+
+- While the Dashboard is shown, each provider fetches and auto refreshes as on its own tab. `f` and `:reload` fetch
+  every provider. A failed fetch or scan shows in the message box: several share one box, with a line each. A provider
+  that is turned off has no events there, also none it cached before.
+- Each provider has a badge in its color where the graph's modes are. A click on it, or `:hide NAME` and
+  `:show NAME`, hides or shows that provider's events, and the count reads `26 / 30 events`. `:show` shows them all.
+  The names are `git`, `github`, `jenkins`, `openshift` and `snyk`.
+- A scan shows its total and every severity in order (`1 critical · 3 high · 0 medium · 0 low`), each count in its
+  severity's color. A partial scan ends in Snyk's `?`.
+- From 180 columns a side panel shows the selected event in its provider's own tab for the event's commit, as
+  that provider's view shows it: runs with jobs, steps and annotations, builds with stages and tests, resources,
+  findings. The event's own run, build or resource is open, its name in the Dashboard's color, and `→` puts the
+  cursor on it. **Info** beside it shows the commit as the graph's Info tab does; a commit has Info only. The keys work
+  as there: `↑`/`↓`, `enter` (a run, a log), `←`/`→` between the tabs. Below 180
+  columns, `enter` opens the same as a dialog, where `s` shows the event in its provider's view.
+- **Menu → Providers → Dashboard** turns it off (Enabled), and sets how far back it reads (Time window, 7 days by
+  default) and how long a knot is (Knot size, 1 hour by default). Saved per repository.
+
 Theme controls and custom configuration are in the [theme guide](themes.md).
 
 ## Commands
@@ -88,13 +125,16 @@ Theme controls and custom configuration are in the [theme guide](themes.md).
 | `:debug` | Toggle debug dialog |
 | `:fetch` | Fetch Git and the open provider |
 | `:help` | Open help dialog |
+| `:hide NAME` | Hide a provider's events on the dashboard |
 | `:menu` | Open menu dialog |
 | `:path` | Switch to path mode |
+| `:pull` | Fetch and fast-forward |
 | `:providers` | Open menu dialog on Providers tab |
 | `:quit` | Quit application |
 | `:reload` | Reload repository data from disk |
 | `:repo` | Open menu dialog on Repository tab |
 | `:search` | Switch to search mode |
+| `:show [NAME]` | Show a provider's events on the dashboard, or all |
 | `:switch` | Open repository switcher |
 | `:theme` | Open theme dialog |
 
@@ -109,10 +149,23 @@ Settings are saved per repository. Menu → Repository → Configuration shows t
 full config path. Click it or press Enter to copy. Windows AppData locations
 fall back to the corresponding folders under your home if environment variables
 are absent. Earlier experimental Windows `.config`/`.cache` files are not migrated.
+A value Codepulse can't use is ignored, and Debug (`:debug`) names it and why, as
+it does for a custom theme it skips.
 
 Local auto-refresh reloads repository state from disk. Remote fetching stays
 manual by default (`f` / `:fetch`). Enable auto-fetch separately in repository
-configuration. Provider request, cache, and diagnostic behavior is described in
+configuration.
+
+By default a fetch moves only the remote branches (`origin/main`), not your local
+ones (Auto fast-forward, below, changes that).
+`ctrl+f` / `:pull` fetches and then fast-forwards each local branch that is only
+behind its remote branch, like `git pull --ff-only`, and says what moved. The
+checked-out branch moves with its files only while no tracked file has changes.
+A branch with commits of its own, or one checked out in another worktree, stays
+where it is, and the message says why. **Menu → Repository → Preferences →
+Auto fast-forward** (off by default, saved per repository as
+`autoFastForward`) makes `f` and Auto fetch fast-forward too. They only
+report a branch that stayed behind. Provider request, cache, and diagnostic behavior is described in
 the [provider guide](providers/README.md).
 
 Use `:cache` to inspect storage across repositories. See the [cache guide](cache.md)

@@ -48,6 +48,8 @@ export interface Theme {
   snykBg: string;
   openShiftFg: string;
   openShiftBg: string;
+  dashboardFg: string;
+  dashboardBg: string;
 }
 
 export interface CustomTheme {

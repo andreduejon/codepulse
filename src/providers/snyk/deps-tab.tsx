@@ -7,7 +7,7 @@ import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useClipboard } from "../../hooks/use-clipboard";
 import { useT } from "../../hooks/use-t";
 import { BUSY } from "../../utils/busy-text";
-import type { LegendItem } from "../shared/detail-legend";
+import { useDetailTree } from "../shared/detail-tree";
 import {
   type DependencyGroupBy,
   type DependencyScopeFilter,
@@ -18,7 +18,7 @@ import { dependencyPackageList } from "./deps-packages";
 import { DependencyRow, dependencyLabelWidth, isEmptyHeader, parentKey } from "./deps-row";
 import { buildDependencyTree, defaultDependencyExpansion } from "./deps-tree";
 import { highlightMatch, SnykFilterRow, useSnykFilter } from "./filter";
-import { SnykControlRow, type SnykDetailTabProps, severityColor, snykScanIdentity, useSnykRows } from "./tab-shared";
+import { SnykControlRow, type SnykDetailTabProps, snykScanIdentity, useSnykRows } from "./tab-shared";
 import { useSnykTabMemory } from "./view-memory";
 
 export type SnykDependenciesTabProps = SnykDetailTabProps & {
@@ -27,13 +27,6 @@ export type SnykDependenciesTabProps = SnykDetailTabProps & {
   setDetailCursorShortcut: (shortcut: { key: string; desc: string } | null) => void;
 };
 
-/** Pinned below the tab when the scan has findings: the triangle's colour is the package's worst severity. */
-export const DEPENDENCY_LEGEND: LegendItem[] = [
-  [
-    (["critical", "high", "medium", "low"] as const).map(severity => ["▲", theme => severityColor(theme, severity)]),
-    "severity",
-  ],
-];
 const VULNERABILITY_SHORTCUT = { key: "v", desc: "vulnerabilities" };
 
 const GROUP_BY_OPTIONS: DependencyGroupBy[] = ["tree", "package"];
@@ -91,8 +84,6 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
   /** Copy, Group by, Scope and filter only when there is something to browse (like Vulnerabilities without findings). */
   const controls = () => !!props.scan && projects().length > 0;
   const itemCount = () => (controls() ? rowBase() + navRows().length : base());
-  const refsByKey = new Map<string, Renderable>();
-  const itemRefs: Renderable[] = [];
   let disposed = false;
   let previousView = "";
 
@@ -146,17 +137,11 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
       2,
     );
   };
-  const syncRefs = () => {
-    itemRefs.length = 0;
-    for (const key of [
-      ...(props.unavailable ? [] : ["scan"]),
-      ...(controls() ? ["copyJson", "groupBy", "scope", "filter"] : []),
-      ...navRows().map(row => row.key),
-    ]) {
-      itemRefs.push(refsByKey.get(key) as Renderable);
-    }
-    if (props.navRef) props.navRef.itemRefs = itemRefs;
-  };
+  /** Every row in cursor order: Scan, then the controls and the tree when there is something to browse. */
+  const rowKeys = () => [
+    ...(props.unavailable ? [] : ["scan"]),
+    ...(controls() ? ["copyJson", "groupBy", "scope", "filter", ...navRows().map(row => row.key)] : []),
+  ];
   const activateCurrentItem = () => {
     if (disposed) return false;
     const index = props.detailCursorIndex();
@@ -212,10 +197,8 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
   };
   const rowsUi = useSnykRows(props, () => activateCurrentItem());
   const cursored = rowsUi.cursored;
-  const controlRef = (key: string, index: number) => (element: Renderable) => {
-    refsByKey.set(key, element);
-    if (index >= 0) itemRefs[index] = element;
-  };
+  // `nav` comes after Enter's handler below; rows only call this once they render.
+  const rowRef = (key: string) => (element: Renderable) => nav.ref(key)(element);
 
   createEffect(() => {
     const identity = scanIdentity();
@@ -268,12 +251,6 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
     });
   });
 
-  createEffect(() => {
-    const count = itemCount();
-    const cursor = untrack(props.detailCursorIndex);
-    if (cursor < 0 || cursor >= count) props.setDetailCursorIndex(Math.max(0, Math.min(count - 1, cursor)));
-  });
-
   /** The cursored vulnerable package, if any: `v` and the footer hint act on it. */
   const cursorVulnerable = () => {
     if (!props.detailFocused()) return null;
@@ -288,13 +265,16 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
   };
   createEffect(() => props.setDetailCursorShortcut(cursorVulnerable() ? VULNERABILITY_SHORTCUT : null));
 
+  const nav = useDetailTree({
+    navRef: props.navRef,
+    keys: rowKeys,
+    activate: activateCurrentItem,
+    detailCursorIndex: props.detailCursorIndex,
+    setDetailCursorIndex: props.setDetailCursorIndex,
+  });
   createEffect(() => {
-    const count = itemCount();
-    syncRefs();
-    if (!props.navRef) return;
-    props.navRef.itemCount = count;
-    props.navRef.activateCurrentItem = activateCurrentItem;
-    props.navRef.handleKey = handleKey;
+    itemCount();
+    if (props.navRef) props.navRef.handleKey = handleKey;
   });
 
   createEffect(() => {
@@ -337,8 +317,6 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
       props.setDetailCursorAction(null);
       props.setDetailCursorShortcut(null);
     }
-    refsByKey.clear();
-    itemRefs.length = 0;
   });
 
   return (
@@ -351,7 +329,7 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
         status={props.loading ? BUSY.scanning : undefined}
         disabled={props.unavailable}
         mouseEnabled={props.mouseEnabled}
-        rowRef={controlRef("scan", scanIndex())}
+        rowRef={rowRef("scan")}
       />
 
       {/* Copy, Group by, Scope and filter only when there is something to browse (like Vulnerabilities). */}
@@ -363,7 +341,7 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
           label="Copy dependencies as JSON"
           copied={copiedId() === "copyJson"}
           mouseEnabled={props.mouseEnabled}
-          rowRef={controlRef("copyJson", copyIndex())}
+          rowRef={rowRef("copyJson")}
         />
         <box height={1} flexShrink={0} />
         {/* Group by and Scope cycle like Group by in Vulnerabilities. */}
@@ -374,7 +352,7 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
           label="Group by"
           value={groupBy()}
           mouseEnabled={props.mouseEnabled}
-          rowRef={controlRef("groupBy", groupByIndex())}
+          rowRef={rowRef("groupBy")}
         />
         <SnykControlRow
           rows={rowsUi}
@@ -383,13 +361,13 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
           label="Scope"
           value={scope()}
           mouseEnabled={props.mouseEnabled}
-          rowRef={controlRef("scope", scopeIndex())}
+          rowRef={rowRef("scope")}
         />
         <SnykFilterRow
           filter={filter}
           selected={cursored(filterIndex())}
           mouseEnabled={props.mouseEnabled}
-          rowRef={controlRef("filter", filterIndex())}
+          rowRef={rowRef("filter")}
           placeholder="Enter dependency filter..."
         >
           <text flexShrink={0} selectable={false} fg={t().foregroundMuted} wrapMode="none">
@@ -408,11 +386,7 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
         </Show>
         <For each={rows()}>
           {row => {
-            let element: Renderable | undefined;
             const index = () => navIndexes().get(row.key) ?? -1;
-            onCleanup(() => {
-              if (refsByKey.get(row.key) === element) refsByKey.delete(row.key);
-            });
             return (
               <DependencyRow
                 row={row}
@@ -433,11 +407,7 @@ export function SnykDependenciesTab(props: Readonly<SnykDependenciesTabProps>) {
                 copied={copiedId() === row.key}
                 filtering={filtering()}
                 mouseEnabled={props.mouseEnabled}
-                rowRef={ref => {
-                  element = ref;
-                  refsByKey.set(row.key, ref);
-                  if (index() >= 0) itemRefs[index()] = ref;
-                }}
+                rowRef={nav.ref(row.key)}
               />
             );
           }}

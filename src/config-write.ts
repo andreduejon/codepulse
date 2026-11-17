@@ -282,6 +282,20 @@ function applyConfigFields(target: Record<string, unknown>, config: CodepulseCon
   if (config.showAllBranches !== undefined) target.showAllBranches = config.showAllBranches;
   if (config.autoRefreshSeconds !== undefined) target.autoRefreshSeconds = config.autoRefreshSeconds;
   if (config.autoFetchSeconds !== undefined) target.autoFetchSeconds = config.autoFetchSeconds;
+  if (config.startView !== undefined) target.startView = config.startView;
+  if (config.autoFastForward !== undefined) target.autoFastForward = config.autoFastForward;
+  if (config.dashboard !== undefined) {
+    const existing =
+      typeof target.dashboard === "object" && target.dashboard !== null && !Array.isArray(target.dashboard)
+        ? (target.dashboard as Record<string, unknown>)
+        : {};
+    target.dashboard = {
+      ...existing,
+      ...(config.dashboard.enabled !== undefined ? { enabled: config.dashboard.enabled } : {}),
+      ...(config.dashboard.windowDays !== undefined ? { windowDays: config.dashboard.windowDays } : {}),
+      ...(config.dashboard.knotMinutes !== undefined ? { knotMinutes: config.dashboard.knotMinutes } : {}),
+    };
+  }
   if (config.providers !== undefined) {
     // Deep-merge providers into existing target.providers to preserve other provider configs
     const existingProviders =

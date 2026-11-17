@@ -3,7 +3,7 @@
  *
  * Manages the full lifecycle of CI data for the GitHub Actions provider:
  *   - Registers the provider in the shared registry
- *   - Lazy initial fetch (triggered on first Tab switch to CI view)
+ *   - Lazy initial fetch (on the first switch to the CI view or the Dashboard)
  *   - Viewport-driven SHA batching: queries the top fetchDepth commits
  *     from state.graphRows() — covering all branches — rather than walking
  *     a single branch's history.  Works for any commit on any branch,
@@ -49,7 +49,7 @@ import {
   isTrustedGitHubHost,
   parseGitHubRemote,
 } from "./api";
-import { GitHubCache, isTerminalGitHubRun, jobsMapFromGitHubCache, mergeGitHubJobs, mergeGitHubRuns } from "./cache";
+import { GitHubCache, isTerminalGitHubRun, mergeGitHubEntry, mergeGitHubRuns } from "./cache";
 import { collectRunningSHAs, collectTopSHAs } from "./sha-selection";
 import type {
   GitHubCommitData,
@@ -63,6 +63,11 @@ import { DEFAULT_GITHUB_CONFIG } from "./types";
 export interface UseGitHubCIResult {
   /** Retrieve all runs for a given commit SHA (null if not fetched yet). */
   getCommitData: (sha: string) => GitHubCommitData | null;
+  /**
+   * Every run it holds for the open repository, shaped like its cache entries: the dashboard shows the running ones
+   * from here (the cache keeps only what ended). Reactive.
+   */
+  heldEntries: () => GitHubCommitData[];
   /**
    * Fetch jobs for a run on demand and cache them.
    * Returns the jobs once fetched (or from cache).
@@ -155,7 +160,7 @@ export function useGitHubCI(opts: {
     if (configAccessor().enabled === true) {
       state.providers.register({
         id: "github-actions",
-        displayName: "GitHub Actions",
+        displayName: "GitHub",
         isAvailable,
         // Runs in every view: graph fetches, auto refresh and Reload commit all go through the lifecycle.
         activity: () => (lifecycle.isFetching() ? "fetching" : null),
@@ -331,16 +336,12 @@ export function useGitHubCI(opts: {
       () => lifecycle.isCurrent(epoch, repoPath),
       sha => (commitDataCache.get(sha)?.runs ?? []).filter(isTerminalGitHubRun),
       (sha, existing, incoming) => {
-        const jobs = mergeGitHubJobs(
-          existing?.jobs,
-          jobsMapFromGitHubCache(
-            jobsCache,
-            incoming.filter(run => cachedJobsFor(run)).map(run => run.id),
-          ),
-        );
-        // A re-run's jobs from before it are not its jobs: they are asked for again rather than kept with it.
-        for (const run of incoming) if (!cachedJobsFor(run)) delete jobs[String(run.id)];
-        return { sha, runs: mergeGitHubRuns(existing?.runs ?? [], incoming), jobs };
+        const fresh = new Map<number, GitHubJob[]>();
+        for (const run of incoming) {
+          const jobs = cachedJobsFor(run);
+          if (jobs) fresh.set(run.id, jobs);
+        }
+        return mergeGitHubEntry(sha, existing, incoming, fresh);
       },
     );
   }
@@ -432,10 +433,13 @@ export function useGitHubCI(opts: {
       if (authFrozen && !retry) return;
       if (retry) authFrozen = false;
       lifecycle.noteRefreshSettled();
-      const runningSHAs = collectRunningSHAs(state.graphBadges());
-      if (runningSHAs.length === 0) return;
+      // The runs still running (its own badges: on the dashboard, the shown view's are none), and the newest commits,
+      // where a workflow may have started since (a deploy, a re-run): one query for both.
+      const runningSHAs = collectRunningSHAs(state.graphBadgesFor("github-actions"));
+      const shas = [...new Set([...runningSHAs, ...collectTopSHAs(state.graphRows(), config.fetchDepth)])];
+      if (shas.length === 0) return;
       try {
-        const { firstError } = await fetchForSHAs(runningSHAs, signal);
+        const { firstError } = await fetchForSHAs(shas, signal);
         if (signal?.aborted || !lifecycle.isCurrent(epoch, repoPath)) return;
         rememberAuthError(firstError);
         lifecycle.noteFetchResult(!firstError);
@@ -583,6 +587,10 @@ export function useGitHubCI(opts: {
       return log;
     },
     fetchCommitDataForSHA,
+    heldEntries: () => {
+      commitDataVersion();
+      return [...commitDataCache.values()];
+    },
     refresh: refreshWindow,
     isAvailable,
     invalidate: lifecycle.resetCaches,

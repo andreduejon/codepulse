@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, test } from "bun:test";
 import type {
   GitHubMenuConfig,
   JenkinsMenuConfig,
@@ -6,12 +6,76 @@ import type {
   SnykMenuConfig,
 } from "../src/hooks/menu-items-types";
 import {
+  buildDashboardItems,
   buildGitHubProviderItems,
   buildJenkinsProviderItems,
   buildOpenShiftProviderItems,
   buildSnykProviderItems,
 } from "../src/hooks/menu-provider-items";
-import { isOptionalRepoMetadataValid, optionalRepoMetadataValue } from "../src/hooks/use-menu-items";
+import {
+  isOptionalRepoMetadataValid,
+  optionalRepoMetadataValue,
+  relativeAgeLabel,
+  startViewItem,
+} from "../src/hooks/use-menu-items";
+
+describe("buildDashboardItems, turned off", () => {
+  it("is on by default; turned off it shows only Enabled, like a provider", () => {
+    const saved: unknown[] = [];
+    const items = buildDashboardItems({ enabled: false, windowDays: 7, knotMinutes: 60 }, next => saved.push(next));
+    expect(items.map(item => ("label" in item ? item.label : ""))).toEqual(["Dashboard", "Enabled"]);
+    const enabled = items[1];
+    if (enabled?.kind !== "toggle") throw new Error("expected a toggle");
+    expect(enabled.get()).toBe(false);
+    enabled.set(true);
+    expect(saved).toEqual([{ enabled: true, windowDays: 7, knotMinutes: 60 }]);
+  });
+});
+
+describe("buildDashboardItems", () => {
+  it("offers the time window and the knot size, and saves the next choice", () => {
+    const saved: unknown[] = [];
+    const items = buildDashboardItems({ enabled: true, windowDays: 7, knotMinutes: 60 }, next => saved.push(next));
+    expect(items.map(item => ("label" in item ? item.label : ""))).toEqual([
+      "Dashboard",
+      "Enabled",
+      "Time window",
+      "Knot size",
+    ]);
+    const window = items[2];
+    const knot = items[3];
+    if (window?.kind !== "cycle" || knot?.kind !== "cycle") throw new Error("expected cycle items");
+    expect(window.options).toEqual(["1d", "3d", "7d", "10d", "30d"]);
+    expect(window.get()).toBe("7d");
+    expect(knot.options).toEqual(["15m", "30m", "1h", "2h", "4h"]);
+    expect(knot.get()).toBe("1h");
+    window.set("10d");
+    knot.set("15m");
+    expect(saved).toEqual([
+      { enabled: true, windowDays: 10, knotMinutes: 60 },
+      { enabled: true, windowDays: 7, knotMinutes: 15 },
+    ]);
+  });
+});
+
+describe("startViewItem", () => {
+  it("offers the views that are turned on, and saves the chosen one", () => {
+    const saved: unknown[] = [];
+    const start = startViewItem(["dashboard", "git", "jenkins"], "jenkins", view => saved.push(view));
+    if (start.kind !== "cycle") throw new Error("expected a cycle item");
+    expect(start.label).toBe("Start in");
+    expect(start.options).toEqual(["Dashboard", "Git", "Jenkins"]);
+    expect(start.get()).toBe("Jenkins");
+    start.set("Dashboard");
+    expect(saved).toEqual(["dashboard"]);
+  });
+
+  it("shows Git when the chosen view's provider is turned off, as codepulse starts there", () => {
+    const start = startViewItem(["dashboard", "git"], "snyk", () => {});
+    if (start.kind !== "cycle") throw new Error("expected a cycle item");
+    expect(start.get()).toBe("Git");
+  });
+});
 
 describe("buildGitHubProviderItems", () => {
   const baseCfg: GitHubMenuConfig = {
@@ -470,4 +534,33 @@ describe("provider menu consistency", () => {
     const lastScan = items.find(item => item.kind === "info" && item.label === "Last scan");
     expect(lastScan?.kind === "info" && lastScan.get()).toBe("2m ago");
   });
+});
+
+test("a last fetch the clock puts in the future reads as just now, not a negative age", () => {
+  const now = Date.now();
+  expect(relativeAgeLabel(new Date(now + 22_325_948_000))).toBe("just now");
+  expect(relativeAgeLabel(new Date(now - 5_000))).toBe("5s ago");
+  expect(relativeAgeLabel(new Date(now - 3 * 3_600_000))).toBe("3h ago");
+});
+
+test("every text field in Menu → Providers has the same placeholder style, Enter … with three dots", () => {
+  const openShift = buildOpenShiftProviderItems({
+    enabled: true,
+    serverUrl: "",
+    consoleUrl: "",
+    tokenEnvVar: "OPENSHIFT_TOKEN",
+    namespaces: [],
+    commitShaAnnotation: "dev/commit-sha",
+    cacheLimit: 20,
+    fetchDepth: 20,
+    autoRefreshSeconds: 120,
+  });
+  const placeholders = openShift.flatMap(item =>
+    item.kind === "editable" ? [[item.label, item.placeholder ?? ""] as const] : [],
+  );
+  expect(Object.fromEntries(placeholders)).toMatchObject({
+    Server: "Enter server URL...",
+    Console: "Enter console URL...",
+  });
+  for (const [, placeholder] of placeholders) if (placeholder) expect(placeholder).toMatch(/^Enter [^.]+\.\.\.$/);
 });

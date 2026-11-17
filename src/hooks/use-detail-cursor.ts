@@ -13,7 +13,7 @@
  * during a component's setup phase without relying on useContext() (see AGENTS.md rule 5).
  */
 import type { Renderable } from "@opentui/core";
-import { createEffect, createMemo } from "solid-js";
+import { createEffect, createMemo, onCleanup } from "solid-js";
 import type { DetailNavRef, DetailViewProps } from "../components/detail-types";
 import { isUncommittedHash } from "../constants";
 import type { createAppState } from "../context/state";
@@ -366,6 +366,12 @@ export function useDetailCursor({
         }
       };
     }
+  });
+
+  // Enter must not reach this view once it is gone (the dashboard's Info fallback has no rows of its own). Only its
+  // own action: another view may have taken the ref already.
+  onCleanup(() => {
+    if (navRef && navRef.activateCurrentItem === activateCurrentItem) navRef.activateCurrentItem = () => false;
   });
 
   // Keep the footer's contextual enter-key hint in sync with the cursor position.

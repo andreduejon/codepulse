@@ -306,3 +306,87 @@ test("a terminal made narrow keeps a diff opened from the side panel open, and E
     for (const spy of spies) spy.mockRestore();
   }
 });
+
+test("a folder collapsed in the side panel stays collapsed when the terminal narrows to the dialog and widens back", async () => {
+  const repo = resolve("/repo/compact-details");
+  let app: { state: AppState; actions: AppActions } | undefined;
+  const head = {
+    hash: "c".repeat(40),
+    shortHash: "ccccccc",
+    parents: [],
+    subject: "head commit",
+    body: "",
+    author: "Author",
+    authorEmail: "author@example.com",
+    authorDate: "2026-10-13T10:00:00Z",
+    committer: "Author",
+    committerEmail: "author@example.com",
+    commitDate: "2026-10-13T10:00:00Z",
+    refs: [],
+  };
+  const spies = [
+    spyOn(configWrite, "backfillRepoConfig").mockImplementation(() => {}),
+    spyOn(config, "loadConfig").mockReturnValue({ config: {}, warnings: [] }),
+    spyOn(config, "getRepoDisplayConfig").mockReturnValue({}),
+    spyOn(config, "getKnownRepoInfos").mockReturnValue([{ path: repo }]),
+    spyOn(detailLoader, "useDetailLoader").mockImplementation(() => {}),
+    spyOn(CliRenderer.prototype, "setTerminalTitle").mockImplementation(() => {}),
+    spyOn(dataLoader, "useDataLoader").mockImplementation(options => {
+      app = { state: options.state, actions: options.actions };
+      options.actions.setRepoPath(repo);
+      options.actions.setCommits([head]);
+      options.actions.setGraphRows(buildGraph([head]));
+      options.actions.setCommitDetail({
+        ...head,
+        files: [
+          { path: "src/cart.ts", additions: 3, deletions: 1, status: "M" },
+          { path: "src/cart.test.ts", additions: 9, deletions: 0, status: "A" },
+          { path: "README.md", additions: 1, deletions: 0, status: "M" },
+        ],
+      });
+      options.actions.setLoading(false);
+      return { loadData: async () => {}, loadMoreData: async () => {}, handleFetch: async () => {} };
+    }),
+  ];
+  let setup: Awaited<ReturnType<typeof testRender>> | undefined;
+  try {
+    setup = await testRender(
+      () => (
+        <AppContent
+          repoPath={repo}
+          startupMode={{ kind: "graph" }}
+          themeState={createThemeState()}
+          autoRefreshInterval={0}
+          autoFetchInterval={0}
+        />
+      ),
+      { width: 200, height: 40, kittyKeyboard: true, useMouse: true },
+    );
+    await setup.flush();
+    if (!app) throw new Error("App fixture did not initialize");
+    setup.mockInput.pressKey("RETURN");
+    await setup.flush();
+    const lines = setup.captureCharFrame().split("\n");
+    const y = lines.findIndex(line => line.includes("src/"));
+    expect(y).toBeGreaterThanOrEqual(0);
+    await setup.mockMouse.click(lines[y].indexOf("src/") + 1, y);
+    await setup.flush();
+    expect(setup.captureCharFrame()).not.toContain("cart.ts");
+    setup.resize(110, 40);
+    await setup.flush();
+    await setup.flush();
+    const compact = setup.captureCharFrame();
+    expect(compact).toMatch(/Details\s+esc close/);
+    expect(compact).toContain("README.md");
+    expect(compact).not.toContain("cart.ts");
+    setup.resize(200, 40);
+    await setup.flush();
+    await setup.flush();
+    const wide = setup.captureCharFrame();
+    expect(wide).toContain("README.md");
+    expect(wide).not.toContain("cart.ts");
+  } finally {
+    await setup?.dispose();
+    for (const spy of spies) spy.mockRestore();
+  }
+});

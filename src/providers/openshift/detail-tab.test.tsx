@@ -2,7 +2,8 @@ import { expect, mock, spyOn, test } from "bun:test";
 import type { KeyEvent } from "@opentui/core";
 import { RGBA } from "@opentui/core";
 import { testRender } from "@opentui/solid";
-import { createSignal } from "solid-js";
+import { createSignal, Show } from "solid-js";
+import { createDetailMemory, type DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
 import { createThemeState, ThemeContext } from "../../context/theme";
 import * as browser from "../../utils/open-url";
@@ -34,6 +35,10 @@ export async function renderOpenShiftTab(
     deployments?: OpenShiftResource[];
     consoleUrl?: string;
     width?: number;
+    memory?: DetailMemory;
+    /** The dashboard's event: a build to mark, and its color. */
+    targetResourceId?: string;
+    targetColor?: string;
   }> = {},
 ) {
   const data: OpenShiftCommitData = {
@@ -51,6 +56,8 @@ export async function renderOpenShiftTab(
     ],
   };
   const [cursor, setCursor] = createSignal(0);
+  /** Off and on again: what a tab switch or a switch between the two layouts does to the tab. */
+  const [mounted, setMounted] = createSignal(true);
   const [consoleUrl, setConsoleUrl] = createSignal(opts.consoleUrl ?? CONSOLE);
   const shortcut = mock((_shortcut: { key: string; desc: string } | null) => {});
   const navRef: DetailNavRef = {
@@ -67,17 +74,22 @@ export async function renderOpenShiftTab(
     () => (
       <ThemeContext.Provider value={theme}>
         <box width={width} flexDirection="column">
-          <OpenShiftDetailTab
-            sha={SHA}
-            getCommitData={() => data}
-            consoleUrl={consoleUrl}
-            navRef={navRef}
-            detailCursorIndex={cursor}
-            detailFocused={() => true}
-            setDetailCursorAction={() => {}}
-            setDetailCursorIndex={setCursor}
-            setDetailCursorShortcut={shortcut}
-          />
+          <Show when={mounted()}>
+            <OpenShiftDetailTab
+              sha={SHA}
+              getCommitData={() => data}
+              consoleUrl={consoleUrl}
+              navRef={navRef}
+              memory={opts.memory}
+              detailCursorIndex={cursor}
+              detailFocused={() => true}
+              setDetailCursorAction={() => {}}
+              setDetailCursorIndex={setCursor}
+              setDetailCursorShortcut={shortcut}
+              targetResourceId={opts.targetResourceId}
+              targetColor={opts.targetColor}
+            />
+          </Show>
         </box>
       </ThemeContext.Provider>
     ),
@@ -96,7 +108,19 @@ export async function renderOpenShiftTab(
       .captureCharFrame()
       .split("\n")
       .find(line => line.includes(text)) ?? "";
-  return { ...setup, navRef, shortcut, setCursor, setConsoleUrl, settle, press, row, theme: theme.theme() };
+  return {
+    ...setup,
+    navRef,
+    shortcut,
+    cursor,
+    setCursor,
+    setMounted,
+    setConsoleUrl,
+    settle,
+    press,
+    row,
+    theme: theme.theme(),
+  };
 }
 
 test("o opens the selected namespace or resource in the web console, only when its URL is set", async () => {
@@ -203,5 +227,123 @@ test("a healthy row has no note", async () => {
     expect(t.row("payments-api").replace(/\s+/g, " ")).toMatch(/payments-api-6d2b-m9w3 ✓/);
   } finally {
     t.renderer.destroy();
+  }
+});
+
+test("a namespace closed by the user stays closed, with the cursor on it, when the tab mounts again", async () => {
+  const t = await renderOpenShiftTab({ memory: createDetailMemory() });
+  try {
+    // Reload commit, then the namespace.
+    const namespace = 1;
+    t.setCursor(namespace);
+    await t.settle();
+    expect(t.row("payments-dev")).toContain("▾");
+    t.navRef.activateCurrentItem();
+    await t.settle();
+    expect(t.captureCharFrame()).not.toContain("payments-api");
+    t.setMounted(false);
+    await t.settle();
+    t.setMounted(true);
+    await t.settle();
+    expect(t.row("payments-dev")).toContain("▸");
+    expect(t.captureCharFrame()).not.toContain("payments-api");
+    expect(t.cursor()).toBe(namespace);
+  } finally {
+    t.renderer.destroy();
+  }
+});
+
+test("the dashboard's event: its build is marked in the given color, and the tab's focus starts on it", async () => {
+  const tab = await renderOpenShiftTab({
+    builds: [resource("Build", "shop-api-42"), resource("Build", "shop-api-43")],
+    targetResourceId: "Build/shop-api-43",
+    targetColor: "#00ff00",
+  });
+  try {
+    const lines = tab.captureCharFrame().split("\n");
+    const y = lines.findIndex(line => line.includes("shop-api-43"));
+    const span = (row: number, text: string) =>
+      tab.captureSpans().lines[row]?.spans.find(candidate => candidate.text.includes(text));
+    // The tab is focused here: the cursor starts on the event's build, which shows the cursor's color.
+    expect(tab.cursor()).toBeGreaterThan(0);
+    expect(span(y, "shop-api-43")?.fg).toEqual(RGBA.fromHex(tab.theme.accent));
+    // The cursor elsewhere: the event's build keeps its mark, the other build its usual color.
+    tab.setCursor(0);
+    await tab.flush();
+    expect(span(y, "shop-api-43")?.fg).toEqual(RGBA.fromHex("#00ff00"));
+    const other = lines.findIndex(line => line.includes("shop-api-42"));
+    expect(span(other, "shop-api-42")?.fg).toEqual(RGBA.fromHex(tab.theme.foreground));
+  } finally {
+    tab.renderer.destroy();
+  }
+});
+
+test("the dashboard's build that arrives after the tab got the keyboard still gets the cursor", async () => {
+  const [data, setData] = createSignal<OpenShiftCommitData | null>(null);
+  const [cursor, setCursor] = createSignal(0);
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={createThemeState()}>
+        <box width={70} flexDirection="column">
+          <OpenShiftDetailTab
+            sha={SHA}
+            getCommitData={() => data()}
+            detailCursorIndex={cursor}
+            detailFocused={() => true}
+            setDetailCursorAction={() => {}}
+            setDetailCursorIndex={setCursor}
+            targetResourceId="Build/shop-api-43"
+          />
+        </box>
+      </ThemeContext.Provider>
+    ),
+    { width: 74, height: 20 },
+  );
+  try {
+    await setup.flush();
+    expect(cursor()).toBe(0);
+    setData({
+      sha: SHA,
+      liveFetched: true,
+      namespaces: [
+        {
+          namespace: "payments-dev",
+          builds: [resource("Build", "shop-api-43")],
+          imageStreamTags: [],
+          deployments: [],
+          deploymentConfigs: [],
+          pods: [],
+        },
+      ],
+    });
+    for (let i = 0; i < 4; i++) {
+      await Bun.sleep(0);
+      await setup.flush();
+    }
+    const lines = setup.captureCharFrame().split("\n");
+    expect(cursor()).toBeGreaterThan(0);
+    expect(lines.find(line => line.includes("shop-api-43"))).toBeDefined();
+  } finally {
+    setup.renderer.destroy();
+  }
+});
+
+test("the dashboard's build gets the cursor once: mounted again (a resize), the tab leaves it where it was moved", async () => {
+  const tab = await renderOpenShiftTab({
+    builds: [resource("Build", "shop-api-42"), resource("Build", "shop-api-43")],
+    targetResourceId: "Build/shop-api-43",
+    memory: createDetailMemory(),
+  });
+  try {
+    expect(tab.cursor()).toBeGreaterThan(0);
+    tab.setCursor(0);
+    await tab.settle();
+    tab.setMounted(false);
+    await tab.settle();
+    tab.setMounted(true);
+    await tab.settle();
+    expect(tab.cursor()).toBe(0);
+  } finally {
+    tab.renderer.destroy();
   }
 });

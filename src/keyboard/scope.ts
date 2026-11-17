@@ -27,6 +27,8 @@ export function dialogToKeyboardScope(dialog: DialogId): KeyboardScope {
     case "diff-blame":
       return "diff-blame";
     case "detail":
+    // The dashboard's compact details: like the graph's, the app's own keys drive them.
+    case "dashboard-event":
       return "detail-dialog";
     case "job-log":
       return "job-log";

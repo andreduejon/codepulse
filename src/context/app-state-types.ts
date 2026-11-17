@@ -87,7 +87,10 @@ export interface SettingsState {
 
 export interface ProviderAppState {
   activeProviderView: Accessor<ProviderView>;
+  /** The shown view's badges. */
   graphBadges: Accessor<Map<string, GraphBadge>>;
+  /** One provider's badges, whichever view is shown (the dashboard shows none of its own). */
+  graphBadgesFor: (view: ProviderView) => ReadonlyMap<string, GraphBadge>;
   providerStatus: Accessor<ProviderStatus>;
   providerStatusFor: (view: ProviderView) => ProviderStatus;
   providerLastSuccessfulRefresh: Accessor<Map<ProviderView, Date>>;

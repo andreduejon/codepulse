@@ -608,7 +608,7 @@ test("OpenShift tree lines close on the last group and the last stream", async (
   }
 });
 
-test("GitHub Actions explains its marks in a legend below the tree, only while it lists runs", async () => {
+test("GitHub explains its marks in a legend below the tree, only while it lists runs", async () => {
   const d = await renderProvider("github-actions", false);
   try {
     const rows = d.frame().split("\n");
@@ -1207,18 +1207,20 @@ test("Dependencies marks vulnerable packages with a severity triangle, pins its 
     d.actions.setDetailActiveTab("snyk-deps");
     await d.flush();
     const lines = d.frame().split("\n");
-    const legend = lines.findIndex(line => line.includes("severity"));
-    expect(lines[legend]).toMatch(/▲ ▲ ▲ ▲ severity\s*$/);
+    // Each level by its name, so the triangles need no Snyk knowledge.
+    const legend = lines.findIndex(line => line.includes("▲ critical"));
+    expect(lines[legend]).toMatch(/▲ critical {2}▲ high {2}▲ medium {2}▲ low\s*$/);
     expect(lines[legend - 1].trim()).toBe("");
-    const dots = lines[legend].indexOf("▲ ▲ ▲ ▲");
-    for (const [x, color] of [
-      [dots, d.theme.severityCritical],
-      [dots + 2, d.theme.severityHigh],
-      [dots + 4, d.theme.severityMedium],
-      [dots + 6, d.theme.severityLow],
-      [lines[legend].indexOf("severity"), d.theme.foregroundMuted],
-    ] as const)
+    for (const [label, color] of [
+      ["critical", d.theme.severityCritical],
+      ["high", d.theme.severityHigh],
+      ["medium", d.theme.severityMedium],
+      ["low", d.theme.severityLow],
+    ] as const) {
+      const x = lines[legend].indexOf(`▲ ${label}`);
       expect(d.cell(x, legend)?.fg).toEqual(RGBA.fromHex(color));
+      expect(d.cell(x + 2, legend)?.fg).toEqual(RGBA.fromHex(d.theme.foregroundMuted));
+    }
     expect(d.frame()).not.toContain("▲ upgrade");
     // v on the vulnerable row: Vulnerabilities opens filtered to that package.
     const row = lines.findIndex(line => line.includes("high-package@1.0.0"));

@@ -10,7 +10,7 @@ import type { KeyEvent, ScrollBoxRenderable } from "@opentui/core";
 import { batch } from "solid-js";
 import type { DetailNavRef } from "../components/detail-types";
 import { SHIFT_JUMP } from "../constants";
-import type { AppActions, AppState } from "../context/state";
+import type { AppActions, AppState, DetailTab } from "../context/state";
 import { allowRepeatNav } from "../utils/keyboard-nav-utils";
 import { scheduleScrollIntoView, scrollElementIntoView } from "../utils/scroll";
 import { getAvailableTabs } from "../utils/tab-utils";
@@ -26,6 +26,11 @@ export interface DetailKeyOptions {
   getCommitData?: (sha: string) => unknown;
   /** Returns true while the initial CI fetch is in-flight. */
   getProviderLoading?: () => boolean;
+  /**
+   * The tabs ←/→ move between, when they are not the selected commit's in the graph (the dashboard: the selected
+   * event's provider tabs).
+   */
+  tabs?: () => DetailTab[];
 }
 
 /**
@@ -44,6 +49,17 @@ export function handleDetailKey(e: KeyEvent, opts: DetailKeyOptions): boolean {
   }
 
   const scrollbox = getDetailScrollboxRef();
+  const availableTabs = () =>
+    opts.tabs?.() ??
+    getAvailableTabs({
+      commit: state.selectedCommit(),
+      uncommittedDetail: state.uncommittedDetail(),
+      commitDetail: state.commitDetail(),
+      stashByParent: state.stashByParent(),
+      activeProviderView: state.activeProviderView(),
+      getCommitData,
+      providerLoading: getProviderLoading?.(),
+    });
 
   const scrollCursorIntoView = (direction: -1 | 0 | 1 = 0) => {
     scheduleScrollIntoView(detailNavRef, () => {
@@ -81,15 +97,7 @@ export function handleDetailKey(e: KeyEvent, opts: DetailKeyOptions): boolean {
     case "left":
     case "h": {
       e.preventDefault();
-      const tabs = getAvailableTabs({
-        commit: state.selectedCommit(),
-        uncommittedDetail: state.uncommittedDetail(),
-        commitDetail: state.commitDetail(),
-        stashByParent: state.stashByParent(),
-        activeProviderView: state.activeProviderView(),
-        getCommitData,
-        providerLoading: getProviderLoading?.(),
-      });
+      const tabs = availableTabs();
       const currentIdx = tabs.indexOf(state.detailActiveTab());
       if (currentIdx <= 0) {
         // In normal mode, left on first tab exits detail focus.
@@ -111,15 +119,7 @@ export function handleDetailKey(e: KeyEvent, opts: DetailKeyOptions): boolean {
     case "right":
     case "l": {
       e.preventDefault();
-      const tabs = getAvailableTabs({
-        commit: state.selectedCommit(),
-        uncommittedDetail: state.uncommittedDetail(),
-        commitDetail: state.commitDetail(),
-        stashByParent: state.stashByParent(),
-        activeProviderView: state.activeProviderView(),
-        getCommitData,
-        providerLoading: getProviderLoading?.(),
-      });
+      const tabs = availableTabs();
       const currentIdx = tabs.indexOf(state.detailActiveTab());
       if (currentIdx < tabs.length - 1) {
         // Batched like the tab click: the new tab mounts after the reset and may restore its own cursor.

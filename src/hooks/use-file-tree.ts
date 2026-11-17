@@ -1,5 +1,6 @@
 import type { Accessor } from "solid-js";
-import { createEffect, createMemo, createSignal } from "solid-js";
+import { createMemo } from "solid-js";
+import { createRememberedSignal, type DetailMemory } from "../components/detail-memory";
 import type { FileChange } from "../git/types";
 import type { FileTreeNode, FileTreeRow } from "../utils/file-tree";
 import { buildFileTree, flattenFileTree } from "../utils/file-tree";
@@ -19,26 +20,30 @@ interface UseFileTreeResult {
  * Reactive file tree state manager.
  *
  * Builds a tree from `files`, tracks collapsed directories, and exposes
- * flattened renderable rows. Automatically resets collapsed state whenever
- * `resetOn` changes (e.g. when the active commit or tab changes).
+ * flattened renderable rows. Every folder opens again when `subject` changes
+ * (the commit, or the uncommitted view's tab).
  *
  * @param files   Reactive accessor for the flat list of file changes.
- * @param resetOn Reactive accessor whose value change triggers a reset of
- *                collapsed dirs. Typically the active commit or tab signal.
+ * @param subject What the files belong to.
+ * @param memory  Keeps collapsed folders while the list is not shown (another tab, the other layout).
  */
-export function useFileTree(files: Accessor<FileChange[]>, resetOn: Accessor<unknown>): UseFileTreeResult {
+export function useFileTree(
+  files: Accessor<FileChange[]>,
+  subject: Accessor<string>,
+  memory?: DetailMemory,
+): UseFileTreeResult {
   const fileTree = createMemo((): FileTreeNode => {
     const f = files();
     if (f.length === 0) return { name: "/", fullPath: "/", children: [] };
     return buildFileTree(f);
   });
 
-  const [collapsedDirs, setCollapsedDirs] = createSignal(new Set<string>());
-
-  createEffect(() => {
-    resetOn(); // track the reset trigger
-    setCollapsedDirs(new Set<string>());
-  });
+  const [collapsedDirs, setCollapsedDirs] = createRememberedSignal(
+    memory,
+    "files.collapsed",
+    subject,
+    () => new Set<string>(),
+  );
 
   const toggleDir = (dirPath: string) => {
     const next = new Set(collapsedDirs());

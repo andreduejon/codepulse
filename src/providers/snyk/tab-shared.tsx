@@ -1,11 +1,10 @@
 import { MouseButton, type MouseEvent, type Renderable } from "@opentui/core";
 import { createSignal, Show } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
-import type { Theme } from "../../context/theme";
 import { useT } from "../../hooks/use-t";
 import type { RowShortcut } from "../shared/open-row";
 import type { SnykBaseline } from "./scan-diff";
-import type { SnykScanResult, SnykSeverity } from "./types";
+import type { SnykScanResult } from "./types";
 import type { SnykViewMemory } from "./view-memory";
 
 export interface SnykDetailTabProps {
@@ -36,19 +35,6 @@ export interface SnykDetailTabProps {
 
 /** `sha:scannedAt`: a rescan of the same commit is another scan. */
 export const snykScanIdentity = (scan: SnykScanResult | null) => (scan ? `${scan.sha}:${scan.scannedAt}` : "");
-
-export function severityColor(theme: Theme, severity: SnykSeverity): string {
-  switch (severity) {
-    case "critical":
-      return theme.severityCritical;
-    case "high":
-      return theme.severityHigh;
-    case "medium":
-      return theme.severityMedium;
-    case "low":
-      return theme.severityLow;
-  }
-}
 
 /**
  * Cursor, hover and left-click handling shared by the rows of both tabs. A click selects the row and activates it;

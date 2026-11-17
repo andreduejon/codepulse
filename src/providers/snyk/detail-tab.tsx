@@ -1,11 +1,12 @@
 import type { Renderable } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/solid";
-import { createEffect, createMemo, createSignal, For, on, Show, untrack } from "solid-js";
+import { createEffect, createMemo, createSignal, For, on, Show } from "solid-js";
 import { DETAIL_PANEL_WIDTH_FRACTION } from "../../constants";
 import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useClipboard } from "../../hooks/use-clipboard";
 import { useT } from "../../hooks/use-t";
 import { BUSY } from "../../utils/busy-text";
+import { useDetailTree } from "../shared/detail-tree";
 import { useOpenRowShortcut } from "../shared/open-row";
 import { filterSnykFindings, SnykFilterRow, useSnykFilter } from "./filter";
 import { countUniqueFindings, groupSnykFixes, groupSnykVulnerabilities, type SnykVulnerabilityEntry } from "./parser";
@@ -59,8 +60,6 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
   const filter = useSnykFilter(props, filterIndex);
   const { copiedId, copyToClipboard } = useClipboard();
   let resettingFilter = false;
-  const refsByKey = new Map<string, Renderable>();
-  const itemRefs: Renderable[] = [];
   const rowsUi = useSnykRows(props, () => activateCurrentItem());
 
   /**
@@ -229,20 +228,8 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
     return text.substring(bannerOffset(), bannerOffset() + width);
   };
 
-  const syncRefs = () => {
-    const items = flatItems();
-    itemRefs.length = items.length;
-    items.forEach((item, index) => {
-      const ref = refsByKey.get(itemKey(item));
-      if (ref) itemRefs[index] = ref;
-    });
-    if (props.navRef) props.navRef.itemRefs = itemRefs;
-  };
-  const rowRef = (item: FlatItem) => (element: Renderable) => {
-    refsByKey.set(itemKey(item), element);
-    const index = indexOf(item);
-    if (index >= 0) itemRefs[index] = element;
-  };
+  // `tree` comes after Enter's handler below; rows only call this once they render.
+  const rowRef = (item: FlatItem) => (element: Renderable) => tree.ref(itemKey(item))(element);
 
   /** Parsed scan as both views see it (findings limited by the filter); graphs stay out — they are large. */
   const scanJson = () => {
@@ -371,13 +358,6 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
     ),
   );
 
-  createEffect(() => {
-    const count = flatItems().length;
-    const cursor = untrack(() => props.detailCursorIndex());
-    if (count === 0) props.setDetailCursorIndex(0);
-    else if (cursor < 0 || cursor >= count) props.setDetailCursorIndex(Math.max(0, Math.min(count - 1, cursor)));
-  });
-
   const activateCurrentItem = () => {
     const item = flatItems()[props.detailCursorIndex()];
     if (!item) return false;
@@ -399,12 +379,12 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
     return false;
   };
 
-  createEffect(() => {
-    const items = flatItems();
-    if (!props.navRef) return;
-    props.navRef.itemCount = items.length;
-    syncRefs();
-    props.navRef.activateCurrentItem = activateCurrentItem;
+  const tree = useDetailTree({
+    navRef: props.navRef,
+    keys: () => flatItems().map(itemKey),
+    activate: activateCurrentItem,
+    detailCursorIndex: props.detailCursorIndex,
+    setDetailCursorIndex: props.setDetailCursorIndex,
   });
 
   useOpenRowShortcut({
@@ -467,10 +447,7 @@ export function SnykDetailTab(props: Readonly<SnykDetailTabProps>) {
         status={props.loading ? BUSY.scanning : undefined}
         disabled={props.unavailable}
         mouseEnabled={props.mouseEnabled}
-        rowRef={element => {
-          refsByKey.set("scan", element);
-          syncRefs();
-        }}
+        rowRef={rowRef({ kind: "scan" })}
       />
 
       <Show when={props.scan}>

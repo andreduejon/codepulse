@@ -382,6 +382,121 @@ describe("fetchJenkinsGraphDataForSHAs", () => {
     }
   });
 
+  test("a last build that is still building is listed again and not remembered: its commit may not be known yet", async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: string[] = [];
+    const sha = "a".repeat(40);
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = decodeURIComponent(String(input));
+      calls.push(url);
+      const body = url.includes("builds[")
+        ? {
+            lastBuild: { number: 12, building: true },
+            builds: [
+              {
+                number: 12,
+                url: "https://jenkins.example.com/job/foo/12/",
+                building: true,
+                timestamp: 1_700_000_000_000,
+                actions: [{ lastBuiltRevision: { SHA1: sha } }],
+              },
+            ],
+          }
+        : { lastBuild: { number: 12, building: true } };
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    }) as typeof fetch;
+    try {
+      const result = await fetchJenkinsGraphDataForSHAs(
+        [{ url: "https://jenkins.example.com/job/foo/" }],
+        "user",
+        "token",
+        [sha],
+        { knownLastBuilds: new Map([["https://jenkins.example.com/job/foo", 12]]) },
+      );
+      // Same number, but building: listed again, so a build whose checkout just finished gets its commit.
+      expect(calls.some(url => url.includes("builds["))).toBe(true);
+      expect(result.data.map(run => [run.runNumber, run.status])).toEqual([[12, "running"]]);
+      expect(result.lastBuilds.has("https://jenkins.example.com/job/foo")).toBe(false);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("a job with an earlier build still running isn't remembered either: that build may get its commit later", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          lastBuild: { number: 12, building: false },
+          builds: [
+            { number: 12, url: "https://jenkins.example.com/job/foo/12/", building: false, result: "SUCCESS" },
+            { number: 11, url: "https://jenkins.example.com/job/foo/11/", building: true },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      )) as unknown as typeof fetch;
+    try {
+      const result = await fetchJenkinsGraphDataForSHAs(
+        [{ url: "https://jenkins.example.com/job/foo/" }],
+        "user",
+        "token",
+        ["a".repeat(40)],
+      );
+      expect(result.lastBuilds.has("https://jenkins.example.com/job/foo")).toBe(false);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("a multibranch project's branch jobs are probed by their last build in its one listing", async () => {
+    const WORKFLOW_JOB = "org.jenkinsci.plugins.workflow.job.WorkflowJob";
+    const originalFetch = globalThis.fetch;
+    const calls: string[] = [];
+    const parent = "https://jenkins.example.com/job/app";
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = decodeURIComponent(String(input));
+      calls.push(url);
+      const body = url.startsWith(`${parent}/api/`)
+        ? {
+            _class: "org.jenkinsci.plugins.workflow.multibranch.WorkflowMultiBranchProject",
+            jobs: [
+              {
+                _class: WORKFLOW_JOB,
+                name: "main",
+                url: `${parent}/job/main/`,
+                buildable: true,
+                lastBuild: { number: 7 },
+              },
+              {
+                _class: WORKFLOW_JOB,
+                name: "dev",
+                url: `${parent}/job/dev/`,
+                buildable: true,
+                lastBuild: { number: 3 },
+              },
+            ],
+          }
+        : { lastBuild: { number: 4 }, builds: [] };
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    }) as typeof fetch;
+    try {
+      const result = await fetchJenkinsGraphDataForSHAs([{ url: `${parent}/` }], "user", "token", ["b".repeat(40)], {
+        knownLastBuilds: new Map([
+          [`${parent}/job/main`, 7],
+          [`${parent}/job/dev`, 2],
+        ]),
+      });
+      // main is unchanged: only dev, which has a new build, is listed.
+      expect(calls.filter(url => !url.startsWith(`${parent}/api/`)).map(url => url.split("/api/")[0])).toEqual([
+        `${parent}/job/dev`,
+      ]);
+      expect(result.lastBuilds.get(`${parent}/job/main`)).toBe(7);
+      expect(result.lastBuilds.get(`${parent}/job/dev`)).toBe(4);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   test("maps one build to head commit only", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () =>
@@ -568,6 +683,22 @@ describe("resolveJenkinsJobs", () => {
             },
             {
               _class: "org.jenkinsci.plugins.workflow.job.WorkflowJob",
+              name: "feature%2Flogin",
+              displayName: "feature/login",
+              url: "https://jenkins.example.com/job/service/job/feature%252Flogin/",
+              buildable: true,
+              disabled: false,
+            },
+            {
+              _class: "org.jenkinsci.plugins.workflow.job.WorkflowJob",
+              name: "PR-12",
+              displayName: "PR-12",
+              url: "https://jenkins.example.com/job/service/job/PR-12/",
+              buildable: true,
+              disabled: false,
+            },
+            {
+              _class: "org.jenkinsci.plugins.workflow.job.WorkflowJob",
               name: "disabled",
               url: "https://jenkins.example.com/job/service/job/disabled/",
               buildable: false,
@@ -592,14 +723,25 @@ describe("resolveJenkinsJobs", () => {
         "token",
       );
       expect(result.error).toBeNull();
+      // A branch job is named after its branch, which its builds carry; a pull request's job is not a branch.
       expect(result.jobs).toEqual([
         {
           url: "https://jenkins.example.com/job/service/job/main",
           label: "main",
+          branch: "main",
+        },
+        {
+          url: "https://jenkins.example.com/job/service/job/feature%252Flogin",
+          label: "feature/login",
+          branch: "feature/login",
+        },
+        {
+          url: "https://jenkins.example.com/job/service/job/PR-12",
+          label: "PR-12",
         },
       ]);
       expect(decodeURIComponent(requestedUrl)).toContain(
-        "jobs[_class,name,displayName,url,buildable,disabled,lastBuild[timestamp]]",
+        "jobs[_class,name,displayName,url,buildable,disabled,lastBuild[number,timestamp,building]]",
       );
     } finally {
       globalThis.fetch = originalFetch;

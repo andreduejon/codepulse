@@ -52,6 +52,8 @@ export interface GitHubWorkflowRun {
   status: string;
   conclusion: string | null;
   headSha: string;
+  /** The branch it ran for (a pull request's head branch); missing in runs cached before codepulse read it. */
+  headBranch?: string;
   event: string;
   runNumber: number;
   startedAt?: string | null;

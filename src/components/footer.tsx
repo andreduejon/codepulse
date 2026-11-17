@@ -1,9 +1,10 @@
 import type { BoxRenderable } from "@opentui/core";
 import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import { useAppState } from "../context/state";
+import type { DashboardState } from "../dashboard/use-dashboard";
 import type { CommandBarMode } from "../hooks/use-keyboard-navigation";
 import { useT } from "../hooks/use-t";
-import { providerShortName } from "../providers/provider";
+import { providerDisplayName } from "../providers/provider";
 import { endTruncate } from "../utils/truncate";
 import { fitHints, KeyHint, KeyHintSeparator, type RankedHint } from "./key-hint";
 
@@ -16,6 +17,9 @@ interface FooterHint extends RankedHint {
 const SPINNER_FRAMES = ["\u28FE", "\u28FD", "\u28FB", "\u28BF", "\u287F", "\u283F", "\u28EF", "\u28F7"];
 const SPINNER_FRAME_MS = 120;
 
+/** How long work runs before the footer shows it as busy. */
+const BUSY_SHOW_DELAY_MS = 500;
+
 export default function Footer(
   props: Readonly<{
     commandBarMode: () => CommandBarMode;
@@ -25,6 +29,12 @@ export default function Footer(
     onConfirm?: () => void;
     onClose?: () => void;
     mouseEnabled?: boolean;
+    /** While the dashboard shows: its keys, and its reading as work in progress. */
+    dashboard?: DashboardState;
+    /** The dashboard's `r`: fetch its providers again and read its events (only reading without it). */
+    onDashboardRefresh?: () => void;
+    /** How long work runs before the spinner and its label show (tests: 0). */
+    busyDelayMs?: number;
   }>,
 ) {
   const t = useT();
@@ -51,17 +61,46 @@ export default function Footer(
   /** Generic `loading` only for a provider that cannot name its work; the others say `fetching` or `scanning`. */
   const genericLoading = () =>
     providerStatus().kind === "loading" && !state.providers.get(state.activeProviderView())?.activity;
+  const dashboardShown = () => state.activeProviderView() === "dashboard" && !!props.dashboard;
+  const dashboardReading = () => dashboardShown() && !!props.dashboard?.loading();
   const busy = () =>
+    dashboardReading() ||
     state.loading() ||
     state.fetching() ||
     state.detailLoading() ||
     providerStatus().kind === "loading" ||
     activities().length > 0;
 
+  /**
+   * Shown once something has been busy for a moment: background work that ends sooner (an automatic refresh, a quick
+   * read) never makes the footer blink. Gone as soon as nothing is busy. A memo, so the wait restarts only when busy
+   * flips, not each time its label changes.
+   */
+  const isBusy = createMemo(busy);
+  const [shownBusy, setShownBusy] = createSignal(false);
+  createEffect(() => {
+    if (!isBusy()) {
+      setShownBusy(false);
+      return;
+    }
+    const delay = props.busyDelayMs ?? BUSY_SHOW_DELAY_MS;
+    if (delay <= 0) {
+      setShownBusy(true);
+      return;
+    }
+    const timer = setTimeout(() => setShownBusy(true), delay);
+    onCleanup(() => clearTimeout(timer));
+  });
+
   const [labelWidth, setLabelWidth] = createSignal(Number.POSITIVE_INFINITY);
   const loadingLabel = () => {
     const git = gitActivity();
-    const parts = [...(git ? [git] : []), ...(genericLoading() ? ["loading"] : []), ...activities()];
+    const parts = [
+      ...(dashboardReading() ? ["Dashboard reading"] : []),
+      ...(git ? [git] : []),
+      ...(genericLoading() ? ["loading"] : []),
+      ...activities(),
+    ];
     return parts.length > 0 ? ` ${parts.join(" · ")}` : "";
   };
 
@@ -70,7 +109,7 @@ export default function Footer(
   let spinnerTimer: ReturnType<typeof setInterval> | null = null;
 
   createEffect(() => {
-    if (busy()) {
+    if (shownBusy()) {
       setFrame(0);
       if (!spinnerTimer) {
         spinnerTimer = setInterval(() => {
@@ -91,7 +130,7 @@ export default function Footer(
 
   // Always render the spinner element to avoid layout shift;
   // show the braille char when loading, empty space when idle.
-  const spinnerChar = () => (busy() ? SPINNER_FRAMES[frame()] : " ");
+  const spinnerChar = () => (shownBusy() ? SPINNER_FRAMES[frame()] : " ");
   const spinnerColor = () => t().accent;
 
   const enterAction = () => {
@@ -103,7 +142,7 @@ export default function Footer(
     if (views.length <= 1) return null;
     const next = state.providers.nextView(state.activeProviderView());
     if (next === state.activeProviderView()) return null;
-    return providerShortName(next);
+    return providerDisplayName(next);
   };
 
   const mode = () => props.commandBarMode();
@@ -135,6 +174,33 @@ export default function Footer(
         ...(shortcut ? [{ key: shortcut.key, desc: ` ${shortcut.desc}`, rank: 2 }] : []),
         { key: "esc", desc: " back", rank: 2, onClick: click(props.onClose) },
         { key: "←/→", desc: " switch tab", rank: 4 },
+        { key: "↑/↓", desc: " navigate", rank: 3 },
+      ];
+    }
+    const dashboard = props.dashboard;
+    if (dashboardShown() && dashboard && mode() === "idle") {
+      const selected = dashboard.rows()[dashboard.cursor()];
+      return [
+        ...viewHint,
+        ...(selected?.kind === "event"
+          ? [
+              {
+                key: "enter",
+                desc: props.compact ? " details" : ` show in ${providerDisplayName(selected.event.source)}`,
+                rank: 1,
+                onClick: click(props.onConfirm),
+              },
+              // Beside the events, the event's tabs (its provider's, Info) take the keyboard.
+              ...(!props.compact ? [{ key: "→", desc: " details", rank: 2 }] : []),
+            ]
+          : []),
+        ...(dashboard.selected()?.url ? [{ key: "o", desc: " open", rank: 2 }] : []),
+        {
+          key: "r",
+          desc: " refresh",
+          rank: 5,
+          onClick: click(props.onDashboardRefresh ?? (() => void dashboard.reload())),
+        },
         { key: "↑/↓", desc: " navigate", rank: 3 },
       ];
     }
@@ -190,7 +256,7 @@ export default function Footer(
           }}
         >
           <text wrapMode="none" fg={t().foregroundMuted}>
-            {endTruncate(loadingLabel(), Math.max(0, labelWidth() - 1))}
+            {shownBusy() ? endTruncate(loadingLabel(), Math.max(0, labelWidth() - 1)) : ""}
           </text>
         </box>
 

@@ -2,7 +2,8 @@ import type { Renderable } from "@opentui/core";
 import { type JSX, Show } from "solid-js";
 import { useT } from "../../hooks/use-t";
 import type { DependencyTreeRow } from "./deps-model";
-import { type SnykRows, severityColor } from "./tab-shared";
+import { severityColor } from "./severity";
+import type { SnykRows } from "./tab-shared";
 
 /** Headers without anything to open (no matches, failed/skipped) are not cursor stops, like empty severities. */
 export const isEmptyHeader = (row: DependencyTreeRow) => row.kind !== "dependency" && !row.expandable;

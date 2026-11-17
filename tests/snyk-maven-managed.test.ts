@@ -50,7 +50,7 @@ describe("parseXml", () => {
 });
 
 describe("parsePom", () => {
-  test("reads coordinates, the parent, properties and dependencyManagement only", () => {
+  test("reads coordinates, the parent, properties, dependencyManagement and dependencies", () => {
     const pom = parsePom(
       "app/pom.xml",
       `<project>
@@ -72,6 +72,7 @@ describe("parsePom", () => {
         { groupId: "g", artifactId: "lib", version: property("lib.version") },
         { groupId: "g", artifactId: "bom", version: "1", type: "pom", scope: "import" },
       ],
+      dependencies: [{ groupId: "g", artifactId: "direct", version: "9" }],
     });
   });
 

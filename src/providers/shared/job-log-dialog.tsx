@@ -307,7 +307,7 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
     <LogViewer
       // Like the diff title: context (time, mode, then provider) goes first; the run and job shrink last.
       title={() => [
-        { text: props.provider === "jenkins" ? "Jenkins" : "GitHub Actions", drop: 3 },
+        { text: props.provider === "jenkins" ? "Jenkins" : "GitHub", drop: 3 },
         { text: `${props.run.name} #${props.run.runNumber}`, drop: 4 },
         { text: currentJob().name, emphasis: true, primary: true },
         { text: currentLoadedLog().detail ?? currentJob().detail ?? "", drop: 1 },

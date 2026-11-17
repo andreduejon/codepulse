@@ -26,7 +26,7 @@ function ciCounts(badge: GraphBadge): GraphStatusCounts {
 }
 
 function compute(view: ProviderView, badges: ReadonlyMap<string, GraphBadge>): GraphColumnWidths {
-  if (view === "git") return GIT_WIDTHS;
+  if (view === "git" || view === "dashboard") return GIT_WIDTHS;
   if (view === "snyk") return { first: severityColumnWidth(badges.values()), second: LAST_SCAN_COL_WIDTH };
   let first = 0;
   let second = 0;

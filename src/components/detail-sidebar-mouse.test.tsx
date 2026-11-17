@@ -14,7 +14,7 @@ import * as clipboard from "../hooks/use-clipboard";
 import type { GitHubJob, GitHubWorkflowRun } from "../providers/github-actions/types";
 import type { JenkinsJob, JenkinsRun } from "../providers/jenkins/types";
 import type { OpenShiftResource } from "../providers/openshift/types";
-import type { ProviderView } from "../providers/provider";
+import type { ProviderDetailView } from "../providers/provider";
 import type { SnykScanResult } from "../providers/snyk/types";
 import DetailPanel from "./detail-panel";
 import type { DetailNavRef } from "./detail-types";
@@ -110,7 +110,7 @@ const scan: SnykScanResult = {
     },
   ],
 };
-async function renderSidebar(provider: ProviderView = "git", snykScan: SnykScanResult = scan) {
+async function renderSidebar(provider: ProviderDetailView | "git" = "git", snykScan: SnykScanResult = scan) {
   const theme = createThemeState();
   const [dialog, setDialog] = createSignal<string | null>(null);
   const [searchFocused, setSearchFocused] = createSignal(true);
@@ -585,7 +585,8 @@ test("clearing either Snyk filter reveals its row after navigating deep into a l
       await d.dispose();
     }
   }
-});
+  // Two 200-row trees: about a second here, but over the 5-second default on the slow Intel Mac release runner.
+}, 20_000);
 
 test("Info row establishes focus before copy activation", async () => {
   let d: Awaited<ReturnType<typeof renderSidebar>> | undefined;
