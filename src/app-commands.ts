@@ -1,4 +1,3 @@
-import { setLastMenuTab } from "./components/dialogs/menu-dialog";
 import type { AppActions, AppState } from "./context/app-state-types";
 import { clearDebugEvents } from "./core/debug-events";
 import type { EventSource } from "./core/provider-model";
@@ -79,15 +78,15 @@ export function runAppCommand(cmd: string, ctx: AppCommandContext): void {
       ctx.setDialog("menu");
       break;
     case "repo":
-      setLastMenuTab("repository");
+      ctx.actions.setMenuTab("repository");
       ctx.setDialog("menu");
       break;
     case "branches":
-      setLastMenuTab("branch");
+      ctx.actions.setMenuTab("branch");
       ctx.setDialog("menu");
       break;
     case "providers":
-      setLastMenuTab("providers");
+      ctx.actions.setMenuTab("providers");
       ctx.setDialog("menu");
       break;
     case "switch":

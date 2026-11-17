@@ -19,6 +19,9 @@ export type DetailTab =
 
 export type HighlightMode = "ancestry" | "path" | "search" | null;
 
+/** The Menu's tabs. */
+export type MenuTab = "repository" | "branch" | "providers";
+
 export interface RepoState {
   commits: Accessor<Commit[]>;
   graphRows: Accessor<GraphRow[]>;
@@ -39,6 +42,8 @@ export interface NavState {
   scrollTargetIndex: Accessor<number>;
   pendingScrollHash: Accessor<string | null>;
   viewingBranch: Accessor<string | null>;
+  /** The tab the Menu opens on: the one it was left on, or the one a command (`:providers`) asked for. */
+  menuTab: Accessor<MenuTab>;
 }
 
 export interface FilterState {
@@ -136,6 +141,7 @@ export interface NavActions {
   setCommitDetail: (detail: CommitDetail | null) => void;
   setSearchQuery: (query: string) => void;
   setViewingBranch: (branch: string | null) => void;
+  setMenuTab: (tab: MenuTab) => void;
 }
 
 export interface FilterActions {

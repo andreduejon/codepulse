@@ -2,6 +2,8 @@ import { MouseButton, type MouseEvent, type Renderable, type ScrollBoxRenderable
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { batch, createEffect, createSignal, For } from "solid-js";
 import { SHIFT_JUMP } from "../../constants";
+import type { MenuTab } from "../../context/app-state-types";
+import { useAppState } from "../../context/state";
 import { useTheme } from "../../context/theme";
 import type { DashboardSettings } from "../../core/dashboard-settings";
 import type { ProviderView } from "../../core/provider-model";
@@ -23,8 +25,6 @@ import { KeyHint, KeyHintSeparator } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 import { type MenuKeyAction, routeMenuKey } from "./menu-keymap";
 import { MenuRow, type MenuRowsView } from "./menu-rows";
-
-type MenuTab = "repository" | "branch" | "providers";
 
 interface MenuDialogProps {
   onClose: () => void;
@@ -59,7 +59,6 @@ interface MenuDialogProps {
 }
 
 /** Persists the last-used tab across dialog open/close cycles. */
-export const [lastMenuTab, setLastMenuTab] = createSignal<MenuTab>("repository");
 
 export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   const renderer = useRenderer();
@@ -76,11 +75,12 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   };
 
   // ── Tab state ─────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = createSignal<MenuTab>(lastMenuTab());
+  const { state: appState, actions: appActions } = useAppState();
+  const [activeTab, setActiveTab] = createSignal<MenuTab>(appState.menuTab());
   const [hoveredTab, setHoveredTab] = createSignal<MenuTab | null>(null);
   const [hoveredItem, setHoveredItem] = createSignal<SettingItem | null>(null);
   createEffect(() => {
-    setLastMenuTab(activeTab());
+    appActions.setMenuTab(activeTab());
   });
 
   // ── Clipboard feedback ────────────────────────────────────────────

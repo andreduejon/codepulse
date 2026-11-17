@@ -7,7 +7,7 @@ import {
   type DashboardWindowDays,
   DEFAULT_DASHBOARD_SETTINGS,
 } from "../dashboard-settings";
-import { addDebugEvent } from "../debug-events";
+import { type DebugLog, debugLog } from "../debug-events";
 import { normalizeGitHubHost } from "../github/host";
 import { isValidJenkinsJobUrl, JENKINS_JOB_URL_MAX_LENGTH } from "../jenkins/validation";
 import {
@@ -182,15 +182,9 @@ export interface KnownRepoInfo {
 }
 
 /** The warnings already in Debug: the config is read again on every reload and repository switch. */
-export const reportedConfigWarnings = new Set<string>();
-
 /** Puts the config's warnings (a value it ignores, and why) in Debug, each once per run. */
-export function reportConfigWarnings(warnings: readonly string[]): void {
-  for (const warning of warnings) {
-    if (reportedConfigWarnings.has(warning)) continue;
-    reportedConfigWarnings.add(warning);
-    addDebugEvent({ source: "error", status: "warning", message: warning });
-  }
+export function reportConfigWarnings(warnings: readonly string[], log: DebugLog = debugLog): void {
+  for (const warning of warnings) log.addOnce({ source: "error", status: "warning", message: warning });
 }
 
 /**

@@ -15,14 +15,12 @@ import type {
   SnykMenuConfig,
 } from "../../hooks/menu-items-types";
 import * as clipboard from "../../hooks/use-clipboard";
-import MenuDialog, { lastMenuTab, setLastMenuTab } from "./menu-dialog";
+import MenuDialog from "./menu-dialog";
 
 const descendants = (node: Renderable): Renderable[] =>
   node.getChildren().flatMap(child => [child, ...descendants(child)]);
 
 async function renderMenu(height = 60, configInfo?: ConfigInfo) {
-  const previousTab = lastMenuTab();
-  setLastMenuTab("repository");
   const write = spyOn(configWrite, "writeConfig").mockReturnValue(true);
   const read = spyOn(config, "getRepoDisplayConfig").mockReturnValue({});
   const copy = mock((_text: string, _id: string) => {});
@@ -175,7 +173,6 @@ async function renderMenu(height = 60, configInfo?: ConfigInfo) {
         clipboardSpy.mockRestore();
         read.mockRestore();
         write.mockRestore();
-        setLastMenuTab(previousTab);
       }
     },
   };
@@ -228,17 +225,17 @@ test("menu tabs hover across all three rows and switch by left click; keyboard t
       expect(m.span("Providers")?.fg).toEqual(RGBA.fromHex(m.theme.foregroundMuted));
       expect(m.colorAt(providers.x, providers.y - 1)).toEqual(RGBA.fromHex(m.theme.border));
       await m.click("Providers", MouseButtons.RIGHT, offset);
-      expect(lastMenuTab()).toBe("repository");
+      expect(m.app.state.menuTab()).toBe("repository");
       await m.click("Providers", MouseButtons.LEFT, offset);
-      expect(lastMenuTab()).toBe("providers");
+      expect(m.app.state.menuTab()).toBe("providers");
       expect(m.span("Providers")?.fg).toEqual(RGBA.fromHex(m.theme.accent));
       expect(m.colorAt(providers.x, providers.y - 1)).toEqual(RGBA.fromHex(m.theme.accent));
       await m.click("Repository", MouseButtons.LEFT, offset);
     }
     await m.key("ARROW_RIGHT");
-    expect(lastMenuTab()).toBe("branch");
+    expect(m.app.state.menuTab()).toBe("branch");
     await m.key("ARROW_LEFT");
-    expect(lastMenuTab()).toBe("repository");
+    expect(m.app.state.menuTab()).toBe("repository");
   } finally {
     await m.dispose();
   }
@@ -377,7 +374,7 @@ test("menu editable clicks preserve caret and drafts, save before navigation, re
     await m.flush();
     await m.click("Providers");
     expect(m.write).toHaveBeenLastCalledWith(expect.objectContaining({ appName: "mouse app" }), "/repo/menu-mouse");
-    expect(lastMenuTab()).toBe("providers");
+    expect(m.app.state.menuTab()).toBe("providers");
     expect(m.input()).toBeUndefined();
     await m.click("Repository");
     await m.click("Group");
@@ -391,7 +388,7 @@ test("menu editable clicks preserve caret and drafts, save before navigation, re
     expect(m.fetch).not.toHaveBeenCalled();
     expect(m.input()).toBe(invalid);
     await m.click("Providers");
-    expect(lastMenuTab()).toBe("repository");
+    expect(m.app.state.menuTab()).toBe("repository");
     expect(m.input()?.value).toBe(draft);
     expect(m.write).toHaveBeenCalledTimes(writes);
     await m.click("esc cancel", MouseButtons.RIGHT);

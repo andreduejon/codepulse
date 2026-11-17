@@ -11,6 +11,7 @@ import {
   closeProviderCaches,
   mergeById,
   onProviderCacheWrite,
+  ProviderCacheRegistry,
   persistMergedSnapshots,
   providerCacheDatabase,
   ShaSqliteCache,
@@ -115,6 +116,32 @@ describe("persistMergedSnapshots, saving a fetch at once", () => {
       expect((await disk.list("/repo")).length).toBe(50);
     } finally {
       stop();
+    }
+  });
+
+  test("a cache with a registry of its own tells that registry's listeners, not the process's", async () => {
+    const root = await cacheRoot();
+    const registry = new ProviderCacheRegistry();
+    const disk = new ShaSqliteCache<Entry>({ root, provider: "test", isEntry, invalidMessage: "bad", registry });
+    const own: string[] = [];
+    const process: string[] = [];
+    const stopOwn = registry.onWrite(repo => own.push(repo));
+    const stopProcess = onProviderCacheWrite(repo => process.push(repo));
+    try {
+      await persistMergedSnapshots(
+        disk,
+        "/repo",
+        shas.slice(0, 2),
+        () => true,
+        () => ["run"],
+        merge,
+      );
+      expect(own).toEqual(["/repo"]);
+      expect(process).toEqual([]);
+    } finally {
+      stopOwn();
+      stopProcess();
+      registry.close();
     }
   });
 

@@ -6,7 +6,7 @@ import { providerIdle } from "../core/provider-status";
 import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL, DEFAULT_MAX_COUNT } from "../core/settings/config";
 import { createProviderRegistry } from "../providers/provider";
 import { matchCommit, parseSearchQuery } from "../search";
-import type { AppActions, AppState, DetailOwner, DetailTab, HighlightMode } from "./app-state-types";
+import type { AppActions, AppState, DetailOwner, DetailTab, HighlightMode, MenuTab } from "./app-state-types";
 
 export type { ProviderStatus } from "../core/provider-status";
 export {
@@ -65,6 +65,7 @@ export function createAppState(
   const [commitDetail, setCommitDetail] = createSignal<CommitDetail | null>(null);
   const [searchQuery, setSearchQuery] = createSignal("");
   const [viewingBranch, setViewingBranch] = createSignal<string | null>(null);
+  const [menuTab, setMenuTab] = createSignal<MenuTab>("repository");
 
   // ── Path filtering ────────────────────────────────────────────────────
   const [pathFilter, setPathFilter] = createSignal<string | null>(null);
@@ -277,6 +278,7 @@ export function createAppState(
     uncommittedDetail,
     workingTreeReads,
     viewingBranch,
+    menuTab,
     pathFilter,
     pathMatchSet,
     ancestrySet,
@@ -330,6 +332,7 @@ export function createAppState(
     setUncommittedDetail,
     noteWorkingTreeRead: () => setWorkingTreeReads(count => count + 1),
     setViewingBranch,
+    setMenuTab,
     setPathFilter,
     setPathMatchSet,
     setActiveProviderView,

@@ -3,7 +3,6 @@ import { resolve } from "node:path";
 import { CliRenderer } from "@opentui/core";
 import { testRender } from "@opentui/solid";
 import { AppContent } from "./app-content";
-import { setLastMenuTab } from "./components/dialogs/menu-dialog";
 import * as config from "./config";
 import * as configWrite from "./config-write";
 import type { AppActions, AppState } from "./context/state";
@@ -132,8 +131,6 @@ test("Auto fast-forward is per repository, off by default, and saved from the me
     expect(app.state.repoPath()).toBe(other);
     expect(app.options.autoFastForward?.()).toBe(true);
 
-    // The menu opens on the tab it was left on, maybe by another test file in this run.
-    setLastMenuTab("repository");
     setup.mockInput.pressKey("m");
     await setup.flush();
     expect(setup.captureCharFrame()).toMatch(/Fast-forward\s+ctrl\+f/);

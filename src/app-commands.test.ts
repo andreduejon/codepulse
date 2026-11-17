@@ -1,13 +1,11 @@
 import { afterEach, expect, mock, test } from "bun:test";
 import { type AppCommandContext, runAppCommand } from "./app-commands";
-import { lastMenuTab, setLastMenuTab } from "./components/dialogs/menu-dialog";
 import { createAppState } from "./context/state";
 import { addDebugEvent, clearDebugEvents, getDebugEvents } from "./core/debug-events";
 import type { EventSource } from "./core/provider-model";
 import type { DialogId } from "./hooks/use-keyboard-navigation";
 
 afterEach(() => {
-  setLastMenuTab("repository");
   clearDebugEvents();
 });
 
@@ -46,7 +44,7 @@ function context(dialog: DialogId = null) {
 test("menu commands open the menu on their tab; unknown commands do nothing", () => {
   const { ctx, dialog } = context();
   runAppCommand(":Providers", ctx);
-  expect(lastMenuTab()).toBe("providers");
+  expect(ctx.state.menuTab()).toBe("providers");
   expect(dialog()).toBe("menu");
   runAppCommand("nonsense", ctx);
   expect(ctx.setDialog).toHaveBeenCalledTimes(1);
