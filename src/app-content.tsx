@@ -1,10 +1,10 @@
-import type { ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
-import { batch, createEffect, createMemo, createSignal, onCleanup, onMount, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, onCleanup, onMount, Show } from "solid-js";
 import { useCommandBar } from "./app/commands";
 import { useDashboardController } from "./app/dashboard-controller";
 import { DialogLayer } from "./app/dialog-layer";
 import { useDialogHost } from "./app/dialogs";
+import { useGraphController } from "./app/graph-controller";
 import { useMessageCenter } from "./app/messages";
 import { useProviderHost } from "./app/providers";
 import { useRepoSession } from "./app/repo-session";
@@ -30,8 +30,6 @@ import { AppStateContext, createAppState } from "./context/state";
 import { ThemeContext } from "./context/theme";
 import { openGraphDetails } from "./hooks/handle-graph-keys";
 import { useAncestry } from "./hooks/use-ancestry";
-import { useDataLoader } from "./hooks/use-data-loader";
-import { useDetailLoader } from "./hooks/use-detail-loader";
 import { useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
 import { providerAccent } from "./providers/colors";
 import { setProviderCacheSuspended } from "./providers/shared/sha-sqlite-cache";
@@ -128,10 +126,6 @@ export function AppContent(props: Readonly<AppContentProps>) {
     openResource: handleOpenOpenShiftResource,
   } = dialogs;
 
-  // Ref for programmatic scrolling of the detail panel
-  let graphScrollboxRef: ScrollBoxRenderable | undefined;
-  let detailScrollboxRef: ScrollBoxRenderable | undefined;
-
   // Navigation ref for interactive detail panel items
   const detailNavRef: DetailNavRef = {
     itemCount: 0,
@@ -140,27 +134,6 @@ export function AppContent(props: Readonly<AppContentProps>) {
     pendingJumpDirection: null,
     scrollToFile: () => {},
     itemRefs: [],
-  };
-
-  // Flag to suppress tab reset during child/parent jump navigation.
-  // Set synchronously before setCursorIndex, read inside the commit-change effect.
-  let isJumpNavigation = false;
-
-  // ── Path filter ───────────────────────────────────────────────────────────
-  const handleJumpToCommit = (hash: string, from: "child" | "parent") => {
-    const rows = state.graphRows();
-    const idx = rows.findIndex(r => r.commit.hash === hash);
-    if (idx >= 0) {
-      detailNavRef.lastJumpFrom = from;
-      detailNavRef.pendingJumpDirection = from;
-      // Suppress tab reset — setCursorIndex triggers the commit-change effect
-      // synchronously, which reads this flag to preserve the active tab.
-      isJumpNavigation = true;
-      actions.setCursorIndex(idx);
-      isJumpNavigation = false;
-      actions.setScrollTargetIndex(idx);
-      detailScrollboxRef?.scrollTo(0);
-    }
   };
 
   const refreshActiveProvider = providers.refreshActive;
@@ -192,9 +165,10 @@ export function AppContent(props: Readonly<AppContentProps>) {
     cacheScreenVisible,
     setCacheScreenVisible,
     clearTransient: resetTransientRepoState,
+    // The graph controller comes later (its loaders start after everything they read): reached when used.
     graphScroll: {
-      top: () => graphScrollboxRef?.scrollTop ?? 0,
-      scrollTo: top => graphScrollboxRef?.scrollTo(top),
+      top: () => graph.graphScroll.top(),
+      scrollTo: top => graph.graphScroll.scrollTo(top),
     },
     closeDialog: () => setDialog(null),
     isDisposed: () => disposed,
@@ -263,65 +237,25 @@ export function AppContent(props: Readonly<AppContentProps>) {
     await refreshActiveProvider();
   };
 
-  const activeProviderCommitData = providers.activeCommitData;
-
-  // All git data loading: initial load, pagination, fetch, and auto-refresh timer.
-  const { loadData, loadMoreData, handleFetch } = useDataLoader({
-    repoPath: activeRepoPath,
-    initialBranch: props.branch,
-    state,
-    actions,
-    autoFastForward,
-    onFastForward: showFastForward,
-  });
-
   onMount(() => {
     renderer.setTerminalTitle("codepulse");
   });
 
-  // Load commit detail when cursor changes (with debounce + abort of stale loads),
-  // and auto-switch away from empty tabs after detail data arrives.
-  useDetailLoader({
-    repoPath: activeRepoPath,
+  const graph = useGraphController({
     state,
     actions,
-    getIsJumpNavigation: () => isJumpNavigation,
-    detailNavRef,
-    getCommitData: activeProviderCommitData,
-    getProviderLoading: () => state.providerStatus().kind === "loading",
+    repoPath: activeRepoPath,
+    initialBranch: props.branch,
+    autoFastForward,
+    onFastForward: showFastForward,
+    navRef: detailNavRef,
+    commitData: providers.activeCommitData,
+    beforeSelect: hash => {
+      reanchorIfOutsideChain(hash);
+      commandBar.leave();
+    },
   });
-
-  // Scroll detail panel to top when active tab changes
-  createEffect(() => {
-    state.detailActiveTab(); // track
-    detailScrollboxRef?.scrollTo(0);
-  });
-
-  // Clamp cursor index when graphRows shrinks (e.g. branch change, reload).
-  createEffect(() => {
-    const rows = state.graphRows();
-    const idx = state.cursorIndex();
-
-    if (rows.length === 0) {
-      if (idx !== 0) {
-        actions.setCursorIndex(0);
-        actions.setScrollTargetIndex(0);
-      }
-    } else if (idx >= rows.length) {
-      const clamped = rows.length - 1;
-      actions.setCursorIndex(clamped);
-      actions.setScrollTargetIndex(clamped);
-    }
-  });
-
-  /** Switch the graph to view a specific branch perspective. */
-  const handleViewBranch = (branch: string | null) => {
-    actions.setViewingBranch(branch);
-    // When clearing the filter (null), jump to checked-out branch head;
-    // when setting a filter, try to keep the cursor on the same commit.
-    const stickyHash = branch ? state.selectedCommit()?.hash : undefined;
-    loadData(undefined, stickyHash);
-  };
+  const { loadData, loadMoreData, handleFetch } = graph;
 
   const handleCommandExecute = (cmd: string) =>
     runAppCommand(cmd, {
@@ -361,7 +295,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     searchInputValue,
     setSearchInputValue,
     clearSearchDebounce: () => {},
-    getDetailScrollboxRef: () => detailScrollboxRef,
+    getDetailScrollboxRef: graph.detailScrollbox,
     detailNavRef,
     loadData,
     loadMoreData,
@@ -374,7 +308,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     onPathExecute: handlePathExecute,
     onSearchExecute: applySearch,
     onClearAncestry: clearAnchor,
-    getCommitData: activeProviderCommitData,
+    getCommitData: providers.activeCommitData,
     getProviderLoading: () => state.providerStatus().kind === "loading",
     onSwitchGroupRepo: switchGroupRepo,
     onDashboardKey: handleDashboardKey,
@@ -482,23 +416,11 @@ export function AppContent(props: Readonly<AppContentProps>) {
 
                       <GraphView
                         mouseEnabled={() => dialog() == null && state.keyboardScopeOverride() == null}
-                        onSelectRow={index => {
-                          const commit = state.graphRows()[index]?.commit;
-                          if (!commit) return;
-                          batch(() => {
-                            reanchorIfOutsideChain(commit.hash);
-                            commandBar.leave();
-                            actions.setDetailFocused(false);
-                            actions.setCursorIndex(index);
-                            actions.setScrollTargetIndex(index);
-                          });
-                          detailNavRef.pendingJumpDirection = null;
-                          detailScrollboxRef?.scrollTo(0);
-                        }}
+                        onSelectRow={graph.selectRow}
                         onLoadMore={loadMoreData}
                         snykGetCommitData={snyk.getCommitData}
                         snykIsScanning={snyk.isScanning}
-                        scrollboxRef={el => (graphScrollboxRef = el)}
+                        scrollboxRef={graph.setGraphScrollbox}
                         suppressAutoScroll={() => pendingGraphScrollTop() != null}
                       />
                     </box>
@@ -582,12 +504,10 @@ export function AppContent(props: Readonly<AppContentProps>) {
                           commandBar.leave();
                           actions.setDetailFocused(true);
                         }}
-                        scrollboxRef={el => {
-                          detailScrollboxRef = el;
-                        }}
+                        scrollboxRef={graph.setDetailScrollbox}
                         navRef={detailNavRef}
                         searchFocused={searchFocused()}
-                        onJumpToCommit={handleJumpToCommit}
+                        onJumpToCommit={graph.jumpToCommit}
                         onOpenDiff={handleOpenDiff}
                         {...providerDetailProps}
                       />
@@ -607,7 +527,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                     onFetch: () => void handleFetchAll(),
                     onPull: () => void handlePullAll(),
                     onOpenCache: openCacheScreen,
-                    onViewBranch: handleViewBranch,
+                    onViewBranch: graph.viewBranch,
                     onSwitchRepo: () => {
                       setDialog(null);
                       setRepoSelectorVisible(true);
@@ -615,11 +535,9 @@ export function AppContent(props: Readonly<AppContentProps>) {
                   }}
                   details={{
                     navRef: detailNavRef,
-                    setScrollbox: element => {
-                      detailScrollboxRef = element;
-                    },
+                    setScrollbox: graph.setDetailScrollbox,
                     searchFocused,
-                    onJumpToCommit: handleJumpToCommit,
+                    onJumpToCommit: graph.jumpToCommit,
                     providerProps: providerDetailProps,
                     message: screenMessage,
                     onDismissMessage: clearScreenMessage,
