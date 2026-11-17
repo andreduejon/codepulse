@@ -11,7 +11,7 @@ import {
   isFailedDebugStatus,
 } from "../../debug/format";
 import { useT } from "../../hooks/use-t";
-import { useKeys } from "../../keyboard/dispatcher";
+import { useModalKeys } from "../../keyboard/dispatcher";
 import { debugSourceColor } from "../../providers/colors";
 import { DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
@@ -31,7 +31,7 @@ export default function DebugDialog(props: Readonly<{ onClose: () => void; gitCo
   const messageColor = (event: ReturnType<typeof events>[number]) =>
     event.status === "error" || event.source === "error" ? t().error : t().foreground;
 
-  useKeys(e => {
+  useModalKeys(e => {
     if (e.eventType === "release") return;
     if (e.name === "q") {
       e.preventDefault();

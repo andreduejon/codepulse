@@ -6,7 +6,7 @@ import packageJson from "../../package.json";
 import { getKnownRepoInfos } from "../config";
 import { useClipboard } from "../hooks/use-clipboard";
 import { useT } from "../hooks/use-t";
-import { useKeys } from "../keyboard/dispatcher";
+import { useModalKeys } from "../keyboard/dispatcher";
 import type { KeyboardScope } from "../keyboard/scope";
 import {
   CACHE_INACTIVITY_MS,
@@ -282,7 +282,7 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
     }
   };
 
-  useKeys(event => {
+  useModalKeys(event => {
     if (event.eventType === "release") return;
     if (event.name === "q") {
       event.preventDefault();

@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import packageJson from "../../package.json";
 import { useT } from "../hooks/use-t";
-import { useKeys } from "../keyboard/dispatcher";
+import { useModalKeys } from "../keyboard/dispatcher";
 import { KeyHint, KeyHintSeparator } from "./key-hint";
 import LogoBanner, { LOGO_WIDTH } from "./logo-banner";
 
@@ -23,7 +23,7 @@ interface SetupScreenProps {
 export default function SetupScreen(props: Readonly<SetupScreenProps>) {
   const t = useT();
 
-  useKeys(e => {
+  useModalKeys(e => {
     if (e.eventType === "release") return;
     if (e.name === "return") {
       e.preventDefault();

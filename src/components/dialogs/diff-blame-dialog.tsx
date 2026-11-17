@@ -5,7 +5,7 @@ import { useAppState } from "../../context/state";
 import { getFileBlame, getFileContent, getFileDiff } from "../../git/repo";
 import type { BlameLine, DiffTarget, FileContent, FileDiff } from "../../git/types";
 import { useT } from "../../hooks/use-t";
-import { useKeys } from "../../keyboard/dispatcher";
+import { useModalKeys } from "../../keyboard/dispatcher";
 import {
   type AbortableRequestState,
   abortActiveRequest,
@@ -371,7 +371,7 @@ export default function DiffBlameDialog(props: Readonly<DiffBlameDialogProps>) {
   const toggleWrap = () => setWrapEnabled(prev => !prev);
 
   // ── Keyboard navigation ────────────────────────────────────────────
-  useKeys(e => {
+  useModalKeys(e => {
     if (e.eventType === "release") return;
 
     switch (e.name) {

@@ -11,7 +11,7 @@ import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, onMount, Show, untrack } from "solid-js";
 import { useT } from "../../hooks/use-t";
-import { useKeys } from "../../keyboard/dispatcher";
+import { useModalKeys } from "../../keyboard/dispatcher";
 import { type StatusCategory, statusColor, statusIcon } from "../../providers/shared/status";
 import { fitHints, KeyHint, KeyHintSeparator, type RankedHint } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitle, DialogTitleBar, getStandardDialogFrame } from "./dialog-chrome";
@@ -145,7 +145,7 @@ export function LogViewer(props: Readonly<LogViewerProps>) {
   const titleElement = createMemo(() => <DialogTitle segments={fitTitleSegments(props.title(), frame().width)} />);
 
   // A key that closes the viewer (the app's Esc) doesn't reach this handler: the dispatcher skips a removed one.
-  useKeys(e => {
+  useModalKeys(e => {
     if (e.eventType === "release") return;
     if (search.handleKey(e)) return;
     if (handleLogScrollKey(e, scrollboxRef, frame().height - 6)) {

@@ -54,6 +54,13 @@
   Only child components rendered *inside* the Provider's JSX subtree can safely
   call `useContext()`.
 
+## Keys
+
+Every key handler goes through `src/keyboard/dispatcher.ts`, never OpenTUI's `useKeyboard` (the linter refuses it in
+`src`). The newest handler sees a key first. A dialog or a screen uses `useModalKeys`: nothing beneath it, the app's
+keys included, sees a key while it is open, so it handles Esc itself. Other handlers use `useKeys` and can keep one key
+from those below with `stopPropagation()`. A handler removed while a key is handled never sees that key.
+
 ## Checking UI changes
 
 Check a UI change in the demo before calling it done: `bun run demo` runs codepulse on made-up data, and `--play`

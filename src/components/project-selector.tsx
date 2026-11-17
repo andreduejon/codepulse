@@ -9,7 +9,7 @@ import type { KnownRepoInfo } from "../config";
 import { removeRepoConfig } from "../config-write";
 import { SHIFT_JUMP } from "../constants";
 import { useT } from "../hooks/use-t";
-import { useKeys } from "../keyboard/dispatcher";
+import { useModalKeys } from "../keyboard/dispatcher";
 import type { KeyboardScope } from "../keyboard/scope";
 import {
   buildProjectSelectorRows,
@@ -145,7 +145,7 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
     }
   };
 
-  useKeys(e => {
+  useModalKeys(e => {
     if (e.eventType === "release") return;
 
     // q quits from any context except when typing in path input

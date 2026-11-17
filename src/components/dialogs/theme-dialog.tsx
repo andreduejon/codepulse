@@ -3,7 +3,7 @@ import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import { SHIFT_JUMP } from "../../constants";
 import { themes as predefinedThemes, type Theme, themeNames, useTheme } from "../../context/theme";
-import { useKeys } from "../../keyboard/dispatcher";
+import { useModalKeys } from "../../keyboard/dispatcher";
 import { scrollIndexedItemIntoView } from "../../utils/scroll";
 import { KeyHint, KeyHintSeparator } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitleBar, getStandardDialogFrame } from "./dialog-chrome";
@@ -128,7 +128,7 @@ export default function ThemeDialog(props: Readonly<{ onClose: () => void; onSel
     setSavedTheme(themeName());
   };
 
-  useKeys(e => {
+  useModalKeys(e => {
     if (e.eventType === "release") return;
 
     switch (e.name) {

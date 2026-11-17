@@ -17,7 +17,7 @@ import {
 import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useClipboard } from "../../hooks/use-clipboard";
 import { useMenuItems } from "../../hooks/use-menu-items";
-import { useKeys } from "../../keyboard/dispatcher";
+import { useModalKeys } from "../../keyboard/dispatcher";
 import type { ProviderView } from "../../providers/provider";
 import { scrollIndexedItemIntoView } from "../../utils/scroll";
 import { KeyHint, KeyHintSeparator } from "../key-hint";
@@ -304,7 +304,7 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
     }
   };
 
-  useKeys(e => {
+  useModalKeys(e => {
     if (e.eventType === "release") return;
 
     const idx = selectedItemIndex();

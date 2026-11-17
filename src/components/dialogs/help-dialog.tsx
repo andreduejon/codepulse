@@ -5,7 +5,7 @@ import packageJson from "../../../package.json";
 import { SHIFT_JUMP } from "../../constants";
 import { useT } from "../../hooks/use-t";
 import { HELP_TABS, type HelpTab, KEYBINDS } from "../../keybinds";
-import { useKeys } from "../../keyboard/dispatcher";
+import { useModalKeys } from "../../keyboard/dispatcher";
 import { KeyHint, KeyHintSeparator } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitleBar } from "./dialog-chrome";
 
@@ -38,7 +38,7 @@ export default function HelpDialog(_props: Readonly<{ onClose: () => void }>) {
     if (idx < HELP_TABS.length - 1) setActiveTab(HELP_TABS[idx + 1].id);
   };
 
-  useKeys(e => {
+  useModalKeys(e => {
     if (e.eventType === "release") return;
     if (e.name === "q") {
       e.preventDefault();

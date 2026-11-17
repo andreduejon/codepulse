@@ -6,7 +6,11 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["src/**", "tests/**", "scripts/**"],
+    "includes": [
+      "src/**",
+      "tests/**",
+      "scripts/**"
+    ],
     "ignoreUnknown": true
   },
   "formatter": {
@@ -27,5 +31,34 @@
     "rules": {
       "recommended": true
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": [
+        "src/**",
+        "!src/**/*.test.ts",
+        "!src/**/*.test.tsx",
+        "!src/keyboard/dispatcher.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "@opentui/solid": {
+                    "importNames": [
+                      "useKeyboard"
+                    ],
+                    "message": "Keys go through src/keyboard/dispatcher.ts: useKeys, or useModalKeys for a dialog or screen."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }
