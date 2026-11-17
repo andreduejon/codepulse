@@ -344,6 +344,9 @@ describe("buildCommitDataMap", () => {
 const TEST_REPO = { hostname: "github.com", owner: "owner", repo: "repo" };
 const TEST_TOKEN = "ghp_test";
 
+/** The real fetch, kept before any test replaces it: `globalThis.fetch = fetch` in a cleanup would put back the mock. */
+const realFetch = globalThis.fetch;
+
 /** Helper to assign a mock function as globalThis.fetch without TS complaining
  *  about the `preconnect` property that Bun adds to its native fetch. */
 // biome-ignore lint/suspicious/noExplicitAny: intentional test helper cast
@@ -352,7 +355,10 @@ function mockFetch(fn: (...args: any[]) => Promise<Response>): void {
   globalThis.fetch = fn as any;
 }
 
-afterEach(() => clearDebugEvents());
+afterEach(() => {
+  clearDebugEvents();
+  globalThis.fetch = realFetch;
+});
 
 // ── fetchRunJobs (mocked fetch) ───────────────────────────────────────────
 
@@ -388,7 +394,7 @@ function makeApiJob(overrides: Partial<GitHubApiJob> = {}): GitHubApiJob {
 
 describe("fetchRunJobs", () => {
   afterEach(() => {
-    globalThis.fetch = fetch;
+    globalThis.fetch = realFetch;
   });
 
   it("returns mapped jobs with steps", async () => {
@@ -565,7 +571,7 @@ function makeBatchResponse(
 
 describe("fetchCIDataForSHAs", () => {
   afterEach(() => {
-    globalThis.fetch = fetch;
+    globalThis.fetch = realFetch;
   });
 
   it("returns runs for two commits on different branches", async () => {
@@ -1098,7 +1104,7 @@ describe("fetchCIDataForSHAs", () => {
 
 describe("fetchJobLog", () => {
   afterEach(() => {
-    globalThis.fetch = fetch;
+    globalThis.fetch = realFetch;
   });
 
   it("returns the log text, and an empty string for a job without output", async () => {
@@ -1128,7 +1134,7 @@ describe("fetchJobLog", () => {
 
 describe("fetchJobAnnotations", () => {
   afterEach(() => {
-    globalThis.fetch = fetch;
+    globalThis.fetch = realFetch;
   });
 
   it("reads the job's check run annotations: level, place and message", async () => {

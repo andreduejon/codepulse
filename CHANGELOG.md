@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file.
 - OpenShift waits longer between automatic requests after failures, as GitHub and
   Jenkins do. On the Dashboard, a cluster that fails is no longer asked again on
   every visit.
+- A request to GitHub, Jenkins or OpenShift whose server sends its headers and then
+  stalls times out, and a repository switch stops it. Before, it could wait
+  forever once the headers had come. A long log that keeps coming is still read
+  whole.
 
 ## [0.18.0] - 2026-11-17
 
