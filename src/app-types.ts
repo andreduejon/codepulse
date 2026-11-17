@@ -1,4 +1,5 @@
 import type { CustomTheme, createThemeState } from "./context/theme";
+import type { ProviderAdapters } from "./core/app-ports";
 import type { CacheStorePort } from "./core/cache-store";
 import type { GitPort } from "./core/git/port";
 import type { Branch, Commit, GraphRow, TagInfo } from "./core/git/types";
@@ -24,6 +25,8 @@ export interface AppProps {
   git?: GitPort;
   /** The providers' cache: the SQLite cache unless the caller gives another. */
   cacheStore?: CacheStorePort;
+  /** Each provider's API, cache and token. */
+  providers?: ProviderAdapters;
   startupMode: StartupMode;
   initialGithubConfig?: {
     enabled?: boolean;

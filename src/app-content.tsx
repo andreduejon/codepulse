@@ -15,6 +15,7 @@ import type { DetailNavRef } from "./components/detail-types";
 import { COMPACT_THRESHOLD_WIDTH, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH } from "./constants";
 import { CacheStoreContext } from "./context/cache-store";
 import { GitContext } from "./context/git";
+import { resolvePorts } from "./context/ports";
 import { SettingsContext } from "./context/settings";
 import { AppStateContext, createAppState } from "./context/state";
 import { ThemeContext } from "./context/theme";
@@ -23,7 +24,6 @@ import { DEFAULT_MAX_COUNT } from "./core/settings/config";
 import { loadAppEvents } from "./dashboard/load";
 import { useAncestry } from "./hooks/use-ancestry";
 import { useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
-import { portsFrom } from "./ports";
 import { providerAccent } from "./providers/colors";
 
 export function AppContent(props: Readonly<AppContentProps>) {
@@ -39,8 +39,8 @@ export function AppContent(props: Readonly<AppContentProps>) {
   const [cacheScreenVisible, setCacheScreenVisible] = createSignal(false);
   let disposed = false;
   /** The providers' cache, as the cache screen manages it. */
-  /** The adapters the app runs on: given by startupProps, the terminal app's otherwise. */
-  const ports = portsFrom(props);
+  /** The ports the app runs on: given by startupProps, the registered ones otherwise. */
+  const ports = resolvePorts(props);
   const cacheStore = ports.cacheStore;
   createEffect(() => cacheStore.setSuspended(cacheScreenVisible()));
   onCleanup(() => {

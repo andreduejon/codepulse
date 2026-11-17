@@ -1,6 +1,3 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { defaultConfigPath } from "../config";
 import { addDebugEvent } from "../core/debug-events";
 import { type CustomTheme, type Theme, themes } from "./theme";
 
@@ -9,10 +6,6 @@ const colorKeys = Object.keys(themes["catppuccin-mocha"]).filter(key => key !== 
 // Unlike $, this end assertion also rejects a trailing newline.
 const validId = /^[a-z0-9]+(?:-[a-z0-9]+)*(?![\s\S])/;
 const validHex = /^#[0-9a-fA-F]{6}(?![\s\S])/;
-
-export function defaultCustomThemesPath(): string {
-  return join(dirname(defaultConfigPath()), "themes.json");
-}
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -67,17 +60,10 @@ function parseTheme(id: string, value: unknown): CustomTheme {
   return { id, theme, ...(base ? { base } : {}), overrides: base ? (suppliedKeys as ColorKey[]) : [] };
 }
 
-export function loadCustomThemes(path = defaultCustomThemesPath()): CustomTheme[] {
-  let contents: string;
-  try {
-    contents = readFileSync(path, "utf-8");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-      addDebugEvent({ source: "error", message: `${path}: could not read custom themes` });
-    }
-    return [];
-  }
-
+/** The custom themes in the themes file's text (read by the root); what is wrong in it goes to Debug. */
+export function parseCustomThemes(file: { path: string; contents: string } | null): CustomTheme[] {
+  if (!file) return [];
+  const { path, contents } = file;
   let parsed: unknown;
   try {
     parsed = JSON.parse(contents);

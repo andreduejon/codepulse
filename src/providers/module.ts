@@ -6,14 +6,11 @@
 
 import type { Accessor } from "solid-js";
 import type { RepoSettings } from "../app/repo-settings";
+import type { ProviderAdapters } from "../core/app-ports";
 import type { AppActions, AppState } from "../core/app-state";
 import type { DashboardEvent } from "../core/dashboard/events";
-import type { GitHubAdapters } from "../core/github/service";
-import type { JenkinsAdapters } from "../core/jenkins/service";
-import type { OpenShiftAdapters } from "../core/openshift/service";
 import type { OpenShiftResource } from "../core/openshift/types";
 import type { ProviderDetailView } from "../core/provider-model";
-import type { SnykAdapters } from "../core/snyk/service";
 import type { JobLogTarget } from "./shared/job-log-dialog";
 
 /** What a provider gets when it starts. Called during the root's setup: state and actions come as values. */
@@ -28,14 +25,6 @@ export interface ProviderContext {
   onOpenResource: (resource: OpenShiftResource) => void;
   /** Each provider's API, cache and token: the root's (src/ports.ts). */
   adapters: ProviderAdapters;
-}
-
-/** What every provider gets from outside, by provider. */
-export interface ProviderAdapters {
-  github: GitHubAdapters;
-  jenkins: JenkinsAdapters;
-  openshift: OpenShiftAdapters;
-  snyk: SnykAdapters;
 }
 
 /** A started provider, as the host and the rest of the app reach it. */

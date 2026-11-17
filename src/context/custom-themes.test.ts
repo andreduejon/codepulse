@@ -4,7 +4,11 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { defaultConfigPath } from "../config";
 import { clearDebugEvents, getDebugEvents } from "../core/debug-events";
-import { defaultCustomThemesPath, loadCustomThemes } from "./custom-themes";
+import { defaultCustomThemesPath, readCustomThemesFile } from "../theme-file";
+import { parseCustomThemes } from "./custom-themes";
+
+const loadCustomThemes = (path: string) => parseCustomThemes(readCustomThemesFile(path));
+
 import { createThemeState, themes } from "./theme";
 
 let root: string;

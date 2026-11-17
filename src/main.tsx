@@ -3,12 +3,15 @@ import { render } from "@opentui/solid";
 import App from "./app";
 import type { AppProps } from "./app-types";
 import { parseArgs } from "./cli/parse-args";
-import { loadCustomThemes } from "./context/custom-themes";
+import { parseCustomThemes } from "./context/custom-themes";
+import { setDefaultPorts } from "./context/ports";
+import type { AppPorts } from "./core/app-ports";
 import { addDebugEvent, redactDebugValue } from "./core/debug-events";
 import { type KnownRepoInfo, mergeOptions, reportConfigWarnings } from "./core/settings/config";
-import { type AppPorts, portsFrom } from "./ports";
+import { portsFrom } from "./ports";
 import { cleanupInactiveProviderCaches } from "./providers/shared/cache-management";
 import { closeProviderCaches } from "./providers/shared/sha-sqlite-cache";
+import { readCustomThemesFile } from "./theme-file";
 
 /** Startup mode determines which screen the app shows first. */
 export type StartupMode =
@@ -22,7 +25,9 @@ export type StartupMode =
  * (`bun run demo --play`) starts the app through this too, so it boots the way the real app does.
  */
 export async function startupProps(argv: string[], ports: Partial<AppPorts> = {}): Promise<AppProps> {
-  const { settings, git, cacheStore } = portsFrom(ports);
+  const all = portsFrom(ports);
+  setDefaultPorts(all);
+  const { settings, git, cacheStore, providers } = all;
   const cli = parseArgs(argv);
   try {
     cleanupInactiveProviderCaches();
@@ -39,7 +44,7 @@ export async function startupProps(argv: string[], ports: Partial<AppPorts> = {}
   const { config, warnings } = settings.load(normalizedCli.repoPath);
   reportConfigWarnings(warnings);
   const opts = mergeOptions(normalizedCli, config);
-  const customThemes = loadCustomThemes();
+  const customThemes = parseCustomThemes(readCustomThemesFile());
 
   let startupMode: StartupMode;
 
@@ -91,6 +96,7 @@ export async function startupProps(argv: string[], ports: Partial<AppPorts> = {}
     settings,
     git,
     cacheStore,
+    providers,
     startupMode,
     initialGithubConfig: config.providers?.github,
     initialJenkinsConfig: config.providers?.jenkins,
