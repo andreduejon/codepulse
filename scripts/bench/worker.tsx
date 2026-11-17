@@ -23,12 +23,18 @@ import { getWorkingTreeStatus } from "../../src/adapters/git/repo-status";
 import { buildGraph, getMaxGraphColumns } from "../../src/core/git/graph";
 import type { Commit } from "../../src/core/git/types";
 import { startupProps } from "../../src/main";
+import { terminalPorts } from "../../src/ports";
 import App from "../../src/tui/app/app";
 import GraphView from "../../src/tui/components/graph";
+import { setDefaultPorts } from "../../src/tui/context/ports";
 import { AppStateContext, createAppState } from "../../src/tui/context/state";
 import { createThemeState, ThemeContext } from "../../src/tui/context/theme";
 import JobLogDialog from "../../src/tui/providers/shared/job-log-dialog";
 import { newestSubject } from "./repo";
+
+// The views a scenario mounts on their own (the graph, the log) reach the outside through the app's ports, as in the
+// app: the terminal's, in this run's home.
+setDefaultPorts(terminalPorts());
 
 export interface BenchRepos {
   big: string;
