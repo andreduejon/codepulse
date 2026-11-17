@@ -1,14 +1,14 @@
 import type { Accessor } from "solid-js";
 import { createEffect, createMemo, createSignal } from "solid-js";
-import type { CodepulseConfig, ConfigInfo } from "../config";
-import { getRepoDisplayConfig } from "../config";
-import { writeConfig } from "../config-write";
 import { AUTO_REFRESH_MS, INTERVAL_OPTIONS, MAX_COUNT_OPTIONS, MS_TO_LABEL } from "../constants";
-import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL, useAppState } from "../context/state";
+import { useSettings } from "../context/settings";
+import { useAppState } from "../context/state";
 import type { Theme } from "../context/theme";
+import { type DashboardSettings, DEFAULT_DASHBOARD_SETTINGS } from "../core/dashboard-settings";
 import { type ProviderDetailView, type ProviderView, providerDisplayName } from "../core/provider-model";
 import { DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS } from "../core/provider-settings";
-import { type DashboardSettings, DEFAULT_DASHBOARD_SETTINGS } from "../dashboard/settings";
+import type { CodepulseConfig, ConfigInfo } from "../core/settings/config";
+import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL } from "../core/settings/config";
 import { getTokenSource } from "../providers/github-actions/api";
 import {
   COPYABLE_VISIBLE_WIDTH,
@@ -129,11 +129,13 @@ export interface MenuItemsResult {
  * come from menu-provider-items.ts.
  */
 export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
+  /** Where the settings are kept: the menu reads and writes them there. */
+  const savedSettings = useSettings();
   const { state, actions } = useAppState();
-  const [repoDisplayConfig, setRepoDisplayConfig] = createSignal(getRepoDisplayConfig(state.repoPath()));
+  const [repoDisplayConfig, setRepoDisplayConfig] = createSignal(savedSettings.display(state.repoPath()));
 
   createEffect(() => {
-    setRepoDisplayConfig(getRepoDisplayConfig(state.repoPath()));
+    setRepoDisplayConfig(savedSettings.display(state.repoPath()));
   });
 
   /**
@@ -175,7 +177,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
         };
       }
     }
-    writeConfig(cfg, state.repoPath());
+    savedSettings.write(cfg, state.repoPath());
     if (overrides && (Object.hasOwn(overrides, "group") || Object.hasOwn(overrides, "appName"))) {
       const nextRepoDisplayConfig = {
         group: Object.hasOwn(overrides, "group") ? overrides.group : repoDisplayConfig().group,

@@ -6,6 +6,7 @@ import { AppContent } from "./app-content";
 import * as config from "./config";
 import * as configWrite from "./config-write";
 import { createThemeState } from "./context/theme";
+import { defaultConfig } from "./core/settings/config";
 import * as dataLoader from "./hooks/use-data-loader";
 import * as detailLoader from "./hooks/use-detail-loader";
 
@@ -53,7 +54,7 @@ test.each([
       expect(themeState.themeName()).toBe("olive-garden");
       setup.mockInput.pressKey("ARROW_RIGHT", { shift: true });
       await setup.flush();
-      expect(themeState.themeName()).toBe(config.defaultConfig().theme);
+      expect(themeState.themeName()).toBe(defaultConfig().theme);
       setup.mockInput.pressKey("ARROW_LEFT", { shift: true });
       await setup.flush();
       expect(themeState.themeName()).toBe("olive-garden");

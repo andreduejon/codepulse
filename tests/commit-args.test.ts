@@ -6,7 +6,7 @@
  * branch + "--" disambiguation, and option interactions.
  */
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_MAX_COUNT } from "../src/constants";
+import { DEFAULT_MAX_COUNT } from "../src/core/settings/config";
 import { buildCommitLogArgs, RS } from "../src/git/repo";
 
 /**

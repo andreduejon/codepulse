@@ -29,9 +29,9 @@ import type {
   OpenShiftResource,
   OpenShiftWatchResult,
 } from "../../core/openshift/types";
+import { isValidOpenShiftNamespace } from "../../core/openshift/validation";
 import { isOpenShiftWatchGone, type OpenShiftWatchEvent, parseOpenShiftWatchBuffer } from "../../core/openshift/watch";
 import { fetchWithRetry } from "../shared/http";
-import { isValidOpenShiftNamespace } from "./validation";
 
 const FETCH_OPTS = { timeoutMs: 15000, attempts: 2, retryDelayMs: 500, timeoutMessage: BANNER.openshift.timeout };
 export const MAX_LIST_PAGES = 100;

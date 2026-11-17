@@ -1,14 +1,22 @@
 import { batch, createContext, createMemo, createSignal, untrack, useContext } from "solid-js";
-import { DEFAULT_MAX_COUNT } from "../constants";
 import type { Branch, Commit, CommitDetail, GraphRow, TagInfo, UncommittedDetail } from "../core/git/types";
 import type { GraphBadge, ProviderView } from "../core/provider-model";
 import type { ProviderStatus } from "../core/provider-status";
 import { providerIdle } from "../core/provider-status";
+import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL, DEFAULT_MAX_COUNT } from "../core/settings/config";
 import { createProviderRegistry } from "../providers/provider";
 import { matchCommit, parseSearchQuery } from "../search";
 import type { AppActions, AppState, DetailOwner, DetailTab, HighlightMode } from "./app-state-types";
 
 export type { ProviderStatus } from "../core/provider-status";
+export {
+  providerError,
+  providerIdle,
+  providerLoading,
+  providerStatusMessage,
+  providerUnavailable,
+  providerWarning,
+} from "../core/provider-status";
 export type {
   AppActions,
   AppState,
@@ -30,18 +38,6 @@ export type {
   SettingsActions,
   SettingsState,
 } from "./app-state-types";
-
-export const DEFAULT_AUTO_REFRESH_INTERVAL = 30000;
-export const DEFAULT_AUTO_FETCH_INTERVAL = 0;
-
-export {
-  providerError,
-  providerIdle,
-  providerLoading,
-  providerStatusMessage,
-  providerUnavailable,
-  providerWarning,
-} from "../core/provider-status";
 
 const AppStateContext = createContext<{ state: AppState; actions: AppActions }>();
 

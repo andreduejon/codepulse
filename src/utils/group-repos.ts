@@ -1,5 +1,5 @@
 import { basename } from "node:path";
-import type { KnownRepoInfo } from "../config";
+import type { KnownRepoInfo } from "../core/settings/config";
 
 export function repoDisplayName(repo: KnownRepoInfo): string {
   return repo.appName?.trim() || basename(repo.path);

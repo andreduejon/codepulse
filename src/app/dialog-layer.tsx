@@ -17,7 +17,7 @@ import HelpDialog from "../components/dialogs/help-dialog";
 import MenuDialog from "../components/dialogs/menu-dialog";
 import ThemeDialog from "../components/dialogs/theme-dialog";
 import type { UIMessage } from "../components/message-box";
-import { writeConfig } from "../config-write";
+import { useSettings } from "../context/settings";
 import { useAppState } from "../context/state";
 import { useT } from "../hooks/use-t";
 import OpenShiftResourceDialog from "../providers/openshift/resource-dialog";
@@ -57,6 +57,8 @@ export function DialogLayer(
     };
   }>,
 ) {
+  /** Where the settings are kept (the theme picked here is saved there). */
+  const savedSettings = useSettings();
   const { actions } = useAppState();
   const t = useT();
   const settings = props.settings;
@@ -112,7 +114,7 @@ export function DialogLayer(
       <Show when={dialog() === "theme"}>
         <ThemeDialog
           onClose={() => setDialog(null)}
-          onSelect={name => writeConfig({ theme: name }, props.repoPath())}
+          onSelect={name => savedSettings.write({ theme: name }, props.repoPath())}
         />
       </Show>
       <Show when={dialog() === "debug"}>

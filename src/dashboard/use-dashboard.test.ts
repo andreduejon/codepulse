@@ -4,10 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createRoot, createSignal } from "solid-js";
 import { RECENT_APPS } from "../constants";
+import type { DashboardSettings } from "../core/dashboard-settings";
 import { GitHubCache } from "../providers/github-actions/cache";
 import { closeProviderCaches } from "../providers/shared/sha-sqlite-cache";
 import type { DashboardEvent } from "./events";
-import type { DashboardSettings } from "./settings";
 import { type DashboardApp, useDashboard } from "./use-dashboard";
 
 const NOW = Date.parse("2026-03-02T11:00:00Z");

@@ -8,6 +8,7 @@ import * as config from "./config";
 import * as configWrite from "./config-write";
 import type { AppActions, AppState } from "./context/state";
 import { createThemeState } from "./context/theme";
+import type { CodepulseConfig } from "./core/settings/config";
 import * as dashboardLoad from "./dashboard/load";
 import * as dataLoader from "./hooks/use-data-loader";
 import * as detailLoader from "./hooks/use-detail-loader";
@@ -18,7 +19,7 @@ const other = resolve("/repo/fast-forward-other");
 type LoaderOptions = Parameters<typeof dataLoader.useDataLoader>[0];
 
 /** Codepulse in Git on two apps of one group, without Git: the loader's options and its fetches are kept. */
-async function launch(configFor: (path: string) => config.CodepulseConfig = () => ({})) {
+async function launch(configFor: (path: string) => CodepulseConfig = () => ({})) {
   let app: { state: AppState; actions: AppActions; options: LoaderOptions } | undefined;
   const handleFetch = mock(async (_mode?: "fetch" | "pull") => {});
   const spies = [

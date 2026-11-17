@@ -7,6 +7,7 @@ import * as config from "../../config";
 import * as configWrite from "../../config-write";
 import { AppStateContext, createAppState } from "../../context/state";
 import { createThemeState, ThemeContext } from "../../context/theme";
+import type { ConfigInfo } from "../../core/settings/config";
 import type {
   GitHubMenuConfig,
   JenkinsMenuConfig,
@@ -19,7 +20,7 @@ import MenuDialog, { lastMenuTab, setLastMenuTab } from "./menu-dialog";
 const descendants = (node: Renderable): Renderable[] =>
   node.getChildren().flatMap(child => [child, ...descendants(child)]);
 
-async function renderMenu(height = 60, configInfo?: config.ConfigInfo) {
+async function renderMenu(height = 60, configInfo?: ConfigInfo) {
   const previousTab = lastMenuTab();
   setLastMenuTab("repository");
   const write = spyOn(configWrite, "writeConfig").mockReturnValue(true);

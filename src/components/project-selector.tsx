@@ -5,9 +5,9 @@ import { type CliRenderer, MouseButton, type Renderable, type ScrollBoxRenderabl
 import { useRenderer } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
 import packageJson from "../../package.json";
-import type { KnownRepoInfo } from "../config";
-import { removeRepoConfig } from "../config-write";
 import { SHIFT_JUMP } from "../constants";
+import { useSettings } from "../context/settings";
+import type { KnownRepoInfo } from "../core/settings/config";
 import { useT } from "../hooks/use-t";
 import { useModalKeys } from "../keyboard/dispatcher";
 import {
@@ -53,6 +53,8 @@ interface ProjectSelectorProps {
  * selection can be handled by the parent without leaving the renderer.
  */
 export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
+  /** Where the settings are kept (forgetting a project removes its settings there). */
+  const savedSettings = useSettings();
   const t = useT();
   const renderer = useRenderer();
 
@@ -117,7 +119,7 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
   const forgetSelectedRepo = () => {
     const row = selectedRow();
     if (row?.kind !== "repo" || row.current) return;
-    if (!removeRepoConfig(row.repo.path)) return;
+    if (!savedSettings.remove(row.repo.path)) return;
     setSavedRepos(prev => prev.filter(repo => repo.path !== row.repo.path));
   };
 

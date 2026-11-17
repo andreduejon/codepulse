@@ -8,6 +8,7 @@ import * as configWrite from "./config-write";
 import { type AppActions, providerError, providerIdle } from "./context/state";
 import { createThemeState } from "./context/theme";
 import { clearDebugEvents, getDebugEvents } from "./core/debug-events";
+import type { CodepulseConfig } from "./core/settings/config";
 import * as dashboardLoad from "./dashboard/load";
 import * as dataLoader from "./hooks/use-data-loader";
 import * as detailLoader from "./hooks/use-detail-loader";
@@ -15,7 +16,7 @@ import * as detailLoader from "./hooks/use-detail-loader";
 const repo = resolve("/repo/dashboard-errors");
 
 /** Codepulse on the dashboard of one app, without Git or providers: the test sets the providers' statuses. */
-async function launch(repoConfig: config.CodepulseConfig = {}, warnings: string[] = []) {
+async function launch(repoConfig: CodepulseConfig = {}, warnings: string[] = []) {
   let actions: AppActions | undefined;
   const spies = [
     spyOn(configWrite, "backfillRepoConfig").mockImplementation(() => {}),

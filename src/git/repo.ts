@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
-import { DEFAULT_MAX_COUNT } from "../constants";
 import { BANNER, classifyGitFailure, debugError } from "../core/banner";
 import type { Branch, Commit, CommitDetail, FileChange, RefInfo, TagInfo } from "../core/git/types";
+import { DEFAULT_MAX_COUNT } from "../core/settings/config";
 import { runGit } from "./repo-git";
 import { parseDiffTreeOutput } from "./repo-status";
 

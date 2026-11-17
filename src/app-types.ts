@@ -1,8 +1,9 @@
-import type { ConfigInfo } from "./config";
 import type { CustomTheme, createThemeState } from "./context/theme";
 import type { Branch, Commit, GraphRow, TagInfo } from "./core/git/types";
 import type { ProviderView } from "./core/provider-model";
 import type { ProviderCacheLimit } from "./core/provider-settings";
+import type { ConfigInfo } from "./core/settings/config";
+import type { SettingsPort } from "./core/settings/port";
 import type { StartupMode } from "./main";
 
 export interface AppProps {
@@ -15,6 +16,8 @@ export interface AppProps {
   autoRefreshInterval?: number;
   autoFetchInterval?: number;
   configInfo?: ConfigInfo;
+  /** Where the settings are kept: the user's settings file unless the caller gives another. */
+  settings?: SettingsPort;
   startupMode: StartupMode;
   initialGithubConfig?: {
     enabled?: boolean;

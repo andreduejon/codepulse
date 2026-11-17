@@ -1,6 +1,3 @@
-/** Default number of commits to load when repo config does not override page size. */
-export const DEFAULT_MAX_COUNT = 200;
-
 /** Column widths for the graph table (character count). */
 export const HASH_COL_WIDTH = 9;
 export const AUTHOR_COL_WIDTH = 15;

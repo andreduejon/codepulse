@@ -7,6 +7,7 @@ import * as config from "./config";
 import * as configWrite from "./config-write";
 import type { AppActions, AppState } from "./context/state";
 import { createThemeState } from "./context/theme";
+import type { CodepulseConfig } from "./core/settings/config";
 import * as dashboardLoad from "./dashboard/load";
 import * as dataLoader from "./hooks/use-data-loader";
 import * as detailLoader from "./hooks/use-detail-loader";
@@ -15,7 +16,7 @@ const repo = resolve("/repo/start-view");
 const other = resolve("/repo/start-view-other");
 
 /** Codepulse on two apps of one group, both starting in the Dashboard unless told otherwise, without Git or provider data. */
-async function launch(configFor: (path: string) => config.CodepulseConfig = () => ({ startView: "dashboard" })) {
+async function launch(configFor: (path: string) => CodepulseConfig = () => ({ startView: "dashboard" })) {
   let app: { state: AppState; actions: AppActions } | undefined;
   const spies = [
     spyOn(configWrite, "backfillRepoConfig").mockImplementation(() => {}),

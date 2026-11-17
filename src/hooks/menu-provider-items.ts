@@ -1,5 +1,18 @@
 import type { Accessor } from "solid-js";
 import {
+  DASHBOARD_KNOT_MINUTES,
+  DASHBOARD_WINDOW_DAYS,
+  type DashboardSettings,
+  knotMinutesLabel,
+  windowDaysLabel,
+} from "../core/dashboard-settings";
+import { isValidJenkinsJobUrl } from "../core/jenkins/validation";
+import {
+  isValidOpenShiftNamespace,
+  isValidOpenShiftServerUrl,
+  isValidOpenShiftText,
+} from "../core/openshift/validation";
+import {
   cycleAutoRefreshSeconds,
   cycleProviderCacheLimit,
   cycleProviderLimit,
@@ -8,20 +21,7 @@ import {
   PROVIDER_LIMIT_OPTIONS,
   PROVIDER_MS_TO_LABEL,
 } from "../core/provider-settings";
-import {
-  DASHBOARD_KNOT_MINUTES,
-  DASHBOARD_WINDOW_DAYS,
-  type DashboardSettings,
-  knotMinutesLabel,
-  windowDaysLabel,
-} from "../dashboard/settings";
 import { parseGitHubRemote } from "../providers/github-actions/api";
-import { isValidJenkinsJobUrl } from "../providers/jenkins/validation";
-import {
-  isValidOpenShiftNamespace,
-  isValidOpenShiftServerUrl,
-  isValidOpenShiftText,
-} from "../providers/openshift/validation";
 import type {
   GitHubMenuConfig,
   JenkinsMenuConfig,

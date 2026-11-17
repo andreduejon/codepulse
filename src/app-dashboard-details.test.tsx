@@ -7,6 +7,7 @@ import * as config from "./config";
 import * as configWrite from "./config-write";
 import type { AppActions, AppState } from "./context/state";
 import { createThemeState } from "./context/theme";
+import type { CodepulseConfig } from "./core/settings/config";
 import type { DashboardEvent } from "./dashboard/events";
 import * as dashboardLoad from "./dashboard/load";
 import { buildGraph } from "./git/graph";
@@ -17,7 +18,7 @@ import * as openUrlModule from "./utils/open-url";
 
 /** Every provider turned on, without a token (the dashboard leaves out a turned-off provider's events). */
 const NO_TOKEN = "CODEPULSE_TEST_NO_TOKEN";
-const PROVIDERS_ON: config.CodepulseConfig = {
+const PROVIDERS_ON: CodepulseConfig = {
   providers: {
     github: { enabled: true, tokenEnvVar: NO_TOKEN },
     jenkins: { enabled: true, tokenEnvVar: NO_TOKEN },

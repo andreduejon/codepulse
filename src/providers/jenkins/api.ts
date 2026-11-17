@@ -10,8 +10,8 @@ import {
   type JenkinsStage,
   type JenkinsTestReport,
 } from "../../core/jenkins/types";
+import { isSafeJenkinsRequestUrl } from "../../core/jenkins/validation";
 import { fetchWithRetry as fetchWithRetryPolicy, runLimited } from "../shared/http";
-import { isSafeJenkinsRequestUrl } from "./validation";
 
 interface JenkinsBuildApi {
   number?: number;

@@ -3,6 +3,7 @@ import { BANNER } from "../../core/banner";
 import { clearDebugEvents, getDebugEvents } from "../../core/debug-events";
 import { buildJenkinsCommitDataMap, buildJenkinsGraphBadges } from "../../core/jenkins/commit-data";
 import type { JenkinsRun } from "../../core/jenkins/types";
+import { isSafeJenkinsRequestUrl, isValidJenkinsJobUrl } from "../../core/jenkins/validation";
 import {
   deriveJenkinsJobLabel,
   extractCandidateShas,
@@ -18,7 +19,6 @@ import {
   normalizeJenkinsJobUrl,
   resolveJenkinsJobs,
 } from "./api";
-import { isSafeJenkinsRequestUrl, isValidJenkinsJobUrl } from "./validation";
 
 // ---------------------------------------------------------------------------
 // URL helpers

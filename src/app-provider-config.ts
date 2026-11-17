@@ -1,4 +1,4 @@
-import type { CodepulseConfig } from "./config";
+import type { CodepulseConfig } from "./core/settings/config";
 import type {
   GitHubMenuConfig,
   JenkinsMenuConfig,

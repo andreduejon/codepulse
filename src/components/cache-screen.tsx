@@ -3,7 +3,7 @@ import { MouseButton, type Renderable, type ScrollBoxRenderable } from "@opentui
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, Index, onCleanup, Show } from "solid-js";
 import packageJson from "../../package.json";
-import { getKnownRepoInfos } from "../config";
+import { useSettings } from "../context/settings";
 import { useClipboard } from "../hooks/use-clipboard";
 import { useT } from "../hooks/use-t";
 import { useModalKeys } from "../keyboard/dispatcher";
@@ -58,7 +58,7 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
   const t = useT();
   const renderer = useRenderer();
   const dimensions = useTerminalDimensions();
-  const knownRepos = getKnownRepoInfos();
+  const knownRepos = useSettings().knownRepos();
   const { copiedId, copyToClipboard } = useClipboard();
   const [summary, setSummary] = createSignal<ProviderCacheSummary | null>(null);
   const [cursor, setCursor] = createSignal(1);

@@ -1,5 +1,5 @@
 import type { OpenShiftResource, OpenShiftResourceKind } from "../../core/openshift/types";
-import { isValidOpenShiftServerUrl } from "./validation";
+import { isValidOpenShiftServerUrl } from "../../core/openshift/validation";
 
 /** The web console's page of each kind. A tag has no page of its own, so it opens its image stream. */
 const CONSOLE_KIND_PATH: Record<OpenShiftResourceKind, string> = {

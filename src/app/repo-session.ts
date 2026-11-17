@@ -7,9 +7,9 @@
 import { type Accessor, batch, createEffect, createSignal, onCleanup, type Setter } from "solid-js";
 import { applyRepoSession, captureRepoSession } from "../app-repo-session";
 import type { RepoSessionSnapshot } from "../app-types";
-import { getKnownRepoInfos, mergeOptions, startViewFor } from "../config";
 import { RECENT_APPS } from "../constants";
 import type { AppActions, AppState } from "../context/state";
+import { mergeOptions, startViewFor } from "../core/settings/config";
 import { type CacheRepositorySummary, evictRepositoryCache } from "../providers/shared/cache-management";
 import { repositoryIdentity } from "../providers/shared/sha-sqlite-cache";
 import { nextGroupRepoPath } from "../utils/group-repos";
@@ -123,11 +123,11 @@ export function useRepoSession(opts: {
 
   return {
     /** Every repository the config knows. */
-    knownRepos: () => getKnownRepoInfos(),
+    knownRepos: () => settings.port.knownRepos(),
     switchTo,
     /** The previous or next app of the open one's group (`shift ←` / `shift →`). */
     switchInGroup: (direction: 1 | -1) => {
-      const nextPath = nextGroupRepoPath(getKnownRepoInfos(), opts.repoPath(), direction, settings.display());
+      const nextPath = nextGroupRepoPath(settings.port.knownRepos(), opts.repoPath(), direction, settings.display());
       if (nextPath) switchTo(nextPath);
     },
     selectorVisible,

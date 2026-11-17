@@ -3,22 +3,16 @@
  * name and group, and its theme. Read once at startup and again whenever another repository opens; a value the config
  * can't use goes to Debug. The Menu changes them through the setters.
  */
+
 import { type Accessor, createEffect, createSignal, type Setter, untrack } from "solid-js";
 import { githubSettings, jenkinsSettings, openShiftSettings, snykSettings } from "../app-provider-config";
 import type { AppContentProps } from "../app-types";
-import {
-  type CodepulseConfig,
-  defaultConfig,
-  getRepoDisplayConfig,
-  loadConfig,
-  reportConfigWarnings,
-  startViewFor,
-} from "../config";
-import { backfillRepoConfig } from "../config-write";
 import type { AppActions, AppState } from "../context/state";
 import type { createThemeState } from "../context/theme";
+import { dashboardSettings } from "../core/dashboard-settings";
 import type { ProviderView } from "../core/provider-model";
-import { dashboardSettings } from "../dashboard/settings";
+import { type CodepulseConfig, defaultConfig, reportConfigWarnings, startViewFor } from "../core/settings/config";
+import type { SettingsPort } from "../core/settings/port";
 import type { SnykProviderConfig } from "../providers/snyk/use-snyk";
 
 type ThemeState = ReturnType<typeof createThemeState>;
@@ -41,12 +35,14 @@ export interface RepoSettings {
   autoFastForward: Accessor<boolean>;
   setAutoFastForward: Setter<boolean>;
   /** The app's name and group, for the project row and switching within the group. */
-  display: Accessor<ReturnType<typeof getRepoDisplayConfig>>;
-  setDisplay: Setter<ReturnType<typeof getRepoDisplayConfig>>;
+  display: Accessor<Pick<CodepulseConfig, "group" | "appName">>;
+  setDisplay: Setter<Pick<CodepulseConfig, "group" | "appName">>;
   /** A repository's config; what it ignores goes to Debug. */
   read: (path: string) => CodepulseConfig;
   /** Reads the open repository's settings again (`:reload` and Menu → Reload). */
   reload: () => void;
+  /** Where the settings are kept. */
+  port: SettingsPort;
 }
 
 export function useRepoSettings(opts: {
@@ -58,10 +54,12 @@ export function useRepoSettings(opts: {
   themeState: ThemeState;
   state: AppState;
   actions: AppActions;
+  /** Where the settings are kept. */
+  port: SettingsPort;
 }): RepoSettings {
   const { state, actions, themeState } = opts;
   const read = (path: string) => {
-    const { config, warnings } = loadConfig(path);
+    const { config, warnings } = opts.port.load(path);
     reportConfigWarnings(warnings);
     return config;
   };
@@ -73,7 +71,7 @@ export function useRepoSettings(opts: {
   const [dashboard, setDashboard] = createSignal(dashboardSettings(startConfig.dashboard));
   const [startView, setStartView] = createSignal<ProviderView>(startConfig.startView ?? "git");
   const [autoFastForward, setAutoFastForward] = createSignal(startConfig.autoFastForward ?? false);
-  const [display, setDisplay] = createSignal(getRepoDisplayConfig(untrack(opts.repoPath)));
+  const [display, setDisplay] = createSignal(opts.port.display(untrack(opts.repoPath)));
   actions.setActiveProviderView(startViewFor(startConfig));
 
   // Menu → Providers → Dashboard → Enabled, per repository: off, it has no tab, and leaving it shows Git.
@@ -85,7 +83,7 @@ export function useRepoSettings(opts: {
 
   const reload = () => {
     const path = opts.repoPath();
-    backfillRepoConfig(path);
+    opts.port.backfill(path);
     const config = read(path);
     setGithub(githubSettings(config.providers?.github));
     setJenkins(jenkinsSettings(config.providers?.jenkins));
@@ -94,7 +92,7 @@ export function useRepoSettings(opts: {
     setDashboard(dashboardSettings(config.dashboard));
     setStartView(config.startView ?? "git");
     setAutoFastForward(config.autoFastForward ?? false);
-    setDisplay(getRepoDisplayConfig(path));
+    setDisplay(opts.port.display(path));
     // The theme is per repository; without this a switch keeps the previous repo's theme, and the next settings
     // change saves it into this one. An unknown theme falls back to the default, as at startup.
     const theme = config.theme ?? defaultConfig().theme;
@@ -125,5 +123,6 @@ export function useRepoSettings(opts: {
     setDisplay,
     read,
     reload,
+    port: opts.port,
   };
 }

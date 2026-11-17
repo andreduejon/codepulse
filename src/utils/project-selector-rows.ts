@@ -1,6 +1,6 @@
 import { homedir } from "node:os";
 import { basename } from "node:path";
-import type { KnownRepoInfo } from "../config";
+import type { KnownRepoInfo } from "../core/settings/config";
 
 export type ProjectSelectorRow =
   | { kind: "group"; label: string }

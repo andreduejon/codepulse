@@ -3,19 +3,14 @@ import { render } from "@opentui/solid";
 import App from "./app";
 import type { AppProps } from "./app-types";
 import { parseArgs } from "./cli/parse-args";
-import {
-  getKnownRepoInfos,
-  type KnownRepoInfo,
-  loadConfig,
-  mergeOptions,
-  reportConfigWarnings,
-  resolveConfigInfo,
-} from "./config";
 import { loadCustomThemes } from "./context/custom-themes";
 import { addDebugEvent, redactDebugValue } from "./core/debug-events";
+import { type KnownRepoInfo, mergeOptions, reportConfigWarnings } from "./core/settings/config";
+import type { SettingsPort } from "./core/settings/port";
 import { getRepoRoot, isGitAvailable, isGitRepo } from "./git/repo";
 import { cleanupInactiveProviderCaches } from "./providers/shared/cache-management";
 import { closeProviderCaches } from "./providers/shared/sha-sqlite-cache";
+import { fileSettings } from "./settings-file";
 
 /** Startup mode determines which screen the app shows first. */
 export type StartupMode =
@@ -28,7 +23,7 @@ export type StartupMode =
  * Everything before the first frame: arguments, config, themes and which screen to show. The demo's headless player
  * (`bun run demo --play`) starts the app through this too, so it boots the way the real app does.
  */
-export async function startupProps(argv: string[]): Promise<AppProps> {
+export async function startupProps(argv: string[], settings: SettingsPort = fileSettings()): Promise<AppProps> {
   const cli = parseArgs(argv);
   try {
     cleanupInactiveProviderCaches();
@@ -41,8 +36,8 @@ export async function startupProps(argv: string[]): Promise<AppProps> {
     repoPath: (await getRepoRoot(cli.repoPath)) ?? cli.repoPath,
   };
 
-  const configInfo = resolveConfigInfo(normalizedCli.repoPath);
-  const { config, warnings } = loadConfig(normalizedCli.repoPath);
+  const configInfo = settings.info(normalizedCli.repoPath);
+  const { config, warnings } = settings.load(normalizedCli.repoPath);
   reportConfigWarnings(warnings);
   const opts = mergeOptions(normalizedCli, config);
   const customThemes = loadCustomThemes();
@@ -58,7 +53,7 @@ export async function startupProps(argv: string[]): Promise<AppProps> {
       kind: "selector",
       message: "Hmm, that directory doesn't exist",
       messagePath: opts.repoPath,
-      knownRepos: getKnownRepoInfos(),
+      knownRepos: settings.knownRepos(),
     };
   } else if (!statSync(opts.repoPath).isDirectory()) {
     // Path is a file, not a directory — show project selector with message
@@ -66,7 +61,7 @@ export async function startupProps(argv: string[]): Promise<AppProps> {
       kind: "selector",
       message: "That path is a file, not a directory",
       messagePath: opts.repoPath,
-      knownRepos: getKnownRepoInfos(),
+      knownRepos: settings.knownRepos(),
     };
   } else if (!(await isGitRepo(opts.repoPath))) {
     // Not a git repo — show project selector with message
@@ -74,7 +69,7 @@ export async function startupProps(argv: string[]): Promise<AppProps> {
       kind: "selector",
       message: "Doesn't look like a git repo",
       messagePath: opts.repoPath,
-      knownRepos: getKnownRepoInfos(),
+      knownRepos: settings.knownRepos(),
     };
   } else if (!configInfo.hasRepoOverrides) {
     // Git repo but not yet known — show welcome screen
@@ -94,6 +89,7 @@ export async function startupProps(argv: string[]): Promise<AppProps> {
     autoRefreshInterval: opts.autoRefreshInterval,
     autoFetchInterval: opts.autoFetchInterval,
     configInfo,
+    settings,
     startupMode,
     initialGithubConfig: config.providers?.github,
     initialJenkinsConfig: config.providers?.jenkins,

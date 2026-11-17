@@ -1,11 +1,11 @@
 import { type Accessor, createEffect, createMemo, createSignal, onCleanup, untrack } from "solid-js";
 import { RECENT_APPS } from "../constants";
+import { type DashboardSettings, DEFAULT_DASHBOARD_SETTINGS } from "../core/dashboard-settings";
 import type { EventSource } from "../core/provider-model";
 import { onProviderCacheWrite } from "../providers/shared/sha-sqlite-cache";
 import { rememberRecent } from "../utils/recent";
 import { type DashboardEvent, type DashboardRow, dashboardRows } from "./events";
 import { type LoadOptions, loadAppEvents } from "./load";
-import { type DashboardSettings, DEFAULT_DASHBOARD_SETTINGS } from "./settings";
 
 export interface DashboardApp {
   path: string;
