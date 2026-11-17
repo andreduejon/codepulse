@@ -261,9 +261,6 @@ const openshift: ContractFixture = {
   name: "OpenShift",
   view: "openshift",
   tokenExpired: BANNER.openshift.tokenExpired,
-  knownGaps: {
-    backoff: "its build list never reports a result to the lifecycle, so failures don't back off (fix in v0.19 step 2)",
-  },
   mount(options) {
     const tokenEnv = "CODEPULSE_CONTRACT_OPENSHIFT_TOKEN";
     let repoPath = () => options.repo;

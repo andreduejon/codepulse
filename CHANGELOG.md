@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- OpenShift waits longer between automatic requests after failures, as GitHub and
+  Jenkins do. On the Dashboard, a cluster that fails is no longer asked again on
+  every visit.
+
 ## [0.18.0] - 2026-11-17
 
 ### Added

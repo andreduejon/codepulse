@@ -447,12 +447,15 @@ export function useOpenShift(opts: {
       });
       if (args.signal?.aborted || !lifecycle.isCurrent(args.epoch, repoPath)) return;
       if (result.error === BANNER.openshift.tokenExpired) {
+        lifecycle.noteFetchResult(false);
         freezeAuth();
         publish();
         actions.setProviderStatus("openshift", providerError(BANNER.openshift.tokenExpired));
         return;
       }
       if (result.successfulRequests === 0 && result.error) {
+        // Failures back off like GitHub's and Jenkins': quiet fetches (the Dashboard, auto refresh) wait.
+        lifecycle.noteFetchResult(false);
         publish();
         actions.setProviderStatus("openshift", providerError(result.error));
         return;
@@ -482,6 +485,8 @@ export function useOpenShift(opts: {
       if (live.listed) applyLive(live.listed);
       else publish();
       lifecycle.noteFetchStarted();
+      // Some namespaces answered: a warning, not a failure to back off from.
+      lifecycle.noteFetchResult(true);
       // A status the live list set (a live 401 that froze requests, a failed list) is the live list's to clear.
       const liveOwned = liveStatus !== null && state.providerStatusFor("openshift") === liveStatus;
       if (result.error) {
@@ -498,6 +503,7 @@ export function useOpenShift(opts: {
           ? BANNER.openshift.tokenExpired
           : BANNER.openshift.inventoryFailed;
       if (message === BANNER.openshift.tokenExpired) freezeAuth();
+      lifecycle.noteFetchResult(false);
       publish();
       actions.setProviderStatus("openshift", providerError(message));
     }
