@@ -3,9 +3,9 @@
 import { createEffect, createMemo, createSignal, onCleanup } from "solid-js";
 import type { LogViewState } from "../../components/dialogs/log-view";
 import { LogViewer, type LogViewerNavigation } from "../../components/dialogs/log-viewer";
+import { useSystem } from "../../context/system";
 import type { StatusCategory } from "../../core/status";
 import { BUSY } from "../../utils/busy-text";
-import { openUrl } from "../../utils/open-url";
 import { stripTerminalControls } from "../../utils/terminal-text";
 
 type LogLineKind = "group" | "error" | "warning" | "normal" | "muted";
@@ -147,6 +147,8 @@ export function parseLogLines(raw: string): LogLine[] {
 }
 
 export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
+  /** The browser and the environment, through the app's system port. */
+  const system = useSystem();
   const orderedJobs = createMemo(() => {
     const seen = new Set<string>();
     const result: JobLogEntry[] = [];
@@ -312,7 +314,7 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
   const cycleViewMode = () =>
     setViewMode(prev => VIEW_MODE_CYCLE[(VIEW_MODE_CYCLE.indexOf(prev) + 1) % VIEW_MODE_CYCLE.length]);
   const openRun = () => {
-    if (props.run.url) openUrl(props.run.url);
+    if (props.run.url) system.openUrl(props.run.url);
   };
 
   return (

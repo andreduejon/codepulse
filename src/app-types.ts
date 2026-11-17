@@ -7,6 +7,7 @@ import type { ProviderView } from "./core/provider-model";
 import type { ProviderCacheLimit } from "./core/provider-settings";
 import type { ConfigInfo } from "./core/settings/config";
 import type { SettingsPort } from "./core/settings/port";
+import type { SystemPort } from "./core/system";
 import type { StartupMode } from "./main";
 
 export interface AppProps {
@@ -27,6 +28,8 @@ export interface AppProps {
   cacheStore?: CacheStorePort;
   /** Each provider's API, cache and token. */
   providers?: ProviderAdapters;
+  /** The browser and the environment. */
+  system?: SystemPort;
   startupMode: StartupMode;
   initialGithubConfig?: {
     enabled?: boolean;

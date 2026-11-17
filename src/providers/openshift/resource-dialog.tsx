@@ -1,10 +1,10 @@
 import { createEffect, createMemo, createSignal, onCleanup, untrack } from "solid-js";
 import type { LogViewState } from "../../components/dialogs/log-view";
 import { LogViewer, type LogViewerLine } from "../../components/dialogs/log-viewer";
+import { useSystem } from "../../context/system";
 import type { OpenShiftEvent, OpenShiftResource } from "../../core/openshift/types";
 import { shouldFollowOpenShiftLog } from "../../core/openshift/watch";
 import { BUSY } from "../../utils/busy-text";
-import { openUrl } from "../../utils/open-url";
 import { stripTerminalControls } from "../../utils/terminal-text";
 import { openShiftConsoleUrl } from "./console";
 import {
@@ -34,6 +34,8 @@ function resourceHasLog(resource: OpenShiftResource): boolean {
 }
 
 export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourceDialogProps>) {
+  /** The browser and the environment, through the app's system port. */
+  const system = useSystem();
   const [viewMode, setViewMode] = createSignal<ViewMode>(resourceHasLog(props.resource) ? "log" : "json");
   const [logText, setLogText] = createSignal<string | null>(null);
   const [logError, setLogError] = createSignal<string | null>(null);
@@ -228,7 +230,7 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
 
   const consolePage = () =>
     openShiftConsoleUrl(props.consoleUrl ?? "", { namespace: props.resource.namespace, resource: props.resource });
-  const openConsole = () => openUrl(consolePage() ?? undefined);
+  const openConsole = () => system.openUrl(consolePage() ?? undefined);
 
   return (
     <LogViewer

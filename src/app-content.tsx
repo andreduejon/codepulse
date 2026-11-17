@@ -18,6 +18,7 @@ import { GitContext } from "./context/git";
 import { resolvePorts } from "./context/ports";
 import { SettingsContext } from "./context/settings";
 import { AppStateContext, createAppState } from "./context/state";
+import { SystemContext } from "./context/system";
 import { ThemeContext } from "./context/theme";
 import { runAppCommand } from "./core/commands";
 import { DEFAULT_MAX_COUNT } from "./core/settings/config";
@@ -187,6 +188,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     actions,
     repoPath: activeRepoPath,
     loadEvents: (path, options) => loadAppEvents(path, options, gitPort),
+    openUrl: ports.system.openUrl,
     onCacheWrite: cacheStore.onWrite,
     settings,
     providers,
@@ -329,31 +331,33 @@ export function AppContent(props: Readonly<AppContentProps>) {
   return (
     <SettingsContext.Provider value={settingsPort}>
       <GitContext.Provider value={gitPort}>
-        <CacheStoreContext.Provider value={cacheStore}>
-          <ThemeContext.Provider value={{ ...themeState, theme: providerTheme }}>
-            <AppStateContext.Provider value={{ state, actions }}>
-              <AppLayout
-                baseTheme={themeState.theme}
-                layoutMode={layoutMode}
-                repoPath={activeRepoPath}
-                configInfo={props.configInfo}
-                setup={{ visible: setupVisible, onComplete: handleSetupComplete }}
-                session={session}
-                cacheScreenVisible={cacheScreenVisible}
-                settings={settings}
-                providers={providers}
-                dialogs={dialogs}
-                messages={messages}
-                commandBar={commandBar}
-                graph={graph}
-                dashboard={dashboardController}
-                keys={{ onEnter: onFooterEnter, onEscape: onFooterEscape }}
-                run={{ reloadAll: handleReloadAll, fetchAll: handleFetchAll, pullAll: handlePullAll }}
-                detail={{ navRef: detailNavRef, providerProps: providerDetailProps }}
-              />
-            </AppStateContext.Provider>
-          </ThemeContext.Provider>
-        </CacheStoreContext.Provider>
+        <SystemContext.Provider value={ports.system}>
+          <CacheStoreContext.Provider value={cacheStore}>
+            <ThemeContext.Provider value={{ ...themeState, theme: providerTheme }}>
+              <AppStateContext.Provider value={{ state, actions }}>
+                <AppLayout
+                  baseTheme={themeState.theme}
+                  layoutMode={layoutMode}
+                  repoPath={activeRepoPath}
+                  configInfo={props.configInfo}
+                  setup={{ visible: setupVisible, onComplete: handleSetupComplete }}
+                  session={session}
+                  cacheScreenVisible={cacheScreenVisible}
+                  settings={settings}
+                  providers={providers}
+                  dialogs={dialogs}
+                  messages={messages}
+                  commandBar={commandBar}
+                  graph={graph}
+                  dashboard={dashboardController}
+                  keys={{ onEnter: onFooterEnter, onEscape: onFooterEscape }}
+                  run={{ reloadAll: handleReloadAll, fetchAll: handleFetchAll, pullAll: handlePullAll }}
+                  detail={{ navRef: detailNavRef, providerProps: providerDetailProps }}
+                />
+              </AppStateContext.Provider>
+            </ThemeContext.Provider>
+          </CacheStoreContext.Provider>
+        </SystemContext.Provider>
       </GitContext.Provider>
     </SettingsContext.Provider>
   );

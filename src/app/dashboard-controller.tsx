@@ -24,7 +24,6 @@ import { openGraphDetails } from "../hooks/handle-graph-keys";
 import { providerColors } from "../providers/colors";
 import { detailEntryFor } from "../providers/detail-entries";
 import { repoDisplayName } from "../utils/group-repos";
-import { openUrl } from "../utils/open-url";
 import type { DialogHost, LayoutMode } from "./dialogs";
 import type { ProviderHost } from "./providers";
 import type { RepoSettings } from "./repo-settings";
@@ -37,6 +36,8 @@ export function useDashboardController(opts: {
   loadEvents: (app: string, options: ReadOptions) => Promise<DashboardEvent[]>;
   /** Calls back after each provider write to the caches; returns the function that stops it. */
   onCacheWrite: (listener: (repoPath: string) => void) => () => void;
+  /** Opens an event's page in the browser. */
+  openUrl: (url: string | undefined) => void;
   settings: RepoSettings;
   providers: ProviderHost;
   dialogs: Pick<DialogHost, "dialog" | "setDialog">;
@@ -286,7 +287,7 @@ export function useDashboardController(opts: {
   };
   const openSelectedEvent = () => {
     const url = dashboard.selected()?.url;
-    if (url) openUrl(url);
+    if (url) opts.openUrl(url);
   };
   /** Keys in the compact details: Enter shows the event in the graph, ↑/↓ scroll, Esc (the cascade) closes. */
   /** The tab's row has its own page (a job, a resource): `o` opens it there rather than the event's. */

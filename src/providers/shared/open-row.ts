@@ -1,7 +1,7 @@
 import type { KeyEvent } from "@opentui/core";
 import { createEffect, onCleanup } from "solid-js";
 import type { DetailNavRef } from "../../components/detail-types";
-import { openUrl } from "../../utils/open-url";
+import { useSystem } from "../../context/system";
 
 export type RowShortcut = { key: string; desc: string };
 
@@ -23,13 +23,15 @@ export function useOpenRowShortcut(
     otherKeys?: (event: KeyEvent) => boolean;
   }>,
 ): void {
+  /** The browser, through the app's system port. */
+  const system = useSystem();
   const currentUrl = () => (opts.detailFocused() ? opts.url() || null : null);
   const handleKey = (event: KeyEvent) => {
     if (opts.otherKeys?.(event)) return true;
     if (event.name !== "o" || event.ctrl || event.meta || event.shift) return false;
     const url = currentUrl();
     if (!url) return false;
-    openUrl(url);
+    system.openUrl(url);
     return true;
   };
 

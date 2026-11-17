@@ -26,5 +26,6 @@ export function resolvePorts(given: Partial<AppPorts>): AppPorts {
     git: given.git ?? fallback().git,
     cacheStore: given.cacheStore ?? fallback().cacheStore,
     providers: given.providers ?? fallback().providers,
+    system: given.system ?? fallback().system,
   };
 }

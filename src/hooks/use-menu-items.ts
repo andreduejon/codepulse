@@ -3,13 +3,13 @@ import { createEffect, createMemo, createSignal } from "solid-js";
 import { AUTO_REFRESH_MS, INTERVAL_OPTIONS, MAX_COUNT_OPTIONS, MS_TO_LABEL } from "../constants";
 import { useSettings } from "../context/settings";
 import { useAppState } from "../context/state";
+import { useSystem } from "../context/system";
 import type { Theme } from "../context/theme";
 import { type DashboardSettings, DEFAULT_DASHBOARD_SETTINGS } from "../core/dashboard-settings";
 import { type ProviderDetailView, type ProviderView, providerDisplayName } from "../core/provider-model";
 import { DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS } from "../core/provider-settings";
 import type { CodepulseConfig, ConfigInfo } from "../core/settings/config";
 import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL } from "../core/settings/config";
-import { getTokenSource } from "../utils/token-env";
 import {
   COPYABLE_VISIBLE_WIDTH,
   type GitHubMenuConfig,
@@ -129,6 +129,8 @@ export interface MenuItemsResult {
  * come from menu-provider-items.ts.
  */
 export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
+  /** The browser and the environment, through the app's system port. */
+  const system = useSystem();
   /** Where the settings are kept: the menu reads and writes them there. */
   const savedSettings = useSettings();
   const { state, actions } = useAppState();
@@ -472,7 +474,7 @@ export function useMenuItems(opts: MenuItemsOptions): MenuItemsResult {
       cacheLimit: 20,
       autoRefreshSeconds: DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS,
     };
-    const tokenSource = getTokenSource(ghCfg.tokenEnvVar);
+    const tokenSource = system.tokenSource(ghCfg.tokenEnvVar);
     const jenkinsCfg = opts.jenkinsConfig?.() ?? {
       enabled: false,
       tokenEnvVar: "JENKINS_TOKEN",

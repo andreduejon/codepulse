@@ -12,6 +12,7 @@ import { openShiftAdapters } from "./providers/openshift/adapters";
 import { providerCacheStore } from "./providers/shared/cache-store";
 import { snykAdapters } from "./providers/snyk/adapters";
 import { fileSettings } from "./settings-file";
+import { terminalSystem } from "./utils/system-port";
 
 /** The providers' HTTP clients, caches, scanner and environment tokens. */
 export function terminalProviderAdapters(): ProviderAdapters {
@@ -25,6 +26,7 @@ export function terminalPorts(): AppPorts {
     git: gitCli(),
     cacheStore: providerCacheStore(),
     providers: terminalProviderAdapters(),
+    system: terminalSystem(),
   };
 }
 
@@ -35,5 +37,6 @@ export function portsFrom(given: Partial<AppPorts>): AppPorts {
     git: given.git ?? gitCli(),
     cacheStore: given.cacheStore ?? providerCacheStore(),
     providers: given.providers ?? terminalProviderAdapters(),
+    system: given.system ?? terminalSystem(),
   };
 }
