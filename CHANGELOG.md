@@ -8,35 +8,40 @@ All notable changes to this project will be documented in this file.
 
 - The Dashboard and the graph keep details of their own: coming back to one, its
   tab, cursor and focus are where you left them, whatever you did in the other.
-- Moving through the Dashboard redraws only the row the cursor leaves and the row
-  it reaches: with 1,000 events a key takes 4 ms instead of 38 ms.
-- GitHub, Jenkins and OpenShift save a fetch's runs and builds to the cache in one
-  go instead of commit by commit, which on Windows took seconds for a large fetch.
-  A refresh that brings nothing new writes nothing, so the Dashboard no longer
-  reads every cache again after it.
-- The last 10 apps you left keep their graph and Dashboard events, so coming back
-  shows them at once. Older ones are read again, so a long session through a large
-  group no longer keeps every app in memory.
+- Moving through the Dashboard redraws only the row the cursor leaves and the
+  row it reaches: with 1,000 events a key takes 4 ms instead of 38 ms.
+- GitHub, Jenkins and OpenShift save a fetch's runs and builds to the cache in
+  one go instead of commit by commit, which on Windows took seconds for a large
+  fetch. A refresh that brings nothing new writes nothing, so the Dashboard no
+  longer reads every cache again after it.
+- The last 10 apps you left keep their graph and Dashboard events, so coming
+  back shows them at once. Older ones are read again, so a long session through
+  a large group no longer keeps every app in memory.
+- The graph draws only the commits near the screen, however much history is
+  loaded. After five pages of older commits codepulse takes about 170 MB instead
+  of 590 MB, a page loads in a third of the time, and a key takes as long with
+  1,200 commits as with 200.
+- A CI log opens at once, however long it is: one of 20,000 lines takes 20 ms
+  instead of 650 ms, and codepulse takes about 110 MB with it open instead of
+  930 MB. With wrap on, a long log still takes as long as before.
 
 ### Fixed
 
 - In the compact layout, the graph's details no longer stay over the Dashboard.
   Back in the graph they open again as you left them, with the keyboard in them;
   before, they showed while the keys moved the graph behind them.
-- OpenShift waits longer between automatic requests after failures, as GitHub and
-  Jenkins do. On the Dashboard, a cluster that fails is no longer asked again on
-  every visit.
-- A request to GitHub, Jenkins or OpenShift whose server sends its headers and then
-  stalls times out, and a repository switch stops it. Before, it could wait
+- OpenShift waits longer between automatic requests after failures, as GitHub
+  and Jenkins do. On the Dashboard, a cluster that fails is no longer asked
+  again on every visit.
+- A request to GitHub, Jenkins or OpenShift whose server sends its headers and
+  then stalls times out, and a repository switch stops it. Before, it could wait
   forever once the headers had come. A long log that keeps coming is still read
   whole.
 - Closing a GitHub or Jenkins log stops its download. Before, a long log kept
   loading after it was closed.
-- Auto refresh shows a changed remote, a tag's new message and a stash replaced by
-  another, also when no commit or branch moved. A selected Uncommitted changes row
-  shows the files as they are now on each refresh.
-- The graph lets go of the rows it no longer shows: after many pages of history,
-  a shorter graph (a branch, another repository) frees their memory.
+- Auto refresh shows a changed remote, a tag's new message and a stash replaced
+  by another, also when no commit or branch moved. A selected Uncommitted
+  changes row shows the files as they are now on each refresh.
 
 ## [0.18.0] - 2026-11-17
 
