@@ -12,7 +12,7 @@ const descendants = (node: Renderable): Renderable[] =>
 
 async function renderLog(
   provider: "github-actions" | "jenkins",
-  long: boolean | "wrapped" = false,
+  long: boolean | "wrapped" | "huge" = false,
   initialSearch?: string,
 ) {
   const jobs = [
@@ -23,13 +23,18 @@ async function renderLog(
   let resolveLog!: (text: string) => void;
   const pending = new Promise<string>(resolve => (resolveLog = resolve));
   const raw =
-    long === "wrapped"
-      ? Array.from({ length: 40 }, (_, i) => `line-${i + 1} ${"word ".repeat(40)}END-${i + 1}`).join("\n")
-      : long
-        ? Array.from({ length: 200 }, (_, i) => `row-${String(i + 1).padStart(3, "0")}`).join("\n")
-        : [`normal ${"x".repeat(100)} WRAP-END`, "##[warning]warning-line", "##[error]error-line", "##[endgroup]"].join(
-            "\n",
-          );
+    long === "huge"
+      ? Array.from({ length: 5_000 }, (_, i) => `row-${i + 1}`).join("\n")
+      : long === "wrapped"
+        ? Array.from({ length: 40 }, (_, i) => `line-${i + 1} ${"word ".repeat(40)}END-${i + 1}`).join("\n")
+        : long
+          ? Array.from({ length: 200 }, (_, i) => `row-${String(i + 1).padStart(3, "0")}`).join("\n")
+          : [
+              `normal ${"x".repeat(100)} WRAP-END`,
+              "##[warning]warning-line",
+              "##[error]error-line",
+              "##[endgroup]",
+            ].join("\n");
   const fetchLog = mock(async (job: { id: string | number; name: string }) => {
     if (job.id === 1) return long ? raw : pending;
     if (job.id === 2) return "";
@@ -773,5 +778,26 @@ test("a note about what the log is shows in every view, so a filtered log still 
     }
   } finally {
     setup.renderer.destroy();
+  }
+});
+
+test("a long log mounts the lines near the screen, and G and a search far down show theirs", async () => {
+  const d = await renderLog("github-actions", "huge");
+  try {
+    await d.flush();
+    expect(d.frame()).toContain("row-1 ");
+    // Two texts per line: all 5,000 lines would be 10,000.
+    expect(descendants(d.renderer.root).filter(node => node instanceof TextRenderable).length).toBeLessThan(600);
+    await d.key("g", { shift: true });
+    await d.flush();
+    expect(d.frame()).toMatch(/5000 +row-5000/);
+    await d.key("g");
+    await d.key("/");
+    await d.mockInput.typeText("row-4000");
+    await d.key("RETURN");
+    await d.flush();
+    expect(d.frame()).toMatch(/4000 +row-4000/);
+  } finally {
+    await d.dispose();
   }
 });

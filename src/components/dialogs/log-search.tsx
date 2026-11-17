@@ -2,7 +2,7 @@ import type { KeyEvent, Renderable, ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, type JSX, on, onCleanup, Show, untrack } from "solid-js";
 import { useT } from "../../hooks/use-t";
-import { hasScrollLayout, scheduleScrollIntoView, scrollElementIntoView } from "../../utils/scroll";
+import { hasScrollLayout, scheduleScrollIntoView } from "../../utils/scroll";
 
 /**
  * Search inside a log or object viewer: `/` opens the search row, typing jumps to the first hit, Enter keeps the
@@ -31,8 +31,8 @@ export function linesDropped(before: readonly string[], after: readonly string[]
 
 export function useLogSearch(opts: {
   texts: () => readonly string[];
-  rowAt: (index: number) => Renderable | undefined;
-  scrollbox: () => ScrollBoxRenderable | undefined;
+  /** Scrolls a line into view; false when it can't yet (no layout), to try again after the next one. */
+  scrollToLine: (index: number) => boolean;
 }) {
   const [query, setQuery] = createSignal("");
   const [editing, setEditing] = createSignal(false);
@@ -50,11 +50,7 @@ export function useLogSearch(opts: {
   const scrollRef: { scrollTimer?: ReturnType<typeof setTimeout> } = {};
   const reveal = (index: number) => {
     setCurrent(index);
-    scheduleScrollIntoView(scrollRef, () => {
-      const scrollbox = opts.scrollbox();
-      const row = opts.rowAt(index);
-      return !!scrollbox && !!row && scrollElementIntoView(scrollbox, row, 1);
-    });
+    scheduleScrollIntoView(scrollRef, () => opts.scrollToLine(index));
   };
   const step = (direction: 1 | -1) => {
     const hits = matches();
@@ -174,9 +170,36 @@ export function highlightHits(text: string, term: string, colors: { fg: string; 
  * the width may only grow: a wider column wraps long lines taller, which can push the widest number out of view,
  * and shrinking again would flip between two widths.
  */
+/**
+ * The last line on the screen, found by the lines' places; null while a line has no layout yet. For lines of any
+ * height (wrapped): lines of one row each can count from the scroll position.
+ */
+export function lastVisibleRow(
+  scrollbox: ScrollBoxRenderable,
+  count: number,
+  rowAt: (index: number) => Renderable | undefined,
+): number | null {
+  const origin = scrollbox.content.screenY;
+  const bottom = scrollbox.scrollTop + scrollbox.viewport.height;
+  let low = 0;
+  let high = count - 1;
+  let lastVisible = 0;
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    const row = rowAt(mid);
+    if (!hasScrollLayout(row)) return null;
+    if ((row as Renderable).screenY - origin < bottom) {
+      lastVisible = mid;
+      low = mid + 1;
+    } else high = mid - 1;
+  }
+  return lastVisible;
+}
+
 export function useVisibleNumberWidth(opts: {
   scrollbox: () => ScrollBoxRenderable | undefined;
-  rowAt: (index: number) => Renderable | undefined;
+  /** The last line on the screen; null while the lines have no layout yet. */
+  lastVisible: (scrollbox: ScrollBoxRenderable, count: number) => number | null;
   lines: () => readonly unknown[];
   numberAt: (index: number) => number;
   layoutKey?: () => unknown;
@@ -197,26 +220,14 @@ export function useVisibleNumberWidth(opts: {
     const scrollbox = opts.scrollbox();
     const lines = untrack(opts.lines);
     if (!scrollbox || lines.length === 0) return;
-    const origin = scrollbox.content.screenY;
-    const bottom = scrollbox.scrollTop + scrollbox.viewport.height;
-    let low = 0;
-    let high = lines.length - 1;
-    let lastVisible = 0;
-    while (low <= high) {
-      const mid = (low + high) >> 1;
-      const row = opts.rowAt(mid);
-      if (!hasScrollLayout(row)) {
-        // New rows get their layout in this frame's paint: measure once more in the next frame.
-        if (last.retried !== lines) {
-          last.retried = lines;
-          renderer.requestRender();
-        }
-        return;
+    const lastVisible = opts.lastVisible(scrollbox, lines.length);
+    if (lastVisible === null) {
+      // New rows get their layout in this frame's paint: measure once more in the next frame.
+      if (last.retried !== lines) {
+        last.retried = lines;
+        renderer.requestRender();
       }
-      if ((row as Renderable).screenY - origin < bottom) {
-        lastVisible = mid;
-        low = mid + 1;
-      } else high = mid - 1;
+      return;
     }
     const width = digits(lastVisible);
     const layout = untrack(() => opts.layoutKey?.());

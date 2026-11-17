@@ -9,16 +9,19 @@
 
 import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
-import { createEffect, createMemo, createSignal, For, onMount, Show, untrack } from "solid-js";
+import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show, untrack } from "solid-js";
+import { useScrollWindow } from "../../hooks/use-scroll-window";
 import { useT } from "../../hooks/use-t";
 import { useModalKeys } from "../../keyboard/dispatcher";
 import { type StatusCategory, statusColor, statusIcon } from "../../providers/shared/status";
+import { scrollElementIntoView } from "../../utils/scroll";
 import { fitHints, KeyHint, KeyHintSeparator, type RankedHint } from "../key-hint";
 import { DialogFooter, DialogOverlay, DialogTitle, DialogTitleBar, getStandardDialogFrame } from "./dialog-chrome";
 import {
   highlightHits,
   LineNumber,
   LogSearchRow,
+  lastVisibleRow,
   useLogSearch,
   useSidewaysReveal,
   useVisibleNumberWidth,
@@ -85,18 +88,38 @@ export function LogViewer(props: Readonly<LogViewerProps>) {
   let scrollboxRef: ScrollBoxRenderable | undefined;
 
   const texts = () => props.lines().map(line => line.text);
-  const lineRefs: Renderable[] = [];
+  /** The mounted lines' elements by index, for wrapped lines (their height comes from their layout). */
+  const lineRefs: (Renderable | undefined)[] = [];
+  /**
+   * Unwrapped, every line is one row: only the lines near the screen are mounted, the others are empty space. Wrapped
+   * lines take the height their words need, so all of them are mounted.
+   */
+  const lineWindow = useScrollWindow({
+    heights: () => props.lines().map(() => 1),
+    screenHeight: () => dimensions().height,
+    windowed: () => !wrapEnabled(),
+  });
+  const shownLines = createMemo(() => {
+    const { start, end } = lineWindow.range();
+    return props.lines().slice(start, end);
+  });
   const numberWidth = useVisibleNumberWidth({
     scrollbox: () => scrollboxRef,
-    rowAt: index => lineRefs[index],
+    lastVisible: (scrollbox, count) =>
+      wrapEnabled()
+        ? lastVisibleRow(scrollbox, count, index => lineRefs[index])
+        : Math.max(0, Math.min(count - 1, scrollbox.scrollTop + scrollbox.viewport.height - 1)),
     lines: props.lines,
     numberAt: index => props.lines()[index]?.lineNo ?? 0,
     layoutKey: wrapEnabled,
   });
   const search = useLogSearch({
     texts,
-    rowAt: index => lineRefs[index],
-    scrollbox: () => scrollboxRef,
+    scrollToLine: index => {
+      if (!wrapEnabled()) return lineWindow.scrollIntoView(index);
+      const line = lineRefs[index];
+      return !!scrollboxRef && !!line && scrollElementIntoView(scrollboxRef, line, 1);
+    },
   });
   // Inner width: the dialog's frame (1) and padding (4) on both sides, then the line numbers and their gap.
   const reveal = useSidewaysReveal({
@@ -198,9 +221,17 @@ export function LogViewer(props: Readonly<LogViewerProps>) {
     const wrapMode = () => (wrapEnabled() ? "word" : "none");
     const text = (value: string) => highlightHits(reveal(value), search.term(), { fg: th.background, bg: th.accent });
     const isCurrentHit = () => search.current() === index();
+    let mounted: Renderable | undefined;
+    /** Where this line put its element: read no signal while it is cleaned up. */
+    let at = -1;
     const ref = (element: Renderable) => {
-      lineRefs[index()] = element;
+      mounted = element;
+      at = index();
+      lineRefs[at] = element;
     };
+    onCleanup(() => {
+      if (at >= 0 && lineRefs[at] === mounted) lineRefs[at] = undefined;
+    });
     const kind = line.kind ?? "normal";
     if (kind === "group") {
       return (
@@ -260,7 +291,10 @@ export function LogViewer(props: Readonly<LogViewerProps>) {
       >
         <DialogTitleBar title={titleElement()} onClose={props.onClose} />
         <scrollbox
-          ref={scrollboxRef}
+          ref={element => {
+            scrollboxRef = element;
+            lineWindow.attach(element);
+          }}
           flexGrow={1}
           flexShrink={1}
           minHeight={0}
@@ -274,7 +308,15 @@ export function LogViewer(props: Readonly<LogViewerProps>) {
           <box flexDirection="column" width="100%" paddingX={props.state()?.kind === "error" ? 0 : 4}>
             <Show
               when={props.state()}
-              fallback={<For each={props.lines()}>{(line, index) => renderLine(line, index)}</For>}
+              fallback={
+                <>
+                  <box height={lineWindow.before()} flexShrink={0} />
+                  <For each={shownLines()}>
+                    {(line, shownIndex) => renderLine(line, () => lineWindow.range().start + shownIndex())}
+                  </For>
+                  <box height={lineWindow.after()} flexShrink={0} />
+                </>
+              }
             >
               {state => <LogViewStatus state={state()} />}
             </Show>

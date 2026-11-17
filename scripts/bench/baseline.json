@@ -1,60 +1,60 @@
 {
   "machine": "darwin 27.0.0 arm64, Apple M4 Max × 16, Bun 1.4.4",
   "date": "2026-11-17",
-  "commit": "6cd1bca",
+  "commit": "e9da745",
   "measurements": [
     {
       "scenario": "functions",
       "name": "git log, 200 commits",
-      "value": 58.7,
+      "value": 65,
       "unit": "ms"
     },
     {
       "scenario": "functions",
       "name": "graph build, 200 commits",
-      "value": 0.5,
+      "value": 0.4,
       "unit": "ms"
     },
     {
       "scenario": "functions",
       "name": "git log, 2000 commits",
-      "value": 73,
+      "value": 68.8,
       "unit": "ms"
     },
     {
       "scenario": "functions",
       "name": "graph build, 2000 commits",
-      "value": 7,
+      "value": 6.7,
       "unit": "ms"
     },
     {
       "scenario": "functions",
       "name": "git log, 20000 commits",
-      "value": 120,
+      "value": 110.2,
       "unit": "ms"
     },
     {
       "scenario": "functions",
       "name": "graph build, 20000 commits",
-      "value": 91.8,
+      "value": 90.8,
       "unit": "ms"
     },
     {
       "scenario": "functions",
       "name": "refresh Git reads, 200 commits loaded",
-      "value": 70.9,
+      "value": 69.7,
       "unit": "ms"
     },
     {
       "scenario": "functions",
       "name": "refresh Git reads, 2000 commits loaded",
-      "value": 75.9,
+      "value": 72.8,
       "unit": "ms"
     },
     {
       "scenario": "functions",
       "name": "Dashboard read, 7 days",
-      "value": 22.2,
+      "value": 23.4,
       "unit": "ms"
     },
     {
@@ -76,99 +76,105 @@
       "unit": "ms"
     },
     {
+      "scenario": "functions",
+      "name": "SQLite save of a fetch, 200 commits at once",
+      "value": 1.9,
+      "unit": "ms"
+    },
+    {
       "scenario": "graph",
       "name": "graph mount, 200 rows",
-      "value": 61.5,
+      "value": 26.9,
       "unit": "ms"
     },
     {
       "scenario": "graph",
       "name": "graph mount, 200 rows: JavaScript heap per 1,000 rows",
-      "value": 84.3,
+      "value": 28.3,
       "unit": "MB"
     },
     {
       "scenario": "graph",
       "name": "graph mount, 1000 rows",
-      "value": 192,
+      "value": 13.2,
       "unit": "ms"
     },
     {
       "scenario": "graph",
       "name": "graph mount, 1000 rows: JavaScript heap per 1,000 rows",
-      "value": 68.8,
+      "value": 4.7,
       "unit": "MB"
     },
     {
       "scenario": "graph",
       "name": "graph mount, 2000 rows",
-      "value": 405.8,
+      "value": 10.8,
       "unit": "ms"
     },
     {
       "scenario": "graph",
       "name": "graph mount, 2000 rows: JavaScript heap per 1,000 rows",
-      "value": 63,
+      "value": 3.2,
       "unit": "MB"
     },
     {
       "scenario": "graph",
       "name": "graph refresh with one new commit, 1,000 rows",
-      "value": 181.1,
+      "value": 10.1,
       "unit": "ms"
     },
     {
       "scenario": "graph",
       "name": "graph cursor move, 1,000 rows",
-      "value": 3.5,
+      "value": 0.3,
       "unit": "ms"
     },
     {
       "scenario": "graph",
       "name": "graph, 20 refreshes: JavaScript heap retained",
-      "value": 0.4,
+      "value": 0.3,
       "unit": "MB"
     },
     {
       "scenario": "graph",
       "name": "graph, baseline before rows: JavaScript heap",
-      "value": 25.9,
+      "value": 25.6,
       "unit": "MB"
     },
     {
       "scenario": "app",
       "name": "app startup until the graph shows",
-      "value": 150.8,
+      "value": 118.7,
       "unit": "ms"
     },
     {
       "scenario": "app",
       "name": "app after startup (200 rows): process memory",
-      "value": 191.9,
+      "value": 133.8,
       "unit": "MB"
     },
     {
       "scenario": "app",
       "name": "app after startup (200 rows): JavaScript heap",
-      "value": 48.1,
+      "value": 36.3,
       "unit": "MB"
     },
     {
       "scenario": "app",
       "name": "app key j, graph",
-      "value": 0.7,
+      "value": 0.3,
       "unit": "ms"
     },
     {
       "scenario": "app",
       "name": "app key k, graph",
-      "value": 0.5,
+      "value": 0.2,
       "unit": "ms"
     },
     {
       "scenario": "app",
       "name": "app page of 200 older commits",
-      "value": 267.4,
+      "value": 86.6,
       "unit": "ms"
     },
     {
@@ -180,25 +186,25 @@
     {
       "scenario": "app",
       "name": "app after 5 pages: process memory",
-      "value": 587.3,
+      "value": 162.6,
       "unit": "MB"
     },
     {
       "scenario": "app",
       "name": "app after 5 pages: JavaScript heap",
-      "value": 121.1,
+      "value": 39.8,
       "unit": "MB"
     },
     {
       "scenario": "app",
       "name": "app key k, 1,200 rows",
-      "value": 4.4,
+      "value": 0.3,
       "unit": "ms"
     },
     {
       "scenario": "dashboard",
       "name": "Dashboard open until its events show",
-      "value": 179.5,
+      "value": 164.4,
       "unit": "ms"
     },
     {
@@ -210,85 +216,85 @@
     {
       "scenario": "dashboard",
       "name": "Dashboard open: process memory",
-      "value": 311.3,
+      "value": 246.8,
       "unit": "MB"
     },
     {
       "scenario": "dashboard",
       "name": "Dashboard open: JavaScript heap",
-      "value": 100,
+      "value": 90.3,
       "unit": "MB"
     },
     {
       "scenario": "dashboard",
       "name": "Dashboard open: JavaScript heap added",
-      "value": 52.4,
+      "value": 53.9,
       "unit": "MB"
     },
     {
       "scenario": "dashboard",
       "name": "app key j, Dashboard",
-      "value": 38,
+      "value": 3.9,
       "unit": "ms"
     },
     {
       "scenario": "switching",
       "name": "app switch to another app of the group",
-      "value": 64.5,
+      "value": 32.4,
       "unit": "ms"
     },
     {
       "scenario": "switching",
       "name": "after 12 switches between 3 apps: process memory",
-      "value": 236,
+      "value": 205.2,
       "unit": "MB"
     },
     {
       "scenario": "switching",
       "name": "after 12 switches between 3 apps: JavaScript heap",
-      "value": 52.8,
+      "value": 47,
       "unit": "MB"
     },
     {
       "scenario": "switching",
       "name": "switches 5 to 12: JavaScript heap added",
-      "value": 0.6,
+      "value": 1.3,
       "unit": "MB"
     },
     {
       "scenario": "log",
       "name": "log of 20,000 lines: open until it shows",
-      "value": 646,
+      "value": 18.5,
       "unit": "ms"
     },
     {
       "scenario": "log",
       "name": "log of 20,000 lines open: process memory",
-      "value": 931.7,
+      "value": 116.3,
       "unit": "MB"
     },
     {
       "scenario": "log",
       "name": "log of 20,000 lines open: JavaScript heap",
-      "value": 326.8,
+      "value": 29.7,
       "unit": "MB"
     },
     {
       "scenario": "log",
       "name": "log of 20,000 lines open: JavaScript heap added",
-      "value": 303.5,
+      "value": 6.2,
       "unit": "MB"
     },
     {
       "scenario": "log",
       "name": "log of 20,000 lines: key G",
-      "value": 58,
+      "value": 8.2,
       "unit": "ms"
     },
     {
       "scenario": "log",
       "name": "log, 10 more opens and closes: JavaScript heap retained",
-      "value": 1.8,
+      "value": 2,
       "unit": "MB"
     }
   ]
