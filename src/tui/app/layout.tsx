@@ -22,7 +22,7 @@ import { MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH } from "../constants";
 import { useAppState } from "../context/state";
 import type { Theme } from "../context/theme";
 import { openGraphDetails } from "../hooks/handle-graph-keys";
-import type { useCommandBar } from "./commands";
+import type { useCommandBar } from "./command-bar";
 import type { useDashboardController } from "./dashboard-controller";
 import { DialogLayer } from "./dialog-layer";
 import type { DialogHost, LayoutMode } from "./dialogs";

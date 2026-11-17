@@ -18,7 +18,7 @@ flowchart LR
   end
   subgraph Core["src/core"]
     Services["services: Git data, details, path mode, Dashboard, GitHub, Jenkins, OpenShift, Snyk"]
-    Commands["commands: `:` commands, graph navigation"]
+    Commands["commands: graph navigation, highlights"]
     Model["model: Git, graph, provider runs and badges, settings, Dashboard events, app state's rules"]
     Ports["ports: AppPorts (Git, settings, cache store, system, Dashboard, providers' API, cache and token)"]
   end
@@ -109,9 +109,10 @@ of the app's one way to them.
 The app's state is Solid signals in `tui/context/state.ts`: the repository, the graph, the cursor, the providers'
 status and badges, and one detail slot each for the graph and the Dashboard. Its shape and rules are a port in core
 (`core/app-state.ts`): which highlight wins, which commits a search matches, how far a cursor moves. What the app does
-is core commands over that port: the `:` commands (`core/commands.ts`) and moving through the graph
-(`core/navigation.ts`). The key handlers in `tui/hooks` map keys to them and keep focus, dialogs and the command bar,
-which are the terminal's.
+is core commands over that port: moving through the graph (`core/navigation.ts`) and turning highlights on and off
+(`core/highlights.ts`). Core knows no terminal words. Focus, dialogs, the command bar and its `:` commands
+(`tui/app/app-commands.ts`), and which step Esc takes back (`tui/keyboard/cascade.ts`) are the terminal's: its keys and
+commands call the core commands and the services.
 
 The app's root (`tui/app/app-content.tsx`) builds the state and the controllers and provides the contexts;
 `tui/app/layout.tsx` draws the screens from them.

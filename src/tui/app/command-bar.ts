@@ -5,11 +5,11 @@
  */
 
 import { type Accessor, batch, createSignal } from "solid-js";
-import type { CommandBarMode } from "../../core/app-state";
 import type { GitPort } from "../../core/git/port";
 import { computeDisplacedIndex } from "../../core/navigation";
 import type { AppActions, AppState } from "../context/state";
 import { usePathFilter } from "../hooks/use-path-filter";
+import type { CommandBarMode } from "./ui-state";
 
 export type GraphMode = "normal" | "search" | "path" | "ancestry";
 

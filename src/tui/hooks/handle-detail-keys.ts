@@ -8,7 +8,7 @@
  */
 import type { KeyEvent, ScrollBoxRenderable } from "@opentui/core";
 import { batch } from "solid-js";
-import type { DialogId } from "../../core/app-state";
+import type { DialogId } from "../app/ui-state";
 import type { DetailNavRef } from "../components/detail-types";
 import { SHIFT_JUMP } from "../constants";
 import type { AppActions, AppState, DetailTab } from "../context/state";

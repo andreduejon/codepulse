@@ -4,12 +4,12 @@
  * them returns to them, and resizing across the side panel's width moves the details between dialog and panel.
  */
 import { type Accessor, createEffect, createSignal, on, untrack } from "solid-js";
-import type { DialogId } from "../../core/app-state";
 import type { DiffTarget } from "../../core/git/types";
-import { DETAIL_CHILD_DIALOGS } from "../../core/navigation";
 import type { OpenShiftResource } from "../../core/openshift/types";
 import type { AppState } from "../context/state";
+import { DETAIL_CHILD_DIALOGS } from "../keyboard/cascade";
 import type { JobLogTarget } from "../providers/shared/job-log-dialog";
+import type { DialogId } from "./ui-state";
 
 export type LayoutMode = "too-small" | "compact" | "normal";
 

@@ -1,4 +1,4 @@
-import type { DialogId } from "../../core/app-state";
+import type { DialogId } from "../app/ui-state";
 
 /**
  * Whether the app's own keys drive what shows: no dialog, or the compact details (the graph's or the dashboard's),

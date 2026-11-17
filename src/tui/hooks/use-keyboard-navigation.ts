@@ -1,6 +1,6 @@
 import { KeyEvent, parseKeypress, type ScrollBoxRenderable } from "@opentui/core";
 import type { Accessor } from "solid-js";
-import type { CommandBarMode, DialogId } from "../../core/app-state";
+import type { CommandBarMode, DialogId } from "../app/ui-state";
 import type { DetailNavRef } from "../components/detail-types";
 import type { AppActions, AppState } from "../context/state";
 import { useKeys } from "../keyboard/dispatcher";

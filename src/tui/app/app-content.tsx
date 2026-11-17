@@ -1,6 +1,5 @@
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
-import { runAppCommand } from "../../core/commands";
 import { DEFAULT_MAX_COUNT } from "../../core/settings/config";
 import { createDetailMemory } from "../components/detail-memory";
 import type { DetailNavRef } from "../components/detail-types";
@@ -15,8 +14,9 @@ import { ThemeContext } from "../context/theme";
 import { useAncestry } from "../hooks/use-ancestry";
 import { useKeyboardNavigation } from "../hooks/use-keyboard-navigation";
 import { providerAccent } from "../providers/colors";
+import { runAppCommand } from "./app-commands";
 import type { AppContentProps } from "./app-types";
-import { useCommandBar } from "./commands";
+import { useCommandBar } from "./command-bar";
 import { useDashboardController } from "./dashboard-controller";
 import { useDialogHost } from "./dialogs";
 import { useGraphController } from "./graph-controller";

@@ -8,9 +8,9 @@
  * Returns true if something was closed, false if there was nothing left.
  */
 
-import type { CommandBarMode, DialogId } from "../../core/app-state";
-import { computeCascadeTarget } from "../../core/navigation";
+import type { CommandBarMode, DialogId } from "../app/ui-state";
 import type { AppActions, AppState } from "../context/state";
+import { computeCascadeTarget } from "../keyboard/cascade";
 
 export interface CascadeCloseOptions {
   state: AppState;

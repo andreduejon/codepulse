@@ -1,9 +1,9 @@
 import { type BoxRenderable, MouseButton } from "@opentui/core";
 import { createMemo, createSignal, For, Show } from "solid-js";
-import type { CommandBarMode } from "../../core/app-state";
 import { isUncommittedHash } from "../../core/git/types";
 import { type EventSource, type ProviderView, providerDisplayName } from "../../core/provider-model";
 import type { KnownRepoInfo } from "../../core/settings/config";
+import type { CommandBarMode } from "../app/ui-state";
 import { useAppState } from "../context/state";
 import type { DashboardState } from "../dashboard/use-dashboard";
 import { useT } from "../hooks/use-t";

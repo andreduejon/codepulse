@@ -4,6 +4,7 @@
  * another front end can keep it in any store with the same shape. The rules that don't depend on where the state is
  * kept (which highlight wins, which commits a search matches, how far the cursor may move) are functions here.
  */
+
 import type { Branch, Commit, CommitDetail, GraphRow, TagInfo, UncommittedDetail } from "./git/types";
 import type { GraphBadge, ProviderRegistry, ProviderView } from "./provider-model";
 import type { ProviderStatus } from "./provider-status";
@@ -227,19 +228,3 @@ export function sameSet<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): boolean {
 export function clampCursor(cursor: number, delta: number, count: number): number {
   return Math.max(0, Math.min(count - 1, cursor + delta));
 }
-
-export type DialogId =
-  | "menu"
-  | "help"
-  | "theme"
-  | "diff-blame"
-  | "detail"
-  /** The selected dashboard event's details, in the compact layout. */
-  | "dashboard-event"
-  | "job-log"
-  | "openshift-resource"
-  | "debug"
-  | null;
-
-/** Command bar mode — drives placeholder text and key routing. */
-export type CommandBarMode = "idle" | "command" | "search" | "path";

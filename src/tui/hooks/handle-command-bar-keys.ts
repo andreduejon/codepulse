@@ -9,7 +9,7 @@
  * Returns true when the key was consumed and the caller should stop processing.
  */
 import type { KeyEvent } from "@opentui/core";
-import type { CommandBarMode } from "../../core/app-state";
+import type { CommandBarMode } from "../app/ui-state";
 import type { AppActions, AppState } from "../context/state";
 
 export interface CommandBarKeyOptions {

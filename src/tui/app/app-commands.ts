@@ -1,6 +1,8 @@
-import type { AppActions, AppState, CommandBarMode, DialogId } from "./app-state";
-import { clearDebugEvents } from "./debug-events";
-import type { EventSource } from "./provider-model";
+import type { AppActions, AppState } from "../../core/app-state";
+import { clearDebugEvents } from "../../core/debug-events";
+import { toggleAncestry } from "../../core/highlights";
+import type { EventSource } from "../../core/provider-model";
+import type { CommandBarMode, DialogId } from "./ui-state";
 
 /** What `:` commands can reach in the app. */
 export interface AppCommandContext {
@@ -132,24 +134,9 @@ export function runAppCommand(cmd: string, ctx: AppCommandContext): void {
       }
       break;
     case "a":
-    case "ancestry": {
-      // Toggle ancestry mode — highlights the first-parent chain through the
-      // selected commit (both backward ancestors and forward descendants).
-      if (ctx.state.ancestrySet() !== null) {
-        // Already active — toggle off
-        ctx.clearAnchor();
-        break;
-      }
-      // Mutually exclusive with search and path
-      ctx.actions.setSearchQuery("");
-      ctx.actions.setPathFilter(null);
-      ctx.actions.setPathMatchSet(null);
-      const anchor = ctx.state.selectedCommit()?.hash ?? null;
-      if (anchor) {
-        ctx.setAnchor(anchor);
-      }
+    case "ancestry":
+      toggleAncestry(ctx);
       break;
-    }
     default:
       // Unknown command — ignore silently
       break;

@@ -1,14 +1,8 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import type { GraphRow } from "../src/core/git/types";
-import {
-  type CascadeState,
-  type CascadeTarget,
-  computeCascadeTarget,
-  computeDisplacedIndex,
-  countHighlightedBelow,
-  findHighlightedIndex,
-} from "../src/core/navigation";
+import { computeDisplacedIndex, countHighlightedBelow, findHighlightedIndex } from "../src/core/navigation";
 import { NAV_REPEAT_MIN_MS } from "../src/tui/constants";
+import { type CascadeState, type CascadeTarget, computeCascadeTarget } from "../src/tui/keyboard/cascade";
 import { allowRepeatNav, resetRepeatNav } from "../src/tui/keyboard/repeat";
 import { makeCommit } from "./test-helpers";
 

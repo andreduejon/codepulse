@@ -13,8 +13,8 @@
  */
 
 import type { KeyEvent, ScrollBoxRenderable } from "@opentui/core";
-import type { CommandBarMode, DialogId } from "../../core/app-state";
 import { createGraphNavigation } from "../../core/navigation";
+import type { CommandBarMode, DialogId } from "../app/ui-state";
 import type { DetailNavRef } from "../components/detail-types";
 import { SHIFT_JUMP } from "../constants";
 import type { AppActions, AppState } from "../context/state";

@@ -4,8 +4,9 @@
  * These functions are framework-agnostic and unit-testable without SolidJS
  * or opentui dependencies.
  */
-import type { CommandBarMode } from "../../core/app-state";
+
 import { isUncommittedHash } from "../../core/git/types";
+import type { CommandBarMode } from "../app/ui-state";
 
 export function filterBadgeLabel(label: string, term: string | null): string {
   return ` ${label}${term ? ` · ${term.length > 10 ? `${term.slice(0, 9)}…` : term}` : ""} `;
