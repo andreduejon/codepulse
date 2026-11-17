@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { isTabNoticeStatus, tabNoticeFor } from "../src/app-tab-notice";
-import type { ProviderStatus } from "../src/context/state";
 import { BANNER } from "../src/core/banner";
 import type { ProviderView } from "../src/core/provider-model";
 import type { SnykScanResult } from "../src/core/snyk/types";
+import { isTabNoticeStatus, tabNoticeFor } from "../src/tui/app/app-tab-notice";
+import type { ProviderStatus } from "../src/tui/context/state";
 
 const scan: SnykScanResult = {
   sha: "a".repeat(40),

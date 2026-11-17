@@ -1,4 +1,16 @@
 import { afterEach, describe, expect, it, mock } from "bun:test";
+import {
+  fetchCIDataForSHAs,
+  fetchJobAnnotations,
+  fetchJobLog,
+  fetchRunJobs,
+  getGitHubToken,
+  isGitHubJobsFieldSchemaError,
+  MAX_CHECK_SUITE_PAGES,
+  MAX_JOB_PAGES,
+  nextGithubLink,
+} from "../src/adapters/github/api";
+import { getTokenSource } from "../src/adapters/system/token-env";
 import { BANNER } from "../src/core/banner";
 import { clearDebugEvents, getDebugEvents } from "../src/core/debug-events";
 import {
@@ -10,18 +22,6 @@ import {
 } from "../src/core/github/commit-data";
 import { isTrustedGitHubHost, normalizeGitHubHost, parseGitHubRemote } from "../src/core/github/host";
 import type { GitHubApiJob } from "../src/core/github/types";
-import {
-  fetchCIDataForSHAs,
-  fetchJobAnnotations,
-  fetchJobLog,
-  fetchRunJobs,
-  getGitHubToken,
-  isGitHubJobsFieldSchemaError,
-  MAX_CHECK_SUITE_PAGES,
-  MAX_JOB_PAGES,
-  nextGithubLink,
-} from "../src/providers/github-actions/api";
-import { getTokenSource } from "../src/utils/token-env";
 
 // ── parseGitHubRemote ─────────────────────────────────────────────────────
 

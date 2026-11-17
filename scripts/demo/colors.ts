@@ -6,7 +6,7 @@
  * color can be several keys, joined by `|` (the first three, then `+N`); a color no key has is its hex.
  */
 import type { CapturedFrame, RGBA } from "@opentui/core";
-import type { Theme } from "../../src/context/theme";
+import type { Theme } from "../../src/tui/context/theme";
 
 const hex = (color: RGBA) =>
   `#${color

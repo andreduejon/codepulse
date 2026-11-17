@@ -1,25 +1,19 @@
 import { existsSync, statSync } from "node:fs";
 import { render } from "@opentui/solid";
-import App from "./app";
-import type { AppProps } from "./app-types";
+import { cleanupInactiveProviderCaches } from "./adapters/cache/cache-management";
+import { closeProviderCaches } from "./adapters/cache/sha-sqlite-cache";
+import { readCustomThemesFile } from "./adapters/settings/theme-file";
 import { parseArgs } from "./cli/parse-args";
-import { parseCustomThemes } from "./context/custom-themes";
-import { setDefaultPorts } from "./context/ports";
 import type { AppPorts } from "./core/app-ports";
 import { addDebugEvent, redactDebugValue } from "./core/debug-events";
-import { type KnownRepoInfo, mergeOptions, reportConfigWarnings } from "./core/settings/config";
+import { mergeOptions, reportConfigWarnings } from "./core/settings/config";
 import { portsFrom } from "./ports";
-import { cleanupInactiveProviderCaches } from "./providers/shared/cache-management";
-import { closeProviderCaches } from "./providers/shared/sha-sqlite-cache";
-import { readCustomThemesFile } from "./theme-file";
+import App from "./tui/app/app";
+import type { AppProps, StartupMode } from "./tui/app/app-types";
+import { parseCustomThemes } from "./tui/context/custom-themes";
+import { setDefaultPorts } from "./tui/context/ports";
 
 /** Startup mode determines which screen the app shows first. */
-export type StartupMode =
-  | { kind: "graph" }
-  | { kind: "setup" }
-  | { kind: "selector"; message?: string; messagePath?: string; knownRepos: KnownRepoInfo[] }
-  | { kind: "error"; message: string };
-
 /**
  * Everything before the first frame: arguments, config, themes and which screen to show. The demo's headless player
  * (`bun run demo --play`) starts the app through this too, so it boots the way the real app does.
@@ -27,7 +21,7 @@ export type StartupMode =
 export async function startupProps(argv: string[], ports: Partial<AppPorts> = {}): Promise<AppProps> {
   const all = portsFrom(ports);
   setDefaultPorts(all);
-  const { settings, git, cacheStore, providers } = all;
+  const { settings, git, cacheStore, providers, system, dashboard } = all;
   const cli = parseArgs(argv);
   try {
     cleanupInactiveProviderCaches();
@@ -97,6 +91,8 @@ export async function startupProps(argv: string[], ports: Partial<AppPorts> = {}
     git,
     cacheStore,
     providers,
+    system,
+    dashboard,
     startupMode,
     initialGithubConfig: config.providers?.github,
     initialJenkinsConfig: config.providers?.jenkins,

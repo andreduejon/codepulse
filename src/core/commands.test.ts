@@ -1,5 +1,5 @@
 import { afterEach, expect, mock, test } from "bun:test";
-import { createAppState } from "../context/state";
+import { createAppState } from "../tui/context/state";
 import type { DialogId } from "./app-state";
 import { type AppCommandContext, runAppCommand } from "./commands";
 import { addDebugEvent, clearDebugEvents, getDebugEvents } from "./debug-events";

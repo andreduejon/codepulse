@@ -1,9 +1,9 @@
 import { expect, spyOn, test } from "bun:test";
 import { join } from "node:path";
-import * as config from "./config";
+import * as cacheManagement from "./adapters/cache/cache-management";
+import * as config from "./adapters/settings/config";
+import * as themeFile from "./adapters/settings/theme-file";
 import { startupProps } from "./main";
-import * as cacheManagement from "./providers/shared/cache-management";
-import * as themeFile from "./theme-file";
 
 test("`codepulse xyz` without a folder xyz opens the project selector saying so, instead of a fatal error", async () => {
   const missing = join(import.meta.dir, "no-such-folder-for-codepulse");

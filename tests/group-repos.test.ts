@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { groupMembersForRepo, nextGroupRepoPath, repoDisplayName } from "../src/utils/group-repos";
+import { groupMembersForRepo, nextGroupRepoPath, repoDisplayName } from "../src/tui/utils/group-repos";
 
 describe("group repos", () => {
   const repos = [

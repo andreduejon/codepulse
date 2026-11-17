@@ -77,6 +77,11 @@ export interface ReadOptions {
   signal?: AbortSignal;
 }
 
+/** Reads an app's Dashboard events; the terminal app's reads Git and the provider caches. */
+export interface DashboardReader {
+  readEvents: (app: string, options: ReadOptions) => Promise<DashboardEvent[]>;
+}
+
 /** An event's commit hash as the side panel may ask Git about it: hex only, so it is never read as an option. */
 export const isCommitHash = (sha: string): boolean => /^[0-9a-f]{7,40}$/i.test(sha);
 

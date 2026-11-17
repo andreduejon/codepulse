@@ -56,21 +56,24 @@
 
 ## Layers
 
-`src/core` is plain TypeScript: no Solid, no OpenTUI, no Bun or Node runtime APIs (the linter refuses them there).
-What it needs from outside (the app's state, the time, timers, requests) comes in as parameters, so it runs in a plain
-test. Solid code adapts it: `core/fetch-lifecycle.ts` is the fetch lifecycle, `providers/shared/use-provider-fetch-
-lifecycle.ts` its adapter; `core/github/service.ts` is GitHub's provider logic, `providers/github-actions/use-github-
-ci.ts` its adapter. New logic that doesn't draw goes in `src/core`.
+`src` has four layers, one folder each ([docs/architecture.md](docs/architecture.md) has the details):
 
-Core imports nothing outside `src/core` (`core/boundary.test.ts` checks it, the linter names the app's layers): the app
-depends on core. A provider's model (types, merges, badges, commit data) is in
-`src/core/<provider>`, its ports in its service; the HTTP client, cache and scanner in `src/providers` implement them.
-The UI reaches Git, the network, the caches and the settings file only through ports (the linter refuses the
-adapters there); [docs/architecture.md](docs/architecture.md) lists the layers, ports and services.
+| Folder | What | May import |
+|--------|------|------------|
+| `src/core` | the app's logic and its ports: plain TypeScript, no Solid, OpenTUI, Bun or Node runtime APIs | core |
+| `src/adapters` | what implements the ports: Git, HTTP, the SQLite cache, the settings file, the system | core, adapters |
+| `src/tui` | the terminal front end: Solid and OpenTUI | core, tui |
+| root: `src/*.ts`, `src/cli` | `main.tsx`, `ports.ts`: builds the adapters and hands them to the front end | everything |
+
+`src/layers.test.ts` checks every import against this table, and the linter refuses the same by folder name. What core
+needs from outside (Git, requests, the app's state, the time) comes in through its ports, so it runs in a plain test;
+a Solid hook in `src/tui` adapts a core service (`core/git/data-service.ts` and `tui/hooks/use-data-loader.ts`). New
+logic that doesn't draw goes in `src/core`; a new way to reach the outside is a port in core and an adapter in
+`src/adapters`, built in `src/ports.ts`.
 
 ## Keys
 
-Every key handler goes through `src/keyboard/dispatcher.ts`, never OpenTUI's `useKeyboard` (the linter refuses it in
+Every key handler goes through `src/tui/keyboard/dispatcher.ts`, never OpenTUI's `useKeyboard` (the linter refuses it in
 `src`). The newest handler sees a key first. A dialog or a screen uses `useModalKeys`: nothing beneath it, the app's
 keys included, sees a key while it is open, so it handles Esc itself. Other handlers use `useKeys` and can keep one key
 from those below with `stopPropagation()`. A handler removed while a key is handled never sees that key.

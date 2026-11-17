@@ -5,7 +5,7 @@ import {
   commitCountText,
   filterBadgeLabel,
   realCommitCount,
-} from "../src/utils/command-bar-utils";
+} from "../src/tui/utils/command-bar-utils";
 
 describe("filterBadgeLabel", () => {
   test("omits empty and unapplied terms", () => {

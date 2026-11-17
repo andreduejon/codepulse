@@ -9,13 +9,8 @@ import { join } from "node:path";
 import { CliRenderer } from "@opentui/core";
 import { testRender } from "@opentui/solid";
 import { createComponent, createSignal, Show } from "solid-js";
-import App from "../../src/app";
-import GraphView from "../../src/components/graph";
-import { AppStateContext, createAppState } from "../../src/context/state";
-import { createThemeState, ThemeContext } from "../../src/context/theme";
-import { buildGraph, getMaxGraphColumns } from "../../src/core/git/graph";
-import type { Commit } from "../../src/core/git/types";
-import { loadAppEvents } from "../../src/dashboard/load";
+import { persistMergedSnapshots, ShaSqliteCache } from "../../src/adapters/cache/sha-sqlite-cache";
+import { loadAppEvents } from "../../src/adapters/dashboard/load";
 import {
   getBranches,
   getCommits,
@@ -23,11 +18,16 @@ import {
   getRemoteUrl,
   getStashList,
   getTagDetails,
-} from "../../src/git/repo";
-import { getWorkingTreeStatus } from "../../src/git/repo-status";
+} from "../../src/adapters/git/repo";
+import { getWorkingTreeStatus } from "../../src/adapters/git/repo-status";
+import { buildGraph, getMaxGraphColumns } from "../../src/core/git/graph";
+import type { Commit } from "../../src/core/git/types";
 import { startupProps } from "../../src/main";
-import JobLogDialog from "../../src/providers/shared/job-log-dialog";
-import { persistMergedSnapshots, ShaSqliteCache } from "../../src/providers/shared/sha-sqlite-cache";
+import App from "../../src/tui/app/app";
+import GraphView from "../../src/tui/components/graph";
+import { AppStateContext, createAppState } from "../../src/tui/context/state";
+import { createThemeState, ThemeContext } from "../../src/tui/context/theme";
+import JobLogDialog from "../../src/tui/providers/shared/job-log-dialog";
 import { newestSubject } from "./repo";
 
 export interface BenchRepos {

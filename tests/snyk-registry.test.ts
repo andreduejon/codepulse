@@ -2,9 +2,9 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { closeProviderCaches } from "../src/providers/shared/sha-sqlite-cache";
-import { createRegistryLookup, RegistryCache } from "../src/providers/snyk/registry";
-import type { SnykCommandRunner } from "../src/providers/snyk/scanner";
+import { closeProviderCaches } from "../src/adapters/cache/sha-sqlite-cache";
+import { createRegistryLookup, RegistryCache } from "../src/adapters/snyk/registry";
+import type { SnykCommandRunner } from "../src/adapters/snyk/scanner";
 
 const roots: string[] = [];
 async function cacheRoot() {

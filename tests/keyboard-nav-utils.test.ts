@@ -1,5 +1,4 @@
 import { describe, expect, spyOn, test } from "bun:test";
-import { NAV_REPEAT_MIN_MS } from "../src/constants";
 import type { GraphRow } from "../src/core/git/types";
 import {
   type CascadeState,
@@ -9,7 +8,8 @@ import {
   countHighlightedBelow,
   findHighlightedIndex,
 } from "../src/core/navigation";
-import { allowRepeatNav, resetRepeatNav } from "../src/keyboard/repeat";
+import { NAV_REPEAT_MIN_MS } from "../src/tui/constants";
+import { allowRepeatNav, resetRepeatNav } from "../src/tui/keyboard/repeat";
 import { makeCommit } from "./test-helpers";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

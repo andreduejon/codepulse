@@ -2,9 +2,9 @@ import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getCommitDetail, runGit } from "../src/git/repo";
-import { getFileDiff } from "../src/git/repo-diff";
-import { getStagedFiles, getUntrackedFiles } from "../src/git/repo-status";
+import { getCommitDetail, runGit } from "../src/adapters/git/repo";
+import { getFileDiff } from "../src/adapters/git/repo-diff";
+import { getStagedFiles, getUntrackedFiles } from "../src/adapters/git/repo-status";
 
 const paths = (files: { path: string; status: string }[]) => files.map(f => `${f.status} ${f.path}`).sort();
 

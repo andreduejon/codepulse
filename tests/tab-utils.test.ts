@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { Commit } from "../src/core/git/types";
 import { UNCOMMITTED_HASH } from "../src/core/git/types";
 import type { ProviderView } from "../src/core/provider-model";
-import { getAvailableTabs, getDefaultDetailTab, getUncommittedProviderNotice } from "../src/utils/tab-utils";
+import { getAvailableTabs, getDefaultDetailTab, getUncommittedProviderNotice } from "../src/tui/utils/tab-utils";
 
 function commit(hash: string): Commit {
   return {

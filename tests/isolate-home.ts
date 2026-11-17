@@ -21,12 +21,12 @@ mock.module("os", () => ({ ...isolated, default: isolated }));
 // The ports a component falls back to when a test renders it without them: the terminal app's, in this home. Loaded
 // after the mocks, like the cache below, so their default folders are the test home.
 const { terminalPorts } = await import("../src/ports");
-const { setDefaultPorts } = await import("../src/context/ports");
+const { setDefaultPorts } = await import("../src/tui/context/ports");
 setDefaultPorts(terminalPorts());
 afterAll(async () => {
   // Windows can't remove a file that is open: close the provider cache's database in that home first. Imported here,
   // after the mocks, so its default folder is the test home.
-  const { closeProviderCaches } = await import("../src/providers/shared/sha-sqlite-cache");
+  const { closeProviderCaches } = await import("../src/adapters/cache/sha-sqlite-cache");
   closeProviderCaches();
   rmSync(home, { recursive: true, force: true });
 });

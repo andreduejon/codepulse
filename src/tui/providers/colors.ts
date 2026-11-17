@@ -1,0 +1,46 @@
+import type { DebugEventSource } from "../../core/debug-events";
+import type { ProviderView } from "../../core/provider-model";
+import type { Theme } from "../context/theme";
+
+export interface ProviderColors {
+  bg: string;
+  fg: string;
+}
+
+export function providerColors(theme: Theme, view: ProviderView): ProviderColors {
+  switch (view) {
+    case "dashboard":
+      return { bg: theme.dashboardBg, fg: theme.dashboardFg };
+    case "git":
+      return { bg: theme.gitBg, fg: theme.background };
+    case "github-actions":
+      return { bg: theme.githubActionsBg, fg: theme.githubActionsFg };
+    case "jenkins":
+      return { bg: theme.jenkinsBg, fg: theme.jenkinsFg };
+    case "openshift":
+      return { bg: theme.openShiftBg, fg: theme.openShiftFg };
+    case "snyk":
+      return { bg: theme.snykBg, fg: theme.snykFg };
+  }
+}
+
+export function providerAccent(theme: Theme, view: ProviderView): string {
+  return providerColors(theme, view).bg;
+}
+
+export function debugSourceColor(theme: Theme, source: DebugEventSource, gitColor: string): string {
+  switch (source) {
+    case "Git":
+      return gitColor;
+    case "GitHub":
+      return theme.githubActionsBg;
+    case "Jenkins":
+      return theme.jenkinsBg;
+    case "OpenShift":
+      return theme.openShiftBg;
+    case "Snyk":
+      return theme.snykBg;
+    case "error":
+      return theme.error;
+  }
+}

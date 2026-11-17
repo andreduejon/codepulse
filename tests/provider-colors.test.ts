@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { themes } from "../src/context/theme";
-import { providerAccent, providerColors } from "../src/providers/colors";
+import { themes } from "../src/tui/context/theme";
+import { providerAccent, providerColors } from "../src/tui/providers/colors";
 
 test("Git badge defaults to original accent and supports its own color independently", () => {
   for (const theme of Object.values(themes)) {

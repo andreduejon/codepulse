@@ -1,4 +1,4 @@
-import { HELP_TABS, KEYBINDS } from "../keybinds";
+import { HELP_TABS, KEYBINDS } from "../tui/keybinds";
 
 /** Print the CLI usage text to stdout. */
 export function printHelp() {

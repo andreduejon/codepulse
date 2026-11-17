@@ -2,8 +2,8 @@ import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { getKnownRepoInfos, loadConfig, resolveConfigInfo } from "../src/config";
-import { backfillRepoConfig, writeConfig } from "../src/config-write";
+import { getKnownRepoInfos, loadConfig, resolveConfigInfo } from "../src/adapters/settings/config";
+import { backfillRepoConfig, writeConfig } from "../src/adapters/settings/config-write";
 import { clearDebugEvents, getDebugEvents } from "../src/core/debug-events";
 import { PROVIDER_CACHE_LIMIT_OPTIONS } from "../src/core/provider-settings";
 import {

@@ -13,7 +13,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { cpus, platform, release, tmpdir } from "node:os";
 import { join } from "node:path";
-import { storageRoot } from "../../src/utils/storage-path";
+import { storageRoot } from "../../src/adapters/system/storage-path";
 import { buildBenchRepo } from "./repo";
 import type { BenchRepos } from "./worker";
 

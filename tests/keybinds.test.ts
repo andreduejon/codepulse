@@ -4,8 +4,8 @@ import {
   buildJenkinsProviderItems,
   buildOpenShiftProviderItems,
   buildSnykProviderItems,
-} from "../src/hooks/menu-provider-items";
-import { KEYBINDS } from "../src/keybinds";
+} from "../src/tui/hooks/menu-provider-items";
+import { KEYBINDS } from "../src/tui/keybinds";
 
 function sectionKeys(label: string): string[] {
   const rows = KEYBINDS.general;

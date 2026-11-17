@@ -1,7 +1,7 @@
 import { afterAll, afterEach, describe, expect, mock, test } from "bun:test";
+import { fetchWithRetry, runLimited } from "../src/adapters/http";
 import { isAbortError } from "../src/core/abort";
 import { clearDebugEvents, getDebugEvents } from "../src/core/debug-events";
-import { fetchWithRetry, runLimited } from "../src/providers/shared/http";
 
 const originalFetch = globalThis.fetch;
 

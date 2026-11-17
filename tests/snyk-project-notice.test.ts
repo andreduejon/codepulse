@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { SnykDependencyProjectResult } from "../src/core/snyk/types";
-import { snykPartialScanNotice, snykProjectNotice } from "../src/providers/snyk/project-notice";
+import { snykPartialScanNotice, snykProjectNotice } from "../src/tui/providers/snyk/project-notice";
 
 const project = (
   targetFile: string,

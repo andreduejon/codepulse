@@ -3,11 +3,6 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getTreeSitterClient } from "@opentui/core";
-import { CACHE_INACTIVITY_MS } from "../src/core/cache-store";
-import type { SnykScanResult } from "../src/core/snyk/types";
-import { GitHubCache } from "../src/providers/github-actions/cache";
-import { JenkinsCache } from "../src/providers/jenkins/cache";
-import { OpenShiftCache } from "../src/providers/openshift/cache";
 import {
   cleanupInactiveProviderCaches,
   evictProviderCache,
@@ -15,9 +10,14 @@ import {
   getProviderCacheSummary,
   resetAllCacheTimers,
   resetRepositoryCacheTimer,
-} from "../src/providers/shared/cache-management";
-import { closeProviderCaches, providerCacheDatabase } from "../src/providers/shared/sha-sqlite-cache";
-import { SnykCache } from "../src/providers/snyk/cache";
+} from "../src/adapters/cache/cache-management";
+import { closeProviderCaches, providerCacheDatabase } from "../src/adapters/cache/sha-sqlite-cache";
+import { GitHubCache } from "../src/adapters/github/cache";
+import { JenkinsCache } from "../src/adapters/jenkins/cache";
+import { OpenShiftCache } from "../src/adapters/openshift/cache";
+import { SnykCache } from "../src/adapters/snyk/cache";
+import { CACHE_INACTIVITY_MS } from "../src/core/cache-store";
+import type { SnykScanResult } from "../src/core/snyk/types";
 
 const client = getTreeSitterClient();
 const cacheRoot = await mkdtemp(join(tmpdir(), "codepulse-sqlite-smoke-"));

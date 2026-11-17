@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { RGBA } from "@opentui/core";
-import { themes } from "../../src/context/theme";
+import { themes } from "../../src/tui/context/theme";
 import { colorLines } from "./colors";
 
 const theme = themes["catppuccin-mocha"];

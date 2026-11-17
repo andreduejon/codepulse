@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
-import { scrollElementIntoView } from "../src/utils/scroll";
+import { scrollElementIntoView } from "../src/tui/utils/scroll";
 
 function element(top: number, height: number): Renderable {
   return {

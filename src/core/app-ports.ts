@@ -1,6 +1,7 @@
 /** Every port the app runs on: what a front end hands the app, built by its composition root. */
 
 import type { CacheStorePort } from "./cache-store";
+import type { DashboardReader } from "./dashboard/load";
 import type { GitPort } from "./git/port";
 import type { GitHubAdapters } from "./github/service";
 import type { JenkinsAdapters } from "./jenkins/service";
@@ -23,4 +24,5 @@ export interface AppPorts {
   cacheStore: CacheStorePort;
   providers: ProviderAdapters;
   system: SystemPort;
+  dashboard: DashboardReader;
 }

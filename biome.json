@@ -38,7 +38,7 @@
         "src/**",
         "!src/**/*.test.ts",
         "!src/**/*.test.tsx",
-        "!src/keyboard/dispatcher.ts"
+        "!src/tui/keyboard/dispatcher.ts"
       ],
       "linter": {
         "rules": {
@@ -62,16 +62,10 @@
     },
     {
       "includes": [
-        "src/components/**",
-        "src/hooks/**",
-        "src/app/**",
-        "src/keyboard/**",
-        "src/utils/**",
-        "src/dashboard/**",
-        "!src/dashboard/load.ts",
+        "src/tui/**",
+        "!src/tui/keyboard/dispatcher.ts",
         "!src/**/*.test.ts",
-        "!src/**/*.test.tsx",
-        "!src/keyboard/dispatcher.ts"
+        "!src/**/*.test.tsx"
       ],
       "linter": {
         "rules": {
@@ -79,33 +73,6 @@
             "noRestrictedImports": {
               "level": "error",
               "options": {
-                "patterns": [
-                  {
-                    "group": [
-                      "**/git/repo",
-                      "**/git/repo-*",
-                      "**/git/git-cli",
-                      "**/providers/*/api",
-                      "**/providers/*/cache",
-                      "**/providers/*/scanner",
-                      "**/providers/snyk/registry",
-                      "**/shared/sha-sqlite-cache",
-                      "**/shared/cache-management",
-                      "**/shared/cache-store",
-                      "**/shared/http",
-                      "../config",
-                      "../../config",
-                      "../config-write",
-                      "../../config-write",
-                      "../settings-file",
-                      "../../settings-file",
-                      "../dashboard/load",
-                      "../../dashboard/load",
-                      "./load"
-                    ],
-                    "message": "The UI reaches Git, the network, the caches and the settings file through the app's ports (core/*/port.ts, the contexts in src/context). Only the root (main, app-content) and the contexts' defaults build the adapters."
-                  }
-                ],
                 "paths": {
                   "@opentui/solid": {
                     "importNames": [
@@ -113,7 +80,16 @@
                     ],
                     "message": "Keys go through src/keyboard/dispatcher.ts: useKeys, or useModalKeys for a dialog or screen."
                   }
-                }
+                },
+                "patterns": [
+                  {
+                    "group": [
+                      "**/adapters/**",
+                      "**/adapters"
+                    ],
+                    "message": "The UI reaches Git, the network, the caches, the settings file and the system through the app's ports (core's ports, src/tui/context). Only the root (src/main.tsx, src/ports.ts) builds the adapters."
+                  }
+                ]
               }
             }
           }
@@ -175,18 +151,11 @@
                 "patterns": [
                   {
                     "group": [
-                      "**/providers/**",
-                      "**/providers",
-                      "**/context/**",
-                      "**/components/**",
-                      "**/app/**",
-                      "**/hooks/**",
-                      "**/keyboard/**",
-                      "**/cli/**",
-                      "**/debug/**",
-                      "**/utils/**"
+                      "**/tui/**",
+                      "**/adapters/**",
+                      "**/cli/**"
                     ],
-                    "message": "src/core does not depend on the app around it: providers, state, UI and CLI depend on core, not the other way round. What core needs comes in through its ports."
+                    "message": "src/core does not depend on the app around it: the UI, the adapters and the CLI depend on core, not the other way round. What core needs comes in through its ports."
                   }
                 ]
               }
@@ -197,6 +166,31 @@
                 "deniedGlobals": {
                   "Bun": "src/core uses no Bun APIs: they come in through ports."
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/adapters/**",
+        "!src/**/*.test.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "**/tui/**"
+                    ],
+                    "message": "Adapters implement core's ports and use only core: the UI depends on them through the ports, never the other way round."
+                  }
+                ]
               }
             }
           }

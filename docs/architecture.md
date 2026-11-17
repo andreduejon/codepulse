@@ -1,110 +1,120 @@
 # Architecture
 
-codepulse is a terminal app in Solid and OpenTUI on Bun. Its logic lives in `src/core`, plain TypeScript that knows
-nothing of Solid, the terminal, Bun or the outside world. Everything it needs from outside comes in through ports:
-interfaces core declares and the app implements. Solid hooks adapt core to the UI, and the root wires the ports to
-their implementations.
+codepulse is a terminal app in Solid and OpenTUI on Bun, built as ports and adapters. Its logic lives in `src/core`,
+plain TypeScript that knows nothing of Solid, the terminal, Bun or the outside world. Everything it needs from outside
+comes in through ports: interfaces core declares. `src/adapters` implements them, `src/tui` is the terminal front end
+on top of core, and the root (`src/main.tsx`, `src/ports.ts`) builds the adapters and hands them to the front end.
 
 ```mermaid
 flowchart LR
-  subgraph UI["UI: Solid + OpenTUI"]
-    Components["components, providers' tabs and dialogs"]
-    Hooks["hooks, app controllers (src/app)"]
-    Keys["keyboard dispatcher"]
-    State["app state (src/context/state.ts)"]
+  subgraph Root["Root: src/main.tsx, src/ports.ts"]
+    Main["startupProps"]
   end
-  subgraph Root["Root"]
-    Main["main.tsx: startupProps"]
-    AppContent["app-content.tsx"]
-    Contexts["contexts: settings, Git, cache store"]
+  subgraph TUI["src/tui: Solid + OpenTUI"]
+    Components["components, providers' tabs and dialogs"]
+    Hooks["hooks, app controllers"]
+    Keys["keyboard dispatcher"]
+    State["app state (Solid signals)"]
   end
   subgraph Core["src/core"]
     Services["services: Git data, details, path mode, Dashboard, GitHub, Jenkins, OpenShift, Snyk"]
-    Model["model: Git, graph, provider runs and badges, settings, Dashboard events"]
-    Ports["ports: GitPort, SettingsPort, CacheStorePort, providers' API, cache and scan ports"]
+    Commands["commands: `:` commands, graph navigation"]
+    Model["model: Git, graph, provider runs and badges, settings, Dashboard events, app state's rules"]
+    Ports["ports: AppPorts (Git, settings, cache store, system, Dashboard, providers' API, cache and token)"]
   end
-  subgraph Adapters["Adapters"]
-    GitCli["src/git: the Git command line"]
-    Http["src/providers/*/api: GitHub, Jenkins, OpenShift"]
-    Caches["src/providers/*/cache: SQLite"]
-    Snyk["src/providers/snyk/scanner: the Snyk CLI"]
-    Files["src/config*.ts, settings-file.ts: the settings file"]
+  subgraph Adapters["src/adapters"]
+    Git["git: the Git command line"]
+    Http["github, jenkins, openshift: HTTP clients and caches"]
+    Snyk["snyk: the Snyk CLI"]
+    Cache["cache: SQLite"]
+    Settings["settings: the settings and themes files"]
+    System["system: browser, environment, storage paths"]
   end
-  Main --> AppContent --> Hooks
-  Contexts --> Components
-  Components --> Hooks --> Services
-  Keys --> Hooks
+  Main -- builds --> Adapters
+  Main -- hands the ports to --> TUI
+  Keys --> Hooks --> Commands & Services
+  Components --> Hooks
   Hooks --> State
-  Services --> Model
-  Services -. ports .-> Ports
-  GitCli & Http & Caches & Snyk & Files -. implement .-> Ports
-  Root -. builds .-> Adapters
+  Services & Commands --> Model
+  Services -. through ports .-> Ports
+  Adapters -. implement .-> Ports
 ```
 
 ## Layers
 
-| Layer | Where | What it may use |
-|-------|-------|-----------------|
-| Core | `src/core` | only `src/core` and plain packages; no Solid, OpenTUI, Bun or Node runtime APIs |
-| Adapters | `src/git`, `src/providers/*/{api,cache,scanner}`, `src/providers/shared/{http,sha-sqlite-cache,cache-management,cache-store}`, `src/config.ts`, `src/config-write.ts`, `src/settings-file.ts`, `src/dashboard/load.ts` | core, Bun and Node |
-| UI | `src/components`, `src/hooks`, `src/app`, `src/keyboard`, `src/utils`, `src/dashboard`, the providers' hooks and tabs | core, Solid, OpenTUI; adapters only through ports |
-| Root | `src/ports.ts`, `src/main.tsx`, `src/app-content.tsx`, the contexts' defaults in `src/context` | everything: it builds the adapters and hands them on |
+| Folder | What | May import |
+|--------|------|------------|
+| `src/core` | the app's logic and its ports: no Solid, OpenTUI, `bun:*`, `node:fs` or `child_process` | core |
+| `src/adapters` | what implements the ports | core, adapters |
+| `src/tui` | the terminal front end | core, tui |
+| root: `src/*.ts`, `src/cli`, `src/types` | builds the adapters, starts the front end | everything |
 
-Three checks keep the layers apart:
+`src/layers.test.ts` resolves every import and fails on one that crosses into a layer its folder may not use. Biome
+refuses the same by folder name as the import is written, and refuses Solid, OpenTUI and the runtime in core.
 
-- `src/core/boundary.test.ts` resolves every import of a core module and fails on one that leaves `src/core`.
-- Biome refuses Solid, OpenTUI, `bun:*`, `node:fs` and `child_process` in core, and the app's layers by name.
-- Biome refuses the adapters in the UI layers: they reach Git, the network, the caches and the settings file through
-  the ports.
+```
+src/
+  core/        model, services, commands, ports
+    git/  github/  jenkins/  openshift/  snyk/  dashboard/  settings/
+  adapters/    git/  github/  jenkins/  openshift/  snyk/  cache/  settings/  system/  dashboard/  http.ts
+  tui/         app/  components/  context/  dashboard/  hooks/  keyboard/  providers/  utils/
+  cli/         arguments and help
+  main.tsx     startupProps: the ports, the settings, which screen to open
+  ports.ts     the terminal app's adapters, in one place
+```
 
 ## Ports
 
-| Port | Declared in | Implemented by | Reaches the UI through |
-|------|-------------|----------------|------------------------|
-| `GitPort` | `core/git/port.ts` | `src/git/git-cli.ts` | `startupProps`, hook parameters, `useGit()` |
-| `SettingsPort` | `core/settings/port.ts` | `src/settings-file.ts` | `startupProps`, hook parameters, `useSettings()` |
-| `CacheStorePort` | `core/cache-store.ts` | `src/providers/shared/cache-store.ts` | `app-content`, hook parameters, `useCacheStore()` |
-| a provider's API, cache and token | `core/<provider>/service.ts` | `src/providers/<provider>/api.ts`, `cache.ts` | the provider's hook |
-| Snyk's scan and cache | `core/snyk/service.ts` | `src/providers/snyk/scanner.ts` | `use-snyk` |
-| the Dashboard's sources | `core/dashboard/load.ts` | `src/dashboard/load.ts` (the provider caches) | `app-content` |
-| the app's state, for a provider | `core/provider-ports.ts` | `src/providers/shared/app-port.ts` | the provider's hook |
+`AppPorts` (`core/app-ports.ts`) is every port the app runs on. `src/ports.ts` builds the terminal app's, `startupProps`
+hands them to the app and registers them (`tui/context/ports.ts`) for a component rendered without them, as in a
+test. A hook called while its component sets up takes a port as a parameter; a component below the root reads it from
+its context (see the Solid rules in AGENTS.md). The adapters' port objects call their modules' functions when they run,
+so a test's `spyOn` on such a function sees the app's calls.
 
-`src/ports.ts` builds the terminal app's adapters in one place: `startupProps` takes them from it (or the ports a caller
-gives), the app gets them as props, and the contexts fall back to them for a component rendered on its own. A hook
-called while its component sets up takes a port as a parameter; a component below the root reads it from its
-context (see the Solid rules in AGENTS.md). The adapters' port objects call their modules' functions when they run, so
-a test's `spyOn` on such a function sees the app's calls.
+| Port | Declared in | Implemented in | The UI reaches it through |
+|------|-------------|----------------|---------------------------|
+| `GitPort` | `core/git/port.ts` | `adapters/git/git-cli.ts` | hook parameters, `useGit()` |
+| `SettingsPort` | `core/settings/port.ts` | `adapters/settings/settings-file.ts` | hook parameters, `useSettings()` |
+| `CacheStorePort` | `core/cache-store.ts` | `adapters/cache/cache-store.ts` | hook parameters, `useCacheStore()` |
+| `SystemPort` | `core/system.ts` | `adapters/system/system-port.ts` | hook parameters, `useSystem()` |
+| `DashboardReader` | `core/dashboard/load.ts` | `src/ports.ts` over `adapters/dashboard/load.ts` | the Dashboard controller |
+| a provider's adapters (API, cache, token) | `core/<provider>/service.ts` | `adapters/<provider>/adapters.ts` | the provider's module |
+| the app's state, for a provider | `core/provider-ports.ts` | `tui/providers/shared/app-port.ts` | the provider's hook |
 
 ## Services
 
-Each service is a plain function or class in core with its ports as parameters, tested without Solid; a hook in the UI
-adapts it: it runs the effects, makes the service's reads reactive and stops it on cleanup.
+Each service is a plain function or class in core with its ports as parameters, tested without Solid; a hook in
+`src/tui` adapts it: it runs the effects, makes the service's reads reactive and stops it on cleanup.
 
-| Service | Core | Adapter hook |
-|---------|------|--------------|
-| the graph's Git data: load, pages, fetch | `core/git/data-service.ts` | `hooks/use-data-loader.ts` |
-| the selected commit's details | `core/git/commit-detail.ts` | `hooks/use-detail-loader.ts` |
-| path mode | `core/git/path-filter.ts` | `hooks/use-path-filter.ts` |
-| the Dashboard's events | `core/dashboard/load.ts` | `dashboard/use-dashboard.ts` |
-| a provider's fetch lifecycle (when, how often, backoff) | `core/fetch-lifecycle.ts` | `providers/shared/use-provider-fetch-lifecycle.ts` |
-| GitHub, Jenkins, OpenShift, Snyk | `core/<provider>/service.ts` | `providers/<provider>/use-*.ts` |
-| which rows a long list mounts | `core/scroll-window.ts` | `hooks/use-scroll-window.ts` |
+| Service | Core | Hook |
+|---------|------|------|
+| the graph's Git data: load, pages, fetch | `core/git/data-service.ts` | `tui/hooks/use-data-loader.ts` |
+| the selected commit's details | `core/git/commit-detail.ts` | `tui/hooks/use-detail-loader.ts` |
+| path mode | `core/git/path-filter.ts` | `tui/hooks/use-path-filter.ts` |
+| the Dashboard's events | `core/dashboard/load.ts` | `tui/dashboard/use-dashboard.ts` |
+| a provider's fetch lifecycle (when, how often, backoff) | `core/fetch-lifecycle.ts` | `tui/providers/shared/use-provider-fetch-lifecycle.ts` |
+| GitHub, Jenkins, OpenShift, Snyk | `core/<provider>/service.ts` | `tui/providers/<provider>/use-*.ts` |
+| which rows a long list mounts | `core/scroll-window.ts` | `tui/hooks/use-scroll-window.ts` |
 
 ## Providers
 
-Each provider is a module (`src/providers/<provider>/module.ts`) that meets one contract (`providers/module.ts`): `start`
-gets the app's state, its settings and where its rows open, and returns the provider with what every caller reads from
-it: its data for a commit, starting over, fetching again, the events it holds for the Dashboard, and its detail tab's
-source. The provider host (`src/app/providers.ts`) starts the modules and is the rest of the app's one way to them.
+Each provider is a module (`tui/providers/<provider>/module.ts`) that meets one contract (`tui/providers/module.ts`):
+`start` gets the app's state, its settings, its adapters and where its rows open, and returns the provider with what
+every caller reads from it: its data for a commit, starting over, fetching again, the events it holds for the
+Dashboard, and its detail tab's source. The provider host (`tui/app/providers.ts`) starts the modules and is the rest
+of the app's one way to them.
 
-## State
+## State and commands
 
-The app's state is Solid signals in `src/context/state.ts`: the repository, the graph, the cursor, the providers'
-status and badges, and one detail slot each for the graph and the Dashboard. The services read and change it through
-narrow ports that the state fits. The state's shape and its rules are a port in core (`core/app-state.ts`):
-which highlight wins, which commits a search matches, how far a cursor moves. What the app does is core commands over
-that port: the `:` commands (`core/commands.ts`) and moving through the graph (`core/navigation.ts`); the key handlers
-in `src/hooks` map keys to them and keep focus, dialogs and the command bar, which are the terminal's.
+The app's state is Solid signals in `tui/context/state.ts`: the repository, the graph, the cursor, the providers'
+status and badges, and one detail slot each for the graph and the Dashboard. Its shape and rules are a port in core
+(`core/app-state.ts`): which highlight wins, which commits a search matches, how far a cursor moves. What the app does
+is core commands over that port: the `:` commands (`core/commands.ts`) and moving through the graph
+(`core/navigation.ts`). The key handlers in `tui/hooks` map keys to them and keep focus, dialogs and the command bar,
+which are the terminal's.
+
+The app's root (`tui/app/app-content.tsx`) builds the state and the controllers and provides the contexts;
+`tui/app/layout.tsx` draws the screens from them.
 
 Process-wide objects a host could give each app its own of: the cache registry (`ProviderCacheRegistry`, one database
 connection per cache folder) and the debug log (`DebugLog`).

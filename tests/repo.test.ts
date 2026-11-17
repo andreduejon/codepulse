@@ -7,7 +7,7 @@
  * These are unit tests for the parsing layer — they don't spawn git subprocesses.
  */
 import { describe, expect, test } from "bun:test";
-import { computeFileWidths } from "../src/components/detail-types";
+import { parseDiffTreeOutput, parseStatusPorcelain } from "../src/adapters/git/repo";
 import {
   parseCommitLine,
   parseNumstatOutput,
@@ -18,7 +18,7 @@ import {
   RS,
   resolveRenamePath,
 } from "../src/core/git/log";
-import { parseDiffTreeOutput, parseStatusPorcelain } from "../src/git/repo";
+import { computeFileWidths } from "../src/tui/components/detail-types";
 
 /** Assert a value is not null/undefined and narrow its type. */
 function assertNotNull<T>(value: T, label = "value"): asserts value is NonNullable<T> {

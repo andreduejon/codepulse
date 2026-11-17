@@ -4,20 +4,20 @@ import type {
   JenkinsMenuConfig,
   OpenShiftMenuConfig,
   SnykMenuConfig,
-} from "../src/hooks/menu-items-types";
+} from "../src/tui/hooks/menu-items-types";
 import {
   buildDashboardItems,
   buildGitHubProviderItems,
   buildJenkinsProviderItems,
   buildOpenShiftProviderItems,
   buildSnykProviderItems,
-} from "../src/hooks/menu-provider-items";
+} from "../src/tui/hooks/menu-provider-items";
 import {
   isOptionalRepoMetadataValid,
   optionalRepoMetadataValue,
   relativeAgeLabel,
   startViewItem,
-} from "../src/hooks/use-menu-items";
+} from "../src/tui/hooks/use-menu-items";
 
 describe("buildDashboardItems, turned off", () => {
   it("is on by default; turned off it shows only Enabled, like a provider", () => {

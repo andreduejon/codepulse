@@ -4,15 +4,18 @@
  * (context/ports.ts) for a component rendered without them.
  */
 
+import { providerCacheStore } from "./adapters/cache/cache-store";
+import * as dashboardLoad from "./adapters/dashboard/load";
+import { gitCli } from "./adapters/git/git-cli";
+import { githubAdapters } from "./adapters/github/adapters";
+import { jenkinsAdapters } from "./adapters/jenkins/adapters";
+import { openShiftAdapters } from "./adapters/openshift/adapters";
+import { fileSettings } from "./adapters/settings/settings-file";
+import { snykAdapters } from "./adapters/snyk/adapters";
+import { terminalSystem } from "./adapters/system/system-port";
 import type { AppPorts, ProviderAdapters } from "./core/app-ports";
-import { gitCli } from "./git/git-cli";
-import { githubAdapters } from "./providers/github-actions/adapters";
-import { jenkinsAdapters } from "./providers/jenkins/adapters";
-import { openShiftAdapters } from "./providers/openshift/adapters";
-import { providerCacheStore } from "./providers/shared/cache-store";
-import { snykAdapters } from "./providers/snyk/adapters";
-import { fileSettings } from "./settings-file";
-import { terminalSystem } from "./utils/system-port";
+import type { DashboardReader } from "./core/dashboard/load";
+import type { GitPort } from "./core/git/port";
 
 /** The providers' HTTP clients, caches, scanner and environment tokens. */
 export function terminalProviderAdapters(): ProviderAdapters {
@@ -20,23 +23,24 @@ export function terminalProviderAdapters(): ProviderAdapters {
 }
 
 /** The terminal app's adapters. */
+/** The Dashboard's reads: Git through the app's Git port, and the provider caches (through the module, for tests' spies). */
+export function terminalDashboard(git: GitPort): DashboardReader {
+  return { readEvents: (app, options) => dashboardLoad.loadAppEvents(app, options, git) };
+}
+
 export function terminalPorts(): AppPorts {
-  return {
-    settings: fileSettings(),
-    git: gitCli(),
-    cacheStore: providerCacheStore(),
-    providers: terminalProviderAdapters(),
-    system: terminalSystem(),
-  };
+  return portsFrom({});
 }
 
 /** The ports given, the terminal app's for the others. */
 export function portsFrom(given: Partial<AppPorts>): AppPorts {
+  const git = given.git ?? gitCli();
   return {
     settings: given.settings ?? fileSettings(),
-    git: given.git ?? gitCli(),
+    git,
     cacheStore: given.cacheStore ?? providerCacheStore(),
     providers: given.providers ?? terminalProviderAdapters(),
     system: given.system ?? terminalSystem(),
+    dashboard: given.dashboard ?? terminalDashboard(git),
   };
 }

@@ -3,13 +3,13 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createEffect, createRoot, createSignal, untrack } from "solid-js";
-import type { DetailNavRef } from "../src/components/detail-types";
-import { createAppState } from "../src/context/state";
+import { gitCli } from "../src/adapters/git/git-cli";
+import { runGit } from "../src/adapters/git/repo";
 import { isUncommittedHash } from "../src/core/git/types";
-import { gitCli } from "../src/git/git-cli";
-import { runGit } from "../src/git/repo";
-import { useDataLoader } from "../src/hooks/use-data-loader";
-import { useDetailLoader } from "../src/hooks/use-detail-loader";
+import type { DetailNavRef } from "../src/tui/components/detail-types";
+import { createAppState } from "../src/tui/context/state";
+import { useDataLoader } from "../src/tui/hooks/use-data-loader";
+import { useDetailLoader } from "../src/tui/hooks/use-detail-loader";
 
 const roots: string[] = [];
 const disposers: (() => void)[] = [];
@@ -228,7 +228,7 @@ test("a failed page of older history says so, and the next page attempt clears i
   const { root } = await makeRepo(["c1", "c2", "c3"]);
   const { state, loader } = mount(root, 2);
   await until(() => !state.loading() && state.commits().length > 0, "first page");
-  const repoModule = await import("../src/git/repo");
+  const repoModule = await import("../src/adapters/git/repo");
   const fail = spyOn(repoModule, "getCommits").mockRejectedValueOnce(new Error("fatal: bad object"));
   try {
     await loader.loadMoreData();
@@ -259,7 +259,7 @@ test("a history page that finishes after a branch switch does not merge into the
   await git("switch", "main");
   const { state, actions, loader } = mount(root, 2);
   await until(() => !state.loading() && state.commits().length > 0, "first page");
-  const repoModule = await import("../src/git/repo");
+  const repoModule = await import("../src/adapters/git/repo");
   const real = repoModule.getCommits;
   let release!: () => void;
   const gate = new Promise<void>(resolve => (release = resolve));
@@ -305,7 +305,7 @@ test("cancelling a history page for a branch switch does not let the graph start
       untrack(() => void loader.loadMoreData());
     });
   });
-  const repoModule = await import("../src/git/repo");
+  const repoModule = await import("../src/adapters/git/repo");
   const real = repoModule.getCommits;
   let release!: () => void;
   const gate = new Promise<void>(resolve => (release = resolve));

@@ -6,7 +6,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import type { FileChange } from "../src/core/git/types";
-import { buildFileTree, flattenFileTree } from "../src/utils/file-tree";
+import { buildFileTree, flattenFileTree } from "../src/tui/utils/file-tree";
 
 /** Helper to create a minimal FileChange for testing. */
 const file = (path: string, status: FileChange["status"] = "M"): FileChange => ({
