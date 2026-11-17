@@ -54,6 +54,13 @@
   Only child components rendered *inside* the Provider's JSX subtree can safely
   call `useContext()`.
 
+## Layers
+
+`src/core` is plain TypeScript: no Solid, no OpenTUI, no Bun or Node runtime APIs (the linter refuses them there).
+What it needs from outside (the app's state, the time, timers, requests) comes in as parameters, so it runs in a plain
+test. Solid code adapts it: `core/fetch-lifecycle.ts` is the fetch lifecycle, `providers/shared/use-provider-fetch-
+lifecycle.ts` its adapter. New logic that doesn't draw goes in `src/core`.
+
 ## Keys
 
 Every key handler goes through `src/keyboard/dispatcher.ts`, never OpenTUI's `useKeyboard` (the linter refuses it in

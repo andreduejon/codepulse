@@ -59,6 +59,72 @@
           }
         }
       }
+    },
+    {
+      "includes": [
+        "src/core/**",
+        "!src/core/**/*.test.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "solid-js": {
+                    "message": "src/core is plain TypeScript: no UI framework, no Bun or Node runtime APIs. Those come in through ports."
+                  },
+                  "solid-js/store": {
+                    "message": "src/core is plain TypeScript: no UI framework, no Bun or Node runtime APIs. Those come in through ports."
+                  },
+                  "solid-js/web": {
+                    "message": "src/core is plain TypeScript: no UI framework, no Bun or Node runtime APIs. Those come in through ports."
+                  },
+                  "@opentui/core": {
+                    "message": "src/core is plain TypeScript: no UI framework, no Bun or Node runtime APIs. Those come in through ports."
+                  },
+                  "@opentui/solid": {
+                    "message": "src/core is plain TypeScript: no UI framework, no Bun or Node runtime APIs. Those come in through ports."
+                  },
+                  "bun:sqlite": {
+                    "message": "src/core is plain TypeScript: no UI framework, no Bun or Node runtime APIs. Those come in through ports."
+                  },
+                  "bun:jsc": {
+                    "message": "src/core is plain TypeScript: no UI framework, no Bun or Node runtime APIs. Those come in through ports."
+                  },
+                  "bun:ffi": {
+                    "message": "src/core is plain TypeScript: no UI framework, no Bun or Node runtime APIs. Those come in through ports."
+                  },
+                  "node:fs": {
+                    "message": "src/core is plain TypeScript: no UI framework, no Bun or Node runtime APIs. Those come in through ports."
+                  },
+                  "node:fs/promises": {
+                    "message": "src/core is plain TypeScript: no UI framework, no Bun or Node runtime APIs. Those come in through ports."
+                  },
+                  "node:child_process": {
+                    "message": "src/core is plain TypeScript: no UI framework, no Bun or Node runtime APIs. Those come in through ports."
+                  },
+                  "fs": {
+                    "message": "src/core is plain TypeScript: no UI framework, no Bun or Node runtime APIs. Those come in through ports."
+                  },
+                  "child_process": {
+                    "message": "src/core is plain TypeScript: no UI framework, no Bun or Node runtime APIs. Those come in through ports."
+                  }
+                }
+              }
+            },
+            "noRestrictedGlobals": {
+              "level": "error",
+              "options": {
+                "deniedGlobals": {
+                  "Bun": "src/core uses no Bun APIs: they come in through ports."
+                }
+              }
+            }
+          }
+        }
+      }
     }
   ]
 }
