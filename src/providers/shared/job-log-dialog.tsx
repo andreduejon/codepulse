@@ -1,6 +1,6 @@
 /** JobLogDialog: CI logs (GitHub jobs, Jenkins builds, stages and failed tests), styled like the diff dialog. */
 
-import { createEffect, createMemo, createSignal } from "solid-js";
+import { createEffect, createMemo, createSignal, onCleanup } from "solid-js";
 import type { LogViewState } from "../../components/dialogs/log-view";
 import { LogViewer, type LogViewerNavigation } from "../../components/dialogs/log-viewer";
 import { BUSY } from "../../utils/busy-text";
@@ -56,7 +56,8 @@ export interface JobLogTarget {
   job: JobLogEntry;
   run: { name: string; runNumber: number; url?: string };
   jobs: JobLogEntry[];
-  fetchLog: (job: JobLogEntry) => Promise<string | JobLogContent>;
+  /** Cancelled through `signal` when the log closes. */
+  fetchLog: (job: JobLogEntry, signal: AbortSignal) => Promise<string | JobLogContent>;
   /** Searched when the log opens (an annotation's message). */
   search?: string;
   /** What ←/→ move between, for the footer: `job` by default. */
@@ -78,7 +79,8 @@ interface JobLogDialogProps {
   job: JobLogEntry;
   jobs: JobLogEntry[];
   run: { name: string; runNumber: number; url?: string };
-  fetchLog: (job: JobLogEntry) => Promise<string | JobLogContent>;
+  /** Cancelled through `signal` when the log closes. */
+  fetchLog: (job: JobLogEntry, signal: AbortSignal) => Promise<string | JobLogContent>;
   /** What ←/→ move between, for the footer (`previous stage`): `job` by default. */
   entryNoun?: string;
   onClose: () => void;
@@ -181,6 +183,13 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
     });
   };
 
+  /** Downloads still running: closing the log cancels them (a long log of a job left behind keeps loading). */
+  const downloads = new Set<AbortController>();
+  onCleanup(() => {
+    for (const download of downloads) download.abort();
+    downloads.clear();
+  });
+
   const loadCurrentJob = () => {
     const job = currentJob();
     const cached = logs().get(String(job.id));
@@ -189,10 +198,14 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
     // the same failed/empty log forever.
     if (cached) return;
     setLoadedLog(job.id, { raw: null, summary: [], loading: true, error: null });
+    const download = new AbortController();
+    downloads.add(download);
     props
-      .fetchLog(job)
+      .fetchLog(job, download.signal)
+      .finally(() => downloads.delete(download))
       // An empty log is a successful, neutral result; only a failed request is an error (with its reason).
       .then(result => {
+        if (download.signal.aborted) return;
         const content = typeof result === "string" ? { log: result } : result;
         setLoadedLog(job.id, {
           raw: content.log,
@@ -203,14 +216,15 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
           error: null,
         });
       })
-      .catch(error =>
+      .catch(error => {
+        if (download.signal.aborted) return;
         setLoadedLog(job.id, {
           raw: null,
           summary: [],
           loading: false,
           error: error instanceof Error && error.message ? error.message : String(error),
-        }),
-      );
+        });
+      });
   };
   /** `r`: fetch the current job's log again (newer output of a running job, or a retry after a failure). */
   const refreshLog = () => {

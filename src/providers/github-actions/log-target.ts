@@ -4,8 +4,8 @@ import type { GitHubJob, GitHubJobFetchResult, GitHubWorkflowRun } from "./types
 
 /** What a job log reads from the GitHub provider. */
 export interface GitHubLogReader {
-  fetchJobLogForJob: (jobId: number, run: GitHubWorkflowRun) => Promise<string>;
-  fetchJobsForRun: (run: GitHubWorkflowRun) => Promise<GitHubJobFetchResult>;
+  fetchJobLogForJob: (jobId: number, run: GitHubWorkflowRun, signal?: AbortSignal) => Promise<string>;
+  fetchJobsForRun: (run: GitHubWorkflowRun, signal?: AbortSignal) => Promise<GitHubJobFetchResult>;
 }
 
 /**
@@ -27,9 +27,9 @@ export function githubJobLogTarget(
     run,
     search,
     jobs: entries,
-    fetchLog: async current => {
-      const log = await ci.fetchJobLogForJob(Number(current.id), run);
-      const latest = await ci.fetchJobsForRun(run).catch(() => null);
+    fetchLog: async (current, signal) => {
+      const log = await ci.fetchJobLogForJob(Number(current.id), run, signal);
+      const latest = await ci.fetchJobsForRun(run, signal).catch(() => null);
       const shown = [...(latest?.jobs ?? []), ...known].find(candidate => candidate.id === current.id);
       if (!shown) return { log, summary: [] };
       return { log, summary: githubJobSummary(shown), detail: githubJobLogEntries([shown])[0]?.detail };

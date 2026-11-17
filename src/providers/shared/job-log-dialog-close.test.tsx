@@ -68,3 +68,39 @@ test("esc that the app handles first closes the log without its handler reading 
     setup.renderer.destroy();
   }
 });
+
+test("closing the log cancels its download", async () => {
+  const jobs = [{ id: 1, name: "build" }];
+  let signal: AbortSignal | undefined;
+  const [open, setOpen] = createSignal(true);
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={createThemeState()}>
+        <Show when={open()}>
+          <JobLogDialog
+            provider="github-actions"
+            job={jobs[0] as { id: number; name: string }}
+            jobs={jobs}
+            run={{ name: "CI", runNumber: 812 }}
+            fetchLog={(_job, requestSignal) => {
+              signal = requestSignal;
+              // A large log still downloading.
+              return new Promise(() => {});
+            }}
+            onClose={() => setOpen(false)}
+          />
+        </Show>
+      </ThemeContext.Provider>
+    ),
+    { width: 80, height: 30 },
+  );
+  try {
+    await setup.flush();
+    expect(signal?.aborted).toBe(false);
+    setOpen(false);
+    await setup.flush();
+    expect(signal?.aborted).toBe(true);
+  } finally {
+    setup.renderer.destroy();
+  }
+});

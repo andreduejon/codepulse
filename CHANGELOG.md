@@ -13,6 +13,8 @@ All notable changes to this project will be documented in this file.
   stalls times out, and a repository switch stops it. Before, it could wait
   forever once the headers had come. A long log that keeps coming is still read
   whole.
+- Closing a GitHub or Jenkins log stops its download. Before, a long log kept
+  loading after it was closed.
 
 ## [0.18.0] - 2026-11-17
 

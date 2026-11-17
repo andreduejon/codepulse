@@ -2,6 +2,9 @@ import { expect, mock, test } from "bun:test";
 import { jenkinsBuildLogTarget, jenkinsTestFailureTarget } from "./log-target";
 import type { JenkinsFailedTest, JenkinsJob, JenkinsRun } from "./types";
 
+/** The log dialog's download signal: the targets pass it to every request. */
+const signal = new AbortController().signal;
+
 const run = {
   id: "main#41",
   name: "main",
@@ -36,10 +39,12 @@ test("a Jenkins build opens at an entry: the full log with its summary, or a sta
   const target = jenkinsBuildLogTarget(ci, run, pipeline, 1);
   expect(target).toMatchObject({ provider: "jenkins", noun: "stage" });
   expect(target.job).toMatchObject({ name: "Unit tests", detail: "3m 30s" });
-  expect(await target.fetchLog(target.job)).toBe("[Pipeline] { (Unit tests)\n+ ./gradlew test\n[Pipeline] }");
-  const full = await target.fetchLog(target.jobs[0]);
+  expect(await target.fetchLog(target.job, signal)).toBe("[Pipeline] { (Unit tests)\n+ ./gradlew test\n[Pipeline] }");
+  const full = await target.fetchLog(target.jobs[0], signal);
   expect(full).toMatchObject({ log: console_ });
   expect(typeof full === "string" ? [] : full.summary?.length).toBe(2);
+  expect(ci.fetchRunLog).toHaveBeenCalledWith(run, signal);
+  expect(ci.fetchJobsForRun).toHaveBeenCalledWith(run, signal);
 });
 
 test("a stage in a parallel branch, or one the console lacks, opens the full log with a line that says so", async () => {
@@ -57,12 +62,12 @@ test("a stage in a parallel branch, or one the console lacks, opens the full log
     fetchJobsForRun: mock(async () => ({ jobs: [pipeline], error: null })),
   };
   const target = jenkinsBuildLogTarget(ci, run, pipeline, 1);
-  expect(await target.fetchLog(target.job)).toEqual({
+  expect(await target.fetchLog(target.job, signal)).toEqual({
     log: parallel,
     note: "Runs in parallel: the full log, with the other branches' lines",
   });
   ci.fetchRunLog.mockImplementation(async () => "Started\nFinished");
-  expect(await target.fetchLog(target.job)).toEqual({
+  expect(await target.fetchLog(target.job, signal)).toEqual({
     log: "Started\nFinished",
     note: "Not in the log yet: the full log",
   });
@@ -75,6 +80,6 @@ test("a failed Jenkins test opens its error and stack; o opens the test report; 
   const target = jenkinsTestFailureTarget(run, failed, 0);
   expect(target).toMatchObject({ noun: "test", job: { name: "CartTest › rounds" } });
   expect(target?.run.url).toBe("https://jenkins.invalid/job/shop/job/main/41/testReport/");
-  expect(await target?.fetchLog(target.job)).toBe("com.demo.CartTest › rounds\nexpected 9.99\n\nat CartTest");
+  expect(await target?.fetchLog(target.job, signal)).toBe("com.demo.CartTest › rounds\nexpected 9.99\n\nat CartTest");
   expect(jenkinsTestFailureTarget(run, [], 0)).toBeNull();
 });

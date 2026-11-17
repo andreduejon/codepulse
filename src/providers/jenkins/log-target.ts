@@ -9,8 +9,8 @@ const STAGE_NOT_IN_LOG = "Not in the log yet: the full log";
 
 /** What a build log reads from the Jenkins provider. */
 export interface JenkinsLogReader {
-  fetchRunLog: (run: JenkinsRun) => Promise<string>;
-  fetchJobsForRun: (run: JenkinsRun) => Promise<JenkinsJobFetchResult>;
+  fetchRunLog: (run: JenkinsRun, signal?: AbortSignal) => Promise<string>;
+  fetchJobsForRun: (run: JenkinsRun, signal?: AbortSignal) => Promise<JenkinsJobFetchResult>;
 }
 
 /**
@@ -30,15 +30,15 @@ export function jenkinsBuildLogTarget(
     run,
     jobs: entries,
     noun: "stage",
-    fetchLog: async current => {
-      const full = await ci.fetchRunLog(run);
+    fetchLog: async (current, signal) => {
+      const full = await ci.fetchRunLog(run, signal);
       if (!isWholeBuildEntry(current)) {
         const stage = sliceStageLog(full, current.name);
         if (stage.log !== undefined) return stage.log;
         // The title still names the stage, so say why the whole console shows instead, in every view.
         return { log: full, note: stage.missing === "parallel" ? STAGE_IN_PARALLEL : STAGE_NOT_IN_LOG };
       }
-      const latest = await ci.fetchJobsForRun(run).catch(() => null);
+      const latest = await ci.fetchJobsForRun(run, signal).catch(() => null);
       return { log: full, summary: jenkinsBuildSummary(latest?.jobs[0] ?? pipeline) };
     },
   };

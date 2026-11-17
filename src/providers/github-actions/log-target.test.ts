@@ -2,6 +2,9 @@ import { expect, mock, test } from "bun:test";
 import { githubJobLogTarget } from "./log-target";
 import type { GitHubJob, GitHubWorkflowRun } from "./types";
 
+/** The log dialog's download signal: the targets pass it to every request. */
+const signal = new AbortController().signal;
+
 const run = { id: 9001, name: "CI", runNumber: 812, headSha: "a".repeat(40), status: "completed" } as GitHubWorkflowRun;
 const job = (id: number, name: string): GitHubJob => ({
   id,
@@ -34,13 +37,14 @@ test("a GitHub job log opens at its job, ←/→ to the run's jobs, and reads it
   expect(target.job).toEqual({ id: 2, name: "test", detail: "2m 17s" });
   expect(target.jobs.map(entry => entry.name)).toEqual(["build", "test"]);
   expect(target.search).toBe("Expected 200");
-  const content = await target.fetchLog(target.job);
+  const content = await target.fetchLog(target.job, signal);
   expect(content).toMatchObject({ log: "log of 2" });
   expect(typeof content === "string" ? [] : content.summary?.map(line => line.text.trimEnd())).toEqual([
     expect.stringMatching(/^STEP/),
     expect.stringMatching(/^Build\s+2m 17s$/),
   ]);
-  expect(ci.fetchJobLogForJob).toHaveBeenCalledWith(2, run);
+  expect(ci.fetchJobLogForJob).toHaveBeenCalledWith(2, run, signal);
+  expect(ci.fetchJobsForRun).toHaveBeenCalledWith(run, signal);
 });
 
 test("a job that was running when its log opened gets its time once r reads it again finished", async () => {
@@ -51,5 +55,5 @@ test("a job that was running when its log opened gets its time once r reads it a
   };
   const target = githubJobLogTarget(ci, running, run, [running]);
   expect(target.job.detail).toBeUndefined();
-  expect(await target.fetchLog(target.job)).toMatchObject({ detail: "2m 17s" });
+  expect(await target.fetchLog(target.job, signal)).toMatchObject({ detail: "2m 17s" });
 });
