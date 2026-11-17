@@ -3,7 +3,7 @@
  * - src/core: core only. The app's logic and its ports.
  * - src/adapters: core and adapters. They implement core's ports (Git, HTTP, caches, settings, the system).
  * - src/tui: core and tui. The terminal front end; it reaches the adapters only through the ports.
- * - the root (src/*.ts, src/cli, src/types): anything. It builds the adapters and hands them to the front end.
+ * - the root (src/*.ts, src/cli): anything. It builds the adapters and hands them to the front end.
  * The linter refuses the same imports by folder name as they are written; this catches every other way across.
  */
 import { expect, test } from "bun:test";

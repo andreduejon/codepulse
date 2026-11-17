@@ -47,7 +47,7 @@ flowchart LR
 | `src/core` | the app's logic and its ports: no Solid, OpenTUI, `bun:*`, `node:fs` or `child_process` | core |
 | `src/adapters` | what implements the ports | core, adapters |
 | `src/tui` | the terminal front end | core, tui |
-| root: `src/*.ts`, `src/cli`, `src/types` | builds the adapters, starts the front end | everything |
+| root: `src/*.ts`, `src/cli` | builds the adapters, starts the front end | everything |
 
 `src/layers.test.ts` resolves every import and fails on one that crosses into a layer its folder may not use. Biome
 refuses the same by folder name as the import is written, and refuses Solid, OpenTUI and the runtime in core.
