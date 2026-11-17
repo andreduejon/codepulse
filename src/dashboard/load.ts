@@ -3,7 +3,7 @@
  * command line (or the app's Git port). Tests spy on these two functions.
  */
 import type { DashboardEvent } from "../core/dashboard/events";
-import { type CommitInfo, type DashboardSources, readAppEvents } from "../core/dashboard/load";
+import { type CommitInfo, type DashboardSources, type ReadOptions, readAppEvents } from "../core/dashboard/load";
 import type { GitPort } from "../core/git/port";
 import { gitCli } from "../git/git-cli";
 import { GitHubCache } from "../providers/github-actions/cache";
@@ -13,12 +13,9 @@ import { SnykCache } from "../providers/snyk/cache";
 
 export type { CommitInfo } from "../core/dashboard/load";
 
-export interface LoadOptions {
-  /** The window's start: older events are left out. */
-  since: number;
+export interface LoadOptions extends ReadOptions {
   /** The provider caches' folder (tests); the app's own otherwise. */
   cacheRoot?: string;
-  signal?: AbortSignal;
 }
 
 /** The provider caches as the Dashboard's sources. */

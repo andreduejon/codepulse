@@ -71,6 +71,12 @@ export interface DashboardSources {
   snyk: (app: string) => Promise<SnykScanResult[]>;
 }
 
+/** What a read of an app's events covers: from `since` (ms), until `signal` stops it. */
+export interface ReadOptions {
+  since: number;
+  signal?: AbortSignal;
+}
+
 /** An event's commit hash as the side panel may ask Git about it: hex only, so it is never read as an option. */
 export const isCommitHash = (sha: string): boolean => /^[0-9a-f]{7,40}$/i.test(sha);
 
@@ -126,7 +132,7 @@ const quietly = async <T>(read: () => Promise<T[]>): Promise<T[]> => {
  */
 export async function readAppEvents(
   app: string,
-  options: { since: number; signal?: AbortSignal },
+  options: ReadOptions,
   ports: { git: DashboardGit; sources: DashboardSources },
 ): Promise<DashboardEvent[]> {
   const { git, sources } = ports;

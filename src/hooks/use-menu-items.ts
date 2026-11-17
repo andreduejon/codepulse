@@ -9,7 +9,7 @@ import { type ProviderDetailView, type ProviderView, providerDisplayName } from 
 import { DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS } from "../core/provider-settings";
 import type { CodepulseConfig, ConfigInfo } from "../core/settings/config";
 import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL } from "../core/settings/config";
-import { getTokenSource } from "../providers/github-actions/api";
+import { getTokenSource } from "../utils/token-env";
 import {
   COPYABLE_VISIBLE_WIDTH,
   type GitHubMenuConfig,

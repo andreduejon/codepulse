@@ -14,53 +14,6 @@ import { fetchWithRetry as fetchWithRetryPolicy } from "../shared/http";
 
 // ── Remote URL parsing ────────────────────────────────────────────────────
 
-/**
- * Parse a GitHub (or GitHub Enterprise) repository's `owner`, `repo`, and
- * `hostname` from a git remote URL.
- *
- * Supported formats (any hostname):
- *   https://<host>/owner/repo[.git][/]
- *   git@<host>:owner/repo[.git]
- *   ssh://[git@]<host>/owner/repo[.git][/]
- *
- * Returns `null` for URLs that do not match the owner/repo path pattern,
- * or any malformed input.
- */
-export function parseGitHubRemote(url: string): GitHubRepo | null {
-  if (!url) return null;
-
-  const trimmed = url.trim();
-
-  // HTTPS: https://<host>/owner/repo[.git][/]
-  const httpsMatch = trimmed.match(/^https?:\/\/([^/]+)\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/i);
-  if (httpsMatch) {
-    const hostname = httpsMatch[1];
-    const owner = httpsMatch[2];
-    const repo = httpsMatch[3];
-    if (hostname && owner && repo) return { hostname, owner, repo };
-  }
-
-  // SSH scp-style: git@<host>:owner/repo[.git]
-  const sshScpMatch = trimmed.match(/^git@([^:]+):([^/]+)\/([^/]+?)(?:\.git)?$/i);
-  if (sshScpMatch) {
-    const hostname = sshScpMatch[1];
-    const owner = sshScpMatch[2];
-    const repo = sshScpMatch[3];
-    if (hostname && owner && repo) return { hostname, owner, repo };
-  }
-
-  // SSH protocol: ssh://[git@]<host>/owner/repo[.git][/]
-  const sshProtoMatch = trimmed.match(/^ssh:\/\/(?:git@)?([^/]+)\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/i);
-  if (sshProtoMatch) {
-    const hostname = sshProtoMatch[1];
-    const owner = sshProtoMatch[2];
-    const repo = sshProtoMatch[3];
-    if (hostname && owner && repo) return { hostname, owner, repo };
-  }
-
-  return null;
-}
-
 export function isTrustedGitHubHost(hostname: string, trustedEnterpriseHost: string | null = null): boolean {
   const normalized = normalizeGitHubHost(hostname);
   if (!normalized) return false;
@@ -69,16 +22,6 @@ export function isTrustedGitHubHost(hostname: string, trustedEnterpriseHost: str
 }
 
 // ── Authentication ────────────────────────────────────────────────────────
-
-/**
- * Determine whether a token is available for display purposes.
- *
- * @returns `"env"` when the env var is set, or `null` when no token is available.
- */
-export function getTokenSource(envVarName: string): "env" | null {
-  const envVal = process.env[envVarName];
-  return envVal?.trim() ? "env" : null;
-}
 
 /**
  * Read a GitHub Personal Access Token from the environment variable.

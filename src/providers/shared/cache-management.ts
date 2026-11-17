@@ -1,39 +1,12 @@
 import { existsSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
+import {
+  CACHE_INACTIVITY_MS,
+  type CacheEvictionResult,
+  type CacheGroupSummary,
+  type ProviderCacheSummary,
+} from "../../core/cache-store";
 import { DEFAULT_PROVIDER_CACHE_ROOT, invalidateProviderCacheWrites, providerCacheDatabase } from "./sha-sqlite-cache";
-
-export const CACHE_INACTIVITY_MS = 90 * 24 * 60 * 60 * 1_000;
-
-export interface CacheGroupSummary {
-  provider: string;
-  repoHash: string;
-  repoPath: string;
-  snapshotCount: number;
-  payloadBytes: number;
-  artifactCount: number;
-  artifactBytes: number;
-  logCount: number;
-  logBytes: number;
-  lastAccessed: number;
-  cleanupAt: number;
-}
-
-export interface ProviderCacheSummary {
-  path: string;
-  databaseBytes: number;
-  journalBytes: number;
-  groups: CacheGroupSummary[];
-}
-
-export interface CacheEvictionResult {
-  snapshotCount: number;
-  artifactCount: number;
-}
-
-export type CacheRepositorySummary = Pick<
-  CacheGroupSummary,
-  "repoHash" | "repoPath" | "snapshotCount" | "lastAccessed" | "cleanupAt"
->;
 
 function fileSize(path: string): number {
   try {

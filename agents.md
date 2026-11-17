@@ -65,8 +65,8 @@ ci.ts` its adapter. New logic that doesn't draw goes in `src/core`.
 Core imports nothing outside `src/core` (`core/boundary.test.ts` checks it, the linter names the app's layers): the app
 depends on core. A provider's model (types, merges, badges, commit data) is in
 `src/core/<provider>`, its ports in its service; the HTTP client, cache and scanner in `src/providers` implement them.
-Settings go through `SettingsPort` (`core/settings/port.ts`): `src/settings-file.ts` is the user's settings file,
-`startupProps` hands it to the app, and components below the app read it with `useSettings()`.
+The UI reaches Git, the network, the caches and the settings file only through ports (the linter refuses the
+adapters there); [docs/architecture.md](docs/architecture.md) lists the layers, ports and services.
 
 ## Keys
 

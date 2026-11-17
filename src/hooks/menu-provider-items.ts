@@ -6,6 +6,7 @@ import {
   knotMinutesLabel,
   windowDaysLabel,
 } from "../core/dashboard-settings";
+import { parseGitHubRemote } from "../core/github/host";
 import { isValidJenkinsJobUrl } from "../core/jenkins/validation";
 import {
   isValidOpenShiftNamespace,
@@ -21,7 +22,6 @@ import {
   PROVIDER_LIMIT_OPTIONS,
   PROVIDER_MS_TO_LABEL,
 } from "../core/provider-settings";
-import { parseGitHubRemote } from "../providers/github-actions/api";
 import type {
   GitHubMenuConfig,
   JenkinsMenuConfig,

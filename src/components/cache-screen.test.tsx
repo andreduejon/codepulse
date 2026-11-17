@@ -15,8 +15,10 @@ import { createSignal, Show } from "solid-js";
 import packageJson from "../../package.json";
 import * as config from "../config";
 import { createThemeState, ThemeContext } from "../context/theme";
+import { CACHE_INACTIVITY_MS, type CacheEvictionResult, type CacheRepositorySummary } from "../core/cache-store";
 import * as clipboard from "../hooks/use-clipboard";
 import * as management from "../providers/shared/cache-management";
+import { providerCacheStore } from "../providers/shared/cache-store";
 import {
   closeProviderCaches,
   DEFAULT_PROVIDER_CACHE_ROOT,
@@ -77,7 +79,7 @@ async function fixture(prefix = "codepulse-cache-screen-") {
 async function screen(
   root: string | undefined,
   currentRepo = ALPHA,
-  onEvict?: (repo: management.CacheRepositorySummary) => Promise<management.CacheEvictionResult>,
+  onEvict?: (repo: CacheRepositorySummary) => Promise<CacheEvictionResult>,
 ) {
   const theme = createThemeState();
   const [open, setOpen] = createSignal(true);
@@ -86,7 +88,7 @@ async function screen(
     () => (
       <ThemeContext.Provider value={theme}>
         <Show when={open()}>
-          <CacheScreen cacheRoot={root} onClose={close} onEvict={onEvict} currentRepo={currentRepo} />
+          <CacheScreen store={providerCacheStore(root)} onClose={close} onEvict={onEvict} currentRepo={currentRepo} />
         </Show>
       </ThemeContext.Provider>
     ),
@@ -154,11 +156,11 @@ async function screen(
 test("compact app rows aggregate all providers; selected reset reaches every provider and preserves selection", async () => {
   const data = await fixture();
   const now = Date.now();
-  await data.seed(ALPHA, "github-actions", now - management.CACHE_INACTIVITY_MS - 5000);
-  await data.seed(BETA, "future/provider", now - management.CACHE_INACTIVITY_MS - 4500);
-  await data.seed(ALPHA, "jenkins", now - management.CACHE_INACTIVITY_MS - 4000);
-  await data.seed(ALPHA, "snyk", now - management.CACHE_INACTIVITY_MS - 3000);
-  await data.seed(ALPHA, "openshift", now - management.CACHE_INACTIVITY_MS - 2000);
+  await data.seed(ALPHA, "github-actions", now - CACHE_INACTIVITY_MS - 5000);
+  await data.seed(BETA, "future/provider", now - CACHE_INACTIVITY_MS - 4500);
+  await data.seed(ALPHA, "jenkins", now - CACHE_INACTIVITY_MS - 4000);
+  await data.seed(ALPHA, "snyk", now - CACHE_INACTIVITY_MS - 3000);
+  await data.seed(ALPHA, "openshift", now - CACHE_INACTIVITY_MS - 2000);
   const before = management.getProviderCacheSummary(data.root);
   const contents = data.contents();
   const setup = await screen(data.root);
@@ -250,7 +252,7 @@ test("compact app rows aggregate all providers; selected reset reaches every pro
     await setup.click("enter confirm");
     const after = management.getProviderCacheSummary(data.root);
     for (const group of after.groups.filter(group => group.repoPath === ALPHA)) {
-      expect(group.cleanupAt).toBeGreaterThanOrEqual(started + management.CACHE_INACTIVITY_MS);
+      expect(group.cleanupAt).toBeGreaterThanOrEqual(started + CACHE_INACTIVITY_MS);
       expect(group.lastAccessed).toBe(before.groups.find(old => old.provider === group.provider)?.lastAccessed ?? 0);
     }
     expect(after.groups.find(group => group.repoPath === BETA)).toEqual(
@@ -437,8 +439,8 @@ test("async selected-repo eviction freezes the clone identity, blocks duplicate 
     { path: alphaPath, appName: "Shared app" },
     { path: betaPath, appName: "Shared app" },
   ]);
-  let pending = Promise.withResolvers<management.CacheEvictionResult>();
-  const evict = mock((_repo: management.CacheRepositorySummary) => pending.promise);
+  let pending = Promise.withResolvers<CacheEvictionResult>();
+  const evict = mock((_repo: CacheRepositorySummary) => pending.promise);
   const setup = await screen(data.root, alphaPath, evict);
   const destroy = spyOn(setup.renderer, "destroy").mockImplementation(() => {});
   try {
@@ -483,7 +485,7 @@ test("async selected-repo eviction freezes the clone identity, blocks duplicate 
     expect(data.contents()).toEqual(before);
     const alpha = setup.row(alphaPath).getChildren()[0] as TextRenderable;
     expect(alpha.fg).toEqual(RGBA.fromHex(setup.theme.theme().accent));
-    pending = Promise.withResolvers<management.CacheEvictionResult>();
+    pending = Promise.withResolvers<CacheEvictionResult>();
     await setup.key("e");
     await setup.key("RETURN");
     expect(evict).toHaveBeenCalledTimes(2);
@@ -511,9 +513,9 @@ test("async selected-repo eviction freezes the clone identity, blocks duplicate 
 test("actual groups sort alphabetically, ungrouped last; app names break access ties and cached sizes sum", async () => {
   const data = await fixture("codepulse cache screen ");
   const now = Date.now();
-  await data.seed(ALPHA, "github-actions", now - management.CACHE_INACTIVITY_MS - 5000);
-  await data.seed(ALPHA, "jenkins", now - management.CACHE_INACTIVITY_MS - 4000);
-  await data.seed(ALPHA, "jenkins", now - management.CACHE_INACTIVITY_MS - 4000, 2);
+  await data.seed(ALPHA, "github-actions", now - CACHE_INACTIVITY_MS - 5000);
+  await data.seed(ALPHA, "jenkins", now - CACHE_INACTIVITY_MS - 4000);
+  await data.seed(ALPHA, "jenkins", now - CACHE_INACTIVITY_MS - 4000, 2);
   const spacedRepo = await data.seed(join(data.root, "repo with spaces"), "jenkins", now - 6000);
   await data.seed(BETA, "jenkins", now - 6000);
   const fallback = await data.seed(resolve("/repo/fallback"), "snyk", now - 7000);
@@ -613,7 +615,7 @@ test("a confirms repository count, cancels safely, survives resize, and resets w
     await setup.key("RETURN");
     const after = management.getProviderCacheSummary(data.root);
     expect(after.groups).toHaveLength(3);
-    expect(after.groups.every(group => group.cleanupAt >= started + management.CACHE_INACTIVITY_MS)).toBe(true);
+    expect(after.groups.every(group => group.cleanupAt >= started + CACHE_INACTIVITY_MS)).toBe(true);
     expect(after.groups.map(group => group.lastAccessed)).toEqual(before.groups.map(group => group.lastAccessed));
     expect(data.contents().artifacts).toEqual(contents.artifacts);
     expect(data.contents().snapshots.map(({ cleanup_reset_at, ...snapshot }) => snapshot)).toEqual(

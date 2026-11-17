@@ -3,9 +3,9 @@ import { type Accessor, createEffect, createSignal, For, type JSX, onCleanup, Sh
 import { useGit } from "../context/git";
 import type { DetailTab } from "../context/state";
 import type { DashboardEvent } from "../core/dashboard/events";
+import type { CommitInfo } from "../core/dashboard/load";
 import { providerDisplayName } from "../core/provider-model";
 import { markLegend } from "../dashboard/legend";
-import { type CommitInfo, loadCommitInfo } from "../dashboard/load";
 import { useT } from "../hooks/use-t";
 import { DetailLegend, type LegendItem } from "../providers/shared/detail-legend";
 import { formatDate } from "../utils/date";
@@ -64,9 +64,7 @@ export function DashboardDetail(
     const key = `${event.app}\u0000${event.sha}`;
     let pending = commits.get(key);
     if (!pending) {
-      pending = props.loadCommit
-        ? props.loadCommit(event.app, event.sha)
-        : loadCommitInfo(event.app, event.sha, undefined, git);
+      pending = props.loadCommit ? props.loadCommit(event.app, event.sha) : git.getCommitInfo(event.app, event.sha);
       commits.set(key, pending);
     }
     void pending.then(info => {

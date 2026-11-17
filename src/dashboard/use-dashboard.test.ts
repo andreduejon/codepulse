@@ -7,7 +7,7 @@ import { RECENT_APPS } from "../constants";
 import type { DashboardEvent } from "../core/dashboard/events";
 import type { DashboardSettings } from "../core/dashboard-settings";
 import { GitHubCache } from "../providers/github-actions/cache";
-import { closeProviderCaches } from "../providers/shared/sha-sqlite-cache";
+import { closeProviderCaches, onProviderCacheWrite } from "../providers/shared/sha-sqlite-cache";
 import { type DashboardApp, useDashboard } from "./use-dashboard";
 
 const NOW = Date.parse("2026-03-02T11:00:00Z");
@@ -44,6 +44,7 @@ function dashboard(
   const state = createRoot(dispose => {
     cleanup.push(dispose);
     return useDashboard({
+      onCacheWrite: onProviderCacheWrite,
       app,
       active,
       settings: config,

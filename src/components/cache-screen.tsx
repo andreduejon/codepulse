@@ -1,23 +1,19 @@
-import { join, resolve } from "node:path";
 import { MouseButton, type Renderable, type ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, Index, onCleanup, Show } from "solid-js";
 import packageJson from "../../package.json";
+import { useCacheStore } from "../context/cache-store";
 import { useSettings } from "../context/settings";
-import { useClipboard } from "../hooks/use-clipboard";
-import { useT } from "../hooks/use-t";
-import { useModalKeys } from "../keyboard/dispatcher";
 import {
   CACHE_INACTIVITY_MS,
   type CacheEvictionResult,
   type CacheRepositorySummary,
-  evictRepositoryCache,
-  getProviderCacheSummary,
+  type CacheStorePort,
   type ProviderCacheSummary,
-  resetAllCacheTimers,
-  resetRepositoryCacheTimer,
-} from "../providers/shared/cache-management";
-import { DEFAULT_PROVIDER_CACHE_ROOT } from "../providers/shared/sha-sqlite-cache";
+} from "../core/cache-store";
+import { useClipboard } from "../hooks/use-clipboard";
+import { useT } from "../hooks/use-t";
+import { useModalKeys } from "../keyboard/dispatcher";
 import { formatGraphDate } from "../utils/date";
 import { repoDisplayName } from "../utils/group-repos";
 import { duplicateNameDetails } from "../utils/project-selector-rows";
@@ -33,7 +29,8 @@ const INACTIVITY_DAYS = Math.round(CACHE_INACTIVITY_MS / (24 * 60 * 60 * 1_000))
 interface CacheScreenProps {
   onClose: () => void;
   onEvict?: (repo: CacheRepositorySummary) => Promise<CacheEvictionResult>;
-  cacheRoot?: string;
+  /** The providers' cache: the app's unless given (a test's). */
+  store?: CacheStorePort;
   currentRepo?: string;
 }
 
@@ -55,6 +52,8 @@ const asRepo = (row: CacheRow) => (row.kind === "repo" ? row : undefined);
 const headerLabel = (row: CacheRow) => (row.kind === "header" ? row.label : "");
 
 export default function CacheScreen(props: Readonly<CacheScreenProps>) {
+  const contextStore = useCacheStore();
+  const store = props.store ?? contextStore;
   const t = useT();
   const renderer = useRenderer();
   const dimensions = useTerminalDimensions();
@@ -104,7 +103,7 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
     ),
   );
   const rows = createMemo(() => {
-    const path = summary()?.path ?? join(resolve(props.cacheRoot ?? DEFAULT_PROVIDER_CACHE_ROOT), "cache.sqlite");
+    const path = summary()?.path ?? store.path();
     const rows: CacheRow[] = [
       { kind: "header", id: "cache-general", label: "General" },
       { kind: "file", id: "cache-file-cache.sqlite", name: "Cache data", path },
@@ -189,7 +188,7 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
     const key = selected()?.id;
     const position = selectableIndexes().indexOf(cursor());
     try {
-      setSummary(getProviderCacheSummary(props.cacheRoot));
+      setSummary(store.summary());
       setError("");
     } catch (cause) {
       setSummary(null);
@@ -253,17 +252,15 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
     setError("");
     try {
       if (action.kind === "reset") {
-        resetRepositoryCacheTimer(action.repo.repoHash, props.cacheRoot);
+        store.resetTimer(action.repo.repoHash);
         refresh();
       } else if (action.kind === "evict") {
-        const counts = props.onEvict
-          ? await props.onEvict(action.repo)
-          : evictRepositoryCache(action.repo.repoHash, props.cacheRoot);
+        const counts = props.onEvict ? await props.onEvict(action.repo) : store.evictRepository(action.repo.repoHash);
         if (disposed) return;
         refresh();
         setResult(`Evicted ${counts.snapshotCount} snapshots and ${counts.artifactCount} artifacts.`);
       } else {
-        resetAllCacheTimers(props.cacheRoot);
+        store.resetAllTimers();
         refresh();
       }
     } catch (cause) {

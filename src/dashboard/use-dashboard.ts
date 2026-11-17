@@ -1,11 +1,10 @@
 import { type Accessor, createEffect, createMemo, createSignal, onCleanup, untrack } from "solid-js";
 import { RECENT_APPS } from "../constants";
 import { type DashboardEvent, type DashboardRow, dashboardRows } from "../core/dashboard/events";
+import type { ReadOptions } from "../core/dashboard/load";
 import { type DashboardSettings, DEFAULT_DASHBOARD_SETTINGS } from "../core/dashboard-settings";
 import type { EventSource } from "../core/provider-model";
-import { onProviderCacheWrite } from "../providers/shared/sha-sqlite-cache";
 import { rememberRecent } from "../utils/recent";
-import { type LoadOptions, loadAppEvents } from "./load";
 
 export interface DashboardApp {
   path: string;
@@ -62,9 +61,10 @@ export function useDashboard(
     /** Read again when this changes while shown: the graph's commits, after a refresh or a fetch. */
     changes?: Accessor<unknown>;
     now?: () => number;
-    cacheRoot?: string;
     /** How the app's events are read (tests); from Git and the provider caches otherwise. */
-    load?: (app: string, options: LoadOptions) => Promise<DashboardEvent[]>;
+    load: (app: string, options: ReadOptions) => Promise<DashboardEvent[]>;
+    /** Calls back after each provider write to the caches; returns the function that stops it. */
+    onCacheWrite?: (listener: (repoPath: string) => void) => () => void;
     /**
      * The open app's events its providers hold now: their caches keep only what ended, so a running build comes from
      * here. With the same id, the newer wins; one without a branch takes its commit's from a read event.
@@ -101,10 +101,9 @@ export function useDashboard(
     const since = (opts.now ?? Date.now)() - untrack(windowDays) * DAY;
     setLoading(true);
     try {
-      const loaded = await (opts.load ?? loadAppEvents)(app.path, {
+      const loaded = await opts.load(app.path, {
         since,
         signal: current.signal,
-        cacheRoot: opts.cacheRoot,
       });
       if (current.signal.aborted) return;
       // The last few apps read keep their events, so coming back shows them at once; older ones read again.
@@ -141,7 +140,8 @@ export function useDashboard(
       if (first) first = false;
       else reloadSoon();
     });
-    onCleanup(onProviderCacheWrite(reloadSoon));
+    const stop = opts.onCacheWrite?.(reloadSoon);
+    if (stop) onCleanup(stop);
   });
 
   /** The events read, without those of providers turned off. */

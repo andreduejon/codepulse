@@ -11,6 +11,7 @@
 import type { Accessor } from "solid-js";
 import { createEffect, createSignal, untrack } from "solid-js";
 import { type AppActions, type AppState, providerIdle } from "../../context/state";
+import { parseGitHubRemote } from "../../core/github/host";
 import { createGitHubService } from "../../core/github/service";
 import type {
   GitHubCommitData,
@@ -81,10 +82,10 @@ export function useGitHubCI(opts: {
   });
 
   // The remote as a GitHub repository: signals, so effects that ask isAvailable() run again once it is parsed.
-  const [parsedGitHubRepo, setParsedGitHubRepo] = createSignal(api.parseGitHubRemote(state.remoteUrl()));
-  const [cachedGitHubRepo, setCachedGitHubRepo] = createSignal<ReturnType<typeof api.parseGitHubRemote>>(null);
+  const [parsedGitHubRepo, setParsedGitHubRepo] = createSignal(parseGitHubRemote(state.remoteUrl()));
+  const [cachedGitHubRepo, setCachedGitHubRepo] = createSignal<ReturnType<typeof parseGitHubRemote>>(null);
   createEffect(() => {
-    const repo = api.parseGitHubRemote(state.remoteUrl());
+    const repo = parseGitHubRemote(state.remoteUrl());
     setParsedGitHubRepo(repo);
     setCachedGitHubRepo(
       repo && api.isTrustedGitHubHost(repo.hostname, configAccessor().trustedEnterpriseHost ?? null) ? repo : null,

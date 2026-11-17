@@ -2,8 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { CACHE_INACTIVITY_MS } from "../../core/cache-store";
 import {
-  CACHE_INACTIVITY_MS,
   cleanupInactiveProviderCaches,
   evictProviderCache,
   evictRepositoryCache,

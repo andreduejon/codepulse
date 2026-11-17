@@ -9,6 +9,7 @@ import * as config from "./config";
 import * as configWrite from "./config-write";
 import type { AppActions, AppState } from "./context/state";
 import { createThemeState } from "./context/theme";
+import { CACHE_INACTIVITY_MS } from "./core/cache-store";
 import { buildGraph } from "./core/git/graph";
 import * as dataLoader from "./hooks/use-data-loader";
 import * as detailLoader from "./hooks/use-detail-loader";
@@ -179,7 +180,7 @@ test(":cache groups apps, resets and evicts only selected repository, then resto
     expect(
       realSummary(root)
         .groups.filter(group => group.repoPath === current)
-        .every(group => group.cleanupAt >= started + management.CACHE_INACTIVITY_MS),
+        .every(group => group.cleanupAt >= started + CACHE_INACTIVITY_MS),
     ).toBe(true);
     expect(realSummary(root).groups).toHaveLength(3);
     /** An eviction first awaits the repository's path on disk: render until it has run, not just once. */

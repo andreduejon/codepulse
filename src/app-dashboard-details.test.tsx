@@ -11,6 +11,7 @@ import type { DashboardEvent } from "./core/dashboard/events";
 import { buildGraph } from "./core/git/graph";
 import type { CodepulseConfig } from "./core/settings/config";
 import * as dashboardLoad from "./dashboard/load";
+import * as repoDashboard from "./git/repo-dashboard";
 import * as dataLoader from "./hooks/use-data-loader";
 import * as detailLoader from "./hooks/use-detail-loader";
 import * as snykHook from "./providers/snyk/use-snyk";
@@ -64,7 +65,7 @@ test("in the compact layout, Enter on a dashboard event opens its details with i
         facts: [{ label: "Workflow", value: "CI" }],
       },
     ]),
-    spyOn(dashboardLoad, "loadCommitInfo").mockResolvedValue(null),
+    spyOn(repoDashboard, "getCommitInfo").mockResolvedValue(null),
     spyOn(dataLoader, "useDataLoader").mockImplementation(options => {
       app = { state: options.state, actions: options.actions };
       options.actions.setRepoPath(repo);
@@ -175,7 +176,7 @@ test("beside the events, → gives the provider's tab the keyboard: ←/→ betw
         sha,
       },
     ]),
-    spyOn(dashboardLoad, "loadCommitInfo").mockResolvedValue(null),
+    spyOn(repoDashboard, "getCommitInfo").mockResolvedValue(null),
     spyOn(dataLoader, "useDataLoader").mockImplementation(options => {
       app = { state: options.state, actions: options.actions };
       options.actions.setRepoPath(repo);
@@ -284,7 +285,7 @@ async function launchDashboard(opts: { width: number; shas: string[]; events: Da
     spyOn(detailLoader, "useDetailLoader").mockImplementation(() => {}),
     spyOn(CliRenderer.prototype, "setTerminalTitle").mockImplementation(() => {}),
     spyOn(dashboardLoad, "loadAppEvents").mockResolvedValue(opts.events.map(event => ({ ...event, app: repo }))),
-    spyOn(dashboardLoad, "loadCommitInfo").mockResolvedValue({
+    spyOn(repoDashboard, "getCommitInfo").mockResolvedValue({
       author: "Old Author",
       email: "old@example.com",
       date: "2026-01-02T03:04:05Z",

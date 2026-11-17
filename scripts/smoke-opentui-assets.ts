@@ -3,12 +3,12 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getTreeSitterClient } from "@opentui/core";
+import { CACHE_INACTIVITY_MS } from "../src/core/cache-store";
 import type { SnykScanResult } from "../src/core/snyk/types";
 import { GitHubCache } from "../src/providers/github-actions/cache";
 import { JenkinsCache } from "../src/providers/jenkins/cache";
 import { OpenShiftCache } from "../src/providers/openshift/cache";
 import {
-  CACHE_INACTIVITY_MS,
   cleanupInactiveProviderCaches,
   evictProviderCache,
   evictRepositoryCache,
