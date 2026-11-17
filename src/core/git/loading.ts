@@ -6,8 +6,8 @@
  * or live git subprocess dependencies.
  */
 
-import type { Commit, GraphRow } from "../core/git/types";
-import { isUncommittedHash, UNCOMMITTED_HASH } from "../core/git/types";
+import type { Commit, GraphRow } from "./types";
+import { isUncommittedHash, UNCOMMITTED_HASH } from "./types";
 
 /**
  * Compute the effective max commit count for a silent (auto-refresh or
