@@ -1,6 +1,7 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { batch, createEffect, createMemo, createSignal, onCleanup, onMount, Show } from "solid-js";
+import { useCommandBar } from "./app/commands";
 import { useDashboardController } from "./app/dashboard-controller";
 import { useDialogHost } from "./app/dialogs";
 import { useMessageCenter } from "./app/messages";
@@ -37,14 +38,12 @@ import { openGraphDetails } from "./hooks/handle-graph-keys";
 import { useAncestry } from "./hooks/use-ancestry";
 import { useDataLoader } from "./hooks/use-data-loader";
 import { useDetailLoader } from "./hooks/use-detail-loader";
-import { type CommandBarMode, useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
-import { usePathFilter } from "./hooks/use-path-filter";
+import { useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
 import { providerAccent } from "./providers/colors";
 import OpenShiftResourceDialog from "./providers/openshift/resource-dialog";
 import JobLogDialog from "./providers/shared/job-log-dialog";
 import { setProviderCacheSuspended } from "./providers/shared/sha-sqlite-cache";
 import type { SnykProviderConfig } from "./providers/snyk/use-snyk";
-import { computeDisplacedIndex } from "./utils/keyboard-nav-utils";
 
 export function AppContent(props: Readonly<AppContentProps>) {
   const { state, actions } = createAppState(
@@ -114,17 +113,27 @@ export function AppContent(props: Readonly<AppContentProps>) {
     setSetupVisible(false);
   };
 
-  const [searchFocused, setSearchFocused] = createSignal(false);
-  /**
-   * Local input value for the search bar — independent of the active filter.
-   * Updated on every keystroke but only applied to the filter on submit (Enter).
-   */
-  const [searchInputValue, setSearchInputValue] = createSignal("");
-
-  /** Command bar mode — drives placeholder text and key routing. */
-  const [commandBarMode, setCommandBarMode] = createSignal<CommandBarMode>("idle");
-  /** Raw text typed in the command bar (e.g. "search", "path src/"). */
-  const [commandBarValue, setCommandBarValue] = createSignal("");
+  const { setAnchor, clearAnchor, reanchorIfOutsideChain } = useAncestry(state, actions);
+  const commandBar = useCommandBar({
+    state,
+    actions,
+    repoPath: activeRepoPath,
+    clearAnchor,
+    runCommand: command => handleCommandExecute(command),
+  });
+  const {
+    searchFocused,
+    setSearchFocused,
+    searchInputValue,
+    setSearchInputValue,
+    commandBarMode,
+    setCommandBarMode,
+    commandBarValue,
+    setCommandBarValue,
+    handlePathExecute,
+    selectMode,
+    applySearch,
+  } = commandBar;
 
   // Reactive terminal dimensions for adaptive layout
   const dimensions = useTerminalDimensions();
@@ -171,9 +180,6 @@ export function AppContent(props: Readonly<AppContentProps>) {
   // Set synchronously before setCursorIndex, read inside the commit-change effect.
   let isJumpNavigation = false;
 
-  // ── Ancestry highlighting ─────────────────────────────────────────────────
-  const { setAnchor, clearAnchor, reanchorIfOutsideChain } = useAncestry(state, actions);
-
   // ── Path filter ───────────────────────────────────────────────────────────
   const handleJumpToCommit = (hash: string, from: "child" | "parent") => {
     const rows = state.graphRows();
@@ -195,9 +201,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
 
   const resetTransientRepoState = () => {
     setDialog(null);
-    setCommandBarMode("idle");
-    setCommandBarValue("");
-    setSearchFocused(false);
+    commandBar.leave();
     setSearchInputValue("");
     clearAnchor();
     actions.setSearchQuery("");
@@ -270,14 +274,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     theme: () => themeState.theme(),
     switchTo: switchRepoPath,
     setGitNotice,
-    closeSearch: () => {
-      const mode = commandBarMode();
-      if (mode === "search" || mode === "path") {
-        setSearchFocused(false);
-        setCommandBarMode("idle");
-        setCommandBarValue("");
-      }
-    },
+    closeSearch: commandBar.closeSearch,
   });
 
   const handleReloadAll = async () => {
@@ -336,10 +333,6 @@ export function AppContent(props: Readonly<AppContentProps>) {
     detailScrollboxRef?.scrollTo(0);
   });
 
-  const handleSearchInput = (value: string) => {
-    setSearchInputValue(value);
-  };
-
   // Clamp cursor index when graphRows shrinks (e.g. branch change, reload).
   createEffect(() => {
     const rows = state.graphRows();
@@ -391,52 +384,6 @@ export function AppContent(props: Readonly<AppContentProps>) {
       setCommandBarMode,
       setCommandBarValue,
     });
-
-  /**
-   * Apply a path filter from the command bar PATH_INPUT mode.
-   * Empty string clears the filter; non-empty sets it and computes
-   * the set of matching commit hashes for display-level dimming.
-   * Mutually exclusive with search and ancestry.
-   */
-  const { handlePathExecute } = usePathFilter({
-    repoPath: activeRepoPath,
-    state,
-    actions,
-    clearAnchor,
-    setSearchInputValue,
-    clearSearchDebounce: () => {},
-  });
-
-  const selectMode = (mode: "normal" | "search" | "path" | "ancestry") => {
-    if (mode === "search" || mode === "path") {
-      handleCommandExecute(mode);
-      return;
-    }
-    batch(() => {
-      setSearchFocused(false);
-      setCommandBarMode("idle");
-      setCommandBarValue("");
-      setSearchInputValue("");
-      actions.setSearchQuery("");
-      actions.setPathFilter(null);
-      actions.setPathMatchSet(null);
-      if (mode === "normal") clearAnchor();
-      else handleCommandExecute("ancestry");
-    });
-  };
-
-  const applySearch = (value: string) => {
-    batch(() => {
-      clearAnchor();
-      actions.setPathFilter(null);
-      actions.setPathMatchSet(null);
-      setSearchInputValue(value);
-      actions.setSearchQuery(value);
-    });
-    const target = computeDisplacedIndex(state.graphRows(), state.highlightSet(), state.cursorIndex());
-    actions.setCursorIndex(target);
-    actions.setScrollTargetIndex(target);
-  };
 
   // Keyboard handling
   const { onFooterEnter, onFooterEscape } = useKeyboardNavigation({
@@ -576,9 +523,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                           if (!commit) return;
                           batch(() => {
                             reanchorIfOutsideChain(commit.hash);
-                            setSearchFocused(false);
-                            setCommandBarMode("idle");
-                            setCommandBarValue("");
+                            commandBar.leave();
                             actions.setDetailFocused(false);
                             actions.setCursorIndex(index);
                             actions.setScrollTargetIndex(index);
@@ -621,13 +566,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                         commandBarValue={commandBarValue}
                         searchInputValue={searchInputValue}
                         searchFocused={searchFocused}
-                        onInput={val => {
-                          if (commandBarMode() === "command" || commandBarMode() === "path") {
-                            setCommandBarValue(val);
-                          } else {
-                            handleSearchInput(val);
-                          }
-                        }}
+                        onInput={commandBar.onInput}
                         detailFocused={state.detailFocused}
                         knownRepos={knownRepoInfos()}
                         currentRepo={activeRepoPath()}
@@ -676,9 +615,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                       <DetailPanel
                         mouseEnabled={dialog() == null && state.keyboardScopeOverride() == null}
                         onMouseFocus={() => {
-                          setSearchFocused(false);
-                          setCommandBarMode("idle");
-                          setCommandBarValue("");
+                          commandBar.leave();
                           actions.setDetailFocused(true);
                         }}
                         scrollboxRef={el => {
