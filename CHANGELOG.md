@@ -8,6 +8,10 @@ All notable changes to this project will be documented in this file.
 
 - Moving through the Dashboard redraws only the row the cursor leaves and the row
   it reaches: with 1,000 events a key takes 4 ms instead of 38 ms.
+- GitHub, Jenkins and OpenShift save a fetch's runs and builds to the cache in one
+  go instead of commit by commit, which on Windows took seconds for a large fetch.
+  A refresh that brings nothing new writes nothing, so the Dashboard no longer
+  reads every cache again after it.
 
 ### Fixed
 

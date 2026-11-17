@@ -10,6 +10,7 @@ import type { ProviderCacheLimit } from "./auto-refresh";
 import {
   closeProviderCaches,
   mergeById,
+  onProviderCacheWrite,
   persistMergedSnapshots,
   providerCacheDatabase,
   ShaSqliteCache,
@@ -86,6 +87,74 @@ describe("persistMergedSnapshots", () => {
     expect((await disk.list("/repo")).sort()).toEqual(shas.slice(1, 11));
     expect((await disk.read("/repo", shas[10]))?.value).toBe("old+new");
     expect((await disk.read("/repo", shas[1]))?.value).toBe("new");
+  });
+});
+
+describe("persistMergedSnapshots, saving a fetch at once", () => {
+  const shas = Array.from({ length: 50 }, (_, index) => (index + 1).toString(16).padStart(40, "0"));
+  const merge = (sha: string, existing: Entry | null, incoming: string[]) => ({
+    sha,
+    value: [...new Set([...(existing?.value.split("+") ?? []), ...incoming])].join("+"),
+  });
+
+  test("a fetch's commits are saved in one go: the Dashboard is told once, not once per commit", async () => {
+    const root = await cacheRoot();
+    const disk = cache(root, "test", 100);
+    const told: string[] = [];
+    const stop = onProviderCacheWrite(repo => told.push(repo));
+    try {
+      await persistMergedSnapshots(
+        disk,
+        "/repo",
+        shas,
+        () => true,
+        () => ["run"],
+        merge,
+      );
+      expect(told).toEqual(["/repo"]);
+      expect((await disk.list("/repo")).length).toBe(50);
+    } finally {
+      stop();
+    }
+  });
+
+  test("a refresh that brings nothing new writes nothing, so the Dashboard isn't told to read again", async () => {
+    const root = await cacheRoot();
+    const disk = cache(root, "test", 100);
+    await persistMergedSnapshots(
+      disk,
+      "/repo",
+      shas,
+      () => true,
+      () => ["run"],
+      merge,
+    );
+    const told: string[] = [];
+    const stop = onProviderCacheWrite(repo => told.push(repo));
+    try {
+      await persistMergedSnapshots(
+        disk,
+        "/repo",
+        shas,
+        () => true,
+        () => ["run"],
+        merge,
+      );
+      expect(told).toEqual([]);
+      // Something new for one commit: written, and told once.
+      await persistMergedSnapshots(
+        disk,
+        "/repo",
+        shas,
+        () => true,
+        sha => (sha === shas[0] ? ["rerun"] : ["run"]),
+        merge,
+      );
+      expect(told).toEqual(["/repo"]);
+      expect((await disk.read("/repo", shas[0] as string))?.value).toBe("run+rerun");
+    } finally {
+      stop();
+    }
   });
 });
 

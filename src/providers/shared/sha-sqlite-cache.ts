@@ -171,18 +171,13 @@ export async function persistMergedSnapshots<T extends { sha: string }, I>(
   merge: (sha: string, existing: T | null, incoming: I[]) => T,
 ): Promise<void> {
   if (!isCurrent()) return;
-  const writes = await Promise.all(
-    shas.map(async sha => {
-      const incoming = incomingFor(sha);
-      if (incoming.length === 0) return false;
-      const existing = await disk.read(repoPath, sha);
-      if (!isCurrent()) return false;
-      await disk.write(repoPath, merge(sha, existing, incoming), { evict: false });
-      return true;
-    }),
-  );
-  if (writes.some(Boolean) && isCurrent()) await disk.evictForRepo(repoPath);
+  const items = shas.map(sha => ({ sha, incoming: incomingFor(sha) })).filter(item => item.incoming.length > 0);
+  if (items.length === 0) return;
+  await disk.mergeMany(repoPath, items, merge, isCurrent);
 }
+
+/** A merge that made an entry the cache can't keep: a programming error, not a cache failure, so it is thrown. */
+class InvalidEntryError extends Error {}
 
 export interface ShaSqliteCacheOptions<T> {
   provider: string;
@@ -318,6 +313,63 @@ export class ShaSqliteCache<T extends { sha: string }> {
       return;
     }
     for (const listener of writeListeners) listener(repoPath);
+  }
+
+  /**
+   * Merges each commit's new results into its entry, all in one transaction: an entry that comes out the same is not
+   * written again, the count limit applies once, and listeners hear of it once, only when something was written.
+   * Reading an entry to merge into doesn't count as using it; writing it does. Returns how many entries it wrote.
+   */
+  async mergeMany<I>(
+    repoPath: string,
+    items: readonly { sha: string; incoming: readonly I[] }[],
+    merge: (sha: string, existing: T | null, incoming: I[]) => T,
+    isCurrent: () => boolean = () => true,
+  ): Promise<number> {
+    const epoch = writeEpochs.get(this.root) ?? 0;
+    if (items.length === 0 || !this.canWrite(epoch) || !isCurrent()) return 0;
+    const { hash, path } = await repositoryIdentity(repoPath);
+    if (!this.canWrite(epoch) || !isCurrent()) return 0;
+    let written = 0;
+    try {
+      const db = providerCacheDatabase(this.root);
+      const select = db.query<{ payload: string }, [string, string, string]>(
+        "SELECT payload FROM snapshots WHERE provider = ? AND repo_hash = ? AND sha = ?",
+      );
+      const upsert = db.query(`INSERT INTO snapshots (provider, repo_hash, repo_path, sha, payload, accessed_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT (provider, repo_hash, sha) DO UPDATE SET
+          repo_path = excluded.repo_path, payload = excluded.payload, accessed_at = excluded.accessed_at`);
+      const now = Date.now();
+      db.transaction(() => {
+        for (const item of items) {
+          const sha = assertExactSha(item.sha);
+          const row = select.get(this.provider, hash, sha);
+          let existing: T | null = null;
+          if (row) {
+            try {
+              const value: unknown = JSON.parse(row.payload);
+              if (this.isEntry(value) && value.sha.toLowerCase() === sha) existing = value;
+            } catch {
+              // An unreadable entry is replaced by the merge.
+            }
+          }
+          const merged = merge(sha, existing, [...item.incoming]);
+          if (!this.isEntry(merged)) throw new InvalidEntryError(this.invalidMessage);
+          const payload = JSON.stringify({ ...merged, sha });
+          if (row?.payload === payload) continue;
+          upsert.run(this.provider, hash, path, sha, payload, now);
+          written++;
+        }
+        if (written > 0) this.evict(db, hash);
+      })();
+    } catch (error) {
+      if (error instanceof InvalidEntryError) throw new Error(error.message);
+      reportCacheError(this.root, error);
+      return 0;
+    }
+    if (written > 0) for (const listener of writeListeners) listener(repoPath);
+    return written;
   }
 
   async evictForRepo(repoPath: string): Promise<void> {

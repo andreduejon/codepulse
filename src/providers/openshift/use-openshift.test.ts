@@ -75,6 +75,8 @@ function mountOpenShift(
   const cacheRead = spyOn(OpenShiftCache.prototype, "read").mockResolvedValue(entry);
   const cachePeek = spyOn(OpenShiftCache.prototype, "peekAll").mockResolvedValue([entry, ...(options.cached ?? [])]);
   const cacheWrite = spyOn(OpenShiftCache.prototype, "write").mockResolvedValue(undefined);
+  // How a fetch saves its builds: all commits at once.
+  const cacheSave = spyOn(OpenShiftCache.prototype, "mergeMany").mockResolvedValue(0);
   const logRead = spyOn(OpenShiftCache.prototype, "readLog").mockResolvedValue(null);
   const logWrite = spyOn(OpenShiftCache.prototype, "writeLog").mockResolvedValue(undefined);
   // What the cluster lists: the entries' builds, fresh from the API (not marked as cache-only).
@@ -106,7 +108,18 @@ function mountOpenShift(
   const watch = spyOn(api, "watchOpenShiftStream").mockImplementation(
     (...args) => new Promise(resolve => watches.push({ signal: args[4], onEvent: args[5], resolve })),
   );
-  for (const mock of [cacheList, cacheRead, cachePeek, cacheWrite, logRead, logWrite, inventory, live, watch]) {
+  for (const mock of [
+    cacheList,
+    cacheRead,
+    cachePeek,
+    cacheWrite,
+    cacheSave,
+    logRead,
+    logWrite,
+    inventory,
+    live,
+    watch,
+  ]) {
     cleanup.push(() => mock.mockRestore());
   }
   cleanup.push(() => {
@@ -158,7 +171,19 @@ function mountOpenShift(
     });
     mounted = { state, actions, openShift, setSuspended };
   });
-  return { ...mounted, cacheList, cacheRead, cachePeek, cacheWrite, logRead, logWrite, inventory, live, watches };
+  return {
+    ...mounted,
+    cacheList,
+    cacheRead,
+    cachePeek,
+    cacheWrite,
+    cacheSave,
+    logRead,
+    logWrite,
+    inventory,
+    live,
+    watches,
+  };
 }
 
 describe("OpenShift suspension", () => {
@@ -208,6 +233,7 @@ describe("OpenShift suspension", () => {
     expect(mounted.cachePeek).not.toHaveBeenCalled();
     expect(mounted.cacheRead).not.toHaveBeenCalled();
     expect(mounted.cacheWrite).not.toHaveBeenCalled();
+    expect(mounted.cacheSave).not.toHaveBeenCalled();
     expect(mounted.inventory).not.toHaveBeenCalled();
     expect(mounted.live).not.toHaveBeenCalled();
     setSuspended(false);
@@ -256,7 +282,7 @@ describe("OpenShift suspension", () => {
     mounted.setSuspended(true);
     mounted.setSuspended(false);
     await Bun.sleep(0);
-    const writes = mounted.cacheWrite.mock.calls.length;
+    const writes = mounted.cacheSave.mock.calls.length;
     const watches = mounted.live.mock.calls.length;
     resolve({
       data: new Map([
@@ -268,7 +294,7 @@ describe("OpenShift suspension", () => {
     });
     await pending;
     expect(mounted.openShift.getCommitData(SHA)?.namespaces[0].builds[0].status).toBe("pass");
-    expect(mounted.cacheWrite.mock.calls.length).toBe(writes);
+    expect(mounted.cacheSave.mock.calls.length).toBe(writes);
     expect(mounted.live.mock.calls.length).toBe(watches);
   });
 });
@@ -376,7 +402,7 @@ describe("OpenShift cache below the fetch depth, saving", () => {
       successfulRequests: 1,
     });
     for (let i = 0; i < 100 && !mounted.state.graphBadges().has(older); i++) await Bun.sleep(5);
-    const savedOlder = () => mounted.cacheWrite.mock.calls.some(call => call[1].sha === older);
+    const savedOlder = () => mounted.cacheSave.mock.calls.some(call => call[1].some(item => item.sha === older));
     await mounted.openShift.refresh();
     await Bun.sleep(5);
     // Only shown: saving it again on every refresh would mark it as used.

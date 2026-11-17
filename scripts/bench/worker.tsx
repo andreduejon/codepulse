@@ -27,7 +27,7 @@ import { getWorkingTreeStatus } from "../../src/git/repo-status";
 import type { Commit } from "../../src/git/types";
 import { startupProps } from "../../src/main";
 import JobLogDialog from "../../src/providers/shared/job-log-dialog";
-import { ShaSqliteCache } from "../../src/providers/shared/sha-sqlite-cache";
+import { persistMergedSnapshots, ShaSqliteCache } from "../../src/providers/shared/sha-sqlite-cache";
 import { newestSubject } from "./repo";
 
 export interface BenchRepos {
@@ -165,6 +165,20 @@ async function functions() {
   });
   report("SQLite write, one entry (of 200 in a row)", writes / commits.length, "ms");
   report("SQLite read every entry (200)", await timed(5, () => cache.peekAll(repo)), "ms");
+  // A fetch's save: every commit at once, as the providers save (a new run on each, so every entry changes).
+  let round = 0;
+  const save = await timed(3, () => {
+    round++;
+    return persistMergedSnapshots(
+      cache,
+      repo,
+      commits.map(commit => commit.hash),
+      () => true,
+      () => [round],
+      (sha, existing, incoming) => ({ sha, runs: [...(existing?.runs ?? []), { id: incoming[0] }] }),
+    );
+  });
+  report("SQLite save of a fetch, 200 commits at once", save, "ms");
 }
 
 /** The graph view on its own: mounting rows, a refresh that brings one new commit, cursor moves, retained memory. */
