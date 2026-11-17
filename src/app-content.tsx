@@ -11,6 +11,7 @@ import {
   Show,
   untrack,
 } from "solid-js";
+import { useDialogHost } from "./app/dialogs";
 import { useMessageCenter } from "./app/messages";
 import { useProviderHost } from "./app/providers";
 import { useRepoSettings } from "./app/repo-settings";
@@ -54,25 +55,23 @@ import type { DashboardEvent } from "./dashboard/events";
 import { markLegend } from "./dashboard/legend";
 import type { CommitInfo } from "./dashboard/load";
 import { type DashboardApp, useDashboard } from "./dashboard/use-dashboard";
-import type { DiffTarget } from "./git/types";
 import { handleDetailKey } from "./hooks/handle-detail-keys";
 import { openGraphDetails } from "./hooks/handle-graph-keys";
 import { useAncestry } from "./hooks/use-ancestry";
 import { useDataLoader } from "./hooks/use-data-loader";
 import { useDetailLoader } from "./hooks/use-detail-loader";
-import { type CommandBarMode, type DialogId, useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
+import { type CommandBarMode, useKeyboardNavigation } from "./hooks/use-keyboard-navigation";
 import { usePathFilter } from "./hooks/use-path-filter";
 import { providerAccent, providerColors } from "./providers/colors";
 import { detailEntryFor } from "./providers/detail-entries";
 import OpenShiftResourceDialog from "./providers/openshift/resource-dialog";
-import type { OpenShiftResource } from "./providers/openshift/types";
 import { type EventSource, isProviderDetailView, type ProviderView, providerDetailTab } from "./providers/provider";
 import { type CacheRepositorySummary, evictRepositoryCache } from "./providers/shared/cache-management";
-import JobLogDialog, { type JobLogTarget } from "./providers/shared/job-log-dialog";
+import JobLogDialog from "./providers/shared/job-log-dialog";
 import { repositoryIdentity, setProviderCacheSuspended } from "./providers/shared/sha-sqlite-cache";
 import type { SnykProviderConfig } from "./providers/snyk/use-snyk";
 import { nextGroupRepoPath, repoDisplayName } from "./utils/group-repos";
-import { computeDisplacedIndex, DETAIL_CHILD_DIALOGS } from "./utils/keyboard-nav-utils";
+import { computeDisplacedIndex } from "./utils/keyboard-nav-utils";
 import { openUrl } from "./utils/open-url";
 import { rememberRecent } from "./utils/recent";
 
@@ -147,19 +146,12 @@ export function AppContent(props: Readonly<AppContentProps>) {
     setSetupVisible(false);
   };
 
-  const [dialog, setDialog] = createSignal<DialogId>(null);
-
   const [searchFocused, setSearchFocused] = createSignal(false);
   /**
    * Local input value for the search bar — independent of the active filter.
    * Updated on every keystroke but only applied to the filter on submit (Enter).
    */
   const [searchInputValue, setSearchInputValue] = createSignal("");
-  /** Target for the diff+blame dialog (set when user activates a file). */
-  const [diffTarget, setDiffTarget] = createSignal<DiffTarget | null>(null);
-  /** Target for the job log dialog (set when user opens a job log). */
-  const [jobLogTarget, setJobLogTarget] = createSignal<JobLogTarget | null>(null);
-  const [openShiftResourceTarget, setOpenShiftResourceTarget] = createSignal<OpenShiftResource | null>(null);
 
   /** Command bar mode — drives placeholder text and key routing. */
   const [commandBarMode, setCommandBarMode] = createSignal<CommandBarMode>("idle");
@@ -177,26 +169,21 @@ export function AppContent(props: Readonly<AppContentProps>) {
     return "normal";
   });
 
-  // Seamless resize transitions between layout modes:
-  // - Normal → Compact while detail is focused: auto-open the detail dialog, unless another dialog is open (a diff
-  //   or log opened from the details stays; closing it goes back to the details)
-  // - Compact → Normal while detail dialog is open: close dialog, keep detail focused
-  // Uses untrack() for dialog() so this effect only fires on layoutMode changes,
-  // not every time any dialog (e.g. diff-blame) opens/closes.
-  createEffect(() => {
-    const mode = layoutMode();
-    const currentDialog = untrack(dialog);
-    if (mode === "compact" && state.detailFocused() && currentDialog === null) {
-      // The dashboard's details have their own dialog.
-      setDialog(untrack(dashboardShown) ? "dashboard-event" : "detail");
-    } else if (mode === "normal" && currentDialog === "detail") {
-      setDialog(null);
-      // detailFocused stays true — panel is now visible in two-column layout
-    } else if (mode === "normal" && currentDialog === "dashboard-event") {
-      // The side panel shows the event now.
-      setDialog(null);
-    }
-  });
+  const {
+    dialog,
+    setDialog,
+    diffTarget,
+    setDiffTarget,
+    jobLogTarget,
+    openShiftResourceTarget,
+    openDiff: handleOpenDiff,
+    openJobLog,
+    openResource: handleOpenOpenShiftResource,
+    openFromMenu: handleOpenDialog,
+    setLogSearchScope,
+    compactDetailUnderChild,
+    closeToDetail,
+  } = useDialogHost({ state, actions, layoutMode });
 
   // Ref for programmatic scrolling of the detail panel
   let graphScrollboxRef: ScrollBoxRenderable | undefined;
@@ -244,24 +231,6 @@ export function AppContent(props: Readonly<AppContentProps>) {
       actions.setScrollTargetIndex(idx);
       detailScrollboxRef?.scrollTo(0);
     }
-  };
-
-  /** Open the diff+blame dialog for the given file target. */
-  const handleOpenDiff = (target: DiffTarget) => {
-    setDiffTarget(target);
-    setDialog("diff-blame");
-  };
-
-  /** The log viewer with what a provider built for it (a job, a build at an entry, a failed test). */
-  const openJobLog = (target: JobLogTarget | null) => {
-    if (!target) return;
-    setJobLogTarget(target);
-    setDialog("job-log");
-  };
-
-  const handleOpenOpenShiftResource = (resource: OpenShiftResource) => {
-    setOpenShiftResourceTarget(resource);
-    setDialog("openshift-resource");
   };
 
   const refreshActiveProvider = providers.refreshActive;
@@ -781,13 +750,6 @@ export function AppContent(props: Readonly<AppContentProps>) {
     }
   });
 
-  /** Open a sub-dialog from within the menu (e.g. theme picker). */
-  const handleOpenDialog = (dialogId: "theme") => {
-    if (dialogId === "theme") {
-      setDialog("theme");
-    }
-  };
-
   const openCacheScreen = () => {
     cacheGraphScrollTop = graphScrollboxRef?.scrollTop ?? 0;
     setDialog(null);
@@ -930,22 +892,6 @@ export function AppContent(props: Readonly<AppContentProps>) {
       return tabNotice();
     },
     onDismissTabNotice: dismissTabNotice,
-  };
-
-  /** While a log dialog's search owns Esc, the app's Esc (cascade close) must not close the dialog. */
-  const setLogSearchScope = (active: boolean) => actions.setKeyboardScopeOverride(active ? "log-search" : null);
-
-  /** A dialog opened from the compact details is showing; they wait under it. */
-  const compactDetailUnderChild = () =>
-    DETAIL_CHILD_DIALOGS.has(dialog() ?? "") &&
-    layoutMode() === "compact" &&
-    state.detailFocused() &&
-    !dashboardShown();
-
-  /** Dialogs opened from the details return to the compact detail dialog when they close. */
-  const closeToDetail = () => {
-    if (layoutMode() === "compact" && state.detailFocused()) setDialog(dashboardShown() ? "dashboard-event" : "detail");
-    else setDialog(null);
   };
 
   // ── Provider-aware theme: override accent with githubActionsBg in CI mode ──
