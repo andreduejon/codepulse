@@ -1,18 +1,11 @@
 import { type Accessor, createEffect, on, onCleanup, untrack } from "solid-js";
 import type { DetailNavRef } from "../components/detail-types";
 import type { AppActions, AppState } from "../context/state";
-import { BANNER, bannerOrFallback } from "../core/banner";
+import { createCommitDetailService } from "../core/git/commit-detail";
 import type { GitPort } from "../core/git/port";
 import { isUncommittedHash } from "../core/git/types";
 import { isProviderDetailView } from "../core/provider-model";
 import { getAvailableTabs, getDefaultDetailTab } from "../utils/tab-utils";
-
-const DETAIL_DEBOUNCE_MS = 150;
-
-function cancelPending(timer: ReturnType<typeof setTimeout> | null, ctrl: AbortController | null): void {
-  if (timer) clearTimeout(timer);
-  if (ctrl) ctrl.abort();
-}
 
 interface UseDetailLoaderOptions {
   /** Git, through the app's port. */
@@ -68,91 +61,32 @@ export function useDetailLoader({
   getCommitData,
   getProviderLoading,
 }: UseDetailLoaderOptions): void {
-  let detailAbortCtrl: AbortController | null = null;
-  let detailDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  const details = createCommitDetailService({
+    git,
+    repoPath,
+    selectedHash: () => state.selectedCommit()?.hash,
+    actions,
+  });
   /** The graph's details: the Dashboard has its own, which the graph's commit leaves alone. */
   const graphDetail = state.detailFor("graph");
   const setGraphDetail = actions.detailFor("graph");
 
-  // Load commit detail whenever the selected commit changes.
+  // Another selected commit (or another view, which may load what the details show): its tab, then its details.
   createEffect(() => {
-    const path = repoPath();
+    repoPath();
     const commit = state.selectedCommit();
-    // Read activeProviderView reactively so this effect re-fires when the user
-    // switches between git and provider views (lazy load on view change).
     const activeProvider = state.activeProviderView();
-
-    // Cancel any pending debounce and abort in-flight git subprocesses
-    cancelPending(detailDebounceTimer, detailAbortCtrl);
-    detailDebounceTimer = detailAbortCtrl = null;
-
-    if (!commit) {
-      actions.setCommitDetail(null);
-      actions.setUncommittedDetail(null);
-      actions.setDetailLoading(false);
-      return;
-    }
-
-    const isUncommitted = isUncommittedHash(commit.hash);
-
     /*
-     * Reset active tab — but preserve it on child/parent jump navigation
-     * so the user stays on the Details tab when walking the commit graph.
-     * getIsJumpNavigation() is a plain JS flag set synchronously by
-     * handleJumpToCommit around the setCursorIndex call. Since SolidJS
-     * effects run synchronously when a signal updates, this flag is still
-     * true when this effect fires.
+     * The tab starts over, except on a jump to a child or parent: walking the graph keeps the Details tab. The jump's
+     * flag is set around the cursor change, and this effect runs inside it. A provider's default tab needs a provider
+     * view: while the Dashboard shows, the graph's tab waits for one.
      */
-    // A provider's default tab needs a provider view: while the Dashboard shows, the graph's tab waits for one.
-    if (!getIsJumpNavigation() && activeProvider !== "dashboard") {
+    if (commit && !getIsJumpNavigation() && activeProvider !== "dashboard") {
       setGraphDetail.setDetailActiveTab(getDefaultDetailTab(commit, activeProvider));
       setGraphDetail.setDetailCursorIndex(0);
-      // Clear any stale jump direction on normal (non-jump) navigation
       detailNavRef.pendingJumpDirection = null;
     }
-
-    // Clear stale detail immediately so the old file tree nodes are removed.
-    actions.setCommitDetail(null);
-    actions.setUncommittedDetail(null);
-
-    // Provider views have no Files tab, but Info still shows the commit body from this detail, so load it too.
-
-    actions.setDetailLoading(true);
-
-    // Debounce the detail load to avoid spawning git subprocesses on rapid navigation
-    detailDebounceTimer = setTimeout(async () => {
-      detailDebounceTimer = null;
-      const ctrl = new AbortController();
-      detailAbortCtrl = ctrl;
-
-      const notSuperseded = () => !ctrl.signal.aborted && repoPath() === path;
-
-      try {
-        if (isUncommitted) {
-          // Uncommitted node: load staged/unstaged/untracked file lists in parallel
-          const ud = await git.getUncommittedDetail(path, ctrl.signal);
-          if (notSuperseded()) {
-            actions.setUncommittedDetail(ud);
-            // Also set a basic CommitDetail so any fallback code still has commit info
-            actions.setCommitDetail({ ...commit, files: [...ud.staged, ...ud.unstaged, ...ud.untracked] });
-            actions.setDetailLoading(false);
-          }
-        } else {
-          const detail = await git.getCommitDetail(path, commit.hash, commit, ctrl.signal);
-          if (notSuperseded()) {
-            actions.setCommitDetail(detail);
-            actions.setDetailLoading(false);
-          }
-        }
-      } catch (err) {
-        if (!ctrl.signal.aborted) {
-          actions.setCommitDetail(null);
-          actions.setUncommittedDetail(null);
-          actions.setDetailLoading(false);
-          actions.setError(bannerOrFallback(err, BANNER.git.detailFailed, "Git"));
-        }
-      }
-    }, DETAIL_DEBOUNCE_MS);
+    untrack(() => details.select(commit));
   });
 
   // Auto-switch away from empty tabs after detail loads (the graph's tabs: not while the dashboard shows its own).
@@ -223,36 +157,16 @@ export function useDetailLoader({
 
   // A refresh that read a dirty working tree: the selected uncommitted row shows its files again, quietly (the cursor
   // and tab stay). The rows themselves may be the same, so the selection doesn't change for it.
-  let workingTreeCtrl: AbortController | null = null;
   createEffect(
     on(
       state.workingTreeReads,
       () => {
         const commit = untrack(state.selectedCommit);
-        if (!commit || !isUncommittedHash(commit.hash)) return;
-        const path = untrack(repoPath);
-        workingTreeCtrl?.abort();
-        const ctrl = new AbortController();
-        workingTreeCtrl = ctrl;
-        git
-          .getUncommittedDetail(path, ctrl.signal)
-          .then(ud => {
-            if (ctrl.signal.aborted || repoPath() !== path || state.selectedCommit()?.hash !== commit.hash) return;
-            actions.setUncommittedDetail(ud);
-            actions.setCommitDetail({ ...commit, files: [...ud.staged, ...ud.unstaged, ...ud.untracked] });
-          })
-          .catch(() => {
-            // The next refresh or selection tries again; the files shown stay.
-          });
+        if (commit) details.reloadWorkingTree(commit);
       },
       { defer: true },
     ),
   );
 
-  // Cancel any pending debounce timers and abort in-flight git subprocesses.
-  onCleanup(() => {
-    cancelPending(detailDebounceTimer, detailAbortCtrl);
-    detailDebounceTimer = detailAbortCtrl = null;
-    workingTreeCtrl?.abort();
-  });
+  onCleanup(() => details.dispose());
 }

@@ -17,8 +17,9 @@
  * @param clearSearchDebounce Callback to cancel the pending search debounce timer.
  */
 
-import { type Accessor, createEffect } from "solid-js";
+import { type Accessor, createEffect, untrack } from "solid-js";
 import type { createAppState } from "../context/state";
+import { createPathFilter } from "../core/git/path-filter";
 import type { GitPort } from "../core/git/port";
 
 type AppState = ReturnType<typeof createAppState>["state"];
@@ -44,13 +45,11 @@ export function usePathFilter({
   setSearchInputValue,
   clearSearchDebounce,
 }: UsePathFilterOptions) {
-  // Re-compute pathMatchSet when graphRows changes and path filter is active
-  // (pagination / auto-refresh may load new commits that touch the path).
-  // Uses the same prevGraphRows guard pattern as the ancestry effect — the
-  // initial path execution already sets the match set; this only fires on
-  // subsequent graphRows changes.
+  const pathFilter = createPathFilter({ git, repoPath, state, actions });
+
+  // The graph changed (pages, a refresh, another scope) while path mode is on: its matches are worked out again. The
+  // path's first matches come from handlePathExecute; this only runs for what changes after.
   let previousIdentity = "";
-  let queryVersion = 0;
   createEffect(() => {
     const rows = state.graphRows();
     const pf = state.pathFilter();
@@ -60,100 +59,20 @@ export function usePathFilter({
     const identity = JSON.stringify({ rows: rows.map(row => row.commit.hash), pf, path, viewBranch, effectiveAll });
     if (identity === previousIdentity) return;
     previousIdentity = identity;
-    const version = ++queryVersion;
-    if (!pf) return;
-    git
-      .getPathMatchingHashes(path, pf, {
-        branch: viewBranch ?? undefined,
-        all: effectiveAll,
-      })
-      .then(hashes => {
-        // Only update if path filter is still the same (guard against race)
-        const currentBranch = state.viewingBranch();
-        const currentAll = currentBranch ? false : state.showAllBranches();
-        if (
-          version === queryVersion &&
-          state.pathFilter() === pf &&
-          repoPath() === path &&
-          currentBranch === viewBranch &&
-          currentAll === effectiveAll
-        ) {
-          actions.setPathMatchSet(hashes.size > 0 ? hashes : new Set());
-          // If cursor is on a non-matching row, jump to the nearest match
-          const matchSet = hashes;
-          if (matchSet.size > 0) {
-            const rows = state.graphRows();
-            const curIdx = state.cursorIndex();
-            if (curIdx >= rows.length || !matchSet.has(rows[curIdx].commit.hash)) {
-              let fwd = -1;
-              for (let i = curIdx + 1; i < rows.length; i++) {
-                if (matchSet.has(rows[i].commit.hash)) {
-                  fwd = i;
-                  break;
-                }
-              }
-              let bwd = -1;
-              for (let i = curIdx - 1; i >= 0; i--) {
-                if (matchSet.has(rows[i].commit.hash)) {
-                  bwd = i;
-                  break;
-                }
-              }
-              let target: number;
-              if (fwd >= 0 && bwd >= 0) {
-                target = curIdx - bwd <= fwd - curIdx ? bwd : fwd;
-              } else {
-                target = fwd >= 0 ? fwd : bwd;
-              }
-              if (target >= 0) {
-                actions.setCursorIndex(target);
-                actions.setScrollTargetIndex(target);
-              }
-            }
-          }
-        }
-      });
+    untrack(() => void pathFilter.refresh());
   });
 
   /**
-   * Apply a path filter from the command bar PATH_INPUT mode.
-   * Empty string clears the filter; non-empty sets it and computes
-   * the set of matching commit hashes for display-level dimming.
-   * Mutually exclusive with search and ancestry.
+   * Apply a path filter from the command bar PATH_INPUT mode. Empty clears it; a path sets it and dims the commits
+   * that don't touch it. Search and ancestry end (one highlight mode at a time).
    */
-  const handlePathExecute = async (pathValue: string) => {
-    const version = ++queryVersion;
-    const newPath = pathValue || null;
-    actions.setPathFilter(newPath);
-    if (!newPath) {
-      actions.setPathMatchSet(null);
-      return;
-    }
-    // Clear other highlight modes (mutual exclusion)
-    actions.setSearchQuery("");
-    setSearchInputValue("");
-    clearSearchDebounce();
-    clearAnchor();
-    // Compute matching hashes using the same branch/all settings as the current view
-    const viewBranch = state.viewingBranch();
-    const effectiveAll = viewBranch ? false : state.showAllBranches();
-    const path = repoPath();
-    const hashes = await git.getPathMatchingHashes(path, newPath, {
-      branch: viewBranch ?? undefined,
-      all: effectiveAll,
+  const handlePathExecute = (pathValue: string) =>
+    pathFilter.apply(pathValue, () => {
+      actions.setSearchQuery("");
+      setSearchInputValue("");
+      clearSearchDebounce();
+      clearAnchor();
     });
-    const currentBranch = state.viewingBranch();
-    const currentAll = currentBranch ? false : state.showAllBranches();
-    if (
-      version !== queryVersion ||
-      repoPath() !== path ||
-      state.pathFilter() !== newPath ||
-      currentBranch !== viewBranch ||
-      currentAll !== effectiveAll
-    )
-      return;
-    actions.setPathMatchSet(hashes.size > 0 ? hashes : new Set());
-  };
 
   return { handlePathExecute };
 }
