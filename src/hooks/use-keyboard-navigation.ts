@@ -3,7 +3,7 @@ import type { Accessor } from "solid-js";
 import type { DetailNavRef } from "../components/detail-types";
 import type { AppActions, AppState } from "../context/state";
 import { useKeys } from "../keyboard/dispatcher";
-import { routeGlobalKey } from "../keyboard/router";
+import { appKeysDrive } from "../keyboard/scope";
 import { createCloseOneCascadeStep } from "./handle-cascade-close";
 import { createCommandBarHelpers, handleCommandOrPathKey, handleSearchKey } from "./handle-command-bar-keys";
 import { handleDetailKey } from "./handle-detail-keys";
@@ -165,9 +165,10 @@ export function useKeyboardNavigation(opts: KeyboardNavigationOptions) {
   const handleKey = (e: KeyEvent) => {
     if (e.eventType === "release") return;
 
-    const route = routeGlobalKey({ dialog: dialog(), overrideScope: state.keyboardScopeOverride() }, e.name);
-    if (!route.runAppHandler) {
-      if (route.runCascadeClose) closeOneCascadeStep();
+    // A dialog with its own keys keeps every key from here while it shows. One that has nothing to show yet still
+    // closes with Esc.
+    if (!appKeysDrive(dialog())) {
+      if (e.name === "escape") closeOneCascadeStep();
       return;
     }
 

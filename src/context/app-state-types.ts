@@ -1,6 +1,5 @@
 import type { Accessor } from "solid-js";
 import type { Branch, Commit, CommitDetail, GraphRow, TagInfo, UncommittedDetail } from "../git/types";
-import type { KeyboardScope } from "../keyboard/scope";
 import type { GraphBadge, ProviderRegistry, ProviderView } from "../providers/provider";
 
 export type DetailTab =
@@ -107,7 +106,6 @@ export interface SettingsState {
   fetchingHistory: Accessor<boolean>;
   hasMore: Accessor<boolean>;
   historyError: Accessor<boolean>;
-  keyboardScopeOverride: Accessor<KeyboardScope | null>;
 }
 
 export interface ProviderAppState {
@@ -179,7 +177,6 @@ export interface SettingsActions {
   setFetching: (fetching: boolean, history?: boolean) => void;
   setHasMore: (hasMore: boolean) => void;
   setHistoryError: (failed: boolean) => void;
-  setKeyboardScopeOverride: (scope: KeyboardScope | null) => void;
 }
 
 export interface ProviderActions {

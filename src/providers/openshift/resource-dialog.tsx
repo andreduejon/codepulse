@@ -21,8 +21,6 @@ interface OpenShiftResourceDialogProps {
   loadLog?: (resource: OpenShiftResource, force?: boolean) => Promise<string>;
   followLog?: (resource: OpenShiftResource, signal: AbortSignal, onText: (text: string) => void) => Promise<void>;
   loadObject?: (resource: OpenShiftResource, force?: boolean) => Promise<unknown>;
-  /** The search row starts or stops owning Esc (see `useLogSearch`). */
-  onSearchActive?: (active: boolean) => void;
   /** Web console URL from the settings; `o` opens the resource there when it is set. */
   consoleUrl?: string;
   /** The events about the resource, for the events view (`c`). */
@@ -268,7 +266,6 @@ export default function OpenShiftResourceDialog(props: Readonly<OpenShiftResourc
       scrollKey={() => [props.resource.id, viewMode()]}
       scrollStart={() => (viewMode() === "log" ? "bottom" : null)}
       onClose={props.onClose}
-      onSearchActive={props.onSearchActive}
     />
   );
 }

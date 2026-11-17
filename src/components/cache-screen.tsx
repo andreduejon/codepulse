@@ -7,7 +7,6 @@ import { getKnownRepoInfos } from "../config";
 import { useClipboard } from "../hooks/use-clipboard";
 import { useT } from "../hooks/use-t";
 import { useModalKeys } from "../keyboard/dispatcher";
-import type { KeyboardScope } from "../keyboard/scope";
 import {
   CACHE_INACTIVITY_MS,
   type CacheEvictionResult,
@@ -34,7 +33,6 @@ const INACTIVITY_DAYS = Math.round(CACHE_INACTIVITY_MS / (24 * 60 * 60 * 1_000))
 interface CacheScreenProps {
   onClose: () => void;
   onEvict?: (repo: CacheRepositorySummary) => Promise<CacheEvictionResult>;
-  setKeyboardScopeOverride?: (scope: KeyboardScope | null) => void;
   cacheRoot?: string;
   currentRepo?: string;
 }
@@ -204,7 +202,6 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
   };
   refresh();
 
-  createEffect(() => props.setKeyboardScopeOverride?.("cache"));
   createEffect(() => {
     dimensions();
     rows();
@@ -212,7 +209,6 @@ export default function CacheScreen(props: Readonly<CacheScreenProps>) {
   });
   onCleanup(() => {
     disposed = true;
-    props.setKeyboardScopeOverride?.(null);
   });
 
   const handleEscape = () => {

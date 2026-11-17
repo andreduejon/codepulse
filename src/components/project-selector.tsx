@@ -3,14 +3,13 @@ import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { type CliRenderer, MouseButton, type Renderable, type ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer } from "@opentui/solid";
-import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
 import packageJson from "../../package.json";
 import type { KnownRepoInfo } from "../config";
 import { removeRepoConfig } from "../config-write";
 import { SHIFT_JUMP } from "../constants";
 import { useT } from "../hooks/use-t";
 import { useModalKeys } from "../keyboard/dispatcher";
-import type { KeyboardScope } from "../keyboard/scope";
 import {
   buildProjectSelectorRows,
   isRepoRow,
@@ -39,8 +38,6 @@ interface ProjectSelectorProps {
   onCancel?: () => void;
   /** Called for in-app repo selection. Startup mode falls back to process re-exec. */
   onSelectRepo?: (repoPath: string) => void;
-  /** Optional keyboard scope hook for in-app usage only. */
-  setKeyboardScopeOverride?: (scope: KeyboardScope | null) => void;
 }
 
 /**
@@ -85,10 +82,6 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
   };
 
   createEffect(() => {
-    props.setKeyboardScopeOverride?.("repo-selector");
-  });
-
-  createEffect(() => {
     const selectable = selectableIndexes();
     setCursor(c => (selectable.includes(c) ? c : (selectable[0] ?? 0)));
   });
@@ -98,8 +91,6 @@ export default function ProjectSelector(props: Readonly<ProjectSelectorProps>) {
     const row = selected ? rowRefs.get(selected) : undefined;
     if (scrollboxRef && row) scrollElementIntoView(scrollboxRef, row);
   });
-
-  onCleanup(() => props.setKeyboardScopeOverride?.(null));
 
   /** Destroy the renderer and re-exec with the given path. */
   const selectRepo = (repoPath: string) => {

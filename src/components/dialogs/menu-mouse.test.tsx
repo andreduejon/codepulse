@@ -456,7 +456,6 @@ test("menu footer Enter activates, starts editing and saves; Escape cancels with
     expect(m.write).toHaveBeenCalledTimes(1);
     expect(m.write).toHaveBeenLastCalledWith(expect.objectContaining({ group: "footer group" }), "/repo/menu-mouse");
     expect(m.input()).toBeUndefined();
-    expect(m.app.state.keyboardScopeOverride()).toBeNull();
 
     await m.click("enter edit");
     await m.key("END");
@@ -563,7 +562,6 @@ test("Enter saves provider additions once, exits input, retains selection and su
         expect(provider.entries()).toEqual(provider.values.slice(0, index + 1));
         expect(m.write).toHaveBeenCalledTimes(writes + index + 1);
         expect(m.input()).toBeUndefined();
-        expect(m.app.state.keyboardScopeOverride()).toBeNull();
         expect(m.span(provider.label)?.fg).toEqual(RGBA.fromHex(m.theme.accent));
         await m.key("RETURN");
         expect(m.input()?.focused).toBe(true);

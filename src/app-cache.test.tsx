@@ -135,7 +135,6 @@ test(":cache groups apps, resets and evicts only selected repository, then resto
     await setup.flush();
     expect(setup.captureCharFrame()).toContain("a reset all");
     expect(setup.captureCharFrame()).toContain("other-cache");
-    expect(app.state.keyboardScopeOverride()).toBe("cache");
     setup.mockInput.pressKey("g");
     setup.mockInput.pressKey("ARROW_DOWN");
     await setup.flush();
@@ -148,7 +147,6 @@ test(":cache groups apps, resets and evicts only selected repository, then resto
     await setup.flush();
     setup.resize(80, 24);
     await setup.flush();
-    expect(app.state.keyboardScopeOverride()).toBe("cache");
     expect(setup.captureCharFrame()).toContain("confirm");
     setup.mockInput.pressKey("TAB");
     setup.mockInput.pressKey("ARROW_RIGHT", { shift: true });
@@ -206,7 +204,6 @@ test(":cache groups apps, resets and evicts only selected repository, then resto
     setup.mockInput.pressKey("ESCAPE");
     await setup.flush();
     expect(evict).not.toHaveBeenCalled();
-    expect(app.state.keyboardScopeOverride()).toBe("cache");
     setup.mockInput.pressKey("e");
     setup.mockInput.pressKey("RETURN");
     await settle(() => invalidate.mock.calls.length > 0);
@@ -216,7 +213,6 @@ test(":cache groups apps, resets and evicts only selected repository, then resto
     setup.mockInput.pressKey("ESCAPE");
     await setup.flush();
     expect(setup.captureCharFrame()).not.toContain("a reset all");
-    expect(app.state.keyboardScopeOverride()).toBeNull();
     expect({
       path: app.state.repoPath(),
       cursor: app.state.cursorIndex(),
@@ -235,14 +231,12 @@ test(":cache groups apps, resets and evicts only selected repository, then resto
     expect(y).toBeGreaterThanOrEqual(0);
     await setup.mockMouse.click(lines[y].indexOf("Inspect cache") + 1, y);
     await setup.flush();
-    expect(app.state.keyboardScopeOverride()).toBe("cache");
     expect(setup.captureCharFrame()).toContain("General");
     expect(setup.captureCharFrame()).toContain("Cache data");
     expect(setup.captureCharFrame()).not.toContain("Preferences");
     expect(realSummary(root)).toEqual(beforeMenu);
     setup.mockInput.pressKey("ESCAPE");
     await setup.flush();
-    expect(app.state.keyboardScopeOverride()).toBeNull();
     expect(setup.captureCharFrame()).toContain("selected commit");
     expect(setup.captureCharFrame()).not.toContain("Preferences");
     expect(app.state.cursorIndex()).toBe(original.cursor);

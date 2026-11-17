@@ -16,7 +16,6 @@ import packageJson from "../../package.json";
 import * as config from "../config";
 import { createThemeState, ThemeContext } from "../context/theme";
 import * as clipboard from "../hooks/use-clipboard";
-import type { KeyboardScope } from "../keyboard/scope";
 import * as management from "../providers/shared/cache-management";
 import {
   closeProviderCaches,
@@ -81,20 +80,13 @@ async function screen(
   onEvict?: (repo: management.CacheRepositorySummary) => Promise<management.CacheEvictionResult>,
 ) {
   const theme = createThemeState();
-  const scopes: (KeyboardScope | null)[] = [];
   const [open, setOpen] = createSignal(true);
   const close = mock(() => setOpen(false));
   const setup = await testRender(
     () => (
       <ThemeContext.Provider value={theme}>
         <Show when={open()}>
-          <CacheScreen
-            cacheRoot={root}
-            onClose={close}
-            onEvict={onEvict}
-            currentRepo={currentRepo}
-            setKeyboardScopeOverride={scope => scopes.push(scope)}
-          />
+          <CacheScreen cacheRoot={root} onClose={close} onEvict={onEvict} currentRepo={currentRepo} />
         </Show>
       </ThemeContext.Provider>
     ),
@@ -156,7 +148,7 @@ async function screen(
     const span = setup.captureSpans().lines[y].spans.find(span => span.text.includes(label));
     expect(span?.fg).toEqual(RGBA.fromHex(theme.theme().accent));
   };
-  return { ...setup, theme, scopes, close, frame, point, click, key, row, rowPoint, clickRow, cells, expectSelected };
+  return { ...setup, theme, close, frame, point, click, key, row, rowPoint, clickRow, cells, expectSelected };
 }
 
 test("compact app rows aggregate all providers; selected reset reaches every provider and preserves selection", async () => {
@@ -171,7 +163,6 @@ test("compact app rows aggregate all providers; selected reset reaches every pro
   const contents = data.contents();
   const setup = await screen(data.root);
   try {
-    expect(setup.scopes).toEqual(["cache"]);
     const fullscreen = setup.renderer.root.getChildren()[0];
     expect({ x: fullscreen.x, y: fullscreen.y, width: fullscreen.width, height: fullscreen.height }).toEqual({
       x: 0,
@@ -300,7 +291,6 @@ test("compact app rows aggregate all providers; selected reset reaches every pro
     expect(setup.close).not.toHaveBeenCalled();
     await setup.click("esc back");
     expect(setup.close).toHaveBeenCalledTimes(1);
-    expect(setup.scopes).toEqual(["cache", null]);
   } finally {
     await setup.dispose();
     await data.dispose();
@@ -468,7 +458,6 @@ test("async selected-repo eviction freezes the clone identity, blocks duplicate 
       expect(setup.frame()).toContain("q quit");
       const card = descendants(setup.renderer.root).find(node => node.id === "cache-card") as BoxRenderable;
       expect(card.y + card.height).toBeLessThanOrEqual(height - 2);
-      expect(setup.scopes).toEqual(["cache"]);
     }
     await setup.clickRow(betaPath);
     await setup.key("j");
@@ -609,7 +598,6 @@ test("a confirms repository count, cancels safely, survives resize, and resets w
       await setup.flush();
       expect(setup.frame()).toContain("Reset all inactivity timers?");
       expect(setup.frame()).toContain("q quit");
-      expect(setup.scopes).toEqual(["cache"]);
     }
     await setup.key("ESCAPE");
     expect(setup.close).not.toHaveBeenCalled();
@@ -645,7 +633,6 @@ test("a confirms repository count, cancels safely, survives resize, and resets w
     expect(setup.frame()).not.toContain("enter confirm");
     setup.expectSelected("Cache data");
     await setup.key("ESCAPE");
-    expect(setup.scopes).toEqual(["cache", null]);
   } finally {
     await setup.dispose();
     await data.dispose();
@@ -733,7 +720,6 @@ test("empty and corrupt databases are safe; an injected root never inspects or c
     expect(setup.frame()).not.toContain("not-visible");
     expect(other.contents()).toEqual(before);
     await setup.key("ESCAPE");
-    expect(setup.scopes).toEqual(["cache", null]);
   } finally {
     await setup.dispose();
     await data.dispose();
@@ -816,7 +802,6 @@ test("long lists scroll by wheel, pages, arrows, j/k and g/G; resize keeps scope
       await setup.flush();
       expect(setup.frame()).toContain("esc back");
       expect(setup.frame()).toContain("q quit");
-      expect(setup.scopes).toEqual(["cache"]);
       const root = setup.renderer.root.getChildren()[0];
       expect(root.width).toBe(width);
       expect(root.height).toBe(height);

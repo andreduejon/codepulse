@@ -1,9 +1,8 @@
 import { MouseButton, type MouseEvent, type Renderable, type ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
-import { batch, createEffect, createSignal, For, onCleanup } from "solid-js";
+import { batch, createEffect, createSignal, For } from "solid-js";
 import type { ConfigInfo } from "../../config";
 import { SHIFT_JUMP } from "../../constants";
-import { useAppState } from "../../context/state";
 import { useTheme } from "../../context/theme";
 import type { DashboardSettings } from "../../dashboard/settings";
 import {
@@ -64,7 +63,6 @@ export const [lastMenuTab, setLastMenuTab] = createSignal<MenuTab>("repository")
 
 export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   const renderer = useRenderer();
-  const { actions } = useAppState();
   const { theme, themeName, setTheme, themes } = useTheme();
   const t = () => theme();
   const dimensions = useTerminalDimensions();
@@ -164,12 +162,6 @@ export default function MenuDialog(props: Readonly<MenuDialogProps>) {
   const [editDraft, setEditDraft] = createSignal("");
   const [autoEditSuppressedIdx, setAutoEditSuppressedIdx] = createSignal<number | null>(null);
   const [pendingSelectionLabel, setPendingSelectionLabel] = createSignal<string | null>(null);
-
-  createEffect(() => {
-    actions.setKeyboardScopeOverride(editingIdx() == null ? null : "menu-token-edit");
-  });
-
-  onCleanup(() => actions.setKeyboardScopeOverride(null));
 
   const startEdit = () => {
     const idx = selectedItemIndex();

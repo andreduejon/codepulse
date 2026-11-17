@@ -71,8 +71,6 @@ interface LogViewerProps {
   scrollKey?: () => unknown;
   scrollStart?: () => "top" | "bottom" | null;
   onClose: () => void;
-  /** The search row starts or stops owning Esc (see `useLogSearch`). */
-  onSearchActive?: (active: boolean) => void;
   /** Searched once mounted, so the first hit shows when the lines arrive. */
   initialSearch?: string;
 }
@@ -99,7 +97,6 @@ export function LogViewer(props: Readonly<LogViewerProps>) {
     texts,
     rowAt: index => lineRefs[index],
     scrollbox: () => scrollboxRef,
-    onActiveChange: active => props.onSearchActive?.(active),
   });
   // Inner width: the dialog's frame (1) and padding (4) on both sides, then the line numbers and their gap.
   const reveal = useSidewaysReveal({

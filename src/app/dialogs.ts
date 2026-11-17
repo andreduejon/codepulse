@@ -4,7 +4,7 @@
  * them returns to them, and resizing across the side panel's width moves the details between dialog and panel.
  */
 import { type Accessor, createEffect, createSignal, on, untrack } from "solid-js";
-import type { AppActions, AppState } from "../context/state";
+import type { AppState } from "../context/state";
 import type { DiffTarget } from "../git/types";
 import type { DialogId } from "../hooks/use-keyboard-navigation";
 import type { OpenShiftResource } from "../providers/openshift/types";
@@ -13,8 +13,8 @@ import { DETAIL_CHILD_DIALOGS } from "../utils/keyboard-nav-utils";
 
 export type LayoutMode = "too-small" | "compact" | "normal";
 
-export function useDialogHost(opts: { state: AppState; actions: AppActions; layoutMode: Accessor<LayoutMode> }) {
-  const { state, actions, layoutMode } = opts;
+export function useDialogHost(opts: { state: AppState; layoutMode: Accessor<LayoutMode> }) {
+  const { state, layoutMode } = opts;
   const [dialog, setDialog] = createSignal<DialogId>(null);
   /** The diff dialog's file (set when a file is opened from the details). */
   const [diffTarget, setDiffTarget] = createSignal<DiffTarget | null>(null);
@@ -86,8 +86,6 @@ export function useDialogHost(opts: { state: AppState; actions: AppActions; layo
     openFromMenu: (id: "theme") => {
       if (id === "theme") setDialog("theme");
     },
-    /** While a log dialog's search owns Esc, the app's Esc (cascade close) must not close the dialog. */
-    setLogSearchScope: (active: boolean) => actions.setKeyboardScopeOverride(active ? "log-search" : null),
     /** A dialog opened from the compact details is showing; they wait under it. */
     compactDetailUnderChild: () =>
       DETAIL_CHILD_DIALOGS.has(dialog() ?? "") &&

@@ -72,7 +72,6 @@ export function DialogLayer(
     openFromMenu: handleOpenDialog,
     closeToDetail,
     compactDetailUnderChild,
-    setLogSearchScope,
   } = props.dialogs;
   return (
     <>
@@ -181,7 +180,6 @@ export function DialogLayer(
             entryNoun={target().noun}
             initialSearch={target().search}
             onClose={closeToDetail}
-            onSearchActive={setLogSearchScope}
           />
         )}
       </Show>
@@ -197,7 +195,6 @@ export function DialogLayer(
             loadEvents={item => props.openShift.loadResourceEvents(item)}
             loadObject={(item, force) => props.openShift.loadResourceObject(item, force)}
             onClose={closeToDetail}
-            onSearchActive={setLogSearchScope}
           />
         )}
       </Show>

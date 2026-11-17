@@ -1,46 +1,9 @@
 import type { DialogId } from "../hooks/use-keyboard-navigation";
 
-export type KeyboardScope =
-  | "app"
-  | "menu"
-  | "menu-token-edit"
-  | "repo-selector"
-  | "cache"
-  | "help"
-  | "theme"
-  | "diff-blame"
-  | "detail-dialog"
-  | "job-log"
-  | "openshift-resource"
-  /** A log dialog's search row is open or holds a query: Esc clears the search, it must not close the dialog. */
-  | "log-search"
-  | "debug";
-
-export function dialogToKeyboardScope(dialog: DialogId): KeyboardScope {
-  switch (dialog) {
-    case "menu":
-      return "menu";
-    case "help":
-      return "help";
-    case "theme":
-      return "theme";
-    case "diff-blame":
-      return "diff-blame";
-    case "detail":
-    // The dashboard's compact details: like the graph's, the app's own keys drive them.
-    case "dashboard-event":
-      return "detail-dialog";
-    case "job-log":
-      return "job-log";
-    case "openshift-resource":
-      return "openshift-resource";
-    case "debug":
-      return "debug";
-    default:
-      return "app";
-  }
-}
-
-export function isAppScope(scope: KeyboardScope): boolean {
-  return scope === "app" || scope === "detail-dialog";
+/**
+ * Whether the app's own keys drive what shows: no dialog, or the compact details (the graph's or the dashboard's),
+ * which move like the panel beside the graph. Every other dialog handles its keys itself (`useModalKeys`).
+ */
+export function appKeysDrive(dialog: DialogId): boolean {
+  return dialog == null || dialog === "detail" || dialog === "dashboard-event";
 }

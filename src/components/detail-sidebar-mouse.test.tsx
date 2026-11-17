@@ -128,7 +128,7 @@ async function renderSidebar(provider: ProviderDetailView | "git" = "git", snykS
   let app!: ReturnType<typeof createAppState>;
   let scrollbox!: ScrollBoxRenderable;
   let graphScrollbox!: ScrollBoxRenderable;
-  const mouseEnabled = () => dialog() == null && app.state.keyboardScopeOverride() == null;
+  const mouseEnabled = () => dialog() == null;
   const focus = mock(() => {
     setSearchFocused(false);
     setCommandMode("idle");
@@ -655,13 +655,12 @@ test("stash and working-tree rows focus before their existing activation", async
   }
 });
 
-test("reactive dialog and keyboard-scope guards block sidebar and graph clicks, hover and native wheel", async () => {
+test("an open dialog blocks sidebar and graph clicks, hover and native wheel", async () => {
   const d = await renderSidebar();
   try {
     await d.click("file-002.ts");
-    for (const block of ["dialog", "scope"] as const) {
-      if (block === "dialog") d.setDialog("diff");
-      else d.actions.setKeyboardScopeOverride("repo-selector");
+    {
+      d.setDialog("diff");
       await d.flush();
       const row = d.point("file-003.ts");
       const bg = d.cell(row.x, row.y)?.bg;
@@ -683,7 +682,6 @@ test("reactive dialog and keyboard-scope guards block sidebar and graph clicks, 
         expect(sb.scrollTop).toBe(top);
       }
       d.setDialog(null);
-      d.actions.setKeyboardScopeOverride(null);
       await d.flush();
       await d.click("Graph row 1", MouseButtons.RIGHT);
       expect(d.state.detailFocused()).toBe(true);

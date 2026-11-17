@@ -117,7 +117,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     return "normal";
   });
 
-  const dialogs = useDialogHost({ state, actions, layoutMode });
+  const dialogs = useDialogHost({ state, layoutMode });
   const {
     dialog,
     setDialog,
@@ -125,6 +125,8 @@ export function AppContent(props: Readonly<AppContentProps>) {
     openJobLog,
     openResource: handleOpenOpenShiftResource,
   } = dialogs;
+  /** The mouse works on the graph, the dashboard and their panels while no dialog covers them. */
+  const mouseEnabled = () => dialog() == null;
 
   // Navigation ref for interactive detail panel items
   const detailNavRef: DetailNavRef = {
@@ -376,7 +378,6 @@ export function AppContent(props: Readonly<AppContentProps>) {
                       currentRepo={activeRepoPath()}
                       onSelectRepo={switchRepoPath}
                       onCancel={() => setRepoSelectorVisible(false)}
-                      setKeyboardScopeOverride={actions.setKeyboardScopeOverride}
                     />
                   }
                 >
@@ -384,7 +385,6 @@ export function AppContent(props: Readonly<AppContentProps>) {
                     currentRepo={activeRepoPath()}
                     onEvict={evictCacheRepository}
                     onClose={closeCacheScreen}
-                    setKeyboardScopeOverride={actions.setKeyboardScopeOverride}
                   />
                 </Show>
               }
@@ -404,7 +404,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                       <box flexDirection="column" flexGrow={1} paddingBottom={1}>
                         <DashboardView
                           dashboard={dashboard}
-                          mouseEnabled={() => dialog() == null && state.keyboardScopeOverride() == null}
+                          mouseEnabled={mouseEnabled}
                           onRowClick={() => actions.setDetailFocused(false)}
                         />
                       </box>
@@ -415,7 +415,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                       <ColumnHeader />
 
                       <GraphView
-                        mouseEnabled={() => dialog() == null && state.keyboardScopeOverride() == null}
+                        mouseEnabled={mouseEnabled}
                         onSelectRow={graph.selectRow}
                         onLoadMore={loadMoreData}
                         snykGetCommitData={snyk.getCommitData}
@@ -436,7 +436,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                               message={msg().message}
                               detail={msg().detail}
                               onDismiss={clearScreenMessage}
-                              mouseEnabled={dialog() == null && state.keyboardScopeOverride() == null}
+                              mouseEnabled={mouseEnabled()}
                             />
                             <box height={1} />
                           </box>
@@ -447,7 +447,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                       <CommandBar
                         onSelectMode={selectMode}
                         onSelectProject={switchRepoPath}
-                        mouseEnabled={() => dialog() == null && state.keyboardScopeOverride() == null}
+                        mouseEnabled={mouseEnabled}
                         commandBarMode={commandBarMode}
                         commandBarValue={commandBarValue}
                         searchInputValue={searchInputValue}
@@ -466,9 +466,9 @@ export function AppContent(props: Readonly<AppContentProps>) {
                       <Footer
                         onConfirm={onFooterEnter}
                         onClose={onFooterEscape}
-                        mouseEnabled={dialog() == null && state.keyboardScopeOverride() == null}
+                        mouseEnabled={mouseEnabled()}
                         onOpenDetails={() => {
-                          if (dialog() != null || state.keyboardScopeOverride() != null) return;
+                          if (!mouseEnabled()) return;
                           openGraphDetails({ state, actions, layoutMode, setDialog, detailNavRef });
                         }}
                         commandBarMode={commandBarMode}
@@ -488,7 +488,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                         event={dashboard.selected}
                         appName={dashboardAppName}
                         onShowInGraph={showSelectedInGraph}
-                        mouseEnabled={() => dialog() == null && state.keyboardScopeOverride() == null}
+                        mouseEnabled={mouseEnabled}
                         scrollboxRef={element => {
                           setDashboardDetailScrollbox(element);
                         }}
@@ -499,7 +499,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
                   <Show when={layoutMode() === "normal" && !dashboardShown()}>
                     <box flexDirection="column" width="25%" minWidth={60} flexShrink={0} paddingX={2} paddingBottom={1}>
                       <DetailPanel
-                        mouseEnabled={dialog() == null && state.keyboardScopeOverride() == null}
+                        mouseEnabled={mouseEnabled()}
                         onMouseFocus={() => {
                           commandBar.leave();
                           actions.setDetailFocused(true);

@@ -84,8 +84,6 @@ interface JobLogDialogProps {
   /** What ←/→ move between, for the footer (`previous stage`): `job` by default. */
   entryNoun?: string;
   onClose: () => void;
-  /** The search row starts or stops owning Esc (see `useLogSearch`). */
-  onSearchActive?: (active: boolean) => void;
   /** Opened from an annotation: its message, searched from the start so the log shows where it happened. */
   initialSearch?: string;
 }
@@ -334,7 +332,6 @@ export default function JobLogDialog(props: Readonly<JobLogDialogProps>) {
       navigation={navigation}
       scrollKey={() => [currentJob().id, viewMode()]}
       onClose={props.onClose}
-      onSearchActive={props.onSearchActive}
       initialSearch={props.initialSearch}
     />
   );

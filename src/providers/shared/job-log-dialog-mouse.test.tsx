@@ -40,7 +40,6 @@ async function renderLog(
   const [open, setOpen] = createSignal(true);
   const [url, setUrl] = createSignal<string | undefined>("https://example.com/run/42");
   const close = mock(() => setOpen(false));
-  const searchActive = mock((_active: boolean) => {});
   let setup: Awaited<ReturnType<typeof testRender>>;
   try {
     setup = await testRender(
@@ -54,7 +53,6 @@ async function renderLog(
               run={{ name: "Build", runNumber: 42, url: url() }}
               fetchLog={fetchLog}
               onClose={close}
-              onSearchActive={searchActive}
               initialSearch={initialSearch}
             />
           </Show>
@@ -118,7 +116,6 @@ async function renderLog(
     fetchLog,
     openUrl,
     close,
-    searchActive,
     open,
     setOpen,
     setUrl,
@@ -487,19 +484,18 @@ test("the search bar sits between empty rows at the same dialog height, is one i
   }
 });
 
-test("the log search tells the app while it owns Esc, so Esc clears it instead of closing the dialog", async () => {
+test("Esc clears the log search first, then closes the dialog", async () => {
   const d = await renderLog("github-actions");
   try {
     d.resolve();
     await d.flush();
     await d.key("/");
-    expect(d.searchActive.mock.calls.at(-1)).toEqual([true]);
     await d.mockInput.typeText("line");
     await d.key("RETURN");
-    expect(d.searchActive.mock.calls.at(-1)).toEqual([true]);
     await d.key("ESCAPE");
-    expect(d.searchActive.mock.calls.at(-1)).toEqual([false]);
     expect(d.close).not.toHaveBeenCalled();
+    await d.key("ESCAPE");
+    expect(d.close).toHaveBeenCalledTimes(1);
   } finally {
     await d.dispose();
   }

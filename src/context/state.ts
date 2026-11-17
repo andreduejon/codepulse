@@ -2,7 +2,6 @@ import { batch, createContext, createMemo, createSignal, untrack, useContext } f
 import { DEFAULT_MAX_COUNT } from "../constants";
 import { providerIdle } from "../core/provider-status";
 import type { Branch, Commit, CommitDetail, GraphRow, TagInfo, UncommittedDetail } from "../git/types";
-import type { KeyboardScope } from "../keyboard/scope";
 import { createProviderRegistry, type GraphBadge, type ProviderView } from "../providers/provider";
 import { matchCommit, parseSearchQuery } from "../search";
 import type { AppActions, AppState, DetailOwner, DetailTab, HighlightMode, ProviderStatus } from "./app-state-types";
@@ -158,7 +157,6 @@ export function createAppState(
   const [providerLastSuccessfulRefresh, setProviderLastSuccessfulRefreshMap] = createSignal<Map<ProviderView, Date>>(
     new Map(),
   );
-  const [keyboardScopeOverride, setKeyboardScopeOverride] = createSignal<KeyboardScope | null>(null);
 
   // ── Search memo ───────────────────────────────────────────────────
   // Memoize parsed search separately so regex compilation only happens when
@@ -292,7 +290,6 @@ export function createAppState(
     providerStatusFor: view => providerStatusMap().get(view) ?? providerIdle(),
     graphBadgesFor: view => providerGraphBadges().get(view) ?? new Map(),
     providerLastSuccessfulRefresh,
-    keyboardScopeOverride,
     providers,
   };
 
@@ -364,7 +361,6 @@ export function createAppState(
       setProviderStatusMap(new Map());
       setProviderLastSuccessfulRefreshMap(new Map());
     },
-    setKeyboardScopeOverride,
     cycleProviderView: () => setActiveProviderView(providers.nextView(activeProviderView())),
   };
 

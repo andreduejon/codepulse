@@ -33,11 +33,6 @@ export function useLogSearch(opts: {
   texts: () => readonly string[];
   rowAt: (index: number) => Renderable | undefined;
   scrollbox: () => ScrollBoxRenderable | undefined;
-  /**
-   * Told when the search starts or stops owning Esc (editing, or a kept query). The app uses it to keep its own
-   * Esc (which closes dialogs) away while the search is active.
-   */
-  onActiveChange?: (active: boolean) => void;
 }) {
   const [query, setQuery] = createSignal("");
   const [editing, setEditing] = createSignal(false);
@@ -115,11 +110,6 @@ export function useLogSearch(opts: {
     setQuery("");
     setCurrent(null);
   };
-  const active = createMemo(() => editing() || !!term());
-  createEffect(on(active, value => opts.onActiveChange?.(value), { defer: true }));
-  onCleanup(() => {
-    if (active()) opts.onActiveChange?.(false);
-  });
   /** Search keys first; returns true when the dialog must not handle the key itself. */
   const handleKey = (e: KeyEvent): boolean => {
     if (editing()) {
