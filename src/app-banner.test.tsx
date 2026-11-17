@@ -7,7 +7,7 @@ import { AppContent } from "./app-content";
 import * as config from "./config";
 import * as configWrite from "./config-write";
 import { createThemeState } from "./context/theme";
-import { BANNER } from "./debug/banner";
+import { BANNER } from "./core/banner";
 import * as dataLoader from "./hooks/use-data-loader";
 import * as detailLoader from "./hooks/use-detail-loader";
 import * as snykHook from "./providers/snyk/use-snyk";

@@ -1,8 +1,8 @@
 /** The OpenShift service with its lifecycle, without Solid: the app is a plain object, the cluster and cache are fakes. */
 import { expect, mock, test } from "bun:test";
-import { BANNER } from "../../debug/banner";
-import type { GraphRow } from "../../git/types";
+import { BANNER } from "../banner";
 import { FetchLifecycle } from "../fetch-lifecycle";
+import type { GraphRow } from "../git/types";
 import type { GraphBadge } from "../provider-model";
 import type { ProviderStatus } from "../provider-status";
 import { commitDataFromCacheEntry } from "./commit-data";

@@ -6,8 +6,9 @@
  *
  * Everything outside comes through ports; the Solid hook (providers/openshift/use-openshift.ts) builds them.
  */
-import { BANNER, debugError } from "../../debug/banner";
+
 import { sleep } from "../abort";
+import { BANNER, debugError } from "../banner";
 import type { ProviderFetchArgs } from "../fetch-lifecycle";
 import type { ProviderAppPort, ProviderLifecycle } from "../provider-ports";
 import { providerError, providerIdle, providerLoading, providerUnavailable, providerWarning } from "../provider-status";

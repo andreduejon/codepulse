@@ -1,9 +1,9 @@
 import { batch, createContext, createMemo, createSignal, untrack, useContext } from "solid-js";
 import { DEFAULT_MAX_COUNT } from "../constants";
+import type { Branch, Commit, CommitDetail, GraphRow, TagInfo, UncommittedDetail } from "../core/git/types";
 import type { GraphBadge, ProviderView } from "../core/provider-model";
 import type { ProviderStatus } from "../core/provider-status";
 import { providerIdle } from "../core/provider-status";
-import type { Branch, Commit, CommitDetail, GraphRow, TagInfo, UncommittedDetail } from "../git/types";
 import { createProviderRegistry } from "../providers/provider";
 import { matchCommit, parseSearchQuery } from "../search";
 import type { AppActions, AppState, DetailOwner, DetailTab, HighlightMode } from "./app-state-types";

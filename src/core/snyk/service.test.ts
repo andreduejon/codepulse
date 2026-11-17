@@ -1,6 +1,6 @@
 /** The Snyk service without Solid: the app is a plain object, the scanner and the cache are fakes. */
 import { expect, mock, test } from "bun:test";
-import type { GraphRow } from "../../git/types";
+import type { GraphRow } from "../git/types";
 import type { GraphBadge } from "../provider-model";
 import type { ProviderStatus } from "../provider-status";
 import { createSnykService, type SnykServicePorts } from "./service";

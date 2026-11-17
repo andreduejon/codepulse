@@ -1,6 +1,6 @@
 import { For, Show } from "solid-js";
 import { useAppState } from "../context/state";
-import type { Commit, GraphRow } from "../git/types";
+import type { Commit, GraphRow } from "../core/git/types";
 import { useT } from "../hooks/use-t";
 import Badge from "./badge";
 import { BADGE_PADDING } from "./detail-types";

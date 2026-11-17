@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { addDebugEvent } from "../../debug/events";
+import { addDebugEvent } from "../../core/debug-events";
 import { DEFAULT_PROVIDER_CACHE_ROOT, providerCacheDatabase } from "../shared/sha-sqlite-cache";
 import type { SnykCommandRunner } from "./scanner";
 

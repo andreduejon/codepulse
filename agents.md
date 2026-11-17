@@ -62,8 +62,8 @@ test. Solid code adapts it: `core/fetch-lifecycle.ts` is the fetch lifecycle, `p
 lifecycle.ts` its adapter; `core/github/service.ts` is GitHub's provider logic, `providers/github-actions/use-github-
 ci.ts` its adapter. New logic that doesn't draw goes in `src/core`.
 
-Core imports nothing from `providers`, `context`, `components`, `app`, `hooks`, `keyboard`, `cli` or `dashboard` (the
-linter refuses it): they depend on core. A provider's model (types, merges, badges, commit data) is in
+Core imports nothing outside `src/core` (`core/boundary.test.ts` checks it, the linter names the app's layers): the app
+depends on core. A provider's model (types, merges, badges, commit data) is in
 `src/core/<provider>`, its ports in its service; the HTTP client, cache and scanner in `src/providers` implement them.
 
 ## Keys

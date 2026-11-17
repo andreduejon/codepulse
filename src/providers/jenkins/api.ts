@@ -1,4 +1,5 @@
 import { isAbortError } from "../../core/abort";
+import { BANNER, bannerOrFallback, debugError } from "../../core/banner";
 import {
   JENKINS_MULTIBRANCH_JOB_LIMIT,
   type JenkinsFailedTest,
@@ -9,7 +10,6 @@ import {
   type JenkinsStage,
   type JenkinsTestReport,
 } from "../../core/jenkins/types";
-import { BANNER, bannerOrFallback, debugError } from "../../debug/banner";
 import { fetchWithRetry as fetchWithRetryPolicy, runLimited } from "../shared/http";
 import { isSafeJenkinsRequestUrl } from "./validation";
 

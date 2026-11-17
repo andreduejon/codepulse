@@ -1,7 +1,7 @@
 import type { Accessor } from "solid-js";
+import type { Branch, Commit, CommitDetail, GraphRow, TagInfo, UncommittedDetail } from "../core/git/types";
 import type { GraphBadge, ProviderView } from "../core/provider-model";
 import type { ProviderStatus } from "../core/provider-status";
-import type { Branch, Commit, CommitDetail, GraphRow, TagInfo, UncommittedDetail } from "../git/types";
 import type { ProviderRegistry } from "../providers/provider";
 
 export type DetailTab =

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { defaultConfigPath } from "../config";
-import { addDebugEvent } from "../debug/events";
+import { addDebugEvent } from "../core/debug-events";
 import { type CustomTheme, type Theme, themes } from "./theme";
 
 type ColorKey = Exclude<keyof Theme, "name">;

@@ -1,4 +1,4 @@
-import { addDebugEvent, type DebugEventSource, redactDebugValue } from "./events";
+import { addDebugEvent, type DebugEventSource, redactDebugValue } from "./debug-events";
 
 export const BANNER = {
   git: {

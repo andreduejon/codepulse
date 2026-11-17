@@ -10,7 +10,7 @@ export interface DisplayLine {
 }
 
 /** Flatten all hunks of a FileDiff into a single display-line array. */
-import type { FileContent, FileDiff } from "../../git/types";
+import type { FileContent, FileDiff } from "../../core/git/types";
 export function buildDisplayLines(diff: FileDiff): DisplayLine[] {
   const lines: DisplayLine[] = [];
   for (let i = 0; i < diff.hunks.length; i++) {
@@ -236,7 +236,7 @@ export function formatHunkHeader(raw: string): string {
 
 // ── Stats helper ──────────────────────────────────────────────────────
 
-import type { DiffHunk } from "../../git/types";
+import type { DiffHunk } from "../../core/git/types";
 
 /**
  * Count total additions and deletions across all hunks of a parsed diff.

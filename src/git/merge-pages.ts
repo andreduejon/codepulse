@@ -5,7 +5,7 @@
  * SolidJS, reactive state, or git subprocess dependencies.
  */
 import { isUncommittedHash } from "../constants";
-import type { Commit } from "./types";
+import type { Commit } from "../core/git/types";
 
 /**
  * Merge a new page of commits onto an existing commit list.

@@ -12,8 +12,8 @@
  * and multi-remote scenarios.
  */
 import { describe, expect, test } from "bun:test";
+import type { GraphRow } from "../src/core/git/types";
 import { buildGraph } from "../src/git/graph";
-import type { GraphRow } from "../src/git/types";
 import { assertDefined, CONNECTION_TYPES, findConnector, makeCommit, printGraph } from "./test-helpers";
 
 /**

@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { DEFAULT_MAX_COUNT } from "./constants";
 import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL } from "./context/state";
+import { addDebugEvent } from "./core/debug-events";
 import { PROVIDER_ORDER, type ProviderView } from "./core/provider-model";
 import {
   isProviderAutoRefreshSeconds,
@@ -17,7 +18,6 @@ import {
   type DashboardWindowDays,
   DEFAULT_DASHBOARD_SETTINGS,
 } from "./dashboard/settings";
-import { addDebugEvent } from "./debug/events";
 import { normalizeGitHubHost } from "./providers/github-actions/api";
 import { isValidJenkinsJobUrl, JENKINS_JOB_URL_MAX_LENGTH } from "./providers/jenkins/validation";
 import {

@@ -5,8 +5,8 @@ import { testRender } from "@opentui/solid";
 import { createSignal, Show } from "solid-js";
 import { AppStateContext, createAppState } from "../../context/state";
 import { createThemeState, ThemeContext } from "../../context/theme";
+import type { BlameLine, DiffLine, DiffTarget } from "../../core/git/types";
 import * as repo from "../../git/repo";
-import type { BlameLine, DiffLine, DiffTarget } from "../../git/types";
 import DiffBlameDialog from "./diff-blame-dialog";
 
 const descendants = (node: Renderable): Renderable[] =>

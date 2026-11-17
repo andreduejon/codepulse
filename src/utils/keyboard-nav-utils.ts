@@ -6,8 +6,8 @@ import { NAV_REPEAT_MIN_MS } from "../constants";
  * These functions contain the core navigation logic and are framework-agnostic,
  * making them unit-testable without SolidJS or opentui dependencies.
  */
-import type { GraphRow } from "../git/types";
-import { monotonicNow, NEVER } from "./monotonic";
+import type { GraphRow } from "../core/git/types";
+import { monotonicNow, NEVER } from "../core/monotonic";
 
 /**
  * When any highlighting is active, find the nearest highlighted row in the

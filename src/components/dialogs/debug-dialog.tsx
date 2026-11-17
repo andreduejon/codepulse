@@ -2,7 +2,7 @@ import type { ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { For } from "solid-js";
 import { SHIFT_JUMP } from "../../constants";
-import { getDebugEvents } from "../../debug/events";
+import { getDebugEvents } from "../../core/debug-events";
 import {
   formatDebugDuration,
   formatDebugMessage,

@@ -1,3 +1,4 @@
+import { BANNER, bannerOrFallback, debugError } from "../../core/banner";
 import type {
   GitHubAnnotation,
   GitHubApiJob,
@@ -8,7 +9,6 @@ import type {
   GitHubWorkflowRun,
   GraphQLFetchResult,
 } from "../../core/github/types";
-import { BANNER, bannerOrFallback, debugError } from "../../debug/banner";
 import { fetchWithRetry as fetchWithRetryPolicy } from "../shared/http";
 
 // ── Remote URL parsing ────────────────────────────────────────────────────

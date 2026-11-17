@@ -1,6 +1,6 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import { NAV_REPEAT_MIN_MS } from "../src/constants";
-import type { GraphRow } from "../src/git/types";
+import type { GraphRow } from "../src/core/git/types";
 import {
   allowRepeatNav,
   type CascadeState,

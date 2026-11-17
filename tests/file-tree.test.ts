@@ -5,7 +5,7 @@
  * and flattenFileTree (connector prefixes, depth tracking, directory collapsing).
  */
 import { describe, expect, test } from "bun:test";
-import type { FileChange } from "../src/git/types";
+import type { FileChange } from "../src/core/git/types";
 import { buildFileTree, flattenFileTree } from "../src/utils/file-tree";
 
 /** Helper to create a minimal FileChange for testing. */

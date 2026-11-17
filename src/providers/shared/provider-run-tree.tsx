@@ -1,8 +1,8 @@
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show, untrack } from "solid-js";
 import { createRememberedSignal, type DetailMemory } from "../../components/detail-memory";
 import type { DetailNavRef } from "../../components/detail-types";
+import type { DebugEventSource } from "../../core/debug-events";
 import { categorize, statusIcon } from "../../core/status";
-import type { DebugEventSource } from "../../debug/events";
 import { useT } from "../../hooks/use-t";
 import { BUSY } from "../../utils/busy-text";
 import { formatRelativeDate } from "../../utils/date";

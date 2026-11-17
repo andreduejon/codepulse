@@ -16,6 +16,7 @@ import {
   UNCOMMITTED_PLACEHOLDER,
 } from "../constants";
 import { useAppState } from "../context/state";
+import type { GraphRow, RefInfo } from "../core/git/types";
 import type { GraphBadge, ProviderView } from "../core/provider-model";
 import type { SnykScanResult } from "../core/snyk/types";
 import {
@@ -32,7 +33,6 @@ import {
   renderGraphRow,
   sliceGraphToViewport,
 } from "../git/graph";
-import type { GraphRow, RefInfo } from "../git/types";
 import { useScrollWindow } from "../hooks/use-scroll-window";
 import { useT } from "../hooks/use-t";
 import {

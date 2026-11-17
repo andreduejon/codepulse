@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { BANNER } from "../../core/banner";
+import { clearDebugEvents, getDebugEvents } from "../../core/debug-events";
 import { buildJenkinsCommitDataMap, buildJenkinsGraphBadges } from "../../core/jenkins/commit-data";
 import type { JenkinsRun } from "../../core/jenkins/types";
-import { BANNER } from "../../debug/banner";
-import { clearDebugEvents, getDebugEvents } from "../../debug/events";
 import {
   deriveJenkinsJobLabel,
   extractCandidateShas,

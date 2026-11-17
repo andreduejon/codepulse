@@ -6,7 +6,7 @@
  * Everything outside comes through ports; the Solid hook (providers/snyk/use-snyk.ts) builds them and tells the
  * service what changed (the graph's commits, the branches, suspension, another repository).
  */
-import { BANNER } from "../../debug/banner";
+import { BANNER } from "../banner";
 import type { ProviderAppPort } from "../provider-ports";
 import { providerError, providerIdle, providerLoading, providerUnavailable, providerWarning } from "../provider-status";
 import { buildSnykGraphBadges } from "./badges";

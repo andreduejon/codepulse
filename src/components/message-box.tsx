@@ -1,6 +1,6 @@
 import { MouseButton, type MouseEvent } from "@opentui/core";
 import { createSignal, For, Show } from "solid-js";
-import { bannerParts } from "../debug/banner";
+import { bannerParts } from "../core/banner";
 import { useT } from "../hooks/use-t";
 import { TITLE_SEP } from "./dialogs/title-utils";
 

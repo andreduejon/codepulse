@@ -7,7 +7,7 @@
  *   substring match if the regex is invalid.
  */
 
-import type { Commit } from "./git/types";
+import type { Commit } from "./core/git/types";
 
 export type SearchMode = "substring" | "regex";
 

@@ -13,6 +13,7 @@ import App from "../../src/app";
 import GraphView from "../../src/components/graph";
 import { AppStateContext, createAppState } from "../../src/context/state";
 import { createThemeState, ThemeContext } from "../../src/context/theme";
+import type { Commit } from "../../src/core/git/types";
 import { loadAppEvents } from "../../src/dashboard/load";
 import { buildGraph, getMaxGraphColumns } from "../../src/git/graph";
 import {
@@ -24,7 +25,6 @@ import {
   getTagDetails,
 } from "../../src/git/repo";
 import { getWorkingTreeStatus } from "../../src/git/repo-status";
-import type { Commit } from "../../src/git/types";
 import { startupProps } from "../../src/main";
 import JobLogDialog from "../../src/providers/shared/job-log-dialog";
 import { persistMergedSnapshots, ShaSqliteCache } from "../../src/providers/shared/sha-sqlite-cache";

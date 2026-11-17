@@ -9,8 +9,8 @@
  */
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import type { AppActions, AppState } from "../../context/state";
+import * as monotonic from "../../core/monotonic";
 import type { ProviderView } from "../../core/provider-model";
-import * as monotonic from "../../utils/monotonic";
 
 export type ContractFailure = "auth" | "server" | null;
 

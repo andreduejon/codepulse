@@ -3,8 +3,8 @@
  * side builds them (providers/shared/app-port.ts).
  */
 
-import type { GraphRow } from "../git/types";
 import type { FetchLifecycle } from "./fetch-lifecycle";
+import type { GraphRow } from "./git/types";
 import type { GraphBadge } from "./provider-model";
 import type { ProviderStatus } from "./provider-status";
 

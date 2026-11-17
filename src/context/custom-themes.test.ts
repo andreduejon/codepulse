@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { defaultConfigPath } from "../config";
-import { clearDebugEvents, getDebugEvents } from "../debug/events";
+import { clearDebugEvents, getDebugEvents } from "../core/debug-events";
 import { defaultCustomThemesPath, loadCustomThemes } from "./custom-themes";
 import { createThemeState, themes } from "./theme";
 

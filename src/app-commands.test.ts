@@ -2,8 +2,8 @@ import { afterEach, expect, mock, test } from "bun:test";
 import { type AppCommandContext, runAppCommand } from "./app-commands";
 import { lastMenuTab, setLastMenuTab } from "./components/dialogs/menu-dialog";
 import { createAppState } from "./context/state";
+import { addDebugEvent, clearDebugEvents, getDebugEvents } from "./core/debug-events";
 import type { EventSource } from "./core/provider-model";
-import { addDebugEvent, clearDebugEvents, getDebugEvents } from "./debug/events";
 import type { DialogId } from "./hooks/use-keyboard-navigation";
 
 afterEach(() => {

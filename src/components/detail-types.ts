@@ -1,6 +1,6 @@
 import type { KeyEvent, Renderable } from "@opentui/core";
 import { DETAIL_PANEL_WIDTH_FRACTION } from "../constants";
-import type { Commit, CommitDetail, DiffTarget, GraphRow } from "../git/types";
+import type { Commit, CommitDetail, DiffTarget, GraphRow } from "../core/git/types";
 import type { ProviderDetailSources } from "../providers/detail-entries";
 import type { FileTreeRow } from "../utils/file-tree";
 import type { DetailMemory } from "./detail-memory";

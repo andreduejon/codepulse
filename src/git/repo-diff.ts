@@ -1,6 +1,6 @@
 import { join } from "node:path";
+import type { BlameLine, DiffSource, FileContent, FileDiff } from "../core/git/types";
 import { runGit } from "./repo-git";
-import type { BlameLine, DiffSource, FileContent, FileDiff } from "./types";
 
 /** Maximum number of diff lines before truncation. */
 const MAX_DIFF_LINES = 5000;
@@ -55,8 +55,8 @@ export function parseUnifiedDiff(stdout: string, filePath: string, cut = false):
 
   const lines = stdout.split("\n");
   if (cut) lines.pop();
-  const hunks: import("./types").DiffHunk[] = [];
-  let currentHunk: import("./types").DiffHunk | null = null;
+  const hunks: import("../core/git/types").DiffHunk[] = [];
+  let currentHunk: import("../core/git/types").DiffHunk | null = null;
   let oldLine = 0;
   let newLine = 0;
   let totalLines = 0;
@@ -246,7 +246,7 @@ async function getUntrackedFileDiff(repoPath: string, filePath: string): Promise
     if (!content || content.isBinary) return { filePath, hunks: [], isBinary: content?.isBinary ?? false };
     const displayLines = content.lines;
 
-    const diffLines: import("./types").DiffLine[] = displayLines.map((line, idx) => ({
+    const diffLines: import("../core/git/types").DiffLine[] = displayLines.map((line, idx) => ({
       type: "add" as const,
       content: line,
       newLineNo: idx + 1,

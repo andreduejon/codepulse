@@ -1,5 +1,5 @@
 import { type Accessor, createContext, createSignal, useContext } from "solid-js";
-import { addDebugEvent } from "../debug/events";
+import { addDebugEvent } from "../core/debug-events";
 import {
   ayuDark,
   catppuccinMocha,

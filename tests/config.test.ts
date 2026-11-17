@@ -15,8 +15,8 @@ import {
 import { backfillRepoConfig, writeConfig } from "../src/config-write";
 import { DEFAULT_MAX_COUNT } from "../src/constants";
 import { DEFAULT_AUTO_REFRESH_INTERVAL } from "../src/context/state";
+import { clearDebugEvents, getDebugEvents } from "../src/core/debug-events";
 import { PROVIDER_CACHE_LIMIT_OPTIONS } from "../src/core/provider-settings";
-import { clearDebugEvents, getDebugEvents } from "../src/debug/events";
 
 const TEST_ROOT = join(tmpdir(), `codepulse-config-test-${Date.now()}`);
 

@@ -2,8 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { chmod, copyFile, mkdir, mkdtemp, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
+import { BANNER } from "../../core/banner";
 import type { SnykDependencyGraph, SnykScanResult } from "../../core/snyk/types";
-import { BANNER } from "../../debug/banner";
 import { closeProviderCaches } from "../shared/sha-sqlite-cache";
 import { SnykCache } from "./cache";
 import {

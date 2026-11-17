@@ -123,7 +123,9 @@
                       "**/hooks/**",
                       "**/keyboard/**",
                       "**/cli/**",
-                      "**/dashboard/**"
+                      "**/dashboard/**",
+                      "**/debug/**",
+                      "**/utils/**"
                     ],
                     "message": "src/core does not depend on the app around it: providers, state, UI and CLI depend on core, not the other way round. What core needs comes in through its ports."
                   }

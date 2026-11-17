@@ -1,6 +1,6 @@
 import type { Theme } from "../context/theme";
+import type { DebugEventSource } from "../core/debug-events";
 import type { ProviderView } from "../core/provider-model";
-import type { DebugEventSource } from "../debug/events";
 
 export interface ProviderColors {
   bg: string;

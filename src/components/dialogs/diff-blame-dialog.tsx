@@ -2,8 +2,8 @@ import type { ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, type JSX, onCleanup, Show } from "solid-js";
 import { useAppState } from "../../context/state";
+import type { BlameLine, DiffTarget, FileContent, FileDiff } from "../../core/git/types";
 import { getFileBlame, getFileContent, getFileDiff } from "../../git/repo";
-import type { BlameLine, DiffTarget, FileContent, FileDiff } from "../../git/types";
 import { useT } from "../../hooks/use-t";
 import { useModalKeys } from "../../keyboard/dispatcher";
 import {

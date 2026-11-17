@@ -1,6 +1,9 @@
 import { lstat, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, posix, relative, resolve } from "node:path";
+import { BANNER } from "../../core/banner";
+import { addDebugEvent, redactDebugValue } from "../../core/debug-events";
+import { monotonicNow } from "../../core/monotonic";
 import { shouldReplaceSnykResult } from "../../core/snyk/results";
 import type {
   SnykCacheLimit,
@@ -9,9 +12,6 @@ import type {
   SnykScanOptions,
   SnykScanResult,
 } from "../../core/snyk/types";
-import { BANNER } from "../../debug/banner";
-import { addDebugEvent, redactDebugValue } from "../../debug/events";
-import { monotonicNow } from "../../utils/monotonic";
 import { repositoryIdentity } from "../shared/sha-sqlite-cache";
 import { SnykCache } from "./cache";
 import { normalizeSnykTargetFile, parseSnykDepGraphs } from "./dep-graph";

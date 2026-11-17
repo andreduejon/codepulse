@@ -3,8 +3,8 @@ import { createMemo } from "solid-js";
 import { createRememberedSignal, type DetailMemory } from "../components/detail-memory";
 import { computeFileWidths } from "../components/detail-types";
 import { useAppState } from "../context/state";
+import type { Commit, FileChange } from "../core/git/types";
 import { getStashFiles } from "../git/repo";
-import type { Commit, FileChange } from "../git/types";
 import type { FileTreeRow } from "../utils/file-tree";
 import { buildFileTree, flattenFileTree } from "../utils/file-tree";
 

@@ -6,8 +6,8 @@
  * connector explaining the shift.
  */
 import { describe, expect, test } from "bun:test";
+import type { Commit } from "../src/core/git/types";
 import { buildGraph } from "../src/git/graph";
-import type { Commit } from "../src/git/types";
 import { makeCommit, printGraph } from "./test-helpers";
 
 /**

@@ -1,6 +1,6 @@
 import { isAbortError } from "../../core/abort";
-import { debugError } from "../../debug/banner";
-import type { DebugEventSource } from "../../debug/events";
+import { debugError } from "../../core/banner";
+import type { DebugEventSource } from "../../core/debug-events";
 
 export type ProviderJobFetchOutcome<T> =
   | { kind: "result"; jobs: T[]; error: string | null }

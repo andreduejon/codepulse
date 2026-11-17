@@ -1,4 +1,4 @@
-import type { DebugEvent } from "./events";
+import type { DebugEvent } from "../core/debug-events";
 
 export function formatDebugTimestamp(timestamp: number): string {
   const date = new Date(timestamp);

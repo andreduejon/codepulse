@@ -3,7 +3,7 @@ import { useTerminalDimensions } from "@opentui/solid";
 import { createMemo, For, Show } from "solid-js";
 import { isUncommittedHash, UNCOMMITTED_PLACEHOLDER } from "../constants";
 import { useAppState } from "../context/state";
-import type { Commit, GraphRow } from "../git/types";
+import type { Commit, GraphRow } from "../core/git/types";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
 import { useClipboard } from "../hooks/use-clipboard";
 import { type CopyableField, useDetailCursor } from "../hooks/use-detail-cursor";

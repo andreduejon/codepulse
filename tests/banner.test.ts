@@ -7,8 +7,8 @@ import {
   debugError,
   displayBanner,
   isBanner,
-} from "../src/debug/banner";
-import { clearDebugEvents, getDebugEvents } from "../src/debug/events";
+} from "../src/core/banner";
+import { clearDebugEvents, getDebugEvents } from "../src/core/debug-events";
 
 afterEach(() => clearDebugEvents());
 

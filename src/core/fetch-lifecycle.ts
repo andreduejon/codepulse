@@ -9,8 +9,8 @@
  * call them directly.
  */
 
-import { monotonicNow, NEVER } from "../utils/monotonic";
 import { isAbortError } from "./abort";
+import { monotonicNow, NEVER } from "./monotonic";
 import { collectTopSHAs } from "./sha-selection";
 
 export const DEFAULT_INITIAL_SHA_LIMIT = 100;

@@ -5,7 +5,7 @@ import { testRender } from "@opentui/solid";
 import { createSignal, Show } from "solid-js";
 import packageJson from "../../../package.json";
 import { createThemeState, ThemeContext } from "../../context/theme";
-import { addDebugEvent, clearDebugEvents } from "../../debug/events";
+import { addDebugEvent, clearDebugEvents } from "../../core/debug-events";
 import { KEYBINDS } from "../../keybinds";
 import DebugDialog from "./debug-dialog";
 import HelpDialog from "./help-dialog";

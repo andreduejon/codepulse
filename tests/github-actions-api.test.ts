@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, mock } from "bun:test";
+import { BANNER } from "../src/core/banner";
+import { clearDebugEvents, getDebugEvents } from "../src/core/debug-events";
 import {
   aggregateRunsToGraphBadge,
   buildCommitDataMap,
@@ -7,8 +9,6 @@ import {
   mapRunToBadge,
 } from "../src/core/github/commit-data";
 import type { GitHubApiJob } from "../src/core/github/types";
-import { BANNER } from "../src/debug/banner";
-import { clearDebugEvents, getDebugEvents } from "../src/debug/events";
 import {
   fetchCIDataForSHAs,
   fetchJobAnnotations,

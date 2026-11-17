@@ -7,8 +7,8 @@ import * as config from "./config";
 import * as configWrite from "./config-write";
 import { type AppActions, providerError, providerIdle } from "./context/state";
 import { createThemeState } from "./context/theme";
+import { clearDebugEvents, getDebugEvents } from "./core/debug-events";
 import * as dashboardLoad from "./dashboard/load";
-import { clearDebugEvents, getDebugEvents } from "./debug/events";
 import * as dataLoader from "./hooks/use-data-loader";
 import * as detailLoader from "./hooks/use-detail-loader";
 

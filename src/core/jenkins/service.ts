@@ -5,7 +5,7 @@
  *
  * Everything outside comes through ports; the Solid hook (providers/jenkins/use-jenkins-ci.ts) builds them.
  */
-import { BANNER, bannerOrFallback } from "../../debug/banner";
+import { BANNER, bannerOrFallback } from "../banner";
 import type { ProviderFetchArgs } from "../fetch-lifecycle";
 import type { ProviderAppPort, ProviderLifecycle } from "../provider-ports";
 import { providerError, providerIdle, providerLoading, providerUnavailable, providerWarning } from "../provider-status";

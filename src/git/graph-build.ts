@@ -1,4 +1,4 @@
-import type { Commit, Connector, GraphColumn, GraphRow } from "./types";
+import type { Commit, Connector, GraphColumn, GraphRow } from "../core/git/types";
 
 /**
  * Walk the first-parent chain starting from `startHash`, calling `visit`

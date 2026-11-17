@@ -1,6 +1,6 @@
 import { MouseButton, type Renderable } from "@opentui/core";
 import { createSignal, For, Show } from "solid-js";
-import type { Commit } from "../git/types";
+import type { Commit } from "../core/git/types";
 import { useT } from "../hooks/use-t";
 import { ScrollingLabel } from "../providers/shared/detail-rows";
 import type { FileTreeRow } from "../utils/file-tree";

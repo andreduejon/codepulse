@@ -5,8 +5,8 @@
  * be unit-tested without a SolidJS runtime.
  */
 
+import type { GraphRow } from "../core/git/types";
 import type { GraphChar } from "./graph-render";
-import type { GraphRow } from "./types";
 
 // ── Bright-column computation ───────────────────────────────────────────────
 

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { GraphRow } from "../git/types";
+import type { GraphRow } from "../core/git/types";
 import { type CursoredTextSource, cursoredItemText } from "./detail-scroll";
 
 const source = (overrides: Partial<CursoredTextSource> = {}): CursoredTextSource => ({

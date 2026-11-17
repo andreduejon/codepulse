@@ -1,4 +1,4 @@
-import type { GraphRow } from "../git/types";
+import type { GraphRow } from "../core/git/types";
 import type { CopyableField, InteractiveItem } from "../hooks/use-detail-cursor";
 import type { StashFileWidths } from "../hooks/use-stash-state";
 import type { FileTreeRow } from "../utils/file-tree";

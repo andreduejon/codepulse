@@ -1,7 +1,7 @@
 import type { DetailTab, ProviderStatus } from "./context/state";
+import { bannerParts } from "./core/banner";
 import type { ProviderView } from "./core/provider-model";
 import type { SnykScanResult } from "./core/snyk/types";
-import { bannerParts } from "./debug/banner";
 import { snykPartialScanNotice, snykProjectNotice } from "./providers/snyk/project-notice";
 
 /**

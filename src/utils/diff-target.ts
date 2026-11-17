@@ -1,4 +1,4 @@
-import type { DiffSource, DiffTarget, FileChange } from "../git/types";
+import type { DiffSource, DiffTarget, FileChange } from "../core/git/types";
 
 /**
  * Build a DiffTarget from a commit hash, file path, source, and file list.

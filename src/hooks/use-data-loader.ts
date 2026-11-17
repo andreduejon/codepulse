@@ -1,7 +1,7 @@
 import { type Accessor, batch, createEffect, onCleanup, untrack } from "solid-js";
 import { isUncommittedHash } from "../constants";
 import type { AppActions, AppState } from "../context/state";
-import { BANNER, bannerOrFallback, debugError } from "../debug/banner";
+import { BANNER, bannerOrFallback, debugError } from "../core/banner";
 import { buildGraph, getMaxGraphColumns } from "../git/graph";
 import { mergeCommitPages } from "../git/merge-pages";
 import {

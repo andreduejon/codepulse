@@ -5,10 +5,10 @@ import { testRender } from "@opentui/solid";
 import { createComponent } from "solid-js";
 import { AppStateContext, createAppState } from "../context/state";
 import { createThemeState, ThemeContext, themes } from "../context/theme";
+import type { Commit } from "../core/git/types";
 import type { GraphBadge, GraphStatusCounts } from "../core/provider-model";
 import { buildGraph } from "../git/graph";
 import { getMaxGraphColumns } from "../git/graph-viewport";
-import type { Commit } from "../git/types";
 import GraphView from "./graph";
 
 test("graph wheel preserves selection; left click selects; modal blocks mouse", async () => {

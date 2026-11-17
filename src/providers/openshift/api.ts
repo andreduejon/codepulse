@@ -1,4 +1,5 @@
 import { isAbortError } from "../../core/abort";
+import { BANNER, debugError } from "../../core/banner";
 import {
   arr,
   buildOpenShiftCommitMap,
@@ -29,7 +30,6 @@ import type {
   OpenShiftWatchResult,
 } from "../../core/openshift/types";
 import { isOpenShiftWatchGone, type OpenShiftWatchEvent, parseOpenShiftWatchBuffer } from "../../core/openshift/watch";
-import { BANNER, debugError } from "../../debug/banner";
 import { fetchWithRetry } from "../shared/http";
 import { isValidOpenShiftNamespace } from "./validation";
 

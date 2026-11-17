@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { clearDebugEvents, getDebugEvents } from "../src/debug/events";
+import { clearDebugEvents, getDebugEvents } from "../src/core/debug-events";
 import { fetchProviderJobs } from "../src/providers/shared/provider-job-fetch";
 
 describe("fetchProviderJobs", () => {

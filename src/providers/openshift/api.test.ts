@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { BANNER } from "../../core/banner";
+import { clearDebugEvents, getDebugEvents } from "../../core/debug-events";
 import {
   buildOpenShiftCommitMap,
   buildOpenShiftGraphBadges,
@@ -8,8 +10,6 @@ import {
   resourceFromWatchObject,
 } from "../../core/openshift/resources";
 import type { OpenShiftCommitData, OpenShiftResource } from "../../core/openshift/types";
-import { BANNER } from "../../debug/banner";
-import { clearDebugEvents, getDebugEvents } from "../../debug/events";
 import {
   fetchOpenShiftEvents,
   fetchOpenShiftInventory,

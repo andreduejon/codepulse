@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { createRoot, createSignal } from "solid-js";
 import { createAppState } from "../../context/state";
+import { BANNER } from "../../core/banner";
 import type {
   OpenShiftCommitData,
   OpenShiftListedInventory,
   OpenShiftResource,
   OpenShiftWatchResult,
 } from "../../core/openshift/types";
-import { BANNER } from "../../debug/banner";
 import { buildGraph } from "../../git/graph";
 import * as api from "./api";
 import { OpenShiftCache, type OpenShiftCacheEntry } from "./cache";

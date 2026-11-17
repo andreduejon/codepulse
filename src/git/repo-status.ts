@@ -1,5 +1,5 @@
+import type { FileChange, UncommittedDetail } from "../core/git/types";
 import { runGit } from "./repo-git";
-import type { FileChange, UncommittedDetail } from "./types";
 
 export interface WorkingTreeStatus {
   staged: number;

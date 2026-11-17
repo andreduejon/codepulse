@@ -1,4 +1,4 @@
-import { redactDebugValue } from "../../debug/events";
+import { redactDebugValue } from "../../core/debug-events";
 
 /** Longest reason kept; Maven and Gradle failures can print whole build logs. */
 const MAX_REASON_LENGTH = 240;

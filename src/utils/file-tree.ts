@@ -1,4 +1,4 @@
-import type { FileChange } from "../git/types";
+import type { FileChange } from "../core/git/types";
 
 /** Tree node for building the file tree structure */
 export interface FileTreeNode {

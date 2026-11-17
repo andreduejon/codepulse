@@ -1,7 +1,7 @@
 import { setLastMenuTab } from "./components/dialogs/menu-dialog";
 import type { AppActions, AppState } from "./context/app-state-types";
+import { clearDebugEvents } from "./core/debug-events";
 import type { EventSource } from "./core/provider-model";
-import { clearDebugEvents } from "./debug/events";
 import type { CommandBarMode, DialogId } from "./hooks/use-keyboard-navigation";
 
 /** What `:` commands can reach in the app. */

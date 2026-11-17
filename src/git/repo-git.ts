@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
-import { addDebugEvent, redactDebugValue } from "../debug/events";
-import { monotonicNow } from "../utils/monotonic";
+import { addDebugEvent, redactDebugValue } from "../core/debug-events";
+import { monotonicNow } from "../core/monotonic";
 
 function spawnGit(repoPath: string, args: string[]) {
   return Bun.spawn(["git", "-c", "core.quotePath=false", ...args], {

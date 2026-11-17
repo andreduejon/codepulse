@@ -1,6 +1,6 @@
 import { abortError, isAbortError, sleep } from "../../core/abort";
-import { addDebugEvent, type DebugEventSource, redactDebugValue } from "../../debug/events";
-import { monotonicNow } from "../../utils/monotonic";
+import { addDebugEvent, type DebugEventSource, redactDebugValue } from "../../core/debug-events";
+import { monotonicNow } from "../../core/monotonic";
 
 export interface FetchWithRetryOptions {
   timeoutMs: number;

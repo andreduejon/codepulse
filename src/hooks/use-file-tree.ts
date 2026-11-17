@@ -1,7 +1,7 @@
 import type { Accessor } from "solid-js";
 import { createMemo } from "solid-js";
 import { createRememberedSignal, type DetailMemory } from "../components/detail-memory";
-import type { FileChange } from "../git/types";
+import type { FileChange } from "../core/git/types";
 import type { FileTreeNode, FileTreeRow } from "../utils/file-tree";
 import { buildFileTree, flattenFileTree } from "../utils/file-tree";
 

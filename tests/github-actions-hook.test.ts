@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createRoot } from "solid-js";
 import { createAppState } from "../src/context/state";
-import { clearDebugEvents, getDebugEvents } from "../src/debug/events";
+import { clearDebugEvents, getDebugEvents } from "../src/core/debug-events";
 import { useGitHubCI } from "../src/providers/github-actions/use-github-ci";
 import { closeProviderCaches } from "../src/providers/shared/sha-sqlite-cache";
 

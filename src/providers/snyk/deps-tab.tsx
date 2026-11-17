@@ -2,7 +2,7 @@ import type { KeyEvent, Renderable } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, createSignal, For, onCleanup, Show, untrack } from "solid-js";
 import { DETAIL_PANEL_WIDTH_FRACTION } from "../../constants";
-import { BANNER } from "../../debug/banner";
+import { BANNER } from "../../core/banner";
 import { useBannerScroll } from "../../hooks/use-banner-scroll";
 import { useClipboard } from "../../hooks/use-clipboard";
 import { useT } from "../../hooks/use-t";

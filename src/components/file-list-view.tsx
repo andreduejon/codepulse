@@ -2,7 +2,7 @@ import type { Renderable } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/solid";
 import { createEffect, createMemo, For, Show } from "solid-js";
 import { useAppState } from "../context/state";
-import type { DiffSource, DiffTarget, FileChange } from "../git/types";
+import type { DiffSource, DiffTarget, FileChange } from "../core/git/types";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
 import { useFileTree } from "../hooks/use-file-tree";
 import { useT } from "../hooks/use-t";

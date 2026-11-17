@@ -12,7 +12,7 @@ import {
   resolveConfigInfo,
 } from "./config";
 import { loadCustomThemes } from "./context/custom-themes";
-import { addDebugEvent, redactDebugValue } from "./debug/events";
+import { addDebugEvent, redactDebugValue } from "./core/debug-events";
 import { getRepoRoot, isGitAvailable, isGitRepo } from "./git/repo";
 import { cleanupInactiveProviderCaches } from "./providers/shared/cache-management";
 import { closeProviderCaches } from "./providers/shared/sha-sqlite-cache";

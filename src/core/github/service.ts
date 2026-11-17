@@ -1,5 +1,5 @@
-import { BANNER, bannerOrFallback, debugError } from "../../debug/banner";
-import { addDebugEvent } from "../../debug/events";
+import { BANNER, bannerOrFallback, debugError } from "../banner";
+import { addDebugEvent } from "../debug-events";
 import type { ProviderFetchArgs } from "../fetch-lifecycle";
 import type { ProviderAppPort, ProviderLifecycle } from "../provider-ports";
 import { providerError, providerIdle, providerLoading, providerUnavailable } from "../provider-status";

@@ -1,9 +1,9 @@
 import { resolve } from "node:path";
 import { DEFAULT_MAX_COUNT } from "../constants";
-import { BANNER, classifyGitFailure, debugError } from "../debug/banner";
+import { BANNER, classifyGitFailure, debugError } from "../core/banner";
+import type { Branch, Commit, CommitDetail, FileChange, RefInfo, TagInfo } from "../core/git/types";
 import { runGit } from "./repo-git";
 import { parseDiffTreeOutput } from "./repo-status";
-import type { Branch, Commit, CommitDetail, FileChange, RefInfo, TagInfo } from "./types";
 
 export { getFileBlame, getFileContent, getFileDiff, parseBlameOutput, parseUnifiedDiff } from "./repo-diff";
 export { runGit } from "./repo-git";
