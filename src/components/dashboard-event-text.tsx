@@ -1,5 +1,5 @@
 import { For, type JSX, Show } from "solid-js";
-import type { DashboardEvent } from "../dashboard/events";
+import type { DashboardEvent } from "../core/dashboard/events";
 import { eventMark } from "../dashboard/legend";
 import { useT } from "../hooks/use-t";
 import { severityColor } from "../providers/snyk/severity";

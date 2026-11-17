@@ -123,7 +123,6 @@
                       "**/hooks/**",
                       "**/keyboard/**",
                       "**/cli/**",
-                      "**/dashboard/**",
                       "**/debug/**",
                       "**/utils/**"
                     ],

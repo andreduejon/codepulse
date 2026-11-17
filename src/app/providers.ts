@@ -5,12 +5,12 @@
  */
 import type { Accessor } from "solid-js";
 import type { AppActions, AppState } from "../context/state";
+import type { DashboardEvent } from "../core/dashboard/events";
+import { githubEvents, jenkinsEvents, openShiftEvents } from "../core/dashboard/events";
 import type { GitHubJob, GitHubWorkflowRun } from "../core/github/types";
 import type { JenkinsFailedTest, JenkinsJob, JenkinsRun } from "../core/jenkins/types";
 import type { OpenShiftResource } from "../core/openshift/types";
 import type { ProviderView } from "../core/provider-model";
-import type { DashboardEvent } from "../dashboard/events";
-import { githubEvents, jenkinsEvents, openShiftEvents } from "../dashboard/events";
 import type { ProviderDetailSources } from "../providers/detail-entries";
 import { githubJobLogTarget } from "../providers/github-actions/log-target";
 import { useGitHubCI } from "../providers/github-actions/use-github-ci";

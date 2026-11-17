@@ -1,3 +1,4 @@
+import type { CommitInfo, DashboardGit } from "../dashboard/load";
 import type { FastForwardResult } from "./log";
 import type { WorkingTreeStatus } from "./status";
 import type {
@@ -17,7 +18,9 @@ import type {
  * Git as the app uses it: the repository's history, refs, working tree and files, fetching and fast-forwarding. The
  * terminal app runs the Git command line (src/git/git-cli.ts); a test or another front end can answer from elsewhere.
  */
-export interface GitPort {
+export interface GitPort extends DashboardGit {
+  /** An event's commit as the repository knows it, for the Dashboard's side panel; null when it doesn't. */
+  getCommitInfo: (repo: string, sha: string, signal?: AbortSignal) => Promise<CommitInfo | null>;
   isGitAvailable: () => Promise<boolean>;
   isGitRepo: (path: string) => Promise<boolean>;
   /** The repository's top folder for a path inside it, or null. */

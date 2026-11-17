@@ -4,7 +4,7 @@ import { MouseButtons } from "@opentui/core/testing";
 import { testRender } from "@opentui/solid";
 import { createRoot, createSignal } from "solid-js";
 import { createThemeState, ThemeContext } from "../context/theme";
-import type { DashboardEvent } from "../dashboard/events";
+import type { DashboardEvent } from "../core/dashboard/events";
 import { useDashboard } from "../dashboard/use-dashboard";
 import * as dates from "../utils/date";
 import { DashboardView } from "./dashboard-view";

@@ -3,6 +3,7 @@
  * event's details (its provider's tabs and Info, in the side panel or the compact dialog), its keys in both layouts,
  * `r`, and showing an event's commit in its provider's view.
  */
+
 import { KeyEvent, parseKeypress, type ScrollBoxRenderable } from "@opentui/core";
 import { type Accessor, batch, createEffect, createMemo, createSignal, Show, untrack } from "solid-js";
 import { DashboardCommitFields, type DashboardDetailTab } from "../components/dashboard-detail";
@@ -13,10 +14,12 @@ import type { DetailNavRef } from "../components/detail-types";
 import type { UIMessage } from "../components/message-box";
 import type { AppActions, AppState, DetailTab } from "../context/state";
 import type { Theme } from "../context/theme";
+import type { DashboardEvent } from "../core/dashboard/events";
+import type { GitPort } from "../core/git/port";
 import { type EventSource, isProviderDetailView, type ProviderView, providerDetailTab } from "../core/provider-model";
-import type { DashboardEvent } from "../dashboard/events";
 import { markLegend } from "../dashboard/legend";
 import type { CommitInfo } from "../dashboard/load";
+import { loadAppEvents } from "../dashboard/load";
 import { type DashboardApp, useDashboard } from "../dashboard/use-dashboard";
 import { handleDetailKey } from "../hooks/handle-detail-keys";
 import { openGraphDetails } from "../hooks/handle-graph-keys";
@@ -32,6 +35,8 @@ export function useDashboardController(opts: {
   state: AppState;
   actions: AppActions;
   repoPath: Accessor<string>;
+  /** Git, through the app's port: the Dashboard reads its main branch and commits with it. */
+  git: GitPort;
   settings: RepoSettings;
   providers: ProviderHost;
   dialogs: Pick<DialogHost, "dialog" | "setDialog">;
@@ -88,6 +93,7 @@ export function useDashboardController(opts: {
     settings: opts.settings.dashboard,
     // The graph read again (a refresh, a fetch, a new commit): its main branch may have moved.
     changes: () => state.graphRows(),
+    load: (path, options) => loadAppEvents(path, options, opts.git),
   });
   // A scan on the dashboard: its cached result, also for a commit the graph doesn't hold (Snyk reads the graph's).
   createEffect(() => {

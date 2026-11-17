@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { themes } from "../context/theme";
+import type { DashboardEvent } from "../core/dashboard/events";
 import { GITHUB_LEGEND, JENKINS_LEGEND, OPENSHIFT_LEGEND, SNYK_SEVERITY_LEGEND } from "../providers/legends";
-import type { DashboardEvent } from "./events";
 import { eventMark, markLegend } from "./legend";
 
 const scan = (severity: DashboardEvent["severity"]): DashboardEvent => ({

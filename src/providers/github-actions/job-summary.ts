@@ -1,5 +1,5 @@
+import { formatDuration } from "../../core/duration";
 import type { GitHubJob } from "../../core/github/types";
-import { formatDuration } from "../../utils/date";
 import type { JobLogEntry, JobLogSummaryLine } from "../shared/job-log-dialog";
 import { stepsSummary } from "../shared/log-summary";
 

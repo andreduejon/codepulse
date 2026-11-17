@@ -211,6 +211,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
     state,
     actions,
     repoPath: activeRepoPath,
+    git: gitPort,
     settings,
     providers,
     dialogs: { dialog, setDialog },

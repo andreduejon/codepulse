@@ -4,6 +4,7 @@
  */
 import type { GitPort } from "../core/git/port";
 import * as repo from "./repo";
+import * as repoDashboard from "./repo-dashboard";
 import * as repoDiff from "./repo-diff";
 import * as repoStatus from "./repo-status";
 
@@ -29,5 +30,10 @@ export function gitCli(): GitPort {
     getFileBlame: (...args) => repoDiff.getFileBlame(...args),
     fetchRemote: repoPath => repo.fetchRemote(repoPath),
     fastForwardBranches: repoPath => repo.fastForwardBranches(repoPath),
+    getMainBranch: (...args) => repoDashboard.getMainBranch(...args),
+    getMainBranchCommits: (...args) => repoDashboard.getMainBranchCommits(...args),
+    getBranchWalk: (...args) => repoDashboard.getBranchWalk(...args),
+    resolveCommit: (...args) => repoDashboard.resolveCommit(...args),
+    getCommitInfo: (...args) => repoDashboard.getCommitInfo(...args),
   };
 }

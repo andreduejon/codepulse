@@ -1,5 +1,5 @@
+import { formatDuration } from "../../core/duration";
 import type { JenkinsJob, JenkinsTestReport } from "../../core/jenkins/types";
-import { formatDuration } from "../../utils/date";
 import type { JobLogEntry, JobLogSummaryLine } from "../shared/job-log-dialog";
 import { stepsSummary, stepTime } from "../shared/log-summary";
 

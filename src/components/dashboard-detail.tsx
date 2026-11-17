@@ -1,8 +1,9 @@
 import { MouseButton, type ScrollBoxRenderable } from "@opentui/core";
 import { type Accessor, createEffect, createSignal, For, type JSX, onCleanup, Show } from "solid-js";
+import { useGit } from "../context/git";
 import type { DetailTab } from "../context/state";
+import type { DashboardEvent } from "../core/dashboard/events";
 import { providerDisplayName } from "../core/provider-model";
-import type { DashboardEvent } from "../dashboard/events";
 import { markLegend } from "../dashboard/legend";
 import { type CommitInfo, loadCommitInfo } from "../dashboard/load";
 import { useT } from "../hooks/use-t";
@@ -46,6 +47,8 @@ export function DashboardDetail(
     onMouseFocus?: () => void;
   }>,
 ) {
+  /** Git, through the app's port: the side panel reads the event's commit with it. */
+  const git = useGit();
   const t = useT();
   const [actionHovered, setActionHovered] = createSignal(false);
   const commits = new Map<string, Promise<CommitInfo | null>>();
@@ -61,7 +64,9 @@ export function DashboardDetail(
     const key = `${event.app}\u0000${event.sha}`;
     let pending = commits.get(key);
     if (!pending) {
-      pending = (props.loadCommit ?? loadCommitInfo)(event.app, event.sha);
+      pending = props.loadCommit
+        ? props.loadCommit(event.app, event.sha)
+        : loadCommitInfo(event.app, event.sha, undefined, git);
       commits.set(key, pending);
     }
     void pending.then(info => {

@@ -4,7 +4,7 @@ import { MouseButtons } from "@opentui/core/testing";
 import { testRender } from "@opentui/solid";
 import { createSignal } from "solid-js";
 import { createThemeState, ThemeContext } from "../context/theme";
-import type { DashboardEvent } from "../dashboard/events";
+import type { DashboardEvent } from "../core/dashboard/events";
 import { DashboardDetail } from "./dashboard-detail";
 
 const SHA = "e6209dd7a1b2c3d4e5f60718293a4b5c6d7e8f90";

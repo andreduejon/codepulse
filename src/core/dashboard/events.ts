@@ -3,13 +3,13 @@
  * happened. `dashboardRows` lays them out as knots on the app's rope.
  */
 
-import type { EventSource } from "../core/provider-model";
-import type { SnykScanResult, SnykSeverity } from "../core/snyk/types";
-import { categorize, type StatusCategory } from "../core/status";
-import type { GitHubCacheEntry } from "../providers/github-actions/cache";
-import type { JenkinsCacheEntry } from "../providers/jenkins/cache";
-import type { OpenShiftCacheEntry } from "../providers/openshift/cache";
-import { formatDuration } from "../utils/date";
+import { formatDuration } from "../duration";
+import type { GitHubCacheEntry } from "../github/merge";
+import type { JenkinsCacheEntry } from "../jenkins/merge";
+import type { OpenShiftCacheEntry } from "../openshift/merge";
+import type { EventSource } from "../provider-model";
+import type { SnykScanResult, SnykSeverity } from "../snyk/types";
+import { categorize, type StatusCategory } from "../status";
 
 /** One line of an event's side panel: a label and its value. */
 export interface DashboardFact {

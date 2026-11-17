@@ -1,5 +1,5 @@
+import { formatDuration } from "../../core/duration";
 import { categorize } from "../../core/status";
-import { formatDuration } from "../../utils/date";
 import type { JobLogSummaryLine } from "./job-log-dialog";
 
 /** A Jenkins stage or a GitHub step: what a log's summary lists. */

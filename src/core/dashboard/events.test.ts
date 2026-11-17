@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { GitHubWorkflowRun } from "../core/github/types";
-import type { JenkinsRun } from "../core/jenkins/types";
+import type { GitHubWorkflowRun } from "../github/types";
+import type { JenkinsRun } from "../jenkins/types";
 import {
   type DashboardEvent,
   dashboardRows,

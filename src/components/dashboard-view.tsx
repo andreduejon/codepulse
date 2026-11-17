@@ -1,8 +1,8 @@
 import { MouseButton, type Renderable, type ScrollBoxRenderable } from "@opentui/core";
 import { createEffect, createMemo, createSelector, createSignal, For, Match, onCleanup, Show, Switch } from "solid-js";
 import { HASH_COL_WIDTH } from "../constants";
-import type { DashboardRow } from "../dashboard/events";
-import { branchColumnWidth, cutBranch } from "../dashboard/layout";
+import type { DashboardRow } from "../core/dashboard/events";
+import { branchColumnWidth, cutBranch } from "../core/dashboard/layout";
 import { KNOT } from "../dashboard/legend";
 import type { DashboardState } from "../dashboard/use-dashboard";
 import { useT } from "../hooks/use-t";
