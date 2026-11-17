@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createRoot, createSignal } from "solid-js";
+import { RECENT_APPS } from "../constants";
 import { GitHubCache } from "../providers/github-actions/cache";
 import { closeProviderCaches } from "../providers/shared/sha-sqlite-cache";
 import type { DashboardEvent } from "./events";
@@ -364,4 +365,38 @@ test("back to an app read before, its events show at once while they are read ag
   release();
   await settle();
   expect(state.totalCount()).toBe(2);
+});
+
+test(`only the last ${RECENT_APPS} apps keep their events once left: an older one reads again`, async () => {
+  const apps = Array.from({ length: RECENT_APPS + 1 }, (_, index) => ({ path: `/app-${index}`, name: `app-${index}` }));
+  const [app, setApp] = createSignal(apps[0] as DashboardApp);
+  const [active] = createSignal(true);
+  const read = new Set<string>();
+  const state = createRoot(dispose => {
+    cleanup.push(dispose);
+    return useDashboard({
+      app,
+      active,
+      now: () => NOW,
+      // The first read of each app answers at once; a second one waits, so what shows meanwhile was kept.
+      load: path => {
+        if (read.has(path)) return new Promise(() => {});
+        read.add(path);
+        return Promise.resolve([event(path, 5)]);
+      },
+    });
+  });
+  for (const next of apps) {
+    setApp(next);
+    await settle();
+  }
+  // The newest left one still shows at once.
+  setApp(apps[RECENT_APPS - 1] as DashboardApp);
+  await settle();
+  expect(state.totalCount()).toBe(1);
+  // The oldest is gone from memory: it reads again before it shows.
+  setApp(apps[0] as DashboardApp);
+  await settle();
+  expect(state.totalCount()).toBe(0);
+  expect(state.loading()).toBe(true);
 });

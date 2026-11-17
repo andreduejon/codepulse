@@ -1,6 +1,8 @@
 import { type Accessor, createEffect, createMemo, createSignal, onCleanup, untrack } from "solid-js";
+import { RECENT_APPS } from "../constants";
 import type { EventSource } from "../providers/provider";
 import { onProviderCacheWrite } from "../providers/shared/sha-sqlite-cache";
+import { rememberRecent } from "../utils/recent";
 import { type DashboardEvent, type DashboardRow, dashboardRows } from "./events";
 import { type LoadOptions, loadAppEvents } from "./load";
 import { type DashboardSettings, DEFAULT_DASHBOARD_SETTINGS } from "./settings";
@@ -105,7 +107,8 @@ export function useDashboard(
         cacheRoot: opts.cacheRoot,
       });
       if (current.signal.aborted) return;
-      setLoaded(current => new Map(current).set(app.path, loaded));
+      // The last few apps read keep their events, so coming back shows them at once; older ones read again.
+      setLoaded(current => rememberRecent(current, app.path, loaded, RECENT_APPS));
     } finally {
       if (controller === current) setLoading(false);
     }

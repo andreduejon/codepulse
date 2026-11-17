@@ -54,6 +54,7 @@ import {
   isUncommittedHash,
   MIN_TERMINAL_HEIGHT,
   MIN_TERMINAL_WIDTH,
+  RECENT_APPS,
 } from "./constants";
 import { AppStateContext, createAppState, type DetailTab, providerIdle, providerStatusMessage } from "./context/state";
 import { ThemeContext } from "./context/theme";
@@ -105,6 +106,7 @@ import { fastForwardMessage } from "./utils/fast-forward-message";
 import { nextGroupRepoPath, repoDisplayName } from "./utils/group-repos";
 import { computeDisplacedIndex, DETAIL_CHILD_DIALOGS } from "./utils/keyboard-nav-utils";
 import { openUrl } from "./utils/open-url";
+import { rememberRecent } from "./utils/recent";
 
 export function AppContent(props: Readonly<AppContentProps>) {
   const { state, actions } = createAppState(
@@ -437,11 +439,13 @@ export function AppContent(props: Readonly<AppContentProps>) {
 
   const knownRepoInfos = () => getKnownRepoInfos();
   const currentRepoDisplayConfig = () => repoDisplayConfig();
-  const repoSessionCache = new Map<string, RepoSessionSnapshot>();
+  /** The apps left last keep their graph, so coming back shows it at once; older ones read again. */
+  let repoSessionCache: ReadonlyMap<string, RepoSessionSnapshot> = new Map();
 
   const saveRepoSessionSnapshot = (path: string) => {
     if (!path || state.repoPath() !== path || state.graphRows().length === 0) return;
-    repoSessionCache.set(path, captureRepoSession(state, graphScrollboxRef?.scrollTop ?? 0));
+    const snapshot = captureRepoSession(state, graphScrollboxRef?.scrollTop ?? 0);
+    repoSessionCache = rememberRecent(repoSessionCache, path, snapshot, RECENT_APPS);
   };
 
   const restoreRepoSessionSnapshot = (snapshot: RepoSessionSnapshot) => {

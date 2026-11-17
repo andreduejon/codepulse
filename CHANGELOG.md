@@ -12,6 +12,9 @@ All notable changes to this project will be documented in this file.
   go instead of commit by commit, which on Windows took seconds for a large fetch.
   A refresh that brings nothing new writes nothing, so the Dashboard no longer
   reads every cache again after it.
+- The last 8 apps you left keep their graph and Dashboard events, so coming back
+  shows them at once. Older ones are read again, so a long session through a large
+  group no longer keeps every app in memory.
 
 ### Fixed
 

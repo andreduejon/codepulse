@@ -55,3 +55,9 @@ export const MS_TO_LABEL: Record<number, string> = {
   30000: "30s",
   60000: "60s",
 };
+
+/**
+ * How many apps keep what was read for them once you leave them (their graph and their Dashboard events), so coming
+ * back shows them at once. An older one reads again.
+ */
+export const RECENT_APPS = 8;
