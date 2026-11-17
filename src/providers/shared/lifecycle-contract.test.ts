@@ -2,6 +2,7 @@
  * The fetch lifecycle contract (lifecycle-contract.ts) for each provider on the shared lifecycle. A provider that
  * moves to another implementation keeps its fixture and must still pass.
  */
+
 import { spyOn } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -10,6 +11,7 @@ import { batch, createRoot, createSignal, untrack } from "solid-js";
 import { createAppState } from "../../context/state";
 import type { GitHubWorkflowRun } from "../../core/github/types";
 import type { JenkinsRun } from "../../core/jenkins/types";
+import type { OpenShiftWatchResult } from "../../core/openshift/types";
 import { BANNER } from "../../debug/banner";
 import { buildGraph } from "../../git/graph";
 import * as githubApi from "../github-actions/api";
@@ -281,7 +283,7 @@ const openshift: ContractFixture = {
       error: null,
       resourceVersions: new Map(),
     });
-    const ends: ((result: openShiftApi.OpenShiftWatchResult) => void)[] = [];
+    const ends: ((result: OpenShiftWatchResult) => void)[] = [];
     const watch = spyOn(openShiftApi, "watchOpenShiftStream").mockImplementation(
       () => new Promise(resolve => ends.push(resolve)),
     );

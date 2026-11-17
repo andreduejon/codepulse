@@ -16,20 +16,22 @@ import {
   str,
 } from "../../core/openshift/resources";
 import type {
+  OpenShiftClusterConfig,
   OpenShiftControllerReference,
   OpenShiftEvent,
+  OpenShiftFetchOptions,
   OpenShiftInventoryFailure,
   OpenShiftInventoryKind,
+  OpenShiftInventoryMode,
   OpenShiftInventoryResult,
   OpenShiftListedInventory,
   OpenShiftResource,
+  OpenShiftWatchResult,
 } from "../../core/openshift/types";
 import { isOpenShiftWatchGone, type OpenShiftWatchEvent, parseOpenShiftWatchBuffer } from "../../core/openshift/watch";
 import { BANNER, debugError } from "../../debug/banner";
 import { fetchWithRetry } from "../shared/http";
 import { isValidOpenShiftNamespace } from "./validation";
-
-export type OpenShiftInventoryMode = "full" | "builds" | "seeds" | "live";
 
 const FETCH_OPTS = { timeoutMs: 15000, attempts: 2, retryDelayMs: 500, timeoutMessage: BANNER.openshift.timeout };
 export const MAX_LIST_PAGES = 100;
@@ -163,8 +165,6 @@ export async function fetchOpenShiftPodLog(
   return await res.text();
 }
 
-export type OpenShiftWatchResult = "gone" | "end" | "forbidden" | "auth";
-
 export async function watchOpenShiftStream(
   serverUrl: string,
   token: string,
@@ -245,11 +245,7 @@ export async function followOpenShiftLog(
   }
 }
 
-export interface OpenShiftFetchOptions {
-  commitShas?: string[];
-}
-
-type InventoryConfig = { serverUrl: string; namespaces: string[]; commitShaAnnotation: string };
+type InventoryConfig = OpenShiftClusterConfig;
 
 type InventoryRequest = {
   kind: OpenShiftInventoryKind;
@@ -624,7 +620,7 @@ export async function fetchOpenShiftResources(
 }
 
 export async function fetchOpenShiftInventory(
-  config: { serverUrl: string; namespaces: string[]; commitShaAnnotation: string },
+  config: OpenShiftClusterConfig,
   token: string,
   signal?: AbortSignal,
   mode: OpenShiftInventoryMode = "full",

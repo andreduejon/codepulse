@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { createRoot, createSignal } from "solid-js";
 import { createAppState } from "../../context/state";
-import type { OpenShiftCommitData, OpenShiftListedInventory, OpenShiftResource } from "../../core/openshift/types";
+import type {
+  OpenShiftCommitData,
+  OpenShiftListedInventory,
+  OpenShiftResource,
+  OpenShiftWatchResult,
+} from "../../core/openshift/types";
 import { BANNER } from "../../debug/banner";
 import { buildGraph } from "../../git/graph";
 import * as api from "./api";
@@ -103,7 +108,7 @@ function mountOpenShift(
   const watches: Array<{
     signal: AbortSignal;
     onEvent: Parameters<typeof api.watchOpenShiftStream>[5];
-    resolve: (result: api.OpenShiftWatchResult) => void;
+    resolve: (result: OpenShiftWatchResult) => void;
   }> = [];
   const watch = spyOn(api, "watchOpenShiftStream").mockImplementation(
     (...args) => new Promise(resolve => watches.push({ signal: args[4], onEvent: args[5], resolve })),

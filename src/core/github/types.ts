@@ -145,3 +145,10 @@ export const DEFAULT_GITHUB_CONFIG: GitHubProviderConfig = {
   cacheLimit: DEFAULT_PROVIDER_CACHE_LIMIT,
   autoRefreshSeconds: DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS,
 };
+
+/** One GraphQL listing of the runs of some commits, with their jobs when asked for. */
+export type GraphQLFetchResult = GitHubResult<GitHubWorkflowRun[]> & {
+  jobs: Map<number, GitHubJob[]>;
+  /** True when the host GraphQL schema has no WorkflowRun.jobs. REST fills jobs on expand. */
+  jobsUnsupported?: boolean;
+};

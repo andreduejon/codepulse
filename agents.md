@@ -62,6 +62,10 @@ test. Solid code adapts it: `core/fetch-lifecycle.ts` is the fetch lifecycle, `p
 lifecycle.ts` its adapter; `core/github/service.ts` is GitHub's provider logic, `providers/github-actions/use-github-
 ci.ts` its adapter. New logic that doesn't draw goes in `src/core`.
 
+Core imports nothing from `providers`, `context`, `components`, `app`, `hooks`, `keyboard`, `cli` or `dashboard` (the
+linter refuses it): they depend on core. A provider's model (types, merges, badges, commit data) is in
+`src/core/<provider>`, its ports in its service; the HTTP client, cache and scanner in `src/providers` implement them.
+
 ## Keys
 
 Every key handler goes through `src/keyboard/dispatcher.ts`, never OpenTUI's `useKeyboard` (the linter refuses it in

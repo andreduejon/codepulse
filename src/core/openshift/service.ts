@@ -7,7 +7,6 @@
  * Everything outside comes through ports; the Solid hook (providers/openshift/use-openshift.ts) builds them.
  */
 import { BANNER, debugError } from "../../debug/banner";
-import type * as OpenShiftApi from "../../providers/openshift/api";
 import { sleep } from "../abort";
 import type { ProviderFetchArgs } from "../fetch-lifecycle";
 import type { ProviderAppPort, ProviderLifecycle } from "../provider-ports";
@@ -31,20 +30,80 @@ import {
   openShiftKindPath,
   openShiftPodLogUrl,
 } from "./resources";
-import type { OpenShiftCommitData, OpenShiftProviderConfig, OpenShiftResource } from "./types";
+import type {
+  OpenShiftClusterConfig,
+  OpenShiftCommitData,
+  OpenShiftEvent,
+  OpenShiftFetchOptions,
+  OpenShiftInventoryMode,
+  OpenShiftInventoryResult,
+  OpenShiftProviderConfig,
+  OpenShiftResource,
+  OpenShiftWatchResult,
+} from "./types";
 import { OPENSHIFT_WATCH_KINDS, type OpenShiftListedInventory } from "./types";
+import type { OpenShiftWatchEvent } from "./watch";
 import { appendOpenShiftLogFollow } from "./watch";
 
 /** OpenShift's API: the requests the service makes. */
 export interface OpenShiftApiPort {
-  fetchOpenShiftInventory: typeof OpenShiftApi.fetchOpenShiftInventory;
-  fetchOpenShiftResources: typeof OpenShiftApi.fetchOpenShiftResources;
-  watchOpenShiftStream: typeof OpenShiftApi.watchOpenShiftStream;
-  fetchOpenShiftBuildLog: typeof OpenShiftApi.fetchOpenShiftBuildLog;
-  fetchOpenShiftPodLog: typeof OpenShiftApi.fetchOpenShiftPodLog;
-  followOpenShiftLog: typeof OpenShiftApi.followOpenShiftLog;
-  fetchOpenShiftObject: typeof OpenShiftApi.fetchOpenShiftObject;
-  fetchOpenShiftEvents: typeof OpenShiftApi.fetchOpenShiftEvents;
+  fetchOpenShiftInventory: (
+    config: OpenShiftClusterConfig,
+    token: string,
+    signal?: AbortSignal,
+    mode?: OpenShiftInventoryMode,
+    options?: OpenShiftFetchOptions,
+  ) => Promise<OpenShiftInventoryResult>;
+  fetchOpenShiftResources: (
+    config: OpenShiftClusterConfig,
+    token: string,
+    signal?: AbortSignal,
+    mode?: OpenShiftInventoryMode,
+    options?: OpenShiftFetchOptions,
+  ) => Promise<OpenShiftListedInventory>;
+  /** Watches a list path from a version until it ends; each change goes to `onEvent`. */
+  watchOpenShiftStream: (
+    serverUrl: string,
+    token: string,
+    path: string,
+    resourceVersion: string,
+    signal: AbortSignal,
+    onEvent: (event: OpenShiftWatchEvent) => void,
+  ) => Promise<OpenShiftWatchResult>;
+  fetchOpenShiftBuildLog: (
+    serverUrl: string,
+    token: string,
+    namespace: string,
+    buildName: string,
+    signal?: AbortSignal,
+  ) => Promise<string>;
+  fetchOpenShiftPodLog: (
+    serverUrl: string,
+    token: string,
+    namespace: string,
+    podName: string,
+    container?: string,
+    signal?: AbortSignal,
+  ) => Promise<string>;
+  /** Streams a log from `url` until it ends or `signal` stops it. */
+  followOpenShiftLog: (
+    url: string,
+    token: string,
+    signal: AbortSignal,
+    onChunk: (text: string) => void,
+  ) => Promise<void>;
+  fetchOpenShiftObject: (
+    serverUrl: string,
+    token: string,
+    resource: OpenShiftResource,
+    signal?: AbortSignal,
+  ) => Promise<unknown>;
+  fetchOpenShiftEvents: (
+    serverUrl: string,
+    token: string,
+    resource: OpenShiftResource,
+    signal?: AbortSignal,
+  ) => Promise<OpenShiftEvent[]>;
 }
 
 /** The cache: finished builds per commit, and build logs. */

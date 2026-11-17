@@ -131,3 +131,21 @@ export interface OpenShiftListedInventory {
   error: string | null;
   resourceVersions: Map<string, string>;
 }
+
+/** Which resources a listing reads: everything, the builds, the seeds for the live list, or the live list. */
+export type OpenShiftInventoryMode = "full" | "builds" | "seeds" | "live";
+
+/** How a watch ended: the server forgot its version (list again), the stream ended, or access was refused. */
+export type OpenShiftWatchResult = "gone" | "end" | "forbidden" | "auth";
+
+/** Narrows a listing to some commits. */
+export interface OpenShiftFetchOptions {
+  commitShas?: string[];
+}
+
+/** The cluster and namespaces a listing reads, and the annotation that names a resource's commit. */
+export interface OpenShiftClusterConfig {
+  serverUrl: string;
+  namespaces: string[];
+  commitShaAnnotation: string;
+}

@@ -111,7 +111,23 @@
                   "child_process": {
                     "message": "src/core is plain TypeScript: no UI framework, no Bun or Node runtime APIs. Those come in through ports."
                   }
-                }
+                },
+                "patterns": [
+                  {
+                    "group": [
+                      "**/providers/**",
+                      "**/providers",
+                      "**/context/**",
+                      "**/components/**",
+                      "**/app/**",
+                      "**/hooks/**",
+                      "**/keyboard/**",
+                      "**/cli/**",
+                      "**/dashboard/**"
+                    ],
+                    "message": "src/core does not depend on the app around it: providers, state, UI and CLI depend on core, not the other way round. What core needs comes in through its ports."
+                  }
+                ]
               }
             },
             "noRestrictedGlobals": {

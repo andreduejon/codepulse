@@ -7,12 +7,11 @@
  * service what changed (the graph's commits, the branches, suspension, another repository).
  */
 import { BANNER } from "../../debug/banner";
-import type * as Scanner from "../../providers/snyk/scanner";
 import type { ProviderAppPort } from "../provider-ports";
 import { providerError, providerIdle, providerLoading, providerUnavailable, providerWarning } from "../provider-status";
 import { buildSnykGraphBadges } from "./badges";
 import { shouldReplaceSnykResult } from "./results";
-import type { SnykCacheLimit, SnykScanResult } from "./types";
+import type { SnykCacheLimit, SnykScanOptions, SnykScanResult } from "./types";
 
 export const EXACT_SHA = /^[0-9a-f]{40,64}$/i;
 
@@ -52,8 +51,14 @@ export interface SnykServicePorts {
   app: ProviderAppPort;
   config: () => SnykSettings;
   hasToken: (envVar: string) => boolean;
-  scan: typeof Scanner.scanSnykCommit;
-  readCache: typeof Scanner.getCachedSnykScan;
+  /** Scans a commit (or reads its cached scan unless `force`). */
+  scan: (options: SnykScanOptions) => Promise<SnykScanResult>;
+  /** A commit's cached scan, or null; `touch: false` leaves the eviction order alone. */
+  readCache: (
+    repoPath: string,
+    sha: string,
+    options?: { maxCachedScans?: SnykCacheLimit; touch?: boolean },
+  ) => Promise<SnykScanResult | null>;
   /** Results changed (getCommitData reads again). */
   onResultsChange: () => void;
   /** Which commits scan changed (isScanning, the footer's activity). */

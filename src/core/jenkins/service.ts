@@ -6,7 +6,6 @@
  * Everything outside comes through ports; the Solid hook (providers/jenkins/use-jenkins-ci.ts) builds them.
  */
 import { BANNER, bannerOrFallback } from "../../debug/banner";
-import type * as JenkinsApi from "../../providers/jenkins/api";
 import type { ProviderFetchArgs } from "../fetch-lifecycle";
 import type { ProviderAppPort, ProviderLifecycle } from "../provider-ports";
 import { providerError, providerIdle, providerLoading, providerUnavailable, providerWarning } from "../provider-status";
@@ -20,15 +19,57 @@ import {
   mergeJenkinsJobs,
   mergeJenkinsRuns,
 } from "./merge";
-import type { JenkinsCommitData, JenkinsJob, JenkinsJobFetchResult, JenkinsProviderConfig, JenkinsRun } from "./types";
+import type {
+  JenkinsCommitData,
+  JenkinsJob,
+  JenkinsJobConfig,
+  JenkinsJobFetchResult,
+  JenkinsListedBuilds,
+  JenkinsProviderConfig,
+  JenkinsRun,
+} from "./types";
 
 /** Jenkins' API: the requests the service makes. */
 export interface JenkinsApiPort {
-  fetchJenkinsGraphDataForSHAs: typeof JenkinsApi.fetchJenkinsGraphDataForSHAs;
-  fetchJenkinsDataForSHAs: typeof JenkinsApi.fetchJenkinsDataForSHAs;
-  fetchJenkinsRunsForBuilds: typeof JenkinsApi.fetchJenkinsRunsForBuilds;
-  fetchJenkinsRunJobs: typeof JenkinsApi.fetchJenkinsRunJobs;
-  fetchJenkinsConsoleLog: typeof JenkinsApi.fetchJenkinsConsoleLog;
+  /** The newest builds of the jobs, for the graph's commits; `knownLastBuilds` skips jobs with no new build. */
+  fetchJenkinsGraphDataForSHAs: (
+    jobs: JenkinsJobConfig[],
+    username: string | undefined,
+    token: string,
+    shas: string[],
+    opts?: {
+      signal?: AbortSignal;
+      buildLimit?: number;
+      knownLastBuilds?: ReadonlyMap<string, number>;
+      preferredBranches?: ReadonlySet<string>;
+    },
+  ) => Promise<JenkinsListedBuilds>;
+  /** The builds of the jobs for some commits, with their details. */
+  fetchJenkinsDataForSHAs: (
+    jobs: JenkinsJobConfig[],
+    username: string | undefined,
+    token: string,
+    shas: string[],
+    opts?: { signal?: AbortSignal; buildLimit?: number; preferredBranches?: ReadonlySet<string> },
+  ) => Promise<JenkinsListedBuilds>;
+  fetchJenkinsRunsForBuilds: (
+    runs: JenkinsRun[],
+    username: string | undefined,
+    token: string,
+    signal?: AbortSignal,
+  ) => Promise<{ data: JenkinsRun[]; error: string | null }>;
+  fetchJenkinsRunJobs: (
+    run: JenkinsRun,
+    username: string | undefined,
+    token: string,
+    signal?: AbortSignal,
+  ) => Promise<{ jobs: JenkinsJob[]; error: string | null }>;
+  fetchJenkinsConsoleLog: (
+    run: JenkinsRun,
+    username: string | undefined,
+    token: string,
+    signal?: AbortSignal,
+  ) => Promise<string>;
 }
 
 /** The cache: finished builds and their stages per commit, and console logs. */

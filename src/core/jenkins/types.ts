@@ -110,3 +110,14 @@ export interface JenkinsJobFetchResult {
   jobs: JenkinsJob[];
   error: string | null;
 }
+
+/** One listing of the configured jobs' builds for some commits. */
+export interface JenkinsListedBuilds {
+  data: JenkinsRun[];
+  error: string | null;
+  jobUrls: string[];
+  discoveryComplete: boolean;
+  discoveryTruncated: boolean;
+  branchJobs: { shown: number; total: number };
+  lastBuilds: Map<string, number>;
+}

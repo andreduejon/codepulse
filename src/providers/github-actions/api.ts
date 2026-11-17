@@ -4,9 +4,9 @@ import type {
   GitHubJob,
   GitHubJobFetchResult,
   GitHubRepo,
-  GitHubResult,
   GitHubStep,
   GitHubWorkflowRun,
+  GraphQLFetchResult,
 } from "../../core/github/types";
 import { BANNER, bannerOrFallback, debugError } from "../../debug/banner";
 import { fetchWithRetry as fetchWithRetryPolicy } from "../shared/http";
@@ -433,12 +433,6 @@ function collectRunsFromRepoData(
   }
   return next;
 }
-
-export type GraphQLFetchResult = GitHubResult<GitHubWorkflowRun[]> & {
-  jobs: Map<number, GitHubJob[]>;
-  /** True when the host GraphQL schema has no WorkflowRun.jobs. REST fills jobs on expand. */
-  jobsUnsupported?: boolean;
-};
 
 async function fetchCIDataForSHAsOnce(
   repo: GitHubRepo,

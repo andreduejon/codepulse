@@ -1,6 +1,5 @@
 import { BANNER, bannerOrFallback, debugError } from "../../debug/banner";
 import { addDebugEvent } from "../../debug/events";
-import type * as GitHubApi from "../../providers/github-actions/api";
 import type { ProviderFetchArgs } from "../fetch-lifecycle";
 import type { ProviderAppPort, ProviderLifecycle } from "../provider-ports";
 import { providerError, providerIdle, providerLoading, providerUnavailable } from "../provider-status";
@@ -9,12 +8,14 @@ import { jobsSettled } from "../status";
 import { buildCommitDataMap, buildGraphBadges, GQL_BATCH_SIZE } from "./commit-data";
 import { type GitHubCacheEntry, isTerminalGitHubRun, mergeGitHubEntry, mergeGitHubRuns } from "./merge";
 import type {
+  GitHubAnnotation,
   GitHubCommitData,
   GitHubJob,
   GitHubJobFetchResult,
   GitHubProviderConfig,
   GitHubRepo,
   GitHubWorkflowRun,
+  GraphQLFetchResult,
 } from "./types";
 
 /** The app, as GitHub sees it. */
@@ -22,10 +23,20 @@ export type GitHubAppPort = ProviderAppPort;
 
 /** GitHub's API: the requests the service makes. */
 export interface GitHubApiPort {
-  fetchCIDataForSHAs: typeof GitHubApi.fetchCIDataForSHAs;
-  fetchRunJobs: typeof GitHubApi.fetchRunJobs;
-  fetchJobAnnotations: typeof GitHubApi.fetchJobAnnotations;
-  fetchJobLog: typeof GitHubApi.fetchJobLog;
+  fetchCIDataForSHAs: (
+    repo: GitHubRepo,
+    token: string,
+    shas: string[],
+    opts?: { signal?: AbortSignal; includeJobs?: boolean },
+  ) => Promise<GraphQLFetchResult>;
+  fetchRunJobs: (repo: GitHubRepo, token: string, runId: number, signal?: AbortSignal) => Promise<GitHubJobFetchResult>;
+  fetchJobAnnotations: (
+    repo: GitHubRepo,
+    token: string,
+    jobId: number,
+    signal?: AbortSignal,
+  ) => Promise<GitHubAnnotation[] | null>;
+  fetchJobLog: (repo: GitHubRepo, token: string, jobId: number, signal?: AbortSignal) => Promise<string>;
 }
 
 /** The cache: finished runs and their jobs per commit, and job logs. */

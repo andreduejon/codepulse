@@ -4,6 +4,7 @@ import {
   type JenkinsFailedTest,
   type JenkinsJob,
   type JenkinsJobConfig,
+  type JenkinsListedBuilds,
   type JenkinsRun,
   type JenkinsStage,
   type JenkinsTestReport,
@@ -539,15 +540,7 @@ export async function fetchJenkinsDataForSHAs(
   token: string,
   shas: string[],
   opts: { signal?: AbortSignal; buildLimit?: number; preferredBranches?: ReadonlySet<string> } = {},
-): Promise<{
-  data: JenkinsRun[];
-  error: string | null;
-  jobUrls: string[];
-  discoveryComplete: boolean;
-  discoveryTruncated: boolean;
-  branchJobs: { shown: number; total: number };
-  lastBuilds: Map<string, number>;
-}> {
+): Promise<JenkinsListedBuilds> {
   const buildLimit = opts.buildLimit ?? 20;
   const wanted = new Set(shas.map(s => s.toLowerCase()));
   const runs: JenkinsRun[] = [];
@@ -627,15 +620,7 @@ export async function fetchJenkinsGraphDataForSHAs(
     knownLastBuilds?: ReadonlyMap<string, number>;
     preferredBranches?: ReadonlySet<string>;
   } = {},
-): Promise<{
-  data: JenkinsRun[];
-  error: string | null;
-  jobUrls: string[];
-  discoveryComplete: boolean;
-  discoveryTruncated: boolean;
-  branchJobs: { shown: number; total: number };
-  lastBuilds: Map<string, number>;
-}> {
+): Promise<JenkinsListedBuilds> {
   const buildLimit = opts.buildLimit ?? 20;
   const wanted = new Set(shas.map(s => s.toLowerCase()));
   const runs: JenkinsRun[] = [];
