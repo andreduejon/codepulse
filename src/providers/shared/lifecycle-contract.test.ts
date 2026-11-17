@@ -61,7 +61,10 @@ function harness<T>(
   const original = process.env[options.tokenEnv];
   process.env[options.tokenEnv] = "test-token";
   const cacheRoot = mkdtempSync(join(tmpdir(), "codepulse-contract-"));
-  options.onCleanup(() => {
+  // Runs after the root is disposed: work it left pending settles first, so nothing writes the folder back.
+  options.onCleanup(async () => {
+    options.backend.release();
+    await Bun.sleep(20);
     closeProviderCaches(cacheRoot);
     rmSync(cacheRoot, { recursive: true, force: true });
     if (original === undefined) delete process.env[options.tokenEnv];
