@@ -6,8 +6,8 @@
  * branch + "--" disambiguation, and option interactions.
  */
 import { describe, expect, test } from "bun:test";
+import { buildCommitLogArgs, RS } from "../src/core/git/log";
 import { DEFAULT_MAX_COUNT } from "../src/core/settings/config";
-import { buildCommitLogArgs, RS } from "../src/git/repo";
 
 /**
  * The expected --format value (mirrors GIT_LOG_FORMAT which is private).

@@ -5,8 +5,9 @@
  * framework-agnostic, making them unit-testable without SolidJS, opentui,
  * or live git subprocess dependencies.
  */
-import { isUncommittedHash, UNCOMMITTED_HASH } from "../constants";
+
 import type { Commit, GraphRow } from "../core/git/types";
+import { isUncommittedHash, UNCOMMITTED_HASH } from "../core/git/types";
 
 /**
  * Compute the effective max commit count for a silent (auto-refresh or

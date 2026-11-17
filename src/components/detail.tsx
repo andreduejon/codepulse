@@ -1,9 +1,10 @@
 import { MouseButton, type MouseEvent, type Renderable } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/solid";
 import { createMemo, For, Show } from "solid-js";
-import { isUncommittedHash, UNCOMMITTED_PLACEHOLDER } from "../constants";
+import { UNCOMMITTED_PLACEHOLDER } from "../constants";
 import { useAppState } from "../context/state";
 import type { Commit, GraphRow } from "../core/git/types";
+import { isUncommittedHash } from "../core/git/types";
 import { useBannerScroll } from "../hooks/use-banner-scroll";
 import { useClipboard } from "../hooks/use-clipboard";
 import { type CopyableField, useDetailCursor } from "../hooks/use-detail-cursor";

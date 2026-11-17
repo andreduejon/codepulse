@@ -3,8 +3,8 @@ import { createRoot, createSignal } from "solid-js";
 import type { AppActions, AppState } from "../../context/state";
 import { createAppState } from "../../context/state";
 import { BANNER } from "../../core/banner";
+import { buildGraph } from "../../core/git/graph";
 import type { SnykScanOptions, SnykScanResult } from "../../core/snyk/types";
-import { buildGraph } from "../../git/graph";
 import {
   collectSnykAutoScanTips,
   type SnykProviderConfig,

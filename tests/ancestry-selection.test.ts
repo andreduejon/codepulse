@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { createRoot } from "solid-js";
 import { createAppState } from "../src/context/state";
-import { buildGraph } from "../src/git/graph";
+import { buildGraph } from "../src/core/git/graph";
 import { useAncestry } from "../src/hooks/use-ancestry";
 
 test("mouse selection reanchors only outside active chain; cursor moves preserve anchor", () => {

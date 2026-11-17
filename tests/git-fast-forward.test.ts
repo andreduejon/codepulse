@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createRoot, createSignal } from "solid-js";
 import { createAppState } from "../src/context/state";
-import { type FastForwardResult, fastForwardBranches, runGit } from "../src/git/repo";
+import type { FastForwardResult } from "../src/core/git/log";
+import { fastForwardBranches, runGit } from "../src/git/repo";
 import { useDataLoader } from "../src/hooks/use-data-loader";
 
 /** Each test runs dozens of Git processes, which start slowly on Windows (over 5 s on its ARM64 runner). */

@@ -9,7 +9,7 @@
  * 12-13. Additional merge/fan-out edge cases
  */
 import { describe, expect, test } from "bun:test";
-import { buildGraph, type GraphChar, type RenderOptions, renderFanOutRow, renderGraphRow } from "../src/git/graph";
+import { buildGraph, type GraphChar, type RenderOptions, renderFanOutRow, renderGraphRow } from "../src/core/git/graph";
 import { assertDefined, findRow, hasMergeConnectors, makeCommit, printGraph, THEME_COLORS } from "./test-helpers";
 
 /** Build render options with the shared test theme colors. */

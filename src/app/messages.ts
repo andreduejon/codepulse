@@ -6,9 +6,10 @@
 import { createEffect, createMemo, createSignal, type Setter } from "solid-js";
 import { isTabNoticeStatus, type TabNotice, tabNoticeFor } from "../app-tab-notice";
 import type { UIMessage } from "../components/message-box";
-import { isUncommittedHash } from "../constants";
 import { type AppActions, type AppState, providerIdle, providerStatusMessage } from "../context/state";
 import { BANNER, displayBanner } from "../core/banner";
+import type { FastForwardResult } from "../core/git/log";
+import { isUncommittedHash } from "../core/git/types";
 import { isProviderDetailView, providerDisplayName } from "../core/provider-model";
 import {
   DASHBOARD_FETCHING_PROVIDERS,
@@ -16,7 +17,6 @@ import {
   type FetchError,
   fetchErrorKey,
 } from "../dashboard/fetch-errors";
-import type { FastForwardResult } from "../git/repo";
 import type { UseSnykResult } from "../providers/snyk/use-snyk";
 import { fastForwardMessage } from "../utils/fast-forward-message";
 

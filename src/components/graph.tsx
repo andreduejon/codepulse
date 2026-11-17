@@ -16,9 +16,6 @@ import {
   UNCOMMITTED_PLACEHOLDER,
 } from "../constants";
 import { useAppState } from "../context/state";
-import type { GraphRow, RefInfo } from "../core/git/types";
-import type { GraphBadge, ProviderView } from "../core/provider-model";
-import type { SnykScanResult } from "../core/snyk/types";
 import {
   computeBrightColumns,
   computeSingleViewportOffset,
@@ -26,13 +23,15 @@ import {
   edgeMarks,
   type GraphChar,
   getColorForColumn,
-  graphCharsToContent,
   MAX_GRAPH_COLUMNS,
   renderConnectorRow,
   renderFanOutRow,
   renderGraphRow,
   sliceGraphToViewport,
-} from "../git/graph";
+} from "../core/git/graph";
+import type { GraphRow, RefInfo } from "../core/git/types";
+import type { GraphBadge, ProviderView } from "../core/provider-model";
+import type { SnykScanResult } from "../core/snyk/types";
 import { useScrollWindow } from "../hooks/use-scroll-window";
 import { useT } from "../hooks/use-t";
 import {
@@ -52,6 +51,7 @@ import { formatRelativeDate } from "../utils/date";
 import { scheduleScrollIntoView } from "../utils/scroll";
 import { cellWidth } from "../utils/terminal-text";
 import Badge from "./badge";
+import { graphCharsToContent } from "./graph-text";
 
 /** Shared graph dimension computations used by ColumnHeader and GraphLine. */
 function useGraphDimensions(maxGraphColumns: () => number) {

@@ -8,7 +8,7 @@
  * columns), and combined vertical + horizontal brightening.
  */
 import { describe, expect, test } from "bun:test";
-import { type DimOptions, dimGraphChars, type GraphChar } from "../src/git/graph";
+import { type DimOptions, dimGraphChars, type GraphChar } from "../src/core/git/graph";
 
 const MUTED = "#666";
 const BRIGHT_A = "#fff";

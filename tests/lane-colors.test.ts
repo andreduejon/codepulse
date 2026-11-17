@@ -6,7 +6,7 @@
  * This prevents visually incorrect connector colors.
  */
 import { describe, expect, test } from "bun:test";
-import { buildGraph, getColorForColumn, renderGraphRow } from "../src/git/graph";
+import { buildGraph, getColorForColumn, renderGraphRow } from "../src/core/git/graph";
 import { assertDefined, findRow, makeCommit, printGraph } from "./test-helpers";
 
 describe("Lane Color Consistency", () => {

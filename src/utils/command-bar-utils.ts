@@ -1,4 +1,4 @@
-import { isUncommittedHash } from "../constants";
+import { isUncommittedHash } from "../core/git/types";
 /**
  * Pure helper functions extracted from command-bar.tsx.
  *

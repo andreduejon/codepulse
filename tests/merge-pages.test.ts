@@ -6,8 +6,8 @@
  * duplicate stash prevention, empty new-page, and no-uncommitted-node case.
  */
 import { describe, expect, test } from "bun:test";
-import { UNCOMMITTED_HASH } from "../src/constants";
-import { mergeCommitPages } from "../src/git/merge-pages";
+import { mergeCommitPages } from "../src/core/git/merge-pages";
+import { UNCOMMITTED_HASH } from "../src/core/git/types";
 import { makeCommit } from "./test-helpers";
 
 /** Create a minimal uncommitted-changes synthetic commit node. */

@@ -1,11 +1,11 @@
 import { type Accessor, batch, createEffect, onCleanup, untrack } from "solid-js";
-import { isUncommittedHash } from "../constants";
 import type { AppActions, AppState } from "../context/state";
 import { BANNER, bannerOrFallback, debugError } from "../core/banner";
-import { buildGraph, getMaxGraphColumns } from "../git/graph";
-import { mergeCommitPages } from "../git/merge-pages";
+import { buildGraph, getMaxGraphColumns } from "../core/git/graph";
+import type { FastForwardResult } from "../core/git/log";
+import { mergeCommitPages } from "../core/git/merge-pages";
+import { isUncommittedHash } from "../core/git/types";
 import {
-  type FastForwardResult,
   fastForwardBranches,
   fetchRemote,
   getBranches,

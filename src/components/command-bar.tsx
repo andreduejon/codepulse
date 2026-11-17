@@ -1,7 +1,7 @@
 import { type BoxRenderable, MouseButton } from "@opentui/core";
 import { createMemo, createSignal, For, Show } from "solid-js";
-import { isUncommittedHash } from "../constants";
 import { useAppState } from "../context/state";
+import { isUncommittedHash } from "../core/git/types";
 import { type EventSource, type ProviderView, providerDisplayName } from "../core/provider-model";
 import type { KnownRepoInfo } from "../core/settings/config";
 import type { DashboardState } from "../dashboard/use-dashboard";

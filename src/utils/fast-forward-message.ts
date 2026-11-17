@@ -1,5 +1,5 @@
 import type { UIMessage } from "../components/message-box";
-import type { FastForwardResult, FastForwardSkip } from "../git/repo";
+import type { FastForwardResult, FastForwardSkip } from "../core/git/log";
 
 const commits = (count: number) => `${count} ${count === 1 ? "commit" : "commits"}`;
 

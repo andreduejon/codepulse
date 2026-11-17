@@ -13,9 +13,9 @@ import App from "../../src/app";
 import GraphView from "../../src/components/graph";
 import { AppStateContext, createAppState } from "../../src/context/state";
 import { createThemeState, ThemeContext } from "../../src/context/theme";
+import { buildGraph, getMaxGraphColumns } from "../../src/core/git/graph";
 import type { Commit } from "../../src/core/git/types";
 import { loadAppEvents } from "../../src/dashboard/load";
-import { buildGraph, getMaxGraphColumns } from "../../src/git/graph";
 import {
   getBranches,
   getCommits,

@@ -4,8 +4,9 @@
  * Extracted from App.loadMoreData() so it can be unit-tested without
  * SolidJS, reactive state, or git subprocess dependencies.
  */
-import { isUncommittedHash } from "../constants";
-import type { Commit } from "../core/git/types";
+
+import type { Commit } from "./types";
+import { isUncommittedHash } from "./types";
 
 /**
  * Merge a new page of commits onto an existing commit list.

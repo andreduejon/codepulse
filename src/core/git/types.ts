@@ -198,3 +198,9 @@ export interface Connector {
   /** Whether this connector belongs to a remote-only branch */
   isRemoteOnly?: boolean;
 }
+
+/** Sentinel hash used for the synthetic "uncommitted changes" node. */
+export const UNCOMMITTED_HASH = "0".repeat(40);
+
+/** Returns true when `hash` refers to the synthetic uncommitted-changes node. */
+export const isUncommittedHash = (hash: string): boolean => hash === UNCOMMITTED_HASH;

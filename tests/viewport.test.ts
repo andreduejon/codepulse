@@ -5,7 +5,7 @@
  * getMaxGraphColumns, edgeMarks.
  */
 import { describe, expect, test } from "bun:test";
-import type { GraphChar, RenderOptions } from "../src/git/graph";
+import type { GraphChar, RenderOptions } from "../src/core/git/graph";
 import {
   buildGraph,
   computeSingleViewportOffset,
@@ -14,7 +14,7 @@ import {
   renderConnectorRow,
   renderGraphRow,
   sliceGraphToViewport,
-} from "../src/git/graph";
+} from "../src/core/git/graph";
 import { makeCommit, printGraph } from "./test-helpers";
 
 describe("Viewport", () => {

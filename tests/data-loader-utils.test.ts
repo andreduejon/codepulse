@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { UNCOMMITTED_HASH } from "../src/constants";
 import type { GraphRow } from "../src/core/git/types";
+import { UNCOMMITTED_HASH } from "../src/core/git/types";
 import {
   buildStashByParent,
   computeSilentMaxCount,

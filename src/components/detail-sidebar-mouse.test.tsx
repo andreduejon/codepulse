@@ -3,16 +3,16 @@ import { InputRenderable, type KeyEvent, type Renderable, RGBA, type ScrollBoxRe
 import { MouseButtons } from "@opentui/core/testing";
 import { testRender } from "@opentui/solid";
 import { createSignal } from "solid-js";
-import { UNCOMMITTED_HASH } from "../constants";
 import { AppStateContext, createAppState, type ProviderStatus } from "../context/state";
 import { createThemeState, ThemeContext } from "../context/theme";
+import { buildGraph } from "../core/git/graph";
 import type { CommitDetail, DiffTarget } from "../core/git/types";
+import { UNCOMMITTED_HASH } from "../core/git/types";
 import type { GitHubJob, GitHubWorkflowRun } from "../core/github/types";
 import type { JenkinsJob, JenkinsRun } from "../core/jenkins/types";
 import type { OpenShiftResource } from "../core/openshift/types";
 import type { ProviderDetailView } from "../core/provider-model";
 import type { SnykScanResult } from "../core/snyk/types";
-import { buildGraph } from "../git/graph";
 import * as repo from "../git/repo";
 import { handleDetailKey } from "../hooks/handle-detail-keys";
 import * as clipboard from "../hooks/use-clipboard";

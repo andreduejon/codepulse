@@ -9,7 +9,7 @@ import * as config from "./config";
 import * as configWrite from "./config-write";
 import type { AppActions, AppState } from "./context/state";
 import { createThemeState } from "./context/theme";
-import { buildGraph } from "./git/graph";
+import { buildGraph } from "./core/git/graph";
 import * as dataLoader from "./hooks/use-data-loader";
 import * as detailLoader from "./hooks/use-detail-loader";
 import * as githubHook from "./providers/github-actions/use-github-ci";

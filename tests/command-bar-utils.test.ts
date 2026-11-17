@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { UNCOMMITTED_HASH } from "../src/constants";
+import { UNCOMMITTED_HASH } from "../src/core/git/types";
 import {
   commandBarPlaceholder,
   commitCountText,

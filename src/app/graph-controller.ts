@@ -7,7 +7,7 @@ import type { ScrollBoxRenderable } from "@opentui/core";
 import { type Accessor, batch, createEffect } from "solid-js";
 import type { DetailNavRef } from "../components/detail-types";
 import type { AppActions, AppState } from "../context/state";
-import type { FastForwardResult } from "../git/repo";
+import type { FastForwardResult } from "../core/git/log";
 import { useDataLoader } from "../hooks/use-data-loader";
 import { useDetailLoader } from "../hooks/use-detail-loader";
 

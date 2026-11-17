@@ -15,9 +15,9 @@
 import type { Renderable } from "@opentui/core";
 import { createEffect, createMemo, onCleanup } from "solid-js";
 import type { DetailNavRef, DetailViewProps } from "../components/detail-types";
-import { isUncommittedHash } from "../constants";
 import type { createAppState } from "../context/state";
 import type { Commit, CommitDetail, FileChange, GraphRow } from "../core/git/types";
+import { isUncommittedHash } from "../core/git/types";
 import { isProviderDetailView } from "../core/provider-model";
 import { buildDiffTarget } from "../utils/diff-target";
 import type { FileTreeRow } from "../utils/file-tree";

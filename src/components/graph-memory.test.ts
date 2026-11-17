@@ -4,8 +4,8 @@ import { testRender } from "@opentui/solid";
 import { createComponent } from "solid-js";
 import { AppStateContext, createAppState } from "../context/state";
 import { createThemeState, ThemeContext } from "../context/theme";
+import { buildGraph } from "../core/git/graph";
 import type { Commit } from "../core/git/types";
-import { buildGraph } from "../git/graph";
 import GraphView from "./graph";
 
 const commits = (count: number): Commit[] =>

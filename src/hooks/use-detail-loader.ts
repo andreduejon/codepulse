@@ -1,8 +1,8 @@
 import { type Accessor, createEffect, on, onCleanup, untrack } from "solid-js";
 import type { DetailNavRef } from "../components/detail-types";
-import { isUncommittedHash } from "../constants";
 import type { AppActions, AppState } from "../context/state";
 import { BANNER, bannerOrFallback } from "../core/banner";
+import { isUncommittedHash } from "../core/git/types";
 import { isProviderDetailView } from "../core/provider-model";
 import { getCommitDetail, getUncommittedDetail } from "../git/repo";
 import { getAvailableTabs, getDefaultDetailTab } from "../utils/tab-utils";

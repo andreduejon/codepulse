@@ -1,6 +1,6 @@
-import { isUncommittedHash } from "../constants";
 import type { DetailTab } from "../context/state";
 import type { Commit, CommitDetail, UncommittedDetail } from "../core/git/types";
+import { isUncommittedHash } from "../core/git/types";
 import { isProviderDetailView, type ProviderView, providerDisplayName } from "../core/provider-model";
 
 interface TabAvailabilityInput {

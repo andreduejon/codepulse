@@ -3,11 +3,11 @@ import { type Renderable, RGBA, type ScrollBoxRenderable, TextRenderable } from 
 import { MouseButtons } from "@opentui/core/testing";
 import { testRender, useKeyboard } from "@opentui/solid";
 import { createSignal, Show } from "solid-js";
-import { UNCOMMITTED_HASH } from "../../constants";
 import { AppStateContext, createAppState } from "../../context/state";
 import { createThemeState, ThemeContext } from "../../context/theme";
+import { buildGraph } from "../../core/git/graph";
 import type { CommitDetail, DiffSource, DiffTarget, FileChange, UncommittedDetail } from "../../core/git/types";
-import { buildGraph } from "../../git/graph";
+import { UNCOMMITTED_HASH } from "../../core/git/types";
 import { handleDetailKey } from "../../hooks/handle-detail-keys";
 import DetailPanel from "../detail-panel";
 import type { DetailNavRef } from "../detail-types";

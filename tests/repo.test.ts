@@ -10,16 +10,15 @@ import { describe, expect, test } from "bun:test";
 import { computeFileWidths } from "../src/components/detail-types";
 import {
   parseCommitLine,
-  parseDiffTreeOutput,
   parseNumstatOutput,
   parseRefs,
   parseStashEntry,
-  parseStatusPorcelain,
   parseTagLine,
   parseTrackInfo,
   RS,
   resolveRenamePath,
-} from "../src/git/repo";
+} from "../src/core/git/log";
+import { parseDiffTreeOutput, parseStatusPorcelain } from "../src/git/repo";
 
 /** Assert a value is not null/undefined and narrow its type. */
 function assertNotNull<T>(value: T, label = "value"): asserts value is NonNullable<T> {

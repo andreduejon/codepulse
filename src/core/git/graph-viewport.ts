@@ -1,5 +1,5 @@
-import type { GraphRow } from "../core/git/types";
 import type { GraphChar, RenderOptions } from "./graph-render";
+import type { GraphRow } from "./types";
 
 /**
  * Maximum number of graph columns to display. Commits on lanes beyond this

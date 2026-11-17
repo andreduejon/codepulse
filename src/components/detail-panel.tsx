@@ -1,10 +1,10 @@
 import { MouseButton, type ScrollBoxRenderable } from "@opentui/core";
 import { batch, createSignal, For, onCleanup, Show } from "solid-js";
 import type { TabNotice } from "../app-tab-notice";
-import { isUncommittedHash } from "../constants";
 import type { DetailTab } from "../context/state";
 import { useAppState } from "../context/state";
 import type { DiffTarget } from "../core/git/types";
+import { isUncommittedHash } from "../core/git/types";
 import { isProviderDetailView, providerDetailTab } from "../core/provider-model";
 import { useT } from "../hooks/use-t";
 import { detailEntryFor, type ProviderDetailSources } from "../providers/detail-entries";

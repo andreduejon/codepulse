@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { createRoot, createSignal } from "solid-js";
 import { createAppState } from "../src/context/state";
-import { buildGraph } from "../src/git/graph";
+import { buildGraph } from "../src/core/git/graph";
 import { useProviderFetchLifecycle } from "../src/providers/shared/use-provider-fetch-lifecycle";
 
 const disposers: Array<() => void> = [];

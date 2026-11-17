@@ -8,7 +8,6 @@ export {
 export {
   type GraphChar,
   getColorForColumn,
-  graphCharsToContent,
   type RenderOptions,
   renderConnectorRow,
   renderFanOutRow,
