@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { RGBA, TextAttributes } from "@opentui/core";
 import { MouseButtons } from "@opentui/core/testing";
 import { testRender } from "@opentui/solid";
@@ -6,6 +6,7 @@ import { createRoot, createSignal } from "solid-js";
 import { createThemeState, ThemeContext } from "../context/theme";
 import type { DashboardEvent } from "../dashboard/events";
 import { useDashboard } from "../dashboard/use-dashboard";
+import * as dates from "../utils/date";
 import { DashboardView } from "./dashboard-view";
 
 const NOW = new Date(2026, 2, 2, 11, 0).getTime();
@@ -225,6 +226,49 @@ test("a scan's counts each take their severity's color, and a severity without f
     expect(setup.captureSpans().lines[partialRow]?.spans.find(span => span.text.trim() === "?")?.fg).toEqual(
       RGBA.fromHex(theme.warning),
     );
+  } finally {
+    setup.renderer.destroy();
+  }
+});
+
+test("moving the cursor redraws the two rows it leaves and reaches, not every row", async () => {
+  const time = new Date(2026, 2, 2, 10, 0).getTime();
+  const events: DashboardEvent[] = Array.from({ length: 200 }, (_, index) => ({
+    id: `e${index}`,
+    app: "/shop",
+    source: "git",
+    time: time - index * 1_000,
+    status: null,
+    text: `commit ${index}`,
+    sha: SHA,
+    branch: "main",
+  }));
+  const [active] = createSignal(true);
+  const dashboard = createRoot(() =>
+    useDashboard({
+      app: () => ({ path: "/shop", name: "shop" }),
+      active,
+      now: () => NOW,
+      load: async () => events,
+    }),
+  );
+  const setup = await testRender(
+    () => (
+      <ThemeContext.Provider value={createThemeState()}>
+        <DashboardView dashboard={dashboard} now={() => NOW} />
+      </ThemeContext.Provider>
+    ),
+    { width: 100, height: 30 },
+  );
+  try {
+    await new Promise(resolve => setTimeout(resolve, 0));
+    await setup.renderOnce();
+    // Each event row that redraws writes its time again.
+    const redrawn = spyOn(dates, "formatClock");
+    dashboard.select(5);
+    await setup.renderOnce();
+    expect(redrawn.mock.calls.length).toBeLessThan(10);
+    redrawn.mockRestore();
   } finally {
     setup.renderer.destroy();
   }

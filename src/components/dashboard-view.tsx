@@ -1,7 +1,8 @@
 import { MouseButton, type Renderable, type ScrollBoxRenderable } from "@opentui/core";
-import { createEffect, createSignal, For, Match, onCleanup, Show, Switch } from "solid-js";
+import { createEffect, createMemo, createSelector, createSignal, For, Match, onCleanup, Show, Switch } from "solid-js";
 import { HASH_COL_WIDTH } from "../constants";
 import type { DashboardRow } from "../dashboard/events";
+import { branchColumnWidth, cutBranch } from "../dashboard/layout";
 import { KNOT } from "../dashboard/legend";
 import type { DashboardState } from "../dashboard/use-dashboard";
 import { useT } from "../hooks/use-t";
@@ -12,12 +13,6 @@ import { DashboardEventText } from "./dashboard-event-text";
 
 /** Width of the Time column: `09:05` and its padding. */
 const TIME_COL_WIDTH = 7;
-/** The longest branch name the Branch column shows whole; a longer one ends in `…`. */
-const BRANCH_MAX = 20;
-
-/** `feature/payments-retry-…` for a name longer than `max`. */
-const cutBranch = (name: string, max = BRANCH_MAX) => (name.length <= max ? name : `${name.slice(0, max - 1)}…`);
-
 /**
  * The dashboard: the open app's rope, with each event a knot in its provider's color, newest first. Laid out like the
  * graph view: the rope, then Commit, Branch, Time and Event.
@@ -36,14 +31,12 @@ export function DashboardView(
   // The column's header is wider than the rope.
   const graphWidth = "Graph".length + 2;
   const [hovered, setHovered] = createSignal<number | null>(null);
+  // A cursor move or a hover redraws only the row it leaves and the row it reaches, as in the graph.
+  const isSelected = createSelector(d.cursor);
+  const isHovered = createSelector(hovered);
   const days = () => d.settings().windowDays;
-  /** As wide as the longest branch shown (at most BRANCH_MAX), and its header; one column of padding. */
-  const branchWidth = () => {
-    let longest = "Branch".length;
-    for (const row of d.rows())
-      if (row.kind === "event" && row.event.branch) longest = Math.max(longest, row.event.branch.length);
-    return Math.min(longest, BRANCH_MAX) + 1;
-  };
+  /** Once per set of rows, not once per row: every row's Branch column has this width. */
+  const branchWidth = createMemo(() => branchColumnWidth(d.rows()));
 
   /** The rope of one row: a knot in the provider's color for an event, plain rope elsewhere. */
   const Rope = (ropeProps: { row: DashboardRow }) => {
@@ -139,8 +132,8 @@ export function DashboardView(
           <For each={d.rows()}>
             {(row, index) => {
               const selectable = () => row.kind === "event";
-              const active = () => index() === d.cursor();
-              const lit = () => active() || (hovered() === index() && props.mouseEnabled?.() !== false);
+              const active = () => isSelected(index());
+              const lit = () => active() || (isHovered(index()) && props.mouseEnabled?.() !== false);
               // The selected row is in the dashboard's color and bold, as a provider view's is; marks keep their colors.
               const muted = () => (active() ? providerColors(t(), "dashboard").bg : t().foregroundMuted);
               /** The selected row's text is bold too, as in the graph and the provider views. */

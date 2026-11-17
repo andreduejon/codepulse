@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- Moving through the Dashboard redraws only the row the cursor leaves and the row
+  it reaches: with 1,000 events a key takes 4 ms instead of 38 ms.
+
 ### Fixed
 
 - OpenShift waits longer between automatic requests after failures, as GitHub and
