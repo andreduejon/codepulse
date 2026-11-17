@@ -59,7 +59,8 @@
 `src/core` is plain TypeScript: no Solid, no OpenTUI, no Bun or Node runtime APIs (the linter refuses them there).
 What it needs from outside (the app's state, the time, timers, requests) comes in as parameters, so it runs in a plain
 test. Solid code adapts it: `core/fetch-lifecycle.ts` is the fetch lifecycle, `providers/shared/use-provider-fetch-
-lifecycle.ts` its adapter. New logic that doesn't draw goes in `src/core`.
+lifecycle.ts` its adapter; `core/github/service.ts` is GitHub's provider logic, `providers/github-actions/use-github-
+ci.ts` its adapter. New logic that doesn't draw goes in `src/core`.
 
 ## Keys
 

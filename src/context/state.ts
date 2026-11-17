@@ -1,5 +1,6 @@
 import { batch, createContext, createMemo, createSignal, untrack, useContext } from "solid-js";
 import { DEFAULT_MAX_COUNT } from "../constants";
+import { providerIdle } from "../core/provider-status";
 import type { Branch, Commit, CommitDetail, GraphRow, TagInfo, UncommittedDetail } from "../git/types";
 import type { KeyboardScope } from "../keyboard/scope";
 import { createProviderRegistry, type GraphBadge, type ProviderView } from "../providers/provider";
@@ -32,18 +33,14 @@ export type {
 export const DEFAULT_AUTO_REFRESH_INTERVAL = 30000;
 export const DEFAULT_AUTO_FETCH_INTERVAL = 0;
 
-export const providerIdle = (): ProviderStatus => ({ kind: "idle" });
-export const providerLoading = (): ProviderStatus => ({ kind: "loading" });
-export const providerUnavailable = (message: string): ProviderStatus => ({
-  kind: "unavailable",
-  message,
-});
-export const providerError = (message: string): ProviderStatus => ({ kind: "error", message });
-export const providerWarning = (message: string): ProviderStatus => ({ kind: "warning", message });
-
-export function providerStatusMessage(status: ProviderStatus): string | null {
-  return status.kind === "error" || status.kind === "warning" || status.kind === "unavailable" ? status.message : null;
-}
+export {
+  providerError,
+  providerIdle,
+  providerLoading,
+  providerStatusMessage,
+  providerUnavailable,
+  providerWarning,
+} from "../core/provider-status";
 
 const AppStateContext = createContext<{ state: AppState; actions: AppActions }>();
 

@@ -1,132 +1,18 @@
 import { DEFAULT_PROVIDER_CACHE_LIMIT, type ProviderCacheLimit } from "../shared/auto-refresh";
-import { DEFAULT_PROVIDER_CACHE_ROOT, mergeById, ShaSqliteCache } from "../shared/sha-sqlite-cache";
-import type { GitHubAnnotation, GitHubJob, GitHubStep, GitHubWorkflowRun } from "./types";
+import { DEFAULT_PROVIDER_CACHE_ROOT, ShaSqliteCache } from "../shared/sha-sqlite-cache";
+import { type GitHubCacheEntry, isGitHubCacheEntry } from "./merge";
 
 export const DEFAULT_GITHUB_CACHE_ROOT = DEFAULT_PROVIDER_CACHE_ROOT;
 
-export interface GitHubCacheEntry {
-  sha: string;
-  runs: GitHubWorkflowRun[];
-  /** Completed jobs + steps keyed by run id. Log text is stored as a separate artifact. */
-  jobs?: Record<string, GitHubJob[]>;
-}
-
-export function isTerminalGitHubRun(run: { status: string }): boolean {
-  return run.status === "completed";
-}
-
-function isGitHubWorkflowRun(value: unknown): value is GitHubWorkflowRun {
-  if (typeof value !== "object" || value === null) return false;
-  const run = value as GitHubWorkflowRun;
-  return (
-    typeof run.id === "number" &&
-    typeof run.name === "string" &&
-    typeof run.status === "string" &&
-    (run.conclusion === null || typeof run.conclusion === "string") &&
-    typeof run.headSha === "string" &&
-    typeof run.event === "string" &&
-    typeof run.runNumber === "number" &&
-    typeof run.updatedAt === "string"
-  );
-}
-
-function isGitHubStep(value: unknown): value is GitHubStep {
-  if (typeof value !== "object" || value === null) return false;
-  const step = value as GitHubStep;
-  return (
-    typeof step.name === "string" &&
-    typeof step.status === "string" &&
-    (step.conclusion === null || typeof step.conclusion === "string") &&
-    typeof step.number === "number" &&
-    (step.startedAt === null || typeof step.startedAt === "string") &&
-    (step.completedAt === null || typeof step.completedAt === "string")
-  );
-}
-
-function isGitHubJob(value: unknown): value is GitHubJob {
-  if (typeof value !== "object" || value === null) return false;
-  const job = value as GitHubJob;
-  return (
-    typeof job.id === "number" &&
-    typeof job.name === "string" &&
-    typeof job.status === "string" &&
-    (job.conclusion === null || typeof job.conclusion === "string") &&
-    (job.startedAt === null || typeof job.startedAt === "string") &&
-    (job.completedAt === null || typeof job.completedAt === "string") &&
-    Array.isArray(job.steps) &&
-    job.steps.every(isGitHubStep) &&
-    (job.annotations === undefined || (Array.isArray(job.annotations) && job.annotations.every(isGitHubAnnotation))) &&
-    (job.runAttempt === undefined || typeof job.runAttempt === "number")
-  );
-}
-
-function isGitHubAnnotation(value: unknown): value is GitHubAnnotation {
-  if (typeof value !== "object" || value === null) return false;
-  const annotation = value as GitHubAnnotation;
-  return (
-    (annotation.level === "failure" || annotation.level === "warning" || annotation.level === "notice") &&
-    typeof annotation.path === "string" &&
-    (annotation.line === null || typeof annotation.line === "number") &&
-    typeof annotation.message === "string"
-  );
-}
-
-function isGitHubJobsMap(value: unknown): value is Record<string, GitHubJob[]> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
-  return Object.values(value).every(jobs => Array.isArray(jobs) && jobs.every(isGitHubJob));
-}
-
-export function isGitHubCacheEntry(value: unknown): value is GitHubCacheEntry {
-  if (typeof value !== "object" || value === null) return false;
-  const entry = value as GitHubCacheEntry;
-  if (typeof entry.sha !== "string" || !Array.isArray(entry.runs) || !entry.runs.every(isGitHubWorkflowRun))
-    return false;
-  return entry.jobs === undefined || isGitHubJobsMap(entry.jobs);
-}
-
-export function mergeGitHubRuns(
-  existing: readonly GitHubWorkflowRun[],
-  incoming: readonly GitHubWorkflowRun[],
-): GitHubWorkflowRun[] {
-  return mergeById(existing, incoming);
-}
-
-export function mergeGitHubJobs(
-  existing: Record<string, GitHubJob[]> | undefined,
-  incoming: Record<string, GitHubJob[]>,
-): Record<string, GitHubJob[]> {
-  return { ...existing, ...incoming };
-}
-
-export function jobsMapFromGitHubCache(jobsCache: ReadonlyMap<number, GitHubJob[]>, runIds: readonly number[]) {
-  const jobs: Record<string, GitHubJob[]> = {};
-  for (const id of runIds) {
-    const cached = jobsCache.get(id);
-    if (cached && cached.length > 0) jobs[String(id)] = cached;
-  }
-  return jobs;
-}
-
-/**
- * A commit's finished runs merged into its snapshot. `freshJobs` holds the jobs read with these runs: a run without
- * them loses the jobs cached before, since a re-run's earlier jobs are not its jobs and are asked for again.
- */
-export function mergeGitHubEntry(
-  sha: string,
-  existing: GitHubCacheEntry | null,
-  incoming: readonly GitHubWorkflowRun[],
-  freshJobs: ReadonlyMap<number, GitHubJob[]>,
-): GitHubCacheEntry {
-  const jobs = mergeGitHubJobs(
-    existing?.jobs,
-    jobsMapFromGitHubCache(
-      freshJobs,
-      incoming.filter(run => freshJobs.has(run.id)).map(run => run.id),
-    ),
-  );
-  for (const run of incoming) if (!freshJobs.has(run.id)) delete jobs[String(run.id)];
-  return { sha, runs: mergeGitHubRuns(existing?.runs ?? [], incoming), jobs };
-}
+export {
+  type GitHubCacheEntry,
+  isGitHubCacheEntry,
+  isTerminalGitHubRun,
+  jobsMapFromGitHubCache,
+  mergeGitHubEntry,
+  mergeGitHubJobs,
+  mergeGitHubRuns,
+} from "./merge";
 
 export class GitHubCache extends ShaSqliteCache<GitHubCacheEntry> {
   constructor(options: { root?: string; maxEntries?: ProviderCacheLimit } = {}) {
