@@ -4,9 +4,12 @@
  * registers the provider, runs the live session while a view shows live resources, and makes the service's reads
  * reactive.
  */
+
 import type { Accessor } from "solid-js";
 import { createEffect, createMemo, createSignal, onCleanup, untrack } from "solid-js";
 import type { AppActions, AppState } from "../../context/state";
+import type { OpenShiftCacheEntry } from "../../core/openshift/merge";
+import type { OpenShiftAdapters } from "../../core/openshift/service";
 import { createOpenShiftService, type OpenShiftLiveState } from "../../core/openshift/service";
 import type {
   OpenShiftCommitData,
@@ -17,8 +20,6 @@ import type {
 import { DEFAULT_OPENSHIFT_AUTO_REFRESH_SECONDS, DEFAULT_OPENSHIFT_CONFIG } from "../../core/openshift/types";
 import { providerAppPort } from "../shared/app-port";
 import { useProviderFetchLifecycle } from "../shared/use-provider-fetch-lifecycle";
-import * as api from "./api";
-import { OpenShiftCache, type OpenShiftCacheEntry } from "./cache";
 
 export {
   commitDataFromCacheEntry,
@@ -55,7 +56,8 @@ export function useOpenShift(opts: {
   state: AppState;
   actions: AppActions;
   config?: Partial<OpenShiftProviderConfig> | Accessor<Partial<OpenShiftProviderConfig>>;
-  cacheRoot?: string;
+  /** Its API, cache and token: the root's (src/ports.ts). */
+  adapters: OpenShiftAdapters;
   suspended?: Accessor<boolean>;
 }): UseOpenShiftResult {
   const { state, actions } = opts;
@@ -66,11 +68,11 @@ export function useOpenShift(opts: {
 
   // A plain snapshot of the merged config: reads of it while fetching must not track the config signal.
   let config: OpenShiftProviderConfig = { ...DEFAULT_OPENSHIFT_CONFIG, ...configAccessor() };
-  let disk = new OpenShiftCache({ root: opts.cacheRoot, maxEntries: config.cacheLimit });
+  let disk = opts.adapters.cache(config.cacheLimit);
   createEffect(() => {
     const partial = configAccessor();
     config = { ...DEFAULT_OPENSHIFT_CONFIG, ...partial, namespaces: partial.namespaces ?? [] };
-    disk = new OpenShiftCache({ root: opts.cacheRoot, maxEntries: config.cacheLimit });
+    disk = opts.adapters.cache(config.cacheLimit);
   });
 
   /** Bumped when the service's builds or resources change: what reads them reads again. */
@@ -82,20 +84,10 @@ export function useOpenShift(opts: {
   let lifecycle!: ReturnType<typeof useProviderFetchLifecycle>;
   const service = createOpenShiftService({
     app: providerAppPort(state, actions, "openshift", opts.suspended),
-    // Through the module at call time: tests replace these functions.
-    api: {
-      fetchOpenShiftInventory: (...args) => api.fetchOpenShiftInventory(...args),
-      fetchOpenShiftResources: (...args) => api.fetchOpenShiftResources(...args),
-      watchOpenShiftStream: (...args) => api.watchOpenShiftStream(...args),
-      fetchOpenShiftBuildLog: (...args) => api.fetchOpenShiftBuildLog(...args),
-      fetchOpenShiftPodLog: (...args) => api.fetchOpenShiftPodLog(...args),
-      followOpenShiftLog: (...args) => api.followOpenShiftLog(...args),
-      fetchOpenShiftObject: (...args) => api.fetchOpenShiftObject(...args),
-      fetchOpenShiftEvents: (...args) => api.fetchOpenShiftEvents(...args),
-    },
+    api: opts.adapters.api,
     cache: () => disk,
     config: () => config,
-    token: api.getOpenShiftToken,
+    token: opts.adapters.token,
     lifecycle: () => lifecycle,
     onDataChange: () => setDataVersion(version => version + 1),
     onLiveState: setLiveState,

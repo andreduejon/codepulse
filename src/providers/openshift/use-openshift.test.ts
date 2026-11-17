@@ -9,6 +9,7 @@ import type {
   OpenShiftResource,
   OpenShiftWatchResult,
 } from "../../core/openshift/types";
+import { openShiftAdapters } from "./adapters";
 import * as api from "./api";
 import { OpenShiftCache, type OpenShiftCacheEntry } from "./cache";
 import {
@@ -164,6 +165,7 @@ function mountOpenShift(
     const openShift = useOpenShift({
       state,
       actions,
+      adapters: openShiftAdapters(),
       suspended,
       config: {
         enabled: true,

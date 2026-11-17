@@ -8,7 +8,7 @@ import {
   GQL_BATCH_SIZE,
   mapRunToBadge,
 } from "../src/core/github/commit-data";
-import { normalizeGitHubHost, parseGitHubRemote } from "../src/core/github/host";
+import { isTrustedGitHubHost, normalizeGitHubHost, parseGitHubRemote } from "../src/core/github/host";
 import type { GitHubApiJob } from "../src/core/github/types";
 import {
   fetchCIDataForSHAs,
@@ -17,7 +17,6 @@ import {
   fetchRunJobs,
   getGitHubToken,
   isGitHubJobsFieldSchemaError,
-  isTrustedGitHubHost,
   MAX_CHECK_SUITE_PAGES,
   MAX_JOB_PAGES,
   nextGithubLink,

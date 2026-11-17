@@ -8,8 +8,8 @@ import { useJenkinsCI } from "./use-jenkins-ci";
 
 export const jenkinsModule = {
   id: "jenkins",
-  start: ({ state, actions, settings, suspended, onOpenJobLog }) => {
-    const jenkins = useJenkinsCI({ state, actions, config: settings.jenkins, suspended });
+  start: ({ state, actions, settings, suspended, onOpenJobLog, adapters }) => {
+    const jenkins = useJenkinsCI({ state, actions, config: settings.jenkins, suspended, adapters: adapters.jenkins });
     return {
       instance: jenkins,
       getCommitData: jenkins.getCommitData,

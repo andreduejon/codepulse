@@ -1,5 +1,4 @@
 import { BANNER, bannerOrFallback, debugError } from "../../core/banner";
-import { normalizeGitHubHost } from "../../core/github/host";
 import type {
   GitHubAnnotation,
   GitHubApiJob,
@@ -13,13 +12,6 @@ import type {
 import { fetchWithRetry as fetchWithRetryPolicy } from "../shared/http";
 
 // ── Remote URL parsing ────────────────────────────────────────────────────
-
-export function isTrustedGitHubHost(hostname: string, trustedEnterpriseHost: string | null = null): boolean {
-  const normalized = normalizeGitHubHost(hostname);
-  if (!normalized) return false;
-  if (normalized === "github.com") return true;
-  return trustedEnterpriseHost != null && normalizeGitHubHost(trustedEnterpriseHost) === normalized;
-}
 
 // ── Authentication ────────────────────────────────────────────────────────
 

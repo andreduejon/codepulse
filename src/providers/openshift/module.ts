@@ -6,8 +6,14 @@ import { useOpenShift } from "./use-openshift";
 
 export const openShiftModule = {
   id: "openshift",
-  start: ({ state, actions, settings, suspended, onOpenResource }) => {
-    const openShift = useOpenShift({ state, actions, config: settings.openShift, suspended });
+  start: ({ state, actions, settings, suspended, onOpenResource, adapters }) => {
+    const openShift = useOpenShift({
+      state,
+      actions,
+      config: settings.openShift,
+      suspended,
+      adapters: adapters.openshift,
+    });
     return {
       instance: openShift,
       getCommitData: openShift.getCommitData,

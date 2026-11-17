@@ -3,16 +3,17 @@
  * results. This hook gives it its ports, tells it what changed (the graph's commits, the branches, suspension, the
  * settings), registers the provider, and makes the service's reads reactive.
  */
+
 import type { Accessor } from "solid-js";
 import { createEffect, createSignal, onCleanup, untrack } from "solid-js";
 import type { AppActions, AppState } from "../../context/state";
 import { providerIdle, providerUnavailable } from "../../context/state";
 import { BANNER } from "../../core/banner";
+import type { SnykAdapters } from "../../core/snyk/service";
 import { createSnykService, EXACT_SHA, type SnykSettings } from "../../core/snyk/service";
 import type { SnykScanResult } from "../../core/snyk/types";
+import { DEFAULT_SNYK_CACHE_LIMIT } from "../../core/snyk/types";
 import { providerAppPort } from "../shared/app-port";
-import { DEFAULT_SNYK_CACHE_LIMIT } from "./cache";
-import { getCachedSnykScan, scanSnykCommit } from "./scanner";
 
 export { collectSnykAutoScanTips, selectSnykCacheProbes } from "../../core/snyk/service";
 
@@ -47,15 +48,15 @@ export function useSnyk(opts: {
   actions: AppActions;
   config: Accessor<Partial<SnykProviderConfig>>;
   suspended?: Accessor<boolean>;
-  scan?: typeof scanSnykCommit;
-  readCache?: typeof getCachedSnykScan;
+  /** Scanning, its cache and the token check: the root's (src/ports.ts). */
+  adapters: SnykAdapters;
 }): UseSnykResult {
   const { state, actions } = opts;
   const config = (): SnykProviderConfig => {
     const partial = opts.config();
     return { ...DEFAULT_SNYK_PROVIDER_CONFIG, ...partial, autoScanBranches: partial.autoScanBranches ?? [] };
   };
-  const hasToken = (envVar: string): boolean => !!process.env[envVar]?.trim();
+  const hasToken = opts.adapters.hasToken;
 
   const [resultsVersion, setResultsVersion] = createSignal(0);
   const [scanningVersion, setScanningVersion] = createSignal(0);
@@ -66,8 +67,8 @@ export function useSnyk(opts: {
     // Read untracked: what a scan reads must not become the dependency of the effect that started it.
     config: () => untrack(config),
     hasToken,
-    scan: opts.scan ?? scanSnykCommit,
-    readCache: opts.readCache ?? getCachedSnykScan,
+    scan: opts.adapters.scan,
+    readCache: opts.adapters.readCache,
     onResultsChange: () => setResultsVersion(version => version + 1),
     onScanningChange: () => setScanningVersion(version => version + 1),
     onWorkChange: () => setWorkVersion(version => version + 1),

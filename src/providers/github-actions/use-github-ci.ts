@@ -11,7 +11,8 @@
 import type { Accessor } from "solid-js";
 import { createEffect, createSignal, untrack } from "solid-js";
 import { type AppActions, type AppState, providerIdle } from "../../context/state";
-import { parseGitHubRemote } from "../../core/github/host";
+import { isTrustedGitHubHost, parseGitHubRemote } from "../../core/github/host";
+import type { GitHubAdapters } from "../../core/github/service";
 import { createGitHubService } from "../../core/github/service";
 import type {
   GitHubCommitData,
@@ -23,8 +24,6 @@ import { DEFAULT_GITHUB_CONFIG } from "../../core/github/types";
 import { DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS } from "../../core/provider-settings";
 import { providerAppPort } from "../shared/app-port";
 import { useProviderFetchLifecycle } from "../shared/use-provider-fetch-lifecycle";
-import * as api from "./api";
-import { GitHubCache } from "./cache";
 
 export interface UseGitHubCIResult {
   /** Retrieve all runs for a given commit SHA (null if not fetched yet). */
@@ -63,7 +62,8 @@ export function useGitHubCI(opts: {
    * `enabled` in the Providers menu is reflected immediately without a restart.
    */
   config?: Partial<GitHubProviderConfig> | Accessor<Partial<GitHubProviderConfig>>;
-  cacheRoot?: string;
+  /** Its API, cache and token: the root's (src/ports.ts). */
+  adapters: GitHubAdapters;
   suspended?: Accessor<boolean>;
 }): UseGitHubCIResult {
   const { state, actions } = opts;
@@ -75,10 +75,10 @@ export function useGitHubCI(opts: {
   // A plain snapshot of the merged config, renewed by an effect: reads of it while fetching (inside other effects) must
   // not track the config signal, or every effect that asks isAvailable() would run again on each settings change.
   let config: GitHubProviderConfig = { ...DEFAULT_GITHUB_CONFIG, ...configAccessor() };
-  let disk = new GitHubCache({ root: opts.cacheRoot, maxEntries: config.cacheLimit });
+  let disk = opts.adapters.cache(config.cacheLimit);
   createEffect(() => {
     config = { ...DEFAULT_GITHUB_CONFIG, ...configAccessor() };
-    disk = new GitHubCache({ root: opts.cacheRoot, maxEntries: config.cacheLimit });
+    disk = opts.adapters.cache(config.cacheLimit);
   });
 
   // The remote as a GitHub repository: signals, so effects that ask isAvailable() run again once it is parsed.
@@ -88,7 +88,7 @@ export function useGitHubCI(opts: {
     const repo = parseGitHubRemote(state.remoteUrl());
     setParsedGitHubRepo(repo);
     setCachedGitHubRepo(
-      repo && api.isTrustedGitHubHost(repo.hostname, configAccessor().trustedEnterpriseHost ?? null) ? repo : null,
+      repo && isTrustedGitHubHost(repo.hostname, configAccessor().trustedEnterpriseHost ?? null) ? repo : null,
     );
   });
 
@@ -97,18 +97,12 @@ export function useGitHubCI(opts: {
   let lifecycle!: ReturnType<typeof useProviderFetchLifecycle>;
   const service = createGitHubService({
     app: providerAppPort(state, actions, "github-actions", opts.suspended),
-    // Through the module at call time: tests replace these functions.
-    api: {
-      fetchCIDataForSHAs: (...args) => api.fetchCIDataForSHAs(...args),
-      fetchRunJobs: (...args) => api.fetchRunJobs(...args),
-      fetchJobAnnotations: (...args) => api.fetchJobAnnotations(...args),
-      fetchJobLog: (...args) => api.fetchJobLog(...args),
-    },
+    api: opts.adapters.api,
     cache: () => disk,
     config: () => config,
     repo: cachedGitHubRepo,
     parsedRepo: parsedGitHubRepo,
-    token: api.getGitHubToken,
+    token: opts.adapters.token,
     lifecycle: () => lifecycle,
     onDataChange: () => setDataVersion(version => version + 1),
   });

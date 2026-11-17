@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { createRoot } from "solid-js";
 import { createAppState } from "../src/context/state";
 import { clearDebugEvents, getDebugEvents } from "../src/core/debug-events";
+import { githubAdapters } from "../src/providers/github-actions/adapters";
 import { useGitHubCI } from "../src/providers/github-actions/use-github-ci";
 import { closeProviderCaches } from "../src/providers/shared/sha-sqlite-cache";
 
@@ -74,7 +75,7 @@ test("unsupported GraphQL jobs stay disabled while runs and REST expansion still
         state,
         actions,
         config: { enabled: true, tokenEnvVar, autoRefreshSeconds: 0 },
-        cacheRoot,
+        adapters: githubAdapters(cacheRoot),
       });
       return { ci, state };
     });

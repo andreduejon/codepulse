@@ -11,6 +11,7 @@ import type { Commit } from "../../core/git/types";
 import type { JenkinsRun } from "../../core/jenkins/types";
 import * as monotonic from "../../core/monotonic";
 import { closeProviderCaches } from "../shared/sha-sqlite-cache";
+import { jenkinsAdapters } from "./adapters";
 import * as api from "./api";
 import { JenkinsCache } from "./cache";
 import { useJenkinsCI } from "./use-jenkins-ci";
@@ -114,7 +115,7 @@ async function mountJenkins(
     const jenkins = useJenkinsCI({
       state,
       actions,
-      cacheRoot: root,
+      adapters: jenkinsAdapters(root),
       config: {
         enabled: true,
         username: "user",
@@ -433,6 +434,7 @@ test("a Jenkins turned off asks Jenkins nothing, also for a forced load of one c
     jenkins = useJenkinsCI({
       state,
       actions,
+      adapters: jenkinsAdapters(),
       config: { enabled: false, username: "user", tokenEnvVar: TOKEN_ENV, jobs: [{ url: JOB_URL }] },
     });
   });

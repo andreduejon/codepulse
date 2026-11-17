@@ -95,3 +95,5 @@ export interface SnykScanOptions {
   force?: boolean;
   maxCachedScans?: SnykCacheLimit;
 }
+
+export const DEFAULT_SNYK_CACHE_LIMIT: SnykCacheLimit = 20;

@@ -5,8 +5,8 @@ import { useSnyk } from "./use-snyk";
 
 export const snykModule = {
   id: "snyk",
-  start: ({ state, actions, settings, suspended }) => {
-    const snyk = useSnyk({ state, actions, config: settings.snyk, suspended });
+  start: ({ state, actions, settings, suspended, adapters }) => {
+    const snyk = useSnyk({ state, actions, config: settings.snyk, suspended, adapters: adapters.snyk });
     return {
       instance: snyk,
       getCommitData: snyk.getCommitData,

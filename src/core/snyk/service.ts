@@ -47,6 +47,13 @@ export function selectSnykCacheProbes(
   return visibleSHAs.filter(sha => !loadedSHAs.has(sha) && !probedSHAs.has(sha));
 }
 
+/** What the app gives Snyk from outside: scanning, its cache, and whether its token is set. */
+export interface SnykAdapters {
+  scan: SnykServicePorts["scan"];
+  readCache: SnykServicePorts["readCache"];
+  hasToken: (envVar: string) => boolean;
+}
+
 export interface SnykServicePorts {
   app: ProviderAppPort;
   config: () => SnykSettings;

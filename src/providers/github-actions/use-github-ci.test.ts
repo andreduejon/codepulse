@@ -9,6 +9,7 @@ import { buildGraph } from "../../core/git/graph";
 import type { GitHubJob, GitHubWorkflowRun } from "../../core/github/types";
 import * as monotonic from "../../core/monotonic";
 import { closeProviderCaches } from "../shared/sha-sqlite-cache";
+import { githubAdapters } from "./adapters";
 import * as api from "./api";
 import { GitHubCache } from "./cache";
 import { useGitHubCI } from "./use-github-ci";
@@ -100,7 +101,7 @@ async function mountGitHub(
     const github = useGitHubCI({
       state,
       actions,
-      cacheRoot: root,
+      adapters: githubAdapters(root),
       config: {
         enabled: true,
         tokenEnvVar: TOKEN_ENV,

@@ -67,3 +67,10 @@ export function parseGitHubRemote(url: string): GitHubRepo | null {
 
   return null;
 }
+
+export function isTrustedGitHubHost(hostname: string, trustedEnterpriseHost: string | null = null): boolean {
+  const normalized = normalizeGitHubHost(hostname);
+  if (!normalized) return false;
+  if (normalized === "github.com") return true;
+  return trustedEnterpriseHost != null && normalizeGitHubHost(trustedEnterpriseHost) === normalized;
+}

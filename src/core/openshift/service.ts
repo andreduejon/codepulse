@@ -11,6 +11,7 @@ import { sleep } from "../abort";
 import { BANNER, debugError } from "../banner";
 import type { ProviderFetchArgs } from "../fetch-lifecycle";
 import type { ProviderAppPort, ProviderLifecycle } from "../provider-ports";
+import type { ProviderCacheLimit } from "../provider-settings";
 import { providerError, providerIdle, providerLoading, providerUnavailable, providerWarning } from "../provider-status";
 import { collectTopSHAs } from "../sha-selection";
 import {
@@ -122,6 +123,16 @@ export interface OpenShiftCachePort {
 }
 
 export type OpenShiftLiveState = "idle" | "loading" | "live";
+
+/**
+ * What the app gives the provider from outside: its API, a cache with a limit, and the token in an environment
+ * variable. The terminal app's are in src/providers/openshift/adapters.ts.
+ */
+export interface OpenShiftAdapters {
+  api: OpenShiftApiPort;
+  cache: (maxEntries: ProviderCacheLimit) => OpenShiftCachePort;
+  token: (envVar: string) => string | null;
+}
 
 export interface OpenShiftServicePorts {
   app: ProviderAppPort;

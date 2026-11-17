@@ -8,8 +8,8 @@ import { useGitHubCI } from "./use-github-ci";
 
 export const githubModule = {
   id: "github-actions",
-  start: ({ state, actions, settings, suspended, onOpenJobLog }) => {
-    const github = useGitHubCI({ state, actions, config: settings.github, suspended });
+  start: ({ state, actions, settings, suspended, onOpenJobLog, adapters }) => {
+    const github = useGitHubCI({ state, actions, config: settings.github, suspended, adapters: adapters.github });
     return {
       instance: github,
       getCommitData: github.getCommitData,

@@ -3,9 +3,11 @@
  * and logs and decides what to ask Jenkins. This hook gives it its ports, keeps its settings reactive, registers the
  * provider, and makes the service's reads reactive.
  */
+
 import type { Accessor } from "solid-js";
 import { createEffect, createSignal, untrack } from "solid-js";
 import type { AppActions, AppState } from "../../context/state";
+import type { JenkinsAdapters } from "../../core/jenkins/service";
 import { createJenkinsService } from "../../core/jenkins/service";
 import type {
   JenkinsCommitData,
@@ -17,8 +19,6 @@ import { DEFAULT_JENKINS_CONFIG } from "../../core/jenkins/types";
 import { DEFAULT_PROVIDER_AUTO_REFRESH_SECONDS } from "../../core/provider-settings";
 import { providerAppPort } from "../shared/app-port";
 import { useProviderFetchLifecycle } from "../shared/use-provider-fetch-lifecycle";
-import * as api from "./api";
-import { JenkinsCache } from "./cache";
 
 export interface UseJenkinsCIResult {
   getCommitData: (sha: string) => JenkinsCommitData | null;
@@ -39,7 +39,8 @@ export function useJenkinsCI(opts: {
   state: AppState;
   actions: AppActions;
   config?: Partial<JenkinsProviderConfig> | Accessor<Partial<JenkinsProviderConfig>>;
-  cacheRoot?: string;
+  /** Its API, cache and token: the root's (src/ports.ts). */
+  adapters: JenkinsAdapters;
   suspended?: Accessor<boolean>;
 }): UseJenkinsCIResult {
   const { state, actions } = opts;
@@ -50,11 +51,11 @@ export function useJenkinsCI(opts: {
 
   // A plain snapshot of the merged config: reads of it while fetching must not track the config signal.
   let config: JenkinsProviderConfig = { ...DEFAULT_JENKINS_CONFIG, ...configAccessor() };
-  let disk = new JenkinsCache({ root: opts.cacheRoot, maxEntries: config.cacheLimit });
+  let disk = opts.adapters.cache(config.cacheLimit);
   createEffect(() => {
     const partial = configAccessor();
     config = { ...DEFAULT_JENKINS_CONFIG, ...partial, jobs: partial.jobs ?? [] };
-    disk = new JenkinsCache({ root: opts.cacheRoot, maxEntries: config.cacheLimit });
+    disk = opts.adapters.cache(config.cacheLimit);
   });
 
   /** Bumped when the service's builds change: what reads them reads again. */
@@ -62,17 +63,10 @@ export function useJenkinsCI(opts: {
   let lifecycle!: ReturnType<typeof useProviderFetchLifecycle>;
   const service = createJenkinsService({
     app: providerAppPort(state, actions, "jenkins", opts.suspended),
-    // Through the module at call time: tests replace these functions.
-    api: {
-      fetchJenkinsGraphDataForSHAs: (...args) => api.fetchJenkinsGraphDataForSHAs(...args),
-      fetchJenkinsDataForSHAs: (...args) => api.fetchJenkinsDataForSHAs(...args),
-      fetchJenkinsRunsForBuilds: (...args) => api.fetchJenkinsRunsForBuilds(...args),
-      fetchJenkinsRunJobs: (...args) => api.fetchJenkinsRunJobs(...args),
-      fetchJenkinsConsoleLog: (...args) => api.fetchJenkinsConsoleLog(...args),
-    },
+    api: opts.adapters.api,
     cache: () => disk,
     config: () => config,
-    token: api.getJenkinsToken,
+    token: opts.adapters.token,
     lifecycle: () => lifecycle,
     onDataChange: () => setDataVersion(version => version + 1),
   });

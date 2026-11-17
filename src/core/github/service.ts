@@ -2,6 +2,7 @@ import { BANNER, bannerOrFallback, debugError } from "../banner";
 import { addDebugEvent } from "../debug-events";
 import type { ProviderFetchArgs } from "../fetch-lifecycle";
 import type { ProviderAppPort, ProviderLifecycle } from "../provider-ports";
+import type { ProviderCacheLimit } from "../provider-settings";
 import { providerError, providerIdle, providerLoading, providerUnavailable } from "../provider-status";
 import { collectRunningSHAs, collectTopSHAs } from "../sha-selection";
 import { jobsSettled } from "../status";
@@ -54,6 +55,16 @@ export interface GitHubCachePort {
 }
 
 export type GitHubLifecycle = ProviderLifecycle;
+
+/**
+ * What the app gives the provider from outside: its API, a cache with a limit, and the token in an environment
+ * variable. The terminal app's are in src/providers/github-actions/adapters.ts.
+ */
+export interface GitHubAdapters {
+  api: GitHubApiPort;
+  cache: (maxEntries: ProviderCacheLimit) => GitHubCachePort;
+  token: (envVar: string) => string | null;
+}
 
 export interface GitHubServicePorts {
   app: GitHubAppPort;

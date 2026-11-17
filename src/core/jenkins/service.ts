@@ -5,9 +5,11 @@
  *
  * Everything outside comes through ports; the Solid hook (providers/jenkins/use-jenkins-ci.ts) builds them.
  */
+
 import { BANNER, bannerOrFallback } from "../banner";
 import type { ProviderFetchArgs } from "../fetch-lifecycle";
 import type { ProviderAppPort, ProviderLifecycle } from "../provider-ports";
+import type { ProviderCacheLimit } from "../provider-settings";
 import { providerError, providerIdle, providerLoading, providerUnavailable, providerWarning } from "../provider-status";
 import { collectRunningSHAs, collectTopSHAs } from "../sha-selection";
 import { jobsSettled } from "../status";
@@ -84,6 +86,16 @@ export interface JenkinsCachePort {
     merge: (sha: string, existing: JenkinsCacheEntry | null, incoming: I[]) => JenkinsCacheEntry,
     isCurrent?: () => boolean,
   ) => Promise<number>;
+}
+
+/**
+ * What the app gives the provider from outside: its API, a cache with a limit, and the token in an environment
+ * variable. The terminal app's are in src/providers/jenkins/adapters.ts.
+ */
+export interface JenkinsAdapters {
+  api: JenkinsApiPort;
+  cache: (maxEntries: ProviderCacheLimit) => JenkinsCachePort;
+  token: (envVar: string) => string | null;
 }
 
 export interface JenkinsServicePorts {

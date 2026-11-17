@@ -14,10 +14,13 @@ import { buildGraph } from "../../core/git/graph";
 import type { GitHubWorkflowRun } from "../../core/github/types";
 import type { JenkinsRun } from "../../core/jenkins/types";
 import type { OpenShiftWatchResult } from "../../core/openshift/types";
+import { githubAdapters } from "../github-actions/adapters";
 import * as githubApi from "../github-actions/api";
 import { useGitHubCI } from "../github-actions/use-github-ci";
+import { jenkinsAdapters } from "../jenkins/adapters";
 import * as jenkinsApi from "../jenkins/api";
 import { useJenkinsCI } from "../jenkins/use-jenkins-ci";
+import { openShiftAdapters } from "../openshift/adapters";
 import * as openShiftApi from "../openshift/api";
 import type { OpenShiftCachedBuild } from "../openshift/cache";
 import { commitDataFromCacheEntry, useOpenShift } from "../openshift/use-openshift";
@@ -150,7 +153,7 @@ const github: ContractFixture = {
         return useGitHubCI({
           state,
           actions,
-          cacheRoot,
+          adapters: githubAdapters(cacheRoot),
           suspended,
           config: () => ({ enabled: enabled(), tokenEnvVar: tokenEnv, autoRefreshSeconds: 0 }),
         });
@@ -218,7 +221,7 @@ const jenkins: ContractFixture = {
         return useJenkinsCI({
           state,
           actions,
-          cacheRoot,
+          adapters: jenkinsAdapters(cacheRoot),
           suspended,
           config: () => ({
             enabled: enabled(),
@@ -300,7 +303,7 @@ const openshift: ContractFixture = {
         return useOpenShift({
           state,
           actions,
-          cacheRoot,
+          adapters: openShiftAdapters(cacheRoot),
           suspended,
           config: () => ({
             enabled: enabled(),

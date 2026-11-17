@@ -65,6 +65,7 @@ export function AppContent(props: Readonly<AppContentProps>) {
   const providers = useProviderHost({
     state,
     actions,
+    adapters: ports.providers,
     settings,
     suspended: cacheScreenVisible,
     onOpenJobLog: target => openJobLog(target),

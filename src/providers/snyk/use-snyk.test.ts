@@ -4,7 +4,9 @@ import type { AppActions, AppState } from "../../context/state";
 import { createAppState } from "../../context/state";
 import { BANNER } from "../../core/banner";
 import { buildGraph } from "../../core/git/graph";
+import type { SnykAdapters } from "../../core/snyk/service";
 import type { SnykScanOptions, SnykScanResult } from "../../core/snyk/types";
+import { snykAdapters } from "./adapters";
 import {
   collectSnykAutoScanTips,
   type SnykProviderConfig,
@@ -18,8 +20,8 @@ const SHA_A = "a".repeat(40);
 const SHA_B = "b".repeat(40);
 const SHA_C = "c".repeat(40);
 
-type Scan = NonNullable<Parameters<typeof useSnyk>[0]["scan"]>;
-type ReadCache = NonNullable<Parameters<typeof useSnyk>[0]["readCache"]>;
+type Scan = SnykAdapters["scan"];
+type ReadCache = SnykAdapters["readCache"];
 
 interface Deferred<T> {
   promise: Promise<T>;
@@ -111,8 +113,11 @@ function mountSnyk(options: {
       actions,
       config,
       suspended,
-      scan: options.scan,
-      readCache: options.readCache ?? (async () => null),
+      adapters: {
+        ...snykAdapters(),
+        ...(options.scan ? { scan: options.scan } : {}),
+        readCache: options.readCache ?? (async () => null),
+      },
     });
     mounted = { state, actions, snyk, dispose, setSuspended };
   });
