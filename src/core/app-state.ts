@@ -1,8 +1,16 @@
-import type { Accessor } from "solid-js";
-import type { Branch, Commit, CommitDetail, GraphRow, TagInfo, UncommittedDetail } from "../core/git/types";
-import type { GraphBadge, ProviderView } from "../core/provider-model";
-import type { ProviderStatus } from "../core/provider-status";
-import type { ProviderRegistry } from "../providers/provider";
+/**
+ * The app's state as a port: what it holds (the repository, the graph and its cursor, highlights, the details, the
+ * providers' status and badges) and how it changes. The terminal app keeps it in Solid signals (context/state.ts);
+ * another front end can keep it in any store with the same shape. The rules that don't depend on where the state is
+ * kept (which highlight wins, which commits a search matches, how far the cursor may move) are functions here.
+ */
+import type { Branch, Commit, CommitDetail, GraphRow, TagInfo, UncommittedDetail } from "./git/types";
+import type { GraphBadge, ProviderRegistry, ProviderView } from "./provider-model";
+import type { ProviderStatus } from "./provider-status";
+import { matchCommit, type ParsedSearch } from "./search";
+
+/** A value the app reads, reactive where the app is: a Solid signal in the terminal app. */
+export type Accessor<T> = () => T;
 
 export type DetailTab =
   | "files"
@@ -190,3 +198,32 @@ export interface ProviderActions {
 }
 
 export type AppActions = RepoActions & NavActions & FilterActions & DetailActions & SettingsActions & ProviderActions;
+
+// ── Rules ─────────────────────────────────────────────────────────────────────
+
+/** One highlight at a time: ancestry, then path, then search. */
+export function highlightModeOf(ancestry: unknown, pathMatches: unknown, searchQuery: string): HighlightMode {
+  if (ancestry) return "ancestry";
+  if (pathMatches) return "path";
+  if (searchQuery) return "search";
+  return null;
+}
+
+/** The rows' commits a search matches. */
+export function searchMatches(rows: readonly GraphRow[], search: ParsedSearch): Set<string> {
+  const matches = new Set<string>();
+  for (const row of rows) if (matchCommit(row.commit, search)) matches.add(row.commit.hash);
+  return matches;
+}
+
+/** Whether two sets hold the same values. */
+export function sameSet<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): boolean {
+  if (a.size !== b.size) return false;
+  for (const value of a) if (!b.has(value)) return false;
+  return true;
+}
+
+/** A cursor moved by `delta` within `count` items: it stops at the first and the last. */
+export function clampCursor(cursor: number, delta: number, count: number): number {
+  return Math.max(0, Math.min(count - 1, cursor + delta));
+}

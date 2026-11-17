@@ -95,3 +95,28 @@ export function providerDetailTab(view: ProviderView): { id: ProviderDetailView;
   const metadata = PROVIDER_METADATA[view];
   return { id: view, label: metadata.detailLabel ?? metadata.displayName };
 }
+
+/** Provider registration entry — each provider registers itself on init. */
+export interface ProviderRegistration {
+  id: ProviderView;
+  /** Human-readable display name shown in the badge and menu. */
+  displayName: string;
+  /** Returns true when the provider can produce data (token + matching remote). */
+  isAvailable: () => boolean;
+  /**
+   * Long-running work as a short verb (`scanning`), shown after the display name in the footer in every view,
+   * instead of the generic `loading`. Set it only when it ends reliably: it can't get stuck after a view switch.
+   */
+  activity?: () => string | null;
+}
+
+export interface ProviderRegistry {
+  register: (p: ProviderRegistration) => void;
+  unregister: (id: ProviderView) => void;
+  getVersion: () => number;
+  getEnabledViews: () => ProviderView[];
+  /** The Dashboard tab shows while it is turned on (Menu → Providers → Dashboard). */
+  setDashboardEnabled: (enabled: boolean) => void;
+  nextView: (current: ProviderView) => ProviderView;
+  get: (id: ProviderView) => ProviderRegistration | undefined;
+}

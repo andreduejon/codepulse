@@ -1,22 +1,14 @@
 import { batch, createContext, createMemo, createSignal, untrack, useContext } from "solid-js";
+import type { AppActions, AppState, DetailOwner, DetailTab, MenuTab } from "../core/app-state";
+import { clampCursor, highlightModeOf, sameSet, searchMatches } from "../core/app-state";
 import type { Branch, Commit, CommitDetail, GraphRow, TagInfo, UncommittedDetail } from "../core/git/types";
 import type { GraphBadge, ProviderView } from "../core/provider-model";
 import type { ProviderStatus } from "../core/provider-status";
 import { providerIdle } from "../core/provider-status";
+import { parseSearchQuery } from "../core/search";
 import { DEFAULT_AUTO_FETCH_INTERVAL, DEFAULT_AUTO_REFRESH_INTERVAL, DEFAULT_MAX_COUNT } from "../core/settings/config";
 import { createProviderRegistry } from "../providers/provider";
-import { matchCommit, parseSearchQuery } from "../search";
-import type { AppActions, AppState, DetailOwner, DetailTab, HighlightMode, MenuTab } from "./app-state-types";
 
-export type { ProviderStatus } from "../core/provider-status";
-export {
-  providerError,
-  providerIdle,
-  providerLoading,
-  providerStatusMessage,
-  providerUnavailable,
-  providerWarning,
-} from "../core/provider-status";
 export type {
   AppActions,
   AppState,
@@ -37,7 +29,16 @@ export type {
   RepoState,
   SettingsActions,
   SettingsState,
-} from "./app-state-types";
+} from "../core/app-state";
+export type { ProviderStatus } from "../core/provider-status";
+export {
+  providerError,
+  providerIdle,
+  providerLoading,
+  providerStatusMessage,
+  providerUnavailable,
+  providerWarning,
+} from "../core/provider-status";
 
 const AppStateContext = createContext<{ state: AppState; actions: AppActions }>();
 
@@ -88,7 +89,7 @@ export function createAppState(
     const [cursorShortcut, setCursorShortcut] = createSignal<{ key: string; desc: string } | null>(null);
     const moveCursor = (delta: number, itemCount: number) => {
       if (itemCount === 0) return;
-      setCursorIndex(Math.max(0, Math.min(itemCount - 1, cursorIndex() + delta)));
+      setCursorIndex(clampCursor(cursorIndex(), delta, itemCount));
     };
     return {
       state: {
@@ -169,54 +170,26 @@ export function createAppState(
   // Priority: ancestry > path > search. Only one mode active at a time
   // (mutual exclusion enforced by the keyboard handler / command dispatch).
 
-  const highlightMode = createMemo((): HighlightMode => {
-    if (ancestrySet()) return "ancestry";
-    if (pathMatchSet()) return "path";
-    if (searchQuery()) return "search";
-    return null;
-  });
+  const highlightMode = createMemo(() => highlightModeOf(ancestrySet(), pathMatchSet(), searchQuery()));
 
-  // Mutable ref caching the last search-derived highlight set.
-  // createMemo uses reference equality (===), so returning a new Set on every
-  // graphRows() change (e.g. pagination, auto-refresh) would trigger downstream
-  // recomputation even when the matching hashes are identical. By returning the
-  // cached reference when contents are unchanged we avoid spurious re-renders —
-  // the same pattern used in use-ancestry.ts for ancestrySet.
-  // (AGENTS.md rule 3: mutable refs for state that must survive multiple effect firings.)
+  // The last search set, returned again while its matches stay the same: pages and refreshes bring new rows, and an
+  // equal set must not make the dimming and navigation that read it run again. (AGENTS.md rule 3: a mutable ref.)
   let prevSearchSet: Set<string> | null = null;
 
   const highlightSet = createMemo((): Set<string> | null => {
     const aSet = ancestrySet();
     if (aSet) return aSet;
-
     const pSet = pathMatchSet();
     if (pSet) return pSet;
-
     const parsed = parsedSearch();
-    if (parsed) {
-      const matches = new Set<string>();
-      for (const row of graphRows()) {
-        if (matchCommit(row.commit, parsed)) matches.add(row.commit.hash);
-      }
-      const newSet = matches.size > 0 ? matches : new Set<string>();
-      // Structural equality check: return cached ref when contents are unchanged
-      // so downstream dimming/navigation memos don't recompute unnecessarily.
-      if (prevSearchSet !== null && prevSearchSet.size === newSet.size) {
-        let same = true;
-        for (const h of newSet) {
-          if (!prevSearchSet.has(h)) {
-            same = false;
-            break;
-          }
-        }
-        if (same) return prevSearchSet;
-      }
-      prevSearchSet = newSet;
-      return newSet;
+    if (!parsed) {
+      prevSearchSet = null;
+      return null;
     }
-
-    prevSearchSet = null;
-    return null;
+    const matches = searchMatches(graphRows(), parsed);
+    if (prevSearchSet && sameSet(prevSearchSet, matches)) return prevSearchSet;
+    prevSearchSet = matches;
+    return matches;
   });
 
   // ── Selection memos (always use full graphRows) ───────────────────
@@ -233,8 +206,7 @@ export function createAppState(
   });
 
   const moveCursor = (delta: number) => {
-    const rows = graphRows();
-    const newIndex = Math.max(0, Math.min(rows.length - 1, cursorIndex() + delta));
+    const newIndex = clampCursor(cursorIndex(), delta, graphRows().length);
     setCursorIndex(newIndex);
     setScrollTargetIndex(newIndex);
   };

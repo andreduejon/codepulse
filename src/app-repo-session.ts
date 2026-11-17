@@ -1,6 +1,6 @@
 import { batch } from "solid-js";
 import type { RepoSessionSnapshot } from "./app-types";
-import type { AppActions, AppState } from "./context/app-state-types";
+import type { AppActions, AppState } from "./core/app-state";
 
 /** The graph state of the current repository, kept while another repository is shown. */
 export function captureRepoSession(state: AppState, graphScrollTop: number): RepoSessionSnapshot {

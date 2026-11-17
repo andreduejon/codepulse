@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { matchCommit, parseSearchQuery } from "../src/search";
+import { matchCommit, parseSearchQuery } from "../src/core/search";
 import { makeCommit } from "./test-helpers";
 
 // ─── parseSearchQuery ────────────────────────────────────────────────

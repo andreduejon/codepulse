@@ -1,4 +1,4 @@
-import type { AppActions, AppState } from "./context/app-state-types";
+import type { AppActions, AppState } from "./core/app-state";
 import { clearDebugEvents } from "./core/debug-events";
 import type { EventSource } from "./core/provider-model";
 import type { CommandBarMode, DialogId } from "./hooks/use-keyboard-navigation";

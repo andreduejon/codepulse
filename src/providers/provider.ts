@@ -4,32 +4,12 @@
  */
 
 import { createSignal } from "solid-js";
-import { PROVIDER_ORDER, type ProviderView } from "../core/provider-model";
-
-/** Provider registration entry — each provider registers itself on init. */
-export interface ProviderRegistration {
-  id: ProviderView;
-  /** Human-readable display name shown in the badge and menu. */
-  displayName: string;
-  /** Returns true when the provider can produce data (token + matching remote). */
-  isAvailable: () => boolean;
-  /**
-   * Long-running work as a short verb (`scanning`), shown after the display name in the footer in every view,
-   * instead of the generic `loading`. Set it only when it ends reliably: it can't get stuck after a view switch.
-   */
-  activity?: () => string | null;
-}
-
-export interface ProviderRegistry {
-  register: (p: ProviderRegistration) => void;
-  unregister: (id: ProviderView) => void;
-  getVersion: () => number;
-  getEnabledViews: () => ProviderView[];
-  /** The Dashboard tab shows while it is turned on (Menu → Providers → Dashboard). */
-  setDashboardEnabled: (enabled: boolean) => void;
-  nextView: (current: ProviderView) => ProviderView;
-  get: (id: ProviderView) => ProviderRegistration | undefined;
-}
+import {
+  PROVIDER_ORDER,
+  type ProviderRegistration,
+  type ProviderRegistry,
+  type ProviderView,
+} from "../core/provider-model";
 
 /** Per-app registry. Do not share across AppState instances. */
 export function createProviderRegistry(): ProviderRegistry {
